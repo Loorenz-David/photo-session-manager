@@ -1,0 +1,26 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / UI
+node_modules/
+ui/dist/
+
+# Runtime data (never commit photos, DB, logs, secrets)
+data/
+*.db
+*.db-journal
+*.log
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Launcher build output
+launcher/build/
