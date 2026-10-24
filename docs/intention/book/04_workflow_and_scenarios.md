@@ -2,9 +2,9 @@
 
 ## The core workflow (independent of any integration)
 1. Create a session for an item: found on the connected integration, or created locally.
-2. Capture photos (tethered through the imaging provider) or import them.
+2. Capture photos (tethered through the camera provider) or import them.
 3. Review: approve as main, move to condition, or delete (hide). Order main and condition.
-4. Adjust: the imaging provider applies the basic layer automatically; manual retouch any time.
+4. Adjust: the editing provider applies the basic layer automatically; manual retouch any time.
 5. Fill item information; accept or edit AI suggestions (agent post-MVP, chapter 08).
 6. Complete: export the ordered files locally, and/or publish to the connected integration.
 
@@ -17,7 +17,7 @@ grouped by last activity; published ones are hidden behind the filter.
 
 **S-B. New session for an existing item.** New session → type a SKU or title → the integration
 returns matches with thumbnails → pick one. A session opens with the item's type and SKU in the
-header and an empty stage reading "Ready for the first photo". The imaging provider's capture
+header and an empty stage reading "Ready for the first photo". The editing provider's capture
 folder is switched for this session (decision D1).
 
 **S-C. Shooting and sorting.** Each shutter press lands a RAW. Within about a second the photo

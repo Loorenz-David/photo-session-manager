@@ -7,7 +7,8 @@ to auction houses, retailers and other organisations with structured photography
 **Principle: MVP scope, production-oriented architecture.** The MVP implements only what the first
 customer needs, on boundaries that let the following be added without restructuring:
 - more platform integrations (auction systems, other e-commerce, inventory, custom APIs);
-- more imaging providers (today Capture One; later other tether or edit tools);
+- more camera providers (Sony first; Canon, Nikon, Fujifilm and others later);
+- more editing providers (today Capture One; later other editing tools or workflows);
 - the AI research agent that fills item attributes;
 - commercial packaging: signed installer, updates, licensing.
 
@@ -24,7 +25,9 @@ hypothetical adapters, multi-user, cloud sync.
 | Attribute | a typed field on an item, defined by a schema | Metafield |
 | Integration | an external platform connected through an adapter with declared capabilities | the Shopify app |
 | Publish | sending a completed session to an integration | Publish to Shopify |
-| Imaging provider | the tether and editing tool behind capture and adjustment | Capture One |
+| Camera provider | the device adapter behind connection, status, capture and transfer | — |
+| Editing provider | the editing application behind adjustment, previews and rendering | Capture One |
+| Export/Publish job | the resumable unit of work that renders files and, optionally, sends them | — |
 
 "Capture One session" is always written **Capture One document** in this book to avoid a clash
 with our Session.

@@ -20,3 +20,19 @@
    fields, batch publish, notifications, condition attribute = `custom.damage_report`.
    "Replace" flag retired in favour of the dirty-state re-publish (N1 opened). N2 and N3 opened.
    Measurement M7 (integration-free completion) added.
+8. **2026-10-24 — Owner.** D1 yes; D2 mirror as an editing-provider capability, coloring likely
+   not needed; N1 mirror; N2 exclude (yes to recommendation); N3 after the desktop MVP. D4 was
+   misread as "Capture One retouch export" and is re-asked in plain words; the owner's real
+   question (how the adjusted preview can be live, and reflect later edits) is answered in
+   chapter 10 (adjusted hook + sidecar watcher, re-render through the preview recipe).
+9. **2026-10-24 — Owner (second architecture memo).** Rust/Tauri replaces Python/FastAPI as the
+   backend; Python optional; camera connectivity and editing software are integrations behind
+   provider interfaces with capabilities; Shopify stays an optional commerce integration; layers
+   frontend / core / services / integrations / infrastructure; Tauri commands thin; MVP
+   integrations exactly Sony ZV-E10, Capture One, Shopify; validate packaging early.
+10. **2026-10-24 — Shaper.** Memo folded in: chapters 01 (H3, H5, H7, H8), 02, 03, 04, 05, 06, 09,
+    10 (renamed "Camera and editing providers"), 11, 12, 13, 14 (M2 → write-direction mirror),
+    15 (R16–R25; R1, R2, R8, R10 superseded). Conflicts found and opened as cards: A1 (R8 "one
+    transport" vs Tauri commands), A2 (camera provider vs Capture One owning the tether).
+    `primary variant adjusted script` added to the hooks in use; VERIFY-8/9/10 added to the
+    Capture One evidence. `.gitignore` and `CLAUDE.md` updated to the Rust stack.

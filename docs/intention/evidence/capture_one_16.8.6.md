@@ -12,7 +12,8 @@ mechanism-inventory as runtime probes against the real application.
 | `capture done script` | "The AppleScript that gets called when an image has completed being captured." | primary capture event |
 | `processing done script` | "…called when a file is finished processing. The script is passed the ident…" (truncated in sdef) | preview/export file ready |
 | `batch done script` | "…called when the batch process queue completes." | export batch complete |
-| `selection changed script`, `primary variant adjusted script` | exist | not used in v1 |
+| `primary variant adjusted script` | exists (untyped) | live adjusted-preview refresh (chapter 10) |
+| `selection changed script` | exists | not used in v1 |
 | `barcode scanned script` | Enterprise only | not available |
 
 **VERIFY-1:** exact handler signature and arguments each script receives (RAW path? variant id?
@@ -72,7 +73,19 @@ We read these to compute expected output paths and to validate the two recipes a
 - Brush strokes, healing, AI Eraser — no commands exist (brief confirmed).
 - Barcode — Enterprise only. Scanning goes into our UI.
 
+**VERIFY-8:** how a hook script reaches the app. Candidates: `do shell script "curl …"` to a
+loopback port the Rust process opens; writing a small file into a spool folder the app watches;
+`open "sessionmanager://…"` (Tauri deep link). Measure latency and behaviour when the app is not
+running.
+**VERIFY-9:** does `primary variant adjusted script` fire per slider change, per mouse-up, or per
+variant switch, and at what rate while dragging? Fallback signal: the per-image settings sidecar
+(`CaptureOne/Settings*/<name>.cos` beside the capture folder) — confirm the path and that its
+mtime changes on adjustment.
+**VERIFY-10:** latency of `process` with the 1600 px preview recipe, command to processing-done,
+one image, Capture One idle.
+
 ## Transport
-`osascript -l JavaScript` with a script file and arguments; one serial queue; timeout per call.
+`osascript -l JavaScript` spawned from the Rust process with a script file and arguments; one
+serial queue; timeout per call.
 Capture One must be running with the session frontmost or referenced by name; **VERIFY-7:**
 addressing a session document by path when more than one document is open.

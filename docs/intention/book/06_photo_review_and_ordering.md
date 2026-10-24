@@ -3,7 +3,8 @@
 ## Arrival
 A capture reaches us two ways; both write `capture_events`, and the photo row is created once per
 (session, raw_path) (M1):
-1. the provider's capture-done hook posts the RAW path to the local API (primary);
+1. the editing provider's capture-done hook hands the RAW path to the app (primary; delivery
+   channel is VERIFY-8 in the evidence);
 2. the folder watcher sees the file (fallback, and reconciler at startup).
 The photo joins the **active session** as `unreviewed` at the end of Main; with no active session
 it joins Unassigned. The original preview (embedded camera JPEG) is written immediately; the
@@ -17,10 +18,11 @@ opens. `deleted` hides the photo; the RAW stays (H2). Only the last delete is un
 4.5 s, works after the toast until the next delete); undo restores the original position and
 makes the photo active.
 
-**Mirror to the provider (decision D2):** `main` → green tag, `condition` → blue tag, `deleted` →
-red tag, `unreviewed` → no tag. A tag changed inside Capture One is read back by polling (every
-3 s for the active session, and when a session opens) and applied as the same classification.
-The last writer wins; conflicts within one poll interval resolve to the provider's value (M2).
+**Mirror to the editing provider (D2, resolved R17):** when the photographer classifies in the
+app, the provider's variant gets the mapped color tag: `main` → green, `condition` → blue,
+`deleted` → red, `unreviewed` → none; ratings ignored (M2). Reading tags back from Capture One
+(poll every 3 s for the active session, last writer wins) is an optional capability, off by
+default, in the only-if-cheap rung (chapter 13): the owner expects to sort only in the app.
 
 ## Order
 Main and Condition are separately ordered, 1-based, contiguous. Main 01 is the cover. Reorder by
@@ -30,7 +32,9 @@ Provider sort order is never used.
 ## Original / Adjusted
 One toggle per session view (pill or Space): camera original or provider-adjusted. Crossfade
 700 ms. While processing, the pill shows a spinner and the original is shown; adjusted fades in
-when it arrives.
+when it arrives. The adjusted preview is **live**: whenever the provider reports the variant
+adjusted, or its settings sidecar changes, the preview is re-rendered and swapped with the same
+crossfade (chapter 10).
 
 ## Unassigned, move, copy
 Unassigned is a built-in session with no item. Its workspace opens the sessions panel; dragging

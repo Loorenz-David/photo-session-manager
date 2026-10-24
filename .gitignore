@@ -1,14 +1,12 @@
-# Python / uv
-.venv/
-__pycache__/
-*.pyc
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+# Rust
+target/
 
 # Node / UI
 node_modules/
-ui/dist/
+apps/desktop/dist/
+
+# Tauri generated schemas
+apps/desktop/src-tauri/gen/schemas/
 
 # Runtime data (never commit photos, DB, logs, secrets)
 data/
@@ -21,6 +19,3 @@ data/
 
 # macOS
 .DS_Store
-
-# Launcher build output
-launcher/build/

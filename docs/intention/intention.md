@@ -2,7 +2,7 @@
 
 **Status: COLLABORATING**
 Owner: David Loorenz. Shaper: Claude (intention-shaper doctrine). Book created 2026-10-24,
-replacing the single-file draft of 2026-10-23.
+replacing the single-file draft of 2026-10-23; backend revised to Rust/Tauri the same day.
 
 ## How to read this book
 
@@ -24,9 +24,9 @@ Every session reads this map, `book/01_objective_and_constraints.md`, and
 | [06 Photo review and ordering](book/06_photo_review_and_ordering.md) | capture arrival, approve/condition/delete, undo, order, Original/Adjusted, unassigned, move/copy |
 | [07 Session states and publishing](book/07_session_states_and_publishing.md) | status order, ready rule, dirty state, publish steps, failures, local export |
 | [08 Attributes and AI](book/08_attributes_and_ai.md) | attribute schema, field kinds, customize fields, AI suggestions and provenance |
-| [09 Integrations](book/09_integrations.md) | integration interface, capabilities, the Shopify adapter |
-| [10 Imaging providers](book/10_imaging_providers.md) | Capture One events and commands, previews, Edit Engine |
-| [11 Architecture and packaging](book/11_architecture_and_packaging.md) | Tauri, sidecar, transport, repo layout, phone remote |
+| [09 Integrations](book/09_integrations.md) | commerce integration interface, capabilities, the Shopify adapter |
+| [10 Camera and editing providers](book/10_imaging_providers.md) | camera adapter, Capture One events and commands, live previews, rendering |
+| [11 Architecture and packaging](book/11_architecture_and_packaging.md) | Tauri + Rust, layers, commands/events, repo layout, packaging spike, phone remote |
 | [12 Operations](book/12_operations.md) | settings, logs, backup, health |
 | [13 Scope ladder](book/13_scope_ladder.md) | must ship / only if cheap / deferred |
 | [14 Measurement ledger](book/14_measurement_ledger.md) | any criterion or test (always read) |

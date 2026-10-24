@@ -1,8 +1,10 @@
 # 09 — Integrations
 
 ## Shape
-`Session Manager core → integration interface → platform adapter`. One interface, one capability
-set, one adapter (Shopify) in the MVP. No plugin loader, no registry beyond a settings key.
+Commerce and publishing is one of three integration families; camera and editing providers are
+chapter 10. Same rule: `core → service → interface → adapter`, adapters declare capabilities,
+nothing platform-specific in core. One commerce adapter (Shopify) in the MVP. No plugin loader,
+no registry beyond a settings key.
 
 ## Capabilities (declared by the adapter; the UI hides what is absent)
 | Capability | Core operation |

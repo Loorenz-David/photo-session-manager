@@ -1,19 +1,25 @@
 
-## Build decisions (owner, updated 2026-10-24)
+## Build decisions (owner, updated 2026-10-24, Rust revision)
 
 The authority for product semantics is the **intention book**: start at `docs/intention/intention.md`
 (map + status header) and read only the chapters your task touches. Summary of standing decisions:
 
-- **Product:** Session Manager, a photography-workflow desktop app; Shopify is the first *integration*,
-  Capture One the first *imaging provider*. Core vocabulary: Item, Session, Photo, Attribute.
-- **Runtime:** Python managed by `uv`, FastAPI as transport only, SQLite. No Docker.
-- **Shell:** Tauri (macOS first) with the Python backend as a sidecar; validated by an early spike.
-  One transport (HTTP + WebSocket) for the desktop window and the future phone remote.
-- **Frontend:** React + TypeScript + Vite + shadcn/ui (+ dnd-kit, Motion, Sonner). Design handoff in
-  `claude_design/`; rules extracted in `docs/intention/evidence/design_handoff.md`.
-- **Backend layout:** industry-standard FastAPI; do not apply the owner's `Application_contracts`.
-- **Capture One:** Pro 16.8.6.25 on the dev Mac; dictionary at `docs/reference/capture_one_16.8.6.sdef`.
+- **Product:** Session Manager, a photography-workflow desktop app. Three integration families, one
+  adapter each in the MVP: camera (Sony ZV-E10, through Capture One's tether), editing (Capture One),
+  commerce (Shopify). Core vocabulary: Item, Session, Photo, Attribute. Nothing device-, app- or
+  platform-specific in core.
+- **Runtime:** Tauri (macOS first) with **Rust as the backend**: services, domain, SQLite, jobs,
+  provider orchestration, native operations. No FastAPI, no uv, no Docker. Python is optional and
+  absent from the MVP (sidecar only for a demonstrated need).
+- **Boundaries:** frontend / core domain / application services / integrations / infrastructure.
+  Tauri commands and events are thin; business logic never depends on Tauri. The phone remote
+  (post-MVP) is an embedded HTTP + WebSocket server over the same services.
+- **Frontend:** React + TypeScript + Vite + shadcn/ui (+ dnd-kit, Motion, Sonner), typed bindings
+  generated from Rust commands. Design handoff in `claude_design/`; rules in
+  `docs/intention/evidence/design_handoff.md`.
+- **Capture One:** Pro 16.8.6.25 on the dev Mac, driven only through its AppleScript dictionary
+  (`docs/reference/capture_one_16.8.6.sdef`) via `osascript` from Rust.
 - **Shopify:** custom dev-app token, provided by the owner before S6. Condition photos → `custom.damage_report`.
-- **Repo:** public, `Loorenz-David/photo-session-manager`.
+- **Repo:** public, `Loorenz-David/photo-session-manager`. The owner's `Application_contracts` are not applied.
 - **Process:** intention-shaper → mechanism-inventory → implementation-planner → pipeline-coordinator.
   Only a RATIFIED intention enters inventory or planning.

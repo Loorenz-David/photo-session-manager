@@ -26,14 +26,17 @@ attribute values. The export is also step one of every publish.
 - Entry points: the session header Publish popover, "Ready · Publish" on a row, or batch
   "Review & publish N" → form queue → "Publish N confirmed".
 - The popover is the **confirmation surface** (H1): main thumbnails in order, condition
-  thumbnails, product-details fill count, the unreviewed note (decision N2), and the create-item
+  thumbnails, product-details fill count, the note "n unreviewed photos will not be published"
+  (N2: unreviewed photos are excluded from every publish and export), the gallery-removal count
+  (N1), and the create-item
   note for local items. Confirming writes `publish_runs` + `publish_items` with the exact summary.
 - Steps per item, each a resumable job (H4, M4):
   1. `prepare` — create the item on the integration if `create_pending`; export files (above).
   2. `upload` — for each main photo, then each condition photo: skip if a `photo_links` row is
      already `ready`; otherwise stage, upload, attach, poll to ready. Progress "Uploading n of N".
-  3. `update` — reconcile order (decision N1), set attribute values including the condition-photo
-     attribute, verify by reading back.
+  3. `update` — make the gallery exactly the session's Main list in order (N1 mirror: add
+     missing, reorder, remove platform media the session does not own), set attribute values
+     including the condition-photo attribute, verify by reading back.
   4. `describe` — post-MVP: agent writes the description. MVP: skipped unless a manual
      description exists, which is sent in `update`.
   5. `done` — `published_at`, `dirty = false`, notification row "Published · time".
@@ -41,5 +44,5 @@ attribute values. The export is also step one of every publish.
 
 ## Failure and retry
 A failed step marks the item `failed` with the reason; photos that uploaded keep their links.
-Retry re-runs from the failed step only. "Nothing was overwritten" is literally true: no step
-deletes or replaces integration data except as decision N1 defines for reconciliation.
+Retry re-runs from the failed step only. No step deletes or replaces integration data except the
+gallery removals announced on the confirmation popover (N1).

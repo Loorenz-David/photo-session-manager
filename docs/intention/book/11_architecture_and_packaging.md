@@ -1,47 +1,57 @@
 # 11 — Architecture and packaging
 
 ## Processes
-One Python process (FastAPI + in-process job worker + provider queue + watcher) and one UI. In
-development the UI runs in a browser from Vite and the backend from `uv run`. In the packaged app
-Tauri hosts the UI in its webview and starts/stops the Python backend as a **sidecar**.
+One native process: the Tauri application. Its Rust side is the backend (application services,
+domain, persistence, jobs, provider queues, watcher); its webview hosts the React UI. In
+development the UI runs from Vite inside the Tauri dev window. There is no second backend
+process. **Python is optional**: introduced only as a Tauri sidecar when a concrete need is
+demonstrated (local vision, image processing, a specialised model); none exists in the MVP.
 
-## One transport (decision C4)
-The UI talks to the backend over HTTP (commands, queries) and one WebSocket (state events) in
-both hosts. Tauri does lifecycle and window only; no Tauri commands carry business operations.
-The phone remote (below) is the same React app over the same transport.
+## Frontend ↔ backend (card A1)
+The window calls typed Tauri commands and subscribes to Tauri events. Command and event types are
+generated from the Rust signatures into TypeScript (tool chosen by the planner); components never
+call `invoke` directly, they call `services/`. The phone remote (chapter 04 S-M, N3) is served
+later by an HTTP + WebSocket server embedded in the same Rust process, exposing the same
+application services; under H8 it is an addition, not a change. If A1 chooses otherwise, the
+desktop window also uses that server from the start.
 
-## Layers in the backend (H8)
+## Layers (owner memo, 2026-10-24) and the dependency rule
 ```
-api/            FastAPI routers + WebSocket: parse, call a service, serialize. No logic.
-core/           domain models, services (commands and queries), events, job queue
-attributes/     schema, presets, values, provenance
-integrations/   interface + capabilities; shopify/
-imaging/        interface (capture adapter, edit engine); capture_one/ with jxa/ scripts
-storage/        SQLite, migrations, app directories
+frontend         React/TS/shadcn; services/ (typed bindings); no business rules
+core             domain: Item, Session, Photo, Attribute, schemas, states, publish/export jobs
+services         session, photo, file, jobs, integration coordination, AI orchestration (later)
+integrations     camera providers, editing providers, commerce/publishing adapters
+infrastructure   Tauri commands/events, SQLite, filesystem, OS APIs, task execution, config
 ```
-Services receive plain inputs and return plain results; they are callable from tests without
-FastAPI. Frontend: `services/` holds typed functions generated from the OpenAPI schema plus the
-WebSocket event types; components never call `fetch` directly.
+Rule: core depends on nothing above it. Services depend on core and on the *interfaces* (traits)
+of integrations and infrastructure, never on Capture One, Shopify, SQLite or Tauri types.
+Adapters and infrastructure implement those traits. Tauri commands are thin: parse, call a
+service, serialize. Services are callable from tests with in-memory implementations. These are
+boundaries, not a framework: the MVP implements only what it needs inside them.
 
-## Repository layout
+## Repository layout (proposal; the planner fixes crate names)
 ```
-backend/            Python package `session_manager` (layout above), tests/
-apps/desktop/       React app (src/) and Tauri shell (src-tauri/)
-docs/               intention book, evidence, checklists, plans
-claude_design/      design handoff (reference, read-only)
+apps/desktop/src/          React app
+apps/desktop/src-tauri/    Tauri app: commands, events, lifecycle, config (infrastructure edge)
+crates/core/               domain + services (no Tauri, no SQL, no HTTP)
+crates/integrations/       camera/, editing/capture_one/ (with jxa/ scripts), commerce/shopify/
+crates/infra/              SQLite storage + migrations, fs + watcher, job runner, osascript runner
+docs/                      intention book, evidence, checklists, plans
+claude_design/             design handoff (reference, read-only)
 ```
+A Cargo workspace. Fewer crates are acceptable if module boundaries keep the dependency rule.
 
-## Tauri sidecar spike (early stage, before UI features)
-Package a minimal Tauri app with the Python backend as a sidecar and verify: sidecar start/stop
-with the window; `/health` reachable from the webview; macOS **Automation** permission prompt for
-Apple Events to Capture One attributed to the app bundle and remembered; app data directory
-writable; the Python sidecar built as a single executable (PyInstaller or equivalent) that still
-finds `osascript` and the bundled JXA scripts. Outcome recorded in evidence before any UI phase.
+## Packaging spike (first stage, before UI features)
+Build the Tauri app and verify on this Mac: macOS Automation permission for Apple Events to
+Capture One, attributed to the bundle and remembered (`NSAppleEventsUsageDescription`); spawning
+`osascript` from the bundle; FSEvents watch on the capture folder; SQLite in the app data
+directory; the capture-done hook reaching the app (VERIFY-8); an ad-hoc-signed `.app` copied to
+the work Mac launches (Gatekeeper right-click Open). Outcome recorded in evidence before any UI
+phase.
 
-## Phone remote (design pending)
-Same app, served on the Mac's LAN address, opened on a phone via a QR code shown on the desktop,
-added to the home screen. Needs a phone layout (not in the current handoff) and LAN binding with
-a pairing token. Scope position: chapter 13.
+## Phone remote (design pending; N3: after the desktop MVP)
+Same React app with a phone layout, served on the LAN by the embedded server, opened via a QR
+code, pairing token. Nothing in core or services changes.
 
 ## Not in the MVP
-Signed installer, notarisation, auto-update, licensing, multi-window. Code signing is ad-hoc.
+Signed or notarised installer, auto-update, licensing, multi-window, Python component.

@@ -6,23 +6,25 @@ Docs only at shaping time: `CLAUDE.md`, this book, evidence, two photographer ch
 `claude_design/`. No code, no contract system, no architecture graph. The pipeline charter's
 standing rules are the baseline.
 
-## Stack (owner decisions, 2026-10-23/24)
-- **Backend:** Python managed by uv (pinned interpreter, lockfile), FastAPI as transport, SQLite.
-  Business logic in plain Python services, independent of FastAPI.
+## Stack (owner decisions 2026-10-23/24; backend revised 2026-10-24)
+- **Application:** Tauri, macOS first. **Rust is the backend**: application services, domain,
+  SQLite persistence, background jobs, provider orchestration, native macOS operations and
+  lifecycle live in the Tauri process. No separate server process (chapter 11).
+- **Python:** optional and absent from the MVP. Added as a sidecar only when a concrete need is
+  demonstrated (local vision, image processing, a specialised model).
 - **Frontend:** React + TypeScript + Vite + shadcn/ui, with dnd-kit, Motion and Sonner as the
-  design handoff names them. Talks to the backend through typed service interfaces over HTTP and
-  WebSocket (see chapter 11).
-- **Shell:** Tauri, macOS first, running the Python backend as a sidecar. Validated by an early spike.
-- **Imaging provider:** Capture One Pro 16.8.6.25, driven by JXA through `osascript`, one serial
-  queue. `capture-one-mcp` not used (decision log, chapter 15).
-- **Folder watching:** watchdog on FSEvents, as fallback and reconciler only.
-- **Integration:** Shopify Admin GraphQL API, custom dev-app token, provided by the owner before S6.
-  Reference metafield definitions were read from the shop on 2026-10-24 (`claude_design/reference/`).
+  design handoff names them. Talks to Rust through typed Tauri commands and events (chapter 11).
+- **Editing provider:** Capture One Pro 16.8.6.25, driven through its AppleScript dictionary by
+  JXA via `osascript`, spawned from Rust on one serial queue. `capture-one-mcp` not used (R11).
+- **Camera:** Sony ZV-E10 over USB-C, tethered by Capture One in the MVP (card A2).
+- **Folder watching:** FSEvents from Rust, as fallback and reconciler only.
+- **Commerce integration:** Shopify Admin GraphQL API, custom dev-app token, provided before S6.
+  Metafield definitions were read from the shop on 2026-10-24 (`claude_design/reference/`).
 
 ## Machines
-Development and testing on the dev Mac (camera, cable, Capture One Pro present). The work Mac
-clones the repo and runs the app. Both macOS 26.5. Installing git, uv and Node on the work Mac
-is acceptable.
+Dev Mac: camera, cable, Capture One Pro, Rust toolchain, Node, Xcode command line tools. The work
+Mac receives the built `.app` (ad-hoc signed) or builds from source with the same toolchain.
+Both macOS 26.5.
 
 ## Evidence
 - Capture One dictionary: `docs/intention/evidence/capture_one_16.8.6.md`.

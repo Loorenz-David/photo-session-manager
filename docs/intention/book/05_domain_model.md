@@ -1,6 +1,6 @@
 # 05 — Domain model
 
-Ownership: **U** photographer (UI), **S** system, **P** imaging provider (read by us; written only
+Ownership: **U** photographer (UI), **S** system, **P** editing provider (read by us; written only
 through its API), **I** integration adapter (read by us; written only inside a confirmed publish
 run), **AI** agent (post-MVP; never overwrites a U value).
 

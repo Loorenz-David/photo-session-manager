@@ -12,10 +12,10 @@ condition metafield.
 | # | Constraint | Why |
 |---|---|---|
 | H1 | Nothing is written to an external platform without an explicit, recorded confirmation by the photographer. | A wrong image on a live listing is a customer-facing defect. |
-| H2 | RAW files are never modified, moved or deleted by Session Manager. "Delete" in the UI hides a photo; bytes stay on disk. | Non-destructive; the imaging provider owns the files. |
-| H3 | No pixel processing in this repo. Styling, crop, masks and export are the imaging provider's job (Capture One in the MVP). Copying an embedded JPEG out of a RAW is allowed; decoding is not. | Reuse; keeps the codebase small. |
+| H2 | RAW files are never modified, moved or deleted by Session Manager. "Delete" in the UI hides a photo; bytes stay on disk. | Non-destructive; the capture folder belongs to the editing provider. |
+| H3 | No pixel processing in this repo. Styling, crop, masks and rendering are the editing provider's job (Capture One in the MVP). Copying an embedded JPEG out of a RAW is allowed; decoding is not. | Reuse; keeps the codebase small. |
 | H4 | Every step is idempotent. After a crash at any point, resuming yields the same end state: no lost associations, no duplicate uploads. | Single operator, no engineer on site. |
-| H5 | No UI automation of other apps. Capture One is driven only through its AppleScript dictionary. | Breaks on every update otherwise. |
-| H6 | The core photography workflow runs with no integration configured. Publishing is optional and last. | Different customers have different systems after photography. |
-| H7 | Platform-specific concepts (Shopify products, metafields, media IDs) never appear in core modules or core tables. They live in adapters and link tables. | Second customer must not require a core rewrite. |
-| H8 | Business logic is independent of FastAPI and of Tauri. Both are transports or shells. | Commercial packaging must not force a rewrite. |
+| H5 | No UI automation of other apps. External applications are driven only through interfaces they publish (Capture One: its AppleScript dictionary). | Breaks on every update otherwise. |
+| H6 | The core photography workflow runs with no commerce integration configured. Publishing is optional and last. | Different customers have different systems after photography. |
+| H7 | Device-, application- and platform-specific concepts (a camera protocol, Capture One variant ids, Shopify products, metafields, media IDs) never appear in core modules or core tables. They live in adapters and link tables. | A second customer, camera or editor must not require a core rewrite. |
+| H8 | Business logic is independent of Tauri, of any HTTP server and of the UI. Tauri commands and events, and any later server, are thin interfaces to application services. | Commercial packaging and the phone remote must not force a rewrite. |
