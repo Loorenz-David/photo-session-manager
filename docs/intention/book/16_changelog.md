@@ -42,3 +42,7 @@
 12. **2026-10-24 — Owner.** D4 at publish (R28). Preview refresh rule: 15–20 s after the last edit
     in Capture One, overridden by the app window returning to the front (R29). Open-decision ledger
     empty; status set to READY_FOR_RATIFICATION and the ratification surface presented.
+13. **2026-10-24 — Owner: RATIFIED.** David Loorenz approved the ratification surface presented
+    2026-10-24 (outcome; measurements M1–M7 verbatim; scope ladder; D2 interpretation confirmed by
+    approval; no open cards). Post-ratification changes follow the amendment path: contract-grade
+    additions by the mechanism inventory, material semantic changes reopen the gate.
