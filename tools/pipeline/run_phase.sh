@@ -5,6 +5,7 @@
 #   tools/pipeline/run_phase.sh plan
 #   tools/pipeline/run_phase.sh phase <PHASE_ID> [--pause]
 #   tools/pipeline/run_phase.sh all [--pause]
+#   tools/pipeline/run_phase.sh archive <PHASE_ID>
 # Exit codes: 0 approved/done · 10 orchestrator must look · 20 runner error
 # Env: DRY_RUN=1 prints the commands instead of running sessions.
 #      PSM_IMPL_DIR overrides docs/implementation (used by the dry run).
@@ -204,13 +205,33 @@ run_phase() {
   commit_artifacts "pipeline: $phase review r2"
   v="$(session_verdict "$RUNS/${phase}_review_r2.last.md" "$rh2")"
   case "$v" in
-    APPROVED|APPROVED_WITH_NOTES) approve "$phase" "$title" "$v" "$rh2" ;;
-    *) stop_for_orchestrator "$phase" "re-review verdict $v (MUST items remain)" ;;
+    APPROVED|APPROVED_WITH_NOTES) approve "$phase" "$title" "$v" "$rh2"; return 0 ;;
+  esac
+  # 5. second fix only when the orchestrator authorised it in the plan's Review log
+  grep -q 'FIX2_AUTHORISED:' "$plan" || stop_for_orchestrator "$phase" "re-review verdict $v (MUST items remain; no FIX2_AUTHORISED in plan)"
+  local fp3="$P/implementer/${phase}_fix_r3.md" fh3="$H/implementer/handoff_${phase}_fix_r3.md"
+  DRY_HANDOFF="$fh3"
+  render "$TPL/fix.md" "$fp3" PHASE="$phase" ROUND=3 FIXN=2 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" REVIEW_HANDOFF="$rh2" IMPL_HANDOFF="$ih" HANDOFF="$fh3"
+  commit_artifacts "pipeline: $phase fix 2 prompt"
+  run_codex gpt-6-luna high "$fp3" "$RUNS/${phase}_fix_r3.last.md" "$RUNS/${phase}_fix_r3.log" || true
+  commit_artifacts "pipeline: $phase fix 2 handoff"
+  st="$(session_state "$RUNS/${phase}_fix_r3.last.md" "$fh3")"; [[ "$st" == DONE ]] || stop_for_orchestrator "$phase" "fix 2 state $st"
+  local rp3="$P/reviewer/${phase}_review_r3.md" rh3="$H/reviewer/handoff_${phase}_review_r3.md"
+  DRY_HANDOFF="$rh3"; DRY_VERDICT="${DRY_VERDICT_R3:-APPROVED_WITH_NOTES}"
+  render "$TPL/rereview.md" "$rp3" PHASE="$phase" ROUND=3 FIXN=2 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" PREV_REVIEW="$rh2" FIX_HANDOFF="$fh3" HANDOFF="$rh3" NARRATIVE="$narrative"
+  commit_artifacts "pipeline: $phase re-review 2 prompt"
+  run_claude pipeline-reviewer opus "$rp3" "$RUNS/${phase}_review_r3.last.md" "$RUNS/${phase}_review_r3.log" || true
+  commit_artifacts "pipeline: $phase review r3"
+  v="$(session_verdict "$RUNS/${phase}_review_r3.last.md" "$rh3")"
+  case "$v" in
+    APPROVED|APPROVED_WITH_NOTES) approve "$phase" "$title" "$v" "$rh3" ;;
+    *) stop_for_orchestrator "$phase" "re-review 2 verdict $v; no further fixes (flow.md §5)" ;;
   esac
 }
 
 approve() {  # phase title verdict handoff
-  local cards; cards="$(chatfield "$RUNS/${1}_review_r1.last.md" OWNER_CARDS)"; [[ -f "$RUNS/${1}_review_r2.last.md" ]] && cards="$(chatfield "$RUNS/${1}_review_r2.last.md" OWNER_CARDS)"
+  local cards; cards="$(chatfield "$RUNS/${1}_review_r1.last.md" OWNER_CARDS)"
+  for r in r2 r3; do [[ -f "$RUNS/${1}_review_$r.last.md" ]] && cards="$(chatfield "$RUNS/${1}_review_$r.last.md" OWNER_CARDS)"; done
   set_state "$1" APPROVED "$3; owner cards: ${cards:-0}"
   if [[ "$DRY_RUN" == 1 ]]; then log "DRY approval commit: APPROVED $1: $2"; else
     git -C "$ROOT" add -A -- "$IMPL" >/dev/null 2>&1 || true
@@ -235,6 +256,11 @@ case "$cmd" in
     st="$(session_state "$RUNS/plan_r1.last.md" "$h")"; log "plan state: $st"; [[ "$st" == DONE ]] || exit 10 ;;
   phase)
     [[ -n "${1:-}" ]] || die "phase id required"; run_phase "$1" ;;
+  archive)
+    [[ -n "${1:-}" ]] || die "phase id required"; ph="$1"; dest="$IMPL/archive/${ph}_$(date +%Y%m%d-%H%M%S)"; mkdir -p "$dest"
+    for f in "$IMPL"/prompts/*/"${ph}"_*.md "$IMPL"/handoffs/*/handoff_"${ph}"_*.md "$IMPL/state/$ph.json" "$IMPL/narratives/$ph.md"; do
+      [[ -e "$f" ]] && mv "$f" "$dest/"; done
+    commit_artifacts "pipeline: archive attempt of $ph"; log "archived $ph → $dest" ;;
   all)
     [[ -f "$IMPL/phases.txt" ]] || die "phases.txt not found"
     pause=0; [[ "${1:-}" == --pause ]] && pause=1

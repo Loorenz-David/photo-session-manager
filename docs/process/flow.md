@@ -26,6 +26,11 @@ one plain-language narrative per phase and can try the result by hand.
 The orchestrator never polls. It starts `tools/pipeline/run_phase.sh` in the background and is
 woken once, when the runner exits.
 
+## 2A. The orchestrator
+A fresh Claude session woken by the owner with `docs/process/prompts/wake_orchestrator.md`. Its
+standing instructions are `docs/process/orchestrator.md`; its memory between sessions is
+`docs/implementation/STATUS.md`.
+
 ## 3. The mechanical bridge
 `tools/pipeline/run_phase.sh` is a shell state machine. It spends no tokens between sessions.
 For one phase it: fills a prompt template from the plan file, commits the prompt, launches the
@@ -72,8 +77,9 @@ fix cycle. Verdicts: `APPROVED`, `APPROVED_WITH_NOTES`, `CHANGES_REQUESTED`.
 **Fix budget: one automatic fix per phase.** If the re-review still finds blocking items, the
 re-reviewer triages each: **MUST** (user-visible wrong outcome, hard constraint, red suite) or
 **DROP** (style, more tests, refactor, speculative robustness). No MUST left → the verdict is
-`APPROVED_WITH_NOTES`. Any MUST → the runner stops and the orchestrator decides: one more fix
-with a recorded reason, or a card for the owner. Never more than two fixes.
+`APPROVED_WITH_NOTES`. Any MUST → the runner stops and the orchestrator decides: one more fix,
+authorised by writing `FIX2_AUTHORISED: <reason>` in the plan's Review log and relaunching, or a
+card for the owner. Never more than two fixes.
 
 ## 6. No questions during a phase
 - The implementer never asks. A judgment call the plan leaves open is decided as the smallest
@@ -115,6 +121,7 @@ usable before Shopify; each plan file carries frontmatter `phase`, `title`, `dif
 Criteria rows name boundary, input, exact outcome and trace (M1–M7 or a mechanism contract).
 
 ## Log
+- **2026-10-24 v1.2.** Orchestrator entry point (§2A), `archive` command, second fix by explicit authorisation.
 - **2026-10-24 v1.1.** §6A: sessions may trigger captures through Capture One; suite stays hardware-free.
 - **2026-10-24 v1.** Created from the owner's brief: Rust/Tauri stack, no tester role, no
   mutation regime, behaviour tests at boundaries, one automatic fix then triage, mechanical
