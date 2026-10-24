@@ -19,3 +19,6 @@ data/
 
 # macOS
 .DS_Store
+
+# Pipeline runner raw session output
+.pipeline/

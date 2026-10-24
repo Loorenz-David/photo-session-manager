@@ -21,5 +21,7 @@ The authority for product semantics is the **intention book**: start at `docs/in
   (`docs/reference/capture_one_16.8.6.sdef`) via `osascript` from Rust.
 - **Shopify:** custom dev-app token, provided by the owner before S6. Condition photos → `custom.damage_report`.
 - **Repo:** public, `Loorenz-David/photo-session-manager`. The owner's `Application_contracts` are not applied.
-- **Process:** intention-shaper → mechanism-inventory → implementation-planner → pipeline-coordinator.
-  Only a RATIFIED intention enters inventory or planning.
+- **Process:** `docs/process/flow.md` is the project's process authority (wins over the global pipeline
+  doctrine where they differ): Rust/Tauri, no tester role, no mutation regime, behaviour tests at
+  boundaries, one automatic fix then triage, owner narratives per phase. Sessions are launched by
+  `tools/pipeline/run_phase.sh`. The intention is RATIFIED (2026-10-24); start at `docs/implementation/narratives/`.
