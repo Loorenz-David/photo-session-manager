@@ -39,3 +39,6 @@
 11. **2026-10-24 — Owner.** A1 Tauri commands now, server later (R26). A2 camera through Capture
     One for the MVP; the physical camera link (USB or wireless) remains open and must not disturb
     the implementation (R27). D4 to be explained again.
+12. **2026-10-24 — Owner.** D4 at publish (R28). Preview refresh rule: 15–20 s after the last edit
+    in Capture One, overridden by the app window returning to the front (R29). Open-decision ledger
+    empty; status set to READY_FOR_RATIFICATION and the ratification surface presented.

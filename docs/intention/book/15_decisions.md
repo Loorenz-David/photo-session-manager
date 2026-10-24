@@ -29,19 +29,10 @@
 | R24 | **Tauri commands are thin.** Business logic never depends on Tauri-specific commands or events (H8 revised). Layers: frontend, core domain, application services, integration layer, infrastructure. | 2026-10-24 |
 | R25 | Concrete MVP integrations are exactly: Sony ZV-E10 (camera), Capture One (editing), Shopify (commerce). No speculative adapters or plugin system. | 2026-10-24 |
 | R26 | **A1 Tauri commands now.** Desktop UI uses typed Tauri commands and events; an HTTP + WebSocket server is embedded in the same Rust process only when the phone remote arrives. Services stay callable without Tauri (H8). Closes R8. | 2026-10-24 |
+| R28 | **D4 at publish.** Web-size files are rendered by the editing provider only inside a publish or export run, never at approve. | 2026-10-24 |
+| R29 | Adjusted-preview refresh: a Capture One edit marks the photo stale; re-render 15 s after the last edit (setting 10–30 s) or at once when the app window becomes visible/focused. | 2026-10-24 |
 | R27 | **A2 camera through Capture One** for the MVP. How the camera physically connects (USB tether today, wireless under exploration) stays open and must not disturb the implementation: everything camera-specific sits behind the camera provider interface, and capture arrival is defined by the editing provider's hook and the capture folder, not by the link. | 2026-10-24 |
 
-## ⚠ OWNER DECISIONS REQUIRED (1)
+## ⚠ OWNER DECISIONS REQUIRED (0)
 
-**D4 — When does Capture One render the web-size files?**
-Question: The files we upload are rendered by Capture One with the 3000 px web recipe (not our
-code). Should that render run when you confirm Publish or Export, or earlier, each time you
-approve a photo? (This is separate from the live preview, which chapter 10 now defines.)
-Story: Seven frames approved at 10:00, two retouched in Capture One at 14:00, published at
-16:00. Render-at-publish uploads the retouched versions and costs about a minute at 16:00.
-Render-at-approve would upload the 10:00 versions unless re-rendered.
-Branches: **At publish** — always the latest edit; the design's "Preparing images" step is this.
-**At approve** — faster publish, stale risk.
-Recommendation: At publish.
-On silence: gate holds.
-Trace: chapter 07 steps, chapter 10, M3.
+None open. Ratification surface presented 2026-10-24 (chapter 16, entry 12).

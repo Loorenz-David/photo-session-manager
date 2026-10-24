@@ -32,9 +32,9 @@ Provider sort order is never used.
 ## Original / Adjusted
 One toggle per session view (pill or Space): camera original or provider-adjusted. Crossfade
 700 ms. While processing, the pill shows a spinner and the original is shown; adjusted fades in
-when it arrives. The adjusted preview is **live**: whenever the provider reports the variant
-adjusted, or its settings sidecar changes, the preview is re-rendered and swapped with the same
-crossfade (chapter 10).
+when it arrives. The adjusted preview is **live**: an edit in Capture One marks the photo stale,
+and it is re-rendered 15 s after the last edit, or immediately when the app window comes back to
+the front, then swapped with the same crossfade (rule in chapter 10).
 
 ## Unassigned, move, copy
 Unassigned is a built-in session with no item. Its workspace opens the sessions panel; dragging

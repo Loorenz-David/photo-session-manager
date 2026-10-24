@@ -1,6 +1,6 @@
 # Session Manager — Intention (book map)
 
-**Status: COLLABORATING**
+**Status: READY_FOR_RATIFICATION** (since 2026-10-24; awaiting the owner's explicit act)
 Owner: David Loorenz. Shaper: Claude (intention-shaper doctrine). Book created 2026-10-24,
 replacing the single-file draft of 2026-10-23; backend revised to Rust/Tauri the same day.
 

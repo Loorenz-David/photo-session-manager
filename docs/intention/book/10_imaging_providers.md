@@ -35,13 +35,18 @@ optional), `import`, `style.apply`. Capture One is the only editing adapter in t
 - Per capture: receive the hook (VERIFY-8), copy the embedded JPEG out of the RAW (byte copy,
   H3), request `process` with the preview recipe, receive processing-done, record the adjusted
   path.
-- **Live adjusted preview.** When `primary variant adjusted script` fires for a photo we know,
-  or as fallback its settings sidecar changes under the watcher (VERIFY-9), debounce 1 s and
-  re-run the preview render; the UI swaps the file with the usual crossfade. Capture One's own
-  render cache is never read: its format is undocumented, and reproducing its rendering would be
-  pixel processing (H3).
+- **Live adjusted preview (owner rule, 2026-10-24).** When `primary variant adjusted script`
+  fires for a photo we know, or as fallback its settings sidecar changes under the watcher
+  (VERIFY-9), the photo is marked *preview stale*. A stale photo is re-rendered with the preview
+  recipe when either happens first: **15 s** have passed since its last adjusted event (setting,
+  range 10–30 s; a retouch step takes the photographer 5–10 s, so one render per pause, not per
+  slider move), or **the Session Manager window becomes visible or focused again**, which renders
+  every stale photo at once because returning to the app is a request to see the previews. The UI
+  swaps the file with the usual crossfade. Capture One's own render cache is never read: its
+  format is undocumented, and reproducing its rendering would be pixel processing (H3).
 - Per publish/export: `process` each main and condition photo with the web recipe into the
-  export folder under our filename, wait for processing-done, verify the file exists (timing: D4).
+  export folder under our filename, wait for processing-done, verify the file exists. Rendering
+  happens only at publish or export time, never at approve (D4, resolved R28).
 - Tags: write `color tag` on classification; batched read only if read-back is enabled (D2).
 - Basic layer: the style, masks and crop on arrival are Capture One's Next Capture Adjustments,
   configured in S1 and named in settings. Scripted autocrop is CH-only.
