@@ -25,6 +25,9 @@ asserting the exact outcome. Unit tests only for the plan's **Core mechanisms** 
 that asserts internals. Run the smallest relevant tests while working; the whole suite, lint and
 typecheck once at the end.
 
+**Hardware (flow.md §6A).** You may trigger real captures through Capture One's `capture`
+command to check behaviour by hand; the test suite itself never requires the camera or Capture One.
+
 **Judgment calls (flow.md §6).** Where the plan leaves a choice open, take the smallest option
 consistent with the intention chapter the plan cites and record it under **Assumptions** in the
 handoff. Never stop to ask. `BLOCKED` only for a plan/intention contradiction or an impossible task.

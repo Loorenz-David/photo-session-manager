@@ -86,6 +86,14 @@ with a recorded reason, or a card for the owner. Never more than two fixes.
 - The reviewer reads the assumptions: one that contradicts the intention is a B1 finding; the
   rest are reported to the owner in plain words.
 
+## 6A. Hardware in sessions
+Sessions may fire the shutter themselves through Capture One's `capture` command (the same
+channel the adapter uses) to produce real captures for probes and manual checks. Preconditions
+the owner sets once: camera tethered and awake (auto power-off disabled), a Capture One session
+document open. Scripted frames land in the active capture folder and are never deleted (H2).
+**The automated suite never depends on the camera or on Capture One being present**; live
+behaviour is checked by probes whose results are recorded in the evidence doc and the Review log.
+
 ## 7. What the owner receives
 At approval the reviewer writes `docs/implementation/narratives/<phase>.md`:
 **What you can do now** · **Try it yourself** (numbered steps on this Mac) · **Choices made for
@@ -107,6 +115,7 @@ usable before Shopify; each plan file carries frontmatter `phase`, `title`, `dif
 Criteria rows name boundary, input, exact outcome and trace (M1–M7 or a mechanism contract).
 
 ## Log
+- **2026-10-24 v1.1.** §6A: sessions may trigger captures through Capture One; suite stays hardware-free.
 - **2026-10-24 v1.** Created from the owner's brief: Rust/Tauri stack, no tester role, no
   mutation regime, behaviour tests at boundaries, one automatic fix then triage, mechanical
   bridge, narratives for the owner, models per role.

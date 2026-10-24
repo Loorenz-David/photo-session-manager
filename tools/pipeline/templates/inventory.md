@@ -20,7 +20,8 @@ row to the map table in `intention.md`, register each contract's invariant in ch
 
 **Runtime probes.** VERIFY-1 … VERIFY-10 in `docs/intention/evidence/capture_one_16.8.6.md` are
 yours to run against Capture One Pro on this Mac with `osascript -l JavaScript`. Preconditions:
-Capture One open with a *session* document and, for capture probes, the camera tethered. If a
+Capture One open with a *session* document and, for capture probes, the camera tethered. You may fire the shutter yourself with the dictionary's `capture` command to produce
+captures for the hook probes (flow.md §6A). If a
 precondition is missing, record the probe as `UNPROBED` with the exact command to run later and
 continue; never fabricate a result. Write results into the evidence doc under each VERIFY item.
 Probes may create files only under the Capture One document's folders or `/tmp`; never modify or
