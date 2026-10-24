@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>@keyframes mfDrop{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}</style></helmet>
+<div style="min-width:0;display:flex;flex-direction:column;gap:6px;font-family:var(--font-body, system-ui)">
+  <sc-if value="{{ isText }}" hint-placeholder-val="{{ true }}">
+    <input value="{{ sv }}" onChange="{{ onStr }}" placeholder="{{ ph }}" style="width:100%;box-sizing:border-box;height:38px;padding:0 12px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)">
+  </sc-if>
+  <sc-if value="{{ isUrl }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:12px;top:11.5px;color:var(--muted);pointer-events:none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+      <input value="{{ sv }}" onChange="{{ onStr }}" placeholder="https://" style="width:100%;box-sizing:border-box;height:38px;padding:0 12px 0 34px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)">
+    </div>
+  </sc-if>
+  <sc-if value="{{ isTextarea }}" hint-placeholder-val="{{ false }}">
+    <textarea value="{{ sv }}" onChange="{{ onStr }}" placeholder="{{ ph }}" rows="3" style="width:100%;box-sizing:border-box;min-height:84px;padding:9px 12px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;line-height:1.45;outline:none;resize:vertical;transition:border-color .15s,box-shadow .15s" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)"></textarea>
+  </sc-if>
+  <sc-if value="{{ isChips }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="4">
+        <button onClick="{{ c.onClick }}" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid {{ c.bd }};border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s" style-hover="border-color:var(--color-text)">{{ c.label }}</button>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isInt }}" hint-placeholder-val="{{ false }}">
+    <div style="display:inline-flex;align-items:center;align-self:flex-start;height:38px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);overflow:hidden">
+      <button onClick="{{ dec }}" title="Decrease" style="width:36px;height:100%;display:grid;place-items:center;border:0;border-radius:0;background:transparent;color:var(--color-text);cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 7%,transparent)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"></path></svg></button>
+      <input value="{{ sv }}" onChange="{{ onInt }}" inputMode="numeric" placeholder="–" style="width:52px;height:100%;box-sizing:border-box;border:0;border-left:1px solid var(--hair, rgba(0,0,0,.1));border-right:1px solid var(--hair, rgba(0,0,0,.1));background:transparent;color:var(--color-text);font:inherit;font-size:14px;font-weight:700;text-align:center;outline:none;font-variant-numeric:tabular-nums">
+      <button onClick="{{ inc }}" title="Increase" style="width:36px;height:100%;display:grid;place-items:center;border:0;border-radius:0;background:transparent;color:var(--color-text);cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 7%,transparent)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isDecimal }}" hint-placeholder-val="{{ false }}">
+    <input value="{{ sv }}" onChange="{{ onNum }}" inputMode="decimal" placeholder="0.0" style="width:100%;box-sizing:border-box;height:38px;padding:0 12px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)">
+  </sc-if>
+  <sc-if value="{{ hasUnit }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:6px">
+      <input value="{{ mv }}" onChange="{{ onMv }}" inputMode="decimal" placeholder="0" style="flex:1;min-width:0;box-sizing:border-box;height:38px;padding:0 12px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;outline:none;font-variant-numeric:tabular-nums;transition:border-color .15s,box-shadow .15s" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)">
+      <div style="flex:none;display:flex;gap:2px;padding:3px;border-radius:9px;background:color-mix(in srgb,var(--color-text) 7%,transparent)">
+        <sc-for list="{{ units }}" as="u" hint-placeholder-count="2">
+          <button onClick="{{ u.onClick }}" style="height:30px;padding:0 9px;border:0;border-radius:6px;background:{{ u.bg }};color:{{ u.fg }};box-shadow:{{ u.shadow }};font:inherit;font-size:12px;font-weight:700;cursor:pointer">{{ u.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isBoolean }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-self:flex-start;gap:2px;padding:3px;border-radius:9px;background:color-mix(in srgb,var(--color-text) 7%,transparent)">
+      <sc-for list="{{ bools }}" as="b" hint-placeholder-count="2">
+        <button onClick="{{ b.onClick }}" style="height:32px;min-width:56px;padding:0 12px;border:0;border-radius:6px;background:{{ b.bg }};color:{{ b.fg }};box-shadow:{{ b.shadow }};font:inherit;font-size:13px;font-weight:700;cursor:pointer">{{ b.label }}</button>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isDate }}" hint-placeholder-val="{{ false }}">
+    <input type="date" value="{{ sv }}" onChange="{{ onStr }}" style="width:100%;box-sizing:border-box;height:38px;padding:0 12px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;outline:none;color-scheme:light dark" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)">
+  </sc-if>
+  <sc-if value="{{ isColor }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+      <sc-for list="{{ swatches }}" as="w" hint-placeholder-count="8">
+        <button onClick="{{ w.onClick }}" title="{{ w.name }}" style="width:28px;height:28px;padding:0;border:1px solid rgba(0,0,0,.12);border-radius:50%;background:{{ w.hex }};box-shadow:{{ w.ring }};cursor:pointer;transition:box-shadow .15s"></button>
+      </sc-for>
+      <input value="{{ sv }}" onChange="{{ onStr }}" placeholder="#hex" style="width:96px;box-sizing:border-box;height:32px;padding:0 10px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:13px;outline:none;font-variant-numeric:tabular-nums" style-focus="border-color:var(--color-text)">
+    </div>
+  </sc-if>
+  <sc-if value="{{ isRating }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:2px">
+      <sc-for list="{{ stars }}" as="r" hint-placeholder-count="5">
+        <button onClick="{{ r.onClick }}" title="{{ r.title }}" style="width:32px;height:32px;display:grid;place-items:center;padding:0;border:0;background:transparent;color:{{ r.color }};cursor:pointer;transition:color .12s,transform .12s" style-hover="transform:scale(1.12)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="{{ r.fill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"></path></svg>
+        </button>
+      </sc-for>
+      <span style="margin-left:6px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">{{ ratingText }}</span>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isDrop }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative">
+      <button ref="{{ trigRef }}" onClick="{{ toggleDrop }}" style="width:100%;min-height:38px;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:4px 34px 4px 12px;border:1px solid {{ dropBd }};border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;text-align:left;cursor:pointer;box-shadow:{{ dropRing }};transition:border-color .15s,box-shadow .15s;position:relative" style-hover="border-color:var(--color-text)">
+        <sc-if value="{{ dropEmpty }}" hint-placeholder-val="{{ true }}"><span style="color:var(--muted)">Select…</span></sc-if>
+        <sc-if value="{{ dropSingle }}" hint-placeholder-val="{{ false }}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sv }}</span></sc-if>
+        <sc-if value="{{ dropTags }}" hint-placeholder-val="{{ false }}">
+          <span style="display:flex;flex-wrap:wrap;gap:4px;min-width:0">
+            <sc-for list="{{ selTags }}" as="t" hint-placeholder-count="2">
+              <span style="display:inline-flex;align-items:center;gap:2px;height:24px;padding:0 3px 0 8px;border-radius:6px;background:color-mix(in srgb,var(--color-text) 8%,transparent);font-size:12px;font-weight:700;white-space:nowrap">{{ t.label }}<span onClick="{{ t.onRemove }}" title="Remove" style="width:18px;height:18px;display:grid;place-items:center;border-radius:4px;color:var(--muted);cursor:pointer" style-hover="color:var(--color-text);background:color-mix(in srgb,var(--color-text) 10%,transparent)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></span>
+            </sc-for>
+          </span>
+        </sc-if>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;right:12px;top:50%;margin-top:-7.5px;color:var(--muted);transform:{{ chevRot }};transition:transform .2s"><path d="m6 9 6 6 6-6"></path></svg>
+      </button>
+      <sc-if value="{{ dropOpen }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ closeDrop }}" style="position:fixed;inset:0;z-index:20"></div>
+        <div style="position:absolute;left:0;right:0;top:{{ popTop }};bottom:{{ popBottom }};z-index:21;display:flex;flex-direction:column;max-height:{{ popMaxH }};background:var(--color-bg);border:1px solid var(--hair, rgba(0,0,0,.1));border-radius:var(--r-lg, 12px);box-shadow:var(--shadow-lg);overflow:hidden;animation:mfDrop .16s cubic-bezier(.22,1,.36,1) both;transform-origin:{{ popOrigin }}">
+          <sc-if value="{{ hasSearch }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:none;padding:8px 8px 4px">
+              <input ref="{{ qRef }}" value="{{ dq }}" onChange="{{ onDq }}" onKeyDown="{{ onDqKey }}" placeholder="Search" style="width:100%;box-sizing:border-box;height:32px;padding:0 10px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r-sm, 6px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:13px;outline:none" style-focus="border-color:var(--color-text)">
+            </div>
+          </sc-if>
+          <div style="flex:1;min-height:0;overflow:auto;padding:4px">
+            <sc-for list="{{ dopts }}" as="o" hint-placeholder-count="5">
+              <button onClick="{{ o.onClick }}" style="width:100%;display:flex;align-items:center;gap:10px;min-height:34px;padding:6px 10px;border:0;border-radius:var(--r-sm, 6px);background:{{ o.bg }};color:var(--color-text);font:inherit;font-size:13px;font-weight:{{ o.weight }};text-align:left;cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 6%,transparent)">
+                <sc-if value="{{ isMultiDrop }}" hint-placeholder-val="{{ false }}"><span style="flex:none;width:16px;height:16px;box-sizing:border-box;border-radius:4px;border:1.5px solid {{ o.boxBd }};background:{{ o.boxBg }};color:var(--color-bg);display:grid;place-items:center"><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span></sc-if>
+                <span style="flex:1;min-width:0">{{ o.label }}</span>
+                <sc-if value="{{ o.singleOn }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+              </button>
+            </sc-for>
+            <sc-if value="{{ dNone }}" hint-placeholder-val="{{ false }}"><div style="padding:10px;font-size:12px;color:var(--muted)">No match</div></sc-if>
+          </div>
+          <sc-if value="{{ dClearable }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 12px;border-top:1px solid var(--hair, rgba(0,0,0,.1));font-size:12px;color:var(--muted)">
+              <span>{{ dCount }}</span>
+              <button onClick="{{ dClear }}" style="height:26px;padding:0 8px;border:0;border-radius:var(--r-sm, 6px);background:transparent;color:var(--color-text);font:inherit;font-size:12px;font-weight:700;cursor:pointer" style-hover="background:color-mix(in srgb,var(--color-text) 7%,transparent)">Clear</button>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isRadio }}" hint-placeholder-val="{{ false }}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+      <sc-for list="{{ radios }}" as="o" hint-placeholder-count="4">
+        <button onClick="{{ o.onClick }}" style="display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid {{ o.bd }};border-radius:10px;background:{{ o.bg }};color:var(--color-text);font:inherit;text-align:left;cursor:pointer;box-shadow:{{ o.ring }};transition:border-color .15s,box-shadow .15s" style-hover="border-color:var(--color-text)">
+          <span style="flex:none;margin-top:2px;width:16px;height:16px;border-radius:50%;box-sizing:border-box;border:{{ o.dot }};background:var(--color-bg)"></span>
+          <span style="display:flex;flex-direction:column;gap:3px;min-width:0"><span style="font-size:13px;font-weight:800">{{ o.title }}</span><span style="font-size:12px;line-height:1.4;color:var(--muted);text-wrap:pretty">{{ o.desc }}</span></span>
+        </button>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isSeverity }}" hint-placeholder-val="{{ false }}">
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:3px;border-radius:9px;background:color-mix(in srgb,var(--color-text) 7%,transparent)">
+      <sc-for list="{{ sev }}" as="o" hint-placeholder-count="5">
+        <button onClick="{{ o.onClick }}" style="height:32px;padding:0 4px;border:0;border-radius:6px;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.shadow }};font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" style-hover="color:{{ o.hoverFg }}">{{ o.label }}</button>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isTags }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:38px;box-sizing:border-box;padding:4px 6px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff)">
+      <sc-for list="{{ tags }}" as="t" hint-placeholder-count="2">
+        <span style="display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 4px 0 9px;border-radius:999px;background:color-mix(in srgb,var(--color-text) 8%,transparent);font-size:12px;font-weight:700">{{ t.label }}<button onClick="{{ t.onRemove }}" title="Remove" style="width:18px;height:18px;display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:transparent;color:var(--muted);cursor:pointer" style-hover="color:var(--color-text)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></span>
+      </sc-for>
+      <input value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onTagKey }}" placeholder="{{ tagPh }}" style="flex:1;min-width:120px;height:28px;border:0;outline:0;background:transparent;color:var(--color-text);font:inherit;font-size:14px;padding:0 4px">
+    </div>
+    <sc-if value="{{ hasSuggest }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px">
+        <sc-for list="{{ suggest }}" as="t" hint-placeholder-count="4">
+          <button onClick="{{ t.onAdd }}" style="display:inline-flex;align-items:center;gap:3px;height:24px;padding:0 8px 0 6px;border:1px dashed var(--hair-strong, rgba(0,0,0,.2));border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-size:12px;font-weight:600;cursor:pointer" style-hover="color:var(--color-text);border-color:var(--color-text)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>{{ t.label }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </sc-if>
+  <sc-if value="{{ isFiles }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px">
+        <sc-for list="{{ files }}" as="x" hint-placeholder-count="3">
+          <button onClick="{{ x.onClick }}" title="{{ x.title }}" style="position:relative;aspect-ratio:1;padding:0;border:0;border-radius:6px;overflow:hidden;background:var(--stage, #ddd);cursor:pointer;box-shadow:{{ x.ring }};opacity:{{ x.op }};transition:opacity .15s,box-shadow .15s">
+            <img src="{{ x.thumb }}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+            <sc-if value="{{ x.on }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;right:4px;top:4px;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;background:var(--color-text);color:var(--color-bg)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+      <span style="font-size:12px;color:var(--muted)">{{ filesNote }}</span>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isAiDesc }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-self:flex-start;gap:2px;padding:3px;border-radius:9px;background:color-mix(in srgb,var(--color-text) 7%,transparent)">
+        <sc-for list="{{ descModes }}" as="b" hint-placeholder-count="2">
+          <button onClick="{{ b.onClick }}" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:0;border-radius:6px;background:{{ b.bg }};color:{{ b.fg }};box-shadow:{{ b.shadow }};font:inherit;font-size:13px;font-weight:700;cursor:pointer">{{ b.label }}</button>
+        </sc-for>
+      </div>
+      <sc-if value="{{ aiMode }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:10px;padding:12px 14px;border-radius:10px;background:color-mix(in srgb,var(--color-text) 4%,transparent)">
+          <span style="flex:none;margin-top:1px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path><path d="M20 3v4"></path><path d="M22 5h-4"></path></svg></span>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:13px;font-weight:800">The AI agent writes the description after you publish</span>
+            <span style="font-size:12px;line-height:1.45;color:var(--muted);text-wrap:pretty">It works from the details, the condition and the photos. Add notes only when something needs extra attention.</span>
+          </div>
+        </div>
+        <textarea value="{{ aiNotes }}" onChange="{{ onAiNotes }}" rows="3" placeholder="Notes for the AI agent (optional)" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;line-height:1.5;outline:none;resize:vertical;transition:border-color .15s,box-shadow .15s;min-height:76px" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)"></textarea>
+      </sc-if>
+      <sc-if value="{{ manualMode }}" hint-placeholder-val="{{ false }}">
+        <textarea value="{{ manText }}" onChange="{{ onManText }}" rows="8" placeholder="Product description" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;line-height:1.5;outline:none;resize:vertical;transition:border-color .15s,box-shadow .15s;min-height:168px" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)"></textarea>
+        <span style="font-size:12px;color:var(--muted)">Published as written. The AI agent won't change it.</span>
+      </sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isUnsupported }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:8px;min-height:38px;box-sizing:border-box;padding:8px 12px;border:1px dashed var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);font-size:12px;color:var(--muted)">Edited in Shopify admin · {{ typeName }}</div>
+  </sc-if>
+  <sc-if value="{{ isMoney }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative">
+      <span style="position:absolute;left:12px;top:0;height:38px;display:flex;align-items:center;font-size:14px;font-weight:700;color:var(--muted);pointer-events:none">{{ currency }}</span>
+      <input value="{{ sv }}" onChange="{{ onNum }}" inputMode="decimal" placeholder="0.00" style="width:100%;box-sizing:border-box;height:38px;padding:0 12px 0 30px;border:1px solid var(--hair-strong, rgba(0,0,0,.18));border-radius:var(--r, 8px);background:var(--color-surface, #fff);color:var(--color-text);font:inherit;font-size:14px;outline:none;font-variant-numeric:tabular-nums;transition:border-color .15s,box-shadow .15s" style-focus="border-color:var(--color-text);box-shadow:0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)">
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:360,&quot;height&quot;:120},&quot;field&quot;:{&quot;editor&quot;:null,&quot;default&quot;:{&quot;kind&quot;:&quot;choice&quot;,&quot;choices&quot;:[&quot;Excellent&quot;,&quot;Very good&quot;,&quot;Good&quot;,&quot;Fair&quot;]},&quot;tsType&quot;:&quot;{ kind: 'text'|'textarea'|'choice'|'multi'|'int'|'decimal'|'dimension'|'weight'|'boolean'|'date'|'color'|'rating'|'money'|'url'; choices?: string[]; units?: string[]; ph?: string; currency?: string }&quot;},&quot;value&quot;:{&quot;editor&quot;:null,&quot;default&quot;:&quot;Good&quot;,&quot;tsType&quot;:&quot;unknown&quot;},&quot;onChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(value: unknown) =&gt; void&quot;}}">
+const SWATCHES = [['Black', '#222120'], ['Off-white', '#efebe4'], ['Teak', '#9a5b34'], ['Oak', '#c9a272'], ['Walnut', '#5a3b2a'], ['Olive', '#6f7651'], ['Bottle green', '#2f4a3a'], ['Rust', '#b0532f'], ['Mustard', '#cf9f3a'], ['Navy', '#33465e'], ['Grey', '#8c8a86']];
+
+const SEV = { 'N/A': 0, None: 1, Minor: 2, Moderate: 3, Major: 4 };
+class Component extends DCLogic {
+  state = { draft: '', open: false, dq: '', up: false };
+  trigRef = React.createRef(); qRef = React.createRef();
+  componentDidUpdate(pp, ps) { if (this.state.open && !ps.open && this.qRef.current) this.qRef.current.focus(); }
+  drop(k, v, set) {
+    const isDrop = k === 'select' || k === 'multiselect', multi = k === 'multiselect';
+    if (!isDrop) return { isDrop: false };
+    const f = this.props.field || {}, all = f.choices || [], st = this.state, arr = Array.isArray(v) ? v : [];
+    const q = st.dq.trim().toLowerCase(), list = q ? all.filter(c => c.toLowerCase().includes(q)) : all;
+    const close = () => this.setState({ open: false, dq: '' });
+    const pick = c => { if (multi) set(arr.includes(c) ? arr.filter(x => x !== c) : [...arr, c]); else { set(v === c ? '' : c); close(); } };
+    return {
+      isDrop, isMultiDrop: multi, trigRef: this.trigRef, qRef: this.qRef,
+      dropEmpty: multi ? !arr.length : !v, dropSingle: !multi && !!v, dropTags: multi && arr.length > 0,
+      selTags: arr.map(t => ({ label: t, onRemove: e => { e.stopPropagation(); set(arr.filter(x => x !== t)); } })),
+      dropOpen: st.open, chevRot: st.open ? 'rotate(180deg)' : 'none',
+      dropBd: st.open ? 'var(--color-text)' : 'var(--hair-strong, rgba(0,0,0,.18))', dropRing: st.open ? '0 0 0 3px color-mix(in srgb,var(--color-text) 10%,transparent)' : 'none',
+      toggleDrop: () => { if (st.open) return close(); const el = this.trigRef.current; if (!el) return this.setState({ open: true, dq: '' });
+        const r = el.getBoundingClientRect(); let lo = 0, hi = window.innerHeight, p = el.parentElement;
+        while (p && p !== document.body) { const cs = getComputedStyle(p); if (/(auto|scroll|hidden)/.test(cs.overflowY)) { const pr = p.getBoundingClientRect(); lo = Math.max(lo, pr.top); hi = Math.min(hi, pr.bottom); break; } p = p.parentElement; }
+        const below = hi - r.bottom - 12, above = r.top - lo - 12, want = Math.min(300, (all.length > 8 ? 48 : 8) + Math.min(list.length, 8) * 34 + (multi && arr.length ? 40 : 0));
+        const up = below < want && above > below;
+        this.setState({ open: true, dq: '', up, maxH: Math.max(120, Math.min(300, up ? above : below)) }); },
+      closeDrop: close,
+      popMaxH: (st.maxH || 300) + 'px', popTop: st.up ? 'auto' : 'calc(100% + 6px)', popBottom: st.up ? 'calc(100% + 6px)' : 'auto', popOrigin: st.up ? 'bottom' : 'top',
+      hasSearch: all.length > 8, dq: st.dq, onDq: e => this.setState({ dq: e.target.value }),
+      onDqKey: e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } else if (e.key === 'Enter' && list[0]) { e.preventDefault(); pick(list[0]); } },
+      dopts: list.map(c => { const on = multi ? arr.includes(c) : v === c; return { label: c, on, singleOn: !multi && on, weight: on ? 700 : 500, bg: !multi && on ? 'color-mix(in srgb,var(--color-text) 6%,transparent)' : 'transparent',
+        boxBd: on ? 'var(--color-text)' : 'var(--hair-strong, rgba(0,0,0,.3))', boxBg: on ? 'var(--color-text)' : 'transparent', onClick: () => pick(c) }; }),
+      dNone: !list.length, dClearable: multi && arr.length > 0, dCount: arr.length + ' selected', dClear: () => set([])
+    };
+  }
+  renderVals() {
+    const f = this.props.field || { kind: 'text' }, k = f.kind || 'text', v = this.props.value;
+    const set = x => this.props.onChange && this.props.onChange(x);
+    const sv = v == null || typeof v === 'object' ? '' : String(v);
+    const seg = on => ({ bg: on ? 'var(--color-bg)' : 'transparent', fg: on ? 'var(--color-text)' : 'var(--muted)', shadow: on ? 'var(--shadow-sm)' : 'none' });
+    const arr = Array.isArray(v) ? v : [];
+    const chips = (f.choices || []).map(c => {
+      const on = k === 'multi' ? arr.includes(c) : v === c;
+      return { label: c, bg: on ? 'var(--color-text)' : 'transparent', fg: on ? 'var(--color-bg)' : 'var(--color-text)', bd: on ? 'var(--color-text)' : 'var(--hair-strong, rgba(0,0,0,.18))',
+        onClick: () => set(k === 'multi' ? (on ? arr.filter(x => x !== c) : [...arr, c]) : (on ? '' : c)) };
+    });
+    const units = f.units || ['cm'], m = v && typeof v === 'object' && !Array.isArray(v) ? v : { v: '', u: units[0] }, mu = m.u || units[0];
+    const n = parseInt(sv, 10);
+    const rv = typeof v === 'number' ? v : 0;
+    return {
+      isText: k === 'text', isUrl: k === 'url', isTextarea: k === 'textarea', isChips: k === 'choice' || k === 'multi',
+      isInt: k === 'int', isDecimal: k === 'decimal', hasUnit: k === 'dimension' || k === 'weight', isBoolean: k === 'boolean',
+      isDate: k === 'date', isColor: k === 'color', isRating: k === 'rating', isMoney: k === 'money',
+      sv, ph: f.ph || '', currency: f.currency || '€', chips,
+      onStr: e => set(e.target.value),
+      onNum: e => set(e.target.value.replace(/[^\d.,]/g, '')),
+      onInt: e => set(e.target.value.replace(/\D/g, '')),
+      dec: () => set(String(Math.max(0, (isNaN(n) ? 0 : n) - 1))),
+      inc: () => set(String((isNaN(n) ? 0 : n) + 1)),
+      mv: m.v || '', onMv: e => set({ v: e.target.value.replace(/[^\d.,]/g, ''), u: mu }),
+      units: units.map(u => ({ label: u, ...seg(u === mu), onClick: () => set({ v: m.v || '', u }) })),
+      bools: [['Yes', true], ['No', false]].map(([label, b]) => ({ label, ...seg(v === b), onClick: () => set(v === b ? undefined : b) })),
+      swatches: SWATCHES.map(([name, hex]) => ({ name, hex, ring: sv.toLowerCase() === hex ? '0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-text)' : 'none', onClick: () => set(sv.toLowerCase() === hex ? '' : hex) })),
+      stars: [1, 2, 3, 4, 5].map(i => ({ title: `${i} of 5`, fill: i <= rv ? 'currentColor' : 'none', color: i <= rv ? 'var(--color-text)' : 'var(--hair-strong, rgba(0,0,0,.25))', onClick: () => set(rv === i ? 0 : i) })),
+      ratingText: rv ? `${rv} / 5` : '',
+      ...this.drop(k, v, set),
+      isSelect: false, isAiDesc: k === 'aidesc',
+      ...(() => { const d = v && typeof v === 'object' && !Array.isArray(v) && v.mode ? v : { mode: 'ai', notes: '', text: '' }, ai = d.mode !== 'manual';
+        return { aiMode: ai, manualMode: !ai, aiNotes: d.notes || '', manText: d.text || '',
+          onAiNotes: e => set({ ...d, notes: e.target.value }), onManText: e => set({ ...d, text: e.target.value }),
+          descModes: [['ai', 'AI agent writes it'], ['manual', 'Write manually']].map(([m, label]) => ({ label, ...seg((m === 'ai') === ai), onClick: () => set({ ...d, mode: m }) })) }; })(),
+      ...(() => { const q = this.state.draft.trim().toLowerCase(), sg = (f.suggest || []).filter(t => !arr.includes(t) && (!q || t.toLowerCase().includes(q))).slice(0, 10);
+        return { hasSuggest: k === 'tags' && sg.length > 0, suggest: sg.map(t => ({ label: t, onAdd: () => { set([...arr, t]); this.setState({ draft: '' }); } })) }; })(), isRadio: k === 'radio', isSeverity: k === 'severity', isTags: k === 'tags', isFiles: k === 'files', isUnsupported: k === 'unsupported',
+      typeName: f.typeName || '', selColor: sv ? 'var(--color-text)' : 'var(--muted)',
+      opts: (f.choices || []).map(value => ({ value })),
+      radios: (f.choices || []).map(c => { const on = v === c, i = c.indexOf(' - ');
+        return { title: i > 0 ? c.slice(0, i) : c, desc: i > 0 ? c.slice(i + 3) : '', bg: on ? 'color-mix(in srgb,var(--color-text) 4%,var(--color-bg))' : 'transparent', bd: on ? 'var(--color-text)' : 'var(--hair-strong, rgba(0,0,0,.18))', ring: on ? '0 0 0 1px var(--color-text)' : 'none', dot: on ? '5px solid var(--color-text)' : '1.5px solid var(--hair-strong, rgba(0,0,0,.3))', onClick: () => set(on ? '' : c) }; }),
+      sev: (f.choices || []).map(c => { const on = v === c, lv = SEV[c] ?? 1;
+        const bg = !on ? 'transparent' : lv === 0 ? 'var(--color-bg)' : lv === 1 ? 'var(--color-text)' : lv === 2 ? 'color-mix(in srgb,var(--danger, #d44) 22%,var(--color-bg))' : lv === 3 ? 'color-mix(in srgb,var(--danger, #d44) 55%,var(--color-bg))' : 'var(--danger, #d44)';
+        const fg = !on ? 'var(--muted)' : lv === 0 ? 'var(--color-text)' : lv === 1 ? 'var(--color-bg)' : lv === 2 ? 'var(--danger-700, #a22)' : '#fff';
+        return { label: c, bg, fg, hoverFg: on ? fg : 'var(--color-text)', shadow: on && lv === 0 ? 'var(--shadow-sm)' : 'none', onClick: () => set(on ? '' : c) }; }),
+      draft: this.state.draft, tagPh: arr.length ? '' : (f.ph || 'Type and press Enter'),
+      tags: arr.map((t, i) => ({ label: t, onRemove: () => set(arr.filter((_, j) => j !== i)) })),
+      onDraft: e => this.setState({ draft: e.target.value }),
+      onTagKey: e => { const d = this.state.draft.trim();
+        if ((e.key === 'Enter' || e.key === ',') && d) { e.preventDefault(); if (!arr.includes(d)) set([...arr, d]); this.setState({ draft: '' }); }
+        else if (e.key === 'Backspace' && !this.state.draft && arr.length) set(arr.slice(0, -1)); },
+      files: (() => { const all = (f.files || []), selF = Array.isArray(v) ? v : all.map(x => x.id);
+        return all.map((x, i) => { const on = selF.includes(x.id); return { thumb: x.thumb, on, title: on ? 'Included' : 'Not included', op: on ? 1 : 0.4, ring: on ? '0 0 0 2px var(--color-text)' : 'inset 0 0 0 1px var(--hair, rgba(0,0,0,.1))', onClick: () => set(on ? selF.filter(y => y !== x.id) : [...selF, x.id]) }; }); })(),
+      filesNote: (() => { const all = (f.files || []), n = Array.isArray(v) ? v.filter(id => all.some(x => x.id === id)).length : all.length; return all.length ? `${n} of ${all.length} condition photos attached` : 'No condition photos in this session'; })()
+    };
+  }
+}
+</script>
+</body>
+</html>

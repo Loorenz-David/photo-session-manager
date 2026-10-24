@@ -1,0 +1,81 @@
+/* Session Manager design tokens. Light is the default; dark overrides under [data-theme="dark"].
+   Names follow the prototype. Map to shadcn: see COMPONENTS.md → "Theme variables". */
+:root, [data-theme="light"] {
+  /* ground + ink */
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;          /* inputs, subtle fills */
+  --color-text: #201e1d;
+  --muted: color-mix(in srgb, #201e1d 62%, transparent);
+  --stage: #e4e2e0;                  /* photo stage / thumbnail placeholder */
+  --hair: color-mix(in srgb, #201e1d 14%, transparent);        /* 1px dividers */
+  --hair-strong: color-mix(in srgb, #201e1d 22%, transparent); /* input borders, section rules */
+
+  /* primary action (near-black, not a hue) */
+  --color-accent: rgb(48, 48, 48);
+  --color-accent-600: rgb(72, 72, 72);  /* hover */
+  --accent-tint: rgb(228, 228, 228);
+
+  /* danger: failures, Delete hover, disconnected camera, failure count */
+  --danger: oklch(0.57 0.2 29);
+  --danger-700: oklch(0.48 0.18 29);   /* danger text */
+
+  /* AI agent: everything the agent touched. Deliberately quiet slate blue. */
+  --ai: oklch(0.6 0.06 248);
+  --ai-700: oklch(0.45 0.065 250);     /* AI text on tint */
+  --ai-tint: oklch(0.94 0.012 245);    /* AI pill / chip background */
+
+  /* status */
+  --ok: oklch(0.62 0.15 150);          /* camera connected dot */
+
+  /* type */
+  --font-heading: "Archivo", system-ui, sans-serif;
+  --font-body: "Archivo", system-ui, sans-serif;
+  --text-xs: 11px;   /* labels, pills, section caps (uppercase, .1em tracking, 800) */
+  --text-sm: 12px;   /* meta, SKU, helper */
+  --text-md: 13px;   /* buttons, list body */
+  --text-base: 14px; /* inputs, body */
+  --text-lg: 15px;   /* row titles, step titles */
+  --text-xl: 17px;   /* dialog title */
+  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600; --weight-bold: 700; --weight-heavy: 800;
+
+  /* spacing (4px base) */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+
+  /* radii */
+  --r-sm: 5px;    /* small tags, mini thumbs */
+  --r: 8px;       /* buttons, inputs, grid thumbnails */
+  --r-lg: 12px;   /* popovers, cards, hover preview */
+  --r-dialog: 14px;
+  --r-pill: 999px; /* status pills, chips, round action buttons */
+
+  /* elevation */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+
+  /* motion */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --dur-fast: 160ms;  /* popovers, hover preview */
+  --dur-med: 280ms;   /* bars, drawers */
+  --dur-slow: 420ms;  /* panel fold, page enter */
+  --dur-crossfade: 700ms; /* Original ⇄ Adjusted */
+}
+[data-theme="dark"] {
+  --color-bg: #151413;
+  --color-surface: #1f1d1c;
+  --color-text: #ebe8e5;
+  --muted: color-mix(in srgb, #ebe8e5 60%, transparent);
+  --stage: #0c0b0b;
+  --hair: color-mix(in srgb, #ebe8e5 14%, transparent);
+  --hair-strong: color-mix(in srgb, #ebe8e5 24%, transparent);
+  --color-accent: rgb(236, 236, 236);
+  --color-accent-600: rgb(255, 255, 255);
+  --accent-tint: rgb(58, 58, 58);
+  --danger: oklch(0.68 0.18 29);
+  --danger-700: oklch(0.78 0.13 29);
+  --ai: oklch(0.7 0.05 245);
+  --ai-700: oklch(0.82 0.04 245);
+  --ai-tint: oklch(0.32 0.018 250);
+  --shadow-md: 0 0 0 1px color-mix(in srgb, #fff 8%, transparent), 0 6px 18px rgba(0,0,0,.45);
+  --shadow-lg: 0 0 0 1px color-mix(in srgb, #fff 10%, transparent), 0 18px 44px rgba(0,0,0,.55);
+}
