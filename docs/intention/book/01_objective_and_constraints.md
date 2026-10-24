@@ -1,0 +1,21 @@
+# 01 — Objective and hard constraints
+
+**Outcome.** A photographer positions the piece, presses the shutter, and sorts. Session Manager
+turns that into a completed photography session: adjusted photos in the chosen order, split into
+main images and condition images, with the item's information filled in, ready to export locally
+or to send to the connected platform. For the first customer the platform is Shopify, and the
+finished product page shows the gallery in the chosen order and the condition photos in the
+condition metafield.
+
+**Hard constraints (never traded for scope).**
+
+| # | Constraint | Why |
+|---|---|---|
+| H1 | Nothing is written to an external platform without an explicit, recorded confirmation by the photographer. | A wrong image on a live listing is a customer-facing defect. |
+| H2 | RAW files are never modified, moved or deleted by Session Manager. "Delete" in the UI hides a photo; bytes stay on disk. | Non-destructive; the imaging provider owns the files. |
+| H3 | No pixel processing in this repo. Styling, crop, masks and export are the imaging provider's job (Capture One in the MVP). Copying an embedded JPEG out of a RAW is allowed; decoding is not. | Reuse; keeps the codebase small. |
+| H4 | Every step is idempotent. After a crash at any point, resuming yields the same end state: no lost associations, no duplicate uploads. | Single operator, no engineer on site. |
+| H5 | No UI automation of other apps. Capture One is driven only through its AppleScript dictionary. | Breaks on every update otherwise. |
+| H6 | The core photography workflow runs with no integration configured. Publishing is optional and last. | Different customers have different systems after photography. |
+| H7 | Platform-specific concepts (Shopify products, metafields, media IDs) never appear in core modules or core tables. They live in adapters and link tables. | Second customer must not require a core rewrite. |
+| H8 | Business logic is independent of FastAPI and of Tauri. Both are transports or shells. | Commercial packaging must not force a rewrite. |
