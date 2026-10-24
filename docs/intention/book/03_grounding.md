@@ -16,7 +16,7 @@ standing rules are the baseline.
   design handoff names them. Talks to Rust through typed Tauri commands and events (chapter 11).
 - **Editing provider:** Capture One Pro 16.8.6.25, driven through its AppleScript dictionary by
   JXA via `osascript`, spawned from Rust on one serial queue. `capture-one-mcp` not used (R11).
-- **Camera:** Sony ZV-E10 over USB-C, tethered by Capture One in the MVP (card A2).
+- **Camera:** Sony ZV-E10 over USB-C, tethered by Capture One in the MVP (R27); the physical link may change.
 - **Folder watching:** FSEvents from Rust, as fallback and reconciler only.
 - **Commerce integration:** Shopify Admin GraphQL API, custom dev-app token, provided before S6.
   Metafield definitions were read from the shop on 2026-10-24 (`claude_design/reference/`).

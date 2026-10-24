@@ -7,13 +7,12 @@ development the UI runs from Vite inside the Tauri dev window. There is no secon
 process. **Python is optional**: introduced only as a Tauri sidecar when a concrete need is
 demonstrated (local vision, image processing, a specialised model); none exists in the MVP.
 
-## Frontend ↔ backend (card A1)
+## Frontend ↔ backend (A1, resolved R26)
 The window calls typed Tauri commands and subscribes to Tauri events. Command and event types are
 generated from the Rust signatures into TypeScript (tool chosen by the planner); components never
 call `invoke` directly, they call `services/`. The phone remote (chapter 04 S-M, N3) is served
 later by an HTTP + WebSocket server embedded in the same Rust process, exposing the same
-application services; under H8 it is an addition, not a change. If A1 chooses otherwise, the
-desktop window also uses that server from the start.
+application services; under H8 it is an addition, not a change.
 
 ## Layers (owner memo, 2026-10-24) and the dependency rule
 ```

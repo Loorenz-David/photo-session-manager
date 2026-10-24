@@ -36,3 +36,6 @@
     transport" vs Tauri commands), A2 (camera provider vs Capture One owning the tether).
     `primary variant adjusted script` added to the hooks in use; VERIFY-8/9/10 added to the
     Capture One evidence. `.gitignore` and `CLAUDE.md` updated to the Rust stack.
+11. **2026-10-24 — Owner.** A1 Tauri commands now, server later (R26). A2 camera through Capture
+    One for the MVP; the physical camera link (USB or wireless) remains open and must not disturb
+    the implementation (R27). D4 to be explained again.

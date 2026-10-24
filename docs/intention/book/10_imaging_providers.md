@@ -9,13 +9,14 @@ Capabilities an adapter may declare: `camera.discover`, `camera.connect`, `camer
 `camera.capture`, `camera.transfer`, `camera.settings.read`, `camera.settings.write`. The UI
 hides what is absent: the header dot needs `camera.status`, the capture button `camera.capture`.
 
-**MVP adapter (card A2): camera through Capture One.** Capture One holds the USB tether to the
+**MVP adapter (A2, resolved R27): camera through Capture One.** Capture One holds the USB tether to the
 Sony ZV-E10, and one host owns that connection. The adapter reports status from the document's
 `camera` and `available camera identifiers`, fires the shutter with the `capture` command, and
 "transfer" is Capture One writing the RAW into the capture folder. It declares `camera.status`,
 `camera.capture`, `camera.transfer`. A direct Sony adapter (Camera Remote SDK or PTP) is a later
 provider that would take over the tether; its feasibility is a research item, never assumed
-(owner memo, 2026-10-24).
+(owner memo, 2026-10-24). The physical link (USB today, wireless under exploration) is the
+adapter's concern and changes nothing above the interface.
 
 ## Editing provider
 Capabilities: `document.inspect` (open document, kind, folders), `capture_folder.set`,

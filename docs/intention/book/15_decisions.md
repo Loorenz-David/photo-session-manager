@@ -28,8 +28,10 @@
 | R23 | **Editing software is an integration**: editing service → editing provider interface → Capture One adapter. Communication mechanism (AppleScript, filesystem) is the adapter's concern. | 2026-10-24 |
 | R24 | **Tauri commands are thin.** Business logic never depends on Tauri-specific commands or events (H8 revised). Layers: frontend, core domain, application services, integration layer, infrastructure. | 2026-10-24 |
 | R25 | Concrete MVP integrations are exactly: Sony ZV-E10 (camera), Capture One (editing), Shopify (commerce). No speculative adapters or plugin system. | 2026-10-24 |
+| R26 | **A1 Tauri commands now.** Desktop UI uses typed Tauri commands and events; an HTTP + WebSocket server is embedded in the same Rust process only when the phone remote arrives. Services stay callable without Tauri (H8). Closes R8. | 2026-10-24 |
+| R27 | **A2 camera through Capture One** for the MVP. How the camera physically connects (USB tether today, wireless under exploration) stays open and must not disturb the implementation: everything camera-specific sits behind the camera provider interface, and capture arrival is defined by the editing provider's hook and the capture folder, not by the link. | 2026-10-24 |
 
-## ⚠ OWNER DECISIONS REQUIRED (3)
+## ⚠ OWNER DECISIONS REQUIRED (1)
 
 **D4 — When does Capture One render the web-size files?**
 Question: The files we upload are rendered by Capture One with the 3000 px web recipe (not our
@@ -43,36 +45,3 @@ Branches: **At publish** — always the latest edit; the design's "Preparing ima
 Recommendation: At publish.
 On silence: gate holds.
 Trace: chapter 07 steps, chapter 10, M3.
-
-**A1 — How does the desktop window talk to the Rust backend?**
-Question: Typed Tauri commands and events in-process, adding an HTTP + WebSocket server inside the
-same Rust process only when the phone remote arrives; or run that server from day one and have
-the desktop window use it too (the former "one transport" decision R8)?
-Story: With Tauri commands the MVP has no open port, no auth and no serialization layer to
-maintain; the phone later gets a server that calls the same services. With a server from day one,
-desktop and phone share one code path, at the price of a port, a token and a second type pipeline
-before anyone needs them.
-Branches: **Tauri commands now, server later** — less MVP surface; H8 keeps the services
-transport-agnostic. **Server for both from day one** — one path, more MVP work.
-Recommendation: Tauri commands now; services must be callable without Tauri so the server is an
-addition.
-On silence: gate holds.
-Trace: chapter 11, H8, M4.
-
-**A2 — Which camera provider does the MVP ship?**
-Question: Capture One holds the USB tether to the ZV-E10, and only one program can hold it.
-Should the MVP's camera adapter work *through Capture One* (status from the document's camera
-property, shutter via the `capture` command, files via the capture folder), with a direct Sony
-adapter as a later provider that would take the tether over from Capture One; or should we
-research and build a direct Sony adapter (Camera Remote SDK or PTP) now?
-Story: Through Capture One, the first stage needs no SDK licence, no device driver and no change
-to the S0 tether checklist, and the header dot and capture button still work. A direct adapter
-means Capture One can no longer tether; files would have to be handed to it by import, and its
-Next Capture Adjustments would not apply on arrival.
-Branches: **Through Capture One (MVP)** — camera interface defined, one adapter, direct adapter
-deferred. **Direct Sony adapter now** — research SDK availability for the ZV-E10 and macOS first;
-reworks capture arrival.
-Recommendation: Through Capture One for the MVP; the camera provider interface and capability
-list are defined now so the direct adapter is a drop-in later.
-On silence: gate holds.
-Trace: chapter 10, chapter 13, M1.
