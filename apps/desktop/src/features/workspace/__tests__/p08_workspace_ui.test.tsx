@@ -278,6 +278,22 @@ describe('C1 review keys and the next unreviewed photo', () => {
   });
 });
 
+describe('Candidate C9 a capture arriving in the open session (ch04 S-C)', () => {
+  it('C9 photo_added puts the new photo on the stage, and the next key acts on it', async () => {
+    const first = photo(1, 'main', { position: 1 });
+    const arrived = photo(2, 'unreviewed');
+    await openWorkspace([view([first]), view([first, arrived])]);
+    expect(activeTile()).toBe(1);
+
+    await act(async () => delivered.workspace.forEach(handler => handler({ kind: 'photo_added', photo_id: 2, session_id: SESSION })));
+    await waitFor(() => expect(activeTile()).toBe(2));
+
+    press('c');
+    await waitFor(() => expect(classifyPhoto).toHaveBeenCalledTimes(1));
+    expect(classifyPhoto).toHaveBeenCalledWith(2, 'condition');
+  });
+});
+
 describe('C2 undo', () => {
   const p = photo(1, 'main', { position: 1 });
   const q = photo(2, 'main', { position: 2 });

@@ -101,7 +101,7 @@ export function useWorkspaceState(sessionId: number) {
     onWorkspaceEvents(event => {
       if (event.session_id !== sessionId) return;
       // A new capture appears on the stage (ch04 S-C).
-      if (event.kind === 'photo_added') activeRef.current = event.photo_id;
+      if (event.kind === 'photo_added') setActiveId(event.photo_id);
       void reload();
     })
       .then(stop => {
@@ -113,7 +113,7 @@ export function useWorkspaceState(sessionId: number) {
       alive = false;
       unlisten?.();
     };
-  }, [sessionId, reload]);
+  }, [sessionId, reload, setActiveId]);
 
   const photos = useMemo(() => view?.photos ?? [], [view]);
   const photosRef = useRef(photos);

@@ -149,3 +149,11 @@ whether `I` opens a popover or a sheet.
   photo" on the stage with no active photo (A/C/⌫ do nothing); with photo 1 active, a new capture 2 leaves the stage on
   photo 1, so C/⌫ act on photo 1 while ←/→ step from photo 2. Contradicts ch04 S-C / ch06 §Arrival ("appears on the
   stage") and the plan's Manual try-out step 1. Notes: 4 rows appended to `backlog.md`.
+- 2026-10-25 fix 1 (actor `sonnet`): **F1 (B1, production) resolved.** In `useWorkspaceState.ts` the `photo_added` branch of the
+  `onWorkspaceEvents` handler now calls `setActiveId(event.photo_id)` (state and ref together) instead of writing only
+  `activeRef`; `setActiveId` was added to the effect's dependency list. The stage, A/C/⌫ and ←/→ now agree on the new
+  photo. **Candidate criterion C9** (declared per the review; traces to ch04 S-C "within about a second the photo appears on
+  the stage … the photographer presses A, C or Delete"): test `C9 photo_added puts the new photo on the stage, and the
+  next key acts on it` (Main photo 1 active; `photo_added{2}` makes tile 2 active; `c` calls `classifyPhoto(2,'condition')`).
+  The test fails without the fix (observed: 1 failed / 23 passed with the old line restored) and passes with it. Suite:
+  vitest 43/0, `cargo test --workspace` 183/0, clippy and fmt clean, typecheck clean. No judgment calls beyond the finding.
