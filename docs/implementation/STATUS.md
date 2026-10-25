@@ -15,8 +15,10 @@ Updated: 2026-10-25 by the orchestrator.
 - Phases: P00–P06 APPROVED 2026-10-25 (P04, P05 with notes; narratives relayed). P04 projection r0 →
   amendments applied by the orchestrator (plan Review log). P00 Automation prompt check PASSED with
   the owner 19:25 (evidence packaging_spike.md).
-- Run in flight: **all**, delayed start 01:05 on 2026-10-26 (P07 implement r1 hit the Codex usage limit
-  at 21:06, resets 01:00; attempt archived, partial work uncommitted in the tree, noted in the P07 Review log).
+- Run in flight: **all**, started 2026-10-25 ~22:00 (resumes at P07; its r1 attempt was stopped by the
+  Codex usage limit, archived, partial work uncommitted in the tree, noted in the P07 Review log).
+- Implementer and fix sessions now run on Claude (owner 2026-10-25: Opus for Codex 6 Sol, Sonnet for
+  Codex 6 Luna); flow.md §2 updated; `PSM_IMPLEMENTER=codex` switches back.
 
 ## Needs the owner
 Nothing. Card 1: owner said "install it"; rustup installed cargo/rustc 1.99.1 (2026-10-25).

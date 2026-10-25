@@ -16,6 +16,9 @@ IMPL="${PSM_IMPL_DIR:-$ROOT/docs/implementation}"
 RUNS="$ROOT/.pipeline/runs"
 TPL="$ROOT/tools/pipeline/templates"
 WRAP="$ROOT/tools/pipeline/wrappers/codex_implementer.md"
+CWRAP="$ROOT/tools/pipeline/wrappers/claude_implementer.md"
+# Implementer/fix runner: claude (owner 2026-10-25: Opus for gpt-6-sol, Sonnet for gpt-6-luna) or codex
+IMPLEMENTER="${PSM_IMPLEMENTER:-claude}"
 DATE="$(date +%F)"
 DRY_RUN="${DRY_RUN:-0}"
 CLAUDE_TOOLS="Bash Read Edit Write Grep Glob"
@@ -99,15 +102,16 @@ run_codex() {  # run_codex MODEL EFFORT PROMPT LAST LOG
   return $rc
 }
 
-run_claude() {  # run_claude AGENT MODEL PROMPT LAST LOG
-  local agent="$1" model="$2" prompt="$3" last="$4" logf="$5"
-  log "claude --agent $agent --model $model ← $(basename "$prompt")"
+run_claude() {  # run_claude AGENT MODEL PROMPT LAST LOG [EFFORT]
+  local agent="$1" model="$2" prompt="$3" last="$4" logf="$5" effort="${6:-}"
+  local eff=(); [[ -n "$effort" ]] && eff=(--effort "$effort")
+  log "claude --agent $agent --model $model${effort:+ --effort $effort} ← $(basename "$prompt")"
   if [[ "$DRY_RUN" == 1 ]]; then
-    echo "DRY: claude -p --agent $agent --model $model --allowedTools \"$CLAUDE_TOOLS\" --permission-mode acceptEdits --no-session-persistence --output-format json < $prompt"
+    echo "DRY: claude -p --agent $agent --model $model ${eff[@]+"${eff[@]}"} --allowedTools \"$CLAUDE_TOOLS\" --permission-mode acceptEdits --no-session-persistence --output-format json < $prompt"
     printf 'HANDOFF: %s | STATE: DONE | VERDICT: %s | OWNER_CARDS: 0\n' "$DRY_HANDOFF" "${DRY_VERDICT:-APPROVED}" > "$last"; return 0
   fi
   set +e
-  ( cd "$ROOT" && claude -p --agent "$agent" --model "$model" --allowedTools $CLAUDE_TOOLS \
+  ( cd "$ROOT" && claude -p --agent "$agent" --model "$model" ${eff[@]+"${eff[@]}"} --allowedTools $CLAUDE_TOOLS \
       --permission-mode acceptEdits --no-session-persistence --output-format json < "$prompt" > "$logf" 2>&1 )
   local rc=$?; set -e
   python3 - "$logf" "$last" <<'PY'
@@ -124,6 +128,15 @@ open(last, 'w').write(result)
 PY
   log "claude exited $rc"
   return $rc
+}
+
+run_impl() {  # run_impl CODEX_MODEL EFFORT PROMPT LAST LOG → codex, or claude pipeline-implementer
+  local model="$1" effort="$2" prompt="$3" last="$4" logf="$5"
+  if [[ "$IMPLEMENTER" == codex ]]; then run_codex "$@"; return $?; fi
+  local cm=opus; [[ "$model" == gpt-6-luna ]] && cm=sonnet
+  local full="$RUNS/$(basename "${prompt%.md}").full.md"
+  cat "$CWRAP" "$prompt" > "$full"
+  run_claude pipeline-implementer "$cm" "$full" "$last" "$logf" "$effort"
 }
 
 # session_state LAST HANDOFF → prints STATE, preferring the handoff frontmatter
@@ -166,7 +179,7 @@ run_phase() {
   DRY_HANDOFF="$ih"
   render "$TPL/implement.md" "$ip" PHASE="$phase" ROUND=1 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" HANDOFF="$ih"
   commit_artifacts "pipeline: $phase implement prompt"
-  run_codex gpt-6-sol "$effort" "$ip" "$RUNS/${phase}_implement_r1.last.md" "$RUNS/${phase}_implement_r1.log" || true
+  run_impl gpt-6-sol "$effort" "$ip" "$RUNS/${phase}_implement_r1.last.md" "$RUNS/${phase}_implement_r1.log" || true
   commit_artifacts "pipeline: $phase implement handoff"
   local st; st="$(session_state "$RUNS/${phase}_implement_r1.last.md" "$ih")"
   [[ "$st" == DONE ]] || stop_for_orchestrator "$phase" "implementer state $st"
@@ -192,7 +205,7 @@ run_phase() {
   DRY_HANDOFF="$fh"
   render "$TPL/fix.md" "$fp" PHASE="$phase" ROUND=2 FIXN=1 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" REVIEW_HANDOFF="$rh" IMPL_HANDOFF="$ih" HANDOFF="$fh"
   commit_artifacts "pipeline: $phase fix prompt"
-  run_codex gpt-6-luna high "$fp" "$RUNS/${phase}_fix_r2.last.md" "$RUNS/${phase}_fix_r2.log" || true
+  run_impl gpt-6-luna high "$fp" "$RUNS/${phase}_fix_r2.last.md" "$RUNS/${phase}_fix_r2.log" || true
   commit_artifacts "pipeline: $phase fix handoff"
   st="$(session_state "$RUNS/${phase}_fix_r2.last.md" "$fh")"
   [[ "$st" == DONE ]] || stop_for_orchestrator "$phase" "fix state $st"
@@ -214,7 +227,7 @@ run_phase() {
   DRY_HANDOFF="$fh3"
   render "$TPL/fix.md" "$fp3" PHASE="$phase" ROUND=3 FIXN=2 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" REVIEW_HANDOFF="$rh2" IMPL_HANDOFF="$ih" HANDOFF="$fh3"
   commit_artifacts "pipeline: $phase fix 2 prompt"
-  run_codex gpt-6-luna high "$fp3" "$RUNS/${phase}_fix_r3.last.md" "$RUNS/${phase}_fix_r3.log" || true
+  run_impl gpt-6-luna high "$fp3" "$RUNS/${phase}_fix_r3.last.md" "$RUNS/${phase}_fix_r3.log" || true
   commit_artifacts "pipeline: $phase fix 2 handoff"
   st="$(session_state "$RUNS/${phase}_fix_r3.last.md" "$fh3")"; [[ "$st" == DONE ]] || stop_for_orchestrator "$phase" "fix 2 state $st"
   local rp3="$P/reviewer/${phase}_review_r3.md" rh3="$H/reviewer/handoff_${phase}_review_r3.md"
