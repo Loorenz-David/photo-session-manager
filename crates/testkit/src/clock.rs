@@ -24,6 +24,6 @@ impl Clock for ManualClock {
         self.ms.load(Ordering::SeqCst)
     }
     fn mono(&self) -> Instant {
-        self.start
+        self.start + std::time::Duration::from_millis(self.ms.load(Ordering::SeqCst).max(0) as u64)
     }
 }

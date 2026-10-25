@@ -3,7 +3,8 @@ use crate::fake_capture_one::FakeCaptureOneScripting;
 use psm_core::Result;
 use psm_core::{
     domain::photo::{NewPhoto, Photo, PhotoSource},
-    ports::{clock::Clock, store::Store},
+    events::AppEvent,
+    ports::{clock::Clock, events::EventSink, store::Store},
     services::{items::ItemsService, review::ReviewService, sessions::SessionsService},
 };
 use psm_infra::paths::AppPaths;
@@ -17,7 +18,16 @@ pub struct TestApp {
     pub app: App,
     pub clock: Arc<ManualClock>,
     pub fake: Arc<FakeCaptureOneScripting>,
+    pub events: Arc<CollectingEventSink>,
     next_hook: AtomicU64,
+}
+
+#[derive(Default)]
+pub struct CollectingEventSink(pub std::sync::Mutex<Vec<AppEvent>>);
+impl EventSink for CollectingEventSink {
+    fn emit(&self, event: AppEvent) {
+        self.0.lock().unwrap().push(event);
+    }
 }
 
 impl TestApp {
@@ -86,11 +96,14 @@ impl TestApp {
         let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
         let clock = Arc::new(ManualClock::new(0));
         let app = App::open_with(paths, fake.clone(), clock.clone(), false)?;
+        let events = Arc::new(CollectingEventSink::default());
+        app.events.set_target(events.clone());
         Ok(Self {
             dir,
             app,
             clock,
             fake,
+            events,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -108,7 +121,14 @@ impl TestApp {
     }
     pub fn tick(&self, ms: i64) -> Result<usize> {
         self.clock.advance(ms);
+        self.app.arrival.tick()?;
         self.app.jobs.tick(self.clock.now_ms())
+    }
+    pub fn watcher_event(&self, path: &std::path::Path) -> Result<()> {
+        self.app.arrival.watcher_event(path)
+    }
+    pub fn scan(&self) -> Result<()> {
+        self.app.arrival.scan()
     }
 }
 

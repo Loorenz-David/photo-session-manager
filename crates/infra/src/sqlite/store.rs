@@ -494,6 +494,142 @@ impl Store for SqliteStore {
         photo(&conn, id)
     }
 
+    fn arrival_insert(&self, mut new: NewPhoto, path_key: &str) -> Result<(Photo, bool)> {
+        new.raw_path = canon(std::path::Path::new(&new.raw_path))?;
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        if let Some(id) = tx
+            .query_row(
+                "SELECT id FROM photos WHERE session_id=?1 AND raw_path=?2",
+                params![new.session_id, new.raw_path],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?
+        {
+            return Ok((photo(&tx, id)?, false));
+        }
+        let shared_hash: Option<String> = tx.query_row("SELECT raw_hash FROM photos WHERE raw_path=?1 AND raw_hash IS NOT NULL ORDER BY id LIMIT 1", [&new.raw_path], |r| r.get(0)).optional().map_err(db)?;
+        let hash_job_exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM jobs WHERE kind='hash' AND target=?1)",
+                [&new.raw_path],
+                |r| r.get(0),
+            )
+            .map_err(db)?;
+        let uid = uuid::Uuid::new_v4().to_string();
+        tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,source,captured_at,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![uid,new.session_id,new.raw_path,shared_hash.clone().or(new.raw_hash),new.source.as_str(),new.captured_at,new.created_at]).map_err(db)?;
+        let id = tx.last_insert_rowid();
+        tx.execute("INSERT INTO raw_state(raw_path,path_key) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET path_key=excluded.path_key", params![new.raw_path,path_key]).map_err(db)?;
+        for kind in ["original_preview", "hash", "render_preview"] {
+            if kind == "hash" && (shared_hash.is_some() || hash_job_exists) {
+                continue;
+            }
+            tx.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES (?1,?2,'{}','queued',0,?3,?3,?3)", params![kind,new.raw_path,new.created_at]).map_err(db)?;
+        }
+        tx.execute(
+            "UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=?2",
+            params![new.created_at, new.session_id],
+        )
+        .map_err(db)?;
+        tx.commit().map_err(db)?;
+        Ok((photo(&conn, id)?, true))
+    }
+
+    fn session_folders(&self) -> Result<Vec<(String, i64)>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt = conn.prepare("SELECT i.folder_key,s.id FROM sessions s JOIN items i ON i.id=s.item_id ORDER BY s.id DESC").map_err(db)?;
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(db)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db)
+    }
+    fn session_for_item(&self, item_id: i64) -> Result<Option<i64>> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .query_row(
+                "SELECT id FROM sessions WHERE item_id=?1 ORDER BY id DESC LIMIT 1",
+                [item_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)
+    }
+    fn photos_in_session(&self, session_id: i64) -> Result<Vec<Photo>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt = conn.prepare("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at FROM photos WHERE session_id=?1 ORDER BY CASE classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END,position,captured_at,id").map_err(db)?;
+        stmt.query_map([session_id], photo_row)
+            .map_err(db)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db)
+    }
+    fn record_arrival_event(
+        &self,
+        source: &str,
+        payload: &str,
+        at: i64,
+        error: Option<&str>,
+    ) -> Result<i64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO capture_events(source,payload,received_at,error) VALUES (?1,?2,?3,?4)",
+            params![source, payload, at, error],
+        )
+        .map_err(db)?;
+        Ok(conn.last_insert_rowid())
+    }
+    fn set_capture_event_error(&self, id: i64, error: &str) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE capture_events SET error=?1 WHERE id=?2",
+                params![error, id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn set_raw_hash(&self, raw_path: &str, hash: &str) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE photos SET raw_hash=?1 WHERE raw_path=?2 AND raw_hash IS NULL",
+                params![hash, raw_path],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn set_original_preview(
+        &self,
+        raw_path: &str,
+        path: Option<&str>,
+        orientation: Option<i64>,
+    ) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE photos SET original_preview_path=?1,orientation=?2 WHERE raw_path=?3",
+                params![path, orientation, raw_path],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+
     fn photo(&self, id: i64) -> Result<Photo> {
         let conn = self
             .conn

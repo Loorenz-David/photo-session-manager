@@ -72,7 +72,7 @@ restated so no session has to infer them:
 | P02_review_order | APPROVED | 2026-10-25 | opus | approved with notes: 25/25 rows hold at their boundaries, suite/lint/typecheck green; 3 notes in backlog |
 | P03_session_state_list | APPROVED | 2026-10-25 | opus | approved with notes after fix 1: 29/29 rows hold at their boundaries, C1(l) now discriminates the latest publish item; suite/lint/typecheck green; 5 notes in backlog |
 | P04_capture_one_adapter | APPROVED | 2026-10-25 | opus | approved with notes: 21/21 rows hold at their boundaries, suite/lint/typecheck green; 11 notes in backlog; live Capture One smoke still unrun |
-| P05_capture_arrival | NOT_STARTED | 2026-10-25 | planner | hook dispatch, filter, stability, attribution, original preview, import |
+| P05_capture_arrival | IMPLEMENTED | 2026-10-25 | codex | 33/33 boundary rows pass; suite, lint and typecheck green; real Sony RAW preview header probe matches evidence |
 | P06_live_previews | NOT_STARTED | 2026-10-25 | planner | render completion, staleness, focus, sidecar, retouch |
 | P07_shell_sessions_ui | NOT_STARTED | 2026-10-25 | planner | app shell, sessions list, new session |
 | P08_workspace_ui | NOT_STARTED | 2026-10-25 | planner | stage, review, order, toggle, unassigned, import |

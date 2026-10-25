@@ -63,6 +63,25 @@ pub trait Store: Send + Sync {
     fn session(&self, id: i64) -> Result<SessionDto>;
     fn session_list_records(&self) -> Result<Vec<SessionListRecord>>;
     fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;
+    fn arrival_insert(&self, photo: NewPhoto, path_key: &str) -> Result<(Photo, bool)>;
+    fn session_folders(&self) -> Result<Vec<(String, i64)>>;
+    fn session_for_item(&self, item_id: i64) -> Result<Option<i64>>;
+    fn photos_in_session(&self, session_id: i64) -> Result<Vec<Photo>>;
+    fn record_arrival_event(
+        &self,
+        source: &str,
+        payload: &str,
+        at: i64,
+        error: Option<&str>,
+    ) -> Result<i64>;
+    fn set_capture_event_error(&self, id: i64, error: &str) -> Result<()>;
+    fn set_raw_hash(&self, raw_path: &str, hash: &str) -> Result<()>;
+    fn set_original_preview(
+        &self,
+        raw_path: &str,
+        path: Option<&str>,
+        orientation: Option<i64>,
+    ) -> Result<()>;
     fn photo(&self, id: i64) -> Result<Photo>;
     fn set_photo_integrity(&self, id: i64, integrity: Integrity) -> Result<()>;
     fn upsert_raw_state(&self, raw_path: &str, path_key: Option<&str>) -> Result<()>;

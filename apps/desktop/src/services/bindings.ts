@@ -22,6 +22,8 @@ export const commands = {
 	photosUndo: (sessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_undo", { sessionId })),
 	photosMove: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_move", { photoIds, targetSessionId })),
 	photosCopy: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_copy", { photoIds, targetSessionId })),
+	photosImport: (paths: string[]) => typedError<null, CommandError>(__TAURI_INVOKE("photos_import", { paths })),
+	photosAssignUnassigned: (itemId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_assign_unassigned", { itemId })),
 };
 
 /* Types */

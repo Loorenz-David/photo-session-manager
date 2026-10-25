@@ -1,8 +1,35 @@
 mod commands;
 mod state;
 
+use psm_core::{events::AppEvent, ports::events::EventSink};
 use psm_infra::paths::AppPaths;
 use state::AppState;
+use std::sync::Arc;
+use tauri::{Emitter, Manager};
+
+struct TauriEvents(tauri::AppHandle);
+#[derive(serde::Serialize, Clone)]
+struct PhotoAddedPayload {
+    photo_id: i64,
+    session_id: i64,
+}
+impl EventSink for TauriEvents {
+    fn emit(&self, event: AppEvent) {
+        if let AppEvent::PhotoAdded {
+            photo_id,
+            session_id,
+        } = event
+        {
+            let _ = self.0.emit(
+                "photo_added",
+                PhotoAddedPayload {
+                    photo_id,
+                    session_id,
+                },
+            );
+        }
+    }
+}
 use tauri_specta::{Builder, collect_commands};
 
 fn specta_builder() -> Builder<tauri::Wry> {
@@ -24,7 +51,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::photos::photos_delete,
         commands::photos::photos_undo,
         commands::photos::photos_move,
-        commands::photos::photos_copy
+        commands::photos::photos_copy,
+        commands::photos::photos_import,
+        commands::photos::photos_assign_unassigned
     ])
 }
 
@@ -35,6 +64,16 @@ pub fn run() {
     let builder = specta_builder();
     tauri::Builder::default()
         .manage(AppState(std::sync::Mutex::new(app)))
+        .setup(|handle| {
+            let state = handle.state::<AppState>();
+            state
+                .0
+                .lock()
+                .expect("app state")
+                .events
+                .set_target(Arc::new(TauriEvents(handle.handle().clone())));
+            Ok(())
+        })
         .invoke_handler(builder.invoke_handler())
         .run(tauri::generate_context!())
         .expect("run Session Manager");

@@ -9,6 +9,7 @@ use psm_core::{
     Error,
     domain::photo::Classification,
     ports::clock::SystemClock,
+    services::photos::PhotosService,
     services::review::{ReviewResult, ReviewService},
 };
 use serde::{Deserialize, Serialize};
@@ -132,4 +133,42 @@ pub fn photos_copy(
             target_session_id.0,
         )
     })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn photos_import(state: State<'_, AppState>, paths: Vec<String>) -> Result<(), CommandError> {
+    let app = state
+        .0
+        .lock()
+        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
+    PhotosService {
+        arrival: app.arrival.as_ref(),
+        editing: app.editing.as_ref(),
+        store: app.store.as_ref(),
+        clock: &SystemClock,
+    }
+    .import(&paths)
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn photos_assign_unassigned(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+) -> Result<ReviewResponse, CommandError> {
+    let app = state
+        .0
+        .lock()
+        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
+    PhotosService {
+        arrival: app.arrival.as_ref(),
+        editing: app.editing.as_ref(),
+        store: app.store.as_ref(),
+        clock: &SystemClock,
+    }
+    .assign_unassigned(item_id.0)
+    .map(Into::into)
+    .map_err(Into::into)
 }

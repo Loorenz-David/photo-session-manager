@@ -8,17 +8,34 @@ use editing::capture_one::{
 };
 use psm_core::{
     Result,
+    domain::editing::{Job, RenderPurpose},
+    events::AppEvent,
+    mechanisms::{arrival::path_key, hash::sha256_file},
     ports::{
         camera::CameraProvider,
         clock::{Clock, SystemClock},
         editing::EditingProvider,
+        events::EventSink,
+        raw_previews::RawPreviews,
         store::Store,
     },
-    services::{camera::CameraService, editing_startup::EditingStartup, health::HealthService},
+    services::{
+        arrival::ArrivalService,
+        camera::CameraService,
+        editing_events::{EditingEventsDispatcher, LoggingEditingEvents},
+        editing_startup::EditingStartup,
+        health::HealthService,
+    },
 };
 use psm_infra::{
-    jobs::JobRunner, nudge::NudgeServer, paths::AppPaths, settings_file::Settings, spool::Spool,
-    sqlite::store::SqliteStore, watcher::FsWatcher,
+    jobs::{JobHandler, JobRunner},
+    nudge::NudgeServer,
+    paths::AppPaths,
+    rawpreview::EmbeddedJpeg,
+    settings_file::Settings,
+    spool::Spool,
+    sqlite::store::SqliteStore,
+    watcher::FsWatcher,
 };
 use std::{
     sync::{
@@ -40,6 +57,8 @@ pub struct App {
     pub editing: Arc<dyn EditingProvider>,
     pub camera: Arc<dyn CameraProvider>,
     pub jobs: Arc<JobRunner>,
+    pub arrival: Arc<ArrivalService>,
+    pub events: Arc<EventHub>,
     pub clock: Arc<dyn Clock>,
     stop: Arc<AtomicBool>,
     background: Option<thread::JoinHandle<()>>,
@@ -65,9 +84,6 @@ impl App {
         );
         let spool = Arc::new(Spool::new(paths.clone()));
         store.requeue_running_jobs()?;
-        spool.drain(store.as_ref(), clock.as_ref())?;
-        let nudge = NudgeServer::start(spool.clone(), store.clone())?;
-        let hooks_compiled = editing::capture_one::hooks::compile_all(&paths, nudge.port()).is_ok();
         let health = Arc::new(HealthService::new());
         let document_id = settings.document_id.clone().unwrap_or_default();
         if document_id.is_empty() {
@@ -87,6 +103,28 @@ impl App {
             scripting,
             document_id: document_id.clone(),
         });
+        let events = Arc::new(EventHub::default());
+        let arrival = Arc::new(ArrivalService::new(
+            store.clone(),
+            editing.clone(),
+            camera.clone(),
+            events.clone(),
+            clock.clone(),
+        ));
+        spool.set_dispatcher(Arc::new(EditingEventsDispatcher {
+            arrival: arrival.clone(),
+            handler: Arc::new(LoggingEditingEvents),
+        }))?;
+        let nudge = NudgeServer::start(spool.clone(), store.clone())?;
+        let hooks_compiled = editing::capture_one::hooks::compile_all(&paths, nudge.port()).is_ok();
+        if let Err(error) = spool.drain(store.as_ref(), clock.as_ref()) {
+            tracing::warn!(%error, "startup spool drain deferred");
+        }
+        if !document_id.is_empty()
+            && let Err(error) = arrival.scan()
+        {
+            tracing::warn!(%error, "startup capture scan deferred");
+        }
         let mut runner = JobRunner::new(store.clone());
         runner.register(
             "mirror_tag",
@@ -94,6 +132,25 @@ impl App {
                 editing: editing.clone(),
                 store: store.clone(),
                 health: health.clone(),
+            }),
+        );
+        runner.register(
+            "hash",
+            Arc::new(HashJob {
+                store: store.clone(),
+            }),
+        );
+        runner.register(
+            "original_preview",
+            Arc::new(OriginalPreviewJob {
+                store: store.clone(),
+                paths: paths.clone(),
+            }),
+        );
+        runner.register(
+            "render_preview",
+            Arc::new(RenderPreviewJob {
+                editing: editing.clone(),
             }),
         );
         let jobs = Arc::new(runner);
@@ -119,11 +176,30 @@ impl App {
         let bg_store = store.clone();
         let bg_jobs = jobs.clone();
         let bg_clock = clock.clone();
+        let bg_arrival = arrival.clone();
         let spool_dir = paths.spool();
         let background = thread::spawn(move || {
             let mut watcher = FsWatcher::watch(&spool_dir).ok();
+            let mut capture_watcher = bg_arrival
+                .capture_root()
+                .ok()
+                .and_then(|root| FsWatcher::watch(&root).ok());
             let mut last_drain = std::time::Instant::now();
+            let mut last_capture_retry = std::time::Instant::now() - Duration::from_secs(5);
             while !bg_stop.load(Ordering::Relaxed) {
+                if run_startup
+                    && !document_id.is_empty()
+                    && capture_watcher.is_none()
+                    && last_capture_retry.elapsed() >= Duration::from_secs(5)
+                {
+                    last_capture_retry = std::time::Instant::now();
+                    if let Ok(root) = bg_arrival.capture_root()
+                        && let Ok(watcher) = FsWatcher::watch(&root)
+                    {
+                        capture_watcher = Some(watcher);
+                        let _ = bg_arrival.scan();
+                    }
+                }
                 if watcher
                     .as_mut()
                     .is_some_and(|(_, rx)| rx.try_recv().is_ok())
@@ -133,6 +209,12 @@ impl App {
                     last_drain = std::time::Instant::now();
                 }
                 if run_startup {
+                    if let Some((_, rx)) = capture_watcher.as_mut() {
+                        while let Ok(event) = rx.try_recv() {
+                            let _ = bg_arrival.watcher_event(&event.path);
+                        }
+                    }
+                    let _ = bg_arrival.tick();
                     let _ = bg_jobs.tick(bg_clock.now_ms());
                 }
                 thread::sleep(Duration::from_millis(50));
@@ -149,6 +231,8 @@ impl App {
             editing,
             camera,
             jobs,
+            arrival,
+            events,
             clock,
             stop,
             background: Some(background),
@@ -167,6 +251,86 @@ impl App {
             health: self.health.as_ref(),
         })
         .run()
+    }
+}
+
+#[derive(Default)]
+pub struct EventHub {
+    state: std::sync::Mutex<EventHubState>,
+}
+#[derive(Default)]
+struct EventHubState {
+    target: Option<Arc<dyn EventSink>>,
+    queued: Vec<AppEvent>,
+}
+impl EventHub {
+    pub fn set_target(&self, target: Arc<dyn EventSink>) {
+        if let Ok(mut state) = self.state.lock() {
+            let queued = std::mem::take(&mut state.queued);
+            state.target = Some(target.clone());
+            drop(state);
+            for event in queued {
+                target.emit(event);
+            }
+        }
+    }
+}
+impl EventSink for EventHub {
+    fn emit(&self, event: AppEvent) {
+        if let Ok(mut state) = self.state.lock() {
+            if let Some(target) = state.target.clone() {
+                drop(state);
+                target.emit(event);
+            } else {
+                state.queued.push(event);
+            }
+        }
+    }
+}
+
+struct HashJob {
+    store: Arc<dyn Store>,
+}
+impl JobHandler for HashJob {
+    fn run(&self, job: &Job, _: i64) -> Result<()> {
+        self.store.set_raw_hash(
+            &job.target,
+            &sha256_file(std::path::Path::new(&job.target))?,
+        )
+    }
+}
+struct OriginalPreviewJob {
+    store: Arc<dyn Store>,
+    paths: AppPaths,
+}
+impl JobHandler for OriginalPreviewJob {
+    fn run(&self, job: &Job, _: i64) -> Result<()> {
+        let key = path_key(&job.target);
+        let dest = self
+            .paths
+            .root
+            .join("previews")
+            .join(&key[..2])
+            .join(&key)
+            .join("original.jpg");
+        let extracted = EmbeddedJpeg.extract(std::path::Path::new(&job.target), &dest)?;
+        self.store.set_original_preview(
+            &job.target,
+            extracted
+                .map(|_| dest.to_string_lossy().into_owned())
+                .as_deref(),
+            extracted.and_then(|e| e.orientation).map(i64::from),
+        )
+    }
+}
+struct RenderPreviewJob {
+    editing: Arc<dyn EditingProvider>,
+}
+impl JobHandler for RenderPreviewJob {
+    fn run(&self, job: &Job, _: i64) -> Result<()> {
+        self.editing
+            .render(&job.target, RenderPurpose::Preview)
+            .map(|_| ())
     }
 }
 

@@ -1,7 +1,10 @@
+pub mod arrival;
 pub mod camera;
+pub mod editing_events;
 pub mod editing_startup;
 pub mod health;
 pub mod integrity;
 pub mod items;
+pub mod photos;
 pub mod review;
 pub mod sessions;

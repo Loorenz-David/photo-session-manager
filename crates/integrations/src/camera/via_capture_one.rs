@@ -11,6 +11,9 @@ pub struct CameraViaCaptureOne {
     pub document_id: String,
 }
 impl CameraProvider for CameraViaCaptureOne {
+    fn raw_extensions(&self) -> &'static [&'static str] {
+        &["arw"]
+    }
     fn status(&self) -> Result<CameraStatus> {
         Ok(self
             .scripting

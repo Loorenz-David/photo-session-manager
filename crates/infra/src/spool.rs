@@ -1,37 +1,25 @@
 use crate::paths::AppPaths;
 use psm_core::{
     Error, Result,
+    mechanisms::hook_payload::{HookEvent, parse},
     ports::{clock::Clock, store::Store},
+    services::editing_events::EditingEventsDispatcher,
 };
-use serde::{Deserialize, Serialize};
-use std::{fs, path::Path, sync::Mutex};
+use std::{
+    fs,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "hook", rename_all = "snake_case")]
-pub enum HookPayload {
-    CaptureDone {
-        argv: Vec<String>,
-        #[serde(default)]
-        last_captured_file: Option<String>,
-    },
-    ProcessingDone {
-        job: String,
-        raw: String,
-        outputs: Vec<String>,
-    },
-    VariantAdjusted {
-        variant_id: String,
-        raw: String,
-    },
-}
-
+pub type HookPayload = HookEvent;
 pub fn parse_spool_file(bytes: &[u8]) -> Result<HookPayload> {
-    serde_json::from_slice(bytes).map_err(|e| Error::InvalidData(e.to_string()))
+    parse(bytes)
 }
 
 pub struct Spool {
     paths: AppPaths,
     drain_lock: Mutex<()>,
+    dispatcher: Mutex<Option<Arc<EditingEventsDispatcher>>>,
 }
 
 impl Spool {
@@ -39,7 +27,15 @@ impl Spool {
         Self {
             paths,
             drain_lock: Mutex::new(()),
+            dispatcher: Mutex::new(None),
         }
+    }
+    pub fn set_dispatcher(&self, dispatcher: Arc<EditingEventsDispatcher>) -> Result<()> {
+        *self
+            .dispatcher
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))? = Some(dispatcher);
+        Ok(())
     }
 
     pub fn drain(&self, store: &dyn Store, clock: &dyn Clock) -> Result<()> {
@@ -58,16 +54,20 @@ impl Spool {
                 Ok(payload) => {
                     let content =
                         String::from_utf8(bytes).map_err(|e| Error::InvalidData(e.to_string()))?;
-                    let hook = match payload {
-                        HookPayload::CaptureDone { .. } => "capture_done",
-                        HookPayload::ProcessingDone { .. } => "processing_done",
-                        HookPayload::VariantAdjusted { .. } => "variant_adjusted",
-                    };
+                    let hook = payload.hook();
                     let name = path
                         .file_name()
                         .and_then(|name| name.to_str())
                         .ok_or_else(|| Error::InvalidData("invalid spool filename".into()))?;
                     store.record_hook(name, hook, &content, clock.now_ms())?;
+                    if let Some(dispatcher) = self
+                        .dispatcher
+                        .lock()
+                        .map_err(|e| Error::InvalidData(e.to_string()))?
+                        .as_ref()
+                    {
+                        dispatcher.dispatch(&payload)?;
+                    }
                     fs::remove_file(path)?;
                 }
                 Err(_) => {
