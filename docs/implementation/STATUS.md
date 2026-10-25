@@ -24,6 +24,9 @@ plans P01/P07/P09/P12/P14 + master plan amended. Colour-tag mapping confirmed by
 On exit: per orchestrator.md table. Before P12 is next: ask the owner for the Shopify token.
 
 ## Facts the next orchestrator needs
+- 2026-10-25 ~15:55: owner took the camera away (not tethered). Capture One stays open on
+  `session test 1` on this Mac; the owner will not use Capture One here. Capture-dependent probes →
+  UNPROBED; rerun them (autofocus + capture, evidence VERIFY-12) when the camera is back.
 - Shopify dev-app token is not available yet; the owner provides it before the publishing phase.
   Tell the owner when that phase is next in `phases.txt`.
 - Codex trust for this repo is set in `~/.codex/config.toml`; `claude -p --agent pipeline-reviewer --model opus` verified working.
