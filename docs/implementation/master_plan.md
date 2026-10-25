@@ -67,7 +67,7 @@ restated so no session has to infer them:
 ## 4. Progress tracker (one row per phase; agents update only their own row)
 | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|
-| P00_spike | IMPLEMENTED | 2026-10-25 | codex | 16 boundary tests pass; signed bundle built and live hook delivery observed |
+| P00_spike | APPROVED | 2026-10-25 | opus | approved with notes: 16/16 rows hold, suite/lint/typecheck green; bundle Automation prompt still to be confirmed by the owner |
 | P01_storage_identity | NOT_STARTED | 2026-10-25 | planner | schema, canon, hash, folder key, items/sessions |
 | P02_review_order | NOT_STARTED | 2026-10-25 | planner | classify/reorder/delete/undo/move/copy, change_seq |
 | P03_session_state_list | NOT_STARTED | 2026-10-25 | planner | status, row label, grouping, list query |
