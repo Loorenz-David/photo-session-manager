@@ -8,7 +8,11 @@ use tauri_specta::{Builder, collect_commands};
 fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new().commands(collect_commands![
         commands::health::health_get,
-        commands::health::app_paths_get
+        commands::health::app_paths_get,
+        commands::items::item_create,
+        commands::items::item_update_identity,
+        commands::sessions::session_create,
+        commands::sessions::session_get
     ])
 }
 

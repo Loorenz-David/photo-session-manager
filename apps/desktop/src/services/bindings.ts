@@ -6,6 +6,10 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 export const commands = {
 	healthGet: () => typedError<HealthReportDto, string>(__TAURI_INVOKE("health_get")),
 	appPathsGet: () => typedError<AppPathsDto, string>(__TAURI_INVOKE("app_paths_get")),
+	itemCreate: (sku: string, title: string, itemType: string, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_create", { sku, title, itemType, barcode })),
+	itemUpdateIdentity: (itemId: CommandId, sku: string | null, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_update_identity", { itemId, sku, barcode })),
+	sessionCreate: (itemId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_create", { itemId })),
+	sessionGet: (sessionId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
 };
 
 /* Types */
@@ -15,6 +19,14 @@ export type AppPathsDto = {
 	settings: string,
 };
 
+export type CommandError = {
+	code: string,
+	message: string,
+	data: { [key in string]: string },
+};
+
+export type CommandId = number;
+
 export type HealthItemDto = {
 	code: string,
 	ok: boolean,
@@ -23,6 +35,62 @@ export type HealthItemDto = {
 
 export type HealthReportDto = {
 	items: HealthItemDto[],
+};
+
+export type ItemDto = ItemDto_Serialize | ItemDto_Deserialize;
+
+export type ItemDto_Deserialize = {
+	id: number,
+	sku: string,
+	folder_key: string,
+	barcode?: string | null,
+	item_type: string,
+	title: string,
+	origin: string,
+	created_at: number,
+	updated_at: number,
+};
+
+export type ItemDto_Serialize = {
+	id: number,
+	sku: string,
+	folder_key: string,
+	barcode: string | null,
+	item_type: string,
+	title: string,
+	origin: string,
+	created_at: number,
+	updated_at: number,
+};
+
+export type SessionResponse = SessionResponse_Serialize | SessionResponse_Deserialize;
+
+export type SessionResponse_Deserialize = {
+	id: number,
+	item_id?: number | null,
+	published_at?: number | null,
+	published_seq: number,
+	change_seq: number,
+	last_activity_at: number,
+	created_at: number,
+	photo_count: number,
+	unreviewed_count: number,
+	main_count: number,
+	condition_count: number,
+};
+
+export type SessionResponse_Serialize = {
+	id: number,
+	item_id: number | null,
+	published_at: number | null,
+	published_seq: number,
+	change_seq: number,
+	last_activity_at: number,
+	created_at: number,
+	photo_count: number,
+	unreviewed_count: number,
+	main_count: number,
+	condition_count: number,
 };
 
 /* Tauri Specta runtime */

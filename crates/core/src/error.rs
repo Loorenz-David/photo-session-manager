@@ -8,6 +8,14 @@ pub enum Error {
     InvalidData(String),
     #[error("provider: {0}")]
     Provider(String),
+    #[error("relative_path")]
+    RelativePath,
+    #[error("sku_collision: {existing_sku}")]
+    SkuCollision { existing_sku: String },
+    #[error("invalid_value: {0}")]
+    InvalidValue(String),
+    #[error("not_found: {0}")]
+    NotFound(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

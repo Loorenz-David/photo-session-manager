@@ -2668,6 +2668,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -2688,9 +2689,12 @@ dependencies = [
  "psm-core",
  "psm-infra",
  "psm-integrations",
+ "rusqlite",
  "serde_json",
+ "sha2 0.11.1",
  "tempfile",
  "tokio",
+ "unicode-normalization",
 ]
 
 [[package]]

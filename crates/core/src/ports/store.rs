@@ -1,6 +1,41 @@
 use crate::Result;
+use crate::domain::{
+    item::{Item, NewItem},
+    photo::{Integrity, NewPhoto, Photo},
+    session::SessionDto,
+};
+
+pub trait StoreTx {
+    fn items(&self) -> Result<Vec<Item>>;
+    fn item(&self, id: i64) -> Result<Item>;
+    fn insert_item(&mut self, item: NewItem<'_>) -> Result<i64>;
+    fn update_item_identity(
+        &mut self,
+        id: i64,
+        sku: &str,
+        folder_key: &str,
+        barcode: Option<&str>,
+        at: i64,
+    ) -> Result<()>;
+    fn item_has_photos(&self, item_id: i64) -> Result<bool>;
+    fn insert_session(&mut self, item_id: i64, at: i64) -> Result<i64>;
+    fn insert_item_link(
+        &mut self,
+        item_id: i64,
+        integration: &str,
+        external_id: &str,
+        external_url: Option<&str>,
+    ) -> Result<()>;
+}
 
 pub trait Store: Send + Sync {
+    fn transaction(&self, op: &mut dyn FnMut(&mut dyn StoreTx) -> Result<()>) -> Result<()>;
+    fn item(&self, id: i64) -> Result<Item>;
+    fn session(&self, id: i64) -> Result<SessionDto>;
+    fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;
+    fn photo(&self, id: i64) -> Result<Photo>;
+    fn set_photo_integrity(&self, id: i64, integrity: Integrity) -> Result<()>;
+    fn upsert_raw_state(&self, raw_path: &str, path_key: Option<&str>) -> Result<()>;
     fn mechanism_version(&self) -> Result<String>;
     fn record_hook(
         &self,

@@ -1,5 +1,9 @@
 use crate::clock::ManualClock;
 use psm_core::Result;
+use psm_core::{
+    ports::store::Store,
+    services::{items::ItemsService, sessions::SessionsService},
+};
 use psm_infra::paths::AppPaths;
 use psm_integrations::App;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,6 +17,15 @@ pub struct TestApp {
 }
 
 impl TestApp {
+    pub fn items(&self) -> ItemsService<'_> {
+        ItemsService::new(self.app.store.as_ref(), &self.clock)
+    }
+    pub fn sessions(&self) -> SessionsService<'_> {
+        SessionsService::new(self.app.store.as_ref(), &self.clock)
+    }
+    pub fn store(&self) -> &dyn Store {
+        self.app.store.as_ref()
+    }
     pub fn new() -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let app = App::open(AppPaths::for_dir(dir.path()))?;

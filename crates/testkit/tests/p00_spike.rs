@@ -92,7 +92,9 @@ fn c1a_first_open_creates_layout_and_defaults() {
 fn c1b_second_open_preserves_settings_and_migration() {
     let dir = tempfile::tempdir().unwrap();
     let paths = AppPaths::for_dir(dir.path());
-    drop(App::open(paths.clone()).unwrap());
+    let first = App::open(paths.clone()).unwrap();
+    let first_version = first.store.migration_version().unwrap();
+    drop(first);
     let mut settings: serde_json::Value =
         serde_json::from_slice(&fs::read(paths.settings()).unwrap()).unwrap();
     settings["preview_delay_s"] = 20.into();
@@ -101,7 +103,7 @@ fn c1b_second_open_preserves_settings_and_migration() {
     let second = App::open(paths.clone()).unwrap();
     assert_eq!(fs::read(paths.settings()).unwrap(), edited);
     assert_eq!(second.store.mechanism_version().unwrap(), "1");
-    assert_eq!(second.store.migration_version().unwrap(), 1);
+    assert_eq!(second.store.migration_version().unwrap(), first_version);
 }
 
 #[test]

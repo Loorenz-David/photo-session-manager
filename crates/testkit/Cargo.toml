@@ -10,4 +10,7 @@ psm-integrations = { path = "../integrations" }
 tempfile = "3"
 tokio.workspace = true
 serde_json.workspace = true
+sha2 = "0.11"
+unicode-normalization = "0.1"
+rusqlite = { version = "0.40", features = ["bundled"] }
 
