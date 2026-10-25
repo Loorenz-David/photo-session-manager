@@ -116,3 +116,39 @@ queue behind the same base name (MC-16). `crates/core/src/error.rs` (+ `raw_chan
 **Observations.** `IntegrityCheck` treats a photo whose hash job has not run yet (`raw_hash` NULL) as
 `raw_changed`; an export started within seconds of a capture could fail on it. Not changed here (P05/P06 code);
 noted for the backlog. No live Capture One export probe was run in this session (the suite is hardware-free).
+
+### 2026-10-25 — review r1 (opus, `pipeline-reviewer`): **APPROVED_WITH_NOTES**
+**Gate.** Tracker `IMPLEMENTED`; checkpoint `4940766` in `git log`. HEAD `d996d42` adds only the implement handoff and
+review prompt; `git status` clean. **Perimeter:** `git show --stat 4940766` lists 25 paths, equal to the handoff's
+declared list (19 production, 4 test/harness, 2 docs). The paths outside the plan's expected-files list (adapter,
+`error.rs`, `events.rs`, `commands/items.rs`, `src-tauri/src/lib.rs`, `integrations/lib.rs`, `infra/lib.rs`,
+`services/mod.rs`, `commands/mod.rs`) are declared deviations or module wiring; the adapter change (dedupe for previews only) is needed for
+M23/C6 and keeps MC-16's one render per base name. **Stamp** on that tree, all exit 0: `cargo test --workspace`,
+clippy `-D warnings`, `fmt --check`, `npm run typecheck`, `npm test` 45/45 (3 files).
+**Verified correct (by reading production, then the test):**
+- C1(a): `snapshot` keeps Main/Condition only, sorted by `(position, id)`; test asserts the exact listing and no
+  `process` for e/f. C2(a): each file's bytes equal `output_bytes` of the job issued for that variant, so a swapped
+  file↔job mapping fails. C2(b): `export_file_name` width = `max(2, digits(n_g))`; exact 100-name listing.
+- C3(a): `item_json` builds a sorted map, omits empty/absent values, `to_string_pretty` (2 spaces) + `\n`; test compares
+  the row's bytes verbatim. C4(a): `ExportFs::swap` renames `<key>`→`.old-<run>`, staging→`<key>`, then removes old;
+  test asserts the exact listing of `K/` and of the export root.
+- C5(a): `IntegrityCheck` runs on every frozen photo before the run row, staging or any render; test asserts
+  `Err(RawChanged{b})`, unchanged `process` count, byte-identical previous `K/`, root = `["K"]`, last event `failed`.
+- C6(a): completions are matched by the adapter's live job map, then by `tracking_job_id` of an uncopied target; the
+  test would fail if a stale completion were accepted (the target would be marked copied with the stray bytes).
+  C6(b): adapter expiry is 120 s for Export, one re-issue, then `ExportStaging::failed` discards staging; test checks
+  2 jobs per RAW after each tick, not-failed then failed, empty root.
+- C7(a)/(b): `Header` shows Export only for `integration === null` (Unassigned keeps Assign product); one toast keyed
+  `export` ends in "Exported n files" with an Open folder action; tests click through to `runExport(5)` /
+  `openExportFolder(5)`.
+- Lock order is `runs` → store everywhere; a completion arriving while `run` issues waits on the mutex and then finds
+  the inserted run, so none is lost. H2 (only Capture One outputs are copied; RAWs are only read), H3, H5
+  (`/usr/bin/open` on a folder), H7 (no provider ids in core export), H8 (commands wrap the service) hold. Tests write
+  only under the temp dir (`with_fake_document` moves `export_folder`). No orphan tests.
+**Assumptions** 1–11: none contradicts the intention (renumbering survivors matches MC-8 positions after a delete;
+restart abandonment leaves `<key>/` exact). Reported to the owner in the narrative.
+**Findings:** none blocking. **Notes:** 5 rows appended to `backlog.md` (NULL-hash false `raw_changed`; leftover
+hidden folders after a crash; run mutex held while issuing; mid-run reclassify/reorder uses the frozen lists; fixtures
+do not separate id order from position order).
+**Lesson for the plans:** an export ordering row should reorder photos before exporting, so position order and
+creation order differ.
