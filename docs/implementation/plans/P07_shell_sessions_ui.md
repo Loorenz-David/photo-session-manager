@@ -13,7 +13,7 @@ retry and error text, bell + failed count placeholder, form and Publish/Export p
 list with Open / Published / All filters and counts, search, time filter, hover preview, status pills, the
 Unassigned card, batch selection bar (visual only until P15), theme toggle, Sonner toasts, keyboard `N`; and the New
 session dialog (search; "Create '…'" row creating a local item and opening its session). Also the small backend
-`items_search` command. **Not in this phase:** the workspace (P08), publish actions (P15), settings/health screens
+`items_search` command; `ItemsService::next_sku()` + `items_next_sku` command (MC-22 proposal rule). **Not in this phase:** the workspace (P08), publish actions (P15), settings/health screens
 (P16). Thin frontend phase — **refine at prompt time** from the screens listed below.
 
 ## Read first
@@ -46,13 +46,14 @@ None (pure rendering; the status/label/grouping mechanisms are backend, P03).
 3. Camera dot: `camera_status` on mount and on `camera_status_changed`; click → `camera_retry`; error popover text
    from ch04 S-A ("check USB mode, close Imaging Edge").
 4. New session dialog (`Dialog` + `Command`): `items_search(q)` (local items + integration matches when configured);
-   result rows with thumbnail/note; "Create '…'" row when no exact title match → SKU entry per owner card 2 (until
-   answered: a required SKU input in the create row) → `item_create` → `session_create(item_id)` → navigate.
+   result rows with thumbnail/note; "Create '…'" row when no exact title match → SKU box pre-filled per 05B
+   MC-22 (`<sku_prefix>-<NNNN>` from `items_next_sku()`, editable; empty and required when no prefix; "<SKU> is
+   already in the shop" disables Create when the integration finds it) → `item_create` → `session_create(item_id)` → navigate.
 5. Backend: `ItemsService::search(q)` (local items by SKU/title substring, plus `CommerceAdapter::item_search` when
    `settings.integration` is set — the adapter arrives in P12; until then local only), `items_search` command.
 6. Tests (vitest, services mocked) for each row.
 
-## Criteria (6 criteria, 17 rows; 10 `[rule]` rows)
+## Criteria (6 criteria, 19 rows; 10 `[rule]` rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `SessionsPage` render | `sessions_list` mock → groups `[Today: [A, B], Yesterday: [C]]` | DOM has headers "Today", "Yesterday" in that order; A and B under Today, C under Yesterday | M11 (grouping rendered as delivered) |
@@ -63,7 +64,9 @@ None (pure rendering; the status/label/grouping mechanisms are backend, P03).
 | C4(b) | `CameraDot` | `Disconnected` | red dot; popover text mentions USB mode and Imaging Edge | `[rule]` ch04 S-A |
 | C4(c) | `CameraDot` click | — | `camera_retry` called once | `[rule]` ch04 S-A |
 | C5(a) | `NewSessionDialog` | `items_search("Brass floor lamp")` → `[]` | a row "Create 'Brass floor lamp'" is shown | `[rule]` ch04 S-D |
-| C5(b) | select the create row (SKU typed `BFL-1` when card 2 is unanswered) | — | `item_create({sku:"BFL-1", title:"Brass floor lamp"})` then `session_create(item_id)` called; navigation to `/session/<id>` | `[rule]` ch04 S-D |
+| C5(b) | select the create row after replacing the proposal with `BFL-1` | — | `item_create({sku:"BFL-1", title:"Brass floor lamp"})` then `session_create(item_id)` called; navigation to `/session/<id>` | `[rule]` ch04 S-D |
+| C5(e) | backend `ItemsService::next_sku()` (Rust test) | prefix `VF`; local SKUs `VF-0419`, `VF-0420`, `vf-0999`, `VF-12a` / prefix absent | `"VF-0421"` / `None` (box empty, Create disabled until typed) | MC-22 (05B) |
+| C5(f) | `NewSessionDialog` | proposal `VF-0421`; `items_search` reports a shop product with SKU `VF-0421` | text "VF-0421 is already in the shop"; Create disabled | MC-22 (05B) |
 | C5(c) | backend `ItemsService::search("oak")` (Rust test) | local items "Oak sideboard" (sku OAK-1), "Teak desk"; no integration | returns the Oak item only, `origin = local` | `[rule]` ch04 S-B |
 | C5(d) | select an existing result | item with a session | `session_create(item_id)` returns the existing session id (no second session); navigation to it | `[rule]` ch02 (one Session per item, R6) — see Notes |
 | C6(a) | `UnassignedCard` | `unassigned_count = 0` / `= 3` | not rendered / rendered with "3" | `[rule]` ch04 S-E |
@@ -75,15 +78,14 @@ boundaries (calendar-day based like MC-4), exact copy of the camera error text, 
 ## Manual try-out
 1. Launch the app: the Sessions page shows "No sessions yet" (or your sessions), the camera dot is green when the
    ZV-E10 is tethered in Capture One; unplug → red; click → retries.
-2. Press `N`, type "Brass floor lamp" → "Create 'Brass floor lamp'" → enter a SKU → the (empty) workspace route opens.
+2. Press `N`, type "Brass floor lamp" → "Create 'Brass floor lamp'" → keep or edit the proposed SKU (set a prefix in Settings first, or type one) → the (empty) workspace route opens.
 3. Back to Sessions: the row shows "In progress"; the Open / Published / All counts read 1 / 0 / 1.
 
 ## Notes
 - **Planner assumption (not an owner card):** the MVP keeps **one session per item** (`session_create(item_id)` returns
   the existing session). R6 defines a Session as one item's photography job; a second job for the same item is not
   in the scope ladder. The orchestrator can lift this by amending P07 and `SessionsService::create`.
-- `sku_prefix` (owner card 2): if answered "generate", the create row pre-fills `<prefix>-<next number>`; the
-  coordinator folds the answer into task 4 before the prompt is compiled.
+- `sku_prefix`: owner card 2 answered "generate, editable" (05B MC-22); folded into task 4 and rows C5(b), C5(e), C5(f).
 - Estimated size: ~22 files, ~1 900 lines (mostly TSX).
 
 ## Review log

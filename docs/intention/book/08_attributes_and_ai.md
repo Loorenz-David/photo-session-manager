@@ -35,4 +35,4 @@ schema: look at the main photo, search, read sources, set suggested values with 
 sources, write the description after publish. It must work with no integration configured.
 
 ## Identity fields
-SKU and barcode are editable from the form header. Title is a Product-step field.
+SKU and barcode are editable from the form header (SKU rules: 05B MC-22). Title is a Product-step field.

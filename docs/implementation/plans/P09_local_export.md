@@ -34,6 +34,9 @@ frozen photo deleted meanwhile is skipped — the same rule applies to an export
 - `mechanisms::naming::export_file_name(key, position, n_g, group) -> String` (`<key>_<NN>_<main|condition>.jpg`, `NN` zero-padded to `max(2, digits(n_g))`).
 - `mechanisms::naming::item_json(item, attributes, main_names, condition_names) -> String` (UTF-8, sorted keys, two-space indent, trailing newline, absent values omitted).
 
+Export `key` = `folder_key(current SKU)` (05B MC-22), not the stored capture-folder key; an export under a
+previous SKU is left untouched.
+
 ## Ordered tasks
 1. `ExportService::run(session_id) -> ExportRunId`: snapshot the photo lists (main, condition in position order;
    unreviewed and deleted excluded), run `IntegrityCheck` on each (any `raw_changed`/`raw_missing` → fail before any

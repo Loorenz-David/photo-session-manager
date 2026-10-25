@@ -32,6 +32,7 @@
 | R28 | **D4 at publish.** Web-size files are rendered by the editing provider only inside a publish or export run, never at approve. | 2026-10-24 |
 | R29 | Adjusted-preview refresh: a Capture One edit marks the photo stale; re-render 15 s after the last edit (setting 10–30 s) or at once when the app window becomes visible/focused. | 2026-10-24 |
 | R30 | **I1 Yes.** A Capture One retouch of a published photo makes the session need publishing again; the next publish replaces that photo on Shopify in the same gallery place (07B MC-21). | 2026-10-25 |
+| R31 | **Card 2: generate, editable; SKU editable after photos.** New local items get `<prefix>-<next number>` proposed, editable before confirming; an item's SKU can change at any time; the capture folder keeps the key it had at the first photo (05B MC-22). | 2026-10-25 |
 | R27 | **A2 camera through Capture One** for the MVP. How the camera physically connects (USB tether today, wireless under exploration) stays open and must not disturb the implementation: everything camera-specific sits behind the camera provider interface, and capture arrival is defined by the editing provider's hook and the capture folder, not by the link. | 2026-10-24 |
 
 ## Open owner cards

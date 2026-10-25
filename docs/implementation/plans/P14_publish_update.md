@@ -41,9 +41,10 @@ Condition photos); `05A` MC-9 (equality) · evidence `shopify_admin.md` SV-1, SV
    and `raw_state.retouch_gen > link.retouch_gen`: `revision += 1`, `upload_state = none`, previous id pushed to
    `superseded_ids`, `link.retouch_gen = raw retouch_gen`; filename `<key>-<uid12>-r<n>.jpg`; adoption matches the
    current revision stem only; `own` for reconciliation includes `superseded_ids`.
+3b. Identity write in `update` (05B MC-22): default-variant SKU/barcode diff against the remote, never clearing.
 4. `publish_summary` completed (counts and notes); tests.
 
-## Criteria (7 criteria, 19 rows; 0 `[rule]` rows)
+## Criteria (7 criteria, 20 rows; 0 `[rule]` rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `update` | frozen `{years: "1950-1960s", country: "Sweden"}`; remote `{years: "1950-1960s", country: "Denmark", designer: "X"}` | fake `metafieldsSet` carries exactly `country` | M20 |
@@ -55,6 +56,7 @@ Condition photos); `05A` MC-9 (equality) · evidence `shopify_admin.md` SV-1, SV
 | C2(b) | `merge_tags` | base `[a,b]`, local `[a]`, remote `[a,b,c]` | `Some([a,c])` (b removed locally, c kept) | MC-13 |
 | C2(c) | `merge_tags` | base `[]`, local `[x]`, remote `[y]` | `Some([y,x])`; after the write `tags_base = [y,x]` | MC-13 |
 | C3(a) | `update` | title local "Oak" vs remote "Oak" / "Teak" | no title write / `productUpdate` with `title: "Oak"` | MC-13 (title) |
+| C3(c) | `update` | linked item, local SKU `K-2` / barcode none; remote `K-1` / `123` | `item_set_identity` sends `sku: K-2` only (barcode not cleared); read-back mismatch → `failed` at `update` | MC-22 (05B), M29 |
 | C3(b) | `update` | manual description `"a\n\nb"` / none | `descriptionHtml = "<p>a</p><p>b</p>"` / no description field in the request | MC-13 (description) |
 | C4(a) | `update` | condition [d, e, f], exclusions `[e]` | files uploaded for d and f (`role = attribute:custom.damage_report`), attribute value `["<fd>","<ff>"]` in that order | M21 |
 | C4(b) | re-publish after reclassifying f to main and adding g | — | attribute `["<fd>","<fg>"]`; `ff` still exists in the fake's Files (not deleted) | M21, MC-14 |

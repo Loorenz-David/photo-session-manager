@@ -199,7 +199,7 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   `RowLabel {Publishing(pct), PublishFailed, DescriptionFailed, Published, Ready, InProgress(n_to_review)}` ·
   `CameraStatus {Connected(name), Disconnected}` · `RenderPurpose {Preview, Export}` · `MechanismsVersion = 1`.
 - Error codes (`psm_core::Error`, snake_case, carried to the UI as `{code, message, data}`): `relative_path`,
-  `sku_collision{existing_sku}`, `sku_immutable`, `target_has_raw`, `target_published`, `nothing_to_undo`,
+  `sku_collision{existing_sku}`, `sku_in_shop{sku}`, `target_has_raw`, `target_published`, `nothing_to_undo`,
   `variant_not_found`, `capture_folder_not_set`, `hooks_not_installed`, `recipe_missing{name}`, `tag_verification`,
   `raw_changed{photo_id}`, `raw_missing{photo_id}`, `several_products_carry_sku{sku}`, `foreign_media_added{n}`,
   `gallery_verification`, `upload_incomplete`, `attribute_verification{keys}`, `not_confirmed`, `timeout`,
@@ -227,8 +227,8 @@ exported by the test `psm-desktop::export_bindings` to `apps/desktop/src/service
 ### 6.8 Settings file keys (`settings.json`, user configuration; `psm_infra::settings_file::Settings`)
 `document_id` (Capture One document folder path, MC-19) · `preview_recipe` (default `"PSM Preview"`) · `web_recipe`
 (`"PSM Web"`) · `style_name` (`"PSM House"`) · `export_folder` (default `~/Pictures/Session Manager Export`) ·
-`preview_delay_s` (15; read clamped 10–30, MC-17) · `theme` (`"light"`) · `sku_prefix` (**pending owner card 2**;
-absent until answered) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","token"}`).
+`preview_delay_s` (15; read clamped 10–30, MC-17) · `theme` (`"light"`) · `sku_prefix` (owner card 2 answered
+"generate", 05B MC-22; absent or empty = no proposal) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","token"}`).
 Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; durations carry their unit suffix.
 
 ### 6.9 Test layout

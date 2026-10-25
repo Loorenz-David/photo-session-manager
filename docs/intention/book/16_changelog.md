@@ -68,3 +68,11 @@
     replaces the old media in the same gallery place (R30). Contract MC-21 and invariant M28 in
     new chapter 07B; pointers in 05A MC-6, 07 Dirty, 07A MC-11/MC-12, 10A MC-17; map row added.
     Owner decision, so the header stays RATIFIED. R-I1…R-I17 stand (owner informed, no objection).
+16. **2026-10-25 — Owner: planner card 2 answered** (relayed by the orchestrator). SKU proposed
+    from a prefix and editable before confirming; the owner added that a SKU must stay editable
+    after the first picture lands, replacing chapter 05's "immutable once a photo exists" (R31).
+    Contract MC-22 and invariant M29 in new chapter 05B: stored folder key frozen at the first
+    photo, export under the current SKU, SKU/barcode diff-written to the shop at publish, shop
+    clash check at create and edit. Pointers in 05, 05A MC-2/MC-8, 08; map row. Owner decision,
+    header stays RATIFIED. Plans P01, P07, P09, P12, P14 and the master plan amended by the
+    orchestrator.

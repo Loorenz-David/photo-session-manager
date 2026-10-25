@@ -8,7 +8,7 @@ run), **AI** agent (post-MVP; never overwrites a U value).
 | Field | Owner | Notes |
 |---|---|---|
 | id | S | |
-| sku | U/I | required, unique; immutable once a photo exists (it names folders and files) |
+| sku | U/I | required, unique; editable at any time (05B MC-22: proposal from a prefix, stored folder key) |
 | barcode | U/I | optional |
 | item_type | U/I | display name in lists ("Lounge Chair"); drives attribute presets |
 | title | U/I/AI | product title |

@@ -12,20 +12,16 @@ Updated: 2026-10-25 by the orchestrator.
   (evidence/capture_one_16.8.6.md VERIFY near line 100) still owed.
 - Master plan and 17 phase plans: written 2026-10-25 (exit 10, OWNER_DECISIONS_PENDING, 2 cards).
   Order in `phases.txt` (P00…P16); Shopify phase P12 needs the token.
-- Phases: none started.
-- Run in flight: **none**.
+- Phases: none approved yet.
+- Run in flight: **all**, `tools/pipeline/run_phase.sh all`, started 2026-10-25 14:58.
 
 ## Needs the owner
-Cards verbatim in `handoffs/reviewer/handoff_master_plan_r1.md`:
-- **Card 1 — Rust not installed** (verified: no cargo/rustc/rustup). Gate holds: P00 not launched
-  until `cargo --version` works. Owner to install, or say so and the orchestrator runs rustup.
-- **Card 2 — SKU for a new local item** (typed vs generated with prefix). Recommendation: generate
-  with editable proposal. On silence P07 builds the typed box only.
-- Optional: 10-second colour-tag visual check.
+Nothing. Card 1: owner said "install it"; rustup installed cargo/rustc 1.99.1 (2026-10-25).
+Card 2: generate with editable proposal, and SKU editable after photos → 05B MC-22, R31, M29;
+plans P01/P07/P09/P12/P14 + master plan amended. Optional: 10-second colour-tag visual check.
 
 ## Next command
-Once `cargo --version` works: `tools/pipeline/run_phase.sh all` (background). Fold card 2's answer
-into P07 (plan row) if it arrives before P07.
+On exit: per orchestrator.md table. Before P12 is next: ask the owner for the Shopify token.
 
 ## Facts the next orchestrator needs
 - Shopify dev-app token is not available yet; the owner provides it before the publishing phase.

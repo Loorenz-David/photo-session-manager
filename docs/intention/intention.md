@@ -24,6 +24,7 @@ the meaning, the contract gives the exact rule.
 | [04 Workflow and scenarios](book/04_workflow_and_scenarios.md) | user-facing behaviour, acceptance stories |
 | [05 Domain model](book/05_domain_model.md) | tables, fields, ownership, facts vs derived |
 | [05A Mechanism contracts: core](book/05A_mechanism_contracts.md) | path identity, capture arrival and session attribution, RAW hash, time, position math, dirty, status derivation, export naming, attribute value forms (MC-1…MC-9) |
+| [05B SKU generation and change](book/05B_sku_generation_and_change.md) | new-item SKU proposal from a prefix, SKU edits after photos, stored folder key, identity writes at publish (MC-22, owner card 2) |
 | [06 Photo review and ordering](book/06_photo_review_and_ordering.md) | capture arrival, approve/condition/delete, undo, order, Original/Adjusted, unassigned, move/copy |
 | [07 Session states and publishing](book/07_session_states_and_publishing.md) | status order, ready rule, dirty state, publish steps, failures, local export |
 | [07A Mechanism contracts: publish](book/07A_publish_contracts.md) | frozen confirmation, mutation token, resume and idempotency keys, gallery reconciliation, attribute writes and the Shopify type map, damage report (MC-10…MC-14) |

@@ -48,12 +48,14 @@ observations" (EXIF clock, hash unchanged).
    never touching `raw_hash`.
 4. `folder_key` + collision rule via `items.folder_key_ci` UNIQUE (refusal returns `sku_collision{existing_sku}`).
 5. `ItemsService::create_local(sku, title, item_type, barcode)` (origin `local`, creates the item's session),
-   `link(item_id, integration, external_id, external_url)`, `update_identity(item_id, sku?, barcode?)` (SKU change
-   refused with `sku_immutable` once any photo row exists in any of the item's sessions). `SessionsService::create`,
+   `link(item_id, integration, external_id, external_url)`, `update_identity(item_id, sku?, barcode?)` (05B MC-22:
+   SKU change always allowed; `items.folder_key` follows the SKU only while the item has no photo row, then stays
+   frozen; the new SKU's key, ignoring case, must not equal another item's stored key or another item's current-SKU
+   key → `sku_collision`). `SessionsService::create`,
    `get` (DTO with counts), `unassigned()`.
 6. Commands + bindings; `TestApp` accessors; tests for every row below.
 
-## Criteria (7 criteria, 20 rows; 3 `[rule]` rows: C1(a), C6(a), C6(b))
+## Criteria (7 criteria, 20 rows; 2 `[rule]` rows: C1(a), C6(a))
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `App::open` then `PRAGMA table_info` per table | fresh data dir | every table of master plan §6.5 exists with every listed column | `[rule]` ch05 §tables (+ inventory columns) |
@@ -74,7 +76,7 @@ observations" (EXIF clock, hash unchanged).
 | C5(c) | `folder_key` | `""`, 101 × `"a"` | `Err(invalid_value)` for both; 100 × `"a"` accepted | MC-8 |
 | C5(d) | `ItemsService::create_local` | items `abc` then `ABC`; then `abd` | second refused `sku_collision{existing_sku: "abc"}`, no row; `abd` created | M15 (no two items share a folder) |
 | C6(a) | `ItemsService::create_local` | sku, title, type | item `origin = local`; exactly one session with that `item_id`; `created_at = clock.now_ms()` | `[rule]` ch05 §items (origin), ch04 S-D |
-| C6(b) | `ItemsService::update_identity` | item with no photos → sku `B`; then a photo row inserted → sku `C` | first call succeeds (`sku`, `folder_key`, `folder_key_ci` updated); second `Err(sku_immutable)`, sku stays `B` | `[rule]` ch05 §items (immutable once a photo exists) |
+| C6(b) | `ItemsService::update_identity` | item with no photos → sku `B`; then a photo row inserted → sku `C`; another item `X` exists | first call: `sku = B`, `folder_key = B`; second call: `sku = C`, `folder_key` still `B`; then sku `b` on item `X` → `Err(sku_collision{existing_sku})` (collides with stored key `B`) | MC-22 (05B), M29 |
 | C7(a) | `ItemsService::create_local` with `ManualClock` at `1_761_400_000_123` | — | `items.created_at`, `sessions.created_at` and `sessions.last_activity_at` all equal `1_761_400_000_123` (integer ms) | M11 (storage) |
 
 ## Delegated choices

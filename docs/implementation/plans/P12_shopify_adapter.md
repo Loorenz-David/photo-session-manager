@@ -11,7 +11,7 @@ depends_on: [P10_attributes]
 Implement `CommerceAdapter` for Shopify (Admin GraphQL, version pinned in settings, default `2026-10`) behind an
 `HttpTransport` seam, after **grounding every Shopify-owned shape** the publish contracts depend on
 (SHOPIFY-VERIFY-1…6) against the owner's dev store with the dev-app token and recording the answers in a new
-evidence doc plus sanitized fixtures. Methods: `item_search` (exact SKU), `item_get`, `item_create` (DRAFT),
+evidence doc plus sanitized fixtures. Methods: `item_search` (exact SKU), `item_get`, `item_create` (DRAFT), `item_set_identity` (default-variant SKU/barcode diff write + read-back, 05B MC-22),
 `attributes_schema` (type map → core definitions), `attributes_read`, `attributes_write` (batched), the media
 primitives (`staged_uploads_create`, `upload`, `product_create_media`, `poll_media_ready`, `product_reorder_media`,
 `poll_job`, `list_media`), `file_create`/`poll_file`, title/description/tags writes. Every mutating method takes
@@ -65,7 +65,7 @@ type_map.rs, errors.rs, fixtures/*.json}}` (new), `crates/integrations/examples/
 5. `FakeTransport` (fixture replay keyed by operation name + variables digest; unmatched request → test failure).
 6. Tests (every row below against `FakeTransport`).
 
-## Criteria (8 criteria, 53 rows; 0 `[rule]` rows). Fixture cells cite `shopify_admin.md` sections (SV-n) and fixture files.
+## Criteria (8 criteria, 54 rows; 0 `[rule]` rows). Fixture cells cite `shopify_admin.md` sections (SV-n) and fixture files.
 | Row | Boundary | Input (fixture) | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `item_search(sku "K-1")` | SV-6 fixture: 0 variants match | `[]` | MC-11 (prepare) |
@@ -73,6 +73,7 @@ type_map.rs, errors.rs, fixtures/*.json}}` (new), `crates/integrations/examples/
 | C1(c) | `item_search` | 2 products carry the SKU | two items (P13 decides the failure) | MC-11 |
 | C1(d) | `item_search("k-1")` | fixture returns a product whose variant SKU is `K-1` (SV-6 case behaviour) | `[]` — comparison is byte-exact after NFC | MC-11 |
 | C2(a) | `item_get(id)` | SV-2 fixture product with 3 media | `RemoteItem` with media `[(id, filename, READY, position)]` in gallery order | M19 (inputs `current`) |
+| C3(x) | `item_set_identity(id, sku, barcode)` | fixture variant SKU `K-1`, barcode `123`; local `K-2`, `123` | request updates the default variant's `sku` only; read-back returns `K-2` | MC-22 (05B) |
 | C3(a) | `item_create(run, sku, barcode, title)` | fixture `productCreate` | returns the new external id; request has `status: DRAFT`, variant `sku`, `barcode` | M18 |
 | C4(a–t) | `attributes_schema` (20 rows) | the 68-definition fixture (`SHOPIFY_PRODUCT_METAFIELDS.md` shapes, SV-1): (a) `single_line_text_field` with choices → `choice` · (b) without → `text` · (c) `list.single_line_text_field` with choices → `multi_choice` · (d) without → `tags` · (e) `multi_line_text_field` → `textarea` · (f) `rich_text_field` → `rich_text` · (g) `number_integer` → `integer` · (h) `number_decimal` → `decimal` · (i) `dimension` → `dimension` · (j) `weight` → `weight` · (k) `volume` → `dimension` · (l) `boolean` · (m) `date` · (n) `date_time` → `reference` · (o) `color` · (p) `rating` (min/max in validations) · (q) `money` · (r) `url` · (s) `list.file_reference` images → `media_list` · (t) `file_reference`, `metaobject_reference`, `product_reference`, `list.metaobject_reference`, `list.product_reference` → `reference`, `writable = false` | the named core type and writability; `custom.condition_cracks` choices are exactly the severity five; `custom.damage_report` group `condition` | M20, MC-13 (type map) |
 | C5(a–n) | `attributes_read` → `canonicalize` → `to_platform_string` (14 rows: choice, text, multi_choice, tags, textarea, rich_text, integer, decimal, dimension, boolean, date, color, rating, money/url) | SV-1 fixture value strings | the produced string equals the fixture's value string byte for byte (identity) | M16, M20 |

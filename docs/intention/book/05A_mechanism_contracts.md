@@ -45,8 +45,8 @@ same string; the arrival pipeline therefore creates at most one row per (session
 
 **Capture root.** The document's capture root is the `file` of the document collection whose
 `id` is `capture` (evidence: stable, independent of the current `captures` value, which we
-change per session). Per-session capture folders are `<capture root>/<folder_key(SKU)>/`
-(`folder_key` in MC-8). When no session is active the app sets the capture folder to
+change per session). Per-session capture folders are `<capture root>/<items.folder_key>/`
+(`folder_key` in MC-8; stored and frozen at the first photo: 05B MC-22). When no session is active the app sets the capture folder to
 `<capture root>/_Unassigned/` **(ratify R-I1)**; `_Unassigned` cannot collide with a folder key
 because folder keys never start with `_` (MC-8).
 
@@ -67,7 +67,7 @@ same size and mtime; otherwise it is re-checked every 1 s, giving up after 120 s
 the event's processing time, because the folder records which session was active when the
 shutter fired (D1 switches the folder with the session):
 1. parent = `<capture root>/_Unassigned/` → Unassigned;
-2. parent = `<capture root>/<k>/` and exactly one session's item has `folder_key(sku) = k` →
+2. parent = `<capture root>/<k>/` and exactly one session's item has stored `items.folder_key = k` (05B MC-22) →
    that session (if that session is `published`, the photo still joins it and makes it dirty;
    captures are never redirected);
 3. otherwise (capture root itself, an unknown folder, an import) → the session that is active
@@ -215,7 +215,8 @@ replace a leading `.` or `_` with `-`; the result must be 1–100 characters. Tw
 folder keys are equal **ignoring case** cannot coexist (the default macOS volume is
 case-insensitive): creating or linking the second is refused with a message naming the first
 **(ratify R-I11)**.
-The folder key names both `Capture/<key>/` (MC-2) and the export folder.
+The stored folder key names `Capture/<key>/` (MC-2); the export folder and files use
+`folder_key(current SKU)` (05B MC-22).
 
 **Export layout** (M7): `<export folder>/<key>/<key>_<NN>_<main|condition>.jpg` plus
 `<export folder>/<key>/item.json`. `NN` is the photo's position, zero-padded to
