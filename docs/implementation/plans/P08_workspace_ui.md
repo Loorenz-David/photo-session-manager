@@ -157,3 +157,13 @@ whether `I` opens a popover or a sheet.
   next key acts on it` (Main photo 1 active; `photo_added{2}` makes tile 2 active; `c` calls `classifyPhoto(2,'condition')`).
   The test fails without the fix (observed: 1 failed / 23 passed with the old line restored) and passes with it. Suite:
   vitest 43/0, `cargo test --workspace` 183/0, clippy and fmt clean, typecheck clean. No judgment calls beyond the finding.
+- 2026-10-25 re-review r2 (actor `opus`): **APPROVED_WITH_NOTES.** Perimeter: `git show --stat 545d619` lists 5 paths,
+  and they equal the fix handoff's list (the two files F1 allowed, the tracker row, this log and the fix handoff). HEAD `8762dfd`
+  adds only the re-review prompt, and the tree is clean. Stamp on that tree, all exit 0: `cargo test --workspace` 183/0,
+  clippy `-D warnings`, `fmt --check`, `npm run typecheck`, and `npm test` 43/43 (2 files). **F1 resolved as corrected:** the
+  `photo_added` branch now calls `setActiveId(event.photo_id)`. After the reload, the photo is visible, so `reload` keeps it,
+  and state and ref agree. That covers both an empty session (ref null → new id) and photo 1 active → photo 2. C9 can fail:
+  with the old line, `activeTile()` stays 1 and `waitFor` times out. It asserts exact `classifyPhoto(2,'condition')`, and it
+  traces to ch04 S-C. Imports emit the same `photo_added` (ch06 §Import: "same path as captures"), so an import also moves the
+  stage. That is consistent with the book. Triage: no blocking items remain, so nothing is MUST or DROP. One new note goes to
+  `backlog.md`: the reload window and the in-flight race in the `photo_added` ordering, both lasting milliseconds.
