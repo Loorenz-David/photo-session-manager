@@ -12,18 +12,21 @@ Updated: 2026-10-25 by the orchestrator.
   the owner 2026-10-25.
 - Master plan and 17 phase plans: written 2026-10-25 (exit 10, OWNER_DECISIONS_PENDING, 2 cards).
   Order in `phases.txt` (P00…P16); Shopify phase P12 needs the token.
-- Phases: P00–P06 APPROVED 2026-10-25 (P04, P05 with notes; narratives relayed). P04 projection r0 →
+- Phases: P00–P11 APPROVED 2026-10-25/26 (most with notes; narratives relayed). P04 projection r0 →
   amendments applied by the orchestrator (plan Review log). P00 Automation prompt check PASSED with
   the owner 19:25 (evidence packaging_spike.md).
-- Run in flight: **all**, started 2026-10-25 ~22:00 (resumes at P07; its r1 attempt was stopped by the
-  Codex usage limit, archived, partial work uncommitted in the tree, noted in the P07 Review log).
-- Implementer and fix sessions now run on Claude (owner 2026-10-25: Opus for Codex 6 Sol, Sonnet for
+- P12 (Shopify): projection r0 (2026-10-26 00:18) → AMENDMENTS_REQUIRED, ledger L1–L25 in
+  `handoffs/reviewer/handoff_P12_shopify_adapter_projection_r0.md`; orchestrator applying them to the
+  P12 plan (+ P13 task 1, master plan wiring, 07A/09 fold-backs). No run in flight.
+- Implementer and fix sessions run on Claude (owner 2026-10-25: Opus for Codex 6 Sol, Sonnet for
   Codex 6 Luna); flow.md §2 updated; `PSM_IMPLEMENTER=codex` switches back.
 
 ## Needs the owner
-Nothing. Card 1: owner said "install it"; rustup installed cargo/rustc 1.99.1 (2026-10-25).
-Card 2: generate with editable proposal, and SKU editable after photos → 05B MC-22, R31, M29;
-plans P01/P07/P09/P12/P14 + master plan amended. Colour-tag mapping confirmed by the owner (evidence).
+1. Shopify token (`SHOPIFY_TOKEN`, `SHOPIFY_SHOP`): P12 precondition. Asked 2026-10-26 00:20.
+2. P12 projection card 1: is `68c5b4-6a.myshopify.com` a test store or the live shop (probe writes)?
+   Branches: test store / live shop writes OK / live shop read-only + separate dev store for writes.
+   Recommendation: if live, read-only there plus a dev store. Asked 2026-10-26 00:20.
+Earlier cards (I1, plan cards 1–2) answered; see changelog and Facts.
 
 ## Next command
 On exit: per orchestrator.md table. Before P12 is next: ask the owner for the Shopify token.
