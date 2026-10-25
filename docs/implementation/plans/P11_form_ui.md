@@ -111,3 +111,40 @@ elements with ARIA roles.
 empty type until some phase lets the photographer set a type. `item_update_identity` treats `null` as "unchanged",
 so the barcode cannot be cleared from the form.
 
+
+### 2026-10-25 — review r1 (opus, `pipeline-reviewer`) — CHANGES_REQUESTED
+**Gate.** Tracker `IMPLEMENTED`; checkpoint `a3ba576` in `git log`. `git show --stat a3ba576`: 36 paths = the declared
+files changed (34 code paths incl. 20 inputs, `master_plan.md`, this plan). No extra or missing paths.
+**Suite (tree `af028a2`, clean; code identical to `a3ba576`).** `npm run typecheck` 0 · `npm test` 77/77 (4 files) ·
+`cargo test --workspace` 235 passed, 0 failed · `cargo clippy --workspace --all-targets -- -D warnings` 0 ·
+`cargo fmt --all -- --check` 0.
+**Verified correct (by reading code and test).** C1(a–u): `kindOf` follows evidence §Field kind map exactly (severity
+before radio before crowded; `> 32`, `> 4`, `> 48`); each fixture has one sufficient cause (C1(e) joins to 53 chars
+with every option ≤ 32; C1(b) would fall to `select` without the severity check). C2(a): per-field 300 ms debounce,
+fake timers prove not-at-299/once-at-300 with the typed string. C2(b): invalid value shown with marker + verbatim
+text; nothing written until the user picks a choice (a write-back on load would fire inside the 400 ms wait).
+C3(a): tab names come from `form_get` counts (fixture counts differ from field counts). C4(a): real dnd-kit drag,
+remove, add, default → `setPreset("Chair","details",[k2,k1,k9="Oak"])` once. C4(b): fixed keys lack Remove, Era has
+it. C5(a): bars 3/2/1, "Check" on low. C5(b): Looks right → `attribute_values_set` (command is provenance Human,
+`commands/attributes.rs:258`) with the stored value; Clear → `attribute_ai_clear`; each excludes the other.
+C5(c): pill absent on human, present on AI neighbour. C6(a): picker lists condition photos only, in order; untick
+writes exactly `{excluded:[p2]}` once. Emptying a field → `attribute_ai_clear`, which clears any live value incl.
+human (`services/attributes.rs:319`). H1–H8, secrets, live services: no violation (form writes local only; works
+without integration; no core/Tauri change).
+**Findings.**
+- **F1 (B1, route: production).** The Product step's Title edits `product.title`, a second copy, while the item's
+  title lives in `items.title` (ch05 §items: `title`, owner U, "product title"; ch08 §Identity fields: "Title is a
+  Product-step field"). Typed titles never reach the sessions list, the workspace header or `item.json`'s `title`;
+  export then carries two different titles (implementer Assumption 3; P10 backlog note "bind before the form
+  ships"). Correction: give the title one home, `items.title`: `form_get` presents `items.title` as the
+  `product.title` field's value, and a human write or clear of `product.title` updates `items.title` (no separate
+  stored row), with one behaviour test at the service boundary; drop the placeholder workaround. Files:
+  `crates/core/src/services/attributes.rs`, `crates/core/src/ports/store.rs`, `crates/infra/src/sqlite/store.rs`,
+  `crates/testkit/tests/p11_title_binding.rs` (new), `apps/desktop/src/features/form/FormDialog.tsx`,
+  `apps/desktop/src/features/form/__tests__/p11_form_ui.test.tsx`, `apps/desktop/src/features/workspace/WorkspacePage.tsx`
+  (reload after a title save, optional).
+**Notes (backlog, 5).** Customize toggle re-fetches before the layout save lands; own invalid entry empties the
+input; `item_type = ""` shares one layout; barcode cannot be cleared; C6(a) fixture order = id order.
+**Lessons for the plans.** A backlog note addressed to the next phase ("P10 → P11: bind title before the form
+ships") was not folded into P11's rows; notes routed to a named phase need a row or an explicit refusal at
+compile time.
