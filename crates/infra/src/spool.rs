@@ -29,25 +29,6 @@ pub fn parse_spool_file(bytes: &[u8]) -> Result<HookPayload> {
     serde_json::from_slice(bytes).map_err(|e| Error::InvalidData(e.to_string()))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mc15_parse_processing_payload() {
-        let input =
-            br#"{"hook":"processing_done","job":"J1","raw":"/tmp/a.ARW","outputs":["/tmp/a.jpg"]}"#;
-        assert_eq!(
-            parse_spool_file(input).unwrap(),
-            HookPayload::ProcessingDone {
-                job: "J1".into(),
-                raw: "/tmp/a.ARW".into(),
-                outputs: vec!["/tmp/a.jpg".into()],
-            }
-        );
-    }
-}
-
 pub struct Spool {
     paths: AppPaths,
     drain_lock: Mutex<()>,
@@ -105,5 +86,24 @@ impl Spool {
     pub fn write_for_test(&self, name: &str, content: &str) -> Result<()> {
         fs::write(self.paths.spool().join(Path::new(name)), content)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mc15_parse_processing_payload() {
+        let input =
+            br#"{"hook":"processing_done","job":"J1","raw":"/tmp/a.ARW","outputs":["/tmp/a.jpg"]}"#;
+        assert_eq!(
+            parse_spool_file(input).unwrap(),
+            HookPayload::ProcessingDone {
+                job: "J1".into(),
+                raw: "/tmp/a.ARW".into(),
+                outputs: vec!["/tmp/a.jpg".into()],
+            }
+        );
     }
 }

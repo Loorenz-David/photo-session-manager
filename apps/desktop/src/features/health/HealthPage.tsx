@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getAppPaths, getHealth } from '../../services/health';
 import type { AppPathsDto, HealthReportDto } from '../../services/bindings';
+import { Button } from '../../components/ui/button';
 
 const names: Record<string, string> = {
-  data_dir: 'Data directory', hooks_compiled: 'Capture One hooks', nudge_listening: 'Event listener'
+  data_dir: 'Data directory', hooks_compiled: 'Capture One hooks', nudge_listening: 'Event listener', capture_one: 'Capture One'
 };
 
 export function HealthPage() {
@@ -19,7 +20,7 @@ export function HealthPage() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   return <main className="health-shell">
-    <header className="health-header"><div><h1 className="health-title">Session Manager</h1><p className="health-subtitle">Health</p></div><button className="health-refresh" onClick={() => void refresh()}>Refresh</button></header>
+    <header className="health-header"><div><h1 className="health-title">Session Manager</h1><p className="health-subtitle">Health</p></div><Button variant="outline" onClick={() => void refresh()}>Test Capture One</Button></header>
     <section className="health-section" aria-label="System status"><h2>System status</h2>
       {error ? <p role="alert">{error}</p> : <div className="health-list">{health?.items.map(item => <div className="health-row" key={item.code}>
         <div className="health-label"><span className="health-dot" data-ok={item.ok} />{names[item.code] ?? item.code}</div><div className="health-detail">{item.detail}</div>

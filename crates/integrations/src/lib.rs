@@ -2,8 +2,8 @@ pub mod editing;
 
 use psm_core::{Result, ports::clock::SystemClock};
 use psm_infra::{
-    nudge::NudgeServer, paths::AppPaths, settings_file::Settings, spool::Spool,
-    sqlite::store::SqliteStore, watcher::FsWatcher,
+    nudge::NudgeServer, osascript::OsaRunner, paths::AppPaths, settings_file::Settings,
+    spool::Spool, sqlite::store::SqliteStore, watcher::FsWatcher,
 };
 use std::{
     sync::{
@@ -26,6 +26,12 @@ pub struct App {
 }
 
 impl App {
+    pub fn probe_capture_one(&self) -> Result<String> {
+        let script = self.paths.hooks().join("probe_capture_one.js");
+        std::fs::write(&script, "Application(\"Capture One\").name()")?;
+        OsaRunner::new(&self.paths.root).run(&script, &[], Duration::from_secs(30))
+    }
+
     pub fn open(paths: AppPaths) -> Result<Self> {
         paths.create()?;
         let settings = Settings::open(&paths)?;

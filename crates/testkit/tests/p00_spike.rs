@@ -116,7 +116,10 @@ fn c2a_osascript_uses_data_directory_as_cwd() {
     let output = OsaRunner::new(dir.path())
         .run(&script, &[], Duration::from_secs(2))
         .unwrap();
-    assert_eq!(output, dir.path().to_string_lossy());
+    assert_eq!(
+        Path::new(&output).canonicalize().unwrap(),
+        dir.path().canonicalize().unwrap()
+    );
 }
 
 #[test]

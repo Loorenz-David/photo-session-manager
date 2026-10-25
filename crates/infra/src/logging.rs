@@ -1,7 +1,12 @@
 use crate::paths::AppPaths;
 
 pub fn init(paths: &AppPaths) -> Option<tracing_appender::non_blocking::WorkerGuard> {
-    let file = tracing_appender::rolling::daily(paths.root.join("logs"), "psm");
+    let file = tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("psm")
+        .filename_suffix("log")
+        .build(paths.root.join("logs"))
+        .ok()?;
     let (writer, guard) = tracing_appender::non_blocking(file);
     let subscriber = tracing_subscriber::fmt()
         .with_writer(writer)

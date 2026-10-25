@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   test: { environment: 'jsdom' }
