@@ -241,3 +241,22 @@ addressing a session document by path when more than one document is open.
 > and capture-folder probes ran through `byId` with Capture One in the background. Two open
 > documents not probed (only one existed). `capture` acts on the foreground document only
 > (dictionary). Contract: 10A MC-19.
+
+## Read-only smoke for P04 (orchestrator, 2026-10-25 ~16:45; camera NOT tethered)
+JXA against the open `session test 1` document:
+- `Application("Capture One").running()` → `true` (checking it does not launch the app).
+- `currentDocument().kind()` → `"session"`; `id()` → `"/Users/davidloorenz/Pictures/session test 1"`;
+  `name()` → `"session test 1.cosessiondb"`; `captures()` (String) → `".../session test 1/Capture"`.
+- **No camera:** `currentDocument().camera()` returns **`null`** (not an error); `availableCameraIdentifiers()` →
+  `[]`. With the camera tethered (13:20 today) `camera().name()` was `"Sony ZV-E10"` and the identifier
+  `"Sony__ZV-E10__00000000000000003285273206729157"`.
+- Capture root: `collections.whose({id: "capture"})()[0].file()` → `".../session test 1/Capture"`.
+- Recipe props read in JXA: `existingFiles()` → `"add suffix"`, `outputSubFolder()` → `""` (a built-in recipe;
+  not written).
+- `images.whose({path: <RAW>})()` → 1 image; its variants: ids `["1"]`, positions `[1]`.
+- **Hook read-back shapes:** a hook property reads back as a JXA `Path` object (`typeof "object"`); use
+  `.toString()`. Set as a **string** `"/private/tmp/…/capture_done.scpt"` → reads back `"/tmp/…"` (prefix
+  stripped); set as `Path("/private/tmp/…")` → reads back `"/private/tmp/…"`. Compare by `canon` (MC-1), never
+  by string. Set to a **non-existent** file → reads back a different path,
+  `/var/folders/…/T/TempCOScript_<UUID>.scpt` (Capture One substitutes a temp copy), so install must run
+  after the scripts are compiled and a read-back mismatch is the signal. Cleared with `""` → reads `null`.

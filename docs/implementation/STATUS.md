@@ -12,8 +12,9 @@ Updated: 2026-10-25 by the orchestrator.
   the owner 2026-10-25.
 - Master plan and 17 phase plans: written 2026-10-25 (exit 10, OWNER_DECISIONS_PENDING, 2 cards).
   Order in `phases.txt` (P00…P16); Shopify phase P12 needs the token.
-- Phases: none approved yet.
-- Run in flight: **all**, relaunched 2026-10-25 15:50 after P00 attempt 3 BLOCKED only on bundle launch (sandbox). Live checks done by orchestrator with owner (launch, processing hook, capture hook PASS). Automation probe defect → P00 task 11(c) amended. **After P00 approves: open the bundle with the owner and confirm the Automation prompt (c).**
+- Phases: P00–P03 APPROVED (with notes) 2026-10-25. P04 projection r0 → amendments applied by the
+  orchestrator (plan Review log); projection marked done so the runner skips a second one.
+- Run in flight: **all**, relaunched 2026-10-25 19:22 at P04 (P00–P03 skipped as approved). **Still owed with the owner: P00 Automation prompt check (open bundle, press Test Capture One, Allow, relaunch).**
 
 ## Needs the owner
 Nothing. Card 1: owner said "install it"; rustup installed cargo/rustc 1.99.1 (2026-10-25).

@@ -28,7 +28,7 @@ assign_unassigned)}`, `crates/core/src/ports/raw_previews.rs` (new), `crates/inf
 `crates/infra/src/{spool.rs (dispatch after row), watcher.rs (capture-root wiring)}`, `crates/core/src/domain/photo.rs`,
 Store trait + impl (insert-or-get in one tx with jobs and raw_state), `apps/desktop/src-tauri/src/commands/photos.rs`
 (`photos_import`, `photos_assign_unassigned`), bindings, `crates/testkit/src/{fixtures/synthetic_raw.rs (new),
-test_app.rs (`watcher_event`, `scan()`, `tick`, capture root in the fake document)}`, `crates/testkit/tests/p05_capture_arrival.rs` (new).
+test_app.rs (`watcher_event`, `scan()`, `tick`; the capture root in the fake document is already provided by P04)}`, `crates/testkit/tests/p05_capture_arrival.rs` (new).
 
 ## Core mechanisms (unit tests allowed)
 - `mechanisms::hook_payload::parse(json) -> Result<HookEvent>` (MC-15 payload table; `capture_done` yields every
