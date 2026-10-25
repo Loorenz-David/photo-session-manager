@@ -73,7 +73,7 @@ restated so no session has to infer them:
 | P03_session_state_list | APPROVED | 2026-10-25 | opus | approved with notes after fix 1: 29/29 rows hold at their boundaries, C1(l) now discriminates the latest publish item; suite/lint/typecheck green; 5 notes in backlog |
 | P04_capture_one_adapter | APPROVED | 2026-10-25 | opus | approved with notes: 21/21 rows hold at their boundaries, suite/lint/typecheck green; 11 notes in backlog; live Capture One smoke still unrun |
 | P05_capture_arrival | APPROVED | 2026-10-25 | opus | approved with notes after fix 1: 33/33 rows hold, capture arrivals now first-sight per RAW across sessions (C7(b) discriminates); suite/lint/typecheck green; 9 notes in backlog |
-| P06_live_previews | IMPLEMENTED | 2026-10-25 | codex | 18/18 boundary rows tested; render completion, staleness, focus, sidecar and retouch connected |
+| P06_live_previews | CHANGES_REQUESTED | 2026-10-25 | opus | review r1: 18/18 rows hold, suite/lint/typecheck green; F1 (B1) a RAW's new row in another session never gets the adjusted preview; F2 (B3/H7) Capture One sidecar layout in core; 9 notes in backlog |
 | P07_shell_sessions_ui | NOT_STARTED | 2026-10-25 | planner | app shell, sessions list, new session |
 | P08_workspace_ui | NOT_STARTED | 2026-10-25 | planner | stage, review, order, toggle, unassigned, import |
 | P09_local_export | NOT_STARTED | 2026-10-25 | planner | export job, naming, item.json, Export action |
