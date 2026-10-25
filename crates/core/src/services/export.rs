@@ -44,6 +44,13 @@ pub trait ExportFiles: Send + Sync {
     fn folder(&self, key: &str) -> PathBuf;
 }
 
+type Snapshot = (
+    Item,
+    Vec<i64>,
+    Vec<i64>,
+    BTreeMap<String, serde_json::Value>,
+);
+
 /// The id of one export run (the `render_export` job row that records its photo-list snapshot).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExportRunId(pub i64);
@@ -62,6 +69,8 @@ struct Run {
     key: String,
     staging: PathBuf,
     item: Item,
+    /// Every valid value of the item at the start of the run, keyed by attribute key (MC-8).
+    attributes: BTreeMap<String, serde_json::Value>,
     targets: Vec<Target>,
 }
 
@@ -106,7 +115,7 @@ impl ExportService {
 
     /// `<export folder>/<folder_key(current SKU)>/` of the session's item.
     pub fn folder(&self, session_id: i64) -> Result<PathBuf> {
-        let (item, _, _) = self.snapshot(session_id)?;
+        let (item, _, _, _) = self.snapshot(session_id)?;
         Ok(self.files.folder(&folder_key(&item.sku)?))
     }
 
@@ -136,8 +145,9 @@ impl ExportService {
         }
     }
 
-    /// Main and condition photos in position order (unreviewed and deleted excluded, N2).
-    fn snapshot(&self, session_id: i64) -> Result<(Item, Vec<i64>, Vec<i64>)> {
+    /// Main and condition photos in position order (unreviewed and deleted excluded, N2), and the
+    /// item's valid attribute values (cleared and invalid ones excluded, MC-8).
+    fn snapshot(&self, session_id: i64) -> Result<Snapshot> {
         let mut snapshot = None;
         self.store.transaction(&mut |tx| {
             let session = tx.session(session_id)?;
@@ -156,10 +166,17 @@ impl ExportService {
             }
             main.sort();
             condition.sort();
+            let attributes = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .filter(|v| v.valid && v.is_live())
+                .filter_map(|v| v.json().map(|json| (v.key, json)))
+                .collect();
             snapshot = Some((
                 item,
                 main.into_iter().map(|(_, id)| id).collect(),
                 condition.into_iter().map(|(_, id)| id).collect(),
+                attributes,
             ));
             Ok(())
         })?;
@@ -167,7 +184,7 @@ impl ExportService {
     }
 
     fn start(&self, session_id: i64) -> Result<Run> {
-        let (item, main, condition) = self.snapshot(session_id)?;
+        let (item, main, condition, attributes) = self.snapshot(session_id)?;
         let key = folder_key(&item.sku)?;
         let check = IntegrityCheck::new(self.store.as_ref());
         for &photo_id in main.iter().chain(&condition) {
@@ -200,6 +217,7 @@ impl ExportService {
             key,
             staging,
             item,
+            attributes,
             targets: Vec::new(),
         };
         for (group, ids) in [
@@ -332,7 +350,7 @@ impl ExportService {
                 lists[usize::from(*slot)].push(name);
             }
         }
-        let json = item_json(&run.item, &BTreeMap::new(), &lists[0], &lists[1]);
+        let json = item_json(&run.item, &run.attributes, &lists[0], &lists[1]);
         self.files
             .write_in(&run.staging, "item.json", json.as_bytes())?;
         self.files.swap(&run.staging, &run.key, run.id)?;

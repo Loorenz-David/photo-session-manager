@@ -113,6 +113,7 @@ impl<'a> ItemsService<'a> {
                 at,
             })?;
             session_id = tx.insert_session(item_id, at)?;
+            crate::services::attributes::prefill_defaults(tx, item_id, item_type, at)?;
             Ok(())
         })?;
         Ok((self.store.item(item_id)?, self.store.session(session_id)?))

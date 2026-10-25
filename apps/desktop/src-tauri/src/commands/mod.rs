@@ -1,3 +1,4 @@
+pub mod attributes;
 pub mod camera;
 pub mod export;
 pub mod health;

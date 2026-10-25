@@ -75,8 +75,9 @@ impl<'a> SessionsService<'a> {
         let mut id = 0;
         let at = now_ms(self.clock);
         self.store.transaction(&mut |tx| {
-            tx.item(item_id)?;
+            let item = tx.item(item_id)?;
             id = tx.insert_session(item_id, at)?;
+            crate::services::attributes::prefill_defaults(tx, item_id, &item.item_type, at)?;
             Ok(())
         })?;
         self.store.session(id)

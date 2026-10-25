@@ -1,5 +1,6 @@
 use crate::Result;
 use crate::domain::{
+    attribute::{AttributeGroup, Definition, Preset, Value as AttributeValue},
     editing::Job,
     item::{Item, NewItem},
     photo::{Classification, Integrity, NewPhoto, Photo, UndoSlot},
@@ -62,6 +63,22 @@ pub trait StoreTx {
         external_id: &str,
         external_url: Option<&str>,
     ) -> Result<()>;
+    /// The stored definitions of one integration, in import order.
+    fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>>;
+    /// Replaces the whole stored definition set of `integration` with `definitions` (in this order).
+    fn replace_attribute_definitions(
+        &mut self,
+        integration: &str,
+        definitions: &[Definition],
+    ) -> Result<()>;
+    /// Every stored value row of the item, cleared rows included, ordered by key.
+    fn attribute_values(&self, item_id: i64) -> Result<Vec<AttributeValue>>;
+    /// Inserts or replaces the row (`item_id`, `key`).
+    fn put_attribute_value(&mut self, value: &AttributeValue) -> Result<()>;
+    /// Sets `last_activity_at` of the item's sessions; `change_seq` is left as it is (MC-6).
+    fn set_item_activity(&mut self, item_id: i64, at: i64) -> Result<()>;
+    fn attribute_preset(&self, item_type: &str, group: AttributeGroup) -> Result<Option<Preset>>;
+    fn put_attribute_preset(&mut self, preset: &Preset) -> Result<()>;
 }
 
 pub trait Store: Send + Sync {

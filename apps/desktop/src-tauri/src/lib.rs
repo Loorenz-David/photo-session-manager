@@ -105,7 +105,15 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::photos::photos_assign_unassigned,
         commands::export::export_run,
         commands::export::export_open_folder,
-        commands::export::integration_get
+        commands::export::integration_get,
+        commands::attributes::attributes_definitions_list,
+        commands::attributes::attribute_values_get,
+        commands::attributes::attribute_values_set,
+        commands::attributes::attribute_ai_accept_all,
+        commands::attributes::attribute_ai_clear,
+        commands::attributes::presets_get,
+        commands::attributes::presets_set,
+        commands::attributes::form_get
     ])
 }
 

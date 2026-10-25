@@ -2679,6 +2679,7 @@ dependencies = [
  "psm-infra",
  "psm-integrations",
  "serde",
+ "serde_json",
  "specta",
  "specta-typescript",
  "tauri",

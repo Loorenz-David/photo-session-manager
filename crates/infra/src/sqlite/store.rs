@@ -2,6 +2,10 @@ use crate::paths::AppPaths;
 use psm_core::{
     Error, Result,
     domain::{
+        attribute::{
+            AiConfidence, AiStatus, AttributeGroup, CoreType, Definition, Preset, Provenance,
+            Value as AttributeValue,
+        },
         editing::Job,
         item::{Item, ItemOrigin, NewItem},
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
@@ -320,6 +324,180 @@ impl StoreTx for SqliteTx<'_> {
         self.tx.execute("INSERT INTO item_links(item_id,integration,external_id,external_url,create_pending) VALUES (?1,?2,?3,?4,0) ON CONFLICT(item_id,integration) DO UPDATE SET external_id=excluded.external_id,external_url=excluded.external_url,create_pending=0", params![item_id,integration,external_id,external_url]).map_err(db)?;
         Ok(())
     }
+    fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>> {
+        let mut stmt = self.tx.prepare("SELECT integration,key,label,core_type,choices,validations,grp,description,writable FROM attribute_definitions WHERE integration=?1 ORDER BY rowid").map_err(db)?;
+        let rows = stmt
+            .query_map([integration], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, Option<String>>(4)?,
+                    r.get::<_, Option<String>>(5)?,
+                    r.get::<_, String>(6)?,
+                    r.get::<_, Option<String>>(7)?,
+                    r.get::<_, bool>(8)?,
+                ))
+            })
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)?;
+        rows.into_iter()
+            .map(
+                |(
+                    integration,
+                    key,
+                    label,
+                    core_type,
+                    choices,
+                    validations,
+                    grp,
+                    description,
+                    writable,
+                )| {
+                    Ok(Definition {
+                        integration,
+                        core_type: CoreType::parse(&core_type).ok_or_else(|| {
+                            Error::InvalidData(format!("core type {core_type} of {key}"))
+                        })?,
+                        group: AttributeGroup::parse(&grp)
+                            .ok_or_else(|| Error::InvalidData(format!("group {grp} of {key}")))?,
+                        key,
+                        label,
+                        choices: choices
+                            .map(|c| from_json(&c))
+                            .transpose()?
+                            .unwrap_or_default(),
+                        validations: validations
+                            .map(|v| from_json(&v))
+                            .transpose()?
+                            .unwrap_or_else(|| serde_json::json!({})),
+                        description,
+                        writable,
+                    })
+                },
+            )
+            .collect()
+    }
+    fn replace_attribute_definitions(
+        &mut self,
+        integration: &str,
+        definitions: &[Definition],
+    ) -> Result<()> {
+        self.tx
+            .execute(
+                "DELETE FROM attribute_definitions WHERE integration=?1",
+                [integration],
+            )
+            .map_err(db)?;
+        for d in definitions {
+            self.tx.execute("INSERT INTO attribute_definitions(integration,key,label,core_type,choices,validations,grp,description,writable) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![integration,d.key,d.label,d.core_type.as_str(),to_json(&d.choices)?,to_json(&d.validations)?,d.group.as_str(),d.description,d.writable]).map_err(db)?;
+        }
+        Ok(())
+    }
+    fn attribute_values(&self, item_id: i64) -> Result<Vec<AttributeValue>> {
+        let mut stmt = self.tx.prepare("SELECT item_id,key,value,valid,provenance,ai_confidence,ai_status,ai_reason,ai_sources,updated_at FROM attribute_values WHERE item_id=?1 ORDER BY key").map_err(db)?;
+        let rows = stmt
+            .query_map([item_id], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, bool>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, Option<String>>(5)?,
+                    r.get::<_, Option<String>>(6)?,
+                    r.get::<_, Option<String>>(7)?,
+                    r.get::<_, Option<String>>(8)?,
+                    r.get::<_, i64>(9)?,
+                ))
+            })
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)?;
+        rows.into_iter()
+            .map(
+                |(
+                    item_id,
+                    key,
+                    value,
+                    valid,
+                    provenance,
+                    confidence,
+                    status,
+                    reason,
+                    sources,
+                    updated_at,
+                )| {
+                    let bad = |what: &str| Error::InvalidData(format!("{what} of value {key}"));
+                    Ok(AttributeValue {
+                        item_id,
+                        provenance: Provenance::parse(&provenance)
+                            .ok_or_else(|| bad("provenance"))?,
+                        ai_confidence: confidence
+                            .map(|c| AiConfidence::parse(&c).ok_or_else(|| bad("confidence")))
+                            .transpose()?,
+                        ai_status: status
+                            .map(|s| AiStatus::parse(&s).ok_or_else(|| bad("ai status")))
+                            .transpose()?,
+                        ai_reason: reason,
+                        ai_sources: sources.map(|s| from_json(&s)).transpose()?,
+                        key,
+                        value,
+                        valid,
+                        updated_at,
+                    })
+                },
+            )
+            .collect()
+    }
+    fn put_attribute_value(&mut self, v: &AttributeValue) -> Result<()> {
+        let sources = v.ai_sources.as_ref().map(to_json).transpose()?;
+        self.tx.execute("INSERT INTO attribute_values(item_id,key,value,valid,provenance,ai_confidence,ai_status,ai_reason,ai_sources,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(item_id,key) DO UPDATE SET value=excluded.value,valid=excluded.valid,provenance=excluded.provenance,ai_confidence=excluded.ai_confidence,ai_status=excluded.ai_status,ai_reason=excluded.ai_reason,ai_sources=excluded.ai_sources,updated_at=excluded.updated_at", params![v.item_id,v.key,v.value,v.valid,v.provenance.as_str(),v.ai_confidence.map(AiConfidence::as_str),v.ai_status.map(AiStatus::as_str),v.ai_reason,sources,v.updated_at]).map_err(db)?;
+        Ok(())
+    }
+    fn set_item_activity(&mut self, item_id: i64, at: i64) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE sessions SET last_activity_at=?1 WHERE item_id=?2",
+                params![at, item_id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn attribute_preset(&self, item_type: &str, group: AttributeGroup) -> Result<Option<Preset>> {
+        let layout: Option<String> = self
+            .tx
+            .query_row(
+                "SELECT layout FROM attribute_presets WHERE item_type=?1 AND grp=?2",
+                params![item_type, group.as_str()],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?;
+        layout
+            .map(|layout| {
+                Ok(Preset {
+                    item_type: item_type.to_owned(),
+                    group,
+                    layout: from_json(&layout)?,
+                })
+            })
+            .transpose()
+    }
+    fn put_attribute_preset(&mut self, preset: &Preset) -> Result<()> {
+        self.tx.execute("INSERT INTO attribute_presets(item_type,grp,layout) VALUES (?1,?2,?3) ON CONFLICT(item_type,grp) DO UPDATE SET layout=excluded.layout", params![preset.item_type,preset.group.as_str(),to_json(&preset.layout)?]).map_err(db)?;
+        Ok(())
+    }
+}
+
+fn to_json<T: serde::Serialize + ?Sized>(value: &T) -> Result<String> {
+    serde_json::to_string(value).map_err(|e| Error::InvalidData(e.to_string()))
+}
+
+fn from_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T> {
+    serde_json::from_str(text).map_err(|e| Error::InvalidData(e.to_string()))
 }
 
 impl Store for SqliteStore {

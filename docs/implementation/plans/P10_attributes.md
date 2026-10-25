@@ -103,4 +103,15 @@ provenance from attribute_values;'` after setting a value through the dev tools 
 - Estimated size: ~9 files, ~1 600 lines.
 
 ## Review log
-(empty)
+- **2026-10-25 implement r1 (opus).** Built: `domain::attribute` (`CoreType`, `AttributeGroup`, `Provenance`,
+  `AiConfidence`, `AiStatus`, `Definition`, `Value`, `Preset`, form types), `mechanisms::values` (`canonicalize`,
+  `is_severity_set`, `selected_condition_photos`, unit tests `mc9_*`/`mc14_*`), `services::attributes`
+  (`AttributesService`: import/definitions, set_value, ai_suggest, accept_all, clear, values, presets_get/set,
+  form_get; `prefill_defaults`), StoreTx methods + SQLite impl (no new migration), item.json `attributes` in the
+  export, 8 Tauri commands + bindings, fixture `shop_definitions()` (68 shop definitions in core types + 6 `test.*`),
+  `tests/p10_attributes.rs` (31 tests, one per row). Assumptions (handoff): built-in Product fields synthesized
+  (`integration = "core"`, description = `rich_text`); url trimmed like text (row C1(c)); decimals also drop
+  redundant leading zeros and `-0`; `clear` keeps the row with `ai_status = cleared`; `is_default` = provenance
+  `default`; `filled` counts valid values; every attribute write (incl. AI) sets `last_activity_at`; values cross
+  the command boundary as JSON text. Deviations: pre-fill hooked into `ItemsService::create_local` and
+  `SessionsService::create` (one line each), `serde_json` added to `psm-desktop`, tracker actor `opus` (not `codex`).

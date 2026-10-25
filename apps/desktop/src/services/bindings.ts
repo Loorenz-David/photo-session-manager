@@ -39,6 +39,26 @@ export const commands = {
 	 *  the session header then offers Export instead of Publish (H6).
 	 */
 	integrationGet: () => typedError<string | null, CommandError>(__TAURI_INVOKE("integration_get")),
+	/**  The active definitions: title, description, tags, then the integration's (ch08 §Schema). */
+	attributesDefinitionsList: () => typedError<DefinitionDto_Serialize[], CommandError>(__TAURI_INVOKE("attributes_definitions_list")),
+	attributeValuesGet: (itemId: CommandId) => typedError<AttributeValueDto_Serialize[], CommandError>(__TAURI_INVOKE("attribute_values_get", { itemId })),
+	/**
+	 *  A human edit of one field: `value` is JSON text, stored canonical or, if it does not fit the
+	 *  definition, verbatim with `valid = false` (MC-9).
+	 */
+	attributeValuesSet: (itemId: CommandId, key: string, value: string) => typedError<AttributeValueDto_Serialize, CommandError>(__TAURI_INVOKE("attribute_values_set", { itemId, key, value })),
+	/**  "Accept all": suggested AI values except low-confidence ones become accepted. Returns the count. */
+	attributeAiAcceptAll: (itemId: CommandId) => typedError<number, CommandError>(__TAURI_INVOKE("attribute_ai_accept_all", { itemId })),
+	attributeAiClear: (itemId: CommandId, key: string) => typedError<null, CommandError>(__TAURI_INVOKE("attribute_ai_clear", { itemId, key })),
+	presetsGet: (itemType: string, group: AttributeGroupDto) => typedError<PresetDto_Serialize, CommandError>(__TAURI_INVOKE("presets_get", { itemType, group })),
+	/**
+	 *  Customize fields: stores the layout of one step for one item type (refused with
+	 *  `invalid_value` for unknown keys, ill-fitting defaults, or a Product step without title,
+	 *  description and tags).
+	 */
+	presetsSet: (preset: PresetDto_Deserialize) => typedError<null, CommandError>(__TAURI_INVOKE("presets_set", { preset })),
+	/**  The item's form: Details, Condition, Product with ordered fields, values and fill counts. */
+	formGet: (itemId: CommandId) => typedError<FormDto_Serialize, CommandError>(__TAURI_INVOKE("form_get", { itemId })),
 };
 
 /* Types */
@@ -46,6 +66,51 @@ export type AppPathsDto = {
 	data_dir: string,
 	database: string,
 	settings: string,
+};
+
+export type AttributeGroupDto = "details" | "condition" | "product";
+
+/**
+ *  One stored value: `value` is canonical JSON text when `valid`, else the value as received.
+ *  `provenance` is `human` / `ai` / `default`; `ai_confidence` `high` / `medium` / `low`;
+ *  `ai_status` `suggested` / `accepted`.
+ */
+export type AttributeValueDto = AttributeValueDto_Serialize | AttributeValueDto_Deserialize;
+
+/**
+ *  One stored value: `value` is canonical JSON text when `valid`, else the value as received.
+ *  `provenance` is `human` / `ai` / `default`; `ai_confidence` `high` / `medium` / `low`;
+ *  `ai_status` `suggested` / `accepted`.
+ */
+export type AttributeValueDto_Deserialize = {
+	item_id: number,
+	key: string,
+	value: string,
+	valid: boolean,
+	provenance: string,
+	ai_confidence?: string | null,
+	ai_status?: string | null,
+	ai_reason?: string | null,
+	ai_sources?: string[] | null,
+	updated_at: number,
+};
+
+/**
+ *  One stored value: `value` is canonical JSON text when `valid`, else the value as received.
+ *  `provenance` is `human` / `ai` / `default`; `ai_confidence` `high` / `medium` / `low`;
+ *  `ai_status` `suggested` / `accepted`.
+ */
+export type AttributeValueDto_Serialize = {
+	item_id: number,
+	key: string,
+	value: string,
+	valid: boolean,
+	provenance: string,
+	ai_confidence: string | null,
+	ai_status: string | null,
+	ai_reason: string | null,
+	ai_sources: string[] | null,
+	updated_at: number,
 };
 
 export type CameraStatusResponse = { kind: "connected"; name: string } | { kind: "disconnected" };
@@ -58,8 +123,85 @@ export type CommandError = {
 
 export type CommandId = number;
 
+/**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */
+export type DefinitionDto = DefinitionDto_Serialize | DefinitionDto_Deserialize;
+
+/**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */
+export type DefinitionDto_Deserialize = {
+	integration: string,
+	key: string,
+	label: string,
+	core_type: string,
+	choices: string[],
+	validations: string,
+	group: AttributeGroupDto,
+	description?: string | null,
+	writable: boolean,
+};
+
+/**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */
+export type DefinitionDto_Serialize = {
+	integration: string,
+	key: string,
+	label: string,
+	core_type: string,
+	choices: string[],
+	validations: string,
+	group: AttributeGroupDto,
+	description: string | null,
+	writable: boolean,
+};
+
 export type ExportRunResponse = {
 	run_id: number,
+};
+
+export type FormDto = FormDto_Serialize | FormDto_Deserialize;
+
+export type FormDto_Deserialize = {
+	item_id: number,
+	groups: FormGroupDto_Deserialize[],
+};
+
+export type FormDto_Serialize = {
+	item_id: number,
+	groups: FormGroupDto_Serialize[],
+};
+
+export type FormFieldDto = FormFieldDto_Serialize | FormFieldDto_Deserialize;
+
+export type FormFieldDto_Deserialize = {
+	definition: DefinitionDto_Deserialize,
+	value?: AttributeValueDto_Deserialize | null,
+	is_default: boolean,
+	is_severity: boolean,
+	/**  For a `media_list` field: the selected condition photo ids in condition order (MC-14). */
+	selected?: number[] | null,
+};
+
+export type FormFieldDto_Serialize = {
+	definition: DefinitionDto_Serialize,
+	value: AttributeValueDto_Serialize | null,
+	is_default: boolean,
+	is_severity: boolean,
+	/**  For a `media_list` field: the selected condition photo ids in condition order (MC-14). */
+	selected: number[] | null,
+};
+
+export type FormGroupDto = FormGroupDto_Serialize | FormGroupDto_Deserialize;
+
+export type FormGroupDto_Deserialize = {
+	group: AttributeGroupDto,
+	fields: FormFieldDto_Deserialize[],
+	filled: number,
+	total: number,
+};
+
+export type FormGroupDto_Serialize = {
+	group: AttributeGroupDto,
+	fields: FormFieldDto_Serialize[],
+	filled: number,
+	total: number,
 };
 
 export type HealthItemDto = {
@@ -129,6 +271,35 @@ export type PhotoResponse_Serialize = {
 	orientation: number | null,
 	source: string,
 	integrity: string,
+};
+
+export type PresetDto = PresetDto_Serialize | PresetDto_Deserialize;
+
+export type PresetDto_Deserialize = {
+	item_type: string,
+	group: AttributeGroupDto,
+	layout: PresetFieldDto_Deserialize[],
+};
+
+export type PresetDto_Serialize = {
+	item_type: string,
+	group: AttributeGroupDto,
+	layout: PresetFieldDto_Serialize[],
+};
+
+/**  One field of a preset layout; `default` is JSON text. */
+export type PresetFieldDto = PresetFieldDto_Serialize | PresetFieldDto_Deserialize;
+
+/**  One field of a preset layout; `default` is JSON text. */
+export type PresetFieldDto_Deserialize = {
+	key: string,
+	default?: string | null,
+};
+
+/**  One field of a preset layout; `default` is JSON text. */
+export type PresetFieldDto_Serialize = {
+	key: string,
+	default: string | null,
 };
 
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;
