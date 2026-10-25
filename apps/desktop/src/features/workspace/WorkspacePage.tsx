@@ -10,11 +10,13 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { PanelsRightBottom } from 'lucide-react';
+import { ClipboardList, PanelsRightBottom } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignUnassigned, type Photo } from '@/services/photos';
 import { createSession } from '@/services/sessions';
 import type { Item } from '@/services/items';
+import { useKeyboard } from '@/lib/keyboard';
+import { FormDialog } from '@/features/form/FormDialog';
 import { FoldedStrip } from './FoldedStrip';
 import { ImportDropZone, pickAndImport } from './ImportDropZone';
 import { ItemDetailsCard } from './ItemDetailsCard';
@@ -96,6 +98,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const [folded, setFolded] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(unassigned);
   const [itemCardOpen, setItemCardOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
   const [dragging, setDragging] = useState<Photo | null>(null);
   const drop = useDrop(state);
@@ -156,7 +159,10 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     [state],
   );
 
-  const dialogOpen = picker !== null || assignOpen;
+  const item = state.view?.item ?? null;
+  const dialogOpen = picker !== null || assignOpen || formOpen;
+  // D opens the product details form (design handoff §Keyboard); Esc closes it (the dialog's own Esc).
+  useKeyboard({ d: () => setFormOpen(true) }, !dialogOpen && item !== null);
   useWorkspaceKeyboard(
     {
       approve: () => review('approve'),
@@ -218,6 +224,11 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
             onItemCard={() => setItemCardOpen(current => !current)}
           />
           {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} />}
+          {item && (
+            <button type="button" className="sessions-toggle" style={{ top: sessionsOpen ? 42 : 74 }} onClick={() => setFormOpen(true)} aria-label="Product details" title="Product details (D)">
+              <ClipboardList /> Details
+            </button>
+          )}
           {!sessionsOpen && (
             <button type="button" className="sessions-toggle" onClick={() => setSessionsOpen(true)} aria-label="Show sessions panel">
               <PanelsRightBottom /> Sessions
@@ -252,6 +263,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         onOpenChange={open => !open && setPicker(null)}
         onPick={item => picker && void assignSome(item, picker.photoIds)}
       />
+      {item && <FormDialog open={formOpen} onOpenChange={setFormOpen} item={item} photos={state.photos} onItemChanged={() => void state.reload()} />}
       {unassigned && <ItemPickerDialog open={assignOpen} title="Assign product" onOpenChange={onAssignOpenChange} onPick={item => void assignWhole(item)} />}
     </DndContext>
   );

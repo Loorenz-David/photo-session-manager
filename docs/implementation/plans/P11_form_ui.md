@@ -79,4 +79,35 @@ original), tag suggestions source (none without an integration; shop tags arrive
 - Estimated size: ~32 files, ~2 800 lines.
 
 ## Review log
-(empty)
+### 2026-10-25 — implement r1 (opus, `pipeline-implementer`)
+**Built.** `services/attributes.ts` (wrappers over the P10 commands plus `item_update_identity`; values go out as
+JSON text of the core form). `features/form/`: `kindOf` (core mechanism), 20 input components, `MetafieldInput`
+(label, AI pill, Default marker, invalid marker with the verbatim value, input by kind), `useFormState` (form_get,
+drafts, per-field 300 ms debounce, flush + re-fetch on blur, pending edits written on close), `FormDialog` (header
+with type, SKU | barcode editor, Saved indicator, Research chip, Customize fields, close; step tabs with counts;
+media column; footer with fill progress, Save & close, prev/next, empty Publish slot for P15), `CustomizeMode`
+(dnd-kit sortable rows, remove except Title/Description/Tags, add via `Command` over all definitions, default editor,
+`presets_set` on Done or on leaving the mode), `AiPill`/`AiPopover`/`ResearchPanel` (static timeline from
+`ai_sources`, focus dims other steps, Accept all). `WorkspacePage`: `D` and a "Details" button open the form when
+the session has an item; workspace keys are off while it is open; Esc closes it (Radix dialog).
+**Tests.** `__tests__/p11_form_ui.test.tsx`: 32 cases for the 30 rows (C1(j) and C1(m) each have two cases). No red
+baseline was captured: the production code was written before the test file.
+**Judgment calls.** (1) Debounce 300 ms per field; emptying a field calls `attribute_ai_clear` instead of writing
+`""`/`[]`. (2) Decimal/int/dimension inputs send what was typed; a non-fitting entry is stored invalid by the backend
+(MC-9) and shows the invalid marker after the blur re-fetch. (3) Title: no value bound to `items.title` (no command
+writes it); the Title input shows the item's title as placeholder only (see backlog note P10 → P11, P14). (4) Description
+opens in "AI agent writes it" (design default) unless a description is stored; that mode is a placeholder that writes
+nothing. (5) Money currency: stored, else `validations.currency`, else `SEK`. Units: `validations.units`, else cm/mm/in,
+kg/lb. Rating scale: `validations.min/max`, else 0–5. Tag suggestions: `validations.suggestions` (none today).
+(6) Date: native `<input type=date>`. (7) Thumbnails: adjusted preview, else original (reuses the workspace `Thumb`).
+(8) Media column shows unreviewed photos after Main (they publish in Main, N2). (9) Non-writable definitions render
+"Edited in Shopify admin" (or "Edited in <integration>") whatever their core type. (10) Customize saves on Done and
+when the mode is left by step change or closing the form, not on every change. (11) The form button sits in the
+workspace stage beside "Sessions", not in `features/shell/Header.tsx` (outside the perimeter).
+**Deviations.** None from the file list. Only existing shadcn components are used (no Tabs/RadioGroup/Sheet/Calendar
+added to `components/ui/`, which is outside the perimeter); tabs, radio cards and the research panel are plain
+elements with ARIA roles.
+**Observations.** Local items are created with `item_type = ""` (P07), so Customize fields saves layouts for the
+empty type until some phase lets the photographer set a type. `item_update_identity` treats `null` as "unchanged",
+so the barcode cannot be cleared from the form.
+

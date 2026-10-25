@@ -78,7 +78,7 @@ restated so no session has to infer them:
 | P08_workspace_ui | APPROVED | 2026-10-25 | opus | approved with notes after fix 1: F1 resolved (a capture arriving in the open session becomes the stage photo, and A/C/⌫ act on it; candidate C9 discriminates); 22 rows + C9 hold; suite/lint/typecheck green; 4 notes from r1 + 1 in backlog |
 | P09_local_export | APPROVED | 2026-10-25 | opus | approved with notes, review r1: 10/10 rows hold at their boundaries; perimeter = declared files; suite/lint/typecheck green; 5 notes in backlog |
 | P10_attributes | APPROVED | 2026-10-25 | opus | approved with notes, review r1: 31/31 rows hold at their boundaries; perimeter = declared files; suite/lint/typecheck green; 7 notes in backlog (title binding for P11/P14 first) |
-| P11_form_ui | NOT_STARTED | 2026-10-25 | planner | form dialog, field kinds, customize, AI states |
+| P11_form_ui | IMPLEMENTED | 2026-10-25 | opus | form dialog, 21 field kinds, customize fields, AI states, damage-report picker; 32 vitest cases for 30 rows (C1 23 cases incl. j/m pairs); suite 77 vitest + 235 cargo, lint, typecheck green |
 | P12_shopify_adapter | NOT_STARTED | 2026-10-25 | planner | GraphQL adapter, grounding probes, fixtures |
 | P13_publish_runs | NOT_STARTED | 2026-10-25 | planner | confirm/freeze, prepare, upload, gallery mirror, resume |
 | P14_publish_update | NOT_STARTED | 2026-10-25 | planner | attribute writes, damage report, retouch replacement |
