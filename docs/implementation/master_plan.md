@@ -70,7 +70,7 @@ restated so no session has to infer them:
 | P00_spike | APPROVED | 2026-10-25 | opus | approved with notes: 16/16 rows hold, suite/lint/typecheck green; bundle Automation prompt still to be confirmed by the owner |
 | P01_storage_identity | APPROVED | 2026-10-25 | opus | approved with notes: 20/20 rows hold at their boundaries, suite/lint/typecheck green; 5 notes in backlog |
 | P02_review_order | APPROVED | 2026-10-25 | opus | approved with notes: 25/25 rows hold at their boundaries, suite/lint/typecheck green; 3 notes in backlog |
-| P03_session_state_list | NOT_STARTED | 2026-10-25 | planner | status, row label, grouping, list query |
+| P03_session_state_list | IMPLEMENTED | 2026-10-25 | codex | status, label, grouping and list command; 29/29 criterion rows tested, suite/lint/typecheck green |
 | P04_capture_one_adapter | NOT_STARTED | 2026-10-25 | planner | scripting layer, folder switch, hooks, recipes, tags, camera |
 | P05_capture_arrival | NOT_STARTED | 2026-10-25 | planner | hook dispatch, filter, stability, attribution, original preview, import |
 | P06_live_previews | NOT_STARTED | 2026-10-25 | planner | render completion, staleness, focus, sidecar, retouch |

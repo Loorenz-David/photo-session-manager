@@ -10,6 +10,7 @@ export const commands = {
 	itemUpdateIdentity: (itemId: CommandId, sku: string | null, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_update_identity", { itemId, sku, barcode })),
 	sessionCreate: (itemId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_create", { itemId })),
 	sessionGet: (sessionId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
+	sessionsList: (filter: SessionFilter, query: string | null) => typedError<SessionListResponse_Serialize, CommandError>(__TAURI_INVOKE("sessions_list", { filter, query })),
 	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
 	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
@@ -83,6 +84,42 @@ export type ReviewResponse_Serialize = {
 	active_photo_id: number | null,
 };
 
+export type RowLabelResponse = { kind: "publishing"; value: number } | { kind: "publish_failed" } | { kind: "description_failed" } | { kind: "published" } | { kind: "ready" } | { kind: "in_progress"; value: number };
+
+export type SessionFilter = "open" | "published" | "all";
+
+export type SessionListCountsResponse = {
+	open: number,
+	published: number,
+	all: number,
+};
+
+export type SessionListGroupResponse = SessionListGroupResponse_Serialize | SessionListGroupResponse_Deserialize;
+
+export type SessionListGroupResponse_Deserialize = {
+	label: string,
+	rows: SessionRowResponse_Deserialize[],
+};
+
+export type SessionListGroupResponse_Serialize = {
+	label: string,
+	rows: SessionRowResponse_Serialize[],
+};
+
+export type SessionListResponse = SessionListResponse_Serialize | SessionListResponse_Deserialize;
+
+export type SessionListResponse_Deserialize = {
+	groups: SessionListGroupResponse_Deserialize[],
+	counts: SessionListCountsResponse,
+	unassigned_count: number,
+};
+
+export type SessionListResponse_Serialize = {
+	groups: SessionListGroupResponse_Serialize[],
+	counts: SessionListCountsResponse,
+	unassigned_count: number,
+};
+
 export type SessionResponse = SessionResponse_Serialize | SessionResponse_Deserialize;
 
 export type SessionResponse_Deserialize = {
@@ -114,6 +151,40 @@ export type SessionResponse_Serialize = {
 	main_count: number,
 	condition_count: number,
 };
+
+export type SessionRowResponse = SessionRowResponse_Serialize | SessionRowResponse_Deserialize;
+
+export type SessionRowResponse_Deserialize = {
+	id: number,
+	sku: string,
+	item_type: string,
+	title: string,
+	main_count: number,
+	condition_count: number,
+	unreviewed_count: number,
+	status: SessionStatusResponse,
+	label: RowLabelResponse,
+	progress?: number | null,
+	last_activity_at: number,
+	cover_preview_path?: string | null,
+};
+
+export type SessionRowResponse_Serialize = {
+	id: number,
+	sku: string,
+	item_type: string,
+	title: string,
+	main_count: number,
+	condition_count: number,
+	unreviewed_count: number,
+	status: SessionStatusResponse,
+	label: RowLabelResponse,
+	progress: number | null,
+	last_activity_at: number,
+	cover_preview_path: string | null,
+};
+
+export type SessionStatusResponse = "publishing" | "failed" | "published" | "ready" | "in_progress";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

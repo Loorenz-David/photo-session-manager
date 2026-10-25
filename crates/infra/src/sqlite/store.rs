@@ -4,7 +4,7 @@ use psm_core::{
     domain::{
         item::{Item, ItemOrigin, NewItem},
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
-        session::{Session, SessionDto},
+        session::{PublishStep, Session, SessionDto, SessionListRecord},
     },
     mechanisms::canon::canon,
     ports::store::{Store, StoreTx},
@@ -150,6 +150,18 @@ fn photo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Photo> {
 fn photo(conn: &Connection, id: i64) -> Result<Photo> {
     conn.query_row("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at FROM photos WHERE id=?1", [id], photo_row)
         .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("photo {id}")))
+}
+
+fn parse_step(step: &str) -> Result<PublishStep> {
+    match step {
+        "prepare" => Ok(PublishStep::Prepare),
+        "upload" => Ok(PublishStep::Upload),
+        "update" => Ok(PublishStep::Update),
+        "describe" => Ok(PublishStep::Describe),
+        "done" => Ok(PublishStep::Done),
+        "failed" => Ok(PublishStep::Failed),
+        _ => Err(Error::InvalidData(format!("invalid publish step: {step}"))),
+    }
 }
 
 struct SqliteTx<'a> {
@@ -299,6 +311,37 @@ impl Store for SqliteStore {
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         session(&conn, id)
+    }
+
+    fn session_list_records(&self) -> Result<Vec<SessionListRecord>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt = conn.prepare("SELECT s.id,i.sku,i.item_type,i.title FROM sessions s JOIN items i ON i.id=s.item_id WHERE s.id<>1 ORDER BY s.id").map_err(db)?;
+        let base = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)?;
+        base.into_iter().map(|(id,sku,item_type,title)| {
+            let session = session(&conn, id)?;
+            let non_deleted_missing_preview_count = conn.query_row("SELECT COUNT(*) FROM photos WHERE session_id=?1 AND classification<>'deleted' AND adjusted_preview_path IS NULL", [id], |r| r.get(0)).map_err(db)?;
+            let cover_preview_path = conn.query_row("SELECT COALESCE(adjusted_preview_path,original_preview_path) FROM photos WHERE session_id=?1 AND classification='main' AND position=1", [id], |r| r.get(0)).optional().map_err(db)?.flatten();
+            let latest: Option<(String,Option<String>,i64,i64)> = conn.query_row("SELECT pi.step,pi.failed_step,pi.uploaded,pi.total FROM publish_items pi JOIN publish_runs pr ON pr.id=pi.run_id WHERE pi.session_id=?1 AND pr.confirmed_at IS NOT NULL ORDER BY pr.confirmed_at DESC,pr.id DESC,pi.id DESC LIMIT 1", [id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional().map_err(db)?;
+            let (latest_step,failed_step,uploaded,total) = match latest {
+                Some((step,failed,uploaded,total)) => (Some(parse_step(&step)?),failed.map(|s| parse_step(&s)).transpose()?,uploaded,total),
+                None => (None,None,0,0),
+            };
+            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total })
+        }).collect()
     }
 
     fn photo_insert_or_get(&self, mut new: NewPhoto) -> Result<Photo> {

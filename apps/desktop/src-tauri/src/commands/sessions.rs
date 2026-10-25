@@ -86,3 +86,227 @@ pub fn session_get(
         .map(Into::into)
         .map_err(Into::into)
 }
+
+#[derive(serde::Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionFilter {
+    Open,
+    Published,
+    All,
+}
+
+impl From<SessionFilter> for psm_core::domain::session::ListFilter {
+    fn from(value: SessionFilter) -> Self {
+        use psm_core::domain::session::ListFilter;
+        match value {
+            SessionFilter::Open => ListFilter::Open,
+            SessionFilter::Published => ListFilter::Published,
+            SessionFilter::All => ListFilter::All,
+        }
+    }
+}
+
+#[derive(Serialize, Type)]
+pub struct SessionListCountsResponse {
+    #[specta(type = specta_typescript::Number)]
+    pub open: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub published: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub all: i64,
+}
+
+#[derive(Serialize, Type)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+pub enum RowLabelResponse {
+    Publishing(u8),
+    PublishFailed,
+    DescriptionFailed,
+    Published,
+    Ready,
+    InProgress(#[specta(type = specta_typescript::Number)] i64),
+}
+
+#[derive(Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionStatusResponse {
+    Publishing,
+    Failed,
+    Published,
+    Ready,
+    InProgress,
+}
+
+#[derive(Serialize, Type)]
+pub struct SessionRowResponse {
+    #[specta(type = specta_typescript::Number)]
+    pub id: i64,
+    pub sku: String,
+    pub item_type: String,
+    pub title: String,
+    #[specta(type = specta_typescript::Number)]
+    pub main_count: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub condition_count: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub unreviewed_count: i64,
+    pub status: SessionStatusResponse,
+    pub label: RowLabelResponse,
+    pub progress: Option<u8>,
+    #[specta(type = specta_typescript::Number)]
+    pub last_activity_at: i64,
+    pub cover_preview_path: Option<String>,
+}
+#[derive(Serialize, Type)]
+pub struct SessionListGroupResponse {
+    pub label: String,
+    pub rows: Vec<SessionRowResponse>,
+}
+#[derive(Serialize, Type)]
+pub struct SessionListResponse {
+    pub groups: Vec<SessionListGroupResponse>,
+    pub counts: SessionListCountsResponse,
+    #[specta(type = specta_typescript::Number)]
+    pub unassigned_count: i64,
+}
+
+impl From<psm_core::domain::session::SessionList> for SessionListResponse {
+    fn from(list: psm_core::domain::session::SessionList) -> Self {
+        use psm_core::domain::session::{RowLabel, SessionStatus};
+        Self {
+            groups: list
+                .groups
+                .into_iter()
+                .map(|group| SessionListGroupResponse {
+                    label: group.label,
+                    rows: group
+                        .rows
+                        .into_iter()
+                        .map(|row| SessionRowResponse {
+                            id: row.id,
+                            sku: row.sku,
+                            item_type: row.item_type,
+                            title: row.title,
+                            main_count: row.main_count,
+                            condition_count: row.condition_count,
+                            unreviewed_count: row.unreviewed_count,
+                            status: match row.status {
+                                SessionStatus::Publishing => SessionStatusResponse::Publishing,
+                                SessionStatus::Failed => SessionStatusResponse::Failed,
+                                SessionStatus::Published => SessionStatusResponse::Published,
+                                SessionStatus::Ready => SessionStatusResponse::Ready,
+                                SessionStatus::InProgress => SessionStatusResponse::InProgress,
+                            },
+                            label: match row.label {
+                                RowLabel::Publishing(p) => RowLabelResponse::Publishing(p),
+                                RowLabel::PublishFailed => RowLabelResponse::PublishFailed,
+                                RowLabel::DescriptionFailed => RowLabelResponse::DescriptionFailed,
+                                RowLabel::Published => RowLabelResponse::Published,
+                                RowLabel::Ready => RowLabelResponse::Ready,
+                                RowLabel::InProgress(n) => RowLabelResponse::InProgress(n),
+                            },
+                            progress: row.progress,
+                            last_activity_at: row.last_activity_at,
+                            cover_preview_path: row.cover_preview_path,
+                        })
+                        .collect(),
+                })
+                .collect(),
+            counts: SessionListCountsResponse {
+                open: list.counts.open,
+                published: list.counts.published,
+                all: list.counts.all,
+            },
+            unassigned_count: list.unassigned_count,
+        }
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn sessions_list(
+    state: State<'_, AppState>,
+    filter: SessionFilter,
+    query: Option<String>,
+) -> Result<SessionListResponse, CommandError> {
+    let app = state
+        .0
+        .lock()
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+    SessionsService::new(app.store.as_ref(), &SystemClock)
+        .list(filter.into(), query)
+        .map(Into::into)
+        .map_err(Into::into)
+}
+
+#[cfg(test)]
+mod list_tests {
+    use super::*;
+    use psm_core::domain::session::{
+        ListCounts, ListGroup, RowLabel, SessionList, SessionRow, SessionStatus,
+    };
+
+    #[test]
+    fn c5a_sessions_list_command_dto_fields() {
+        let list = SessionList {
+            groups: vec![ListGroup {
+                label: "Today".into(),
+                rows: vec![SessionRow {
+                    id: 5,
+                    sku: "OAK-2".into(),
+                    item_type: "Furniture".into(),
+                    title: "Oak sideboard".into(),
+                    main_count: 2,
+                    condition_count: 1,
+                    unreviewed_count: 3,
+                    status: SessionStatus::Publishing,
+                    label: RowLabel::Publishing(42),
+                    progress: Some(42),
+                    last_activity_at: 123,
+                    cover_preview_path: Some("/cover.jpg".into()),
+                }],
+            }],
+            counts: ListCounts {
+                open: 1,
+                published: 0,
+                all: 1,
+            },
+            unassigned_count: 2,
+        };
+        let response = SessionListResponse::from(list);
+        assert_eq!(response.groups[0].label, "Today");
+        let row = &response.groups[0].rows[0];
+        assert_eq!(
+            (
+                row.id,
+                row.sku.as_str(),
+                row.item_type.as_str(),
+                row.title.as_str()
+            ),
+            (5, "OAK-2", "Furniture", "Oak sideboard")
+        );
+        assert_eq!(
+            (row.main_count, row.condition_count, row.unreviewed_count),
+            (2, 1, 3)
+        );
+        assert!(matches!(row.status, SessionStatusResponse::Publishing));
+        assert!(matches!(row.label, RowLabelResponse::Publishing(42)));
+        assert_eq!(
+            (
+                row.progress,
+                row.last_activity_at,
+                row.cover_preview_path.as_deref()
+            ),
+            (Some(42), 123, Some("/cover.jpg"))
+        );
+        assert_eq!(
+            (
+                response.counts.open,
+                response.counts.published,
+                response.counts.all,
+                response.unassigned_count
+            ),
+            (1, 0, 1, 2)
+        );
+    }
+}

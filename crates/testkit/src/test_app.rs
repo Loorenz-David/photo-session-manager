@@ -70,3 +70,22 @@ impl TestApp {
         self.app.spool.drain(self.app.store.as_ref(), &self.clock)
     }
 }
+
+impl TestApp {
+    pub fn insert_publish_item(
+        &self,
+        session_id: i64,
+        step: &str,
+        confirmed_at: i64,
+        failed_step: Option<&str>,
+    ) -> Result<()> {
+        let conn = rusqlite::Connection::open(self.app.paths.db())
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        conn.execute("INSERT INTO publish_runs(integration,created_at,confirmed_at,confirmed_summary) VALUES ('test',?1,?1,'test')", [confirmed_at])
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        let run_id = conn.last_insert_rowid();
+        conn.execute("INSERT INTO publish_items(run_id,session_id,create_item,step,failed_step) VALUES (?1,?2,0,?3,?4)", rusqlite::params![run_id,session_id,step,failed_step])
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        Ok(())
+    }
+}

@@ -2,7 +2,7 @@ use crate::Result;
 use crate::domain::{
     item::{Item, NewItem},
     photo::{Classification, Integrity, NewPhoto, Photo, UndoSlot},
-    session::{Session, SessionDto},
+    session::{Session, SessionDto, SessionListRecord},
 };
 
 pub trait StoreTx {
@@ -51,6 +51,7 @@ pub trait Store: Send + Sync {
     fn transaction(&self, op: &mut dyn FnMut(&mut dyn StoreTx) -> Result<()>) -> Result<()>;
     fn item(&self, id: i64) -> Result<Item>;
     fn session(&self, id: i64) -> Result<SessionDto>;
+    fn session_list_records(&self) -> Result<Vec<SessionListRecord>>;
     fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;
     fn photo(&self, id: i64) -> Result<Photo>;
     fn set_photo_integrity(&self, id: i64, integrity: Integrity) -> Result<()>;
