@@ -101,6 +101,9 @@ The document's direct `images`/`variants` elements are "for the current collecti
 > confirmed: this session had no screen access. Owner check, 10 seconds: in Capture One select a
 > photo and run `osascript -l JavaScript -e 'var d=Application("Capture One").currentDocument(); d.variants[0].colorTag=4'`;
 > the tag must show green; repeat with 5 (blue) and 1 (red), then 0.
+>
+> **Confirmed by the owner 2026-10-25:** on `session test 11952` the orchestrator wrote 4, 5, 1 five
+> seconds apart; the owner saw green, blue, red ("correct"). Restored to 0, read back 0.
 
 **VERIFY-5:** does `process` with a RAW path and recipe name honour the recipe's own output folder
 (`root folder type` / `root folder location`) and `output name format`? We need the output path
