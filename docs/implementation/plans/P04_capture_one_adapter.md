@@ -206,3 +206,7 @@ option consistent with MC-19). Each choice is recorded under **Assumptions**.
   P06; L20 fake fidelity; L21 optional smoke (read-only part already run by the orchestrator, evidence); L22
   perimeter; L23 delegations; L24 C7(c) retraced to M25, C7(a) kept `[rule]` as a recorded exception; L25 line
   numbers) and D1–D6 in the rows. Relaunched without a second projection.
+- 2026-10-25 19:30 orchestrator: implement r1 interrupted by the Codex usage limit (resets 19:58), no handoff. Its
+  partial work is left **uncommitted in the working tree** (≈38 paths: scripting layer, JXA scripts, fake, jobs,
+  camera service, tests file started). The next implementer continues from it: review it against this plan, keep
+  what is right, finish, and checkpoint as usual. Archived and relaunched at 20:00.

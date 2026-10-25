@@ -14,7 +14,7 @@ Updated: 2026-10-25 by the orchestrator.
   Order in `phases.txt` (P00…P16); Shopify phase P12 needs the token.
 - Phases: P00–P03 APPROVED (with notes) 2026-10-25. P04 projection r0 → amendments applied by the
   orchestrator (plan Review log); projection marked done so the runner skips a second one.
-- Run in flight: **all**, relaunched 2026-10-25 19:22 at P04 (P00–P03 skipped as approved). **Still owed with the owner: P00 Automation prompt check (open bundle, press Test Capture One, Allow, relaunch).**
+- Run in flight: **all**, delayed start 20:00 (P04 implement r1 hit the Codex usage limit at 19:30, resets 19:58; partial work uncommitted in the tree, noted in the P04 Review log). **Still owed with the owner: P00 Automation prompt check (open bundle, press Test Capture One, Allow, relaunch).**
 
 ## Needs the owner
 Nothing. Card 1: owner said "install it"; rustup installed cargo/rustc 1.99.1 (2026-10-25).
