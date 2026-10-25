@@ -69,7 +69,7 @@ restated so no session has to infer them:
 |---|---|---|---|---|
 | P00_spike | APPROVED | 2026-10-25 | opus | approved with notes: 16/16 rows hold, suite/lint/typecheck green; bundle Automation prompt still to be confirmed by the owner |
 | P01_storage_identity | APPROVED | 2026-10-25 | opus | approved with notes: 20/20 rows hold at their boundaries, suite/lint/typecheck green; 5 notes in backlog |
-| P02_review_order | NOT_STARTED | 2026-10-25 | planner | classify/reorder/delete/undo/move/copy, change_seq |
+| P02_review_order | IMPLEMENTED | 2026-10-25 | codex | review operations, dirty/change sequence and desktop commands; 25 boundary tests green |
 | P03_session_state_list | NOT_STARTED | 2026-10-25 | planner | status, row label, grouping, list query |
 | P04_capture_one_adapter | NOT_STARTED | 2026-10-25 | planner | scripting layer, folder switch, hooks, recipes, tags, camera |
 | P05_capture_arrival | NOT_STARTED | 2026-10-25 | planner | hook dispatch, filter, stability, attribution, original preview, import |

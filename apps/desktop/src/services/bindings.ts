@@ -10,6 +10,12 @@ export const commands = {
 	itemUpdateIdentity: (itemId: CommandId, sku: string | null, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_update_identity", { itemId, sku, barcode })),
 	sessionCreate: (itemId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_create", { itemId })),
 	sessionGet: (sessionId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
+	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
+	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
+	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
+	photosUndo: (sessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_undo", { sessionId })),
+	photosMove: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_move", { photoIds, targetSessionId })),
+	photosCopy: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_copy", { photoIds, targetSessionId })),
 };
 
 /* Types */
@@ -63,6 +69,20 @@ export type ItemDto_Serialize = {
 	updated_at: number,
 };
 
+export type PhotoClassification = "unreviewed" | "main" | "condition" | "deleted";
+
+export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;
+
+export type ReviewResponse_Deserialize = {
+	sessions: SessionResponse_Deserialize[],
+	active_photo_id?: number | null,
+};
+
+export type ReviewResponse_Serialize = {
+	sessions: SessionResponse_Serialize[],
+	active_photo_id: number | null,
+};
+
 export type SessionResponse = SessionResponse_Serialize | SessionResponse_Deserialize;
 
 export type SessionResponse_Deserialize = {
@@ -71,6 +91,7 @@ export type SessionResponse_Deserialize = {
 	published_at?: number | null,
 	published_seq: number,
 	change_seq: number,
+	dirty: boolean,
 	last_activity_at: number,
 	created_at: number,
 	photo_count: number,
@@ -85,6 +106,7 @@ export type SessionResponse_Serialize = {
 	published_at: number | null,
 	published_seq: number,
 	change_seq: number,
+	dirty: boolean,
 	last_activity_at: number,
 	created_at: number,
 	photo_count: number,

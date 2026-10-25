@@ -49,6 +49,9 @@ impl From<Error> for CommandError {
             Error::Io(_) => "io",
             Error::InvalidData(_) => "invalid_data",
             Error::Provider(_) => "provider",
+            Error::TargetHasRaw => "target_has_raw",
+            Error::TargetPublished => "target_published",
+            Error::NothingToUndo => "nothing_to_undo",
         };
         Self {
             code: code.into(),

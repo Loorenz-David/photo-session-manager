@@ -21,6 +21,7 @@ pub struct SessionResponse {
     pub published_seq: i64,
     #[specta(type = specta_typescript::Number)]
     pub change_seq: i64,
+    pub dirty: bool,
     #[specta(type = specta_typescript::Number)]
     pub last_activity_at: i64,
     #[specta(type = specta_typescript::Number)]
@@ -43,6 +44,7 @@ impl From<SessionDto> for SessionResponse {
             published_at: dto.session.published_at,
             published_seq: dto.session.published_seq,
             change_seq: dto.session.change_seq,
+            dirty: dto.dirty,
             last_activity_at: dto.session.last_activity_at,
             created_at: dto.session.created_at,
             photo_count: dto.photo_count,

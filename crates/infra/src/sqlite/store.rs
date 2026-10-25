@@ -3,7 +3,7 @@ use psm_core::{
     Error, Result,
     domain::{
         item::{Item, ItemOrigin, NewItem},
-        photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource},
+        photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
         session::{Session, SessionDto},
     },
     mechanisms::canon::canon,
@@ -84,22 +84,31 @@ fn item(conn: &Connection, id: i64) -> Result<Item> {
 }
 
 fn session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SessionDto> {
+    let published_at: Option<i64> = r.get(2)?;
+    let published_seq: i64 = r.get(3)?;
+    let change_seq: i64 = r.get(4)?;
     Ok(SessionDto {
         session: Session {
             id: r.get(0)?,
             item_id: r.get(1)?,
-            published_at: r.get(2)?,
-            published_seq: r.get(3)?,
-            change_seq: r.get(4)?,
+            published_at,
+            published_seq,
+            change_seq,
             last_activity_at: r.get(5)?,
             created_at: r.get(6)?,
             undo_slot: r.get(7)?,
         },
+        dirty: published_at.is_some() && change_seq > published_seq,
         photo_count: r.get(8)?,
         unreviewed_count: r.get(9)?,
         main_count: r.get(10)?,
         condition_count: r.get(11)?,
     })
+}
+
+fn session(conn: &Connection, id: i64) -> Result<SessionDto> {
+    conn.query_row("SELECT s.id,s.item_id,s.published_at,s.published_seq,s.change_seq,s.last_activity_at,s.created_at,s.undo_slot,COUNT(p.id),COALESCE(SUM(p.classification='unreviewed'),0),COALESCE(SUM(p.classification='main'),0),COALESCE(SUM(p.classification='condition'),0) FROM sessions s LEFT JOIN photos p ON p.session_id=s.id WHERE s.id=?1 GROUP BY s.id", [id], session_row)
+        .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("session {id}")))
 }
 
 fn photo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Photo> {
@@ -148,6 +157,75 @@ struct SqliteTx<'a> {
 }
 
 impl StoreTx for SqliteTx<'_> {
+    fn session(&self, id: i64) -> Result<Session> {
+        Ok(session(&self.tx, id)?.session)
+    }
+    fn photo(&self, id: i64) -> Result<Photo> {
+        photo(&self.tx, id)
+    }
+    fn photos(&self, session_id: i64) -> Result<Vec<Photo>> {
+        let mut stmt = self.tx.prepare("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at FROM photos WHERE session_id=?1 ORDER BY CASE classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END,position,captured_at,id").map_err(db)?;
+        let rows = stmt.query_map([session_id], photo_row).map_err(db)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db)
+    }
+    fn set_photo_review(
+        &mut self,
+        id: i64,
+        session_id: i64,
+        classification: Classification,
+        position: Option<i64>,
+    ) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE photos SET session_id=?1,classification=?2,position=?3 WHERE id=?4",
+                params![session_id, classification.as_str(), position, id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn set_positions(&mut self, positions: &[(i64, i64)]) -> Result<()> {
+        for (id, position) in positions {
+            self.tx
+                .execute(
+                    "UPDATE photos SET position=?1 WHERE id=?2",
+                    params![position, id],
+                )
+                .map_err(db)?;
+        }
+        Ok(())
+    }
+    fn copy_photo(
+        &mut self,
+        photo: &Photo,
+        target_session: i64,
+        position: Option<i64>,
+    ) -> Result<i64> {
+        let uid = uuid::Uuid::new_v4().to_string();
+        self.tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)", params![uid,target_session,photo.raw_path,photo.raw_hash,photo.integrity.as_str(),photo.provider_ref,photo.original_preview_path,photo.adjusted_preview_path,photo.orientation,photo.classification.as_str(),position,photo.captured_at,photo.source.as_str(),photo.created_at]).map_err(db)?;
+        Ok(self.tx.last_insert_rowid())
+    }
+    fn set_undo_slot(&mut self, session_id: i64, slot: Option<&UndoSlot>) -> Result<()> {
+        let json = slot
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        self.tx
+            .execute(
+                "UPDATE sessions SET undo_slot=?1 WHERE id=?2",
+                params![json, session_id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn touch_session(&mut self, session_id: i64, at: i64) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=?2",
+                params![at, session_id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
     fn items(&self) -> Result<Vec<Item>> {
         let mut stmt = self.tx.prepare("SELECT id,sku,folder_key,barcode,item_type,title,origin,created_at,updated_at FROM items ORDER BY id").map_err(db)?;
         let rows = stmt.query_map([], item_row).map_err(db)?;
@@ -220,8 +298,7 @@ impl Store for SqliteStore {
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        conn.query_row("SELECT s.id,s.item_id,s.published_at,s.published_seq,s.change_seq,s.last_activity_at,s.created_at,s.undo_slot,COUNT(p.id),COALESCE(SUM(p.classification='unreviewed'),0),COALESCE(SUM(p.classification='main'),0),COALESCE(SUM(p.classification='condition'),0) FROM sessions s LEFT JOIN photos p ON p.session_id=s.id WHERE s.id=?1 GROUP BY s.id", [id], session_row)
-            .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("session {id}")))
+        session(&conn, id)
     }
 
     fn photo_insert_or_get(&self, mut new: NewPhoto) -> Result<Photo> {

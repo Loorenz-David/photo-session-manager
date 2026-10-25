@@ -1,11 +1,30 @@
 use crate::Result;
 use crate::domain::{
     item::{Item, NewItem},
-    photo::{Integrity, NewPhoto, Photo},
-    session::SessionDto,
+    photo::{Classification, Integrity, NewPhoto, Photo, UndoSlot},
+    session::{Session, SessionDto},
 };
 
 pub trait StoreTx {
+    fn session(&self, id: i64) -> Result<Session>;
+    fn photo(&self, id: i64) -> Result<Photo>;
+    fn photos(&self, session_id: i64) -> Result<Vec<Photo>>;
+    fn set_photo_review(
+        &mut self,
+        id: i64,
+        session_id: i64,
+        classification: Classification,
+        position: Option<i64>,
+    ) -> Result<()>;
+    fn set_positions(&mut self, positions: &[(i64, i64)]) -> Result<()>;
+    fn copy_photo(
+        &mut self,
+        photo: &Photo,
+        target_session: i64,
+        position: Option<i64>,
+    ) -> Result<i64>;
+    fn set_undo_slot(&mut self, session_id: i64, slot: Option<&UndoSlot>) -> Result<()>;
+    fn touch_session(&mut self, session_id: i64, at: i64) -> Result<()>;
     fn items(&self) -> Result<Vec<Item>>;
     fn item(&self, id: i64) -> Result<Item>;
     fn insert_item(&mut self, item: NewItem<'_>) -> Result<i64>;

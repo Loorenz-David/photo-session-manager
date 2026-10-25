@@ -86,4 +86,4 @@ No UI yet. From the dev app's Health page nothing changes; the owner can wait fo
 - Estimated size: ~8 files, ~1 100 lines.
 
 ## Review log
-(empty)
+- 2026-10-25, implement r1 (codex): Added transactional review operations, contiguous position math, single-slot undo, move/copy checks, derived dirty state, six desktop commands and generated bindings. All 25 criterion rows have one boundary test; the position mechanism has one unit test. Assumptions: JSON undo slot as planned; same-classification and same-position calls are no-ops; a published target is refused only when it is not dirty, following the ordered task and C4(e); move/copy batches with multiple source sessions touch each source once. Necessary registration and DTO/error wiring extends the enumerated file list; no migration or phase-external behaviour was added. Full suite, clippy, formatting, TypeScript typecheck and frontend test command green.

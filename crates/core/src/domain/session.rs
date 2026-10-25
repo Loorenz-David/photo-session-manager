@@ -15,6 +15,7 @@ pub struct Session {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionDto {
     pub session: Session,
+    pub dirty: bool,
     pub photo_count: i64,
     pub unreviewed_count: i64,
     pub main_count: i64,

@@ -16,6 +16,12 @@ pub enum Error {
     InvalidValue(String),
     #[error("not_found: {0}")]
     NotFound(String),
+    #[error("target_has_raw")]
+    TargetHasRaw,
+    #[error("target_published")]
+    TargetPublished,
+    #[error("nothing_to_undo")]
+    NothingToUndo,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

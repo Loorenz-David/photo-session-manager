@@ -12,7 +12,13 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::items::item_create,
         commands::items::item_update_identity,
         commands::sessions::session_create,
-        commands::sessions::session_get
+        commands::sessions::session_get,
+        commands::photos::photos_classify,
+        commands::photos::photos_reorder,
+        commands::photos::photos_delete,
+        commands::photos::photos_undo,
+        commands::photos::photos_move,
+        commands::photos::photos_copy
     ])
 }
 

@@ -1,8 +1,9 @@
 use crate::clock::ManualClock;
 use psm_core::Result;
 use psm_core::{
-    ports::store::Store,
-    services::{items::ItemsService, sessions::SessionsService},
+    domain::photo::{NewPhoto, Photo, PhotoSource},
+    ports::{clock::Clock, store::Store},
+    services::{items::ItemsService, review::ReviewService, sessions::SessionsService},
 };
 use psm_infra::paths::AppPaths;
 use psm_integrations::App;
@@ -22,6 +23,31 @@ impl TestApp {
     }
     pub fn sessions(&self) -> SessionsService<'_> {
         SessionsService::new(self.app.store.as_ref(), &self.clock)
+    }
+    pub fn review(&self) -> ReviewService<'_> {
+        ReviewService::new(self.app.store.as_ref(), &self.clock)
+    }
+    pub fn add_photo(&self, session_id: i64, raw: &str) -> Result<Photo> {
+        let path = self.dir.path().join(raw);
+        std::fs::write(&path, raw.as_bytes())?;
+        self.app.store.photo_insert_or_get(NewPhoto {
+            session_id,
+            raw_path: path.to_string_lossy().into_owned(),
+            raw_hash: Some(format!("hash-{raw}")),
+            captured_at: Some(self.clock.now_ms()),
+            source: PhotoSource::Capture,
+            created_at: self.clock.now_ms(),
+        })
+    }
+    pub fn mark_published(&self, session_id: i64) -> Result<()> {
+        let conn = rusqlite::Connection::open(self.app.paths.db())
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        conn.execute(
+            "UPDATE sessions SET published_at=?1,published_seq=change_seq WHERE id=?2",
+            rusqlite::params![self.clock.now_ms(), session_id],
+        )
+        .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        Ok(())
     }
     pub fn store(&self) -> &dyn Store {
         self.app.store.as_ref()
