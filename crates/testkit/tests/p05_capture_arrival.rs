@@ -464,15 +464,38 @@ fn c7a_startup_scans_root_and_children() {
 #[test]
 fn c7b_startup_ignores_cache_and_known_raw() {
     let a = app();
-    let known = file(&a, "K1/known.ARW", b"known");
+    let known = file(&a, "_Unassigned/known.ARW", b"known");
     hook(&a, &known);
+    let mut item_id = 0;
+    a.store()
+        .transaction(&mut |tx| {
+            item_id = tx.insert_item(NewItem {
+                sku: "K1",
+                folder_key: "K1",
+                barcode: None,
+                item_type: "object",
+                title: "K1",
+                origin: "local",
+                at: 0,
+            })?;
+            Ok(())
+        })
+        .unwrap();
+    service(&a).assign_unassigned(item_id).unwrap();
+    let assigned_session = a.store().session_for_item(item_id).unwrap().unwrap();
     file(&a, "K1/CaptureOne/x.ARW", b"cache");
     let b = reopen(&a);
-    let count: i64 = Connection::open(b.paths.db())
-        .unwrap()
-        .query_row("SELECT COUNT(*) FROM photos", [], |r| r.get(0))
-        .unwrap();
-    assert_eq!(count, 1);
+    let got: Vec<(String, i64)> = {
+        let c = Connection::open(b.paths.db()).unwrap();
+        let mut stmt = c
+            .prepare("SELECT raw_path,session_id FROM photos ORDER BY raw_path")
+            .unwrap();
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+    };
+    assert_eq!(got, vec![(canon(&known).unwrap(), assigned_session)]);
 }
 
 #[test]

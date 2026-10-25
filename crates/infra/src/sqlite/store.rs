@@ -501,15 +501,24 @@ impl Store for SqliteStore {
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         let tx = conn.transaction().map_err(db)?;
-        if let Some(id) = tx
-            .query_row(
+        let existing: Option<i64> = if new.source == PhotoSource::Capture {
+            tx.query_row(
+                "SELECT id FROM photos WHERE raw_path=?1 ORDER BY id LIMIT 1",
+                [&new.raw_path],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?
+        } else {
+            tx.query_row(
                 "SELECT id FROM photos WHERE session_id=?1 AND raw_path=?2",
                 params![new.session_id, new.raw_path],
                 |r| r.get(0),
             )
             .optional()
             .map_err(db)?
-        {
+        };
+        if let Some(id) = existing {
             return Ok((photo(&tx, id)?, false));
         }
         let shared_hash: Option<String> = tx.query_row("SELECT raw_hash FROM photos WHERE raw_path=?1 AND raw_hash IS NOT NULL ORDER BY id LIMIT 1", [&new.raw_path], |r| r.get(0)).optional().map_err(db)?;
