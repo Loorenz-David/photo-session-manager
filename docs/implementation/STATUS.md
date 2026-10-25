@@ -1,6 +1,6 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
-Updated: 2026-10-24 by the shaper session.
+Updated: 2026-10-25 by the orchestrator.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
@@ -8,7 +8,7 @@ Updated: 2026-10-24 by the shaper session.
   least one RAW; camera tethered and awake for the capture probes (owner connects it tomorrow).
 - Master plan and phase plans: not written.
 - Phases: none.
-- Run in flight: **none**.
+- Run in flight: **inventory**, `tools/pipeline/run_phase.sh inventory`, started 2026-10-25 12:39. Capture One open (session test 1), camera tethered.
 
 ## Needs the owner
 Nothing.
