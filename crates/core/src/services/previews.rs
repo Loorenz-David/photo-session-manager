@@ -15,7 +15,6 @@ use crate::{
 };
 use std::{
     collections::HashMap,
-    fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -71,10 +70,16 @@ impl PreviewService {
         let Some(generation) = self.store.ensure_initial_generation(raw)? else {
             return Ok(());
         };
-        if self.store.preview_state(raw)?.is_some_and(|state| {
-            !is_stale(state.adjusted_gen, state.rendered_gen)
-                && state.adjusted_preview_path.is_some()
-        }) {
+        if let Some(state) = self.store.preview_state(raw)?
+            && !is_stale(state.adjusted_gen, state.rendered_gen)
+            && let Some(path) = state.adjusted_preview_path
+        {
+            for (photo_id, session_id) in self.store.set_missing_preview_paths(raw, &path)? {
+                self.events.emit(AppEvent::PhotoChanged {
+                    photo_id,
+                    session_id,
+                });
+            }
             return Ok(());
         }
         self.request(raw, generation)
@@ -252,33 +257,7 @@ impl PreviewService {
     }
     fn check_sidecars(&self) -> Result<()> {
         for state in self.store.preview_states()? {
-            let raw = Path::new(&state.raw_path);
-            let Some(parent) = raw.parent() else {
-                continue;
-            };
-            let Some(name) = raw.file_name() else {
-                continue;
-            };
-            let sidecars = parent.join("CaptureOne");
-            if !sidecars.is_dir() {
-                continue;
-            }
-            let mut newest: Option<SystemTime> = None;
-            for folder in fs::read_dir(sidecars)? {
-                let folder = folder?;
-                if !folder.file_name().to_string_lossy().starts_with("Settings")
-                    || !folder.file_type()?.is_dir()
-                {
-                    continue;
-                }
-                let path = folder
-                    .path()
-                    .join(format!("{}.cos", name.to_string_lossy()));
-                if let Ok(mtime) = path.metadata().and_then(|m| m.modified()) {
-                    newest = Some(newest.map_or(mtime, |old| old.max(mtime)));
-                }
-            }
-            let Some(mtime) = newest else {
+            let Some(mtime) = self.editing.settings_changed_at(&state.raw_path)? else {
                 continue;
             };
             let rendered = state

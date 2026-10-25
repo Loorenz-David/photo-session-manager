@@ -105,6 +105,51 @@ fn c1a_completion_records_bytes_for_every_copy() {
         .collect();
     assert_eq!(changed, vec![p1.id, p2.id]);
 }
+
+#[test]
+fn rendered_raw_gets_preview_on_later_session_row() {
+    let a = app();
+    let s1 = session(&a, "S1");
+    let s2 = session(&a, "S2");
+    let first = photo(&a, s1, "K/X.ARW", C::Unreviewed);
+    start(&a, &first.raw_path);
+    finish(&a, "job-1");
+    let path = out(&a, &first.raw_path);
+    a.events.0.lock().unwrap().clear();
+
+    let later = photo(&a, s2, "K/X.ARW", C::Unreviewed);
+    assert_eq!(
+        a.store().photo(later.id).unwrap().adjusted_preview_path,
+        None
+    );
+    start(&a, &later.raw_path);
+
+    assert_eq!(
+        a.store()
+            .photo(later.id)
+            .unwrap()
+            .adjusted_preview_path
+            .as_deref(),
+        Some(path.as_str())
+    );
+    assert_eq!(process_ops(&a).len(), 1);
+    let changed: Vec<_> = a
+        .events
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|event| match event {
+            AppEvent::PhotoChanged {
+                photo_id,
+                session_id,
+            } => Some((*photo_id, *session_id)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(changed, vec![(later.id, s2)]);
+}
+
 #[test]
 fn c1b_old_output_rejected() {
     let a = app();

@@ -70,6 +70,7 @@ pub trait Store: Send + Sync {
     fn ensure_initial_generation(&self, raw: &str) -> Result<Option<i64>>;
     fn adjusted_event(&self, raw: &str, retouch: bool) -> Result<Option<Vec<i64>>>;
     fn complete_preview(&self, raw: &str, generation: i64, path: &str) -> Result<PreviewCommit>;
+    fn set_missing_preview_paths(&self, raw: &str, path: &str) -> Result<Vec<(i64, i64)>>;
     fn new_render_job(&self, raw: &str, now_ms: i64) -> Result<i64>;
     fn finish_render_job(&self, id: i64, error: Option<&str>, now_ms: i64) -> Result<()>;
     fn active_session_id(&self) -> Result<Option<i64>>;

@@ -453,6 +453,23 @@ impl Store for SqliteStore {
             photos: ids,
         })
     }
+    fn set_missing_preview_paths(&self, raw: &str, path: &str) -> Result<Vec<(i64, i64)>> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let mut stmt = tx.prepare("SELECT id,session_id FROM photos WHERE raw_path=?1 AND adjusted_preview_path IS NULL ORDER BY id").map_err(db)?;
+        let rows = stmt
+            .query_map([raw], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)?;
+        drop(stmt);
+        tx.execute("UPDATE photos SET adjusted_preview_path=?1 WHERE raw_path=?2 AND adjusted_preview_path IS NULL", params![path, raw]).map_err(db)?;
+        tx.commit().map_err(db)?;
+        Ok(rows)
+    }
     fn new_render_job(&self, raw: &str, now_ms: i64) -> Result<i64> {
         let conn = self
             .conn

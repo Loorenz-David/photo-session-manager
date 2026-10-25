@@ -20,7 +20,7 @@ use std::{
     fs,
     path::Path,
     sync::{Arc, Mutex},
-    time::{Duration, Instant, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 pub struct CaptureOneAdapter {
@@ -92,6 +92,33 @@ pub fn tag_for(classification: Classification) -> i32 {
     }
 }
 impl EditingProvider for CaptureOneAdapter {
+    fn settings_changed_at(&self, raw: &str) -> Result<Option<SystemTime>> {
+        let raw = Path::new(raw);
+        let (Some(parent), Some(name)) = (raw.parent(), raw.file_name()) else {
+            return Ok(None);
+        };
+        let sidecars = parent.join("CaptureOne");
+        let entries = match fs::read_dir(sidecars) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let mut newest = None;
+        for entry in entries {
+            let entry = entry?;
+            if !entry.file_name().to_string_lossy().starts_with("Settings")
+                || !entry.file_type()?.is_dir()
+            {
+                continue;
+            }
+            let sidecar = entry.path().join(format!("{}.cos", name.to_string_lossy()));
+            if let Ok(modified) = sidecar.metadata().and_then(|metadata| metadata.modified()) {
+                newest = Some(newest.map_or(modified, |prior: SystemTime| prior.max(modified)));
+            }
+        }
+        Ok(newest)
+    }
+
     fn inspect_document(&self) -> Result<DocumentState> {
         if self.document_id.is_empty() {
             return Err(Error::DocumentNotOpen);

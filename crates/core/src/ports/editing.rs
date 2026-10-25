@@ -5,7 +5,10 @@ use crate::{
         photo::Classification,
     },
 };
-use std::{path::Path, time::Instant};
+use std::{
+    path::Path,
+    time::{Instant, SystemTime},
+};
 
 #[derive(Debug, Clone)]
 pub struct RenderCompletion {
@@ -38,6 +41,7 @@ pub trait EditingProvider: Send + Sync {
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>>;
     fn render_in_flight(&self, raw: &str) -> bool;
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()>;
+    fn settings_changed_at(&self, raw: &str) -> Result<Option<SystemTime>>;
     fn import(&self, paths: &[String]) -> Result<()>;
     fn capabilities(&self) -> EditingCapabilities;
 }
