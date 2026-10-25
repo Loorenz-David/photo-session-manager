@@ -111,3 +111,18 @@ boundaries (calendar-day based like MC-4), exact copy of the camera error text, 
   `aria-valuenow` before); `next-themes` dropped, `cmdk`/`sonner` pinned exactly. Session thumbnails use
   `convertFileSrc`; they display once P08 enables the asset protocol (P08 owns that choice). Camera not tethered:
   no hardware probe run. Handoff `handoffs/implementer/handoff_P07_shell_sessions_ui_implement_r1.md`.
+- 2026-10-25 review r1 (opus): **CHANGES_REQUESTED.** Checkpoint `acfcc8c` = the 45 declared paths; stamp on that
+  tree green (`cargo test --workspace` 181, clippy, fmt, typecheck, `npm test` 17/17). Verified correct: all 19 rows
+  at their boundaries (C1(a) group order; C2(a–f) exact pill copy, `Progress` now forwards `value`; C3(a) filter +
+  per-key counts; C3(b) debounced server-side query; C4(a–c) dot state, help text, one retry; C5(a/b/f/d) Create row
+  only without an exact title hit, Create enabled only for a checked current SKU, `item_create` → `session_create`
+  → navigate, shop hit disables Create; C5(c) local substring search; C5(d) `create` returns the existing session;
+  C5(e) MC-22 verbatim; C6(a)); one test per row, none over-engineered; H1–H8 hold. **F1 (B1, route production):**
+  `EditingStartup` re-applies the persisted active session's capture folder at launch, the app opens on Sessions,
+  and `useCaptureTarget` deactivates only after an in-run activation, so after a relaunch frames shot with no
+  session open land in the last opened session (ch04 S-E, S-A; ch06 arrival). Correction: at launch make UI and
+  backend agree (open the active session's view, or switch to Unassigned without racing the startup re-apply),
+  with one behaviour test. Files: `App.tsx`, `services/sessions.ts`, `bindings.ts`, `src-tauri/src/commands/sessions.rs`,
+  `src-tauri/src/lib.rs`, `crates/core/src/services/sessions.rs`, `crates/core/src/services/editing_startup.rs`, the
+  two P07 test files. Assumption 8 (no proposal advance on a shop hit) differs from MC-22 but is unreachable until
+  P12: backlog. 6 notes in backlog. Handoff `handoffs/reviewer/handoff_P07_shell_sessions_ui_review_r1.md`.

@@ -74,7 +74,7 @@ restated so no session has to infer them:
 | P04_capture_one_adapter | APPROVED | 2026-10-25 | opus | approved with notes: 21/21 rows hold at their boundaries, suite/lint/typecheck green; 11 notes in backlog; live Capture One smoke still unrun |
 | P05_capture_arrival | APPROVED | 2026-10-25 | opus | approved with notes after fix 1: 33/33 rows hold, capture arrivals now first-sight per RAW across sessions (C7(b) discriminates); suite/lint/typecheck green; 9 notes in backlog |
 | P06_live_previews | APPROVED | 2026-10-25 | opus | approved after fix 1: F1 (later row of a rendered RAW gets the path) and F2 (sidecar layout moved to the Capture One adapter) resolved; 18 rows + F1 case hold; suite/lint/typecheck green; 9 notes in backlog from r1 |
-| P07_shell_sessions_ui | IMPLEMENTED | 2026-10-25 | codex | shell, sessions list, new session dialog, `items_search`/`items_next_sku`; 17 vitest rows + 3 Rust rows; suite/lint/typecheck green |
+| P07_shell_sessions_ui | CHANGES_REQUESTED | 2026-10-25 | opus | review r1: 19/19 rows hold, suite/lint/typecheck green; F1 (B1): after a relaunch captures still go to the last opened session while the UI shows none open (ch04 S-E); 6 notes in backlog |
 | P08_workspace_ui | NOT_STARTED | 2026-10-25 | planner | stage, review, order, toggle, unassigned, import |
 | P09_local_export | NOT_STARTED | 2026-10-25 | planner | export job, naming, item.json, Export action |
 | P10_attributes | NOT_STARTED | 2026-10-25 | planner | definitions, values, canonical forms, provenance, presets |
