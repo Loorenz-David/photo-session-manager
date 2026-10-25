@@ -192,6 +192,17 @@ written. Most likely the camera refuses to release without focus (AF with focus 
 cap, or nothing focusable). To run: set the camera to MF or release priority, then repeat
 VERIFY-1 and time `capture` → RAW mtime → hook.
 
+**VERIFY-12 resolved (orchestrator, 2026-10-25 13:23): PASS with autofocus first.** Camera in its
+owner settings (AF, focus priority). A bare `capture` wrote nothing (1 more attempt, same as
+above). Setting `camera.autofocusing = true` on the current document's camera, waiting 2 s
+(`focusIndicator` read back `"focused"`), then `capture` wrote a RAW within 8 s, twice in a row
+(`session test 11954.ARW`, `session test 11955.ARW`, ~24.6 MB each, in the capture folder root).
+Recipe for scripted captures (sessions, probes, and the camera adapter's trigger):
+`var c=Application("Capture One").currentDocument().camera(); c.autofocusing=true; delay(2);`
+then require `c.focusIndicator()=="focused"` and call `Application("Capture One").capture()`.
+Capture One did not need to be brought to the front. VERIFY-1 timing (capture → RAW → hook) is
+still to be measured by the first phase that installs the hook.
+
 ## Other runtime observations (2026-10-25)
 - Capture One writes a capture via a hidden `Capture/.capture` location
   (`writeImage … toURL: …/Capture/.capture` in its log) before it appears in the capture
