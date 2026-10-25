@@ -1,0 +1,13 @@
+[package]
+name = "psm-testkit"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+psm-core = { path = "../core" }
+psm-infra = { path = "../infra" }
+psm-integrations = { path = "../integrations" }
+tempfile = "3"
+tokio.workspace = true
+serde_json.workspace = true
+

@@ -1,0 +1,12 @@
+[package]
+name = "psm-integrations"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+psm-core = { path = "../core" }
+psm-infra = { path = "../infra" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+

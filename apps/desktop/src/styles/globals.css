@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  --card: var(--color-bg);
+  --popover: var(--color-bg);
+  --muted-foreground: var(--muted);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--accent-tint);
+  --accent: var(--accent-tint);
+  --destructive: var(--danger);
+  --border: var(--hair);
+  --input: var(--hair-strong);
+  --ring: var(--color-text);
+  --radius: 8px;
+  --ai-foreground: var(--ai-700);
+  --ai-muted: var(--ai-tint);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); font-size: var(--text-base); }
+button { font: inherit; }
+.health-shell { max-width: 900px; margin: 0 auto; padding: 56px 48px; }
+.health-header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--hair); padding-bottom: 24px; }
+.health-title { font-family: var(--font-heading); font-size: 28px; letter-spacing: -0.04em; margin: 0; }
+.health-subtitle { color: var(--muted); margin: 8px 0 0; }
+.health-section { margin-top: 42px; }
+.health-section h2 { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800; margin-bottom: 20px; }
+.health-list { border-top: 1px solid var(--hair); }
+.health-row { display: grid; grid-template-columns: 180px 1fr; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--hair); align-items: baseline; }
+.health-label { font-weight: 600; }
+.health-detail { color: var(--muted); overflow-wrap: anywhere; }
+.health-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; background: var(--ok); }
+.health-dot[data-ok="false"] { background: var(--danger); }
+.health-refresh { border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--color-bg); padding: 10px 14px; cursor: pointer; }
+.health-refresh:hover { background: var(--color-surface); }
+@media (max-width: 650px) { .health-shell { padding: 32px 22px; } .health-row { grid-template-columns: 1fr; gap: 6px; } }
+

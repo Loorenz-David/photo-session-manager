@@ -1,0 +1,19 @@
+[package]
+name = "psm-infra"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+psm-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+rusqlite = { version = "0.41", features = ["bundled"] }
+rusqlite_migration = "2.6"
+notify = "8.2"
+axum = "0.8"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+

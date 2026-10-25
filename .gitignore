@@ -1,8 +1,11 @@
 # Rust
 target/
+.cargo-home/
+apps/desktop/src-tauri/target/
 
 # Node / UI
 node_modules/
+.npm-cache/
 apps/desktop/dist/
 
 # Tauri generated schemas

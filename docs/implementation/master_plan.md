@@ -246,7 +246,7 @@ Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; d
 | Check | Command run | Result |
 |---|---|---|
 | macOS | `sw_vers` | 26.5.2 (25F84) |
-| Rust | `rustc --version`, `cargo --version`, `rustup show`, `ls ~/.cargo ~/.rustup` | **not installed** (none found; chapter 03 assumed it). Install: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh -s -- -y` then `source ~/.cargo/env`. Owner card 1. |
+| Rust | `cargo --version` (P00, 2026-10-25) | Installed: `cargo 1.99.1 (5f94df478 2026-08-27)`. The earlier preflight found it absent; it was installed before P00 started. |
 | Xcode | `xcode-select -p`, `xcodebuild -version` | Command Line Tools at `/Library/Developer/CommandLineTools`; full Xcode absent — sufficient for desktop Tauri (Tauri prerequisites: "Only developing for desktop targets? … xcode-select --install"). |
 | Node / npm | `node --version`, `npm --version` | v22.22.3 / 10.9.8 (pnpm absent; use npm) |
 | Tauri CLI | — | not installed; installed per project as devDependency `@tauri-apps/cli` and run as `npm run tauri -- <cmd>` (no `cargo install` needed) |
@@ -258,7 +258,7 @@ Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; d
 | App data dir | `ls ~/Library/Application Support/ \| grep -i session` | nothing yet (created at first run of P00) |
 | Export folder default | `ls ~/Pictures/Session Manager Export` | does not exist; created on first export |
 | Shopify token | STATUS.md | not available yet (precondition for P12) |
-| Codex sandbox | `~/.codex/config.toml` | `sandbox_mode = "workspace-write"`, `network_access = true`, repo trusted. **Caveat:** `~/.cargo/registry` and `~/.npm/_cacache` are outside the workspace; if a Codex session's `cargo fetch`/`npm install` fails with a write-permission error, P00 records the fix here: either `writable_roots` for `~/.cargo` and `~/.npm` in `[sandbox_workspace_write]` (orchestrator) or `CARGO_HOME=$ROOT/.cargo-home`, `npm_config_cache=$ROOT/.npm-cache` (both gitignored). |
+| Codex sandbox | `cargo check -p psm-integrations` (P00, 2026-10-25) | **Blocked:** Cargo reported `failed to write cache` at `~/.cargo/registry/index/.../chrono`, `Operation not permitted (os error 1)`. The session wrapper forbids routing around a sandbox refusal, so this run stopped instead of retrying with a different Cargo home. Cargo also reported that the pinned `tauri-specta = "=2.0.0-rc.27"` had no matching candidate (latest shown rc.26). |
 | Claude sessions | `.claude/settings.json` | Bash allowlist includes `cargo`, `rustup`, `npm`, `npx`, `node`, `osascript`, git read/write (no force-push) |
 
 ### 7.2 Commands (standard invocations; **not yet runnable here because Rust is absent** — P00 confirms each and

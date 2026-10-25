@@ -1,0 +1,15 @@
+[workspace]
+members = ["crates/core", "crates/infra", "crates/integrations", "crates/testkit", "apps/desktop/src-tauri"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process"] }
+
