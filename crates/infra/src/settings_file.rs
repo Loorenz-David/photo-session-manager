@@ -16,11 +16,25 @@ pub struct Settings {
     pub web_recipe: String,
     pub style_name: String,
     pub export_folder: String,
+    #[serde(deserialize_with = "deserialize_preview_delay")]
     pub preview_delay_s: u32,
     pub theme: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sku_prefix: Option<String>,
     pub integration: Option<serde_json::Value>,
+}
+
+fn deserialize_preview_delay<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<u32, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(match value {
+        serde_json::Value::Number(n) => {
+            n.as_u64().and_then(|v| u32::try_from(v).ok()).unwrap_or(15)
+        }
+        serde_json::Value::String(s) => s.parse().unwrap_or(15),
+        _ => 15,
+    })
 }
 
 impl Default for Settings {

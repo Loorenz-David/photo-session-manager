@@ -3,6 +3,7 @@ pub mod logging;
 pub mod nudge;
 pub mod osascript;
 pub mod paths;
+pub mod previews_store;
 pub mod rawpreview;
 pub mod settings_file;
 pub mod spool;

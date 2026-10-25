@@ -6,5 +6,6 @@ pub mod health;
 pub mod integrity;
 pub mod items;
 pub mod photos;
+pub mod previews;
 pub mod review;
 pub mod sessions;

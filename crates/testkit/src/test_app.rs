@@ -11,6 +11,10 @@ use psm_infra::paths::AppPaths;
 use psm_integrations::App;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 use tempfile::TempDir;
 
 pub struct TestApp {
@@ -122,7 +126,52 @@ impl TestApp {
     pub fn tick(&self, ms: i64) -> Result<usize> {
         self.clock.advance(ms);
         self.app.arrival.tick()?;
-        self.app.jobs.tick(self.clock.now_ms())
+        let count = self.app.jobs.tick(self.clock.now_ms())?;
+        self.app.previews.tick()?;
+        Ok(count)
+    }
+    pub fn focus(&self) -> Result<()> {
+        self.app.previews.on_focus()
+    }
+    pub fn complete_render(&self, job_id: &str) -> Result<PathBuf> {
+        let entry = self
+            .app
+            .editing
+            .render_completion(job_id)
+            .ok_or_else(|| psm_core::Error::NotFound(job_id.into()))?;
+        let output = self.dir.path().join("Output").join(format!(
+            "{}.jpg",
+            Path::new(&entry.raw)
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+        ));
+        std::fs::create_dir_all(output.parent().unwrap())?;
+        std::fs::write(&output, format!("image from {job_id}"))?;
+        std::fs::File::options()
+            .write(true)
+            .open(&output)?
+            .set_times(std::fs::FileTimes::new().set_modified(
+                std::time::UNIX_EPOCH
+                    + std::time::Duration::from_millis(self.clock.now_ms().max(0) as u64),
+            ))?;
+        self.deliver_hook(&serde_json::json!({"hook":"processing_done","job":job_id,"raw":entry.raw,"outputs":[output]}).to_string())?;
+        Ok(output)
+    }
+    pub fn write_sidecar(&self, raw: &str, mtime: SystemTime) -> Result<PathBuf> {
+        let raw = Path::new(raw);
+        let folder = raw.parent().unwrap().join("CaptureOne/Settings1680");
+        std::fs::create_dir_all(&folder)?;
+        let path = folder.join(format!(
+            "{}.cos",
+            raw.file_name().unwrap().to_string_lossy()
+        ));
+        std::fs::write(&path, b"settings")?;
+        std::fs::File::options()
+            .write(true)
+            .open(&path)?
+            .set_times(std::fs::FileTimes::new().set_modified(mtime))?;
+        Ok(path)
     }
     pub fn watcher_event(&self, path: &std::path::Path) -> Result<()> {
         self.app.arrival.watcher_event(path)

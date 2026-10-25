@@ -8,7 +8,7 @@ use editing::capture_one::{
 };
 use psm_core::{
     Result,
-    domain::editing::{Job, RenderPurpose},
+    domain::editing::Job,
     events::AppEvent,
     mechanisms::{arrival::path_key, hash::sha256_file},
     ports::{
@@ -20,17 +20,15 @@ use psm_core::{
         store::Store,
     },
     services::{
-        arrival::ArrivalService,
-        camera::CameraService,
-        editing_events::{EditingEventsDispatcher, LoggingEditingEvents},
-        editing_startup::EditingStartup,
-        health::HealthService,
+        arrival::ArrivalService, camera::CameraService, editing_events::EditingEventsDispatcher,
+        editing_startup::EditingStartup, health::HealthService, previews::PreviewService,
     },
 };
 use psm_infra::{
     jobs::{JobHandler, JobRunner},
     nudge::NudgeServer,
     paths::AppPaths,
+    previews_store::PreviewStore,
     rawpreview::EmbeddedJpeg,
     settings_file::Settings,
     spool::Spool,
@@ -58,6 +56,7 @@ pub struct App {
     pub camera: Arc<dyn CameraProvider>,
     pub jobs: Arc<JobRunner>,
     pub arrival: Arc<ArrivalService>,
+    pub previews: Arc<PreviewService>,
     pub events: Arc<EventHub>,
     pub clock: Arc<dyn Clock>,
     stop: Arc<AtomicBool>,
@@ -111,9 +110,17 @@ impl App {
             events.clone(),
             clock.clone(),
         ));
+        let previews = Arc::new(PreviewService::new(
+            store.clone(),
+            editing.clone(),
+            events.clone(),
+            clock.clone(),
+            Arc::new(PreviewStore(paths.clone())),
+            Some(&settings.preview_delay_s.to_string()),
+        ));
         spool.set_dispatcher(Arc::new(EditingEventsDispatcher {
             arrival: arrival.clone(),
-            handler: Arc::new(LoggingEditingEvents),
+            handler: previews.clone(),
         }))?;
         let nudge = NudgeServer::start(spool.clone(), store.clone())?;
         let hooks_compiled = editing::capture_one::hooks::compile_all(&paths, nudge.port()).is_ok();
@@ -124,6 +131,9 @@ impl App {
             && let Err(error) = arrival.scan()
         {
             tracing::warn!(%error, "startup capture scan deferred");
+        }
+        if let Err(error) = previews.on_startup() {
+            tracing::warn!(%error, "startup sidecar check deferred");
         }
         let mut runner = JobRunner::new(store.clone());
         runner.register(
@@ -150,7 +160,7 @@ impl App {
         runner.register(
             "render_preview",
             Arc::new(RenderPreviewJob {
-                editing: editing.clone(),
+                previews: previews.clone(),
             }),
         );
         let jobs = Arc::new(runner);
@@ -177,6 +187,7 @@ impl App {
         let bg_jobs = jobs.clone();
         let bg_clock = clock.clone();
         let bg_arrival = arrival.clone();
+        let bg_previews = previews.clone();
         let spool_dir = paths.spool();
         let background = thread::spawn(move || {
             let mut watcher = FsWatcher::watch(&spool_dir).ok();
@@ -216,6 +227,7 @@ impl App {
                     }
                     let _ = bg_arrival.tick();
                     let _ = bg_jobs.tick(bg_clock.now_ms());
+                    let _ = bg_previews.tick();
                 }
                 thread::sleep(Duration::from_millis(50));
             }
@@ -232,6 +244,7 @@ impl App {
             camera,
             jobs,
             arrival,
+            previews,
             events,
             clock,
             stop,
@@ -324,13 +337,11 @@ impl JobHandler for OriginalPreviewJob {
     }
 }
 struct RenderPreviewJob {
-    editing: Arc<dyn EditingProvider>,
+    previews: Arc<PreviewService>,
 }
 impl JobHandler for RenderPreviewJob {
     fn run(&self, job: &Job, _: i64) -> Result<()> {
-        self.editing
-            .render(&job.target, RenderPurpose::Preview)
-            .map(|_| ())
+        self.previews.request_initial(&job.target)
     }
 }
 

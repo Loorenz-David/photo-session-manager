@@ -2707,6 +2707,7 @@ dependencies = [
  "psm-infra",
  "serde",
  "serde_json",
+ "tempfile",
  "tracing",
 ]
 

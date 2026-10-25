@@ -13,20 +13,43 @@ struct PhotoAddedPayload {
     photo_id: i64,
     session_id: i64,
 }
+#[derive(serde::Serialize, Clone)]
+struct SessionChangedPayload {
+    session_id: i64,
+}
 impl EventSink for TauriEvents {
     fn emit(&self, event: AppEvent) {
-        if let AppEvent::PhotoAdded {
-            photo_id,
-            session_id,
-        } = event
-        {
-            let _ = self.0.emit(
-                "photo_added",
-                PhotoAddedPayload {
-                    photo_id,
-                    session_id,
-                },
-            );
+        match event {
+            AppEvent::PhotoAdded {
+                photo_id,
+                session_id,
+            } => {
+                let _ = self.0.emit(
+                    "photo_added",
+                    PhotoAddedPayload {
+                        photo_id,
+                        session_id,
+                    },
+                );
+            }
+            AppEvent::PhotoChanged {
+                photo_id,
+                session_id,
+            } => {
+                let _ = self.0.emit(
+                    "photo_changed",
+                    PhotoAddedPayload {
+                        photo_id,
+                        session_id,
+                    },
+                );
+            }
+            AppEvent::SessionChanged { session_id } => {
+                let _ = self
+                    .0
+                    .emit("session_changed", SessionChangedPayload { session_id });
+            }
+            _ => {}
         }
     }
 }
@@ -72,6 +95,17 @@ pub fn run() {
                 .expect("app state")
                 .events
                 .set_target(Arc::new(TauriEvents(handle.handle().clone())));
+            if let Some(window) = handle.get_webview_window("main") {
+                let app_handle = handle.handle().clone();
+                window.on_window_event(move |event| {
+                    if matches!(event, tauri::WindowEvent::Focused(true)) {
+                        let state = app_handle.state::<AppState>();
+                        if let Ok(app) = state.0.lock() {
+                            let _ = app.previews.on_focus();
+                        }
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(builder.invoke_handler())

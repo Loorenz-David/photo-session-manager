@@ -1,4 +1,7 @@
-use super::scripting::CaptureOneScripting;
+use super::{
+    renders::{PendingRender, RenderEntry, RenderRegistry, accept_output, base_name},
+    scripting::CaptureOneScripting,
+};
 use psm_core::{
     Error, Result,
     domain::{
@@ -6,11 +9,19 @@ use psm_core::{
         photo::Classification,
     },
     mechanisms::canon::canon,
-    ports::{editing::EditingProvider, store::Store},
+    ports::{
+        editing::{EditingProvider, RenderCompletion},
+        store::Store,
+    },
     services::health::HealthService,
 };
 use psm_infra::paths::AppPaths;
-use std::{fs, path::Path, sync::Arc};
+use std::{
+    fs,
+    path::Path,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant, UNIX_EPOCH},
+};
 
 pub struct CaptureOneAdapter {
     pub scripting: Arc<dyn CaptureOneScripting>,
@@ -20,6 +31,7 @@ pub struct CaptureOneAdapter {
     pub preview_recipe: String,
     pub web_recipe: String,
     pub paths: AppPaths,
+    renders: Mutex<RenderRegistry>,
 }
 impl CaptureOneAdapter {
     pub fn new(
@@ -39,6 +51,7 @@ impl CaptureOneAdapter {
             preview_recipe,
             web_recipe,
             paths,
+            renders: Mutex::new(RenderRegistry::default()),
         }
     }
     fn variant(&self, raw: &str) -> Result<String> {
@@ -161,6 +174,190 @@ impl EditingProvider for CaptureOneAdapter {
         }
         let variant = self.variant(raw)?;
         self.scripting.process(&variant, recipe)
+    }
+    fn request_render(
+        &self,
+        raw: &str,
+        purpose: RenderPurpose,
+        generation: i64,
+        tracking_job_id: i64,
+        now: Instant,
+        now_ms: i64,
+    ) -> Result<()> {
+        let mut state = self
+            .renders
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        if state.jobs.values().any(|e| e.completion.raw == raw)
+            || state.pending.iter().any(|e| e.raw == raw)
+        {
+            return Ok(());
+        }
+        if !state.busy.insert(base_name(raw)) {
+            state.pending.push_back(PendingRender {
+                raw: raw.into(),
+                purpose,
+                generation,
+                tracking_job_id,
+            });
+            return Ok(());
+        }
+        match self.render(raw, purpose) {
+            Ok(job_id) => {
+                state.jobs.insert(
+                    job_id.clone(),
+                    RenderEntry {
+                        completion: RenderCompletion {
+                            job_id,
+                            raw: raw.into(),
+                            purpose,
+                            generation,
+                            issued_at_ms: now_ms,
+                            tracking_job_id,
+                        },
+                        issued_mono: now,
+                        attempts: 0,
+                    },
+                );
+                Ok(())
+            }
+            Err(error) => {
+                state.busy.remove(&base_name(raw));
+                Err(error)
+            }
+        }
+    }
+    fn render_completion(&self, job: &str) -> Option<RenderCompletion> {
+        self.renders
+            .lock()
+            .ok()?
+            .jobs
+            .get(job)
+            .map(|e| e.completion.clone())
+    }
+    fn accept_render_output(&self, output: &Path, issued_at_ms: i64) -> bool {
+        accept_output(
+            output,
+            UNIX_EPOCH + Duration::from_millis(issued_at_ms.max(0) as u64),
+        )
+    }
+    fn finish_render(&self, job: &str, now: Instant, now_ms: i64) -> Result<()> {
+        let mut state = self
+            .renders
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let Some(entry) = state.jobs.remove(job) else {
+            return Ok(());
+        };
+        state.busy.remove(&base_name(&entry.completion.raw));
+        let key = base_name(&entry.completion.raw);
+        if let Some(index) = state.pending.iter().position(|p| base_name(&p.raw) == key) {
+            let next = state.pending.remove(index).expect("pending index");
+            state.busy.insert(key);
+            match self.render(&next.raw, next.purpose) {
+                Ok(job_id) => {
+                    state.jobs.insert(
+                        job_id.clone(),
+                        RenderEntry {
+                            completion: RenderCompletion {
+                                job_id,
+                                raw: next.raw,
+                                purpose: next.purpose,
+                                generation: next.generation,
+                                issued_at_ms: now_ms,
+                                tracking_job_id: next.tracking_job_id,
+                            },
+                            issued_mono: now,
+                            attempts: 0,
+                        },
+                    );
+                }
+                Err(e) => {
+                    state.busy.remove(&base_name(&next.raw));
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
+    }
+    fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>> {
+        let mut failed = Vec::new();
+        let expired: Vec<_> = {
+            let state = self
+                .renders
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            state
+                .jobs
+                .iter()
+                .filter(|(_, e)| {
+                    now.duration_since(e.issued_mono).as_secs()
+                        >= match e.completion.purpose {
+                            RenderPurpose::Preview => 60,
+                            RenderPurpose::Export => 120,
+                        }
+                })
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+        for old_id in expired {
+            let mut state = self
+                .renders
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            let Some(mut entry) = state.jobs.remove(&old_id) else {
+                continue;
+            };
+            if entry.attempts == 0 {
+                match self.render(&entry.completion.raw, entry.completion.purpose) {
+                    Ok(new_id) => {
+                        entry.completion.job_id = new_id.clone();
+                        entry.completion.issued_at_ms = now_ms;
+                        entry.issued_mono = now;
+                        entry.attempts = 1;
+                        state.jobs.insert(new_id, entry);
+                    }
+                    Err(error) => {
+                        state.jobs.insert(old_id, entry);
+                        return Err(error);
+                    }
+                }
+            } else {
+                failed.push((
+                    entry.completion.tracking_job_id,
+                    entry.completion.generation,
+                ));
+                let key = base_name(&entry.completion.raw);
+                state.busy.remove(&key);
+                if let Some(index) = state.pending.iter().position(|p| base_name(&p.raw) == key) {
+                    let next = state.pending.remove(index).expect("pending index");
+                    state.busy.insert(key);
+                    let id = self.render(&next.raw, next.purpose)?;
+                    state.jobs.insert(
+                        id.clone(),
+                        RenderEntry {
+                            completion: RenderCompletion {
+                                job_id: id,
+                                raw: next.raw,
+                                purpose: next.purpose,
+                                generation: next.generation,
+                                issued_at_ms: now_ms,
+                                tracking_job_id: next.tracking_job_id,
+                            },
+                            issued_mono: now,
+                            attempts: 0,
+                        },
+                    );
+                }
+            }
+        }
+        Ok(failed)
+    }
+    fn render_in_flight(&self, raw: &str) -> bool {
+        self.renders.lock().is_ok_and(|s| {
+            s.jobs.values().any(|e| e.completion.raw == raw)
+                || s.pending.iter().any(|e| e.raw == raw)
+        })
     }
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()> {
         let variant = self.variant(raw)?;

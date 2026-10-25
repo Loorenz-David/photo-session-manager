@@ -6,6 +6,21 @@ use crate::domain::{
     session::{Session, SessionDto, SessionListRecord},
 };
 
+#[derive(Debug, Clone)]
+pub struct RawPreviewState {
+    pub raw_path: String,
+    pub adjusted_gen: i64,
+    pub rendered_gen: i64,
+    pub retouch_gen: i64,
+    pub last_own_write_at: Option<i64>,
+    pub adjusted_preview_path: Option<String>,
+}
+
+pub struct PreviewCommit {
+    pub previous_path: Option<String>,
+    pub photos: Vec<(i64, i64)>,
+}
+
 pub trait StoreTx {
     fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()>;
     fn session(&self, id: i64) -> Result<Session>;
@@ -50,6 +65,13 @@ pub trait StoreTx {
 }
 
 pub trait Store: Send + Sync {
+    fn preview_states(&self) -> Result<Vec<RawPreviewState>>;
+    fn preview_state(&self, raw: &str) -> Result<Option<RawPreviewState>>;
+    fn ensure_initial_generation(&self, raw: &str) -> Result<Option<i64>>;
+    fn adjusted_event(&self, raw: &str, retouch: bool) -> Result<Option<Vec<i64>>>;
+    fn complete_preview(&self, raw: &str, generation: i64, path: &str) -> Result<PreviewCommit>;
+    fn new_render_job(&self, raw: &str, now_ms: i64) -> Result<i64>;
+    fn finish_render_job(&self, id: i64, error: Option<&str>, now_ms: i64) -> Result<()>;
     fn active_session_id(&self) -> Result<Option<i64>>;
     fn set_active_session_id(&self, id: Option<i64>) -> Result<()>;
     fn job_due(&self, now_ms: i64) -> Result<Option<Job>>;

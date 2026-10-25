@@ -1,4 +1,8 @@
-use crate::{Result, mechanisms::hook_payload::HookEvent, services::arrival::ArrivalService};
+use crate::{
+    Result,
+    mechanisms::hook_payload::HookEvent,
+    services::{arrival::ArrivalService, previews::PreviewService},
+};
 use std::sync::Arc;
 
 pub trait EditingEvents: Send + Sync {
@@ -6,15 +10,12 @@ pub trait EditingEvents: Send + Sync {
     fn variant_adjusted(&self, variant_id: &str, raw: &str) -> Result<()>;
 }
 
-pub struct LoggingEditingEvents;
-impl EditingEvents for LoggingEditingEvents {
-    fn processing_done(&self, job: &str, raw: &str, _outputs: &[String]) -> Result<()> {
-        tracing::info!(job, raw, "processing_done awaits P06");
-        Ok(())
+impl EditingEvents for PreviewService {
+    fn processing_done(&self, job: &str, raw: &str, outputs: &[String]) -> Result<()> {
+        self.on_processing_done(job, raw, outputs)
     }
     fn variant_adjusted(&self, variant_id: &str, raw: &str) -> Result<()> {
-        tracing::info!(variant_id, raw, "variant_adjusted awaits P06");
-        Ok(())
+        self.on_variant_adjusted(variant_id, raw)
     }
 }
 

@@ -7,6 +7,13 @@ pub enum AppEvent {
         photo_id: i64,
         session_id: i64,
     },
+    PhotoChanged {
+        photo_id: i64,
+        session_id: i64,
+    },
+    SessionChanged {
+        session_id: i64,
+    },
     HealthChanged,
     CameraStatusChanged {
         status: crate::domain::editing::CameraStatus,

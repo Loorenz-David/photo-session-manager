@@ -4,5 +4,6 @@ pub mod hash;
 pub mod hook_payload;
 pub mod naming;
 pub mod position;
+pub mod staleness;
 pub mod status;
 pub mod time;

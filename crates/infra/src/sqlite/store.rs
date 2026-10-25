@@ -8,7 +8,7 @@ use psm_core::{
         session::{PublishStep, Session, SessionDto, SessionListRecord},
     },
     mechanisms::canon::canon,
-    ports::store::{Store, StoreTx},
+    ports::store::{PreviewCommit, RawPreviewState, Store, StoreTx},
 };
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use rusqlite_migration::{M, Migrations};
@@ -151,6 +151,10 @@ fn photo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Photo> {
 fn photo(conn: &Connection, id: i64) -> Result<Photo> {
     conn.query_row("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at FROM photos WHERE id=?1", [id], photo_row)
         .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("photo {id}")))
+}
+
+fn raw_preview_state(conn: &Connection, raw: &str) -> Result<Option<RawPreviewState>> {
+    conn.query_row("SELECT r.raw_path,r.adjusted_gen,r.rendered_gen,r.retouch_gen,r.last_own_write_at,(SELECT adjusted_preview_path FROM photos WHERE raw_path=r.raw_path ORDER BY id LIMIT 1) FROM raw_state r WHERE r.raw_path=?1 AND EXISTS(SELECT 1 FROM photos WHERE raw_path=r.raw_path)", [raw], |r| Ok(RawPreviewState { raw_path:r.get(0)?, adjusted_gen:r.get(1)?, rendered_gen:r.get(2)?, retouch_gen:r.get(3)?, last_own_write_at:r.get(4)?, adjusted_preview_path:r.get(5)? })).optional().map_err(db)
 }
 
 fn job(conn: &Connection, id: i64) -> Result<Job> {
@@ -319,6 +323,160 @@ impl StoreTx for SqliteTx<'_> {
 }
 
 impl Store for SqliteStore {
+    fn preview_states(&self) -> Result<Vec<RawPreviewState>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let active: Option<i64> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key='active_session_id'",
+                [],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(db)?
+            .and_then(|v| v.parse().ok());
+        let mut stmt = conn.prepare("SELECT p.raw_path FROM photos p GROUP BY p.raw_path ORDER BY MIN(CASE WHEN p.session_id=?1 THEN 0 ELSE 1 END), MIN(CASE WHEN p.session_id=?1 THEN CASE p.classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END ELSE 4 END), MIN(CASE WHEN p.session_id=?1 THEN COALESCE(p.position,9223372036854775807) ELSE 9223372036854775807 END), MIN(p.captured_at), MIN(p.id)").map_err(db)?;
+        let raws: Vec<String> = stmt
+            .query_map([active], |r| r.get(0))
+            .map_err(db)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db)?;
+        raws.into_iter()
+            .filter_map(|raw| match raw_preview_state(&conn, &raw) {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            })
+            .collect()
+    }
+    fn preview_state(&self, raw: &str) -> Result<Option<RawPreviewState>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        raw_preview_state(&conn, raw)
+    }
+    fn ensure_initial_generation(&self, raw: &str) -> Result<Option<i64>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let changed = conn.execute("UPDATE raw_state SET adjusted_gen=MAX(adjusted_gen,1) WHERE raw_path=?1 AND EXISTS(SELECT 1 FROM photos WHERE raw_path=?1)", [raw]).map_err(db)?;
+        if changed == 0 {
+            return Ok(None);
+        }
+        conn.query_row(
+            "SELECT adjusted_gen FROM raw_state WHERE raw_path=?1",
+            [raw],
+            |r| r.get(0),
+        )
+        .map(Some)
+        .map_err(db)
+    }
+    fn adjusted_event(&self, raw: &str, retouch: bool) -> Result<Option<Vec<i64>>> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM photos WHERE raw_path=?1)",
+                [raw],
+                |r| r.get(0),
+            )
+            .map_err(db)?;
+        if !exists {
+            return Ok(None);
+        }
+        tx.execute("INSERT INTO raw_state(raw_path,adjusted_gen,retouch_gen) VALUES (?1,1,?2) ON CONFLICT(raw_path) DO UPDATE SET adjusted_gen=adjusted_gen+1,retouch_gen=retouch_gen+excluded.retouch_gen", params![raw, i64::from(retouch)]).map_err(db)?;
+        let sessions = if retouch {
+            let mut stmt = tx.prepare("SELECT DISTINCT session_id FROM photos WHERE raw_path=?1 AND classification IN ('main','condition') ORDER BY session_id").map_err(db)?;
+            let ids: Vec<i64> = stmt
+                .query_map([raw], |r| r.get(0))
+                .map_err(db)?
+                .collect::<rusqlite::Result<_>>()
+                .map_err(db)?;
+            for id in &ids {
+                tx.execute(
+                    "UPDATE sessions SET change_seq=change_seq+1 WHERE id=?1",
+                    [id],
+                )
+                .map_err(db)?;
+            }
+            ids
+        } else {
+            Vec::new()
+        };
+        tx.commit().map_err(db)?;
+        Ok(Some(sessions))
+    }
+    fn complete_preview(&self, raw: &str, generation: i64, path: &str) -> Result<PreviewCommit> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let prior: Option<String> = tx
+            .query_row(
+                "SELECT adjusted_preview_path FROM photos WHERE raw_path=?1 ORDER BY id LIMIT 1",
+                [raw],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?
+            .flatten();
+        let mut stmt = tx
+            .prepare("SELECT id,session_id FROM photos WHERE raw_path=?1 ORDER BY id")
+            .map_err(db)?;
+        let ids: Vec<(i64, i64)> = stmt
+            .query_map([raw], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(db)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db)?;
+        drop(stmt);
+        tx.execute(
+            "UPDATE photos SET adjusted_preview_path=?1 WHERE raw_path=?2",
+            params![path, raw],
+        )
+        .map_err(db)?;
+        tx.execute(
+            "UPDATE raw_state SET rendered_gen=MAX(rendered_gen,?1) WHERE raw_path=?2",
+            params![generation, raw],
+        )
+        .map_err(db)?;
+        tx.commit().map_err(db)?;
+        Ok(PreviewCommit {
+            previous_path: prior,
+            photos: ids,
+        })
+    }
+    fn new_render_job(&self, raw: &str, now_ms: i64) -> Result<i64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_preview',?1,'{}','running',0,?2,?2,?2)", params![raw,now_ms]).map_err(db)?;
+        Ok(conn.last_insert_rowid())
+    }
+    fn finish_render_job(&self, id: i64, error: Option<&str>, now_ms: i64) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE jobs SET status=?1,error=?2,updated_at=?3 WHERE id=?4",
+                params![
+                    if error.is_some() { "failed" } else { "done" },
+                    error,
+                    now_ms,
+                    id
+                ],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
     fn active_session_id(&self) -> Result<Option<i64>> {
         self.conn
             .lock()
