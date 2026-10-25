@@ -218,3 +218,24 @@ option consistent with MC-19). Each choice is recorded under **Assumptions**.
   error-to-command mapping and Arc clock forwarding needed by existing tests, both outside the expected changed
   paths. No live Capture One smoke was run; VERIFY-11 remains live-unprobed. Full suite, Clippy, formatting,
   TypeScript typecheck and frontend test command passed.
+- 2026-10-25 review r1 (opus): **APPROVED_WITH_NOTES**, 0 blocking. Checkpoint `f216011` paths == the handoff's
+  declared 55 files (diff empty). Stamp on `938ebb5` (checkpoint + review prompt only, porcelain clean):
+  `cargo test --workspace` green (P04 21/21, P00 16, P01 20, P02 25, P03 28, unit tests incl. `mc19_tag_mapping`,
+  `mc19_backoff`, `mc16_process_result`), clippy `-D warnings`, `fmt --check`, `npm run typecheck`, `npm test` all
+  exit 0; regenerated bindings equal the committed file. Verified correct, by reading production then test:
+  C1(a–d) MC-18 save → mkdir → set → read-back by `canon`, revert through the same steps, health + camera block,
+  `active_session_id` only on success; C2(a/b) hooks set as text, read back, compared by `canon` (a string compare
+  would fail under `private_prefix`); C3(a/b) per-recipe `overwrite`/`_session_manager`, one `recipe_missing` per
+  name, render refused only for the missing purpose; C4(a/b) position-1 pick lives in `find_image*.js`
+  (`variants.whose({position:1})`), folder fallback via `Path::parent`; C4(c)/C5(b) retry → `queued`, attempts 1,
+  `now+1000`; C5(a/d/e) enqueue in the same transaction on classify/delete/undo only, coalesced into a `queued`
+  row (payload overwritten), handler writes the row's current classification; read-first skips redundant writes;
+  C5(c)/C6(a) `last_own_write_at` upserted before the write is issued, timed-out write re-read before retry;
+  C7(a–c) `CameraService` in core (H8), `Disconnected` while `capture_folder_not_set`; C8(a) catalog stops before
+  hooks. Every JXA script checks `running()` first; `capture.js` implements the VERIFY-12 recipe; `process` goes
+  through `parse_process_result`. H1–H8 hold (H7: core holds only neutral types; see note on the `capture_one`
+  health code). P00 backlog note on `health_get` holding the lock across osascript is resolved (probe removed,
+  provider commands async without the lock). Reviewer probes (temporary test file, deleted, tree clean):
+  `variant_not_found` cleared by another RAW's success (confirmed → note); activate with document closed →
+  `document_not_open`, previous session stays active, capture lands in its folder (consistent with M25 → note).
+  11 notes to `backlog.md`. Assumptions reported to the owner in the narrative; none contradicts the book.
