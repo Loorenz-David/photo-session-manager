@@ -12,9 +12,11 @@ Updated: 2026-10-25 by the orchestrator.
   the owner 2026-10-25.
 - Master plan and 17 phase plans: written 2026-10-25 (exit 10, OWNER_DECISIONS_PENDING, 2 cards).
   Order in `phases.txt` (P00…P16); Shopify phase P12 needs the token.
-- Phases: P00–P03 APPROVED (with notes) 2026-10-25. P04 projection r0 → amendments applied by the
-  orchestrator (plan Review log); projection marked done so the runner skips a second one.
-- Run in flight: **all**, delayed start 20:00 (P04 implement r1 hit the Codex usage limit at 19:30, resets 19:58; partial work uncommitted in the tree, noted in the P04 Review log). P00 Automation prompt check PASSED with the owner 19:25 (evidence packaging_spike.md).
+- Phases: P00–P06 APPROVED 2026-10-25 (P04, P05 with notes; narratives relayed). P04 projection r0 →
+  amendments applied by the orchestrator (plan Review log). P00 Automation prompt check PASSED with
+  the owner 19:25 (evidence packaging_spike.md).
+- Run in flight: **all**, delayed start 01:05 on 2026-10-26 (P07 implement r1 hit the Codex usage limit
+  at 21:06, resets 01:00; attempt archived, partial work uncommitted in the tree, noted in the P07 Review log).
 
 ## Needs the owner
 Nothing. Card 1: owner said "install it"; rustup installed cargo/rustc 1.99.1 (2026-10-25).

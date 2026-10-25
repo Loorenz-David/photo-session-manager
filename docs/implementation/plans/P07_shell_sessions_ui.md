@@ -89,4 +89,4 @@ boundaries (calendar-day based like MC-4), exact copy of the camera error text, 
 - Estimated size: ~22 files, ~1 900 lines (mostly TSX).
 
 ## Review log
-(empty)
+- 2026-10-25 21:06 (orchestrator): implement r1 stopped by the Codex usage limit (resets 2026-10-26 01:00); attempt archived to `archive/P07_shell_sessions_ui_20261025-210645`. Partial work is left uncommitted in the tree (shadcn ui components, `features/sessions`, `features/shell`, services, `crates/testkit/tests/p07_shell_sessions_ui.rs`, edits to items/sessions services and commands). The next implementer continues from it: verify each piece against this plan, keep what fits, replace what does not.
