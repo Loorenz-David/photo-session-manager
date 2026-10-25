@@ -132,16 +132,20 @@ implement ports; `psm-desktop` commands are thin (parse → service → serializ
 
 ### 6.2 Pinned dependency versions (verified on crates.io / npm, 2026-10-25)
 Rust: `tauri = "2"` (2.12.5, feature `specta`), `tauri-build = "2"` (2.7.4), `tauri-specta = "=2.0.0-rc.26"`
-(features `derive`, `typescript`), `specta = "=2.0.0-rc.26"`, `specta-typescript = "0.0.13"`, `rusqlite = "0.41"`
+(features `derive`, `typescript`), `specta = "=2.0.0-rc.26"`, `specta-typescript = "0.0.13"`, `rusqlite = "0.40"`
 (feature `bundled`), `rusqlite_migration = "2.6"`, `notify = "8.2"`, `tokio = "1"` (1.54; `rt-multi-thread`,
 `macros`, `sync`, `time`, `process`), `axum = "0.8"`, `serde`/`serde_json = "1"`, `uuid = "1"` (`v4`),
-`sha2 = "0.11"`, `unicode-normalization = "0.1"`, `chrono = "0.4"` (plus `chrono-tz` latest 0.x as a
+`sha2 = "0.11"`, `unicode-normalization = "0.1"`, `chrono = "0.4"` (plus `chrono-tz = "0.10"` as a
 dev-dependency for TZ-pinned tests), `tracing = "0.1"`, `tracing-subscriber = "0.3"`, `tracing-appender = "0.2"`,
-`thiserror = "2"`, `reqwest = "0.13"` (`json`, `multipart`, `rustls-tls`, no default TLS), `tempfile = "3"` (dev).
+`thiserror = "2"`, `reqwest = "0.13"` (`json`, `multipart`, `rustls`, no default features; 0.13 has no `rustls-tls` feature), `tempfile = "3"` (dev).
 Note: `tauri-specta` **1.0.2 is Tauri-v1 only**; the 2.0.0-rc line is the Tauri-v2 one and must be pinned with `=`.
 **Corrected by the orchestrator 2026-10-25:** rc.27 of `tauri-specta` was never published; rc.26 requires
 `specta = "=2.0.0-rc.26"` and `specta-typescript = "^0.0.13"`. This trio with `tauri 2.12.5` (feature `specta`) was
 resolved with `cargo generate-lockfile` on this Mac.
+**Second correction, 2026-10-25 (after P00 r1 attempt 2):** `rusqlite_migration 2.6` requires `rusqlite ^0.40`
+(0.41 made two `libsqlite3-sys` links conflict). The **whole Rust list above, as now written, was resolved together**
+in one probe manifest (`cargo generate-lockfile`: tauri 2.12.5, rusqlite 0.40.2, rusqlite_migration 2.6.0, axum 0.8.9,
+notify 8.2.1, reqwest 0.13.5, sha2 0.11.1, chrono-tz 0.10.4), and every npm pin below exists on the registry.
 npm: `@tauri-apps/cli@2.12.4`, `@tauri-apps/api@2.12.4`, `react@19.3.1`, `vite@8.3.5`, `@vitejs/plugin-react@6.1.2`,
 `vitest@5.0.5` (+ `jsdom`, `@testing-library/react@16.3.3`, `@testing-library/jest-dom`), `tailwindcss@4.3.3`,
 shadcn/ui via `npx shadcn@latest init`, `@dnd-kit/core@6.3.1`, `@dnd-kit/sortable@10.0.0`, `motion@14.6.0`,
