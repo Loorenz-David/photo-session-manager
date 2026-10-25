@@ -163,3 +163,22 @@ with `invalid_value` (the item row cannot hold an "invalid" copy). (4) Pre-exist
 by `form_get`; they are not migrated (none can exist from the shipped UI before this phase's first release).
 **Deviations.** None; no P10 test pinned `product.title` as a stored row.
 
+### 2026-10-26 — re-review r2 (opus, `pipeline-reviewer`) — APPROVED_WITH_NOTES
+**Perimeter.** `git show --stat 4fbc0f9`: `FormDialog.tsx`, `p11_form_ui.test.tsx`, `ports/store.rs`,
+`services/attributes.rs`, `sqlite/store.rs`, `p11_title_binding.rs` (new) — all on F1's allowed list — plus the P11
+tracker row and this Review log. Commits after it are runner docs only. Nothing extra.
+**Evidence (one run, tree = `9b29c4b`, clean).** `cargo test --workspace` 236 passed / 0 failed; clippy `-D warnings`
+exit 0; `cargo fmt --check` exit 0; `npm run typecheck` exit 0; `npm test` 4 files, 78/78.
+**F1 resolved as its correction said.** Verified by reading: `form_get` presents `items.title` for `product.title`
+(human, valid; empty = no value); human `set_value` canonicalizes (trim) and writes `items.title` + `updated_at`
+only when it differs, sets sessions' `last_activity_at`, leaves `change_seq` (MC-4, MC-6 "attribute edits do not
+change change_seq"); `clear` empties it (`create_local` accepts an empty title too, and `item_json` omits an empty
+title, so this is consistent); no value row is stored; the placeholder workaround is gone. The service test
+discriminates on all five outcomes (session_get item, item row, form_get, no row, activity) and on clear; the form
+test asserts the field value, no placeholder, the exact write and the reload. Judgment calls 1–4 are sound: refusing
+a non-human title write and skipping a preset default both protect the one home; `ai_suggest` has no command caller
+in the MVP.
+**No blocking items remain; triage empty.** Notes (backlog): Escape-close after a Title edit leaves the item card
+stale until the next workspace reload; `ai_suggest`/legacy `product.title` rows are hidden from the form but a legacy
+row would still reach `item.json`; P12/P14 must read/write the title through `items.title` (non-human
+`set_value` on `product.title` is now refused).
