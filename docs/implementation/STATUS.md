@@ -16,8 +16,9 @@ Updated: 2026-10-25 by the orchestrator.
   amendments applied by the orchestrator (plan Review log). P00 Automation prompt check PASSED with
   the owner 19:25 (evidence packaging_spike.md).
 - P12 (Shopify): projection r0 (2026-10-26 00:18) → AMENDMENTS_REQUIRED, ledger L1–L25 in
-  `handoffs/reviewer/handoff_P12_shopify_adapter_projection_r0.md`; orchestrator applying them to the
-  P12 plan (+ P13 task 1, master plan wiring, 07A/09 fold-backs). No run in flight.
+  `handoffs/reviewer/handoff_P12_shopify_adapter_projection_r0.md`; applied 2026-10-26 (commit a1cf9b4: P12 59 rows,
+  P13 task 0 wiring + C9, master plan, 07A/09 grounding, changelog 17). Only the probe-store line
+  (owner card 1) is left in P12's Precondition. No run in flight.
 - Implementer and fix sessions run on Claude (owner 2026-10-25: Opus for Codex 6 Sol, Sonnet for
   Codex 6 Luna); flow.md §2 updated; `PSM_IMPLEMENTER=codex` switches back.
 
@@ -26,6 +27,8 @@ Updated: 2026-10-25 by the orchestrator.
 2. P12 projection card 1: is `68c5b4-6a.myshopify.com` a test store or the live shop (probe writes)?
    Branches: test store / live shop writes OK / live shop read-only + separate dev store for writes.
    Recommendation: if live, read-only there plus a dev store. Asked 2026-10-26 00:20.
+3. Small: when the shop already has the proposed SKU, should New session suggest the next free number?
+   Book 05B MC-22 says no (Create stays off until the SKU changes); P07's narrative implied yes; P13 notes it.
 Earlier cards (I1, plan cards 1–2) answered; see changelog and Facts.
 
 ## Next command
