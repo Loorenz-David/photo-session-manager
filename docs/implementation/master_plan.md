@@ -78,7 +78,7 @@ restated so no session has to infer them:
 | P08_workspace_ui | APPROVED | 2026-10-25 | opus | approved with notes after fix 1: F1 resolved (a capture arriving in the open session becomes the stage photo, and A/C/⌫ act on it; candidate C9 discriminates); 22 rows + C9 hold; suite/lint/typecheck green; 4 notes from r1 + 1 in backlog |
 | P09_local_export | APPROVED | 2026-10-25 | opus | approved with notes, review r1: 10/10 rows hold at their boundaries; perimeter = declared files; suite/lint/typecheck green; 5 notes in backlog |
 | P10_attributes | APPROVED | 2026-10-25 | opus | approved with notes, review r1: 31/31 rows hold at their boundaries; perimeter = declared files; suite/lint/typecheck green; 7 notes in backlog (title binding for P11/P14 first) |
-| P11_form_ui | CHANGES_REQUESTED | 2026-10-25 | opus | review r1: 30/30 rows hold at their boundaries, perimeter = declared, suite/lint/typecheck green; 1 blocking (B1 F1: the form's Title writes `product.title`, not the item's title `items.title`, ch05/ch08); 5 notes in backlog |
+| P11_form_ui | IMPLEMENTED | 2026-10-26 | sonnet | fix 1: the Title now has one home, `items.title` (F1/B1): `form_get` presents it as `product.title`, human set/clear of it updates the item; +1 service test, +1 form test; suite 236 Rust / 78 UI, clippy/fmt/typecheck green |
 | P12_shopify_adapter | NOT_STARTED | 2026-10-25 | planner | GraphQL adapter, grounding probes, fixtures |
 | P13_publish_runs | NOT_STARTED | 2026-10-25 | planner | confirm/freeze, prepare, upload, gallery mirror, resume |
 | P14_publish_update | NOT_STARTED | 2026-10-25 | planner | attribute writes, damage report, retouch replacement |

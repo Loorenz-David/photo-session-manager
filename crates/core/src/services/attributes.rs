@@ -10,6 +10,7 @@ use crate::{
             AiConfidence, AiStatus, AttributeGroup, CoreType, Definition, Form, FormField,
             FormGroup, Preset, PresetField, Provenance, Value,
         },
+        item::Item,
         photo::Classification,
     },
     mechanisms::values::{
@@ -105,6 +106,9 @@ pub fn prefill_defaults(
             let Some(default) = field.default else {
                 continue;
             };
+            if field.key == PRODUCT_TITLE {
+                continue; // the title is the item's own (ch05), never a stored row
+            }
             if existing.contains(&field.key) {
                 continue;
             }
@@ -123,6 +127,23 @@ pub fn prefill_defaults(
         }
     }
     Ok(())
+}
+
+/// The item's title presented as the value of `product.title`: the title has one home, `items.title`
+/// (ch05), so this is the single source of the field. An empty title is no value.
+fn title_value(item: &Item) -> Option<Value> {
+    (!item.title.trim().is_empty()).then(|| Value {
+        item_id: item.id,
+        key: PRODUCT_TITLE.to_owned(),
+        value: canonical_json(&Json::String(item.title.clone())),
+        valid: true,
+        provenance: Provenance::Human,
+        ai_confidence: None,
+        ai_status: None,
+        ai_reason: None,
+        ai_sources: None,
+        updated_at: item.updated_at,
+    })
 }
 
 /// Computes the row to store from the definition, the stored row and the current time.
@@ -216,9 +237,41 @@ impl<'a> AttributesService<'a> {
         Ok(result)
     }
 
+    /// Sets the item's title, the single home of `product.title` (ch05): `items.title`, not a value
+    /// row. `None` empties it. A title equal to the stored one is not written (H4); a write sets the
+    /// item's sessions' activity and leaves `change_seq` alone (MC-4, MC-6).
+    fn write_title(&self, item_id: i64, title: Option<String>) -> Result<Value> {
+        let now = self.clock.now_ms();
+        let title = title.unwrap_or_default();
+        let mut result = None;
+        self.store.transaction(&mut |tx| {
+            let item = tx.item(item_id)?;
+            if item.title != title {
+                tx.update_item_title(item_id, &title, now)?;
+                tx.set_item_activity(item_id, now)?;
+            }
+            let stored = tx.item(item_id)?;
+            result = Some(Value {
+                item_id,
+                key: PRODUCT_TITLE.to_owned(),
+                value: canonical_json(&Json::String(stored.title)),
+                valid: true,
+                provenance: Provenance::Human,
+                ai_confidence: None,
+                ai_status: None,
+                ai_reason: None,
+                ai_sources: None,
+                updated_at: stored.updated_at,
+            });
+            Ok(())
+        })?;
+        result.ok_or_else(|| Error::InvalidData("title not stored".into()))
+    }
+
     /// Stores `raw` in canonical form (`valid = true`), or verbatim with `valid = false` when it
     /// does not fit (MC-9). A value equal to the stored one is not written. A human value is never
-    /// replaced by a non-human one.
+    /// replaced by a non-human one. `product.title` is the item's title: a human text sets
+    /// `items.title` and no value row is stored.
     pub fn set_value(
         &self,
         item_id: i64,
@@ -226,6 +279,22 @@ impl<'a> AttributesService<'a> {
         raw: Json,
         provenance: Provenance,
     ) -> Result<Value> {
+        if key == PRODUCT_TITLE {
+            if provenance != Provenance::Human {
+                return Err(Error::InvalidValue(format!(
+                    "{key} is the item's title; only a human edit sets it"
+                )));
+            }
+            let definition = builtin_definitions()
+                .into_iter()
+                .find(|d| d.key == PRODUCT_TITLE)
+                .ok_or_else(|| unknown(key))?;
+            let canonical = canonicalize(definition.core_type, &definition, raw)
+                .map_err(|e| Error::InvalidValue(format!("{key}: {}", e.0)))?;
+            let title: String = serde_json::from_str(&canonical.0)
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            return self.write_title(item_id, Some(title));
+        }
         let mut raw = Some(raw);
         self.write(item_id, key, &mut |definition, stored, now| {
             if provenance != Provenance::Human
@@ -317,6 +386,10 @@ impl<'a> AttributesService<'a> {
     /// Clears the field: the row is kept with `ai_status = cleared` and is no longer one of the
     /// item's values. Clearing an empty or already cleared field changes nothing.
     pub fn clear(&self, item_id: i64, key: &str) -> Result<()> {
+        if key == PRODUCT_TITLE {
+            self.write_title(item_id, None)?;
+            return Ok(());
+        }
         self.write(item_id, key, &mut |_, stored, now| {
             Ok(stored.filter(|s| s.is_live()).map(|s| Value {
                 ai_status: Some(AiStatus::Cleared),
@@ -458,7 +531,11 @@ impl<'a> AttributesService<'a> {
                 let fields: Vec<FormField> = ordered
                     .into_iter()
                     .map(|definition| {
-                        let value = values.get(&definition.key).cloned();
+                        let value = if definition.key == PRODUCT_TITLE {
+                            title_value(&item)
+                        } else {
+                            values.get(&definition.key).cloned()
+                        };
                         let selected = (definition.core_type == CoreType::MediaList).then(|| {
                             let excluded: Vec<PhotoId> = value
                                 .as_ref()

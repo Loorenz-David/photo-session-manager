@@ -54,6 +54,8 @@ pub trait StoreTx {
         barcode: Option<&str>,
         at: i64,
     ) -> Result<()>;
+    /// Sets the item's title (its one home, ch05) and its `updated_at`.
+    fn update_item_title(&mut self, id: i64, title: &str, at: i64) -> Result<()>;
     fn item_has_photos(&self, item_id: i64) -> Result<bool>;
     fn insert_session(&mut self, item_id: i64, at: i64) -> Result<i64>;
     fn insert_item_link(

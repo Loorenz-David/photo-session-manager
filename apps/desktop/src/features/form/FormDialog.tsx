@@ -96,8 +96,17 @@ function FormBody({ item, photos, onItemChanged, publishSlot, close }: FormBodyP
   }
 
   async function saveAndClose() {
+    const titleEdited = state.isEdited(PRODUCT_TITLE);
     await state.flush();
+    if (titleEdited) onItemChanged();
     close();
+  }
+
+  /** The Title is the item's title (ch05): once it is saved, the workspace reloads so its header follows. */
+  async function blurField(key: string) {
+    const titleEdited = key === PRODUCT_TITLE && state.isEdited(PRODUCT_TITLE);
+    await state.blur();
+    if (titleEdited) onItemChanged();
   }
 
   function finishCustomizing() {
@@ -152,8 +161,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, close }: FormBodyP
                   value={state.valueOf(field)}
                   edited={state.isEdited(field.definition.key)}
                   onChange={value => state.edit(field.definition.key, value)}
-                  onBlur={() => void state.blur()}
-                  placeholder={field.definition.key === PRODUCT_TITLE ? item.title : undefined}
+                  onBlur={() => void blurField(field.definition.key)}
                   conditionPhotos={conditionPhotos}
                   onLooksRight={f => void act(() => setAttributeValue(item.id, f.definition.key, rawValue(f)), 'Could not accept')}
                   onClearAi={f => void act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}

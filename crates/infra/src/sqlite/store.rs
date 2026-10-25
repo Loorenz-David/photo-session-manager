@@ -302,6 +302,15 @@ impl StoreTx for SqliteTx<'_> {
         self.tx.execute("UPDATE items SET sku=?1,folder_key=?2,folder_key_ci=?3,barcode=?4,updated_at=?5 WHERE id=?6", params![sku,folder_key,folder_key.to_ascii_lowercase(),barcode,at,id]).map_err(db)?;
         Ok(())
     }
+    fn update_item_title(&mut self, id: i64, title: &str, at: i64) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE items SET title=?1,updated_at=?2 WHERE id=?3",
+                params![title, at, id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
     fn item_has_photos(&self, item_id: i64) -> Result<bool> {
         self.tx.query_row("SELECT EXISTS(SELECT 1 FROM photos JOIN sessions ON sessions.id=photos.session_id WHERE sessions.item_id=?1)", [item_id], |r| r.get(0)).map_err(db)
     }

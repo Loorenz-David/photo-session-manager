@@ -148,3 +148,18 @@ input; `item_type = ""` shares one layout; barcode cannot be cleared; C6(a) fixt
 **Lessons for the plans.** A backlog note addressed to the next phase ("P10 → P11: bind title before the form
 ships") was not folded into P11's rows; notes routed to a named phase need a row or an explicit refusal at
 compile time.
+
+### fix 1 (2026-10-26, sonnet)
+**Built.** F1 only. `items.title` is the single home of the Product Title: `form_get` presents it as the
+`product.title` field's value (human, valid; an empty title is no value); `attribute_values_set` by a human on
+`product.title` sets `items.title` (canonical text, unchanged title not written, sessions' `last_activity_at` set,
+`change_seq` untouched) and stores no row; `attribute_ai_clear` empties `items.title`. New store method
+`update_item_title`. The form no longer passes the title as a placeholder; after a Title save (blur or Save & close)
+it calls `onItemChanged`, which makes the workspace reload, so the header follows (no `WorkspacePage.tsx` edit needed).
+**Judgment calls.** (1) A non-human `set_value` on `product.title` is refused with `invalid_value` (a title is only
+set by a human edit); `ai_suggest` and the Shopify import paths are untouched. (2) `prefill_defaults` skips a preset
+default for `product.title`, so no stored row can shadow the item's title. (3) A value that is not text is refused
+with `invalid_value` (the item row cannot hold an "invalid" copy). (4) Pre-existing `product.title` rows are ignored
+by `form_get`; they are not migrated (none can exist from the shipped UI before this phase's first release).
+**Deviations.** None; no P10 test pinned `product.title` as a stored row.
+

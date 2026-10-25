@@ -119,8 +119,8 @@ function photo(id: number, classification: Photo['classification'], position: nu
   };
 }
 
-function renderForm(photos: Photo[] = []) {
-  return render(<FormDialog open onOpenChange={() => undefined} item={ITEM} photos={photos} onItemChanged={() => undefined} />);
+function renderForm(photos: Photo[] = [], onItemChanged: () => void = () => undefined) {
+  return render(<FormDialog open onOpenChange={() => undefined} item={ITEM} photos={photos} onItemChanged={onItemChanged} />);
 }
 
 /** Lays out the Customize rows for dnd-kit, which measures with getBoundingClientRect (zero everywhere in jsdom). */
@@ -194,6 +194,20 @@ describe('P11 product details form', () => {
     act(() => void vi.advanceTimersByTime(1));
     expect(setAttributeValue).toHaveBeenCalledTimes(1);
     expect(setAttributeValue).toHaveBeenCalledWith(ITEM_ID, 'custom.maker', 'Hans Wegner');
+  });
+
+  it('Title is the item title: the form shows it as the field value, and saving it reloads the workspace', async () => {
+    vi.mocked(getForm).mockResolvedValue(form({ product: [field(def('product.title', 'text', [], 'product', 'Title'), stored('product.title', 'Oak chair'))] }));
+    const onItemChanged = vi.fn();
+    renderForm([], onItemChanged);
+    fireEvent.click(await screen.findByRole('tab', { name: /Product/ }));
+    const input = (await screen.findByLabelText('Title')) as HTMLInputElement;
+    expect(input.value).toBe('Oak chair');
+    expect(input).not.toHaveAttribute('placeholder');
+    fireEvent.change(input, { target: { value: 'Oak dining chair' } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(onItemChanged).toHaveBeenCalledTimes(1));
+    expect(setAttributeValue).toHaveBeenCalledWith(ITEM_ID, 'product.title', 'Oak dining chair');
   });
 
   it('C2(b) an invalid stored value is shown verbatim with an "invalid" marker and is not written until the user edits', async () => {
