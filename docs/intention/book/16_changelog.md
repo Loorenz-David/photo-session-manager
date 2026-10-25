@@ -76,3 +76,10 @@
     clash check at create and edit. Pointers in 05, 05A MC-2/MC-8, 08; map row. Owner decision,
     header stays RATIFIED. Plans P01, P07, P09, P12, P14 and the master plan amended by the
     orchestrator.
+17. **2026-10-26 — Grounding fold-back from the Shopify adapter projection** (orchestrator).
+    07A: SHOPIFY-VERIFY-6 extended with a search-lag check, SHOPIFY-VERIFY-7 added (atomic create
+    with SKU/barcode, identity write). MC-11 prepare notes that a non-atomic create or search lag
+    requires a recovery lookup, to be contracted if the probe shows it. MC-13 writability also
+    requires the definition's access to permit writes; SV-1 and SV-4 record access and media
+    delete. 09: the type map pointer now names 07A MC-13. No product sentence changed; header
+    stays RATIFIED.

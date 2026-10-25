@@ -7,6 +7,11 @@ depends_on: [P09_local_export, P12_shopify_adapter]
 ---
 # P13 — Publish runs: confirmation freeze, prepare, upload, gallery mirror, resume and retry
 
+> **Amended by the orchestrator 2026-10-26** from the P12 round-0 projection
+> (`handoffs/reviewer/handoff_P12_shopify_adapter_projection_r0.md`, L8, L10, L15, L22, L23): task 0 now wires the
+> commerce adapter into the app (adapter from settings, schema refresh persisted, search integration and the
+> `sku_in_shop` checks of 05B MC-22); task 1 reuses P12's `ConfirmedRun::from_persisted`.
+
 ## Goal
 Implement the publish service as the resumable step machine of MC-11 over `CommerceAdapter`: confirmation writes
 the frozen run (MC-10, M17), `prepare` creates or adopts the product and exports (P09 path), `upload` drives each
@@ -14,17 +19,27 @@ link through its states with crash-safe adoption by filename stem (M18), `update
 (MC-12, M19, M3) — attribute writes come in P14 — `done` records `published_at`/`published_seq` and a notification,
 retry re-runs the failed step only, and startup resumes active items. Exposes `publish_preview`, `publish_confirm`,
 `publish_retry`, `notifications_list` and the `publish_progress` event. **Not in this phase:** attribute writes,
-damage-report files, retouch replacement (P14); any UI (P15).
+damage-report files, retouch replacement (P14); any UI (P15) beyond what the New-session dialog needs to show shop
+hits (task 0).
 
 ## Read first
 master plan §6.5 (`publish_runs`, `publish_items`, `photo_links`, `notifications`), §6.6 (`PublishStep`, `UploadState`),
 §6.7, §7.5 (`FakeCommerce`) · book `01` (H1, H4), `14`, `07` (Publish, Failure and retry), `04` S-G, S-I, S-J, S-K ·
-contracts `07A` MC-10, MC-11 (all but the MC-21 pointer), MC-12; `05A` MC-6 (`published_seq`), MC-7 (status inputs),
-MC-3 (checks a), MC-4 (`last_activity_at` on done/failed) · evidence `shopify_admin.md` SV-2 (uniquifier), SV-4.
+contracts `07A` MC-10, MC-11 (all but the MC-21 pointer), MC-12, MC-13 (writability); `05B` MC-22 (`sku_in_shop`);
+`04` S-B (pick a shop product); `05A` MC-6 (`published_seq`), MC-7 (status inputs),
+MC-3 (checks a), MC-4 (`last_activity_at` on done/failed) · evidence `shopify_admin.md` SV-2 (uniquifier), SV-4,
+SV-6 (search) · P12 plan §Types (`ConfirmedRun`, `RemoteItem`, `DefinitionLink`).
 
 ## Files expected to change
 `crates/core/src/services/publish.rs` (new: `PublishService`, step handlers), `crates/core/src/mechanisms/reconcile.rs`
-(new), `crates/core/src/domain/publish.rs` (`ConfirmedRun` constructor used only here; `PublishPreview` DTO),
+(new), `crates/core/src/domain/publish.rs` (`PublishPreview` DTO; `ConfirmedRun` is P12's, unchanged),
+task 0 wiring: `crates/integrations/src/lib.rs` (`App.commerce`, `commerce_from_settings`, startup schema refresh),
+`crates/integrations/src/commerce/shopify/{adapter.rs, graphql.rs}` (`item_find` by SKU or title),
+`crates/core/src/ports/commerce.rs` (`item_find`), `crates/core/src/services/{items.rs (search + `sku_in_shop`),
+attributes.rs (`refresh_schema`)}`, `crates/core/src/ports/store.rs` + `crates/infra/src/sqlite/store.rs`
+(`replace_attribute_definition_links`, item adoption with `item_links`), `apps/desktop/src-tauri/src/commands/items.rs`,
+`apps/desktop/src/services/{items.ts, bindings.ts}`, `apps/desktop/src/features/sessions/NewSessionDialog.tsx` (pick a
+shop hit), `docs/intention/evidence/shopify_admin.md` (SV-6 addendum: the title query, read-only),
 `crates/core/src/services/{export.rs (reuse inside prepare), sessions.rs (status inputs from items)}`, Store trait + impl
 (runs, items, links, notifications, resume queries), `crates/infra/src/jobs.rs` (`PublishStep` handler),
 `apps/desktop/src-tauri/src/commands/publish.rs` (new), bindings, `crates/testkit/src/fake_commerce.rs` (new),
@@ -36,16 +51,30 @@ MC-3 (checks a), MC-4 (`last_activity_at` on done/failed) · evidence `shopify_a
 - `mechanisms::publish::progress(step, uploaded, total)` already exists (P03); `publish_summary(preview) -> String` (the exact confirmation text).
 
 ## Ordered tasks
+0. **Wiring (owned here, master plan §6.1).** `commerce_from_settings(&Settings) -> Option<Arc<dyn CommerceAdapter>>`
+   builds `ShopifyAdapter` over `ReqwestTransport` when `settings.integration.kind == "shopify"` with a token; none →
+   `None` and the app stays in Export mode (P09). `App.commerce` holds it; `TestApp` injects `FakeCommerce` instead.
+   At startup (background thread, never the IPC thread), when an adapter exists, `AttributesService::refresh_schema`
+   calls `attributes_schema()` and, in one transaction, `import_definitions("shopify", defs)` plus
+   `replace_attribute_definition_links("shopify", links)`; on error the stored definitions and links stay unchanged.
+   `ItemsService::search(q)` = local matches, then the adapter's `item_find(q)` hits (exact SKU via `item_search`, and
+   title per S-B; the Shopify title query is recorded read-only in a `shopify_admin.md` SV-6 addendum) not already
+   linked locally, returned as `Item{origin: linked, id: 0, …}` carrying `external_id`. Adapter unreachable → local
+   results only, no error. Picking a shop hit (`item_adopt(external_id)`) creates a local `linked` item with the shop's
+   SKU, title, barcode and an `item_links` row, then the session opens as for a local item. `sku_in_shop` (05B MC-22):
+   `item_create` and `update_identity` refuse a SKU that `item_search` finds on a product other than the item's own
+   link (`Err(sku_in_shop{sku})`), only when reachable.
 1. `publish_preview(session_ids) -> PublishPreview` (per session: main thumbnails in order, condition thumbnails after
    exclusions, details fill count, unreviewed count, `announced_removals` from `item_get` = current media not owned by
    this item, `create_item` flag) and `publish_summary` (text: "Publish N images …", the N2 sentence, the N1 count, the
    create note). `publish_confirm(session_ids, summary_text)`: one transaction → `publish_runs` + `publish_items` with
-   the frozen columns of MC-10; returns run id; enqueues `PublishStep` jobs. `ConfirmedRun` is constructed only from a
-   persisted run with `confirmed_at` (crate-private `ConfirmedRun::from_persisted`).
+   the frozen columns of MC-10; returns run id; enqueues `PublishStep` jobs. Every adapter call takes the `ConfirmedRun` obtained from P12's
+   public `ConfirmedRun::from_persisted(store, run_id)` (the single constructor; no new one).
 2. Step handler: commit `step` before work; `prepare` (SKU search 0/1/>1 rule, `item_links` written before any other
    call, `IntegrityCheck`, export via `ExportService` into the run's staging; `export_sha256` per link); `upload`
    (frozen main then condition; skip `deleted`/moved-away; `ready` links skipped; otherwise list media, adopt by stem,
-   else stage → upload → create → poll; each transition committed after the remote effect; progress events); `update`
+   else stage → upload → create → poll; the adoption matcher is `stem + (SV-2 uniquifier)? + ".jpg"`, never a plain
+   prefix, because MC-21 revision names `-r<n>` share the stem; each transition committed after the remote effect; progress events); `update`
    = `reconcile::plan` executed (fail before any deletion on `Foreign`; delete; reorder; poll; read back equals `D`),
    P14 appends attribute writes after this; `describe` skipped; `done` → `published_at`, `published_seq =
    confirmed_change_seq`, notification "Published · <time>", `last_activity_at`.
@@ -55,7 +84,7 @@ MC-3 (checks a), MC-4 (`last_activity_at` on done/failed) · evidence `shopify_a
    once, simulating a kill between remote effect and local record; records `(op, run_id, mono_time)`).
 5. Commands, bindings, tests.
 
-## Criteria (8 criteria, 28 rows; 0 `[rule]` rows)
+## Criteria (9 criteria, 34 rows; 0 `[rule]` rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `publish_confirm([S], text)` | main [a,b,c], condition [d,e] with exclusion e, unreviewed [u] | one run + one item in one transaction; `frozen_main = [a,b,c]`, `frozen_condition = [d]`; u nowhere | M17 |
@@ -86,6 +115,12 @@ MC-3 (checks a), MC-4 (`last_activity_at` on done/failed) · evidence `shopify_a
 | C7(c) | `failed` at `upload` | — | `last_activity_at` updated; status `failed` if never published else label `PublishFailed` | MC-4, M14 |
 | C8(a) | `publish_retry(item)` after a failure at `upload` | — | re-runs from `upload` only: fake receives no `item_search`/`item_create`; completes | M18 (retry from failed step) |
 | C8(b) | `kill_and_restart` with an item in `upload` and a job `running` | — | job `queued` again; item re-queued at `upload`; run completes with no duplicates | MC-11 (startup) |
+| C9(a) | `commerce_from_settings` | integration `{"kind":"shopify","shop_domain":"x.myshopify.com","api_version":"2026-10","token":"t"}`; and no integration block | `Some` (capabilities = the nine of ch09); `None` | H6, H7 |
+| C9(b) | startup schema refresh | `FakeCommerce` schema of 3 `(Definition, DefinitionLink)`; then a refresh returning 2; then a refresh that errors | `definitions(Some("shopify"))` = built-ins then the 3; link rows equal the 3 links; after the second refresh exactly the 2 (definitions and links); after the error still the 2 | M20, MC-13 |
+| C9(c) | `items_search(q)` | local item `L-1 "Oak table"`; fake shop products `K-1 "Oak chair"` and `L-1` (already linked to the local item) | `items_search("Oak")` = `[L-1 (local), K-1 (linked, id 0, external_id)]`; no second `L-1`; fake shop unreachable → `[L-1]` and `Ok` | MC-11, H6 (S-B) |
+| C9(d) | `item_adopt(external_id of K-1)` then `session_create` | — | one `linked` item `K-1` with the shop's title and barcode; `item_links` row with that external id; the session opens with that item | M18 (link before any write; S-B) |
+| C9(e) | `item_create` / `update_identity` | fake shop holds `K-7` on another product; and on the item's own linked product | `Err(sku_in_shop{sku: "K-7"})` for create and for an identity edit of a different item; the item's own product → `Ok`; shop unreachable → `Ok` | M29 (05B MC-22) |
+| C9(f) | `NewSessionDialog` (vitest, services mocked) | `items_search` returns a `linked` hit with `id 0` | the row reads "in the shop"; picking it calls `item_adopt(external_id)` then opens the returned session | S-B |
 
 ## Delegated choices
 Job granularity (one `PublishStep` job per item stepping through, or one job per step), staging folder for the run's
@@ -100,9 +135,12 @@ notification text time format, how `publish_progress` events are throttled.
 3. Kill the app mid-upload (Activity Monitor), relaunch: the row resumes and finishes; the shop has one media per photo.
 
 ## Notes
+- The "next free SKU" suggestion when the proposal is already in the shop (mentioned in P07's narrative) is **not**
+  in 05B MC-22: the proposal stays `1 + max local` and Create stays disabled until the SKU changes. Adding a
+  suggestion is an owner decision, not part of this phase.
 - `update` here ends after the gallery read-back; P14 appends the attribute, title, tags, description and
   damage-report writes to the same step (the step is committed once, before any of it).
-- Estimated size: ~10 files, ~2 400 lines (FakeCommerce ≈ 500).
+- Estimated size: ~18 files, ~3 000 lines (FakeCommerce ≈ 500, wiring ≈ 500).
 
 ## Review log
 (empty)

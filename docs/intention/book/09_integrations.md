@@ -24,7 +24,7 @@ A session can complete without any of them (H6).
 Admin GraphQL API, version pinned in settings (2026-10 unless the store's evidence says
 otherwise). Mapping:
 - Item ↔ Product (SKU and barcode on the default variant); `item.create` makes a DRAFT product.
-- `attributes.schema` ← product metafield definitions; type map in `evidence/design_handoff.md`.
+- `attributes.schema` ← product metafield definitions; type map in `07A` MC-13 (field kinds for the form in `evidence/design_handoff.md`).
   `metaobject_reference` and `product_reference` become `reference` (read-only in the form).
 - `media.publish`: `stagedUploadsCreate` → upload → `productUpdate` media → poll `READY` →
   `productReorderMedia` → poll job.

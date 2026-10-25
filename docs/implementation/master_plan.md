@@ -14,11 +14,11 @@ differ, the book wins and this file is amended.
 | Content | Artifact |
 |---|---|
 | Product semantics, hard constraints H1–H8, domain, scenarios | `docs/intention/book/01…13` |
-| Mechanism contracts MC-1…MC-21 (exact rules) | `book/05A_mechanism_contracts.md`, `book/07A_publish_contracts.md`, `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md` |
-| Measurement ledger M1–M28 (root of every criterion's trace) | `book/14_measurement_ledger.md` |
+| Mechanism contracts MC-1…MC-22 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md` |
+| Measurement ledger M1–M29 (root of every criterion's trace) | `book/14_measurement_ledger.md` |
 | Capture One facts and VERIFY probes | `docs/intention/evidence/capture_one_16.8.6.md`; dictionary `docs/reference/capture_one_16.8.6.sdef` |
 | Design rules (field kinds, timings, keyboard, components) | `docs/intention/evidence/design_handoff.md`; pictures/prototype `claude_design/` |
-| Shopify facts | `docs/intention/evidence/shopify_admin.md` — **does not exist yet**; written in phase P12 (SHOPIFY-VERIFY-1…6) |
+| Shopify facts | `docs/intention/evidence/shopify_admin.md` — **does not exist yet**; written in phase P12 (SHOPIFY-VERIFY-1…7) |
 | Process (roles, tests, verdicts, fix budget, narratives) | `docs/process/flow.md` |
 | Skeleton: naming registry, environment, standing rules, tracker | this file |
 | Phase goal / tasks / criteria / Review log | `docs/implementation/plans/<phase>.md` |
@@ -54,7 +54,7 @@ restated so no session has to infer them:
 - **Perimeter**: a phase touches only the files its plan lists (plus the test file(s) it names). A new file not
   listed is declared in the handoff's **Deviations**.
 - **Trace conventions** (charter trace chain, flow §9): every criterion row's trace cell names an `M` id
-  (M1–M28), an `MC` id (MC-1…MC-21) or a hard constraint (H1–H8). A row may instead cite a chapter rule
+  (M1–M29), an `MC` id (MC-1…MC-22) or a hard constraint (H1–H8). A row may instead cite a chapter rule
   (`ch07 §Open filter`, `evidence/design_handoff §Field kind map`) **only** for UI-rendering rows, operations
   rows the inventory listed as "not contracted", and packaging rows (ch11); such a cell is prefixed `[rule]` so
   the reviewer knows the row has no ledger measurement behind it. Every plan file derives its own counts of
@@ -122,7 +122,7 @@ Fixed up front so sessions cannot diverge. Anything **new** below does not exist
 | `Cargo.toml`, `rust-toolchain.toml` (`channel = "stable"`), `.cargo/config.toml` | workspace, resolver 2, edition 2024 | — |
 | `crates/core/` | `psm-core` (lib `psm_core`): domain, mechanisms, ports (traits), services, events, errors. **No Tauri, SQL, HTTP, osascript types.** | serde, uuid, sha2, unicode-normalization, chrono, tracing, thiserror |
 | `crates/infra/` | `psm-infra` (`psm_infra`): `paths`, `settings_file`, `sqlite` (Store impl + `migrations/`), `spool`, `nudge` (loopback listener), `watcher` (FSEvents), `osascript` (runner), `rawpreview` (MC-20), `jobs` (runner), `logging`, `backup` | psm-core, rusqlite, rusqlite_migration, notify, axum, tokio, tracing-appender |
-| `crates/integrations/` | `psm-integrations` (`psm_integrations`): `editing/capture_one/` (`adapter.rs`, `scripting.rs` trait, `jxa.rs` impl, `jxa/*.js`, `hooks/*.applescript.tmpl`), `camera/via_capture_one.rs`, `commerce/shopify/` (`adapter.rs`, `graphql.rs`, `transport.rs` trait, `type_map.rs`, `fixtures/*.json`) | psm-core, psm-infra (osascript runner), reqwest |
+| `crates/integrations/` | `psm-integrations` (`psm_integrations`): `editing/capture_one/` (`adapter.rs`, `scripting.rs` trait, `jxa.rs` impl, `jxa/*.js`, `hooks/*.applescript.tmpl`), `camera/via_capture_one.rs`, `commerce/shopify/` (`adapter.rs`, `graphql.rs`, `transport.rs` trait, `type_map.rs`, `fixtures/*.json`). **Wiring owner:** P12 builds the adapter only; P13 task 0 adds `App.commerce` from `settings.integration`, the startup schema refresh (definitions + `attribute_definition_links`) and the search integration (amended 2026-10-26, P12 projection L10) | psm-core, psm-infra (osascript runner), reqwest |
 | `crates/testkit/` | `psm-testkit`: `src/` fakes + `TestApp`; `tests/` **all behaviour tests** (§6.9) | psm-core, psm-infra, psm-integrations, tempfile |
 | `apps/desktop/src-tauri/` | `psm-desktop` (bin + lib `psm_desktop_lib`): `commands/`, `events.rs`, `state.rs`, `tauri.conf.json`, `Info.plist`, `capabilities/default.json`, `build.rs` | all of the above, tauri, tauri-specta |
 | `apps/desktop/` | Vite + React + TS: `package.json`, `src/services/bindings.ts` (**generated, never hand-edited**), `src/services/*.ts`, `src/components/ui/` (shadcn), `src/features/{shell,sessions,workspace,form,publish,settings,health}/`, `src/lib/`, `src/styles/tokens.css` (copied from `claude_design/tokens/tokens.css`) | — |
@@ -137,7 +137,10 @@ Rust: `tauri = "2"` (2.12.5, feature `specta`), `tauri-build = "2"` (2.7.4), `ta
 `macros`, `sync`, `time`, `process`), `axum = "0.8"`, `serde`/`serde_json = "1"`, `uuid = "1"` (`v4`),
 `sha2 = "0.11"`, `unicode-normalization = "0.1"`, `chrono = "0.4"` (plus `chrono-tz = "0.10"` as a
 dev-dependency for TZ-pinned tests), `tracing = "0.1"`, `tracing-subscriber = "0.3"`, `tracing-appender = "0.2"`,
-`thiserror = "2"`, `reqwest = "0.13"` (`json`, `multipart`, `rustls`, no default features; 0.13 has no `rustls-tls` feature), `tempfile = "3"` (dev).
+`thiserror = "2"`, `reqwest = "0.13"` (`json`, `multipart`, `rustls`, no default features; 0.13 has no `rustls-tls` feature;
+P12 may add `blocking` or use a private runtime inside `ReqwestTransport`, delegated, under the constraint that
+the transport never panics when created, used or dropped from a Tauri async command; the choice is recorded in
+P12's handoff), `tempfile = "3"` (dev).
 Note: `tauri-specta` **1.0.2 is Tauri-v1 only**; the 2.0.0-rc line is the Tauri-v2 one and must be pinned with `=`.
 **Corrected by the orchestrator 2026-10-25:** rc.27 of `tauri-specta` was never published; rc.26 requires
 `specta = "=2.0.0-rc.26"` and `specta-typescript = "^0.0.13"`. This trio with `tauri 2.12.5` (feature `specta`) was

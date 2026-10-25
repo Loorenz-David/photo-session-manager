@@ -58,6 +58,11 @@ default variant SKU byte for byte after NFC). 0 matches → `item.create`, then 
 written before any other call; 1 match → adopt it into `item_links`; more than 1 → fail with
 "several products carry SKU <sku>". Then re-verify RAW hashes (05A MC-3) and render the export
 (05A MC-8, 10A MC-16).
+*Grounding (fold-back 2026-10-26, ch16 entry 17):* this rule assumes `item.create` leaves a
+product that carries the SKU and that a search right after finds it. SHOPIFY-VERIFY-7 and the
+SHOPIFY-VERIFY-6 lag check test both. If create is not atomic or search lags, prepare needs a
+recovery lookup that does not depend on the search index. The orchestrator amends this contract
+before the adapter phase continues.
 
 **photo_links key (ratify R-I4).** `(photo_id, integration, item_id, role)`, where `item_id` is
 the item the link was created for. A link created for item A never satisfies item B: a photo
@@ -117,6 +122,10 @@ gallery.
 ---
 
 ## MC-13 — Attribute writes (update step, second half) and the Shopify type map
+
+*Writability (fold-back 2026-10-26, ch16 entry 17):* a definition is writable when its type is
+writable in the type map below **and** its definition `access` permits writes by this app
+(SHOPIFY-VERIFY-1 records access). Other apps' namespaces may be read-only for our token.
 
 **Write set (ratify R-I8).** Read the item's current values (`attributes.read`) at the start of
 the write. Write exactly the keys in `frozen_attributes` whose definition is writable, whose
@@ -183,4 +192,12 @@ photos in condition order; an unexcluded condition photo is never missing from i
 - **SHOPIFY-VERIFY-3** whether any content hash or checksum is exposed for media or files.
 - **SHOPIFY-VERIFY-4** `productReorderMedia` position base and job polling shape.
 - **SHOPIFY-VERIFY-5** `metafieldsSet` batch limit and partial-failure shape.
-- **SHOPIFY-VERIFY-6** search by exact SKU: query syntax and whether matching is case-sensitive.
+- **SHOPIFY-VERIFY-6** search by exact SKU: query syntax, whether matching is case-sensitive,
+  and whether a product created seconds earlier is found (immediately, +5 s, +30 s).
+- **SHOPIFY-VERIFY-7** the create mutation that sets status DRAFT plus the default variant's SKU
+  and barcode in one call, if one exists, and the mutation that writes SKU/barcode later
+  (05B MC-22) with its read-back.
+- SHOPIFY-VERIFY-1 also records each definition's `access`; SHOPIFY-VERIFY-4 also records the
+  media-delete request and its not-found reply (MC-12 step 3).
+(SHOPIFY-VERIFY-6 extension, -7 and the access/delete additions: fold-back 2026-10-26 from the
+adapter phase's projection, ch16 entry 17.)
