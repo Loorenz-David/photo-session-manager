@@ -131,14 +131,17 @@ Layer rule (ch11): core ← nothing above it; services (in core) depend on ports
 implement ports; `psm-desktop` commands are thin (parse → service → serialize).
 
 ### 6.2 Pinned dependency versions (verified on crates.io / npm, 2026-10-25)
-Rust: `tauri = "2"` (2.12.5, feature `specta`), `tauri-build = "2"` (2.7.4), `tauri-specta = "=2.0.0-rc.27"`
-(features `derive`, `typescript`), `specta = "=2.0.0-rc.27"`, `specta-typescript = "0.0.14"`, `rusqlite = "0.41"`
+Rust: `tauri = "2"` (2.12.5, feature `specta`), `tauri-build = "2"` (2.7.4), `tauri-specta = "=2.0.0-rc.26"`
+(features `derive`, `typescript`), `specta = "=2.0.0-rc.26"`, `specta-typescript = "0.0.13"`, `rusqlite = "0.41"`
 (feature `bundled`), `rusqlite_migration = "2.6"`, `notify = "8.2"`, `tokio = "1"` (1.54; `rt-multi-thread`,
 `macros`, `sync`, `time`, `process`), `axum = "0.8"`, `serde`/`serde_json = "1"`, `uuid = "1"` (`v4`),
 `sha2 = "0.11"`, `unicode-normalization = "0.1"`, `chrono = "0.4"` (plus `chrono-tz` latest 0.x as a
 dev-dependency for TZ-pinned tests), `tracing = "0.1"`, `tracing-subscriber = "0.3"`, `tracing-appender = "0.2"`,
 `thiserror = "2"`, `reqwest = "0.13"` (`json`, `multipart`, `rustls-tls`, no default TLS), `tempfile = "3"` (dev).
-Note: `tauri-specta` **1.0.2 is Tauri-v1 only**; the rc.27 line is the Tauri-v2 one and must be pinned with `=`.
+Note: `tauri-specta` **1.0.2 is Tauri-v1 only**; the 2.0.0-rc line is the Tauri-v2 one and must be pinned with `=`.
+**Corrected by the orchestrator 2026-10-25:** rc.27 of `tauri-specta` was never published; rc.26 requires
+`specta = "=2.0.0-rc.26"` and `specta-typescript = "^0.0.13"`. This trio with `tauri 2.12.5` (feature `specta`) was
+resolved with `cargo generate-lockfile` on this Mac.
 npm: `@tauri-apps/cli@2.12.4`, `@tauri-apps/api@2.12.4`, `react@19.3.1`, `vite@8.3.5`, `@vitejs/plugin-react@6.1.2`,
 `vitest@5.0.5` (+ `jsdom`, `@testing-library/react@16.3.3`, `@testing-library/jest-dom`), `tailwindcss@4.3.3`,
 shadcn/ui via `npx shadcn@latest init`, `@dnd-kit/core@6.3.1`, `@dnd-kit/sortable@10.0.0`, `motion@14.6.0`,
@@ -258,7 +261,7 @@ Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; d
 | App data dir | `ls ~/Library/Application Support/ \| grep -i session` | nothing yet (created at first run of P00) |
 | Export folder default | `ls ~/Pictures/Session Manager Export` | does not exist; created on first export |
 | Shopify token | STATUS.md | not available yet (precondition for P12) |
-| Codex sandbox | `cargo check -p psm-integrations` (P00, 2026-10-25) | **Blocked:** Cargo reported `failed to write cache` at `~/.cargo/registry/index/.../chrono`, `Operation not permitted (os error 1)`. The session wrapper forbids routing around a sandbox refusal, so this run stopped instead of retrying with a different Cargo home. Cargo also reported that the pinned `tauri-specta = "=2.0.0-rc.27"` had no matching candidate (latest shown rc.26). |
+| Codex sandbox | runner `run_codex` | `workspace-write` plus `--add-dir` for the repo `.git`, `~/.cargo` and `~/.npm` (orchestrator fix 2026-10-25 after P00 r1: Cargo's registry cache and npm's cache were refused; `npm install` of `apps/desktop/package.json` succeeds outside the sandbox). Use the default Cargo home and npm cache; no local `CARGO_HOME`. Codex's command review rejects `rm -rf`: remove generated files with `git rm`/`git clean -n` + targeted deletes or avoid creating them. |
 | Claude sessions | `.claude/settings.json` | Bash allowlist includes `cargo`, `rustup`, `npm`, `npx`, `node`, `osascript`, git read/write (no force-push) |
 
 ### 7.2 Commands (standard invocations; **not yet runnable here because Rust is absent** — P00 confirms each and

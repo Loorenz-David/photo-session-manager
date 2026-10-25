@@ -13,7 +13,7 @@ Updated: 2026-10-25 by the orchestrator.
 - Master plan and 17 phase plans: written 2026-10-25 (exit 10, OWNER_DECISIONS_PENDING, 2 cards).
   Order in `phases.txt` (P00…P16); Shopify phase P12 needs the token.
 - Phases: none approved yet.
-- Run in flight: **all**, `tools/pipeline/run_phase.sh all`, started 2026-10-25 14:58.
+- Run in flight: **all**, `tools/pipeline/run_phase.sh all`, relaunched 2026-10-25 15:05 after P00 r1 BLOCKED on environment (sandbox cache dirs, tauri-specta pin): fixed in runner, master plan §6.2/§7.1, P00 task 0; P00 r1 archived.
 
 ## Needs the owner
 Nothing. Card 1: owner said "install it"; rustup installed cargo/rustc 1.99.1 (2026-10-25).

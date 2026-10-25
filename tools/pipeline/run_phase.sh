@@ -87,11 +87,12 @@ run_codex() {  # run_codex MODEL EFFORT PROMPT LAST LOG
   local model="$1" effort="$2" prompt="$3" last="$4" logf="$5"
   log "codex $model/$effort ← $(basename "$prompt")"
   if [[ "$DRY_RUN" == 1 ]]; then
-    echo "DRY: cat $WRAP $prompt | codex exec -C $ROOT -s workspace-write --add-dir $ROOT/.git -m $model -c model_reasoning_effort=\"$effort\" -o $last --json -"
+    echo "DRY: cat $WRAP $prompt | codex exec -C $ROOT -s workspace-write --add-dir $ROOT/.git --add-dir $HOME/.cargo --add-dir $HOME/.npm -m $model -c model_reasoning_effort=\"$effort\" -o $last --json -"
     printf 'HANDOFF: %s | STATE: DONE | OWNER_CARDS: 0\n' "$DRY_HANDOFF" > "$last"; return 0
   fi
   set +e
   cat "$WRAP" "$prompt" | codex exec -C "$ROOT" -s workspace-write --add-dir "$ROOT/.git" \
+      --add-dir "$HOME/.cargo" --add-dir "$HOME/.npm" \
       -m "$model" -c model_reasoning_effort="\"$effort\"" -o "$last" --json - > "$logf" 2>&1
   local rc=$?; set -e
   log "codex exited $rc"

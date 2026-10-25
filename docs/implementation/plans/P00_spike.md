@@ -38,9 +38,12 @@ probe) · `claude_design/COMPONENTS.md` §Theme variables and `claude_design/tok
 - `psm_infra::spool::parse_spool_file(bytes) -> Result<HookPayload>` (shape per MC-15 payload table).
 
 ## Ordered tasks
-0. **Toolchain gate.** `cargo --version` must succeed (owner installs Rust: master plan §7.1). If `cargo fetch` or
-   `npm ci` is refused by the sandbox when writing under `~/.cargo` or `~/.npm`, use `CARGO_HOME=$ROOT/.cargo-home`
-   and `npm_config_cache=$ROOT/.npm-cache` and record the outcome in master plan §7.1 (Codex sandbox row).
+0. **Toolchain gate.** `cargo --version` must succeed (Rust 1.99.1 installed 2026-10-25). The sandbox may write
+   `~/.cargo` and `~/.npm` (master plan §7.1, Codex sandbox row); use the default Cargo home and npm cache.
+   **Attempt 1 left a partial scaffold** (checkpoint `24b27a7`: workspace, crates, Tauri/frontend scaffolds, hook
+   templates, provisional `bindings.ts`). Continue from it; fix the `tauri-specta`/`specta`/`specta-typescript` pins
+   per §6.2; replace anything that contradicts this plan. The `.icns` failed with `iconutil` ("Invalid Iconset"):
+   generate icons with `npm run tauri -- icon <1024px png>` instead.
 1. Workspace: root `Cargo.toml` (members per master plan §6.1), `rust-toolchain.toml`, crate skeletons with the
    module files listed above; pinned versions from §6.2.
 2. `psm_infra::paths::AppPaths` (`from_env_or_default()`: `PSM_DATA_DIR` else Tauri app-data; `for_dir(path)`),
@@ -128,3 +131,4 @@ Health page, how `.gitignore` entries are grouped, eslint (optional; not part of
 
 ## Review log
 - 2026-10-25 implement r1, codex: Began the workspace, storage, spool/nudge, hook templates and Health shell. No criteria were verified. `cargo check -p psm-integrations` was blocked by a sandbox write refusal to `~/.cargo/registry`; the wrapper requires `STATE: BLOCKED` without a workaround. Cargo also could not resolve the plan-pinned `tauri-specta` rc.27. `npm install` failed with `Cannot read properties of null (reading 'edgesOut')`. Assumption: preserve the partial scaffold in a checkpoint for the next run. Deviation: the `shadcn init`, generated bindings, icon compilation, and package lock are incomplete because the run stopped at the blocked command.
+- 2026-10-25 orchestrator: r1 BLOCKED on environment, resolved upstream. Runner now grants the Codex sandbox `~/.cargo` and `~/.npm` (npm's `edgesOut` error was the same cache refusal: the same `package.json` installs cleanly outside the sandbox). Pins corrected in master plan §6.2 (`tauri-specta`/`specta` `=2.0.0-rc.26`, `specta-typescript 0.0.13`; resolved against `tauri 2.12.5`). Task 0 rewritten: continue from checkpoint `24b27a7`, icons via `tauri icon`. Archived and relaunched.
