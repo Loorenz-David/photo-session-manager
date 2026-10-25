@@ -10,16 +10,22 @@ Updated: 2026-10-25 by the orchestrator.
   then `capture` (evidence VERIFY-12, 2026-10-25); the inventory's capture-dependent probes are
   still to be run by the first phase that needs them. Colour-tag visual check
   (evidence/capture_one_16.8.6.md VERIFY near line 100) still owed.
-- Master plan and phase plans: not written.
-- Phases: none.
-- Run in flight: **plan**, `tools/pipeline/run_phase.sh plan`, started 2026-10-25 13:19.
+- Master plan and 17 phase plans: written 2026-10-25 (exit 10, OWNER_DECISIONS_PENDING, 2 cards).
+  Order in `phases.txt` (P00…P16); Shopify phase P12 needs the token.
+- Phases: none started.
+- Run in flight: **none**.
 
 ## Needs the owner
-Nothing. I1 answered Yes 2026-10-25 → 07B MC-21, R30, M28. Still asked of the owner (not a
-decision): 10-second colour-tag visual check. Camera focus setting no longer needed.
+Cards verbatim in `handoffs/reviewer/handoff_master_plan_r1.md`:
+- **Card 1 — Rust not installed** (verified: no cargo/rustc/rustup). Gate holds: P00 not launched
+  until `cargo --version` works. Owner to install, or say so and the orchestrator runs rustup.
+- **Card 2 — SKU for a new local item** (typed vs generated with prefix). Recommendation: generate
+  with editable proposal. On silence P07 builds the typed box only.
+- Optional: 10-second colour-tag visual check.
 
 ## Next command
-When the plan returns 0: relay the phase map, then `tools/pipeline/run_phase.sh all` (background).
+Once `cargo --version` works: `tools/pipeline/run_phase.sh all` (background). Fold card 2's answer
+into P07 (plan row) if it arrives before P07.
 
 ## Facts the next orchestrator needs
 - Shopify dev-app token is not available yet; the owner provides it before the publishing phase.
