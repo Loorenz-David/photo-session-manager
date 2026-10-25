@@ -67,7 +67,7 @@ restated so no session has to infer them:
 ## 4. Progress tracker (one row per phase; agents update only their own row)
 | Phase | State | Date | Actor | Note |
 |---|---|---|---|---|
-| P00_spike | NOT_STARTED | 2026-10-25 | planner | packaging spike and workspace skeleton |
+| P00_spike | IMPLEMENTED | 2026-10-25 | codex | 16 boundary tests pass; signed bundle built and live hook delivery observed |
 | P01_storage_identity | NOT_STARTED | 2026-10-25 | planner | schema, canon, hash, folder key, items/sessions |
 | P02_review_order | NOT_STARTED | 2026-10-25 | planner | classify/reorder/delete/undo/move/copy, change_seq |
 | P03_session_state_list | NOT_STARTED | 2026-10-25 | planner | status, row label, grouping, list query |
@@ -268,7 +268,7 @@ Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; d
 | Export folder default | `ls ~/Pictures/Session Manager Export` | does not exist; created on first export |
 | Shopify token | STATUS.md | not available yet (precondition for P12) |
 | Codex sandbox | runner `run_codex` | `workspace-write` plus `--add-dir` for the repo `.git`, `~/.cargo` and `~/.npm` (orchestrator fix 2026-10-25 after P00 r1: Cargo's registry cache and npm's cache were refused; `npm install` of `apps/desktop/package.json` succeeds outside the sandbox). Use the default Cargo home and npm cache; no local `CARGO_HOME`. Codex's command review rejects `rm -rf`: remove generated files with `git rm`/`git clean -n` + targeted deletes or avoid creating them. |
-| P00 bundle launch | `open -n --env PSM_DATA_DIR=/tmp/psm-spike-bundle -a '/Users/davidloorenz/Desktop/Developer/Photo-Session-Manager/apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app'` | Build and ad-hoc signing succeeded; `codesign --verify --deep --strict` succeeded. LaunchServices returned `NSOSStatusErrorDomain Code=-10827 kLSNoExecutableErr` although `Contents/MacOS/psm-desktop` exists and `CFBundleExecutable` names it. Bundle launch and Automation attribution remain unverified in this sandboxed session. |
+| P00 bundle launch | `open -n --env PSM_DATA_DIR=/tmp/psm-spike-bundle -a '/Users/davidloorenz/Desktop/Developer/Photo-Session-Manager/apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app'` | Build and ad-hoc signing succeeded; `codesign --verify --deep --strict` succeeded. LaunchServices returned `NSOSStatusErrorDomain Code=-10827 kLSNoExecutableErr` inside the Codex sandbox. The orchestrator launched the bundle outside the sandbox and the owner saw the Health page (evidence `packaging_spike.md`). Automation attribution with the corrected real-event probe awaits an interactive check. |
 | Claude sessions | `.claude/settings.json` | Bash allowlist includes `cargo`, `rustup`, `npm`, `npx`, `node`, `osascript`, git read/write (no force-push) |
 
 ### 7.2 Commands (standard invocations; Rust is installed and the corrected SQLite pair resolves;
@@ -318,3 +318,4 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
 ## 9. Amendment log
 - 2026-10-25 v1 — created by the planner (round 1).
 - 2026-10-25 P00 r1 continuation — corrected the stale environment note after resolving SQLite, running the workspace suite and building an ad-hoc bundle; recorded the LaunchServices refusal at the bundle-launch boundary.
+- 2026-10-25 P00 r1 close — recorded the orchestrator's successful launch outside the Codex sandbox and the remaining interactive Automation check.

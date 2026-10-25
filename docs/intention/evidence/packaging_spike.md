@@ -33,3 +33,19 @@ The `-10827` refusal above is a property of the Codex sandbox, not of the bundle
 | Clearing a hook property | Finding | Setting the property to `null` (JXA) or `missing value` (AppleScript) raises -1700. Setting it to `""` clears it; read-back is `null` / `missing value`. Both hooks were cleared this way after the checks. |
 | (e) FSEvents on the real capture folder | Not done | The P00 app does not watch the capture folder yet; covered when capture arrival is built. |
 | (f) Work Mac | Not done: no second Mac in session. | |
+
+## P00 implement continuation (2026-10-25)
+
+The Health probe now writes its JXA script once during `App::open` and calls
+`Application("Capture One").currentDocument().name()`. This query requires a real Apple event;
+the former application-name query did not. The Health button reads “Testing…” while the query is
+running, then the Capture One row shows the document name or error and a local “checked hh:mm:ss”
+time. The probe is invoked at startup and by the button.
+
+`cargo test -p psm-testkit --test p00_spike` passed all 16 boundary rows. The updated frontend
+typechecked, and `npm run tauri -- build --bundles app` produced an ad-hoc-signed bundle;
+`codesign --verify --deep --strict` passed. The earlier live checks above establish bundle
+launch and hook delivery outside this sandbox. The updated real-event probe's Automation prompt,
+permission memory, and document-name display await an interactive bundle run by the owner or
+orchestrator. The work Mac remains unavailable. The real capture-folder watcher probe was not
+rerun in this continuation; its temporary-folder boundary test passed.

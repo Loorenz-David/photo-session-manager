@@ -28,12 +28,15 @@ pub struct App {
 impl App {
     pub fn probe_capture_one(&self) -> Result<String> {
         let script = self.paths.hooks().join("probe_capture_one.js");
-        std::fs::write(&script, "Application(\"Capture One\").name()")?;
         OsaRunner::new(&self.paths.root).run(&script, &[], Duration::from_secs(30))
     }
 
     pub fn open(paths: AppPaths) -> Result<Self> {
         paths.create()?;
+        std::fs::write(
+            paths.hooks().join("probe_capture_one.js"),
+            "Application(\"Capture One\").currentDocument().name()",
+        )?;
         let settings = Settings::open(&paths)?;
         let store = Arc::new(
             SqliteStore::open(&paths).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
