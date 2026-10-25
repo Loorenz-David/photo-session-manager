@@ -15,6 +15,7 @@ export const commands = {
 	sessionsList: (filter: SessionFilter, query: string | null) => typedError<SessionListResponse_Serialize, CommandError>(__TAURI_INVOKE("sessions_list", { filter, query })),
 	sessionActivate: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("session_activate", { sessionId })),
 	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
+	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
 	cameraStatus: () => typedError<CameraStatusResponse, CommandError>(__TAURI_INVOKE("camera_status")),
 	cameraRetry: () => typedError<CameraStatusResponse, CommandError>(__TAURI_INVOKE("camera_retry")),
 	cameraCapture: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_capture")),

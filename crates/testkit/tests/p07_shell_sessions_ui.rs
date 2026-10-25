@@ -53,3 +53,19 @@ fn c5d_session_create_returns_the_existing_session_of_an_item() {
         Some(first.session.id)
     );
 }
+
+#[test]
+fn f1_active_reports_the_stored_active_session() {
+    let app = TestApp::new().unwrap();
+    let (_, session) = app
+        .items()
+        .create_local("OAK-1", "Oak sideboard", "Sideboard", None)
+        .unwrap();
+    assert_eq!(app.sessions().active().unwrap(), None);
+
+    app.store()
+        .set_active_session_id(Some(session.session.id))
+        .unwrap();
+
+    assert_eq!(app.sessions().active().unwrap(), Some(session.session.id));
+}

@@ -35,6 +35,11 @@ export async function createSession(itemId: number): Promise<Session> {
   return unwrap(await commands.sessionCreate(itemId));
 }
 
+/** The session captures are routed to right now (restored from the last run), or null when they go to Unassigned. */
+export async function activeSession(): Promise<Session | null> {
+  return unwrap(await commands.sessionActive());
+}
+
 export async function activateSession(sessionId: number): Promise<void> {
   unwrap(await commands.sessionActivate(sessionId));
 }

@@ -63,6 +63,11 @@ impl<'a> SessionsService<'a> {
         Ok(())
     }
 
+    /// The session captures are currently routed to, if any (what `activate` last stored).
+    pub fn active(&self) -> Result<Option<i64>> {
+        self.store.active_session_id()
+    }
+
     pub fn create(&self, item_id: i64) -> Result<SessionDto> {
         if let Some(id) = self.store.session_for_item(item_id)? {
             return self.store.session(id);

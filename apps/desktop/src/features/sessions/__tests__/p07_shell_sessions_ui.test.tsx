@@ -2,11 +2,12 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ItemDto_Serialize, RowLabelResponse, SessionRowResponse_Serialize } from '@/services/bindings';
-import type { SessionList } from '@/services/sessions';
+import type { Session, SessionList } from '@/services/sessions';
 
 vi.mock('@/services/sessions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/sessions')>()),
   listSessions: vi.fn(),
+  activeSession: vi.fn(),
   createSession: vi.fn(),
   activateSession: vi.fn(),
   deactivateSession: vi.fn(),
@@ -26,7 +27,7 @@ import { StatusPill } from '@/features/sessions/StatusPill';
 import { UnassignedCard } from '@/features/sessions/UnassignedCard';
 import { cameraRetry, cameraStatus } from '@/services/camera';
 import { createItem, nextSku, searchItems } from '@/services/items';
-import { activateSession, createSession, deactivateSession, listSessions } from '@/services/sessions';
+import { activateSession, activeSession, createSession, deactivateSession, listSessions } from '@/services/sessions';
 
 // cmdk and Radix need these browser APIs, which jsdom lacks.
 globalThis.ResizeObserver ??= class {
@@ -64,6 +65,7 @@ function item(id: number, sku: string, title: string, origin = 'local'): ItemDto
 beforeEach(() => {
   vi.mocked(listSessions).mockResolvedValue(list([]));
   vi.mocked(activateSession).mockResolvedValue();
+  vi.mocked(activeSession).mockResolvedValue(null);
   vi.mocked(deactivateSession).mockResolvedValue();
   vi.mocked(cameraStatus).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10' });
   vi.mocked(nextSku).mockResolvedValue(null);
@@ -259,6 +261,25 @@ describe('C5 new session', () => {
     expect(createSession).toHaveBeenCalledWith(5);
     expect(createItem).not.toHaveBeenCalled();
     expect(screen.queryByText(/Create “/)).toBeNull();
+  });
+});
+
+describe('F1 launch state', () => {
+  it('F1 a session left active by the last run is opened at launch, so the screen matches where captures go', async () => {
+    vi.mocked(activeSession).mockResolvedValue({ id: 9 } as Session);
+    render(<App />);
+
+    await waitFor(() => expect(window.location.hash).toBe('#/session/9'));
+    expect(await screen.findByText('Ready for the first photo')).toBeInTheDocument();
+    expect(deactivateSession).not.toHaveBeenCalled();
+  });
+
+  it('F1 with no active session the app opens on the Sessions list', async () => {
+    render(<App />);
+    await act(async () => undefined);
+
+    expect(window.location.hash).toBe('#/');
+    expect(await screen.findByText('No sessions yet')).toBeInTheDocument();
   });
 });
 

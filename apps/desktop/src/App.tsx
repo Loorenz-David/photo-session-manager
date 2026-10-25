@@ -7,7 +7,7 @@ import { HealthPage } from './features/health/HealthPage';
 import { NewSessionDialog } from './features/sessions/NewSessionDialog';
 import { SessionsPage } from './features/sessions/SessionsPage';
 import { useKeyboard } from './lib/keyboard';
-import { activateSession, deactivateSession } from './services/sessions';
+import { activateSession, activeSession, deactivateSession } from './services/sessions';
 
 /** Routes: `#/` sessions, `#/session/:id` session view, `#/health` health report (hash routing works for the bundled app's file URLs). */
 function routeSessionId(): number | undefined {
@@ -60,8 +60,30 @@ function useCaptureTarget(sessionId?: number) {
   }, [sessionId]);
 }
 
+/**
+ * At launch the backend re-applies the capture folder of the session that was active last time (P04 startup), so the
+ * window must show that session; otherwise shots would land in a session the screen does not show (ch04 S-E).
+ * Reading the stored id (not writing it) leaves nothing to race with the startup re-apply. A route the user has
+ * already moved to (a session, the health page) is left alone.
+ */
+function useResumeActiveSession(navigate: (sessionId?: number) => void) {
+  useEffect(() => {
+    let cancelled = false;
+    activeSession()
+      .then(session => {
+        const atDefaultRoute = window.location.hash === '' || window.location.hash === '#/';
+        if (!cancelled && session && atDefaultRoute) navigate(session.id);
+      })
+      .catch(error => toast.error(`Could not tell which session captures go to: ${(error as Error).message}`));
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+}
+
 export default function App() {
   const [sessionId, navigate, health] = useRoute();
+  useResumeActiveSession(navigate);
   const [theme, setTheme] = useTheme();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   useCaptureTarget(sessionId);

@@ -241,6 +241,20 @@ pub fn sessions_list(
 
 #[tauri::command]
 #[specta::specta]
+pub fn session_active(state: State<'_, AppState>) -> Result<Option<SessionResponse>, CommandError> {
+    let app = state
+        .0
+        .lock()
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+    let sessions = SessionsService::new(app.store.as_ref(), &SystemClock);
+    match sessions.active()? {
+        Some(id) => Ok(Some(sessions.get(id)?.into())),
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn session_activate(
     state: State<'_, AppState>,
     session_id: CommandId,

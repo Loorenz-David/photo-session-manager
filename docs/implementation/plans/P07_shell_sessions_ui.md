@@ -126,3 +126,14 @@ boundaries (calendar-day based like MC-4), exact copy of the camera error text, 
   `src-tauri/src/lib.rs`, `crates/core/src/services/sessions.rs`, `crates/core/src/services/editing_startup.rs`, the
   two P07 test files. Assumption 8 (no proposal advance on a shop hit) differs from MC-22 but is unreachable until
   P12: backlog. 6 notes in backlog. Handoff `handoffs/reviewer/handoff_P07_shell_sessions_ui_review_r1.md`.
+- 2026-10-25 fix 1 (sonnet): **F1 resolved, first of the two offered corrections** (open the active session's view).
+  `SessionsService::active()` reads the stored `active_session_id`; command `session_active` returns that session or
+  null; `App` calls it once at launch and, if a session is active and the route is still the default, navigates to it
+  (`useResumeActiveSession`). The UI only reads the stored id, never writes it, so it cannot race `EditingStartup`'s
+  background re-apply; `EditingStartup` is untouched (P04 Task 5 stays as designed). Judgment: this means a relaunch
+  resumes the session left open rather than showing the Sessions list (ch04 S-A) only when a session was active when
+  the app quit; with none active the list shows. Going back to Sessions still deactivates (S-E). The command returns
+  the session (`Option<SessionResponse>`) because `CommandId` is input-only. Tests: `F1` x2 in the frontend file
+  (active session opens its view without a deactivate; none active stays on the list) and
+  `f1_active_reports_the_stored_active_session` in the Rust file. Stamp: `cargo test --workspace` 182 passed, clippy
+  and fmt clean, typecheck clean, `npm test` 19/19. Handoff `handoffs/implementer/handoff_P07_shell_sessions_ui_fix_r2.md`.
