@@ -1,0 +1,1 @@
+function run(argv) { const a=Application("Capture One"); if(!a.running()) throw Error("Capture One is not running"); const names={capture_done:"captureDoneScript",processing_done:"processingDoneScript",variant_adjusted:"primaryVariantAdjustedScript"}; const n=names[argv[0]]; if(!n) throw Error("unknown hook"); a[n]=argv[1]; return JSON.stringify(null); }

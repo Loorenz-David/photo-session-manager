@@ -52,6 +52,16 @@ impl From<Error> for CommandError {
             Error::TargetHasRaw => "target_has_raw",
             Error::TargetPublished => "target_published",
             Error::NothingToUndo => "nothing_to_undo",
+            Error::CaptureFolderNotSet => "capture_folder_not_set",
+            Error::HooksNotInstalled => "hooks_not_installed",
+            Error::RecipeMissing { name } => {
+                data.insert("name".into(), name.clone());
+                "recipe_missing"
+            }
+            Error::TagVerification => "tag_verification",
+            Error::VariantNotFound => "variant_not_found",
+            Error::DocumentNotOpen => "document_not_open",
+            Error::DocumentNotSession => "document_not_session",
         };
         Self {
             code: code.into(),

@@ -1,5 +1,4 @@
 use crate::state::AppState;
-use psm_core::services::health::HealthService;
 use serde::Serialize;
 use specta::Type;
 use tauri::State;
@@ -27,20 +26,11 @@ pub struct AppPathsDto {
 #[specta::specta]
 pub fn health_get(state: State<'_, AppState>) -> Result<HealthReportDto, String> {
     let app = state.0.lock().map_err(|e| e.to_string())?;
-    let mut report = HealthService::report(
+    let report = app.health.report(
         &app.paths.root.to_string_lossy(),
         app.hooks_compiled,
         app.nudge_port() != 0,
     );
-    let capture_one = app.probe_capture_one();
-    report.items.push(psm_core::domain::HealthItem {
-        code: "capture_one".into(),
-        ok: capture_one.is_ok(),
-        detail: match capture_one {
-            Ok(name) => name,
-            Err(error) => error.to_string(),
-        },
-    });
     Ok(HealthReportDto {
         items: report
             .items

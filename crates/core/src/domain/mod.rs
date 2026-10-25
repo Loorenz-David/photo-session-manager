@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const MECHANISMS_VERSION: &str = "1";
+pub mod editing;
 pub mod item;
 pub mod photo;
 pub mod session;

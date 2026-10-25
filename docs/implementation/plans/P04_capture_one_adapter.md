@@ -210,3 +210,11 @@ option consistent with MC-19). Each choice is recorded under **Assumptions**.
   partial work is left **uncommitted in the working tree** (≈38 paths: scripting layer, JXA scripts, fake, jobs,
   camera service, tests file started). The next implementer continues from it: review it against this plan, keep
   what is right, finish, and checkpoint as usual. Archived and relaunched at 20:00.
+- 2026-10-25 implement r1 (codex): completed the inherited partial adapter, durable mirror-tag jobs, startup,
+  capture-folder switching, camera service and commands, and 21 boundary tests. JXA resolves the selected variant
+  through its RAW and folder collection when the current collection differs. Assumptions: one serial JXA mutex;
+  TestApp uses an explicit fake-document constructor while its default remains the P00 state; startup runs on a
+  worker thread; health keeps provider results in a mutex and lists positive items. Deviations: updated the shared
+  error-to-command mapping and Arc clock forwarding needed by existing tests, both outside the expected changed
+  paths. No live Capture One smoke was run; VERIFY-11 remains live-unprobed. Full suite, Clippy, formatting,
+  TypeScript typecheck and frontend test command passed.

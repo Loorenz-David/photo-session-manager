@@ -1,18 +1,66 @@
 use crate::{
-    Result,
+    Error, Result,
     domain::session::SessionDto,
     mechanisms::time::now_ms,
-    ports::{clock::Clock, store::Store},
+    ports::{clock::Clock, editing::EditingProvider, store::Store},
+    services::health::HealthService,
 };
 
 pub struct SessionsService<'a> {
     store: &'a dyn Store,
     clock: &'a dyn Clock,
+    editing: Option<&'a dyn EditingProvider>,
+    health: Option<&'a HealthService>,
 }
 
 impl<'a> SessionsService<'a> {
     pub fn new(store: &'a dyn Store, clock: &'a dyn Clock) -> Self {
-        Self { store, clock }
+        Self {
+            store,
+            clock,
+            editing: None,
+            health: None,
+        }
+    }
+
+    pub fn with_editing(
+        mut self,
+        editing: &'a dyn EditingProvider,
+        health: &'a HealthService,
+    ) -> Self {
+        self.editing = Some(editing);
+        self.health = Some(health);
+        self
+    }
+
+    pub fn activate(&self, id: i64) -> Result<()> {
+        let editing = self.editing.ok_or(Error::DocumentNotOpen)?;
+        let health = self.health.ok_or(Error::DocumentNotOpen)?;
+        let session = self.store.session(id)?;
+        let item = self
+            .store
+            .item(session.session.item_id.ok_or(Error::DocumentNotSession)?)?;
+        let root = editing.inspect_document()?.capture_root;
+        if let Err(e) = editing.set_capture_folder(&format!("{}/{}", root, item.folder_key)) {
+            health.set("capture_folder_not_set", e.to_string());
+            return Err(Error::CaptureFolderNotSet);
+        }
+        self.store.set_active_session_id(Some(id))?;
+        health.clear("capture_folder_not_set");
+        Ok(())
+    }
+
+    pub fn deactivate(&self) -> Result<()> {
+        let editing = self.editing.ok_or(Error::DocumentNotOpen)?;
+        let health = self.health.ok_or(Error::DocumentNotOpen)?;
+        let root = editing.inspect_document()?.capture_root;
+        if let Err(e) = editing.set_capture_folder(&format!("{root}/_Unassigned")) {
+            health.set("capture_folder_not_set", e.to_string());
+            return Err(Error::CaptureFolderNotSet);
+        }
+        self.store.set_active_session_id(None)?;
+        health.clear("capture_folder_not_set");
+        Ok(())
     }
 
     pub fn create(&self, item_id: i64) -> Result<SessionDto> {

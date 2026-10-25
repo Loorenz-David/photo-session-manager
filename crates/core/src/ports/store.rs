@@ -1,11 +1,13 @@
 use crate::Result;
 use crate::domain::{
+    editing::Job,
     item::{Item, NewItem},
     photo::{Classification, Integrity, NewPhoto, Photo, UndoSlot},
     session::{Session, SessionDto, SessionListRecord},
 };
 
 pub trait StoreTx {
+    fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()>;
     fn session(&self, id: i64) -> Result<Session>;
     fn photo(&self, id: i64) -> Result<Photo>;
     fn photos(&self, session_id: i64) -> Result<Vec<Photo>>;
@@ -48,6 +50,14 @@ pub trait StoreTx {
 }
 
 pub trait Store: Send + Sync {
+    fn active_session_id(&self) -> Result<Option<i64>>;
+    fn set_active_session_id(&self, id: Option<i64>) -> Result<()>;
+    fn job_due(&self, now_ms: i64) -> Result<Option<Job>>;
+    fn job_done(&self, id: i64, now_ms: i64) -> Result<()>;
+    fn job_retry(&self, id: i64, code: &str, next_attempt_at: i64, now_ms: i64) -> Result<()>;
+    fn requeue_running_jobs(&self) -> Result<()>;
+    fn mark_own_write(&self, raw_path: &str, now_ms: i64) -> Result<()>;
+    fn job(&self, id: i64) -> Result<Job>;
     fn transaction(&self, op: &mut dyn FnMut(&mut dyn StoreTx) -> Result<()>) -> Result<()>;
     fn item(&self, id: i64) -> Result<Item>;
     fn session(&self, id: i64) -> Result<SessionDto>;

@@ -1,0 +1,1 @@
+function run(argv) { const a=Application("Capture One"); if(!a.running()) throw Error("Capture One is not running"); const c=a.currentDocument().camera(); if(!c) throw Error("camera disconnected"); c.autofocusing=true; delay(2); if(c.focusIndicator()!=="focused") throw Error("camera did not focus"); a.capture(); return JSON.stringify(null); }

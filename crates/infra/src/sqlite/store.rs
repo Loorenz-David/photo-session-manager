@@ -2,6 +2,7 @@ use crate::paths::AppPaths;
 use psm_core::{
     Error, Result,
     domain::{
+        editing::Job,
         item::{Item, ItemOrigin, NewItem},
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
         session::{PublishStep, Session, SessionDto, SessionListRecord},
@@ -152,6 +153,28 @@ fn photo(conn: &Connection, id: i64) -> Result<Photo> {
         .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("photo {id}")))
 }
 
+fn job(conn: &Connection, id: i64) -> Result<Job> {
+    conn.query_row(
+        "SELECT id,kind,target,payload,status,attempts,next_attempt_at,error FROM jobs WHERE id=?1",
+        [id],
+        |r| {
+            Ok(Job {
+                id: r.get(0)?,
+                kind: r.get(1)?,
+                target: r.get(2)?,
+                payload: r.get(3)?,
+                status: r.get(4)?,
+                attempts: r.get(5)?,
+                next_attempt_at: r.get(6)?,
+                error: r.get(7)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(db)?
+    .ok_or_else(|| Error::NotFound(format!("job {id}")))
+}
+
 fn parse_step(step: &str) -> Result<PublishStep> {
     match step {
         "prepare" => Ok(PublishStep::Prepare),
@@ -169,6 +192,16 @@ struct SqliteTx<'a> {
 }
 
 impl StoreTx for SqliteTx<'_> {
+    fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()> {
+        let payload = serde_json::json!({"photo_id": photo_id}).to_string();
+        let queued: Option<i64> = self.tx.query_row("SELECT id FROM jobs WHERE kind='mirror_tag' AND target=?1 AND status='queued' ORDER BY id DESC LIMIT 1", [raw_path], |r| r.get(0)).optional().map_err(db)?;
+        if let Some(id) = queued {
+            self.tx.execute("UPDATE jobs SET payload=?1,next_attempt_at=?2,error=NULL,updated_at=?2 WHERE id=?3", params![payload,now_ms,id]).map_err(db)?;
+        } else {
+            self.tx.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('mirror_tag',?1,?2,'queued',0,?3,?3,?3)",params![raw_path,payload,now_ms]).map_err(db)?;
+        }
+        Ok(())
+    }
     fn session(&self, id: i64) -> Result<Session> {
         Ok(session(&self.tx, id)?.session)
     }
@@ -286,6 +319,92 @@ impl StoreTx for SqliteTx<'_> {
 }
 
 impl Store for SqliteStore {
+    fn active_session_id(&self) -> Result<Option<i64>> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .query_row(
+                "SELECT value FROM settings WHERE key='active_session_id'",
+                [],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(db)?
+            .map(|v| {
+                v.parse::<i64>()
+                    .map_err(|e| Error::InvalidData(e.to_string()))
+            })
+            .transpose()
+    }
+    fn set_active_session_id(&self, id: Option<i64>) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        if let Some(id) = id {
+            conn.execute("INSERT INTO settings(key,value) VALUES ('active_session_id',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [id.to_string()]).map_err(db)?;
+        } else {
+            conn.execute("DELETE FROM settings WHERE key='active_session_id'", [])
+                .map_err(db)?;
+        }
+        Ok(())
+    }
+    fn job_due(&self, now_ms: i64) -> Result<Option<Job>> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let id: Option<i64> = tx.query_row("SELECT id FROM jobs WHERE status='queued' AND next_attempt_at<=?1 ORDER BY next_attempt_at,id LIMIT 1", [now_ms], |r| r.get(0)).optional().map_err(db)?;
+        let job = if let Some(id) = id {
+            tx.execute(
+                "UPDATE jobs SET status='running',updated_at=?1 WHERE id=?2",
+                params![now_ms, id],
+            )
+            .map_err(db)?;
+            Some(job(&tx, id)?)
+        } else {
+            None
+        };
+        tx.commit().map_err(db)?;
+        Ok(job)
+    }
+    fn job_done(&self, id: i64, now_ms: i64) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE jobs SET status='done',error=NULL,updated_at=?1 WHERE id=?2",
+                params![now_ms, id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn job_retry(&self, id: i64, code: &str, next_attempt_at: i64, now_ms: i64) -> Result<()> {
+        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute("UPDATE jobs SET status='queued',attempts=attempts+1,error=?1,next_attempt_at=?2,updated_at=?3 WHERE id=?4",params![code,next_attempt_at,now_ms,id]).map_err(db)?;
+        Ok(())
+    }
+    fn requeue_running_jobs(&self) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute("UPDATE jobs SET status='queued' WHERE status='running'", [])
+            .map_err(db)?;
+        Ok(())
+    }
+    fn mark_own_write(&self, raw_path: &str, now_ms: i64) -> Result<()> {
+        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute("INSERT INTO raw_state(raw_path,last_own_write_at) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET last_own_write_at=excluded.last_own_write_at",params![raw_path,now_ms]).map_err(db)?;
+        Ok(())
+    }
+    fn job(&self, id: i64) -> Result<Job> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        job(&conn, id)
+    }
     fn transaction(&self, op: &mut dyn FnMut(&mut dyn StoreTx) -> Result<()>) -> Result<()> {
         let mut conn = self
             .conn

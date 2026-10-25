@@ -1,0 +1,1 @@
+function run(argv) { const a=Application("Capture One"); if(!a.running()) throw Error("Capture One is not running"); const r=a.documents.byId(argv[0]).recipes.byName(argv[1]); r.existingFiles=argv[2]; r.outputSubFolder=argv[3]; return JSON.stringify(null); }

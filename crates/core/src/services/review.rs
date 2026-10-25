@@ -60,6 +60,7 @@ impl<'a> ReviewService<'a> {
                 None
             };
             tx.set_photo_review(photo_id, session_id, target, next)?;
+            tx.enqueue_mirror_tag(&photo.raw_path, photo_id, at)?;
             tx.touch_session(session_id, at)
         })?;
         self.result(&[session_id], None)
@@ -104,6 +105,7 @@ impl<'a> ReviewService<'a> {
                 tx.set_positions(&position::remove_at(&old, photo_id))?;
             }
             tx.set_photo_review(photo_id, session_id, Classification::Deleted, None)?;
+            tx.enqueue_mirror_tag(&photo.raw_path, photo_id, at)?;
             tx.set_undo_slot(session_id, Some(&slot))?;
             tx.touch_session(session_id, at)
         })?;
@@ -135,6 +137,7 @@ impl<'a> ReviewService<'a> {
                 None
             };
             tx.set_photo_review(slot.photo_id, session_id, slot.prior_classification, next)?;
+            tx.enqueue_mirror_tag(&photo.raw_path, slot.photo_id, at)?;
             tx.set_undo_slot(session_id, None)?;
             tx.touch_session(session_id, at)?;
             active = Some(slot.photo_id);

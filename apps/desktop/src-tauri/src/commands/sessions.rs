@@ -239,6 +239,49 @@ pub fn sessions_list(
         .map_err(Into::into)
 }
 
+#[tauri::command]
+#[specta::specta]
+pub async fn session_activate(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<(), CommandError> {
+    let (store, editing, health) = {
+        let app = state
+            .0
+            .lock()
+            .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+        (app.store.clone(), app.editing.clone(), app.health.clone())
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        SessionsService::new(store.as_ref(), &SystemClock)
+            .with_editing(editing.as_ref(), health.as_ref())
+            .activate(session_id.0)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), CommandError> {
+    let (store, editing, health) = {
+        let app = state
+            .0
+            .lock()
+            .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+        (app.store.clone(), app.editing.clone(), app.health.clone())
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        SessionsService::new(store.as_ref(), &SystemClock)
+            .with_editing(editing.as_ref(), health.as_ref())
+            .deactivate()
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod list_tests {
     use super::*;

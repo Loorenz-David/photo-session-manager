@@ -1,0 +1,1 @@
+function run(argv) { const a=Application("Capture One"); if(!a.running()) throw Error("Capture One is not running"); const d=a.documents.byId(argv[0]); const paths=JSON.parse(argv[1]); a.import(d,{source:paths.map(p=>Path(p))}); return JSON.stringify(null); }

@@ -11,6 +11,11 @@ export const commands = {
 	sessionCreate: (itemId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_create", { itemId })),
 	sessionGet: (sessionId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
 	sessionsList: (filter: SessionFilter, query: string | null) => typedError<SessionListResponse_Serialize, CommandError>(__TAURI_INVOKE("sessions_list", { filter, query })),
+	sessionActivate: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("session_activate", { sessionId })),
+	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
+	cameraStatus: () => typedError<CameraStatusResponse, CommandError>(__TAURI_INVOKE("camera_status")),
+	cameraRetry: () => typedError<CameraStatusResponse, CommandError>(__TAURI_INVOKE("camera_retry")),
+	cameraCapture: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_capture")),
 	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
 	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
@@ -25,6 +30,8 @@ export type AppPathsDto = {
 	database: string,
 	settings: string,
 };
+
+export type CameraStatusResponse = { kind: "connected"; name: string } | { kind: "disconnected" };
 
 export type CommandError = {
 	code: string,

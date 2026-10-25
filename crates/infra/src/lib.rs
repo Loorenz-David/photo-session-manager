@@ -1,3 +1,4 @@
+pub mod jobs;
 pub mod logging;
 pub mod nudge;
 pub mod osascript;

@@ -22,6 +22,20 @@ pub enum Error {
     TargetPublished,
     #[error("nothing_to_undo")]
     NothingToUndo,
+    #[error("capture_folder_not_set")]
+    CaptureFolderNotSet,
+    #[error("hooks_not_installed")]
+    HooksNotInstalled,
+    #[error("recipe_missing: {name}")]
+    RecipeMissing { name: String },
+    #[error("tag_verification")]
+    TagVerification,
+    #[error("variant_not_found")]
+    VariantNotFound,
+    #[error("document_not_open")]
+    DocumentNotOpen,
+    #[error("document_not_session")]
+    DocumentNotSession,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

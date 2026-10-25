@@ -1,4 +1,5 @@
 use crate::clock::ManualClock;
+use crate::fake_capture_one::FakeCaptureOneScripting;
 use psm_core::Result;
 use psm_core::{
     domain::photo::{NewPhoto, Photo, PhotoSource},
@@ -7,25 +8,28 @@ use psm_core::{
 };
 use psm_infra::paths::AppPaths;
 use psm_integrations::App;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tempfile::TempDir;
 
 pub struct TestApp {
     pub dir: TempDir,
     pub app: App,
-    pub clock: ManualClock,
+    pub clock: Arc<ManualClock>,
+    pub fake: Arc<FakeCaptureOneScripting>,
     next_hook: AtomicU64,
 }
 
 impl TestApp {
     pub fn items(&self) -> ItemsService<'_> {
-        ItemsService::new(self.app.store.as_ref(), &self.clock)
+        ItemsService::new(self.app.store.as_ref(), self.clock.as_ref())
     }
     pub fn sessions(&self) -> SessionsService<'_> {
-        SessionsService::new(self.app.store.as_ref(), &self.clock)
+        SessionsService::new(self.app.store.as_ref(), self.clock.as_ref())
+            .with_editing(self.app.editing.as_ref(), self.app.health.as_ref())
     }
     pub fn review(&self) -> ReviewService<'_> {
-        ReviewService::new(self.app.store.as_ref(), &self.clock)
+        ReviewService::new(self.app.store.as_ref(), self.clock.as_ref())
     }
     pub fn add_photo(&self, session_id: i64, raw: &str) -> Result<Photo> {
         let path = self.dir.path().join(raw);
@@ -53,12 +57,40 @@ impl TestApp {
         self.app.store.as_ref()
     }
     pub fn new() -> Result<Self> {
+        Self::create(false)
+    }
+    pub fn with_fake_document() -> Result<Self> {
+        Self::create(true)
+    }
+    fn create(configure_document: bool) -> Result<Self> {
         let dir = tempfile::tempdir()?;
-        let app = App::open(AppPaths::for_dir(dir.path()))?;
+        let paths = AppPaths::for_dir(dir.path());
+        paths.create()?;
+        let document_id = dir
+            .path()
+            .join("Capture One Session")
+            .to_string_lossy()
+            .into_owned();
+        let capture_root = dir.path().join("Capture").to_string_lossy().into_owned();
+        std::fs::create_dir_all(&document_id)?;
+        std::fs::create_dir_all(&capture_root)?;
+        let mut settings = psm_infra::settings_file::Settings::open(&paths)?;
+        if configure_document {
+            settings.document_id = Some(document_id.clone());
+            std::fs::write(
+                paths.settings(),
+                serde_json::to_vec(&settings)
+                    .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
+            )?;
+        }
+        let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
+        let clock = Arc::new(ManualClock::new(0));
+        let app = App::open_with(paths, fake.clone(), clock.clone(), false)?;
         Ok(Self {
             dir,
             app,
-            clock: ManualClock::new(0),
+            clock,
+            fake,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -67,7 +99,16 @@ impl TestApp {
         self.app
             .spool
             .write_for_test(&format!("{id:016}-test.json"), json)?;
-        self.app.spool.drain(self.app.store.as_ref(), &self.clock)
+        self.app
+            .spool
+            .drain(self.app.store.as_ref(), self.clock.as_ref())
+    }
+    pub fn fake_c1(&self) -> &FakeCaptureOneScripting {
+        &self.fake
+    }
+    pub fn tick(&self, ms: i64) -> Result<usize> {
+        self.clock.advance(ms);
+        self.app.jobs.tick(self.clock.now_ms())
     }
 }
 

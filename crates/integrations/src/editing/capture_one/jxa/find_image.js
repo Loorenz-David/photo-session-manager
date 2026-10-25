@@ -1,0 +1,1 @@
+function run(argv) { const a=Application("Capture One"); if(!a.running()) throw Error("Capture One is not running"); const found=a.documents.byId(argv[0]).images.whose({path:argv[1]})(); if(!found.length) return JSON.stringify(null); const pick=found[0].variants.whose({position:1})(); return JSON.stringify(pick.length ? pick[0].id().toString() : null); }
