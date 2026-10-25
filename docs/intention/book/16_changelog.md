@@ -46,3 +46,20 @@
     2026-10-24 (outcome; measurements M1–M7 verbatim; scope ladder; D2 interpretation confirmed by
     approval; no open cards). Post-ratification changes follow the amendment path: contract-grade
     additions by the mechanism inventory, material semantic changes reopen the gate.
+14. **2026-10-25 — Mechanism inventory (round 1).** Contract chapters added: 05A (MC-1…MC-9),
+    07A (MC-10…MC-14), 10A (MC-15…MC-20); invariants M8–M27 registered in chapter 14; map rows
+    added. Runtime probes against Capture One 16.8.6.25 recorded under VERIFY-1…10 in the
+    evidence (VERIFY-11/12 added). Capture-dependent probes are UNPROBED: the camera did not
+    release the shutter on any scripted capture. Contradictions resolved by contract, pending
+    owner ratification (no product sentence changed): R-I1 session attribution by capture folder
+    plus `_Unassigned` folder; R-I2 unreviewed position null, displayed after Main; R-I3 rows may
+    move out of a published session; R-I4 photo links scoped by item; R-I5 media nobody confirmed
+    removing makes `update` fail rather than be deleted; R-I6 photos deleted or moved after
+    confirmation are skipped; R-I7 "Publish failed" label whenever the latest item failed;
+    R-I8 attribute writes are a diff and never clear; R-I9 M3's condition clause is over the
+    damage-report selection; R-I10 remote dedupe by upload filename only; R-I11 SKUs whose folder names collide ignoring
+    case cannot coexist; R-I12 move/copy into a
+    session already holding the RAW is refused; R-I13 dirty survives changes made during a
+    publish; R-I14 a run sends the attribute values frozen at confirmation; R-I15 sidecar fallback only at startup and focus; R-I16 startup scan covers every
+    per-SKU folder; R-I17 `date_time` metafields read-only. Open card I1 (retouch after
+    publishing) in chapter 15. Status header unchanged: no material semantic change.

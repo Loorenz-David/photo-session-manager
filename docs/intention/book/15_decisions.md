@@ -33,6 +33,23 @@
 | R29 | Adjusted-preview refresh: a Capture One edit marks the photo stale; re-render 15 s after the last edit (setting 10–30 s) or at once when the app window becomes visible/focused. | 2026-10-24 |
 | R27 | **A2 camera through Capture One** for the MVP. How the camera physically connects (USB tether today, wireless under exploration) stays open and must not disturb the implementation: everything camera-specific sits behind the camera provider interface, and capture arrival is defined by the editing provider's hook and the capture folder, not by the link. | 2026-10-24 |
 
-## ⚠ OWNER DECISIONS REQUIRED (0)
+## ⚠ OWNER DECISIONS REQUIRED (1)
 
-None open. Ratification surface presented 2026-10-24 (chapter 16, entry 12).
+Ratification surface presented 2026-10-24 (chapter 16, entry 12). Opened by the mechanism
+inventory 2026-10-25 (chapter 16, entry 14):
+
+**I1 — Retouch after publishing.**
+- **Question:** When you retouch an already-published photo in Capture One, should the session
+  need publishing again, and the next publish replace that photo on Shopify?
+- **Story:** You publish the oak sideboard on Monday. On Tuesday you heal a dust spot on Main 03
+  in Capture One. Session Manager's preview updates, but the session still says Published, and
+  even a second publish leaves Monday's image on Shopify, because that photo was already
+  uploaded. The listing shows the dust spot until a customer mentions it.
+- **Branches:** *Yes*: the retouch puts the session back to "Ready · Publish", and the next
+  publish uploads the new version into the same gallery place and removes the old one. *No*:
+  Shopify keeps the first version, and to change it you delete the photo and capture it again.
+- **Recommendation:** Yes, because the live preview already promises that what you see is
+  what goes out.
+- **On silence:** the gate holds. The ratified rule (no replacement) is what gets built until
+  you answer.
+- **Trace:** 07 Dirty; 07A MC-11; 05A MC-6; 10A MC-17.
