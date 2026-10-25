@@ -75,7 +75,7 @@ restated so no session has to infer them:
 | P05_capture_arrival | APPROVED | 2026-10-25 | opus | approved with notes after fix 1: 33/33 rows hold, capture arrivals now first-sight per RAW across sessions (C7(b) discriminates); suite/lint/typecheck green; 9 notes in backlog |
 | P06_live_previews | APPROVED | 2026-10-25 | opus | approved after fix 1: F1 (later row of a rendered RAW gets the path) and F2 (sidecar layout moved to the Capture One adapter) resolved; 18 rows + F1 case hold; suite/lint/typecheck green; 9 notes in backlog from r1 |
 | P07_shell_sessions_ui | APPROVED | 2026-10-25 | opus | approved with notes after fix 1: F1 resolved (launch opens the session the backend still captures into, so screen and capture folder agree); 19 rows + F1 cases hold; suite/lint/typecheck green; 6 notes from r1 + 1 in backlog |
-| P08_workspace_ui | NOT_STARTED | 2026-10-25 | planner | stage, review, order, toggle, unassigned, import |
+| P08_workspace_ui | IMPLEMENTED | 2026-10-25 | codex | workspace built: 22/22 rows + displayOrder unit test (vitest 23), candidate C0 session view (Rust 1); suite/clippy/fmt/typecheck green; session_get now returns item + photos (deviation) |
 | P09_local_export | NOT_STARTED | 2026-10-25 | planner | export job, naming, item.json, Export action |
 | P10_attributes | NOT_STARTED | 2026-10-25 | planner | definitions, values, canonical forms, provenance, presets |
 | P11_form_ui | NOT_STARTED | 2026-10-25 | planner | form dialog, field kinds, customize, AI states |

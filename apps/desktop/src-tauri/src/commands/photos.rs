@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
 
-#[derive(Deserialize, Type)]
+#[derive(Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum PhotoClassification {
     Unreviewed,

@@ -6,6 +6,8 @@ import { useTheme } from './features/shell/ThemeToggle';
 import { HealthPage } from './features/health/HealthPage';
 import { NewSessionDialog } from './features/sessions/NewSessionDialog';
 import { SessionsPage } from './features/sessions/SessionsPage';
+import { ArrivalToasts } from './features/shell/ArrivalToasts';
+import { WorkspacePage } from './features/workspace/WorkspacePage';
 import { useKeyboard } from './lib/keyboard';
 import { activateSession, activeSession, deactivateSession } from './services/sessions';
 
@@ -86,6 +88,7 @@ export default function App() {
   useResumeActiveSession(navigate);
   const [theme, setTheme] = useTheme();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   useCaptureTarget(sessionId);
 
   useKeyboard({ n: () => setNewSessionOpen(true) }, sessionId === undefined && !health && !newSessionOpen);
@@ -101,15 +104,20 @@ export default function App() {
         onThemeChange={setTheme}
         onNewSession={() => setNewSessionOpen(true)}
         goHome={() => navigate()}
+        onAssignProduct={() => setAssignOpen(true)}
       />
       {sessionId === undefined ? (
         <SessionsPage navigate={navigate} />
       ) : (
-        <main className="workspace-placeholder">
-          <h1>Ready for the first photo</h1>
-          <p>Capture and review arrive with the workspace.</p>
-        </main>
+        <WorkspacePage
+          key={sessionId}
+          sessionId={sessionId}
+          assignOpen={assignOpen}
+          onAssignOpenChange={setAssignOpen}
+          navigate={navigate}
+        />
       )}
+      <ArrivalToasts sessionId={sessionId} navigate={navigate} />
       <NewSessionDialog
         open={newSessionOpen}
         onOpenChange={setNewSessionOpen}

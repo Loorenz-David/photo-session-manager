@@ -18,6 +18,18 @@ vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(), cameraRetry: vi.fn(
 vi.mock('@/services/events', () => ({
   onSessionsChanged: vi.fn(async () => () => undefined),
   onCameraStatus: vi.fn(async () => () => undefined),
+  // P08 subscriptions (workspace, arrival toast, file drop), inert here.
+  onWorkspaceEvents: vi.fn(async () => () => undefined),
+  onPhotoAdded: vi.fn(async () => () => undefined),
+  onFileDrop: vi.fn(async () => () => undefined),
+}));
+// P08: an opened session loads its (here empty) photo list.
+vi.mock('@/services/photos', () => ({
+  getSessionView: vi.fn(async (id: number) => ({
+    session: { id, item_id: null, published_at: null, published_seq: 0, change_seq: 0, dirty: false, last_activity_at: 0, created_at: 0, photo_count: 0, unreviewed_count: 0, main_count: 0, condition_count: 0 },
+    item: null,
+    photos: [],
+  })),
 }));
 
 import App from '@/App';

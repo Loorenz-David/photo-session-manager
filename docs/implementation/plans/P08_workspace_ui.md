@@ -101,4 +101,35 @@ whether `I` opens a popover or a sheet.
 - Estimated size: ~22 files, ~2 600 lines.
 
 ## Review log
-(empty)
+- 2026-10-25 implement r1 (actor `codex` per prompt; run on Claude Opus): **IMPLEMENTED.** Built the session workspace:
+  `useWorkspaceState` (loads `session_get`, follows `photo_added`/`photo_changed`/`session_changed` for its session,
+  keeps the active photo and the per-view Original/Adjusted mode), the stage (stacked original/adjusted `<img>`, original
+  rotated per EXIF orientation 1–8, adjusted unrotated, 700 ms opacity crossfade, a new render laid over the previous one
+  and faded in, prev/next, "Main n of m · k to review"), the pill (Space, spinner while `adjusted_preview_path` is null),
+  round Delete / Condition-or-"Move to Main" / Approve buttons, keys A C ⌫ ←/→ ↑/↓ Space F I Esc ⌘Z, Motion swipes
+  (120 px horizontal, 110 px up), next-unreviewed rule, undo toast (4.5 s, Undo action) and ⌘Z, the photo panel (Main
+  then unreviewed after Main, Condition) with dnd-kit sortable groups, `DragOverlay`, reorder within a group,
+  classify across groups, ⌘/⇧-click multi-selection, the folded 64 px strip with the COND divider, ⋯ and right-click
+  menus (Move/Copy to session…, Assign to product…, Delete, Main/Condition), the item card (I), the Unassigned
+  workspace (sessions panel open with droppable rows, published rows disabled, "No product" tag and "Assign product"
+  in the header → item search → `photos_assign_unassigned` → opens the item's session), import by Finder drop (Tauri
+  webview drag-drop) and by a file picker (Tauri dialog plugin), and the "Photos arrived in Unassigned · Open" toast.
+  **Deviations (plan defect worked around, smallest option):** (1) `session_get` returned only counts, so the workspace
+  had no photo list; it now returns `{session, item, photos}` (new `SessionsService::view` in core: item + photos
+  except deleted; command DTOs `SessionViewResponse`, `PhotoResponse`; bindings regenerated). (2) Previews could not
+  load: asset protocol enabled (`tauri` feature `protocol-asset`, `assetProtocol.enable`, scope set at startup to the
+  data dir's `previews/` only). (3) `tauri-plugin-dialog` 2 / `@tauri-apps/plugin-dialog` 2.8.3 added for the picker
+  (capability `dialog:allow-open`); `@dnd-kit/utilities` 3.2.2 added (CSS transform helper of dnd-kit). (4) Header.tsx
+  (P07) gained the Unassigned tag and "Assign product"; P07's test mocks gained the new event/photo service exports.
+  (5) New files not listed: `PickerDialogs.tsx`, `workspace.css`, `crates/testkit/tests/p08_workspace_ui.rs`.
+  **Candidate criterion C0** (for the coordinator): `session_get` lists the item and every photo except deleted ones
+  (ch06 "deleted hides the photo"; feeds M12's display) — test `c0_session_view_lists_item_and_visible_photos`.
+  Judgment calls: `convertFileSrc` (asset protocol; each render has its own path, nothing to bust); a new capture in the
+  open session becomes the active photo (S-C "appears on the stage"); A on a Main photo and C on a Condition photo
+  change nothing and open the next unreviewed photo; a drag across groups does not advance the active photo; the
+  menus act on the selection when the photo is selected; "Assign to product…" = `session_create(item)` then
+  `photos_move`; Assign product lists existing items only (no create row); the item card is an in-stage card; the
+  sessions panel can be reopened in any workspace; the import overlay shows while files hover; dropped paths are passed
+  unfiltered (the backend's candidate rules decide); capture button `S` not added; unreviewed photos are numbered after
+  Main in the grid (display only). No hardware probe run (no tethered camera in this session); the debug binary was
+  launched against a scratch data dir and stayed up (no panic in the new setup code).

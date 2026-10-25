@@ -85,6 +85,25 @@ impl<'a> SessionsService<'a> {
     pub fn get(&self, id: i64) -> Result<SessionDto> {
         self.store.session(id)
     }
+    /// The workspace view of one session: its item and its photos without the deleted ones.
+    pub fn view(&self, id: i64) -> Result<crate::domain::session::SessionView> {
+        let session = self.store.session(id)?;
+        let item = match session.session.item_id {
+            Some(item_id) => Some(self.store.item(item_id)?),
+            None => None,
+        };
+        let photos = self
+            .store
+            .photos_in_session(id)?
+            .into_iter()
+            .filter(|photo| photo.classification != crate::domain::photo::Classification::Deleted)
+            .collect();
+        Ok(crate::domain::session::SessionView {
+            session,
+            item,
+            photos,
+        })
+    }
     pub fn unassigned(&self) -> Result<SessionDto> {
         self.get(1)
     }

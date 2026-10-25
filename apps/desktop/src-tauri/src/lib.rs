@@ -89,15 +89,20 @@ pub fn run() {
     let _logging = psm_infra::logging::init(&app.paths);
     let builder = specta_builder();
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState(std::sync::Mutex::new(app)))
         .setup(|handle| {
             let state = handle.state::<AppState>();
-            state
-                .0
-                .lock()
-                .expect("app state")
-                .events
-                .set_target(Arc::new(TauriEvents(handle.handle().clone())));
+            let previews = {
+                let app = state.0.lock().expect("app state");
+                app.events
+                    .set_target(Arc::new(TauriEvents(handle.handle().clone())));
+                app.paths.root.join("previews")
+            };
+            // The workspace loads preview files through the asset protocol; only the previews folder is readable.
+            handle
+                .asset_protocol_scope()
+                .allow_directory(previews, true)?;
             if let Some(window) = handle.get_webview_window("main") {
                 let app_handle = handle.handle().clone();
                 window.on_window_event(move |event| {

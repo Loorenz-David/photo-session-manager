@@ -1,9 +1,17 @@
 use crate::{
-    commands::items::{CommandError, CommandId},
+    commands::{
+        items::{CommandError, CommandId, ItemDto},
+        photos::PhotoClassification,
+    },
     state::AppState,
 };
 use psm_core::{
-    domain::session::SessionDto, ports::clock::SystemClock, services::sessions::SessionsService,
+    domain::{
+        photo::Photo,
+        session::{SessionDto, SessionView},
+    },
+    ports::clock::SystemClock,
+    services::sessions::SessionsService,
 };
 use serde::Serialize;
 use specta::Type;
@@ -71,18 +79,88 @@ pub fn session_create(
         .map_err(Into::into)
 }
 
+/// One visible photo of the workspace (P08): what the stage, grid and strip need.
+#[derive(Serialize, Type)]
+pub struct PhotoResponse {
+    #[specta(type = specta_typescript::Number)]
+    pub id: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub session_id: i64,
+    pub classification: PhotoClassification,
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub position: Option<i64>,
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub captured_at: Option<i64>,
+    pub original_preview_path: Option<String>,
+    pub adjusted_preview_path: Option<String>,
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub orientation: Option<i64>,
+    pub source: String,
+    pub integrity: String,
+}
+
+impl From<Photo> for PhotoResponse {
+    fn from(photo: Photo) -> Self {
+        use psm_core::domain::photo::{Classification, Integrity, PhotoSource};
+        Self {
+            id: photo.id,
+            session_id: photo.session_id,
+            classification: match photo.classification {
+                Classification::Unreviewed => PhotoClassification::Unreviewed,
+                Classification::Main => PhotoClassification::Main,
+                Classification::Condition => PhotoClassification::Condition,
+                Classification::Deleted => PhotoClassification::Deleted,
+            },
+            position: photo.position,
+            captured_at: photo.captured_at,
+            original_preview_path: photo.original_preview_path,
+            adjusted_preview_path: photo.adjusted_preview_path,
+            orientation: photo.orientation,
+            source: match photo.source {
+                PhotoSource::Capture => "capture",
+                PhotoSource::Import => "import",
+            }
+            .into(),
+            integrity: match photo.integrity {
+                Integrity::Ok => "ok",
+                Integrity::RawChanged => "raw_changed",
+                Integrity::RawMissing => "raw_missing",
+            }
+            .into(),
+        }
+    }
+}
+
+/// `session_get`: the session, its item (null for Unassigned) and its visible photos.
+#[derive(Serialize, Type)]
+pub struct SessionViewResponse {
+    pub session: SessionResponse,
+    pub item: Option<ItemDto>,
+    pub photos: Vec<PhotoResponse>,
+}
+
+impl From<SessionView> for SessionViewResponse {
+    fn from(view: SessionView) -> Self {
+        Self {
+            session: view.session.into(),
+            item: view.item.map(Into::into),
+            photos: view.photos.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn session_get(
     state: State<'_, AppState>,
     session_id: CommandId,
-) -> Result<SessionResponse, CommandError> {
+) -> Result<SessionViewResponse, CommandError> {
     let app = state
         .0
         .lock()
         .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
     SessionsService::new(app.store.as_ref(), &SystemClock)
-        .get(session_id.0)
+        .view(session_id.0)
         .map(Into::into)
         .map_err(Into::into)
 }

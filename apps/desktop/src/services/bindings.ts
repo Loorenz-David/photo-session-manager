@@ -11,7 +11,7 @@ export const commands = {
 	itemsSearch: (query: string) => typedError<ItemDto_Serialize[], CommandError>(__TAURI_INVOKE("items_search", { query })),
 	itemsNextSku: () => typedError<string | null, CommandError>(__TAURI_INVOKE("items_next_sku")),
 	sessionCreate: (itemId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_create", { itemId })),
-	sessionGet: (sessionId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
+	sessionGet: (sessionId: CommandId) => typedError<SessionViewResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
 	sessionsList: (filter: SessionFilter, query: string | null) => typedError<SessionListResponse_Serialize, CommandError>(__TAURI_INVOKE("sessions_list", { filter, query })),
 	sessionActivate: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("session_activate", { sessionId })),
 	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
@@ -83,6 +83,37 @@ export type ItemDto_Serialize = {
 };
 
 export type PhotoClassification = "unreviewed" | "main" | "condition" | "deleted";
+
+/**  One visible photo of the workspace (P08): what the stage, grid and strip need. */
+export type PhotoResponse = PhotoResponse_Serialize | PhotoResponse_Deserialize;
+
+/**  One visible photo of the workspace (P08): what the stage, grid and strip need. */
+export type PhotoResponse_Deserialize = {
+	id: number,
+	session_id: number,
+	classification: PhotoClassification,
+	position?: number | null,
+	captured_at?: number | null,
+	original_preview_path?: string | null,
+	adjusted_preview_path?: string | null,
+	orientation?: number | null,
+	source: string,
+	integrity: string,
+};
+
+/**  One visible photo of the workspace (P08): what the stage, grid and strip need. */
+export type PhotoResponse_Serialize = {
+	id: number,
+	session_id: number,
+	classification: PhotoClassification,
+	position: number | null,
+	captured_at: number | null,
+	original_preview_path: string | null,
+	adjusted_preview_path: string | null,
+	orientation: number | null,
+	source: string,
+	integrity: string,
+};
 
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;
 
@@ -197,6 +228,23 @@ export type SessionRowResponse_Serialize = {
 };
 
 export type SessionStatusResponse = "publishing" | "failed" | "published" | "ready" | "in_progress";
+
+/**  `session_get`: the session, its item (null for Unassigned) and its visible photos. */
+export type SessionViewResponse = SessionViewResponse_Serialize | SessionViewResponse_Deserialize;
+
+/**  `session_get`: the session, its item (null for Unassigned) and its visible photos. */
+export type SessionViewResponse_Deserialize = {
+	session: SessionResponse_Deserialize,
+	item?: ItemDto_Deserialize | null,
+	photos: PhotoResponse_Deserialize[],
+};
+
+/**  `session_get`: the session, its item (null for Unassigned) and its visible photos. */
+export type SessionViewResponse_Serialize = {
+	session: SessionResponse_Serialize,
+	item: ItemDto_Serialize | null,
+	photos: PhotoResponse_Serialize[],
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

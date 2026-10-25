@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ClipboardList, CloudUpload, Info } from 'lucide-react';
+import { ArrowLeft, ClipboardList, CloudUpload, Info, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { listSessions } from '@/services/sessions';
 import { CameraDot } from './CameraDot';
@@ -12,6 +12,8 @@ type HeaderProps = {
   onThemeChange: (theme: Theme) => void;
   onNewSession: () => void;
   goHome: () => void;
+  /** Unassigned workspace: "Assign product" replaces Publish (ch06 §Unassigned). */
+  onAssignProduct?: () => void;
 };
 
 type SessionIdentity = { name: string; sku: string };
@@ -37,7 +39,7 @@ function useSessionIdentity(sessionId?: number): SessionIdentity | null {
 }
 
 /** App header (COMPONENTS.md §App shell): Sessions page or session view. */
-export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome }: HeaderProps) {
+export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, onAssignProduct }: HeaderProps) {
   const identity = useSessionIdentity(sessionId);
 
   if (sessionId === undefined) {
@@ -64,7 +66,10 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome }
         </Button>
         <span className="header-divider" aria-hidden />
         {sessionId === 1 ? (
-          <strong className="header-name">Unassigned photos</strong>
+          <>
+            <strong className="header-name">Unassigned photos</strong>
+            <span className="header-tag">No product</span>
+          </>
         ) : (
           <>
             <strong className="header-name">{identity?.name ?? ''}</strong>
@@ -77,12 +82,20 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome }
         <CameraDot />
         <span className="header-divider" aria-hidden />
         <NotificationsBell />
-        <Button variant="outline" disabled title="The details form arrives in a later phase">
-          <ClipboardList /> Details
-        </Button>
-        <Button disabled title="Publishing arrives in a later phase">
-          <CloudUpload /> Publish
-        </Button>
+        {sessionId === 1 ? (
+          <Button onClick={onAssignProduct}>
+            <Tag /> Assign product
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" disabled title="The details form arrives in a later phase">
+              <ClipboardList /> Details
+            </Button>
+            <Button disabled title="Publishing arrives in a later phase">
+              <CloudUpload /> Publish
+            </Button>
+          </>
+        )}
       </div>
     </header>
   );

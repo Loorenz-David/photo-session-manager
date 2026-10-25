@@ -22,6 +22,15 @@ pub struct SessionDto {
     pub condition_count: i64,
 }
 
+/// What the session workspace shows: the session, its item (none for Unassigned) and its visible photos
+/// (every classification except `deleted`, which is hidden, ch06).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionView {
+    pub session: SessionDto,
+    pub item: Option<crate::domain::item::Item>,
+    pub photos: Vec<crate::domain::photo::Photo>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PublishStep {
