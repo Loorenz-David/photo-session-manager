@@ -17,3 +17,19 @@ The corrected SQLite pin resolves. The Rust workspace suite passes, the frontend
 ## Build and test observation
 
 `rusqlite_migration 2.6` and `rusqlite 0.40` resolve together. `cargo test --workspace` passed 16 P00 criterion tests, three core-mechanism tests, and the bindings export test. `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `npm run typecheck`, `npm test`, and the Tauri bundle build passed. The npm test command currently has no frontend test files; P00's frontend criterion is exercised by generated bindings plus TypeScript typecheck. Node 22 / npm 10 were selected explicitly in `apps/desktop/` because its default PATH chooses Node 23.
+
+## Live checks run by the orchestrator outside the Codex sandbox (2026-10-25, 15:29–15:50, with the owner)
+
+The built bundle was launched from the orchestrator's shell (not sandboxed):
+`open -n --env PSM_DATA_DIR=<scratch> "apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app"`.
+The `-10827` refusal above is a property of the Codex sandbox, not of the bundle.
+
+| Checklist item | Result | Evidence |
+|---|---|---|
+| (b) Launch the `.app` | **PASS** | Process started, data dir laid out; the owner saw the window with the Health page (screenshot 15:49: Data directory, Capture One hooks "Compiled", Event listener "Listening", Capture One "Capture One", all green). |
+| (c) Automation prompt attributed to Session Manager | **NOT PROVEN; probe defect** | No prompt appeared, on load or on "Test Capture One". The probe script is `Application("Capture One").name()`, which JXA answers from the bundle without sending an Apple event, so it cannot trigger or test the permission. `probe_capture_one` also rewrites the script on every call. The button gives no visible feedback (same text before and after). Plan amended. |
+| (d) Real Capture One processing hook → app | **PASS** | `processingDoneScript` set to `<data>/hooks/processing_done.scpt`; `process("…/session test 11952.ARW", {recipe: "JPEG - QuickProof (preview size)"})` returned job `5F4E3B10…` in 32 ms; Capture One answered a query 8 ms later (not blocked); one `capture_events` row `hook=processing_done` with `job`, `raw`, `outputs: ["…/Output/session test 11952.jpg"]`. |
+| (g) VERIFY-1 capture-done hook with a real capture | **PASS** | `captureDoneScript` set to `<data>/hooks/capture_done.scpt`; autofocus (focused), `capture()`; `capture_events` row `hook=capture_done`, `argv: ["/Users/davidloorenz/Pictures/session test 1/Capture/session test 11957.ARW"]` (the full RAW path as the only argument), received 1.74 s after the capture call. |
+| Clearing a hook property | Finding | Setting the property to `null` (JXA) or `missing value` (AppleScript) raises -1700. Setting it to `""` clears it; read-back is `null` / `missing value`. Both hooks were cleared this way after the checks. |
+| (e) FSEvents on the real capture folder | Not done | The P00 app does not watch the capture folder yet; covered when capture arrival is built. |
+| (f) Work Mac | Not done: no second Mac in session. | |

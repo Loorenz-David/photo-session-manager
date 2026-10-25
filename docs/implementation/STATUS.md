@@ -13,7 +13,7 @@ Updated: 2026-10-25 by the orchestrator.
 - Master plan and 17 phase plans: written 2026-10-25 (exit 10, OWNER_DECISIONS_PENDING, 2 cards).
   Order in `phases.txt` (P00…P16); Shopify phase P12 needs the token.
 - Phases: none approved yet.
-- Run in flight: **all**, `tools/pipeline/run_phase.sh all`, relaunched 2026-10-25 15:16 after P00 attempt 2 BLOCKED on rusqlite pin; all Rust pins re-resolved together and npm pins verified (master plan §6.2).
+- Run in flight: **all**, relaunched 2026-10-25 15:50 after P00 attempt 3 BLOCKED only on bundle launch (sandbox). Live checks done by orchestrator with owner (launch, processing hook, capture hook PASS). Automation probe defect → P00 task 11(c) amended. **After P00 approves: open the bundle with the owner and confirm the Automation prompt (c).**
 
 ## Needs the owner
 Nothing. Card 1: owner said "install it"; rustup installed cargo/rustc 1.99.1 (2026-10-25).

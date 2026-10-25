@@ -206,6 +206,13 @@ then require `c.focusIndicator()=="focused"` and call `Application("Capture One"
 Capture One did not need to be brought to the front. VERIFY-1 timing (capture → RAW → hook) is
 still to be measured by the first phase that installs the hook.
 
+**VERIFY-1 result (orchestrator, 2026-10-25 15:30, PASS).** With the P00 app running and
+`captureDoneScript` set to its compiled `capture_done.scpt`, an autofocus + `capture()` produced
+one spool event whose `argv` is exactly `["/Users/davidloorenz/Pictures/session test 1/Capture/session test 11957.ARW"]`
+(the full POSIX path of the new RAW, nothing else), received 1.74 s after the capture call.
+**Clearing a hook:** assign `""` (JXA or AppleScript); `null` / `missing value` raise -1700.
+Read-back after clearing is `null` / `missing value`. (Details: `packaging_spike.md`, Live checks.)
+
 ## Other runtime observations (2026-10-25)
 - Capture One writes a capture via a hidden `Capture/.capture` location
   (`writeImage … toURL: …/Capture/.capture` in its log) before it appears in the capture
