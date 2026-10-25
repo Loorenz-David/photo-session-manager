@@ -27,6 +27,7 @@ the meaning, the contract gives the exact rule.
 | [06 Photo review and ordering](book/06_photo_review_and_ordering.md) | capture arrival, approve/condition/delete, undo, order, Original/Adjusted, unassigned, move/copy |
 | [07 Session states and publishing](book/07_session_states_and_publishing.md) | status order, ready rule, dirty state, publish steps, failures, local export |
 | [07A Mechanism contracts: publish](book/07A_publish_contracts.md) | frozen confirmation, mutation token, resume and idempotency keys, gallery reconciliation, attribute writes and the Shopify type map, damage report (MC-10…MC-14) |
+| [07B Retouch after publishing](book/07B_retouch_after_publish.md) | a Capture One edit to a published photo: dirty, revision upload, in-place replacement (MC-21, owner decision I1) |
 | [08 Attributes and AI](book/08_attributes_and_ai.md) | attribute schema, field kinds, customize fields, AI suggestions and provenance |
 | [09 Integrations](book/09_integrations.md) | commerce integration interface, capabilities, the Shopify adapter |
 | [10 Camera and editing providers](book/10_imaging_providers.md) | camera adapter, Capture One events and commands, live previews, rendering |

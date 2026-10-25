@@ -68,7 +68,8 @@ moved to another session is uploaded again for the new product, and its old medi
 never reused. The filename sent with every upload (staged upload, media create, file create) is
 `<folder_key>-<first 12 hex of uid>.jpg` (lowercase). The local export file keeps its
 position-based name (05A MC-8); only the uploaded copy's name differs. Position-based names are
-never used to identify remote media: they change with every reorder.
+never used to identify remote media: they change with every reorder. A retouched photo is
+re-uploaded under a revision suffix and replaces its media in place (07B MC-21).
 
 **upload** (for each frozen main photo, then each frozen condition photo; role `gallery` or
 `attribute:<key>`): state `none → exported → staged → uploaded → attached → ready`, each
@@ -97,7 +98,7 @@ uninterrupted run, with no duplicate product, media or file (M4 restated per key
 Inputs, read at step time: `D` = the media ids of the `ready` gallery links (this item) of the
 filtered `frozen_main`, in order; `current` = the product's gallery media ids in order;
 `own` = media ids of any gallery link for this item (any photo, including photos since moved,
-deleted or reclassified) plus media whose filename matches an upload stem of this item;
+deleted or reclassified, and the link's `superseded_ids`: 07B MC-21) plus media whose filename matches an upload stem of this item;
 `announced` = `announced_removals`.
 
 1. Every element of `D` exists and is `READY` (else the upload step was not complete: fail).

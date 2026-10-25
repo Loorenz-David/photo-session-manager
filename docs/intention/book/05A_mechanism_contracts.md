@@ -173,8 +173,8 @@ change** (add, classify, reorder, move in or out, copy in, delete, undo). `dirty
 `change_seq` recorded in the publish item at confirmation (07A MC-10) and copied to the session
 when that item reaches `done` **(ratify R-I13)**. A change made while a publish is running
 therefore keeps the session dirty after that publish completes. Attribute edits do not change
-`change_seq` (chapter 07). Pending owner card I1 (Capture One retouch after publish) would add
-one event to this list.
+`change_seq` (chapter 07). A Capture One retouch of a reviewed photo is a photo change (owner
+decision I1: 07B MC-21).
 
 **Invariant (M13).** A session whose photos changed after the confirmation of its latest
 completed publish is dirty; one with no photo change since that confirmation is not.

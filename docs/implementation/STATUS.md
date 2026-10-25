@@ -11,17 +11,14 @@ Updated: 2026-10-25 by the orchestrator.
   (evidence/capture_one_16.8.6.md VERIFY near line 100) still owed.
 - Master plan and phase plans: not written.
 - Phases: none.
-- Run in flight: **none**.
+- Run in flight: **plan**, `tools/pipeline/run_phase.sh plan`, started 2026-10-25 13:19.
 
 ## Needs the owner
-**I1 — Retouch after publishing.** (verbatim card in the inventory handoff.) Recommendation: Yes.
-On silence the ratified rule (no replacement) is built. Owner asked to stop on non-success, so
-planning waits for the owner's word.
-Also asked of the owner (not decisions): set the camera to fire without focus (manual focus or
-release priority); 10-second colour-tag visual check.
+Nothing. I1 answered Yes 2026-10-25 → 07B MC-21, R30, M28. Still asked of the owner (not
+decisions): camera set to fire without focus; 10-second colour-tag visual check.
 
 ## Next command
-After the owner answers I1 (fold a Yes into a lettered chapter + changelog, or keep the ratified rule): `tools/pipeline/run_phase.sh plan` (background), then `all`.
+When the plan returns 0: relay the phase map, then `tools/pipeline/run_phase.sh all` (background).
 
 ## Facts the next orchestrator needs
 - Shopify dev-app token is not available yet; the owner provides it before the publishing phase.

@@ -37,6 +37,7 @@ cite either the `M` id or the `MC` id.
 | **M25** | MC-18 (10A) | After activation, the capture folder reads back as the session's folder, or capture is blocked with an error. | captures in the wrong folder |
 | **M26** | MC-19 (10A) | With the queue idle, each variant's tag equals the mapping of its latest row classification, confirmed by read-back. | stale tags in the editor |
 | **M27** | MC-20 (10A) | The original preview is a byte-exact copy of the largest embedded JPEG; the RAW is unchanged. | corrupted preview, RAW writes |
+| **M28** | MC-21 (07B) | A retouch of a published photo makes the session dirty; the next publish leaves exactly one media for it, same position, from a post-retouch render; the app's own tag writes never dirty a session. | dust spot stays on Shopify |
 
 Operational measurements (recorded in S0 and S8, not tests): shot-to-original-preview and
 shot-to-adjusted-preview times; cold start of the packaged app on a fresh Mac.

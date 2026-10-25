@@ -109,6 +109,8 @@ instant), `render_in_flight` (job id or null).
 - A colour-tag write by the app fires the adjusted hook when that variant is Capture One's
   primary; the resulting extra render is accepted (identical output, invisible crossfade).
 
+An adjusted event outside the own-write window is also a retouch (07B MC-21).
+
 **Invariant (M24).** After the last adjusted event for a RAW, the recorded preview comes from a
 render requested after that event, within `delay` plus render time, or right after the window is
 focused; an event arriving during a render is never lost.

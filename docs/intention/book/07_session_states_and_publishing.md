@@ -12,7 +12,8 @@ failed, Published, Ready · Publish, In progress (+ "n to review"). The Open fil
 except `published`.
 
 ## Dirty
-Any photo change (add, classify, reorder, move, delete, undo) sets `dirty`; a published session
+Any photo change (add, classify, reorder, move, delete, undo, or a Capture One retouch of a
+reviewed photo: 07B) sets `dirty`; a published session
 therefore returns to `ready` or `in_progress`. Attribute edits alone do not set dirty (they are
 sent on the next publish regardless).
 

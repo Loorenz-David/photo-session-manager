@@ -63,3 +63,8 @@
     publish; R-I14 a run sends the attribute values frozen at confirmation; R-I15 sidecar fallback only at startup and focus; R-I16 startup scan covers every
     per-SKU folder; R-I17 `date_time` metafields read-only. Open card I1 (retouch after
     publishing) in chapter 15. Status header unchanged: no material semantic change.
+15. **2026-10-25 — Owner: I1 answered Yes** (relayed by the orchestrator). A Capture One retouch
+    of a published photo makes the session dirty, and the next publish uploads a new revision and
+    replaces the old media in the same gallery place (R30). Contract MC-21 and invariant M28 in
+    new chapter 07B; pointers in 05A MC-6, 07 Dirty, 07A MC-11/MC-12, 10A MC-17; map row added.
+    Owner decision, so the header stays RATIFIED. R-I1…R-I17 stand (owner informed, no objection).
