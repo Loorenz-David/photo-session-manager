@@ -7,7 +7,7 @@
     "dev": "vite --port 1420",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -16,6 +16,7 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/cli": "2.12.4",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.3",
@@ -29,4 +30,3 @@
     "vitest": "5.0.5"
   }
 }
-

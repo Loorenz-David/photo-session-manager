@@ -10,7 +10,7 @@ on run argv
         set payload to "{\"hook\":\"capture_done\",\"argv\":[" & joined & "]"
         if (count of argv) is 0 then
             try
-                tell application "Capture One" to set lastFile to last captured file of current document
+                tell application "Capture One" to set lastFile to «property COCp» of «property Cudo»
                 if lastFile is not missing value then
                     set payload to payload & ",\"last_captured_file\":\"" & my jsonEscape(POSIX path of lastFile) & "\""
                 end if

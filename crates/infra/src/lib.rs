@@ -6,4 +6,3 @@ pub mod settings_file;
 pub mod spool;
 pub mod sqlite;
 pub mod watcher;
-

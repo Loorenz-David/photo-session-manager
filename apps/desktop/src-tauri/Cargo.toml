@@ -15,9 +15,9 @@ psm-core = { path = "../../../crates/core" }
 psm-infra = { path = "../../../crates/infra" }
 psm-integrations = { path = "../../../crates/integrations" }
 tauri = { version = "2", features = ["specta"] }
-tauri-specta = { version = "=2.0.0-rc.27", features = ["derive", "typescript"] }
-specta = { version = "=2.0.0-rc.27", features = ["derive"] }
-specta-typescript = "0.0.14"
+tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
+specta = { version = "=2.0.0-rc.26", features = ["derive"] }
+specta-typescript = "0.0.13"
 serde.workspace = true
 tracing.workspace = true
 

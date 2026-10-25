@@ -1,9 +1,9 @@
 on run argv
     try
         tell application "Capture One"
-            set v to primary variant
-            set variantId to id of v as text
-            set rawPath to POSIX path of (path of parent image of v)
+            set v to «property cprv»
+            set variantId to «property ID  » of v as text
+            set rawPath to «property ipth» of («property vpar» of v) as text
         end tell
         set payload to "{\"hook\":\"variant_adjusted\",\"variant_id\":\"" & my jsonEscape(variantId) & "\",\"raw\":\"" & my jsonEscape(rawPath) & "\"}"
         my emitJSON(payload, "variant_adjusted")

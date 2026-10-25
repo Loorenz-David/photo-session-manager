@@ -5,4 +5,3 @@ use serde::{Deserialize, Serialize};
 pub enum AppEvent {
     HealthChanged,
 }
-

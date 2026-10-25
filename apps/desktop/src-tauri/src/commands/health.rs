@@ -1,30 +1,57 @@
+use crate::state::AppState;
+use psm_core::services::health::HealthService;
 use serde::Serialize;
 use specta::Type;
 use tauri::State;
-use psm_core::services::health::HealthService;
-use crate::state::AppState;
 
 #[derive(Serialize, Type)]
-pub struct HealthItemDto { pub code: String, pub ok: bool, pub detail: String }
+pub struct HealthItemDto {
+    pub code: String,
+    pub ok: bool,
+    pub detail: String,
+}
 
 #[derive(Serialize, Type)]
-pub struct HealthReportDto { pub items: Vec<HealthItemDto> }
+pub struct HealthReportDto {
+    pub items: Vec<HealthItemDto>,
+}
 
 #[derive(Serialize, Type)]
-pub struct AppPathsDto { pub data_dir: String, pub database: String, pub settings: String }
+pub struct AppPathsDto {
+    pub data_dir: String,
+    pub database: String,
+    pub settings: String,
+}
 
 #[tauri::command]
 #[specta::specta]
 pub fn health_get(state: State<'_, AppState>) -> Result<HealthReportDto, String> {
     let app = state.0.lock().map_err(|e| e.to_string())?;
-    let report = HealthService::report(&app.paths.root.to_string_lossy(), app.hooks_compiled, app.nudge_port() != 0);
-    Ok(HealthReportDto { items: report.items.into_iter().map(|i| HealthItemDto { code: i.code, ok: i.ok, detail: i.detail }).collect() })
+    let report = HealthService::report(
+        &app.paths.root.to_string_lossy(),
+        app.hooks_compiled,
+        app.nudge_port() != 0,
+    );
+    Ok(HealthReportDto {
+        items: report
+            .items
+            .into_iter()
+            .map(|i| HealthItemDto {
+                code: i.code,
+                ok: i.ok,
+                detail: i.detail,
+            })
+            .collect(),
+    })
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn app_paths_get(state: State<'_, AppState>) -> Result<AppPathsDto, String> {
     let app = state.0.lock().map_err(|e| e.to_string())?;
-    Ok(AppPathsDto { data_dir: app.paths.root.to_string_lossy().into_owned(), database: app.paths.db().to_string_lossy().into_owned(), settings: app.paths.settings().to_string_lossy().into_owned() })
+    Ok(AppPathsDto {
+        data_dir: app.paths.root.to_string_lossy().into_owned(),
+        database: app.paths.db().to_string_lossy().into_owned(),
+        settings: app.paths.settings().to_string_lossy().into_owned(),
+    })
 }
-

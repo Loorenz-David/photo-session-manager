@@ -13,4 +13,3 @@ pub struct HealthItem {
 pub struct HealthReport {
     pub items: Vec<HealthItem>,
 }
-

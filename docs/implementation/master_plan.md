@@ -250,8 +250,10 @@ Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; d
 |---|---|---|
 | macOS | `sw_vers` | 26.5.2 (25F84) |
 | Rust | `cargo --version` (P00, 2026-10-25) | Installed: `cargo 1.99.1 (5f94df478 2026-08-27)`. The earlier preflight found it absent; it was installed before P00 started. |
+| Cargo dependency resolution | `cargo check -p psm-integrations` (P00, 2026-10-25) | BLOCKED: pinned `rusqlite_migration 2.6.0` requires `rusqlite ^0.40.0` (`libsqlite3-sys ^0.38.0`), while pinned `rusqlite 0.41.0` requires `libsqlite3-sys ^0.39.0`; Cargo refuses two crates linking `sqlite3`. The pinned pair needs an upstream correction before the Rust suite or bundle can run. |
 | Xcode | `xcode-select -p`, `xcodebuild -version` | Command Line Tools at `/Library/Developer/CommandLineTools`; full Xcode absent — sufficient for desktop Tauri (Tauri prerequisites: "Only developing for desktop targets? … xcode-select --install"). |
 | Node / npm | `node --version`, `npm --version` | v22.22.3 / 10.9.8 (pnpm absent; use npm) |
+| Node workdir selection | `which node npm` in `apps/desktop/` (P00, 2026-10-25) | This directory resolves `/opt/homebrew/bin` Node v23.11.0 / npm 11.5.2; `npm install` fails with Arborist `Cannot read properties of null (reading 'edgesOut')`. Prefixing `PATH=/Users/davidloorenz/.nvm/versions/node/v22.22.3/bin:$PATH` selects the planned Node 22 / npm 10 and install succeeds. |
 | Tauri CLI | — | not installed; installed per project as devDependency `@tauri-apps/cli` and run as `npm run tauri -- <cmd>` (no `cargo install` needed) |
 | osascript | `which osascript` | `/usr/bin/osascript` (JXA available) |
 | sqlite3 CLI | `sqlite3 --version` | 3.51.0 (inspection only; the app bundles its own via `rusqlite/bundled`) |
@@ -264,8 +266,8 @@ Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; d
 | Codex sandbox | runner `run_codex` | `workspace-write` plus `--add-dir` for the repo `.git`, `~/.cargo` and `~/.npm` (orchestrator fix 2026-10-25 after P00 r1: Cargo's registry cache and npm's cache were refused; `npm install` of `apps/desktop/package.json` succeeds outside the sandbox). Use the default Cargo home and npm cache; no local `CARGO_HOME`. Codex's command review rejects `rm -rf`: remove generated files with `git rm`/`git clean -n` + targeted deletes or avoid creating them. |
 | Claude sessions | `.claude/settings.json` | Bash allowlist includes `cargo`, `rustup`, `npm`, `npx`, `node`, `osascript`, git read/write (no force-push) |
 
-### 7.2 Commands (standard invocations; **not yet runnable here because Rust is absent** — P00 confirms each and
-amends this table with the observed toolchain version and timings)
+### 7.2 Commands (standard invocations; Rust is installed, but the pinned SQLite dependency conflict in §7.1
+currently prevents Cargo resolution; P00 records command outcomes and timings)
 | Purpose | Command (from repo root unless noted) |
 |---|---|
 | Rust suite (L4 stamp) | `cargo test --workspace` |
