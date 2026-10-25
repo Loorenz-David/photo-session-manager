@@ -90,6 +90,7 @@ No UI yet (P07 shows the list). The owner can wait for P07.
 - Estimated size: ~7 files, ~900 lines.
 
 ## Review log
+- 2026-10-25, codex, fix 1: Resolved F1 by asserting C1(l)'s row label is `Published`, which distinguishes the newer successful publish item from the older failed item. Full workspace suite, Clippy, formatting, desktop typecheck, and frontend test command pass (95 Rust tests; frontend reports no test files). No assumption or behavior changes; no divergence.
 - 2026-10-25, codex, implement round 1: Built MC-7 status and row labels, MC-4 local activity groups, read-only sessions list with counts, search, cover preview and latest confirmed publish item, plus the `sessions_list` command and generated bindings. All 29 criterion rows have one behavior test; the workspace suite, Clippy, formatting, frontend typecheck and frontend tests pass.
 - Assumptions: A publish item without `confirmed_at` is excluded from latest-item derivation, as MC-7 names the greatest confirmation time. Counts describe all sessions before search, matching the filter tabs in the design. Progress is present only while publishing; labels carry the displayed percentage or review count. The cover uses main position 1's adjusted preview, falling back to original, as delegated by the plan.
 - Deviations: Added `Cargo.lock` and `crates/testkit/Cargo.toml` for the plan's Europe/Stockholm DST test dependency; registered the command in `apps/desktop/src-tauri/src/lib.rs` and status module in `mechanisms/mod.rs`. No semantic deviations.

@@ -173,6 +173,7 @@ fn c1l_latest_confirmed_wins() {
     a.insert_publish_item(s, "done", 2, None).unwrap();
     a.mark_published(s).unwrap();
     assert_eq!(row(&a, s).status, S::Published);
+    assert_eq!(row(&a, s).label, L::Published);
 }
 
 #[test]
