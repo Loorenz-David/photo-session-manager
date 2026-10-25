@@ -64,6 +64,9 @@ impl<'a> SessionsService<'a> {
     }
 
     pub fn create(&self, item_id: i64) -> Result<SessionDto> {
+        if let Some(id) = self.store.session_for_item(item_id)? {
+            return self.store.session(id);
+        }
         let mut id = 0;
         let at = now_ms(self.clock);
         self.store.transaction(&mut |tx| {

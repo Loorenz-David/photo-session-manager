@@ -128,3 +128,31 @@ pub fn item_update_identity(
         .map(Into::into)
         .map_err(Into::into)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn items_search(
+    state: State<'_, AppState>,
+    query: String,
+) -> Result<Vec<ItemDto>, CommandError> {
+    let app = state
+        .0
+        .lock()
+        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
+    ItemsService::new(app.store.as_ref(), &SystemClock)
+        .search(&query)
+        .map(|items| items.into_iter().map(Into::into).collect())
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn items_next_sku(state: State<'_, AppState>) -> Result<Option<String>, CommandError> {
+    let app = state
+        .0
+        .lock()
+        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
+    ItemsService::new(app.store.as_ref(), &SystemClock)
+        .next_sku(app.settings.sku_prefix.as_deref())
+        .map_err(Into::into)
+}

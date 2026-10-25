@@ -61,6 +61,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::health::app_paths_get,
         commands::items::item_create,
         commands::items::item_update_identity,
+        commands::items::items_search,
+        commands::items::items_next_sku,
         commands::sessions::session_create,
         commands::sessions::session_get,
         commands::sessions::sessions_list,

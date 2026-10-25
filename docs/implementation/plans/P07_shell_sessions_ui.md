@@ -90,3 +90,24 @@ boundaries (calendar-day based like MC-4), exact copy of the camera error text, 
 
 ## Review log
 - 2026-10-25 21:06 (orchestrator): implement r1 stopped by the Codex usage limit (resets 2026-10-26 01:00); attempt archived to `archive/P07_shell_sessions_ui_20261025-210645`. Partial work is left uncommitted in the tree (shadcn ui components, `features/sessions`, `features/shell`, services, `crates/testkit/tests/p07_shell_sessions_ui.rs`, edits to items/sessions services and commands). The next implementer continues from it: verify each piece against this plan, keep what fits, replace what does not.
+- 2026-10-25 implement r1 (resumed, actor `codex` per prompt; run on Claude Opus): **IMPLEMENTED.** Built the React shell
+  (hash router `#/`, `#/session/:id`, header for both, camera dot with retry and help text, bell placeholder, theme toggle,
+  Sonner, `N`/`Esc`), the Sessions page (groups as delivered, Open/Published/All with counts, debounced server-side search,
+  client-side time filter, hover preview, status pills, Unassigned card, batch selection + disabled "Review & publish"),
+  the New session dialog (`Dialog` + `Command`; existing item → `session_create`; "Create “…”" row → SKU box pre-filled
+  from `items_next_sku`, checked with `items_search` before Create enables → `item_create` → `session_create` → navigate),
+  and the backend `ItemsService::search`, `ItemsService::next_sku(prefix)`, `items_search`, `items_next_sku`, plus
+  `SessionsService::create` returning an item's existing session. Kept from the stopped attempt: the backend pieces
+  (reviewed against MC-22, `next_sku` rewritten for clippy) and the shadcn components; the frontend was rewritten.
+  Judgment calls: hash routing (bundled file URLs); debounce 250 ms (list), 200 ms (item search), 250 ms (SKU check);
+  time filter calendar-day based; theme in `localStorage` until P16; camera help text in `CameraDot.CAMERA_HELP`;
+  `next_sku` takes the prefix as an argument (core cannot read the settings file; the command passes `sku_prefix`);
+  a search hit with `origin` ≠ `local` counts as "in the shop" (P12 fixes the shop-hit shape); a local SKU clash reads
+  "<SKU> is already used by “title”"; no auto-advance of the proposal when the shop holds it (row C5(f) only disables);
+  new local items get an empty `item_type` (filled in the form later), rows show `item_type` or else the title;
+  "Create “…”" copy uses the design's curly double quotes; opening a session calls `session_activate`, returning to
+  Sessions calls `session_deactivate` (ch04 S-B/S-E); the P00 health page stays reachable at `#/health`; checkboxes
+  only on publishable rows (ready, failed) as in the design; shadcn `Progress` fixed to forward `value` (no
+  `aria-valuenow` before); `next-themes` dropped, `cmdk`/`sonner` pinned exactly. Session thumbnails use
+  `convertFileSrc`; they display once P08 enables the asset protocol (P08 owns that choice). Camera not tethered:
+  no hardware probe run. Handoff `handoffs/implementer/handoff_P07_shell_sessions_ui_implement_r1.md`.

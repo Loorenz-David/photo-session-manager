@@ -21,6 +21,58 @@ impl<'a> ItemsService<'a> {
         Self { store, clock }
     }
 
+    /// Local items whose SKU or title contains `query` (case-insensitive). The commerce adapter's
+    /// matches join this list once an integration exists (P12); until then local items only.
+    pub fn search(&self, query: &str) -> Result<Vec<crate::domain::item::Item>> {
+        let needle = query.trim().to_lowercase();
+        if needle.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut items = Vec::new();
+        self.store.transaction(&mut |tx| {
+            items = tx
+                .items()?
+                .into_iter()
+                .filter(|item| {
+                    item.sku.to_lowercase().contains(&needle)
+                        || item.title.to_lowercase().contains(&needle)
+                })
+                .collect();
+            Ok(())
+        })?;
+        Ok(items)
+    }
+
+    /// MC-22 proposal: `<prefix>-<NNNN>` with `NNNN` = 1 + the largest `n` among local SKUs matching
+    /// `^<prefix>-(\d+)$` exactly (case-sensitive), or 1; zero-padded to at least 4 digits.
+    /// `prefix` is the `sku_prefix` setting; absent or empty → no proposal.
+    pub fn next_sku(&self, prefix: Option<&str>) -> Result<Option<String>> {
+        let Some(prefix) = prefix.filter(|p| !p.is_empty()) else {
+            return Ok(None);
+        };
+        let mut largest = 0_u64;
+        self.store.transaction(&mut |tx| {
+            for item in tx.items()? {
+                let number = item
+                    .sku
+                    .strip_prefix(prefix)
+                    .and_then(|rest| rest.strip_prefix('-'))
+                    .filter(|digits| {
+                        !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
+                    })
+                    .and_then(|digits| digits.parse::<u64>().ok());
+                if let Some(number) = number {
+                    largest = largest.max(number);
+                }
+            }
+            Ok(())
+        })?;
+        let next = largest
+            .checked_add(1)
+            .ok_or_else(|| Error::InvalidValue("SKU sequence exhausted".into()))?;
+        Ok(Some(format!("{prefix}-{next:04}")))
+    }
+
     fn collision(tx: &dyn StoreTx, item_id: Option<i64>, sku: &str, key: &str) -> Result<()> {
         for other in tx.items()? {
             if Some(other.id) == item_id {
