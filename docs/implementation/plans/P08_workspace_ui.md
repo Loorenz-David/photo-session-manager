@@ -133,3 +133,19 @@ whether `I` opens a popover or a sheet.
   unfiltered (the backend's candidate rules decide); capture button `S` not added; unreviewed photos are numbered after
   Main in the grid (display only). No hardware probe run (no tethered camera in this session); the debug binary was
   launched against a scratch data dir and stayed up (no panic in the new setup code).
+- 2026-10-25 review r1 (actor `opus`): **CHANGES_REQUESTED.** Tree `2b79552` (+ two docs-only runner commits, clean).
+  Perimeter: the checkpoint's 41 paths equal the handoff's declared list. Suite `cargo test --workspace` 183/0, clippy
+  and fmt clean, `npm run typecheck` clean, `npm test` 42/0. **Verified correct:** all 22 rows: production read and
+  each test judged to observe the row's outcome at its boundary and to fail on a wrong one (C1(d) discriminates
+  captured_at from id order; C2(a) at 4 499/4 500 ms; C2(b) after the toast is gone; C3(b) new asset URL + 700 ms
+  opacity transition; C3(c) mode survives navigation; C3(d) rotation on the original only; C4(a)/(d) from an unsorted
+  input; C4(b) position 3 and no classify; C4(c) classify and no reorder; C5(b) the whole selection; C5(c) a real drop
+  on the disabled row makes no call; C5(d), C6(a), C7(a), C8(a) exact arguments). `displayOrder` matches MC-5 (R-I2).
+  H1–H8: no violation (core `SessionsService::view` is Tauri-free; command thin; asset scope limited to `previews/`;
+  no secrets; no live services in tests). Candidate C0 (`session_get` lists item + non-deleted photos) is sound.
+  **F1 (B1, route production):** the `photo_added` handler in `useWorkspaceState.ts` sets only `activeRef`, never the
+  rendered `activeId`, and `reload` keeps the stale state because the ref's photo is visible. Reviewer probe (a
+  throwaway vitest file, deleted): opening an empty session and delivering `photo_added` leaves "Ready for the first
+  photo" on the stage with no active photo (A/C/⌫ do nothing); with photo 1 active, a new capture 2 leaves the stage on
+  photo 1, so C/⌫ act on photo 1 while ←/→ step from photo 2. Contradicts ch04 S-C / ch06 §Arrival ("appears on the
+  stage") and the plan's Manual try-out step 1. Notes: 4 rows appended to `backlog.md`.
