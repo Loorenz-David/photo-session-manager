@@ -49,3 +49,10 @@ launch and hook delivery outside this sandbox. The updated real-event probe's Au
 permission memory, and document-name display await an interactive bundle run by the owner or
 orchestrator. The work Mac remains unavailable. The real capture-folder watcher probe was not
 rerun in this continuation; its temporary-folder boundary test passed.
+
+## (c) Automation prompt — PASS (orchestrator with the owner, 2026-10-25 19:25)
+The approved P00 bundle (`Session Manager.app`, built 15:52, probe `Application("Capture One").currentDocument().name()`)
+was opened with a scratch data dir while Capture One had `session test 1` open. macOS showed the Automation prompt
+attributed to **Session Manager**; the owner allowed it; the first probe took 2 848 ms (waiting on the prompt) and
+the Health page showed `session test 1`. After quitting and reopening, the probe took 153 ms, **no prompt appeared**
+(owner confirmed) and the document name showed again. The permission is attributed to the bundle and remembered.
