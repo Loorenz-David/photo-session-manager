@@ -73,6 +73,17 @@ pub trait Store: Send + Sync {
     fn set_missing_preview_paths(&self, raw: &str, path: &str) -> Result<Vec<(i64, i64)>>;
     fn new_render_job(&self, raw: &str, now_ms: i64) -> Result<i64>;
     fn finish_render_job(&self, id: i64, error: Option<&str>, now_ms: i64) -> Result<()>;
+    /// Records an export run (a running `render_export` job row whose payload is the frozen photo
+    /// lists) and returns its id, the export run id.
+    fn new_export_run(&self, session_id: i64, snapshot: &str, now_ms: i64) -> Result<i64>;
+    /// The tracking row of one export render (`render_export`, target = the RAW).
+    fn new_export_render_job(
+        &self,
+        raw: &str,
+        run_id: i64,
+        photo_id: i64,
+        now_ms: i64,
+    ) -> Result<i64>;
     fn active_session_id(&self) -> Result<Option<i64>>;
     fn set_active_session_id(&self, id: Option<i64>) -> Result<()>;
     fn job_due(&self, now_ms: i64) -> Result<Option<Job>>;

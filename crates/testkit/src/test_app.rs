@@ -91,6 +91,8 @@ impl TestApp {
         let mut settings = psm_infra::settings_file::Settings::open(&paths)?;
         if configure_document {
             settings.document_id = Some(document_id.clone());
+            // Exports stay inside the test's temporary directory, never under ~/Pictures.
+            settings.export_folder = dir.path().join("Export").to_string_lossy().into_owned();
             std::fs::write(
                 paths.settings(),
                 serde_json::to_vec(&settings)
@@ -147,7 +149,7 @@ impl TestApp {
                 .to_string_lossy()
         ));
         std::fs::create_dir_all(output.parent().unwrap())?;
-        std::fs::write(&output, format!("image from {job_id}"))?;
+        std::fs::write(&output, FakeCaptureOneScripting::output_bytes(job_id))?;
         std::fs::File::options()
             .write(true)
             .open(&output)?
@@ -157,6 +159,34 @@ impl TestApp {
             ))?;
         self.deliver_hook(&serde_json::json!({"hook":"processing_done","job":job_id,"raw":entry.raw,"outputs":[output]}).to_string())?;
         Ok(output)
+    }
+    /// Completes every render still in flight (in issue order), including renders the adapter
+    /// queued behind a busy base name and issued as earlier ones finished. Returns the job ids.
+    pub fn complete_all_renders(&self) -> Result<Vec<String>> {
+        let mut completed = Vec::new();
+        loop {
+            let open: Vec<String> = self
+                .fake
+                .state
+                .lock()
+                .unwrap()
+                .issued
+                .iter()
+                .map(|(job, _, _)| job.clone())
+                .filter(|job| self.app.editing.render_completion(job).is_some())
+                .collect();
+            if open.is_empty() {
+                return Ok(completed);
+            }
+            for job in open {
+                self.complete_render(&job)?;
+                completed.push(job);
+            }
+        }
+    }
+    /// `<export folder>` from the settings of this app (inside the test's temporary directory).
+    pub fn export_root(&self) -> PathBuf {
+        PathBuf::from(&self.app.settings.export_folder)
     }
     pub fn write_sidecar(&self, raw: &str, mtime: SystemTime) -> Result<PathBuf> {
         let raw = Path::new(raw);

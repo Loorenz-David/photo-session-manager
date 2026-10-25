@@ -79,4 +79,40 @@ Progress granularity, how the test makes the fake's export output distinguishabl
 - Estimated size: ~10 files, ~1 300 lines.
 
 ## Review log
-(empty)
+### 2026-10-25 — implement r1 (opus, `pipeline-implementer`)
+**Built.** `ExportService` (core, `services/export.rs`): snapshot of main/condition in position order
+(unreviewed, deleted excluded) → `IntegrityCheck` on each (first `raw_changed`/`raw_missing` fails the run before
+any render) → run row (`jobs` kind `render_export`, payload = frozen lists) → staging `.<key>.partial-<run>/` →
+one `request_render(raw, Export)` per photo with its own tracking row → completions (P06 hook point
+`ExportStaging::completed`) copy `outputs[0]` to the position name → when all are in: drop photos now deleted or
+moved out of the session (R-I6 analogue) and renumber the rest, write `item.json`, swap with renames, delete the
+old folder → `export_progress{done}`. Any failure (final render timeout via the new `ExportStaging::failed`,
+provider error at issue, file error) deletes staging and emits `failed`; `<key>/` is untouched. Mechanisms
+`export_file_name`, `item_json` (+ `ExportGroup`) in `mechanisms/naming.rs`; `ExportFs` (infra) for staging/swap.
+Commands `export_run` (async, off the main thread), `export_open_folder`, `integration_get`; event
+`export_progress`; header **Export** (when `integration == null`) with one progress/result toast.
+
+**Judgment calls.** (1) A photo deleted mid-run is skipped and the remaining files are renamed to contiguous
+positions with `n_g` of the survivors, so M15 "named by the rule" still holds. (2) Run id = id of a `render_export`
+job row (no new table; no migration). (3) `item.json` is written after all renders are copied, before the swap.
+(4) Progress: one `running` event at start and after every copied file. (5) "Open folder" runs `/usr/bin/open` on
+`<export folder>/<key>/` through a new thin command (no opener plugin dependency). (6) A second `export_run` while
+the session's run is in flight returns that run's id. (7) A session with no main/condition photo exports just
+`item.json` (button not disabled; the plan does not ask for a disabled state). (8) Restart mid-export: the
+interrupted run is abandoned (a `render_export` job handler logs and completes the requeued row, so it cannot
+wedge the job queue); its hidden `.<key>.partial-<run>` folder stays beside `<key>/` (never inside it) until
+removed by hand. (9) Fake output bytes: a JPEG SOI/EOI frame around `image from <job id>`
+(`FakeCaptureOneScripting::output_bytes`), and the fake records every `process` call (`issued`, `jobs_for`).
+
+**Deviations (outside the listed perimeter).** `crates/integrations/src/editing/capture_one/adapter.rs`: the
+in-flight dedupe of `request_render` now applies to previews only; before, an export render for a RAW with a
+preview (or an earlier export) in flight was silently dropped and the run would never finish. Export renders still
+queue behind the same base name (MC-16). `crates/core/src/error.rs` (+ `raw_changed{photo_id}`,
+`raw_missing{photo_id}` from the §6.6 registry) and the forced `CommandError` mapping in
+`apps/desktop/src-tauri/src/commands/items.rs`; `crates/core/src/events.rs` (`ExportProgress`, `ExportState`);
+`crates/integrations/src/lib.rs` (wiring); `crates/infra/src/lib.rs` (module). Two commands beyond the registry's
+`export_run`: `export_open_folder`, `integration_get` (no settings command exists before P16).
+
+**Observations.** `IntegrityCheck` treats a photo whose hash job has not run yet (`raw_hash` NULL) as
+`raw_changed`; an export started within seconds of a capture could fail on it. Not changed here (P05/P06 code);
+noted for the backlog. No live Capture One export probe was run in this session (the suite is hardware-free).

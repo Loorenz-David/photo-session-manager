@@ -27,6 +27,18 @@ export const commands = {
 	photosCopy: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_copy", { photoIds, targetSessionId })),
 	photosImport: (paths: string[]) => typedError<null, CommandError>(__TAURI_INVOKE("photos_import", { paths })),
 	photosAssignUnassigned: (itemId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_assign_unassigned", { itemId })),
+	/**
+	 *  Starts the local export of the session (ch07 §Completion without an integration). Progress and
+	 *  the outcome arrive as `export_progress` events; a changed or missing RAW fails here, before any render.
+	 */
+	exportRun: (sessionId: CommandId) => typedError<ExportRunResponse, CommandError>(__TAURI_INVOKE("export_run", { sessionId })),
+	/**  Shows the session's export folder (`<export folder>/<SKU>/`) in Finder. */
+	exportOpenFolder: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("export_open_folder", { sessionId })),
+	/**
+	 *  The configured integration's kind (`settings.integration.kind`), or null when none is configured:
+	 *  the session header then offers Export instead of Publish (H6).
+	 */
+	integrationGet: () => typedError<string | null, CommandError>(__TAURI_INVOKE("integration_get")),
 };
 
 /* Types */
@@ -45,6 +57,10 @@ export type CommandError = {
 };
 
 export type CommandId = number;
+
+export type ExportRunResponse = {
+	run_id: number,
+};
 
 export type HealthItemDto = {
 	code: string,

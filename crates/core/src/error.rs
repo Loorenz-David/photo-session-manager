@@ -36,6 +36,10 @@ pub enum Error {
     DocumentNotOpen,
     #[error("document_not_session")]
     DocumentNotSession,
+    #[error("raw_changed: photo {photo_id}")]
+    RawChanged { photo_id: i64 },
+    #[error("raw_missing: photo {photo_id}")]
+    RawMissing { photo_id: i64 },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -478,6 +478,29 @@ impl Store for SqliteStore {
         conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_preview',?1,'{}','running',0,?2,?2,?2)", params![raw,now_ms]).map_err(db)?;
         Ok(conn.last_insert_rowid())
     }
+    fn new_export_run(&self, session_id: i64, snapshot: &str, now_ms: i64) -> Result<i64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_export',?1,?2,'running',0,?3,?3,?3)", params![format!("session:{session_id}"),snapshot,now_ms]).map_err(db)?;
+        Ok(conn.last_insert_rowid())
+    }
+    fn new_export_render_job(
+        &self,
+        raw: &str,
+        run_id: i64,
+        photo_id: i64,
+        now_ms: i64,
+    ) -> Result<i64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let payload = serde_json::json!({"run_id": run_id, "photo_id": photo_id}).to_string();
+        conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_export',?1,?2,'running',0,?3,?3,?3)", params![raw,payload,now_ms]).map_err(db)?;
+        Ok(conn.last_insert_rowid())
+    }
     fn finish_render_job(&self, id: i64, error: Option<&str>, now_ms: i64) -> Result<()> {
         self.conn
             .lock()

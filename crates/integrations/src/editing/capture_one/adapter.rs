@@ -215,8 +215,17 @@ impl EditingProvider for CaptureOneAdapter {
             .renders
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        if state.jobs.values().any(|e| e.completion.raw == raw)
-            || state.pending.iter().any(|e| e.raw == raw)
+        // A preview already in flight for this RAW covers a newer preview request; an export render
+        // always gets its own job (it belongs to one export run), queued behind the base name.
+        if purpose == RenderPurpose::Preview
+            && (state
+                .jobs
+                .values()
+                .any(|e| e.completion.raw == raw && e.completion.purpose == RenderPurpose::Preview)
+                || state
+                    .pending
+                    .iter()
+                    .any(|e| e.raw == raw && e.purpose == RenderPurpose::Preview))
         {
             return Ok(());
         }

@@ -62,6 +62,14 @@ impl From<Error> for CommandError {
             Error::VariantNotFound => "variant_not_found",
             Error::DocumentNotOpen => "document_not_open",
             Error::DocumentNotSession => "document_not_session",
+            Error::RawChanged { photo_id } => {
+                data.insert("photo_id".into(), photo_id.to_string());
+                "raw_changed"
+            }
+            Error::RawMissing { photo_id } => {
+                data.insert("photo_id".into(), photo_id.to_string());
+                "raw_missing"
+            }
         };
         Self {
             code: code.into(),

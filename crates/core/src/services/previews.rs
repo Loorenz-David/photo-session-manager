@@ -27,6 +27,8 @@ pub trait PreviewFiles: Send + Sync {
 
 pub trait ExportStaging: Send + Sync {
     fn completed(&self, render: &RenderCompletion, output: &Path) -> Result<()>;
+    /// An export render that will not complete (final timeout, MC-16).
+    fn failed(&self, tracking_job_id: i64, reason: &str) -> Result<()>;
 }
 
 pub struct PreviewService {
@@ -196,7 +198,11 @@ impl PreviewService {
             .expire_renders(self.clock.mono(), self.clock.now_ms())?
         {
             let job = self.store.job(id)?;
-            if self.store.preview_state(&job.target)?.is_some() {
+            if job.kind == "render_export" {
+                if let Some(callback) = &self.export_staging {
+                    callback.failed(id, "timeout")?;
+                }
+            } else if self.store.preview_state(&job.target)?.is_some() {
                 self.failed_generation
                     .lock()
                     .map_err(|e| crate::Error::InvalidData(e.to_string()))?

@@ -17,6 +17,13 @@ struct PhotoAddedPayload {
 struct SessionChangedPayload {
     session_id: i64,
 }
+#[derive(serde::Serialize, Clone)]
+struct ExportProgressPayload {
+    session_id: i64,
+    done: usize,
+    total: usize,
+    state: psm_core::events::ExportState,
+}
 impl EventSink for TauriEvents {
     fn emit(&self, event: AppEvent) {
         match event {
@@ -49,6 +56,22 @@ impl EventSink for TauriEvents {
                     .0
                     .emit("session_changed", SessionChangedPayload { session_id });
             }
+            AppEvent::ExportProgress {
+                session_id,
+                done,
+                total,
+                state,
+            } => {
+                let _ = self.0.emit(
+                    "export_progress",
+                    ExportProgressPayload {
+                        session_id,
+                        done,
+                        total,
+                        state,
+                    },
+                );
+            }
             _ => {}
         }
     }
@@ -79,7 +102,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::photos::photos_move,
         commands::photos::photos_copy,
         commands::photos::photos_import,
-        commands::photos::photos_assign_unassigned
+        commands::photos::photos_assign_unassigned,
+        commands::export::export_run,
+        commands::export::export_open_folder,
+        commands::export::integration_get
     ])
 }
 

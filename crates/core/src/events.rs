@@ -18,4 +18,19 @@ pub enum AppEvent {
     CameraStatusChanged {
         status: crate::domain::editing::CameraStatus,
     },
+    ExportProgress {
+        session_id: i64,
+        done: usize,
+        total: usize,
+        state: ExportState,
+    },
+}
+
+/// `export_progress.state` (master plan §6.7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportState {
+    Running,
+    Done,
+    Failed,
 }

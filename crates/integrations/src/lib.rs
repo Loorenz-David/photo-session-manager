@@ -21,10 +21,12 @@ use psm_core::{
     },
     services::{
         arrival::ArrivalService, camera::CameraService, editing_events::EditingEventsDispatcher,
-        editing_startup::EditingStartup, health::HealthService, previews::PreviewService,
+        editing_startup::EditingStartup, export::ExportService, health::HealthService,
+        previews::PreviewService,
     },
 };
 use psm_infra::{
+    export_fs::ExportFs,
     jobs::{JobHandler, JobRunner},
     nudge::NudgeServer,
     paths::AppPaths,
@@ -57,6 +59,7 @@ pub struct App {
     pub jobs: Arc<JobRunner>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
+    pub export: Arc<ExportService>,
     pub events: Arc<EventHub>,
     pub clock: Arc<dyn Clock>,
     stop: Arc<AtomicBool>,
@@ -110,14 +113,23 @@ impl App {
             events.clone(),
             clock.clone(),
         ));
-        let previews = Arc::new(PreviewService::new(
+        let export = Arc::new(ExportService::new(
+            store.clone(),
+            editing.clone(),
+            events.clone(),
+            clock.clone(),
+            Arc::new(ExportFs::new(&settings.export_folder)),
+        ));
+        let mut previews = PreviewService::new(
             store.clone(),
             editing.clone(),
             events.clone(),
             clock.clone(),
             Arc::new(PreviewStore(paths.clone())),
             Some(&settings.preview_delay_s.to_string()),
-        ));
+        );
+        previews.export_staging = Some(export.clone());
+        let previews = Arc::new(previews);
         spool.set_dispatcher(Arc::new(EditingEventsDispatcher {
             arrival: arrival.clone(),
             handler: previews.clone(),
@@ -163,6 +175,7 @@ impl App {
                 previews: previews.clone(),
             }),
         );
+        runner.register("render_export", Arc::new(InterruptedExport));
         let jobs = Arc::new(runner);
         if run_startup && !document_id.is_empty() {
             let startup_editing = editing.clone();
@@ -245,6 +258,7 @@ impl App {
             jobs,
             arrival,
             previews,
+            export,
             events,
             clock,
             stop,
@@ -342,6 +356,16 @@ struct RenderPreviewJob {
 impl JobHandler for RenderPreviewJob {
     fn run(&self, job: &Job, _: i64) -> Result<()> {
         self.previews.request_initial(&job.target)
+    }
+}
+
+/// An export interrupted by a restart: its renders and staging folder belonged to the previous
+/// process, so the run is abandoned (the user exports again); its row must not block the queue.
+struct InterruptedExport;
+impl JobHandler for InterruptedExport {
+    fn run(&self, job: &Job, _: i64) -> Result<()> {
+        tracing::info!(job = job.id, "export interrupted by a restart; abandoned");
+        Ok(())
     }
 }
 

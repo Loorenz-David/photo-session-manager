@@ -25,6 +25,8 @@ pub struct FakeState {
     pub drop_tag_writes: bool,
     pub hooks_readback_null: bool,
     pub next_job: i64,
+    /// Every `process` call in order: (job id, variant, recipe).
+    pub issued: Vec<(String, String, String)>,
 }
 pub struct FakeCaptureOneScripting {
     pub state: Mutex<FakeState>,
@@ -53,8 +55,28 @@ impl FakeCaptureOneScripting {
                 drop_tag_writes: false,
                 hooks_readback_null: false,
                 next_job: 1,
+                issued: Vec::new(),
             }),
         }
+    }
+    /// The output file Capture One writes for render job `job`: a JPEG (SOI … EOI) whose bytes
+    /// carry the job id, so every recorded or exported file can be traced to the job that made it.
+    pub fn output_bytes(job: &str) -> Vec<u8> {
+        let mut bytes = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        bytes.extend_from_slice(format!("image from {job}").as_bytes());
+        bytes.extend_from_slice(&[0xFF, 0xD9]);
+        bytes
+    }
+    /// The job ids `process` returned for `variant`, oldest first.
+    pub fn jobs_for(&self, variant: &str) -> Vec<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .issued
+            .iter()
+            .filter(|(_, v, _)| v == variant)
+            .map(|(job, _, _)| job.clone())
+            .collect()
     }
     pub fn add_image(&self, raw: &str, variants: &[&str], in_folder: bool) {
         let mut s = self.state.lock().unwrap();
@@ -217,6 +239,7 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         s.ops.push(format!("process:{variant}:{recipe}"));
         let id = format!("job-{}", s.next_job);
         s.next_job += 1;
+        s.issued.push((id.clone(), variant.into(), recipe.into()));
         Ok(id)
     }
     fn capture(&self) -> Result<()> {
