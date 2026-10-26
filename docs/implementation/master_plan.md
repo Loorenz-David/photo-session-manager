@@ -87,22 +87,25 @@ restated so no session has to infer them:
 | P14_publish_update | APPROVED | 2026-10-26 | opus | approved with notes after fix 1 (re-review r2): F1 resolved (clearing the last tag in the form removes the app's tags from the shop, admin tags kept, base → `[]`); perimeter = allowed files; suite 371 Rust / 79 UI, clippy/fmt/typecheck green; 22/22 rows hold; notes from earlier rounds in backlog, none added |
 | P15_publish_ui | APPROVED | 2026-10-26 | opus | review r1 of fix 2 (`c4b056d`): APPROVED_WITH_NOTES; F4 resolved (review dialog nested in the form dialog; C5(a) red on pre-fix code, green now); F1–F3 settled earlier; suite 374 Rust / 90 UI, clippy/fmt/typecheck green; 1 backlog note |
 | P16_operations | APPROVED | 2026-10-26 | opus | review r1 APPROVED_WITH_NOTES: 12/12 rows hold at their boundaries; suite 387 Rust / 92 UI, clippy/fmt/typecheck green (re-run by reviewer); C6(a) re-run live by reviewer → "130", still browsing Capture; no secret in the checkpoint diff; 10 backlog notes, none blocking |
+| P17_real_run_fixes | NOT_STARTED | 2026-10-26 | planner | real run 2026-10-26 fixes R1, R2, R4, R5 (backend), R6: settings rebuild, shared collection scan, capture root from the document id, async commands, render backoff + user-priority gate; 5 criteria / 16 rows |
+| P18_pending_state_ui | NOT_STARTED | 2026-10-26 | planner | real run R3 + R5 (frontend): `useAction`/`ActionButton`, `usePageData` + Skeleton on every page, local-first item search with `items_search_shop`; 3 criteria / 9 rows |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 17 phases in execution order; the runner is sequential and a phase starts only when every
+`phases.txt` lists the 19 phases in execution order (17 MVP phases plus the two real-run fix phases added
+2026-10-26); the runner is sequential and a phase starts only when every
 phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
-P15[P14,P11] · P16[P15].
+P15[P14,P11] · P16[P15] · P17[P16] · P18[P17].
 
 - **Local workflow usable after P09** (shoot → arrive → review → live previews → export). Attributes and the
   form (P10, P11) complete the local item data; Shopify starts at P12.
@@ -231,7 +234,9 @@ P03 `sessions_list` · P04 `session_activate`, `session_deactivate`, `camera_sta
 P05 `photos_import`, `photos_assign_unassigned` · P07 `items_search` · P09 `export_run` ·
 P10 `attributes_definitions_list`, `attribute_values_get`, `attribute_values_set`, `attribute_ai_accept_all`,
 `attribute_ai_clear`, `presets_get`, `presets_set`, `form_get` · P13 `publish_preview`, `publish_confirm`, `publish_retry`,
-`notifications_list` · P16 `settings_get`, `settings_set`.
+`notifications_list` · P16 `settings_get`, `settings_set` · P18 `items_search_shop` (`items_search` becomes local-only).
+From P17 every command is `pub async fn` over `AppState(RwLock<App>)` through `AppState::handles()` / `mutate()`
+(`state.rs`), work inside `tauri::async_runtime::spawn_blocking`; no command holds the app lock across provider work.
 Events (`AppEvent` → Tauri event name): `session_changed{session_id}`, `photo_added{photo_id, session_id}`,
 `photo_changed{photo_id, session_id}`, `publish_progress{session_id, item_id, step, uploaded, total}`,
 `export_progress{session_id, done, total, state}`, `health_changed{}`, `camera_status_changed{status}`.
@@ -327,3 +332,4 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
 - 2026-10-25 v1 — created by the planner (round 1).
 - 2026-10-25 P00 r1 continuation — corrected the stale environment note after resolving SQLite, running the workspace suite and building an ad-hoc bundle; recorded the LaunchServices refusal at the bundle-launch boundary.
 - 2026-10-25 P00 r1 close — recorded the orchestrator's successful launch outside the Codex sandbox and the remaining interactive Automation check.
+- 2026-10-26 real-run fix phases — planner added P17_real_run_fixes and P18_pending_state_ui (§4 rows, §5 order, §6.7 command rule and `items_search_shop`) from `real_run_2026-10-26.md`. Fold-back owed by the orchestrator before P17 launches: 05A MC-2's capture-root sentence (the `capture` favourite is the current capture folder per the evidence Correction of 2026-10-26; the root is `<document id>/Capture`).
