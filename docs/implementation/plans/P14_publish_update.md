@@ -95,3 +95,11 @@ whether tags are written in the same `productUpdate` as the title.
 - 2026-10-26 (orchestrator): owner answers (book 09A, R32): the damage-report role uses the configured
   `condition_photos_key` (the one `media_list` definition); task 2 skips condition photos with a notification when
   the field is missing; row C4(d) added (20 → 21 rows). 09A added to Read-first.
+- 2026-10-26 (codex, implement r1): completed attribute diff and canonical read-back, title/SKU/barcode/description
+  writes, three-way tag merge, selected condition-file publishing, retouch revision replacement, and the complete
+  confirmation summary. All 21 P14 boundary tests pass; Rust suite, Clippy, fmt, frontend tests and typecheck pass.
+  Assumptions: an item with no stored tag base starts from an empty base; missing condition-field notification is
+  appended when selected condition photos exist; description is sent as the manual text and escaped to HTML by the
+  adapter. The render-request retouch generation is persisted in its tracking job payload. No contract deviation.
+  Extra perimeter required for the new commerce read path and stored revision fields: domain/ports, Shopify adapter
+  and type, test harness, and the P13 test assertions updated for the new summary wording.

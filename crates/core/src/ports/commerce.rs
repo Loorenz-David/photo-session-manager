@@ -24,6 +24,7 @@ pub const ALL_CAPABILITIES: [&str; 9] = [
 
 pub trait CommerceAdapter: Send + Sync {
     fn capabilities(&self) -> Vec<&'static str>;
+    fn condition_photos_key(&self) -> &str;
 
     /// Items whose default variant SKU equals `sku` byte for byte after NFC (07A MC-11).
     fn item_search(&self, sku: &str) -> Result<Vec<RemoteItem>>;
@@ -31,6 +32,8 @@ pub trait CommerceAdapter: Send + Sync {
     fn item_find(&self, query: &str) -> Result<Vec<RemoteItem>>;
     /// The item's identity and its gallery media in order.
     fn item_get(&self, external_id: &str) -> Result<RemoteItem>;
+    /// Current product fields used for the confirmed description and three-way tag merge.
+    fn product_fields(&self, external_id: &str) -> Result<(Vec<String>, Option<String>)>;
     /// Creates a draft item whose default variant carries `sku` and `barcode`; returns its id.
     fn item_create(
         &self,

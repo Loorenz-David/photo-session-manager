@@ -177,7 +177,11 @@ fn c1a_confirm_freezes_lists_and_excludes_unreviewed() {
             .summary
             .contains("1 unreviewed photos will not be published")
     );
-    assert!(preview.summary.contains("Create 1 shop items"));
+    assert!(
+        preview
+            .summary
+            .contains("The product will be created on Shopify")
+    );
     let run = a
         .app
         .publish
@@ -250,6 +254,8 @@ fn c1c_preview_removals_and_exact_confirmation_text() {
                 upload_state: "ready".into(),
                 export_sha256: None,
                 superseded_ids: Vec::new(),
+                revision: 0,
+                retouch_gen: 0,
             },
             a.clock.now_ms(),
         )
@@ -270,7 +276,11 @@ fn c1c_preview_removals_and_exact_confirmation_text() {
     ];
     let preview = a.app.publish.as_ref().unwrap().preview(&[s]).unwrap();
     assert_eq!(preview.items[0].announced_removals, vec!["m9"]);
-    assert!(preview.summary.contains("Remove 1 shop gallery photos"));
+    assert!(
+        preview
+            .summary
+            .contains("1 photo will be removed from the gallery")
+    );
     a.app
         .publish
         .as_ref()
@@ -771,6 +781,8 @@ fn c5e_update_refuses_unready_desired_media_before_deletion() {
                 upload_state: "attached".into(),
                 export_sha256: None,
                 superseded_ids: Vec::new(),
+                revision: 0,
+                retouch_gen: 0,
             },
             a.clock.now_ms(),
         )

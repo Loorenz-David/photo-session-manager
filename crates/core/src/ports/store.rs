@@ -160,6 +160,7 @@ pub trait Store: Send + Sync {
         integration: &str,
     ) -> Result<Option<crate::domain::item::ItemLink>>;
     fn all_item_links(&self, integration: &str) -> Result<Vec<crate::domain::item::ItemLink>>;
+    fn set_item_tags_base(&self, item_id: i64, integration: &str, tags: &[String]) -> Result<()>;
     fn definition_links(&self, integration: &str) -> Result<Vec<(String, DefinitionLink)>>;
     fn publish_item(&self, item_id: i64) -> Result<PublishItem>;
     fn active_publish_items(&self) -> Result<Vec<i64>>;
@@ -174,6 +175,8 @@ pub trait Store: Send + Sync {
     fn set_publish_progress(&self, item_id: i64, uploaded: i64, total: i64) -> Result<()>;
     fn enqueue_publish_item(&self, item_id: i64, at: i64) -> Result<()>;
     fn set_publish_export(&self, item_id: i64, export_run_id: i64) -> Result<()>;
+    /// RAW retouch generation captured when this publish export's render was requested.
+    fn export_retouch_gen(&self, export_run_id: i64, photo_id: i64) -> Result<Option<i64>>;
     fn photo_link(&self, photo_id: i64, item_id: i64, role: &str) -> Result<Option<PhotoLink>>;
     fn upsert_photo_link(&self, link: &PhotoLink, at: i64) -> Result<()>;
     fn photo_links_for_item(&self, item_id: i64) -> Result<Vec<PhotoLink>>;

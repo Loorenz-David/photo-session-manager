@@ -31,6 +31,7 @@ pub struct FakeShop {
     pub files: Vec<RemoteMedia>,
     pub definitions: Vec<(Definition, DefinitionLink)>,
     pub values: HashMap<String, Vec<(String, Json)>>,
+    pub attribute_writes: Vec<Vec<WriteValue>>,
     pub mutations: Vec<Mutation>,
     pub reads: Vec<String>,
     pub fail_after: Option<String>,
@@ -42,9 +43,14 @@ pub struct FakeShop {
     pub not_found_delivered: bool,
     pub next_id: i64,
     pub staged: HashMap<String, String>,
+    pub tags: HashMap<String, Vec<String>>,
+    pub descriptions: HashMap<String, String>,
+    pub readback_override: Option<(String, Json)>,
+    pub identity_override: Option<RemoteIdentity>,
 }
 pub struct FakeCommerce {
     pub state: Mutex<FakeShop>,
+    pub condition_key: String,
     clock: Arc<dyn Clock>,
     media_poll: (Mutex<MediaPollGate>, Condvar),
 }
@@ -55,8 +61,12 @@ struct MediaPollGate {
 }
 impl FakeCommerce {
     pub fn new(clock: Arc<dyn Clock>) -> Self {
+        Self::with_condition_key(clock, "custom.damage_report")
+    }
+    pub fn with_condition_key(clock: Arc<dyn Clock>, key: &str) -> Self {
         Self {
             state: Mutex::new(FakeShop::default()),
+            condition_key: key.into(),
             clock,
             media_poll: (Mutex::new(MediaPollGate::default()), Condvar::new()),
         }
@@ -137,6 +147,9 @@ impl FakeCommerce {
     }
 }
 impl CommerceAdapter for FakeCommerce {
+    fn condition_photos_key(&self) -> &str {
+        &self.condition_key
+    }
     fn capabilities(&self) -> Vec<&'static str> {
         ALL_CAPABILITIES.to_vec()
     }
@@ -181,6 +194,14 @@ impl CommerceAdapter for FakeCommerce {
             .cloned()
             .ok_or_else(|| Error::NotFound(id.into()))
     }
+    fn product_fields(&self, id: &str) -> Result<(Vec<String>, Option<String>)> {
+        self.read("product_fields")?;
+        let s = self.state.lock().unwrap();
+        Ok((
+            s.tags.get(id).cloned().unwrap_or_default(),
+            s.descriptions.get(id).cloned(),
+        ))
+    }
     fn item_create(
         &self,
         run: &ConfirmedRun,
@@ -213,6 +234,7 @@ impl CommerceAdapter for FakeCommerce {
             sku: sku.into(),
             barcode: p.barcode.clone(),
         };
+        let out = s.identity_override.clone().unwrap_or(out);
         drop(s);
         self.effect(run, "item_set_identity")?;
         Ok(out)
@@ -227,17 +249,24 @@ impl CommerceAdapter for FakeCommerce {
     }
     fn attributes_read(&self, id: &str) -> Result<Vec<(String, Json)>> {
         self.read("attributes_read")?;
-        Ok(self
+        let mut values = self
             .state
             .lock()
             .unwrap()
             .values
             .get(id)
             .cloned()
-            .unwrap_or_default())
+            .unwrap_or_default();
+        if let Some((key, value)) = &self.state.lock().unwrap().readback_override
+            && let Some(row) = values.iter_mut().find(|(k, _)| k == key)
+        {
+            row.1 = value.clone();
+        }
+        Ok(values)
     }
     fn attributes_write(&self, run: &ConfirmedRun, id: &str, values: &[WriteValue]) -> Result<()> {
         let mut s = self.state.lock().unwrap();
+        s.attribute_writes.push(values.to_vec());
         let rows = s.values.entry(id.into()).or_default();
         for v in values {
             if let Some(row) = rows.iter_mut().find(|(key, _)| key == &v.key) {
@@ -429,10 +458,19 @@ impl CommerceAdapter for FakeCommerce {
         drop(s);
         self.effect(run, "update_title")
     }
-    fn update_description(&self, run: &ConfirmedRun, _id: &str, _paragraphs: &str) -> Result<()> {
+    fn update_description(&self, run: &ConfirmedRun, id: &str, paragraphs: &str) -> Result<()> {
+        self.state.lock().unwrap().descriptions.insert(
+            id.into(),
+            psm_integrations::commerce::shopify::adapter::description_html(paragraphs),
+        );
         self.effect(run, "update_description")
     }
-    fn update_tags(&self, run: &ConfirmedRun, _id: &str, _tags: &[String]) -> Result<()> {
+    fn update_tags(&self, run: &ConfirmedRun, id: &str, tags: &[String]) -> Result<()> {
+        self.state
+            .lock()
+            .unwrap()
+            .tags
+            .insert(id.into(), tags.to_vec());
         self.effect(run, "update_tags")
     }
 }

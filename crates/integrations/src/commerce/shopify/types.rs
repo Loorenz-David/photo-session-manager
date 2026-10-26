@@ -133,6 +133,10 @@ pub fn filename_of_url(url: &str) -> Option<String> {
 pub struct ProductNode {
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default, rename = "descriptionHtml")]
+    pub description_html: Option<String>,
     pub variants: Nodes<VariantNode>,
     pub media: Nodes<MediaNode>,
 }

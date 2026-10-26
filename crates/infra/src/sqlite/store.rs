@@ -259,6 +259,8 @@ type PhotoLinkRow = (
     String,
     Option<String>,
     Option<String>,
+    i64,
+    i64,
 );
 fn photo_link_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<PhotoLinkRow> {
     Ok((
@@ -269,6 +271,8 @@ fn photo_link_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<PhotoLinkRow> {
         r.get(4)?,
         r.get(5)?,
         r.get(6)?,
+        r.get(7)?,
+        r.get(8)?,
     ))
 }
 fn map_photo_link(row: PhotoLinkRow) -> Result<PhotoLink> {
@@ -280,6 +284,8 @@ fn map_photo_link(row: PhotoLinkRow) -> Result<PhotoLink> {
         upload_state: row.4,
         export_sha256: row.5,
         superseded_ids: from_json(row.6.as_deref().unwrap_or("[]"))?,
+        revision: row.7,
+        retouch_gen: row.8,
     })
 }
 
@@ -797,7 +803,18 @@ impl Store for SqliteStore {
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let payload = serde_json::json!({"run_id": run_id, "photo_id": photo_id}).to_string();
+        let retouch_gen: i64 = conn
+            .query_row(
+                "SELECT retouch_gen FROM raw_state WHERE raw_path=?1",
+                [raw],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?
+            .unwrap_or(0);
+        let payload =
+            serde_json::json!({"run_id": run_id, "photo_id": photo_id, "retouch_gen": retouch_gen})
+                .to_string();
         conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_export',?1,?2,'running',0,?3,?3,?3)", params![raw,payload,now_ms]).map_err(db)?;
         Ok(conn.last_insert_rowid())
     }
@@ -1220,6 +1237,17 @@ impl Store for SqliteStore {
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(db)
     }
+    fn set_item_tags_base(&self, item_id: i64, integration: &str, tags: &[String]) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE item_links SET tags_base=?3 WHERE item_id=?1 AND integration=?2",
+                params![item_id, integration, to_json(tags)?],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
     fn definition_links(&self, integration: &str) -> Result<Vec<(String, DefinitionLink)>> {
         let conn = self
             .conn
@@ -1322,15 +1350,22 @@ impl Store for SqliteStore {
             .map_err(db)?;
         Ok(())
     }
+    fn export_retouch_gen(&self, export_run_id: i64, photo_id: i64) -> Result<Option<i64>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.query_row("SELECT json_extract(payload,'$.retouch_gen') FROM jobs WHERE kind='render_export' AND json_extract(payload,'$.run_id')=?1 AND json_extract(payload,'$.photo_id')=?2 ORDER BY id DESC LIMIT 1", params![export_run_id,photo_id], |r| r.get(0)).optional().map_err(db).map(|value| value.flatten())
+    }
     fn photo_link(&self, photo_id: i64, item_id: i64, role: &str) -> Result<Option<PhotoLink>> {
         let conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        conn.query_row("SELECT photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids FROM photo_links WHERE photo_id=?1 AND integration='shopify' AND item_id=?2 AND role=?3",params![photo_id,item_id,role],photo_link_row).optional().map_err(db)?.map(map_photo_link).transpose()
+        conn.query_row("SELECT photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids,revision,retouch_gen FROM photo_links WHERE photo_id=?1 AND integration='shopify' AND item_id=?2 AND role=?3",params![photo_id,item_id,role],photo_link_row).optional().map_err(db)?.map(map_photo_link).transpose()
     }
     fn upsert_photo_link(&self, link: &PhotoLink, at: i64) -> Result<()> {
-        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?.execute("INSERT INTO photo_links(photo_id,integration,item_id,role,external_id,upload_state,export_sha256,superseded_ids,updated_at) VALUES (?1,'shopify',?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(photo_id,integration,item_id,role) DO UPDATE SET external_id=excluded.external_id,upload_state=excluded.upload_state,export_sha256=excluded.export_sha256,superseded_ids=excluded.superseded_ids,updated_at=excluded.updated_at",params![link.photo_id,link.item_id,link.role,link.external_id,link.upload_state,link.export_sha256,to_json(&link.superseded_ids)?,at]).map_err(db)?;
+        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?.execute("INSERT INTO photo_links(photo_id,integration,item_id,role,external_id,upload_state,export_sha256,superseded_ids,updated_at,revision,retouch_gen) VALUES (?1,'shopify',?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(photo_id,integration,item_id,role) DO UPDATE SET external_id=excluded.external_id,upload_state=excluded.upload_state,export_sha256=excluded.export_sha256,superseded_ids=excluded.superseded_ids,updated_at=excluded.updated_at,revision=excluded.revision,retouch_gen=excluded.retouch_gen",params![link.photo_id,link.item_id,link.role,link.external_id,link.upload_state,link.export_sha256,to_json(&link.superseded_ids)?,at,link.revision,link.retouch_gen]).map_err(db)?;
         Ok(())
     }
     fn photo_links_for_item(&self, item_id: i64) -> Result<Vec<PhotoLink>> {
@@ -1338,7 +1373,7 @@ impl Store for SqliteStore {
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let mut stmt=conn.prepare("SELECT photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids FROM photo_links WHERE integration='shopify' AND item_id=?1 ORDER BY id").map_err(db)?;
+        let mut stmt=conn.prepare("SELECT photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids,revision,retouch_gen FROM photo_links WHERE integration='shopify' AND item_id=?1 ORDER BY id").map_err(db)?;
         stmt.query_map([item_id], photo_link_row)
             .map_err(db)?
             .collect::<rusqlite::Result<Vec<_>>>()

@@ -73,15 +73,18 @@ impl TestApp {
         self.app.store.as_ref()
     }
     pub fn new() -> Result<Self> {
-        Self::create(false, false)
+        Self::create(false, false, "custom.damage_report")
     }
     pub fn with_fake_document() -> Result<Self> {
-        Self::create(true, false)
+        Self::create(true, false, "custom.damage_report")
     }
     pub fn with_fake_shop() -> Result<Self> {
-        Self::create(true, true)
+        Self::create(true, true, "custom.damage_report")
     }
-    fn create(configure_document: bool, configure_shop: bool) -> Result<Self> {
+    pub fn with_fake_shop_key(key: &str) -> Result<Self> {
+        Self::create(true, true, key)
+    }
+    fn create(configure_document: bool, configure_shop: bool, condition_key: &str) -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let paths = AppPaths::for_dir(dir.path());
         paths.create()?;
@@ -106,7 +109,12 @@ impl TestApp {
         }
         let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
         let clock = Arc::new(ManualClock::new(0));
-        let commerce = configure_shop.then(|| Arc::new(FakeCommerce::new(clock.clone())));
+        let commerce = configure_shop.then(|| {
+            Arc::new(FakeCommerce::with_condition_key(
+                clock.clone(),
+                condition_key,
+            ))
+        });
         let app = App::open_with_adapter(
             paths,
             fake.clone(),

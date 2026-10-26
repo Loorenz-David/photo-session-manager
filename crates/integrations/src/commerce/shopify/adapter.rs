@@ -394,6 +394,9 @@ fn search_query(sku: &str) -> String {
 }
 
 impl CommerceAdapter for ShopifyAdapter {
+    fn condition_photos_key(&self) -> &str {
+        &self.config.condition_photos_key
+    }
     fn capabilities(&self) -> Vec<&'static str> {
         ALL_CAPABILITIES.to_vec()
     }
@@ -498,6 +501,11 @@ impl CommerceAdapter for ShopifyAdapter {
                 .and_then(|i| i.url.clone()),
             media: remote_media(&product.media.nodes),
         })
+    }
+
+    fn product_fields(&self, external_id: &str) -> Result<(Vec<String>, Option<String>)> {
+        let product = self.product(external_id)?;
+        Ok((product.tags, product.description_html))
     }
 
     fn item_create(

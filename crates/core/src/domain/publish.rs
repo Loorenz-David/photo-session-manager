@@ -150,6 +150,8 @@ pub struct PhotoLink {
     pub upload_state: String,
     pub export_sha256: Option<String>,
     pub superseded_ids: Vec<String>,
+    pub revision: i64,
+    pub retouch_gen: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

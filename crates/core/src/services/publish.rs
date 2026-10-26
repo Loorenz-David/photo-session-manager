@@ -11,10 +11,12 @@ use crate::{
     },
     events::AppEvent,
     mechanisms::{
+        attribute_write::{merge_tags, write_set},
         hash::sha256_file,
         naming::{ExportGroup, export_file_name, folder_key},
-        publish::publish_summary,
+        publish::{publish_summary, replacement_candidates},
         reconcile,
+        values::canonicalize,
     },
     ports::{clock::Clock, commerce::CommerceAdapter, events::EventSink, store::Store},
     services::{export::ExportService, integrity::IntegrityCheck},
@@ -102,19 +104,20 @@ impl PublishService {
             key = tx
                 .attribute_definitions("shopify")?
                 .into_iter()
-                .find(|d| d.core_type == CoreType::MediaList)
+                .find(|d| {
+                    d.core_type == CoreType::MediaList
+                        && d.key == self.commerce.condition_photos_key()
+                })
                 .map(|d| d.key);
             Ok(())
         })?;
         Ok(key)
     }
     fn filtered_condition(&self, item_id: i64, ids: &[i64]) -> Result<Vec<i64>> {
-        let Some(key) = self.condition_key()? else {
-            return Ok(Vec::new());
-        };
+        let key = self.commerce.condition_photos_key();
         let attributes = self.frozen_attributes(item_id)?;
         let excluded: HashSet<i64> = attributes
-            .get(&key)
+            .get(key)
             .and_then(|v| v.get("excluded"))
             .and_then(|v| serde_json::from_value::<Vec<i64>>(v.clone()).ok())
             .unwrap_or_default()
@@ -317,6 +320,9 @@ impl PublishService {
         if matches!(item.step, PublishStep::Done | PublishStep::Failed) {
             return Ok(());
         }
+        if item.step == PublishStep::Prepare {
+            self.emit(&item, PublishStep::Prepare);
+        }
         let token = ConfirmedRun::from_persisted(self.store.as_ref(), item.run_id)?;
         let outcome = match item.step {
             PublishStep::Prepare => self.prepare(&item, &token),
@@ -331,7 +337,7 @@ impl PublishService {
                 let next = match item.step {
                     PublishStep::Prepare => PublishStep::Upload,
                     PublishStep::Upload => PublishStep::Update,
-                    PublishStep::Update => PublishStep::Describe,
+                    PublishStep::Update => PublishStep::Done,
                     _ => PublishStep::Done,
                 };
                 if next == PublishStep::Done {
@@ -360,7 +366,13 @@ impl PublishService {
                             return Ok(());
                         }
                     }
-                    let text = format!("Published · {}", self.clock.now_ms());
+                    let mut text = format!("Published · {}", self.clock.now_ms());
+                    if self.condition_key()?.is_none() && !item.frozen_condition.is_empty() {
+                        text.push_str(&format!(
+                            ". Condition photos not published: field {} not found in the shop",
+                            self.commerce.condition_photos_key()
+                        ));
+                    }
                     self.store
                         .complete_publish_item(item.id, self.clock.now_ms(), &text)?;
                 } else {
@@ -484,9 +496,23 @@ impl PublishService {
                         upload_state: "none".into(),
                         export_sha256: None,
                         superseded_ids: Vec::new(),
+                        revision: 0,
+                        retouch_gen: self.store.export_retouch_gen(export_id, *id)?.unwrap_or(0),
                     });
+                let export_gen = self.store.export_retouch_gen(export_id, *id)?.unwrap_or(0);
+                let replaced =
+                    replacement_candidates(&[link.clone()], &HashMap::from([(*id, export_gen)]))
+                        .contains(id);
+                if replaced {
+                    if let Some(old_id) = link.external_id.take() {
+                        link.superseded_ids.push(old_id);
+                    }
+                    link.revision += 1;
+                    link.retouch_gen = export_gen;
+                    link.upload_state = "none".into();
+                }
                 link.export_sha256 = Some(hash);
-                if link.upload_state == "none" {
+                if link.upload_state == "none" && !replaced {
                     link.upload_state = "exported".into();
                 }
                 self.store.upsert_photo_link(&link, self.clock.now_ms())?;
@@ -546,6 +572,9 @@ impl PublishService {
             ),
         ] {
             for (index, id) in ids.iter().enumerate() {
+                if group == ExportGroup::Condition && self.condition_key()?.is_none() {
+                    continue;
+                }
                 // Safety recheck immediately before any remote write.
                 let photo = self.store.photo(*id)?;
                 if photo.session_id != item.session_id
@@ -561,7 +590,15 @@ impl PublishService {
                     uploaded += 1;
                     continue;
                 }
-                let stem = Self::upload_stem(&local.folder_key, &photo.uid);
+                let stem = format!(
+                    "{}{}",
+                    Self::upload_stem(&local.folder_key, &photo.uid),
+                    if link.revision > 0 {
+                        format!("-r{}", link.revision)
+                    } else {
+                        String::new()
+                    }
+                );
                 let existing = if group == ExportGroup::Main {
                     self.commerce.list_media(&remote)?
                 } else {
@@ -595,7 +632,7 @@ impl PublishService {
                         run,
                         &local.folder_key,
                         &photo.uid,
-                        0,
+                        link.revision,
                         bytes.len() as u64,
                     )?;
                     link.upload_state = "staged".into();
@@ -708,6 +745,135 @@ impl PublishService {
             .collect();
         if readback != desired {
             return Err(Error::GalleryVerification);
+        }
+        // MC-13: compare typed values, write only confirmed differences, then verify the same keys.
+        let mut definitions = Vec::new();
+        self.store.transaction(&mut |tx| {
+            definitions = tx.attribute_definitions("shopify")?;
+            Ok(())
+        })?;
+        let links: HashMap<_, _> = self
+            .store
+            .definition_links("shopify")?
+            .into_iter()
+            .collect();
+        let remote_values = self.commerce.attributes_read(&external)?;
+        let mut changes = write_set(&item.frozen_attributes, &definitions, &remote_values);
+        if let Some(key) = self.condition_key()? {
+            let selected = self.selected(item.session_id, &item.frozen_condition)?;
+            if !selected.is_empty() || item.frozen_attributes.contains_key(&key) {
+                let mut ids = Vec::new();
+                for photo_id in selected {
+                    let link = self
+                        .store
+                        .photo_link(photo_id, local.id, &format!("attribute:{key}"))?
+                        .ok_or(Error::UploadIncomplete)?;
+                    if link.upload_state != "ready" {
+                        return Err(Error::UploadIncomplete);
+                    }
+                    ids.push(link.external_id.ok_or(Error::UploadIncomplete)?);
+                }
+                let value = serde_json::json!(ids);
+                if !remote_values.iter().any(|(k, v)| k == &key && v == &value) {
+                    changes.push((key, value));
+                }
+            }
+        }
+        let writes: Vec<_> = changes
+            .iter()
+            .filter_map(|(key, value)| {
+                links
+                    .get(key)
+                    .map(|link| crate::domain::publish::WriteValue {
+                        key: key.clone(),
+                        link: link.clone(),
+                        value: value.clone(),
+                    })
+            })
+            .collect();
+        for batch in writes.chunks(25) {
+            self.commerce.attributes_write(run, &external, batch)?;
+        }
+        if !writes.is_empty() {
+            let readback: HashMap<_, _> = self
+                .commerce
+                .attributes_read(&external)?
+                .into_iter()
+                .collect();
+            let failed: Vec<_> = writes
+                .iter()
+                .filter(|write| {
+                    let Some(actual) = readback.get(&write.key) else {
+                        return true;
+                    };
+                    let Some(definition) = definitions.iter().find(|d| d.key == write.key) else {
+                        return true;
+                    };
+                    if definition.core_type == CoreType::MediaList {
+                        return actual != &write.value;
+                    }
+                    canonicalize(definition.core_type, definition, actual.clone()).ok()
+                        != canonicalize(definition.core_type, definition, write.value.clone()).ok()
+                })
+                .map(|write| write.key.clone())
+                .collect();
+            if !failed.is_empty() {
+                return Err(Error::AttributeVerification { keys: failed });
+            }
+        }
+        let remote = self.commerce.item_get(&external)?;
+        if remote.title != item.title {
+            self.commerce.update_title(run, &external, &item.title)?;
+        }
+        if remote.sku.as_deref() != Some(&local.sku)
+            || local
+                .barcode
+                .as_ref()
+                .is_some_and(|barcode| remote.barcode.as_ref() != Some(barcode))
+        {
+            let identity = self.commerce.item_set_identity(
+                run,
+                &external,
+                &local.sku,
+                local.barcode.as_deref(),
+            )?;
+            if identity.sku != local.sku
+                || local
+                    .barcode
+                    .as_ref()
+                    .is_some_and(|barcode| identity.barcode.as_ref() != Some(barcode))
+            {
+                return Err(Error::InvalidData("identity read-back mismatch".into()));
+            }
+        }
+        let (remote_tags, remote_description) = self.commerce.product_fields(&external)?;
+        if let Some(description) = item
+            .frozen_attributes
+            .get("product.description")
+            .and_then(|v| v.as_str())
+            && remote_description.as_deref() != Some(description)
+        {
+            self.commerce
+                .update_description(run, &external, description)?;
+        }
+        if let Some(local_tags) = item
+            .frozen_attributes
+            .get("product.tags")
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+        {
+            let link = self
+                .store
+                .item_link(local.id, "shopify")?
+                .ok_or(Error::UploadIncomplete)?;
+            let base: Vec<String> = link
+                .tags_base
+                .as_deref()
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_default();
+            if let Some(tags) = merge_tags(&base, &local_tags, &remote_tags) {
+                self.commerce.update_tags(run, &external, &tags)?;
+                self.store.set_item_tags_base(local.id, "shopify", &tags)?;
+            }
         }
         Ok(true)
     }
