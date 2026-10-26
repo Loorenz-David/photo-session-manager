@@ -29,13 +29,22 @@ master plan §6.3, §6.8, §7.2 (build command), §3 (secrets) · book `01` (rul
 `ClientCredentialsAuth`, then a `shop { name }` query; errors are the 09A MC-23 ones), `apps/desktop/src-tauri/src/commands/settings.rs` (new: `settings_get`, `settings_set`),
 bindings, `apps/desktop/src/features/{settings/SettingsPage.tsx, health/HealthPage.tsx (complete), shell/Header.tsx (gear)}`,
 `apps/desktop/src/services/settings.ts`, `docs/intention/evidence/packaging_spike.md` (final build + measurements appended),
-`crates/testkit/tests/p16_operations.rs` (new), `apps/desktop/src/features/settings/__tests__/p16_settings.test.tsx`.
+`crates/testkit/tests/p16_operations.rs` (new), `apps/desktop/src/features/settings/__tests__/p16_settings.test.tsx`,
+`crates/integrations/src/editing/capture_one/jxa/find_image_in_folder.js` (task 0).
 
 ## Core mechanisms (unit tests allowed)
 - `psm_infra::backup::prune(dir, keep = 30)`.
 - `psm_infra::logging::redact(line, secrets) -> String`.
 
 ## Ordered tasks
+0. **Capture One folder lookup (VERIFY-11, live 2026-10-26).** On the real app `doc.images whose path` searches only
+   the collection being browsed, and `collections.whose({file: Path(...)})` raises -1725 "Illegal logical operator",
+   so `find_image_in_folder.js` (the 10A MC-19 fallback the adapter uses when `find_image` misses) always errors.
+   Rewrite it to iterate `d.collections()` and pick the first whose `file()` (when not null) `.toString()` equals the
+   folder argument after canonicalisation (strip a leading `/private`, drop a trailing `/`), then
+   `images.whose({path: raw})` on that collection and the position-1 variant as today. It must not change
+   `currentCollection`. No change to `find_image.js` or the adapter order. Evidence: `capture_one_16.8.6.md`
+   "VERIFY-11 result".
 1. `SettingsService::get()` (`client_secret` masked as `••••` + last 4; shop domain, client ID and
    `condition_photos_key` shown as stored) and `set(patch)` (validates `preview_delay_s` 10–30 on
    write? **No** — stored as given, clamped on read per MC-17; validates `export_folder` is absolute); file rewritten
@@ -49,7 +58,7 @@ bindings, `apps/desktop/src/features/{settings/SettingsPage.tsx, health/HealthPa
    releases, shot-to-original-preview and shot-to-adjusted-preview (5 frames) in `packaging_spike.md`.
 6. Tests.
 
-## Criteria (5 criteria, 11 rows; 7 `[rule]` rows)
+## Criteria (6 criteria, 12 rows; 8 `[rule]` rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `settings_set({preview_delay_s: 40, export_folder: "/tmp/x"})` then `settings_get` | — | `settings.json` holds `40`; `settings_get` returns `preview_delay_s: 40` and `effective_preview_delay_s: 30`; file mode `0600` | MC-17 (clamp on read); `[rule]` ch12 §Settings |
@@ -62,6 +71,7 @@ bindings, `apps/desktop/src/features/{settings/SettingsPage.tsx, health/HealthPa
 | C4(a) | log capture around one editing-provider call | — | a log line with the operation name and `duration_ms` | MC-19 / ch10 (every provider call with duration) |
 | C4(b) | log capture around a publish run | — | every adapter mutation line contains `run_id=<id>` | M5, MC-10 |
 | C5(a) | log capture around a publish run with client secret `"SECRETTOKEN123"` and fake access token `"ACCESSTOKEN456"` | — | neither string ever appears in any log line or in any `capture_events`/`notifications` row | B3 (rule 8: secrets never logged) |
+| C6(a) | `osascript -l JavaScript find_image_in_folder.js "/Users/davidloorenz/Pictures/session test 1" "/Users/davidloorenz/Pictures/session test 1/Capture/PSM_PROBE_A" "/Users/davidloorenz/Pictures/session test 1/Capture/PSM_PROBE_A/session test 12199.ARW"` against the running Capture One while it browses `Capture` | live frames from 2026-10-26 | prints `"130"`; Capture One still browses `Capture` afterwards; the script contains no `whose({file` | `[rule]` 10A MC-19 (live; the implementer runs it if its sandbox allows Apple events, else the reviewer runs it) |
 | C5(b) | `settings.json` after any `settings_set` | — | mode `0600`; the repo tree contains no file with the client secret (test greps the temp data dir only; the reviewer greps the checkpoint diff) | B3 (rule 8) |
 
 ## Delegated choices
@@ -86,3 +96,6 @@ format (JSON lines or key=value), how cold start is measured (launch → first `
 - 2026-10-26 (orchestrator): owner answers (book 09A, R32): settings show shop, client ID, masked secret and the
   condition-photos key; health checks token obtainability (09A MC-23 messages) and the condition-photos field; rows
   C1(b), C3(a), C5(a)/(b) reworded. Counts unchanged (11 rows).
+- 2026-10-26 (orchestrator): live camera probe found the 10A MC-19 fallback script broken on the real Capture One
+  (`collections.whose({file})` → -1725; `images whose path` limited to the browsed collection). Added task 0 and row
+  C6(a) (12 rows). Evidence `capture_one_16.8.6.md` "VERIFY-11 result".

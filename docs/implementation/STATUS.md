@@ -40,7 +40,7 @@ When the owner says the credentials file is filled: check the token request (nev
 ## Facts the next orchestrator needs
 - 2026-10-25 ~15:55: owner took the camera away (not tethered). Capture One stays open on
   `session test 1` on this Mac; the owner will not use Capture One here. Capture-dependent probes →
-  UNPROBED; rerun them (autofocus + capture, evidence VERIFY-12) when the camera is back.
+  UNPROBED; rerun 2026-10-26 08:10–08:20 with the camera: VERIFY-11 (fallback script broken → P16 task 0) and VERIFY-8 capture latency recorded; VERIFY-6 at N≥50 still unprobed.
 - Codex trust for this repo is set in `~/.codex/config.toml`; `claude -p --agent pipeline-reviewer --model opus` verified working.
 - 2026-10-26 owner answers: (B) the P12 probe store is the owner's **test store**; the real store comes later by
   changing shop + credentials in settings only, so nothing store-specific is hard-coded. (A) Shopify access is a Dev

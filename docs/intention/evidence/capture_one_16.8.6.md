@@ -260,3 +260,22 @@ JXA against the open `session test 1` document:
   by string. Set to a **non-existent** file → reads back a different path,
   `/var/folders/…/T/TempCOScript_<UUID>.scpt` (Capture One substitutes a temp copy), so install must run
   after the scripts are compiled and a read-back mismatch is the signal. Cleared with `""` → reads `null`.
+
+**VERIFY-11 result (orchestrator, 2026-10-26 08:16, camera tethered).** Frames 12199, 12200 into
+`Capture/PSM_PROBE_A/` and 12201, 12202 into `Capture/PSM_PROBE_B/` (capture folder set before each pair;
+autofocus recipe). While Capture One browsed `PSM_PROBE_B` (it followed the capture folder):
+- `doc.images.whose({path: <RAW in B>})` → 1 image, variant `"132"`, 46 ms; `<RAW in A>` → **0 images**.
+  `images whose path` on the document searches **only the current collection**.
+- `doc.collections.whose({file: Path(<folder>)})` → **error -1725 "Illegal logical operator called"** for every
+  folder tried. The adapter's `find_image_in_folder.js` uses exactly this, so the MC-19 fallback always errors.
+- Working form: iterate `doc.collections()` (top level lists every folder favourite, nested ones flattened too; 84 ms
+  for 11 collections) and compare `c.file().toString()` with the folder; then `c.images.whose({path: RAW})` → 1 image,
+  variant `"130"`, colour tag 0, 33 ms. `currentCollection` is unchanged. `collections.whose({name})` and
+  `collections.byId(17)` also work. Folder collections exist for folders that were set as capture folder.
+- Fix routed to P16 task 0 (row C6(a)). Frames and the two scratch folders stay in the test session.
+
+**VERIFY-8 capture latency (2026-10-26, 4 frames).** Temporary compiled hook writing a timestamp + argv;
+`captureDoneScript` cleared with `""` afterwards. `capture` call (incl. 2 s autofocus wait) returns in 2.21–2.34 s;
+the RAW is visible in the capture folder 1.37–1.48 s after the call returns; the capture-done hook fires 1.71–2.54 s
+after the call returns (0.3–1.1 s after the file is visible), argv = the full RAW path (VERIFY-1 confirmed again).
+
