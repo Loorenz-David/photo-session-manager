@@ -1,0 +1,267 @@
+{
+  "source": "captured: P12 probe capture sv1_values_set (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { namespace key type value } userErrors { field message code elementIndex } } }",
+    "variables": {
+      "metafields": [
+        {
+          "key": "extention_type",
+          "namespace": "custom",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "Two Outside"
+        },
+        {
+          "key": "fx_text",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "Hej världen ✓"
+        },
+        {
+          "key": "testing_listing",
+          "namespace": "custom",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "list.single_line_text_field",
+          "value": "[\"Completely restored\",\"Light wear consistent with age and use\"]"
+        },
+        {
+          "key": "fx_list_text",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "list.single_line_text_field",
+          "value": "[\"teak\",\"oak\"]"
+        },
+        {
+          "key": "fx_text_long",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "multi_line_text_field",
+          "value": "line one\nline two\n\nsecond paragraph"
+        },
+        {
+          "key": "psm_probe_rich_text_field",
+          "namespace": "custom",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "rich_text_field",
+          "value": "{\"children\":[{\"children\":[{\"type\":\"text\",\"value\":\"First paragraph & more\"}],\"type\":\"paragraph\"},{\"children\":[{\"type\":\"text\",\"value\":\"Second <b> \\\"q\\\"\"}],\"type\":\"paragraph\"}],\"type\":\"root\"}"
+        },
+        {
+          "key": "fx_integer",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "number_integer",
+          "value": "42"
+        },
+        {
+          "key": "fx_decimal",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "number_decimal",
+          "value": "12.50"
+        },
+        {
+          "key": "fx_dimension",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "dimension",
+          "value": "{\"value\":45.5,\"unit\":\"cm\"}"
+        },
+        {
+          "key": "fx_weight",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "weight",
+          "value": "{\"value\":2.5,\"unit\":\"kg\"}"
+        },
+        {
+          "key": "fx_volume",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "volume",
+          "value": "{\"value\":1.5,\"unit\":\"l\"}"
+        },
+        {
+          "key": "fx_boolean",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "boolean",
+          "value": "true"
+        },
+        {
+          "key": "fx_date",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "date",
+          "value": "2026-10-26"
+        },
+        {
+          "key": "fx_datetime",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "date_time",
+          "value": "2026-10-26T10:00:00Z"
+        },
+        {
+          "key": "fx_color",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "color",
+          "value": "#a1b2c3"
+        },
+        {
+          "key": "fx_rating",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "rating",
+          "value": "{\"value\":\"4.5\",\"scale_min\":\"1.0\",\"scale_max\":\"5.0\"}"
+        },
+        {
+          "key": "fx_money",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "money",
+          "value": "{\"amount\":\"12.50\",\"currency_code\":\"USD\"}"
+        },
+        {
+          "key": "fx_url",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "url",
+          "value": "https://example.com/item?x=1"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "metafieldsSet": {
+          "metafields": [
+            {
+              "key": "extention_type",
+              "namespace": "custom",
+              "type": "single_line_text_field",
+              "value": "Two Outside"
+            },
+            {
+              "key": "fx_text",
+              "namespace": "beyo",
+              "type": "single_line_text_field",
+              "value": "Hej världen ✓"
+            },
+            {
+              "key": "testing_listing",
+              "namespace": "custom",
+              "type": "list.single_line_text_field",
+              "value": "[\"Completely restored\",\"Light wear consistent with age and use\"]"
+            },
+            {
+              "key": "fx_list_text",
+              "namespace": "beyo",
+              "type": "list.single_line_text_field",
+              "value": "[\"teak\",\"oak\"]"
+            },
+            {
+              "key": "fx_text_long",
+              "namespace": "beyo",
+              "type": "multi_line_text_field",
+              "value": "line one\nline two\n\nsecond paragraph"
+            },
+            {
+              "key": "psm_probe_rich_text_field",
+              "namespace": "custom",
+              "type": "rich_text_field",
+              "value": "{\"children\":[{\"children\":[{\"type\":\"text\",\"value\":\"First paragraph & more\"}],\"type\":\"paragraph\"},{\"children\":[{\"type\":\"text\",\"value\":\"Second <b> \\\"q\\\"\"}],\"type\":\"paragraph\"}],\"type\":\"root\"}"
+            },
+            {
+              "key": "fx_integer",
+              "namespace": "beyo",
+              "type": "number_integer",
+              "value": "42"
+            },
+            {
+              "key": "fx_decimal",
+              "namespace": "beyo",
+              "type": "number_decimal",
+              "value": "12.5"
+            },
+            {
+              "key": "fx_dimension",
+              "namespace": "beyo",
+              "type": "dimension",
+              "value": "{\"value\":45.5,\"unit\":\"CENTIMETERS\"}"
+            },
+            {
+              "key": "fx_weight",
+              "namespace": "beyo",
+              "type": "weight",
+              "value": "{\"value\":2.5,\"unit\":\"KILOGRAMS\"}"
+            },
+            {
+              "key": "fx_volume",
+              "namespace": "beyo",
+              "type": "volume",
+              "value": "{\"value\":1.5,\"unit\":\"LITERS\"}"
+            },
+            {
+              "key": "fx_boolean",
+              "namespace": "beyo",
+              "type": "boolean",
+              "value": "true"
+            },
+            {
+              "key": "fx_date",
+              "namespace": "beyo",
+              "type": "date",
+              "value": "2026-10-26"
+            },
+            {
+              "key": "fx_datetime",
+              "namespace": "beyo",
+              "type": "date_time",
+              "value": "2026-10-26T10:00:00Z"
+            },
+            {
+              "key": "fx_color",
+              "namespace": "beyo",
+              "type": "color",
+              "value": "#a1b2c3"
+            },
+            {
+              "key": "fx_rating",
+              "namespace": "beyo",
+              "type": "rating",
+              "value": "{\"scale_min\":\"1.0\",\"scale_max\":\"5.0\",\"value\":\"4.5\"}"
+            },
+            {
+              "key": "fx_money",
+              "namespace": "beyo",
+              "type": "money",
+              "value": "{\"amount\":\"12.50\",\"currency_code\":\"USD\"}"
+            },
+            {
+              "key": "fx_url",
+              "namespace": "beyo",
+              "type": "url",
+              "value": "https://example.com/item?x=1"
+            }
+          ],
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 14,
+          "requestedQueryCost": 14,
+          "throttleStatus": {
+            "currentlyAvailable": 1986,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

@@ -1,0 +1,387 @@
+{
+  "source": "captured: P12 probe capture sv1_definitions_p2 (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query Definitions($after: String) { metafieldDefinitions(ownerType: PRODUCT, first: 50, after: $after) { pageInfo { hasNextPage endCursor } nodes { id namespace key name description type { name } validations { name value } access { admin } } } }",
+    "variables": {
+      "after": "eyJsYXN0X2lkIjozNDk2OTM2MDgwODksImxhc3RfdmFsdWUiOiIzNDk2OTM2MDgwODkifQ=="
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "metafieldDefinitions": {
+          "nodes": [
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349693640857",
+              "key": "fx_dimension",
+              "name": "Dimension",
+              "namespace": "beyo",
+              "type": {
+                "name": "dimension"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349694263449",
+              "key": "fx_integer",
+              "name": "Integer",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349694427289",
+              "key": "fx_json",
+              "name": "Json",
+              "namespace": "beyo",
+              "type": {
+                "name": "json"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349694591129",
+              "key": "fx_list_reference",
+              "name": "List Reference",
+              "namespace": "beyo",
+              "type": {
+                "name": "list.metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24253956249"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349694623897",
+              "key": "fx_list_text",
+              "name": "List Text",
+              "namespace": "beyo",
+              "type": {
+                "name": "list.single_line_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349694656665",
+              "key": "fx_money",
+              "name": "Money",
+              "namespace": "beyo",
+              "type": {
+                "name": "money"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349694689433",
+              "key": "fx_rating",
+              "name": "Rating",
+              "namespace": "beyo",
+              "type": {
+                "name": "rating"
+              },
+              "validations": [
+                {
+                  "name": "scale_max",
+                  "value": "5.0"
+                },
+                {
+                  "name": "scale_min",
+                  "value": "1.0"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349694722201",
+              "key": "fx_reference",
+              "name": "Reference",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24253956249"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349695344793",
+              "key": "fx_text",
+              "name": "Text",
+              "namespace": "beyo",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349695377561",
+              "key": "fx_text_long",
+              "name": "Text Long",
+              "namespace": "beyo",
+              "type": {
+                "name": "multi_line_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349695410329",
+              "key": "fx_url",
+              "name": "Url",
+              "namespace": "beyo",
+              "type": {
+                "name": "url"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349695443097",
+              "key": "fx_volume",
+              "name": "Volume",
+              "namespace": "beyo",
+              "type": {
+                "name": "volume"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349695475865",
+              "key": "fx_weight",
+              "name": "Weight",
+              "namespace": "beyo",
+              "type": {
+                "name": "weight"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "The item's current open issues; written only by the central system.",
+              "id": "gid://shopify/MetafieldDefinition/479907479705",
+              "key": "condition_issues",
+              "name": "Condition issues",
+              "namespace": "beyo",
+              "type": {
+                "name": "list.metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/35257942169"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "The append-only condition record list; written only by the central system.",
+              "id": "gid://shopify/MetafieldDefinition/479907512473",
+              "key": "condition_log",
+              "name": "Condition log",
+              "namespace": "beyo",
+              "type": {
+                "name": "json"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/479985664153",
+              "key": "damage_report",
+              "name": "Damage Report",
+              "namespace": "custom",
+              "type": {
+                "name": "list.file_reference"
+              },
+              "validations": [
+                {
+                  "name": "file_type_options",
+                  "value": "[\"Image\"]"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Session Manager grounding probe (temporary; deleted by the probe)",
+              "id": "gid://shopify/MetafieldDefinition/479996936345",
+              "key": "psm_probe_rich_text_field",
+              "name": "psm_probe_rich_text_field",
+              "namespace": "custom",
+              "type": {
+                "name": "rich_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Session Manager grounding probe (temporary; deleted by the probe)",
+              "id": "gid://shopify/MetafieldDefinition/479996969113",
+              "key": "psm_probe_file_reference",
+              "name": "psm_probe_file_reference",
+              "namespace": "custom",
+              "type": {
+                "name": "file_reference"
+              },
+              "validations": [
+                {
+                  "name": "file_type_options",
+                  "value": "[\"Image\",\"Video\"]"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Session Manager grounding probe (temporary; deleted by the probe)",
+              "id": "gid://shopify/MetafieldDefinition/479997001881",
+              "key": "psm_probe_product_reference",
+              "name": "psm_probe_product_reference",
+              "namespace": "custom",
+              "type": {
+                "name": "product_reference"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Session Manager grounding probe (temporary; deleted by the probe)",
+              "id": "gid://shopify/MetafieldDefinition/479997034649",
+              "key": "psm_probe_list_product_reference",
+              "name": "psm_probe_list_product_reference",
+              "namespace": "custom",
+              "type": {
+                "name": "list.product_reference"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Session Manager grounding probe (temporary; deleted by the probe)",
+              "id": "gid://shopify/MetafieldDefinition/479997067417",
+              "key": "psm_probe_list_file_reference",
+              "name": "psm_probe_list_file_reference",
+              "namespace": "custom",
+              "type": {
+                "name": "list.file_reference"
+              },
+              "validations": [
+                {
+                  "name": "file_type_options",
+                  "value": "[\"Image\"]"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Session Manager grounding probe (temporary; deleted by the probe)",
+              "id": "gid://shopify/MetafieldDefinition/479997100185",
+              "key": "condition_psm_probe_cracks",
+              "name": "psm_probe_condition_psm_probe_cracks",
+              "namespace": "custom",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": [
+                {
+                  "name": "choices",
+                  "value": "[\"N/A\",\"None\",\"Minor\",\"Moderate\",\"Major\"]"
+                }
+              ]
+            }
+          ],
+          "pageInfo": {
+            "endCursor": "eyJsYXN0X2lkIjo0Nzk5OTcxMDAxODUsImxhc3RfdmFsdWUiOiI0Nzk5OTcxMDAxODUifQ==",
+            "hasNextPage": false
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 15,
+          "requestedQueryCost": 30,
+          "throttleStatus": {
+            "currentlyAvailable": 1985,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

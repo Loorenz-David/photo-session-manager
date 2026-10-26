@@ -1,0 +1,320 @@
+{
+  "source": "captured: P12 probe capture sv5_partial_one_invalid_readback (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query MetafieldsRead($id: ID!, $after: String) { product(id: $id) { metafields(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { namespace key type value } } } }",
+    "variables": {
+      "after": null,
+      "id": "gid://shopify/Product/15444448280729"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "product": {
+          "metafields": {
+            "nodes": [
+              {
+                "key": "fx_dimension",
+                "namespace": "beyo",
+                "type": "dimension",
+                "value": "{\"value\":45.5,\"unit\":\"CENTIMETERS\"}"
+              },
+              {
+                "key": "fx_weight",
+                "namespace": "beyo",
+                "type": "weight",
+                "value": "{\"value\":2.5,\"unit\":\"KILOGRAMS\"}"
+              },
+              {
+                "key": "fx_volume",
+                "namespace": "beyo",
+                "type": "volume",
+                "value": "{\"value\":1.5,\"unit\":\"LITERS\"}"
+              },
+              {
+                "key": "extention_type",
+                "namespace": "custom",
+                "type": "single_line_text_field",
+                "value": "Two Outside"
+              },
+              {
+                "key": "fx_text",
+                "namespace": "beyo",
+                "type": "single_line_text_field",
+                "value": "Hej världen ✓"
+              },
+              {
+                "key": "testing_listing",
+                "namespace": "custom",
+                "type": "list.single_line_text_field",
+                "value": "[\"Completely restored\",\"Light wear consistent with age and use\"]"
+              },
+              {
+                "key": "fx_list_text",
+                "namespace": "beyo",
+                "type": "list.single_line_text_field",
+                "value": "[\"teak\",\"oak\"]"
+              },
+              {
+                "key": "fx_text_long",
+                "namespace": "beyo",
+                "type": "multi_line_text_field",
+                "value": "line one\nline two\n\nsecond paragraph"
+              },
+              {
+                "key": "psm_probe_rich_text_field",
+                "namespace": "custom",
+                "type": "rich_text_field",
+                "value": "{\"children\":[{\"children\":[{\"type\":\"text\",\"value\":\"First paragraph & more\"}],\"type\":\"paragraph\"},{\"children\":[{\"type\":\"text\",\"value\":\"Second <b> \\\"q\\\"\"}],\"type\":\"paragraph\"}],\"type\":\"root\"}"
+              },
+              {
+                "key": "fx_integer",
+                "namespace": "beyo",
+                "type": "number_integer",
+                "value": "42"
+              },
+              {
+                "key": "fx_decimal",
+                "namespace": "beyo",
+                "type": "number_decimal",
+                "value": "12.5"
+              },
+              {
+                "key": "fx_boolean",
+                "namespace": "beyo",
+                "type": "boolean",
+                "value": "true"
+              },
+              {
+                "key": "fx_date",
+                "namespace": "beyo",
+                "type": "date",
+                "value": "2026-10-26"
+              },
+              {
+                "key": "fx_datetime",
+                "namespace": "beyo",
+                "type": "date_time",
+                "value": "2026-10-26T10:00:00Z"
+              },
+              {
+                "key": "fx_color",
+                "namespace": "beyo",
+                "type": "color",
+                "value": "#A1B2C3"
+              },
+              {
+                "key": "fx_rating",
+                "namespace": "beyo",
+                "type": "rating",
+                "value": "{\"scale_min\":\"1.0\",\"scale_max\":\"5.0\",\"value\":\"4.5\"}"
+              },
+              {
+                "key": "fx_money",
+                "namespace": "beyo",
+                "type": "money",
+                "value": "{\"amount\":\"12.50\",\"currency_code\":\"USD\"}"
+              },
+              {
+                "key": "fx_url",
+                "namespace": "beyo",
+                "type": "url",
+                "value": "https://example.com/item?x=1"
+              },
+              {
+                "key": "rating",
+                "namespace": "reviews",
+                "type": "rating",
+                "value": "{\"scale_min\":\"1.0\",\"scale_max\":\"5.0\",\"value\":\"4.0\"}"
+              },
+              {
+                "key": "related_products_display",
+                "namespace": "shopify--discovery--product_recommendation",
+                "type": "single_line_text_field",
+                "value": "ahead"
+              },
+              {
+                "key": "psm_probe_text",
+                "namespace": "globo--filter--product_recommendation",
+                "type": "single_line_text_field",
+                "value": "x"
+              },
+              {
+                "key": "item_location",
+                "namespace": "app",
+                "type": "single_line_text_field",
+                "value": "H1"
+              },
+              {
+                "key": "limit_00",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v0"
+              },
+              {
+                "key": "limit_01",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v1"
+              },
+              {
+                "key": "limit_02",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v2"
+              },
+              {
+                "key": "limit_03",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v3"
+              },
+              {
+                "key": "limit_04",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v4"
+              },
+              {
+                "key": "limit_05",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v5"
+              },
+              {
+                "key": "limit_06",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v6"
+              },
+              {
+                "key": "limit_07",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v7"
+              },
+              {
+                "key": "limit_08",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v8"
+              },
+              {
+                "key": "limit_09",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v9"
+              },
+              {
+                "key": "limit_10",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v10"
+              },
+              {
+                "key": "limit_11",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v11"
+              },
+              {
+                "key": "limit_12",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v12"
+              },
+              {
+                "key": "limit_13",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v13"
+              },
+              {
+                "key": "limit_14",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v14"
+              },
+              {
+                "key": "limit_15",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v15"
+              },
+              {
+                "key": "limit_16",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v16"
+              },
+              {
+                "key": "limit_17",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v17"
+              },
+              {
+                "key": "limit_18",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v18"
+              },
+              {
+                "key": "limit_19",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v19"
+              },
+              {
+                "key": "limit_20",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v20"
+              },
+              {
+                "key": "limit_21",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v21"
+              },
+              {
+                "key": "limit_22",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v22"
+              },
+              {
+                "key": "limit_23",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v23"
+              },
+              {
+                "key": "limit_24",
+                "namespace": "psm_probe",
+                "type": "single_line_text_field",
+                "value": "v24"
+              }
+            ],
+            "pageInfo": {
+              "endCursor": "eyJsYXN0X2lkIjoxOTE0NzYwNDgyOTgxMzcsImxhc3RfdmFsdWUiOiIxOTE0NzYwNDgyOTgxMzcifQ==",
+              "hasNextPage": false
+            }
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 8,
+          "requestedQueryCost": 12,
+          "throttleStatus": {
+            "currentlyAvailable": 1992,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

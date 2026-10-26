@@ -1,0 +1,31 @@
+{
+  "source": "synthetic: sv4_job_poll_0 with done = false (the reorder reply itself shows job.done = false, C6(f))",
+  "request": {
+    "query": "query JobPoll($id: ID!) { job(id: $id) { id done } }",
+    "variables": {
+      "id": "gid://shopify/Job/f05fcf08-5e3f-45f2-bd04-31b7179b98e8"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "job": {
+          "done": false,
+          "id": "gid://shopify/Job/f05fcf08-5e3f-45f2-bd04-31b7179b98e8"
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 1,
+          "requestedQueryCost": 1,
+          "throttleStatus": {
+            "currentlyAvailable": 1999,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

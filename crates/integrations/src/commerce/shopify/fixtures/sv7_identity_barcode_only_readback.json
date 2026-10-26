@@ -1,0 +1,56 @@
+{
+  "source": "captured: P12 probe capture sv7_identity_barcode_only_readback (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query ProductRead($id: ID!) { product(id: $id) { id title status tags descriptionHtml variants(first: 5) { nodes { id sku barcodes(first: 5) { nodes { value type } } inventoryItem { sku } } } media(first: 50) { nodes { id status alt mediaContentType ... on MediaImage { image { url } originalSource { url } } } } } }",
+    "variables": {
+      "id": "gid://shopify/Product/15444448280729"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "product": {
+          "descriptionHtml": "",
+          "id": "gid://shopify/Product/15444448280729",
+          "media": {
+            "nodes": []
+          },
+          "status": "DRAFT",
+          "tags": [],
+          "title": "PSM-PROBE product (Session Manager grounding probe)",
+          "variants": {
+            "nodes": [
+              {
+                "barcodes": {
+                  "nodes": [
+                    {
+                      "type": null,
+                      "value": "4006381333948"
+                    }
+                  ]
+                },
+                "id": "gid://shopify/ProductVariant/67785913991321",
+                "inventoryItem": {
+                  "sku": "PSM-PROBE-SKU-2"
+                },
+                "sku": "PSM-PROBE-SKU-2"
+              }
+            ]
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 16,
+          "requestedQueryCost": 47,
+          "throttleStatus": {
+            "currentlyAvailable": 1984,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "source": "captured: P12 probe capture sv3_file_create_2 (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation FileCreate($files: [FileCreateInput!]!) { fileCreate(files: $files) { files { id fileStatus alt } userErrors { field message code } } }",
+    "variables": {
+      "files": [
+        {
+          "alt": "psm probe condition",
+          "contentType": "IMAGE",
+          "duplicateResolutionMode": "APPEND_UUID",
+          "filename": "psm-probe-cafe00000001.jpg",
+          "originalSource": "https://shopify-staged-uploads.storage.googleapis.com/tmp/00000000000/files/2ba60e46-8eee-4722-8e03-b7e3bd44f0f1/psm-probe-cafe00000001.jpg"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "fileCreate": {
+          "files": [
+            {
+              "alt": "psm probe condition",
+              "fileStatus": "UPLOADED",
+              "id": "gid://shopify/MediaImage/46644770472089"
+            }
+          ],
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 20,
+          "requestedQueryCost": 20,
+          "throttleStatus": {
+            "currentlyAvailable": 1980,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

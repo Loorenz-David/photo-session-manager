@@ -1,5 +1,6 @@
 pub mod camera;
 pub mod clock;
+pub mod commerce;
 pub mod editing;
 pub mod events;
 pub mod raw_previews;

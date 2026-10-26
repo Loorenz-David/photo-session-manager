@@ -9,7 +9,11 @@ psm-infra = { path = "../infra" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
+tokio.workspace = true
+unicode-normalization = "0.1"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
 
 [dev-dependencies]
 tempfile = "3"
+rusqlite = { version = "0.40", features = ["bundled"] }
 

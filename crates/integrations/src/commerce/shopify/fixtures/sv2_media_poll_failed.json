@@ -1,0 +1,44 @@
+{
+  "source": "synthetic: sv2_media_poll_1_first with status FAILED and one mediaErrors entry (C6(d))",
+  "request": {
+    "query": "query MediaPoll($id: ID!) { node(id: $id) { id ... on MediaImage { status fileStatus alt image { url } originalSource { url } mediaErrors { code message details } } } }",
+    "variables": {
+      "id": "gid://shopify/MediaImage/46644767260825"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "node": {
+          "alt": "psm probe 1",
+          "fileStatus": "FAILED",
+          "id": "gid://shopify/MediaImage/46644767260825",
+          "image": null,
+          "mediaErrors": [
+            {
+              "code": "UNSUPPORTED_IMAGE_FILE_TYPE",
+              "message": "Image could not be processed",
+              "details": null
+            }
+          ],
+          "originalSource": {
+            "url": null
+          },
+          "status": "FAILED"
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 4,
+          "requestedQueryCost": 4,
+          "throttleStatus": {
+            "currentlyAvailable": 1996,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

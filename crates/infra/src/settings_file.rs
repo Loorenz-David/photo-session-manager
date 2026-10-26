@@ -78,3 +78,52 @@ impl Settings {
         Ok(settings)
     }
 }
+
+/// The typed `integration` block (09A MC-23/MC-24):
+/// `{"kind":"shopify","shop_domain","api_version","client_id","client_secret","condition_photos_key"}`.
+/// An absent `api_version` reads as `"2026-10"`; an absent `condition_photos_key` as
+/// `"custom.damage_report"`. `Debug` never shows the client secret.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IntegrationSettings {
+    pub kind: String,
+    pub shop_domain: String,
+    #[serde(default = "default_api_version")]
+    pub api_version: String,
+    pub client_id: String,
+    pub client_secret: String,
+    #[serde(default = "default_condition_photos_key")]
+    pub condition_photos_key: String,
+}
+
+fn default_api_version() -> String {
+    "2026-10".into()
+}
+
+fn default_condition_photos_key() -> String {
+    "custom.damage_report".into()
+}
+
+impl std::fmt::Debug for IntegrationSettings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IntegrationSettings")
+            .field("kind", &self.kind)
+            .field("shop_domain", &self.shop_domain)
+            .field("api_version", &self.api_version)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"<redacted>")
+            .field("condition_photos_key", &self.condition_photos_key)
+            .finish()
+    }
+}
+
+impl Settings {
+    /// The typed integration block; `None` when the key is absent or `null`.
+    pub fn integration_settings(&self) -> Result<Option<IntegrationSettings>> {
+        match &self.integration {
+            None | Some(serde_json::Value::Null) => Ok(None),
+            Some(value) => serde_json::from_value(value.clone())
+                .map(Some)
+                .map_err(|e| Error::InvalidData(format!("integration settings: {e}"))),
+        }
+    }
+}

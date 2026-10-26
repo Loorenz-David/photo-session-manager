@@ -1,0 +1,45 @@
+{
+  "source": "captured: P12 probe capture tags_update (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation ProductUpdateTags($product: ProductUpdateInput!) { productUpdate(product: $product) { product { id tags title descriptionHtml } userErrors { field message } } }",
+    "variables": {
+      "product": {
+        "id": "gid://shopify/Product/15444448280729",
+        "tags": [
+          "a",
+          "b"
+        ]
+      }
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "productUpdate": {
+          "product": {
+            "descriptionHtml": "",
+            "id": "gid://shopify/Product/15444448280729",
+            "tags": [
+              "a",
+              "b"
+            ],
+            "title": "PSM-PROBE product (Session Manager grounding probe)"
+          },
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 10,
+          "requestedQueryCost": 10,
+          "throttleStatus": {
+            "currentlyAvailable": 1990,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

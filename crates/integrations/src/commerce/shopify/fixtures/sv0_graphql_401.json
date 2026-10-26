@@ -1,0 +1,14 @@
+{
+  "source": "captured: P12 probe capture sv0_graphql_wrong_token (test store, API 2026-10), sanitized",
+  "request": {
+    "access_token": "<WRONG_TOKEN>",
+    "query": "query Shop { shop { name } }",
+    "variables": {}
+  },
+  "response": {
+    "body": {
+      "errors": "[API] Invalid API key or access token (unrecognized login or wrong password)"
+    },
+    "status": 401
+  }
+}

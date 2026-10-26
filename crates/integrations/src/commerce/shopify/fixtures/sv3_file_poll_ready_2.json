@@ -1,0 +1,39 @@
+{
+  "source": "captured: P12 probe capture sv3_file_poll_2_1, sanitized",
+  "request": {
+    "query": "query FilePoll($id: ID!) { node(id: $id) { id ... on File { fileStatus alt fileErrors { code message details } } ... on MediaImage { image { url } originalSource { url } } ... on GenericFile { url } } }",
+    "variables": {
+      "id": "gid://shopify/MediaImage/46644770472089"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "node": {
+          "alt": "psm probe condition",
+          "fileErrors": [],
+          "fileStatus": "READY",
+          "id": "gid://shopify/MediaImage/46644770472089",
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/psm-probe-cafe00000001_b4c2fd63-9256-4524-a086-8c299e4f20c8.jpg?v=1792989343"
+          },
+          "originalSource": {
+            "url": "https://shopify-shop-assets.storage.googleapis.com/s/files/1/d/0000/0000/0000/0000/files/psm-probe-cafe00000001_b4c2fd63-9256-4524-a086-8c299e4f20c8.jpg?<SIGNED_QUERY>"
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 4,
+          "requestedQueryCost": 4,
+          "throttleStatus": {
+            "currentlyAvailable": 1996,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

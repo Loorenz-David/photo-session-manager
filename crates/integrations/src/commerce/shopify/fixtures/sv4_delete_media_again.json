@@ -1,0 +1,42 @@
+{
+  "source": "captured: P12 probe capture sv4_delete_media_again (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation ProductDeleteMedia($files: [FileUpdateInput!]!) { fileUpdate(files: $files) { files { id } userErrors { field message code } } }",
+    "variables": {
+      "files": [
+        {
+          "id": "gid://shopify/MediaImage/46644767260825",
+          "referencesToRemove": [
+            "gid://shopify/Product/15444448280729"
+          ]
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "fileUpdate": {
+          "files": [
+            {
+              "id": "gid://shopify/MediaImage/46644767260825"
+            }
+          ],
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 10,
+          "requestedQueryCost": 10,
+          "throttleStatus": {
+            "currentlyAvailable": 1990,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

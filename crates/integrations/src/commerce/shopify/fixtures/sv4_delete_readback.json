@@ -1,0 +1,81 @@
+{
+  "source": "captured: P12 probe capture sv4_delete_readback (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query ProductRead($id: ID!) { product(id: $id) { id title status tags descriptionHtml variants(first: 5) { nodes { id sku barcodes(first: 5) { nodes { value type } } inventoryItem { sku } } } media(first: 50) { nodes { id status alt mediaContentType ... on MediaImage { image { url } originalSource { url } } } } } }",
+    "variables": {
+      "id": "gid://shopify/Product/15444448280729"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "product": {
+          "descriptionHtml": "",
+          "id": "gid://shopify/Product/15444448280729",
+          "media": {
+            "nodes": [
+              {
+                "alt": "psm probe 2",
+                "id": "gid://shopify/MediaImage/46644767457433",
+                "image": {
+                  "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/psm-probe-ab12cd34ef56_4fffd4cd-17a1-449a-92f7-2e862798500b.jpg?v=1792989305"
+                },
+                "mediaContentType": "IMAGE",
+                "originalSource": {
+                  "url": "https://shopify-shop-assets.storage.googleapis.com/s/files/1/d/0000/0000/0000/0000/files/psm-probe-ab12cd34ef56_4fffd4cd-17a1-449a-92f7-2e862798500b.jpg?<SIGNED_QUERY>"
+                },
+                "status": "READY"
+              },
+              {
+                "alt": "psm probe 3",
+                "id": "gid://shopify/MediaImage/46644767686809",
+                "image": {
+                  "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/psm-probe-0123456789ab.jpg?v=1792989308"
+                },
+                "mediaContentType": "IMAGE",
+                "originalSource": {
+                  "url": "https://shopify-shop-assets.storage.googleapis.com/s/files/1/d/0000/0000/0000/0000/files/psm-probe-0123456789ab.jpg?<SIGNED_QUERY>"
+                },
+                "status": "READY"
+              }
+            ]
+          },
+          "status": "DRAFT",
+          "tags": [],
+          "title": "PSM-PROBE product (Session Manager grounding probe)",
+          "variants": {
+            "nodes": [
+              {
+                "barcodes": {
+                  "nodes": [
+                    {
+                      "type": null,
+                      "value": "4006381333931"
+                    }
+                  ]
+                },
+                "id": "gid://shopify/ProductVariant/67785913991321",
+                "inventoryItem": {
+                  "sku": "PSM-PROBE-SKU-1"
+                },
+                "sku": "PSM-PROBE-SKU-1"
+              }
+            ]
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 10,
+          "requestedQueryCost": 47,
+          "throttleStatus": {
+            "currentlyAvailable": 1990,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

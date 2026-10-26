@@ -1,0 +1,223 @@
+{
+  "source": "captured: P12 probe capture sv5_limit_26 (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { namespace key type value } userErrors { field message code elementIndex } } }",
+    "variables": {
+      "metafields": [
+        {
+          "key": "limit_00",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v0"
+        },
+        {
+          "key": "limit_01",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v1"
+        },
+        {
+          "key": "limit_02",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v2"
+        },
+        {
+          "key": "limit_03",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v3"
+        },
+        {
+          "key": "limit_04",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v4"
+        },
+        {
+          "key": "limit_05",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v5"
+        },
+        {
+          "key": "limit_06",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v6"
+        },
+        {
+          "key": "limit_07",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v7"
+        },
+        {
+          "key": "limit_08",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v8"
+        },
+        {
+          "key": "limit_09",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v9"
+        },
+        {
+          "key": "limit_10",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v10"
+        },
+        {
+          "key": "limit_11",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v11"
+        },
+        {
+          "key": "limit_12",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v12"
+        },
+        {
+          "key": "limit_13",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v13"
+        },
+        {
+          "key": "limit_14",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v14"
+        },
+        {
+          "key": "limit_15",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v15"
+        },
+        {
+          "key": "limit_16",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v16"
+        },
+        {
+          "key": "limit_17",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v17"
+        },
+        {
+          "key": "limit_18",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v18"
+        },
+        {
+          "key": "limit_19",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v19"
+        },
+        {
+          "key": "limit_20",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v20"
+        },
+        {
+          "key": "limit_21",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v21"
+        },
+        {
+          "key": "limit_22",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v22"
+        },
+        {
+          "key": "limit_23",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v23"
+        },
+        {
+          "key": "limit_24",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v24"
+        },
+        {
+          "key": "limit_25",
+          "namespace": "psm_probe",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "v25"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "metafieldsSet": {
+          "metafields": null,
+          "userErrors": [
+            {
+              "code": "LESS_THAN_OR_EQUAL_TO",
+              "elementIndex": null,
+              "field": [
+                "metafields"
+              ],
+              "message": "Exceeded the maximum metafields input limit of 25."
+            }
+          ]
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 14,
+          "requestedQueryCost": 14,
+          "throttleStatus": {
+            "currentlyAvailable": 1986,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

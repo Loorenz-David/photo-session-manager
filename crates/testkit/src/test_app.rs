@@ -229,3 +229,21 @@ impl TestApp {
         Ok(())
     }
 }
+
+impl TestApp {
+    /// Inserts a `publish_runs` row committed with `confirmed_at` = now and returns the mutation
+    /// token built from it by the one public constructor (07A MC-10).
+    pub fn confirmed_run(&self) -> Result<psm_core::domain::publish::ConfirmedRun> {
+        let conn = rusqlite::Connection::open(self.app.paths.db())
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        conn.execute(
+            "INSERT INTO publish_runs(integration,created_at,confirmed_at,confirmed_summary) VALUES ('shopify',?1,?1,'test run')",
+            [self.clock.now_ms()],
+        )
+        .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        psm_core::domain::publish::ConfirmedRun::from_persisted(
+            self.store(),
+            conn.last_insert_rowid(),
+        )
+    }
+}

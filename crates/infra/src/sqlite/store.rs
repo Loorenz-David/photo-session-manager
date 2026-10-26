@@ -1051,6 +1051,21 @@ impl Store for SqliteStore {
         Ok(())
     }
 
+    fn confirmed_run(&self, run_id: i64) -> Result<Option<i64>> {
+        let confirmed: Option<Option<i64>> = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .query_row(
+                "SELECT confirmed_at FROM publish_runs WHERE id=?1",
+                [run_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?;
+        Ok(confirmed.flatten())
+    }
+
     fn mechanism_version(&self) -> Result<String> {
         self.conn
             .lock()

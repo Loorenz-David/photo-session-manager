@@ -1,0 +1,46 @@
+{
+  "source": "captured: P12 probe capture sv1_foreign_3_app (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { namespace key type value } userErrors { field message code elementIndex } } }",
+    "variables": {
+      "metafields": [
+        {
+          "key": "item_location",
+          "namespace": "app",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "H1"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "metafieldsSet": {
+          "metafields": [
+            {
+              "key": "item_location",
+              "namespace": "app",
+              "type": "single_line_text_field",
+              "value": "H1"
+            }
+          ],
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 14,
+          "requestedQueryCost": 14,
+          "throttleStatus": {
+            "currentlyAvailable": 1986,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

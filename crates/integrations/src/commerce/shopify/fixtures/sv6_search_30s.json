@@ -1,0 +1,48 @@
+{
+  "source": "captured: P12 probe capture sv6_search_30s (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query VariantSearch($query: String!) { productVariants(first: 10, query: $query) { nodes { id sku barcodes(first: 5) { nodes { value } } product { id title status featuredMedia { preview { image { url } } } } } } }",
+    "variables": {
+      "query": "sku:\"PSM-PROBE-SKU-1\""
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "productVariants": {
+          "nodes": [
+            {
+              "barcodes": {
+                "nodes": [
+                  {
+                    "value": "4006381333931"
+                  }
+                ]
+              },
+              "id": "gid://shopify/ProductVariant/67785913991321",
+              "product": {
+                "featuredMedia": null,
+                "id": "gid://shopify/Product/15444448280729",
+                "status": "DRAFT",
+                "title": "PSM-PROBE product (Session Manager grounding probe)"
+              },
+              "sku": "PSM-PROBE-SKU-1"
+            }
+          ]
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 5,
+          "requestedQueryCost": 42,
+          "throttleStatus": {
+            "currentlyAvailable": 1995,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

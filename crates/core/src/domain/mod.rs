@@ -5,6 +5,7 @@ pub mod attribute;
 pub mod editing;
 pub mod item;
 pub mod photo;
+pub mod publish;
 pub mod session;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

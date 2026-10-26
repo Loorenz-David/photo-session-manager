@@ -1,0 +1,38 @@
+{
+  "source": "captured: P12 probe capture sv2_media_poll_1_first (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query MediaPoll($id: ID!) { node(id: $id) { id ... on MediaImage { status fileStatus alt image { url } originalSource { url } mediaErrors { code message details } } } }",
+    "variables": {
+      "id": "gid://shopify/MediaImage/46644767260825"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "node": {
+          "alt": "psm probe 1",
+          "fileStatus": "PROCESSING",
+          "id": "gid://shopify/MediaImage/46644767260825",
+          "image": null,
+          "mediaErrors": [],
+          "originalSource": {
+            "url": null
+          },
+          "status": "PROCESSING"
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 4,
+          "requestedQueryCost": 4,
+          "throttleStatus": {
+            "currentlyAvailable": 1996,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

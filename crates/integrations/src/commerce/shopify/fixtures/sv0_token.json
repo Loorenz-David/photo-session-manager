@@ -1,0 +1,21 @@
+{
+  "source": "captured: P12 probe capture sv0_token (test store, API 2026-10), sanitized",
+  "request": {
+    "content_type": "application/x-www-form-urlencoded",
+    "fields": {
+      "client_id": "<CLIENT_ID>",
+      "client_secret": "<CLIENT_SECRET>",
+      "grant_type": "client_credentials"
+    },
+    "method": "POST",
+    "url": "https://example.myshopify.com/admin/oauth/access_token"
+  },
+  "response": {
+    "body": {
+      "access_token": "<ACCESS_TOKEN>",
+      "expires_in": 86399,
+      "scope": "write_products,write_metaobject_definitions,write_metaobjects,write_files"
+    },
+    "status": 200
+  }
+}

@@ -1,0 +1,899 @@
+{
+  "source": "captured: P12 probe capture sv1_definitions_before_p1 (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query Definitions($after: String) { metafieldDefinitions(ownerType: PRODUCT, first: 50, after: $after) { pageInfo { hasNextPage endCursor } nodes { id namespace key name description type { name } validations { name value } access { admin } } } }",
+    "variables": {
+      "after": null
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "metafieldDefinitions": {
+          "nodes": [
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "The length of the snowboard",
+              "id": "gid://shopify/MetafieldDefinition/148700299417",
+              "key": "snowboard_length",
+              "name": "Snowboard length",
+              "namespace": "test_data",
+              "type": {
+                "name": "dimension"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "The type of binding mount used on the snowboard",
+              "id": "gid://shopify/MetafieldDefinition/148700332185",
+              "key": "binding_mount",
+              "name": "Snowboard binding mount",
+              "namespace": "test_data",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/150392766617",
+              "key": "height",
+              "name": "Height",
+              "namespace": "custom",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/150393356441",
+              "key": "width",
+              "name": "Width",
+              "namespace": "custom",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/150393389209",
+              "key": "depth",
+              "name": "Depth",
+              "namespace": "custom",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/150393979033",
+              "key": "item_location",
+              "name": "Item Location",
+              "namespace": "app",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": [
+                {
+                  "name": "choices",
+                  "value": "[\"H1\",\"G2\",\"U9\",\"S8\",\"yo\"]"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/175259418777",
+              "key": "wood_type",
+              "name": "wood type",
+              "namespace": "custom",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": [
+                {
+                  "name": "choices",
+                  "value": "[\"oak-1\",\"oak-2\",\"lumber\",\"teak\",\"rose\",\"wood\",\"jorge\",\"stefan\",\"anna\",\"lumberg\"]"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/175454683289",
+              "key": "widthcm",
+              "name": "Widthcm",
+              "namespace": "custom",
+              "type": {
+                "name": "dimension"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "{\"value\":0.0,\"unit\":\"CENTIMETERS\"}"
+                },
+                {
+                  "name": "max",
+                  "value": "{\"value\":2000.0,\"unit\":\"CENTIMETERS\"}"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/175474475161",
+              "key": "heigthcm",
+              "name": "Heigth Cm",
+              "namespace": "custom",
+              "type": {
+                "name": "list.dimension"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/175480373401",
+              "key": "extention_type",
+              "name": "Extention Type",
+              "namespace": "custom",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": [
+                {
+                  "name": "choices",
+                  "value": "[\"one\",\"Two Outside\"]"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/175480963225",
+              "key": "test_space",
+              "name": "Test Space",
+              "namespace": "custom",
+              "type": {
+                "name": "dimension"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/175506063513",
+              "key": "backrest_types",
+              "name": "Backrest types",
+              "namespace": "custom",
+              "type": {
+                "name": "list.metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/15441756313"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "",
+              "id": "gid://shopify/MetafieldDefinition/175513206937",
+              "key": "testing_listing",
+              "name": "testing listing",
+              "namespace": "custom",
+              "type": {
+                "name": "list.single_line_text_field"
+              },
+              "validations": [
+                {
+                  "name": "choices",
+                  "value": "[\"Surface has been refinished\",\"Completely restored\",\"val_3Partially restored\",\"Light wear consistent with age and use\"]"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534369433",
+              "key": "armrests",
+              "name": "Armrests",
+              "namespace": "beyo",
+              "type": {
+                "name": "boolean"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534402201",
+              "key": "back_height",
+              "name": "Back Height",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24253825177"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534434969",
+              "key": "cabinets_quantity",
+              "name": "Cabinets Quantity",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "0"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534467737",
+              "key": "cushion_type",
+              "name": "Cushion Type",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24253857945"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Outer depth",
+              "id": "gid://shopify/MetafieldDefinition/286534500505",
+              "key": "depth_mm",
+              "name": "Depth in mm",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Designer of the item",
+              "id": "gid://shopify/MetafieldDefinition/286534533273",
+              "key": "designer",
+              "name": "Designer",
+              "namespace": "beyo",
+              "type": {
+                "name": "single_line_text_field"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Can be taken apart, e.g. for transport",
+              "id": "gid://shopify/MetafieldDefinition/286534566041",
+              "key": "dismantlable",
+              "name": "Dismantlable",
+              "namespace": "beyo",
+              "type": {
+                "name": "boolean"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534598809",
+              "key": "door_type",
+              "name": "Door Type",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24253890713"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Number of drawer units",
+              "id": "gid://shopify/MetafieldDefinition/286534631577",
+              "key": "drawer_units",
+              "name": "Drawer Units",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534664345",
+              "key": "drawers_quantity",
+              "name": "Drawers Quantity",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "0"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534697113",
+              "key": "extension_type",
+              "name": "Extension Type",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24253923481"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Width added when extended",
+              "id": "gid://shopify/MetafieldDefinition/286534729881",
+              "key": "extension_width_mm",
+              "name": "Extension width in mm",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534762649",
+              "key": "extensions_quantity",
+              "name": "Extensions Quantity",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "0"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534795417",
+              "key": "frame",
+              "name": "Frame",
+              "namespace": "beyo",
+              "type": {
+                "name": "boolean"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Outer height",
+              "id": "gid://shopify/MetafieldDefinition/286534828185",
+              "key": "height_mm",
+              "name": "Height in mm",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534860953",
+              "key": "magazine_shelf",
+              "name": "Magazine Shelf",
+              "namespace": "beyo",
+              "type": {
+                "name": "boolean"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534893721",
+              "key": "parts",
+              "name": "Parts",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Number of seats",
+              "id": "gid://shopify/MetafieldDefinition/286534926489",
+              "key": "seater_count",
+              "name": "Seater Count",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "2"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Number of pieces in the set",
+              "id": "gid://shopify/MetafieldDefinition/286534959257",
+              "key": "set_count",
+              "name": "Set Count",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286534992025",
+              "key": "shape",
+              "name": "Shape",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24253989017"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286535024793",
+              "key": "shelvings_quantity",
+              "name": "Shelvings Quantity",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "0"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286535057561",
+              "key": "sidepanels_quantity",
+              "name": "Sidepanels Quantity",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "0"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286535090329",
+              "key": "type_of_material",
+              "name": "Type of Material",
+              "namespace": "beyo",
+              "type": {
+                "name": "list.metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24253956249"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286535123097",
+              "key": "unit_type",
+              "name": "Unit Type",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24254021785"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286535155865",
+              "key": "upholstered",
+              "name": "Upholstered",
+              "namespace": "beyo",
+              "type": {
+                "name": "boolean"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286535188633",
+              "key": "upholstery",
+              "name": "Upholstery",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24254054553"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Weight of the item",
+              "id": "gid://shopify/MetafieldDefinition/286535221401",
+              "key": "weight_g",
+              "name": "Weight in g",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": "Outer width",
+              "id": "gid://shopify/MetafieldDefinition/286535254169",
+              "key": "width_mm",
+              "name": "Width in mm",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_integer"
+              },
+              "validations": [
+                {
+                  "name": "min",
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/286535385241",
+              "key": "item_type",
+              "name": "Item type",
+              "namespace": "beyo",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/24255725721"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349568041113",
+              "key": "group_drawers_range",
+              "name": "Drawers Range",
+              "namespace": "beyo_derived",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/25106710681"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349568663705",
+              "key": "group_material_type",
+              "name": "Material Type Group",
+              "namespace": "beyo_derived",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/25106710681"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349568696473",
+              "key": "group_weight",
+              "name": "Weight Definition",
+              "namespace": "beyo_derived",
+              "type": {
+                "name": "metaobject_reference"
+              },
+              "validations": [
+                {
+                  "name": "metaobject_definition_id",
+                  "value": "gid://shopify/MetaobjectDefinition/25106710681"
+                }
+              ]
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349692788889",
+              "key": "fx_boolean",
+              "name": "Boolean",
+              "namespace": "beyo",
+              "type": {
+                "name": "boolean"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349693477017",
+              "key": "fx_color",
+              "name": "Color",
+              "namespace": "beyo",
+              "type": {
+                "name": "color"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349693509785",
+              "key": "fx_date",
+              "name": "Date",
+              "namespace": "beyo",
+              "type": {
+                "name": "date"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349693575321",
+              "key": "fx_datetime",
+              "name": "Datetime",
+              "namespace": "beyo",
+              "type": {
+                "name": "date_time"
+              },
+              "validations": []
+            },
+            {
+              "access": {
+                "admin": "PUBLIC_READ_WRITE"
+              },
+              "description": null,
+              "id": "gid://shopify/MetafieldDefinition/349693608089",
+              "key": "fx_decimal",
+              "name": "Decimal",
+              "namespace": "beyo",
+              "type": {
+                "name": "number_decimal"
+              },
+              "validations": [
+                {
+                  "name": "max_precision",
+                  "value": "3"
+                }
+              ]
+            }
+          ],
+          "pageInfo": {
+            "endCursor": "eyJsYXN0X2lkIjozNDk2OTM2MDgwODksImxhc3RfdmFsdWUiOiIzNDk2OTM2MDgwODkifQ==",
+            "hasNextPage": true
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 30,
+          "requestedQueryCost": 30,
+          "throttleStatus": {
+            "currentlyAvailable": 1970,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

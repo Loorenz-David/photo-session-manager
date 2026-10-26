@@ -1,0 +1,37 @@
+{
+  "source": "captured: P12 probe capture sv3_file_poll_1_0 (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query FilePoll($id: ID!) { node(id: $id) { id ... on File { fileStatus alt fileErrors { code message details } } ... on MediaImage { image { url } originalSource { url } } ... on GenericFile { url } } }",
+    "variables": {
+      "id": "gid://shopify/MediaImage/46644770275481"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "node": {
+          "alt": "psm probe condition",
+          "fileErrors": [],
+          "fileStatus": "PROCESSING",
+          "id": "gid://shopify/MediaImage/46644770275481",
+          "image": null,
+          "originalSource": {
+            "url": null
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 4,
+          "requestedQueryCost": 4,
+          "throttleStatus": {
+            "currentlyAvailable": 1996,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

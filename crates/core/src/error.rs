@@ -40,6 +40,19 @@ pub enum Error {
     RawChanged { photo_id: i64 },
     #[error("raw_missing: photo {photo_id}")]
     RawMissing { photo_id: i64 },
+    /// Attribute writes the platform refused or that did not read back (07A MC-13).
+    #[error("attribute_verification: {}", keys.join(", "))]
+    AttributeVerification { keys: Vec<String> },
+    /// A mutation was attempted without a run committed as confirmed (07A MC-10).
+    #[error("not_confirmed")]
+    NotConfirmed,
+    /// 09A MC-23 grant refusals, with the messages shown to the photographer.
+    #[error("This Shopify store is not in the app's organization")]
+    ShopNotPermitted,
+    #[error("The Session Manager app is not installed on this store")]
+    AppNotInstalled,
+    #[error("Shopify credentials rejected")]
+    CredentialsRejected,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

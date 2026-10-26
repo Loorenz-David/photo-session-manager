@@ -300,3 +300,35 @@ serves it at runtime.
   env from `~/.psm_shopify.env`, redaction of secret and tokens, settings parse with `client_id`, `client_secret`,
   `condition_photos_key`. Only the configured condition-photos key maps to `media_list` (09A MC-24). Rows: C4(v),
   C4(w) and criterion C9 (a)–(g) added; C4(s), C5(q) reworded. 59 → 68 rows, 8 → 9 criteria.
+- 2026-10-26 (implementer, Claude Opus 5.5, implement r1): **IMPLEMENTED.**
+  - **Task 0 ran** against the test store (API 2026-10). Evidence is in `docs/intention/evidence/shopify_admin.md`
+    (SV-0…SV-7 plus a live smoke of the adapter's own documents); 70 sanitized fixtures. No stop case was hit:
+    `productSet(synchronous: true)` creates DRAFT + SKU + barcode atomically; search finds the product 1 s after
+    create (case-insensitive); filenames are readable from `image.url` once media is READY (uniquifier `_<uuid>`);
+    `access.admin` is visible on every definition; `metafieldsSet` is atomic per call (L = 25, entries named by
+    `field[1]`).
+  - **Absorbed literals:** `expires_in` 86399 s; L = 25; reorder base 0; job `{done}`; uniquifier `_<uuid v4>`;
+    unit codes upper-case names (`CENTIMETERS`, `KILOGRAMS`, `LITERS`…); `number_decimal` `12.50` → `12.5`; colour
+    case kept; `FILE_DOES_NOT_EXIST` as the not-found reply.
+  - **2026-10 shape changes absorbed:** `productCreateMedia` / `productDeleteMedia` do not exist. Media are created
+    with `productUpdate(media:)` (new id = `media(first: 1, reverse: true)`) and removed from the product with
+    `fileUpdate(referencesToRemove:)`. Variants carry `barcodes` (list), not `barcode`.
+  - **Built:** `CommerceAdapter` port; `ConfirmedRun` (single constructor) + `Store::confirmed_run`; the
+    `RemoteItem`/`RemoteMedia`/`RemoteIdentity`/`DefinitionLink`/`WriteValue`/`StagedTarget` types; five error
+    variants; `HttpTransport` + `ReqwestTransport` (private worker thread with its own current-thread runtime;
+    reqwest features `json`, `rustls`, no defaults, no `blocking`); `ClientCredentialsAuth`; the type map;
+    `ShopifyAdapter`; the typed `integration` settings parse; `FakeTransport`, the fixture loader and
+    `TestApp::confirmed_run()`. Tests: 68 rows + 5 core-mechanism unit tests.
+  - **Fixture deviation (absorbed, flagged):** the test store has 66 definitions, not the real store's 68. The C4
+    input is the test store's captured list plus 6 scratch definitions (72). The `custom.condition_cracks` clause is
+    served by the scratch `custom.condition_psm_probe_cracks` (severity five). The real store's `condition_*` fields
+    were not captured; they are read from the configured store at schema refresh (09A MC-23).
+  - **Deviation:** `apps/desktop/src-tauri/src/commands/items.rs` gained five match arms for the new error variants.
+    The match is exhaustive, so the build would not compile without them.
+  - **Leftover on the test store:** the standard definition
+    `shopify--discovery--product_recommendation.related_products_display`, auto-created by the SV-1
+    foreign-namespace write. This app gets `ACCESS_DENIED` when deleting it. It has no values.
+  - **Notes for P13/P14:** media still PROCESSING expose no filename (adopt only after READY); the files search
+    index lags (do not rely on `files(query: filename:)` for recovery); Shopify reads `&quot;` back as `"` in
+    `descriptionHtml`; re-check definition `access` on the real store at the switch (the foreign-namespace
+    writes here are not representative).

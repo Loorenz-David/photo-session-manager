@@ -1,0 +1,46 @@
+{
+  "source": "captured: P12 probe capture sv1_foreign_0_reviews (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { namespace key type value } userErrors { field message code elementIndex } } }",
+    "variables": {
+      "metafields": [
+        {
+          "key": "rating",
+          "namespace": "reviews",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "rating",
+          "value": "{\"value\":\"4.0\",\"scale_min\":\"1.0\",\"scale_max\":\"5.0\"}"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "metafieldsSet": {
+          "metafields": [
+            {
+              "key": "rating",
+              "namespace": "reviews",
+              "type": "rating",
+              "value": "{\"scale_min\":\"1.0\",\"scale_max\":\"5.0\",\"value\":\"4.0\"}"
+            }
+          ],
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 14,
+          "requestedQueryCost": 14,
+          "throttleStatus": {
+            "currentlyAvailable": 1986,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

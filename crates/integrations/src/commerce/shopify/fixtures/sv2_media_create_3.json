@@ -1,0 +1,71 @@
+{
+  "source": "captured: P12 probe capture sv2_media_create_3 (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation ProductCreateMedia($product: ProductUpdateInput!, $media: [CreateMediaInput!]) { productUpdate(product: $product, media: $media) { product { id newest: media(first: 1, reverse: true) { nodes { id status alt mediaContentType } } all: media(first: 50) { nodes { id status alt } } } userErrors { field message } } }",
+    "variables": {
+      "media": [
+        {
+          "alt": "psm probe 3",
+          "mediaContentType": "IMAGE",
+          "originalSource": "https://shopify-staged-uploads.storage.googleapis.com/tmp/00000000000/files/de7b9744-08fa-415d-9a88-94c42d8d0831/psm-probe-0123456789ab.jpg"
+        }
+      ],
+      "product": {
+        "id": "gid://shopify/Product/15444448280729"
+      }
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "productUpdate": {
+          "product": {
+            "all": {
+              "nodes": [
+                {
+                  "alt": "psm probe 1",
+                  "id": "gid://shopify/MediaImage/46644767260825",
+                  "status": "READY"
+                },
+                {
+                  "alt": "psm probe 2",
+                  "id": "gid://shopify/MediaImage/46644767457433",
+                  "status": "READY"
+                },
+                {
+                  "alt": "psm probe 3",
+                  "id": "gid://shopify/MediaImage/46644767686809",
+                  "status": "UPLOADED"
+                }
+              ]
+            },
+            "id": "gid://shopify/Product/15444448280729",
+            "newest": {
+              "nodes": [
+                {
+                  "alt": "psm probe 3",
+                  "id": "gid://shopify/MediaImage/46644767686809",
+                  "mediaContentType": "IMAGE",
+                  "status": "UPLOADED"
+                }
+              ]
+            }
+          },
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 24,
+          "requestedQueryCost": 24,
+          "throttleStatus": {
+            "currentlyAvailable": 1976,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

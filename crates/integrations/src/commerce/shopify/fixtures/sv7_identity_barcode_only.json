@@ -1,0 +1,57 @@
+{
+  "source": "captured: P12 probe capture sv7_identity_barcode_only (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation ItemSetIdentity($productId: ID!, $variants: [ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId: $productId, variants: $variants) { productVariants { id sku barcodes(first: 5) { nodes { value type } } inventoryItem { sku } } userErrors { field message code } } }",
+    "variables": {
+      "productId": "gid://shopify/Product/15444448280729",
+      "variants": [
+        {
+          "barcodes": [
+            {
+              "value": "4006381333948"
+            }
+          ],
+          "id": "gid://shopify/ProductVariant/67785913991321"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "productVariantsBulkUpdate": {
+          "productVariants": [
+            {
+              "barcodes": {
+                "nodes": [
+                  {
+                    "type": null,
+                    "value": "4006381333948"
+                  }
+                ]
+              },
+              "id": "gid://shopify/ProductVariant/67785913991321",
+              "inventoryItem": {
+                "sku": "PSM-PROBE-SKU-2"
+              },
+              "sku": "PSM-PROBE-SKU-2"
+            }
+          ],
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 14,
+          "requestedQueryCost": 16,
+          "throttleStatus": {
+            "currentlyAvailable": 1986,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

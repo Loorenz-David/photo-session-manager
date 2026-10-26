@@ -1,0 +1,20 @@
+{
+  "source": "synthetic: SV-0 wrong-secret reply shape (status 400, {error, error_description}) with error = \"app_not_installed\" (09A MC-23); not reproducible on the owner setup",
+  "request": {
+    "content_type": "application/x-www-form-urlencoded",
+    "fields": {
+      "client_id": "<CLIENT_ID>",
+      "client_secret": "<CLIENT_SECRET>",
+      "grant_type": "client_credentials"
+    },
+    "method": "POST",
+    "url": "https://example.myshopify.com/admin/oauth/access_token"
+  },
+  "response": {
+    "body": {
+      "error": "app_not_installed",
+      "error_description": "App is not installed on this shop"
+    },
+    "status": 400
+  }
+}

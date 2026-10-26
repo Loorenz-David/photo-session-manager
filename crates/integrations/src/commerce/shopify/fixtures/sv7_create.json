@@ -1,0 +1,83 @@
+{
+  "source": "captured: P12 probe capture sv7_create (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation ProductSet($input: ProductSetInput!) { productSet(synchronous: true, input: $input) { product { id title status variants(first: 5) { nodes { id sku barcodes(first: 5) { nodes { value type } } inventoryItem { sku } } } } userErrors { field message code } } }",
+    "variables": {
+      "input": {
+        "productOptions": [
+          {
+            "name": "Title",
+            "values": [
+              {
+                "name": "Default Title"
+              }
+            ]
+          }
+        ],
+        "status": "DRAFT",
+        "title": "PSM-PROBE product (Session Manager grounding probe)",
+        "variants": [
+          {
+            "barcodes": [
+              {
+                "value": "4006381333931"
+              }
+            ],
+            "optionValues": [
+              {
+                "name": "Default Title",
+                "optionName": "Title"
+              }
+            ],
+            "sku": "PSM-PROBE-SKU-1"
+          }
+        ]
+      }
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "productSet": {
+          "product": {
+            "id": "gid://shopify/Product/15444448280729",
+            "status": "DRAFT",
+            "title": "PSM-PROBE product (Session Manager grounding probe)",
+            "variants": {
+              "nodes": [
+                {
+                  "barcodes": {
+                    "nodes": [
+                      {
+                        "type": null,
+                        "value": "4006381333931"
+                      }
+                    ]
+                  },
+                  "id": "gid://shopify/ProductVariant/67785913991321",
+                  "inventoryItem": {
+                    "sku": "PSM-PROBE-SKU-1"
+                  },
+                  "sku": "PSM-PROBE-SKU-1"
+                }
+              ]
+            }
+          },
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 16,
+          "requestedQueryCost": 33,
+          "throttleStatus": {
+            "currentlyAvailable": 1984,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "source": "captured: P12 probe capture sv4_reorder_one_based (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation ProductReorderMedia($id: ID!, $moves: [MoveInput!]!) { productReorderMedia(id: $id, moves: $moves) { job { id done } mediaUserErrors { field message code } } }",
+    "variables": {
+      "id": "gid://shopify/Product/15444448280729",
+      "moves": [
+        {
+          "id": "gid://shopify/MediaImage/46644767260825",
+          "newPosition": "1"
+        },
+        {
+          "id": "gid://shopify/MediaImage/46644767457433",
+          "newPosition": "2"
+        },
+        {
+          "id": "gid://shopify/MediaImage/46644767686809",
+          "newPosition": "3"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "productReorderMedia": {
+          "job": {
+            "done": false,
+            "id": "gid://shopify/Job/5433f7b5-8b55-4225-9944-55346ab554f5"
+          },
+          "mediaUserErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 10,
+          "requestedQueryCost": 10,
+          "throttleStatus": {
+            "currentlyAvailable": 1990,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

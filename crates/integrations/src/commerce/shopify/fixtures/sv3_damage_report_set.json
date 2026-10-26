@@ -1,0 +1,46 @@
+{
+  "source": "captured: P12 probe capture sv3_damage_report_set (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { namespace key type value } userErrors { field message code elementIndex } } }",
+    "variables": {
+      "metafields": [
+        {
+          "key": "damage_report",
+          "namespace": "custom",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "list.file_reference",
+          "value": "[\"gid://shopify/MediaImage/46644770275481\",\"gid://shopify/MediaImage/46644770472089\"]"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "metafieldsSet": {
+          "metafields": [
+            {
+              "key": "damage_report",
+              "namespace": "custom",
+              "type": "list.file_reference",
+              "value": "[\"gid://shopify/MediaImage/46644770275481\",\"gid://shopify/MediaImage/46644770472089\"]"
+            }
+          ],
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 14,
+          "requestedQueryCost": 14,
+          "throttleStatus": {
+            "currentlyAvailable": 1986,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

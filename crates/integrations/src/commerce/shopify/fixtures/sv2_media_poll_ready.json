@@ -1,0 +1,40 @@
+{
+  "source": "captured: P12 probe capture sv2_media_poll_1_ready (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "query MediaPoll($id: ID!) { node(id: $id) { id ... on MediaImage { status fileStatus alt image { url } originalSource { url } mediaErrors { code message details } } } }",
+    "variables": {
+      "id": "gid://shopify/MediaImage/46644767260825"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "node": {
+          "alt": "psm probe 1",
+          "fileStatus": "READY",
+          "id": "gid://shopify/MediaImage/46644767260825",
+          "image": {
+            "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/psm-probe-ab12cd34ef56.jpg?v=1792989302"
+          },
+          "mediaErrors": [],
+          "originalSource": {
+            "url": "https://shopify-shop-assets.storage.googleapis.com/s/files/1/d/0000/0000/0000/0000/files/psm-probe-ab12cd34ef56.jpg?<SIGNED_QUERY>"
+          },
+          "status": "READY"
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 4,
+          "requestedQueryCost": 4,
+          "throttleStatus": {
+            "currentlyAvailable": 1996,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

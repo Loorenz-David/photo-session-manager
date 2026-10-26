@@ -1,0 +1,54 @@
+{
+  "source": "captured: P12 probe capture sv2_staged_2 (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation StagedUploadsCreate($input: [StagedUploadInput!]!) { stagedUploadsCreate(input: $input) { stagedTargets { url resourceUrl parameters { name value } } userErrors { field message } } }",
+    "variables": {
+      "input": [
+        {
+          "fileSize": "2050",
+          "filename": "psm-probe-ab12cd34ef56.jpg",
+          "httpMethod": "PUT",
+          "mimeType": "image/jpeg",
+          "resource": "IMAGE"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "stagedUploadsCreate": {
+          "stagedTargets": [
+            {
+              "parameters": [
+                {
+                  "name": "content_type",
+                  "value": "image/jpeg"
+                },
+                {
+                  "name": "acl",
+                  "value": "<PARAM_VALUE:acl>"
+                }
+              ],
+              "resourceUrl": "https://shopify-staged-uploads.storage.googleapis.com/tmp/00000000000/files/74eacf63-a3e1-40cd-85f9-ce10bdc35cac/psm-probe-ab12cd34ef56.jpg",
+              "url": "https://shopify-staged-uploads.storage.googleapis.com/tmp/00000000000/files/74eacf63-a3e1-40cd-85f9-ce10bdc35cac/psm-probe-ab12cd34ef56.jpg?<SIGNED_QUERY>"
+            }
+          ],
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 11,
+          "requestedQueryCost": 11,
+          "throttleStatus": {
+            "currentlyAvailable": 1989,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

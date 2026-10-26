@@ -1,0 +1,16 @@
+{
+  "source": "captured: P12 probe capture sv2_put_2 (test store, API 2026-10), sanitized",
+  "request": {
+    "body_bytes": 2050,
+    "headers": {
+      "acl": "<PARAM_VALUE:acl>",
+      "content_type": "image/jpeg"
+    },
+    "method": "PUT",
+    "url": "https://shopify-staged-uploads.storage.googleapis.com/tmp/00000000000/files/74eacf63-a3e1-40cd-85f9-ce10bdc35cac/psm-probe-ab12cd34ef56.jpg?<SIGNED_QUERY>"
+  },
+  "response": {
+    "body": null,
+    "status": 200
+  }
+}

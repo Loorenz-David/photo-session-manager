@@ -1,0 +1,64 @@
+{
+  "source": "captured: P12 probe capture sv5_partial_one_invalid (test store, API 2026-10), sanitized",
+  "request": {
+    "query": "mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { namespace key type value } userErrors { field message code elementIndex } } }",
+    "variables": {
+      "metafields": [
+        {
+          "key": "fx_text",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "single_line_text_field",
+          "value": "sv5 changed"
+        },
+        {
+          "key": "fx_integer",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "number_integer",
+          "value": "not-a-number"
+        },
+        {
+          "key": "fx_boolean",
+          "namespace": "beyo",
+          "ownerId": "gid://shopify/Product/15444448280729",
+          "type": "boolean",
+          "value": "false"
+        }
+      ]
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "metafieldsSet": {
+          "metafields": [],
+          "userErrors": [
+            {
+              "code": "INVALID_VALUE",
+              "elementIndex": null,
+              "field": [
+                "metafields",
+                "1",
+                "value"
+              ],
+              "message": "Value must be an integer."
+            }
+          ]
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 14,
+          "requestedQueryCost": 14,
+          "throttleStatus": {
+            "currentlyAvailable": 1986,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

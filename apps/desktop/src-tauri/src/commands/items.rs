@@ -70,6 +70,14 @@ impl From<Error> for CommandError {
                 data.insert("photo_id".into(), photo_id.to_string());
                 "raw_missing"
             }
+            Error::AttributeVerification { keys } => {
+                data.insert("keys".into(), keys.join(","));
+                "attribute_verification"
+            }
+            Error::NotConfirmed => "not_confirmed",
+            Error::ShopNotPermitted => "shop_not_permitted",
+            Error::AppNotInstalled => "app_not_installed",
+            Error::CredentialsRejected => "credentials_rejected",
         };
         Self {
             code: code.into(),

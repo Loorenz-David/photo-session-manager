@@ -139,6 +139,8 @@ pub trait Store: Send + Sync {
     fn set_photo_integrity(&self, id: i64, integrity: Integrity) -> Result<()>;
     fn upsert_raw_state(&self, raw_path: &str, path_key: Option<&str>) -> Result<()>;
     fn mechanism_version(&self) -> Result<String>;
+    /// The run's `confirmed_at` when the `publish_runs` row exists and is confirmed (07A MC-10).
+    fn confirmed_run(&self, run_id: i64) -> Result<Option<i64>>;
     fn record_hook(
         &self,
         spool_name: &str,
