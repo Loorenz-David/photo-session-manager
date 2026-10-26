@@ -84,7 +84,7 @@ restated so no session has to infer them:
 | P11_form_ui | APPROVED | 2026-10-26 | opus | approved with notes after fix 1: F1 resolved (the form's Title is `items.title`, one home; list, header, export and form agree); perimeter = allowed files; 30 rows + F1 test hold; suite 236 Rust / 78 UI, clippy/fmt/typecheck green; 5 notes from r1 + 3 in backlog |
 | P12_shopify_adapter | APPROVED | 2026-10-26 | opus | approved with notes, review r1: 68/68 rows hold at their boundaries; perimeter = declared files (+ disclosed `items.rs` match arms); suite 309 Rust / 78 UI, clippy/fmt/typecheck green; no credential in HEAD; 8 notes in backlog (condition-attribute read-back for P14 first) |
 | P13_publish_runs | APPROVED | 2026-10-26 | opus | approved with notes after fix 1: F1 resolved (a ready nameless media no longer stalls `upload`; reconciliation removes it); F2 resolved (`publish_step` runs on its own worker; the shared loop excludes it); perimeter = allowed files; suite 345 Rust / 79 UI, clippy/fmt/typecheck green; 11 notes from r1 + 1 in backlog |
-| P14_publish_update | IMPLEMENTED | 2026-10-26 | codex | tag base follows the local list after each successful update; 22/22 P14 rows, workspace suite/lint/typecheck green |
+| P14_publish_update | CHANGES_REQUESTED | 2026-10-26 | opus | review r1 (continuation): F2/F3 fixes and the tag base hold; suite 371 Rust / 79 UI, clippy/fmt/typecheck green; F1 (B1): removing the last tag in the form clears the field, so the tag step is skipped and the tag stays on the shop |
 | P15_publish_ui | NOT_STARTED | 2026-10-25 | planner | popover, progress, failure, batch, notifications |
 | P16_operations | NOT_STARTED | 2026-10-25 | planner | settings, health, backup, logs, final build |
 

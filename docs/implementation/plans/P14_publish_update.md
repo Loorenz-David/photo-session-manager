@@ -142,3 +142,21 @@ whether tags are written in the same `productUpdate` as the title.
   is advanced only for a frozen local tag value, as MC-13's no-clear rule keeps absent local values untouched.
   No deviations; prior F2/F3 fixes remain intact.
 
+- 2026-10-26 (opus, review r1 of the continuation): **CHANGES_REQUESTED** (handoff
+  `handoffs/reviewer/handoff_P14_publish_update_review_r1.md`). Tree `931cb88` (checkpoint `87dda4a` + handoff + review
+  prompt), clean; L4 stamp: `cargo test --workspace` 371 passed / 0 failed, clippy, fmt, `npm test` 79, typecheck
+  green. Perimeter: `87dda4a` = the 4 declared files (handoff committed by the runner in `59bd0ba`); fix r2 (`ca203c0`,
+  not reviewed before) = its 6 declared code files + docs. Verified correct: F2 (dedicated condition-metafield
+  read-back; Shopify query by namespace/key, JSON value parse; fake omits the key from `attributes_read`); F3 (C1(c)
+  now `"Sweden"`, `valid = false` on a writable text field, so the test fails if the `valid` filter goes); the tag
+  base := local list after every successful tag step, written or not (C2(c), C2(d)(i), crash between `update_tags` and
+  the base write re-merges to `None`, H4); removing one of several tags reaches the shop with admin tags kept (probe:
+  local `[a,b]`, shop `[z]`, publish, local `[a]`, publish → shop `[z,a]`). Settled rows from the first review unchanged.
+  Blocking: **F1 (B1)** removing the *last* tag in the form calls `clearAttribute` (useFormState: an empty list clears
+  the field), so `frozen_attributes` has no `product.tags`, the tag step is skipped, the base stays, and the shop
+  keeps the tag (probe: local `[a]`, shop `[a]`, publish, `AttributesService::clear`, publish → shop `["a"]`, run
+  `done`). C2(d)(ii)'s test stores `[]` through `set_value`, an input the form never sends. Authority: 07A MC-13
+  (R33) "after every successful update the base becomes the current local list … a tag removed in the app is removed
+  from the shop"; plan C2(d)(ii). Correction: when `product.tags` is absent from the frozen values and the stored base
+  is non-empty, merge with local `[]` and store base `[]`; C2(d)(ii) clears through `AttributesService::clear`.
+  1 note to backlog (no test asserts `done` after a damage-report write).
