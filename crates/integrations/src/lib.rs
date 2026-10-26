@@ -306,14 +306,14 @@ impl App {
         // ch12 §Backup: a copy at every start (a settings reopen is not a start).
         if start_backup {
             backup::create(&paths)?;
-        }
-        let spool = Arc::new(Spool::new(paths.clone()));
-        store.requeue_running_jobs()?;
-        if commerce.is_some() {
-            for id in store.active_publish_items()? {
-                store.enqueue_publish_item(id, clock.now_ms())?;
+            store.requeue_running_jobs()?;
+            if commerce.is_some() {
+                for id in store.active_publish_items()? {
+                    store.enqueue_publish_item(id, clock.now_ms())?;
+                }
             }
         }
+        let spool = Arc::new(Spool::new(paths.clone()));
         let health = Arc::new(HealthService::new());
         let document_id = settings.document_id.clone().unwrap_or_default();
         if document_id.is_empty() {

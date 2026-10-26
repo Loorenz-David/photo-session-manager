@@ -1,3 +1,4 @@
+use psm_core::ports::{clock::Clock, store::Store};
 use psm_core::{Error, mechanisms::canon::canon};
 use psm_infra::paths::AppPaths;
 use psm_integrations::editing::capture_one::{jxa::JxaScripting, scripting::CaptureOneScripting};
@@ -100,6 +101,41 @@ fn c1c_integration_rebuilds_without_network() {
         .unwrap();
     assert!(app.app.commerce.is_none() && app.app.publish.is_none());
 }
+
+#[test]
+fn settings_rebuild_preserves_running_job_and_does_not_duplicate_active_publish_job() {
+    let mut app = TestApp::with_fake_shop().unwrap();
+    let session_id = session(&app, "P17-SETTINGS-REBUILD");
+    app.app
+        .publish
+        .as_ref()
+        .unwrap()
+        .confirm(&[session_id], "Publish images")
+        .unwrap();
+    let item_id = app.app.store.active_publish_items().unwrap()[0];
+    let job = app
+        .app
+        .store
+        .job_due(app.clock.now_ms(), Some("publish_step"), None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.target, item_id.to_string());
+
+    app.settings_set(&serde_json::json!({"preview_delay_s":20}))
+        .unwrap();
+
+    let conn = Connection::open(app.app.paths.db()).unwrap();
+    let (status, count): (String, i64) = conn
+        .query_row(
+            "SELECT min(status), count(*) FROM jobs WHERE kind='publish_step' AND target=?1",
+            [item_id.to_string()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(status, "running");
+    assert_eq!(count, 1);
+}
+
 #[test]
 fn c2a_written_jxa_scripts_share_one_folder_scan() {
     let dir = tempfile::tempdir().unwrap();
