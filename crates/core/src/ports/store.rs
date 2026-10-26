@@ -5,7 +5,7 @@ use crate::domain::{
     item::{Item, NewItem},
     photo::{Classification, Integrity, NewPhoto, Photo, UndoSlot},
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
-    session::{Session, SessionDto, SessionListRecord},
+    session::{LatestPublish, Session, SessionDto, SessionListRecord},
 };
 
 #[derive(Debug, Clone)]
@@ -128,6 +128,7 @@ pub trait Store: Send + Sync {
     fn item(&self, id: i64) -> Result<Item>;
     fn session(&self, id: i64) -> Result<SessionDto>;
     fn session_list_records(&self) -> Result<Vec<SessionListRecord>>;
+    fn latest_publish(&self, session_id: i64) -> Result<Option<LatestPublish>>;
     fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;
     fn arrival_insert(&self, photo: NewPhoto, path_key: &str) -> Result<(Photo, bool)>;
     fn session_folders(&self) -> Result<Vec<(String, i64)>>;

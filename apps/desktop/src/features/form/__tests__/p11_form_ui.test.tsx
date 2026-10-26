@@ -117,6 +117,7 @@ function photo(id: number, classification: Photo['classification'], position: nu
     orientation: null,
     source: 'capture',
     integrity: 'ok',
+    upload_state: null,
   };
 }
 

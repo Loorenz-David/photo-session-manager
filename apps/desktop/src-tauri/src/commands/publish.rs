@@ -63,6 +63,8 @@ pub struct NotificationDto {
     #[specta(type = specta_typescript::Number)]
     pub id: i64,
     #[specta(type = specta_typescript::Number)]
+    pub item_id: i64,
+    #[specta(type = specta_typescript::Number)]
     pub session_id: i64,
     #[specta(type = specta_typescript::Number)]
     pub run_id: i64,
@@ -75,6 +77,7 @@ impl From<Notification> for NotificationDto {
     fn from(n: Notification) -> Self {
         Self {
             id: n.id,
+            item_id: n.item_id,
             session_id: n.session_id,
             run_id: n.run_id,
             kind: n.kind,

@@ -1,11 +1,13 @@
-import type { MouseEvent } from 'react';
+import { createContext, useContext, type MouseEvent } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { previewUrl } from '@/services/sessions';
 import type { Photo } from '@/services/photos';
 import { orientationTransform } from './StageImage';
+import { PhotoUploadBadge } from '@/features/publish/PhotoUploadBadge';
 
 export const photoDragId = (photoId: number) => `photo:${photoId}`;
+export const PublishFailedContext = createContext(false);
 
 type ThumbProps = { photo: Photo };
 
@@ -44,6 +46,7 @@ export function PhotoTile({ photo, number, active, selected, variant, onOpen, on
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: photoDragId(photo.id) });
   const unreviewed = photo.classification === 'unreviewed';
   const isCover = photo.classification === 'main' && number === 1;
+  const failed = useContext(PublishFailedContext);
 
   function onClick(event: MouseEvent) {
     if (event.metaKey || event.shiftKey) onToggleSelected(photo.id);
@@ -72,6 +75,7 @@ export function PhotoTile({ photo, number, active, selected, variant, onOpen, on
           <span className="tile-number">{String(number).padStart(2, '0')}</span>
           {isCover && <span className="tile-cover">Cover</span>}
           {!photo.adjusted_preview_path && <span className="tile-processing">Processing</span>}
+          {(photo.upload_state || failed) && <PhotoUploadBadge state={photo.upload_state ?? 'none'} />}
         </>
       )}
       {unreviewed && <span className="tile-unreviewed" aria-hidden />}

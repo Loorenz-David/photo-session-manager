@@ -11,6 +11,7 @@ pub struct SessionsService<'a> {
     clock: &'a dyn Clock,
     editing: Option<&'a dyn EditingProvider>,
     health: Option<&'a HealthService>,
+    commerce: Option<&'a dyn crate::ports::commerce::CommerceAdapter>,
 }
 
 impl<'a> SessionsService<'a> {
@@ -20,7 +21,16 @@ impl<'a> SessionsService<'a> {
             clock,
             editing: None,
             health: None,
+            commerce: None,
         }
+    }
+
+    pub fn with_commerce(
+        mut self,
+        commerce: Option<&'a dyn crate::ports::commerce::CommerceAdapter>,
+    ) -> Self {
+        self.commerce = commerce;
+        self
     }
 
     pub fn with_editing(
@@ -93,16 +103,41 @@ impl<'a> SessionsService<'a> {
             Some(item_id) => Some(self.store.item(item_id)?),
             None => None,
         };
-        let photos = self
+        let photos: Vec<_> = self
             .store
             .photos_in_session(id)?
             .into_iter()
             .filter(|photo| photo.classification != crate::domain::photo::Classification::Deleted)
             .collect();
+        let publish = self.store.latest_publish(id)?;
+        let upload_states = photos
+            .iter()
+            .map(|photo| {
+                let Some(commerce) = self.commerce else {
+                    return Ok(None);
+                };
+                let Some(item_id) = session.session.item_id else {
+                    return Ok(None);
+                };
+                let role = match photo.classification {
+                    crate::domain::photo::Classification::Main => "gallery".to_string(),
+                    crate::domain::photo::Classification::Condition => {
+                        format!("attribute:{}", commerce.condition_photos_key())
+                    }
+                    _ => return Ok(None),
+                };
+                Ok(self
+                    .store
+                    .photo_link(photo.id, item_id, &role)?
+                    .map(|link| link.upload_state))
+            })
+            .collect::<Result<Vec<_>>>()?;
         Ok(crate::domain::session::SessionView {
             session,
             item,
             photos,
+            publish,
+            upload_states,
         })
     }
     pub fn unassigned(&self) -> Result<SessionDto> {
@@ -179,6 +214,7 @@ impl SessionsService<'_> {
                 progress,
                 last_activity_at: dto.session.last_activity_at,
                 cover_preview_path: record.cover_preview_path,
+                publish: record.publish,
             });
         }
         let group_ids = group_by_activity(

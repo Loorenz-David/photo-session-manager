@@ -16,10 +16,12 @@ type SessionRowProps = {
   selected: boolean;
   onToggle: () => void;
   onOpen: () => void;
+  onPublish?: () => void;
+  onRetry?: () => void;
   now: number;
 };
 
-export function SessionRow({ row, selected, onToggle, onOpen, now }: SessionRowProps) {
+export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now }: SessionRowProps) {
   const name = row.item_type || row.title;
   return (
     <div className="session-row" data-testid={`session-row-${row.id}`} data-selected={selected || undefined}>
@@ -36,7 +38,7 @@ export function SessionRow({ row, selected, onToggle, onOpen, now }: SessionRowP
         </button>
       </HoverPreview>
       <span className="row-photos">{photoSummary(row.main_count, row.condition_count)}</span>
-      <StatusPill label={row.label} />
+      <StatusPill label={row.label} onPublish={onPublish} onRetry={onRetry} />
       <time className="row-time" dateTime={new Date(row.last_activity_at).toISOString()}>
         {activityLabel(row.last_activity_at, now)}
       </time>

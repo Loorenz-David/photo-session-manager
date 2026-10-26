@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -17,6 +17,8 @@ import { createSession } from '@/services/sessions';
 import type { Item } from '@/services/items';
 import { useKeyboard } from '@/lib/keyboard';
 import { FormDialog } from '@/features/form/FormDialog';
+import { FailurePopover } from '@/features/publish/FailurePopover';
+import { publishRetry } from '@/services/publish';
 import { FoldedStrip } from './FoldedStrip';
 import { ImportDropZone, pickAndImport } from './ImportDropZone';
 import { ItemDetailsCard } from './ItemDetailsCard';
@@ -24,7 +26,7 @@ import { displayOrder, displaySequence } from './order';
 import { ItemPickerDialog, SessionPickerDialog } from './PickerDialogs';
 import { PhotoPanel } from './PhotoPanel';
 import type { PhotoMenuAction } from './PhotoMenu';
-import { Thumb } from './PhotoTile';
+import { PublishFailedContext, Thumb } from './PhotoTile';
 import { SessionsPanel } from './SessionsPanel';
 import { Stage } from './Stage';
 import type { SwipeAction } from './SwipeLayer';
@@ -101,9 +103,22 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const [formOpen, setFormOpen] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
   const [dragging, setDragging] = useState<Photo | null>(null);
+  const [failureOpen, setFailureOpen] = useState(false);
+  const shownFailure = useRef<number | null>(null);
   const drop = useDrop(state);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const { active } = state;
+  const failure = state.view?.session.publish?.step === 'failed' ? state.view.session.publish : null;
+  const retry = useCallback(() => {
+    if (!failure) return;
+    void publishRetry(failure.item_id).then(() => { setFailureOpen(false); toast.dismiss(`publish-failed-${failure.item_id}`); void state.reload(); }).catch(error => toast.error(`Retry failed: ${(error as Error).message}`));
+  }, [failure, state]);
+  useEffect(() => {
+    if (!failure || shownFailure.current === failure.item_id) return;
+    shownFailure.current = failure.item_id;
+    setFailureOpen(true);
+    toast.error('Publish failed', { id: `publish-failed-${failure.item_id}`, duration: Infinity, action: { label: 'Retry', onClick: retry } });
+  }, [failure, retry]);
 
   const review = useCallback(
     (action: SwipeAction) => {
@@ -210,6 +225,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   }
 
   return (
+    <PublishFailedContext.Provider value={failure !== null}>
     <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       <main className="workspace" data-folded={folded || undefined}>
         <div className="stage-column">
@@ -244,6 +260,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         <ImportDropZone />
       </main>
       <DragOverlay>{dragging && <div className="drag-overlay"><Thumb photo={dragging} /></div>}</DragOverlay>
+      {failureOpen && failure && <FailurePopover reason={failure.error ?? 'Publish failed'} onRetry={retry} onClose={() => setFailureOpen(false)} />}
 
       <SessionPickerDialog
         open={picker?.kind === 'move' || picker?.kind === 'copy'}
@@ -266,5 +283,6 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
       {item && <FormDialog open={formOpen} onOpenChange={setFormOpen} item={item} photos={state.photos} onItemChanged={() => void state.reload()} />}
       {unassigned && <ItemPickerDialog open={assignOpen} title="Assign product" onOpenChange={onAssignOpenChange} onPick={item => void assignWhole(item)} />}
     </DndContext>
+    </PublishFailedContext.Provider>
   );
 }

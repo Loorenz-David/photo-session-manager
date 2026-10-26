@@ -122,7 +122,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
   const publish = usePublish(sessionId);
   const [publishOpen, setPublishOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const failedCount = publish.notifications.filter(note => note.kind === 'failed').length;
+  const failedCount = publish.failedCount;
   const bell = <Button variant="ghost" size="icon" aria-label="Notifications" onClick={() => setNotificationsOpen(true)} className="relative"><Bell />{failedCount > 0 && <span className="bell-count">{failedCount}</span>}</Button>;
   const drawer = notificationsOpen && <NotificationsDrawer notifications={publish.notifications} onClose={() => setNotificationsOpen(false)} onOpen={id => { window.location.hash = `#/session/${id}`; setNotificationsOpen(false); }} />;
 

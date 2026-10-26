@@ -7,6 +7,8 @@ import { useDebounced, useKeyboard } from '@/lib/keyboard';
 import type { SessionFilter } from '@/services/bindings';
 import { onSessionsChanged } from '@/services/events';
 import { BatchQueue } from '@/features/publish/BatchQueue';
+import { PublishPopover } from '@/features/publish/PublishPopover';
+import { publishRetry } from '@/services/publish';
 import { listSessions, type SessionList } from '@/services/sessions';
 import { BatchBar } from './BatchBar';
 import { Filters } from './Filters';
@@ -25,6 +27,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   const [list, setList] = useState<SessionList | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [queueIds, setQueueIds] = useState<number[]>([]);
+  const [publishId, setPublishId] = useState<number | null>(null);
   const debouncedQuery = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
   const request = useRef(0);
 
@@ -157,6 +160,8 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
                   selected={selected.has(row.id)}
                   onToggle={() => toggle(row.id)}
                   onOpen={() => navigate(row.id)}
+                  onPublish={() => setPublishId(row.id)}
+                  onRetry={row.publish?.item_id ? () => void publishRetry(row.publish!.item_id).then(load).catch(error => toast.error(`Retry failed: ${(error as Error).message}`)) : undefined}
                 />
               ))}
             </section>
@@ -172,6 +177,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
         onReview={() => setQueueIds([...selected])}
       />
       {queueIds.length > 0 && <BatchQueue ids={queueIds} onClose={() => { setQueueIds([]); setSelected(new Set()); void load(); }} />}
+      {publishId !== null && <PublishPopover sessionIds={[publishId]} onClose={() => { setPublishId(null); void load(); }} />}
     </main>
   );
 }

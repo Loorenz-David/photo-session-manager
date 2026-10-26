@@ -10,7 +10,7 @@ use psm_core::{
         item::{Item, ItemOrigin, NewItem},
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
         publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
-        session::{PublishStep, Session, SessionDto, SessionListRecord},
+        session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
     },
     mechanisms::canon::canon,
     ports::store::{PreviewCommit, RawPreviewState, Store, StoreTx},
@@ -195,6 +195,26 @@ fn parse_step(step: &str) -> Result<PublishStep> {
         "failed" => Ok(PublishStep::Failed),
         _ => Err(Error::InvalidData(format!("invalid publish step: {step}"))),
     }
+}
+
+fn latest_publish(conn: &Connection, session_id: i64) -> Result<Option<LatestPublish>> {
+    type PublishRow = (i64, String, Option<String>, Option<String>, i64, i64);
+    let raw: Option<PublishRow> = conn.query_row(
+        "SELECT pi.id,pi.step,pi.failed_step,pi.error,pi.uploaded,pi.total FROM publish_items pi JOIN publish_runs pr ON pr.id=pi.run_id WHERE pi.session_id=?1 AND pr.confirmed_at IS NOT NULL ORDER BY pr.confirmed_at DESC,pr.id DESC,pi.id DESC LIMIT 1",
+        [session_id],
+        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?)),
+    ).optional().map_err(db)?;
+    raw.map(|(item_id, step, failed_step, error, uploaded, total)| {
+        Ok(LatestPublish {
+            item_id,
+            step: parse_step(&step)?,
+            failed_step: failed_step.map(|s| parse_step(&s)).transpose()?,
+            error,
+            uploaded,
+            total,
+        })
+    })
+    .transpose()
 }
 
 fn step_name(step: PublishStep) -> &'static str {
@@ -978,13 +998,24 @@ impl Store for SqliteStore {
             let session = session(&conn, id)?;
             let non_deleted_missing_preview_count = conn.query_row("SELECT COUNT(*) FROM photos WHERE session_id=?1 AND classification<>'deleted' AND adjusted_preview_path IS NULL", [id], |r| r.get(0)).map_err(db)?;
             let cover_preview_path = conn.query_row("SELECT COALESCE(adjusted_preview_path,original_preview_path) FROM photos WHERE session_id=?1 AND classification='main' AND position=1", [id], |r| r.get(0)).optional().map_err(db)?.flatten();
-            let latest: Option<(String,Option<String>,i64,i64)> = conn.query_row("SELECT pi.step,pi.failed_step,pi.uploaded,pi.total FROM publish_items pi JOIN publish_runs pr ON pr.id=pi.run_id WHERE pi.session_id=?1 AND pr.confirmed_at IS NOT NULL ORDER BY pr.confirmed_at DESC,pr.id DESC,pi.id DESC LIMIT 1", [id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional().map_err(db)?;
-            let (latest_step,failed_step,uploaded,total) = match latest {
-                Some((step,failed,uploaded,total)) => (Some(parse_step(&step)?),failed.map(|s| parse_step(&s)).transpose()?,uploaded,total),
+            let publish = latest_publish(&conn, id)?;
+            let (latest_step,failed_step,uploaded,total) = match &publish {
+                Some(latest) => (Some(latest.step),latest.failed_step,latest.uploaded,latest.total),
                 None => (None,None,0,0),
             };
-            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total })
+            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total,publish })
         }).collect()
+    }
+
+    fn latest_publish(
+        &self,
+        session_id: i64,
+    ) -> Result<Option<psm_core::domain::session::LatestPublish>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        latest_publish(&conn, session_id)
     }
 
     fn photo_insert_or_get(&self, mut new: NewPhoto) -> Result<Photo> {
@@ -1303,19 +1334,21 @@ impl Store for SqliteStore {
         error: Option<&str>,
         at: i64,
     ) -> Result<()> {
-        let conn = self
+        let mut conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        conn.execute(
+        let tx = conn.transaction().map_err(db)?;
+        tx.execute(
             "UPDATE publish_items SET step=?1,failed_step=?2,error=?3 WHERE id=?4",
             params![step_name(step), failed_step.map(step_name), error, item_id],
         )
         .map_err(db)?;
         if step == PublishStep::Failed {
-            conn.execute("UPDATE sessions SET last_activity_at=?1 WHERE id=(SELECT session_id FROM publish_items WHERE id=?2)",params![at,item_id]).map_err(db)?;
+            tx.execute("UPDATE sessions SET last_activity_at=?1 WHERE id=(SELECT session_id FROM publish_items WHERE id=?2)",params![at,item_id]).map_err(db)?;
+            tx.execute("INSERT INTO notifications(session_id,run_id,kind,text,created_at) SELECT session_id,run_id,'failed',?1,?2 FROM publish_items WHERE id=?3",params![format!("Publish failed · {}", error.unwrap_or_default()),at,item_id]).map_err(db)?;
         }
-        Ok(())
+        tx.commit().map_err(db)
     }
     fn set_publish_progress(&self, item_id: i64, uploaded: i64, total: i64) -> Result<()> {
         self.conn
@@ -1403,10 +1436,11 @@ impl Store for SqliteStore {
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let mut stmt=conn.prepare("SELECT id,session_id,run_id,kind,text,created_at FROM notifications WHERE (?1 IS NULL OR session_id=?1) ORDER BY id DESC").map_err(db)?;
+        let mut stmt=conn.prepare("SELECT n.id,n.session_id,n.run_id,n.kind,n.text,n.created_at,pi.id FROM notifications n JOIN publish_items pi ON pi.run_id=n.run_id AND pi.session_id=n.session_id WHERE (?1 IS NULL OR n.session_id=?1) ORDER BY n.id DESC").map_err(db)?;
         stmt.query_map([session_id], |r| {
             Ok(Notification {
                 id: r.get(0)?,
+                item_id: r.get(6)?,
                 session_id: r.get(1)?,
                 run_id: r.get(2)?,
                 kind: r.get(3)?,

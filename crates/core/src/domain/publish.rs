@@ -157,6 +157,7 @@ pub struct PhotoLink {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Notification {
     pub id: i64,
+    pub item_id: i64,
     pub session_id: i64,
     pub run_id: i64,
     pub kind: String,

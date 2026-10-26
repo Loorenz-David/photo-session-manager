@@ -247,8 +247,29 @@ export type ItemDto_Serialize = {
 	updated_at: number,
 };
 
+export type LatestPublishResponse = LatestPublishResponse_Serialize | LatestPublishResponse_Deserialize;
+
+export type LatestPublishResponse_Deserialize = {
+	item_id: number,
+	step: string,
+	failed_step?: string | null,
+	error?: string | null,
+	uploaded: number,
+	total: number,
+};
+
+export type LatestPublishResponse_Serialize = {
+	item_id: number,
+	step: string,
+	failed_step: string | null,
+	error: string | null,
+	uploaded: number,
+	total: number,
+};
+
 export type NotificationDto = {
 	id: number,
+	item_id: number,
 	session_id: number,
 	run_id: number,
 	kind: string,
@@ -273,6 +294,7 @@ export type PhotoResponse_Deserialize = {
 	orientation?: number | null,
 	source: string,
 	integrity: string,
+	upload_state?: string | null,
 };
 
 /**  One visible photo of the workspace (P08): what the stage, grid and strip need. */
@@ -287,6 +309,7 @@ export type PhotoResponse_Serialize = {
 	orientation: number | null,
 	source: string,
 	integrity: string,
+	upload_state: string | null,
 };
 
 export type PresetDto = PresetDto_Serialize | PresetDto_Deserialize;
@@ -399,6 +422,7 @@ export type SessionResponse_Deserialize = {
 	unreviewed_count: number,
 	main_count: number,
 	condition_count: number,
+	publish?: LatestPublishResponse_Deserialize | null,
 };
 
 export type SessionResponse_Serialize = {
@@ -414,6 +438,7 @@ export type SessionResponse_Serialize = {
 	unreviewed_count: number,
 	main_count: number,
 	condition_count: number,
+	publish: LatestPublishResponse_Serialize | null,
 };
 
 export type SessionRowResponse = SessionRowResponse_Serialize | SessionRowResponse_Deserialize;
@@ -431,6 +456,7 @@ export type SessionRowResponse_Deserialize = {
 	progress?: number | null,
 	last_activity_at: number,
 	cover_preview_path?: string | null,
+	publish?: LatestPublishResponse_Deserialize | null,
 };
 
 export type SessionRowResponse_Serialize = {
@@ -446,6 +472,7 @@ export type SessionRowResponse_Serialize = {
 	progress: number | null,
 	last_activity_at: number,
 	cover_preview_path: string | null,
+	publish: LatestPublishResponse_Serialize | null,
 };
 
 export type SessionStatusResponse = "publishing" | "failed" | "published" | "ready" | "in_progress";

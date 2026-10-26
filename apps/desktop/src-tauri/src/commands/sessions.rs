@@ -8,7 +8,7 @@ use crate::{
 use psm_core::{
     domain::{
         photo::Photo,
-        session::{SessionDto, SessionView},
+        session::{LatestPublish, PublishStep, SessionDto, SessionView},
     },
     ports::clock::SystemClock,
     services::sessions::SessionsService,
@@ -16,6 +16,36 @@ use psm_core::{
 use serde::Serialize;
 use specta::Type;
 use tauri::State;
+
+#[derive(Serialize, Type)]
+pub struct LatestPublishResponse {
+    #[specta(type = specta_typescript::Number)]
+    pub item_id: i64,
+    pub step: String,
+    pub failed_step: Option<String>,
+    pub error: Option<String>,
+    #[specta(type = specta_typescript::Number)]
+    pub uploaded: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub total: i64,
+}
+
+fn step_name(step: PublishStep) -> String {
+    format!("{step:?}").to_lowercase()
+}
+
+impl From<LatestPublish> for LatestPublishResponse {
+    fn from(value: LatestPublish) -> Self {
+        Self {
+            item_id: value.item_id,
+            step: step_name(value.step),
+            failed_step: value.failed_step.map(step_name),
+            error: value.error,
+            uploaded: value.uploaded,
+            total: value.total,
+        }
+    }
+}
 
 #[derive(Serialize, Type)]
 pub struct SessionResponse {
@@ -42,6 +72,7 @@ pub struct SessionResponse {
     pub main_count: i64,
     #[specta(type = specta_typescript::Number)]
     pub condition_count: i64,
+    pub publish: Option<LatestPublishResponse>,
 }
 
 impl From<SessionDto> for SessionResponse {
@@ -59,6 +90,7 @@ impl From<SessionDto> for SessionResponse {
             unreviewed_count: dto.unreviewed_count,
             main_count: dto.main_count,
             condition_count: dto.condition_count,
+            publish: None,
         }
     }
 }
@@ -97,6 +129,7 @@ pub struct PhotoResponse {
     pub orientation: Option<i64>,
     pub source: String,
     pub integrity: String,
+    pub upload_state: Option<String>,
 }
 
 impl From<Photo> for PhotoResponse {
@@ -127,6 +160,7 @@ impl From<Photo> for PhotoResponse {
                 Integrity::RawMissing => "raw_missing",
             }
             .into(),
+            upload_state: None,
         }
     }
 }
@@ -141,10 +175,21 @@ pub struct SessionViewResponse {
 
 impl From<SessionView> for SessionViewResponse {
     fn from(view: SessionView) -> Self {
+        let mut session: SessionResponse = view.session.into();
+        session.publish = view.publish.map(Into::into);
         Self {
-            session: view.session.into(),
+            session,
             item: view.item.map(Into::into),
-            photos: view.photos.into_iter().map(Into::into).collect(),
+            photos: view
+                .photos
+                .into_iter()
+                .zip(view.upload_states)
+                .map(|(photo, upload_state)| {
+                    let mut response: PhotoResponse = photo.into();
+                    response.upload_state = upload_state;
+                    response
+                })
+                .collect(),
         }
     }
 }
@@ -160,6 +205,7 @@ pub fn session_get(
         .lock()
         .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
     SessionsService::new(app.store.as_ref(), &SystemClock)
+        .with_commerce(app.commerce.as_deref())
         .view(session_id.0)
         .map(Into::into)
         .map_err(Into::into)
@@ -234,6 +280,7 @@ pub struct SessionRowResponse {
     #[specta(type = specta_typescript::Number)]
     pub last_activity_at: i64,
     pub cover_preview_path: Option<String>,
+    pub publish: Option<LatestPublishResponse>,
 }
 #[derive(Serialize, Type)]
 pub struct SessionListGroupResponse {
@@ -286,6 +333,7 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
                             progress: row.progress,
                             last_activity_at: row.last_activity_at,
                             cover_preview_path: row.cover_preview_path,
+                            publish: row.publish.map(Into::into),
                         })
                         .collect(),
                 })
@@ -399,6 +447,7 @@ mod list_tests {
                     progress: Some(42),
                     last_activity_at: 123,
                     cover_preview_path: Some("/cover.jpg".into()),
+                    publish: None,
                 }],
             }],
             counts: ListCounts {

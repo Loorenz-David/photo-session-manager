@@ -29,6 +29,18 @@ pub struct SessionView {
     pub session: SessionDto,
     pub item: Option<crate::domain::item::Item>,
     pub photos: Vec<crate::domain::photo::Photo>,
+    pub publish: Option<LatestPublish>,
+    pub upload_states: Vec<Option<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LatestPublish {
+    pub item_id: i64,
+    pub step: PublishStep,
+    pub failed_step: Option<PublishStep>,
+    pub error: Option<String>,
+    pub uploaded: i64,
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,6 +104,7 @@ pub struct SessionRow {
     pub progress: Option<u8>,
     pub last_activity_at: i64,
     pub cover_preview_path: Option<String>,
+    pub publish: Option<LatestPublish>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,4 +132,5 @@ pub struct SessionListRecord {
     pub failed_step: Option<PublishStep>,
     pub uploaded: i64,
     pub total: i64,
+    pub publish: Option<LatestPublish>,
 }

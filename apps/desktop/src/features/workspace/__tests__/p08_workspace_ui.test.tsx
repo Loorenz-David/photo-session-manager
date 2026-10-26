@@ -108,6 +108,7 @@ function photo(id: number, classification: Photo['classification'], extra: Parti
     orientation: 1,
     source: 'capture',
     integrity: 'ok',
+    upload_state: null,
     ...extra,
   };
 }
@@ -127,6 +128,7 @@ function view(photos: Photo[], sessionId = SESSION): SessionView {
       unreviewed_count: photos.filter(p => p.classification === 'unreviewed').length,
       main_count: photos.filter(p => p.classification === 'main').length,
       condition_count: photos.filter(p => p.classification === 'condition').length,
+      publish: null,
     },
     item: sessionId === 1 ? null : ITEM,
     photos: photos.map(p => ({ ...p, session_id: sessionId })),
@@ -147,6 +149,7 @@ function sessionRow(id: number, title: string, status: SessionStatusResponse = '
     progress: null,
     last_activity_at: 0,
     cover_preview_path: null,
+    publish: null,
   };
 }
 

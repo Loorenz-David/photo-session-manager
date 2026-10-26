@@ -8,9 +8,11 @@ import type { RowLabelResponse } from '@/services/bindings';
 export function usePublish(sessionId?: number) {
   const [label, setLabel] = useState<RowLabelResponse | null>(null);
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
+  const [failedCount, setFailedCount] = useState(0);
   const refresh = useCallback(async () => {
     const [list, history] = await Promise.all([listSessions({ filter: 'all', query: null }), notificationsList()]);
     setLabel(list.groups.flatMap(group => group.rows).find(row => row.id === sessionId)?.label ?? null);
+    setFailedCount(list.groups.flatMap(group => group.rows).filter(row => row.publish?.step === 'failed').length);
     setNotifications(history);
   }, [sessionId]);
   useEffect(() => {
@@ -23,5 +25,5 @@ export function usePublish(sessionId?: number) {
     void onPublishProgress(() => void refresh().catch(() => undefined)).then(off => { if (alive) offProgress = off; else off(); }).catch(() => undefined);
     return () => { alive = false; offSessions?.(); offProgress?.(); };
   }, [refresh]);
-  return { label, notifications, refresh };
+  return { label, notifications, failedCount, refresh };
 }
