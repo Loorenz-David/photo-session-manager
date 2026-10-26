@@ -100,3 +100,8 @@ format (JSON lines or key=value), how cold start is measured (launch → first `
   (`collections.whose({file})` → -1725; `images whose path` limited to the browsed collection). Added task 0 and row
   C6(a) (12 rows). Evidence `capture_one_16.8.6.md` "VERIFY-11 result".
 - 2026-10-26 (codex implement r1, blocked at live launch): implemented settings persistence and masked display, integration health, SQLite online backups, daily log redaction, settings/health screens, and the collection-iteration Capture One lookup. The ad-hoc bundle builds and verifies. Assumptions: plain form controls and a separate settings page are the smallest undesigned UI; integration health reads the stored core `media_list` definition after schema refresh; settings changes that affect provider wiring reopen the app runtime. Deviations: startup and publish backup wiring required `crates/integrations/src/lib.rs`; routing required `apps/desktop/src/App.tsx`; dynamic token redaction required `shopify/auth.rs`; supporting module/Cargo/testkit files were added. Live folder lookup returned `Application can't be found (-2700)` and bundle launch returned LaunchServices -10827 in this sandbox, so cold-start and five-frame timings remain unmeasured. The tracker is not advanced because those live checks remain blocked.
+- 2026-10-26 08:42 (orchestrator): implement r1 (Codex) stopped by the usage limit (resets 12:09) after ~20 min; attempt
+  archived. Substantial partial work is uncommitted in the tree (settings service/commands/page, backup, logging,
+  health, auth, `find_image_in_folder.js`, `p16_operations.rs`). Relaunched on Claude (PSM_IMPLEMENTER=claude): the
+  implement session continues from the tree, verifies each piece against this plan, keeps what fits.
+

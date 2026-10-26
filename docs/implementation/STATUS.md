@@ -26,7 +26,8 @@ Updated: 2026-10-25 by the orchestrator.
   changelog 20); attempt to be archived by the orchestrator, next implementer continues from `e3848bd`.
   P15 attempt archived 07:41; relaunch → re-review r2 one MUST (F4 batch panel inert) → FIX2_AUTHORISED in the
   P15 Review log 08:20. 08:09 Codex at capacity → stale-handoff BLOCK; archived 08:11.
-  Run in flight: `phase P15` on Claude then `all` on Codex, started 08:12.
+  P15 APPROVED (with notes) 08:21 on Claude. P16 implement r1 (Codex) hit the usage limit 08:41
+  (resets 12:09), archived. Run in flight: `phase P16` on Claude, started 08:43.
 - Implementer and fix sessions: Codex again from P13 (owner 2026-10-26); P07–P12 were built on Claude
   (Opus/Sonnet) while Codex was rate-limited; `PSM_IMPLEMENTER=claude` switches.
 
