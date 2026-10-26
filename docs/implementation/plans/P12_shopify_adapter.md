@@ -332,3 +332,26 @@ serves it at runtime.
     index lags (do not rely on `files(query: filename:)` for recovery); Shopify reads `&quot;` back as `"` in
     `descriptionHtml`; re-check definition `access` on the real store at the switch (the foreign-namespace
     writes here are not representative).
+- 2026-10-26 (reviewer, Claude Opus 5.5, review r1): **APPROVED_WITH_NOTES.**
+  - Gate: tracker IMPLEMENTED, checkpoint `bd4218f` in `git log`. `git show --stat bd4218f` = the declared files
+    exactly (31 paths + 70 fixtures; `items.rs` is the disclosed deviation, needed for the exhaustive match).
+  - Stamp (own run, tree = `bd4218f` + docs): `cargo test --workspace` 309 passed; clippy `-D warnings`, `fmt --check`,
+    `npm run typecheck`, `npm test` (78) all exit 0.
+  - Verified correct by reading code then test, per row: C1 (NFC byte-exact filter over a case-insensitive search;
+    dedup by product), C2, C3(x) (diff write, no `None` barcode, return = mutation read-back), C3(a) (variables equal
+    the SV-7 capture incl. `status DRAFT`), C3(b) (single constructor; no other `ConfirmedRun {…}` site in the tree),
+    C4(a)–(w) (type map = MC-13 table; writable = type ∧ `PUBLIC_READ_WRITE`; only the configured
+    `list.file_reference` is `media_list`; groups; units; rating bounds; no `product` group), C5(a)–(p) (canonical +
+    round trip, byte identity for the rows the plan names), C5(q)(r) (25 + 5; atomic batch keys from `field[1]`,
+    stop at first failing batch), C6(a)–(h), C7(a)(b), C8(a)(b), C9(a)–(g) (refresh at `lifetime − 60 s`; one 401
+    retry; grant-refusal mapping and the three 09A messages; secret only in the form request). Each test would fail
+    on a wrong outcome (the FakeTransport panics on unmatched requests, so extra mutations cannot hide).
+  - H1–H8: every mutating port method takes `&ConfirmedRun`; mutations never retried after 5xx/timeout (401/429/
+    THROTTLED only, not executed); suite network-free; no Tauri in business logic. Secrets: HEAD contains none of the
+    shop domain, handle, client id or secret (counted, not printed); fixtures redacted.
+  - Assumptions A1–A21: none contradicts the book. Notes (backlog): condition-attribute read-back for P14 (A11);
+    media id from "last in gallery" (A4); settings parse untested; Shopify validations not in core; own-app
+    definitions read-only (A5); Shopify strings in core errors (H7, plan-directed); test-store leftover definition;
+    extra live smoke (A21).
+  - Lessons for the plans: row literals and the "(68)" count referred to the real store while the probe store was
+    the test store; live-store phases should state whether a post-probe smoke is allowed.
