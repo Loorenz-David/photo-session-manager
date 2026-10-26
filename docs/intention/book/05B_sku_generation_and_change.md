@@ -13,8 +13,9 @@ proposal). In New session's "Create '…'" row the SKU box is pre-filled with
 `^<prefix>-(\d+)$` exactly (case-sensitive), or 1 if none, zero-padded to at least 4 digits. The
 box stays editable; the SKU sent is what the box holds at confirmation. When an integration is
 configured and reachable, a proposed or typed SKU that `item.search` finds in the shop is shown
-as "<SKU> is already in the shop" and the create action is disabled until it changes (the
-proposal advances to the next free number). No prefix → the box starts empty and is required.
+as "<SKU> is already in the shop" and the create action is disabled until it changes. The
+proposal is computed from local SKUs only and does not skip numbers the shop holds; the
+photographer types another SKU (clarified 2026-10-26, R32: no next-free suggestion). No prefix → the box starts empty and is required.
 
 **Stored folder key.** `items.folder_key` is computed from the SKU (MC-8) at creation and
 **follows the SKU while the item has no photo row in any of its sessions**. From the first photo

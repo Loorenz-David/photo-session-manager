@@ -39,6 +39,7 @@ cite either the `M` id or the `MC` id.
 | **M27** | MC-20 (10A) | The original preview is a byte-exact copy of the largest embedded JPEG; the RAW is unchanged. | corrupted preview, RAW writes |
 | **M28** | MC-21 (07B) | A retouch of a published photo makes the session dirty; the next publish leaves exactly one media for it, same position, from a post-retouch render; the app's own tag writes never dirty a session. | dust spot stays on Shopify |
 | **M29** | MC-22 (05B) | After SKU edits, captures land in and are attributed from the item's one stored folder; export and `item.json` use the current SKU; after the next publish the shop variant SKU equals it; no proposal is confirmed while the shop holds it elsewhere. | captures misfiled after a SKU change, wrong SKU on Shopify |
+| **M30** | MC-23, MC-24 (09A) | At most one integration definition is `media_list`, keyed by `condition_photos_key`; condition photos are written only there; the access token and client secret never leave memory and the settings file. | damage report written to the wrong field, leaked credentials |
 
 Operational measurements (recorded in S0 and S8, not tests): shot-to-original-preview and
 shot-to-adjusted-preview times; cold start of the packaged app on a fresh Mac.

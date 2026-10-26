@@ -17,7 +17,7 @@ phase:** UI (P15); the AI description (post-MVP).
 ## Read first
 master plan §6.5 (`item_links.tags_base`, `photo_links.revision/retouch_gen/superseded_ids`) · book `01`, `14`, `07`
 §Publish steps 3–4, `07B` (all), `08` §Values and provenance · contracts `07A` MC-13 (write set, tags, title,
-description), MC-14, MC-12 (own set includes `superseded_ids`); `07B` MC-21 (Replacement, Upload filename, Gallery,
+description), MC-14, `09A` MC-24 (configured condition-photos field), MC-12 (own set includes `superseded_ids`); `07B` MC-21 (Replacement, Upload filename, Gallery,
 Condition photos); `05A` MC-9 (equality) · evidence `shopify_admin.md` SV-1, SV-5.
 
 ## Files expected to change
@@ -35,8 +35,12 @@ Condition photos); `05A` MC-9 (equality) · evidence `shopify_admin.md` SV-1, SV
 1. Update step, second half: `attributes_read` → `write_set` → batched `attributes_write` → read back and compare
    canonically (fail `attribute_verification{keys}` on any difference); title if different; description HTML when a
    manual description exists; tags via `merge_tags` with `item_links.tags_base` updated to the written set.
-2. Damage report: selected condition photos (MC-14) uploaded as files (role `attribute:custom.damage_report`, same
-   link state machine and adoption rule), then the attribute set to the file ids in condition order.
+2. Damage report: selected condition photos (MC-14) uploaded as files (role `attribute:<key>`, where `<key>` is the
+   one integration definition of core type `media_list`, i.e. the configured `condition_photos_key`, 09A MC-24; same
+   link state machine and adoption rule), then the attribute set to the file ids in condition order. When no
+   `media_list` definition exists (key missing or not a file list), the condition-photo uploads and write are
+   skipped, the rest of `update` runs, and the `published` notification text ends with "Condition photos not
+   published: field <key> not found in the shop" (09A MC-24).
 3. Replacement pass in `prepare` (before upload): for each frozen photo whose link (this item, this role) is `ready`
    and `raw_state.retouch_gen > link.retouch_gen`: `revision += 1`, `upload_state = none`, previous id pushed to
    `superseded_ids`, `link.retouch_gen = raw retouch_gen`; filename `<key>-<uid12>-r<n>.jpg`; adoption matches the
@@ -44,7 +48,7 @@ Condition photos); `05A` MC-9 (equality) · evidence `shopify_admin.md` SV-1, SV
 3b. Identity write in `update` (05B MC-22): default-variant SKU/barcode diff against the remote, never clearing.
 4. `publish_summary` completed (counts and notes); tests.
 
-## Criteria (7 criteria, 20 rows; 0 `[rule]` rows)
+## Criteria (7 criteria, 21 rows; 0 `[rule]` rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `update` | frozen `{years: "1950-1960s", country: "Sweden"}`; remote `{years: "1950-1960s", country: "Denmark", designer: "X"}` | fake `metafieldsSet` carries exactly `country` | M20 |
@@ -58,9 +62,10 @@ Condition photos); `05A` MC-9 (equality) · evidence `shopify_admin.md` SV-1, SV
 | C3(a) | `update` | title local "Oak" vs remote "Oak" / "Teak" | no title write / `productUpdate` with `title: "Oak"` | MC-13 (title) |
 | C3(c) | `update` | linked item, local SKU `K-2` / barcode none; remote `K-1` / `123` | `item_set_identity` sends `sku: K-2` only (barcode not cleared); read-back mismatch → `failed` at `update` | MC-22 (05B), M29 |
 | C3(b) | `update` | manual description `"a\n\nb"` / none | `descriptionHtml = "<p>a</p><p>b</p>"` / no description field in the request | MC-13 (description) |
-| C4(a) | `update` | condition [d, e, f], exclusions `[e]` | files uploaded for d and f (`role = attribute:custom.damage_report`), attribute value `["<fd>","<ff>"]` in that order | M21 |
+| C4(a) | `update` | condition [d, e, f], exclusions `[e]` | files uploaded for d and f (`role = attribute:custom.damage_report`, the configured key in the fixture), attribute value `["<fd>","<ff>"]` in that order | M21 |
 | C4(b) | re-publish after reclassifying f to main and adding g | — | attribute `["<fd>","<fg>"]`; `ff` still exists in the fake's Files (not deleted) | M21, MC-14 |
 | C4(c) | `update` | `frozen_condition` empty | attribute set to `[]`? **No**: no write when there is no local value and no selection — attribute untouched | M20 (never clears) — see Notes |
+| C4(d) | `update` | condition [d], configured key `custom.nope` (no `media_list` definition stored) | no file upload and no write for condition photos; gallery and other attributes written; run `done`; notification text ends with "Condition photos not published: field custom.nope not found in the shop" | MC-24 (09A), M30 |
 | C5(a) | `prepare` replacement | link for photo p `ready` with `retouch_gen 0`, `external_id m1`; raw `retouch_gen 1` | link `revision = 1`, `upload_state = none`, `superseded_ids = [m1]`, `retouch_gen = 1`; upload filename `<key>-<uid12>-r1.jpg` | M28 |
 | C5(b) | `update` after C5(a) | p was main 02 | new media at gallery index 1; `m1` deleted (own); exactly one media for p | M28, M19 |
 | C5(c) | replacement of a condition photo | — | new file id in the damage-report attribute; old file remains in Files | M28, MC-21 |
@@ -87,4 +92,6 @@ whether tags are written in the same `productUpdate` as the title.
 - Estimated size: ~6 files, ~1 400 lines.
 
 ## Review log
-(empty)
+- 2026-10-26 (orchestrator): owner answers (book 09A, R32): the damage-report role uses the configured
+  `condition_photos_key` (the one `media_list` definition); task 2 skips condition photos with a notification when
+  the field is missing; row C4(d) added (20 → 21 rows). 09A added to Read-first.

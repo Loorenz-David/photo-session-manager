@@ -83,3 +83,16 @@
     requires the definition's access to permit writes; SV-1 and SV-4 record access and media
     delete. 09: the type map pointer now names 07A MC-13. No product sentence changed; header
     stays RATIFIED.
+18. **2026-10-26 — Owner: Shopify access, probe store, condition field** (relayed by the
+    orchestrator). Owner's words: "im using a dev app … in the app i have the client key and the
+    secrete"; "this is a test store, later upon completion we will use the real store, it should
+    be more than enought to change the credentials and shop to make that change"; "the condition
+    report images are uploaded to a specific metafield, that is set up on app settings, for now no
+    interface, so we will set it up manually ( metafield key space )". New chapter 09A: MC-23
+    (client credentials grant, token in memory only, refresh and one 401 retry, error messages,
+    store switch by settings) and MC-24 (`integration.condition_photos_key`, initial
+    `custom.damage_report`, the only `media_list` definition; misconfiguration shown in health and
+    the damage report skipped), invariant M30, decision R32. Pointers in 07A MC-13 table and MC-14
+    (and SHOPIFY-VERIFY-0 in its Grounding list), 09, 12, intention.md map. 05B MC-22: the ambiguous "(the proposal advances to the next free
+    number)" replaced by the default the owner was offered and did not change: no next-free
+    suggestion, the proposal comes from local SKUs only. Owner decisions, header stays RATIFIED.

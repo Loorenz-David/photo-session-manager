@@ -29,8 +29,11 @@ otherwise). Mapping:
 - `media.publish`: `stagedUploadsCreate` → upload → `productUpdate` media → poll `READY` →
   `productReorderMedia` → poll job.
 - `media.attribute_publish`: `fileCreate` → poll → `metafieldsSet` on the `media_list` attribute.
-  The condition photos attribute for the first customer is `custom.damage_report`
-  (`list.file_reference`, images only), per the shop's definitions on 2026-10-24.
+  The condition photos attribute is the one definition named by the setting
+  `integration.condition_photos_key` (initial value `custom.damage_report`, `list.file_reference`,
+  images only): chapter 09A MC-24.
+- Credentials: client ID and client secret of a Dev Dashboard app; the access token comes from the
+  client credentials grant and lives in memory only (chapter 09A MC-23).
 - Every write is preceded by a read that checks whether it already happened: by stored external
   ID, then by filename and hash (H4). Tests never touch the live store (fixtures captured once
   from the dev store).

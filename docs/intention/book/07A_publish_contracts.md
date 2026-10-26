@@ -158,7 +158,7 @@ each blank-line-separated paragraph becomes `<p>…</p>` with `& < > "` escaped.
 | `rating` | `rating` | JSON `{"value", "scale_min", "scale_max"}` as decimal strings |
 | `money` | `money` | JSON `{"amount", "currency_code"}` |
 | `url` | `url` | the URL |
-| `list.file_reference` limited to images | `media_list` | MC-14 |
+| `list.file_reference` limited to images, **only** the definition named by `condition_photos_key` | `media_list` | MC-14, 09A MC-24 |
 | `file_reference`, `metaobject_reference`, `product_reference`, their `list.` forms, anything else | `reference` | never sent |
 
 **Invariant (M20).** A publish writes only keys whose confirmed local value differs from the
@@ -176,7 +176,8 @@ that are no longer condition photos are ignored. **(ratify R-I9)** M3's "every c
 is in the condition attribute" is evaluated over this selected set; with no exclusions they are
 equal.
 
-Publishing: each selected photo is uploaded as a file (role `attribute:<key>`, MC-11 rules),
+Publishing: each selected photo is uploaded as a file (role `attribute:<key>`, where `<key>` is the
+configured `condition_photos_key`, 09A MC-24; MC-11 rules),
 then the attribute is set to the JSON array of their file ids in order. Files for photos no
 longer selected stay in the shop's Files (not deleted, not on the product).
 
@@ -186,6 +187,8 @@ photos in condition order; an unexcluded condition photo is never missing from i
 ---
 
 ## Grounding owed (Shopify, before the adapter phase's criteria are final)
+- **SHOPIFY-VERIFY-0** client credentials token request and response fields (token, lifetime, scope), the
+  wrong-secret reply and a GraphQL 401 (09A MC-23; added 2026-10-26, ch16 entry 18).
 - **SHOPIFY-VERIFY-1** metafield value string formats per type above, for the pinned version.
 - **SHOPIFY-VERIFY-2** filename of a media image and of a file after upload: where it is
   readable, and the exact uniquifier added on a name collision.

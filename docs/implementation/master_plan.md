@@ -14,8 +14,8 @@ differ, the book wins and this file is amended.
 | Content | Artifact |
 |---|---|
 | Product semantics, hard constraints H1–H8, domain, scenarios | `docs/intention/book/01…13` |
-| Mechanism contracts MC-1…MC-22 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md` |
-| Measurement ledger M1–M29 (root of every criterion's trace) | `book/14_measurement_ledger.md` |
+| Mechanism contracts MC-1…MC-24 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/09A_shopify_credentials_and_condition_field.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md` |
+| Measurement ledger M1–M30 (root of every criterion's trace) | `book/14_measurement_ledger.md` |
 | Capture One facts and VERIFY probes | `docs/intention/evidence/capture_one_16.8.6.md`; dictionary `docs/reference/capture_one_16.8.6.sdef` |
 | Design rules (field kinds, timings, keyboard, components) | `docs/intention/evidence/design_handoff.md`; pictures/prototype `claude_design/` |
 | Shopify facts | `docs/intention/evidence/shopify_admin.md` — **does not exist yet**; written in phase P12 (SHOPIFY-VERIFY-1…7) |
@@ -54,15 +54,18 @@ restated so no session has to infer them:
 - **Perimeter**: a phase touches only the files its plan lists (plus the test file(s) it names). A new file not
   listed is declared in the handoff's **Deviations**.
 - **Trace conventions** (charter trace chain, flow §9): every criterion row's trace cell names an `M` id
-  (M1–M29), an `MC` id (MC-1…MC-22) or a hard constraint (H1–H8). A row may instead cite a chapter rule
+  (M1–M30), an `MC` id (MC-1…MC-24) or a hard constraint (H1–H8). A row may instead cite a chapter rule
   (`ch07 §Open filter`, `evidence/design_handoff §Field kind map`) **only** for UI-rendering rows, operations
   rows the inventory listed as "not contracted", and packaging rows (ch11); such a cell is prefixed `[rule]` so
   the reviewer knows the row has no ledger measurement behind it. Every plan file derives its own counts of
   criteria, rows and `[rule]` rows.
 - **Migrations are never rewritten once a checkpoint commit contains them** (charter rule 7); add the next
   numbered file.
-- **Secrets**: the Shopify token lives only in `settings.json` (mode 0600) or the env var `SHOPIFY_TOKEN`
-  during a probe; never in logs, fixtures, commits or handoffs.
+- **Secrets** (09A MC-23): the Shopify client ID and client secret live only in `settings.json` (mode 0600), or in
+  the env vars `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` during the P12 probe. The access token
+  (client credentials grant) lives in memory only. None of them ever appears in logs, fixtures, commits or handoffs.
+  The owner keeps the probe variables in `~/.psm_shopify.env` (outside the repo, never copied into it); the
+  session that runs the probe loads it with `set -a; . ~/.psm_shopify.env; set +a` before task 0.
 
 ## 4. Progress tracker (one row per phase; agents update only their own row)
 | Phase | State | Date | Actor | Note |
@@ -110,8 +113,9 @@ P15[P14,P11] · P16[P15].
   Shopify, charter rule 17). Off elsewhere; P05's one unprobed shape (capture-done argv) is handled by design
   (plan P05 Notes).
 - **External preconditions the orchestrator must see met before launching**: P00 — Rust toolchain installed
-  (§7.1, owner card 1). P12 — Shopify dev-app token present (`SHOPIFY_TOKEN` env for the probe, then
-  `settings.json`), otherwise the grounding task cannot run and the session reports BLOCKED.
+  (§7.1, owner card 1). P12 — `~/.psm_shopify.env` holds `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` of the owner's
+  **test store** (owner 2026-10-26) and a client credentials token request succeeds (orchestrator checks it without
+  printing the token); otherwise the grounding task cannot run and the session reports BLOCKED.
 
 ## 6. Shared skeleton and naming registry
 Fixed up front so sessions cannot diverge. Anything **new** below does not exist yet; P00/P01 create it.
@@ -213,9 +217,10 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   `variant_not_found`, `capture_folder_not_set`, `hooks_not_installed`, `recipe_missing{name}`, `tag_verification`,
   `raw_changed{photo_id}`, `raw_missing{photo_id}`, `several_products_carry_sku{sku}`, `foreign_media_added{n}`,
   `gallery_verification`, `upload_incomplete`, `attribute_verification{keys}`, `not_confirmed`, `timeout`,
-  `no_integration`, `invalid_value`.
+  `no_integration`, `invalid_value`, `shop_not_permitted`, `app_not_installed`, `credentials_rejected` (09A MC-23).
 - Health codes (`HealthItem{code, ok, detail}`): `camera_disconnected`, `document_not_open`, `document_not_session`,
-  `hooks_not_installed`, `recipe_missing`, `capture_folder_not_set`, `variant_not_found`, `integration_token_invalid`.
+  `hooks_not_installed`, `recipe_missing`, `capture_folder_not_set`, `variant_not_found`, `integration_token_invalid` (detail = the 09A MC-23
+  message), `condition_field_missing` (detail = key, "not found" or "not a file list"; 09A MC-24).
 - Colour-tag mapping (MC-19): `main 4`, `condition 5`, `deleted 1`, `unreviewed 0`.
 
 ### 6.7 Tauri commands (`#[tauri::command] #[specta::specta]`, snake_case) and events
@@ -238,7 +243,7 @@ exported by the test `psm-desktop::export_bindings` to `apps/desktop/src/service
 `document_id` (Capture One document folder path, MC-19) · `preview_recipe` (default `"PSM Preview"`) · `web_recipe`
 (`"PSM Web"`) · `style_name` (`"PSM House"`) · `export_folder` (default `~/Pictures/Session Manager Export`) ·
 `preview_delay_s` (15; read clamped 10–30, MC-17) · `theme` (`"light"`) · `sku_prefix` (owner card 2 answered
-"generate", 05B MC-22; absent or empty = no proposal) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","token"}`).
+"generate", 05B MC-22; absent or empty = no proposal) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","client_id","client_secret","condition_photos_key":"custom.damage_report"}`, 09A MC-23/MC-24; no stored access token).
 Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; durations carry their unit suffix.
 
 ### 6.9 Test layout
@@ -269,7 +274,7 @@ Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; d
 | Capture One | `ls /Applications` | `Capture One.app` present (Pro 16.8.6.25 per evidence); test document `~/Pictures/session test 1/` with `Capture/`, `Output/`, one ARW |
 | App data dir | `ls ~/Library/Application Support/ \| grep -i session` | nothing yet (created at first run of P00) |
 | Export folder default | `ls ~/Pictures/Session Manager Export` | does not exist; created on first export |
-| Shopify token | STATUS.md | not available yet (precondition for P12) |
+| Shopify credentials | `~/.psm_shopify.env` (owner, 2026-10-26) | Dev Dashboard app client ID + secret for the owner's test store; client credentials grant (09A MC-23); real store later = settings change |
 | Codex sandbox | runner `run_codex` | `workspace-write` plus `--add-dir` for the repo `.git`, `~/.cargo` and `~/.npm` (orchestrator fix 2026-10-25 after P00 r1: Cargo's registry cache and npm's cache were refused; `npm install` of `apps/desktop/package.json` succeeds outside the sandbox). Use the default Cargo home and npm cache; no local `CARGO_HOME`. Codex's command review rejects `rm -rf`: remove generated files with `git rm`/`git clean -n` + targeted deletes or avoid creating them. |
 | P00 bundle launch | `open -n --env PSM_DATA_DIR=/tmp/psm-spike-bundle -a '/Users/davidloorenz/Desktop/Developer/Photo-Session-Manager/apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app'` | Build and ad-hoc signing succeeded; `codesign --verify --deep --strict` succeeded. LaunchServices returned `NSOSStatusErrorDomain Code=-10827 kLSNoExecutableErr` inside the Codex sandbox. The orchestrator launched the bundle outside the sandbox and the owner saw the Health page (evidence `packaging_spike.md`). Automation attribution with the corrected real-event probe awaits an interactive check. |
 | Claude sessions | `.claude/settings.json` | Bash allowlist includes `cargo`, `rustup`, `npm`, `npx`, `node`, `osascript`, git read/write (no force-push) |

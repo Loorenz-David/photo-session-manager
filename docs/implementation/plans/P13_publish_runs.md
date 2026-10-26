@@ -24,7 +24,7 @@ hits (task 0).
 
 ## Read first
 master plan §6.5 (`publish_runs`, `publish_items`, `photo_links`, `notifications`), §6.6 (`PublishStep`, `UploadState`),
-§6.7, §7.5 (`FakeCommerce`) · book `01` (H1, H4), `14`, `07` (Publish, Failure and retry), `04` S-G, S-I, S-J, S-K ·
+§6.7, §7.5 (`FakeCommerce`) · book `01` (H1, H4), `09A` (MC-23 settings, MC-24 condition key), `14`, `07` (Publish, Failure and retry), `04` S-G, S-I, S-J, S-K ·
 contracts `07A` MC-10, MC-11 (all but the MC-21 pointer), MC-12, MC-13 (writability); `05B` MC-22 (`sku_in_shop`);
 `04` S-B (pick a shop product); `05A` MC-6 (`published_seq`), MC-7 (status inputs),
 MC-3 (checks a), MC-4 (`last_activity_at` on done/failed) · evidence `shopify_admin.md` SV-2 (uniquifier), SV-4,
@@ -52,7 +52,9 @@ shop hit), `docs/intention/evidence/shopify_admin.md` (SV-6 addendum: the title 
 
 ## Ordered tasks
 0. **Wiring (owned here, master plan §6.1).** `commerce_from_settings(&Settings) -> Option<Arc<dyn CommerceAdapter>>`
-   builds `ShopifyAdapter` over `ReqwestTransport` when `settings.integration.kind == "shopify"` with a token; none →
+   builds `ShopifyAdapter` over `ReqwestTransport` when `settings.integration.kind == "shopify"` with `client_id` and
+   `client_secret` (09A MC-23), passing `ShopifyConfig{shop_domain, api_version, client_id, client_secret,
+   condition_photos_key}` (absent key → `"custom.damage_report"`, 09A MC-24); none →
    `None` and the app stays in Export mode (P09). `App.commerce` holds it; `TestApp` injects `FakeCommerce` instead.
    At startup (background thread, never the IPC thread), when an adapter exists, `AttributesService::refresh_schema`
    calls `attributes_schema()` and, in one transaction, `import_definitions("shopify", defs)` plus
@@ -115,7 +117,7 @@ shop hit), `docs/intention/evidence/shopify_admin.md` (SV-6 addendum: the title 
 | C7(c) | `failed` at `upload` | — | `last_activity_at` updated; status `failed` if never published else label `PublishFailed` | MC-4, M14 |
 | C8(a) | `publish_retry(item)` after a failure at `upload` | — | re-runs from `upload` only: fake receives no `item_search`/`item_create`; completes | M18 (retry from failed step) |
 | C8(b) | `kill_and_restart` with an item in `upload` and a job `running` | — | job `queued` again; item re-queued at `upload`; run completes with no duplicates | MC-11 (startup) |
-| C9(a) | `commerce_from_settings` | integration `{"kind":"shopify","shop_domain":"x.myshopify.com","api_version":"2026-10","token":"t"}`; and no integration block | `Some` (capabilities = the nine of ch09); `None` | H6, H7 |
+| C9(a) | `commerce_from_settings` | integration `{"kind":"shopify","shop_domain":"x.myshopify.com","api_version":"2026-10","client_id":"c","client_secret":"s"}` (no `condition_photos_key`); and no integration block | `Some` (capabilities = the nine of ch09) whose config has `condition_photos_key = "custom.damage_report"`; `None` | H6, H7 |
 | C9(b) | startup schema refresh | `FakeCommerce` schema of 3 `(Definition, DefinitionLink)`; then a refresh returning 2; then a refresh that errors | `definitions(Some("shopify"))` = built-ins then the 3; link rows equal the 3 links; after the second refresh exactly the 2 (definitions and links); after the error still the 2 | M20, MC-13 |
 | C9(c) | `items_search(q)` | local item `L-1 "Oak table"`; fake shop products `K-1 "Oak chair"` and `L-1` (already linked to the local item) | `items_search("Oak")` = `[L-1 (local), K-1 (linked, id 0, external_id)]`; no second `L-1`; fake shop unreachable → `[L-1]` and `Ok` | MC-11, H6 (S-B) |
 | C9(d) | `item_adopt(external_id of K-1)` then `session_create` | — | one `linked` item `K-1` with the shop's title and barcode; `item_links` row with that external id; the session opens with that item | M18 (link before any write; S-B) |
@@ -135,12 +137,14 @@ notification text time format, how `publish_progress` events are throttled.
 3. Kill the app mid-upload (Activity Monitor), relaunch: the row resumes and finishes; the shop has one media per photo.
 
 ## Notes
-- The "next free SKU" suggestion when the proposal is already in the shop (mentioned in P07's narrative) is **not**
-  in 05B MC-22: the proposal stays `1 + max local` and Create stays disabled until the SKU changes. Adding a
-  suggestion is an owner decision, not part of this phase.
+- No "next free SKU" suggestion when the proposal is already in the shop: the owner kept the default (2026-10-26,
+  R32; 05B MC-22 clarified). The proposal stays `1 + max local` and Create stays disabled until the SKU changes.
+  P07's narrative line implying a suggestion is superseded.
 - `update` here ends after the gallery read-back; P14 appends the attribute, title, tags, description and
   damage-report writes to the same step (the step is committed once, before any of it).
 - Estimated size: ~18 files, ~3 000 lines (FakeCommerce ≈ 500, wiring ≈ 500).
 
 ## Review log
-(empty)
+- 2026-10-26 (orchestrator): owner answers (book 09A, R32): task 0 builds the adapter from `client_id`/`client_secret`
+  and passes `condition_photos_key` (default `custom.damage_report`); C9(a) input/outcome reworded; the next-free-SKU
+  note resolved (no suggestion, 05B MC-22 clarified). Counts unchanged (34 rows).

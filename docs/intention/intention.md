@@ -31,6 +31,7 @@ the meaning, the contract gives the exact rule.
 | [07B Retouch after publishing](book/07B_retouch_after_publish.md) | a Capture One edit to a published photo: dirty, revision upload, in-place replacement (MC-21, owner decision I1) |
 | [08 Attributes and AI](book/08_attributes_and_ai.md) | attribute schema, field kinds, customize fields, AI suggestions and provenance |
 | [09 Integrations](book/09_integrations.md) | commerce integration interface, capabilities, the Shopify adapter |
+| [09A Shopify credentials and condition field](book/09A_shopify_credentials_and_condition_field.md) | client-credentials token, store switch by settings, the configured condition-photos metafield (MC-23, MC-24, owner answers 2026-10-26) |
 | [10 Camera and editing providers](book/10_imaging_providers.md) | camera adapter, Capture One events and commands, live previews, rendering |
 | [10A Mechanism contracts: Capture One](book/10A_capture_one_contracts.md) | hook install and delivery, render jobs, live-preview staleness, capture-folder switch, document/variant addressing and tags, original preview extraction (MC-15…MC-20) |
 | [11 Architecture and packaging](book/11_architecture_and_packaging.md) | Tauri + Rust, layers, commands/events, repo layout, packaging spike, phone remote |

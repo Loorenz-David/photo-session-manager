@@ -17,27 +17,28 @@ Updated: 2026-10-25 by the orchestrator.
   the owner 19:25 (evidence packaging_spike.md).
 - P12 (Shopify): projection r0 (2026-10-26 00:18) → AMENDMENTS_REQUIRED, ledger L1–L25 in
   `handoffs/reviewer/handoff_P12_shopify_adapter_projection_r0.md`; applied 2026-10-26 (commit a1cf9b4: P12 59 rows,
-  P13 task 0 wiring + C9, master plan, 07A/09 grounding, changelog 17). Only the probe-store line
-  (owner card 1) is left in P12's Precondition. No run in flight.
+  P13 task 0 wiring + C9, master plan, 07A/09 grounding, changelog 17). Owner answers folded in
+  (book 09A, R32, changelog 18; P12 68 rows / 9 criteria, P13, P14 21 rows, P16, master plan). No run in flight.
 - Implementer and fix sessions run on Claude (owner 2026-10-25: Opus for Codex 6 Sol, Sonnet for
   Codex 6 Luna); flow.md §2 updated; `PSM_IMPLEMENTER=codex` switches back.
 
 ## Needs the owner
-1. Shopify token (`SHOPIFY_TOKEN`, `SHOPIFY_SHOP`): P12 precondition. Asked 2026-10-26 00:20.
-2. P12 projection card 1: is `68c5b4-6a.myshopify.com` a test store or the live shop (probe writes)?
-   Branches: test store / live shop writes OK / live shop read-only + separate dev store for writes.
-   Recommendation: if live, read-only there plus a dev store. Asked 2026-10-26 00:20.
-3. Small: when the shop already has the proposed SKU, should New session suggest the next free number?
-   Book 05B MC-22 says no (Create stays off until the SKU changes); P07's narrative implied yes; P13 notes it.
-Earlier cards (I1, plan cards 1–2) answered; see changelog and Facts.
+- Fill `~/.psm_shopify.env` (`SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`; owner doing it). Then the
+  orchestrator checks a client credentials token request (token never printed) and launches P12.
+Earlier cards (I1, plan cards 1–2, P12 card 1, SKU suggestion) answered; see Facts and changelog 18.
 
 ## Next command
-On exit: per orchestrator.md table. Before P12 is next: ask the owner for the Shopify token.
+When the owner says the credentials file is filled: check the token request (never print it), then
+`tools/pipeline/run_phase.sh all` in the background (resumes at P12; projection is marked done). On exit: per orchestrator.md table.
 
 ## Facts the next orchestrator needs
 - 2026-10-25 ~15:55: owner took the camera away (not tethered). Capture One stays open on
   `session test 1` on this Mac; the owner will not use Capture One here. Capture-dependent probes →
   UNPROBED; rerun them (autofocus + capture, evidence VERIFY-12) when the camera is back.
-- Shopify dev-app token is not available yet; the owner provides it before the publishing phase.
-  Tell the owner when that phase is next in `phases.txt`.
 - Codex trust for this repo is set in `~/.codex/config.toml`; `claude -p --agent pipeline-reviewer --model opus` verified working.
+- 2026-10-26 owner answers: (B) the P12 probe store is the owner's **test store**; the real store comes later by
+  changing shop + credentials in settings only, so nothing store-specific is hard-coded. (A) Shopify access is a Dev
+  Dashboard app: client ID + secret, client credentials grant, token in memory only (09A MC-23); the owner keeps them
+  in `~/.psm_shopify.env` (outside the repo). (C) Condition photos go to one metafield named by the setting
+  `integration.condition_photos_key`, initial `custom.damage_report`, set by hand (09A MC-24). (D) No answer on the
+  next-free-SKU suggestion → default kept: none (05B MC-22 clarified, R32).
