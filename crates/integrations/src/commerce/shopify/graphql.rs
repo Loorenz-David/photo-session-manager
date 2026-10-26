@@ -12,6 +12,7 @@ pub const VARIANT_SEARCH: &str = "query VariantSearch($query: String!) { product
 pub const TITLE_SEARCH: &str = "query TitleSearch($query: String!) { products(first: 20, query: $query) { nodes { id title featuredMedia { preview { image { url } } } variants(first: 1) { nodes { sku barcodes(first: 5) { nodes { value } } inventoryItem { sku } } } } } }";
 
 pub const METAFIELDS_READ: &str = "query MetafieldsRead($id: ID!, $after: String) { product(id: $id) { metafields(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { namespace key type value } } } }";
+pub const CONDITION_METAFIELD_READ: &str = "query ConditionMetafieldRead($id: ID!, $namespace: String!, $key: String!) { product(id: $id) { metafield(namespace: $namespace, key: $key) { value } } }";
 
 pub const METAFIELDS_SET: &str = "mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { namespace key type value } userErrors { field message code elementIndex } } }";
 

@@ -257,12 +257,27 @@ impl CommerceAdapter for FakeCommerce {
             .get(id)
             .cloned()
             .unwrap_or_default();
+        values.retain(|(key, _)| key != &self.condition_key);
         if let Some((key, value)) = &self.state.lock().unwrap().readback_override
             && let Some(row) = values.iter_mut().find(|(k, _)| k == key)
         {
             row.1 = value.clone();
         }
         Ok(values)
+    }
+    fn condition_photos_readback(&self, id: &str) -> Result<Option<Json>> {
+        self.read("condition_photos_readback")?;
+        let state = self.state.lock().unwrap();
+        if let Some((key, value)) = &state.readback_override
+            && key == &self.condition_key
+        {
+            return Ok(Some(value.clone()));
+        }
+        Ok(state
+            .values
+            .get(id)
+            .and_then(|values| values.iter().find(|(key, _)| key == &self.condition_key))
+            .map(|(_, value)| value.clone()))
     }
     fn attributes_write(&self, run: &ConfirmedRun, id: &str, values: &[WriteValue]) -> Result<()> {
         let mut s = self.state.lock().unwrap();

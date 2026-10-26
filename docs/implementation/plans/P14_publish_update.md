@@ -121,3 +121,8 @@ whether tags are written in the same `productUpdate` as the title.
   `"Sweden"`, `valid = 0` on a text field: correctly not written). 5 notes to backlog. Lesson for the plan: MC-13's
   base ("remote tags when the session last read them") presumes a tag field seeded from the shop; the book never
   seeds it.
+- 2026-10-26 (codex, fix r2): corrected F2 with a dedicated condition-metafield read-back and a fake that omits
+  the key from ordinary attribute reads, matching the Shopify adapter; corrected F3 with a canonical text value
+  and `valid = false`. The condition-file boundary tests, full workspace suite (370 Rust tests), Clippy, fmt,
+  frontend tests (79) and typecheck pass. F1 remains pending owner card 1, so the tracker remains
+  `CHANGES_REQUESTED` and C2(c) is unchanged. Handoff: `handoffs/implementer/handoff_P14_publish_update_fix_r2.md`.

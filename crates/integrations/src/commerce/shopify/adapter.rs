@@ -634,6 +634,18 @@ impl CommerceAdapter for ShopifyAdapter {
         }
     }
 
+    fn condition_photos_readback(&self, external_id: &str) -> Result<Option<Json>> {
+        let (namespace, key) = split_key(&self.config.condition_photos_key)?;
+        let data = self.call(
+            graphql::CONDITION_METAFIELD_READ,
+            json!({ "id": external_id, "namespace": namespace, "key": key }),
+        )?;
+        let Some(value) = data["product"]["metafield"]["value"].as_str() else {
+            return Ok(None);
+        };
+        condition_metafield_value(value).map(Some)
+    }
+
     fn attributes_write(
         &self,
         run: &ConfirmedRun,
@@ -983,6 +995,11 @@ impl CommerceAdapter for ShopifyAdapter {
     }
 }
 
+fn condition_metafield_value(value: &str) -> Result<Json> {
+    serde_json::from_str(value)
+        .map_err(|error| Error::InvalidData(format!("condition metafield: {error}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1010,5 +1027,14 @@ mod tests {
             "<p>x &gt; y\nline</p><p>z</p>"
         );
         assert_eq!(description_html(""), "");
+    }
+
+    #[test]
+    fn mc14_condition_file_ids_are_json_values() {
+        let value = r#"["gid://shopify/MediaImage/1","gid://shopify/MediaImage/2"]"#;
+        assert_eq!(
+            condition_metafield_value(value).unwrap(),
+            json!(["gid://shopify/MediaImage/1", "gid://shopify/MediaImage/2"])
+        );
     }
 }

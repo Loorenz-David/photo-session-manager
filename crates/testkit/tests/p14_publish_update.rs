@@ -209,13 +209,13 @@ fn c1c_invalid_local_is_not_written() {
     let a = app();
     let (s, item) = session(&a, "P14-C");
     photo(&a, s, "p", C::Main);
-    schema(&a, vec![def("custom.year", CoreType::Integer, true)]);
+    schema(&a, vec![def("custom.country", CoreType::Text, true)]);
     a.store()
         .transaction(&mut |tx| {
             tx.put_attribute_value(&AttributeValue {
                 item_id: item,
-                key: "custom.year".into(),
-                value: "bad".into(),
+                key: "custom.country".into(),
+                value: json!("Sweden").to_string(),
                 valid: false,
                 provenance: Provenance::Human,
                 ai_confidence: None,
@@ -228,7 +228,7 @@ fn c1c_invalid_local_is_not_written() {
         .unwrap();
     let id = linked(&a, item, "P14-C", "Oak", None);
     run(&a, s);
-    assert_eq!(remote_value(&a, &id, "custom.year"), None);
+    assert_eq!(remote_value(&a, &id, "custom.country"), None);
 }
 #[test]
 fn c1d_read_only_reference_is_not_written() {

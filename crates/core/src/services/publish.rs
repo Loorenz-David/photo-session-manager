@@ -800,10 +800,26 @@ impl PublishService {
                 .attributes_read(&external)?
                 .into_iter()
                 .collect();
+            let condition_readback = if writes.iter().any(|write| {
+                definitions.iter().any(|definition| {
+                    definition.key == write.key && definition.core_type == CoreType::MediaList
+                })
+            }) {
+                self.commerce.condition_photos_readback(&external)?
+            } else {
+                None
+            };
             let failed: Vec<_> = writes
                 .iter()
                 .filter(|write| {
-                    let Some(actual) = readback.get(&write.key) else {
+                    let actual = if definitions.iter().any(|definition| {
+                        definition.key == write.key && definition.core_type == CoreType::MediaList
+                    }) {
+                        condition_readback.as_ref()
+                    } else {
+                        readback.get(&write.key)
+                    };
+                    let Some(actual) = actual else {
                         return true;
                     };
                     let Some(definition) = definitions.iter().find(|d| d.key == write.key) else {

@@ -58,6 +58,8 @@ pub trait CommerceAdapter: Send + Sync {
     /// value the core cannot represent is returned verbatim as the platform's JSON, which the
     /// caller's canonicalization rejects, so it is stored `valid = false` (05A MC-9).
     fn attributes_read(&self, external_id: &str) -> Result<Vec<(String, Json)>>;
+    /// Reads the configured condition-photo file ids for post-write verification.
+    fn condition_photos_readback(&self, external_id: &str) -> Result<Option<Json>>;
     /// Writes the values, batched at the platform's limit.
     fn attributes_write(
         &self,
