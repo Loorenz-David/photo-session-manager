@@ -99,6 +99,11 @@ run_codex() {  # run_codex MODEL EFFORT PROMPT LAST LOG
       -m "$model" -c model_reasoning_effort="\"$effort\"" -o "$last" --json - > "$logf" 2>&1
   local rc=$?; set -e
   log "codex exited $rc"
+  # owner 2026-10-26: when gpt-6-sol is at capacity, use gpt-5.6-terra on high
+  if [[ $rc -ne 0 && "$model" == gpt-6-sol ]] && grep -q 'at capacity' "$logf"; then
+    log "gpt-6-sol at capacity → gpt-5.6-terra/high"
+    run_codex gpt-5.6-terra high "$prompt" "$last" "$logf"; return $?
+  fi
   return $rc
 }
 
