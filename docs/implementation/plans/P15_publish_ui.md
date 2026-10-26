@@ -108,3 +108,23 @@ notification lands (workspace).
   7 criteria, 14 rows. Unreviewed exclusion confirmed (N2/R19); ch04 S-G corrected (changelog 20). Attempt
   archived. **The next implementer continues from the tree at checkpoint `e3848bd`**: keep the components and tests
   that fit, do task 0 first, then wire `FailurePopover`, `PhotoUploadBadge`, row Retry and the drawer Retry to it.
+- 2026-10-26, opus review r1: **CHANGES_REQUESTED** (3 blocking, 7 notes in backlog). Gate held (tracker
+  `IMPLEMENTED`, checkpoint `d5fc553`); `git show --stat d5fc553` = the 21 declared code files + 3 docs, exactly.
+  Suite 374 Rust / 90 UI, clippy, fmt, typecheck green on `549129c` (clean). Verified correct: C1(a), C1(b), C3(b),
+  C4(a–c), C5(b), C6(a), C7(a–c) (production and test); task 0 (latest confirmed item on list and workspace reads,
+  upload state from the `gallery` / `attribute:<key>` link only with a configured integration, failed notification
+  inserted in the failure transaction, `item_id` joined); header Export ↔ Publish switch; bell = latest-failed
+  sessions; assumptions 1–4 consistent with the book; H1–H8 hold except as F3.
+  **F1 (B1, route production):** publishing emits only `publish_progress` (core never emits `session_changed` for
+  publish), but the Sessions list and the workspace view reload only on `session_changed`/`photo_added`/
+  `photo_changed`. Rows never show live "Publishing n%", "Publish failed" or "Published", and a failure while the
+  workspace is open shows no sticky toast, popover or badges until the page is re-entered (ch07 §Publish "rows show
+  live progress"; ch04 S-J; C2(a), C3(a)). C2(a)'s test injects a `session_changed` the backend never sends; probe
+  without it: row stays at 10%, header reaches 42%.
+  **F2 (B1, route production):** `WorkspacePage` keys the toast/popover on `shownFailure.current === item_id` and never
+  resets it, so a Retry that fails again (same item) shows no sticky toast or popover (ch04 S-J).
+  **F3 (B1, route production):** `BatchQueue` fetches `publish_preview(confirmed)` at the click and sends its summary
+  without showing it; the photographer never sees the batch's gallery-removal counts, unreviewed notes or summary,
+  yet `confirmed_summary` records it as shown (07A MC-10 "the exact text shown"; R18 removal count shown before
+  confirm; M17). Lessons: C2(a)'s input named an event the backend does not emit for publish; the plan left the
+  batch confirmation surface undefined against MC-10/R18.
