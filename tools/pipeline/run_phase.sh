@@ -288,6 +288,7 @@ case "$cmd" in
       if [[ -f "$IMPL/state/$ph.json" ]] && grep -q '"state":"APPROVED"' "$IMPL/state/$ph.json"; then log "skip $ph (approved)"; continue; fi
       run_phase "$ph"
       [[ $pause == 1 ]] && { log "paused after $ph"; exit 0; }
-    done < "$IMPL/phases.txt" ;;
+    done < "$IMPL/phases.txt"
+    exit 0 ;;  # every phase approved (the loop's last test would otherwise leak status 1)
   *) sed -n 2,10p "$0"; exit 20 ;;
 esac
