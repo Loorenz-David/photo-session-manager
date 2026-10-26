@@ -121,3 +121,22 @@ format (JSON lines or key=value), how cold start is measured (launch → first `
   (it mirrored `document_not_open`; C3(a) "the rest ok"), files outside the list touched for wiring (see handoff).
   Live: C6(a) run against Capture One 08:5x → `"130"`, still browsing `Capture`, no `whose({file`. Shot-to-preview
   timings not measured (camera not tethered). Suite 387 Rust / 92 UI; clippy, fmt, typecheck green.
+- 2026-10-26 (review r1, opus): **APPROVED_WITH_NOTES.** Gate passed (tracker IMPLEMENTED, checkpoint `f18db80` in
+  history). The checkpoint's 33 paths equal the handoff's declared files. Suite re-run on the same tree: 387 Rust and 92 UI
+  tests pass; clippy, fmt and typecheck exit 0. Verified correct, by reading the production code and the test of each
+  row: C1(a) the delay is stored as given (no clamp in `Settings::open`; `SettingsService::get` clamps the shown
+  value; `PreviewService` still clamps through `clamp_delay`, so MC-17 holds at runtime) and the file is written at
+  0600 (temp file `create_new` 0600, rename, `set_permissions`). C1(b) masks `••••` + last 4, and a masked save
+  restores the stored secret (Rust and UI tests). C2(a)/(b)/(c) online backup at start and after `Done`, pruned to
+  the newest 30 by name (`~NNNN` collision suffix sorts after the base name). C3(a) health reports exactly the three
+  failing codes with the MC-23/MC-24 details. C3(b) the page renders `data-ok` per row and Retry calls again.
+  C4(a) `op=<script stem>` and a numeric `duration_ms` on a real `osascript` run. C4(b) every mutation and upload line
+  of the real adapter carries `run_id`. C5(a) the production redacting writer is used; the client secret is
+  registered at build and at `settings_set`, and each fetched token is registered in `auth.rs`. C5(b) the reviewer
+  grepped the checkpoint diff for the owner's real shop, client ID and secret (from `~/.psm_shopify.env`, never
+  printed) and for `shpss_`/`shpat_`/`shpca_`: 0 hits. C6(a) re-run live by the reviewer: `"130"` in 0.24 s, Capture One
+  browsed `Capture` before and after, and `grep -c "whose({file"` = 0. H1–H8 hold for the diff: the new core health
+  code takes the key from the adapter (the existing `"shopify"` literal family is already in the backlog), the
+  commands are thin, and the token check is read-only. Assumptions 1–7 are consistent with ch12/09A (assumption 6
+  follows the plan's per-item wording; see backlog). Notes: 10 rows appended to `backlog.md`, none blocking.
+  Lesson for the planner: rows should copy the intention's unit (ch12 "completed publish run", not "item").
