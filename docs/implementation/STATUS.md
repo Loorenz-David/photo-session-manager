@@ -18,17 +18,13 @@ Updated: 2026-10-25 by the orchestrator.
 - P12 (Shopify): projection r0 (2026-10-26 00:18) → AMENDMENTS_REQUIRED, ledger L1–L25 in
   `handoffs/reviewer/handoff_P12_shopify_adapter_projection_r0.md`; applied 2026-10-26 (commit a1cf9b4: P12 59 rows,
   P13 task 0 wiring + C9, master plan, 07A/09 grounding, changelog 17). Owner answers folded in
-  (book 09A, R32, changelog 18; P12 68 rows / 9 criteria, P13, P14 21 rows, P16, master plan). No run in flight.
+  (book 09A, R32, changelog 18; P12 68 rows / 9 criteria, P13, P14 21 rows, P16, master plan). Run in flight: **all** (from P12), started 2026-10-26 after the files-scope re-check.
 - Implementer and fix sessions run on Claude (owner 2026-10-25: Opus for Codex 6 Sol, Sonnet for
   Codex 6 Luna); flow.md §2 updated; `PSM_IMPLEMENTER=codex` switches back.
 
 ## Needs the owner
-- Add the `write_files` + `read_files` scopes to the Dev Dashboard app, release, approve on the test store (asked
-  2026-10-26 ~05:20). Token check 05:18 (read-only, token never printed): client credentials → HTTP 200,
-  `expires_in` 86399, scope `write_products,write_metaobject_definitions,write_metaobjects`; shop
-  `test-item-position-scanner.myshopify.com` (partnerDevelopment true); 66 product definitions;
-  `custom.damage_report` = `list.file_reference` (the only file list); `files` query → ACCESS_DENIED
-  (needs read_files). After the owner's "done": re-run the check incl. `files(first:1)`, then launch `all`.
+Nothing. Files scope granted 2026-10-26 (re-check: scope `write_products,write_metaobject_definitions,
+write_metaobjects,write_files`; `files` + `products` queries readable; token never printed).
 Earlier cards (I1, plan cards 1–2, P12 card 1, SKU suggestion) answered; see Facts and changelog 18.
 
 ## Next command
