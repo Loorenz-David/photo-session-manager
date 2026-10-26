@@ -166,3 +166,17 @@ whether tags are written in the same `productUpdate` as the title.
   path, and asserted the shop tags and stored base. Assumption: an absent tag value with an empty or null base means
   there is no app-owned tag state to reconcile, so it remains untouched. No divergence. C2(d) passes; workspace suite
   371 Rust tests, Clippy, fmt, 79 frontend tests and typecheck pass.
+- 2026-10-26 (opus, re-review r2): **APPROVED_WITH_NOTES** (handoff
+  `handoffs/reviewer/handoff_P14_publish_update_review_r2.md`). Tree `61130ff` (fix checkpoint `4e50bac` + re-review
+  prompt), clean. Perimeter: `git show --stat 4e50bac` = `publish.rs`, `p14_publish_update.rs` (the two files F1
+  allowed) + tracker row, this Review log, the fix handoff; nothing else. L4: `cargo test --workspace` 371 passed /
+  0 failed, `cargo clippy --workspace --all-targets -- -D warnings` exit 0, `cargo fmt --all -- --check` exit 0,
+  `npm test` 79 passed, `npm run typecheck` exit 0. **F1 resolved as corrected:** with `product.tags` absent from the
+  frozen values, `update` reads `tags_base`; non-empty → `merge_tags(base, [], remote)`, write only if it differs,
+  base := `[]`; empty/null → untouched. The `item_link` read adds no new failure path (`update` already requires the
+  link). C2(d)(ii) now clears through `AttributesService::clear` (the form's path) and asserts shop `[]` and base
+  `"[]"`; the pre-fix code leaves `["a"]` (r1 probe), so the row discriminates. Crash between `update_tags` and the
+  base write re-merges to `None` on resume (H4). Reviewer changed-input probe (throwaway test file, deleted): local
+  `[a]`, shop `[a,z]`, publish, clear, publish → shop `[z]`; third publish sends no tag write, item `done`; an item
+  never tagged with shop `[z]` → no tag write, base stays `NULL`. H1–H8 unchanged by the delta. Triage: no blocking
+  items remain. No new notes.
