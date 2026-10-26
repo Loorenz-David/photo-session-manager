@@ -154,3 +154,9 @@ notification lands (workspace).
   `IMPLEMENTED`. The relaunch restarted at implement r1; Codex exited 1 ("model at capacity") and wrote nothing. The runner
   then took the stale 07:53 implement handoff (`state: DONE`, `d5fc553`) as current. There is no code delta since `7ace3d5`,
   so F4 is still open. Earlier review r1 handoff preserved at `ace737d`. Next: run only fix 2 (F4), then re-review r3.
+- 2026-10-26 08:11 (orchestrator): the FIX2 relaunch's implement session failed (Codex "Selected model is at capacity");
+  the runner then read the stale 07:53 implement handoff and the review r1 correctly BLOCKED at the gate (no new code).
+  All P15 artifacts archived to `archive/P15_publish_ui_20261026-081128/` — review r2 with F4 is
+  `archive/P15_publish_ui_20261026-081128/handoff_P15_publish_ui_review_r2.md`. FIX2_AUTHORISED above still holds.
+  Relaunched on Claude (PSM_IMPLEMENTER=claude) for this phase; the implement session applies F4 only, from the tree.
+
