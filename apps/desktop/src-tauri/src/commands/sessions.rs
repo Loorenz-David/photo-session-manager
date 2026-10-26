@@ -97,18 +97,19 @@ impl From<SessionDto> for SessionResponse {
 
 #[tauri::command]
 #[specta::specta]
-pub fn session_create(
+pub async fn session_create(
     state: State<'_, AppState>,
     item_id: CommandId,
 ) -> Result<SessionResponse, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
-    SessionsService::new(app.store.as_ref(), &SystemClock)
-        .create(item_id.0)
-        .map(Into::into)
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<SessionResponse, CommandError> {
+        SessionsService::new(app.store.as_ref(), &SystemClock)
+            .create(item_id.0)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 /// One visible photo of the workspace (P08): what the stage, grid and strip need.
@@ -196,19 +197,20 @@ impl From<SessionView> for SessionViewResponse {
 
 #[tauri::command]
 #[specta::specta]
-pub fn session_get(
+pub async fn session_get(
     state: State<'_, AppState>,
     session_id: CommandId,
 ) -> Result<SessionViewResponse, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
-    SessionsService::new(app.store.as_ref(), &SystemClock)
-        .with_commerce(app.commerce.as_deref())
-        .view(session_id.0)
-        .map(Into::into)
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<SessionViewResponse, CommandError> {
+        SessionsService::new(app.store.as_ref(), &SystemClock)
+            .with_commerce(app.commerce.as_deref())
+            .view(session_id.0)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[derive(serde::Deserialize, Type)]
@@ -350,33 +352,39 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
 
 #[tauri::command]
 #[specta::specta]
-pub fn sessions_list(
+pub async fn sessions_list(
     state: State<'_, AppState>,
     filter: SessionFilter,
     query: Option<String>,
 ) -> Result<SessionListResponse, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
-    SessionsService::new(app.store.as_ref(), &SystemClock)
-        .list(filter.into(), query)
-        .map(Into::into)
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<SessionListResponse, CommandError> {
+        SessionsService::new(app.store.as_ref(), &SystemClock)
+            .list(filter.into(), query)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn session_active(state: State<'_, AppState>) -> Result<Option<SessionResponse>, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
-    let sessions = SessionsService::new(app.store.as_ref(), &SystemClock);
-    match sessions.active()? {
-        Some(id) => Ok(Some(sessions.get(id)?.into())),
-        None => Ok(None),
-    }
+pub async fn session_active(
+    state: State<'_, AppState>,
+) -> Result<Option<SessionResponse>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(
+        move || -> Result<Option<SessionResponse>, CommandError> {
+            let sessions = SessionsService::new(app.store.as_ref(), &SystemClock);
+            match sessions.active()? {
+                Some(id) => Ok(Some(sessions.get(id)?.into())),
+                None => Ok(None),
+            }
+        },
+    )
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
@@ -386,10 +394,7 @@ pub async fn session_activate(
     session_id: CommandId,
 ) -> Result<(), CommandError> {
     let (store, editing, health) = {
-        let app = state
-            .0
-            .lock()
-            .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+        let app = state.handles().map_err(CommandError::from)?;
         (app.store.clone(), app.editing.clone(), app.health.clone())
     };
     tauri::async_runtime::spawn_blocking(move || {
@@ -406,10 +411,7 @@ pub async fn session_activate(
 #[specta::specta]
 pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), CommandError> {
     let (store, editing, health) = {
-        let app = state
-            .0
-            .lock()
-            .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+        let app = state.handles().map_err(CommandError::from)?;
         (app.store.clone(), app.editing.clone(), app.health.clone())
     };
     tauri::async_runtime::spawn_blocking(move || {

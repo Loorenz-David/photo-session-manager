@@ -89,71 +89,78 @@ impl From<Notification> for NotificationDto {
 
 #[tauri::command]
 #[specta::specta]
-pub fn publish_preview(
+pub async fn publish_preview(
     state: State<'_, AppState>,
     session_ids: Vec<CommandId>,
 ) -> Result<PreviewDto, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    let service = app
-        .publish
-        .as_ref()
-        .ok_or(CommandError::from(Error::NoIntegration))?;
-    service
-        .preview(&session_ids.into_iter().map(|id| id.0).collect::<Vec<_>>())
-        .map(Into::into)
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<PreviewDto, CommandError> {
+        let service = app
+            .publish
+            .as_ref()
+            .ok_or(CommandError::from(Error::NoIntegration))?;
+        service
+            .preview(&session_ids.into_iter().map(|id| id.0).collect::<Vec<_>>())
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 #[tauri::command]
 #[specta::specta]
-pub fn publish_confirm(
+pub async fn publish_confirm(
     state: State<'_, AppState>,
     session_ids: Vec<CommandId>,
     summary_text: String,
 ) -> Result<CommandId, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    let service = app
-        .publish
-        .as_ref()
-        .ok_or(CommandError::from(Error::NoIntegration))?;
-    service
-        .confirm(
-            &session_ids.into_iter().map(|id| id.0).collect::<Vec<_>>(),
-            &summary_text,
-        )
-        .map(CommandId)
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<CommandId, CommandError> {
+        let service = app
+            .publish
+            .as_ref()
+            .ok_or(CommandError::from(Error::NoIntegration))?;
+        service
+            .confirm(
+                &session_ids.into_iter().map(|id| id.0).collect::<Vec<_>>(),
+                &summary_text,
+            )
+            .map(CommandId)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 #[tauri::command]
 #[specta::specta]
-pub fn publish_retry(state: State<'_, AppState>, item_id: CommandId) -> Result<(), CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    app.publish
-        .as_ref()
-        .ok_or(CommandError::from(Error::NoIntegration))?
-        .retry(item_id.0)
-        .map_err(Into::into)
+pub async fn publish_retry(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+) -> Result<(), CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), CommandError> {
+        app.publish
+            .as_ref()
+            .ok_or(CommandError::from(Error::NoIntegration))?
+            .retry(item_id.0)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 #[tauri::command]
 #[specta::specta]
-pub fn notifications_list(
+pub async fn notifications_list(
     state: State<'_, AppState>,
     session_id: Option<CommandId>,
 ) -> Result<Vec<NotificationDto>, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    app.store
-        .notifications(session_id.map(|id| id.0))
-        .map(|rows| rows.into_iter().map(Into::into).collect())
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<NotificationDto>, CommandError> {
+        app.store
+            .notifications(session_id.map(|id| id.0))
+            .map(|rows| rows.into_iter().map(Into::into).collect())
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }

@@ -12,7 +12,6 @@ use psm_core::{
     ports::clock::SystemClock,
     services::attributes::AttributesService,
 };
-use psm_integrations::App;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -202,7 +201,7 @@ fn parse(text: &str) -> Result<serde_json::Value, CommandError> {
 }
 
 /// The configured integration's kind, whose definitions are the active set (none without one).
-fn integration(app: &App) -> Option<String> {
+fn integration(app: &psm_integrations::AppHandles) -> Option<String> {
     app.settings
         .integration
         .as_ref()
@@ -212,14 +211,10 @@ fn integration(app: &App) -> Option<String> {
 }
 
 fn with_service<T>(
-    state: &State<'_, AppState>,
+    app: &psm_integrations::AppHandles,
     op: impl FnOnce(&AttributesService<'_>) -> psm_core::Result<T>,
 ) -> Result<T, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    let integration = integration(&app);
+    let integration = integration(app);
     let service = AttributesService::new(app.store.as_ref(), &SystemClock, integration.as_deref());
     op(&service).map_err(Into::into)
 }
@@ -227,75 +222,102 @@ fn with_service<T>(
 /// The active definitions: title, description, tags, then the integration's (ch08 §Schema).
 #[tauri::command]
 #[specta::specta]
-pub fn attributes_definitions_list(
+pub async fn attributes_definitions_list(
     state: State<'_, AppState>,
 ) -> Result<Vec<DefinitionDto>, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    let integration = integration(&app);
-    AttributesService::new(app.store.as_ref(), &SystemClock, integration.as_deref())
-        .definitions(integration.as_deref())
-        .map(|defs| defs.into_iter().map(Into::into).collect())
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<DefinitionDto>, CommandError> {
+        let integration = integration(&app);
+        AttributesService::new(app.store.as_ref(), &SystemClock, integration.as_deref())
+            .definitions(integration.as_deref())
+            .map(|defs| defs.into_iter().map(Into::into).collect())
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn attribute_values_get(
+pub async fn attribute_values_get(
     state: State<'_, AppState>,
     item_id: CommandId,
 ) -> Result<Vec<AttributeValueDto>, CommandError> {
-    with_service(&state, |s| s.values(item_id.0))
-        .map(|values| values.into_iter().map(Into::into).collect())
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<AttributeValueDto>, CommandError> {
+        with_service(&app, |s| s.values(item_id.0))
+            .map(|values| values.into_iter().map(Into::into).collect())
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 /// A human edit of one field: `value` is JSON text, stored canonical or, if it does not fit the
 /// definition, verbatim with `valid = false` (MC-9).
 #[tauri::command]
 #[specta::specta]
-pub fn attribute_values_set(
+pub async fn attribute_values_set(
     state: State<'_, AppState>,
     item_id: CommandId,
     key: String,
     value: String,
 ) -> Result<AttributeValueDto, CommandError> {
-    let raw = parse(&value)?;
-    with_service(&state, |s| {
-        s.set_value(item_id.0, &key, raw, Provenance::Human)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<AttributeValueDto, CommandError> {
+        let raw = parse(&value)?;
+        with_service(&app, |s| {
+            s.set_value(item_id.0, &key, raw, Provenance::Human)
+        })
+        .map(Into::into)
     })
-    .map(Into::into)
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 /// "Accept all": suggested AI values except low-confidence ones become accepted. Returns the count.
 #[tauri::command]
 #[specta::specta]
-pub fn attribute_ai_accept_all(
+pub async fn attribute_ai_accept_all(
     state: State<'_, AppState>,
     item_id: CommandId,
 ) -> Result<u32, CommandError> {
-    with_service(&state, |s| s.accept_all(item_id.0)).map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<u32, CommandError> {
+        with_service(&app, |s| s.accept_all(item_id.0))
+            .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn attribute_ai_clear(
+pub async fn attribute_ai_clear(
     state: State<'_, AppState>,
     item_id: CommandId,
     key: String,
 ) -> Result<(), CommandError> {
-    with_service(&state, |s| s.clear(item_id.0, &key))
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), CommandError> {
+        with_service(&app, |s| s.clear(item_id.0, &key))
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn presets_get(
+pub async fn presets_get(
     state: State<'_, AppState>,
     item_type: String,
     group: AttributeGroupDto,
 ) -> Result<PresetDto, CommandError> {
-    with_service(&state, |s| s.presets_get(&item_type, group.into())).map(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<PresetDto, CommandError> {
+        with_service(&app, |s| s.presets_get(&item_type, group.into())).map(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 /// Customize fields: stores the layout of one step for one item type (refused with
@@ -303,25 +325,41 @@ pub fn presets_get(
 /// description and tags).
 #[tauri::command]
 #[specta::specta]
-pub fn presets_set(state: State<'_, AppState>, preset: PresetDto) -> Result<(), CommandError> {
-    let mut layout = Vec::with_capacity(preset.layout.len());
-    for field in preset.layout {
-        layout.push(PresetField {
-            key: field.key,
-            default: field.default.as_deref().map(parse).transpose()?,
-        });
-    }
-    let preset = Preset {
-        item_type: preset.item_type,
-        group: preset.group.into(),
-        layout,
-    };
-    with_service(&state, |s| s.presets_set(preset))
+pub async fn presets_set(
+    state: State<'_, AppState>,
+    preset: PresetDto,
+) -> Result<(), CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), CommandError> {
+        let mut layout = Vec::with_capacity(preset.layout.len());
+        for field in preset.layout {
+            layout.push(PresetField {
+                key: field.key,
+                default: field.default.as_deref().map(parse).transpose()?,
+            });
+        }
+        let preset = Preset {
+            item_type: preset.item_type,
+            group: preset.group.into(),
+            layout,
+        };
+        with_service(&app, |s| s.presets_set(preset))
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 /// The item's form: Details, Condition, Product with ordered fields, values and fill counts.
 #[tauri::command]
 #[specta::specta]
-pub fn form_get(state: State<'_, AppState>, item_id: CommandId) -> Result<FormDto, CommandError> {
-    with_service(&state, |s| s.form_get(item_id.0)).map(Into::into)
+pub async fn form_get(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+) -> Result<FormDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<FormDto, CommandError> {
+        with_service(&app, |s| s.form_get(item_id.0)).map(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }

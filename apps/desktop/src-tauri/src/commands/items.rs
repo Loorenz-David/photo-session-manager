@@ -126,87 +126,92 @@ impl From<Item> for ItemDto {
 
 #[tauri::command]
 #[specta::specta]
-pub fn item_create(
+pub async fn item_create(
     state: State<'_, AppState>,
     sku: String,
     title: String,
     item_type: String,
     barcode: Option<String>,
 ) -> Result<ItemDto, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    let service =
-        ItemsService::new(app.store.as_ref(), &SystemClock).with_commerce(app.commerce.as_deref());
-    service
-        .create_local(&sku, &title, &item_type, barcode.as_deref())
-        .map(|(item, _)| item.into())
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<ItemDto, CommandError> {
+        let service = ItemsService::new(app.store.as_ref(), &SystemClock)
+            .with_commerce(app.commerce.as_deref());
+        service
+            .create_local(&sku, &title, &item_type, barcode.as_deref())
+            .map(|(item, _)| item.into())
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn item_update_identity(
+pub async fn item_update_identity(
     state: State<'_, AppState>,
     item_id: CommandId,
     sku: Option<String>,
     barcode: Option<String>,
 ) -> Result<ItemDto, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    ItemsService::new(app.store.as_ref(), &SystemClock)
-        .with_commerce(app.commerce.as_deref())
-        .update_identity(item_id.0, sku.as_deref(), barcode.as_deref())
-        .map(Into::into)
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<ItemDto, CommandError> {
+        ItemsService::new(app.store.as_ref(), &SystemClock)
+            .with_commerce(app.commerce.as_deref())
+            .update_identity(item_id.0, sku.as_deref(), barcode.as_deref())
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn items_search(
+pub async fn items_search(
     state: State<'_, AppState>,
     query: String,
 ) -> Result<Vec<ItemDto>, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    ItemsService::new(app.store.as_ref(), &SystemClock)
-        .with_commerce(app.commerce.as_deref())
-        .search(&query)
-        .map(|items| items.into_iter().map(Into::into).collect())
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ItemDto>, CommandError> {
+        ItemsService::new(app.store.as_ref(), &SystemClock)
+            .with_commerce(app.commerce.as_deref())
+            .search(&query)
+            .map(|items| items.into_iter().map(Into::into).collect())
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn items_next_sku(state: State<'_, AppState>) -> Result<Option<String>, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    ItemsService::new(app.store.as_ref(), &SystemClock)
-        .with_commerce(app.commerce.as_deref())
-        .next_sku(app.settings.sku_prefix.as_deref())
-        .map_err(Into::into)
+pub async fn items_next_sku(state: State<'_, AppState>) -> Result<Option<String>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<String>, CommandError> {
+        ItemsService::new(app.store.as_ref(), &SystemClock)
+            .with_commerce(app.commerce.as_deref())
+            .next_sku(app.settings.sku_prefix.as_deref())
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn item_adopt(
+pub async fn item_adopt(
     state: State<'_, AppState>,
     external_id: String,
 ) -> Result<ItemDto, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    ItemsService::new(app.store.as_ref(), &SystemClock)
-        .with_commerce(app.commerce.as_deref())
-        .adopt(&external_id)
-        .map(Into::into)
-        .map_err(Into::into)
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<ItemDto, CommandError> {
+        ItemsService::new(app.store.as_ref(), &SystemClock)
+            .with_commerce(app.commerce.as_deref())
+            .adopt(&external_id)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }

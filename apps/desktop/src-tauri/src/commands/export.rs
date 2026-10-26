@@ -14,11 +14,7 @@ pub struct ExportRunResponse {
     pub run_id: i64,
 }
 
-fn service(state: &State<'_, AppState>) -> Result<Arc<ExportService>, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
+fn service(app: &psm_integrations::AppHandles) -> Result<Arc<ExportService>, CommandError> {
     Ok(app.export.clone())
 }
 
@@ -30,7 +26,8 @@ pub async fn export_run(
     state: State<'_, AppState>,
     session_id: CommandId,
 ) -> Result<ExportRunResponse, CommandError> {
-    let export = service(&state)?;
+    let app = state.handles().map_err(CommandError::from)?;
+    let export = service(&app)?;
     tauri::async_runtime::spawn_blocking(move || export.run(session_id.0))
         .await
         .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
@@ -41,34 +38,40 @@ pub async fn export_run(
 /// Shows the session's export folder (`<export folder>/<SKU>/`) in Finder.
 #[tauri::command]
 #[specta::specta]
-pub fn export_open_folder(
+pub async fn export_open_folder(
     state: State<'_, AppState>,
     session_id: CommandId,
 ) -> Result<(), CommandError> {
-    let folder = service(&state)?.folder(session_id.0)?;
-    std::process::Command::new("/usr/bin/open")
-        .arg(&folder)
-        .spawn()
-        .map_err(|e| CommandError::from(Error::Io(e)))?;
-    Ok(())
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), CommandError> {
+        let folder = service(&app)?.folder(session_id.0)?;
+        std::process::Command::new("/usr/bin/open")
+            .arg(&folder)
+            .spawn()
+            .map_err(|e| CommandError::from(Error::Io(e)))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 /// The configured integration's kind (`settings.integration.kind`), or null when none is configured:
 /// the session header then offers Export instead of Publish (H6).
 #[tauri::command]
 #[specta::specta]
-pub fn integration_get(state: State<'_, AppState>) -> Result<Option<String>, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    Ok(app.settings.integration.as_ref().and_then(|value| {
-        (!value.is_null()).then(|| {
-            value
-                .get("kind")
-                .and_then(|kind| kind.as_str())
-                .unwrap_or("unknown")
-                .to_owned()
-        })
-    }))
+pub async fn integration_get(state: State<'_, AppState>) -> Result<Option<String>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<String>, CommandError> {
+        Ok(app.settings.integration.as_ref().and_then(|value| {
+            (!value.is_null()).then(|| {
+                value
+                    .get("kind")
+                    .and_then(|kind| kind.as_str())
+                    .unwrap_or("unknown")
+                    .to_owned()
+            })
+        }))
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }

@@ -7,7 +7,6 @@ use psm_core::{
     ports::clock::Clock,
     services::camera::CameraService,
 };
-use psm_integrations::editing::capture_one::scripting::CaptureOneScripting;
 use psm_testkit::TestApp;
 
 fn app() -> TestApp {
@@ -56,7 +55,7 @@ fn c1a_activate_saves_creates_verifies_and_persists() {
     let s = session(&a, "K1");
     a.fake.state.lock().unwrap().private_prefix = true;
     a.sessions().activate(s).unwrap();
-    let path = a.dir.path().join("Capture/K1");
+    let path = a.dir.path().join("Capture One Session/Capture/K1");
     assert!(path.is_dir());
     assert_eq!(
         std::fs::canonicalize(capture(&a)).unwrap(),
@@ -122,9 +121,12 @@ fn c1d_deactivate_targets_unassigned() {
     let s = session(&a, "K1");
     a.sessions().activate(s).unwrap();
     a.sessions().deactivate().unwrap();
-    let target = a.dir.path().join("Capture/_Unassigned");
+    let target = a.dir.path().join("Capture One Session/Capture/_Unassigned");
     assert!(target.is_dir());
-    assert_eq!(capture(&a), target.to_string_lossy());
+    assert_eq!(
+        std::fs::canonicalize(capture(&a)).unwrap(),
+        std::fs::canonicalize(target).unwrap()
+    );
     assert_eq!(a.store().active_session_id().unwrap(), None);
 }
 #[test]

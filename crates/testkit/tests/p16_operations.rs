@@ -389,14 +389,16 @@ fn c5a_secrets_never_reach_logs_events_or_notifications() {
 
 #[test]
 fn c6a_folder_lookup_finds_variant_without_switching_collection() {
-    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../integrations/src/editing/capture_one/jxa/find_image_in_folder.js");
+    let dir = tempfile::tempdir().unwrap();
+    let paths = psm_infra::paths::AppPaths::for_dir(dir.path());
+    psm_integrations::editing::capture_one::jxa::JxaScripting::new(&paths).unwrap();
+    let script = paths.hooks().join("jxa/find_image_in_folder.js");
     let harness = r#"
 const fs = require('fs');
 const source = fs.readFileSync(process.argv[1], 'utf8');
 let switched = false;
 const images = { whose: ({path}) => () => path.endsWith('12199.ARW') ? [{ variants: { whose: () => () => [{id: () => 130}] } }] : [] };
-const folder = { file: () => ({toString: () => '/private/Users/davidloorenz/Pictures/session test 1/Capture/PSM_PROBE_A/'}), images };
+const folder = { folder: () => ({toString: () => '/private/Users/davidloorenz/Pictures/session test 1/Capture/PSM_PROBE_A/'}), images };
 const doc = { collections: () => [folder], set currentCollection(_) { switched = true; } };
 global.Application = () => ({running: () => true, documents: {byId: () => doc}});
 eval(source);

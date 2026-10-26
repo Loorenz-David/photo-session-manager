@@ -2818,6 +2818,7 @@ dependencies = [
  "psm-core",
  "psm-infra",
  "psm-integrations",
+ "psm-testkit",
  "serde",
  "serde_json",
  "specta",
@@ -2826,6 +2827,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-specta",
+ "tempfile",
  "tracing",
 ]
 

@@ -23,3 +23,8 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+psm-testkit = { path = "../../../crates/testkit" }
+tempfile = "3"
+

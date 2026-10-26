@@ -160,11 +160,11 @@ pub fn run() {
     let builder = specta_builder();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState(std::sync::Mutex::new(app)))
+        .manage(AppState(std::sync::RwLock::new(app)))
         .setup(|handle| {
             let state = handle.state::<AppState>();
             let previews = {
-                let app = state.0.lock().expect("app state");
+                let app = state.handles().expect("app state");
                 app.events
                     .set_target(Arc::new(TauriEvents(handle.handle().clone())));
                 app.paths.root.join("previews")
@@ -178,8 +178,8 @@ pub fn run() {
                 window.on_window_event(move |event| {
                     if matches!(event, tauri::WindowEvent::Focused(true)) {
                         let state = app_handle.state::<AppState>();
-                        if let Ok(app) = state.0.lock() {
-                            let _ = app.previews.on_focus();
+                        if let Ok(handles) = state.handles() {
+                            handles.on_window_focus();
                         }
                     }
                 });
@@ -201,5 +201,100 @@ mod tests {
                 "../src/services/bindings.ts",
             )
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod p17_tests {
+    use super::*;
+    use std::{
+        fs,
+        sync::{Arc, RwLock, mpsc},
+        time::{Duration, Instant},
+    };
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody},
+        webview::InvokeRequest,
+    };
+
+    #[test]
+    fn commands_are_async() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/commands");
+        let mut command_count = 0;
+        let mut async_count = 0;
+        for entry in fs::read_dir(path).unwrap() {
+            let entry = entry.unwrap();
+            let code = fs::read_to_string(entry.path()).unwrap();
+            command_count += code.matches("#[tauri::command]").count();
+            async_count += code.matches("pub async fn ").count();
+            assert!(
+                !code.contains(".0.lock(")
+                    && !code.contains(".0.read(")
+                    && !code.contains(".0.write(")
+            );
+        }
+        assert_eq!(command_count, async_count);
+        assert!(command_count > 30);
+    }
+
+    fn request(cmd: &str, args: serde_json::Value) -> InvokeRequest {
+        InvokeRequest {
+            cmd: cmd.into(),
+            callback: CallbackFn(0),
+            error: CallbackFn(1),
+            url: "tauri://localhost".parse().unwrap(),
+            body: InvokeBody::Json(args),
+            headers: Default::default(),
+            invoke_key: INVOKE_KEY.to_string(),
+        }
+    }
+
+    #[test]
+    fn commands_do_not_wait_on_each_other() {
+        let test = psm_testkit::TestApp::with_fake_document().unwrap();
+        test.fake.state.lock().unwrap().delay_document_info_ms = 1_500;
+        let psm_testkit::TestApp { dir: _dir, app, .. } = test;
+        let tauri_app = mock_builder()
+            .manage(AppState(RwLock::new(app)))
+            .invoke_handler(tauri::generate_handler![
+                commands::health::health_get,
+                commands::sessions::sessions_list
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let webview = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let webview = Arc::new(webview);
+        let (tx, rx) = mpsc::channel();
+        std::thread::scope(|scope| {
+            let slow = webview.clone();
+            let slow_tx = tx.clone();
+            let slow_thread = scope.spawn(move || {
+                let answer =
+                    get_ipc_response(slow.as_ref(), request("health_get", serde_json::json!({})));
+                slow_tx
+                    .send(("health", answer.is_ok(), Instant::now()))
+                    .unwrap();
+            });
+            std::thread::sleep(Duration::from_millis(100));
+            let sent = Instant::now();
+            let fast = get_ipc_response(
+                webview.as_ref(),
+                request(
+                    "sessions_list",
+                    serde_json::json!({"filter":"open","query":null}),
+                ),
+            );
+            assert!(fast.is_ok());
+            assert!(sent.elapsed() < Duration::from_millis(500));
+            assert!(
+                rx.try_recv().is_err(),
+                "health_get should still be waiting for Capture One"
+            );
+            slow_thread.join().unwrap();
+        });
+        assert!(rx.recv().unwrap().1);
     }
 }

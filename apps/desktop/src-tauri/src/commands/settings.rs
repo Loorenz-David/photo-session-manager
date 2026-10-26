@@ -1,7 +1,7 @@
 use crate::{commands::items::CommandError, state::AppState};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 /// The `integration` block as shown and as patched (09A MC-23/MC-24). On read the client
 /// secret is masked (`••••` + last 4); sending the masked value back keeps the stored secret.
@@ -60,25 +60,28 @@ fn to_dto(value: serde_json::Value) -> Result<SettingsDto, CommandError> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn settings_get(state: State<'_, AppState>) -> Result<SettingsDto, CommandError> {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-    to_dto(app.settings_get()?)
+pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<SettingsDto, CommandError> {
+        to_dto(app.settings_get()?)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn settings_set(
-    state: State<'_, AppState>,
+pub async fn settings_set(
+    _state: State<'_, AppState>,
+    app_handle: AppHandle,
     patch: SettingsPatchDto,
 ) -> Result<SettingsDto, CommandError> {
-    let mut app = state
-        .0
-        .lock()
-        .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-    let patch =
-        serde_json::to_value(&patch).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-    to_dto(app.settings_set(&patch)?)
+    tauri::async_runtime::spawn_blocking(move || {
+        let patch = serde_json::to_value(&patch)
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        let state = app_handle.state::<AppState>();
+        to_dto(state.settings_set(&patch)?)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }

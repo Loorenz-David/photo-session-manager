@@ -74,6 +74,8 @@ pub struct App {
     pub events: Arc<EventHub>,
     pub clock: Arc<dyn Clock>,
     scripting: Arc<dyn CaptureOneScripting>,
+    user_scripting: Arc<dyn CaptureOneScripting>,
+    background_scripting: Arc<dyn CaptureOneScripting>,
     run_startup: bool,
     commerce_override: Option<Arc<dyn CommerceAdapter>>,
     stop: Arc<AtomicBool>,
@@ -81,7 +83,169 @@ pub struct App {
     publish_background: Option<thread::JoinHandle<()>>,
 }
 
+#[derive(Clone)]
+pub struct AppHandles {
+    pub paths: AppPaths,
+    pub settings: Settings,
+    pub store: Arc<SqliteStore>,
+    pub health: Arc<HealthService>,
+    pub editing: Arc<dyn EditingProvider>,
+    pub camera: Arc<dyn CameraProvider>,
+    pub commerce: Option<Arc<dyn CommerceAdapter>>,
+    pub arrival: Arc<ArrivalService>,
+    pub previews: Arc<PreviewService>,
+    pub export: Arc<ExportService>,
+    pub publish: Option<Arc<PublishService>>,
+    pub events: Arc<EventHub>,
+    pub hooks_compiled: bool,
+    pub nudge_running: bool,
+}
+
+pub struct SettingsSetContext {
+    paths: AppPaths,
+    settings: Settings,
+    scripting: Arc<dyn CaptureOneScripting>,
+    lanes: (Arc<dyn CaptureOneScripting>, Arc<dyn CaptureOneScripting>),
+    clock: Arc<dyn Clock>,
+    run_startup: bool,
+    commerce_override: Option<Arc<dyn CommerceAdapter>>,
+}
+
+pub enum PreparedSettings {
+    Theme(Settings),
+    Runtime(Box<App>),
+}
+
+impl SettingsSetContext {
+    pub fn prepare(self, patch: &serde_json::Value) -> Result<PreparedSettings> {
+        let previous = settings_value(&self.settings)?;
+        let next = SettingsService::set(&previous, patch)?;
+        let settings: Settings = serde_json::from_value(next.clone())
+            .map_err(|e| psm_core::Error::InvalidValue(e.to_string()))?;
+        if let Some(integration) = settings.integration_settings()? {
+            psm_infra::logging::add_secret(&integration.client_secret);
+        }
+        Settings::set(&self.paths, &settings)?;
+        let mut a = previous;
+        let mut b = next;
+        a["theme"] = serde_json::Value::Null;
+        b["theme"] = serde_json::Value::Null;
+        if a == b {
+            return Ok(PreparedSettings::Theme(settings));
+        }
+        match App::build(
+            self.paths.clone(),
+            self.scripting,
+            self.lanes,
+            self.clock,
+            self.run_startup,
+            self.commerce_override,
+            false,
+        ) {
+            Ok(app) => Ok(PreparedSettings::Runtime(Box::new(app))),
+            Err(error) => {
+                let _ = Settings::set(&self.paths, &self.settings);
+                Err(error)
+            }
+        }
+    }
+}
+
+impl AppHandles {
+    pub fn health_check(&self) -> Result<psm_core::domain::HealthReport> {
+        if self
+            .settings
+            .document_id
+            .as_deref()
+            .is_some_and(|d| !d.is_empty())
+        {
+            if let Err(error) = (EditingStartup {
+                provider: self.editing.as_ref(),
+                store: self.store.as_ref(),
+                health: self.health.as_ref(),
+            })
+            .run()
+            {
+                tracing::warn!(%error, "health: editing checks failed");
+            }
+            if let Err(error) =
+                CameraService::new(self.camera.as_ref(), self.health.as_ref()).status()
+            {
+                tracing::warn!(%error, "health: camera status failed");
+            }
+        }
+        self.health
+            .check_integration(self.store.as_ref(), self.commerce.as_deref())?;
+        Ok(self.health.report(
+            &self.paths.root.to_string_lossy(),
+            self.hooks_compiled,
+            self.nudge_running,
+        ))
+    }
+    pub fn settings_get(&self) -> Result<serde_json::Value> {
+        Ok(SettingsService::get(&settings_value(&self.settings)?))
+    }
+    pub fn on_window_focus(&self) {
+        let previews = self.previews.clone();
+        thread::spawn(move || {
+            if let Err(error) = previews.on_focus() {
+                tracing::warn!(%error, "window focus preview check failed");
+            }
+        });
+    }
+}
+
 impl App {
+    pub fn settings_set_context(&self) -> SettingsSetContext {
+        SettingsSetContext {
+            paths: self.paths.clone(),
+            settings: self.settings.clone(),
+            scripting: self.scripting.clone(),
+            lanes: (
+                self.user_scripting.clone(),
+                self.background_scripting.clone(),
+            ),
+            clock: self.clock.clone(),
+            run_startup: self.run_startup,
+            commerce_override: self.commerce_override.clone(),
+        }
+    }
+    pub fn apply_settings(
+        &mut self,
+        prepared: PreparedSettings,
+    ) -> Result<(serde_json::Value, Option<App>)> {
+        let old = match prepared {
+            PreparedSettings::Theme(settings) => {
+                self.settings = settings;
+                None
+            }
+            PreparedSettings::Runtime(next) => {
+                self.events.transfer_target_to(&next.events);
+                let old = std::mem::replace(self, *next);
+                self.events.emit(AppEvent::HealthChanged);
+                Some(old)
+            }
+        };
+        Ok((self.settings_get()?, old))
+    }
+    pub fn handles(&self) -> AppHandles {
+        AppHandles {
+            paths: self.paths.clone(),
+            settings: self.settings.clone(),
+            store: self.store.clone(),
+            health: self.health.clone(),
+            editing: self.editing.clone(),
+            camera: self.camera.clone(),
+            commerce: self.commerce.clone(),
+            arrival: self.arrival.clone(),
+            previews: self.previews.clone(),
+            export: self.export.clone(),
+            publish: self.publish.clone(),
+            events: self.events.clone(),
+            hooks_compiled: self.hooks_compiled,
+            nudge_running: self.nudge_port() != 0,
+        }
+    }
     pub fn open(paths: AppPaths) -> Result<Self> {
         paths.create()?;
         let scripting = Arc::new(JxaScripting::new(&paths)?);
@@ -104,9 +268,12 @@ impl App {
         run_startup: bool,
         commerce_override: Option<Arc<dyn CommerceAdapter>>,
     ) -> Result<Self> {
+        let (user_scripting, background_scripting) =
+            editing::capture_one::gate::GatedScripting::pair(scripting.clone());
         Self::build(
             paths,
             scripting,
+            (user_scripting, background_scripting),
             clock,
             run_startup,
             commerce_override,
@@ -117,11 +284,13 @@ impl App {
     fn build(
         paths: AppPaths,
         scripting: Arc<dyn CaptureOneScripting>,
+        lanes: (Arc<dyn CaptureOneScripting>, Arc<dyn CaptureOneScripting>),
         clock: Arc<dyn Clock>,
         run_startup: bool,
         commerce_override: Option<Arc<dyn CommerceAdapter>>,
         start_backup: bool,
     ) -> Result<Self> {
+        let (user_scripting, background_scripting) = lanes;
         paths.create()?;
         let settings = Settings::open(&paths)?;
         if let Some(integration) = settings.integration_settings()? {
@@ -151,7 +320,7 @@ impl App {
             health.set("document_not_open", "No Capture One session configured");
         }
         let editing: Arc<dyn EditingProvider> = Arc::new(CaptureOneAdapter::new(
-            scripting.clone(),
+            (user_scripting.clone(), background_scripting.clone()),
             store.clone(),
             health.clone(),
             document_id.clone(),
@@ -160,7 +329,7 @@ impl App {
             paths.clone(),
         ));
         let camera: Arc<dyn CameraProvider> = Arc::new(CameraViaCaptureOne {
-            scripting: scripting.clone(),
+            scripting: user_scripting.clone(),
             document_id: document_id.clone(),
         });
         let events = Arc::new(EventHub::default());
@@ -372,6 +541,8 @@ impl App {
             events,
             clock,
             scripting,
+            user_scripting,
+            background_scripting,
             run_startup,
             commerce_override,
             stop,
@@ -397,58 +568,24 @@ impl App {
     /// ch12 §Health: re-runs the editing startup checks (document, hooks, recipes, capture
     /// folder), the camera status and the integration checks (09A MC-23/MC-24), then reports.
     pub fn health_check(&self) -> Result<psm_core::domain::HealthReport> {
-        if self
-            .settings
-            .document_id
-            .as_deref()
-            .is_some_and(|d| !d.is_empty())
-        {
-            if let Err(error) = self.startup() {
-                tracing::warn!(%error, "health: editing checks failed");
-            }
-            if let Err(error) =
-                CameraService::new(self.camera.as_ref(), self.health.as_ref()).status()
-            {
-                tracing::warn!(%error, "health: camera status failed");
-            }
-        }
-        self.health
-            .check_integration(self.store.as_ref(), self.commerce.as_deref())?;
-        Ok(self.health.report(
-            &self.paths.root.to_string_lossy(),
-            self.hooks_compiled,
-            self.nudge_port() != 0,
-        ))
+        self.handles().health_check()
     }
 
     /// The settings as shown (client secret masked, effective preview delay; ch12 §Settings).
     pub fn settings_get(&self) -> Result<serde_json::Value> {
-        Ok(SettingsService::get(&settings_value(&self.settings)?))
+        self.handles().settings_get()
     }
 
     /// Applies a settings patch: validated, written atomically with mode 0600, then the runtime
     /// is reopened over the new settings so providers, export folder and preview delay take
     /// effect, and `health_changed` is emitted. A theme-only change does not reopen.
     pub fn settings_set(&mut self, patch: &serde_json::Value) -> Result<serde_json::Value> {
-        let previous = settings_value(&self.settings)?;
-        let next = SettingsService::set(&previous, patch)?;
-        let settings: Settings = serde_json::from_value(next.clone())
-            .map_err(|e| psm_core::Error::InvalidValue(e.to_string()))?;
-        if let Some(integration) = settings.integration_settings()? {
-            psm_infra::logging::add_secret(&integration.client_secret);
+        let prepared = self.settings_set_context().prepare(patch)?;
+        let (value, old) = self.apply_settings(prepared)?;
+        if let Some(mut old) = old {
+            old.shutdown();
         }
-        Settings::set(&self.paths, &settings)?;
-        let mut a = previous.clone();
-        let mut b = next.clone();
-        a["theme"] = serde_json::Value::Null;
-        b["theme"] = serde_json::Value::Null;
-        if a != b {
-            self.reopen()?;
-            self.events.emit(AppEvent::HealthChanged);
-        } else {
-            self.settings = settings;
-        }
-        self.settings_get()
+        Ok(value)
     }
 
     /// Stops the background workers (idempotent; also run on drop).
@@ -464,15 +601,19 @@ impl App {
 
     /// Rebuilds the runtime over the current `settings.json`, keeping the event target.
     pub fn reopen(&mut self) -> Result<()> {
-        self.shutdown();
         let next = Self::build(
             self.paths.clone(),
             self.scripting.clone(),
+            (
+                self.user_scripting.clone(),
+                self.background_scripting.clone(),
+            ),
             self.clock.clone(),
             self.run_startup,
             self.commerce_override.clone(),
             false,
         )?;
+        self.shutdown();
         self.events.transfer_target_to(&next.events);
         let old = std::mem::replace(self, next);
         drop(old);

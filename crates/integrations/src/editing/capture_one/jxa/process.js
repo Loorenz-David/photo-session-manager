@@ -1,1 +1,7 @@
-function run(argv) { const a=Application("Capture One"); if(!a.running()) throw Error("Capture One is not running"); const d=a.documents.byId(argv[0]); let images=d.images.whose({path:argv[1]})(); if(!images.length) { const folders=d.collections.whose({file:Path(argv[2])})(); if(folders.length) images=folders[0].images.whose({path:argv[1]})(); } if(!images.length) throw Error("variant not found"); return JSON.stringify(a.process(images[0].variants.byId(argv[3]),{recipe:argv[4]}).toString()); }
+function run(argv) {
+  const a = Application('Capture One');
+  if (!a.running()) throw Error('Capture One is not running');
+  const image = imageByPath(a.documents.byId(argv[0]), argv[1], argv[2]);
+  if (image === null) throw Error('variant not found');
+  return JSON.stringify(a.process(image.variants.byId(argv[3]), {recipe: argv[4]}).toString());
+}

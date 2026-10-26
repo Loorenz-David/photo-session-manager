@@ -19,6 +19,12 @@ impl EditingStartup<'_> {
                 doc
             }
             Err(e) => {
+                if matches!(e, Error::CaptureFolderNotSet) {
+                    if !self.health.has("capture_folder_not_set") {
+                        self.health.set("capture_folder_not_set", e.to_string());
+                    }
+                    return Err(e);
+                }
                 self.health.set(
                     if matches!(e, Error::DocumentNotSession) {
                         "document_not_session"

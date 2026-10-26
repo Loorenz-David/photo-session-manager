@@ -37,6 +37,9 @@ impl EventSink for CollectingEventSink {
 }
 
 impl TestApp {
+    pub fn settings_set(&mut self, patch: &serde_json::Value) -> Result<serde_json::Value> {
+        self.app.settings_set(patch)
+    }
     pub fn items(&self) -> ItemsService<'_> {
         ItemsService::new(self.app.store.as_ref(), self.clock.as_ref())
     }
@@ -93,7 +96,12 @@ impl TestApp {
             .join("Capture One Session")
             .to_string_lossy()
             .into_owned();
-        let capture_root = dir.path().join("Capture").to_string_lossy().into_owned();
+        let capture_root = dir
+            .path()
+            .join("Capture One Session")
+            .join("Capture")
+            .to_string_lossy()
+            .into_owned();
         std::fs::create_dir_all(&document_id)?;
         std::fs::create_dir_all(&capture_root)?;
         let mut settings = psm_infra::settings_file::Settings::open(&paths)?;

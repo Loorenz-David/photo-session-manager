@@ -15,7 +15,7 @@ fn app() -> TestApp {
     TestApp::with_fake_document().unwrap()
 }
 fn root(a: &TestApp) -> PathBuf {
-    a.dir.path().join("Capture")
+    a.dir.path().join("Capture One Session").join("Capture")
 }
 fn file(a: &TestApp, relative: &str, bytes: &[u8]) -> PathBuf {
     let path = root(a).join(relative);

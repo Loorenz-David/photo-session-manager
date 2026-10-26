@@ -32,7 +32,7 @@ impl EventSink for TauriCameraEvents {
     }
 }
 fn providers(
-    state: &State<'_, AppState>,
+    app: &psm_integrations::AppHandles,
 ) -> Result<
     (
         std::sync::Arc<dyn psm_core::ports::camera::CameraProvider>,
@@ -40,10 +40,6 @@ fn providers(
     ),
     CommandError,
 > {
-    let app = state
-        .0
-        .lock()
-        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
     Ok((app.camera.clone(), app.health.clone()))
 }
 #[tauri::command]
@@ -51,7 +47,8 @@ fn providers(
 pub async fn camera_status(
     state: State<'_, AppState>,
 ) -> Result<CameraStatusResponse, CommandError> {
-    let (camera, health) = providers(&state)?;
+    let app = state.handles().map_err(CommandError::from)?;
+    let (camera, health) = providers(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         CameraService::new(camera.as_ref(), health.as_ref()).status()
     })
@@ -66,7 +63,8 @@ pub async fn camera_retry(
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> Result<CameraStatusResponse, CommandError> {
-    let (camera, health) = providers(&state)?;
+    let app = state.handles().map_err(CommandError::from)?;
+    let (camera, health) = providers(&app)?;
     let status = tauri::async_runtime::spawn_blocking(move || {
         let events = TauriCameraEvents(app_handle);
         CameraService::new(camera.as_ref(), health.as_ref())
@@ -81,7 +79,8 @@ pub async fn camera_retry(
 #[tauri::command]
 #[specta::specta]
 pub async fn camera_capture(state: State<'_, AppState>) -> Result<(), CommandError> {
-    let (camera, health) = providers(&state)?;
+    let app = state.handles().map_err(CommandError::from)?;
+    let (camera, health) = providers(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         CameraService::new(camera.as_ref(), health.as_ref()).capture()
     })

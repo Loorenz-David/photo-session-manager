@@ -3,6 +3,7 @@ use crate::{
     domain::editing::RenderPurpose,
     events::AppEvent,
     mechanisms::{
+        backoff::render_backoff,
         canon::canon,
         staleness::{clamp_delay, due_at, is_stale},
     },
@@ -42,7 +43,7 @@ pub struct PreviewService {
     last_adjusted: Mutex<HashMap<String, Instant>>,
     seen_sidecars: Mutex<HashMap<String, SystemTime>>,
     failed_generation: Mutex<HashMap<String, i64>>,
-    retry_after: Mutex<HashMap<String, Instant>>,
+    retry_after: Mutex<HashMap<String, (u32, Instant)>>,
 }
 
 impl PreviewService {
@@ -102,11 +103,19 @@ impl PreviewService {
         ) {
             self.store
                 .finish_render_job(tracking, Some("provider"), now_ms)?;
-            self.retry_after
+            let mut retry = self
+                .retry_after
                 .lock()
-                .map_err(|e| crate::Error::InvalidData(e.to_string()))?
-                .insert(raw.into(), self.clock.mono() + Duration::from_secs(2));
-            return Err(error);
+                .map_err(|e| crate::Error::InvalidData(e.to_string()))?;
+            let attempts = retry
+                .get(raw)
+                .map_or(1, |(previous, _)| previous.saturating_add(1));
+            retry.insert(
+                raw.into(),
+                (attempts, self.clock.mono() + render_backoff(attempts)),
+            );
+            tracing::warn!(%error, raw, attempts, "preview render deferred");
+            return Ok(());
         }
         self.retry_after
             .lock()
@@ -161,6 +170,10 @@ impl PreviewService {
         }
         self.store
             .finish_render_job(entry.tracking_job_id, None, self.clock.now_ms())?;
+        self.retry_after
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .remove(&entry.raw);
         self.editing
             .finish_render(job, self.clock.mono(), self.clock.now_ms())?;
         self.schedule_due(false)
@@ -180,6 +193,10 @@ impl PreviewService {
             .adjusted_event(&raw, retouch)?
             .unwrap_or_default();
         self.failed_generation
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .remove(&raw);
+        self.retry_after
             .lock()
             .map_err(|e| crate::Error::InvalidData(e.to_string()))?
             .remove(&raw);
@@ -234,7 +251,7 @@ impl PreviewService {
             .filter(|state| {
                 is_stale(state.adjusted_gen, state.rendered_gen)
                     && failed.get(&state.raw_path) != Some(&state.adjusted_gen)
-                    && retry.get(&state.raw_path).is_none_or(|at| now >= *at)
+                    && retry.get(&state.raw_path).is_none_or(|(_, at)| now >= *at)
                     && !self.editing.render_in_flight(&state.raw_path)
                     && (force
                         || last

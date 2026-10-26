@@ -18,13 +18,14 @@ use psm_core::{
 use psm_infra::paths::AppPaths;
 use std::{
     fs,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 pub struct CaptureOneAdapter {
-    pub scripting: Arc<dyn CaptureOneScripting>,
+    pub user: Arc<dyn CaptureOneScripting>,
+    pub background: Arc<dyn CaptureOneScripting>,
     pub store: Arc<dyn Store>,
     pub health: Arc<HealthService>,
     pub document_id: String,
@@ -35,7 +36,7 @@ pub struct CaptureOneAdapter {
 }
 impl CaptureOneAdapter {
     pub fn new(
-        scripting: Arc<dyn CaptureOneScripting>,
+        lanes: (Arc<dyn CaptureOneScripting>, Arc<dyn CaptureOneScripting>),
         store: Arc<dyn Store>,
         health: Arc<HealthService>,
         document_id: String,
@@ -44,7 +45,8 @@ impl CaptureOneAdapter {
         paths: AppPaths,
     ) -> Self {
         Self {
-            scripting,
+            user: lanes.0,
+            background: lanes.1,
             store,
             health,
             document_id,
@@ -54,28 +56,35 @@ impl CaptureOneAdapter {
             renders: Mutex::new(RenderRegistry::default()),
         }
     }
-    fn variant(&self, raw: &str) -> Result<String> {
-        if let Some(id) = self.scripting.find_image(&self.document_id, raw)? {
+    fn variant_background(&self, raw: &str) -> Result<String> {
+        if let Some(id) = self.background.find_image(&self.document_id, raw)? {
             return Ok(id);
         }
         let folder = Path::new(raw)
             .parent()
             .ok_or(Error::VariantNotFound)?
             .to_string_lossy();
-        self.scripting
+        self.background
             .find_image_in_folder(&self.document_id, &folder, raw)?
             .ok_or(Error::VariantNotFound)
     }
     fn apply_folder(&self, target: &str) -> Result<()> {
-        self.scripting.save(&self.document_id)?;
+        self.user.save(&self.document_id)?;
         fs::create_dir_all(target)?;
-        self.scripting.set_captures(&self.document_id, target)?;
-        let readback = self.scripting.get_captures(&self.document_id)?;
+        self.user.set_captures(&self.document_id, target)?;
+        let readback = self.user.get_captures(&self.document_id)?;
         if !same_path(&readback, target) {
             return Err(Error::CaptureFolderNotSet);
         }
         Ok(())
     }
+}
+pub fn capture_root(document_id: &str) -> Result<PathBuf> {
+    let root = Path::new(document_id).join("Capture");
+    if !root.is_dir() {
+        return Err(Error::CaptureFolderNotSet);
+    }
+    Ok(PathBuf::from(canon(&root)?))
 }
 fn same_path(a: &str, b: &str) -> bool {
     match (canon(Path::new(a)), canon(Path::new(b))) {
@@ -124,20 +133,26 @@ impl EditingProvider for CaptureOneAdapter {
             return Err(Error::DocumentNotOpen);
         }
         let info = self
-            .scripting
+            .user
             .document_info(&self.document_id)
             .map_err(|_| Error::DocumentNotOpen)?;
         if info.kind != "session" {
             return Err(Error::DocumentNotSession);
         }
+        let root = capture_root(&info.id).inspect_err(|_| {
+            self.health.set(
+                "capture_folder_not_set",
+                format!("Capture root {}/Capture not found", info.id),
+            );
+        })?;
         Ok(DocumentState {
-            capture_root: info.capture_root,
+            capture_root: root.to_string_lossy().into_owned(),
             capture_folder: info.captures,
         })
     }
     fn set_capture_folder(&self, target: &str) -> Result<()> {
         let prior = self
-            .scripting
+            .user
             .document_info(&self.document_id)
             .map_err(|_| Error::CaptureFolderNotSet)?
             .captures;
@@ -157,8 +172,8 @@ impl EditingProvider for CaptureOneAdapter {
             for name in ["capture_done", "processing_done", "variant_adjusted"] {
                 let expected = self.paths.hooks().join(format!("{name}.scpt"));
                 let path = expected.to_string_lossy();
-                self.scripting.set_hook(name, &path)?;
-                let read = self.scripting.get_hook(name)?;
+                self.user.set_hook(name, &path)?;
+                let read = self.user.get_hook(name)?;
                 if !read.as_deref().is_some_and(|value| same_path(value, &path)) {
                     return Err(Error::HooksNotInstalled);
                 }
@@ -176,9 +191,13 @@ impl EditingProvider for CaptureOneAdapter {
     fn check_recipes(&self) -> Result<Vec<String>> {
         let mut missing = Vec::new();
         for name in [&self.preview_recipe, &self.web_recipe] {
-            if self.scripting.recipe_exists(name)? {
-                self.scripting
-                    .set_recipe_props(name, "overwrite", "_session_manager")?;
+            if self.user.recipe_exists(&self.document_id, name)? {
+                self.user.set_recipe_props(
+                    &self.document_id,
+                    name,
+                    "overwrite",
+                    "_session_manager",
+                )?;
             } else {
                 missing.push(name.clone());
             }
@@ -194,13 +213,13 @@ impl EditingProvider for CaptureOneAdapter {
             RenderPurpose::Preview => &self.preview_recipe,
             RenderPurpose::Export => &self.web_recipe,
         };
-        if !self.scripting.recipe_exists(recipe)? {
+        if !self.background.recipe_exists(&self.document_id, recipe)? {
             return Err(Error::RecipeMissing {
                 name: recipe.clone(),
             });
         }
-        let variant = self.variant(raw)?;
-        self.scripting.process(&variant, recipe)
+        let variant = self.variant_background(raw)?;
+        self.background.process(&self.document_id, &variant, recipe)
     }
     fn request_render(
         &self,
@@ -211,34 +230,37 @@ impl EditingProvider for CaptureOneAdapter {
         now: Instant,
         now_ms: i64,
     ) -> Result<()> {
+        {
+            let mut state = self
+                .renders
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            if purpose == RenderPurpose::Preview
+                && (state.jobs.values().any(|e| {
+                    e.completion.raw == raw && e.completion.purpose == RenderPurpose::Preview
+                }) || state
+                    .pending
+                    .iter()
+                    .any(|e| e.raw == raw && e.purpose == RenderPurpose::Preview))
+            {
+                return Ok(());
+            }
+            if !state.busy.insert(base_name(raw)) {
+                state.pending.push_back(PendingRender {
+                    raw: raw.into(),
+                    purpose,
+                    generation,
+                    tracking_job_id,
+                });
+                return Ok(());
+            }
+        }
+        let result = self.render(raw, purpose);
         let mut state = self
             .renders
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        // A preview already in flight for this RAW covers a newer preview request; an export render
-        // always gets its own job (it belongs to one export run), queued behind the base name.
-        if purpose == RenderPurpose::Preview
-            && (state
-                .jobs
-                .values()
-                .any(|e| e.completion.raw == raw && e.completion.purpose == RenderPurpose::Preview)
-                || state
-                    .pending
-                    .iter()
-                    .any(|e| e.raw == raw && e.purpose == RenderPurpose::Preview))
-        {
-            return Ok(());
-        }
-        if !state.busy.insert(base_name(raw)) {
-            state.pending.push_back(PendingRender {
-                raw: raw.into(),
-                purpose,
-                generation,
-                tracking_job_id,
-            });
-            return Ok(());
-        }
-        match self.render(raw, purpose) {
+        match result {
             Ok(job_id) => {
                 state.jobs.insert(
                     job_id.clone(),
@@ -278,19 +300,31 @@ impl EditingProvider for CaptureOneAdapter {
         )
     }
     fn finish_render(&self, job: &str, now: Instant, now_ms: i64) -> Result<()> {
-        let mut state = self
-            .renders
-            .lock()
-            .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let Some(entry) = state.jobs.remove(job) else {
-            return Ok(());
+        let next = {
+            let mut state = self
+                .renders
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            let Some(entry) = state.jobs.remove(job) else {
+                return Ok(());
+            };
+            let key = base_name(&entry.completion.raw);
+            state.busy.remove(&key);
+            if let Some(index) = state.pending.iter().position(|p| base_name(&p.raw) == key) {
+                let next = state.pending.remove(index).expect("pending index");
+                state.busy.insert(key);
+                Some(next)
+            } else {
+                None
+            }
         };
-        state.busy.remove(&base_name(&entry.completion.raw));
-        let key = base_name(&entry.completion.raw);
-        if let Some(index) = state.pending.iter().position(|p| base_name(&p.raw) == key) {
-            let next = state.pending.remove(index).expect("pending index");
-            state.busy.insert(key);
-            match self.render(&next.raw, next.purpose) {
+        if let Some(next) = next {
+            let result = self.render(&next.raw, next.purpose);
+            let mut state = self
+                .renders
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            match result {
                 Ok(job_id) => {
                     state.jobs.insert(
                         job_id.clone(),
@@ -308,17 +342,16 @@ impl EditingProvider for CaptureOneAdapter {
                         },
                     );
                 }
-                Err(e) => {
+                Err(error) => {
                     state.busy.remove(&base_name(&next.raw));
-                    return Err(e);
+                    return Err(error);
                 }
             }
         }
         Ok(())
     }
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>> {
-        let mut failed = Vec::new();
-        let expired: Vec<_> = {
+        let expired: Vec<String> = {
             let state = self
                 .renders
                 .lock()
@@ -326,9 +359,9 @@ impl EditingProvider for CaptureOneAdapter {
             state
                 .jobs
                 .iter()
-                .filter(|(_, e)| {
-                    now.duration_since(e.issued_mono).as_secs()
-                        >= match e.completion.purpose {
+                .filter(|(_, entry)| {
+                    now.duration_since(entry.issued_mono).as_secs()
+                        >= match entry.completion.purpose {
                             RenderPurpose::Preview => 60,
                             RenderPurpose::Export => 120,
                         }
@@ -336,17 +369,42 @@ impl EditingProvider for CaptureOneAdapter {
                 .map(|(id, _)| id.clone())
                 .collect()
         };
+        let mut failed = Vec::new();
         for old_id in expired {
-            let mut state = self
-                .renders
-                .lock()
-                .map_err(|e| Error::InvalidData(e.to_string()))?;
-            let Some(mut entry) = state.jobs.remove(&old_id) else {
-                continue;
+            let (entry, next) = {
+                let mut state = self
+                    .renders
+                    .lock()
+                    .map_err(|e| Error::InvalidData(e.to_string()))?;
+                let Some(entry) = state.jobs.remove(&old_id) else {
+                    continue;
+                };
+                let next = if entry.attempts > 0 {
+                    let key = base_name(&entry.completion.raw);
+                    state.busy.remove(&key);
+                    let next = state
+                        .pending
+                        .iter()
+                        .position(|p| base_name(&p.raw) == key)
+                        .and_then(|index| state.pending.remove(index));
+                    if next.is_some() {
+                        state.busy.insert(key);
+                    }
+                    next
+                } else {
+                    None
+                };
+                (entry, next)
             };
             if entry.attempts == 0 {
-                match self.render(&entry.completion.raw, entry.completion.purpose) {
+                let result = self.render(&entry.completion.raw, entry.completion.purpose);
+                let mut state = self
+                    .renders
+                    .lock()
+                    .map_err(|e| Error::InvalidData(e.to_string()))?;
+                match result {
                     Ok(new_id) => {
+                        let mut entry = entry;
                         entry.completion.job_id = new_id.clone();
                         entry.completion.issued_at_ms = now_ms;
                         entry.issued_mono = now;
@@ -363,27 +421,35 @@ impl EditingProvider for CaptureOneAdapter {
                     entry.completion.tracking_job_id,
                     entry.completion.generation,
                 ));
-                let key = base_name(&entry.completion.raw);
-                state.busy.remove(&key);
-                if let Some(index) = state.pending.iter().position(|p| base_name(&p.raw) == key) {
-                    let next = state.pending.remove(index).expect("pending index");
-                    state.busy.insert(key);
-                    let id = self.render(&next.raw, next.purpose)?;
-                    state.jobs.insert(
-                        id.clone(),
-                        RenderEntry {
-                            completion: RenderCompletion {
-                                job_id: id,
-                                raw: next.raw,
-                                purpose: next.purpose,
-                                generation: next.generation,
-                                issued_at_ms: now_ms,
-                                tracking_job_id: next.tracking_job_id,
-                            },
-                            issued_mono: now,
-                            attempts: 0,
-                        },
-                    );
+                if let Some(next) = next {
+                    let result = self.render(&next.raw, next.purpose);
+                    let mut state = self
+                        .renders
+                        .lock()
+                        .map_err(|e| Error::InvalidData(e.to_string()))?;
+                    match result {
+                        Ok(job_id) => {
+                            state.jobs.insert(
+                                job_id.clone(),
+                                RenderEntry {
+                                    completion: RenderCompletion {
+                                        job_id,
+                                        raw: next.raw,
+                                        purpose: next.purpose,
+                                        generation: next.generation,
+                                        issued_at_ms: now_ms,
+                                        tracking_job_id: next.tracking_job_id,
+                                    },
+                                    issued_mono: now,
+                                    attempts: 0,
+                                },
+                            );
+                        }
+                        Err(error) => {
+                            state.busy.remove(&base_name(&next.raw));
+                            return Err(error);
+                        }
+                    }
                 }
             }
         }
@@ -396,24 +462,26 @@ impl EditingProvider for CaptureOneAdapter {
         })
     }
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()> {
-        let variant = self.variant(raw)?;
+        let variant = self.variant_background(raw)?;
         let desired = tag_for(classification);
-        if self.scripting.get_color_tag(&variant)? == desired {
+        if self.background.get_color_tag(&self.document_id, &variant)? == desired {
             return Ok(());
         }
         self.store.mark_own_write(raw, now_ms)?;
-        let write = self.scripting.set_color_tag(&variant, desired);
+        let write = self
+            .background
+            .set_color_tag(&self.document_id, &variant, desired);
         if matches!(write, Err(Error::Timeout)) {
             return Err(Error::Timeout);
         }
         write?;
-        if self.scripting.get_color_tag(&variant)? != desired {
+        if self.background.get_color_tag(&self.document_id, &variant)? != desired {
             return Err(Error::TagVerification);
         }
         Ok(())
     }
     fn import(&self, paths: &[String]) -> Result<()> {
-        self.scripting.import(&self.document_id, paths)
+        self.user.import(&self.document_id, paths)
     }
     fn capabilities(&self) -> EditingCapabilities {
         EditingCapabilities {
@@ -428,6 +496,22 @@ impl EditingProvider for CaptureOneAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mc2_capture_root_is_document_capture_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let document = dir.path().join("Capture One Session");
+        let root = document.join("Capture");
+        fs::create_dir_all(&root).unwrap();
+        assert_eq!(
+            capture_root(&document.to_string_lossy()).unwrap(),
+            root.canonicalize().unwrap()
+        );
+        fs::remove_dir(&root).unwrap();
+        assert!(matches!(
+            capture_root(&document.to_string_lossy()),
+            Err(Error::CaptureFolderNotSet)
+        ));
+    }
     #[test]
     fn mc19_tag_mapping() {
         assert_eq!(
