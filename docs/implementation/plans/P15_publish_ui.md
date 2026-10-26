@@ -150,3 +150,7 @@ notification lands (workspace).
   with `getByRole`. The implement session of the relaunch continues from the tree (checkpoint 7ace3d5): F1–F3 fixes
   stay; only F4 is open. Review r2: `handoffs/reviewer/handoff_P15_publish_ui_review_r2.md` (git history if overwritten).
 
+- 2026-10-26 08:10, opus review r1 (relaunch): **BLOCKED at gate, nothing reviewed.** Tracker is `CHANGES_REQUESTED`, not
+  `IMPLEMENTED`. The relaunch restarted at implement r1; Codex exited 1 ("model at capacity") and wrote nothing. The runner
+  then took the stale 07:53 implement handoff (`state: DONE`, `d5fc553`) as current. There is no code delta since `7ace3d5`,
+  so F4 is still open. Earlier review r1 handoff preserved at `ace737d`. Next: run only fix 2 (F4), then re-review r3.
