@@ -24,7 +24,8 @@ Updated: 2026-10-25 by the orchestrator.
   P14 APPROVED (with notes) 07:29 on Codex. P15 implement r1 (07:37) BLOCKED: failure/upload-state/notification
   data not exposed by commands → plan amended (task 0 backend reads, C7(a)–(c), 14 rows; ch04 S-G aligned with N2,
   changelog 20); attempt to be archived by the orchestrator, next implementer continues from `e3848bd`.
-  P15 attempt archived 07:41. Run in flight: **all** (from P15, Codex), started 07:41.
+  P15 attempt archived 07:41; relaunch → re-review r2 one MUST (F4 batch panel inert) → FIX2_AUTHORISED in the
+  P15 Review log 08:20. Run in flight: **all** (from P15, Codex), started 08:20.
 - Implementer and fix sessions: Codex again from P13 (owner 2026-10-26); P07–P12 were built on Claude
   (Opus/Sonnet) while Codex was rate-limited; `PSM_IMPLEMENTER=claude` switches.
 

@@ -141,3 +141,12 @@ notification lands (workspace).
   (inline in the queue footer, or as its own Radix dialog nested in the form dialog). C5(a) must render the real
   `FormDialog` root and find the confirm by role. Notes: 2 rows in backlog (events module mocked whole; F2
   retry/re-fail race).
+- 2026-10-26 08:20 (orchestrator): re-review r2 left one MUST, F4: the batch review panel renders outside the open
+  modal `FormDialog`, so it is inert and its confirm closes the queue; batch "Publish N confirmed" cannot publish
+  (ch04 S-H, C5(a), 07A MC-10). Real user-visible defect.
+  FIX2_AUTHORISED: F4 (review r2) — batch publish impossible in the running app; apply the r2 correction (review inside
+  the form dialog's layer, or close the dialog first with Cancel returning to the queue with confirmations intact;
+  send exactly the displayed summary) and make C5(a) render the real `FormDialog`/`Dialog` and reach "Publish N images"
+  with `getByRole`. The implement session of the relaunch continues from the tree (checkpoint 7ace3d5): F1–F3 fixes
+  stay; only F4 is open. Review r2: `handoffs/reviewer/handoff_P15_publish_ui_review_r2.md` (git history if overwritten).
+
