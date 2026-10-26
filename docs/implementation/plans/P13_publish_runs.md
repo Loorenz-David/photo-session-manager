@@ -196,3 +196,13 @@ notification text time format, how `publish_progress` events are throttled.
   a ready nameless announced media is removed and the run completes with gallery D, and a capture row is recorded
   while the fake shop's media poll is held. No additional assumptions or deviations. Full suite (345 Rust tests,
   36 P13) and UI suite (79 tests), clippy, fmt and typecheck passed.
+- 2026-10-26 (opus, re-review r2): **APPROVED_WITH_NOTES.** Perimeter: `5e9531e` touches 8 code files, all inside the
+  F1 ∪ F2 allowed lists, plus the P13 tracker row and this log. Suite 345 Rust (36 P13) / 79 UI, clippy, fmt and
+  typecheck green on HEAD `69cc73a` (code = `5e9531e`). F1 resolved as corrected: `upload` waits on a nameless media
+  only in `Processing`/`Uploaded` (all four `RemoteMediaStatus` variants read); the new test reaches `done` with
+  gallery = D and stalls at `upload` under the old predicate. F2 resolved as corrected: the shared runner is built
+  `excluding_kind("publish_step")`, a second runner `only_kind("publish_step")` owns the only `PublishJob`
+  registration, and its worker thread starts whenever `run_startup` is true (`App::open` passes true) and is joined
+  in `Drop`. The `job_due` SQL filter binds NULL for "no filter" correctly, and SQLite is the only `Store` impl. No
+  blocking item remains, so no triage was needed. New note (backlog): the F2 test shows a held publish step holds no
+  store lock, but it does not exercise the shared loop's exclusion.
