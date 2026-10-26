@@ -160,3 +160,9 @@ whether tags are written in the same `productUpdate` as the title.
   from the shop"; plan C2(d)(ii). Correction: when `product.tags` is absent from the frozen values and the stored base
   is non-empty, merge with local `[]` and store base `[]`; C2(d)(ii) clears through `AttributesService::clear`.
   1 note to backlog (no test asserts `done` after a damage-report write).
+- 2026-10-26 (codex, fix 1): resolved F1 by treating an absent frozen `product.tags` value as local `[]` only when
+  the saved `tags_base` is non-empty; the merge preserves admin tags and removes the app's final previously published
+  tag, then stores `tags_base = []`. Updated C2(d)(ii) to clear through `AttributesService::clear`, matching the form
+  path, and asserted the shop tags and stored base. Assumption: an absent tag value with an empty or null base means
+  there is no app-owned tag state to reconcile, so it remains untouched. No divergence. C2(d) passes; workspace suite
+  371 Rust tests, Clippy, fmt, 79 frontend tests and typecheck pass.

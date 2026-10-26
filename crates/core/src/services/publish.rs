@@ -872,11 +872,11 @@ impl PublishService {
             self.commerce
                 .update_description(run, &external, description)?;
         }
-        if let Some(local_tags) = item
+        let local_tags = item
             .frozen_attributes
             .get("product.tags")
-            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
-        {
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok());
+        if local_tags.is_some() {
             let link = self
                 .store
                 .item_link(local.id, "shopify")?
@@ -886,11 +886,30 @@ impl PublishService {
                 .as_deref()
                 .and_then(|text| serde_json::from_str(text).ok())
                 .unwrap_or_default();
+            let local_tags = local_tags.unwrap_or_default();
             if let Some(tags) = merge_tags(&base, &local_tags, &remote_tags) {
                 self.commerce.update_tags(run, &external, &tags)?;
             }
             self.store
                 .set_item_tags_base(local.id, "shopify", &local_tags)?;
+        } else {
+            let link = self
+                .store
+                .item_link(local.id, "shopify")?
+                .ok_or(Error::UploadIncomplete)?;
+            let base: Vec<String> = link
+                .tags_base
+                .as_deref()
+                .and_then(|text| serde_json::from_str(text).ok())
+                .unwrap_or_default();
+            if !base.is_empty() {
+                let local_tags = Vec::new();
+                if let Some(tags) = merge_tags(&base, &local_tags, &remote_tags) {
+                    self.commerce.update_tags(run, &external, &tags)?;
+                }
+                self.store
+                    .set_item_tags_base(local.id, "shopify", &local_tags)?;
+            }
         }
         Ok(true)
     }

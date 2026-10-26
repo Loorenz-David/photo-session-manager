@@ -398,11 +398,22 @@ fn c2d_republish_preserves_admin_tags_and_applies_local_removal() {
             .iter()
             .any(|m| m.op == "update_tags")
     );
-    value(&b, item, "product.tags", json!([]));
+    AttributesService::new(b.store(), b.clock.as_ref(), Some("shopify"))
+        .clear(item, "product.tags")
+        .unwrap();
     run(&b, s);
     assert_eq!(
         b.fake_shop().state.lock().unwrap().tags[&id],
         Vec::<String>::new()
+    );
+    assert_eq!(
+        b.store()
+            .item_link(item, "shopify")
+            .unwrap()
+            .unwrap()
+            .tags_base
+            .as_deref(),
+        Some("[]")
     );
 }
 #[test]
