@@ -129,3 +129,15 @@ notification lands (workspace).
   confirm; M17). Lessons: C2(a)'s input named an event the backend does not emit for publish; the plan left the
   batch confirmation surface undefined against MC-10/R18.
 - 2026-10-26, codex fix r2: Resolved F1 by refreshing the Sessions list and matching workspace view on `publish_progress`; C2(a) now delivers that event alone. Resolved F2 by clearing the shown-failure marker when failure clears and when the workspace changes sessions; C3(a) now covers non-failed → failed → Retry → failed for the same item. Resolved F3 by opening the existing `PublishPopover` for the confirmed batch ids, displaying its summary, per-item counts and notes before confirmation, and sending that displayed summary; C5(a) confirms through this surface and excludes the unconfirmed session. No divergences. Focused UI tests 11/11; full Rust 374, UI 90, clippy, fmt and typecheck green.
+- 2026-10-26, opus re-review r2 (fix 1 `7ace3d5`, tree `0fb62e8` clean): CHANGES_REQUESTED, 1 MUST. Perimeter = the
+  findings' allowed files plus tracker/log/handoff. Suite 374 Rust / 90 UI, clippy/fmt/typecheck green. F1 resolved
+  (`publish_progress` added to `onSessionsChanged` and `onWorkspaceEvents`; payload carries `session_id`; failed
+  transitions emit it). F2 resolved (marker cleared when failure clears and on session change). **F4 (B1, MUST,
+  regression of the F3 fix):** `BatchQueue` renders `PublishPopover` as a sibling of the still-open modal
+  `FormDialog` (Radix). Probe with the real `Dialog`/`DialogContent`: `body` has `pointer-events: none`, the
+  popover sits under an `aria-hidden` ancestor, and a pointerdown on its "Publish N images" fires the dialog's
+  `onOpenChange(false)`, which is `BatchQueue`'s `onClose`, so the queue unmounts and nothing is published (ch04 S-H, C5(a),
+  07A MC-10). C5(a) mocks `FormDialog`, so it cannot see this. Correction: show the review inside the dialog's layer
+  (inline in the queue footer, or as its own Radix dialog nested in the form dialog). C5(a) must render the real
+  `FormDialog` root and find the confirm by role. Notes: 2 rows in backlog (events module mocked whole; F2
+  retry/re-fail race).
