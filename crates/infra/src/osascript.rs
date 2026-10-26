@@ -19,6 +19,11 @@ impl OsaRunner {
 
     pub fn run(&self, script_path: &Path, args: &[&str], timeout: Duration) -> Result<String> {
         let start = Instant::now();
+        // ch12 §Logs: every provider call with its operation (the script's name) and duration.
+        let op = script_path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let mut child = Command::new("osascript")
             .arg("-l")
             .arg("JavaScript")
@@ -34,6 +39,7 @@ impl OsaRunner {
                 tracing::info!(
                     duration_ms = start.elapsed().as_millis(),
                     command = "osascript",
+                    op = %op,
                     "provider call"
                 );
                 if !output.status.success() {
@@ -51,6 +57,7 @@ impl OsaRunner {
                 tracing::info!(
                     duration_ms = start.elapsed().as_millis(),
                     command = "osascript",
+                    op = %op,
                     "provider timeout"
                 );
                 return Err(Error::Timeout);

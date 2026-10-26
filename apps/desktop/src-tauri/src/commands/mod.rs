@@ -6,3 +6,4 @@ pub mod items;
 pub mod photos;
 pub mod publish;
 pub mod sessions;
+pub mod settings;

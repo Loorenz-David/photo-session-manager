@@ -37,6 +37,7 @@ pub struct FakeShop {
     pub fail_after: Option<String>,
     pub fail_before: Option<String>,
     pub unreachable: bool,
+    pub token_app_not_installed: bool,
     pub schema_error: bool,
     pub wrong_order: bool,
     pub delete_not_found: bool,
@@ -147,6 +148,14 @@ impl FakeCommerce {
     }
 }
 impl CommerceAdapter for FakeCommerce {
+    fn check_token(&self) -> Result<()> {
+        self.read("check_token")?;
+        if self.state.lock().unwrap().token_app_not_installed {
+            Err(Error::AppNotInstalled)
+        } else {
+            Ok(())
+        }
+    }
     fn condition_photos_key(&self) -> &str {
         &self.condition_key
     }

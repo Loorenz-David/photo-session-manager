@@ -64,6 +64,8 @@ export const commands = {
 	publishConfirm: (sessionIds: CommandId[], summaryText: string) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText })),
 	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
 	notificationsList: (sessionId: CommandId | null) => typedError<NotificationDto[], CommandError>(__TAURI_INVOKE("notifications_list", { sessionId })),
+	settingsGet: () => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_get")),
+	settingsSet: (patch: SettingsPatchDto_Deserialize) => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_set", { patch })),
 };
 
 /* Types */
@@ -217,6 +219,19 @@ export type HealthItemDto = {
 
 export type HealthReportDto = {
 	items: HealthItemDto[],
+};
+
+/**
+ *  The `integration` block as shown and as patched (09A MC-23/MC-24). On read the client
+ *  secret is masked (`••••` + last 4); sending the masked value back keeps the stored secret.
+ */
+export type IntegrationSettingsDto = {
+	kind: string,
+	shop_domain: string,
+	api_version: string,
+	client_id: string,
+	client_secret: string,
+	condition_photos_key: string,
 };
 
 export type ItemDto = ItemDto_Serialize | ItemDto_Deserialize;
@@ -492,6 +507,75 @@ export type SessionViewResponse_Serialize = {
 	session: SessionResponse_Serialize,
 	item: ItemDto_Serialize | null,
 	photos: PhotoResponse_Serialize[],
+};
+
+/**
+ *  `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the
+ *  stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
+ */
+export type SettingsDto = SettingsDto_Serialize | SettingsDto_Deserialize;
+
+/**
+ *  `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the
+ *  stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
+ */
+export type SettingsDto_Deserialize = {
+	document_id?: string | null,
+	preview_recipe: string,
+	web_recipe: string,
+	style_name: string,
+	export_folder: string,
+	preview_delay_s: number,
+	effective_preview_delay_s: number,
+	theme: string,
+	sku_prefix?: string | null,
+	integration?: IntegrationSettingsDto | null,
+};
+
+/**
+ *  `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the
+ *  stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
+ */
+export type SettingsDto_Serialize = {
+	document_id: string | null,
+	preview_recipe: string,
+	web_recipe: string,
+	style_name: string,
+	export_folder: string,
+	preview_delay_s: number,
+	effective_preview_delay_s: number,
+	theme: string,
+	sku_prefix: string | null,
+	integration: IntegrationSettingsDto | null,
+};
+
+/**  A partial update: absent fields stay as stored. */
+export type SettingsPatchDto = SettingsPatchDto_Serialize | SettingsPatchDto_Deserialize;
+
+/**  A partial update: absent fields stay as stored. */
+export type SettingsPatchDto_Deserialize = {
+	document_id?: string | null,
+	preview_recipe?: string | null,
+	web_recipe?: string | null,
+	style_name?: string | null,
+	export_folder?: string | null,
+	preview_delay_s?: number | null,
+	theme?: string | null,
+	sku_prefix?: string | null,
+	integration?: IntegrationSettingsDto | null,
+};
+
+/**  A partial update: absent fields stay as stored. */
+export type SettingsPatchDto_Serialize = {
+	document_id?: string,
+	preview_recipe?: string,
+	web_recipe?: string,
+	style_name?: string,
+	export_folder?: string,
+	preview_delay_s?: number,
+	theme?: string,
+	sku_prefix?: string,
+	integration?: IntegrationSettingsDto,
 };
 
 /* Tauri Specta runtime */

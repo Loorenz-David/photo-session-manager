@@ -26,11 +26,7 @@ pub struct AppPathsDto {
 #[specta::specta]
 pub fn health_get(state: State<'_, AppState>) -> Result<HealthReportDto, String> {
     let app = state.0.lock().map_err(|e| e.to_string())?;
-    let report = app.health.report(
-        &app.paths.root.to_string_lossy(),
-        app.hooks_compiled,
-        app.nudge_port() != 0,
-    );
+    let report = app.health_check().map_err(|e| e.to_string())?;
     Ok(HealthReportDto {
         items: report
             .items

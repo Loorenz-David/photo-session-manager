@@ -1,3 +1,4 @@
+pub mod backup;
 pub mod export_fs;
 pub mod jobs;
 pub mod logging;

@@ -104,4 +104,20 @@ format (JSON lines or key=value), how cold start is measured (launch → first `
   archived. Substantial partial work is uncommitted in the tree (settings service/commands/page, backup, logging,
   health, auth, `find_image_in_folder.js`, `p16_operations.rs`). Relaunched on Claude (PSM_IMPLEMENTER=claude): the
   implement session continues from the tree, verifies each piece against this plan, keeps what fits.
-
+- 2026-10-26 (implement r1 on Claude, continuing the archived Codex tree): kept the Codex pieces that fit the plan
+  (backup, redaction writer, settings write 0600, masked secret, folder-lookup script, health integration check) and
+  reworked the rest. Built: `App::settings_get/settings_set` (the `settings_get`/`settings_set` commands are thin
+  wrappers with typed DTOs `SettingsDto`/`SettingsPatchDto`/`IntegrationSettingsDto`), `App::health_check` (re-runs
+  the editing startup checks, camera status and the integration checks; `health_get` wraps it), `App::reopen`
+  after a settings change (theme-only changes do not reopen) + `health_changed`, start backup in `App::open` and one
+  after each publish item reaching `done`, `psm_infra::logging::redacting` (production writer; tests capture through
+  it), operation names on provider-call log lines (`op=<script>` for osascript, `op=<graphql operation>` with
+  `duration_ms` for every Shopify call), the settings page and the completed health page. Assumptions: a
+  settings save reopens the runtime so export folder, preview delay, recipes, document and Shopify take effect at
+  once; that reopen does not write a backup (only a real start does); the theme stays on the header toggle (not in
+  the form); `sku_prefix` passes through untouched; the condition-field detail uses 09A's wording ("Condition photos
+  field `<key>` not found in the shop" / "… is not a file list"); cold start is measured launch → first window
+  (the default screen does not call `health_get`). Deviations: P00's duplicate `capture_one` health item removed
+  (it mirrored `document_not_open`; C3(a) "the rest ok"), files outside the list touched for wiring (see handoff).
+  Live: C6(a) run against Capture One 08:5x → `"130"`, still browsing `Capture`, no `whose({file`. Shot-to-preview
+  timings not measured (camera not tethered). Suite 387 Rust / 92 UI; clippy, fmt, typecheck green.

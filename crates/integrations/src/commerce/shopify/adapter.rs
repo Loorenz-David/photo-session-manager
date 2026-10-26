@@ -233,11 +233,31 @@ impl ShopifyAdapter {
     fn call(&self, document: &str, variables: Json) -> Result<Json> {
         let is_mutation = document.trim_start().starts_with("mutation");
         let url = self.graphql_url();
+        let started = std::time::Instant::now();
+        let op = operation_name(document);
+        let result = self.call_inner(&url, is_mutation, document, &variables);
+        // ch12 §Logs: every provider call with its duration (never the token or the variables).
+        tracing::info!(
+            provider = "shopify",
+            op = %op,
+            duration_ms = started.elapsed().as_millis(),
+            ok = result.is_ok(),
+            "provider call"
+        );
+        result
+    }
+
+    fn call_inner(
+        &self,
+        url: &str,
+        is_mutation: bool,
+        document: &str,
+        variables: &Json,
+    ) -> Result<Json> {
         let mut attempt = 0;
         loop {
             let reply: HttpReply = self.auth.with_token(&|token| {
-                self.transport
-                    .post_graphql(&url, token, document, &variables)
+                self.transport.post_graphql(url, token, document, variables)
             })?;
             let retryable = reply.status == 429
                 || errors::is_throttled(&reply.body)
@@ -388,12 +408,36 @@ impl ShopifyAdapter {
     }
 }
 
+/// The GraphQL operation's name for the log (`mutation productCreate(…)` → `productCreate`),
+/// or its kind when unnamed.
+fn operation_name(document: &str) -> String {
+    let mut words = document
+        .trim_start()
+        .split(|c: char| c.is_whitespace() || c == '(' || c == '{')
+        .filter(|w| !w.is_empty());
+    let kind = words.next().unwrap_or("query");
+    match words.next() {
+        Some(name)
+            if document.trim_start()[kind.len()..]
+                .trim_start()
+                .starts_with(name) =>
+        {
+            name.to_owned()
+        }
+        _ => kind.to_owned(),
+    }
+}
+
 fn search_query(sku: &str) -> String {
     let escaped = sku.replace('\\', "\\\\").replace('"', "\\\"");
     format!("sku:\"{escaped}\"")
 }
 
 impl CommerceAdapter for ShopifyAdapter {
+    fn check_token(&self) -> Result<()> {
+        self.call("query { shop { name } }", serde_json::json!({}))?;
+        Ok(())
+    }
     fn condition_photos_key(&self) -> &str {
         &self.config.condition_photos_key
     }

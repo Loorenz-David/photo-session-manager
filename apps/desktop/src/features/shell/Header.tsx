@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bell, ClipboardList, CloudUpload, FolderDown, Info, Tag } from 'lucide-react';
+import { ArrowLeft, Bell, ClipboardList, CloudUpload, FolderDown, Info, Settings, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { integrationKind, onExportProgress, openExportFolder, runExport } from '@/services/export';
@@ -137,6 +137,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
         <div className="header-actions">
           <CameraDot />
           {bell}{drawer}
+          <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => { window.location.hash = '#/settings'; }}><Settings /></Button>
           <ThemeToggle theme={theme} onChange={onThemeChange} />
           <Button className="new-session-button" onClick={onNewSession} title="New session (N)">
             New session
@@ -170,6 +171,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
         <CameraDot />
         <span className="header-divider" aria-hidden />
         {bell}{drawer}
+        <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => { window.location.hash = '#/settings'; }}><Settings /></Button>
         {sessionId === 1 ? (
           <Button onClick={onAssignProduct}>
             <Tag /> Assign product

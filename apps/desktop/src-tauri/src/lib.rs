@@ -98,6 +98,9 @@ impl EventSink for TauriEvents {
                     },
                 );
             }
+            AppEvent::HealthChanged => {
+                let _ = self.0.emit("health_changed", ());
+            }
             _ => {}
         }
     }
@@ -144,7 +147,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::publish::publish_preview,
         commands::publish::publish_confirm,
         commands::publish::publish_retry,
-        commands::publish::notifications_list
+        commands::publish::notifications_list,
+        commands::settings::settings_get,
+        commands::settings::settings_set
     ])
 }
 

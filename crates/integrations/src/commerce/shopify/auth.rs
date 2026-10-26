@@ -94,6 +94,7 @@ impl ClientCredentialsAuth {
             .filter(|t| !t.is_empty())
             .ok_or_else(|| Error::Provider("shopify token reply without access_token".into()))?
             .to_owned();
+        psm_infra::logging::add_secret(&value);
         let lifetime_ms = reply
             .body
             .get("expires_in")

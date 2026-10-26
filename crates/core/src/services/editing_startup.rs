@@ -16,7 +16,6 @@ impl EditingStartup<'_> {
                 self.health.clear("document_not_open");
                 self.health.clear("document_not_session");
                 self.health.set_ok("document", "Session open");
-                self.health.set_ok("capture_one", "Session open");
                 doc
             }
             Err(e) => {
@@ -28,7 +27,6 @@ impl EditingStartup<'_> {
                     },
                     e.to_string(),
                 );
-                self.health.set("capture_one", e.to_string());
                 return Err(e);
             }
         };

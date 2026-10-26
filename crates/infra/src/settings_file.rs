@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, OpenOptions},
     io::Write,
-    os::unix::fs::OpenOptionsExt,
+    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::PathBuf,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub document_id: Option<String>,
@@ -72,10 +72,32 @@ impl Settings {
             )?;
         }
         let raw = fs::read(&path)?;
-        let mut settings: Self =
+        let settings: Self =
             serde_json::from_slice(&raw).map_err(|e| Error::InvalidData(e.to_string()))?;
-        settings.preview_delay_s = settings.preview_delay_s.clamp(10, 30);
         Ok(settings)
+    }
+
+    pub fn set(paths: &AppPaths, settings: &Self) -> Result<()> {
+        let path = paths.settings();
+        let temp = path.with_extension(format!("{}.tmp", std::process::id()));
+        let result = (|| -> Result<()> {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&temp)?;
+            serde_json::to_writer_pretty(&mut file, settings)
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            file.flush()?;
+            file.sync_all()?;
+            fs::rename(&temp, &path)?;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temp);
+        }
+        result
     }
 }
 

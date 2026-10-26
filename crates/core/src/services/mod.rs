@@ -12,3 +12,4 @@ pub mod previews;
 pub mod publish;
 pub mod review;
 pub mod sessions;
+pub mod settings;

@@ -23,6 +23,7 @@ pub const ALL_CAPABILITIES: [&str; 9] = [
 ];
 
 pub trait CommerceAdapter: Send + Sync {
+    fn check_token(&self) -> Result<()>;
     fn capabilities(&self) -> Vec<&'static str>;
     fn condition_photos_key(&self) -> &str;
 

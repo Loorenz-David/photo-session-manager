@@ -56,3 +56,31 @@ was opened with a scratch data dir while Capture One had `session test 1` open. 
 attributed to **Session Manager**; the owner allowed it; the first probe took 2 848 ms (waiting on the prompt) and
 the Health page showed `session test 1`. After quitting and reopening, the probe took 153 ms, **no prompt appeared**
 (owner confirmed) and the document name showed again. The permission is attributed to the bundle and remembered.
+
+## P16 final operations build (2026-10-26, implement r1 on Claude)
+
+An earlier Codex attempt of the same session built the bundle but could not launch it (LaunchServices -10827 and
+Apple events -2700 inside its sandbox); its tree was continued on Claude, outside that sandbox, with these results.
+
+- **Build.** `cd apps/desktop && npm run tauri -- build --bundles app` on the final P16 tree: release build and
+  bundling succeeded in 17.9 s wall (incremental), `Session Manager.app` 22.49 MiB, signed ad-hoc (`-`);
+  `codesign --verify --deep --strict` exits 0. Notarization skipped (no Apple ID; ad-hoc by design).
+- **Cold start (3 runs).** Each run: `open -n --env PSM_DATA_DIR=/tmp/psm-p16-cold-<n> -a '<bundle>'` on a fresh
+  scratch data dir, polled every 50 ms. Measured: launch → backend open (the start backup file exists, i.e.
+  `App::open` finished: data dir, migrations, backup) and launch → first window (System Events window count > 0).
+  The default screen is Sessions, which does not call `health_get`, so the window is the user-visible end point.
+
+  | Run | Backend open | First window |
+  |---|---|---|
+  | 1 (first launch after the build) | 0.61 s | 16.33 s |
+  | 2 | 0.36 s | 0.64 s |
+  | 3 | 0.34 s | 0.57 s |
+
+  Run 1 is the first launch of the freshly signed binary; the 16 s are spent before the window appears and not in
+  the backend (backup written at 0.61 s); most likely macOS's first-launch assessment of the new ad-hoc signature.
+  Warm cold starts are ~0.6 s to the window. On a fresh Mac expect run 1's behaviour once.
+- **Logs.** The scratch run wrote `logs/psm.2026-10-26.log` with lines such as
+  `INFO psm_infra::osascript: provider call duration_ms=141 command="osascript" op=document_info`.
+- **Shot-to-original-preview / shot-to-adjusted-preview (5 frames): not measured.** At 08:55 Capture One had
+  `session test 1` open but reported no camera (`document_info` → `"camera": null`); the camera was not tethered,
+  so no frames could be fired. The measurement stays open for the next session with the camera attached.

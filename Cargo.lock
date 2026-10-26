@@ -2834,12 +2834,14 @@ name = "psm-infra"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "notify",
  "psm-core",
  "rusqlite",
  "rusqlite_migration",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -2878,6 +2880,8 @@ dependencies = [
  "sha2 0.11.1",
  "tempfile",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "unicode-normalization",
 ]
 

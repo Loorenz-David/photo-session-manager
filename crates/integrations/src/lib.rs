@@ -13,7 +13,7 @@ use editing::capture_one::{
 };
 use psm_core::{
     Result,
-    domain::editing::Job,
+    domain::{editing::Job, session::PublishStep},
     events::AppEvent,
     mechanisms::{arrival::path_key, hash::sha256_file},
     ports::{
@@ -29,10 +29,11 @@ use psm_core::{
         arrival::ArrivalService, attributes::AttributesService, camera::CameraService,
         editing_events::EditingEventsDispatcher, editing_startup::EditingStartup,
         export::ExportService, health::HealthService, previews::PreviewService,
-        publish::PublishService,
+        publish::PublishService, settings::SettingsService,
     },
 };
 use psm_infra::{
+    backup,
     export_fs::ExportFs,
     jobs::{JobHandler, JobRunner},
     nudge::NudgeServer,
@@ -72,6 +73,9 @@ pub struct App {
     pub publish: Option<Arc<PublishService>>,
     pub events: Arc<EventHub>,
     pub clock: Arc<dyn Clock>,
+    scripting: Arc<dyn CaptureOneScripting>,
+    run_startup: bool,
+    commerce_override: Option<Arc<dyn CommerceAdapter>>,
     stop: Arc<AtomicBool>,
     background: Option<thread::JoinHandle<()>>,
     publish_background: Option<thread::JoinHandle<()>>,
@@ -100,15 +104,40 @@ impl App {
         run_startup: bool,
         commerce_override: Option<Arc<dyn CommerceAdapter>>,
     ) -> Result<Self> {
+        Self::build(
+            paths,
+            scripting,
+            clock,
+            run_startup,
+            commerce_override,
+            true,
+        )
+    }
+
+    fn build(
+        paths: AppPaths,
+        scripting: Arc<dyn CaptureOneScripting>,
+        clock: Arc<dyn Clock>,
+        run_startup: bool,
+        commerce_override: Option<Arc<dyn CommerceAdapter>>,
+        start_backup: bool,
+    ) -> Result<Self> {
         paths.create()?;
         let settings = Settings::open(&paths)?;
-        let commerce = match commerce_override {
+        if let Some(integration) = settings.integration_settings()? {
+            psm_infra::logging::add_secret(&integration.client_secret);
+        }
+        let commerce = match commerce_override.clone() {
             Some(adapter) => Some(adapter),
             None => commerce_from_settings(&settings, clock.clone())?,
         };
         let store = Arc::new(
             SqliteStore::open(&paths).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
         );
+        // ch12 §Backup: a copy at every start (a settings reopen is not a start).
+        if start_backup {
+            backup::create(&paths)?;
+        }
         let spool = Arc::new(Spool::new(paths.clone()));
         store.requeue_running_jobs()?;
         if commerce.is_some() {
@@ -120,7 +149,6 @@ impl App {
         let document_id = settings.document_id.clone().unwrap_or_default();
         if document_id.is_empty() {
             health.set("document_not_open", "No Capture One session configured");
-            health.set("capture_one", "No Capture One session configured");
         }
         let editing: Arc<dyn EditingProvider> = Arc::new(CaptureOneAdapter::new(
             scripting.clone(),
@@ -132,7 +160,7 @@ impl App {
             paths.clone(),
         ));
         let camera: Arc<dyn CameraProvider> = Arc::new(CameraViaCaptureOne {
-            scripting,
+            scripting: scripting.clone(),
             document_id: document_id.clone(),
         });
         let events = Arc::new(EventHub::default());
@@ -217,7 +245,14 @@ impl App {
         );
         runner.register("render_export", Arc::new(InterruptedExport));
         if let Some(service) = publish.clone() {
-            publish_runner.register("publish_step", Arc::new(PublishJob { service }));
+            publish_runner.register(
+                "publish_step",
+                Arc::new(PublishJob {
+                    service,
+                    store: store.clone(),
+                    paths: paths.clone(),
+                }),
+            );
         }
         let jobs = Arc::new(runner);
         let publish_jobs = Arc::new(publish_runner);
@@ -336,6 +371,9 @@ impl App {
             publish,
             events,
             clock,
+            scripting,
+            run_startup,
+            commerce_override,
             stop,
             background: Some(background),
             publish_background,
@@ -355,6 +393,95 @@ impl App {
         })
         .run()
     }
+
+    /// ch12 §Health: re-runs the editing startup checks (document, hooks, recipes, capture
+    /// folder), the camera status and the integration checks (09A MC-23/MC-24), then reports.
+    pub fn health_check(&self) -> Result<psm_core::domain::HealthReport> {
+        if self
+            .settings
+            .document_id
+            .as_deref()
+            .is_some_and(|d| !d.is_empty())
+        {
+            if let Err(error) = self.startup() {
+                tracing::warn!(%error, "health: editing checks failed");
+            }
+            if let Err(error) =
+                CameraService::new(self.camera.as_ref(), self.health.as_ref()).status()
+            {
+                tracing::warn!(%error, "health: camera status failed");
+            }
+        }
+        self.health
+            .check_integration(self.store.as_ref(), self.commerce.as_deref())?;
+        Ok(self.health.report(
+            &self.paths.root.to_string_lossy(),
+            self.hooks_compiled,
+            self.nudge_port() != 0,
+        ))
+    }
+
+    /// The settings as shown (client secret masked, effective preview delay; ch12 §Settings).
+    pub fn settings_get(&self) -> Result<serde_json::Value> {
+        Ok(SettingsService::get(&settings_value(&self.settings)?))
+    }
+
+    /// Applies a settings patch: validated, written atomically with mode 0600, then the runtime
+    /// is reopened over the new settings so providers, export folder and preview delay take
+    /// effect, and `health_changed` is emitted. A theme-only change does not reopen.
+    pub fn settings_set(&mut self, patch: &serde_json::Value) -> Result<serde_json::Value> {
+        let previous = settings_value(&self.settings)?;
+        let next = SettingsService::set(&previous, patch)?;
+        let settings: Settings = serde_json::from_value(next.clone())
+            .map_err(|e| psm_core::Error::InvalidValue(e.to_string()))?;
+        if let Some(integration) = settings.integration_settings()? {
+            psm_infra::logging::add_secret(&integration.client_secret);
+        }
+        Settings::set(&self.paths, &settings)?;
+        let mut a = previous.clone();
+        let mut b = next.clone();
+        a["theme"] = serde_json::Value::Null;
+        b["theme"] = serde_json::Value::Null;
+        if a != b {
+            self.reopen()?;
+            self.events.emit(AppEvent::HealthChanged);
+        } else {
+            self.settings = settings;
+        }
+        self.settings_get()
+    }
+
+    /// Stops the background workers (idempotent; also run on drop).
+    pub fn shutdown(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(bg) = self.background.take() {
+            let _ = bg.join();
+        }
+        if let Some(bg) = self.publish_background.take() {
+            let _ = bg.join();
+        }
+    }
+
+    /// Rebuilds the runtime over the current `settings.json`, keeping the event target.
+    pub fn reopen(&mut self) -> Result<()> {
+        self.shutdown();
+        let next = Self::build(
+            self.paths.clone(),
+            self.scripting.clone(),
+            self.clock.clone(),
+            self.run_startup,
+            self.commerce_override.clone(),
+            false,
+        )?;
+        self.events.transfer_target_to(&next.events);
+        let old = std::mem::replace(self, next);
+        drop(old);
+        Ok(())
+    }
+}
+
+fn settings_value(settings: &Settings) -> Result<serde_json::Value> {
+    serde_json::to_value(settings).map_err(|e| psm_core::Error::InvalidData(e.to_string()))
 }
 
 pub fn commerce_from_settings(
@@ -386,6 +513,13 @@ struct EventHubState {
     queued: Vec<AppEvent>,
 }
 impl EventHub {
+    pub fn transfer_target_to(&self, other: &EventHub) {
+        if let Ok(state) = self.state.lock()
+            && let Some(target) = state.target.clone()
+        {
+            other.set_target(target);
+        }
+    }
     pub fn set_target(&self, target: Arc<dyn EventSink>) {
         if let Ok(mut state) = self.state.lock() {
             let queued = std::mem::take(&mut state.queued);
@@ -465,6 +599,8 @@ impl JobHandler for InterruptedExport {
 }
 struct PublishJob {
     service: Arc<PublishService>,
+    store: Arc<dyn Store>,
+    paths: AppPaths,
 }
 impl JobHandler for PublishJob {
     fn run(&self, job: &Job, _: i64) -> Result<()> {
@@ -472,18 +608,17 @@ impl JobHandler for PublishJob {
             .target
             .parse::<i64>()
             .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-        self.service.run_item(id)
+        let was_done = self.store.publish_item(id)?.step == PublishStep::Done;
+        self.service.run_item(id)?;
+        if !was_done && self.store.publish_item(id)?.step == PublishStep::Done {
+            backup::create(&self.paths)?;
+        }
+        Ok(())
     }
 }
 
 impl Drop for App {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        if let Some(bg) = self.background.take() {
-            let _ = bg.join();
-        }
-        if let Some(bg) = self.publish_background.take() {
-            let _ = bg.join();
-        }
+        self.shutdown();
     }
 }

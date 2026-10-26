@@ -4,6 +4,7 @@ import { Toaster } from './components/ui/sonner';
 import { Header } from './features/shell/Header';
 import { useTheme } from './features/shell/ThemeToggle';
 import { HealthPage } from './features/health/HealthPage';
+import { SettingsPage } from './features/settings/SettingsPage';
 import { NewSessionDialog } from './features/sessions/NewSessionDialog';
 import { SessionsPage } from './features/sessions/SessionsPage';
 import { ArrivalToasts } from './features/shell/ArrivalToasts';
@@ -11,7 +12,7 @@ import { WorkspacePage } from './features/workspace/WorkspacePage';
 import { useKeyboard } from './lib/keyboard';
 import { activateSession, activeSession, deactivateSession } from './services/sessions';
 
-/** Routes: `#/` sessions, `#/session/:id` session view, `#/health` health report (hash routing works for the bundled app's file URLs). */
+/** Routes: `#/` sessions, `#/session/:id` session view, `#/health` health screen, `#/settings` settings (hash routing works for the bundled app's file URLs). */
 function routeSessionId(): number | undefined {
   const match = window.location.hash.match(/^#\/session\/(\d+)$/);
   return match ? Number(match[1]) : undefined;
@@ -21,13 +22,15 @@ export function sessionPath(sessionId?: number): string {
   return sessionId === undefined ? '#/' : `#/session/${sessionId}`;
 }
 
-function useRoute(): [number | undefined, (sessionId?: number) => void, boolean] {
+function useRoute(): [number | undefined, (sessionId?: number) => void, boolean, boolean] {
   const [sessionId, setSessionId] = useState(routeSessionId);
   const [health, setHealth] = useState(() => window.location.hash === '#/health');
+  const [settings, setSettings] = useState(() => window.location.hash === '#/settings');
   useEffect(() => {
     const follow = () => {
       setSessionId(routeSessionId());
       setHealth(window.location.hash === '#/health');
+      setSettings(window.location.hash === '#/settings');
     };
     window.addEventListener('hashchange', follow);
     return () => window.removeEventListener('hashchange', follow);
@@ -36,8 +39,9 @@ function useRoute(): [number | undefined, (sessionId?: number) => void, boolean]
     window.location.hash = sessionPath(next);
     setSessionId(next);
     setHealth(false);
+    setSettings(false);
   }, []);
-  return [sessionId, navigate, health];
+  return [sessionId, navigate, health, settings];
 }
 
 /**
@@ -84,17 +88,18 @@ function useResumeActiveSession(navigate: (sessionId?: number) => void) {
 }
 
 export default function App() {
-  const [sessionId, navigate, health] = useRoute();
+  const [sessionId, navigate, health, settings] = useRoute();
   useResumeActiveSession(navigate);
   const [theme, setTheme] = useTheme();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   useCaptureTarget(sessionId);
 
-  useKeyboard({ n: () => setNewSessionOpen(true) }, sessionId === undefined && !health && !newSessionOpen);
+  useKeyboard({ n: () => setNewSessionOpen(true) }, sessionId === undefined && !health && !settings && !newSessionOpen);
 
-  // Health report from P00, kept reachable until the health screen of P16.
+  // Health (ch12) and settings screens: plain pages reached from the header gear.
   if (health) return <HealthPage />;
+  if (settings) return <><SettingsPage /><Toaster theme={theme} position="bottom-right" visibleToasts={3} closeButton /></>;
 
   return (
     <>
