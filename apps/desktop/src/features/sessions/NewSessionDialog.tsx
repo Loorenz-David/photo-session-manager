@@ -45,6 +45,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   const [query, setQuery] = useState('');
   const [localResults, setLocalResults] = useState<Item[]>([]);
   const [shopResults, setShopResults] = useState<Item[]>([]);
+  const [shopFor, setShopFor] = useState<string | null>(null);
   const [shopState, setShopState] = useState<'searching' | 'done' | 'unavailable'>('searching');
   const [searchedFor, setSearchedFor] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -67,6 +68,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
     setQuery('');
     setLocalResults([]);
     setShopResults([]);
+    setShopFor(null);
     setSearchedFor(null);
     setCreating(false);
     setSku('');
@@ -103,14 +105,17 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   useEffect(() => {
     if (!open || !debouncedShop) {
       setShopResults([]);
+      setShopFor(null);
       setShopState('searching');
       return;
     }
     let alive = true;
+    setShopState('searching');
     searchItemsShop(debouncedShop)
       .then(found => {
         if (!alive || currentTitle.current !== debouncedShop) return;
         setShopResults(found);
+        setShopFor(debouncedShop);
         setShopState('done');
       })
       .catch(() => {
@@ -136,7 +141,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   }, [creating]);
 
   const searchDone = title !== '' && searchedFor === title;
-  const shopDone = debouncedShop === title && shopState === 'done';
+  const shopDone = debouncedShop === title && shopFor === title && shopState === 'done';
   const results = [...(searchDone ? localResults : []), ...(shopDone ? shopResults : [])];
   const exactTitle = results.some(item => item.title.trim().toLowerCase() === title.toLowerCase());
   const showCreate = searchDone && !exactTitle;

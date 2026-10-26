@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { NewSessionDialog, ITEM_SEARCH_DEBOUNCE_MS, SHOP_SEARCH_DEBOUNCE_MS } from '../NewSessionDialog';
+import { ItemPickerDialog } from '@/features/workspace/PickerDialogs';
 import { nextSku, searchItems, searchItemsShop, type Item } from '@/services/items';
 
 vi.mock('@/services/items', () => ({ nextSku: vi.fn(), searchItems: vi.fn(), searchItemsShop: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn() }));
@@ -58,4 +59,41 @@ it('C3(c) an older shop response cannot replace the newer query result', async (
   await act(async () => old.resolve([item(0, 'shop A', 'linked')]));
   expect(screen.getByText('shop AB')).toBeInTheDocument();
   expect(screen.queryByText('shop A')).not.toBeInTheDocument();
+});
+
+it('C3(c) NewSessionDialog hides completed shop hits as soon as a new shop query starts', async () => {
+  vi.useFakeTimers();
+  vi.mocked(nextSku).mockResolvedValue(null);
+  vi.mocked(searchItems).mockResolvedValue([]);
+  const latest = deferred<Item[]>();
+  vi.mocked(searchItemsShop).mockImplementation(query => query === 'a' ? Promise.resolve([item(0, 'shop A', 'linked')]) : latest.promise);
+  render(<NewSessionDialog open onOpenChange={() => undefined} onOpened={() => undefined} />);
+  const input = screen.getByLabelText('Search items by title or SKU');
+  fireEvent.change(input, { target: { value: 'a' } });
+  await advance(SHOP_SEARCH_DEBOUNCE_MS);
+  expect(screen.getByText('shop A')).toBeInTheDocument();
+  fireEvent.change(input, { target: { value: 'ab' } });
+  await advance(SHOP_SEARCH_DEBOUNCE_MS);
+  expect(screen.queryByText('shop A')).not.toBeInTheDocument();
+  expect(screen.getByText('0 found · searching the shop…')).toBeInTheDocument();
+  await act(async () => latest.resolve([item(0, 'shop AB', 'linked')]));
+  expect(screen.getByText('shop AB')).toBeInTheDocument();
+});
+
+it('C3(c) ItemPickerDialog hides completed shop hits as soon as a new shop query starts', async () => {
+  vi.useFakeTimers();
+  vi.mocked(searchItems).mockResolvedValue([]);
+  const latest = deferred<Item[]>();
+  vi.mocked(searchItemsShop).mockImplementation(query => query === 'a' ? Promise.resolve([item(0, 'shop A', 'linked')]) : latest.promise);
+  render(<ItemPickerDialog open title="Assign product" onOpenChange={() => undefined} onPick={() => undefined} />);
+  const input = screen.getByLabelText('Search items by title or SKU');
+  fireEvent.change(input, { target: { value: 'a' } });
+  await advance(SHOP_SEARCH_DEBOUNCE_MS);
+  expect(screen.getByText('shop A')).toBeInTheDocument();
+  fireEvent.change(input, { target: { value: 'ab' } });
+  await advance(SHOP_SEARCH_DEBOUNCE_MS);
+  expect(screen.queryByText('shop A')).not.toBeInTheDocument();
+  expect(screen.getByText('0 found · searching the shop…')).toBeInTheDocument();
+  await act(async () => latest.resolve([item(0, 'shop AB', 'linked')]));
+  expect(screen.getByText('shop AB')).toBeInTheDocument();
 });

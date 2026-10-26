@@ -77,6 +77,7 @@ export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerPr
   const [query, setQuery] = useState('');
   const [local, setLocal] = useState<Item[]>([]);
   const [shop, setShop] = useState<Item[]>([]);
+  const [shopFor, setShopFor] = useState<string | null>(null);
   const [shopState, setShopState] = useState<'searching' | 'done' | 'unavailable'>('searching');
   const debounced = useDebounced(query.trim(), ITEM_SEARCH_DEBOUNCE_MS);
   const debouncedShop = useDebounced(query.trim(), SHOP_SEARCH_DEBOUNCE_MS);
@@ -90,6 +91,7 @@ export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerPr
     setQuery('');
     setLocal([]);
     setShop([]);
+    setShopFor(null);
   }, [open]);
 
   useEffect(() => {
@@ -107,15 +109,16 @@ export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerPr
   }, [open, debounced]);
 
   useEffect(() => {
-    if (!open || !debouncedShop) { setShop([]); setShopState('searching'); return; }
+    if (!open || !debouncedShop) { setShop([]); setShopFor(null); setShopState('searching'); return; }
     let alive = true;
+    setShopState('searching');
     searchItemsShop(debouncedShop).then(found => {
-      if (alive && currentQueryRef.current === debouncedShop) { setShop(found); setShopState('done'); }
+      if (alive && currentQueryRef.current === debouncedShop) { setShop(found); setShopFor(debouncedShop); setShopState('done'); }
     }).catch(() => { if (alive && currentQueryRef.current === debouncedShop) setShopState('unavailable'); });
     return () => { alive = false; };
   }, [open, debouncedShop]);
 
-  const shopDone = debouncedShop === currentQuery && shopState === 'done';
+  const shopDone = debouncedShop === currentQuery && shopFor === currentQuery && shopState === 'done';
   const results = [...(debounced === currentQuery ? local : []), ...(shopDone ? shop : [])];
 
   return (
