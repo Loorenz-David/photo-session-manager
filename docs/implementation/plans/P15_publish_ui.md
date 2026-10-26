@@ -169,3 +169,14 @@ notification lands (workspace).
   C5(b) awaits the ✓ because the real "Confirm & next" flushes the form first. Assumption: the dialog ignores close
   requests while the confirm is in flight. No deviations; F1–F3 fixes untouched. Suite 374 Rust / 90 UI, clippy, fmt,
   typecheck green.
+- 2026-10-26, opus review r1 (FIX2 relaunch, checkpoint `c4b056d`, tree `e786ce5` clean): **APPROVED_WITH_NOTES**.
+  Gate held. `git show --stat c4b056d` = the 3 declared code files + tracker row + Review log, exactly; code delta since
+  `7ace3d5` is those 3 files only. Suite 374 Rust / 90 UI, clippy, fmt, typecheck green (run once). **F4 resolved:**
+  `PublishPopover modal` mounts inside `FormDialog`'s `DialogContent` (via `publishSlot`, FormDialog l.204), so the
+  nested Radix dialog is the highest dismissable layer: the outer layer ignores pointerdown in it (inside its React
+  tree, and below the highest outside-pointer-disabled layer), Escape closes only the review, and the outer portal
+  is `aria-hidden` while it is open. Confirm sends `preview.summary` for `confirmed` only, then `onClose`. Variation:
+  the new C5(a) run against pre-fix production (scratch worktree at `7ace3d5`, removed) fails with "Unable to find
+  role=dialog name Review publish"; it passes on `c4b056d`. Its `onClose` called-once assertion also catches an
+  outer dismissal. Settled earlier and unchanged: task 0, C1–C4, C5(b), C6(a), C7(a–c), F1, F2. H1–H8 hold. One note
+  in backlog (Cancel stays live while the confirm is in flight). Narrative written.
