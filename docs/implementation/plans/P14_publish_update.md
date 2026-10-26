@@ -103,3 +103,21 @@ whether tags are written in the same `productUpdate` as the title.
   adapter. The render-request retouch generation is persisted in its tracking job payload. No contract deviation.
   Extra perimeter required for the new commerce read path and stored revision fields: domain/ports, Shopify adapter
   and type, test harness, and the P13 test assertions updated for the new summary wording.
+- 2026-10-26 (opus, review r1): **CHANGES_REQUESTED**, owner card 1 pending (handoff
+  `handoffs/reviewer/handoff_P14_publish_update_review_r1.md`). Tree `33d43e4` (checkpoint `535dd2a` + review prompt),
+  clean; suite 369 Rust / 79 UI, clippy, fmt, typecheck green. Perimeter = declared files (17). Verified correct:
+  C1(a,b,d,e), C2(a,b), C3(a,b,c), C4(a,b,c,d), C5(a–d), C6(a), C7(a) by reading code and tests; invalid values are
+  dropped at freeze (`frozen_attributes` filters `valid`); rich text with foreign nodes stays read-only; adoption matches
+  the exact revision stem; `own` includes `superseded_ids`; H1–H8 hold (H7 literals noted). Blocking:
+  **F1 (B1)** `merge_tags` base: `tags_base` is set to the written set, and never refreshed when nothing is written;
+  with the local tag field holding only app-typed tags, (i) a second publish with nothing changed deletes an
+  admin-added tag (probe: local `[x]`, shop `[y]` → `[y,x]` → `[x]`), (ii) a local removal of a tag that was on the
+  shop at the first publish never reaches the shop (probe: `[a]` stays). Correction depends on owner card 1 (which
+  base); C2(c)'s stated `tags_base` changes with it. **F2 (B1)** the condition-attribute read-back reads
+  `attributes_read`, which the Shopify adapter skips for `condition_photos_key` (adapter.rs, P12 A11; backlog P12 →
+  P14): every real publish that writes the damage report fails `attribute_verification{custom.damage_report}`; the
+  fake returns the key, so C4/C5(c) pass. **F3 (B2)** C1(c)'s stored value `"bad"` is not JSON and not a valid
+  integer, so it is dropped before the `valid` check; the test cannot fail if `valid` were ignored (probe with
+  `"Sweden"`, `valid = 0` on a text field: correctly not written). 5 notes to backlog. Lesson for the plan: MC-13's
+  base ("remote tags when the session last read them") presumes a tag field seeded from the shop; the book never
+  seeds it.
