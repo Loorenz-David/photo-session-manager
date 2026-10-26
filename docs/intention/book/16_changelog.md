@@ -93,6 +93,6 @@
     store switch by settings) and MC-24 (`integration.condition_photos_key`, initial
     `custom.damage_report`, the only `media_list` definition; misconfiguration shown in health and
     the damage report skipped), invariant M30, decision R32. Pointers in 07A MC-13 table and MC-14
-    (and SHOPIFY-VERIFY-0 in its Grounding list), 09, 12, intention.md map. 05B MC-22: the ambiguous "(the proposal advances to the next free
-    number)" replaced by the default the owner was offered and did not change: no next-free
-    suggestion, the proposal comes from local SKUs only. Owner decisions, header stays RATIFIED.
+    (and SHOPIFY-VERIFY-0 in its Grounding list), 09, 12, intention.md map. 05B MC-22 unchanged: when the shop
+    holds the proposal, the proposal advances to the next free number (offered to the owner as
+    "keep as written"; no change requested). Owner decisions, header stays RATIFIED.

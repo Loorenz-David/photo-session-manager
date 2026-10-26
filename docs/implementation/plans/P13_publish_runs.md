@@ -86,7 +86,7 @@ shop hit), `docs/intention/evidence/shopify_admin.md` (SV-6 addendum: the title 
    once, simulating a kill between remote effect and local record; records `(op, run_id, mono_time)`).
 5. Commands, bindings, tests.
 
-## Criteria (9 criteria, 34 rows; 0 `[rule]` rows)
+## Criteria (9 criteria, 35 rows; 0 `[rule]` rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `publish_confirm([S], text)` | main [a,b,c], condition [d,e] with exclusion e, unreviewed [u] | one run + one item in one transaction; `frozen_main = [a,b,c]`, `frozen_condition = [d]`; u nowhere | M17 |
@@ -123,6 +123,7 @@ shop hit), `docs/intention/evidence/shopify_admin.md` (SV-6 addendum: the title 
 | C9(d) | `item_adopt(external_id of K-1)` then `session_create` | — | one `linked` item `K-1` with the shop's title and barcode; `item_links` row with that external id; the session opens with that item | M18 (link before any write; S-B) |
 | C9(e) | `item_create` / `update_identity` | fake shop holds `K-7` on another product; and on the item's own linked product | `Err(sku_in_shop{sku: "K-7"})` for create and for an identity edit of a different item; the item's own product → `Ok`; shop unreachable → `Ok` | M29 (05B MC-22) |
 | C9(f) | `NewSessionDialog` (vitest, services mocked) | `items_search` returns a `linked` hit with `id 0` | the row reads "in the shop"; picking it calls `item_adopt(external_id)` then opens the returned session | S-B |
+| C9(g) | `items_next_sku(prefix)` with the commerce adapter wired | prefix `VF`; local max `VF-0420`; fake shop holds `VF-0421` / holds `VF-0421` and `VF-0422` / unreachable | `"VF-0422"` / `"VF-0423"` / `"VF-0421"` (plain local proposal, `Ok`) | M29 (05B MC-22 next free number) |
 
 ## Delegated choices
 Job granularity (one `PublishStep` job per item stepping through, or one job per step), staging folder for the run's
@@ -137,9 +138,11 @@ notification text time format, how `publish_progress` events are throttled.
 3. Kill the app mid-upload (Activity Monitor), relaunch: the row resumes and finishes; the shop has one media per photo.
 
 ## Notes
-- No "next free SKU" suggestion when the proposal is already in the shop: the owner kept the default (2026-10-26,
-  R32; 05B MC-22 clarified). The proposal stays `1 + max local` and Create stays disabled until the SKU changes.
-  P07's narrative line implying a suggestion is superseded.
+- Next free SKU (05B MC-22, kept as written by the owner 2026-10-26): when the shop holds the proposal, the
+  proposal advances to the next number free both locally and in the shop (one `item_search` per candidate,
+  at most 50 candidates, then the plain local proposal); a SKU the photographer typed is never changed, only
+  flagged "<SKU> is already in the shop" with Create disabled. Row C9(g). This delivers what P07's narrative
+  promised.
 - `update` here ends after the gallery read-back; P14 appends the attribute, title, tags, description and
   damage-report writes to the same step (the step is committed once, before any of it).
 - Estimated size: ~18 files, ~3 000 lines (FakeCommerce ≈ 500, wiring ≈ 500).
@@ -147,4 +150,4 @@ notification text time format, how `publish_progress` events are throttled.
 ## Review log
 - 2026-10-26 (orchestrator): owner answers (book 09A, R32): task 0 builds the adapter from `client_id`/`client_secret`
   and passes `condition_photos_key` (default `custom.damage_report`); C9(a) input/outcome reworded; the next-free-SKU
-  note resolved (no suggestion, 05B MC-22 clarified). Counts unchanged (34 rows).
+  suggestion of 05B MC-22 is kept (owner kept it as written) and gets row C9(g) (35 rows).

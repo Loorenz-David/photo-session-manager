@@ -23,8 +23,12 @@ Updated: 2026-10-25 by the orchestrator.
   Codex 6 Luna); flow.md §2 updated; `PSM_IMPLEMENTER=codex` switches back.
 
 ## Needs the owner
-- Fill `~/.psm_shopify.env` (`SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`; owner doing it). Then the
-  orchestrator checks a client credentials token request (token never printed) and launches P12.
+- Add the `write_files` + `read_files` scopes to the Dev Dashboard app, release, approve on the test store (asked
+  2026-10-26 ~05:20). Token check 05:18 (read-only, token never printed): client credentials → HTTP 200,
+  `expires_in` 86399, scope `write_products,write_metaobject_definitions,write_metaobjects`; shop
+  `test-item-position-scanner.myshopify.com` (partnerDevelopment true); 66 product definitions;
+  `custom.damage_report` = `list.file_reference` (the only file list); `files` query → ACCESS_DENIED
+  (needs read_files). After the owner's "done": re-run the check incl. `files(first:1)`, then launch `all`.
 Earlier cards (I1, plan cards 1–2, P12 card 1, SKU suggestion) answered; see Facts and changelog 18.
 
 ## Next command
@@ -41,4 +45,5 @@ When the owner says the credentials file is filled: check the token request (nev
   Dashboard app: client ID + secret, client credentials grant, token in memory only (09A MC-23); the owner keeps them
   in `~/.psm_shopify.env` (outside the repo). (C) Condition photos go to one metafield named by the setting
   `integration.condition_photos_key`, initial `custom.damage_report`, set by hand (09A MC-24). (D) No answer on the
-  next-free-SKU suggestion → default kept: none (05B MC-22 clarified, R32).
+  next-free-SKU suggestion → kept as written in 05B MC-22: the proposal advances to the next free number
+  (P13 row C9(g)). The orchestrator first misdescribed this to the owner; corrected 2026-10-26.
