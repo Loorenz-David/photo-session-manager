@@ -18,9 +18,11 @@ Updated: 2026-10-25 by the orchestrator.
 - P12 (Shopify): projection r0 (2026-10-26 00:18) → AMENDMENTS_REQUIRED, ledger L1–L25 in
   `handoffs/reviewer/handoff_P12_shopify_adapter_projection_r0.md`; applied 2026-10-26 (commit a1cf9b4: P12 59 rows,
   P13 task 0 wiring + C9, master plan, 07A/09 grounding, changelog 17). Owner answers folded in
-  (book 09A, R32, changelog 18; P12 68 rows / 9 criteria, P13, P14 21 rows, P16, master plan). Run in flight: **all** (from P12), started 2026-10-26 after the files-scope re-check.
-- Implementer and fix sessions run on Claude (owner 2026-10-25: Opus for Codex 6 Sol, Sonnet for
-  Codex 6 Luna); flow.md §2 updated; `PSM_IMPLEMENTER=codex` switches back.
+  (book 09A, R32, changelog 18; P12 68 rows / 9 criteria, P13, P14 21 rows, P16, master plan). Run in flight: **all** (from P12, implementer on Claude Opus), started 2026-10-26 05:20. Owner 2026-10-26:
+  back to Codex → runner default is codex again; P13–P16 are commented `#PAUSED` in phases.txt (edited in place so
+  the running loop ends after P12). On exit: restore phases.txt (remove `#PAUSED `), then relaunch `all`.
+- Implementer and fix sessions: Codex again from P13 (owner 2026-10-26); P07–P12 were built on Claude
+  (Opus/Sonnet) while Codex was rate-limited; `PSM_IMPLEMENTER=claude` switches.
 
 ## Needs the owner
 Nothing. Files scope granted 2026-10-26 (re-check: scope `write_products,write_metaobject_definitions,

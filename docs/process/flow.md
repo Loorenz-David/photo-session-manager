@@ -17,8 +17,8 @@ one plain-language narrative per phase and can try the result by hand.
 | Orchestrator | this Claude session; starts runs, reads results, answers blocked sessions from the book | Fable |
 | Mechanism inventory | `claude -p --agent pipeline-inventory` | Opus 5.5 |
 | Planner | `claude -p --agent pipeline-planner` | Fable |
-| Implementer | `claude -p --agent pipeline-implementer --model opus`, effort `medium`, or `high` when the plan marks the phase `difficulty: high` (owner 2026-10-25: Opus replaces Codex 6 Sol; `PSM_IMPLEMENTER=codex` restores `codex exec -m gpt-6-sol`) | Opus 5.5 |
-| Fix | `claude -p --agent pipeline-implementer --model sonnet`, effort `high` (owner 2026-10-25: Sonnet replaces Codex 6 Luna; `PSM_IMPLEMENTER=codex` restores `codex exec -m gpt-6-luna`) | Sonnet 5.5 |
+| Implementer | `codex exec -m gpt-6-sol`, effort `medium`, or `high` when the plan marks the phase `difficulty: high` (`PSM_IMPLEMENTER=claude` → `claude -p --agent pipeline-implementer --model opus`, used 2026-10-25/26 while Codex was rate-limited) | Codex 6 Sol |
+| Fix | `codex exec -m gpt-6-luna`, effort `high` (`PSM_IMPLEMENTER=claude` → Sonnet) | Codex 6 Luna |
 | Reviewer, re-reviewer | `claude -p --agent pipeline-reviewer` | Opus 5.5 |
 | Projection | off by default; `projection: yes` in a plan's frontmatter turns it on (`pipeline-projectionist`, Opus) | Opus 5.5 |
 | Tester | **not declared.** The implementer writes the behaviour tests; the reviewer audits them. | — |

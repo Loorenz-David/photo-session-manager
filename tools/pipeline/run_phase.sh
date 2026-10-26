@@ -17,8 +17,8 @@ RUNS="$ROOT/.pipeline/runs"
 TPL="$ROOT/tools/pipeline/templates"
 WRAP="$ROOT/tools/pipeline/wrappers/codex_implementer.md"
 CWRAP="$ROOT/tools/pipeline/wrappers/claude_implementer.md"
-# Implementer/fix runner: claude (owner 2026-10-25: Opus for gpt-6-sol, Sonnet for gpt-6-luna) or codex
-IMPLEMENTER="${PSM_IMPLEMENTER:-claude}"
+# Implementer/fix runner: codex (default; owner 2026-10-26) or claude (PSM_IMPLEMENTER=claude: Opus for gpt-6-sol, Sonnet for gpt-6-luna)
+IMPLEMENTER="${PSM_IMPLEMENTER:-codex}"
 DATE="$(date +%F)"
 DRY_RUN="${DRY_RUN:-0}"
 CLAUDE_TOOLS="Bash Read Edit Write Grep Glob"
