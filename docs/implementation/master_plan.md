@@ -88,7 +88,7 @@ restated so no session has to infer them:
 | P15_publish_ui | APPROVED | 2026-10-26 | opus | review r1 of fix 2 (`c4b056d`): APPROVED_WITH_NOTES; F4 resolved (review dialog nested in the form dialog; C5(a) red on pre-fix code, green now); F1–F3 settled earlier; suite 374 Rust / 90 UI, clippy/fmt/typecheck green; 1 backlog note |
 | P16_operations | APPROVED | 2026-10-26 | opus | review r1 APPROVED_WITH_NOTES: 12/12 rows hold at their boundaries; suite 387 Rust / 92 UI, clippy/fmt/typecheck green (re-run by reviewer); C6(a) re-run live by reviewer → "130", still browsing Capture; no secret in the checkpoint diff; 10 backlog notes, none blocking |
 | P17_real_run_fixes | APPROVED | 2026-10-26 | opus | approved with notes after fix 1 (re-review r2): F1 resolved (a settings rebuild no longer requeues or re-enqueues jobs the live workers own; real starts keep crash recovery); perimeter = allowed files (`43adbee`: 2 paths); 16/16 rows + F1 test hold; suite 406 Rust / 92 UI, clippy/fmt/typecheck green; 4 notes from r1 + 1 in backlog |
-| P18_pending_state_ui | IMPLEMENTED | 2026-10-26 | codex | shared pending UI and local-first search; 9/9 criterion rows tested, 407 Rust and 100 UI tests green |
+| P18_pending_state_ui | CHANGES_REQUESTED | 2026-10-26 | opus | review r1: suite/lint/typecheck green, 9/9 rows hold; F1 (B1) both item searches re-show the previous query's shop hits as "done" while the current shop query is in flight |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
