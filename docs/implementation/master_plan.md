@@ -83,7 +83,7 @@ restated so no session has to infer them:
 | P10_attributes | APPROVED | 2026-10-25 | opus | approved with notes, review r1: 31/31 rows hold at their boundaries; perimeter = declared files; suite/lint/typecheck green; 7 notes in backlog (title binding for P11/P14 first) |
 | P11_form_ui | APPROVED | 2026-10-26 | opus | approved with notes after fix 1: F1 resolved (the form's Title is `items.title`, one home; list, header, export and form agree); perimeter = allowed files; 30 rows + F1 test hold; suite 236 Rust / 78 UI, clippy/fmt/typecheck green; 5 notes from r1 + 3 in backlog |
 | P12_shopify_adapter | APPROVED | 2026-10-26 | opus | approved with notes, review r1: 68/68 rows hold at their boundaries; perimeter = declared files (+ disclosed `items.rs` match arms); suite 309 Rust / 78 UI, clippy/fmt/typecheck green; no credential in HEAD; 8 notes in backlog (condition-attribute read-back for P14 first) |
-| P13_publish_runs | IMPLEMENTED | 2026-10-26 | codex | confirmed runs, resumable publish steps, shop wiring and search; 35 boundary rows tested |
+| P13_publish_runs | CHANGES_REQUESTED | 2026-10-26 | opus | review r1: 35/35 rows hold at their boundaries; perimeter = declared files; suite 343 Rust / 79 UI, clippy/fmt/typecheck green; 2 blocking (F1 a ready media with no filename stalls `upload` forever; F2 publish steps run on the arrival/preview loop and freeze it); 11 notes in backlog |
 | P14_publish_update | NOT_STARTED | 2026-10-25 | planner | attribute writes, damage report, retouch replacement |
 | P15_publish_ui | NOT_STARTED | 2026-10-25 | planner | popover, progress, failure, batch, notifications |
 | P16_operations | NOT_STARTED | 2026-10-25 | planner | settings, health, backup, logs, final build |

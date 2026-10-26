@@ -165,3 +165,28 @@ notification text time format, how `publish_progress` events are throttled.
   existing `JobRunner`, rather than an edit to `infra/jobs.rs`. Supporting DTO, event, error, module registration,
   generated-binding and older test-fixture files changed to wire the declared boundaries; the UI boundary has a
   dedicated frontend test file. `sessions.rs` needed no edit because its existing status query reads publish items.
+- 2026-10-26 (opus, review r1): **CHANGES_REQUESTED.** Gate passed (tracker IMPLEMENTED, checkpoint `3b034dd`).
+  The perimeter equals the declared files (37 paths). Suite 343 Rust / 79 UI; clippy, fmt and typecheck are green.
+  All 35 rows hold at their boundaries. Variations run by the reviewer (scratch test file, deleted afterwards):
+  reorder + republish follows the new order (M3); a classify during a run reaches `done` with
+  `published_seq = confirmed_change_seq` and stays dirty. Verified by reading: H1 (every mutating port method
+  takes `ConfirmedRun` built only by `from_persisted`), H2, H3, H5, H6 (no adapter → `publish = None`), H8 (commands
+  thin), no live service in the suite, no secret in the diff. **F1** (B1, route production): `upload` returns
+  "not yet" whenever the product holds any media with no filename and a non-FAILED status. A READY video, 3D model or
+  external video never has one (the adapter reads filenames from MediaImage URLs only), so the item retries forever
+  at `upload`. It never fails and never finishes. Reviewer probe: a product with a ready unnamed media, announced for
+  removal, was still at `upload` with no error after 40 simulated minutes. Authority: ch07 Failure and retry, N1,
+  07A MC-12. Correction: wait only while such a media is `Processing`/`Uploaded`. Ready or failed unnamed media are
+  not adoption candidates and go to MC-12 (deleted if announced, `foreign_media_added` if not). Files:
+  `crates/core/src/services/publish.rs`, `crates/testkit/tests/p13_publish_runs.rs` (+ `fake_commerce.rs` if needed).
+  **F2** (B1, route production): `publish_step` jobs run synchronously inside `JobRunner::tick`, on the one background
+  loop that also drains capture hooks, handles watcher events and ticks previews. An `upload` step (per photo: list,
+  stage, PUT, create, poll ≥ 1 s) holds that loop for tens of seconds to minutes, so captures and previews stop
+  arriving during every publish. Authority: ch07 "Publishing never blocks the workspace". Correction: run
+  `publish_step` jobs on their own worker thread (a runner that picks only that kind, and the shared runner skips it).
+  One boundary test: a capture delivered while an upload is held gets its photo row before the upload is released.
+  Files: `crates/integrations/src/lib.rs`, `crates/infra/src/jobs.rs`, `crates/core/src/ports/store.rs`,
+  `crates/infra/src/sqlite/store.rs`, `crates/testkit/src/test_app.rs`, `crates/testkit/tests/p13_publish_runs.rs`.
+  11 notes went to the backlog. The first is an incomplete `integration` block making the app panic at launch.
+  Lesson for the plans: no platform literal in core-service tasks (task 0's `"shopify"`), and C5(f) belongs at the
+  adapter boundary.
