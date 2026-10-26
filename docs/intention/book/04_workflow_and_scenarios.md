@@ -39,8 +39,8 @@ pickable in the Damage report field (all selected by default). Publishing never 
 complete form.
 
 **S-G. Publishing one.** Publish opens the popover: main thumbnails in order, condition
-thumbnails, product-details count, and the note that unreviewed photos will publish in Main
-(decision N2). "Publish 9 images" records the confirmation and runs in the background: Creating
+thumbnails, product-details count, and the note "n unreviewed photos will not be published"
+(decision N2, R19: unreviewed photos never publish; corrected 2026-10-26, changelog 20). "Publish 9 images" records the confirmation and runs in the background: Creating
 product (new items) or Preparing images → Uploading n of N → Updating product → Published.
 
 **S-H. Publishing many.** Tick rows → "Review & publish 4" opens the form as a queue; "Confirm &

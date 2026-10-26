@@ -21,7 +21,10 @@ Updated: 2026-10-25 by the orchestrator.
   (book 09A, R32, changelog 18; P12 68 rows / 9 criteria, P13, P14 21 rows, P16, master plan). P12 APPROVED (with notes) 2026-10-26 06:02 on Claude; narrative relayed.
   P13 APPROVED (with notes) 06:52 on Codex. P14 fix r2 → OWNER_DECISIONS_PENDING (tag merge base);
   answered from 07A MC-13's intent (option A, R33, changelog 19), C2(c) amended + C2(d) (22 rows), attempt archived.
-  Run in flight: **all** (from P14, Codex), started 2026-10-26 07:15.
+  P14 APPROVED (with notes) 07:29 on Codex. P15 implement r1 (07:37) BLOCKED: failure/upload-state/notification
+  data not exposed by commands → plan amended (task 0 backend reads, C7(a)–(c), 14 rows; ch04 S-G aligned with N2,
+  changelog 20); attempt to be archived by the orchestrator, next implementer continues from `e3848bd`.
+  No run in flight (relaunch `all` after archiving P15).
 - Implementer and fix sessions: Codex again from P13 (owner 2026-10-26); P07–P12 were built on Claude
   (Opus/Sonnet) while Codex was rate-limited; `PSM_IMPLEMENTER=claude` switches.
 

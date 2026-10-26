@@ -101,3 +101,7 @@
     nothing is written), not the remote tags at the last read, which removed admin-added tags on
     the second publish and never propagated app removals. Realises the clause's stated purpose
     ("tags added in the Shopify admin are not lost"); option A of the P14 review card. R33.
+20. **2026-10-26 — Ch04 S-G aligned with N2** (orchestrator, from P15 implement r1). S-G said the
+    popover notes that unreviewed photos "will publish in Main"; the owner's decision N2 (R19) and
+    ch07 §Publish exclude them ("n unreviewed photos will not be published"), and 05A MC-7 requires
+    no unreviewed photo for `ready`. S-G's sentence is corrected; no behaviour changes.

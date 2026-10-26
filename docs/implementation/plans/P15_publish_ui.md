@@ -26,12 +26,35 @@ popover, Failure notice), §Product details form (Batch queue strip, Footer); sc
 `apps/desktop/src/features/publish/{PublishPopover.tsx, PublishProgress.tsx, FailurePopover.tsx, PhotoUploadBadge.tsx,
 BatchQueue.tsx, NotificationsDrawer.tsx, usePublish.ts, __tests__/p15_publish_ui.test.tsx}`, `apps/desktop/src/services/publish.ts`,
 `apps/desktop/src/features/{shell/Header.tsx (Publish action, bell count), sessions/{BatchBar.tsx, StatusPill.tsx (Retry
-click), SessionsPage.tsx}, workspace/{PhotoTile.tsx (badges), WorkspacePage.tsx}, form/FormDialog.tsx (queue strip, footer buttons)}`.
+click), SessionsPage.tsx, SessionRow.tsx (row Retry, Ready · Publish)}, workspace/{PhotoTile.tsx (badges), WorkspacePage.tsx},
+form/FormDialog.tsx (queue strip, footer buttons)}`.
+
+Backend read additions (task 0, added 2026-10-26 after implement r1 BLOCKED):
+`crates/core/src/domain/{session.rs (`LatestPublish` on the session record and view), publish.rs (`Notification.item_id`)}`,
+`crates/core/src/ports/store.rs`, `crates/core/src/services/sessions.rs` (view carries photo `upload_state`),
+`crates/infra/src/sqlite/store.rs`, `apps/desktop/src-tauri/src/commands/{sessions.rs, publish.rs}` (DTO fields),
+`apps/desktop/src/services/bindings.ts` (regenerated), `crates/testkit/tests/p15_publish_backend.rs` (new),
+`crates/testkit/src/fake_commerce.rs` (only if a failure needs scripting). No migration: every value is already stored.
 
 ## Core mechanisms (unit tests allowed)
 None.
 
 ## Ordered tasks
+0. **Backend reads (thin; no new publish logic except (c)).** Verified 2026-10-26 against the tree at `e3848bd`:
+   (a) `publish_items.id`, `.error`, `.failed_step` are stored (07 §Failure and retry: "marks the item `failed` with
+   the reason") and the session-list query already reads the latest confirmed item's step/failed_step/progress
+   (`sqlite/store.rs` ~l.981) but drops its id and error. Expose `publish: Option<LatestPublish{item_id, step,
+   failed_step, error, uploaded, total}>` on `SessionRowResponse` and on `session_get`'s `SessionResponse` (same
+   latest-confirmed-item rule). (b) `photo_links.upload_state` is stored per photo/item/role (07A MC-11) but
+   `session_get` photos omit it. Add `upload_state: Option<String>` to `PhotoResponse`: the state of the photo's link
+   for the configured integration (role `main` or `attribute:<condition key>` per its classification); `null` when
+   no link or no integration. (c) **Genuinely missing in core:** the store inserts only `published` notifications
+   (`complete_publish_item`), and notification rows carry no publish item id, so the drawer cannot list a failure or
+   retry it (ch12: "Notifications drawer lists publish history with Retry and Open"; ch04 S-J). Minimal addition: in
+   the same transaction as `set_publish_step(.., Failed, ..)`, insert one notification `kind = 'failed'`, text
+   `Publish failed · <error>`, with the item's `session_id`/`run_id`; `Notification` and `notifications_list` gain
+   `item_id` (join `publish_items` on `run_id` + `session_id`, one item per session per run; no migration). The bell
+   count = sessions whose latest item is `failed` (from (a)), not a count of notification rows.
 1. `usePublish`: `publish_preview(ids)` → popover data; `publish_confirm(ids, summary)`; subscribe to
    `publish_progress`; `publish_retry(item)`; `notifications_list`.
 2. Popover per `COMPONENTS.md`; progress labels per MC-7 (`Publishing n%` from `session_changed`/`publish_progress`);
@@ -41,18 +64,21 @@ None.
 4. Notifications drawer (bell count = failed items).
 5. Tests.
 
-## Criteria (6 criteria, 11 rows; 10 `[rule]` rows)
+## Criteria (7 criteria, 14 rows; 13 `[rule]` rows)
 | Row | Boundary | Input (services mocked) | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `PublishPopover` render | `publish_preview` → 3 main, 1 condition, 2 unreviewed, 1 removal, `create_item`, details 3/8, summary text T | main thumbnails in order, condition thumbnails, "Product details 3/8", the text T rendered verbatim, button "Publish 4 images" | `[rule]` ch07 §Publish (confirmation surface) |
 | C1(b) | click "Publish 4 images" | — | `publish_confirm([S], T)` called with the **same** T the popover showed | M17 (summary recorded = text shown) |
 | C2(a) | `publish_progress{step: upload, uploaded: 2, total: 4}` then `session_changed` with label `Publishing(42)` | — | row and header read "Publishing 42%"; progress bar value 42 | `[rule]` ch07 (live progress) |
-| C3(a) | item failed (`session_get` → `label PublishFailed`, error "Upload timed out") | — | sticky toast with "Retry"; clicking calls `publish_retry(item)`; failure popover shows the reason and "Nothing was overwritten" | `[rule]` ch04 S-J |
-| C3(b) | label `DescriptionFailed` | — | row reads "Description failed"; Retry present | `[rule]` ch07 (list rows) |
-| C4(a–c) | `PhotoUploadBadge` | `upload_state` `ready` / `none` after a failure / `uploaded` | "On Shopify" / "Not uploaded" / "Uploading" (3 rows) | `[rule]` ch04 S-J (badges) |
+| C3(a) | `WorkspacePage` with `session_get` mocked → session `publish {item_id: 7, step: failed, failed_step: upload, error: "Upload timed out"}` | — | sticky toast with "Retry"; clicking calls `publish_retry(7)`; failure popover shows "Upload timed out" and "Nothing was overwritten" | `[rule]` ch04 S-J |
+| C3(b) | `SessionsPage` row with `session_list` mocked → label `DescriptionFailed`, `publish.item_id = 9` | — | row reads "Description failed"; its Retry calls `publish_retry(9)` | `[rule]` ch07 (list rows) |
+| C4(a–c) | `WorkspacePage` photo tile with `session_get` mocked → photo `upload_state` `ready` / `none` with session `publish.step = failed` / `uploaded` | — | badge "On Shopify" / "Not uploaded" / "Uploading" (3 rows) | `[rule]` ch04 S-J (badges) |
 | C5(a) | tick rows A, B, C → "Review & publish 3" → form queue; "Confirm & next" on A and B; "Publish 2 confirmed" | — | `publish_confirm([A, B], T_AB)` — C excluded | `[rule]` ch04 S-H |
 | C5(b) | queue strip | after confirming A | A shows ✓ and "n/N filled" | `[rule]` evidence §Form (batch queue strip) |
-| C6(a) | `NotificationsDrawer` | `notifications_list` → one `published`, one `failed` with run/item ids | two rows; the failed one has Retry → `publish_retry(item)` and Open → navigates to the session | `[rule]` ch12 §Notifications drawer |
+| C6(a) | `NotificationsDrawer` | `notifications_list` → one `published`, one `failed` `{item_id: 11, session_id: 4}` | two rows; the failed one has Retry → `publish_retry(11)` and Open → navigates to `#/session/4` | `[rule]` ch12 §Notifications drawer |
+| C7(a) | `session_list` / `session_get` (Rust, `TestApp` + `FakeCommerce`) | one confirmed item whose upload fails with fixture message M; and a session never published | row and session `publish = {item_id: <that item>, step: failed, failed_step: upload, error: M}`; never published → `null` | `[rule]` ch07 §Failure and retry |
+| C7(b) | `session_get` photos | run where photo P1 uploaded to `ready` and P2's upload failed; and no integration configured | P1 `upload_state = "ready"`, P2 `"none"` or `null` as stored; no integration → both `null` | `[rule]` ch04 S-J (badges), 07A MC-11 |
+| C7(c) | `notifications_list` | the failure of C7(a), then `publish_retry` succeeding | first: one `failed` row, text `Publish failed · M`, `item_id` = the item; after retry: that row plus one `published` row, both with the same `item_id`, newest first | `[rule]` ch12 §Notifications drawer |
 
 ## Delegated choices
 Popover vs. sheet on narrow widths, throttling of progress re-renders, exact iconography, where the "Open" of a
@@ -65,8 +91,19 @@ notification lands (workspace).
 3. Tick three rows → "Review & publish 3" → confirm two → "Publish 2 confirmed".
 
 ## Notes
-- Estimated size: ~12 files, ~1 500 lines.
+- **Unreviewed photos are excluded from publish** (owner decision N2, R19; ch07 §Publish: the popover note is
+  "n unreviewed photos will not be published"; 05A MC-7: `ready` requires no unreviewed photo). Ch04 S-G's "will
+  publish in Main" was stale and is corrected (changelog 20). The implementer's r1 assumption is right.
+- Estimated size: ~20 files, ~2 000 lines.
 
 ## Review log
 - 2026-10-26, codex implement r1: Built the confirmation popover (exact preview summary forwarded), progress display, batch form queue with confirmed-only publish, photo badge component, and notification history drawer. Eight P15 UI behavior tests pass. Assumed the ch07 rule governs unreviewed photos: they are excluded, matching the P13 preview and frozen-run behavior; ch04 S-G's older wording says they publish in Main. Delegated queue form count uses `form_get` for each item; confirmed sessions are sent in confirmation order. No mechanism or backend contract was changed.
 - **Blocking boundary gap:** P15's C3(a), C4 integration, and C6(a) cannot be completed within this plan's frontend file perimeter. `session_get` has neither photo `upload_state` nor failed publish item ID/reason. `notifications_list` returns `id`, `session_id`, `run_id`, `kind`, `text`, `created_at`, omitting the publish item ID needed by `publish_retry(item_id)`; the store currently inserts only `published` notifications. The backend command/DTO/store changes must be planned before these rows can be implemented and tested at their named boundaries. C3(b)'s StatusPill behavior is covered in isolation, but the list cannot pass a retry target until the backend exposes it.
+- 2026-10-26 (orchestrator): implement r1 BLOCKED on backend data, resolved by plan amendment. Verified against
+  `e3848bd`: failed item id/error and per-photo `upload_state` are stored but not exposed (task 0 (a), (b): DTO
+  fields only); failed notifications and the notification item id are genuinely absent (task 0 (c): one insert in
+  the failure transaction + a join, ch12/S-J). Perimeter extended (backend reads, `SessionRow.tsx`). C3(a), C3(b),
+  C4, C6(a) restated at their boundaries with exact mocked inputs; new C7(a)–(c) (Rust) for the backend reads.
+  7 criteria, 14 rows. Unreviewed exclusion confirmed (N2/R19); ch04 S-G corrected (changelog 20). Attempt
+  archived. **The next implementer continues from the tree at checkpoint `e3848bd`**: keep the components and tests
+  that fit, do task 0 first, then wire `FailurePopover`, `PhotoUploadBadge`, row Retry and the drawer Retry to it.
