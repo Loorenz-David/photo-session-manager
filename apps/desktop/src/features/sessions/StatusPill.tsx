@@ -32,8 +32,9 @@ export function StatusPill({ label, onRetry, onPublish }: StatusPillProps) {
       );
     case 'description_failed':
       return (
-        <div className="status-cell">
+        <div className="status-cell status-row">
           <span className="pill pill-failed">Description failed</span>
+          {onRetry && <button type="button" className="pill pill-action" onClick={onRetry}><RotateCw aria-hidden /> Retry</button>}
         </div>
       );
     case 'published':

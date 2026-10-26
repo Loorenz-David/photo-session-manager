@@ -6,11 +6,13 @@ export function BatchBar({
   selectableCount,
   onSelectAll,
   onClear,
+  onReview,
 }: {
   count: number;
   selectableCount: number;
   onSelectAll: () => void;
   onClear: () => void;
+  onReview?: () => void;
 }) {
   if (count === 0) return null;
   return (
@@ -21,7 +23,7 @@ export function BatchBar({
           Select all {selectableCount}
         </button>
       )}
-      <button type="button" className="batch-primary" disabled title="Coming with publishing">
+      <button type="button" className="batch-primary" disabled={!onReview} onClick={onReview}>
         <CloudUpload aria-hidden /> Review &amp; publish {count}
       </button>
       <button type="button" className="batch-close" aria-label="Clear selection" onClick={onClear}>

@@ -49,6 +49,8 @@ type FormDialogProps = {
   onItemChanged: () => void;
   /** Filled by the publish phase (P15). */
   publishSlot?: ReactNode;
+  queueStrip?: ReactNode;
+  queueConfirm?: () => void;
 };
 
 /** The product details form (NOTES §Screens 6–7): a dialog over the workspace. */
@@ -64,7 +66,7 @@ export function FormDialog({ open, onOpenChange, ...rest }: FormDialogProps) {
 
 type FormBodyProps = Omit<FormDialogProps, 'open' | 'onOpenChange'> & { close: () => void };
 
-function FormBody({ item, photos, onItemChanged, publishSlot, close }: FormBodyProps) {
+function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close }: FormBodyProps) {
   const state = useFormState(item.id);
   const { form } = state;
   const [step, setStep] = useState<Group>('details');
@@ -141,6 +143,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, close }: FormBodyP
         </div>
       </header>
 
+      {queueStrip}
       {form && <StepTabs groups={form.groups} step={step} onStep={setStep} />}
 
       {customizing ? (
@@ -201,6 +204,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, close }: FormBodyP
               <div data-slot="publish" className={cn(!publishSlot && 'hidden')}>
                 {publishSlot}
               </div>
+              {queueConfirm && <Button variant="outline" onClick={() => void state.flush().then(queueConfirm)}>Confirm &amp; next</Button>}
             </div>
           </footer>
         </>

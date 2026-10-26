@@ -68,4 +68,5 @@ notification lands (workspace).
 - Estimated size: ~12 files, ~1 500 lines.
 
 ## Review log
-(empty)
+- 2026-10-26, codex implement r1: Built the confirmation popover (exact preview summary forwarded), progress display, batch form queue with confirmed-only publish, photo badge component, and notification history drawer. Eight P15 UI behavior tests pass. Assumed the ch07 rule governs unreviewed photos: they are excluded, matching the P13 preview and frozen-run behavior; ch04 S-G's older wording says they publish in Main. Delegated queue form count uses `form_get` for each item; confirmed sessions are sent in confirmation order. No mechanism or backend contract was changed.
+- **Blocking boundary gap:** P15's C3(a), C4 integration, and C6(a) cannot be completed within this plan's frontend file perimeter. `session_get` has neither photo `upload_state` nor failed publish item ID/reason. `notifications_list` returns `id`, `session_id`, `run_id`, `kind`, `text`, `created_at`, omitting the publish item ID needed by `publish_retry(item_id)`; the store currently inserts only `published` notifications. The backend command/DTO/store changes must be planned before these rows can be implemented and tested at their named boundaries. C3(b)'s StatusPill behavior is covered in isolation, but the list cannot pass a retry target until the backend exposes it.

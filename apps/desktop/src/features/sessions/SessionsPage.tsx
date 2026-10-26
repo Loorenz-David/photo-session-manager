@@ -6,6 +6,7 @@ import { withinRange, type TimeRange } from '@/lib/format';
 import { useDebounced, useKeyboard } from '@/lib/keyboard';
 import type { SessionFilter } from '@/services/bindings';
 import { onSessionsChanged } from '@/services/events';
+import { BatchQueue } from '@/features/publish/BatchQueue';
 import { listSessions, type SessionList } from '@/services/sessions';
 import { BatchBar } from './BatchBar';
 import { Filters } from './Filters';
@@ -23,6 +24,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   const [range, setRange] = useState<TimeRange>('any');
   const [list, setList] = useState<SessionList | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [queueIds, setQueueIds] = useState<number[]>([]);
   const debouncedQuery = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
   const request = useRef(0);
 
@@ -167,7 +169,9 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
         selectableCount={selectable.length}
         onSelectAll={() => setSelected(new Set(selectable))}
         onClear={() => setSelected(new Set())}
+        onReview={() => setQueueIds([...selected])}
       />
+      {queueIds.length > 0 && <BatchQueue ids={queueIds} onClose={() => { setQueueIds([]); setSelected(new Set()); void load(); }} />}
     </main>
   );
 }

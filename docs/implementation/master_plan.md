@@ -85,7 +85,7 @@ restated so no session has to infer them:
 | P12_shopify_adapter | APPROVED | 2026-10-26 | opus | approved with notes, review r1: 68/68 rows hold at their boundaries; perimeter = declared files (+ disclosed `items.rs` match arms); suite 309 Rust / 78 UI, clippy/fmt/typecheck green; no credential in HEAD; 8 notes in backlog (condition-attribute read-back for P14 first) |
 | P13_publish_runs | APPROVED | 2026-10-26 | opus | approved with notes after fix 1: F1 resolved (a ready nameless media no longer stalls `upload`; reconciliation removes it); F2 resolved (`publish_step` runs on its own worker; the shared loop excludes it); perimeter = allowed files; suite 345 Rust / 79 UI, clippy/fmt/typecheck green; 11 notes from r1 + 1 in backlog |
 | P14_publish_update | APPROVED | 2026-10-26 | opus | approved with notes after fix 1 (re-review r2): F1 resolved (clearing the last tag in the form removes the app's tags from the shop, admin tags kept, base → `[]`); perimeter = allowed files; suite 371 Rust / 79 UI, clippy/fmt/typecheck green; 22/22 rows hold; notes from earlier rounds in backlog, none added |
-| P15_publish_ui | NOT_STARTED | 2026-10-25 | planner | popover, progress, failure, batch, notifications |
+| P15_publish_ui | IMPLEMENTING | 2026-10-26 | codex | partial UI built; blocked because publish commands omit failed item ID/reason, photo upload state, and failed notifications |
 | P16_operations | NOT_STARTED | 2026-10-25 | planner | settings, health, backup, logs, final build |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →

@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ClipboardList, CloudUpload, FolderDown, Info, Tag } from 'lucide-react';
+import { ArrowLeft, Bell, ClipboardList, CloudUpload, FolderDown, Info, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { integrationKind, onExportProgress, openExportFolder, runExport } from '@/services/export';
 import { listSessions } from '@/services/sessions';
 import { CameraDot } from './CameraDot';
-import { NotificationsBell } from './NotificationsBell';
 import { ThemeToggle, type Theme } from './ThemeToggle';
+import { PublishPopover } from '@/features/publish/PublishPopover';
+import { PublishProgress } from '@/features/publish/PublishProgress';
+import { NotificationsDrawer } from '@/features/publish/NotificationsDrawer';
+import { usePublish } from '@/features/publish/usePublish';
 
 type HeaderProps = {
   sessionId?: number;
@@ -116,6 +119,12 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
   const identity = useSessionIdentity(sessionId);
   const integration = useIntegration();
   const exporting = useExportToasts();
+  const publish = usePublish(sessionId);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const failedCount = publish.notifications.filter(note => note.kind === 'failed').length;
+  const bell = <Button variant="ghost" size="icon" aria-label="Notifications" onClick={() => setNotificationsOpen(true)} className="relative"><Bell />{failedCount > 0 && <span className="bell-count">{failedCount}</span>}</Button>;
+  const drawer = notificationsOpen && <NotificationsDrawer notifications={publish.notifications} onClose={() => setNotificationsOpen(false)} onOpen={id => { window.location.hash = `#/session/${id}`; setNotificationsOpen(false); }} />;
 
   const startExport = (id: number) => {
     runExport(id).catch(error => toast.error(`Export failed: ${(error as Error).message}`, { id: EXPORT_TOAST_ID }));
@@ -127,7 +136,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
         <h1 className="app-title">Session Manager</h1>
         <div className="header-actions">
           <CameraDot />
-          <NotificationsBell />
+          {bell}{drawer}
           <ThemeToggle theme={theme} onChange={onThemeChange} />
           <Button className="new-session-button" onClick={onNewSession} title="New session (N)">
             New session
@@ -160,7 +169,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
       <div className="header-actions">
         <CameraDot />
         <span className="header-divider" aria-hidden />
-        <NotificationsBell />
+        {bell}{drawer}
         {sessionId === 1 ? (
           <Button onClick={onAssignProduct}>
             <Tag /> Assign product
@@ -175,11 +184,8 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
                 <FolderDown /> Export
               </Button>
             )}
-            {typeof integration === 'string' && (
-              <Button disabled title="Publishing arrives in a later phase">
-                <CloudUpload /> Publish
-              </Button>
-            )}
+            {publish.label?.kind === 'publishing' && <PublishProgress value={publish.label.value} />}
+            {typeof integration === 'string' && <div className="relative"><Button onClick={() => setPublishOpen(true)}><CloudUpload /> Publish</Button>{publishOpen && <PublishPopover sessionIds={[sessionId]} onClose={() => { setPublishOpen(false); void publish.refresh(); }} />}</div>}
           </>
         )}
       </div>
