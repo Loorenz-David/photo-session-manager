@@ -105,3 +105,6 @@
     popover notes that unreviewed photos "will publish in Main"; the owner's decision N2 (R19) and
     ch07 §Publish exclude them ("n unreviewed photos will not be published"), and 05A MC-7 requires
     no unreviewed photo for `ready`. S-G's sentence is corrected; no behaviour changes.
+21. **2026-10-26 — Capture root corrected** (orchestrator, from the owner's first real run, R4). 05A MC-2: the
+    capture root is `canon(<document id>/Capture)`; the `capture` favourite is the current capture folder,
+    not the root (evidence Correction 2026-10-26). R34. Plans P17/P18 added for the real-run findings.

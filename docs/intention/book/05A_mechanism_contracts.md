@@ -43,9 +43,10 @@ same string; the arrival pipeline therefore creates at most one row per (session
 
 ## MC-2 — Capture arrival: candidate filter, stability, session attribution, row creation
 
-**Capture root.** The document's capture root is the `file` of the document collection whose
-`id` is `capture` (evidence: stable, independent of the current `captures` value, which we
-change per session). Per-session capture folders are `<capture root>/<items.folder_key>/`
+**Capture root.** The document's capture root is `canon(<document id>/Capture)`, which must
+exist on disk. The collection with `id` `capture` is **not** the root: in Capture One 16.8.6 it is
+the current capture folder and moves with every `captures` change (evidence, Correction
+2026-10-26; corrected R34 — the earlier rule nested folders on every switch). Per-session capture folders are `<capture root>/<items.folder_key>/`
 (`folder_key` in MC-8; stored and frozen at the first photo: 05B MC-22). When no session is active the app sets the capture folder to
 `<capture root>/_Unassigned/` **(ratify R-I1)**; `_Unassigned` cannot collide with a folder key
 because folder keys never start with `_` (MC-8).
