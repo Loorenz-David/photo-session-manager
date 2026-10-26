@@ -9,6 +9,8 @@ pub struct Item {
     pub item_type: String,
     pub title: String,
     pub origin: ItemOrigin,
+    #[serde(default)]
+    pub external_id: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }

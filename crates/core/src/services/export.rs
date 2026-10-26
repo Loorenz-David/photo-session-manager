@@ -72,6 +72,7 @@ struct Run {
     /// Every valid value of the item at the start of the run, keyed by attribute key (MC-8).
     attributes: BTreeMap<String, serde_json::Value>,
     targets: Vec<Target>,
+    defer_swap: bool,
 }
 
 impl Run {
@@ -126,7 +127,7 @@ impl ExportService {
         if let Some(run) = runs.values().find(|r| r.session_id == session_id) {
             return Ok(ExportRunId(run.id));
         }
-        match self.start(session_id) {
+        match self.start(session_id, None) {
             Ok(run) => {
                 let id = run.id;
                 let total = run.targets.len();
@@ -143,6 +144,56 @@ impl ExportService {
                 Err(error)
             }
         }
+    }
+
+    /// Render a confirmed publish snapshot through the web recipe. The staging folder is kept
+    /// until the publish reaches done; repeat calls during one process return the same export.
+    pub fn run_staged(
+        &self,
+        session_id: i64,
+        main: &[i64],
+        condition: &[i64],
+        attributes: &BTreeMap<String, serde_json::Value>,
+    ) -> Result<ExportRunId> {
+        let mut runs = self.runs()?;
+        if let Some(run) = runs
+            .values()
+            .find(|r| r.session_id == session_id && r.defer_swap)
+        {
+            return Ok(ExportRunId(run.id));
+        }
+        let item = self.store.item(
+            self.store
+                .session(session_id)?
+                .session
+                .item_id
+                .ok_or_else(|| Error::InvalidValue("unassigned".into()))?,
+        )?;
+        let run = self.start(
+            session_id,
+            Some((item, main.to_vec(), condition.to_vec(), attributes.clone())),
+        )?;
+        let id = run.id;
+        if run.targets.is_empty() {
+            self.finalize(run);
+        } else {
+            runs.insert(id, run);
+        }
+        Ok(ExportRunId(id))
+    }
+
+    pub fn staging_folder(&self, key: &str, run_id: i64) -> PathBuf {
+        self.files
+            .folder(key)
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(format!(".{key}.partial-{run_id}"))
+    }
+    pub fn publish_swap(&self, staging: &Path, key: &str, run_id: i64) -> Result<()> {
+        self.files.swap(staging, key, run_id)
+    }
+    pub fn discard_staging(&self, staging: &Path) -> Result<()> {
+        self.files.discard(staging)
     }
 
     /// Main and condition photos in position order (unreviewed and deleted excluded, N2), and the
@@ -183,8 +234,12 @@ impl ExportService {
         snapshot.ok_or_else(|| Error::InvalidData("export snapshot".into()))
     }
 
-    fn start(&self, session_id: i64) -> Result<Run> {
-        let (item, main, condition, attributes) = self.snapshot(session_id)?;
+    fn start(&self, session_id: i64, frozen: Option<Snapshot>) -> Result<Run> {
+        let defer_swap = frozen.is_some();
+        let (item, main, condition, attributes) = match frozen {
+            Some(snapshot) => snapshot,
+            None => self.snapshot(session_id)?,
+        };
         let key = folder_key(&item.sku)?;
         let check = IntegrityCheck::new(self.store.as_ref());
         for &photo_id in main.iter().chain(&condition) {
@@ -219,6 +274,7 @@ impl ExportService {
             item,
             attributes,
             targets: Vec::new(),
+            defer_swap,
         };
         for (group, ids) in [
             (ExportGroup::Main, &main),
@@ -353,7 +409,9 @@ impl ExportService {
         let json = item_json(&run.item, &run.attributes, &lists[0], &lists[1]);
         self.files
             .write_in(&run.staging, "item.json", json.as_bytes())?;
-        self.files.swap(&run.staging, &run.key, run.id)?;
+        if !run.defer_swap {
+            self.files.swap(&run.staging, &run.key, run.id)?;
+        }
         Ok(lists[0].len() + lists[1].len())
     }
 }

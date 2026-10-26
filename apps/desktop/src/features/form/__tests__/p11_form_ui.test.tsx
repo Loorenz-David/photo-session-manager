@@ -64,6 +64,7 @@ const ITEM: Item = {
   item_type: 'Chair',
   title: 'Oak chair',
   origin: 'local',
+  external_id: null,
   created_at: 0,
   updated_at: 0,
 };

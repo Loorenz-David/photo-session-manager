@@ -94,7 +94,7 @@ if (!('PointerEvent' in window)) {
 }
 
 const SESSION = 5;
-const ITEM: ItemDto_Serialize = { id: 50, sku: 'OAK-1', folder_key: 'OAK-1', barcode: null, item_type: 'Chair', title: 'Oak chair', origin: 'local', created_at: 0, updated_at: 0 };
+const ITEM: ItemDto_Serialize = { id: 50, sku: 'OAK-1', folder_key: 'OAK-1', barcode: null, item_type: 'Chair', title: 'Oak chair', origin: 'local', external_id: null, created_at: 0, updated_at: 0 };
 
 function photo(id: number, classification: Photo['classification'], extra: Partial<Photo> = {}): Photo {
   return {

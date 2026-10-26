@@ -435,6 +435,53 @@ impl CommerceAdapter for ShopifyAdapter {
         Ok(items)
     }
 
+    fn item_find(&self, query: &str) -> Result<Vec<RemoteItem>> {
+        let mut found = self.item_search(query)?;
+        let safe = query.replace(['"', '\\', ':', '*'], " ");
+        let terms = safe
+            .split_whitespace()
+            .map(|term| format!("{term}*"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let Ok(data) = self.call(graphql::TITLE_SEARCH, json!({"query":terms})) else {
+            return Ok(found);
+        };
+        let products: Vec<Json> = parse(&data["products"]["nodes"], "title search")?;
+        for product in products {
+            let id = product["id"].as_str().unwrap_or_default();
+            if id.is_empty()
+                || found.iter().any(|item| item.external_id == id)
+                || !product["title"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_lowercase()
+                    .contains(&query.to_lowercase())
+            {
+                continue;
+            }
+            let variant = &product["variants"]["nodes"][0];
+            let Some(sku) = variant["inventoryItem"]["sku"]
+                .as_str()
+                .or_else(|| variant["sku"].as_str())
+            else {
+                continue;
+            };
+            found.push(RemoteItem {
+                external_id: id.into(),
+                title: product["title"].as_str().unwrap_or_default().into(),
+                sku: Some(sku.into()),
+                barcode: variant["barcodes"]["nodes"][0]["value"]
+                    .as_str()
+                    .map(Into::into),
+                thumbnail_url: product["featuredMedia"]["preview"]["image"]["url"]
+                    .as_str()
+                    .map(Into::into),
+                media: Vec::new(),
+            });
+        }
+        Ok(found)
+    }
+
     fn item_get(&self, external_id: &str) -> Result<RemoteItem> {
         let product = self.product(external_id)?;
         let variant = product.variants.nodes.first();
@@ -779,6 +826,55 @@ impl CommerceAdapter for ShopifyAdapter {
         Ok(remote_media(&self.product(external_id)?.media.nodes))
     }
 
+    fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>> {
+        let mut found = Vec::new();
+        let mut after: Option<String> = None;
+        loop {
+            let data = self.call(graphql::FILES_ALL, json!({"after":after}))?;
+            if let Some(nodes) = data["files"]["nodes"].as_array() {
+                for (position, node) in nodes.iter().enumerate() {
+                    let filename = node["image"]["url"]
+                        .as_str()
+                        .and_then(|url| url.split('?').next())
+                        .and_then(|path| path.rsplit('/').next())
+                        .map(str::to_owned);
+                    let alt = node["alt"].as_str();
+                    if !filename
+                        .as_deref()
+                        .is_some_and(|name| name.starts_with(stem))
+                        && alt != Some(format!("{stem}.jpg").as_str())
+                    {
+                        continue;
+                    }
+                    let Some(id) = node["id"].as_str() else {
+                        continue;
+                    };
+                    let status = if node["fileStatus"] == "READY" {
+                        RemoteMediaStatus::Ready
+                    } else {
+                        RemoteMediaStatus::Processing
+                    };
+                    found.push(RemoteMedia {
+                        id: id.into(),
+                        filename,
+                        status,
+                        position: position as i64 + 1,
+                    });
+                }
+            }
+            if data["files"]["pageInfo"]["hasNextPage"] != true {
+                break;
+            }
+            after = data["files"]["pageInfo"]["endCursor"]
+                .as_str()
+                .map(Into::into);
+            if after.is_none() {
+                return Err(Error::InvalidData("file pagination lacks cursor".into()));
+            }
+        }
+        Ok(found)
+    }
+
     fn product_delete_media(
         &self,
         run: &ConfirmedRun,
@@ -816,6 +912,7 @@ impl CommerceAdapter for ShopifyAdapter {
             json!({ "files": [{
                 "originalSource": resource_url,
                 "filename": filename,
+                "alt": filename,
                 "contentType": "IMAGE",
                 "duplicateResolutionMode": "APPEND_UUID",
             }] }),

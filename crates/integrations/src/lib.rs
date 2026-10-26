@@ -3,6 +3,10 @@ pub mod commerce;
 pub mod editing;
 
 use camera::via_capture_one::CameraViaCaptureOne;
+use commerce::shopify::{
+    adapter::{PollConfig, ShopifyAdapter, ShopifyConfig},
+    transport::ReqwestTransport,
+};
 use editing::capture_one::{
     adapter::CaptureOneAdapter, jxa::JxaScripting, mirror::MirrorTag,
     scripting::CaptureOneScripting,
@@ -15,15 +19,17 @@ use psm_core::{
     ports::{
         camera::CameraProvider,
         clock::{Clock, SystemClock},
+        commerce::CommerceAdapter,
         editing::EditingProvider,
         events::EventSink,
         raw_previews::RawPreviews,
         store::Store,
     },
     services::{
-        arrival::ArrivalService, camera::CameraService, editing_events::EditingEventsDispatcher,
-        editing_startup::EditingStartup, export::ExportService, health::HealthService,
-        previews::PreviewService,
+        arrival::ArrivalService, attributes::AttributesService, camera::CameraService,
+        editing_events::EditingEventsDispatcher, editing_startup::EditingStartup,
+        export::ExportService, health::HealthService, previews::PreviewService,
+        publish::PublishService,
     },
 };
 use psm_infra::{
@@ -57,10 +63,12 @@ pub struct App {
     pub health: Arc<HealthService>,
     pub editing: Arc<dyn EditingProvider>,
     pub camera: Arc<dyn CameraProvider>,
+    pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub jobs: Arc<JobRunner>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
     pub export: Arc<ExportService>,
+    pub publish: Option<Arc<PublishService>>,
     pub events: Arc<EventHub>,
     pub clock: Arc<dyn Clock>,
     stop: Arc<AtomicBool>,
@@ -80,13 +88,32 @@ impl App {
         clock: Arc<dyn Clock>,
         run_startup: bool,
     ) -> Result<Self> {
+        Self::open_with_adapter(paths, scripting, clock, run_startup, None)
+    }
+
+    pub fn open_with_adapter(
+        paths: AppPaths,
+        scripting: Arc<dyn CaptureOneScripting>,
+        clock: Arc<dyn Clock>,
+        run_startup: bool,
+        commerce_override: Option<Arc<dyn CommerceAdapter>>,
+    ) -> Result<Self> {
         paths.create()?;
         let settings = Settings::open(&paths)?;
+        let commerce = match commerce_override {
+            Some(adapter) => Some(adapter),
+            None => commerce_from_settings(&settings, clock.clone())?,
+        };
         let store = Arc::new(
             SqliteStore::open(&paths).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
         );
         let spool = Arc::new(Spool::new(paths.clone()));
         store.requeue_running_jobs()?;
+        if commerce.is_some() {
+            for id in store.active_publish_items()? {
+                store.enqueue_publish_item(id, clock.now_ms())?;
+            }
+        }
         let health = Arc::new(HealthService::new());
         let document_id = settings.document_id.clone().unwrap_or_default();
         if document_id.is_empty() {
@@ -121,6 +148,15 @@ impl App {
             clock.clone(),
             Arc::new(ExportFs::new(&settings.export_folder)),
         ));
+        let publish = commerce.as_ref().map(|adapter| {
+            Arc::new(PublishService::new(
+                store.clone(),
+                adapter.clone(),
+                export.clone(),
+                clock.clone(),
+                events.clone(),
+            ))
+        });
         let mut previews = PreviewService::new(
             store.clone(),
             editing.clone(),
@@ -177,6 +213,9 @@ impl App {
             }),
         );
         runner.register("render_export", Arc::new(InterruptedExport));
+        if let Some(service) = publish.clone() {
+            runner.register("publish_step", Arc::new(PublishJob { service }));
+        }
         let jobs = Arc::new(runner);
         if run_startup && !document_id.is_empty() {
             let startup_editing = editing.clone();
@@ -192,6 +231,21 @@ impl App {
                 .run();
                 let _ =
                     CameraService::new(startup_camera.as_ref(), startup_health.as_ref()).status();
+            });
+        }
+        if run_startup && let Some(adapter) = commerce.clone() {
+            let schema_store = store.clone();
+            let schema_clock = clock.clone();
+            thread::spawn(move || {
+                if let Err(error) = AttributesService::new(
+                    schema_store.as_ref(),
+                    schema_clock.as_ref(),
+                    Some("shopify"),
+                )
+                .refresh_schema(adapter.as_ref())
+                {
+                    tracing::warn!(%error,"schema refresh deferred");
+                }
             });
         }
         let stop = Arc::new(AtomicBool::new(false));
@@ -256,10 +310,12 @@ impl App {
             health,
             editing,
             camera,
+            commerce,
             jobs,
             arrival,
             previews,
             export,
+            publish,
             events,
             clock,
             stop,
@@ -280,6 +336,25 @@ impl App {
         })
         .run()
     }
+}
+
+pub fn commerce_from_settings(
+    settings: &Settings,
+    clock: Arc<dyn Clock>,
+) -> Result<Option<Arc<dyn CommerceAdapter>>> {
+    let Some(integration) = settings.integration_settings()? else {
+        return Ok(None);
+    };
+    if integration.kind != "shopify" {
+        return Ok(None);
+    }
+    let transport = Arc::new(ReqwestTransport::new()?);
+    Ok(Some(Arc::new(ShopifyAdapter::new(
+        ShopifyConfig::from(&integration),
+        transport,
+        clock,
+        PollConfig::default(),
+    ))))
 }
 
 #[derive(Default)]
@@ -367,6 +442,18 @@ impl JobHandler for InterruptedExport {
     fn run(&self, job: &Job, _: i64) -> Result<()> {
         tracing::info!(job = job.id, "export interrupted by a restart; abandoned");
         Ok(())
+    }
+}
+struct PublishJob {
+    service: Arc<PublishService>,
+}
+impl JobHandler for PublishJob {
+    fn run(&self, job: &Job, _: i64) -> Result<()> {
+        let id = job
+            .target
+            .parse::<i64>()
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        self.service.run_item(id)
     }
 }
 

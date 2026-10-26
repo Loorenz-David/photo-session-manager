@@ -24,6 +24,14 @@ struct ExportProgressPayload {
     total: usize,
     state: psm_core::events::ExportState,
 }
+#[derive(serde::Serialize, Clone)]
+struct PublishProgressPayload {
+    session_id: i64,
+    item_id: i64,
+    step: psm_core::domain::session::PublishStep,
+    uploaded: i64,
+    total: i64,
+}
 impl EventSink for TauriEvents {
     fn emit(&self, event: AppEvent) {
         match event {
@@ -72,6 +80,24 @@ impl EventSink for TauriEvents {
                     },
                 );
             }
+            AppEvent::PublishProgress {
+                session_id,
+                item_id,
+                step,
+                uploaded,
+                total,
+            } => {
+                let _ = self.0.emit(
+                    "publish_progress",
+                    PublishProgressPayload {
+                        session_id,
+                        item_id,
+                        step,
+                        uploaded,
+                        total,
+                    },
+                );
+            }
             _ => {}
         }
     }
@@ -83,6 +109,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::health::health_get,
         commands::health::app_paths_get,
         commands::items::item_create,
+        commands::items::item_adopt,
         commands::items::item_update_identity,
         commands::items::items_search,
         commands::items::items_next_sku,
@@ -113,7 +140,11 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::attributes::attribute_ai_clear,
         commands::attributes::presets_get,
         commands::attributes::presets_set,
-        commands::attributes::form_get
+        commands::attributes::form_get,
+        commands::publish::publish_preview,
+        commands::publish::publish_confirm,
+        commands::publish::publish_retry,
+        commands::publish::notifications_list
     ])
 }
 

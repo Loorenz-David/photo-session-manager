@@ -24,6 +24,13 @@ pub enum AppEvent {
         total: usize,
         state: ExportState,
     },
+    PublishProgress {
+        session_id: i64,
+        item_id: i64,
+        step: crate::domain::session::PublishStep,
+        uploaded: i64,
+        total: i64,
+    },
 }
 
 /// `export_progress.state` (master plan §6.7).

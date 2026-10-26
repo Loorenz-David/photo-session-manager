@@ -1,5 +1,6 @@
 use crate::clock::ManualClock;
 use crate::fake_capture_one::FakeCaptureOneScripting;
+use crate::fake_commerce::FakeCommerce;
 use psm_core::Result;
 use psm_core::{
     domain::photo::{NewPhoto, Photo, PhotoSource},
@@ -23,6 +24,7 @@ pub struct TestApp {
     pub clock: Arc<ManualClock>,
     pub fake: Arc<FakeCaptureOneScripting>,
     pub events: Arc<CollectingEventSink>,
+    pub commerce: Option<Arc<FakeCommerce>>,
     next_hook: AtomicU64,
 }
 
@@ -71,12 +73,15 @@ impl TestApp {
         self.app.store.as_ref()
     }
     pub fn new() -> Result<Self> {
-        Self::create(false)
+        Self::create(false, false)
     }
     pub fn with_fake_document() -> Result<Self> {
-        Self::create(true)
+        Self::create(true, false)
     }
-    fn create(configure_document: bool) -> Result<Self> {
+    pub fn with_fake_shop() -> Result<Self> {
+        Self::create(true, true)
+    }
+    fn create(configure_document: bool, configure_shop: bool) -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let paths = AppPaths::for_dir(dir.path());
         paths.create()?;
@@ -101,7 +106,16 @@ impl TestApp {
         }
         let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
         let clock = Arc::new(ManualClock::new(0));
-        let app = App::open_with(paths, fake.clone(), clock.clone(), false)?;
+        let commerce = configure_shop.then(|| Arc::new(FakeCommerce::new(clock.clone())));
+        let app = App::open_with_adapter(
+            paths,
+            fake.clone(),
+            clock.clone(),
+            false,
+            commerce
+                .as_ref()
+                .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
+        )?;
         let events = Arc::new(CollectingEventSink::default());
         app.events.set_target(events.clone());
         Ok(Self {
@@ -110,8 +124,34 @@ impl TestApp {
             clock,
             fake,
             events,
+            commerce,
             next_hook: AtomicU64::new(1),
         })
+    }
+    pub fn fake_shop(&self) -> &FakeCommerce {
+        self.commerce.as_deref().expect("fake commerce configured")
+    }
+    pub fn kill_and_restart(&mut self) -> Result<()> {
+        self.restart(false)
+    }
+    pub fn restart_with_startup(&mut self) -> Result<()> {
+        self.restart(true)
+    }
+    fn restart(&mut self, run_startup: bool) -> Result<()> {
+        let paths = self.app.paths.clone();
+        let next = App::open_with_adapter(
+            paths,
+            self.fake.clone(),
+            self.clock.clone(),
+            run_startup,
+            self.commerce
+                .as_ref()
+                .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
+        )?;
+        let old = std::mem::replace(&mut self.app, next);
+        drop(old);
+        self.app.events.set_target(self.events.clone());
+        Ok(())
     }
     pub fn deliver_hook(&self, json: &str) -> Result<()> {
         let id = self.next_hook.fetch_add(1, Ordering::Relaxed);

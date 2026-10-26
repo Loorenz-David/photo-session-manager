@@ -4,6 +4,7 @@ use crate::domain::{
     editing::Job,
     item::{Item, NewItem},
     photo::{Classification, Integrity, NewPhoto, Photo, UndoSlot},
+    publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{Session, SessionDto, SessionListRecord},
 };
 
@@ -65,6 +66,13 @@ pub trait StoreTx {
         external_id: &str,
         external_url: Option<&str>,
     ) -> Result<()>;
+    fn replace_attribute_definition_links(
+        &mut self,
+        integration: &str,
+        links: &[(String, DefinitionLink)],
+    ) -> Result<()>;
+    fn insert_publish_run(&mut self, integration: &str, at: i64, summary: &str) -> Result<i64>;
+    fn insert_publish_item(&mut self, item: &PublishItem) -> Result<i64>;
     /// The stored definitions of one integration, in import order.
     fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>>;
     /// Replaces the whole stored definition set of `integration` with `definitions` (in this order).
@@ -141,6 +149,31 @@ pub trait Store: Send + Sync {
     fn mechanism_version(&self) -> Result<String>;
     /// The run's `confirmed_at` when the `publish_runs` row exists and is confirmed (07A MC-10).
     fn confirmed_run(&self, run_id: i64) -> Result<Option<i64>>;
+    fn item_link(
+        &self,
+        item_id: i64,
+        integration: &str,
+    ) -> Result<Option<crate::domain::item::ItemLink>>;
+    fn all_item_links(&self, integration: &str) -> Result<Vec<crate::domain::item::ItemLink>>;
+    fn definition_links(&self, integration: &str) -> Result<Vec<(String, DefinitionLink)>>;
+    fn publish_item(&self, item_id: i64) -> Result<PublishItem>;
+    fn active_publish_items(&self) -> Result<Vec<i64>>;
+    fn set_publish_step(
+        &self,
+        item_id: i64,
+        step: crate::domain::session::PublishStep,
+        failed_step: Option<crate::domain::session::PublishStep>,
+        error: Option<&str>,
+        at: i64,
+    ) -> Result<()>;
+    fn set_publish_progress(&self, item_id: i64, uploaded: i64, total: i64) -> Result<()>;
+    fn enqueue_publish_item(&self, item_id: i64, at: i64) -> Result<()>;
+    fn set_publish_export(&self, item_id: i64, export_run_id: i64) -> Result<()>;
+    fn photo_link(&self, photo_id: i64, item_id: i64, role: &str) -> Result<Option<PhotoLink>>;
+    fn upsert_photo_link(&self, link: &PhotoLink, at: i64) -> Result<()>;
+    fn photo_links_for_item(&self, item_id: i64) -> Result<Vec<PhotoLink>>;
+    fn complete_publish_item(&self, item_id: i64, at: i64, text: &str) -> Result<()>;
+    fn notifications(&self, session_id: Option<i64>) -> Result<Vec<Notification>>;
     fn record_hook(
         &self,
         spool_name: &str,

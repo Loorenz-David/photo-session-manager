@@ -27,6 +27,8 @@ pub trait CommerceAdapter: Send + Sync {
 
     /// Items whose default variant SKU equals `sku` byte for byte after NFC (07A MC-11).
     fn item_search(&self, sku: &str) -> Result<Vec<RemoteItem>>;
+    /// Read-only SKU or title search for the New session dialog.
+    fn item_find(&self, query: &str) -> Result<Vec<RemoteItem>>;
     /// The item's identity and its gallery media in order.
     fn item_get(&self, external_id: &str) -> Result<RemoteItem>;
     /// Creates a draft item whose default variant carries `sku` and `barcode`; returns its id.
@@ -90,6 +92,7 @@ pub trait CommerceAdapter: Send + Sync {
     ) -> Result<String>;
     fn poll_job(&self, job_id: &str) -> Result<()>;
     fn list_media(&self, external_id: &str) -> Result<Vec<RemoteMedia>>;
+    fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>>;
     /// Removes the media from the item; a not-found reply counts as removed (MC-12 step 3).
     fn product_delete_media(
         &self,

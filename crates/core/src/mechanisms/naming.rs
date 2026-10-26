@@ -148,6 +148,7 @@ mod tests {
             item_type: "Sideboard".into(),
             title: title.into(),
             origin: ItemOrigin::Local,
+            external_id: None,
             created_at: 0,
             updated_at: 0,
         }

@@ -9,5 +9,6 @@ pub mod integrity;
 pub mod items;
 pub mod photos;
 pub mod previews;
+pub mod publish;
 pub mod review;
 pub mod sessions;

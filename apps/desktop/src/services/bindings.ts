@@ -7,6 +7,7 @@ export const commands = {
 	healthGet: () => typedError<HealthReportDto, string>(__TAURI_INVOKE("health_get")),
 	appPathsGet: () => typedError<AppPathsDto, string>(__TAURI_INVOKE("app_paths_get")),
 	itemCreate: (sku: string, title: string, itemType: string, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_create", { sku, title, itemType, barcode })),
+	itemAdopt: (externalId: string) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_adopt", { externalId })),
 	itemUpdateIdentity: (itemId: CommandId, sku: string | null, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_update_identity", { itemId, sku, barcode })),
 	itemsSearch: (query: string) => typedError<ItemDto_Serialize[], CommandError>(__TAURI_INVOKE("items_search", { query })),
 	itemsNextSku: () => typedError<string | null, CommandError>(__TAURI_INVOKE("items_next_sku")),
@@ -59,6 +60,10 @@ export const commands = {
 	presetsSet: (preset: PresetDto_Deserialize) => typedError<null, CommandError>(__TAURI_INVOKE("presets_set", { preset })),
 	/**  The item's form: Details, Condition, Product with ordered fields, values and fill counts. */
 	formGet: (itemId: CommandId) => typedError<FormDto_Serialize, CommandError>(__TAURI_INVOKE("form_get", { itemId })),
+	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
+	publishConfirm: (sessionIds: CommandId[], summaryText: string) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText })),
+	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
+	notificationsList: (sessionId: CommandId | null) => typedError<NotificationDto[], CommandError>(__TAURI_INVOKE("notifications_list", { sessionId })),
 };
 
 /* Types */
@@ -224,6 +229,7 @@ export type ItemDto_Deserialize = {
 	item_type: string,
 	title: string,
 	origin: string,
+	external_id?: string | null,
 	created_at: number,
 	updated_at: number,
 };
@@ -236,8 +242,18 @@ export type ItemDto_Serialize = {
 	item_type: string,
 	title: string,
 	origin: string,
+	external_id: string | null,
 	created_at: number,
 	updated_at: number,
+};
+
+export type NotificationDto = {
+	id: number,
+	session_id: number,
+	run_id: number,
+	kind: string,
+	text: string,
+	created_at: number,
 };
 
 export type PhotoClassification = "unreviewed" | "main" | "condition" | "deleted";
@@ -300,6 +316,24 @@ export type PresetFieldDto_Deserialize = {
 export type PresetFieldDto_Serialize = {
 	key: string,
 	default: string | null,
+};
+
+export type PreviewDto = {
+	items: PreviewItemDto[],
+	summary: string,
+};
+
+export type PreviewItemDto = {
+	session_id: number,
+	main: number[],
+	condition: number[],
+	main_thumbnails: (string | null)[],
+	condition_thumbnails: (string | null)[],
+	details_filled: number,
+	details_total: number,
+	unreviewed: number,
+	announced_removals: string[],
+	create_item: boolean,
 };
 
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;

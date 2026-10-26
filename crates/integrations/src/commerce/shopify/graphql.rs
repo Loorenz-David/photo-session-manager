@@ -9,6 +9,7 @@ pub const DEFINITIONS: &str = "query Definitions($after: String) { metafieldDefi
 pub const PRODUCT_READ: &str = "query ProductRead($id: ID!) { product(id: $id) { id title status tags descriptionHtml variants(first: 5) { nodes { id sku barcodes(first: 5) { nodes { value type } } inventoryItem { sku } } } media(first: 50) { nodes { id status alt mediaContentType ... on MediaImage { image { url } originalSource { url } } } } } }";
 
 pub const VARIANT_SEARCH: &str = "query VariantSearch($query: String!) { productVariants(first: 10, query: $query) { nodes { id sku barcodes(first: 5) { nodes { value } } product { id title status featuredMedia { preview { image { url } } } } } } }";
+pub const TITLE_SEARCH: &str = "query TitleSearch($query: String!) { products(first: 20, query: $query) { nodes { id title featuredMedia { preview { image { url } } } variants(first: 1) { nodes { sku barcodes(first: 5) { nodes { value } } inventoryItem { sku } } } } } }";
 
 pub const METAFIELDS_READ: &str = "query MetafieldsRead($id: ID!, $after: String) { product(id: $id) { metafields(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { namespace key type value } } } }";
 
@@ -25,6 +26,7 @@ pub const FILE_CREATE: &str = "mutation FileCreate($files: [FileCreateInput!]!) 
 pub const FILE_POLL: &str = "query FilePoll($id: ID!) { node(id: $id) { id ... on File { fileStatus alt fileErrors { code message details } } ... on MediaImage { image { url } originalSource { url } } ... on GenericFile { url } } }";
 
 pub const FILES_BY_NAME: &str = "query FilesByName($query: String!) { files(first: 20, query: $query) { nodes { id fileStatus alt ... on MediaImage { image { url } } } } }";
+pub const FILES_ALL: &str = "query FilesAll($after: String) { files(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { id fileStatus alt ... on MediaImage { image { url } } } } }";
 
 pub const PRODUCT_REORDER_MEDIA: &str = "mutation ProductReorderMedia($id: ID!, $moves: [MoveInput!]!) { productReorderMedia(id: $id, moves: $moves) { job { id done } mediaUserErrors { field message code } } }";
 

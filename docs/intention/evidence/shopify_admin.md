@@ -160,6 +160,18 @@ status featuredMedia { preview { image { url } } } } } } }` with `query = sku:"<
 **Conclusion.** No lag was observed (the product was found 1 s after create), so no stop case applies. Search is
 case-insensitive, so the adapter filters the returned variants byte for byte after NFC (MC-11).
 
+### SV-6 addendum — read-only title search (P13, 2026-10-26)
+
+The test store accepted `products(first: 5, query: "Oak*")` with fields `id`, `title`,
+`featuredMedia.preview.image.url`, and `variants(first: 1).nodes { sku, barcodes, inventoryItem.sku }`.
+The read-only reply contained five nodes, all with a default variant SKU; three titles contained
+the case-insensitive query text. No GraphQL errors were returned. The adapter asks for up to 20
+nodes, filters the returned titles locally for the typed text, and merges them with exact-SKU
+hits. The probe used `shopify_probe gql` with only the query above; it made no shop mutation.
+Shopify's [products query](https://shopify.dev/docs/api/admin-graphql/2026-10/queries/products)
+and [search syntax](https://shopify.dev/docs/api/usage/search-syntax) document the query and
+prefix wildcard.
+
 ## SV-2 — staged upload, media create, filenames, uniquifier (L15–L18)
 
 **Staged target.** `stagedUploadsCreate(input: [{resource: IMAGE, filename, mimeType: "image/jpeg", httpMethod: PUT,
@@ -205,6 +217,13 @@ gets `psm-probe-cafe00000001_b4c2fd63-9256-4524-a086-8c299e4f20c8.jpg`, the same
 (`sv3_files_by_name`). The files search index lags, so it is not a reliable recovery lookup for files. Writing the
 damage report `metafieldsSet(type: list.file_reference, value: "[\"gid…\",\"gid…\"]")` was accepted
 (`sv3_damage_report_set`).
+P13 recovery therefore pages through the unfiltered `files` connection and compares the returned
+CDN filename. New uploads set `alt` to the requested filename so a still-processing file can be
+recognized and waited on before the CDN filename appears. The pagination and `alt` fields are
+documented by Shopify's [files query](https://shopify.dev/docs/api/admin-graphql/2026-10/queries/files)
+and [FileCreateInput](https://shopify.dev/docs/api/admin-graphql/2026-10/input-objects/FileCreateInput).
+P13 read-only test-store probe of `files(first: 5, after: null)` returned five nodes, `pageInfo`,
+`fileStatus` and `alt` without GraphQL errors. No file was created for this probe.
 **SHOPIFY-VERIFY-3 (content hash):** `MediaImage`, `File` and `GenericFile` expose no checksum or hash field
 (`originalSource.fileSize` only). MC-11 (R-I10) by-filename adoption stands.
 

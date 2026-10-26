@@ -9,6 +9,7 @@ use psm_core::{
         editing::Job,
         item::{Item, ItemOrigin, NewItem},
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
+        publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
         session::{PublishStep, Session, SessionDto, SessionListRecord},
     },
     mechanisms::canon::canon,
@@ -78,6 +79,7 @@ fn item_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Item> {
         } else {
             ItemOrigin::Local
         },
+        external_id: None,
         created_at: r.get(7)?,
         updated_at: r.get(8)?,
     })
@@ -193,6 +195,92 @@ fn parse_step(step: &str) -> Result<PublishStep> {
         "failed" => Ok(PublishStep::Failed),
         _ => Err(Error::InvalidData(format!("invalid publish step: {step}"))),
     }
+}
+
+fn step_name(step: PublishStep) -> &'static str {
+    match step {
+        PublishStep::Prepare => "prepare",
+        PublishStep::Upload => "upload",
+        PublishStep::Update => "update",
+        PublishStep::Describe => "describe",
+        PublishStep::Done => "done",
+        PublishStep::Failed => "failed",
+    }
+}
+
+type PublishItemRow = (
+    i64,
+    i64,
+    i64,
+    bool,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<i64>,
+    String,
+    Option<String>,
+    i64,
+    i64,
+    Option<String>,
+    Option<i64>,
+);
+fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
+    let row: PublishItemRow = conn.query_row(
+        "SELECT id,run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,failed_step,uploaded,total,error,(SELECT CAST(value AS INTEGER) FROM settings WHERE key='publish_export:'||publish_items.id) FROM publish_items WHERE id=?1", [id],
+        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?,r.get(8)?,r.get(9)?,r.get(10)?,r.get(11)?,r.get(12)?,r.get(13)?,r.get(14)?,r.get(15)?))
+    ).optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("publish item {id}")))?;
+    Ok(PublishItem {
+        id: row.0,
+        run_id: row.1,
+        session_id: row.2,
+        create_item: row.3,
+        title: row.4.unwrap_or_default(),
+        frozen_main: from_json(row.5.as_deref().unwrap_or("[]"))?,
+        frozen_condition: from_json(row.6.as_deref().unwrap_or("[]"))?,
+        frozen_attributes: from_json(row.7.as_deref().unwrap_or("{}"))?,
+        announced_removals: from_json(row.8.as_deref().unwrap_or("[]"))?,
+        confirmed_change_seq: row.9.unwrap_or_default(),
+        step: parse_step(&row.10)?,
+        failed_step: row.11.as_deref().map(parse_step).transpose()?,
+        uploaded: row.12,
+        total: row.13,
+        error: row.14,
+        export_run_id: row.15,
+    })
+}
+
+type PhotoLinkRow = (
+    i64,
+    i64,
+    String,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+);
+fn photo_link_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<PhotoLinkRow> {
+    Ok((
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get(5)?,
+        r.get(6)?,
+    ))
+}
+fn map_photo_link(row: PhotoLinkRow) -> Result<PhotoLink> {
+    Ok(PhotoLink {
+        photo_id: row.0,
+        item_id: row.1,
+        role: row.2,
+        external_id: row.3,
+        upload_state: row.4,
+        export_sha256: row.5,
+        superseded_ids: from_json(row.6.as_deref().unwrap_or("[]"))?,
+    })
 }
 
 struct SqliteTx<'a> {
@@ -332,6 +420,31 @@ impl StoreTx for SqliteTx<'_> {
     ) -> Result<()> {
         self.tx.execute("INSERT INTO item_links(item_id,integration,external_id,external_url,create_pending) VALUES (?1,?2,?3,?4,0) ON CONFLICT(item_id,integration) DO UPDATE SET external_id=excluded.external_id,external_url=excluded.external_url,create_pending=0", params![item_id,integration,external_id,external_url]).map_err(db)?;
         Ok(())
+    }
+    fn replace_attribute_definition_links(
+        &mut self,
+        integration: &str,
+        links: &[(String, DefinitionLink)],
+    ) -> Result<()> {
+        self.tx
+            .execute(
+                "DELETE FROM attribute_definition_links WHERE integration=?1",
+                [integration],
+            )
+            .map_err(db)?;
+        for (key, link) in links {
+            self.tx.execute("INSERT INTO attribute_definition_links(integration,key,platform_type,platform_meta) VALUES (?1,?2,?3,?4)",params![integration,key,link.platform_type,to_json(&link.platform_meta)?]).map_err(db)?;
+        }
+        Ok(())
+    }
+    fn insert_publish_run(&mut self, integration: &str, at: i64, summary: &str) -> Result<i64> {
+        self.tx.execute("INSERT INTO publish_runs(integration,created_at,confirmed_at,confirmed_summary) VALUES (?1,?2,?2,?3)",params![integration,at,summary]).map_err(db)?;
+        Ok(self.tx.last_insert_rowid())
+    }
+    fn insert_publish_item(&mut self, item: &PublishItem) -> Result<i64> {
+        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11)",
+            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total]).map_err(db)?;
+        Ok(self.tx.last_insert_rowid())
     }
     fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>> {
         let mut stmt = self.tx.prepare("SELECT integration,key,label,core_type,choices,validations,grp,description,writable FROM attribute_definitions WHERE integration=?1 ORDER BY rowid").map_err(db)?;
@@ -1064,6 +1177,202 @@ impl Store for SqliteStore {
             .optional()
             .map_err(db)?;
         Ok(confirmed.flatten())
+    }
+
+    fn item_link(
+        &self,
+        item_id: i64,
+        integration: &str,
+    ) -> Result<Option<psm_core::domain::item::ItemLink>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.query_row("SELECT item_id,integration,external_id,external_url,last_synced_at,create_pending,tags_base FROM item_links WHERE item_id=?1 AND integration=?2",params![item_id,integration],|r| Ok(psm_core::domain::item::ItemLink{item_id:r.get(0)?,integration:r.get(1)?,external_id:r.get(2)?,external_url:r.get(3)?,last_synced_at:r.get(4)?,create_pending:r.get(5)?,tags_base:r.get(6)?})).optional().map_err(db)
+    }
+    fn all_item_links(&self, integration: &str) -> Result<Vec<psm_core::domain::item::ItemLink>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt=conn.prepare("SELECT item_id,integration,external_id,external_url,last_synced_at,create_pending,tags_base FROM item_links WHERE integration=?1 ORDER BY item_id").map_err(db)?;
+        stmt.query_map([integration], |r| {
+            Ok(psm_core::domain::item::ItemLink {
+                item_id: r.get(0)?,
+                integration: r.get(1)?,
+                external_id: r.get(2)?,
+                external_url: r.get(3)?,
+                last_synced_at: r.get(4)?,
+                create_pending: r.get(5)?,
+                tags_base: r.get(6)?,
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)
+    }
+    fn definition_links(&self, integration: &str) -> Result<Vec<(String, DefinitionLink)>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt=conn.prepare("SELECT key,platform_type,platform_meta FROM attribute_definition_links WHERE integration=?1 ORDER BY rowid").map_err(db)?;
+        let rows = stmt
+            .query_map([integration], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)?;
+        rows.into_iter()
+            .map(|(key, platform_type, meta)| {
+                Ok((
+                    key,
+                    DefinitionLink {
+                        platform_type,
+                        platform_meta: from_json(&meta)?,
+                    },
+                ))
+            })
+            .collect()
+    }
+    fn publish_item(&self, item_id: i64) -> Result<PublishItem> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        publish_item(&conn, item_id)
+    }
+    fn active_publish_items(&self) -> Result<Vec<i64>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt=conn.prepare("SELECT id FROM publish_items WHERE step IN ('prepare','upload','update','describe') ORDER BY id").map_err(db)?;
+        stmt.query_map([], |r| r.get(0))
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)
+    }
+    fn set_publish_step(
+        &self,
+        item_id: i64,
+        step: PublishStep,
+        failed_step: Option<PublishStep>,
+        error: Option<&str>,
+        at: i64,
+    ) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.execute(
+            "UPDATE publish_items SET step=?1,failed_step=?2,error=?3 WHERE id=?4",
+            params![step_name(step), failed_step.map(step_name), error, item_id],
+        )
+        .map_err(db)?;
+        if step == PublishStep::Failed {
+            conn.execute("UPDATE sessions SET last_activity_at=?1 WHERE id=(SELECT session_id FROM publish_items WHERE id=?2)",params![at,item_id]).map_err(db)?;
+        }
+        Ok(())
+    }
+    fn set_publish_progress(&self, item_id: i64, uploaded: i64, total: i64) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE publish_items SET uploaded=?1,total=?2 WHERE id=?3",
+                params![uploaded, total, item_id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn enqueue_publish_item(&self, item_id: i64, at: i64) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let queued:bool=conn.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE kind='publish_step' AND target=?1 AND status='queued')",[item_id.to_string()],|r|r.get(0)).map_err(db)?;
+        if !queued {
+            conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('publish_step',?1,'{}','queued',0,?2,?2,?2)",params![item_id.to_string(),at]).map_err(db)?;
+        }
+        Ok(())
+    }
+    fn set_publish_export(&self, item_id: i64, export_run_id: i64) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "INSERT INTO settings(key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                params![format!("publish_export:{item_id}"),export_run_id.to_string()],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn photo_link(&self, photo_id: i64, item_id: i64, role: &str) -> Result<Option<PhotoLink>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.query_row("SELECT photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids FROM photo_links WHERE photo_id=?1 AND integration='shopify' AND item_id=?2 AND role=?3",params![photo_id,item_id,role],photo_link_row).optional().map_err(db)?.map(map_photo_link).transpose()
+    }
+    fn upsert_photo_link(&self, link: &PhotoLink, at: i64) -> Result<()> {
+        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?.execute("INSERT INTO photo_links(photo_id,integration,item_id,role,external_id,upload_state,export_sha256,superseded_ids,updated_at) VALUES (?1,'shopify',?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(photo_id,integration,item_id,role) DO UPDATE SET external_id=excluded.external_id,upload_state=excluded.upload_state,export_sha256=excluded.export_sha256,superseded_ids=excluded.superseded_ids,updated_at=excluded.updated_at",params![link.photo_id,link.item_id,link.role,link.external_id,link.upload_state,link.export_sha256,to_json(&link.superseded_ids)?,at]).map_err(db)?;
+        Ok(())
+    }
+    fn photo_links_for_item(&self, item_id: i64) -> Result<Vec<PhotoLink>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt=conn.prepare("SELECT photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids FROM photo_links WHERE integration='shopify' AND item_id=?1 ORDER BY id").map_err(db)?;
+        stmt.query_map([item_id], photo_link_row)
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)?
+            .into_iter()
+            .map(map_photo_link)
+            .collect()
+    }
+    fn complete_publish_item(&self, item_id: i64, at: i64, text: &str) -> Result<()> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        tx.execute("UPDATE publish_items SET step='done',failed_step=NULL,error=NULL,finished_at=?1 WHERE id=?2",params![at,item_id]).map_err(db)?;
+        tx.execute("UPDATE sessions SET published_at=?1,published_seq=(SELECT confirmed_change_seq FROM publish_items WHERE id=?2),last_activity_at=?1 WHERE id=(SELECT session_id FROM publish_items WHERE id=?2)",params![at,item_id]).map_err(db)?;
+        tx.execute("INSERT INTO notifications(session_id,run_id,kind,text,created_at) SELECT session_id,run_id,'published',?1,?2 FROM publish_items WHERE id=?3",params![text,at,item_id]).map_err(db)?;
+        tx.execute(
+            "DELETE FROM settings WHERE key=?1",
+            [format!("publish_export:{item_id}")],
+        )
+        .map_err(db)?;
+        tx.commit().map_err(db)
+    }
+    fn notifications(&self, session_id: Option<i64>) -> Result<Vec<Notification>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt=conn.prepare("SELECT id,session_id,run_id,kind,text,created_at FROM notifications WHERE (?1 IS NULL OR session_id=?1) ORDER BY id DESC").map_err(db)?;
+        stmt.query_map([session_id], |r| {
+            Ok(Notification {
+                id: r.get(0)?,
+                session_id: r.get(1)?,
+                run_id: r.get(2)?,
+                kind: r.get(3)?,
+                text: r.get(4)?,
+                created_at: r.get(5)?,
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)
     }
 
     fn mechanism_version(&self) -> Result<String> {

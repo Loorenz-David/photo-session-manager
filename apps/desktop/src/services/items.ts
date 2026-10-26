@@ -17,3 +17,7 @@ export async function nextSku(): Promise<string | null> {
 export async function createItem(args: { sku: string; title: string }): Promise<Item> {
   return unwrap(await commands.itemCreate(args.sku, args.title, '', null));
 }
+
+export async function adoptItem(externalId: string): Promise<Item> {
+  return unwrap(await commands.itemAdopt(externalId));
+}

@@ -17,6 +17,7 @@ pub struct ItemDto {
     pub item_type: String,
     pub title: String,
     pub origin: String,
+    pub external_id: Option<String>,
     #[specta(type = specta_typescript::Number)]
     pub created_at: i64,
     #[specta(type = specta_typescript::Number)]
@@ -30,7 +31,7 @@ pub struct CommandError {
     pub data: BTreeMap<String, String>,
 }
 
-#[derive(Deserialize, Type)]
+#[derive(Serialize, Deserialize, Type)]
 #[specta(type = specta_typescript::Number)]
 pub struct CommandId(pub i64);
 
@@ -42,6 +43,21 @@ impl From<Error> for CommandError {
                 data.insert("existing_sku".into(), existing_sku.clone());
                 "sku_collision"
             }
+            Error::SkuInShop { sku } => {
+                data.insert("sku".into(), sku.clone());
+                "sku_in_shop"
+            }
+            Error::NoIntegration => "no_integration",
+            Error::SeveralProductsCarrySku { sku } => {
+                data.insert("sku".into(), sku.clone());
+                "several_products_carry_sku"
+            }
+            Error::ForeignMediaAdded { n } => {
+                data.insert("n".into(), n.to_string());
+                "foreign_media_added"
+            }
+            Error::GalleryVerification => "gallery_verification",
+            Error::UploadIncomplete => "upload_incomplete",
             Error::RelativePath => "relative_path",
             Error::InvalidValue(_) => "invalid_value",
             Error::NotFound(_) => "not_found",
@@ -101,6 +117,7 @@ impl From<Item> for ItemDto {
                 psm_core::domain::item::ItemOrigin::Linked => "linked",
             }
             .into(),
+            external_id: item.external_id,
             created_at: item.created_at,
             updated_at: item.updated_at,
         }
@@ -120,7 +137,8 @@ pub fn item_create(
         .0
         .lock()
         .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
-    let service = ItemsService::new(app.store.as_ref(), &SystemClock);
+    let service =
+        ItemsService::new(app.store.as_ref(), &SystemClock).with_commerce(app.commerce.as_deref());
     service
         .create_local(&sku, &title, &item_type, barcode.as_deref())
         .map(|(item, _)| item.into())
@@ -140,6 +158,7 @@ pub fn item_update_identity(
         .lock()
         .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
     ItemsService::new(app.store.as_ref(), &SystemClock)
+        .with_commerce(app.commerce.as_deref())
         .update_identity(item_id.0, sku.as_deref(), barcode.as_deref())
         .map(Into::into)
         .map_err(Into::into)
@@ -156,6 +175,7 @@ pub fn items_search(
         .lock()
         .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
     ItemsService::new(app.store.as_ref(), &SystemClock)
+        .with_commerce(app.commerce.as_deref())
         .search(&query)
         .map(|items| items.into_iter().map(Into::into).collect())
         .map_err(Into::into)
@@ -169,6 +189,24 @@ pub fn items_next_sku(state: State<'_, AppState>) -> Result<Option<String>, Comm
         .lock()
         .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
     ItemsService::new(app.store.as_ref(), &SystemClock)
+        .with_commerce(app.commerce.as_deref())
         .next_sku(app.settings.sku_prefix.as_deref())
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn item_adopt(
+    state: State<'_, AppState>,
+    external_id: String,
+) -> Result<ItemDto, CommandError> {
+    let app = state
+        .0
+        .lock()
+        .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?;
+    ItemsService::new(app.store.as_ref(), &SystemClock)
+        .with_commerce(app.commerce.as_deref())
+        .adopt(&external_id)
+        .map(Into::into)
         .map_err(Into::into)
 }

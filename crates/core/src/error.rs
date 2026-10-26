@@ -12,6 +12,18 @@ pub enum Error {
     RelativePath,
     #[error("sku_collision: {existing_sku}")]
     SkuCollision { existing_sku: String },
+    #[error("sku_in_shop: {sku}")]
+    SkuInShop { sku: String },
+    #[error("no_integration")]
+    NoIntegration,
+    #[error("several_products_carry_sku: {sku}")]
+    SeveralProductsCarrySku { sku: String },
+    #[error("foreign_media_added: {n}")]
+    ForeignMediaAdded { n: usize },
+    #[error("gallery_verification")]
+    GalleryVerification,
+    #[error("upload_incomplete")]
+    UploadIncomplete,
     #[error("invalid_value: {0}")]
     InvalidValue(String),
     #[error("not_found: {0}")]

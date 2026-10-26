@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useDebounced } from '@/lib/keyboard';
-import { createItem, nextSku, searchItems, type Item } from '@/services/items';
+import { adoptItem, createItem, nextSku, searchItems, type Item } from '@/services/items';
 import { createSession, ServiceError } from '@/services/sessions';
 
 export const ITEM_SEARCH_DEBOUNCE_MS = 200;
@@ -130,7 +130,10 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   }
 
   function openExisting(item: Item) {
-    void run(async () => (await createSession(item.id)).id);
+    void run(async () => {
+      const local = item.id === 0 && item.external_id ? await adoptItem(item.external_id) : item;
+      return (await createSession(local.id)).id;
+    });
   }
 
   function createAndOpen() {
@@ -164,7 +167,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
             <CommandList className="new-session-results">
               <CommandGroup heading={searchDone ? `${results.length} found${shopCount ? ` · ${shopCount} in the shop` : ''}` : 'Searching…'}>
                 {results.map(item => (
-                  <CommandItem key={item.id} value={`item-${item.id}`} onSelect={() => openExisting(item)} disabled={busy} className="result-row">
+                  <CommandItem key={item.external_id ?? item.id} value={`item-${item.external_id ?? item.id}`} onSelect={() => openExisting(item)} disabled={busy} className="result-row">
                     <span className="result-thumb" aria-hidden>
                       {(item.item_type || item.title).slice(0, 1).toUpperCase()}
                     </span>

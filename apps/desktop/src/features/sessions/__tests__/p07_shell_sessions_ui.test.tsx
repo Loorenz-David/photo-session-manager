@@ -13,7 +13,7 @@ vi.mock('@/services/sessions', async importOriginal => ({
   deactivateSession: vi.fn(),
   previewUrl: (path: string) => `asset://${path}`,
 }));
-vi.mock('@/services/items', () => ({ searchItems: vi.fn(), nextSku: vi.fn(), createItem: vi.fn() }));
+vi.mock('@/services/items', () => ({ searchItems: vi.fn(), nextSku: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn() }));
 vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(), cameraRetry: vi.fn() }));
 vi.mock('@/services/events', () => ({
   onSessionsChanged: vi.fn(async () => () => undefined),
@@ -71,7 +71,7 @@ function list(groups: SessionList['groups'], counts = { open: 3, published: 0, a
 }
 
 function item(id: number, sku: string, title: string, origin = 'local'): ItemDto_Serialize {
-  return { id, sku, folder_key: sku, barcode: null, item_type: '', title, origin, created_at: 0, updated_at: 0 };
+  return { id, sku, folder_key: sku, barcode: null, item_type: '', title, origin, external_id: null, created_at: 0, updated_at: 0 };
 }
 
 beforeEach(() => {

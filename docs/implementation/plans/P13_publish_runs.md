@@ -151,3 +151,17 @@ notification text time format, how `publish_progress` events are throttled.
 - 2026-10-26 (orchestrator): owner answers (book 09A, R32): task 0 builds the adapter from `client_id`/`client_secret`
   and passes `condition_photos_key` (default `custom.damage_report`); C9(a) input/outcome reworded; the next-free-SKU
   suggestion of 05B MC-22 is kept (owner kept it as written) and gets row C9(g) (35 rows).
+- 2026-10-26 (codex, implement r1): built settings-based Shopify wiring, atomic definition/link refresh, title and
+  exact-SKU search with adoption and shop SKU checks, confirmation freeze, prepare/export, resumable upload, gallery
+  reconciliation, retry/startup resume, commands, event and notifications. Thirty-four Rust boundary tests plus one
+  New-session UI test cover the 35 rows. The read-only title and file-list probes are recorded in
+  `docs/intention/evidence/shopify_admin.md`.
+  Assumptions: one queued `publish_step` job advances one item step; export renders use the existing P09 staging
+  folder keyed by its export job id and swap at publish completion; notification time is UTC milliseconds in text;
+  progress emits at each state change and ready link without throttling; title search uses Shopify prefix terms and
+  local substring filtering; file recovery pages unfiltered files because SV-3's indexed filename search lagged.
+  Deviations: P01's exact schema check ruled out an added `publish_items` column, so the export job id is kept in
+  the existing app-state `settings` table until completion. Registration of the publish job is in `App` using the
+  existing `JobRunner`, rather than an edit to `infra/jobs.rs`. Supporting DTO, event, error, module registration,
+  generated-binding and older test-fixture files changed to wire the declared boundaries; the UI boundary has a
+  dedicated frontend test file. `sessions.rs` needed no edit because its existing status query reads publish items.

@@ -1,12 +1,13 @@
 use crate::{
     Error, Result,
     domain::{
-        item::{Item, NewItem},
+        item::{Item, ItemOrigin, NewItem},
         session::SessionDto,
     },
     mechanisms::{naming::folder_key, time::now_ms},
     ports::{
         clock::Clock,
+        commerce::CommerceAdapter,
         store::{Store, StoreTx},
     },
 };
@@ -14,11 +15,21 @@ use crate::{
 pub struct ItemsService<'a> {
     store: &'a dyn Store,
     clock: &'a dyn Clock,
+    commerce: Option<&'a dyn CommerceAdapter>,
 }
 
 impl<'a> ItemsService<'a> {
     pub fn new(store: &'a dyn Store, clock: &'a dyn Clock) -> Self {
-        Self { store, clock }
+        Self {
+            store,
+            clock,
+            commerce: None,
+        }
+    }
+
+    pub fn with_commerce(mut self, commerce: Option<&'a dyn CommerceAdapter>) -> Self {
+        self.commerce = commerce;
+        self
     }
 
     /// Local items whose SKU or title contains `query` (case-insensitive). The commerce adapter's
@@ -40,6 +51,34 @@ impl<'a> ItemsService<'a> {
                 .collect();
             Ok(())
         })?;
+        if let Some(adapter) = self.commerce
+            && let Ok(hits) = adapter.item_find(query)
+        {
+            let links = self.store.all_item_links("shopify")?;
+            for hit in hits {
+                if links.iter().any(|link| link.external_id == hit.external_id) {
+                    continue;
+                }
+                let Some(sku) = hit.sku else {
+                    continue;
+                };
+                if items.iter().any(|item| item.sku == sku) {
+                    continue;
+                }
+                items.push(Item {
+                    id: 0,
+                    folder_key: folder_key(&sku)?,
+                    sku,
+                    barcode: hit.barcode,
+                    item_type: String::new(),
+                    title: hit.title,
+                    origin: ItemOrigin::Linked,
+                    external_id: Some(hit.external_id),
+                    created_at: 0,
+                    updated_at: 0,
+                });
+            }
+        }
         Ok(items)
     }
 
@@ -70,7 +109,62 @@ impl<'a> ItemsService<'a> {
         let next = largest
             .checked_add(1)
             .ok_or_else(|| Error::InvalidValue("SKU sequence exhausted".into()))?;
-        Ok(Some(format!("{prefix}-{next:04}")))
+        let local = format!("{prefix}-{next:04}");
+        if let Some(adapter) = self.commerce {
+            for offset in 0..50_u64 {
+                let candidate = format!("{prefix}-{:04}", next + offset);
+                match adapter.item_search(&candidate) {
+                    Ok(found) if found.is_empty() => return Ok(Some(candidate)),
+                    Err(_) => return Ok(Some(local)),
+                    _ => {}
+                }
+            }
+        }
+        Ok(Some(local))
+    }
+
+    fn check_shop_sku(&self, sku: &str, item_id: Option<i64>) -> Result<()> {
+        let Some(adapter) = self.commerce else {
+            return Ok(());
+        };
+        let Ok(found) = adapter.item_search(sku) else {
+            return Ok(());
+        };
+        let own = item_id
+            .and_then(|id| self.store.item_link(id, "shopify").ok().flatten())
+            .map(|link| link.external_id);
+        if found
+            .iter()
+            .any(|hit| Some(&hit.external_id) != own.as_ref())
+        {
+            return Err(Error::SkuInShop { sku: sku.into() });
+        }
+        Ok(())
+    }
+
+    pub fn adopt(&self, external_id: &str) -> Result<Item> {
+        let adapter = self.commerce.ok_or(Error::NoIntegration)?;
+        let hit = adapter.item_get(external_id)?;
+        let sku = hit
+            .sku
+            .ok_or_else(|| Error::InvalidValue("shop item has no SKU".into()))?;
+        let key = folder_key(&sku)?;
+        let mut id = 0;
+        let at = now_ms(self.clock);
+        self.store.transaction(&mut |tx| {
+            Self::collision(tx, None, &sku, &key)?;
+            id = tx.insert_item(NewItem {
+                sku: &sku,
+                folder_key: &key,
+                barcode: hit.barcode.as_deref(),
+                item_type: "",
+                title: &hit.title,
+                origin: "linked",
+                at,
+            })?;
+            tx.insert_item_link(id, "shopify", external_id, None)
+        })?;
+        self.store.item(id)
     }
 
     fn collision(tx: &dyn StoreTx, item_id: Option<i64>, sku: &str, key: &str) -> Result<()> {
@@ -98,6 +192,7 @@ impl<'a> ItemsService<'a> {
         barcode: Option<&str>,
     ) -> Result<(Item, SessionDto)> {
         let key = folder_key(sku)?;
+        self.check_shop_sku(sku, None)?;
         let at = now_ms(self.clock);
         let mut item_id = 0;
         let mut session_id = 0;
@@ -139,6 +234,9 @@ impl<'a> ItemsService<'a> {
         barcode: Option<&str>,
     ) -> Result<Item> {
         let at = now_ms(self.clock);
+        if let Some(next) = sku {
+            self.check_shop_sku(next, Some(item_id))?;
+        }
         self.store.transaction(&mut |tx| {
             let old = tx.item(item_id)?;
             let next_sku = sku.unwrap_or(&old.sku);

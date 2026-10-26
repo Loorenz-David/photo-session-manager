@@ -18,6 +18,7 @@ use crate::{
     },
     ports::{
         clock::Clock,
+        commerce::CommerceAdapter,
         store::{Store, StoreTx},
     },
 };
@@ -156,6 +157,22 @@ pub struct AttributesService<'a> {
 }
 
 impl<'a> AttributesService<'a> {
+    /// Read the remote schema before opening the transaction, then replace both tables together.
+    pub fn refresh_schema(&self, adapter: &dyn CommerceAdapter) -> Result<()> {
+        let schema = adapter.attributes_schema()?;
+        let definitions: Vec<_> = schema
+            .iter()
+            .map(|(definition, _)| definition.clone())
+            .collect();
+        let links: Vec<_> = schema
+            .into_iter()
+            .map(|(definition, link)| (definition.key, link))
+            .collect();
+        self.store.transaction(&mut |tx| {
+            tx.replace_attribute_definitions("shopify", &definitions)?;
+            tx.replace_attribute_definition_links("shopify", &links)
+        })
+    }
     /// `integration` = the configured integration (its definitions are the active set), or `None`.
     pub fn new(store: &'a dyn Store, clock: &'a dyn Clock, integration: Option<&'a str>) -> Self {
         Self {

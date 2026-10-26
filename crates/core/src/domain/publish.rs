@@ -100,3 +100,64 @@ pub struct StagedTarget {
     pub resource_url: String,
     pub parameters: Vec<(String, String)>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublishPreviewItem {
+    pub session_id: i64,
+    pub main: Vec<i64>,
+    pub condition: Vec<i64>,
+    pub main_thumbnails: Vec<Option<String>>,
+    pub condition_thumbnails: Vec<Option<String>>,
+    pub details_filled: usize,
+    pub details_total: usize,
+    pub unreviewed: usize,
+    pub announced_removals: Vec<String>,
+    pub create_item: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublishPreview {
+    pub items: Vec<PublishPreviewItem>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublishItem {
+    pub id: i64,
+    pub run_id: i64,
+    pub session_id: i64,
+    pub create_item: bool,
+    pub title: String,
+    pub frozen_main: Vec<i64>,
+    pub frozen_condition: Vec<i64>,
+    pub frozen_attributes: std::collections::BTreeMap<String, Json>,
+    pub announced_removals: Vec<String>,
+    pub confirmed_change_seq: i64,
+    pub step: crate::domain::session::PublishStep,
+    pub failed_step: Option<crate::domain::session::PublishStep>,
+    pub uploaded: i64,
+    pub total: i64,
+    pub error: Option<String>,
+    pub export_run_id: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PhotoLink {
+    pub photo_id: i64,
+    pub item_id: i64,
+    pub role: String,
+    pub external_id: Option<String>,
+    pub upload_state: String,
+    pub export_sha256: Option<String>,
+    pub superseded_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Notification {
+    pub id: i64,
+    pub session_id: i64,
+    pub run_id: i64,
+    pub kind: String,
+    pub text: String,
+    pub created_at: i64,
+}
