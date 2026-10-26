@@ -279,3 +279,10 @@ autofocus recipe). While Capture One browsed `PSM_PROBE_B` (it followed the capt
 the RAW is visible in the capture folder 1.37–1.48 s after the call returns; the capture-done hook fires 1.71–2.54 s
 after the call returns (0.3–1.1 s after the file is visible), argv = the full RAW path (VERIFY-1 confirmed again).
 
+**Correction (orchestrator, 2026-10-26, real run R4).** The favourite collection with `id "capture"` is the
+**current capture folder**, not the session's `Capture` root: after the capture folder was set to
+`Capture/PSM_PROBE_B`, the listing showed `PSM_PROBE_B | kind=favorite | id=capture | file=…/Capture/PSM_PROBE_B`,
+and the root itself is a separate favourite (`Capture`, numeric id 3, `file=…/Capture`). The 2026-10-25 smoke line
+"capture root via `collections.whose({id:"capture"})`" held only because the capture folder was the root at the time.
+Do not derive the capture root from it.
+
