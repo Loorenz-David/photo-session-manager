@@ -4,7 +4,7 @@ import type { CameraStatus } from './camera';
 
 /** Calls `refresh` whenever a session or its photos change (`session_changed`, `photo_added`). */
 export async function onSessionsChanged(refresh: () => void): Promise<UnlistenFn> {
-  const unlisteners = await Promise.all(['session_changed', 'photo_added'].map(name => listen(name, () => refresh())));
+  const unlisteners = await Promise.all(['session_changed', 'photo_added', 'publish_progress'].map(name => listen(name, () => refresh())));
   return () => unlisteners.forEach(unlisten => unlisten());
 }
 
@@ -17,14 +17,16 @@ export type PhotoEvent = { photo_id: number; session_id: number };
 export type WorkspaceEvent =
   | { kind: 'photo_added'; photo_id: number; session_id: number }
   | { kind: 'photo_changed'; photo_id: number; session_id: number }
-  | { kind: 'session_changed'; session_id: number };
+  | { kind: 'session_changed'; session_id: number }
+  | { kind: 'publish_progress'; session_id: number };
 
-/** The three events the workspace follows: `photo_added`, `photo_changed`, `session_changed` (master plan §6.7). */
+/** Workspace changes and publish progress refresh the current session view (master plan §6.7). */
 export async function onWorkspaceEvents(handler: (event: WorkspaceEvent) => void): Promise<UnlistenFn> {
   const unlisteners = await Promise.all([
     listen<PhotoEvent>('photo_added', event => handler({ kind: 'photo_added', ...event.payload })),
     listen<PhotoEvent>('photo_changed', event => handler({ kind: 'photo_changed', ...event.payload })),
     listen<{ session_id: number }>('session_changed', event => handler({ kind: 'session_changed', ...event.payload })),
+    listen<{ session_id: number }>('publish_progress', event => handler({ kind: 'publish_progress', ...event.payload })),
   ]);
   return () => unlisteners.forEach(unlisten => unlisten());
 }

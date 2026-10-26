@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { previewUrl } from '@/services/sessions';
 import { publishConfirm, publishPreview, type PreviewDto } from '@/services/publish';
 
-export function PublishPopover({ sessionIds, onClose }: { sessionIds: number[]; onClose: () => void }) {
+export function PublishPopover({ sessionIds, onClose, onConfirmed }: { sessionIds: number[]; onClose: () => void; onConfirmed?: () => void }) {
   const [preview, setPreview] = useState<PreviewDto | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -18,7 +18,7 @@ export function PublishPopover({ sessionIds, onClose }: { sessionIds: number[]; 
     setBusy(true);
     try {
       await publishConfirm(sessionIds, preview.summary);
-      onClose();
+      (onConfirmed ?? onClose)();
     } catch (error) {
       toast.error(`Could not publish: ${(error as Error).message}`);
       setBusy(false);

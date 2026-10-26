@@ -3,9 +3,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/publish', () => ({ publishPreview: vi.fn(), publishConfirm: vi.fn(), publishRetry: vi.fn(), notificationsList: vi.fn(), onPublishProgress: vi.fn() }));
-const delivered = vi.hoisted(() => ({ sessions: [] as (() => void)[], progress: [] as (() => void)[] }));
+const delivered = vi.hoisted(() => ({ sessions: [] as (() => void)[], progress: [] as (() => void)[], workspace: [] as ((event: { kind: string; session_id: number }) => void)[] }));
 vi.mock('@/services/sessions', () => ({ previewUrl: (path: string) => path, listSessions: vi.fn(), createSession: vi.fn() }));
-vi.mock('@/services/events', () => ({ onSessionsChanged: vi.fn(async (handler: () => void) => { delivered.sessions.push(handler); return () => undefined; }), onWorkspaceEvents: vi.fn(async () => () => undefined), onFileDrop: vi.fn(async () => () => undefined) }));
+vi.mock('@/services/events', () => ({ onSessionsChanged: vi.fn(async (handler: () => void) => { delivered.sessions.push(handler); delivered.progress.push(handler); return () => undefined; }), onWorkspaceEvents: vi.fn(async (handler: (event: { kind: string; session_id: number }) => void) => { delivered.workspace.push(handler); return () => undefined; }), onFileDrop: vi.fn(async () => () => undefined) }));
 vi.mock('@/services/export', () => ({ integrationKind: vi.fn(async () => 'shopify'), onExportProgress: vi.fn(async () => () => undefined) }));
 vi.mock('@/features/workspace/Stage', () => ({ Stage: () => <div /> }));
 vi.mock('@/features/workspace/ImportDropZone', () => ({ ImportDropZone: () => <div /> }));
@@ -27,7 +27,7 @@ import { usePublish } from '../usePublish';
 import { listSessions } from '@/services/sessions';
 import { toast } from 'sonner';
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); delivered.sessions.length = 0; delivered.progress.length = 0; delete (window as Window & { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__; });
+afterEach(() => { cleanup(); vi.clearAllMocks(); delivered.sessions.length = 0; delivered.progress.length = 0; delivered.workspace.length = 0; delete (window as Window & { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__; });
 
 const preview = { summary: 'Publish session 7: four selected images; remove one old image.', items: [{ session_id: 7, main: [4, 2, 3], condition: [9], main_thumbnails: ['/4.jpg', '/2.jpg', '/3.jpg'], condition_thumbnails: ['/9.jpg'], details_filled: 3, details_total: 8, unreviewed: 2, announced_removals: ['old'], create_item: true }] };
 
@@ -59,12 +59,16 @@ function queueFixtures() {
 
 it('C5(a) publishes only the first two confirmed sessions with their fresh preview summary', async () => {
   queueFixtures();
-  vi.mocked(publishPreview).mockResolvedValue({ items: [], summary: 'T_AB' });
+  vi.mocked(publishPreview).mockResolvedValue({ ...preview, summary: 'T_AB' });
   vi.mocked(publishConfirm).mockResolvedValue(9);
   render(<BatchQueue ids={[1, 2, 3]} onClose={() => undefined} />);
   fireEvent.click(await screen.findByText('Confirm & next'));
   fireEvent.click(screen.getByText('Confirm & next'));
   fireEvent.click(screen.getByRole('button', { name: 'Publish 2 confirmed' }));
+  expect(await screen.findByText('T_AB')).toBeInTheDocument();
+  expect(screen.getByText('1 gallery removals')).toBeInTheDocument();
+  expect(publishConfirm).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Publish 4 images' }));
   await waitFor(() => expect(publishConfirm).toHaveBeenCalledWith([1, 2], 'T_AB'));
   expect(publishPreview).toHaveBeenCalledWith([1, 2]);
 });
@@ -80,7 +84,7 @@ it('C5(b) marks a confirmed queue item and shows its form fill count', async () 
 const listRow = (label: { kind: 'description_failed' } | { kind: 'publishing'; value: number }, publish: unknown = null) => ({ id: 4, sku: 'P15', item_type: 'Chair', title: 'Oak chair', main_count: 1, condition_count: 0, unreviewed_count: 0, status: label.kind === 'publishing' ? 'publishing' : 'failed', label, progress: label.kind === 'publishing' ? label.value : null, last_activity_at: Date.now(), cover_preview_path: null, publish });
 const list = (row: ReturnType<typeof listRow>) => ({ groups: [{ label: 'Today', rows: [row] }], counts: { open: 1, published: 0, all: 1 }, unassigned_count: 0 });
 
-it('C2(a) refreshes the row after publish progress and session change to Publishing 42%', async () => {
+it('C2(a) refreshes the row from publish progress alone to Publishing 42%', async () => {
   let percent = 10;
   vi.mocked(listSessions).mockImplementation(async () => list(listRow({ kind: 'publishing', value: percent })) as Awaited<ReturnType<typeof listSessions>>);
   vi.mocked(notificationsList).mockResolvedValue([]);
@@ -90,9 +94,8 @@ it('C2(a) refreshes the row after publish progress and session change to Publish
   render(<><SessionsPage navigate={() => undefined} /><HeaderProgress /></>);
   await waitFor(() => expect(screen.getAllByText('Publishing 10%')).toHaveLength(2));
   percent = 42;
-  await waitFor(() => expect(delivered.progress).toHaveLength(1));
+  await waitFor(() => expect(delivered.progress.length).toBeGreaterThan(0));
   await act(async () => delivered.progress.forEach(handler => handler()));
-  await act(async () => delivered.sessions.forEach(handler => handler()));
   await waitFor(() => expect(screen.getAllByText('Publishing 42%')).toHaveLength(2));
   expect(screen.getAllByRole('progressbar').map(bar => bar.getAttribute('aria-valuenow'))).toEqual(['42', '42']);
 });
@@ -111,14 +114,23 @@ function workspaceView(uploadState: string | null, failed = true) {
 }
 
 it('C3(a) shows the failed reason and sticky Retry for the workspace item', async () => {
-  vi.mocked(getSessionView).mockResolvedValue(workspaceView(null) as Awaited<ReturnType<typeof getSessionView>>);
-  vi.mocked(publishRetry).mockResolvedValue();
+  let failed = false;
+  vi.mocked(getSessionView).mockImplementation(async () => workspaceView(null, failed) as Awaited<ReturnType<typeof getSessionView>>);
+  vi.mocked(publishRetry).mockImplementation(async () => { failed = false; });
   render(<WorkspacePage sessionId={4} assignOpen={false} onAssignOpenChange={() => undefined} navigate={() => undefined} />);
+  await waitFor(() => expect(getSessionView).toHaveBeenCalled());
+  failed = true;
+  await act(async () => delivered.workspace.forEach(handler => handler({ kind: 'publish_progress', session_id: 4 })));
   expect(await screen.findByText('Upload timed out')).toBeInTheDocument();
   expect(screen.getByText('Nothing was overwritten')).toBeInTheDocument();
   expect(toast.error).toHaveBeenCalledWith('Publish failed', expect.objectContaining({ duration: Infinity, action: expect.objectContaining({ label: 'Retry' }) }));
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   await waitFor(() => expect(publishRetry).toHaveBeenCalledWith(7));
+  await waitFor(() => expect(screen.queryByText('Upload timed out')).not.toBeInTheDocument());
+  failed = true;
+  await act(async () => delivered.workspace.forEach(handler => handler({ kind: 'publish_progress', session_id: 4 })));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(2));
+  expect(screen.getByText('Upload timed out')).toBeInTheDocument();
 });
 
 it.each([['C4(a)', 'ready', 'On Shopify'], ['C4(b)', 'none', 'Not uploaded'], ['C4(c)', 'uploaded', 'Uploading']])('%s shows %s on a workspace photo', async (_row, state, label) => {

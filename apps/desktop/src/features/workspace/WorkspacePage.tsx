@@ -105,6 +105,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const [dragging, setDragging] = useState<Photo | null>(null);
   const [failureOpen, setFailureOpen] = useState(false);
   const shownFailure = useRef<number | null>(null);
+  const shownFailureSession = useRef(sessionId);
   const drop = useDrop(state);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const { active } = state;
@@ -114,11 +115,19 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     void publishRetry(failure.item_id).then(() => { setFailureOpen(false); toast.dismiss(`publish-failed-${failure.item_id}`); void state.reload(); }).catch(error => toast.error(`Retry failed: ${(error as Error).message}`));
   }, [failure, state]);
   useEffect(() => {
-    if (!failure || shownFailure.current === failure.item_id) return;
+    if (shownFailureSession.current !== sessionId) {
+      shownFailureSession.current = sessionId;
+      shownFailure.current = null;
+    }
+    if (!failure) {
+      shownFailure.current = null;
+      return;
+    }
+    if (shownFailure.current === failure.item_id) return;
     shownFailure.current = failure.item_id;
     setFailureOpen(true);
     toast.error('Publish failed', { id: `publish-failed-${failure.item_id}`, duration: Infinity, action: { label: 'Retry', onClick: retry } });
-  }, [failure, retry]);
+  }, [failure, retry, sessionId]);
 
   const review = useCallback(
     (action: SwipeAction) => {
