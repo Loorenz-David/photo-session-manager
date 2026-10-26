@@ -93,8 +93,8 @@ type MetafieldInputProps = {
   onBlur: () => void;
   placeholder?: string;
   conditionPhotos?: Photo[];
-  onLooksRight: (field: FormField) => void;
-  onClearAi: (field: FormField) => void;
+  onLooksRight: (field: FormField) => Promise<unknown>;
+  onClearAi: (field: FormField) => Promise<unknown>;
   onSeeResearch: (key: string) => void;
 };
 

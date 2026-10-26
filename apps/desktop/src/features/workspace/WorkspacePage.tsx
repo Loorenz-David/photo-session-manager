@@ -12,9 +12,11 @@ import {
 } from '@dnd-kit/core';
 import { ClipboardList, PanelsRightBottom } from 'lucide-react';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonTiles } from '@/components/pending/SkeletonTiles';
 import { assignUnassigned, type Photo } from '@/services/photos';
 import { createSession } from '@/services/sessions';
-import type { Item } from '@/services/items';
+import { adoptItem, type Item } from '@/services/items';
 import { useKeyboard } from '@/lib/keyboard';
 import { FormDialog } from '@/features/form/FormDialog';
 import { FailurePopover } from '@/features/publish/FailurePopover';
@@ -112,7 +114,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const failure = state.view?.session.publish?.step === 'failed' ? state.view.session.publish : null;
   const retry = useCallback(() => {
     if (!failure) return;
-    void publishRetry(failure.item_id).then(() => { setFailureOpen(false); toast.dismiss(`publish-failed-${failure.item_id}`); void state.reload(); }).catch(error => toast.error(`Retry failed: ${(error as Error).message}`));
+    return publishRetry(failure.item_id).then(() => { setFailureOpen(false); toast.dismiss(`publish-failed-${failure.item_id}`); void state.reload(); });
   }, [failure, state]);
   useEffect(() => {
     if (shownFailureSession.current !== sessionId) {
@@ -126,7 +128,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     if (shownFailure.current === failure.item_id) return;
     shownFailure.current = failure.item_id;
     setFailureOpen(true);
-    toast.error('Publish failed', { id: `publish-failed-${failure.item_id}`, duration: Infinity, action: { label: 'Retry', onClick: retry } });
+    toast.error('Publish failed', { id: `publish-failed-${failure.item_id}`, duration: Infinity, action: { label: 'Retry', onClick: () => void retry()?.catch(error => toast.error(`Retry failed: ${(error as Error).message}`)) } });
   }, [failure, retry, sessionId]);
 
   const review = useCallback(
@@ -157,9 +159,10 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
 
   const assignWhole = useCallback(
     async (item: Item) => {
-      onAssignOpenChange(false);
       try {
-        const result = await assignUnassigned(item.id);
+        const local = item.id === 0 && item.external_id ? await adoptItem(item.external_id) : item;
+        const result = await assignUnassigned(local.id);
+        onAssignOpenChange(false);
         const target = result.sessions.find(session => session.id !== UNASSIGNED_SESSION_ID);
         if (target) navigate(target.id);
         else await state.reload();
@@ -172,10 +175,11 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
 
   const assignSome = useCallback(
     async (item: Item, photoIds: number[]) => {
-      setPicker(null);
       try {
-        const session = await createSession(item.id);
+        const local = item.id === 0 && item.external_id ? await adoptItem(item.external_id) : item;
+        const session = await createSession(local.id);
         await state.move(photoIds, session.id);
+        setPicker(null);
       } catch (error) {
         toast.error(`Could not assign the photos: ${(error as Error).message}`);
       }
@@ -233,6 +237,11 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     );
   }
 
+  if (!state.view) return <main className="workspace" aria-busy="true">
+    <div className="stage-column"><Skeleton className="h-full min-h-64 w-full" />{itemCardOpen && <ItemDetailsCard view={null} onClose={() => setItemCardOpen(false)} />}</div>
+    <aside className="photo-panel" aria-label="Photos"><div className="panel-scroll"><SkeletonTiles n={8} /></div></aside>
+  </main>;
+
   return (
     <PublishFailedContext.Provider value={failure !== null}>
     <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
@@ -263,7 +272,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         {folded ? (
           <FoldedStrip photos={state.photos} onUnfold={() => setFolded(false)} {...tileHandlers} />
         ) : (
-          <PhotoPanel photos={state.photos} onFold={() => setFolded(true)} onImport={() => void pickAndImport()} {...tileHandlers} />
+          <PhotoPanel photos={state.photos} onFold={() => setFolded(true)} onImport={() => pickAndImport()} {...tileHandlers} />
         )}
         {sessionsOpen && <SessionsPanel currentSessionId={sessionId} onClose={() => setSessionsOpen(false)} />}
         <ImportDropZone />
@@ -276,21 +285,21 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         title={picker?.kind === 'copy' ? 'Copy to session' : 'Move to session'}
         excludeSessionId={sessionId}
         onOpenChange={open => !open && setPicker(null)}
-        onPick={row => {
+        onPick={async row => {
           if (!picker) return;
           const { kind, photoIds } = picker;
+          await (kind === 'copy' ? state.copy(photoIds, row.id) : state.move(photoIds, row.id));
           setPicker(null);
-          void (kind === 'copy' ? state.copy(photoIds, row.id) : state.move(photoIds, row.id));
         }}
       />
       <ItemPickerDialog
         open={picker?.kind === 'assign'}
         title="Assign to product"
         onOpenChange={open => !open && setPicker(null)}
-        onPick={item => picker && void assignSome(item, picker.photoIds)}
+        onPick={item => { if (picker) return assignSome(item, picker.photoIds); }}
       />
       {item && <FormDialog open={formOpen} onOpenChange={setFormOpen} item={item} photos={state.photos} onItemChanged={() => void state.reload()} />}
-      {unassigned && <ItemPickerDialog open={assignOpen} title="Assign product" onOpenChange={onAssignOpenChange} onPick={item => void assignWhole(item)} />}
+      {unassigned && <ItemPickerDialog open={assignOpen} title="Assign product" onOpenChange={onAssignOpenChange} onPick={assignWhole} />}
     </DndContext>
     </PublishFailedContext.Provider>
   );

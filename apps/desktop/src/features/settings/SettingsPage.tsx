@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Input } from '@/components/ui/input';
+import { useAction, usePageData } from '@/lib/pending';
 import { getSettings, pickFolder, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 
 const emptyIntegration: IntegrationSettings = {
@@ -15,44 +17,36 @@ type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition
 export function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => { getSettings().then(setSettings).catch(e => setError(e instanceof Error ? e.message : String(e))); }, []);
+  const page = usePageData(getSettings);
+  useEffect(() => { if (page.data) setSettings(page.data); }, [page.data]);
 
   const edit = (patch: Partial<Settings>) => setSettings(current => current ? { ...current, ...patch } : current);
   const editIntegration = (key: IntegrationKey, value: string) =>
     setSettings(current => current ? { ...current, integration: { ...(current.integration ?? emptyIntegration), [key]: value } } : current);
 
-  async function choose(key: 'document_id' | 'export_folder', title: string) {
+  const choose = useAction(async (key: 'document_id' | 'export_folder', title: string) => {
     const folder = await pickFolder(title);
     if (folder) edit({ [key]: folder });
-  }
+  }, e => setError(String(e)));
 
-  async function save(event: FormEvent) {
-    event.preventDefault();
+  const save = useAction(async () => {
     if (!settings) return;
-    setSaving(true);
-    try {
-      const shopify = settings.integration;
-      // An untouched, empty Shopify block is not saved (no integration stays no integration).
-      const integration = shopify && [shopify.shop_domain, shopify.client_id, shopify.client_secret].some(v => v.trim() !== '') ? shopify : undefined;
-      const saved = await saveSettings({
-        document_id: settings.document_id ?? undefined,
-        preview_recipe: settings.preview_recipe,
-        web_recipe: settings.web_recipe,
-        style_name: settings.style_name,
-        export_folder: settings.export_folder,
-        preview_delay_s: settings.preview_delay_s,
-        integration,
-      });
-      setSettings(saved);
-      setError(null);
-      toast.success('Settings saved');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
-    }
-  }
+    const shopify = settings.integration;
+    // An untouched, empty Shopify block is not saved (no integration stays no integration).
+    const integration = shopify && [shopify.shop_domain, shopify.client_id, shopify.client_secret].some(v => v.trim() !== '') ? shopify : undefined;
+    const saved = await saveSettings({
+      document_id: settings.document_id ?? undefined,
+      preview_recipe: settings.preview_recipe,
+      web_recipe: settings.web_recipe,
+      style_name: settings.style_name,
+      export_folder: settings.export_folder,
+      preview_delay_s: settings.preview_delay_s,
+      integration,
+    });
+    setSettings(saved);
+    setError(null);
+    toast.success('Settings saved');
+  }, e => setError(e instanceof Error ? e.message : String(e)));
 
   const header = <header className="health-header">
     <div><h1 className="health-title">Settings</h1><p className="health-subtitle">Capture One, export and Shopify</p></div>
@@ -61,13 +55,13 @@ export function SettingsPage() {
       <Button variant="outline" onClick={() => { window.location.hash = '#/health'; }}>Health</Button>
     </div>
   </header>;
-  if (!settings) return <main className="health-shell">{header}{error ? <p role="alert">{error}</p> : <p>Loading…</p>}</main>;
+  if (!settings) return <main className="health-shell">{header}{error || page.error ? <p role="alert">{error ?? String(page.error)}</p> : <SkeletonFields n={6} />}</main>;
 
   const text = (label: string, key: TextKey, picker?: string) => <div className="flex flex-col gap-1">
     <label htmlFor={`settings-${key}`}>{label}</label>
     <div className="flex gap-2">
       <Input id={`settings-${key}`} value={settings[key] ?? ''} onChange={e => edit({ [key]: e.target.value })} />
-      {picker && <Button type="button" variant="outline" onClick={() => void choose(key as 'document_id' | 'export_folder', picker)}>Choose…</Button>}
+      {picker && <Button type="button" variant="outline" disabled={choose.busy} aria-busy={choose.busy ? 'true' : undefined} onClick={() => void choose.run(key as 'document_id' | 'export_folder', picker)}>Choose…{choose.busy ? '…' : ''}</Button>}
     </div>
   </div>;
   const shop = (label: string, key: IntegrationKey, type = 'text') => <div className="flex flex-col gap-1">
@@ -77,7 +71,7 @@ export function SettingsPage() {
 
   return <main className="health-shell">
     {header}
-    <form onSubmit={save} className="health-section flex max-w-xl flex-col gap-4" aria-label="Settings">
+    <form onSubmit={event => { event.preventDefault(); void save.run(); }} className="health-section flex max-w-xl flex-col gap-4" aria-label="Settings">
       <h2>Capture One</h2>
       {text('Capture One session folder', 'document_id', 'Capture One session folder')}
       {text('Preview recipe', 'preview_recipe')}
@@ -97,7 +91,7 @@ export function SettingsPage() {
       {shop('Client secret', 'client_secret', 'password')}
       {shop('Condition photos key', 'condition_photos_key')}
       {error && <p role="alert">{error}</p>}
-      <div><Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</Button></div>
+      <div><Button type="submit" disabled={save.busy} aria-busy={save.busy ? 'true' : undefined}>Save settings{save.busy ? '…' : ''}</Button></div>
     </form>
   </main>;
 }

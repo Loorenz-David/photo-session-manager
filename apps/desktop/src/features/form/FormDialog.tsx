@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, ClipboardList, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
+import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { useAction } from '@/lib/pending';
 import {
   PRODUCT_TITLE,
   acceptAllSuggestions,
@@ -88,14 +91,14 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const total = form?.groups.reduce((sum, g) => sum + g.total, 0) ?? 0;
   const stepIndex = STEPS.indexOf(step);
 
-  async function act(action: () => Promise<unknown>, failure: string) {
+  const act = useAction(async (action: () => Promise<unknown>, failure: string) => {
     try {
       await action();
     } catch (error) {
-      toast.error(`${failure}: ${(error as Error).message}`);
+      throw new Error(`${failure}: ${(error as Error).message}`);
     }
     await state.reload();
-  }
+  });
 
   async function saveAndClose() {
     const titleEdited = state.isEdited(PRODUCT_TITLE);
@@ -153,7 +156,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
           <div className="flex min-h-0 flex-1">
             <MediaColumn photos={photos} step={step} />
             <section className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5" aria-label={`${STEP_LABEL[step]} fields`}>
-              {!form && <p className="text-sm text-muted-foreground">Loading…</p>}
+              {!form && <SkeletonFields n={5} />}
               {group && group.fields.length === 0 && (
                 <p className="text-sm text-muted-foreground">No fields in this step. Use Customize fields to add some.</p>
               )}
@@ -166,8 +169,8 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   onChange={value => state.edit(field.definition.key, value)}
                   onBlur={() => void blurField(field.definition.key)}
                   conditionPhotos={conditionPhotos}
-                  onLooksRight={f => void act(() => setAttributeValue(item.id, f.definition.key, rawValue(f)), 'Could not accept')}
-                  onClearAi={f => void act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
+                  onLooksRight={f => act.run(() => setAttributeValue(item.id, f.definition.key, rawValue(f)), 'Could not accept')}
+                  onClearAi={f => act.run(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
                   onSeeResearch={key => setResearch({ open: true, focus: key })}
                 />
               ))}
@@ -177,7 +180,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                 fields={aiFields}
                 focusKey={research.focus}
                 onFocus={focus => setResearch(current => ({ ...current, focus }))}
-                onAcceptAll={() => void act(() => acceptAllSuggestions(item.id), 'Could not accept')}
+                onAcceptAll={() => act.run(() => acceptAllSuggestions(item.id), 'Could not accept')}
                 onClose={() => setResearch({ open: false, focus: null })}
               />
             )}
@@ -188,9 +191,9 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
               {filled} of {total} filled
             </span>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="outline" onClick={() => void saveAndClose()}>
+              <ActionButton variant="outline" action={saveAndClose}>
                 Save &amp; close
-              </Button>
+              </ActionButton>
               {stepIndex > 0 && (
                 <Button variant="ghost" onClick={() => setStep(STEPS[stepIndex - 1])}>
                   <ArrowLeft /> {STEP_LABEL[STEPS[stepIndex - 1]]}
@@ -204,7 +207,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
               <div data-slot="publish" className={cn(!publishSlot && 'hidden')}>
                 {publishSlot}
               </div>
-              {queueConfirm && <Button variant="outline" onClick={() => void state.flush().then(queueConfirm)}>Confirm &amp; next</Button>}
+              {queueConfirm && <ActionButton variant="outline" action={async () => { await state.flush(); queueConfirm(); }}>Confirm &amp; next</ActionButton>}
             </div>
           </footer>
         </>

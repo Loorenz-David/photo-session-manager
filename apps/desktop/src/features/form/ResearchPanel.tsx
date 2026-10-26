@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
 import { cn } from '@/lib/utils';
 import type { FormField } from '@/services/attributes';
 import { ConfidenceBars, CONFIDENCE_BARS } from './AiPill';
@@ -11,7 +12,7 @@ type ResearchPanelProps = {
   /** A field focused from its popover: the steps that did not lead to it are dimmed. */
   focusKey: string | null;
   onFocus: (key: string | null) => void;
-  onAcceptAll: () => void;
+  onAcceptAll: () => Promise<unknown>;
   onClose: () => void;
 };
 
@@ -56,9 +57,9 @@ export function ResearchPanel({ fields, focusKey, onFocus, onAcceptAll, onClose 
         })}
       </ol>
       <footer className="border-t px-4 py-3">
-        <Button className="w-full" disabled={suggested === 0} onClick={onAcceptAll}>
+        <ActionButton className="w-full" disabled={suggested === 0} action={onAcceptAll}>
           Accept all{suggested > 0 ? ` (${suggested})` : ''}
-        </Button>
+        </ActionButton>
         <p className="mt-1.5 text-[11px] text-muted-foreground">Low-confidence fields are left for you to check.</p>
       </footer>
     </aside>

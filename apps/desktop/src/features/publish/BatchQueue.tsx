@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
+import { SkeletonRows } from '@/components/pending/SkeletonRows';
 import { FormDialog } from '@/features/form/FormDialog';
 import { getForm } from '@/services/attributes';
 import { getSessionView, type SessionView } from '@/services/photos';
@@ -29,15 +30,16 @@ export function BatchQueue({ ids, onClose }: { ids: number[]; onClose: () => voi
   const view = views.get(ids[index]);
   const item = view?.item;
   return <>
+    {!item && <div className="p-6"><SkeletonRows n={4} /></div>}
     {item && view && <FormDialog key={ids[index]} open onOpenChange={open => !open && onClose()} item={item} photos={view.photos} onItemChanged={() => void getSessionView(ids[index]).then(updated => setViews(old => new Map(old).set(ids[index], updated)))}
-      queueStrip={<nav aria-label="Publish queue" className="flex gap-2 border-b px-5 py-2">{ids.map((id, position) => <button key={id} type="button" onClick={() => setIndex(position)} aria-current={position === index}>{confirmed.includes(id) ? '✓ ' : ''}{views.get(id)?.item?.title ?? `Session ${id}`} · {counts.get(id) ?? 'Loading'}</button>)}</nav>}
+      queueStrip={<nav aria-label="Publish queue" className="flex gap-2 border-b px-5 py-2">{ids.map((id, position) => <button key={id} type="button" onClick={() => setIndex(position)} aria-current={position === index}>{confirmed.includes(id) ? '✓ ' : ''}{views.get(id)?.item?.title ?? `Session ${id}`} · {counts.get(id) ?? '…'}</button>)}</nav>}
       queueConfirm={() => {
         setConfirmed(old => old.includes(ids[index]) ? old : [...old, ids[index]]);
         void getForm(item.id).then(form => setCounts(old => new Map(old).set(ids[index], `${form.groups.reduce((n, group) => n + group.filled, 0)}/${form.groups.reduce((n, group) => n + group.total, 0)} filled`)));
         setIndex(old => Math.min(old + 1, ids.length - 1));
       }}
       publishSlot={<>
-        <Button disabled={confirmed.length === 0} onClick={() => setReviewOpen(true)}>Publish {confirmed.length} confirmed</Button>
+        <ActionButton disabled={confirmed.length === 0} action={async () => { setReviewOpen(true); }}>Publish {confirmed.length} confirmed</ActionButton>
         {/* Inside the form dialog's tree, so the review is the top modal layer (not inert behind the form). */}
         {reviewOpen && <PublishPopover modal sessionIds={confirmed} onClose={() => setReviewOpen(false)} onConfirmed={onClose} />}
       </>}

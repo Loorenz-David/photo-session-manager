@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AttributeValue } from '@/services/attributes';
 import { AiPill } from './AiPill';
@@ -22,8 +23,8 @@ const CONFIDENCE_LABEL: Record<string, string> = { high: 'High confidence', medi
 type AiPopoverProps = {
   value: AttributeValue;
   label: string;
-  onLooksRight: () => void;
-  onClear: () => void;
+  onLooksRight: () => Promise<unknown>;
+  onClear: () => Promise<unknown>;
   onSeeResearch: () => void;
 };
 
@@ -55,12 +56,12 @@ export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch }
           </ul>
         )}
         <div className="flex gap-1.5">
-          <Button size="sm" onClick={act(onLooksRight)}>
+          <ActionButton size="sm" action={async () => { await onLooksRight(); setOpen(false); }}>
             Looks right
-          </Button>
-          <Button size="sm" variant="outline" onClick={act(onClear)}>
+          </ActionButton>
+          <ActionButton size="sm" variant="outline" action={async () => { await onClear(); setOpen(false); }}>
             Clear
-          </Button>
+          </ActionButton>
           <Button size="sm" variant="ghost" onClick={act(onSeeResearch)}>
             See research
           </Button>

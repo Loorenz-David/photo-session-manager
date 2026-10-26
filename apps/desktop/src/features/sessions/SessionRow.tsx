@@ -17,7 +17,7 @@ type SessionRowProps = {
   onToggle: () => void;
   onOpen: () => void;
   onPublish?: () => void;
-  onRetry?: () => void;
+  onRetry?: () => Promise<unknown> | void;
   now: number;
 };
 

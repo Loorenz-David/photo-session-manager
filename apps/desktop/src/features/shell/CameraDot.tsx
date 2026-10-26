@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { cameraRetry, cameraStatus, type CameraStatus } from '@/services/camera';
 import { onCameraStatus } from '@/services/events';
+import { useAction } from '@/lib/pending';
 
 export const CAMERA_HELP =
   'Capture One does not see a camera. Check that the camera is on and connected by USB in PC Remote (USB mode), ' +
@@ -9,7 +10,6 @@ export const CAMERA_HELP =
 /** Header camera status (ch04 S-A): green when Capture One reports a camera, red otherwise; click retries. */
 export function CameraDot() {
   const [status, setStatus] = useState<CameraStatus | null>(null);
-  const [retrying, setRetrying] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
@@ -27,17 +27,7 @@ export function CameraDot() {
     };
   }, []);
 
-  async function retry() {
-    if (retrying) return;
-    setRetrying(true);
-    try {
-      setStatus(await cameraRetry());
-    } catch {
-      setStatus({ kind: 'disconnected' });
-    } finally {
-      setRetrying(false);
-    }
-  }
+  const retry = useAction(async () => { setStatus(await cameraRetry()); }, () => setStatus({ kind: 'disconnected' }));
 
   const connected = status?.kind === 'connected';
   const unknown = status === null;
@@ -55,12 +45,14 @@ export function CameraDot() {
         data-state={connected ? 'connected' : unknown ? 'unknown' : 'disconnected'}
         title={title}
         aria-label={title}
-        onClick={() => void retry()}
+        onClick={() => void retry.run()}
+        disabled={retry.busy}
+        aria-busy={retry.busy ? 'true' : undefined}
         onFocus={() => setHelpOpen(true)}
         onBlur={() => setHelpOpen(false)}
       >
         <span className="camera-light" data-testid="camera-light" aria-hidden />
-        <span className="camera-text">{retrying ? 'Retrying…' : connected ? status.name : unknown ? '' : 'Camera disconnected'}</span>
+        <span className="camera-text">{retry.busy ? 'Retrying…' : connected ? status.name : unknown ? '' : 'Camera disconnected'}</span>
       </button>
       {!connected && !unknown && helpOpen && (
         <div role="tooltip" className="camera-help">

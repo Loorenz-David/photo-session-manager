@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
+import { SkeletonRows } from '@/components/pending/SkeletonRows';
 import { withinRange, type TimeRange } from '@/lib/format';
 import { useDebounced, useKeyboard } from '@/lib/keyboard';
+import { usePageData } from '@/lib/pending';
 import type { SessionFilter } from '@/services/bindings';
 import { onSessionsChanged } from '@/services/events';
 import { BatchQueue } from '@/features/publish/BatchQueue';
 import { PublishPopover } from '@/features/publish/PublishPopover';
 import { publishRetry } from '@/services/publish';
-import { listSessions, type SessionList } from '@/services/sessions';
+import { listSessions } from '@/services/sessions';
 import { BatchBar } from './BatchBar';
 import { Filters } from './Filters';
 import { GroupHeader } from './GroupHeader';
@@ -24,26 +26,12 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   const [filter, setFilter] = useState<SessionFilter>('open');
   const [query, setQuery] = useState('');
   const [range, setRange] = useState<TimeRange>('any');
-  const [list, setList] = useState<SessionList | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [queueIds, setQueueIds] = useState<number[]>([]);
   const [publishId, setPublishId] = useState<number | null>(null);
   const debouncedQuery = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
-  const request = useRef(0);
-
-  const load = useCallback(async () => {
-    const ticket = ++request.current;
-    try {
-      const next = await listSessions({ filter, query: debouncedQuery || null });
-      if (ticket === request.current) setList(next);
-    } catch (error) {
-      if (ticket === request.current) toast.error(`Could not load sessions: ${(error as Error).message}`);
-    }
-  }, [filter, debouncedQuery]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: list, loading, error, reload: load } = usePageData(() => listSessions({ filter, query: debouncedQuery || null }), [filter, debouncedQuery]);
+  useEffect(() => { if (error) toast.error(`Could not load sessions: ${(error as Error).message}`); }, [error]);
 
   const latestLoad = useRef(load);
   latestLoad.current = load;
@@ -110,7 +98,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
 
       <UnassignedCard count={list?.unassigned_count ?? 0} onOpen={() => navigate(1)} />
 
-      {list && groups.length === 0 ? (
+      {loading ? <div className="session-table" role="table" aria-label="Sessions" aria-busy="true"><SkeletonRows n={6} /></div> : list && groups.length === 0 ? (
         <div className="empty-sessions">
           {searching ? (
             <>
@@ -161,7 +149,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
                   onToggle={() => toggle(row.id)}
                   onOpen={() => navigate(row.id)}
                   onPublish={() => setPublishId(row.id)}
-                  onRetry={row.publish?.item_id ? () => void publishRetry(row.publish!.item_id).then(load).catch(error => toast.error(`Retry failed: ${(error as Error).message}`)) : undefined}
+                  onRetry={row.publish?.item_id ? () => publishRetry(row.publish!.item_id).then(load) : undefined}
                 />
               ))}
             </section>

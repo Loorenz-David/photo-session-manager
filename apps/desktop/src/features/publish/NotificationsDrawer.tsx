@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
 import type { NotificationDto } from '@/services/publish';
 import { publishRetry } from '@/services/publish';
 import { toast } from 'sonner';
@@ -10,7 +11,7 @@ export function NotificationsDrawer({ notifications, onClose, onOpen }: { notifi
     {notifications.map(note => <div key={note.id} className="border-b py-3">
       <p>{note.text}</p><small>{note.kind}</small>
       <Button variant="outline" size="sm" onClick={() => { window.location.hash = `#/session/${note.session_id}`; onOpen(note.session_id); }}>Open</Button>
-      {note.kind === 'failed' && <Button size="sm" onClick={() => void publishRetry(note.item_id).catch(error => toast.error(`Retry failed: ${(error as Error).message}`))}>Retry</Button>}
+      {note.kind === 'failed' && <ActionButton size="sm" action={() => publishRetry(note.item_id)} onError={error => toast.error(`Retry failed: ${(error as Error).message}`)}>Retry</ActionButton>}
     </div>)}
   </aside>;
 }

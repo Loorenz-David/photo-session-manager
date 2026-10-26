@@ -13,7 +13,7 @@ vi.mock('@/services/sessions', async importOriginal => ({
   deactivateSession: vi.fn(),
   previewUrl: (path: string) => `asset://${path}`,
 }));
-vi.mock('@/services/items', () => ({ searchItems: vi.fn(), nextSku: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn() }));
+vi.mock('@/services/items', () => ({ searchItems: vi.fn(), searchItemsShop: vi.fn(), nextSku: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn() }));
 vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(), cameraRetry: vi.fn() }));
 vi.mock('@/services/events', () => ({
   onSessionsChanged: vi.fn(async () => () => undefined),
@@ -38,7 +38,7 @@ import { SessionsPage } from '@/features/sessions/SessionsPage';
 import { StatusPill } from '@/features/sessions/StatusPill';
 import { UnassignedCard } from '@/features/sessions/UnassignedCard';
 import { cameraRetry, cameraStatus } from '@/services/camera';
-import { createItem, nextSku, searchItems } from '@/services/items';
+import { createItem, nextSku, searchItems, searchItemsShop } from '@/services/items';
 import { activateSession, activeSession, createSession, deactivateSession, listSessions } from '@/services/sessions';
 
 // cmdk and Radix need these browser APIs, which jsdom lacks.
@@ -83,6 +83,7 @@ beforeEach(() => {
   vi.mocked(cameraStatus).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10' });
   vi.mocked(nextSku).mockResolvedValue(null);
   vi.mocked(searchItems).mockResolvedValue([]);
+  vi.mocked(searchItemsShop).mockResolvedValue([]);
   window.location.hash = '#/';
 });
 
@@ -249,7 +250,7 @@ describe('C5 new session', () => {
 
   it('C5(f) a proposal the shop already holds is flagged and Create stays disabled', async () => {
     vi.mocked(nextSku).mockResolvedValue('VF-0421');
-    vi.mocked(searchItems).mockImplementation(async query =>
+    vi.mocked(searchItemsShop).mockImplementation(async query =>
       query === 'VF-0421' ? [item(90, 'VF-0421', 'Walnut cabinet', 'linked')] : [],
     );
     await startNewSession('Brass floor lamp');

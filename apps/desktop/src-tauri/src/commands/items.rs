@@ -175,8 +175,25 @@ pub async fn items_search(
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ItemDto>, CommandError> {
         ItemsService::new(app.store.as_ref(), &SystemClock)
+            .search_local(&query)
+            .map(|items| items.into_iter().map(Into::into).collect())
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn items_search_shop(
+    state: State<'_, AppState>,
+    query: String,
+) -> Result<Vec<ItemDto>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ItemDto>, CommandError> {
+        ItemsService::new(app.store.as_ref(), &SystemClock)
             .with_commerce(app.commerce.as_deref())
-            .search(&query)
+            .search_shop(&query)
             .map(|items| items.into_iter().map(Into::into).collect())
             .map_err(Into::into)
     })

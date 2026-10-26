@@ -3,9 +3,13 @@ import { unwrap } from './sessions';
 
 export type Item = ItemDto_Serialize;
 
-/** Local items whose SKU or title contains the query (plus integration matches once an integration exists). */
+/** Local items whose SKU or title contains the query. */
 export async function searchItems(query: string): Promise<Item[]> {
   return unwrap(await commands.itemsSearch(query));
+}
+
+export async function searchItemsShop(query: string): Promise<Item[]> {
+  return unwrap(await commands.itemsSearchShop(query));
 }
 
 /** MC-22 proposal `<sku_prefix>-<NNNN>`, or null when no prefix is set. */

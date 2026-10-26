@@ -115,6 +115,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::items::item_adopt,
         commands::items::item_update_identity,
         commands::items::items_search,
+        commands::items::items_search_shop,
         commands::items::items_next_sku,
         commands::sessions::session_create,
         commands::sessions::session_get,

@@ -32,9 +32,8 @@ impl<'a> ItemsService<'a> {
         self
     }
 
-    /// Local items whose SKU or title contains `query` (case-insensitive). The commerce adapter's
-    /// matches join this list once an integration exists (P12); until then local items only.
-    pub fn search(&self, query: &str) -> Result<Vec<crate::domain::item::Item>> {
+    /// Local items whose SKU or title contains `query` (case-insensitive).
+    pub fn search_local(&self, query: &str) -> Result<Vec<Item>> {
         let needle = query.trim().to_lowercase();
         if needle.is_empty() {
             return Ok(Vec::new());
@@ -51,10 +50,25 @@ impl<'a> ItemsService<'a> {
                 .collect();
             Ok(())
         })?;
-        if let Some(adapter) = self.commerce
-            && let Ok(hits) = adapter.item_find(query)
-        {
-            let links = self.store.all_item_links("shopify")?;
+        Ok(items)
+    }
+
+    /// Shop matches that are not already represented by a local item or link.
+    pub fn search_shop(&self, query: &str) -> Result<Vec<Item>> {
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        let Some(adapter) = self.commerce else {
+            return Ok(Vec::new());
+        };
+        let mut local = Vec::new();
+        self.store.transaction(&mut |tx| {
+            local = tx.items()?;
+            Ok(())
+        })?;
+        let links = self.store.all_item_links("shopify")?;
+        let mut items = Vec::new();
+        if let Ok(hits) = adapter.item_find(query) {
             for hit in hits {
                 if links.iter().any(|link| link.external_id == hit.external_id) {
                     continue;
@@ -62,7 +76,9 @@ impl<'a> ItemsService<'a> {
                 let Some(sku) = hit.sku else {
                     continue;
                 };
-                if items.iter().any(|item| item.sku == sku) {
+                if local.iter().any(|item| item.sku == sku)
+                    || items.iter().any(|item: &Item| item.sku == sku)
+                {
                     continue;
                 }
                 items.push(Item {
@@ -79,6 +95,13 @@ impl<'a> ItemsService<'a> {
                 });
             }
         }
+        Ok(items)
+    }
+
+    /// Combined lookup retained for existing service callers.
+    pub fn search(&self, query: &str) -> Result<Vec<Item>> {
+        let mut items = self.search_local(query)?;
+        items.extend(self.search_shop(query)?);
         Ok(items)
     }
 

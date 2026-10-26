@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, Bell, ClipboardList, CloudUpload, FolderDown, Info, Settings, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
 import { integrationKind, onExportProgress, openExportFolder, runExport } from '@/services/export';
 import { listSessions } from '@/services/sessions';
 import { CameraDot } from './CameraDot';
@@ -126,10 +127,6 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
   const bell = <Button variant="ghost" size="icon" aria-label="Notifications" onClick={() => setNotificationsOpen(true)} className="relative"><Bell />{failedCount > 0 && <span className="bell-count">{failedCount}</span>}</Button>;
   const drawer = notificationsOpen && <NotificationsDrawer notifications={publish.notifications} onClose={() => setNotificationsOpen(false)} onOpen={id => { window.location.hash = `#/session/${id}`; setNotificationsOpen(false); }} />;
 
-  const startExport = (id: number) => {
-    runExport(id).catch(error => toast.error(`Export failed: ${(error as Error).message}`, { id: EXPORT_TOAST_ID }));
-  };
-
   if (sessionId === undefined) {
     return (
       <header className="app-header">
@@ -173,21 +170,21 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
         {bell}{drawer}
         <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => { window.location.hash = '#/settings'; }}><Settings /></Button>
         {sessionId === 1 ? (
-          <Button onClick={onAssignProduct}>
+          <ActionButton action={async () => { onAssignProduct?.(); }}>
             <Tag /> Assign product
-          </Button>
+          </ActionButton>
         ) : (
           <>
             <Button variant="outline" disabled title="The details form arrives in a later phase">
               <ClipboardList /> Details
             </Button>
             {integration === null && (
-              <Button onClick={() => startExport(sessionId)} disabled={exporting.has(sessionId)} title="Export the main and condition photos to the export folder">
+              <ActionButton action={() => runExport(sessionId)} onError={error => toast.error(`Export failed: ${(error as Error).message}`, { id: EXPORT_TOAST_ID })} disabled={exporting.has(sessionId)} title="Export the main and condition photos to the export folder">
                 <FolderDown /> Export
-              </Button>
+              </ActionButton>
             )}
             {publish.label?.kind === 'publishing' && <PublishProgress value={publish.label.value} />}
-            {typeof integration === 'string' && <div className="relative"><Button onClick={() => setPublishOpen(true)}><CloudUpload /> Publish</Button>{publishOpen && <PublishPopover sessionIds={[sessionId]} onClose={() => { setPublishOpen(false); void publish.refresh(); }} />}</div>}
+            {typeof integration === 'string' && <div className="relative"><ActionButton action={async () => { setPublishOpen(true); }}><CloudUpload /> Publish</ActionButton>{publishOpen && <PublishPopover sessionIds={[sessionId]} onClose={() => { setPublishOpen(false); void publish.refresh(); }} />}</div>}
           </>
         )}
       </div>

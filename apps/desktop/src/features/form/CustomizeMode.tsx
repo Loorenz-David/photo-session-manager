@@ -5,6 +5,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/ui/action-button';
+import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { FIXED_KEYS, PRODUCT_DESCRIPTION, getPreset, setPreset, type Definition, type Group, type PresetEntry } from '@/services/attributes';
 import { kindOf } from './kinds';
@@ -112,7 +114,7 @@ export function CustomizeMode({ itemType, group, definitions, onDone }: Customiz
     setLayout(next);
   }
 
-  if (!layout) return <p className="p-6 text-sm text-muted-foreground">Loading…</p>;
+  if (!layout) return <div className="p-6"><SkeletonFields n={4} /></div>;
 
   const byKey = new Map(definitions.map(definition => [definition.key, definition]));
   const addable = definitions.filter(definition => !layout.some(entry => entry.key === definition.key));
@@ -160,7 +162,7 @@ export function CustomizeMode({ itemType, group, definitions, onDone }: Customiz
       </div>
       <footer className="flex items-center justify-between border-t px-5 py-3">
         <span className="text-xs text-muted-foreground">Saved for every {itemType || 'item of this type'}</span>
-        <Button onClick={() => void save().then(onDone, () => undefined)}>Done</Button>
+        <ActionButton action={async () => { await save(); onDone(); }}>Done</ActionButton>
       </footer>
     </div>
   );

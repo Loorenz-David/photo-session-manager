@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { Barcode, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAction } from '@/lib/pending';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { updateIdentity } from '@/services/attributes';
 import type { Item } from '@/services/items';
@@ -24,19 +25,16 @@ export function IdentityEditor({ item, onSaved }: IdentityEditorProps) {
     }
   }
 
-  async function save(event: FormEvent) {
-    event.preventDefault();
+  const save = useAction(async () => {
     const nextSku = sku.trim();
     const nextBarcode = barcode.trim();
-    try {
-      const saved = await updateIdentity(item.id, nextSku && nextSku !== item.sku ? nextSku : null, nextBarcode && nextBarcode !== (item.barcode ?? '') ? nextBarcode : null);
-      setOpen(false);
-      onSaved(saved);
-    } catch (failure) {
+    const saved = await updateIdentity(item.id, nextSku && nextSku !== item.sku ? nextSku : null, nextBarcode && nextBarcode !== (item.barcode ?? '') ? nextBarcode : null);
+    setOpen(false);
+    onSaved(saved);
+  }, failure => {
       const code = (failure as { code?: string; data?: Record<string, string> }).code;
       setError(code === 'sku_collision' ? `SKU already used by ${(failure as { data?: Record<string, string> }).data?.existing_sku ?? 'another item'}` : (failure as Error).message);
-    }
-  }
+  });
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -56,7 +54,7 @@ export function IdentityEditor({ item, onSaved }: IdentityEditorProps) {
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72">
-        <form className="flex flex-col gap-2" onSubmit={event => void save(event)}>
+        <form className="flex flex-col gap-2" onSubmit={event => { event.preventDefault(); void save.run(); }}>
           <label className="text-xs font-semibold" htmlFor="identity-sku">
             SKU
           </label>
@@ -70,8 +68,8 @@ export function IdentityEditor({ item, onSaved }: IdentityEditorProps) {
               {error}
             </p>
           )}
-          <Button type="submit" size="sm" className="self-end">
-            Save
+          <Button type="submit" size="sm" className="self-end" disabled={save.busy} aria-busy={save.busy ? 'true' : undefined}>
+            Save{save.busy ? '…' : ''}
           </Button>
         </form>
       </PopoverContent>

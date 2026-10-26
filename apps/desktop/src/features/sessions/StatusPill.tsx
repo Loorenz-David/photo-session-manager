@@ -1,11 +1,12 @@
 import { CloudUpload, RotateCw } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { useAction } from '@/lib/pending';
 import type { RowLabelResponse } from '@/services/bindings';
 
 type StatusPillProps = {
   label: RowLabelResponse;
   /** Publish actions are wired with publishing (P15); without a handler the buttons are shown disabled. */
-  onRetry?: () => void;
+  onRetry?: () => Promise<unknown> | void;
   onPublish?: () => void;
 };
 
@@ -13,6 +14,7 @@ const LATER = 'Arrives with publishing';
 
 /** Row status in the order of ch07: Publishing n%, Publish failed, Description failed, Published, Ready · Publish, In progress. */
 export function StatusPill({ label, onRetry, onPublish }: StatusPillProps) {
+  const retry = useAction(async () => { await onRetry?.(); });
   switch (label.kind) {
     case 'publishing':
       return (
@@ -25,8 +27,8 @@ export function StatusPill({ label, onRetry, onPublish }: StatusPillProps) {
       return (
         <div className="status-cell status-row">
           <span className="pill pill-failed">Publish failed</span>
-          <button type="button" className="pill pill-action" onClick={onRetry} disabled={!onRetry} title={onRetry ? 'Retry' : LATER}>
-            <RotateCw aria-hidden /> Retry
+          <button type="button" className="pill pill-action" onClick={() => void retry.run()} disabled={!onRetry || retry.busy} aria-busy={retry.busy ? 'true' : undefined} title={onRetry ? 'Retry' : LATER}>
+            <RotateCw aria-hidden /> Retry{retry.busy ? '…' : ''}
           </button>
         </div>
       );
@@ -34,7 +36,7 @@ export function StatusPill({ label, onRetry, onPublish }: StatusPillProps) {
       return (
         <div className="status-cell status-row">
           <span className="pill pill-failed">Description failed</span>
-          {onRetry && <button type="button" className="pill pill-action" onClick={onRetry}><RotateCw aria-hidden /> Retry</button>}
+          {onRetry && <button type="button" className="pill pill-action" onClick={() => void retry.run()} disabled={retry.busy} aria-busy={retry.busy ? 'true' : undefined}><RotateCw aria-hidden /> Retry{retry.busy ? '…' : ''}</button>}
         </div>
       );
     case 'published':

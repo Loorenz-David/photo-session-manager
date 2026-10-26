@@ -1,4 +1,5 @@
 import { FolderInput, PanelRightClose } from 'lucide-react';
+import { useAction } from '@/lib/pending';
 import type { Photo } from '@/services/photos';
 import { displayOrder } from './order';
 import { PhotoGrid, type TileHandlers } from './PhotoGrid';
@@ -6,11 +7,12 @@ import { PhotoGrid, type TileHandlers } from './PhotoGrid';
 type PhotoPanelProps = TileHandlers & {
   photos: readonly Photo[];
   onFold: () => void;
-  onImport: () => void;
+  onImport: () => Promise<unknown>;
 };
 
 /** The photo panel (NOTES.md §Screens 4): Main images (unreviewed shown after Main), then Condition. */
 export function PhotoPanel({ photos, onFold, onImport, ...handlers }: PhotoPanelProps) {
+  const importing = useAction(onImport);
   const order = displayOrder(photos);
   const mainShown = [...order.main, ...order.unreviewed];
   return (
@@ -21,8 +23,8 @@ export function PhotoPanel({ photos, onFold, onImport, ...handlers }: PhotoPanel
           {order.main.length} main · {order.condition.length} condition
         </span>
         <span className="panel-tools">
-          <button type="button" className="stage-icon-button" onClick={onImport} aria-label="Import photos" title="Import photos">
-            <FolderInput />
+          <button type="button" className="stage-icon-button" onClick={() => void importing.run()} disabled={importing.busy} aria-busy={importing.busy ? 'true' : undefined} aria-label="Import photos" title="Import photos">
+            <FolderInput />{importing.busy && <span aria-hidden>…</span>}
           </button>
           <button type="button" className="stage-icon-button" onClick={onFold} aria-label="Fold panel" title="Fold panel (F)">
             <PanelRightClose />

@@ -10,6 +10,7 @@ export const commands = {
 	itemAdopt: (externalId: string) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_adopt", { externalId })),
 	itemUpdateIdentity: (itemId: CommandId, sku: string | null, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_update_identity", { itemId, sku, barcode })),
 	itemsSearch: (query: string) => typedError<ItemDto_Serialize[], CommandError>(__TAURI_INVOKE("items_search", { query })),
+	itemsSearchShop: (query: string) => typedError<ItemDto_Serialize[], CommandError>(__TAURI_INVOKE("items_search_shop", { query })),
 	itemsNextSku: () => typedError<string | null, CommandError>(__TAURI_INVOKE("items_next_sku")),
 	sessionCreate: (itemId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_create", { itemId })),
 	sessionGet: (sessionId: CommandId) => typedError<SessionViewResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
