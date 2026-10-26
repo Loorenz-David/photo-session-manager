@@ -48,7 +48,7 @@ Condition photos); `05A` MC-9 (equality) · evidence `shopify_admin.md` SV-1, SV
 3b. Identity write in `update` (05B MC-22): default-variant SKU/barcode diff against the remote, never clearing.
 4. `publish_summary` completed (counts and notes); tests.
 
-## Criteria (7 criteria, 21 rows; 0 `[rule]` rows)
+## Criteria (7 criteria, 22 rows; 0 `[rule]` rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | `update` | frozen `{years: "1950-1960s", country: "Sweden"}`; remote `{years: "1950-1960s", country: "Denmark", designer: "X"}` | fake `metafieldsSet` carries exactly `country` | M20 |
@@ -58,7 +58,8 @@ Condition photos); `05A` MC-9 (equality) · evidence `shopify_admin.md` SV-1, SV
 | C1(e) | `update` | fake read-back returns a different value for `country` | item `failed` at `update`, `attribute_verification{keys: ["custom.country"]}` | MC-13 (read back) |
 | C2(a) | `merge_tags` | base `[a,b]`, local `[a,b]`, remote `[a,b,c]` (admin added c) | `None` (no write); c kept | MC-13 (tags) |
 | C2(b) | `merge_tags` | base `[a,b]`, local `[a]`, remote `[a,b,c]` | `Some([a,c])` (b removed locally, c kept) | MC-13 |
-| C2(c) | `merge_tags` | base `[]`, local `[x]`, remote `[y]` | `Some([y,x])`; after the write `tags_base = [y,x]` | MC-13 |
+| C2(c) | `merge_tags` | base `[]`, local `[x]`, remote `[y]` | `Some([y,x])`; after the successful update `tags_base = [x]` (the local list, 07A MC-13 as corrected, R33) | MC-13 |
+| C2(d) | `update` twice (boundary: fake shop) | (i) local `[x]`, shop `[y]`: publish, then publish again with nothing changed; (ii) local `[a]`, shop `[a]`: publish (no tag write), clear local tags, publish | (i) shop tags `[y,x]` after both publishes, the second sends no tag write; (ii) shop tags `[]` after the second publish | MC-13 (R33), M20 |
 | C3(a) | `update` | title local "Oak" vs remote "Oak" / "Teak" | no title write / `productUpdate` with `title: "Oak"` | MC-13 (title) |
 | C3(c) | `update` | linked item, local SKU `K-2` / barcode none; remote `K-1` / `123` | `item_set_identity` sends `sku: K-2` only (barcode not cleared); read-back mismatch → `failed` at `update` | MC-22 (05B), M29 |
 | C3(b) | `update` | manual description `"a\n\nb"` / none | `descriptionHtml = "<p>a</p><p>b</p>"` / no description field in the request | MC-13 (description) |
@@ -126,3 +127,11 @@ whether tags are written in the same `productUpdate` as the title.
   and `valid = false`. The condition-file boundary tests, full workspace suite (370 Rust tests), Clippy, fmt,
   frontend tests (79) and typecheck pass. F1 remains pending owner card 1, so the tracker remains
   `CHANGES_REQUESTED` and C2(c) is unchanged. Handoff: `handoffs/implementer/handoff_P14_publish_update_fix_r2.md`.
+- 2026-10-26 (orchestrator): review r1 card 1 (tag merge base) answered from the book: 07A MC-13's stated purpose
+  ("tags added in the Shopify admin are not lost") → option A; 07A MC-13 corrected (R33, changelog 19). C2(c)'s base
+  is now the local list; new row C2(d) covers the two-publish and the removal scenarios (22 rows). Fix r2 already
+  corrected F2 (condition read-back) and F3 (C1(c) fixture) in its checkpoint; attempt archived. The next implementer
+  continues from the tree: apply F1 under option A (`tags_base` := local tag list after every successful `update`
+  with a local tag value, written or not; an empty local list after a non-empty base counts as a value) and add C2(d);
+  keep F2/F3 as they are.
+
