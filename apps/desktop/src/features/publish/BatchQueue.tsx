@@ -36,8 +36,11 @@ export function BatchQueue({ ids, onClose }: { ids: number[]; onClose: () => voi
         void getForm(item.id).then(form => setCounts(old => new Map(old).set(ids[index], `${form.groups.reduce((n, group) => n + group.filled, 0)}/${form.groups.reduce((n, group) => n + group.total, 0)} filled`)));
         setIndex(old => Math.min(old + 1, ids.length - 1));
       }}
-      publishSlot={<Button disabled={confirmed.length === 0} onClick={() => setReviewOpen(true)}>Publish {confirmed.length} confirmed</Button>}
+      publishSlot={<>
+        <Button disabled={confirmed.length === 0} onClick={() => setReviewOpen(true)}>Publish {confirmed.length} confirmed</Button>
+        {/* Inside the form dialog's tree, so the review is the top modal layer (not inert behind the form). */}
+        {reviewOpen && <PublishPopover modal sessionIds={confirmed} onClose={() => setReviewOpen(false)} onConfirmed={onClose} />}
+      </>}
     />}
-    {reviewOpen && <PublishPopover sessionIds={confirmed} onClose={() => setReviewOpen(false)} onConfirmed={onClose} />}
   </>;
 }

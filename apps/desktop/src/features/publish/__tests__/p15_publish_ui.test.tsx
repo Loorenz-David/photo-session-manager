@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
 vi.mock('@/services/publish', () => ({ publishPreview: vi.fn(), publishConfirm: vi.fn(), publishRetry: vi.fn(), notificationsList: vi.fn(), onPublishProgress: vi.fn() }));
@@ -11,8 +11,7 @@ vi.mock('@/features/workspace/Stage', () => ({ Stage: () => <div /> }));
 vi.mock('@/features/workspace/ImportDropZone', () => ({ ImportDropZone: () => <div /> }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }));
 vi.mock('@/services/photos', () => ({ getSessionView: vi.fn() }));
-vi.mock('@/services/attributes', () => ({ getForm: vi.fn() }));
-vi.mock('@/features/form/FormDialog', () => ({ FormDialog: ({ queueStrip, queueConfirm, publishSlot }: { queueStrip: React.ReactNode; queueConfirm: () => void; publishSlot: React.ReactNode }) => <div>{queueStrip}<button onClick={queueConfirm}>Confirm &amp; next</button>{publishSlot}</div> }));
+vi.mock('@/services/attributes', async importOriginal => ({ ...(await importOriginal<typeof import('@/services/attributes')>()), getForm: vi.fn() }));
 
 import { PublishPopover } from '../PublishPopover';
 import { PublishProgress } from '../PublishProgress';
@@ -54,31 +53,38 @@ it('C1(b) sends the exact summary displayed in the confirmation surface', async 
 
 function queueFixtures() {
   vi.mocked(getSessionView).mockImplementation(async id => ({ session: { id }, item: { id, title: `Item ${id}` }, photos: [] }) as unknown as Awaited<ReturnType<typeof getSessionView>>);
-  vi.mocked(getForm).mockResolvedValue({ groups: [{ filled: 1, total: 3 }] } as Awaited<ReturnType<typeof getForm>>);
+  vi.mocked(getForm).mockResolvedValue({ groups: [{ group: 'details', fields: [], filled: 1, total: 3 }] } as unknown as Awaited<ReturnType<typeof getForm>>);
 }
 
 it('C5(a) publishes only the first two confirmed sessions with their fresh preview summary', async () => {
   queueFixtures();
   vi.mocked(publishPreview).mockResolvedValue({ ...preview, summary: 'T_AB' });
   vi.mocked(publishConfirm).mockResolvedValue(9);
-  render(<BatchQueue ids={[1, 2, 3]} onClose={() => undefined} />);
-  fireEvent.click(await screen.findByText('Confirm & next'));
-  fireEvent.click(screen.getByText('Confirm & next'));
-  fireEvent.click(screen.getByRole('button', { name: 'Publish 2 confirmed' }));
-  expect(await screen.findByText('T_AB')).toBeInTheDocument();
-  expect(screen.getByText('1 gallery removals')).toBeInTheDocument();
+  const onClose = vi.fn();
+  render(<BatchQueue ids={[1, 2, 3]} onClose={onClose} />);
+  // The real modal form dialog: a pointer press outside its layer dismisses it, and getByRole skips aria-hidden content.
+  const press = (button: HTMLElement) => { fireEvent.pointerDown(button); fireEvent.click(button); };
+  press(await screen.findByRole('button', { name: 'Confirm & next' }));
+  await screen.findByText(/^✓ Item 1/);
+  press(screen.getByRole('button', { name: 'Confirm & next' }));
+  await screen.findByText(/^✓ Item 2/);
+  press(screen.getByRole('button', { name: 'Publish 2 confirmed' }));
+  const review = await screen.findByRole('dialog', { name: 'Review publish' });
+  expect(await within(review).findByText('T_AB')).toBeInTheDocument();
+  expect(within(review).getByText('1 gallery removals')).toBeInTheDocument();
   expect(publishConfirm).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Publish 4 images' }));
+  press(within(review).getByRole('button', { name: 'Publish 4 images' }));
   await waitFor(() => expect(publishConfirm).toHaveBeenCalledWith([1, 2], 'T_AB'));
   expect(publishPreview).toHaveBeenCalledWith([1, 2]);
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
 });
 
 it('C5(b) marks a confirmed queue item and shows its form fill count', async () => {
   queueFixtures();
   render(<BatchQueue ids={[1, 2, 3]} onClose={() => undefined} />);
   await screen.findByText(/Item 1 · 1\/3 filled/);
-  fireEvent.click(screen.getByText('Confirm & next'));
-  expect(screen.getByText(/✓ Item 1 · 1\/3 filled/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm & next' }));
+  expect(await screen.findByText(/✓ Item 1 · 1\/3 filled/)).toBeInTheDocument();
 });
 
 const listRow = (label: { kind: 'description_failed' } | { kind: 'publishing'; value: number }, publish: unknown = null) => ({ id: 4, sku: 'P15', item_type: 'Chair', title: 'Oak chair', main_count: 1, condition_count: 0, unreviewed_count: 0, status: label.kind === 'publishing' ? 'publishing' : 'failed', label, progress: label.kind === 'publishing' ? label.value : null, last_activity_at: Date.now(), cover_preview_path: null, publish });

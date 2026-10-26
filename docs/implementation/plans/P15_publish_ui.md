@@ -159,4 +159,13 @@ notification lands (workspace).
   All P15 artifacts archived to `archive/P15_publish_ui_20261026-081128/` — review r2 with F4 is
   `archive/P15_publish_ui_20261026-081128/handoff_P15_publish_ui_review_r2.md`. FIX2_AUTHORISED above still holds.
   Relaunched on Claude (PSM_IMPLEMENTER=claude) for this phase; the implement session applies F4 only, from the tree.
-
+- 2026-10-26, claude implement r1 (FIX2 relaunch, F4 only): `BatchQueue` now mounts the review inside the form dialog's
+  tree (its `publishSlot`), and `PublishPopover` gained `modal`: it renders as its own Radix `Dialog` (title "Review
+  publish", same body, same `preview.summary` sent). Nested in the form dialog it is the top modal layer, so its buttons
+  are live and pressing them no longer dismisses the queue. Cancel/Escape close only the review; queue confirmations stay.
+  C5(a) no longer mocks `FormDialog`: it renders the real dialog, presses (pointerdown + click) "Confirm & next" twice,
+  "Publish 2 confirmed" and "Publish 4 images" found by role inside the "Review publish" dialog, and asserts
+  `publish_confirm([1, 2], 'T_AB')` and the queue closing. It failed on the pre-fix tree (review dialog not reachable).
+  C5(b) awaits the ✓ because the real "Confirm & next" flushes the form first. Assumption: the dialog ignores close
+  requests while the confirm is in flight. No deviations; F1–F3 fixes untouched. Suite 374 Rust / 90 UI, clippy, fmt,
+  typecheck green.
