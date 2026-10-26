@@ -135,8 +135,13 @@ batched (SHOPIFY-VERIFY-5 gives the batch limit), then read back and compared ca
 difference fails the step and names the keys.
 
 **Product tags** (a product field, not a metafield) use a three-way merge so tags added in the
-Shopify admin are not lost: with `base` = the remote tags when the session last read them,
-write `(remote_now − (base − local)) ∪ (local − base)`, only if that differs from `remote_now`.
+Shopify admin are not lost: with `base` = the app's own tag list as of the last successful
+`update` of this product (stored per link; empty before the first), write
+`(remote_now − (base − local)) ∪ (local − base)`, only if that differs from `remote_now`. After
+every successful `update` the base becomes the current local list, whether or not a write
+happened. So a tag added in the admin is never removed, and a tag removed in the app is removed
+from the shop. (Corrected 2026-10-26, R33: the earlier base "the remote tags when last read"
+deleted admin tags on the second publish.)
 **Title** is written when it differs. **Description** (MVP: only a manual one) is sent as HTML:
 each blank-line-separated paragraph becomes `<p>…</p>` with `& < > "` escaped.
 

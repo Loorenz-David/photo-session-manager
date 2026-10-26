@@ -19,7 +19,9 @@ Updated: 2026-10-25 by the orchestrator.
   `handoffs/reviewer/handoff_P12_shopify_adapter_projection_r0.md`; applied 2026-10-26 (commit a1cf9b4: P12 59 rows,
   P13 task 0 wiring + C9, master plan, 07A/09 grounding, changelog 17). Owner answers folded in
   (book 09A, R32, changelog 18; P12 68 rows / 9 criteria, P13, P14 21 rows, P16, master plan). P12 APPROVED (with notes) 2026-10-26 06:02 on Claude; narrative relayed.
-  Run in flight: **all** (from P13, implementer on Codex), started 2026-10-26 ~06:05; phases.txt restored.
+  P13 APPROVED (with notes) 06:52 on Codex. P14 fix r2 → OWNER_DECISIONS_PENDING (tag merge base);
+  answered from 07A MC-13's intent (option A, R33, changelog 19), C2(c) amended + C2(d) (22 rows), attempt archived.
+  Run in flight: **all** (from P14, Codex), started 2026-10-26 07:15.
 - Implementer and fix sessions: Codex again from P13 (owner 2026-10-26); P07–P12 were built on Claude
   (Opus/Sonnet) while Codex was rate-limited; `PSM_IMPLEMENTER=claude` switches.
 

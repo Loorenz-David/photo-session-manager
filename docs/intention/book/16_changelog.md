@@ -96,3 +96,8 @@
     (and SHOPIFY-VERIFY-0 in its Grounding list), 09, 12, intention.md map. 05B MC-22 unchanged: when the shop
     holds the proposal, the proposal advances to the next free number (offered to the owner as
     "keep as written"; no change requested). Owner decisions, header stays RATIFIED.
+19. **2026-10-26 — Tag merge base corrected** (orchestrator, from P14 review). 07A MC-13 Product
+    tags: `base` is the app's own tag list at the last successful `update` (refreshed even when
+    nothing is written), not the remote tags at the last read, which removed admin-added tags on
+    the second publish and never propagated app removals. Realises the clause's stated purpose
+    ("tags added in the Shopify admin are not lost"); option A of the P14 review card. R33.
