@@ -134,4 +134,11 @@ whether tags are written in the same `productUpdate` as the title.
   continues from the tree: apply F1 under option A (`tags_base` := local tag list after every successful `update`
   with a local tag value, written or not; an empty local list after a non-empty base counts as a value) and add C2(d);
   keep F2/F3 as they are.
+- 2026-10-26 (codex, implement continuation r1): applied the R33 tag-base correction in `update`: the stored base
+  becomes the confirmed local tag list after a successful update, including a no-write merge and an empty list.
+  C2(c) now asserts the local base; C2(d) verifies an admin-added tag survives a second publish without a tag write
+  and that clearing local tags removes a previously shared tag. The old code failed both targeted checks; all 22 P14
+  boundary tests and the workspace suite, Clippy, fmt, UI tests and typecheck pass. Assumption: the stored tag base
+  is advanced only for a frozen local tag value, as MC-13's no-clear rule keeps absent local values untouched.
+  No deviations; prior F2/F3 fixes remain intact.
 

@@ -339,7 +339,70 @@ fn c2c_local_addition_merges_and_persists_base() {
             .unwrap()
             .tags_base
             .as_deref(),
-        Some("[\"y\",\"x\"]")
+        Some("[\"x\"]")
+    );
+}
+#[test]
+fn c2d_republish_preserves_admin_tags_and_applies_local_removal() {
+    let a = app();
+    let (s, item) = session(&a, "P14-TAGS-REPEAT");
+    photo(&a, s, "p", C::Main);
+    value(&a, item, "product.tags", json!(["x"]));
+    let id = linked(&a, item, "P14-TAGS-REPEAT", "Oak", None);
+    a.fake_shop()
+        .state
+        .lock()
+        .unwrap()
+        .tags
+        .insert(id.clone(), vec!["y".into()]);
+    run(&a, s);
+    let writes_after_first = a
+        .fake_shop()
+        .state
+        .lock()
+        .unwrap()
+        .mutations
+        .iter()
+        .filter(|m| m.op == "update_tags")
+        .count();
+    run(&a, s);
+    let shop = a.fake_shop().state.lock().unwrap();
+    assert_eq!(shop.tags[&id], vec!["y", "x"]);
+    assert_eq!(
+        shop.mutations
+            .iter()
+            .filter(|m| m.op == "update_tags")
+            .count(),
+        writes_after_first
+    );
+    drop(shop);
+
+    let b = app();
+    let (s, item) = session(&b, "P14-TAGS-REMOVE");
+    photo(&b, s, "p", C::Main);
+    value(&b, item, "product.tags", json!(["a"]));
+    let id = linked(&b, item, "P14-TAGS-REMOVE", "Oak", None);
+    b.fake_shop()
+        .state
+        .lock()
+        .unwrap()
+        .tags
+        .insert(id.clone(), vec!["a".into()]);
+    run(&b, s);
+    assert!(
+        !b.fake_shop()
+            .state
+            .lock()
+            .unwrap()
+            .mutations
+            .iter()
+            .any(|m| m.op == "update_tags")
+    );
+    value(&b, item, "product.tags", json!([]));
+    run(&b, s);
+    assert_eq!(
+        b.fake_shop().state.lock().unwrap().tags[&id],
+        Vec::<String>::new()
     );
 }
 #[test]

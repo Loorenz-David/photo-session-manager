@@ -888,8 +888,9 @@ impl PublishService {
                 .unwrap_or_default();
             if let Some(tags) = merge_tags(&base, &local_tags, &remote_tags) {
                 self.commerce.update_tags(run, &external, &tags)?;
-                self.store.set_item_tags_base(local.id, "shopify", &tags)?;
             }
+            self.store
+                .set_item_tags_base(local.id, "shopify", &local_tags)?;
         }
         Ok(true)
     }
