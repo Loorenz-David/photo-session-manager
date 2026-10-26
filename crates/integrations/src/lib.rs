@@ -65,6 +65,7 @@ pub struct App {
     pub camera: Arc<dyn CameraProvider>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub jobs: Arc<JobRunner>,
+    pub publish_jobs: Arc<JobRunner>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
     pub export: Arc<ExportService>,
@@ -73,6 +74,7 @@ pub struct App {
     pub clock: Arc<dyn Clock>,
     stop: Arc<AtomicBool>,
     background: Option<thread::JoinHandle<()>>,
+    publish_background: Option<thread::JoinHandle<()>>,
 }
 
 impl App {
@@ -184,7 +186,8 @@ impl App {
         if let Err(error) = previews.on_startup() {
             tracing::warn!(%error, "startup sidecar check deferred");
         }
-        let mut runner = JobRunner::new(store.clone());
+        let mut runner = JobRunner::new(store.clone()).excluding_kind("publish_step");
+        let mut publish_runner = JobRunner::new(store.clone()).only_kind("publish_step");
         runner.register(
             "mirror_tag",
             Arc::new(MirrorTag {
@@ -214,9 +217,10 @@ impl App {
         );
         runner.register("render_export", Arc::new(InterruptedExport));
         if let Some(service) = publish.clone() {
-            runner.register("publish_step", Arc::new(PublishJob { service }));
+            publish_runner.register("publish_step", Arc::new(PublishJob { service }));
         }
         let jobs = Arc::new(runner);
+        let publish_jobs = Arc::new(publish_runner);
         if run_startup && !document_id.is_empty() {
             let startup_editing = editing.clone();
             let startup_store = store.clone();
@@ -300,6 +304,19 @@ impl App {
                 thread::sleep(Duration::from_millis(50));
             }
         });
+        let publish_background = if run_startup {
+            let worker_stop = stop.clone();
+            let worker_jobs = publish_jobs.clone();
+            let worker_clock = clock.clone();
+            Some(thread::spawn(move || {
+                while !worker_stop.load(Ordering::Relaxed) {
+                    let _ = worker_jobs.tick(worker_clock.now_ms());
+                    thread::sleep(Duration::from_millis(50));
+                }
+            }))
+        } else {
+            None
+        };
         Ok(Self {
             paths,
             settings,
@@ -312,6 +329,7 @@ impl App {
             camera,
             commerce,
             jobs,
+            publish_jobs,
             arrival,
             previews,
             export,
@@ -320,6 +338,7 @@ impl App {
             clock,
             stop,
             background: Some(background),
+            publish_background,
         })
     }
     pub fn nudge_port(&self) -> u16 {
@@ -461,6 +480,9 @@ impl Drop for App {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(bg) = self.background.take() {
+            let _ = bg.join();
+        }
+        if let Some(bg) = self.publish_background.take() {
             let _ = bg.join();
         }
     }

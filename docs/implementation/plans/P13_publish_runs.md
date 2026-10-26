@@ -190,3 +190,9 @@ notification text time format, how `publish_progress` events are throttled.
   11 notes went to the backlog. The first is an incomplete `integration` block making the app panic at launch.
   Lesson for the plans: no platform literal in core-service tasks (task 0's `"shopify"`), and C5(f) belongs at the
   adapter boundary.
+- 2026-10-26 (codex, fix 1): resolved F1 by treating a nameless media as pending only in `Processing` or `Uploaded`
+  status; ready nameless media now reaches gallery reconciliation. Resolved F2 by filtering `publish_step` jobs out
+  of the shared runner and processing them on a dedicated worker thread. Added the two requested boundary tests:
+  a ready nameless announced media is removed and the run completes with gallery D, and a capture row is recorded
+  while the fake shop's media poll is held. No additional assumptions or deviations. Full suite (345 Rust tests,
+  36 P13) and UI suite (79 tests), clippy, fmt and typecheck passed.

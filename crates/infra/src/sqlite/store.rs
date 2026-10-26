@@ -847,13 +847,22 @@ impl Store for SqliteStore {
         }
         Ok(())
     }
-    fn job_due(&self, now_ms: i64) -> Result<Option<Job>> {
+    fn job_due(
+        &self,
+        now_ms: i64,
+        only_kind: Option<&str>,
+        excluded_kind: Option<&str>,
+    ) -> Result<Option<Job>> {
         let mut conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         let tx = conn.transaction().map_err(db)?;
-        let id: Option<i64> = tx.query_row("SELECT id FROM jobs WHERE status='queued' AND next_attempt_at<=?1 ORDER BY next_attempt_at,id LIMIT 1", [now_ms], |r| r.get(0)).optional().map_err(db)?;
+        let id: Option<i64> = tx.query_row(
+            "SELECT id FROM jobs WHERE status='queued' AND next_attempt_at<=?1 AND (?2 IS NULL OR kind=?2) AND (?3 IS NULL OR kind<>?3) ORDER BY next_attempt_at,id LIMIT 1",
+            rusqlite::params![now_ms, only_kind, excluded_kind],
+            |r| r.get(0),
+        ).optional().map_err(db)?;
         let job = if let Some(id) = id {
             tx.execute(
                 "UPDATE jobs SET status='running',updated_at=?1 WHERE id=?2",

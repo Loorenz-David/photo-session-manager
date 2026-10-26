@@ -569,7 +569,11 @@ impl PublishService {
                 };
                 if existing.iter().any(|m| {
                     m.filename.is_none()
-                        && m.status != crate::domain::publish::RemoteMediaStatus::Failed
+                        && matches!(
+                            m.status,
+                            crate::domain::publish::RemoteMediaStatus::Processing
+                                | crate::domain::publish::RemoteMediaStatus::Uploaded
+                        )
                 }) {
                     return Ok(false);
                 }

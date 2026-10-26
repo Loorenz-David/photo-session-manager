@@ -6,7 +6,7 @@ use psm_core::{
         session::{PublishStep, SessionStatus},
     },
     mechanisms::{hash::sha256_file, reconcile},
-    ports::clock::Clock,
+    ports::{clock::Clock, commerce::CommerceAdapter},
     services::attributes::AttributesService,
 };
 use psm_infra::settings_file::Settings;
@@ -289,6 +289,74 @@ fn c1c_preview_removals_and_exact_confirmation_text() {
     assert_eq!(
         a.store().publish_item(1).unwrap().announced_removals,
         vec!["m9"]
+    );
+}
+
+#[test]
+fn ready_nameless_announced_media_is_removed_and_publish_completes() {
+    let a = app();
+    let s = session(&a, "VF-NAMELESS");
+    let p = photo(&a, s, "main", C::Main);
+    let item_id = a.store().session(s).unwrap().session.item_id.unwrap();
+    let external = a.fake_shop().add_product("VF-NAMELESS", "Oak", None);
+    a.items().link(item_id, "shopify", &external, None).unwrap();
+    a.fake_shop().state.lock().unwrap().products[0].media = vec![RemoteMedia {
+        id: "ready-video".into(),
+        filename: None,
+        status: RemoteMediaStatus::Ready,
+        position: 1,
+    }];
+
+    let run = publish(&a, s);
+    let item = a.store().publish_item(1).unwrap();
+    let gallery = a.fake_shop().item_get(&external).unwrap().media;
+    let desired = a
+        .store()
+        .photo_link(p, item_id, "gallery")
+        .unwrap()
+        .unwrap();
+    assert_eq!(item.run_id, run);
+    assert_eq!(item.step, PublishStep::Done);
+    assert_eq!(
+        gallery
+            .iter()
+            .map(|media| media.id.as_str())
+            .collect::<Vec<_>>(),
+        [desired.external_id.as_deref().unwrap()]
+    );
+}
+
+#[test]
+fn capture_arrival_is_recorded_while_publish_media_poll_is_held() {
+    let a = app();
+    let s = session(&a, "VF-PARALLEL");
+    photo(&a, s, "publish", C::Main);
+    start_upload(&a, s);
+    let commerce = a.commerce.as_ref().unwrap().clone();
+    commerce.hold_media_poll();
+    a.clock.advance(10_000);
+    let jobs = a.app.publish_jobs.clone();
+    let clock = a.clock.clone();
+    let upload = std::thread::spawn(move || jobs.tick(clock.now_ms()).unwrap());
+    if !commerce.wait_for_media_poll() {
+        commerce.release_media_poll();
+        upload.join().unwrap();
+        panic!("publish worker did not reach media poll");
+    }
+
+    a.store().set_active_session_id(Some(s)).unwrap();
+    let capture_root = a.app.arrival.capture_root().unwrap();
+    let capture_path = capture_root.join("during-publish.arw");
+    fs::write(&capture_path, b"capture arriving during publish").unwrap();
+    a.app.arrival.scan().unwrap();
+    let arrived = a.store().photos_in_session(s).unwrap();
+    let capture_path = capture_path.to_string_lossy().into_owned();
+    let released = arrived.iter().any(|photo| photo.raw_path == capture_path);
+    commerce.release_media_poll();
+    upload.join().unwrap();
+    assert!(
+        released,
+        "capture photo row was not recorded before media poll release"
     );
 }
 #[test]

@@ -113,7 +113,12 @@ pub trait Store: Send + Sync {
     ) -> Result<i64>;
     fn active_session_id(&self) -> Result<Option<i64>>;
     fn set_active_session_id(&self, id: Option<i64>) -> Result<()>;
-    fn job_due(&self, now_ms: i64) -> Result<Option<Job>>;
+    fn job_due(
+        &self,
+        now_ms: i64,
+        only_kind: Option<&str>,
+        excluded_kind: Option<&str>,
+    ) -> Result<Option<Job>>;
     fn job_done(&self, id: i64, now_ms: i64) -> Result<()>;
     fn job_retry(&self, id: i64, code: &str, next_attempt_at: i64, now_ms: i64) -> Result<()>;
     fn requeue_running_jobs(&self) -> Result<()>;

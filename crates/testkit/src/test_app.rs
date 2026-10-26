@@ -169,6 +169,7 @@ impl TestApp {
         self.clock.advance(ms);
         self.app.arrival.tick()?;
         let count = self.app.jobs.tick(self.clock.now_ms())?;
+        let count = count + self.app.publish_jobs.tick(self.clock.now_ms())?;
         self.app.previews.tick()?;
         Ok(count)
     }

@@ -7,20 +7,36 @@ pub trait JobHandler: Send + Sync {
 pub struct JobRunner {
     store: Arc<dyn Store>,
     handlers: HashMap<String, Arc<dyn JobHandler>>,
+    only_kind: Option<String>,
+    excluded_kind: Option<String>,
 }
 impl JobRunner {
     pub fn new(store: Arc<dyn Store>) -> Self {
         Self {
             store,
             handlers: HashMap::new(),
+            only_kind: None,
+            excluded_kind: None,
         }
+    }
+    pub fn only_kind(mut self, kind: &str) -> Self {
+        self.only_kind = Some(kind.into());
+        self
+    }
+    pub fn excluding_kind(mut self, kind: &str) -> Self {
+        self.excluded_kind = Some(kind.into());
+        self
     }
     pub fn register(&mut self, kind: &str, handler: Arc<dyn JobHandler>) {
         self.handlers.insert(kind.into(), handler);
     }
     pub fn tick(&self, now_ms: i64) -> Result<usize> {
         let mut count = 0;
-        while let Some(job) = self.store.job_due(now_ms)? {
+        while let Some(job) = self.store.job_due(
+            now_ms,
+            self.only_kind.as_deref(),
+            self.excluded_kind.as_deref(),
+        )? {
             let outcome = self
                 .handlers
                 .get(&job.kind)

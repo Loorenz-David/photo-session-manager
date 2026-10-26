@@ -15,7 +15,8 @@ use psm_core::{
 use serde_json::Value as Json;
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Condvar, Mutex},
+    time::Duration,
 };
 
 #[derive(Debug, Clone)]
@@ -45,13 +46,38 @@ pub struct FakeShop {
 pub struct FakeCommerce {
     pub state: Mutex<FakeShop>,
     clock: Arc<dyn Clock>,
+    media_poll: (Mutex<MediaPollGate>, Condvar),
+}
+#[derive(Default)]
+struct MediaPollGate {
+    held: bool,
+    entered: bool,
 }
 impl FakeCommerce {
     pub fn new(clock: Arc<dyn Clock>) -> Self {
         Self {
             state: Mutex::new(FakeShop::default()),
             clock,
+            media_poll: (Mutex::new(MediaPollGate::default()), Condvar::new()),
         }
+    }
+    pub fn hold_media_poll(&self) {
+        let mut gate = self.media_poll.0.lock().unwrap();
+        gate.held = true;
+        gate.entered = false;
+    }
+    pub fn wait_for_media_poll(&self) -> bool {
+        let (lock, ready) = &self.media_poll;
+        let gate = lock.lock().unwrap();
+        let (gate, _) = ready
+            .wait_timeout_while(gate, Duration::from_secs(5), |gate| !gate.entered)
+            .unwrap();
+        gate.entered
+    }
+    pub fn release_media_poll(&self) {
+        let mut gate = self.media_poll.0.lock().unwrap();
+        gate.held = false;
+        self.media_poll.1.notify_all();
     }
     pub fn add_product(&self, sku: &str, title: &str, barcode: Option<&str>) -> String {
         let mut s = self.state.lock().unwrap();
@@ -290,7 +316,17 @@ impl CommerceAdapter for FakeCommerce {
         Ok(media_id)
     }
     fn poll_media_ready(&self, _id: &str) -> Result<()> {
-        self.read("poll_media_ready")
+        self.read("poll_media_ready")?;
+        let (lock, ready) = &self.media_poll;
+        let mut gate = lock.lock().unwrap();
+        if gate.held {
+            gate.entered = true;
+            ready.notify_all();
+            while gate.held {
+                gate = ready.wait(gate).unwrap();
+            }
+        }
+        Ok(())
     }
     fn product_reorder_media(
         &self,
