@@ -41,12 +41,27 @@ type PhotoTileProps = {
   onToggleSelected: (photoId: number) => void;
 };
 
+/** The same visible tile contents in the grid and in its drag overlay. */
+export function PhotoTileFace({ photo, number, variant }: Pick<PhotoTileProps, 'photo' | 'number' | 'variant'>) {
+  const unreviewed = photo.classification === 'unreviewed';
+  const isCover = photo.classification === 'main' && number === 1;
+  const failed = useContext(PublishFailedContext);
+  return <>
+    <Thumb photo={photo} />
+    {variant === 'grid' && <>
+      <span className="tile-number">{String(number).padStart(2, '0')}</span>
+      {isCover && <span className="tile-cover">Cover</span>}
+      {!photo.adjusted_preview_path && <span className="tile-processing">Processing</span>}
+      {(photo.upload_state || failed) && <PhotoUploadBadge state={photo.upload_state ?? 'none'} />}
+    </>}
+    {unreviewed && <span className="tile-unreviewed" aria-hidden />}
+  </>;
+}
+
 /** One sortable photo in the grid or the folded strip. ⌘-click adds it to the selection. */
 export function PhotoTile({ photo, number, active, selected, variant, onOpen, onToggleSelected }: PhotoTileProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: photoDragId(photo.id) });
   const unreviewed = photo.classification === 'unreviewed';
-  const isCover = photo.classification === 'main' && number === 1;
-  const failed = useContext(PublishFailedContext);
 
   function onClick(event: MouseEvent) {
     if (event.metaKey || event.shiftKey) onToggleSelected(photo.id);
@@ -63,22 +78,13 @@ export function PhotoTile({ photo, number, active, selected, variant, onOpen, on
       data-dragging={isDragging || undefined}
       aria-current={active ? 'true' : undefined}
       aria-label={`Photo ${String(number).padStart(2, '0')}${unreviewed ? ', to review' : ''}`}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1 }}
       onClick={onClick}
       {...attributes}
       {...listeners}
       role="button"
     >
-      <Thumb photo={photo} />
-      {variant === 'grid' && (
-        <>
-          <span className="tile-number">{String(number).padStart(2, '0')}</span>
-          {isCover && <span className="tile-cover">Cover</span>}
-          {!photo.adjusted_preview_path && <span className="tile-processing">Processing</span>}
-          {(photo.upload_state || failed) && <PhotoUploadBadge state={photo.upload_state ?? 'none'} />}
-        </>
-      )}
-      {unreviewed && <span className="tile-unreviewed" aria-hidden />}
+      <PhotoTileFace photo={photo} number={number} variant={variant} />
     </div>
   );
 }

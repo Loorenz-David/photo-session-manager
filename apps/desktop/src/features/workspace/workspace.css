@@ -66,7 +66,7 @@
 .tile-strip { width: 44px; height: 33px; border-radius: var(--r-sm); }
 .photo-tile[data-active] { box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-text); }
 .photo-tile[data-selected] { box-shadow: 0 0 0 3px var(--ai); }
-.photo-tile[data-dragging] { opacity: .35; }
+.photo-tile[data-dragging] { opacity: 0; }
 .thumb-image { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .thumb-empty { display: block; width: 100%; height: 100%; }
 .tile-number { position: absolute; top: 6px; left: 6px; min-width: 22px; height: 18px; padding: 0 4px; border-radius: 4px; background: var(--color-bg); font-size: 10px; font-weight: var(--weight-heavy); line-height: 18px; text-align: center; }
@@ -74,7 +74,8 @@
 .tile-processing { position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--color-bg) 85%, transparent); font-size: 10px; font-weight: var(--weight-bold); }
 .tile-unreviewed { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border: 2px solid var(--color-bg); border-radius: 50%; background: var(--color-text); }
 .tile-strip .tile-unreviewed { top: 2px; right: 2px; width: 7px; height: 7px; }
-.drag-overlay { width: 120px; aspect-ratio: 4 / 3; overflow: hidden; border-radius: var(--r); box-shadow: var(--shadow-lg); transform: rotate(2.5deg); }
+.drag-overlay { width: 100%; height: 100%; }
+.drag-overlay.tile-strip { border-radius: var(--r-sm); }
 
 .folded-strip { width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; overflow-y: auto; border-left: 1px solid var(--hair); background: var(--color-bg); }
 .strip-divider { width: 44px; padding-top: 6px; border-top: 1px solid var(--hair-strong); color: var(--muted); font-size: 9px; font-weight: var(--weight-heavy); letter-spacing: .1em; text-align: center; }

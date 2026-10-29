@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import {
   DndContext,
   DragOverlay,
+  defaultDropAnimationSideEffects,
   PointerSensor,
   pointerWithin,
   useSensor,
@@ -9,6 +11,7 @@ import {
   type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
+  type DropAnimation,
 } from '@dnd-kit/core';
 import { ClipboardList, PanelsRightBottom } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,7 +31,7 @@ import { displayOrder, displaySequence } from './order';
 import { ItemPickerDialog, SessionPickerDialog } from './PickerDialogs';
 import { PhotoPanel } from './PhotoPanel';
 import type { PhotoMenuAction } from './PhotoMenu';
-import { PublishFailedContext, Thumb } from './PhotoTile';
+import { PhotoTileFace, PublishFailedContext } from './PhotoTile';
 import { SessionsPanel } from './SessionsPanel';
 import { Stage } from './Stage';
 import type { SwipeAction } from './SwipeLayer';
@@ -56,6 +59,16 @@ const collisions: CollisionDetection = args => {
   const within = pointerWithin(args);
   const tile = within.find(hit => String(hit.id).startsWith('photo:'));
   return tile ? [tile] : within;
+};
+
+const dropAnimation: DropAnimation = {
+  duration: 200,
+  easing: 'cubic-bezier(.22, 1, .36, 1)',
+  keyframes: ({ transform: { initial, final } }) => [
+    { transform: `translate3d(${initial.x}px, ${initial.y}px, 0)` },
+    { transform: `translate3d(${final.x}px, ${final.y}px, 0)` },
+  ],
+  sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0' } } }),
 };
 
 /**
@@ -104,13 +117,18 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const [itemCardOpen, setItemCardOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
-  const [dragging, setDragging] = useState<Photo | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
   const [failureOpen, setFailureOpen] = useState(false);
   const shownFailure = useRef<number | null>(null);
   const shownFailureSession = useRef(sessionId);
   const drop = useDrop(state);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const { active } = state;
+  const dragging = state.photos.find(photo => photo.id === draggingId) ?? null;
+  const ordered = displayOrder(state.photos);
+  const draggedGroup = dragging?.classification === 'condition' ? ordered.condition : [...ordered.main, ...ordered.unreviewed];
+  const draggedNumber = dragging ? draggedGroup.findIndex(photo => photo.id === dragging.id) + 1 : 0;
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const failure = state.view?.session.publish?.step === 'failed' ? state.view.session.publish : null;
   const retry = useCallback(() => {
     if (!failure) return;
@@ -212,13 +230,15 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
 
   function onDragStart(event: DragStartEvent) {
     const id = idNumber(event.active.id, 'photo:');
-    setDragging(state.photos.find(photo => photo.id === id) ?? null);
+    setDraggingId(state.photos.some(photo => photo.id === id) ? id : null);
   }
 
   function onDragEnd(event: DragEndEvent) {
-    setDragging(null);
     const id = idNumber(event.active.id, 'photo:');
-    if (id !== null && event.over) drop(id, event.over.id);
+    const overId = event.over?.id;
+    // Render the destination tile and the overlay's matching contents before dnd-kit clones it for the glide.
+    if (id !== null && overId !== undefined) flushSync(() => drop(id, overId));
+    setDraggingId(null);
   }
 
   const tileHandlers = {
@@ -244,7 +264,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
 
   return (
     <PublishFailedContext.Provider value={failure !== null}>
-    <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+    <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDraggingId(null)}>
       <main className="workspace" data-folded={folded || undefined}>
         <div className="stage-column">
           <Stage
@@ -277,7 +297,11 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         {sessionsOpen && <SessionsPanel currentSessionId={sessionId} onClose={() => setSessionsOpen(false)} />}
         <ImportDropZone />
       </main>
-      <DragOverlay>{dragging && <div className="drag-overlay"><Thumb photo={dragging} /></div>}</DragOverlay>
+      <DragOverlay dropAnimation={reducedMotion ? null : dropAnimation}>
+        {dragging && <div className={`photo-tile tile-${folded ? 'strip' : 'grid'} drag-overlay`} style={{ width: '100%', height: '100%' }} data-active={state.activeId === dragging.id || undefined} data-selected={state.selection.has(dragging.id) || undefined} aria-hidden="true">
+          <PhotoTileFace photo={dragging} number={draggedNumber} variant={folded ? 'strip' : 'grid'} />
+        </div>}
+      </DragOverlay>
       {failureOpen && failure && <FailurePopover reason={failure.error ?? 'Publish failed'} onRetry={retry} onClose={() => setFailureOpen(false)} />}
 
       <SessionPickerDialog
