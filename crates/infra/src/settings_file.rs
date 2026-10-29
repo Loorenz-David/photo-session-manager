@@ -57,6 +57,26 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub fn open_lenient(paths: &AppPaths) -> Result<(Self, Option<String>)> {
+        let path = paths.settings();
+        if !path.exists() {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&path)?;
+            serde_json::to_writer_pretty(&mut file, &Self::default())
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+        }
+        let raw = fs::read(&path)?;
+        match serde_json::from_slice(&raw) {
+            Ok(settings) => Ok((settings, None)),
+            Err(error) => {
+                tracing::warn!(%error, "settings.json invalid; using defaults");
+                Ok((Self::default(), Some(error.to_string())))
+            }
+        }
+    }
     pub fn open(paths: &AppPaths) -> Result<Self> {
         let path = paths.settings();
         if !path.exists() {

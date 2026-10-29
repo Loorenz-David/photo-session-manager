@@ -161,7 +161,7 @@ pub fn run() {
     let builder = specta_builder();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState(std::sync::RwLock::new(app)))
+        .manage(AppState::new(app))
         .setup(|handle| {
             let state = handle.state::<AppState>();
             let previews = {
@@ -210,7 +210,7 @@ mod p17_tests {
     use super::*;
     use std::{
         fs,
-        sync::{Arc, RwLock, mpsc},
+        sync::{Arc, mpsc},
         time::{Duration, Instant},
     };
     use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
@@ -257,7 +257,7 @@ mod p17_tests {
         test.fake.state.lock().unwrap().delay_document_info_ms = 1_500;
         let psm_testkit::TestApp { dir: _dir, app, .. } = test;
         let tauri_app = mock_builder()
-            .manage(AppState(RwLock::new(app)))
+            .manage(AppState::new(app))
             .invoke_handler(tauri::generate_handler![
                 commands::health::health_get,
                 commands::sessions::sessions_list
@@ -297,5 +297,46 @@ mod p17_tests {
             slow_thread.join().unwrap();
         });
         assert!(rx.recv().unwrap().1);
+    }
+}
+
+#[cfg(test)]
+mod p21_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn c2a_concurrent_settings_saves_preserve_every_change() {
+        let test = psm_testkit::TestApp::new().unwrap();
+        let path = test.app.paths.settings();
+        let state = Arc::new(AppState::new(test.app));
+        let patches = [
+            json!({"preview_recipe":"R1"}),
+            json!({"web_recipe":"W1"}),
+            json!({"style_name":"S1"}),
+            json!({"sku_prefix":"PX"}),
+        ];
+        let threads: Vec<_> = patches
+            .into_iter()
+            .map(|patch| {
+                let state = state.clone();
+                std::thread::spawn(move || state.settings_set(&patch))
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap().unwrap();
+        }
+        let shown = state.handles().unwrap().settings_get().unwrap();
+        let stored: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        for (key, value) in [
+            ("preview_recipe", "R1"),
+            ("web_recipe", "W1"),
+            ("style_name", "S1"),
+            ("sku_prefix", "PX"),
+        ] {
+            assert_eq!(shown[key], value);
+            assert_eq!(stored[key], value);
+        }
     }
 }

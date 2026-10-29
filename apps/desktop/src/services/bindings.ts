@@ -8,6 +8,7 @@ export const commands = {
 	appPathsGet: () => typedError<AppPathsDto, string>(__TAURI_INVOKE("app_paths_get")),
 	itemCreate: (sku: string, title: string, itemType: string, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_create", { sku, title, itemType, barcode })),
 	itemAdopt: (externalId: string) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_adopt", { externalId })),
+	/**  `barcode: null` keeps the current barcode; `barcode: ""` clears it. */
 	itemUpdateIdentity: (itemId: CommandId, sku: string | null, barcode: string | null) => typedError<ItemDto_Serialize, CommandError>(__TAURI_INVOKE("item_update_identity", { itemId, sku, barcode })),
 	itemsSearch: (query: string) => typedError<ItemDto_Serialize[], CommandError>(__TAURI_INVOKE("items_search", { query })),
 	itemsSearchShop: (query: string) => typedError<ItemDto_Serialize[], CommandError>(__TAURI_INVOKE("items_search_shop", { query })),

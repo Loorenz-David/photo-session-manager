@@ -586,7 +586,7 @@ fn c7a_done_records_publish_and_notification() {
     let n = a.store().notifications(Some(s)).unwrap();
     assert_eq!(n.len(), 1);
     assert_eq!(n[0].kind, "published");
-    assert!(n[0].text.starts_with("Published · "));
+    assert_eq!(n[0].text, "Published");
     assert_eq!(
         a.sessions()
             .list(psm_core::domain::session::ListFilter::All, None)
@@ -1084,7 +1084,7 @@ fn c9b_schema_refresh_replaces_definitions_and_links_atomically() {
     assert_eq!(a.store().definition_links("shopify").unwrap().len(), 2);
 }
 #[test]
-fn c9c_search_merges_local_and_unlinked_shop_hits_and_survives_outage() {
+fn c9c_search_merges_local_and_unlinked_shop_hits_and_reports_outage() {
     let a = app();
     let local = a
         .items()
@@ -1094,22 +1094,18 @@ fn c9c_search_merges_local_and_unlinked_shop_hits_and_survives_outage() {
     let already = a.fake_shop().add_product("L-1", "Oak table", None);
     a.items().link(local.id, "shopify", &already, None).unwrap();
     let chair = a.fake_shop().add_product("K-1", "Oak chair", None);
-    let search = || {
-        a.items()
-            .with_commerce(Some(a.fake_shop()))
-            .search("Oak")
-            .unwrap()
-    };
-    let found = search();
+    let search = || a.items().with_commerce(Some(a.fake_shop())).search("Oak");
+    let found = search().unwrap();
     assert_eq!(found.len(), 2);
     assert_eq!(found[0].sku, "L-1");
     assert_eq!(found[1].sku, "K-1");
     assert_eq!(found[1].id, 0);
     assert_eq!(found[1].external_id.as_deref(), Some(chair.as_str()));
     a.fake_shop().state.lock().unwrap().unreachable = true;
-    let found = search();
-    assert_eq!(found.len(), 1);
-    assert_eq!(found[0].sku, "L-1");
+    assert!(matches!(search(), Err(psm_core::Error::Provider(_))));
+    let local = a.items().search_local("Oak").unwrap();
+    assert_eq!(local.len(), 1);
+    assert_eq!(local[0].sku, "L-1");
 }
 #[test]
 fn c9d_adopt_shop_hit_creates_linked_item_then_session() {

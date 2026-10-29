@@ -366,7 +366,7 @@ impl PublishService {
                             return Ok(());
                         }
                     }
-                    let mut text = format!("Published · {}", self.clock.now_ms());
+                    let mut text = String::from("Published");
                     if self.condition_key()?.is_none() && !item.frozen_condition.is_empty() {
                         text.push_str(&format!(
                             ". Condition photos not published: field {} not found in the shop",
@@ -867,7 +867,8 @@ impl PublishService {
             .frozen_attributes
             .get("product.description")
             .and_then(|v| v.as_str())
-            && remote_description.as_deref() != Some(description)
+            && remote_description.as_deref()
+                != Some(self.commerce.render_description(description).as_str())
         {
             self.commerce
                 .update_description(run, &external, description)?;

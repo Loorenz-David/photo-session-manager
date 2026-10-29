@@ -27,8 +27,11 @@ impl AppPaths {
     }
 
     pub fn create(&self) -> Result<()> {
-        for name in ["previews", "hooks", "spool", "spool/bad", "logs", "backup"] {
+        for name in ["previews", "hooks", "spool", "spool/bad", "logs"] {
             fs::create_dir_all(self.root.join(name))?;
+        }
+        if let Err(error) = fs::create_dir_all(self.root.join("backup")) {
+            tracing::warn!(%error, "backup directory unavailable");
         }
         Ok(())
     }

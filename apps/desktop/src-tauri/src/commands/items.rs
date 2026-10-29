@@ -148,6 +148,7 @@ pub async fn item_create(
 
 #[tauri::command]
 #[specta::specta]
+/// `barcode: null` keeps the current barcode; `barcode: ""` clears it.
 pub async fn item_update_identity(
     state: State<'_, AppState>,
     item_id: CommandId,

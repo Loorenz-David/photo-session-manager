@@ -148,6 +148,9 @@ impl FakeCommerce {
     }
 }
 impl CommerceAdapter for FakeCommerce {
+    fn render_description(&self, paragraphs: &str) -> String {
+        psm_integrations::commerce::shopify::adapter::description_html(paragraphs)
+    }
     fn check_token(&self) -> Result<()> {
         self.read("check_token")?;
         if self.state.lock().unwrap().token_app_not_installed {

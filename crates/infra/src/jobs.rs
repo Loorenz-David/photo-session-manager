@@ -31,17 +31,22 @@ impl JobRunner {
         self.handlers.insert(kind.into(), handler);
     }
     pub fn tick(&self, now_ms: i64) -> Result<usize> {
+        if self.handlers.is_empty() {
+            return Ok(0);
+        }
         let mut count = 0;
         while let Some(job) = self.store.job_due(
             now_ms,
             self.only_kind.as_deref(),
             self.excluded_kind.as_deref(),
         )? {
-            let outcome = self
-                .handlers
-                .get(&job.kind)
-                .ok_or_else(|| Error::InvalidData(format!("unknown job kind: {}", job.kind)))?
-                .run(&job, now_ms);
+            let Some(handler) = self.handlers.get(&job.kind) else {
+                self.store
+                    .job_retry(job.id, "unknown_job_kind", now_ms + 60_000, now_ms)?;
+                count += 1;
+                continue;
+            };
+            let outcome = handler.run(&job, now_ms);
             match outcome {
                 Ok(()) => self.store.job_done(job.id, now_ms)?,
                 Err(error) => {

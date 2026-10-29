@@ -68,7 +68,8 @@ impl<'a> ItemsService<'a> {
         })?;
         let links = self.store.all_item_links("shopify")?;
         let mut items = Vec::new();
-        if let Ok(hits) = adapter.item_find(query) {
+        let hits = adapter.item_find(query)?;
+        {
             for hit in hits {
                 if links.iter().any(|link| link.external_id == hit.external_id) {
                     continue;
@@ -274,7 +275,10 @@ impl<'a> ItemsService<'a> {
                 item_id,
                 next_sku,
                 &stored_key,
-                barcode.or(old.barcode.as_deref()),
+                barcode
+                    .map(str::trim)
+                    .or(old.barcode.as_deref())
+                    .filter(|v| !v.is_empty()),
                 at,
             )
         })?;

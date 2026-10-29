@@ -35,6 +35,8 @@ pub trait CommerceAdapter: Send + Sync {
     fn item_get(&self, external_id: &str) -> Result<RemoteItem>;
     /// Current product fields used for the confirmed description and three-way tag merge.
     fn product_fields(&self, external_id: &str) -> Result<(Vec<String>, Option<String>)>;
+    /// The exact description representation stored by this platform.
+    fn render_description(&self, paragraphs: &str) -> String;
     /// Creates a draft item whose default variant carries `sku` and `barcode`; returns its id.
     fn item_create(
         &self,

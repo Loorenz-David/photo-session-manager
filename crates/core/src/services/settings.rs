@@ -60,7 +60,20 @@ impl SettingsService {
             if key == "integration" && !value.is_null() {
                 let mut integration = value.clone();
                 if let Some(secret) = integration.get("client_secret").and_then(Value::as_str)
-                    && secret.starts_with("••••")
+                    && current
+                        .pointer("/integration/client_secret")
+                        .and_then(Value::as_str)
+                        .is_some_and(|stored| {
+                            let tail = stored
+                                .chars()
+                                .rev()
+                                .take(4)
+                                .collect::<Vec<_>>()
+                                .into_iter()
+                                .rev()
+                                .collect::<String>();
+                            secret == format!("••••{tail}")
+                        })
                 {
                     let previous = current
                         .pointer("/integration/client_secret")

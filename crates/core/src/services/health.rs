@@ -2,9 +2,10 @@ use crate::domain::{HealthItem, HealthReport};
 use crate::{
     Result,
     domain::attribute::CoreType,
-    ports::{commerce::CommerceAdapter, store::Store},
+    ports::{clock::Clock, commerce::CommerceAdapter, store::Store},
+    services::attributes::AttributesService,
 };
-use std::sync::Mutex;
+use std::{sync::Mutex, time::Instant};
 
 #[derive(Default)]
 pub struct HealthService {
@@ -18,6 +19,7 @@ impl HealthService {
     pub fn check_integration(
         &self,
         store: &dyn Store,
+        clock: &dyn Clock,
         commerce: Option<&dyn CommerceAdapter>,
     ) -> Result<()> {
         let Some(adapter) = commerce else {
@@ -29,12 +31,29 @@ impl HealthService {
             Ok(()) => self.set_ok("integration_token_invalid", "Shopify token obtainable"),
             Err(error) => self.set("integration_token_invalid", error.to_string()),
         }
+        let started = Instant::now();
+        let refreshed =
+            AttributesService::new(store, clock, Some("shopify")).refresh_schema(adapter);
+        tracing::info!(
+            duration_ms = started.elapsed().as_millis() as u64,
+            "health: attributes_schema"
+        );
+        if let Err(error) = &refreshed {
+            tracing::warn!(%error, "health: schema refresh failed");
+        }
         let key = adapter.condition_photos_key().to_owned();
         let mut definitions = Vec::new();
         store.transaction(&mut |tx| {
             definitions = tx.attribute_definitions("shopify")?;
             Ok(())
         })?;
+        if refreshed.is_err() && definitions.is_empty() {
+            self.set(
+                "condition_field_missing",
+                format!("Condition photos field {key} unknown: shop fields not read yet"),
+            );
+            return Ok(());
+        }
         match definitions.iter().find(|definition| definition.key == key) {
             None => self.set(
                 "condition_field_missing",

@@ -89,6 +89,7 @@ pub struct AppHandles {
     pub settings: Settings,
     pub store: Arc<SqliteStore>,
     pub health: Arc<HealthService>,
+    pub clock: Arc<dyn Clock>,
     pub editing: Arc<dyn EditingProvider>,
     pub camera: Arc<dyn CameraProvider>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
@@ -104,6 +105,7 @@ pub struct AppHandles {
 pub struct SettingsSetContext {
     paths: AppPaths,
     settings: Settings,
+    health: Arc<HealthService>,
     scripting: Arc<dyn CaptureOneScripting>,
     lanes: (Arc<dyn CaptureOneScripting>, Arc<dyn CaptureOneScripting>),
     clock: Arc<dyn Clock>,
@@ -142,7 +144,18 @@ impl SettingsSetContext {
             self.commerce_override,
             false,
         ) {
-            Ok(app) => Ok(PreparedSettings::Runtime(Box::new(app))),
+            Ok(app) => {
+                if let Some(failure) = self
+                    .health
+                    .report("", false, false)
+                    .items
+                    .into_iter()
+                    .find(|item| item.code == "backup_failed" && !item.ok)
+                {
+                    app.health.set("backup_failed", failure.detail);
+                }
+                Ok(PreparedSettings::Runtime(Box::new(app)))
+            }
             Err(error) => {
                 let _ = Settings::set(&self.paths, &self.settings);
                 Err(error)
@@ -174,8 +187,11 @@ impl AppHandles {
                 tracing::warn!(%error, "health: camera status failed");
             }
         }
-        self.health
-            .check_integration(self.store.as_ref(), self.commerce.as_deref())?;
+        self.health.check_integration(
+            self.store.as_ref(),
+            self.clock.as_ref(),
+            self.commerce.as_deref(),
+        )?;
         Ok(self.health.report(
             &self.paths.root.to_string_lossy(),
             self.hooks_compiled,
@@ -183,7 +199,14 @@ impl AppHandles {
         ))
     }
     pub fn settings_get(&self) -> Result<serde_json::Value> {
-        Ok(SettingsService::get(&settings_value(&self.settings)?))
+        let mut value = settings_value(&self.settings)?;
+        if let Ok(Some(integration)) = self.settings.integration_settings() {
+            value["integration"] = serde_json::to_value(integration)
+                .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        } else {
+            value["integration"] = serde_json::Value::Null;
+        }
+        Ok(SettingsService::get(&value))
     }
     pub fn on_window_focus(&self) {
         let previews = self.previews.clone();
@@ -200,6 +223,7 @@ impl App {
         SettingsSetContext {
             paths: self.paths.clone(),
             settings: self.settings.clone(),
+            health: self.health.clone(),
             scripting: self.scripting.clone(),
             lanes: (
                 self.user_scripting.clone(),
@@ -217,6 +241,7 @@ impl App {
         let old = match prepared {
             PreparedSettings::Theme(settings) => {
                 self.settings = settings;
+                self.health.clear("settings_invalid");
                 None
             }
             PreparedSettings::Runtime(next) => {
@@ -234,6 +259,7 @@ impl App {
             settings: self.settings.clone(),
             store: self.store.clone(),
             health: self.health.clone(),
+            clock: self.clock.clone(),
             editing: self.editing.clone(),
             camera: self.camera.clone(),
             commerce: self.commerce.clone(),
@@ -292,20 +318,34 @@ impl App {
     ) -> Result<Self> {
         let (user_scripting, background_scripting) = lanes;
         paths.create()?;
-        let settings = Settings::open(&paths)?;
-        if let Some(integration) = settings.integration_settings()? {
+        let (settings, settings_problem) = Settings::open_lenient(&paths)?;
+        let integration_result = settings.integration_settings();
+        let integration_invalid = integration_result.is_err();
+        let integration = match integration_result {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!(%error, "integration settings invalid; using Export mode");
+                None
+            }
+        };
+        if let Some(integration) = &integration {
             psm_infra::logging::add_secret(&integration.client_secret);
         }
         let commerce = match commerce_override.clone() {
-            Some(adapter) => Some(adapter),
-            None => commerce_from_settings(&settings, clock.clone())?,
+            Some(adapter) if !integration_invalid => Some(adapter),
+            None if integration.is_some() => commerce_from_settings(&settings, clock.clone())?,
+            _ => None,
         };
         let store = Arc::new(
             SqliteStore::open(&paths).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
         );
         // ch12 §Backup: a copy at every start (a settings reopen is not a start).
+        let backup_problem = if start_backup {
+            backup::create(&paths).err().map(|e| e.to_string())
+        } else {
+            None
+        };
         if start_backup {
-            backup::create(&paths)?;
             store.requeue_running_jobs()?;
             if commerce.is_some() {
                 for id in store.active_publish_items()? {
@@ -315,6 +355,15 @@ impl App {
         }
         let spool = Arc::new(Spool::new(paths.clone()));
         let health = Arc::new(HealthService::new());
+        if let Some(problem) = settings_problem {
+            health.set("settings_invalid", format!("settings.json: {problem}"));
+        } else if let Err(error) = settings.integration_settings() {
+            health.set("settings_invalid", format!("integration: {error}"));
+        }
+        if let Some(problem) = backup_problem {
+            tracing::warn!(problem, "startup backup failed");
+            health.set("backup_failed", problem);
+        }
         let document_id = settings.document_id.clone().unwrap_or_default();
         if document_id.is_empty() {
             health.set("document_not_open", "No Capture One session configured");
@@ -420,6 +469,7 @@ impl App {
                     service,
                     store: store.clone(),
                     paths: paths.clone(),
+                    health: health.clone(),
                 }),
             );
         }
@@ -742,6 +792,7 @@ struct PublishJob {
     service: Arc<PublishService>,
     store: Arc<dyn Store>,
     paths: AppPaths,
+    health: Arc<HealthService>,
 }
 impl JobHandler for PublishJob {
     fn run(&self, job: &Job, _: i64) -> Result<()> {
@@ -752,7 +803,13 @@ impl JobHandler for PublishJob {
         let was_done = self.store.publish_item(id)?.step == PublishStep::Done;
         self.service.run_item(id)?;
         if !was_done && self.store.publish_item(id)?.step == PublishStep::Done {
-            backup::create(&self.paths)?;
+            match backup::create(&self.paths) {
+                Ok(()) => self.health.clear("backup_failed"),
+                Err(error) => {
+                    tracing::warn!(%error, "post-publish backup failed");
+                    self.health.set("backup_failed", error.to_string());
+                }
+            }
         }
         Ok(())
     }

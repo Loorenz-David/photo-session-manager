@@ -434,6 +434,9 @@ fn search_query(sku: &str) -> String {
 }
 
 impl CommerceAdapter for ShopifyAdapter {
+    fn render_description(&self, paragraphs: &str) -> String {
+        description_html(paragraphs)
+    }
     fn check_token(&self) -> Result<()> {
         self.call("query { shop { name } }", serde_json::json!({}))?;
         Ok(())

@@ -1,12 +1,25 @@
 use psm_core::{Error, Result};
 use psm_integrations::{App, AppHandles};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
-pub struct AppState(pub RwLock<App>);
+pub struct AppState {
+    app: RwLock<App>,
+    save: Mutex<()>,
+}
 impl AppState {
+    pub fn new(app: App) -> Self {
+        Self {
+            app: RwLock::new(app),
+            save: Mutex::new(()),
+        }
+    }
     pub fn settings_set(&self, patch: &serde_json::Value) -> Result<serde_json::Value> {
+        let _save = self
+            .save
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
         let context = self
-            .0
+            .app
             .read()
             .map_err(|e| Error::InvalidData(e.to_string()))?
             .settings_set_context();
@@ -18,14 +31,14 @@ impl AppState {
         Ok(value)
     }
     pub fn handles(&self) -> Result<AppHandles> {
-        self.0
+        self.app
             .read()
             .map(|app| app.handles())
             .map_err(|e| Error::InvalidData(e.to_string()))
     }
     pub fn mutate<T>(&self, f: impl FnOnce(&mut App) -> Result<T>) -> Result<T> {
         let mut app = self
-            .0
+            .app
             .write()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         f(&mut app)
