@@ -34,6 +34,7 @@ the meaning, the contract gives the exact rule.
 | [09A Shopify credentials and condition field](book/09A_shopify_credentials_and_condition_field.md) | client-credentials token, store switch by settings, the configured condition-photos metafield (MC-23, MC-24, owner answers 2026-10-26) |
 | [10 Camera and editing providers](book/10_imaging_providers.md) | camera adapter, Capture One events and commands, live previews, rendering |
 | [10A Mechanism contracts: Capture One](book/10A_capture_one_contracts.md) | hook install and delivery, render jobs, live-preview staleness, capture-folder switch, document/variant addressing and tags, original preview extraction (MC-15…MC-20) |
+| [10B Shape on arrival](book/10B_shape_on_arrival.md) | the crop shape (Square by default) the app asks Capture One to set on each new photo, the `crop_on_arrival` setting, true-proportion tiles (MC-25, owner 2026-10-29) |
 | [11 Architecture and packaging](book/11_architecture_and_packaging.md) | Tauri + Rust, layers, commands/events, repo layout, packaging spike, phone remote |
 | [12 Operations](book/12_operations.md) | settings, logs, backup, health |
 | [13 Scope ladder](book/13_scope_ladder.md) | must ship / only if cheap / deferred |

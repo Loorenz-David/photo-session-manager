@@ -48,8 +48,9 @@ optional), `import`, `style.apply`. Capture One is the only editing adapter in t
   export folder under our filename, wait for processing-done, verify the file exists. Rendering
   happens only at publish or export time, never at approve (D4, resolved R28).
 - Tags: write `color tag` on classification; batched read only if read-back is enabled (D2).
-- Basic layer: the style, masks and crop on arrival are Capture One's Next Capture Adjustments,
-  configured in S1 and named in settings. Scripted autocrop is CH-only.
+- Basic layer: the style and masks on arrival are Capture One's Next Capture Adjustments,
+  configured in S1 and named in settings. Scripted autocrop is CH-only. The crop shape on arrival
+  is set by the app through Capture One's crop ratio: chapter 10B MC-25 (owner 2026-10-29).
 
 ## Not scriptable (manual in Capture One)
 Brush strokes, healing, AI Eraser. The app never needs to know a retouch happened beyond the

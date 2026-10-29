@@ -3,7 +3,7 @@
 - **Data directory:** the app's data directory under `~/Library/Application Support/` (Tauri
   app-data path for the bundle) holds the SQLite file, previews cache, logs and settings.
   Nothing runtime lives in the repo.
-- **Settings:** edited in a settings screen; stored as a JSON file in the data directory.
+- **Settings:** edited in a settings screen; stored as a JSON file in the data directory. The crop shape on arrival (`crop_on_arrival`) and its health items: chapter 10B MC-25.
   Integration credentials (Shopify client ID and secret, 09A MC-23) are stored there in the MVP with
   file permissions 600; Keychain after the MVP. The Shopify access token is never stored.
   Secrets are never logged or committed (rule 8).

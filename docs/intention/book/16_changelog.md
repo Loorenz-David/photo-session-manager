@@ -108,3 +108,10 @@
 21. **2026-10-26 — Capture root corrected** (orchestrator, from the owner's first real run, R4). 05A MC-2: the
     capture root is `canon(<document id>/Capture)`; the `capture` favourite is the current capture folder,
     not the root (evidence Correction 2026-10-26). R34. Plans P17/P18 added for the real-run findings.
+22. **2026-10-29 — Owner: shape on arrival** (relayed by the orchestrator). Owner's words: "on the camera I'm
+    choosing cropping 1:1 … the imported images because they are raw are brought without that 1:1 cropping
+    … my end intention is 1:1"; choice "App sets Square". New chapter 10B: MC-25 (setting `crop_on_arrival`,
+    default `Square`; once per new RAW whose crop is untouched, through the editing-provider lane; health on
+    failure or unknown ratio; tiles in true proportions), invariant M31, decision R35. Chapter 10 "Basic
+    layer" no longer names crop as a Next Capture Adjustment. Evidence: "Crop by script" (2026-10-29).
+    Owner decision, header stays RATIFIED.
