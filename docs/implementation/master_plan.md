@@ -89,23 +89,24 @@ restated so no session has to infer them:
 | P16_operations | APPROVED | 2026-10-26 | opus | review r1 APPROVED_WITH_NOTES: 12/12 rows hold at their boundaries; suite 387 Rust / 92 UI, clippy/fmt/typecheck green (re-run by reviewer); C6(a) re-run live by reviewer → "130", still browsing Capture; no secret in the checkpoint diff; 10 backlog notes, none blocking |
 | P17_real_run_fixes | APPROVED | 2026-10-26 | opus | approved with notes after fix 1 (re-review r2): F1 resolved (a settings rebuild no longer requeues or re-enqueues jobs the live workers own; real starts keep crash recovery); perimeter = allowed files (`43adbee`: 2 paths); 16/16 rows + F1 test hold; suite 406 Rust / 92 UI, clippy/fmt/typecheck green; 4 notes from r1 + 1 in backlog |
 | P18_pending_state_ui | APPROVED | 2026-10-26 | opus | approved with notes after fix 1 (re-review r2): F1 resolved (shop hits keyed to the query that produced them in both dialogs; new C3(c) cases red on pre-fix code by reading); perimeter = allowed files (`bcd4f51`: 3 paths); suite 407 Rust / 102 UI, clippy/fmt/typecheck green; 5 notes from r1 + 1 in backlog |
+| P19_navigation_and_drop | NOT_STARTED | 2026-10-29 | planner | planned from the second real run (R7: one shared page header, Back top-left, parent per route, ⌘[/Esc; R8: a dropped photo's preview settles into its new slot); 3 criteria / 9 rows, frontend only |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 19 phases in execution order (17 MVP phases plus the two real-run fix phases added
-2026-10-26); the runner is sequential and a phase starts only when every
+`phases.txt` lists the 20 phases in execution order (17 MVP phases, the two real-run fix phases added
+2026-10-26 and the second real run's fix phase P19 added 2026-10-29); the runner is sequential and a phase starts only when every
 phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
-P15[P14,P11] · P16[P15] · P17[P16] · P18[P17].
+P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18].
 
 - **Local workflow usable after P09** (shoot → arrive → review → live previews → export). Attributes and the
   form (P10, P11) complete the local item data; Shopify starts at P12.
@@ -333,3 +334,4 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
 - 2026-10-25 P00 r1 continuation — corrected the stale environment note after resolving SQLite, running the workspace suite and building an ad-hoc bundle; recorded the LaunchServices refusal at the bundle-launch boundary.
 - 2026-10-25 P00 r1 close — recorded the orchestrator's successful launch outside the Codex sandbox and the remaining interactive Automation check.
 - 2026-10-26 real-run fix phases — planner added P17_real_run_fixes and P18_pending_state_ui (§4 rows, §5 order, §6.7 command rule and `items_search_shop`) from `real_run_2026-10-26.md`. Fold-back owed by the orchestrator before P17 launches: 05A MC-2's capture-root sentence (the `capture` favourite is the current capture folder per the evidence Correction of 2026-10-26; the root is `<document id>/Capture`).
+- 2026-10-29 second real run — planner added P19_navigation_and_drop (§4 row, §5 order and `depends_on`) from `real_run_2026-10-26.md` "Second real run" R7, R8. Frontend only; no registry, command or environment change.
