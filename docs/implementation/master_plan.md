@@ -91,23 +91,26 @@ restated so no session has to infer them:
 | P18_pending_state_ui | APPROVED | 2026-10-26 | opus | approved with notes after fix 1 (re-review r2): F1 resolved (shop hits keyed to the query that produced them in both dialogs; new C3(c) cases red on pre-fix code by reading); perimeter = allowed files (`bcd4f51`: 3 paths); suite 407 Rust / 102 UI, clippy/fmt/typecheck green; 5 notes from r1 + 1 in backlog |
 | P19_navigation_and_drop | APPROVED | 2026-10-29 | opus | review r1 APPROVED_WITH_NOTES: 9/9 rows hold at their boundaries (8 tests red on the pre-phase tree, C1(d) a regression guard that already held); perimeter = declared files (`3058be8`: 13 paths); suite 407 Rust / 111 UI, clippy/fmt/typecheck green (re-run by reviewer); 4 backlog notes; drop animation not verified live (owner try-out step 3) |
 | P20_drop_continuity | APPROVED | 2026-10-29 | opus | review r1 APPROVED_WITH_NOTES: 3/3 rows hold at their boundaries; perimeter = declared files (`63e5899`: 7 paths); suite 407 Rust / 114 UI, clippy/fmt/typecheck green (re-run by reviewer); 2 backlog notes (gliding copy keeps its pre-drop number/Cover badge, so the flushSync claim does not hold; the glide is not verified live) |
+| P21_backend_robustness | NOT_STARTED | 2026-10-29 | planner | planned from `backlog.md` (7 criteria / 14 rows): start fallbacks (damaged settings, incomplete integration, failing backup), serialised saves, exact-mask secret, integration defaults on read, no stranded jobs, honest shop search, health reads the schema first, `Published` text, description compare, barcode clear |
+| P22_frontend_tidy_up | NOT_STARTED | 2026-10-29 | planner | planned from `backlog.md` (5 criteria / 10 rows): drawer shows local date/time, secret field clears on focus, ⌘[ ignored while typing, event reloads deferred during a drag command, overlay shows the projected number/Cover, form action queue / invalid-value seed / close path / barcode clear, one source for a page's parent |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 20 phases in execution order (17 MVP phases, the two real-run fix phases added
-2026-10-26 and the second real run's fix phase P19 added 2026-10-29); the runner is sequential and a phase starts only when every
+`phases.txt` lists the 22 phases in execution order (17 MVP phases, the two real-run fix phases added
+2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, and the two tidy-up phases P21/P22 planned
+2026-10-29 from `backlog.md`); the runner is sequential and a phase starts only when every
 phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
-P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18].
+P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21].
 
 - **Local workflow usable after P09** (shoot → arrive → review → live previews → export). Attributes and the
   form (P10, P11) complete the local item data; Shopify starts at P12.
@@ -180,7 +183,9 @@ version; `package-lock.json` committed). Exact versions in `package.json`, no `^
 `Clock` (`now_ms() -> i64`, `mono() -> Instant`; `SystemClock`, testkit `ManualClock`) · `EditingProvider`
 (`inspect_document`, `set_capture_folder`, `install_hooks`, `check_recipes`, `render(raw, RenderPurpose) -> JobId`,
 `mirror_tag(raw, Classification)`, `import(paths)`, `capabilities()`) · `CameraProvider` (`status`, `capture`,
-`capabilities`) · `CommerceAdapter` (ch09 capability methods; every mutating method takes `&ConfirmedRun`) ·
+`capabilities`) · `CommerceAdapter` (ch09 capability methods; every mutating method takes `&ConfirmedRun`; P21 adds
+`render_description(paragraphs) -> String`, the description text as the platform stores it, so core compares before
+writing) ·
 `RawPreviews` (`extract(raw, dest) -> Option<Extracted{orientation}>`) · `EventSink` (`emit(AppEvent)`).
 Capture One internals: `psm_integrations::editing::capture_one::scripting::CaptureOneScripting` (typed
 operations over the dictionary; impls `JxaScripting`, testkit `FakeCaptureOneScripting`). Shopify internals:
@@ -225,7 +230,10 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   `no_integration`, `invalid_value`, `shop_not_permitted`, `app_not_installed`, `credentials_rejected` (09A MC-23).
 - Health codes (`HealthItem{code, ok, detail}`): `camera_disconnected`, `document_not_open`, `document_not_session`,
   `hooks_not_installed`, `recipe_missing`, `capture_folder_not_set`, `variant_not_found`, `integration_token_invalid` (detail = the 09A MC-23
-  message), `condition_field_missing` (detail = key, "not found" or "not a file list"; 09A MC-24).
+  message), `condition_field_missing` (detail = key, "not found" or "not a file list"; 09A MC-24; from P21 also
+  `Condition photos field <key> unknown: shop fields not read yet` when the schema could not be read and nothing is
+  stored), `settings_invalid` (P21; detail `settings.json: <parser message>` or `integration: <serde message>`),
+  `backup_failed` (P21; detail = the error; cleared by the next successful backup).
 - Colour-tag mapping (MC-19): `main 4`, `condition 5`, `deleted 1`, `unreviewed 0`.
 
 ### 6.7 Tauri commands (`#[tauri::command] #[specta::specta]`, snake_case) and events
@@ -236,7 +244,9 @@ P03 `sessions_list` · P04 `session_activate`, `session_deactivate`, `camera_sta
 P05 `photos_import`, `photos_assign_unassigned` · P07 `items_search` · P09 `export_run` ·
 P10 `attributes_definitions_list`, `attribute_values_get`, `attribute_values_set`, `attribute_ai_accept_all`,
 `attribute_ai_clear`, `presets_get`, `presets_set`, `form_get` · P13 `publish_preview`, `publish_confirm`, `publish_retry`,
-`notifications_list` · P16 `settings_get`, `settings_set` · P18 `items_search_shop` (`items_search` becomes local-only).
+`notifications_list` · P16 `settings_get`, `settings_set` · P18 `items_search_shop` (`items_search` becomes local-only) ·
+P21: `item_update_identity` reads `barcode: ""` as "clear the barcode" (`null` = unchanged); `items_search_shop` rejects
+with code `provider` when the shop cannot be reached (no silent `[]`).
 From P17 every command is `pub async fn` over `AppState(RwLock<App>)` through `AppState::handles()` / `mutate()`
 (`state.rs`), work inside `tauri::async_runtime::spawn_blocking`; no command holds the app lock across provider work.
 Events (`AppEvent` → Tauri event name): `session_changed{session_id}`, `photo_added{photo_id, session_id}`,
@@ -252,6 +262,10 @@ exported by the test `psm-desktop::export_bindings` to `apps/desktop/src/service
 `preview_delay_s` (15; read clamped 10–30, MC-17) · `theme` (`"light"`) · `sku_prefix` (owner card 2 answered
 "generate", 05B MC-22; absent or empty = no proposal) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","client_id","client_secret","condition_photos_key":"custom.damage_report"}`, 09A MC-23/MC-24; no stored access token).
 Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; durations carry their unit suffix.
+**Reading rule (P21):** a `settings.json` that does not parse, or an `integration` block that is not a complete
+`IntegrationSettings`, never stops the app: the defaults are used in memory (Export mode for the block), the file is
+left untouched, health shows `settings_invalid`; the next save writes a complete file. `settings_get` always shows
+`api_version` and `condition_photos_key` (defaults filled).
 
 ### 6.9 Test layout
 - Behaviour tests: `crates/testkit/tests/<phase_lower>_<slug>.rs` (e.g. `p02_review_order.rs`); one `#[test]` per
@@ -337,3 +351,4 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
 - 2026-10-26 real-run fix phases — planner added P17_real_run_fixes and P18_pending_state_ui (§4 rows, §5 order, §6.7 command rule and `items_search_shop`) from `real_run_2026-10-26.md`. Fold-back owed by the orchestrator before P17 launches: 05A MC-2's capture-root sentence (the `capture` favourite is the current capture folder per the evidence Correction of 2026-10-26; the root is `<document id>/Capture`).
 - 2026-10-29 second real run — planner added P19_navigation_and_drop (§4 row, §5 order and `depends_on`) from `real_run_2026-10-26.md` "Second real run" R7, R8. Frontend only; no registry, command or environment change.
 - 2026-10-29 orchestrator added P20_drop_continuity (owner feedback on the P19 drop; frontend only, 3 rows).
+- 2026-10-29 tidy-up — planner added P21_backend_robustness and P22_frontend_tidy_up from `backlog.md` (owner: fix the known small leftovers before the work Mac and the real store). §4 rows, §5 count/graph/`depends_on` (P20 recorded too), §6.4 `render_description`, §6.6 health codes `settings_invalid`/`backup_failed` and a third `condition_field_missing` detail, §6.7 barcode `""` and the `provider` rejection of `items_search_shop`, §6.8 reading rule. Backlog rows 124, 125 / P00 note 1 / 103 and 129 were verified already fixed by P17/P18 and marked so; no intention-book change needed.
