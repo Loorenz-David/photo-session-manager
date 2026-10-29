@@ -297,3 +297,6 @@ Do not derive the capture root from it.
   camera's 1:1). The app's adjusted-variant path picked it up unaided: a new `adjusted-13.jpg` at 1600×1600.
 - Restoring the full frame: `app.maximumCrop(variant)` returned it exactly (ratio "", 5981×3987, same rect);
   setting `"Original"` instead keeps the reduced area (4884×3256).
+- **Correction (P23 live, 2026-10-29):** on an untouched variant `cropAspectRatio()` returns JXA `null` (it printed as
+  "" above only because the probe joined values into a string); `maximumCrop(v, {apply:false})` reports the full
+  frame in a shape other than `{width,height}` — `jxa/apply_crop.js` reads both as Capture One actually returns them.

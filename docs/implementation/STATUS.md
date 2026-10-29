@@ -2,7 +2,7 @@
 
 Updated: 2026-10-29 by the orchestrator.
 
-**Run in flight:** `tools/pipeline/run_phase.sh all` (P21_backend_robustness, P22_frontend_tidy_up, then P23_shape_on_arrival if the loop picks up the in-place append; else relaunch `all`; Codex), started 2026-10-29 ~12:30. **Owner decision 2026-10-29:** the app sets Capture One's Square crop on every new photo (setting, default Square); tiles show the true shape → book 10B (MC-25, M31, R35, changelog 22–23), plan P23 written; give-up limit 8 answered from the book.
+**No run in flight.** P21, P22, P23 APPROVED 2026-10-29 (with notes; narratives relayed). Build with P23 opened 15:25. Next: owner try-out (shoot 1:1 → square in Capture One/app/shop; hand crop kept; drop glide), then the work-Mac move with the real store.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
