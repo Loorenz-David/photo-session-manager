@@ -31,7 +31,8 @@ Updated: 2026-10-25 by the orchestrator.
 - 2026-10-26 14:00–14:30 first real run with the owner → findings R1–R6 (`real_run_2026-10-26.md`); owner wants
   the lag fixed now. Planner wrote P17_real_run_fixes (backend) + P18_pending_state_ui (frontend); 05A MC-2 capture
   root corrected (R34, changelog 21). P17 APPROVED 15:18, P18 APPROVED 15:48 (Codex). Second real run 2026-10-29 PASS end to end (capture → previews → classify/reorder → form → publish to the test
-  store, read back). Owner findings R7 (back button top left), R8 (drop animation) → small fix phase P19.
+  store, read back). Owner findings R7 (back button top left), R8 (drop animation) → small fix phase P19 (planned 2026-10-29, 9 rows).
+  Run in flight: **all** (P19, Codex), started 2026-10-29.
 - Open after the MVP build: one tethered session to measure shot→original/adjusted preview (P16 Not yet);
   first end-to-end real use with the owner (shoot, sort, form, publish to the test store); backlog.md notes.
 - Implementer and fix sessions: Codex again from P13 (owner 2026-10-26); P07–P12 were built on Claude
