@@ -2,7 +2,7 @@
 
 Updated: 2026-10-29 by the orchestrator.
 
-**In flight (2026-10-29 ~12:05):** planner session writing the tidy-up phase(s) P21(+P22) from backlog.md (owner: "let's correct the known small leftovers"). **Owner decision open:** square crop — camera 1:1 is not applied to RAWs; published photos were 3:2 (evidence: "Crop by script"). Proposal: the app asks Capture One for a Square crop on every new photo (setting, default Square), tiles show the true shape.
+**Run in flight:** `tools/pipeline/run_phase.sh all` (P21_backend_robustness, P22_frontend_tidy_up; Codex), started 2026-10-29 ~12:30. **Owner decision 2026-10-29:** the app sets Capture One's Square crop on every new photo (setting, default Square); tiles show the true shape → book chapter + phase P23 to follow.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
