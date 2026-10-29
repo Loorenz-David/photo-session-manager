@@ -1,6 +1,8 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
-Updated: 2026-10-25 by the orchestrator.
+Updated: 2026-10-29 by the orchestrator.
+
+**In flight (2026-10-29 ~12:05):** planner session writing the tidy-up phase(s) P21(+P22) from backlog.md (owner: "let's correct the known small leftovers"). **Owner decision open:** square crop — camera 1:1 is not applied to RAWs; published photos were 3:2 (evidence: "Crop by script"). Proposal: the app asks Capture One for a Square crop on every new photo (setting, default Square), tiles show the true shape.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
