@@ -286,3 +286,14 @@ and the root itself is a separate favourite (`Capture`, numeric id 3, `file=…/
 "capture root via `collections.whose({id:"capture"})`" held only because the capture folder was the root at the time.
 Do not derive the capture root from it.
 
+
+## Crop by script (orchestrator probe, 2026-10-29, session test 1, last variant)
+- The camera's 1:1 aspect setting is **not** applied by Capture One to the RAW: the variant reads full frame
+  (`crop width/height` 5981×3987, `crop aspect ratio` ""), renders and exports are 3:2 (`PSM Preview`
+  1600×1067, published `PSM Web` 2048×1365). Only the JPEG embedded in the ARW is square (1088×1080), which is
+  why the app's `original.jpg` looked 1:1 before the adjusted preview arrived; tiles also trim with `object-fit: cover`.
+- `available crop aspect ratios` = `Unconstrained, Original, Output, Square, 1x2, 1x3, 2x3, 3x4, 4x5, 5x7, 16x9`.
+- Writing `variant.cropAspectRatio = "Square"` (JXA) works: crop becomes 3987×3987, centred (same framing as the
+  camera's 1:1). The app's adjusted-variant path picked it up unaided: a new `adjusted-13.jpg` at 1600×1600.
+- Restoring the full frame: `app.maximumCrop(variant)` returned it exactly (ratio "", 5981×3987, same rect);
+  setting `"Original"` instead keeps the reduced area (4884×3256).
