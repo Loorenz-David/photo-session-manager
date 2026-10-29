@@ -33,7 +33,7 @@ Updated: 2026-10-25 by the orchestrator.
   root corrected (R34, changelog 21). P17 APPROVED 15:18, P18 APPROVED 15:48 (Codex). Second real run 2026-10-29 PASS end to end (capture → previews → classify/reorder → form → publish to the test
   store, read back). Owner findings R7 (back button top left), R8 (drop animation) → small fix phase P19 (planned 2026-10-29, 9 rows).
   P19 APPROVED 2026-10-29 08:51 (Codex, no fix round). Owner: back button good, drop lands right but shrinks then pops → P20_drop_continuity (orchestrator plan).
-  Run in flight: **all** (P20, Codex), started 2026-10-29.
+  P20 APPROVED 09:50 (Codex). No run in flight. Next: owner eyeballs the glide; then the work-Mac move with the real store.
 - Open after the MVP build: one tethered session to measure shot→original/adjusted preview (P16 Not yet);
   first end-to-end real use with the owner (shoot, sort, form, publish to the test store); backlog.md notes.
 - Implementer and fix sessions: Codex again from P13 (owner 2026-10-26); P07–P12 were built on Claude
