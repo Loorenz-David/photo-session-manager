@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Input } from '@/components/ui/input';
 import { useAction, usePageData } from '@/lib/pending';
-import { getSettings, pickFolder, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
+import { getSettings, listCropRatios, pickFolder, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
 
 const emptyIntegration: IntegrationSettings = {
@@ -18,10 +18,12 @@ type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition
 export function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cropRatios, setCropRatios] = useState<string[]>([]);
   const page = usePageData(getSettings);
   const loadedSecret = useRef('');
   useEffect(() => { if (page.data) setSettings(page.data); }, [page.data]);
   useEffect(() => { if (page.data) loadedSecret.current = page.data.integration?.client_secret ?? ''; }, [page.data]);
+  useEffect(() => { void listCropRatios().then(setCropRatios).catch(() => setCropRatios([])); }, []);
 
   const edit = (patch: Partial<Settings>) => setSettings(current => current ? { ...current, ...patch } : current);
   const editIntegration = (key: IntegrationKey, value: string) =>
@@ -42,6 +44,7 @@ export function SettingsPage() {
       preview_recipe: settings.preview_recipe,
       web_recipe: settings.web_recipe,
       style_name: settings.style_name,
+      crop_on_arrival: settings.crop_on_arrival,
       export_folder: settings.export_folder,
       preview_delay_s: settings.preview_delay_s,
       integration,
@@ -83,6 +86,14 @@ export function SettingsPage() {
       {text('Preview recipe', 'preview_recipe')}
       {text('Web recipe', 'web_recipe')}
       {text('Style', 'style_name')}
+      <div className="flex flex-col gap-1">
+        <label htmlFor="settings-crop_on_arrival">Shape on arrival</label>
+        <select id="settings-crop_on_arrival" value={settings.crop_on_arrival} onChange={e => edit({ crop_on_arrival: e.target.value })}>
+          <option value="off">Leave as shot</option>
+          {settings.crop_on_arrival !== 'off' && !cropRatios.includes(settings.crop_on_arrival) && <option value={settings.crop_on_arrival}>{settings.crop_on_arrival}</option>}
+          {cropRatios.filter(name => name !== 'off').map(name => <option key={name} value={name}>{name}</option>)}
+        </select>
+      </div>
       <h2>Export and previews</h2>
       {text('Export folder', 'export_folder', 'Export folder')}
       <div className="flex flex-col gap-1">

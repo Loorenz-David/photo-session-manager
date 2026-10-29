@@ -3,6 +3,9 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 pub trait JobHandler: Send + Sync {
     fn run(&self, job: &Job, now_ms: i64) -> Result<()>;
+    fn max_attempts(&self) -> Option<i64> {
+        None
+    }
 }
 pub struct JobRunner {
     store: Arc<dyn Store>,
@@ -54,15 +57,24 @@ impl JobRunner {
                         Error::VariantNotFound => "variant_not_found",
                         Error::TagVerification => "tag_verification",
                         Error::Timeout => "timeout",
+                        Error::CropRatioUnknown { .. } => "crop_ratio_unknown",
                         _ => "provider",
                     };
                     let attempts = job.attempts + 1;
-                    self.store.job_retry(
-                        job.id,
-                        code,
-                        now_ms + backoff(attempts).as_millis() as i64,
-                        now_ms,
-                    )?;
+                    if matches!(error, Error::CropRatioUnknown { .. })
+                        || handler
+                            .max_attempts()
+                            .is_some_and(|limit| attempts >= limit)
+                    {
+                        self.store.job_fail(job.id, code, now_ms)?;
+                    } else {
+                        self.store.job_retry(
+                            job.id,
+                            code,
+                            now_ms + backoff(attempts).as_millis() as i64,
+                            now_ms,
+                        )?;
+                    }
                 }
             }
             count += 1;

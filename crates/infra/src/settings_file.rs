@@ -15,6 +15,7 @@ pub struct Settings {
     pub preview_recipe: String,
     pub web_recipe: String,
     pub style_name: String,
+    pub crop_on_arrival: String,
     pub export_folder: String,
     #[serde(deserialize_with = "deserialize_preview_delay")]
     pub preview_delay_s: u32,
@@ -44,6 +45,7 @@ impl Default for Settings {
             preview_recipe: "PSM Preview".into(),
             web_recipe: "PSM Web".into(),
             style_name: "PSM House".into(),
+            crop_on_arrival: "Square".into(),
             export_folder: PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
                 .join("Pictures/Session Manager Export")
                 .to_string_lossy()

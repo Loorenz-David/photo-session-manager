@@ -45,6 +45,7 @@ impl SettingsService {
                 "theme",
                 "sku_prefix",
                 "integration",
+                "crop_on_arrival",
             ]
             .contains(&key.as_str())
             {
@@ -56,6 +57,9 @@ impl SettingsService {
                     .is_some_and(|s| std::path::Path::new(s).is_absolute())
             {
                 return Err(Error::RelativePath);
+            }
+            if key == "crop_on_arrival" && !value.as_str().is_some_and(|s| !s.is_empty()) {
+                return Err(Error::InvalidValue("crop_on_arrival".into()));
             }
             if key == "integration" && !value.is_null() {
                 let mut integration = value.clone();

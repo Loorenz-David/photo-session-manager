@@ -5,3 +5,4 @@ pub mod jxa;
 pub mod mirror;
 pub mod renders;
 pub mod scripting;
+pub mod shape;

@@ -67,7 +67,7 @@
 .photo-tile[data-active] { box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-text); }
 .photo-tile[data-selected] { box-shadow: 0 0 0 3px var(--ai); }
 .photo-tile[data-dragging] { opacity: 0; }
-.thumb-image { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.thumb-image { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
 .thumb-empty { display: block; width: 100%; height: 100%; }
 .tile-number { position: absolute; top: 6px; left: 6px; min-width: 22px; height: 18px; padding: 0 4px; border-radius: 4px; background: var(--color-bg); font-size: 10px; font-weight: var(--weight-heavy); line-height: 18px; text-align: center; }
 .tile-cover { position: absolute; top: 6px; left: 32px; height: 18px; padding: 0 6px; border-radius: 4px; background: var(--color-accent); color: var(--color-bg); font-size: 10px; font-weight: var(--weight-heavy); line-height: 18px; text-transform: uppercase; letter-spacing: .06em; }

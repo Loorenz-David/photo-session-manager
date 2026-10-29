@@ -19,7 +19,7 @@ import type { Settings } from '@/services/settings';
 vi.mock('@/services/sessions', async importOriginal => ({ ...(await importOriginal<typeof import('@/services/sessions')>()), listSessions: vi.fn() }));
 vi.mock('@/services/photos', () => ({ getSessionView: vi.fn() }));
 vi.mock('@/services/health', () => ({ getHealth: vi.fn(), getAppPaths: vi.fn() }));
-vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), pickFolder: vi.fn(), saveSettings: vi.fn() }));
+vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), pickFolder: vi.fn(), listCropRatios: vi.fn(async () => []), saveSettings: vi.fn() }));
 vi.mock('@/services/events', () => ({ onSessionsChanged: vi.fn(async () => () => undefined), onWorkspaceEvents: vi.fn(async () => () => undefined), onFileDrop: vi.fn(async () => () => undefined) }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), dismiss: vi.fn() } }));
 
@@ -125,7 +125,7 @@ it('C2(d) health and settings show placeholders, then their loaded content', asy
   await act(async () => {
     health.resolve({ items: [{ code: 'nudge_listening', ok: true, detail: 'Listening' }] });
     paths.resolve({ data_dir: '/tmp/psm', database: '/tmp/psm/session_manager.db', settings: '/tmp/psm/settings.json' });
-    settings.resolve({ document_id: '/tmp/session', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House', export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null, integration: null });
+    settings.resolve({ document_id: '/tmp/session', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House', crop_on_arrival: 'Square', export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null, integration: null });
   });
   expect(screen.getByText('Listening')).toBeInTheDocument();
   expect(screen.getByLabelText('Preview recipe')).toHaveValue('PSM Preview');

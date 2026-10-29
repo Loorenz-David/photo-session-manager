@@ -44,6 +44,8 @@ pub enum Error {
     TagVerification,
     #[error("variant_not_found")]
     VariantNotFound,
+    #[error("crop_ratio_unknown: {name}")]
+    CropRatioUnknown { name: String },
     #[error("document_not_open")]
     DocumentNotOpen,
     #[error("document_not_session")]

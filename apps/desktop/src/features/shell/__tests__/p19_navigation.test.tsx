@@ -13,7 +13,7 @@ const delivered = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/health', () => ({ getHealth: vi.fn(), getAppPaths: vi.fn() }));
-vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), saveSettings: vi.fn(), pickFolder: vi.fn() }));
+vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), saveSettings: vi.fn(), pickFolder: vi.fn(), listCropRatios: vi.fn(async () => []) }));
 vi.mock('@/services/photos', () => ({
   getSessionView: vi.fn(),
   classifyPhoto: vi.fn(),
@@ -151,6 +151,7 @@ async function openWorkspace(views: SessionView[], sessionId = SESSION) {
 }
 
 const shown: Settings = {
+  crop_on_arrival: 'Square',
   document_id: null, preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House',
   export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null,
   integration: { kind: 'shopify', shop_domain: 'shop.myshopify.com', api_version: '2026-10', client_id: 'client', client_secret: 'masked', condition_photos_key: 'custom.damage_report' },

@@ -8,6 +8,7 @@ pub struct EditingStartup<'a> {
     pub provider: &'a dyn EditingProvider,
     pub store: &'a dyn Store,
     pub health: &'a HealthService,
+    pub crop_on_arrival: Option<&'a str>,
 }
 impl EditingStartup<'_> {
     pub fn run(&self) -> Result<()> {
@@ -53,6 +54,22 @@ impl EditingStartup<'_> {
                 }
             }
             Err(e) => self.health.set("recipe_missing", e.to_string()),
+        }
+        if let Some(name) = self.crop_on_arrival {
+            if let Ok(ratios) = self.provider.crop_aspect_ratios()
+                && !ratios.is_empty()
+            {
+                if ratios.iter().any(|ratio| ratio == name) {
+                    self.health.clear("crop_ratio_unknown");
+                } else {
+                    self.health.set(
+                        "crop_ratio_unknown",
+                        format!("Shape on arrival: '{name}' is not a Capture One crop ratio"),
+                    );
+                }
+            }
+        } else {
+            self.health.clear("crop_ratio_unknown");
         }
         let active = self.store.active_session_id()?;
         let folder = if let Some(id) = active {

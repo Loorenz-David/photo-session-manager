@@ -279,7 +279,9 @@ fn c4c_focus_returns_before_provider_render() {
     assert_eq!(app.fake.state.lock().unwrap().issued.len(), 2);
 }
 fn failed_render_fixture() -> (TestApp, String) {
-    let app = TestApp::with_fake_document().unwrap();
+    let mut app = TestApp::with_fake_document().unwrap();
+    app.settings_set(&serde_json::json!({"crop_on_arrival":"off"}))
+        .unwrap();
     let path = raw(&app, "_Unassigned/backoff.ARW");
     app.fake.add_image(&path, &["v1"], false);
     app.fake.state.lock().unwrap().fail_process = true;

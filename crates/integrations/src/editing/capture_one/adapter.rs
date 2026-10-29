@@ -5,7 +5,7 @@ use super::{
 use psm_core::{
     Error, Result,
     domain::{
-        editing::{DocumentState, EditingCapabilities, RenderPurpose},
+        editing::{DocumentState, EditingCapabilities, RenderPurpose, ShapeOutcome},
         photo::Classification,
     },
     mechanisms::canon::canon,
@@ -479,6 +479,20 @@ impl EditingProvider for CaptureOneAdapter {
             return Err(Error::TagVerification);
         }
         Ok(())
+    }
+    fn crop_aspect_ratios(&self) -> Result<Vec<String>> {
+        self.background.crop_aspect_ratios(&self.document_id)
+    }
+    fn shape_on_arrival(&self, raw: &str, ratio: &str, now_ms: i64) -> Result<ShapeOutcome> {
+        let variant = self.variant_background(raw)?;
+        self.store.mark_own_write(raw, now_ms)?;
+        match self
+            .background
+            .apply_crop_if_untouched(&self.document_id, &variant, ratio)?
+        {
+            ShapeOutcome::UnknownRatio => Err(Error::CropRatioUnknown { name: ratio.into() }),
+            outcome => Ok(outcome),
+        }
     }
     fn import(&self, paths: &[String]) -> Result<()> {
         self.user.import(&self.document_id, paths)

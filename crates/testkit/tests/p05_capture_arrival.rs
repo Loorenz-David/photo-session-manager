@@ -343,7 +343,7 @@ fn c5b_file_mtime_not_exif() {
     assert_eq!(actual, m);
 }
 #[test]
-fn c5c_three_followup_jobs() {
+fn c5c_four_followup_jobs() {
     let a = app();
     let p = file(&a, "x.ARW", b"raw");
     hook(&a, &p);
@@ -360,6 +360,7 @@ fn c5c_three_followup_jobs() {
     assert_eq!(
         jobs,
         vec![
+            ("crop_on_arrival".into(), raw.clone(), "queued".into()),
             ("hash".into(), raw.clone(), "queued".into()),
             ("original_preview".into(), raw.clone(), "queued".into()),
             ("render_preview".into(), raw, "queued".into())

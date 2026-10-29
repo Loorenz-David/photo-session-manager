@@ -1,4 +1,4 @@
-use psm_core::{Error, Result};
+use psm_core::{Error, Result, domain::editing::ShapeOutcome};
 use psm_integrations::editing::capture_one::scripting::{
     CaptureOneScripting, CollectionInfo, DocumentInfo,
 };
@@ -8,6 +8,9 @@ use std::{collections::HashMap, fs, path::Path, sync::Mutex};
 pub struct FakeVariant {
     pub id: String,
     pub tag: i32,
+    pub crop_ratio: String,
+    pub crop: (i64, i64),
+    pub max_crop: (i64, i64),
 }
 pub struct FakeState {
     pub document_id: String,
@@ -29,6 +32,9 @@ pub struct FakeState {
     pub readback_garbage: bool,
     pub timeout_next_set_tag: bool,
     pub drop_tag_writes: bool,
+    pub crop_ratios: Vec<String>,
+    pub fail_apply_crop: Option<String>,
+    pub timeout_next_apply_crop: bool,
     pub hooks_readback_null: bool,
     pub next_job: i64,
     /// Every `process` call in order: (job id, variant, recipe).
@@ -78,6 +84,23 @@ impl FakeCaptureOneScripting {
                 readback_garbage: false,
                 timeout_next_set_tag: false,
                 drop_tag_writes: false,
+                crop_ratios: [
+                    "Unconstrained",
+                    "Original",
+                    "Output",
+                    "Square",
+                    "1x2",
+                    "1x3",
+                    "2x3",
+                    "3x4",
+                    "4x5",
+                    "5x7",
+                    "16x9",
+                ]
+                .map(str::to_string)
+                .to_vec(),
+                fail_apply_crop: None,
+                timeout_next_apply_crop: false,
                 hooks_readback_null: false,
                 next_job: 1,
                 issued: Vec::new(),
@@ -124,12 +147,32 @@ impl FakeCaptureOneScripting {
             .map(|id| FakeVariant {
                 id: (*id).into(),
                 tag: 3,
+                crop_ratio: String::new(),
+                crop: (5981, 3987),
+                max_crop: (5981, 3987),
             })
             .collect();
         if in_folder {
             s.folder_images.insert(raw.into(), value);
         } else {
             s.images.insert(raw.into(), value);
+        }
+    }
+    pub fn set_variant_crop(&self, variant: &str, ratio: &str, crop: (i64, i64)) {
+        let mut s = self.state.lock().unwrap();
+        let FakeState {
+            images,
+            folder_images,
+            ..
+        } = &mut *s;
+        if let Some(value) = images
+            .values_mut()
+            .chain(folder_images.values_mut())
+            .flatten()
+            .find(|v| v.id == variant)
+        {
+            value.crop_ratio = ratio.into();
+            value.crop = crop;
         }
     }
 }
@@ -293,6 +336,59 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
             }
         }
         if timeout { Err(Error::Timeout) } else { Ok(()) }
+    }
+    fn crop_aspect_ratios(&self, id: &str) -> Result<Vec<String>> {
+        self.check_id(id)?;
+        let mut s = self.state.lock().unwrap();
+        s.ops.push("crop_aspect_ratios".into());
+        Ok(s.crop_ratios.clone())
+    }
+    fn apply_crop_if_untouched(
+        &self,
+        id: &str,
+        variant: &str,
+        ratio: &str,
+    ) -> Result<ShapeOutcome> {
+        self.check_id(id)?;
+        let mut s = self.state.lock().unwrap();
+        s.ops.push(format!("apply_crop:{variant}:{ratio}"));
+        if let Some(message) = &s.fail_apply_crop {
+            return Err(Error::Provider(message.clone()));
+        }
+        if s.timeout_next_apply_crop {
+            s.timeout_next_apply_crop = false;
+            return Err(Error::Timeout);
+        }
+        if !s.crop_ratios.iter().any(|name| name == ratio) {
+            return Ok(ShapeOutcome::UnknownRatio);
+        }
+        let FakeState {
+            images,
+            folder_images,
+            ..
+        } = &mut *s;
+        let outcome = if let Some(value) = images
+            .values_mut()
+            .chain(folder_images.values_mut())
+            .flatten()
+            .find(|v| v.id == variant)
+        {
+            if !["", "Unconstrained"].contains(&value.crop_ratio.as_str())
+                || value.crop != value.max_crop
+            {
+                return Ok(ShapeOutcome::Skipped);
+            }
+            value.crop_ratio = ratio.into();
+            if ratio == "Square" {
+                let side = value.max_crop.0.min(value.max_crop.1);
+                value.crop = (side, side);
+            }
+            ShapeOutcome::Applied
+        } else {
+            return Err(Error::VariantNotFound);
+        };
+        s.ops.push(format!("set_crop:{variant}:{ratio}"));
+        Ok(outcome)
     }
     fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<String> {
         self.check_id(id)?;

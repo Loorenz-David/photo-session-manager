@@ -121,6 +121,9 @@ pub trait Store: Send + Sync {
     ) -> Result<Option<Job>>;
     fn job_done(&self, id: i64, now_ms: i64) -> Result<()>;
     fn job_retry(&self, id: i64, code: &str, next_attempt_at: i64, now_ms: i64) -> Result<()>;
+    fn job_fail(&self, id: i64, code: &str, now_ms: i64) -> Result<()>;
+    fn count_jobs(&self, kind: &str, status: &str, exclude_error: Option<&str>) -> Result<i64>;
+    fn requeue_failed_jobs(&self, kind: &str, now_ms: i64) -> Result<usize>;
     fn requeue_running_jobs(&self) -> Result<()>;
     fn mark_own_write(&self, raw_path: &str, now_ms: i64) -> Result<()>;
     fn job(&self, id: i64) -> Result<Job>;
@@ -130,7 +133,12 @@ pub trait Store: Send + Sync {
     fn session_list_records(&self) -> Result<Vec<SessionListRecord>>;
     fn latest_publish(&self, session_id: i64) -> Result<Option<LatestPublish>>;
     fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;
-    fn arrival_insert(&self, photo: NewPhoto, path_key: &str) -> Result<(Photo, bool)>;
+    fn arrival_insert(
+        &self,
+        photo: NewPhoto,
+        path_key: &str,
+        shape_on_arrival: bool,
+    ) -> Result<(Photo, bool)>;
     fn session_folders(&self) -> Result<Vec<(String, i64)>>;
     fn session_for_item(&self, item_id: i64) -> Result<Option<i64>>;
     fn photos_in_session(&self, session_id: i64) -> Result<Vec<Photo>>;

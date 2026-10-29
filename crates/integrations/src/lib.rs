@@ -9,7 +9,7 @@ use commerce::shopify::{
 };
 use editing::capture_one::{
     adapter::CaptureOneAdapter, jxa::JxaScripting, mirror::MirrorTag,
-    scripting::CaptureOneScripting,
+    scripting::CaptureOneScripting, shape::ShapeOnArrival,
 };
 use psm_core::{
     Result,
@@ -53,6 +53,22 @@ use std::{
     thread,
     time::Duration,
 };
+
+fn refresh_shape_health(store: &dyn Store, health: &HealthService) -> Result<()> {
+    let count = store.count_jobs("crop_on_arrival", "failed", Some("crop_ratio_unknown"))?;
+    if count == 0 {
+        health.clear("crop_not_applied");
+    } else {
+        health.set(
+            "crop_not_applied",
+            format!(
+                "Shape not applied to {count} photo{}",
+                if count == 1 { "" } else { "s" }
+            ),
+        );
+    }
+    Ok(())
+}
 
 pub struct App {
     pub paths: AppPaths,
@@ -114,7 +130,7 @@ pub struct SettingsSetContext {
 }
 
 pub enum PreparedSettings {
-    Theme(Settings),
+    Theme(Box<Settings>),
     Runtime(Box<App>),
 }
 
@@ -133,7 +149,7 @@ impl SettingsSetContext {
         a["theme"] = serde_json::Value::Null;
         b["theme"] = serde_json::Value::Null;
         if a == b {
-            return Ok(PreparedSettings::Theme(settings));
+            return Ok(PreparedSettings::Theme(Box::new(settings)));
         }
         match App::build(
             self.paths.clone(),
@@ -166,6 +182,11 @@ impl SettingsSetContext {
 
 impl AppHandles {
     pub fn health_check(&self) -> Result<psm_core::domain::HealthReport> {
+        refresh_shape_health(self.store.as_ref(), self.health.as_ref())?;
+        if self.settings.crop_on_arrival != "off" {
+            self.store
+                .requeue_failed_jobs("crop_on_arrival", self.clock.now_ms())?;
+        }
         if self
             .settings
             .document_id
@@ -176,6 +197,8 @@ impl AppHandles {
                 provider: self.editing.as_ref(),
                 store: self.store.as_ref(),
                 health: self.health.as_ref(),
+                crop_on_arrival: (self.settings.crop_on_arrival != "off")
+                    .then_some(self.settings.crop_on_arrival.as_str()),
             })
             .run()
             {
@@ -240,7 +263,7 @@ impl App {
     ) -> Result<(serde_json::Value, Option<App>)> {
         let old = match prepared {
             PreparedSettings::Theme(settings) => {
-                self.settings = settings;
+                self.settings = *settings;
                 self.health.clear("settings_invalid");
                 None
             }
@@ -364,6 +387,10 @@ impl App {
             tracing::warn!(problem, "startup backup failed");
             health.set("backup_failed", problem);
         }
+        refresh_shape_health(store.as_ref(), health.as_ref())?;
+        if start_backup && settings.crop_on_arrival != "off" {
+            store.requeue_failed_jobs("crop_on_arrival", clock.now_ms())?;
+        }
         let document_id = settings.document_id.clone().unwrap_or_default();
         if document_id.is_empty() {
             health.set("document_not_open", "No Capture One session configured");
@@ -382,13 +409,16 @@ impl App {
             document_id: document_id.clone(),
         });
         let events = Arc::new(EventHub::default());
-        let arrival = Arc::new(ArrivalService::new(
-            store.clone(),
-            editing.clone(),
-            camera.clone(),
-            events.clone(),
-            clock.clone(),
-        ));
+        let arrival = Arc::new(
+            ArrivalService::new(
+                store.clone(),
+                editing.clone(),
+                camera.clone(),
+                events.clone(),
+                clock.clone(),
+            )
+            .with_shape_on_arrival(settings.crop_on_arrival != "off"),
+        );
         let export = Arc::new(ExportService::new(
             store.clone(),
             editing.clone(),
@@ -443,6 +473,16 @@ impl App {
             }),
         );
         runner.register(
+            "crop_on_arrival",
+            Arc::new(ShapeOnArrival {
+                editing: editing.clone(),
+                store: store.clone(),
+                health: health.clone(),
+                previews: previews.clone(),
+                ratio: settings.crop_on_arrival.clone(),
+            }),
+        );
+        runner.register(
             "hash",
             Arc::new(HashJob {
                 store: store.clone(),
@@ -480,11 +520,13 @@ impl App {
             let startup_store = store.clone();
             let startup_health = health.clone();
             let startup_camera = camera.clone();
+            let startup_crop = settings.crop_on_arrival.clone();
             thread::spawn(move || {
                 let _ = (EditingStartup {
                     provider: startup_editing.as_ref(),
                     store: startup_store.as_ref(),
                     health: startup_health.as_ref(),
+                    crop_on_arrival: (startup_crop != "off").then_some(startup_crop.as_str()),
                 })
                 .run();
                 let _ =
@@ -611,6 +653,8 @@ impl App {
             provider: self.editing.as_ref(),
             store: self.store.as_ref(),
             health: self.health.as_ref(),
+            crop_on_arrival: (self.settings.crop_on_arrival != "off")
+                .then_some(self.settings.crop_on_arrival.as_str()),
         })
         .run()
     }

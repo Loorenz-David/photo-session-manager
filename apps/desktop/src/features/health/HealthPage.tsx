@@ -12,6 +12,7 @@ const names: Record<string, string> = {
   hooks: 'Installed hooks', hooks_not_installed: 'Installed hooks', recipes: 'Recipes', recipe_missing: 'Recipe missing',
   capture_folder_not_set: 'Capture folder', camera: 'Camera', camera_disconnected: 'Camera',
   integration_token_invalid: 'Shopify token', condition_field_missing: 'Condition photos field',
+  crop_not_applied: 'Shape on arrival', crop_ratio_unknown: 'Shape on arrival',
 };
 
 export function HealthPage() {

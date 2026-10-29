@@ -1,4 +1,5 @@
 use super::scripting::{CaptureOneScripting, DocumentInfo};
+use psm_core::domain::editing::ShapeOutcome;
 use psm_core::{Error, Result};
 use psm_infra::{osascript::OsaRunner, paths::AppPaths};
 use serde::de::DeserializeOwned;
@@ -10,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-const SCRIPTS: [(&str, &str); 14] = [
+const SCRIPTS: [(&str, &str); 16] = [
     ("document_info", include_str!("jxa/document_info.js")),
     ("save", include_str!("jxa/save.js")),
     ("set_captures", include_str!("jxa/set_captures.js")),
@@ -28,6 +29,11 @@ const SCRIPTS: [(&str, &str); 14] = [
     ("set_color_tag", include_str!("jxa/set_color_tag.js")),
     ("process", include_str!("jxa/process.js")),
     ("capture", include_str!("jxa/capture.js")),
+    (
+        "crop_aspect_ratios",
+        include_str!("jxa/crop_aspect_ratios.js"),
+    ),
+    ("apply_crop", include_str!("jxa/apply_crop.js")),
 ];
 const IMPORT: &str = include_str!("jxa/import.js");
 
@@ -151,6 +157,26 @@ impl CaptureOneScripting for JxaScripting {
             "set_color_tag",
             &[id, &raw, &folder, variant, &tag.to_string()],
         )
+    }
+    fn crop_aspect_ratios(&self, id: &str) -> Result<Vec<String>> {
+        self.call("crop_aspect_ratios", &[id])
+    }
+    fn apply_crop_if_untouched(
+        &self,
+        id: &str,
+        variant: &str,
+        ratio: &str,
+    ) -> Result<ShapeOutcome> {
+        let (raw, folder) = self.variant_location(variant)?;
+        let answer: serde_json::Value =
+            self.call("apply_crop", &[id, &raw, &folder, variant, ratio])?;
+        match answer["outcome"].as_str() {
+            Some("applied") if answer["ratio"].as_str() == Some(ratio) => Ok(ShapeOutcome::Applied),
+            Some("applied") => Err(Error::Provider("crop read-back mismatch".into())),
+            Some("skipped") => Ok(ShapeOutcome::Skipped),
+            Some("unknown_ratio") => Ok(ShapeOutcome::UnknownRatio),
+            _ => Err(Error::InvalidData("apply_crop outcome".into())),
+        }
     }
     fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<String> {
         let (raw, folder) = self.variant_location(variant)?;

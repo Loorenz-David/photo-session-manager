@@ -32,6 +32,7 @@ pub struct ArrivalService {
     pub camera: std::sync::Arc<dyn CameraProvider>,
     pub events: std::sync::Arc<dyn EventSink>,
     pub clock: std::sync::Arc<dyn Clock>,
+    pub shape_on_arrival: bool,
     capture_root_cache: Mutex<Option<PathBuf>>,
     pending: Mutex<HashMap<PathBuf, Pending>>,
 }
@@ -50,9 +51,14 @@ impl ArrivalService {
             camera,
             events,
             clock,
+            shape_on_arrival: false,
             capture_root_cache: Mutex::new(None),
             pending: Mutex::new(HashMap::new()),
         }
+    }
+    pub fn with_shape_on_arrival(mut self, enabled: bool) -> Self {
+        self.shape_on_arrival = enabled;
+        self
     }
     pub fn capture_root(&self) -> Result<PathBuf> {
         let mut cache = self
@@ -273,6 +279,7 @@ impl ArrivalService {
                 created_at: self.clock.now_ms(),
             },
             &key,
+            self.shape_on_arrival,
         )?;
         if inserted {
             self.events.emit(AppEvent::PhotoAdded {

@@ -68,6 +68,7 @@ export const commands = {
 	notificationsList: (sessionId: CommandId | null) => typedError<NotificationDto[], CommandError>(__TAURI_INVOKE("notifications_list", { sessionId })),
 	settingsGet: () => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_get")),
 	settingsSet: (patch: SettingsPatchDto_Deserialize) => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_set", { patch })),
+	cropRatiosList: () => typedError<string[], CommandError>(__TAURI_INVOKE("crop_ratios_list")),
 };
 
 /* Types */
@@ -526,6 +527,7 @@ export type SettingsDto_Deserialize = {
 	preview_recipe: string,
 	web_recipe: string,
 	style_name: string,
+	crop_on_arrival: string,
 	export_folder: string,
 	preview_delay_s: number,
 	effective_preview_delay_s: number,
@@ -543,6 +545,7 @@ export type SettingsDto_Serialize = {
 	preview_recipe: string,
 	web_recipe: string,
 	style_name: string,
+	crop_on_arrival: string,
 	export_folder: string,
 	preview_delay_s: number,
 	effective_preview_delay_s: number,
@@ -560,6 +563,7 @@ export type SettingsPatchDto_Deserialize = {
 	preview_recipe?: string | null,
 	web_recipe?: string | null,
 	style_name?: string | null,
+	crop_on_arrival?: string | null,
 	export_folder?: string | null,
 	preview_delay_s?: number | null,
 	theme?: string | null,
@@ -573,6 +577,7 @@ export type SettingsPatchDto_Serialize = {
 	preview_recipe?: string,
 	web_recipe?: string,
 	style_name?: string,
+	crop_on_arrival?: string,
 	export_folder?: string,
 	preview_delay_s?: number,
 	theme?: string,

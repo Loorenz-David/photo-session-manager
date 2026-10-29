@@ -1,7 +1,7 @@
 use crate::{
     Result,
     domain::{
-        editing::{DocumentState, EditingCapabilities, RenderPurpose},
+        editing::{DocumentState, EditingCapabilities, RenderPurpose, ShapeOutcome},
         photo::Classification,
     },
 };
@@ -41,6 +41,8 @@ pub trait EditingProvider: Send + Sync {
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>>;
     fn render_in_flight(&self, raw: &str) -> bool;
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()>;
+    fn crop_aspect_ratios(&self) -> Result<Vec<String>>;
+    fn shape_on_arrival(&self, raw: &str, ratio: &str, now_ms: i64) -> Result<ShapeOutcome>;
     fn settings_changed_at(&self, raw: &str) -> Result<Option<SystemTime>>;
     fn import(&self, paths: &[String]) -> Result<()>;
     fn capabilities(&self) -> EditingCapabilities;

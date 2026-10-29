@@ -21,6 +21,11 @@ export async function saveSettings(patch: SettingsPatch): Promise<Settings> {
   return unwrap(await commands.settingsSet(patch));
 }
 
+
+export async function listCropRatios(): Promise<string[]> {
+  return unwrap(await commands.cropRatiosList());
+}
+
 /** Opens the macOS folder picker; resolves to the chosen folder or null when cancelled. */
 export async function pickFolder(title: string): Promise<string | null> {
   const chosen = await open({ multiple: false, directory: true, title });
