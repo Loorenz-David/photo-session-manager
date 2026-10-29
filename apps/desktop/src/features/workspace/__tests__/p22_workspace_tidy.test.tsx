@@ -225,9 +225,9 @@ it('C3(a) an event during a pending reorder leaves the dropped order visible unt
 });
 
 it('C3(b) the held overlay shows the destination number and Cover badge before release', async () => {
-  const withCondition = view([...original.photos, photo(4, 'condition', { position: 1 })]);
+  const withCondition = view([...original.photos, photo(4, 'condition', { position: 1 }), photo(6, 'unreviewed')]);
   await openWorkspace([withCondition]);
-  layout({ '[data-photo-id="1"]': [0, 0], '[data-photo-id="2"]': [110, 0], '[data-photo-id="5"]': [0, 85], '[data-photo-id="4"]': [0, 300] });
+  layout({ '[data-photo-id="1"]': [0, 0], '[data-photo-id="2"]': [110, 0], '[data-photo-id="5"]': [0, 85], '[data-photo-id="6"]': [110, 85], '[data-photo-id="4"]': [0, 300] });
   const start = tile(1);
   fireEvent.pointerDown(start, { button: 0, isPrimary: true, clientX: 50, clientY: 37 });
   await act(async () => { fireEvent.pointerMove(document, { clientX: 60, clientY: 47 }); });
@@ -244,7 +244,7 @@ it('C3(b) the held overlay shows the destination number and Cover badge before r
   act(() => { fireEvent.pointerUp(document, { clientX: 50, clientY: 37 }); });
   expect(reorderPhoto).not.toHaveBeenCalled();
   expect(classifyPhoto).not.toHaveBeenCalled();
-  expect(mainOrder()).toEqual([1, 2, 5]);
+  expect(mainOrder()).toEqual([1, 2, 5, 6]);
   expect(conditionOrder()).toEqual([4]);
   const next = tile(5);
   fireEvent.pointerDown(next, { button: 0, isPrimary: true, clientX: 50, clientY: 122 });
@@ -253,4 +253,12 @@ it('C3(b) the held overlay shows the destination number and Cover badge before r
   expect(overlay().querySelector('.tile-number')).toHaveTextContent('01');
   expect(overlay().querySelector('.tile-cover')).not.toBeNull();
   act(() => { fireEvent.pointerUp(document, { clientX: 50, clientY: 37 }); });
+  const afterOwnSlot = tile(1);
+  fireEvent.pointerDown(afterOwnSlot, { button: 0, isPrimary: true, clientX: 50, clientY: 37 });
+  await act(async () => { fireEvent.pointerMove(document, { clientX: 60, clientY: 47 }); });
+  await act(async () => { fireEvent.pointerMove(document, { clientX: 160, clientY: 122 }); });
+  expect(overlay().querySelector('.tile-number')).toHaveTextContent('03');
+  expect(overlay().querySelector('.tile-cover')).toBeNull();
+  act(() => { fireEvent.pointerUp(document, { clientX: 160, clientY: 122 }); });
+  await waitFor(() => expect(reorderPhoto).toHaveBeenCalledWith(1, 3));
 });

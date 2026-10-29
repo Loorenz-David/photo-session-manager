@@ -54,6 +54,11 @@ type Picker = { kind: 'move' | 'copy' | 'assign'; photoIds: number[] } | null;
 const idNumber = (id: string | number, prefix: string): number | null =>
   String(id).startsWith(prefix) ? Number(String(id).slice(prefix.length)) : null;
 
+function projectedSlot(group: Photo[], photoId: number): number {
+  const index = group.findIndex(candidate => candidate.id === photoId);
+  return index === -1 ? group.length : index + 1;
+}
+
 /** Drops land on what is under the pointer; a tile wins over the group around it. */
 const collisions: CollisionDetection = args => {
   const within = pointerWithin(args);
@@ -100,8 +105,7 @@ function useDrop(state: WorkspaceState) {
       }
       if (!overPhoto || overPhoto.id === photoId) return;
       const group = target === 'main' ? order.main : order.condition;
-      const index = group.findIndex(candidate => candidate.id === overPhoto.id);
-      const position = index === -1 ? group.length : index + 1;
+      const position = projectedSlot(group, overPhoto.id);
       if (position !== photo.position) void state.reorder(photoId, position);
     },
     [state],
@@ -142,7 +146,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         projectedGroup = target;
         projectedNumber = ordered[target].length + 1;
       } else if (overPhoto) {
-        projectedNumber = ordered[target].findIndex(photo => photo.id === overPhoto.id) + 1;
+        projectedNumber = projectedSlot(ordered[target], overPhoto.id);
       }
     }
   }
