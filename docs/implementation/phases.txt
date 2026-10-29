@@ -18,3 +18,4 @@ P16_operations
 P17_real_run_fixes
 P18_pending_state_ui
 P19_navigation_and_drop
+P20_drop_continuity

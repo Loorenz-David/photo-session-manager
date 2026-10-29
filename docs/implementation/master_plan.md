@@ -90,6 +90,7 @@ restated so no session has to infer them:
 | P17_real_run_fixes | APPROVED | 2026-10-26 | opus | approved with notes after fix 1 (re-review r2): F1 resolved (a settings rebuild no longer requeues or re-enqueues jobs the live workers own; real starts keep crash recovery); perimeter = allowed files (`43adbee`: 2 paths); 16/16 rows + F1 test hold; suite 406 Rust / 92 UI, clippy/fmt/typecheck green; 4 notes from r1 + 1 in backlog |
 | P18_pending_state_ui | APPROVED | 2026-10-26 | opus | approved with notes after fix 1 (re-review r2): F1 resolved (shop hits keyed to the query that produced them in both dialogs; new C3(c) cases red on pre-fix code by reading); perimeter = allowed files (`bcd4f51`: 3 paths); suite 407 Rust / 102 UI, clippy/fmt/typecheck green; 5 notes from r1 + 1 in backlog |
 | P19_navigation_and_drop | APPROVED | 2026-10-29 | opus | review r1 APPROVED_WITH_NOTES: 9/9 rows hold at their boundaries (8 tests red on the pre-phase tree, C1(d) a regression guard that already held); perimeter = declared files (`3058be8`: 13 paths); suite 407 Rust / 111 UI, clippy/fmt/typecheck green (re-run by reviewer); 4 backlog notes; drop animation not verified live (owner try-out step 3) |
+| P20_drop_continuity | NOT_STARTED | 2026-10-29 | orchestrator | owner P19 try-out: drop preview shrinks then pops; one component |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
@@ -335,3 +336,4 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
 - 2026-10-25 P00 r1 close — recorded the orchestrator's successful launch outside the Codex sandbox and the remaining interactive Automation check.
 - 2026-10-26 real-run fix phases — planner added P17_real_run_fixes and P18_pending_state_ui (§4 rows, §5 order, §6.7 command rule and `items_search_shop`) from `real_run_2026-10-26.md`. Fold-back owed by the orchestrator before P17 launches: 05A MC-2's capture-root sentence (the `capture` favourite is the current capture folder per the evidence Correction of 2026-10-26; the root is `<document id>/Capture`).
 - 2026-10-29 second real run — planner added P19_navigation_and_drop (§4 row, §5 order and `depends_on`) from `real_run_2026-10-26.md` "Second real run" R7, R8. Frontend only; no registry, command or environment change.
+- 2026-10-29 orchestrator added P20_drop_continuity (owner feedback on the P19 drop; frontend only, 3 rows).
