@@ -10,10 +10,12 @@ function run(argv) {
   const current = variant.cropAspectRatio();
   const size = () => ({width: variant.cropWidth(), height: variant.cropHeight()});
   if (!available.includes(ratio)) return JSON.stringify({outcome: 'unknown_ratio', ratio: current, ...size(), available});
-  if (current !== '' && current !== 'Unconstrained') return JSON.stringify({outcome: 'skipped', ratio: current, ...size()});
+  if (current !== null && current !== undefined && current !== '' && current !== 'Unconstrained') {
+    return JSON.stringify({outcome: 'skipped', ratio: current, ...size()});
+  }
   const max = a.maximumCrop(variant, {apply: false});
-  const width = Array.isArray(max) ? max[2] : max && max.width;
-  const height = Array.isArray(max) ? max[3] : max && max.height;
+  const width = max && max.x + max.width;
+  const height = max && max.y + max.height;
   if (typeof width !== 'number' || typeof height !== 'number' || !Number.isFinite(width) || !Number.isFinite(height)) {
     throw Error('maximum crop size unavailable');
   }

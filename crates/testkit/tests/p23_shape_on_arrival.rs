@@ -18,7 +18,8 @@ fn script(config: Value, name: &str) -> Value {
 const fs = require('fs');
 const cfg = JSON.parse(process.argv[2]);
 const ratios = ['Unconstrained','Original','Output','Square','1x2','1x3','2x3','3x4','4x5','5x7','16x9'];
-let ratio = cfg.ratio ?? '', width = cfg.width ?? 5981, height = cfg.height ?? 3987;
+let ratio = Object.prototype.hasOwnProperty.call(cfg, 'ratio') ? cfg.ratio : '',
+ width = cfg.width ?? 5981, height = cfg.height ?? 3987;
 let calls = [], writes = [];
 const variant = {availableCropAspectRatios: () => ratios, cropAspectRatio: () => ratio,
  cropWidth: () => width, cropHeight: () => height};
@@ -29,7 +30,7 @@ const image = {variants: Object.assign(() => [variant], {byId: () => variant})};
 const images = Object.assign(() => [image], {whose: ({path}) => () => path === '/raw' ? [image] : []});
 const doc = {images, collections: () => []};
 const app = {running: () => true, documents: {byId: () => doc}, maximumCrop: (_v, options) => {
- calls.push(options); return cfg.null_max ? null : [0,0,5981,3987];
+ calls.push(options); return cfg.null_max ? null : {x:3000,y:1993,width:2981,height:1994};
 }};
 global.Application = () => app;
 const source = fs.readFileSync(process.argv[1], 'utf8');
@@ -124,11 +125,15 @@ fn health(a: &TestApp, code: &str) -> Option<String> {
 
 #[test]
 fn c1a_untouched_frame_is_shaped_in_one_call() {
-    let out = script(json!({}), "apply_crop");
+    let out = script(json!({"ratio":null}), "apply_crop");
     assert_eq!(out["result"]["outcome"], "applied");
     assert_eq!(out["result"]["ratio"], "Square");
     assert_eq!(out["calls"], json!([{"apply":false}]));
     assert_eq!(out["writes"], json!(["Square"]));
+
+    let empty = script(json!({"ratio":""}), "apply_crop");
+    assert_eq!(empty["result"]["outcome"], "applied");
+    assert_eq!(empty["writes"], json!(["Square"]));
 }
 #[test]
 fn c1b_hand_crops_are_skipped() {
