@@ -45,7 +45,8 @@ happens before any publish of the RAW, so it never makes a session dirty (MC-21 
 published photos only). The original preview (MC-20) is unchanged: it is the camera's embedded JPEG.
 
 **Failures.** Capture One not answering or the variant not found yet: retry with the provider
-back-off (MC-19 rules), then give up after the same limit and record a health item "Shape not
+back-off (MC-19 rules), then give up after 8 attempts (about three minutes; the colour-tag mirror
+itself never gives up) and record a health item "Shape not
 applied to n photos" until a later attempt succeeds. A configured name the adapter does not list:
 no crop is attempted and health shows "Shape on arrival: '<name>' is not a Capture One crop
 ratio". Neither blocks capture, review or publish.

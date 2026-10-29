@@ -93,7 +93,7 @@ restated so no session has to infer them:
 | P20_drop_continuity | APPROVED | 2026-10-29 | opus | review r1 APPROVED_WITH_NOTES: 3/3 rows hold at their boundaries; perimeter = declared files (`63e5899`: 7 paths); suite 407 Rust / 114 UI, clippy/fmt/typecheck green (re-run by reviewer); 2 backlog notes (gliding copy keeps its pre-drop number/Cover badge, so the flushSync claim does not hold; the glide is not verified live) |
 | P21_backend_robustness | APPROVED | 2026-10-29 | opus | review r1 APPROVED_WITH_NOTES: 14/14 rows hold at their boundaries; perimeter = declared files + disclosed `paths.rs` (`e33ddfb`: 17 paths); suite 421 Rust / 114 UI, clippy/fmt/typecheck green (re-run by reviewer); 2 reviewer probe tests (deleted) confirmed the post-publish backup half and an incomplete-block save; 4 backlog notes |
 | P22_frontend_tidy_up | IMPLEMENTED | 2026-10-29 | codex | drawer time, Settings typing, steady drag display, form actions and closing, barcode clear, and parent route covered by 10 boundary tests; suite, lint and typecheck green |
-| P23_shape_on_arrival | NOT_STARTED | 2026-10-29 | planner | planned from book 10B / MC-25 / M31 (6 criteria / 15 rows, one optional live row): `crop_on_arrival` job on the Capture One lane (one race-free JXA call, untouched frame only, once per RAW, survives relaunch), MC-19 back-off + give-up into health `crop_not_applied`, `crop_ratio_unknown`, setting `crop_on_arrival` (default Square, `off`) + "Shape on arrival" select, `crop_ratios_list`, tiles fit (not trim). **Owner card 1 open:** the give-up limit (`CROP_GIVE_UP_ATTEMPTS`, recommended 8) — the book names none |
+| P23_shape_on_arrival | NOT_STARTED | 2026-10-29 | planner | planned from book 10B / MC-25 / M31 (6 criteria / 15 rows, one optional live row): `crop_on_arrival` job on the Capture One lane (one race-free JXA call, untouched frame only, once per RAW, survives relaunch), MC-19 back-off + give-up into health `crop_not_applied`, `crop_ratio_unknown`, setting `crop_on_arrival` (default Square, `off`) + "Shape on arrival" select, `crop_ratios_list`, tiles fit (not trim). give-up limit `CROP_GIVE_UP_ATTEMPTS` = 8 (orchestrator 2026-10-29, from 10B §Failures, changelog 23) |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
@@ -224,7 +224,7 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   link `role`: `gallery` or `attribute:<key>` · `PublishStep {Prepare, Upload, Update, Describe, Done, Failed}` ·
   `JobKind {OriginalPreview, Hash, RenderPreview, RenderExport, MirrorTag, PublishStep, VerifyHash, CropOnArrival}` (P23:
   `crop_on_arrival`, target = the RAW, once per RAW; terminal `failed` with `error = crop_ratio_unknown`, or with the last
-  code after `CROP_GIVE_UP_ATTEMPTS` attempts — **value pending P23 owner card 1, recommended 8**; `failed` rows of this
+  code after `CROP_GIVE_UP_ATTEMPTS` attempts = **8** (10B §Failures, changelog 23); `failed` rows of this
   kind are re-queued with `attempts = 0` at a real start and by the Health page's "Retry checks") ·
   `ShapeOutcome {Applied, Skipped, UnknownRatio}` (P23) ·
   `JobStatus {Queued, Running, Done, Failed}` · `Provenance {Human, Ai, Default}` · `AiConfidence {High, Medium, Low}` ·
@@ -379,7 +379,7 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   2026-10-29). §2 (10B, MC-25, M31), §3 trace ranges, §4 row, §5 count 23 / graph tail / `depends_on` P23[P22], §6.4
   (`EditingProvider::{crop_aspect_ratios, shape_on_arrival}`, `Store::{arrival_insert flag, job_fail, count_jobs,
   requeue_failed_jobs}`, `CaptureOneScripting` two ops + two scripts), §6.6 (`JobKind::CropOnArrival`, `ShapeOutcome`,
-  `crop_ratio_unknown`, health `crop_not_applied` / `crop_ratio_unknown`, `CROP_GIVE_UP_ATTEMPTS` pending owner card 1),
+  `crop_ratio_unknown`, health `crop_not_applied` / `crop_ratio_unknown`, `CROP_GIVE_UP_ATTEMPTS` = 8),
   §6.7 (`crop_ratios_list`), §6.8 (`crop_on_arrival`), §7.5 (fake crop state). Book hole reported, not patched: 10B's
   "give up after the same limit" has no limit in MC-19.
 - 2026-10-29 tidy-up — planner added P21_backend_robustness and P22_frontend_tidy_up from `backlog.md` (owner: fix the known small leftovers before the work Mac and the real store). §4 rows, §5 count/graph/`depends_on` (P20 recorded too), §6.4 `render_description`, §6.6 health codes `settings_invalid`/`backup_failed` and a third `condition_field_missing` detail, §6.7 barcode `""` and the `provider` rejection of `items_search_shop`, §6.8 reading rule. Backlog rows 124, 125 / P00 note 1 / 103 and 129 were verified already fixed by P17/P18 and marked so; no intention-book change needed.

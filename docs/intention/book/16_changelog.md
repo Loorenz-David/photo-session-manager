@@ -115,3 +115,6 @@
     failure or unknown ratio; tiles in true proportions), invariant M31, decision R35. Chapter 10 "Basic
     layer" no longer names crop as a Next Capture Adjustment. Evidence: "Crop by script" (2026-10-29).
     Owner decision, header stays RATIFIED.
+23. **2026-10-29 — 10B give-up limit** (orchestrator, from the P23 planner's card 1). MC-25 §Failures said "give up
+    after the same limit" as MC-19, which has none. Fixed at 8 attempts (≈3 min of back-off), realising the
+    clause's stated purpose (a visible health warning instead of silent retries); option A of the card.

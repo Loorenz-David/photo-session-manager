@@ -324,3 +324,4 @@ names (unchanged size is enough); whether `set_variant_crop` lives on the fake o
 - Estimated size: ~24 files, ~950 lines (half tests).
 
 ## Review log
+- 2026-10-29 (orchestrator): card 1 answered from 10B's intent (option A): `CROP_GIVE_UP_ATTEMPTS` = 8; 10B §Failures and master plan §6.6 amended (changelog 23). Gate open.
