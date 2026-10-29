@@ -187,3 +187,13 @@ provider calls (ch12 §Logs says yes).
 - Estimated size: ~16 files, ~700 lines (half tests).
 
 ## Review log
+
+- **2026-10-29, implement r1, codex.** Built the 14 planned boundary outcomes across settings,
+  startup backup, jobs, shop search, health, publishing and barcode identity. Added 13 testkit
+  cases and one desktop concurrency case; updated inherited P13 expectations for the new shop
+  outage and notification semantics. Assumptions: malformed settings falls back to the complete
+  defaults until a save; a schema refresh error retains stored definitions; an existing backup
+  health failure survives a settings runtime rebuild until a successful backup. Deviation:
+  `crates/infra/src/paths.rs` also changed because its eager `backup/` creation rejected the
+  regular-file fixture before backup handling could report the failure. Bindings regenerated
+  with the documented empty-barcode rule. No camera or live Shopify probe was needed.
