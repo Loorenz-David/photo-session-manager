@@ -47,7 +47,6 @@ button { font: inherit; }
 .health-shell { max-width: 900px; margin: 0 auto; padding: 56px 48px; }
 .health-checked { color: var(--muted); font-size: var(--text-sm); }
 .health-title { font-family: var(--font-heading); font-size: 28px; letter-spacing: -0.04em; margin: 0; }
-.health-subtitle { color: var(--muted); margin: 8px 0 0; }
 .health-section { margin-top: 42px; }
 .health-section h2 { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800; margin-bottom: 20px; }
 .health-list { border-top: 1px solid var(--hair); }

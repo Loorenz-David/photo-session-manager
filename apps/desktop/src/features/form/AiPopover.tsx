@@ -56,10 +56,10 @@ export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch }
           </ul>
         )}
         <div className="flex gap-1.5">
-          <ActionButton size="sm" action={async () => { await onLooksRight(); setOpen(false); }}>
+          <ActionButton size="sm" action={async () => { setOpen(false); await onLooksRight(); }}>
             Looks right
           </ActionButton>
-          <ActionButton size="sm" variant="outline" action={async () => { await onClear(); setOpen(false); }}>
+          <ActionButton size="sm" variant="outline" action={async () => { setOpen(false); await onClear(); }}>
             Clear
           </ActionButton>
           <Button size="sm" variant="ghost" onClick={act(onSeeResearch)}>

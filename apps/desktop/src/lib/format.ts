@@ -11,6 +11,11 @@ const clock = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-d
 const weekday = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const dayMonth = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 
+/** Full local date and time for publish history. */
+export function dateTimeLabel(ms: number): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(ms);
+}
+
 /** Last-activity label: "27 min ago" within the hour, "10:45" today, "Fri 11:45" this week, "12 Oct" before. */
 export function activityLabel(ms: number, now = Date.now()): string {
   const minutes = Math.floor((now - ms) / MINUTE);

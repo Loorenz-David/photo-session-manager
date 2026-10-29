@@ -78,7 +78,7 @@ export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerPr
   const [local, setLocal] = useState<Item[]>([]);
   const [shop, setShop] = useState<Item[]>([]);
   const [shopFor, setShopFor] = useState<string | null>(null);
-  const [shopState, setShopState] = useState<'searching' | 'done' | 'unavailable'>('searching');
+  const [shopFailedFor, setShopFailedFor] = useState<string | null>(null);
   const debounced = useDebounced(query.trim(), ITEM_SEARCH_DEBOUNCE_MS);
   const debouncedShop = useDebounced(query.trim(), SHOP_SEARCH_DEBOUNCE_MS);
   const currentQuery = query.trim();
@@ -92,6 +92,7 @@ export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerPr
     setLocal([]);
     setShop([]);
     setShopFor(null);
+    setShopFailedFor(null);
   }, [open]);
 
   useEffect(() => {
@@ -109,16 +110,15 @@ export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerPr
   }, [open, debounced]);
 
   useEffect(() => {
-    if (!open || !debouncedShop) { setShop([]); setShopFor(null); setShopState('searching'); return; }
+    if (!open || !debouncedShop) { setShop([]); setShopFor(null); setShopFailedFor(null); return; }
     let alive = true;
-    setShopState('searching');
     searchItemsShop(debouncedShop).then(found => {
-      if (alive && currentQueryRef.current === debouncedShop) { setShop(found); setShopFor(debouncedShop); setShopState('done'); }
-    }).catch(() => { if (alive && currentQueryRef.current === debouncedShop) setShopState('unavailable'); });
+      if (alive && currentQueryRef.current === debouncedShop) { setShop(found); setShopFor(debouncedShop); setShopFailedFor(null); }
+    }).catch(() => { if (alive && currentQueryRef.current === debouncedShop) setShopFailedFor(debouncedShop); });
     return () => { alive = false; };
   }, [open, debouncedShop]);
 
-  const shopDone = debouncedShop === currentQuery && shopFor === currentQuery && shopState === 'done';
+  const shopDone = debouncedShop === currentQuery && shopFor === currentQuery;
   const results = [...(debounced === currentQuery ? local : []), ...(shopDone ? shop : [])];
 
   return (
@@ -130,7 +130,7 @@ export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerPr
           <CommandInput value={query} onValueChange={setQuery} placeholder="Title or SKU" aria-label="Search items by title or SKU" autoFocus />
           {currentQuery !== '' && (
             <CommandList className="new-session-results">
-              <CommandGroup heading={pick.busy ? 'Assigning…' : `${results.length} found · ${shopDone ? `${shop.length} in the shop` : debouncedShop === currentQuery && shopState === 'unavailable' ? 'shop unavailable' : 'searching the shop…'}`}>
+              <CommandGroup heading={pick.busy ? 'Assigning…' : `${results.length} found · ${shopDone ? `${shop.length} in the shop` : shopFailedFor === currentQuery ? 'shop unavailable' : 'searching the shop…'}`}>
                 {results.map(item => (
                   <CommandItem key={item.external_id ?? item.id} value={`item-${item.external_id ?? item.id}`} onSelect={() => void pick.run(item)} disabled={pick.busy} aria-busy={pick.busy ? 'true' : undefined} className="result-row">
                     <span className="result-thumb" aria-hidden>

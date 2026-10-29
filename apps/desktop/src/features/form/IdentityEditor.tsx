@@ -28,7 +28,7 @@ export function IdentityEditor({ item, onSaved }: IdentityEditorProps) {
   const save = useAction(async () => {
     const nextSku = sku.trim();
     const nextBarcode = barcode.trim();
-    const saved = await updateIdentity(item.id, nextSku && nextSku !== item.sku ? nextSku : null, nextBarcode && nextBarcode !== (item.barcode ?? '') ? nextBarcode : null);
+    const saved = await updateIdentity(item.id, nextSku && nextSku !== item.sku ? nextSku : null, nextBarcode !== (item.barcode ?? '') ? nextBarcode : null);
     setOpen(false);
     onSaved(saved);
   }, failure => {

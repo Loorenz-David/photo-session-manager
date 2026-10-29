@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, ClipboardList, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,6 @@ import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { useAction } from '@/lib/pending';
 import {
   PRODUCT_TITLE,
   acceptAllSuggestions,
@@ -58,24 +57,32 @@ type FormDialogProps = {
 
 /** The product details form (NOTES §Screens 6–7): a dialog over the workspace. */
 export function FormDialog({ open, onOpenChange, ...rest }: FormDialogProps) {
+  const closeBody = useRef<(() => void) | null>(null);
+  const changeOpen = (next: boolean) => {
+    if (next) onOpenChange(true);
+    else if (closeBody.current) closeBody.current();
+    else onOpenChange(false);
+  };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent showCloseButton={false} className="flex h-[min(820px,92vh)] w-[min(1120px,96vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
-        {open && <FormBody close={() => onOpenChange(false)} {...rest} />}
+        {open && <FormBody close={() => onOpenChange(false)} registerClose={close => { closeBody.current = close; }} {...rest} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-type FormBodyProps = Omit<FormDialogProps, 'open' | 'onOpenChange'> & { close: () => void };
+type FormBodyProps = Omit<FormDialogProps, 'open' | 'onOpenChange'> & { close: () => void; registerClose: (close: () => void) => void };
 
-function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close }: FormBodyProps) {
+function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose }: FormBodyProps) {
   const state = useFormState(item.id);
   const { form } = state;
   const [step, setStep] = useState<Group>('details');
   const [customizing, setCustomizing] = useState(false);
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [research, setResearch] = useState<{ open: boolean; focus: string | null }>({ open: false, focus: null });
+  const actionQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const closing = useRef(false);
 
   useEffect(() => {
     if (!customizing) return;
@@ -91,21 +98,29 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const total = form?.groups.reduce((sum, g) => sum + g.total, 0) ?? 0;
   const stepIndex = STEPS.indexOf(step);
 
-  const act = useAction(async (action: () => Promise<unknown>, failure: string) => {
-    try {
-      await action();
-    } catch (error) {
-      throw new Error(`${failure}: ${(error as Error).message}`);
-    }
-    await state.reload();
-  });
+  const act = (action: () => Promise<unknown>, failure: string): Promise<unknown> => {
+    const next = actionQueue.current.then(async () => {
+      try {
+        await action();
+      } catch (error) {
+        toast.error(`${failure}: ${(error as Error).message}`);
+      } finally {
+        await state.reload();
+      }
+    });
+    actionQueue.current = next;
+    return next;
+  };
 
   async function saveAndClose() {
+    if (closing.current) return;
+    closing.current = true;
     const titleEdited = state.isEdited(PRODUCT_TITLE);
     await state.flush();
     if (titleEdited) onItemChanged();
     close();
   }
+  registerClose(() => { void saveAndClose(); });
 
   /** The Title is the item's title (ch05): once it is saved, the workspace reloads so its header follows. */
   async function blurField(key: string) {
@@ -140,7 +155,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
           <Button variant={customizing ? 'secondary' : 'ghost'} size="sm" aria-pressed={customizing} onClick={() => (customizing ? finishCustomizing() : setCustomizing(true))}>
             <SlidersHorizontal /> Customize fields
           </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={close}>
+          <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={() => void saveAndClose()}>
             <X />
           </Button>
         </div>
@@ -169,8 +184,8 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   onChange={value => state.edit(field.definition.key, value)}
                   onBlur={() => void blurField(field.definition.key)}
                   conditionPhotos={conditionPhotos}
-                  onLooksRight={f => act.run(() => setAttributeValue(item.id, f.definition.key, rawValue(f)), 'Could not accept')}
-                  onClearAi={f => act.run(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
+                  onLooksRight={f => act(() => setAttributeValue(item.id, f.definition.key, rawValue(f)), 'Could not accept')}
+                  onClearAi={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
                   onSeeResearch={key => setResearch({ open: true, focus: key })}
                 />
               ))}
@@ -180,7 +195,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                 fields={aiFields}
                 focusKey={research.focus}
                 onFocus={focus => setResearch(current => ({ ...current, focus }))}
-                onAcceptAll={() => act.run(() => acceptAllSuggestions(item.id), 'Could not accept')}
+                onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}
                 onClose={() => setResearch({ open: false, focus: null })}
               />
             )}

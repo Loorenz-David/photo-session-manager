@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { SkeletonFields } from '@/components/pending/SkeletonFields';
@@ -19,7 +19,9 @@ export function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const page = usePageData(getSettings);
+  const loadedSecret = useRef('');
   useEffect(() => { if (page.data) setSettings(page.data); }, [page.data]);
+  useEffect(() => { if (page.data) loadedSecret.current = page.data.integration?.client_secret ?? ''; }, [page.data]);
 
   const edit = (patch: Partial<Settings>) => setSettings(current => current ? { ...current, ...patch } : current);
   const editIntegration = (key: IntegrationKey, value: string) =>
@@ -45,11 +47,12 @@ export function SettingsPage() {
       integration,
     });
     setSettings(saved);
+    loadedSecret.current = saved.integration?.client_secret ?? '';
     setError(null);
     toast.success('Settings saved');
   }, e => setError(e instanceof Error ? e.message : String(e)));
 
-  const header = <PageHeader back={{ label: 'Sessions', to: '#/' }} title={<h1 className="health-title">Settings</h1>} escapeGoesBack>
+  const header = <PageHeader title={<h1 className="health-title">Settings</h1>} escapeGoesBack>
     <Button variant="outline" onClick={() => { window.location.hash = '#/health'; }}>Health</Button>
   </PageHeader>;
   if (!settings) return <>{header}<main className="health-shell">{error || page.error ? <p role="alert">{error ?? String(page.error)}</p> : <SkeletonFields n={6} />}</main></>;
@@ -63,7 +66,14 @@ export function SettingsPage() {
   </div>;
   const shop = (label: string, key: IntegrationKey, type = 'text') => <div className="flex flex-col gap-1">
     <label htmlFor={`settings-${key}`}>{label}</label>
-    <Input id={`settings-${key}`} type={type} autoComplete="off" value={settings.integration?.[key] ?? ''} onChange={e => editIntegration(key, e.target.value)} />
+    <Input id={`settings-${key}`} type={type} autoComplete="off" value={settings.integration?.[key] ?? ''} onChange={e => editIntegration(key, e.target.value)}
+      onFocus={key === 'client_secret' ? () => {
+        const value = settings.integration?.client_secret ?? '';
+        if (value.startsWith('••••') && value === loadedSecret.current) editIntegration('client_secret', '');
+      } : undefined}
+      onBlur={key === 'client_secret' ? () => {
+        if (settings.integration?.client_secret === '' && loadedSecret.current.startsWith('••••')) editIntegration('client_secret', loadedSecret.current);
+      } : undefined} />
   </div>;
 
   return <>{header}<main className="health-shell">

@@ -18,7 +18,6 @@ type HeaderProps = {
   theme: Theme;
   onThemeChange: (theme: Theme) => void;
   onNewSession: () => void;
-  goHome: () => void;
   /** Unassigned workspace: "Assign product" replaces Publish (ch06 §Unassigned). */
   onAssignProduct?: () => void;
 };
@@ -143,7 +142,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
   }
 
   return (
-    <PageHeader back={{ label: 'Sessions', to: '#/' }} title={<>
+    <PageHeader title={<>
         {sessionId === 1 ? (
           <>
             <strong className="header-name">Unassigned photos</strong>

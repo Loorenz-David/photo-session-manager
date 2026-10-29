@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { clearAttribute, getForm, setAttributeValue, type Form, type FormField } from '@/services/attributes';
+import { kindOf } from './kinds';
 
 /** Quiet time after the last keystroke before a field is written (delegated choice; ch08 "values save as typed"). */
 export const SAVE_DEBOUNCE_MS = 300;
@@ -117,7 +118,18 @@ export function useFormState(itemId: number) {
 
   /** What the field shows: the local edit, else the stored value. */
   const valueOf = useCallback(
-    (field: FormField) => (field.definition.key in drafts ? drafts[field.definition.key] : storedValue(field)),
+    (field: FormField) => {
+      if (field.definition.key in drafts) return drafts[field.definition.key];
+      if (field.value && !field.value.valid && ['text', 'textarea', 'url', 'int', 'decimal'].includes(kindOf(field.definition))) {
+        try {
+          const parsed: unknown = JSON.parse(field.value.value);
+          return typeof parsed === 'string' ? parsed : field.value.value;
+        } catch {
+          return field.value.value;
+        }
+      }
+      return storedValue(field);
+    },
     [drafts],
   );
   const isEdited = useCallback((key: string) => key in drafts, [drafts]);

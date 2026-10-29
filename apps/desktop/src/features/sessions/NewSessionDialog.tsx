@@ -46,7 +46,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   const [localResults, setLocalResults] = useState<Item[]>([]);
   const [shopResults, setShopResults] = useState<Item[]>([]);
   const [shopFor, setShopFor] = useState<string | null>(null);
-  const [shopState, setShopState] = useState<'searching' | 'done' | 'unavailable'>('searching');
+  const [shopFailedFor, setShopFailedFor] = useState<string | null>(null);
   const [searchedFor, setSearchedFor] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [sku, setSku] = useState('');
@@ -69,6 +69,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
     setLocalResults([]);
     setShopResults([]);
     setShopFor(null);
+    setShopFailedFor(null);
     setSearchedFor(null);
     setCreating(false);
     setSku('');
@@ -106,20 +107,19 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
     if (!open || !debouncedShop) {
       setShopResults([]);
       setShopFor(null);
-      setShopState('searching');
+      setShopFailedFor(null);
       return;
     }
     let alive = true;
-    setShopState('searching');
     searchItemsShop(debouncedShop)
       .then(found => {
         if (!alive || currentTitle.current !== debouncedShop) return;
         setShopResults(found);
         setShopFor(debouncedShop);
-        setShopState('done');
+        setShopFailedFor(null);
       })
       .catch(() => {
-        if (alive && currentTitle.current === debouncedShop) setShopState('unavailable');
+        if (alive && currentTitle.current === debouncedShop) setShopFailedFor(debouncedShop);
       });
     return () => { alive = false; };
   }, [open, debouncedShop]);
@@ -141,7 +141,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   }, [creating]);
 
   const searchDone = title !== '' && searchedFor === title;
-  const shopDone = debouncedShop === title && shopFor === title && shopState === 'done';
+  const shopDone = debouncedShop === title && shopFor === title;
   const results = [...(searchDone ? localResults : []), ...(shopDone ? shopResults : [])];
   const exactTitle = results.some(item => item.title.trim().toLowerCase() === title.toLowerCase());
   const showCreate = searchDone && !exactTitle;
@@ -164,7 +164,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   }, failure => setError(errorText(failure)));
 
   const shopCount = results.filter(inShop).length;
-  const heading = searchDone ? `${results.length} found · ${shopDone ? `${shopCount} in the shop` : shopState === 'unavailable' && debouncedShop === title ? 'shop unavailable' : 'searching the shop…'}` : 'Searching…';
+  const heading = searchDone ? `${results.length} found · ${shopDone ? `${shopCount} in the shop` : shopFailedFor === title ? 'shop unavailable' : 'searching the shop…'}` : 'Searching…';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

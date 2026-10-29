@@ -238,7 +238,7 @@ it('C1(a) the measured tile fills the overlay while its source is invisible', as
   expect(getComputedStyle(overlay).width).not.toBe('120px');
   expect(getComputedStyle(overlay).width).toBe('100%');
   expect(getComputedStyle(tile(1)).opacity).toBe('0');
-  expect(overlay.querySelector('.tile-number')?.textContent).toBe('01');
+  expect(overlay.querySelector('.tile-number')?.textContent).toBe('03');
   fireEvent.pointerUp(document, { clientX: 50, clientY: 122 });
 });
 

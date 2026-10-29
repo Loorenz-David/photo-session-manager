@@ -28,7 +28,7 @@ const SESSION = 5;
 function renderHeader() {
   render(
     <>
-      <Header sessionId={SESSION} theme="light" onThemeChange={() => undefined} onNewSession={() => undefined} goHome={() => undefined} />
+      <Header sessionId={SESSION} theme="light" onThemeChange={() => undefined} onNewSession={() => undefined} />
       <Toaster />
     </>,
   );

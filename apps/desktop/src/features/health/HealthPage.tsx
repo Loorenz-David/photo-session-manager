@@ -22,7 +22,7 @@ export function HealthPage() {
   useEffect(() => { if (health) setCheckedAt(new Date().toLocaleTimeString()); }, [health]);
   const refresh = async () => { await reload(); };
 
-  return <><PageHeader back={{ label: 'Settings', to: '#/settings' }} title={<h1 className="health-title">Health</h1>} escapeGoesBack><ActionButton variant="outline" action={refresh}>Retry checks</ActionButton></PageHeader><main className="health-shell">
+  return <><PageHeader title={<h1 className="health-title">Health</h1>} escapeGoesBack><ActionButton variant="outline" action={refresh}>Retry checks</ActionButton></PageHeader><main className="health-shell">
     <section className="health-section" aria-label="System status"><h2>System status</h2>
       {loading ? <SkeletonRows n={4} /> : error ? <p role="alert">{String(error)}</p> : <div className="health-list">{health?.items.map((item, index) => <div className="health-row" key={`${item.code}-${index}`} data-ok={item.ok}>
         <div className="health-label"><span className="health-dot" data-ok={item.ok} />{names[item.code] ?? item.code}</div><div className="health-detail">{item.detail}{item.code.startsWith('document') && checkedAt && <span className="health-checked"> · checked {checkedAt}</span>}</div>

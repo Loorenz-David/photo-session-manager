@@ -64,6 +64,8 @@ export function useWorkspaceState(sessionId: number) {
   const [selection, setSelection] = useState<ReadonlySet<number>>(new Set());
   const activeRef = useRef<number | null>(null);
   const request = useRef(0);
+  const commandsInFlight = useRef(0);
+  const reloadWanted = useRef(false);
 
   const setActiveId = useCallback((id: number | null) => {
     activeRef.current = id;
@@ -102,7 +104,8 @@ export function useWorkspaceState(sessionId: number) {
       if (event.session_id !== sessionId) return;
       // A new capture appears on the stage (ch04 S-C).
       if (event.kind === 'photo_added') setActiveId(event.photo_id);
-      void reload();
+      if (commandsInFlight.current > 0) reloadWanted.current = true;
+      else void reload();
     })
       .then(stop => {
         if (alive) unlisten = stop;
@@ -123,16 +126,22 @@ export function useWorkspaceState(sessionId: number) {
   /** Runs a review command, then opens `next` and reloads; failures are told, never silent. */
   const run = useCallback(
     async (command: () => Promise<ReviewResult>, next?: number | null, optimistic?: (photos: Photo[]) => Photo[]): Promise<ReviewResult | null> => {
+      commandsInFlight.current += 1;
       if (optimistic) setView(current => current ? { ...current, photos: optimistic(current.photos) } : current);
       try {
         const result = await command();
         if (next !== undefined) setActiveId(next);
-        await reload();
         return result;
       } catch (error) {
         toast.error(refusalText(error));
-        await reload();
         return null;
+      } finally {
+        try {
+          await reload();
+        } finally {
+          commandsInFlight.current -= 1;
+          if (commandsInFlight.current === 0) reloadWanted.current = false;
+        }
       }
     },
     [reload, setActiveId],

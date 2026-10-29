@@ -10,6 +10,7 @@ import { SessionsPage } from './features/sessions/SessionsPage';
 import { ArrivalToasts } from './features/shell/ArrivalToasts';
 import { WorkspacePage } from './features/workspace/WorkspacePage';
 import { useKeyboard } from './lib/keyboard';
+export { parentRoute, routeLabel } from './lib/routes';
 import { activateSession, activeSession, deactivateSession } from './services/sessions';
 
 /** Routes: `#/` sessions, `#/session/:id` session view, `#/health` health screen, `#/settings` settings (hash routing works for the bundled app's file URLs). */
@@ -20,12 +21,6 @@ function routeSessionId(): number | undefined {
 
 export function sessionPath(sessionId?: number): string {
   return sessionId === undefined ? '#/' : `#/session/${sessionId}`;
-}
-
-export function parentRoute(hash: string): string | null {
-  if (hash === '' || hash === '#/') return null;
-  if (hash === '#/health') return '#/settings';
-  return '#/';
 }
 
 function useRoute(): [number | undefined, (sessionId?: number) => void, boolean, boolean] {
@@ -114,7 +109,6 @@ export default function App() {
         theme={theme}
         onThemeChange={setTheme}
         onNewSession={() => setNewSessionOpen(true)}
-        goHome={() => navigate()}
         onAssignProduct={() => setAssignOpen(true)}
       />
       {sessionId === undefined ? (

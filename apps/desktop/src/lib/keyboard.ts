@@ -35,7 +35,7 @@ export function useBackKeys(parent: string | null, escape: boolean): void {
     if (parent === null) return;
     function onKey(event: KeyboardEvent) {
       if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
-      const commandBack = event.key === '[' && (event.metaKey || event.ctrlKey);
+      const commandBack = event.key === '[' && (event.metaKey || event.ctrlKey) && !isTyping(event.target);
       const escapeBack = escape && event.key === 'Escape' && !isTyping(event.target);
       if (!commandBack && !escapeBack) return;
       event.preventDefault();

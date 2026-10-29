@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import {
   DndContext,
   DragOverlay,
@@ -10,6 +9,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
   type DropAnimation,
 } from '@dnd-kit/core';
@@ -118,6 +118,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const [formOpen, setFormOpen] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [overId, setOverId] = useState<string | number | null>(null);
   const [failureOpen, setFailureOpen] = useState(false);
   const shownFailure = useRef<number | null>(null);
   const shownFailureSession = useRef(sessionId);
@@ -128,6 +129,23 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const ordered = displayOrder(state.photos);
   const draggedGroup = dragging?.classification === 'condition' ? ordered.condition : [...ordered.main, ...ordered.unreviewed];
   const draggedNumber = dragging ? draggedGroup.findIndex(photo => photo.id === dragging.id) + 1 : 0;
+  let projectedNumber = draggedNumber;
+  let projectedGroup = dragging?.classification;
+  if (dragging && overId !== null && idNumber(overId, 'session:') === null && String(overId) !== `photo:${dragging.id}`) {
+    const overPhotoId = idNumber(overId, 'photo:');
+    const overPhoto = overPhotoId === null ? undefined : state.photos.find(photo => photo.id === overPhotoId);
+    const target = overPhoto?.classification === 'condition' ? 'condition'
+      : overPhoto ? 'main'
+      : String(overId).startsWith('group:') ? String(overId).slice('group:'.length) : null;
+    if (target === 'main' || target === 'condition') {
+      if (dragging.classification !== target) {
+        projectedGroup = target;
+        projectedNumber = ordered[target].length + 1;
+      } else if (overPhoto) {
+        projectedNumber = ordered[target].findIndex(photo => photo.id === overPhoto.id) + 1;
+      }
+    }
+  }
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const failure = state.view?.session.publish?.step === 'failed' ? state.view.session.publish : null;
   const retry = useCallback(() => {
@@ -231,14 +249,19 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   function onDragStart(event: DragStartEvent) {
     const id = idNumber(event.active.id, 'photo:');
     setDraggingId(state.photos.some(photo => photo.id === id) ? id : null);
+    setOverId(null);
+  }
+
+  function onDragOver(event: DragOverEvent) {
+    setOverId(event.over?.id ?? null);
   }
 
   function onDragEnd(event: DragEndEvent) {
     const id = idNumber(event.active.id, 'photo:');
     const overId = event.over?.id;
-    // Render the destination tile and the overlay's matching contents before dnd-kit clones it for the glide.
-    if (id !== null && overId !== undefined) flushSync(() => drop(id, overId));
+    if (id !== null && overId !== undefined) drop(id, overId);
     setDraggingId(null);
+    setOverId(null);
   }
 
   const tileHandlers = {
@@ -264,7 +287,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
 
   return (
     <PublishFailedContext.Provider value={failure !== null}>
-    <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDraggingId(null)}>
+    <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDraggingId(null); setOverId(null); }}>
       <main className="workspace" data-folded={folded || undefined}>
         <div className="stage-column">
           <Stage
@@ -299,7 +322,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
       </main>
       <DragOverlay dropAnimation={reducedMotion ? null : dropAnimation}>
         {dragging && <div className={`photo-tile tile-${folded ? 'strip' : 'grid'} drag-overlay`} style={{ width: '100%', height: '100%' }} data-active={state.activeId === dragging.id || undefined} data-selected={state.selection.has(dragging.id) || undefined} aria-hidden="true">
-          <PhotoTileFace photo={dragging} number={draggedNumber} variant={folded ? 'strip' : 'grid'} />
+          <PhotoTileFace photo={{ ...dragging, classification: projectedGroup ?? dragging.classification }} number={projectedNumber} variant={folded ? 'strip' : 'grid'} />
         </div>}
       </DragOverlay>
       {failureOpen && failure && <FailurePopover reason={failure.error ?? 'Publish failed'} onRetry={retry} onClose={() => setFailureOpen(false)} />}
