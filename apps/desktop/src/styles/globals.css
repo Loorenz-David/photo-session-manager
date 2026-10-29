@@ -45,7 +45,6 @@
 body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); font-size: var(--text-base); }
 button { font: inherit; }
 .health-shell { max-width: 900px; margin: 0 auto; padding: 56px 48px; }
-.health-header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--hair); padding-bottom: 24px; }
 .health-checked { color: var(--muted); font-size: var(--text-sm); }
 .health-title { font-family: var(--font-heading); font-size: 28px; letter-spacing: -0.04em; margin: 0; }
 .health-subtitle { color: var(--muted); margin: 8px 0 0; }
@@ -57,7 +56,7 @@ button { font: inherit; }
 .health-detail { color: var(--muted); overflow-wrap: anywhere; }
 .health-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; background: var(--ok); }
 .health-dot[data-ok="false"] { background: var(--danger); }
-@media (max-width: 650px) { .health-shell { padding: 32px 22px; } .health-header { align-items: flex-start; gap: 16px; flex-direction: column; } .health-row { grid-template-columns: 1fr; gap: 6px; } }
+@media (max-width: 650px) { .health-shell { padding: 32px 22px; } .health-row { grid-template-columns: 1fr; gap: 6px; } }
 
 @theme inline {
   --font-sans: "Archivo", system-ui, sans-serif;

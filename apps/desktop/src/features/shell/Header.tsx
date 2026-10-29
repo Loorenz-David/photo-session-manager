@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bell, ClipboardList, CloudUpload, FolderDown, Info, Settings, Tag } from 'lucide-react';
+import { Bell, ClipboardList, CloudUpload, FolderDown, Info, Settings, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ActionButton } from '@/components/ui/action-button';
@@ -11,6 +11,7 @@ import { PublishPopover } from '@/features/publish/PublishPopover';
 import { PublishProgress } from '@/features/publish/PublishProgress';
 import { NotificationsDrawer } from '@/features/publish/NotificationsDrawer';
 import { usePublish } from '@/features/publish/usePublish';
+import { PageHeader } from './PageHeader';
 
 type HeaderProps = {
   sessionId?: number;
@@ -116,7 +117,7 @@ function useExportToasts(): Set<number> {
 }
 
 /** App header (COMPONENTS.md §App shell): Sessions page or session view. */
-export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, onAssignProduct }: HeaderProps) {
+export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssignProduct }: HeaderProps) {
   const identity = useSessionIdentity(sessionId);
   const integration = useIntegration();
   const exporting = useExportToasts();
@@ -129,9 +130,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
 
   if (sessionId === undefined) {
     return (
-      <header className="app-header">
-        <h1 className="app-title">Session Manager</h1>
-        <div className="header-actions">
+      <PageHeader title={<h1 className="app-title">Session Manager</h1>}>
           <CameraDot />
           {bell}{drawer}
           <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => { window.location.hash = '#/settings'; }}><Settings /></Button>
@@ -139,18 +138,12 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
           <Button className="new-session-button" onClick={onNewSession} title="New session (N)">
             New session
           </Button>
-        </div>
-      </header>
+      </PageHeader>
     );
   }
 
   return (
-    <header className="app-header">
-      <div className="header-identity">
-        <Button variant="ghost" onClick={goHome} className="back-button">
-          <ArrowLeft /> Sessions
-        </Button>
-        <span className="header-divider" aria-hidden />
+    <PageHeader back={{ label: 'Sessions', to: '#/' }} title={<>
         {sessionId === 1 ? (
           <>
             <strong className="header-name">Unassigned photos</strong>
@@ -163,8 +156,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
             <Info className="header-info" aria-hidden />
           </>
         )}
-      </div>
-      <div className="header-actions">
+      </>}>
         <CameraDot />
         <span className="header-divider" aria-hidden />
         {bell}{drawer}
@@ -187,7 +179,6 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, goHome, 
             {typeof integration === 'string' && <div className="relative"><ActionButton action={async () => { setPublishOpen(true); }}><CloudUpload /> Publish</ActionButton>{publishOpen && <PublishPopover sessionIds={[sessionId]} onClose={() => { setPublishOpen(false); void publish.refresh(); }} />}</div>}
           </>
         )}
-      </div>
-    </header>
+    </PageHeader>
   );
 }

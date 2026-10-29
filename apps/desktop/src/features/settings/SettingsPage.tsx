@@ -5,6 +5,7 @@ import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Input } from '@/components/ui/input';
 import { useAction, usePageData } from '@/lib/pending';
 import { getSettings, pickFolder, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
+import { PageHeader } from '@/features/shell/PageHeader';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
@@ -48,14 +49,10 @@ export function SettingsPage() {
     toast.success('Settings saved');
   }, e => setError(e instanceof Error ? e.message : String(e)));
 
-  const header = <header className="health-header">
-    <div><h1 className="health-title">Settings</h1><p className="health-subtitle">Capture One, export and Shopify</p></div>
-    <div className="flex gap-2">
-      <Button variant="outline" onClick={() => { window.location.hash = '#/'; }}>Sessions</Button>
-      <Button variant="outline" onClick={() => { window.location.hash = '#/health'; }}>Health</Button>
-    </div>
-  </header>;
-  if (!settings) return <main className="health-shell">{header}{error || page.error ? <p role="alert">{error ?? String(page.error)}</p> : <SkeletonFields n={6} />}</main>;
+  const header = <PageHeader back={{ label: 'Sessions', to: '#/' }} title={<h1 className="health-title">Settings</h1>} escapeGoesBack>
+    <Button variant="outline" onClick={() => { window.location.hash = '#/health'; }}>Health</Button>
+  </PageHeader>;
+  if (!settings) return <>{header}<main className="health-shell">{error || page.error ? <p role="alert">{error ?? String(page.error)}</p> : <SkeletonFields n={6} />}</main></>;
 
   const text = (label: string, key: TextKey, picker?: string) => <div className="flex flex-col gap-1">
     <label htmlFor={`settings-${key}`}>{label}</label>
@@ -69,8 +66,7 @@ export function SettingsPage() {
     <Input id={`settings-${key}`} type={type} autoComplete="off" value={settings.integration?.[key] ?? ''} onChange={e => editIntegration(key, e.target.value)} />
   </div>;
 
-  return <main className="health-shell">
-    {header}
+  return <>{header}<main className="health-shell">
     <form onSubmit={event => { event.preventDefault(); void save.run(); }} className="health-section flex max-w-xl flex-col gap-4" aria-label="Settings">
       <h2>Capture One</h2>
       {text('Capture One session folder', 'document_id', 'Capture One session folder')}
@@ -93,5 +89,5 @@ export function SettingsPage() {
       {error && <p role="alert">{error}</p>}
       <div><Button type="submit" disabled={save.busy} aria-busy={save.busy ? 'true' : undefined}>Save settings{save.busy ? '…' : ''}</Button></div>
     </form>
-  </main>;
+  </main></>;
 }

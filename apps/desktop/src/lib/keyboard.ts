@@ -29,6 +29,23 @@ export function useKeyboard(map: KeyMap, enabled = true): void {
   }, [enabled]);
 }
 
+/** Back keys belong to pages; an open layer owns its own keyboard dismissal. */
+export function useBackKeys(parent: string | null, escape: boolean): void {
+  useEffect(() => {
+    if (parent === null) return;
+    function onKey(event: KeyboardEvent) {
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      const commandBack = event.key === '[' && (event.metaKey || event.ctrlKey);
+      const escapeBack = escape && event.key === 'Escape' && !isTyping(event.target);
+      if (!commandBack && !escapeBack) return;
+      event.preventDefault();
+      window.location.hash = parent!;
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [parent, escape]);
+}
+
 /** Value that follows `value` after `ms` of quiet. */
 export function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);

@@ -22,6 +22,12 @@ export function sessionPath(sessionId?: number): string {
   return sessionId === undefined ? '#/' : `#/session/${sessionId}`;
 }
 
+export function parentRoute(hash: string): string | null {
+  if (hash === '' || hash === '#/') return null;
+  if (hash === '#/health') return '#/settings';
+  return '#/';
+}
+
 function useRoute(): [number | undefined, (sessionId?: number) => void, boolean, boolean] {
   const [sessionId, setSessionId] = useState(routeSessionId);
   const [health, setHealth] = useState(() => window.location.hash === '#/health');

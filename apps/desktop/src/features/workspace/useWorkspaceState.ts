@@ -122,7 +122,8 @@ export function useWorkspaceState(sessionId: number) {
 
   /** Runs a review command, then opens `next` and reloads; failures are told, never silent. */
   const run = useCallback(
-    async (command: () => Promise<ReviewResult>, next?: number | null): Promise<ReviewResult | null> => {
+    async (command: () => Promise<ReviewResult>, next?: number | null, optimistic?: (photos: Photo[]) => Photo[]): Promise<ReviewResult | null> => {
+      if (optimistic) setView(current => current ? { ...current, photos: optimistic(current.photos) } : current);
       try {
         const result = await command();
         if (next !== undefined) setActiveId(next);
@@ -141,7 +142,17 @@ export function useWorkspaceState(sessionId: number) {
   const classify = useCallback(
     (photoId: number, classification: Exclude<Classification, 'deleted' | 'unreviewed'>, advance = true) => {
       const next = advance ? nextAfterAction(photosRef.current, photoId, false) : undefined;
-      return run(() => classifyPhoto(photoId, classification), next);
+      const optimistic = !advance ? (photos: Photo[]) => {
+        const photo = photos.find(candidate => candidate.id === photoId);
+        if (!photo || photo.classification === classification) return photos;
+        const source = photo.classification;
+        const targetPosition = photos.filter(candidate => candidate.classification === classification).length + 1;
+        const updated = photos.map(candidate => candidate.id === photoId ? { ...candidate, classification, position: targetPosition } : candidate);
+        const remaining = displayOrder(updated)[source === 'condition' ? 'condition' : source === 'main' ? 'main' : 'unreviewed'];
+        const positions = new Map(remaining.map((candidate, index) => [candidate.id, index + 1]));
+        return updated.map(candidate => positions.has(candidate.id) ? { ...candidate, position: positions.get(candidate.id)! } : candidate);
+      } : undefined;
+      return run(() => classifyPhoto(photoId, classification), next, optimistic);
     },
     [run],
   );
@@ -179,7 +190,17 @@ export function useWorkspaceState(sessionId: number) {
     [run, undo],
   );
 
-  const reorder = useCallback((photoId: number, position: number) => run(() => reorderPhoto(photoId, position)), [run]);
+  const reorder = useCallback((photoId: number, position: number) => run(() => reorderPhoto(photoId, position), undefined, photos => {
+    const photo = photos.find(candidate => candidate.id === photoId);
+    if (!photo || (photo.classification !== 'main' && photo.classification !== 'condition')) return photos;
+    const group = [...displayOrder(photos)[photo.classification]];
+    const from = group.findIndex(candidate => candidate.id === photoId);
+    if (from < 0) return photos;
+    group.splice(from, 1);
+    group.splice(Math.max(0, Math.min(group.length, position - 1)), 0, photo);
+    const positions = new Map(group.map((candidate, index) => [candidate.id, index + 1]));
+    return photos.map(candidate => positions.has(candidate.id) ? { ...candidate, position: positions.get(candidate.id)! } : candidate);
+  }), [run]);
 
   const move = useCallback(
     (photoIds: number[], target: number) => {
