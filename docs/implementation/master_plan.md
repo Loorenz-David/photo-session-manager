@@ -14,8 +14,8 @@ differ, the book wins and this file is amended.
 | Content | Artifact |
 |---|---|
 | Product semantics, hard constraints H1–H8, domain, scenarios | `docs/intention/book/01…13` |
-| Mechanism contracts MC-1…MC-24 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/09A_shopify_credentials_and_condition_field.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md` |
-| Measurement ledger M1–M30 (root of every criterion's trace) | `book/14_measurement_ledger.md` |
+| Mechanism contracts MC-1…MC-25 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/09A_shopify_credentials_and_condition_field.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md`, `book/10B_shape_on_arrival.md` (MC-25, owner 2026-10-29) |
+| Measurement ledger M1–M31 (root of every criterion's trace) | `book/14_measurement_ledger.md` |
 | Capture One facts and VERIFY probes | `docs/intention/evidence/capture_one_16.8.6.md`; dictionary `docs/reference/capture_one_16.8.6.sdef` |
 | Design rules (field kinds, timings, keyboard, components) | `docs/intention/evidence/design_handoff.md`; pictures/prototype `claude_design/` |
 | Shopify facts | `docs/intention/evidence/shopify_admin.md` — **does not exist yet**; written in phase P12 (SHOPIFY-VERIFY-1…7) |
@@ -54,7 +54,7 @@ restated so no session has to infer them:
 - **Perimeter**: a phase touches only the files its plan lists (plus the test file(s) it names). A new file not
   listed is declared in the handoff's **Deviations**.
 - **Trace conventions** (charter trace chain, flow §9): every criterion row's trace cell names an `M` id
-  (M1–M30), an `MC` id (MC-1…MC-24) or a hard constraint (H1–H8). A row may instead cite a chapter rule
+  (M1–M31), an `MC` id (MC-1…MC-25) or a hard constraint (H1–H8). A row may instead cite a chapter rule
   (`ch07 §Open filter`, `evidence/design_handoff §Field kind map`) **only** for UI-rendering rows, operations
   rows the inventory listed as "not contracted", and packaging rows (ch11); such a cell is prefixed `[rule]` so
   the reviewer knows the row has no ledger measurement behind it. Every plan file derives its own counts of
@@ -93,24 +93,25 @@ restated so no session has to infer them:
 | P20_drop_continuity | APPROVED | 2026-10-29 | opus | review r1 APPROVED_WITH_NOTES: 3/3 rows hold at their boundaries; perimeter = declared files (`63e5899`: 7 paths); suite 407 Rust / 114 UI, clippy/fmt/typecheck green (re-run by reviewer); 2 backlog notes (gliding copy keeps its pre-drop number/Cover badge, so the flushSync claim does not hold; the glide is not verified live) |
 | P21_backend_robustness | APPROVED | 2026-10-29 | opus | review r1 APPROVED_WITH_NOTES: 14/14 rows hold at their boundaries; perimeter = declared files + disclosed `paths.rs` (`e33ddfb`: 17 paths); suite 421 Rust / 114 UI, clippy/fmt/typecheck green (re-run by reviewer); 2 reviewer probe tests (deleted) confirmed the post-publish backup half and an incomplete-block save; 4 backlog notes |
 | P22_frontend_tidy_up | NOT_STARTED | 2026-10-29 | planner | planned from `backlog.md` (5 criteria / 10 rows): drawer shows local date/time, secret field clears on focus, ⌘[ ignored while typing, event reloads deferred during a drag command, overlay shows the projected number/Cover, form action queue / invalid-value seed / close path / barcode clear, one source for a page's parent |
+| P23_shape_on_arrival | NOT_STARTED | 2026-10-29 | planner | planned from book 10B / MC-25 / M31 (6 criteria / 15 rows, one optional live row): `crop_on_arrival` job on the Capture One lane (one race-free JXA call, untouched frame only, once per RAW, survives relaunch), MC-19 back-off + give-up into health `crop_not_applied`, `crop_ratio_unknown`, setting `crop_on_arrival` (default Square, `off`) + "Shape on arrival" select, `crop_ratios_list`, tiles fit (not trim). **Owner card 1 open:** the give-up limit (`CROP_GIVE_UP_ATTEMPTS`, recommended 8) — the book names none |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 22 phases in execution order (17 MVP phases, the two real-run fix phases added
-2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, and the two tidy-up phases P21/P22 planned
-2026-10-29 from `backlog.md`); the runner is sequential and a phase starts only when every
-phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
+`phases.txt` lists the 23 phases in execution order (17 MVP phases, the two real-run fix phases added
+2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, the two tidy-up phases P21/P22 planned
+2026-10-29 from `backlog.md`, and P23_shape_on_arrival planned 2026-10-29 from book 10B); the runner is sequential and a
+phase starts only when every phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
-P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21].
+P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22].
 
 - **Local workflow usable after P09** (shoot → arrive → review → live previews → export). Attributes and the
   form (P10, P11) complete the local item data; Shopify starts at P12.
@@ -182,14 +183,19 @@ version; `package-lock.json` committed). Exact versions in `package.json`, no `^
 `Store` (transactional repository; one SQLite impl; exact method set designed in P01 and extended per phase) ·
 `Clock` (`now_ms() -> i64`, `mono() -> Instant`; `SystemClock`, testkit `ManualClock`) · `EditingProvider`
 (`inspect_document`, `set_capture_folder`, `install_hooks`, `check_recipes`, `render(raw, RenderPurpose) -> JobId`,
-`mirror_tag(raw, Classification)`, `import(paths)`, `capabilities()`) · `CameraProvider` (`status`, `capture`,
-`capabilities`) · `CommerceAdapter` (ch09 capability methods; every mutating method takes `&ConfirmedRun`; P21 adds
+`mirror_tag(raw, Classification)`, `import(paths)`, `capabilities()`; P23 adds `crop_aspect_ratios() -> Vec<String>` (the
+provider's crop-shape names, opaque to core) and `shape_on_arrival(raw, ratio, now_ms) -> ShapeOutcome {Applied, Skipped,
+UnknownRatio}` (10B MC-25: set the ratio only on an untouched full frame, one provider call)) · `CameraProvider` (`status`,
+`capture`, `capabilities`) · `CommerceAdapter` (ch09 capability methods; every mutating method takes `&ConfirmedRun`; P21 adds
 `render_description(paragraphs) -> String`, the description text as the platform stores it, so core compares before
 writing) ·
 `RawPreviews` (`extract(raw, dest) -> Option<Extracted{orientation}>`) · `EventSink` (`emit(AppEvent)`).
+`Store` (P23): `arrival_insert(photo, path_key, shape_on_arrival: bool)` enqueues the `crop_on_arrival` job in the arrival
+transaction; `job_fail(id, code, now_ms)`, `count_jobs(kind, status, exclude_error)`, `requeue_failed_jobs(kind, now_ms)`.
 Capture One internals: `psm_integrations::editing::capture_one::scripting::CaptureOneScripting` (typed
-operations over the dictionary; impls `JxaScripting`, testkit `FakeCaptureOneScripting`). Shopify internals:
-`commerce::shopify::transport::HttpTransport` (impls `ReqwestTransport`, testkit `FakeTransport`).
+operations over the dictionary; impls `JxaScripting`, testkit `FakeCaptureOneScripting`; P23 adds `crop_aspect_ratios(id)`
+and `apply_crop_if_untouched(id, variant, ratio) -> ShapeOutcome`, scripts `jxa/crop_aspect_ratios.js`, `jxa/apply_crop.js`).
+Shopify internals: `commerce::shopify::transport::HttpTransport` (impls `ReqwestTransport`, testkit `FakeTransport`).
 
 ### 6.5 Tables (migration `001_init.sql` in P00: `settings`, `capture_events`; `002_domain.sql` in P01: the rest)
 All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stored as snake_case TEXT; JSON as TEXT.
@@ -216,7 +222,11 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
 - `Classification {Unreviewed, Main, Condition, Deleted}` · `PhotoSource {Capture, Import}` · `ItemOrigin {Linked, Local}` ·
   `Integrity {Ok, RawChanged, RawMissing}` · `UploadState {None, Exported, Staged, Uploaded, Attached, Ready, Failed}` ·
   link `role`: `gallery` or `attribute:<key>` · `PublishStep {Prepare, Upload, Update, Describe, Done, Failed}` ·
-  `JobKind {OriginalPreview, Hash, RenderPreview, RenderExport, MirrorTag, PublishStep, VerifyHash}` ·
+  `JobKind {OriginalPreview, Hash, RenderPreview, RenderExport, MirrorTag, PublishStep, VerifyHash, CropOnArrival}` (P23:
+  `crop_on_arrival`, target = the RAW, once per RAW; terminal `failed` with `error = crop_ratio_unknown`, or with the last
+  code after `CROP_GIVE_UP_ATTEMPTS` attempts — **value pending P23 owner card 1, recommended 8**; `failed` rows of this
+  kind are re-queued with `attempts = 0` at a real start and by the Health page's "Retry checks") ·
+  `ShapeOutcome {Applied, Skipped, UnknownRatio}` (P23) ·
   `JobStatus {Queued, Running, Done, Failed}` · `Provenance {Human, Ai, Default}` · `AiConfidence {High, Medium, Low}` ·
   `AiStatus {Suggested, Accepted, Cleared}` · `AttributeGroup {Details, Condition, Product}` ·
   `CoreType` = the 18 types of ch08 · `SessionStatus {Publishing, Failed, Published, Ready, InProgress}` ·
@@ -227,13 +237,19 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   `variant_not_found`, `capture_folder_not_set`, `hooks_not_installed`, `recipe_missing{name}`, `tag_verification`,
   `raw_changed{photo_id}`, `raw_missing{photo_id}`, `several_products_carry_sku{sku}`, `foreign_media_added{n}`,
   `gallery_verification`, `upload_incomplete`, `attribute_verification{keys}`, `not_confirmed`, `timeout`,
-  `no_integration`, `invalid_value`, `shop_not_permitted`, `app_not_installed`, `credentials_rejected` (09A MC-23).
+  `no_integration`, `invalid_value`, `shop_not_permitted`, `app_not_installed`, `credentials_rejected` (09A MC-23),
+  `crop_ratio_unknown{name}` (P23; terminal for the `crop_on_arrival` job).
 - Health codes (`HealthItem{code, ok, detail}`): `camera_disconnected`, `document_not_open`, `document_not_session`,
   `hooks_not_installed`, `recipe_missing`, `capture_folder_not_set`, `variant_not_found`, `integration_token_invalid` (detail = the 09A MC-23
   message), `condition_field_missing` (detail = key, "not found" or "not a file list"; 09A MC-24; from P21 also
   `Condition photos field <key> unknown: shop fields not read yet` when the schema could not be read and nothing is
   stored), `settings_invalid` (P21; detail `settings.json: <parser message>` or `integration: <serde message>`),
-  `backup_failed` (P21; detail = the error; cleared by the next successful backup).
+  `backup_failed` (P21; detail = the error; cleared by the next successful backup),
+  `crop_not_applied` (P23; detail `Shape not applied to <n> photo` / `… photos`, n = `failed` `crop_on_arrival` jobs whose
+  error is not `crop_ratio_unknown`; derived at a real start and at every health check, counted before that check's
+  re-queue), `crop_ratio_unknown` (P23; detail exactly `Shape on arrival: '<name>' is not a Capture One crop ratio`; set by
+  the startup/health ratio check when the adapter's list is readable and lacks the name, and by the job; cleared when the
+  list contains the name, when a job applies, or when the setting is `off`).
 - Colour-tag mapping (MC-19): `main 4`, `condition 5`, `deleted 1`, `unreviewed 0`.
 
 ### 6.7 Tauri commands (`#[tauri::command] #[specta::specta]`, snake_case) and events
@@ -246,7 +262,9 @@ P10 `attributes_definitions_list`, `attribute_values_get`, `attribute_values_set
 `attribute_ai_clear`, `presets_get`, `presets_set`, `form_get` · P13 `publish_preview`, `publish_confirm`, `publish_retry`,
 `notifications_list` · P16 `settings_get`, `settings_set` · P18 `items_search_shop` (`items_search` becomes local-only) ·
 P21: `item_update_identity` reads `barcode: ""` as "clear the barcode" (`null` = unchanged); `items_search_shop` rejects
-with code `provider` when the shop cannot be reached (no silent `[]`).
+with code `provider` when the shop cannot be reached (no silent `[]`) · P23 `crop_ratios_list` → `Vec<String>` (the editing
+adapter's crop-shape names; rejects with the provider error when Capture One cannot answer); `settings_get`/`settings_set`
+carry `crop_on_arrival`.
 From P17 every command is `pub async fn` over `AppState(RwLock<App>)` through `AppState::handles()` / `mutate()`
 (`state.rs`), work inside `tauri::async_runtime::spawn_blocking`; no command holds the app lock across provider work.
 Events (`AppEvent` → Tauri event name): `session_changed{session_id}`, `photo_added{photo_id, session_id}`,
@@ -260,7 +278,10 @@ exported by the test `psm-desktop::export_bindings` to `apps/desktop/src/service
 `document_id` (Capture One document folder path, MC-19) · `preview_recipe` (default `"PSM Preview"`) · `web_recipe`
 (`"PSM Web"`) · `style_name` (`"PSM House"`) · `export_folder` (default `~/Pictures/Session Manager Export`) ·
 `preview_delay_s` (15; read clamped 10–30, MC-17) · `theme` (`"light"`) · `sku_prefix` (owner card 2 answered
-"generate", 05B MC-22; absent or empty = no proposal) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","client_id","client_secret","condition_photos_key":"custom.damage_report"}`, 09A MC-23/MC-24; no stored access token).
+"generate", 05B MC-22; absent or empty = no proposal) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","client_id","client_secret","condition_photos_key":"custom.damage_report"}`, 09A MC-23/MC-24; no stored access token) ·
+`crop_on_arrival` (P23, 10B MC-25: `"off"` = leave as shot, or one of the editing adapter's crop-shape names, e.g. `"Square"`,
+`"4x5"`; missing → `"Square"`; any non-empty string is accepted and stored as typed — core never knows the names; the
+Settings screen shows it as "Shape on arrival" with "Leave as shot" + the adapter's list).
 Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; durations carry their unit suffix.
 **Reading rule (P21):** a `settings.json` that does not parse, or an `integration` block that is not a complete
 `IntegrationSettings`, never stops the app: the defaults are used in memory (Export mode for the block), the file is
@@ -334,7 +355,10 @@ left at head. Migrations are applied by `rusqlite_migration::Migrations::to_late
 - `FakeCaptureOneScripting`: an in-memory Capture One document (kind, `captures`, capture-root collection, hook
   properties, recipes, images by path with variants and colour tags, `camera`); configurable faults (`fail_next_set`,
   `timeout_next_write`, `readback_garbage`); records every operation. `FakeEditing` = the real Capture One adapter
-  over this fake (so adapter logic is under test) — never a second implementation of `EditingProvider`.
+  over this fake (so adapter logic is under test) — never a second implementation of `EditingProvider`. P23: each
+  `FakeVariant` carries `crop_ratio` (`""` untouched), `crop` and `max_crop` (default `(5981, 3987)`, the evidence's full
+  frame); the state carries the evidence's 11 ratio names and the faults `fail_apply_crop`, `timeout_next_apply_crop`; a
+  real write is recorded as op `set_crop:<variant>:<ratio>`.
 - `FakeCommerce`: in-memory shop (products with variant SKU, media list in order with filenames incl. Shopify-style
   uniquifiers, files, metafields, tags); `fail_after_effect(step)` to simulate a kill between remote effect and local
   record; records every mutation with its `ConfirmedRun`. `FakeTransport` replays sanitized GraphQL fixtures for the
@@ -351,4 +375,11 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
 - 2026-10-26 real-run fix phases — planner added P17_real_run_fixes and P18_pending_state_ui (§4 rows, §5 order, §6.7 command rule and `items_search_shop`) from `real_run_2026-10-26.md`. Fold-back owed by the orchestrator before P17 launches: 05A MC-2's capture-root sentence (the `capture` favourite is the current capture folder per the evidence Correction of 2026-10-26; the root is `<document id>/Capture`).
 - 2026-10-29 second real run — planner added P19_navigation_and_drop (§4 row, §5 order and `depends_on`) from `real_run_2026-10-26.md` "Second real run" R7, R8. Frontend only; no registry, command or environment change.
 - 2026-10-29 orchestrator added P20_drop_continuity (owner feedback on the P19 drop; frontend only, 3 rows).
+- 2026-10-29 shape on arrival — planner added P23_shape_on_arrival from book 10B (MC-25, M31, R35; owner decision
+  2026-10-29). §2 (10B, MC-25, M31), §3 trace ranges, §4 row, §5 count 23 / graph tail / `depends_on` P23[P22], §6.4
+  (`EditingProvider::{crop_aspect_ratios, shape_on_arrival}`, `Store::{arrival_insert flag, job_fail, count_jobs,
+  requeue_failed_jobs}`, `CaptureOneScripting` two ops + two scripts), §6.6 (`JobKind::CropOnArrival`, `ShapeOutcome`,
+  `crop_ratio_unknown`, health `crop_not_applied` / `crop_ratio_unknown`, `CROP_GIVE_UP_ATTEMPTS` pending owner card 1),
+  §6.7 (`crop_ratios_list`), §6.8 (`crop_on_arrival`), §7.5 (fake crop state). Book hole reported, not patched: 10B's
+  "give up after the same limit" has no limit in MC-19.
 - 2026-10-29 tidy-up — planner added P21_backend_robustness and P22_frontend_tidy_up from `backlog.md` (owner: fix the known small leftovers before the work Mac and the real store). §4 rows, §5 count/graph/`depends_on` (P20 recorded too), §6.4 `render_description`, §6.6 health codes `settings_invalid`/`backup_failed` and a third `condition_field_missing` detail, §6.7 barcode `""` and the `provider` rejection of `items_search_shop`, §6.8 reading rule. Backlog rows 124, 125 / P00 note 1 / 103 and 129 were verified already fixed by P17/P18 and marked so; no intention-book change needed.
