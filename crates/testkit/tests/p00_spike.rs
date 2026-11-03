@@ -6,6 +6,7 @@ use psm_infra::{
 use psm_integrations::{App, editing::capture_one::hooks};
 use psm_testkit::TestApp;
 use psm_testkit::clock::ManualClock;
+use psm_testkit::fake_capture_one::FakeCaptureOneScripting;
 use std::{
     fs,
     io::{Read, Write},
@@ -13,6 +14,7 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::Path,
     process::Command,
+    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
@@ -91,8 +93,26 @@ fn c1a_first_open_creates_layout_and_defaults() {
 #[test]
 fn c1b_second_open_preserves_settings_and_migration() {
     let dir = tempfile::tempdir().unwrap();
-    let paths = AppPaths::for_dir(dir.path());
-    let first = App::open(paths.clone()).unwrap();
+    let mut paths = AppPaths::for_dir(dir.path());
+    paths.home = dir.path().to_path_buf();
+    let document_id = dir
+        .path()
+        .join("Capture One Session")
+        .to_string_lossy()
+        .into_owned();
+    let capture_root = dir
+        .path()
+        .join("Capture One Session/Capture")
+        .to_string_lossy()
+        .into_owned();
+    let scripting = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
+    let first = App::open_with(
+        paths.clone(),
+        scripting.clone(),
+        Arc::new(ManualClock::new(0)),
+        false,
+    )
+    .unwrap();
     let first_version = first.store.migration_version().unwrap();
     drop(first);
     let mut settings: serde_json::Value =
@@ -100,7 +120,13 @@ fn c1b_second_open_preserves_settings_and_migration() {
     settings["preview_delay_s"] = 20.into();
     let edited = serde_json::to_vec_pretty(&settings).unwrap();
     fs::write(paths.settings(), &edited).unwrap();
-    let second = App::open(paths.clone()).unwrap();
+    let second = App::open_with(
+        paths.clone(),
+        scripting,
+        Arc::new(ManualClock::new(0)),
+        false,
+    )
+    .unwrap();
     assert_eq!(fs::read(paths.settings()).unwrap(), edited);
     assert_eq!(second.store.mechanism_version().unwrap(), "1");
     assert_eq!(second.store.migration_version().unwrap(), first_version);
@@ -296,10 +322,27 @@ fn c4c_drain_uses_filename_order() {
 #[test]
 fn c4d_open_drains_file_left_while_closed() {
     let dir = tempfile::tempdir().unwrap();
-    let paths = AppPaths::for_dir(dir.path());
+    let mut paths = AppPaths::for_dir(dir.path());
+    paths.home = dir.path().to_path_buf();
     paths.create().unwrap();
     fs::write(paths.spool().join("0001-processing_done.json"), PROCESSING).unwrap();
-    let app = App::open(paths.clone()).unwrap();
+    let document_id = dir
+        .path()
+        .join("Capture One Session")
+        .to_string_lossy()
+        .into_owned();
+    let capture_root = dir
+        .path()
+        .join("Capture One Session/Capture")
+        .to_string_lossy()
+        .into_owned();
+    let app = App::open_with(
+        paths.clone(),
+        Arc::new(FakeCaptureOneScripting::new(document_id, capture_root)),
+        Arc::new(ManualClock::new(0)),
+        false,
+    )
+    .unwrap();
     assert_eq!(app.store.event_rows().unwrap().len(), 1);
     assert!(!paths.spool().join("0001-processing_done.json").exists());
 }

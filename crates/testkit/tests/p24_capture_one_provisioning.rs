@@ -474,7 +474,7 @@ vm.runInThisContext(fs.readFileSync(file,'utf8'));
 let args;
 if(mode.startsWith('recipe'))args=['/tmp/x/Session Manager','PSM Web',JSON.stringify(want)];
 else if(mode==='make_document')args=['/tmp/x','Session Manager'];
-else if(mode==='open_document')args=['/tmp/x/Session Manager/Session Manager.cosessiondb'];
+else if(mode==='open_document')args=['/tmp/x/Session Manager/Session Manager.cosessiondb','/tmp/x/scratch'];
 else if(mode==='front_document')args=['/tmp/x/Session Manager'];
 else args=['/tmp/x/Session Manager',mode==='style_missing'?'Moody':'PSM House'];
 const first=JSON.parse(run(args));
@@ -562,7 +562,17 @@ fn c4b_document_front_and_style_scripts_use_grounded_dictionary_forms() {
     let opened = script_result("open_document", "open_document", None);
     assert_eq!(
         opened["calls"],
-        json!([{"op":"open","value":"/tmp/x/Session Manager/Session Manager.cosessiondb"}])
+        json!([
+            {
+                "op":"make",
+                "value":{
+                    "new":"document",
+                    "at":false,
+                    "withProperties":{"name":"PSM Open Window","path":"/tmp/x/scratch"}
+                }
+            },
+            {"op":"open","value":"/tmp/x/Session Manager/Session Manager.cosessiondb"}
+        ])
     );
     let front = script_result("front_document", "front_document", None);
     assert_eq!(front["first"], "/tmp/x/Session Manager");

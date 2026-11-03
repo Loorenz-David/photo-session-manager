@@ -142,12 +142,8 @@ impl CaptureOneScripting for JxaScripting {
                 .as_nanos()
         ));
         fs::create_dir_all(&scratch)?;
-        let made = self.make_document(&scratch.to_string_lossy(), "PSM Open Window");
-        if let Err(error) = made {
-            let _ = fs::remove_dir_all(&scratch);
-            return Err(error);
-        }
-        let result = self.call("open_document", &[file]);
+        let scratch = scratch.to_string_lossy().into_owned();
+        let result = self.call("open_document", &[file, &scratch]);
         let _ = fs::remove_dir_all(&scratch);
         result
     }
