@@ -125,3 +125,6 @@
     style → hooks; front document on activation; other documents never touched; VERIFY-13/14 with a stop if two
     documents cannot be open), invariant M32, decision R36. Pointers in 10 (startup), 12 (health), map.
     Owner decision, header stays RATIFIED.
+25. **2026-11-03 — 10C grounded** (orchestrator, P24 task 0 live probe). Recipes are application-wide (step 4 no
+    longer says "in that document"); Capture One's `open` replaces the front window, so step 3 opens the app's
+    document via a throwaway new window, keeping the "alongside" decision. No product sentence changed.

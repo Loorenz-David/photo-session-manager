@@ -300,3 +300,42 @@ Do not derive the capture root from it.
 - **Correction (P23 live, 2026-10-29):** on an untouched variant `cropAspectRatio()` returns JXA `null` (it printed as
   "" above only because the probe joined values into a string); `maximumCrop(v, {apply:false})` reports the full
   frame in a shape other than `{width,height}` — `jxa/apply_crop.js` reads both as Capture One actually returns them.
+
+## VERIFY-13 result — make new document (orchestrator, P24 task 0, 2026-11-03)
+- Working form: `a.make({new:'document', withProperties:{name:'PSM Probe Session', path:Path('<parent>')}})`.
+  With `kind:'session'` (Path or text) → `Can't convert types` (kind is read-only; a new document is a session).
+  ~1.4 s. On disk: `<parent>/PSM Probe Session/` with `PSM Probe Session.cosessiondb`, `Capture`, `Selects`, `Output`,
+  `Trash`. The parent folder existed (created by the probe). `id()` = the session folder path, `name()` =
+  `PSM Probe Session.cosessiondb`, `kind()` = `session`; the new document **became `currentDocument`**.
+- The new document opened **alongside** the owner's open document, although Capture One's preference
+  `NewSessionCreatesNewWindow` reads `false`.
+
+## VERIFY-14 result — two documents, front, open
+- Two session documents open at once: yes (`documents.name()` held both).
+- Front switch: `a.currentDocument = a.documents.byId(<folder id>)` works and reads back (both directions).
+  `a.windows.name()` also lists tool panels ("Events", "Print", "Add Filter Term", …), so window-index forms are fragile.
+- **`a.open(Path(<file>.cosessiondb))` REPLACES the front document's window**: with the owner's document in front,
+  opening an existing session closed the owner's document (reopened by the orchestrator at once). There is no
+  preference to change this. **Working "open alongside" form:** first `make` a throwaway document (it opens in a new
+  window and becomes front), then `open` the wanted session: it replaces the throwaway's window; the owner's document
+  stays open. Delete the throwaway folder afterwards. ~5 s for an open.
+- `open -g -a "Capture One"` while running: not probed (step skipped). Launch from quit: owner try-out.
+- Capture routing to the foreground document: not probed (camera not tethered) — owner try-out.
+
+## Recipe property read-back (P24 task 0)
+- **Process recipes are application-wide, not per document**: `PSM Preview`/`PSM Web` created in `session test 1`
+  appear in every document (the owner's Instagram session, a brand-new session). Creating or repairing them affects
+  all of the photographer's documents (they are disabled, so batch processing never runs them).
+- A fresh recipe (`a.make({new:'recipe', at:doc, withProperties:{name}})`) reads: TIFF, `Adobe RGB (1998)`, `Fixed`,
+  `percent`, 100, q100, `enabled` false, `output location`, `add suffix`, sub folder "", `[Image Name]`.
+- Accepted spellings (set and read back): `outputFormat 'JPEG'`, `colorProfile 'sRGB Color Space Profile'`,
+  `scalingMethod 'Long_Edge'`, `scalingUnit 'pixels'`, `primaryScalingValue`, `jpegQuality`, `enabled`,
+  `existingFiles 'overwrite'`, `outputSubFolder '_session_manager'`, `rootFolderType 'output location'`.
+- **`make` (or `recipes.push`) with a name that already exists throws "Cannot name a recipe with the same name as an
+  existing recipe" but still leaves an `Untitled Recipe` behind, `enabled: true`** (two were left and then deleted
+  by the orchestrator). At the same time `PSM Preview` was found reset to the fresh defaults above (cause not
+  isolated; it was correct on 2026-10-29) and was set back. Rule: check `recipes.byName(n).exists()` first and never
+  `make` an existing name; after any `make` error, delete `Untitled Recipe*` created by that call.
+- `delete` on a recipe works (`a.delete(r)`).
+- Styles: `a.availableStyles()` = 110 names (no `PSM House`); `doc.nextCaptureSettings.applyStyles` reads `[]`, set
+  `['Bright Contrast']` read back, set back to `[]` read back.

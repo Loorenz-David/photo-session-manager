@@ -130,6 +130,23 @@ Evidence (implementer, task 0): `docs/intention/evidence/capture_one_16.8.6.md` 
 `psm_integrations::editing::capture_one::provision::classify_editor_error(message: &str) -> Option<EditorFailure>` — the
 only pure classifier (not installed / Automation denied) whose inputs are macOS strings the suite cannot produce live.
 
+## Task 0 already run by the orchestrator (2026-11-03) — read before task 1
+Results are in `docs/intention/evidence/capture_one_16.8.6.md` ("VERIFY-13 result", "VERIFY-14 result", "Recipe property
+read-back"). **Do not re-run task 0.** Binding consequences for tasks 1–5 and the rows:
+- `make_document.js`: `withProperties: {name, path: Path(parent)}` — no `kind` (it throws). Returns `id()` (= session folder).
+- `open_document.js`: **never a bare `open` while another document is front** (it replaces that document — the owner's
+  Instagram session was closed this way during the probe). Form: `make` a throwaway document named
+  `PSM Open Window` under the app's data dir (scratch subfolder), then `a.open(Path(file))`, wait until
+  `documents.byId(folder).exists()`, then the Rust side deletes the throwaway folder. If the target is already open, do nothing.
+  C4(b) and C6(a) assert this form (C6(a): the owner's documents are all still open after open).
+- `front_document.js`: `a.currentDocument = a.documents.byId(id)`; read back `currentDocument().id()`.
+- `ensure_recipe.js`: recipes are **application-wide**; check `recipes.byName(name).exists()` first; `make` only when absent,
+  as `a.make({new:'recipe', at:doc, withProperties:{name}})`; if `make` throws, delete any `Untitled Recipe*` it left and
+  return the error. `SRGB_PROFILE = "sRGB Color Space Profile"`. Spellings as in the evidence.
+- `ensure_capture_style.js`: `doc.nextCaptureSettings.applyStyles` (list), read-back works.
+- C6(a)'s step (1) restore and every live step must keep the owner's documents open; the "two documents" STOP condition did
+  not trigger (two documents can be open).
+
 ## Ordered tasks
 0. **Grounding probe, live, before any code (VERIFY-13/14; book 10C "Grounding to verify before relying on it").** Run as the
    implementer if the session can send Apple events; if the sandbox refuses them (P16's Codex attempt: `-2700`), the
@@ -413,3 +430,4 @@ Fresh setup on this Mac, deleting or renaming nothing of yours. Capture One may 
 - Estimated size: ~32 files, ~1 500 lines (half tests and fake). One session; difficulty high.
 
 ## Review log
+- 2026-11-03 (orchestrator): task 0 run live by the orchestrator (owner said "go now"); findings in evidence and the section above; book 10C steps 3–4 grounded (changelog 25).

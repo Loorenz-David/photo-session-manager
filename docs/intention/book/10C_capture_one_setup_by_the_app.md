@@ -41,13 +41,16 @@ the sequence with its own health item; nothing blocks review, export or the rest
 2. **Document exists.** If no document is at the path, create it with Capture One's `make new
    document` (kind session) at that location. Never create over an existing folder that is not a
    Capture One session (health item instead).
-3. **Document open.** If it is not among Capture One's open documents, open it. **Other open
+3. **Document open.** If it is not among Capture One's open documents, open it **in a window of its own**
+   (Capture One's `open` replaces the front document's window — evidence VERIFY-14; the app first makes a throwaway
+   document, which opens in a new window, opens its own into that window, and deletes the throwaway folder). **Other open
    documents are never closed, saved, switched or modified.**
-4. **Recipes.** In that document, `PSM Preview` and `PSM Web` (names from settings) exist with the
+4. **Recipes.** `PSM Preview` and `PSM Web` (names from settings) exist with the
    properties the app depends on: JPEG, sRGB, long edge 1600 / q80 (preview) and 2048 / q90 (web),
    output location as the render contract needs (MC-16), **disabled** so the photographer's own
    batch processing never runs them. Missing → created; a dependent property drifted → set back;
-   other properties are left alone. Recipes with other names are never touched.
+   other properties are left alone. Recipes with other names are never touched. Capture One's recipes are application-wide (evidence
+   VERIFY-14), so these two are shared by every document the photographer opens; being disabled, they are inert there.
 5. **Next-capture style.** If `style_name` is set and Capture One lists it, the document's next
    capture settings apply that style; if it is not listed, health "Style '<name>' not found in
    Capture One" (capture still works). Empty `style_name` → the next-capture settings are left as
