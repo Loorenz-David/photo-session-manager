@@ -22,3 +22,4 @@ P20_drop_continuity
 P21_backend_robustness
 P22_frontend_tidy_up
 P23_shape_on_arrival
+P24_capture_one_provisioning

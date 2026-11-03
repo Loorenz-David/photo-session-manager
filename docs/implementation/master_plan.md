@@ -14,8 +14,8 @@ differ, the book wins and this file is amended.
 | Content | Artifact |
 |---|---|
 | Product semantics, hard constraints H1–H8, domain, scenarios | `docs/intention/book/01…13` |
-| Mechanism contracts MC-1…MC-25 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/09A_shopify_credentials_and_condition_field.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md`, `book/10B_shape_on_arrival.md` (MC-25, owner 2026-10-29) |
-| Measurement ledger M1–M31 (root of every criterion's trace) | `book/14_measurement_ledger.md` |
+| Mechanism contracts MC-1…MC-26 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/09A_shopify_credentials_and_condition_field.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md`, `book/10B_shape_on_arrival.md` (MC-25, owner 2026-10-29), `book/10C_capture_one_setup_by_the_app.md` (MC-26, owner 2026-11-03) |
+| Measurement ledger M1–M32 (root of every criterion's trace) | `book/14_measurement_ledger.md` |
 | Capture One facts and VERIFY probes | `docs/intention/evidence/capture_one_16.8.6.md`; dictionary `docs/reference/capture_one_16.8.6.sdef` |
 | Design rules (field kinds, timings, keyboard, components) | `docs/intention/evidence/design_handoff.md`; pictures/prototype `claude_design/` |
 | Shopify facts | `docs/intention/evidence/shopify_admin.md` — **does not exist yet**; written in phase P12 (SHOPIFY-VERIFY-1…7) |
@@ -54,7 +54,7 @@ restated so no session has to infer them:
 - **Perimeter**: a phase touches only the files its plan lists (plus the test file(s) it names). A new file not
   listed is declared in the handoff's **Deviations**.
 - **Trace conventions** (charter trace chain, flow §9): every criterion row's trace cell names an `M` id
-  (M1–M31), an `MC` id (MC-1…MC-25) or a hard constraint (H1–H8). A row may instead cite a chapter rule
+  (M1–M32), an `MC` id (MC-1…MC-26) or a hard constraint (H1–H8). A row may instead cite a chapter rule
   (`ch07 §Open filter`, `evidence/design_handoff §Field kind map`) **only** for UI-rendering rows, operations
   rows the inventory listed as "not contracted", and packaging rows (ch11); such a cell is prefixed `[rule]` so
   the reviewer knows the row has no ledger measurement behind it. Every plan file derives its own counts of
@@ -94,24 +94,26 @@ restated so no session has to infer them:
 | P21_backend_robustness | APPROVED | 2026-10-29 | opus | review r1 APPROVED_WITH_NOTES: 14/14 rows hold at their boundaries; perimeter = declared files + disclosed `paths.rs` (`e33ddfb`: 17 paths); suite 421 Rust / 114 UI, clippy/fmt/typecheck green (re-run by reviewer); 2 reviewer probe tests (deleted) confirmed the post-publish backup half and an incomplete-block save; 4 backlog notes |
 | P22_frontend_tidy_up | APPROVED | 2026-10-29 | opus | re-review r2 APPROVED_WITH_NOTES: F1 resolved (`2f5308b`: shared `projectedSlot` for overlay and `useDrop`; C3(b) extended with a hover over a to-review tile, `03` then `reorderPhoto(1, 3)`); perimeter = allowed files; suite 421 Rust / 124 UI, clippy/fmt/typecheck green (re-run by reviewer); r1's 5 backlog notes stand, none new; overlay and glide not verified live (owner try-out step 3) |
 | P23_shape_on_arrival | APPROVED | 2026-10-29 | opus | re-review r2 APPROVED_WITH_NOTES: F1 and F2 resolved (`5d2210d`: untouched check accepts `null`; maximum size read as `x+width`/`y+height`; C1 harness uses the live values); perimeter = allowed files (2 code + tracker + Review log); suite 432 Rust / 127 UI, clippy/fmt/typecheck green (re-run by reviewer); live C6(a) re-run on Capture One 16.8.6 passes (applied Square 3987×3987, repeat skipped, restored `[null,5981,3987]`); r1's 6 backlog notes stand, none new |
+| P24_capture_one_provisioning | NOT_STARTED | 2026-11-03 | planner | planned from book 10C (MC-26, M32, R36): the app's own session document by default, ensure sequence (launch → create → open → recipes → style → hooks) in the adapter, front document on activation, Settings picker; task 0 is a live grounding probe (VERIFY-13/14) with a stop rule |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 23 phases in execution order (17 MVP phases, the two real-run fix phases added
+`phases.txt` lists the 24 phases in execution order (17 MVP phases, the two real-run fix phases added
 2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, the two tidy-up phases P21/P22 planned
-2026-10-29 from `backlog.md`, and P23_shape_on_arrival planned 2026-10-29 from book 10B); the runner is sequential and a
+2026-10-29 from `backlog.md`, P23_shape_on_arrival planned 2026-10-29 from book 10B, and P24_capture_one_provisioning planned
+2026-11-03 from book 10C); the runner is sequential and a
 phase starts only when every phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
-P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22].
+P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23].
 
 - **Local workflow usable after P09** (shoot → arrive → review → live previews → export). Attributes and the
   form (P10, P11) complete the local item data; Shopify starts at P12.
@@ -124,7 +126,11 @@ P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[
 - **External preconditions the orchestrator must see met before launching**: P00 — Rust toolchain installed
   (§7.1, owner card 1). P12 — `~/.psm_shopify.env` holds `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` of the owner's
   **test store** (owner 2026-10-26) and a client credentials token request succeeds (orchestrator checks it without
-  printing the token); otherwise the grounding task cannot run and the session reports BLOCKED.
+  printing the token); otherwise the grounding task cannot run and the session reports BLOCKED. P24 — task 0 (VERIFY-13/14,
+  live against Capture One in a scratch folder, alongside whatever the owner has open) and the live row C6(a) need a session that
+  can send Apple events; the Codex sandbox refused them in P16 (`-2700`), so when the implementer is Codex the orchestrator runs
+  task 0 before dispatch and records the results in the evidence file; the implementer then reads them. If task 0 shows Capture
+  One cannot keep two documents open, the phase stops with the owner card drafted in the plan's Notes (book 10C stop rule).
 
 ## 6. Shared skeleton and naming registry
 Fixed up front so sessions cannot diverge. Anything **new** below does not exist yet; P00/P01 create it.
@@ -135,7 +141,7 @@ Fixed up front so sessions cannot diverge. Anything **new** below does not exist
 | `Cargo.toml`, `rust-toolchain.toml` (`channel = "stable"`), `.cargo/config.toml` | workspace, resolver 2, edition 2024 | — |
 | `crates/core/` | `psm-core` (lib `psm_core`): domain, mechanisms, ports (traits), services, events, errors. **No Tauri, SQL, HTTP, osascript types.** | serde, uuid, sha2, unicode-normalization, chrono, tracing, thiserror |
 | `crates/infra/` | `psm-infra` (`psm_infra`): `paths`, `settings_file`, `sqlite` (Store impl + `migrations/`), `spool`, `nudge` (loopback listener), `watcher` (FSEvents), `osascript` (runner), `rawpreview` (MC-20), `jobs` (runner), `logging`, `backup` | psm-core, rusqlite, rusqlite_migration, notify, axum, tokio, tracing-appender |
-| `crates/integrations/` | `psm-integrations` (`psm_integrations`): `editing/capture_one/` (`adapter.rs`, `scripting.rs` trait, `jxa.rs` impl, `jxa/*.js`, `hooks/*.applescript.tmpl`), `camera/via_capture_one.rs`, `commerce/shopify/` (`adapter.rs`, `graphql.rs`, `transport.rs` trait, `type_map.rs`, `fixtures/*.json`). **Wiring owner:** P12 builds the adapter only; P13 task 0 adds `App.commerce` from `settings.integration`, the startup schema refresh (definitions + `attribute_definition_links`) and the search integration (amended 2026-10-26, P12 projection L10) | psm-core, psm-infra (osascript runner), reqwest |
+| `crates/integrations/` | `psm-integrations` (`psm_integrations`): `editing/capture_one/` (`adapter.rs`, `scripting.rs` trait, `jxa.rs` impl, `jxa/*.js`, `hooks/*.applescript.tmpl`; P24 adds `provision.rs` (the ensure sequence, `classify_editor_error`) and `recipes.rs` (`RecipeSpec`, `SRGB_PROFILE`)), `camera/via_capture_one.rs`, `commerce/shopify/` (`adapter.rs`, `graphql.rs`, `transport.rs` trait, `type_map.rs`, `fixtures/*.json`). **Wiring owner:** P12 builds the adapter only; P13 task 0 adds `App.commerce` from `settings.integration`, the startup schema refresh (definitions + `attribute_definition_links`) and the search integration (amended 2026-10-26, P12 projection L10) | psm-core, psm-infra (osascript runner), reqwest |
 | `crates/testkit/` | `psm-testkit`: `src/` fakes + `TestApp`; `tests/` **all behaviour tests** (§6.9) | psm-core, psm-infra, psm-integrations, tempfile |
 | `apps/desktop/src-tauri/` | `psm-desktop` (bin + lib `psm_desktop_lib`): `commands/`, `events.rs`, `state.rs`, `tauri.conf.json`, `Info.plist`, `capabilities/default.json`, `build.rs` | all of the above, tauri, tauri-specta |
 | `apps/desktop/` | Vite + React + TS: `package.json`, `src/services/bindings.ts` (**generated, never hand-edited**), `src/services/*.ts`, `src/components/ui/` (shadcn), `src/features/{shell,sessions,workspace,form,publish,settings,health}/`, `src/lib/`, `src/styles/tokens.css` (copied from `claude_design/tokens/tokens.css`) | — |
@@ -177,6 +183,8 @@ version; `package-lock.json` committed). Exact versions in `package.json`, no `^
   `session_manager.db` · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg}` ·
   `hooks/{capture_done,processing_done,variant_adjusted}.scpt` · `spool/`, `spool/bad/` · `logs/psm.<date>.log` ·
   `backup/session_manager-<yyyyMMdd-HHmmss>.db`. Nothing runtime lives in the repo.
+- `AppPaths` (P24) also carries `home` (`$HOME`; tests set it to their temp dir) — the base of the default Capture One document
+  `<home>/Pictures/Session Manager` (10C MC-26, §6.8).
 - `osascript` is always spawned with **cwd = the data dir** (MC-18 evidence).
 
 ### 6.4 Ports (traits in `psm_core::ports`)
@@ -185,7 +193,10 @@ version; `package-lock.json` committed). Exact versions in `package.json`, no `^
 (`inspect_document`, `set_capture_folder`, `install_hooks`, `check_recipes`, `render(raw, RenderPurpose) -> JobId`,
 `mirror_tag(raw, Classification)`, `import(paths)`, `capabilities()`; P23 adds `crop_aspect_ratios() -> Vec<String>` (the
 provider's crop-shape names, opaque to core) and `shape_on_arrival(raw, ratio, now_ms) -> ShapeOutcome {Applied, Skipped,
-UnknownRatio}` (10B MC-25: set the ratio only on an untouched full frame, one provider call)) · `CameraProvider` (`status`,
+UnknownRatio}` (10B MC-25: set the ratio only on an untouched full frame, one provider call); P24 adds `ensure(&ProvisionInputs
+{style_name, wait}) -> ProvisionReport {document_created, recipes_created, style: StyleOutcome {Applied, NotListed, NotRequested}}`
+(10C MC-26 steps 1–6 in the adapter, under one lock, user lane; health items per failing step) and `bring_document_to_front()`
+(`document_not_front` on a read-back mismatch), and removes `check_recipes`) · `CameraProvider` (`status`,
 `capture`, `capabilities`) · `CommerceAdapter` (ch09 capability methods; every mutating method takes `&ConfirmedRun`; P21 adds
 `render_description(paragraphs) -> String`, the description text as the platform stores it, so core compares before
 writing) ·
@@ -194,7 +205,16 @@ writing) ·
 transaction; `job_fail(id, code, now_ms)`, `count_jobs(kind, status, exclude_error)`, `requeue_failed_jobs(kind, now_ms)`.
 Capture One internals: `psm_integrations::editing::capture_one::scripting::CaptureOneScripting` (typed
 operations over the dictionary; impls `JxaScripting`, testkit `FakeCaptureOneScripting`; P23 adds `crop_aspect_ratios(id)`
-and `apply_crop_if_untouched(id, variant, ratio) -> ShapeOutcome`, scripts `jxa/crop_aspect_ratios.js`, `jxa/apply_crop.js`).
+and `apply_crop_if_untouched(id, variant, ratio) -> ShapeOutcome`, scripts `jxa/crop_aspect_ratios.js`, `jxa/apply_crop.js`;
+P24 adds `editor_info() -> EditorInfo {running, version, pro}`, `launch()` (`open -g -a "Capture One"`, not a script),
+`make_document(parent, name) -> id`, `open_document(file)`, `front_document(id) -> current id`, `ensure_recipe(id, name,
+&RecipeProps) -> RecipeEnsure {created, changed, props}` (one run: create if missing, write only drifted dependent properties,
+read back), `ensure_capture_style(id, name) -> StyleEnsure {listed, applied}` (one run), scripts `jxa/{editor_info,
+make_document, open_document, front_document, ensure_recipe, ensure_capture_style}.js`, and removes `set_recipe_props` and its
+script — `SCRIPTS` 16 → 21. `RecipeProps {enabled, output_format, color_profile, scaling_method, scaling_unit,
+primary_scaling_value, jpeg_quality, existing_files, output_sub_folder, root_folder_type (read-only)}`; the dependent values
+live in `recipes.rs`: preview `1600`/`80`, web `2048`/`90`, both `enabled false`, `JPEG`, `SRGB_PROFILE` (the string Capture One
+reads back, recorded by P24 task 0), `Long_Edge`, `pixels`, `overwrite`, `_session_manager`).
 Shopify internals: `commerce::shopify::transport::HttpTransport` (impls `ReqwestTransport`, testkit `FakeTransport`).
 
 ### 6.5 Tables (migration `001_init.sql` in P00: `settings`, `capture_events`; `002_domain.sql` in P01: the rest)
@@ -238,9 +258,20 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   `raw_changed{photo_id}`, `raw_missing{photo_id}`, `several_products_carry_sku{sku}`, `foreign_media_added{n}`,
   `gallery_verification`, `upload_incomplete`, `attribute_verification{keys}`, `not_confirmed`, `timeout`,
   `no_integration`, `invalid_value`, `shop_not_permitted`, `app_not_installed`, `credentials_rejected` (09A MC-23),
-  `crop_ratio_unknown{name}` (P23; terminal for the `crop_on_arrival` job).
-- Health codes (`HealthItem{code, ok, detail}`): `camera_disconnected`, `document_not_open`, `document_not_session`,
-  `hooks_not_installed`, `recipe_missing`, `capture_folder_not_set`, `variant_not_found`, `integration_token_invalid` (detail = the 09A MC-23
+  `crop_ratio_unknown{name}` (P23; terminal for the `crop_on_arrival` job), `document_not_front` (P24; activation refused because
+  Capture One's front document could not be made the app's).
+- Health codes (`HealthItem{code, ok, detail}`): `camera_disconnected`, `document_not_open` (from P24 also detail `Capture One could
+  not open <file>[: <error>]`), `document_not_session` (from P24 also detail `<folder> exists but is not a Capture One session`),
+  `hooks_not_installed`, `recipe_missing` (from P24 detail `<name> could not be created or repaired: <error>`; several rows allowed),
+  `capture_folder_not_set`, `variant_not_found`,
+  P24 (10C MC-26, one per failing ensure step, plain wording): `editor_not_installed` (`Capture One is not installed on this Mac`),
+  `editor_not_pro` (`Capture One Pro is required; the installed edition cannot be scripted`), `editor_automation_denied` (`macOS has not
+  allowed Session Manager to control Capture One. Allow it under System Settings › Privacy & Security › Automation`),
+  `editor_not_running` (`Capture One did not start within <n> s`), `document_not_created` (`Capture One could not create the session
+  <file>: <error>`), `document_not_front` (`Capture One is showing another session; captures would land there`; also gates camera
+  status and capture like `capture_folder_not_set`), `style_not_found` (`Style '<name>' not found in Capture One`, or `Style '<name>'
+  could not be applied: <error>`); the ok items `document` (detail `<file name> open`), `recipes` (`Ready`), `hooks` (`Installed`) are set
+  by the ensure and cleared when their step or an earlier one fails; `integration_token_invalid` (detail = the 09A MC-23
   message), `condition_field_missing` (detail = key, "not found" or "not a file list"; 09A MC-24; from P21 also
   `Condition photos field <key> unknown: shop fields not read yet` when the schema could not be read and nothing is
   stored), `settings_invalid` (P21; detail `settings.json: <parser message>` or `integration: <serde message>`),
@@ -264,7 +295,10 @@ P10 `attributes_definitions_list`, `attribute_values_get`, `attribute_values_set
 P21: `item_update_identity` reads `barcode: ""` as "clear the barcode" (`null` = unchanged); `items_search_shop` rejects
 with code `provider` when the shop cannot be reached (no silent `[]`) · P23 `crop_ratios_list` → `Vec<String>` (the editing
 adapter's crop-shape names; rejects with the provider error when Capture One cannot answer); `settings_get`/`settings_set`
-carry `crop_on_arrival`.
+carry `crop_on_arrival` · P24: `settings_get` adds `effective_document_id` (the folder the app uses: the stored `document_id` or
+the default); `settings_set` reads `document_id: ""` as "back to the app's own document" (stored `null`; a non-empty value must be
+absolute, else `relative_path`); `session_activate` runs the editing ensure, brings the app's document to the front and only then
+switches the capture folder (rejects with `document_not_front` when the front cannot be verified); no new command.
 From P17 every command is `pub async fn` over `AppState(RwLock<App>)` through `AppState::handles()` / `mutate()`
 (`state.rs`), work inside `tauri::async_runtime::spawn_blocking`; no command holds the app lock across provider work.
 Events (`AppEvent` → Tauri event name): `session_changed{session_id}`, `photo_added{photo_id, session_id}`,
@@ -275,7 +309,10 @@ exported by the test `psm-desktop::export_bindings` to `apps/desktop/src/service
 (`specta_typescript::Typescript::default()`); the committed file must equal the regenerated one.
 
 ### 6.8 Settings file keys (`settings.json`, user configuration; `psm_infra::settings_file::Settings`)
-`document_id` (Capture One document folder path, MC-19) · `preview_recipe` (default `"PSM Preview"`) · `web_recipe`
+`document_id` (Capture One document **folder** path, MC-19; P24, 10C MC-26: missing, `null` or `""` → the app's own document
+`<home>/Pictures/Session Manager` holding `Session Manager.cosessiondb`, created and opened by the app; an explicit value is honoured
+and provisioned the same way; the Settings screen shows the default as "Capture One session: Session Manager (created by the app)"
+with "Use another session…" (a `.cosessiondb` picker; the parent folder is stored) and "Use the app's own session") · `preview_recipe` (default `"PSM Preview"`) · `web_recipe`
 (`"PSM Web"`) · `style_name` (`"PSM House"`) · `export_folder` (default `~/Pictures/Session Manager Export`) ·
 `preview_delay_s` (15; read clamped 10–30, MC-17) · `theme` (`"light"`) · `sku_prefix` (owner card 2 answered
 "generate", 05B MC-22; absent or empty = no proposal) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","client_id","client_secret","condition_photos_key":"custom.damage_report"}`, 09A MC-23/MC-24; no stored access token) ·
@@ -358,7 +395,12 @@ left at head. Migrations are applied by `rusqlite_migration::Migrations::to_late
   over this fake (so adapter logic is under test) — never a second implementation of `EditingProvider`. P23: each
   `FakeVariant` carries `crop_ratio` (`""` untouched), `crop` and `max_crop` (default `(5981, 3987)`, the evidence's full
   frame); the state carries the evidence's 11 ratio names and the faults `fail_apply_crop`, `timeout_next_apply_crop`; a
-  real write is recorded as op `set_crop:<variant>:<ratio>`.
+  real write is recorded as op `set_crop:<variant>:<ratio>`. P24: editor state (`running`, `pro`, `automation_denied`,
+  `launch_fails`, `running_after_polls`), `open_documents` / `front_document` (the configured document initially; `make_document`
+  creates the session layout on disk in the temp dir and opens it; `open_document` needs the `.cosessiondb` on disk; `front:<id>`),
+  faults `fail_make_document`, `fail_open_document`, `fail_front`, `fail_make_recipe`, `styles` (default `["PSM House"]`) and
+  `next_capture_styles`; `recipes` become `HashMap<String, RecipeProps>`; `check_id` accepts any open document. `TestApp` sets
+  `paths.home` to its temp dir and writes an empty `Capture One Session.cosessiondb` marker beside the temp document's `Capture/`.
 - `FakeCommerce`: in-memory shop (products with variant SKU, media list in order with filenames incl. Shopify-style
   uniquifiers, files, metafields, tags); `fail_after_effect(step)` to simulate a kill between remote effect and local
   record; records every mutation with its `ConfirmedRun`. `FakeTransport` replays sanitized GraphQL fixtures for the
@@ -383,3 +425,12 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   §6.7 (`crop_ratios_list`), §6.8 (`crop_on_arrival`), §7.5 (fake crop state). Book hole reported, not patched: 10B's
   "give up after the same limit" has no limit in MC-19.
 - 2026-10-29 tidy-up — planner added P21_backend_robustness and P22_frontend_tidy_up from `backlog.md` (owner: fix the known small leftovers before the work Mac and the real store). §4 rows, §5 count/graph/`depends_on` (P20 recorded too), §6.4 `render_description`, §6.6 health codes `settings_invalid`/`backup_failed` and a third `condition_field_missing` detail, §6.7 barcode `""` and the `provider` rejection of `items_search_shop`, §6.8 reading rule. Backlog rows 124, 125 / P00 note 1 / 103 and 129 were verified already fixed by P17/P18 and marked so; no intention-book change needed.
+- 2026-11-03 Capture One set up by the app — planner added P24_capture_one_provisioning from book 10C (MC-26, M32, R36; owner
+  decision 2026-11-03). §2 (10C, MC-26, M32), §3 trace ranges, §4 row, §5 count 24 / graph tail / `P24[P23]` / the Apple-events
+  precondition for task 0, §6.1 (`provision.rs`, `recipes.rs`), §6.3 (`AppPaths.home`), §6.4 (`EditingProvider::{ensure,
+  bring_document_to_front}`, `check_recipes` removed; `CaptureOneScripting` seven ops, `set_recipe_props` removed, `SCRIPTS` 21,
+  `RecipeProps` and the dependent recipe values), §6.6 (`document_not_front`; seven health codes with their plain details; new
+  details of `document_not_open`, `document_not_session`, `recipe_missing`), §6.7 (`effective_document_id`, `document_id: ""`,
+  `session_activate` order), §6.8 (`document_id` default rule and the Settings wording), §7.5 (fake editor/document/style state,
+  `TestApp` home and marker). No intention-book change; two readings recorded in the plan's Notes (folder vs file in `document_id`;
+  M32's "frontmost while active" enforced at activation and at every ensure, not polled).
