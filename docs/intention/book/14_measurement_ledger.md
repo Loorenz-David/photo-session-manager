@@ -41,6 +41,7 @@ cite either the `M` id or the `MC` id.
 | **M29** | MC-22 (05B) | After SKU edits, captures land in and are attributed from the item's one stored folder; export and `item.json` use the current SKU; after the next publish the shop variant SKU equals it; no proposal is confirmed while the shop holds it elsewhere. | captures misfiled after a SKU change, wrong SKU on Shopify |
 | **M30** | MC-23, MC-24 (09A) | At most one integration definition is `media_list`, keyed by `condition_photos_key`; condition photos are written only there; the access token and client secret never leave memory and the settings file. | damage report written to the wrong field, leaked credentials |
 | **M31** | MC-25 (10B) | After the provider queue is idle, every RAW that arrived uncropped with `crop_on_arrival ≠ off` reads back with that crop ratio; no photographer-set crop and no published RAW was written. | rectangular photos on the shop, a hand-made crop overwritten |
+| **M32** | MC-26 (10C) | After a successful ensure, the configured session document exists, is open (frontmost while a session is active) and holds both recipes with their dependent properties; no other Capture One document or recipe was closed, switched or edited. | manual Capture One setup, the photographer's other work disturbed |
 
 Operational measurements (recorded in S0 and S8, not tests): shot-to-original-preview and
 shot-to-adjusted-preview times; cold start of the packaged app on a fresh Mac.

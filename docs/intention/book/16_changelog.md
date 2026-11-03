@@ -118,3 +118,10 @@
 23. **2026-10-29 — 10B give-up limit** (orchestrator, from the P23 planner's card 1). MC-25 §Failures said "give up
     after the same limit" as MC-19, which has none. Fixed at 8 attempts (≈3 min of back-off), realising the
     clause's stated purpose (a visible health warning instead of silent retries); option A of the card.
+24. **2026-11-03 — Owner: Capture One set up by the app** (relayed by the orchestrator). Owner's words: "what I'm
+    looking for is Session Manager managing all that infrastructure and configuration so that the photographer
+    only focuses on take picture, retouch if needed, upload"; choices "its own file" and "open ours alongside".
+    New chapter 10C: MC-26 (default own session document; ensure sequence launch → create → open → recipes →
+    style → hooks; front document on activation; other documents never touched; VERIFY-13/14 with a stop if two
+    documents cannot be open), invariant M32, decision R36. Pointers in 10 (startup), 12 (health), map.
+    Owner decision, header stays RATIFIED.

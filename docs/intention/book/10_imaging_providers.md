@@ -28,7 +28,7 @@ optional), `import`, `style.apply`. Capture One is the only editing adapter in t
 - Transport: `osascript -l JavaScript` spawned from the Rust process, script files in the repo,
   one serial queue, timeout and duration logged per call. Dictionary facts and VERIFY items in
   `evidence/capture_one_16.8.6.md`.
-- Startup: find the open document; require kind `session`; set `capture done script`,
+- Startup (provisioning — launch, create/open the document, recipes, style — is chapter 10C MC-26): find the open document; require kind `session`; set `capture done script`,
   `processing done script` and `primary variant adjusted script` to our scripts; read the two
   recipes and the style by name; report what is missing on the health screen.
 - Per session: set the document's capture folder to `Capture/<SKU>/` (D1, resolved yes).

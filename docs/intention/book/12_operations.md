@@ -13,7 +13,7 @@
   integration mutation with the publish run id.
 - **Backup:** SQLite copied to `backup/` at every start and after every completed publish run;
   last 30 kept.
-- **Health screen / header:** camera, provider document open, hooks installed, recipes found,
+- **Health screen / header** (the editing-side items and what the app repairs itself: chapter 10C MC-26): camera, provider document open, hooks installed, recipes found,
   integration token can be obtained (09A MC-23 messages), condition-photos field found (09A MC-24). Notifications drawer lists publish history with Retry and Open.
 - **Startup reconciliation:** scan the active document's capture folder against `photos`;
   resume incomplete publish items; re-install hooks.
