@@ -1,5 +1,6 @@
 use crate::{
     Error, Result,
+    domain::editing::ProvisionInputs,
     domain::session::SessionDto,
     mechanisms::time::now_ms,
     ports::{clock::Clock, editing::EditingProvider, store::Store},
@@ -11,6 +12,7 @@ pub struct SessionsService<'a> {
     clock: &'a dyn Clock,
     editing: Option<&'a dyn EditingProvider>,
     health: Option<&'a HealthService>,
+    provision: Option<&'a ProvisionInputs>,
     commerce: Option<&'a dyn crate::ports::commerce::CommerceAdapter>,
 }
 
@@ -21,6 +23,7 @@ impl<'a> SessionsService<'a> {
             clock,
             editing: None,
             health: None,
+            provision: None,
             commerce: None,
         }
     }
@@ -37,9 +40,11 @@ impl<'a> SessionsService<'a> {
         mut self,
         editing: &'a dyn EditingProvider,
         health: &'a HealthService,
+        provision: &'a ProvisionInputs,
     ) -> Self {
         self.editing = Some(editing);
         self.health = Some(health);
+        self.provision = Some(provision);
         self
     }
 
@@ -50,6 +55,8 @@ impl<'a> SessionsService<'a> {
         let item = self
             .store
             .item(session.session.item_id.ok_or(Error::DocumentNotSession)?)?;
+        editing.ensure(self.provision.ok_or(Error::DocumentNotOpen)?)?;
+        editing.bring_document_to_front()?;
         let root = editing.inspect_document()?.capture_root;
         if let Err(e) = editing.set_capture_folder(&format!("{}/{}", root, item.folder_key)) {
             health.set("capture_folder_not_set", e.to_string());

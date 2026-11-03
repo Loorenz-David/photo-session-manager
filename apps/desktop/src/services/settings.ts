@@ -31,3 +31,9 @@ export async function pickFolder(title: string): Promise<string | null> {
   const chosen = await open({ multiple: false, directory: true, title });
   return typeof chosen === 'string' ? chosen : null;
 }
+
+export async function pickSessionFile(title: string): Promise<string | null> {
+  const chosen = await open({ multiple: false, directory: false,
+    filters: [{ name: 'Capture One session', extensions: ['cosessiondb'] }], title });
+  return typeof chosen === 'string' ? chosen : null;
+}

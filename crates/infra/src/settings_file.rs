@@ -59,6 +59,13 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub fn effective_document_id(&self, paths: &AppPaths) -> PathBuf {
+        self.document_id
+            .as_deref()
+            .filter(|id| !id.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| paths.home.join("Pictures/Session Manager"))
+    }
     pub fn open_lenient(paths: &AppPaths) -> Result<(Self, Option<String>)> {
         let path = paths.settings();
         if !path.exists() {

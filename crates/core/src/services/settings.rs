@@ -58,6 +58,20 @@ impl SettingsService {
             {
                 return Err(Error::RelativePath);
             }
+            if key == "document_id" {
+                let id = value
+                    .as_str()
+                    .ok_or_else(|| Error::InvalidValue("document_id".into()))?;
+                if !id.is_empty() && !std::path::Path::new(id).is_absolute() {
+                    return Err(Error::RelativePath);
+                }
+                next[key] = if id.is_empty() {
+                    Value::Null
+                } else {
+                    value.clone()
+                };
+                continue;
+            }
             if key == "crop_on_arrival" && !value.as_str().is_some_and(|s| !s.is_empty()) {
                 return Err(Error::InvalidValue("crop_on_arrival".into()));
             }

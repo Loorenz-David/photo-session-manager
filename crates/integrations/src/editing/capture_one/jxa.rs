@@ -1,4 +1,6 @@
-use super::scripting::{CaptureOneScripting, DocumentInfo};
+use super::scripting::{
+    CaptureOneScripting, DocumentInfo, EditorInfo, RecipeEnsure, RecipeProps, StyleEnsure,
+};
 use psm_core::domain::editing::ShapeOutcome;
 use psm_core::{Error, Result};
 use psm_infra::{osascript::OsaRunner, paths::AppPaths};
@@ -11,7 +13,16 @@ use std::{
     time::Duration,
 };
 
-const SCRIPTS: [(&str, &str); 16] = [
+const SCRIPTS: [(&str, &str); 21] = [
+    ("editor_info", include_str!("jxa/editor_info.js")),
+    ("make_document", include_str!("jxa/make_document.js")),
+    ("open_document", include_str!("jxa/open_document.js")),
+    ("front_document", include_str!("jxa/front_document.js")),
+    ("ensure_recipe", include_str!("jxa/ensure_recipe.js")),
+    (
+        "ensure_capture_style",
+        include_str!("jxa/ensure_capture_style.js"),
+    ),
     ("document_info", include_str!("jxa/document_info.js")),
     ("save", include_str!("jxa/save.js")),
     ("set_captures", include_str!("jxa/set_captures.js")),
@@ -19,7 +30,6 @@ const SCRIPTS: [(&str, &str); 16] = [
     ("set_hook", include_str!("jxa/set_hook.js")),
     ("get_hook", include_str!("jxa/get_hook.js")),
     ("recipe_exists", include_str!("jxa/recipe_exists.js")),
-    ("set_recipe_props", include_str!("jxa/set_recipe_props.js")),
     ("find_image", include_str!("jxa/find_image.js")),
     (
         "find_image_in_folder",
@@ -104,6 +114,53 @@ pub fn parse_process_result(value: &str) -> Result<String> {
     }
 }
 impl CaptureOneScripting for JxaScripting {
+    fn editor_info(&self) -> Result<EditorInfo> {
+        self.call("editor_info", &[])
+    }
+    fn launch(&self) -> Result<()> {
+        let output = std::process::Command::new("open")
+            .args(["-g", "-a", "Capture One"])
+            .output()?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(Error::Provider(
+                String::from_utf8_lossy(&output.stderr).into_owned(),
+            ))
+        }
+    }
+    fn make_document(&self, parent: &str, name: &str) -> Result<String> {
+        self.call("make_document", &[parent, name])
+    }
+    fn open_document(&self, file: &str) -> Result<()> {
+        let scratch = self.dir.join(format!(
+            "open-window-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&scratch)?;
+        let made = self.make_document(&scratch.to_string_lossy(), "PSM Open Window");
+        if let Err(error) = made {
+            let _ = fs::remove_dir_all(&scratch);
+            return Err(error);
+        }
+        let result = self.call("open_document", &[file]);
+        let _ = fs::remove_dir_all(&scratch);
+        result
+    }
+    fn front_document(&self, id: &str) -> Result<String> {
+        self.call("front_document", &[id])
+    }
+    fn ensure_recipe(&self, id: &str, name: &str, want: &RecipeProps) -> Result<RecipeEnsure> {
+        let json = serde_json::to_string(want).map_err(|e| Error::InvalidData(e.to_string()))?;
+        self.call("ensure_recipe", &[id, name, &json])
+    }
+    fn ensure_capture_style(&self, id: &str, name: &str) -> Result<StyleEnsure> {
+        self.call("ensure_capture_style", &[id, name])
+    }
     fn document_info(&self, id: &str) -> Result<DocumentInfo> {
         self.call("document_info", &[id])
     }
@@ -124,18 +181,6 @@ impl CaptureOneScripting for JxaScripting {
     }
     fn recipe_exists(&self, id: &str, name: &str) -> Result<bool> {
         self.call("recipe_exists", &[id, name])
-    }
-    fn set_recipe_props(
-        &self,
-        id: &str,
-        name: &str,
-        existing_files: &str,
-        output_sub_folder: &str,
-    ) -> Result<()> {
-        self.call(
-            "set_recipe_props",
-            &[id, name, existing_files, output_sub_folder],
-        )
     }
     fn find_image(&self, id: &str, raw: &str) -> Result<Option<String>> {
         let found = self.call("find_image", &[id, raw])?;

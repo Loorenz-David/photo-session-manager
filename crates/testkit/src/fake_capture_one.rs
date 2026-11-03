@@ -1,6 +1,8 @@
 use psm_core::{Error, Result, domain::editing::ShapeOutcome};
+use psm_integrations::editing::capture_one::recipes::RecipeSpec;
 use psm_integrations::editing::capture_one::scripting::{
-    CaptureOneScripting, CollectionInfo, DocumentInfo,
+    CaptureOneScripting, CollectionInfo, DocumentInfo, EditorInfo, RecipeEnsure, RecipeProps,
+    StyleEnsure,
 };
 use std::{collections::HashMap, fs, path::Path, sync::Mutex};
 
@@ -22,7 +24,21 @@ pub struct FakeState {
     pub call_delay_ms: u64,
     pub fail_process: bool,
     pub camera: Option<String>,
-    pub recipes: HashMap<String, (String, String)>,
+    pub recipes: HashMap<String, RecipeProps>,
+    pub running: bool,
+    pub pro: bool,
+    pub automation_denied: bool,
+    pub launch_fails: Option<String>,
+    pub launched: bool,
+    pub running_after_polls: Option<u32>,
+    pub open_documents: Vec<String>,
+    pub front_document: Option<String>,
+    pub fail_make_document: Option<String>,
+    pub fail_open_document: Option<String>,
+    pub fail_front: bool,
+    pub fail_make_recipe: Option<String>,
+    pub styles: Vec<String>,
+    pub next_capture_styles: Vec<String>,
     pub hooks: HashMap<String, String>,
     pub images: HashMap<String, Vec<FakeVariant>>,
     pub folder_images: HashMap<String, Vec<FakeVariant>>,
@@ -50,11 +66,33 @@ impl FakeCaptureOneScripting {
     }
     pub fn new(document_id: String, capture_root: String) -> Self {
         let mut recipes = HashMap::new();
-        recipes.insert("PSM Preview".into(), ("add suffix".into(), String::new()));
-        recipes.insert("PSM Web".into(), ("add suffix".into(), String::new()));
+        for (name, spec) in [
+            ("PSM Preview", RecipeSpec::PREVIEW),
+            ("PSM Web", RecipeSpec::WEB),
+        ] {
+            let mut props = spec.props();
+            props.existing_files = "add suffix".into();
+            props.output_sub_folder = String::new();
+            props.root_folder_type = Some("output location".into());
+            recipes.insert(name.into(), props);
+        }
         Self {
             state: Mutex::new(FakeState {
+                open_documents: vec![document_id.clone()],
+                front_document: Some(document_id.clone()),
                 document_id,
+                running: true,
+                pro: true,
+                automation_denied: false,
+                launch_fails: None,
+                launched: false,
+                running_after_polls: None,
+                fail_make_document: None,
+                fail_open_document: None,
+                fail_front: false,
+                fail_make_recipe: None,
+                styles: vec!["PSM House".into()],
+                next_capture_styles: Vec::new(),
                 kind: "session".into(),
                 captures: capture_root.clone(),
                 collections: vec![
@@ -112,12 +150,15 @@ impl FakeCaptureOneScripting {
     fn check_id(&self, id: &str) -> Result<()> {
         let (expected, delay) = {
             let s = self.state.lock().unwrap();
-            (s.document_id.clone(), s.call_delay_ms)
+            (
+                s.open_documents.iter().any(|open| open == id),
+                s.call_delay_ms,
+            )
         };
         if delay > 0 {
             std::thread::sleep(std::time::Duration::from_millis(delay));
         }
-        if id != expected {
+        if !expected {
             Err(Error::DocumentNotOpen)
         } else {
             Ok(())
@@ -177,6 +218,157 @@ impl FakeCaptureOneScripting {
     }
 }
 impl CaptureOneScripting for FakeCaptureOneScripting {
+    fn editor_info(&self) -> Result<EditorInfo> {
+        let mut s = self.state.lock().unwrap();
+        s.ops.push("editor_info".into());
+        if s.automation_denied {
+            return Err(Error::Provider(
+                "execution error: Not authorized to send Apple events to Capture One. (-1743)"
+                    .into(),
+            ));
+        }
+        if s.launched
+            && let Some(polls) = s.running_after_polls.as_mut()
+            && *polls > 0
+        {
+            *polls -= 1;
+            if *polls == 0 {
+                s.running = true;
+            }
+        }
+        Ok(EditorInfo {
+            running: s.running,
+            version: Some("16.8.6".into()),
+            pro: s.running.then_some(s.pro),
+        })
+    }
+    fn launch(&self) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        s.ops.push("launch".into());
+        if let Some(error) = &s.launch_fails {
+            return Err(Error::Provider(error.clone()));
+        }
+        s.launched = true;
+        Ok(())
+    }
+    fn make_document(&self, parent: &str, name: &str) -> Result<String> {
+        let mut s = self.state.lock().unwrap();
+        let folder = Path::new(parent).join(name);
+        let id = folder.to_string_lossy().into_owned();
+        s.ops.push(format!("make_document:{id}"));
+        if let Some(error) = &s.fail_make_document {
+            return Err(Error::Provider(error.clone()));
+        }
+        fs::create_dir_all(&folder)?;
+        for sub in ["Capture", "Selects", "Output", "Trash"] {
+            fs::create_dir_all(folder.join(sub))?;
+        }
+        fs::write(folder.join(format!("{name}.cosessiondb")), b"")?;
+        s.open_documents.push(id.clone());
+        s.front_document = Some(id.clone());
+        s.document_id = id.clone();
+        s.capture_root = folder.join("Capture").to_string_lossy().into_owned();
+        s.captures = s.capture_root.clone();
+        Ok(id)
+    }
+    fn open_document(&self, file: &str) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        s.ops.push(format!("open_document:{file}"));
+        if let Some(error) = &s.fail_open_document {
+            return Err(Error::Provider(error.clone()));
+        }
+        if !Path::new(file).is_file() {
+            return Err(Error::DocumentNotOpen);
+        }
+        let id = Path::new(file)
+            .parent()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        if !s.open_documents.contains(&id) {
+            s.open_documents.push(id.clone());
+        }
+        s.front_document = Some(id);
+        Ok(())
+    }
+    fn front_document(&self, id: &str) -> Result<String> {
+        let mut s = self.state.lock().unwrap();
+        s.ops.push(format!("front:{id}"));
+        if !s.open_documents.iter().any(|d| d == id) {
+            return Err(Error::DocumentNotOpen);
+        }
+        if !s.fail_front {
+            s.front_document = Some(id.into());
+        }
+        Ok(s.front_document.clone().unwrap_or_default())
+    }
+    fn ensure_recipe(&self, id: &str, name: &str, want: &RecipeProps) -> Result<RecipeEnsure> {
+        self.check_id(id)?;
+        let mut s = self.state.lock().unwrap();
+        s.ops.push(format!("ensure_recipe:{name}"));
+        let created = !s.recipes.contains_key(name);
+        if created {
+            if let Some(error) = &s.fail_make_recipe {
+                return Err(Error::Provider(error.clone()));
+            }
+            s.ops.push(format!("make_recipe:{name}"));
+            let mut defaults = RecipeSpec::PREVIEW.props();
+            defaults.enabled = false;
+            defaults.output_format = "TIFF".into();
+            defaults.color_profile = "Adobe RGB (1998)".into();
+            defaults.scaling_method = "Fixed".into();
+            defaults.scaling_unit = "percent".into();
+            defaults.primary_scaling_value = 100;
+            defaults.jpeg_quality = 100;
+            defaults.existing_files = "add suffix".into();
+            defaults.output_sub_folder = String::new();
+            defaults.root_folder_type = Some("output location".into());
+            s.recipes.insert(name.into(), defaults);
+        }
+        let mut props = s.recipes.get(name).unwrap().clone();
+        let mut changed = Vec::new();
+        macro_rules! repair {
+            ($field:ident,$label:literal) => {
+                if props.$field != want.$field {
+                    props.$field = want.$field.clone();
+                    changed.push($label.into());
+                }
+            };
+        }
+        repair!(enabled, "enabled");
+        repair!(output_format, "outputFormat");
+        repair!(color_profile, "colorProfile");
+        repair!(scaling_method, "scalingMethod");
+        repair!(scaling_unit, "scalingUnit");
+        repair!(primary_scaling_value, "primaryScalingValue");
+        repair!(jpeg_quality, "jpegQuality");
+        repair!(existing_files, "existingFiles");
+        repair!(output_sub_folder, "outputSubFolder");
+        if !changed.is_empty() {
+            s.ops
+                .push(format!("set_recipe_props:{name}:{}", changed.join(",")));
+        }
+        s.recipes.insert(name.into(), props.clone());
+        Ok(RecipeEnsure {
+            created,
+            changed,
+            props,
+        })
+    }
+    fn ensure_capture_style(&self, id: &str, name: &str) -> Result<StyleEnsure> {
+        self.check_id(id)?;
+        let mut s = self.state.lock().unwrap();
+        s.ops.push(format!("ensure_capture_style:{name}"));
+        let listed = s.styles.iter().any(|style| style == name);
+        if listed && s.next_capture_styles != [name] {
+            s.next_capture_styles = vec![name.into()];
+            s.ops.push(format!("set_next_capture_styles:{name}"));
+        }
+        Ok(StyleEnsure {
+            listed,
+            applied: s.next_capture_styles.clone(),
+        })
+    }
     fn document_info(&self, id: &str) -> Result<DocumentInfo> {
         let delay = self.state.lock().unwrap().delay_document_info_ms;
         if delay > 0 {
@@ -184,9 +376,24 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         }
         let mut s = self.state.lock().unwrap();
         s.ops.push("document_info".into());
-        if id != s.document_id {
+        if !s.open_documents.iter().any(|d| d == id) {
             return Err(Error::DocumentNotOpen);
         };
+        if s.automation_denied {
+            return Err(Error::Provider(
+                "execution error: Not authorized to send Apple events to Capture One. (-1743)"
+                    .into(),
+            ));
+        }
+        if id != s.document_id {
+            return Ok(DocumentInfo {
+                kind: "session".into(),
+                id: id.into(),
+                captures: format!("{id}/Capture"),
+                collections: Vec::new(),
+                camera: None,
+            });
+        }
         Ok(DocumentInfo {
             kind: s.kind.clone(),
             id: s.document_id.clone(),
@@ -269,22 +476,6 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         let mut s = self.state.lock().unwrap();
         s.ops.push(format!("recipe_exists:{name}"));
         Ok(s.recipes.contains_key(name))
-    }
-    fn set_recipe_props(
-        &self,
-        id: &str,
-        name: &str,
-        existing_files: &str,
-        output_sub_folder: &str,
-    ) -> Result<()> {
-        self.check_id(id)?;
-        let mut s = self.state.lock().unwrap();
-        s.ops.push(format!("set_recipe_props:{name}"));
-        s.recipes.insert(
-            name.into(),
-            (existing_files.into(), output_sub_folder.into()),
-        );
-        Ok(())
     }
     fn find_image(&self, id: &str, raw: &str) -> Result<Option<String>> {
         self.check_id(id)?;

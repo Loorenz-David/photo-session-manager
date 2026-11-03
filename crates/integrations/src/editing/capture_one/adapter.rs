@@ -5,7 +5,10 @@ use super::{
 use psm_core::{
     Error, Result,
     domain::{
-        editing::{DocumentState, EditingCapabilities, RenderPurpose, ShapeOutcome},
+        editing::{
+            DocumentState, EditingCapabilities, ProvisionInputs, ProvisionReport, RenderPurpose,
+            ShapeOutcome,
+        },
         photo::Classification,
     },
     mechanisms::canon::canon,
@@ -33,6 +36,7 @@ pub struct CaptureOneAdapter {
     pub web_recipe: String,
     pub paths: AppPaths,
     renders: Mutex<RenderRegistry>,
+    pub(crate) provision_lock: Mutex<()>,
 }
 impl CaptureOneAdapter {
     pub fn new(
@@ -54,6 +58,7 @@ impl CaptureOneAdapter {
             web_recipe,
             paths,
             renders: Mutex::new(RenderRegistry::default()),
+            provision_lock: Mutex::new(()),
         }
     }
     fn variant_background(&self, raw: &str) -> Result<String> {
@@ -101,6 +106,12 @@ pub fn tag_for(classification: Classification) -> i32 {
     }
 }
 impl EditingProvider for CaptureOneAdapter {
+    fn ensure(&self, inputs: &ProvisionInputs) -> Result<ProvisionReport> {
+        self.ensure_provision(inputs)
+    }
+    fn bring_document_to_front(&self) -> Result<()> {
+        self.front_provision_document()
+    }
     fn settings_changed_at(&self, raw: &str) -> Result<Option<SystemTime>> {
         let raw = Path::new(raw);
         let (Some(parent), Some(name)) = (raw.parent(), raw.file_name()) else {
@@ -187,26 +198,6 @@ impl EditingProvider for CaptureOneAdapter {
             self.health.clear("hooks_not_installed");
         }
         result
-    }
-    fn check_recipes(&self) -> Result<Vec<String>> {
-        let mut missing = Vec::new();
-        for name in [&self.preview_recipe, &self.web_recipe] {
-            if self.user.recipe_exists(&self.document_id, name)? {
-                self.user.set_recipe_props(
-                    &self.document_id,
-                    name,
-                    "overwrite",
-                    "_session_manager",
-                )?;
-            } else {
-                missing.push(name.clone());
-            }
-        }
-        self.health.clear("recipe_missing");
-        for name in &missing {
-            self.health.set("recipe_missing", name);
-        }
-        Ok(missing)
     }
     fn render(&self, raw: &str, purpose: RenderPurpose) -> Result<String> {
         let recipe = match purpose {

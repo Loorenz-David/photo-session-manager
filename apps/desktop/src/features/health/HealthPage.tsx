@@ -9,6 +9,8 @@ import { PageHeader } from '@/features/shell/PageHeader';
 const names: Record<string, string> = {
   data_dir: 'Data directory', hooks_compiled: 'Capture One hooks', nudge_listening: 'Event listener',
   document: 'Capture One document', document_not_open: 'Capture One document', document_not_session: 'Capture One document',
+  document_not_created: 'Capture One document', document_not_front: 'Capture One document',
+  editor_not_installed: 'Capture One', editor_not_pro: 'Capture One', editor_automation_denied: 'Capture One', editor_not_running: 'Capture One', style_not_found: 'Style',
   hooks: 'Installed hooks', hooks_not_installed: 'Installed hooks', recipes: 'Recipes', recipe_missing: 'Recipe missing',
   capture_folder_not_set: 'Capture folder', camera: 'Camera', camera_disconnected: 'Camera',
   integration_token_invalid: 'Shopify token', condition_field_missing: 'Condition photos field',

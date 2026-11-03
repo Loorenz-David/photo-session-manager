@@ -1,4 +1,25 @@
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+#[derive(Debug, Clone)]
+pub struct ProvisionInputs {
+    pub style_name: String,
+    pub wait: Duration,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StyleOutcome {
+    Applied,
+    NotListed,
+    NotRequested,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProvisionReport {
+    pub document_created: bool,
+    pub recipes_created: Vec<String>,
+    pub style: StyleOutcome,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentState {

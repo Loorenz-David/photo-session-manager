@@ -1,5 +1,6 @@
 use crate::{
     Error, Result,
+    domain::editing::ProvisionInputs,
     ports::{editing::EditingProvider, store::Store},
     services::health::HealthService,
 };
@@ -9,14 +10,15 @@ pub struct EditingStartup<'a> {
     pub store: &'a dyn Store,
     pub health: &'a HealthService,
     pub crop_on_arrival: Option<&'a str>,
+    pub provision: &'a ProvisionInputs,
 }
 impl EditingStartup<'_> {
     pub fn run(&self) -> Result<()> {
+        self.provider.ensure(self.provision)?;
         let doc = match self.provider.inspect_document() {
             Ok(doc) => {
                 self.health.clear("document_not_open");
                 self.health.clear("document_not_session");
-                self.health.set_ok("document", "Session open");
                 doc
             }
             Err(e) => {
@@ -37,24 +39,6 @@ impl EditingStartup<'_> {
                 return Err(e);
             }
         };
-        if let Err(e) = self.provider.install_hooks() {
-            self.health.set("hooks_not_installed", e.to_string());
-        } else {
-            self.health.clear("hooks_not_installed");
-            self.health.set_ok("hooks", "Installed");
-        }
-        match self.provider.check_recipes() {
-            Ok(missing) => {
-                self.health.clear("recipe_missing");
-                if missing.is_empty() {
-                    self.health.set_ok("recipes", "Ready");
-                }
-                for name in missing {
-                    self.health.set("recipe_missing", name);
-                }
-            }
-            Err(e) => self.health.set("recipe_missing", e.to_string()),
-        }
         if let Some(name) = self.crop_on_arrival {
             if let Ok(ratios) = self.provider.crop_aspect_ratios()
                 && !ratios.is_empty()
@@ -72,6 +56,9 @@ impl EditingStartup<'_> {
             self.health.clear("crop_ratio_unknown");
         }
         let active = self.store.active_session_id()?;
+        if active.is_some() {
+            self.provider.bring_document_to_front()?;
+        }
         let folder = if let Some(id) = active {
             let session = self.store.session(id)?;
             let item = self

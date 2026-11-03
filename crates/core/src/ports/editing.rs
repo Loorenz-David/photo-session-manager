@@ -1,7 +1,10 @@
 use crate::{
     Result,
     domain::{
-        editing::{DocumentState, EditingCapabilities, RenderPurpose, ShapeOutcome},
+        editing::{
+            DocumentState, EditingCapabilities, ProvisionInputs, ProvisionReport, RenderPurpose,
+            ShapeOutcome,
+        },
         photo::Classification,
     },
 };
@@ -21,10 +24,11 @@ pub struct RenderCompletion {
 }
 
 pub trait EditingProvider: Send + Sync {
+    fn ensure(&self, inputs: &ProvisionInputs) -> Result<ProvisionReport>;
+    fn bring_document_to_front(&self) -> Result<()>;
     fn inspect_document(&self) -> Result<DocumentState>;
     fn set_capture_folder(&self, target: &str) -> Result<()>;
     fn install_hooks(&self) -> Result<()>;
-    fn check_recipes(&self) -> Result<Vec<String>>;
     fn render(&self, raw: &str, purpose: RenderPurpose) -> Result<String>;
     fn request_render(
         &self,

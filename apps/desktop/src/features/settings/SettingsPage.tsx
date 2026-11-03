@@ -4,14 +4,14 @@ import { Button } from '@/components/ui/button';
 import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Input } from '@/components/ui/input';
 import { useAction, usePageData } from '@/lib/pending';
-import { getSettings, listCropRatios, pickFolder, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
+import { getSettings, listCropRatios, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
 };
 
-type TextKey = 'document_id' | 'preview_recipe' | 'web_recipe' | 'style_name' | 'export_folder';
+type TextKey = 'preview_recipe' | 'web_recipe' | 'style_name' | 'export_folder';
 type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition_photos_key';
 
 /** ch12 §Settings: a plain form over `settings.json` (undesigned in the handoff). The theme stays on the header toggle. */
@@ -29,9 +29,13 @@ export function SettingsPage() {
   const editIntegration = (key: IntegrationKey, value: string) =>
     setSettings(current => current ? { ...current, integration: { ...(current.integration ?? emptyIntegration), [key]: value } } : current);
 
-  const choose = useAction(async (key: 'document_id' | 'export_folder', title: string) => {
+  const choose = useAction(async (key: 'export_folder', title: string) => {
     const folder = await pickFolder(title);
     if (folder) edit({ [key]: folder });
+  }, e => setError(String(e)));
+  const chooseSession = useAction(async () => {
+    const file = await pickSessionFile('Use another session');
+    if (file) edit({ document_id: file.slice(0, file.lastIndexOf('/')) });
   }, e => setError(String(e)));
 
   const save = useAction(async () => {
@@ -40,7 +44,7 @@ export function SettingsPage() {
     // An untouched, empty Shopify block is not saved (no integration stays no integration).
     const integration = shopify && [shopify.shop_domain, shopify.client_id, shopify.client_secret].some(v => v.trim() !== '') ? shopify : undefined;
     const saved = await saveSettings({
-      document_id: settings.document_id ?? undefined,
+      document_id: settings.document_id ?? '',
       preview_recipe: settings.preview_recipe,
       web_recipe: settings.web_recipe,
       style_name: settings.style_name,
@@ -64,7 +68,7 @@ export function SettingsPage() {
     <label htmlFor={`settings-${key}`}>{label}</label>
     <div className="flex gap-2">
       <Input id={`settings-${key}`} value={settings[key] ?? ''} onChange={e => edit({ [key]: e.target.value })} />
-      {picker && <Button type="button" variant="outline" disabled={choose.busy} aria-busy={choose.busy ? 'true' : undefined} onClick={() => void choose.run(key as 'document_id' | 'export_folder', picker)}>Choose…{choose.busy ? '…' : ''}</Button>}
+      {picker && <Button type="button" variant="outline" disabled={choose.busy} aria-busy={choose.busy ? 'true' : undefined} onClick={() => void choose.run('export_folder', picker)}>Choose…{choose.busy ? '…' : ''}</Button>}
     </div>
   </div>;
   const shop = (label: string, key: IntegrationKey, type = 'text') => <div className="flex flex-col gap-1">
@@ -82,7 +86,15 @@ export function SettingsPage() {
   return <>{header}<main className="health-shell">
     <form onSubmit={event => { event.preventDefault(); void save.run(); }} className="health-section flex max-w-xl flex-col gap-4" aria-label="Settings">
       <h2>Capture One</h2>
-      {text('Capture One session folder', 'document_id', 'Capture One session folder')}
+      <div className="flex flex-col gap-1">
+        <p>Capture One session</p>
+        <p>{settings.document_id || 'Session Manager (created by the app)'}</p>
+        <p className="health-detail">Effective path: {settings.document_id || (page.data?.document_id ? '~/Pictures/Session Manager' : settings.effective_document_id)}</p>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" disabled={chooseSession.busy} onClick={() => void chooseSession.run()}>Use another session…</Button>
+          {settings.document_id && <Button type="button" variant="outline" onClick={() => edit({ document_id: null })}>Use the app&apos;s own session</Button>}
+        </div>
+      </div>
       {text('Preview recipe', 'preview_recipe')}
       {text('Web recipe', 'web_recipe')}
       {text('Style', 'style_name')}

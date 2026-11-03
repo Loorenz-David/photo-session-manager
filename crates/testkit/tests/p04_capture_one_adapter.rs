@@ -156,13 +156,17 @@ fn c2b_null_hook_readback_is_unhealthy() {
 #[test]
 fn c3a_existing_recipes_are_corrected() {
     let a = app();
-    assert!(a.app.editing.check_recipes().unwrap().is_empty());
+    a.app.editing.ensure(&a.app.provision).unwrap();
     let s = a.fake.state.lock().unwrap();
     for name in ["PSM Preview", "PSM Web"] {
-        assert_eq!(
-            s.recipes.get(name).unwrap(),
-            &("overwrite".into(), "_session_manager".into())
-        );
+        let spec = if name == "PSM Preview" {
+            psm_integrations::editing::capture_one::recipes::RecipeSpec::PREVIEW
+        } else {
+            psm_integrations::editing::capture_one::recipes::RecipeSpec::WEB
+        };
+        let mut got = s.recipes.get(name).unwrap().clone();
+        got.root_folder_type = None;
+        assert_eq!(got, spec.props());
     }
     assert!(!a.app.health.has("recipe_missing"));
 }
@@ -170,19 +174,26 @@ fn c3a_existing_recipes_are_corrected() {
 fn c3b_missing_recipe_only_blocks_its_render() {
     let a = app();
     a.fake.state.lock().unwrap().recipes.remove("PSM Web");
+    a.fake.state.lock().unwrap().fail_make_recipe = Some("busy".into());
     let s = session(&a, "K1");
     let p = photo(&a, s, "a.ARW", "7");
     let raw = a.store().photo(p).unwrap().raw_path;
-    assert_eq!(a.app.editing.check_recipes().unwrap(), vec!["PSM Web"]);
+    assert!(
+        matches!(a.app.editing.ensure(&a.app.provision), Err(Error::RecipeMissing{name}) if name=="PSM Web")
+    );
+    let mut got = a
+        .fake
+        .state
+        .lock()
+        .unwrap()
+        .recipes
+        .get("PSM Preview")
+        .unwrap()
+        .clone();
+    got.root_folder_type = None;
     assert_eq!(
-        a.fake
-            .state
-            .lock()
-            .unwrap()
-            .recipes
-            .get("PSM Preview")
-            .unwrap(),
-        &("overwrite".into(), "_session_manager".into())
+        got,
+        psm_integrations::editing::capture_one::recipes::RecipeSpec::PREVIEW.props()
     );
     let h = a.app.health.report("", true, true);
     assert_eq!(
@@ -191,7 +202,7 @@ fn c3b_missing_recipe_only_blocks_its_render() {
             .filter(|i| i.code == "recipe_missing")
             .map(|i| i.detail.as_str())
             .collect::<Vec<_>>(),
-        ["PSM Web"]
+        ["PSM Web could not be created or repaired: provider: busy"]
     );
     assert!(
         matches!(a.app.editing.render(&raw,RenderPurpose::Export),Err(Error::RecipeMissing{name}) if name=="PSM Web")

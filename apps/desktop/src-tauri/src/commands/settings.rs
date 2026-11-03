@@ -20,6 +20,7 @@ pub struct IntegrationSettingsDto {
 #[derive(Serialize, Deserialize, Type)]
 pub struct SettingsDto {
     pub document_id: Option<String>,
+    pub effective_document_id: String,
     pub preview_recipe: String,
     pub web_recipe: String,
     pub style_name: String,

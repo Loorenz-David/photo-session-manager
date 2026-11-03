@@ -44,8 +44,11 @@ impl TestApp {
         ItemsService::new(self.app.store.as_ref(), self.clock.as_ref())
     }
     pub fn sessions(&self) -> SessionsService<'_> {
-        SessionsService::new(self.app.store.as_ref(), self.clock.as_ref())
-            .with_editing(self.app.editing.as_ref(), self.app.health.as_ref())
+        SessionsService::new(self.app.store.as_ref(), self.clock.as_ref()).with_editing(
+            self.app.editing.as_ref(),
+            self.app.health.as_ref(),
+            &self.app.provision,
+        )
     }
     pub fn review(&self) -> ReviewService<'_> {
         ReviewService::new(self.app.store.as_ref(), self.clock.as_ref())
@@ -89,7 +92,8 @@ impl TestApp {
     }
     fn create(configure_document: bool, configure_shop: bool, condition_key: &str) -> Result<Self> {
         let dir = tempfile::tempdir()?;
-        let paths = AppPaths::for_dir(dir.path());
+        let mut paths = AppPaths::for_dir(dir.path());
+        paths.home = dir.path().to_path_buf();
         paths.create()?;
         let document_id = dir
             .path()
@@ -104,6 +108,10 @@ impl TestApp {
             .into_owned();
         std::fs::create_dir_all(&document_id)?;
         std::fs::create_dir_all(&capture_root)?;
+        std::fs::write(
+            Path::new(&document_id).join("Capture One Session.cosessiondb"),
+            b"",
+        )?;
         let mut settings = psm_infra::settings_file::Settings::open(&paths)?;
         if configure_document {
             settings.document_id = Some(document_id.clone());

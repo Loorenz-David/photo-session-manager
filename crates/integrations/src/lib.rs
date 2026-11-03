@@ -13,7 +13,10 @@ use editing::capture_one::{
 };
 use psm_core::{
     Result,
-    domain::{editing::Job, session::PublishStep},
+    domain::{
+        editing::{Job, ProvisionInputs},
+        session::PublishStep,
+    },
     events::AppEvent,
     mechanisms::{arrival::path_key, hash::sha256_file},
     ports::{
@@ -54,6 +57,8 @@ use std::{
     time::Duration,
 };
 
+pub const EDITOR_WAIT: Duration = Duration::from_secs(45);
+
 fn refresh_shape_health(store: &dyn Store, health: &HealthService) -> Result<()> {
     let count = store.count_jobs("crop_on_arrival", "failed", Some("crop_ratio_unknown"))?;
     if count == 0 {
@@ -73,6 +78,7 @@ fn refresh_shape_health(store: &dyn Store, health: &HealthService) -> Result<()>
 pub struct App {
     pub paths: AppPaths,
     pub settings: Settings,
+    pub provision: ProvisionInputs,
     pub store: Arc<SqliteStore>,
     pub spool: Arc<Spool>,
     pub nudge: NudgeServer,
@@ -103,6 +109,7 @@ pub struct App {
 pub struct AppHandles {
     pub paths: AppPaths,
     pub settings: Settings,
+    pub provision: ProvisionInputs,
     pub store: Arc<SqliteStore>,
     pub health: Arc<HealthService>,
     pub clock: Arc<dyn Clock>,
@@ -187,11 +194,6 @@ impl AppHandles {
             self.store
                 .requeue_failed_jobs("crop_on_arrival", self.clock.now_ms())?;
         }
-        if self
-            .settings
-            .document_id
-            .as_deref()
-            .is_some_and(|d| !d.is_empty())
         {
             if let Err(error) = (EditingStartup {
                 provider: self.editing.as_ref(),
@@ -199,6 +201,7 @@ impl AppHandles {
                 health: self.health.as_ref(),
                 crop_on_arrival: (self.settings.crop_on_arrival != "off")
                     .then_some(self.settings.crop_on_arrival.as_str()),
+                provision: &self.provision,
             })
             .run()
             {
@@ -229,7 +232,14 @@ impl AppHandles {
         } else {
             value["integration"] = serde_json::Value::Null;
         }
-        Ok(SettingsService::get(&value))
+        let mut shown = SettingsService::get(&value);
+        shown["effective_document_id"] = serde_json::Value::String(
+            self.settings
+                .effective_document_id(&self.paths)
+                .to_string_lossy()
+                .into_owned(),
+        );
+        Ok(shown)
     }
     pub fn on_window_focus(&self) {
         let previews = self.previews.clone();
@@ -280,6 +290,7 @@ impl App {
         AppHandles {
             paths: self.paths.clone(),
             settings: self.settings.clone(),
+            provision: self.provision.clone(),
             store: self.store.clone(),
             health: self.health.clone(),
             clock: self.clock.clone(),
@@ -391,10 +402,14 @@ impl App {
         if start_backup && settings.crop_on_arrival != "off" {
             store.requeue_failed_jobs("crop_on_arrival", clock.now_ms())?;
         }
-        let document_id = settings.document_id.clone().unwrap_or_default();
-        if document_id.is_empty() {
-            health.set("document_not_open", "No Capture One session configured");
-        }
+        let document_id = settings
+            .effective_document_id(&paths)
+            .to_string_lossy()
+            .into_owned();
+        let provision = ProvisionInputs {
+            style_name: settings.style_name.clone(),
+            wait: EDITOR_WAIT,
+        };
         let editing: Arc<dyn EditingProvider> = Arc::new(CaptureOneAdapter::new(
             (user_scripting.clone(), background_scripting.clone()),
             store.clone(),
@@ -454,9 +469,7 @@ impl App {
         if let Err(error) = spool.drain(store.as_ref(), clock.as_ref()) {
             tracing::warn!(%error, "startup spool drain deferred");
         }
-        if !document_id.is_empty()
-            && let Err(error) = arrival.scan()
-        {
+        if let Err(error) = arrival.scan() {
             tracing::warn!(%error, "startup capture scan deferred");
         }
         if let Err(error) = previews.on_startup() {
@@ -515,18 +528,20 @@ impl App {
         }
         let jobs = Arc::new(runner);
         let publish_jobs = Arc::new(publish_runner);
-        if run_startup && !document_id.is_empty() {
+        if run_startup {
             let startup_editing = editing.clone();
             let startup_store = store.clone();
             let startup_health = health.clone();
             let startup_camera = camera.clone();
             let startup_crop = settings.crop_on_arrival.clone();
+            let startup_provision = provision.clone();
             thread::spawn(move || {
                 let _ = (EditingStartup {
                     provider: startup_editing.as_ref(),
                     store: startup_store.as_ref(),
                     health: startup_health.as_ref(),
                     crop_on_arrival: (startup_crop != "off").then_some(startup_crop.as_str()),
+                    provision: &startup_provision,
                 })
                 .run();
                 let _ =
@@ -616,6 +631,7 @@ impl App {
         Ok(Self {
             paths,
             settings,
+            provision,
             store,
             spool,
             nudge,
@@ -655,6 +671,7 @@ impl App {
             health: self.health.as_ref(),
             crop_on_arrival: (self.settings.crop_on_arrival != "off")
                 .then_some(self.settings.crop_on_arrival.as_str()),
+            provision: &self.provision,
         })
         .run()
     }

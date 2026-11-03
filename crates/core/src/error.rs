@@ -48,6 +48,8 @@ pub enum Error {
     CropRatioUnknown { name: String },
     #[error("document_not_open")]
     DocumentNotOpen,
+    #[error("document_not_front")]
+    DocumentNotFront,
     #[error("document_not_session")]
     DocumentNotSession,
     #[error("raw_changed: photo {photo_id}")]

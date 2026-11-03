@@ -77,6 +77,7 @@ impl From<Error> for CommandError {
             Error::TagVerification => "tag_verification",
             Error::VariantNotFound => "variant_not_found",
             Error::DocumentNotOpen => "document_not_open",
+            Error::DocumentNotFront => "document_not_front",
             Error::DocumentNotSession => "document_not_session",
             Error::RawChanged { photo_id } => {
                 data.insert("photo_id".into(), photo_id.to_string());

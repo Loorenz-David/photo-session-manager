@@ -3,6 +3,8 @@ pub mod gate;
 pub mod hooks;
 pub mod jxa;
 pub mod mirror;
+pub mod provision;
+pub mod recipes;
 pub mod renders;
 pub mod scripting;
 pub mod shape;

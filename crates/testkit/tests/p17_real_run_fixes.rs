@@ -69,7 +69,7 @@ fn c1a_settings_rebuild_addresses_new_document() {
             [true]
         );
     }
-    assert!(ops(&app).contains(&"recipe_exists:PSM Preview".into()));
+    assert!(ops(&app).contains(&"ensure_recipe:PSM Preview".into()));
 }
 #[test]
 fn c1b_recipe_names_take_effect_without_relaunch() {
@@ -77,13 +77,8 @@ fn c1b_recipe_names_take_effect_without_relaunch() {
     app.settings_set(&serde_json::json!({"preview_recipe":"Nope"}))
         .unwrap();
     let first = app.app.health_check().unwrap();
-    assert_eq!(
-        report_item(&first, "recipe_missing")
-            .iter()
-            .map(|x| x.detail.as_str())
-            .collect::<Vec<_>>(),
-        ["Nope"]
-    );
+    assert!(report_item(&first, "recipe_missing").is_empty());
+    assert!(app.fake.state.lock().unwrap().recipes.contains_key("Nope"));
     app.settings_set(&serde_json::json!({"preview_recipe":"PSM Preview"}))
         .unwrap();
     assert!(report_item(&app.app.health_check().unwrap(), "recipe_missing").is_empty());
@@ -238,7 +233,7 @@ fn c3c_arrivals_follow_derived_root() {
     assert_eq!(rows, [(x, b), (y, 1)]);
 }
 #[test]
-fn c3d_missing_capture_root_is_unhealthy() {
+fn c3d_missing_capture_root_is_recreated_by_ensure() {
     let app = TestApp::with_fake_document().unwrap();
     fs::remove_dir_all(root(&app)).unwrap();
     assert!(matches!(
@@ -246,14 +241,8 @@ fn c3d_missing_capture_root_is_unhealthy() {
         Err(Error::CaptureFolderNotSet)
     ));
     let report = app.app.health_check().unwrap();
-    let items = report_item(&report, "capture_folder_not_set");
-    assert_eq!(items.len(), 1);
-    assert!(!items[0].ok);
-    assert!(
-        items[0]
-            .detail
-            .contains(&root(&app).to_string_lossy().to_string())
-    );
+    assert!(root(&app).is_dir());
+    assert!(report_item(&report, "capture_folder_not_set").is_empty());
 }
 #[test]
 fn c4c_focus_returns_before_provider_render() {

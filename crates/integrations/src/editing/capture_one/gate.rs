@@ -1,4 +1,6 @@
-use super::scripting::{CaptureOneScripting, DocumentInfo};
+use super::scripting::{
+    CaptureOneScripting, DocumentInfo, EditorInfo, RecipeEnsure, RecipeProps, StyleEnsure,
+};
 use psm_core::domain::editing::ShapeOutcome;
 use psm_core::{Error, Result};
 use std::sync::{Arc, Condvar, Mutex};
@@ -68,6 +70,27 @@ impl GatedScripting {
     }
 }
 impl CaptureOneScripting for GatedScripting {
+    fn editor_info(&self) -> Result<EditorInfo> {
+        self.call(|i| i.editor_info())
+    }
+    fn launch(&self) -> Result<()> {
+        self.call(|i| i.launch())
+    }
+    fn make_document(&self, parent: &str, name: &str) -> Result<String> {
+        self.call(|i| i.make_document(parent, name))
+    }
+    fn open_document(&self, file: &str) -> Result<()> {
+        self.call(|i| i.open_document(file))
+    }
+    fn front_document(&self, id: &str) -> Result<String> {
+        self.call(|i| i.front_document(id))
+    }
+    fn ensure_recipe(&self, id: &str, name: &str, want: &RecipeProps) -> Result<RecipeEnsure> {
+        self.call(|i| i.ensure_recipe(id, name, want))
+    }
+    fn ensure_capture_style(&self, id: &str, name: &str) -> Result<StyleEnsure> {
+        self.call(|i| i.ensure_capture_style(id, name))
+    }
     fn document_info(&self, id: &str) -> Result<DocumentInfo> {
         self.call(|i| i.document_info(id))
     }
@@ -88,15 +111,6 @@ impl CaptureOneScripting for GatedScripting {
     }
     fn recipe_exists(&self, id: &str, name: &str) -> Result<bool> {
         self.call(|i| i.recipe_exists(id, name))
-    }
-    fn set_recipe_props(
-        &self,
-        id: &str,
-        name: &str,
-        existing_files: &str,
-        output_sub_folder: &str,
-    ) -> Result<()> {
-        self.call(|i| i.set_recipe_props(id, name, existing_files, output_sub_folder))
     }
     fn find_image(&self, id: &str, raw: &str) -> Result<Option<String>> {
         self.call(|i| i.find_image(id, raw))

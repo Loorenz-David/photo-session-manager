@@ -7,12 +7,14 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct AppPaths {
     pub root: PathBuf,
+    pub home: PathBuf,
 }
 
 impl AppPaths {
     pub fn for_dir(path: impl AsRef<Path>) -> Self {
         Self {
             root: path.as_ref().to_path_buf(),
+            home: PathBuf::from(env::var_os("HOME").unwrap_or_default()),
         }
     }
 

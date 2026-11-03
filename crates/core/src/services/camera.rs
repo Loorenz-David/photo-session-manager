@@ -24,7 +24,7 @@ impl<'a> CameraService<'a> {
         self
     }
     pub fn status(&self) -> Result<CameraStatus> {
-        if self.health.has("capture_folder_not_set") {
+        if self.health.has("capture_folder_not_set") || self.health.has("document_not_front") {
             return Ok(CameraStatus::Disconnected);
         }
         let status = self.provider.status()?;
@@ -51,6 +51,9 @@ impl<'a> CameraService<'a> {
         Ok(status)
     }
     pub fn capture(&self) -> Result<()> {
+        if self.health.has("document_not_front") {
+            return Err(Error::DocumentNotFront);
+        }
         if self.health.has("capture_folder_not_set") {
             return Err(Error::CaptureFolderNotSet);
         }

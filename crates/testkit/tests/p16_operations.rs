@@ -174,7 +174,11 @@ fn c2b_publish_done_creates_second_backup() {
 #[test]
 fn c3a_health_reports_document_token_and_field_failures() {
     let app = TestApp::with_fake_shop_key("custom.nope").unwrap();
-    app.fake.state.lock().unwrap().document_id = "/elsewhere/Other Session".into();
+    {
+        let mut fake = app.fake.state.lock().unwrap();
+        fake.open_documents.clear();
+        fake.fail_open_document = Some("busy".into());
+    }
     app.fake_shop()
         .state
         .lock()
