@@ -2,7 +2,7 @@
 
 Updated: 2026-10-29 by the orchestrator.
 
-**Run in flight:** `tools/pipeline/run_phase.sh all` (P24_capture_one_provisioning; Codex), started 2026-11-03 ~19:20. Book 10B/10C added (owner decisions 2026-10-29, 2026-11-03). P24 task 0 run by the orchestrator (evidence VERIFY-13/14). Open with the owner: AI assistant questions (provider, scope, sources, description style, cost, privacy) — book ch08 asks for them before planning.
+**No run in flight.** P24 APPROVED 2026-11-03 19:38 (with notes; narrative relayed; build made, not launched — owner launches it, it will open Capture One sessions). Book 10B/10C added (owner decisions 2026-10-29, 2026-11-03). P24 task 0 run by the orchestrator (evidence VERIFY-13/14). Open with the owner: AI assistant questions (provider, scope, sources, description style, cost, privacy) — book ch08 asks for them before planning.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
