@@ -1,8 +1,8 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
-Updated: 2026-10-29 by the orchestrator.
+Updated: 2026-11-04 by the orchestrator.
 
-**No run in flight.** P24 APPROVED 2026-11-03 19:38 (with notes; narrative relayed; build made, not launched — owner launches it, it will open Capture One sessions). Book 10B/10C added (owner decisions 2026-10-29, 2026-11-03). P24 task 0 run by the orchestrator (evidence VERIFY-13/14). Open with the owner: AI assistant questions (provider, scope, sources, description style, cost, privacy) — book ch08 asks for them before planning.
+**No run in flight.** P24 APPROVED 2026-11-03 19:38 (with notes; narrative relayed 2026-11-04 with the PSM House default-style correction; build made, not launched — owner launches it, it will open Capture One sessions). 2026-11-04 owner asked what is left: proposed a tidy-up phase P25 (P24 leftovers backlog 168/173 + short path, IntegrityCheck NULL hash 106, logging before App::open 133, double-drag reload 157, P23 re-queue 164, media id by filename 107, P24 test gaps 167) and an empty default style_name — awaiting the owner's go. Book 10B/10C added (owner decisions 2026-10-29, 2026-11-03). P24 task 0 run by the orchestrator (evidence VERIFY-13/14). Open with the owner: AI assistant questions (provider, scope, sources, description style, cost, privacy) — book ch08 asks for them before planning.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
