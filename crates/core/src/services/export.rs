@@ -529,7 +529,7 @@ impl ExportService {
                 }
                 self.emit(run.session_id, count, count, ExportState::Done);
                 if !run.defer_swap {
-                    self.release_masters(state, &run);
+                    self.release_run_masters(state, &run);
                 }
             }
             Err(error) => {
@@ -539,9 +539,37 @@ impl ExportService {
         }
     }
 
+    /// MC-28 §Master after a publish (P30): the masters of the session's non-deleted photos are
+    /// deleted (the caller checked the session is not dirty). A RAW an export in flight still
+    /// needs keeps its master.
+    pub fn release_masters(&self, session_id: i64) -> Result<()> {
+        let state = self.state()?;
+        let in_use: HashSet<&str> = state
+            .runs
+            .values()
+            .flat_map(|run| run.targets.iter())
+            .filter(|t| t.progress != Progress::Copied)
+            .map(|t| t.raw.as_str())
+            .collect();
+        let raws: BTreeSet<String> = self
+            .store
+            .photos_in_session(session_id)?
+            .into_iter()
+            .filter(|p| p.classification != Classification::Deleted)
+            .map(|p| p.raw_path)
+            .collect();
+        for raw in raws {
+            if in_use.contains(raw.as_str()) || state.masters.contains_key(&raw) {
+                continue;
+            }
+            self.render.masters.remove_all(&raw)?;
+        }
+        Ok(())
+    }
+
     /// MC-28 §Master: masters are a cache, deleted once the export completes and the session is
     /// not dirty. A RAW another run still needs keeps its master.
-    fn release_masters(&self, state: &State, run: &Run) {
+    fn release_run_masters(&self, state: &State, run: &Run) {
         match self.store.session(run.session_id) {
             Ok(session) if !session.dirty => {}
             Ok(_) => return,

@@ -90,22 +90,6 @@ impl Default for PollConfig {
     }
 }
 
-/// MC-11 / MC-21 upload filename: `<folder_key>-<first 12 hex of uid>.jpg`, revision n ≥ 1 adds
-/// `-r<n>` before the extension; lowercase.
-pub fn upload_filename(folder_key: &str, uid: &str, revision: i64) -> String {
-    let hex: String = uid
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit())
-        .take(12)
-        .collect();
-    let suffix = if revision >= 1 {
-        format!("-r{revision}")
-    } else {
-        String::new()
-    };
-    format!("{folder_key}-{hex}{suffix}.jpg").to_lowercase()
-}
-
 fn escape_html(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
@@ -759,12 +743,11 @@ impl CommerceAdapter for ShopifyAdapter {
     fn staged_uploads_create(
         &self,
         run: &ConfirmedRun,
-        folder_key: &str,
-        uid: &str,
-        revision: i64,
+        stem: &str,
         byte_size: u64,
     ) -> Result<StagedTarget> {
-        let filename = upload_filename(folder_key, uid, revision);
+        // Core builds the stem (10D MC-29 §Upload filename); the adapter only adds `.jpg`.
+        let filename = format!("{stem}.jpg");
         let data = self.mutate(
             run,
             "staged_uploads_create",
@@ -1102,18 +1085,6 @@ fn condition_metafield_value(value: &str) -> Result<Json> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn mc11_upload_filename() {
-        assert_eq!(
-            upload_filename("K-1", "AB12CD34-EF56-4a7b-8c9d-0123456789ab", 0),
-            "k-1-ab12cd34ef56.jpg"
-        );
-        assert_eq!(
-            upload_filename("k-1", "ab12cd34-ef56-4a7b-8c9d-0123456789ab", 2),
-            "k-1-ab12cd34ef56-r2.jpg"
-        );
-    }
 
     #[test]
     fn mc13_description_html() {

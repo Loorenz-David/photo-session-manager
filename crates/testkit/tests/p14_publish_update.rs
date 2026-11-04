@@ -522,14 +522,24 @@ fn c4a_selected_condition_files_in_order() {
     let role = "attribute:custom.damage_report";
     let fd = a
         .store()
-        .photo_link(d, item, role)
+        .photo_link(
+            d,
+            item,
+            role,
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
         .unwrap();
     let ff = a
         .store()
-        .photo_link(f, item, role)
+        .photo_link(
+            f,
+            item,
+            role,
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
@@ -555,7 +565,12 @@ fn c4b_republish_condition_set_keeps_old_file() {
     let role = "attribute:custom.damage_report";
     let old = a
         .store()
-        .photo_link(f, item, role)
+        .photo_link(
+            f,
+            item,
+            role,
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
@@ -565,14 +580,24 @@ fn c4b_republish_condition_set_keeps_old_file() {
     run(&a, s);
     let fd = a
         .store()
-        .photo_link(d, item, role)
+        .photo_link(
+            d,
+            item,
+            role,
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
         .unwrap();
     let fg = a
         .store()
-        .photo_link(g, item, role)
+        .photo_link(
+            g,
+            item,
+            role,
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
@@ -648,13 +673,31 @@ fn c5a_retouch_prepares_revision_and_new_filename() {
     let p = photo(&a, s, "p", C::Main);
     let id = linked(&a, item, "P14-RET", "Oak", None);
     run(&a, s);
-    let before = a.store().photo_link(p, item, "gallery").unwrap().unwrap();
+    let before = a
+        .store()
+        .photo_link(
+            p,
+            item,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
+        .unwrap()
+        .unwrap();
     let old = before.external_id.unwrap();
     let raw = a.store().photo(p).unwrap().raw_path;
     a.store().adjusted_event(&raw, true).unwrap();
     a.fake_shop().fail_before_effect("staged_uploads_create");
     run(&a, s);
-    let link = a.store().photo_link(p, item, "gallery").unwrap().unwrap();
+    let link = a
+        .store()
+        .photo_link(
+            p,
+            item,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
+        .unwrap()
+        .unwrap();
     assert_eq!(link.revision, 1);
     assert_eq!(link.retouch_gen, 1);
     assert_eq!(link.upload_state, "none");
@@ -692,7 +735,12 @@ fn c5b_retouch_main_replaces_in_same_gallery_position() {
     run(&a, s);
     let old = a
         .store()
-        .photo_link(p, item, "gallery")
+        .photo_link(
+            p,
+            item,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
@@ -704,7 +752,12 @@ fn c5b_retouch_main_replaces_in_same_gallery_position() {
     let media = a.fake_shop().item_get(&id).unwrap().media;
     let new = a
         .store()
-        .photo_link(p, item, "gallery")
+        .photo_link(
+            p,
+            item,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
@@ -727,7 +780,12 @@ fn c5c_retouch_condition_points_to_new_file_and_keeps_old() {
     run(&a, s);
     let old = a
         .store()
-        .photo_link(p, item, "attribute:custom.damage_report")
+        .photo_link(
+            p,
+            item,
+            "attribute:custom.damage_report",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
@@ -738,7 +796,12 @@ fn c5c_retouch_condition_points_to_new_file_and_keeps_old() {
     run(&a, s);
     let new = a
         .store()
-        .photo_link(p, item, "attribute:custom.damage_report")
+        .photo_link(
+            p,
+            item,
+            "attribute:custom.damage_report",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
@@ -767,7 +830,12 @@ fn c5d_crash_adopts_only_current_revision() {
     run(&a, s);
     let old = a
         .store()
-        .photo_link(p, item, "gallery")
+        .photo_link(
+            p,
+            item,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap()
         .external_id
@@ -786,7 +854,16 @@ fn c5d_crash_adopts_only_current_revision() {
     assert!(killed.is_err());
     a.kill_and_restart().unwrap();
     drain(&a);
-    let link = a.store().photo_link(p, item, "gallery").unwrap().unwrap();
+    let link = a
+        .store()
+        .photo_link(
+            p,
+            item,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
+        .unwrap()
+        .unwrap();
     assert_eq!(link.revision, 1);
     assert_ne!(link.external_id.as_deref(), Some(old.as_str()));
     assert_eq!(a.fake_shop().item_get(&id).unwrap().media.len(), 1);

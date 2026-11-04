@@ -134,9 +134,11 @@ impl<'a> SessionsService<'a> {
                     }
                     _ => return Ok(None),
                 };
+                // The photo's first output slot (`single` or `left`) stands for its upload.
+                let slot = self.store.composition(photo.id)?.kind.slots()[0];
                 Ok(self
                     .store
-                    .photo_link(photo.id, item_id, &role)?
+                    .photo_link(photo.id, item_id, &role, slot)?
                     .map(|link| link.upload_state))
             })
             .collect::<Result<Vec<_>>>()?;

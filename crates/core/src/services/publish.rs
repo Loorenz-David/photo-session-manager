@@ -3,6 +3,8 @@ use crate::{
     Error, Result,
     domain::{
         attribute::CoreType,
+        composition::{CompositionState, OutputSlot},
+        output::slot_name,
         photo::{Classification, Integrity},
         publish::{
             ConfirmedRun, Notification, PhotoLink, PublishItem, PublishPreview, PublishPreviewItem,
@@ -13,9 +15,9 @@ use crate::{
     mechanisms::{
         attribute_write::{merge_tags, write_set},
         hash::sha256_file,
-        naming::{ExportGroup, export_file_name, folder_key},
+        naming::{ExportGroup, folder_key, output_names, review_label},
         publish::{publish_summary, replacement_candidates},
-        reconcile,
+        reconcile, upload_name,
         values::canonicalize,
     },
     ports::{clock::Clock, commerce::CommerceAdapter, events::EventSink, store::Store},
@@ -23,8 +25,45 @@ use crate::{
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    path::Path,
     sync::{Arc, Mutex},
 };
+
+/// One output of a photo list (10D MC-29): its group, photo, slot and staged file name.
+struct Output {
+    group: ExportGroup,
+    photo_id: i64,
+    slot: OutputSlot,
+    name: String,
+}
+
+/// One `manifest.json` entry of a staging folder (P29): what the file was rendered from.
+struct Staged {
+    photo_id: i64,
+    slot: String,
+    adjusted_gen: i64,
+    composition_rev: i64,
+}
+
+/// `manifest.json` of a staging folder: the output format key and the entries by file name.
+fn read_manifest(staging: &Path) -> Option<(String, HashMap<String, Staged>)> {
+    let text = std::fs::read_to_string(staging.join("manifest.json")).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let format_key = json.get("format_key")?.as_str()?.to_string();
+    let mut entries = HashMap::new();
+    for (name, entry) in json.get("outputs")?.as_object()? {
+        entries.insert(
+            name.clone(),
+            Staged {
+                photo_id: entry.get("photo_id")?.as_i64()?,
+                slot: entry.get("slot")?.as_str()?.to_string(),
+                adjusted_gen: entry.get("adjusted_gen")?.as_i64()?,
+                composition_rev: entry.get("composition_rev")?.as_i64()?,
+            },
+        );
+    }
+    Some((format_key, entries))
+}
 
 pub struct PublishService {
     store: Arc<dyn Store>,
@@ -62,6 +101,84 @@ impl PublishService {
             }
         }
         Ok(selected)
+    }
+    /// The outputs of the main then condition photos, in order, by their current composition
+    /// kind (10D MC-29 §Outputs; names as the export stages them).
+    fn outputs(&self, key: &str, main: &[i64], condition: &[i64]) -> Result<Vec<Output>> {
+        let mut out = Vec::new();
+        for (group, ids) in [
+            (ExportGroup::Main, main),
+            (ExportGroup::Condition, condition),
+        ] {
+            let mut kinds = Vec::new();
+            for &id in ids {
+                kinds.push((id, self.store.composition(id)?.kind.slots()));
+            }
+            out.extend(output_names(key, group, &kinds).into_iter().map(
+                |(photo_id, slot, name)| Output {
+                    group,
+                    photo_id,
+                    slot,
+                    name,
+                },
+            ));
+        }
+        Ok(out)
+    }
+    /// 10D MC-27 §Revisions: the labels (`Main 02`, `Condition 01`) of the photos that need
+    /// re-framing, in display order.
+    fn needs_review(&self, main: &[i64], condition: &[i64]) -> Result<Vec<String>> {
+        let mut flagged = Vec::new();
+        for (group, ids) in [
+            (ExportGroup::Main, main),
+            (ExportGroup::Condition, condition),
+        ] {
+            for (index, &id) in ids.iter().enumerate() {
+                if self.store.composition(id)?.state == CompositionState::NeedsReview {
+                    flagged.push(review_label(group, index + 1, ids.len()));
+                }
+            }
+        }
+        Ok(flagged)
+    }
+    /// MC-28 §Cache key: a staging folder is reused only when its `manifest.json` holds exactly
+    /// the current outputs, each rendered from the RAW's current `adjusted_gen` and the photo's
+    /// current composition revision with the current output format.
+    fn staging_current(
+        &self,
+        staging: &Path,
+        key: &str,
+        main: &[i64],
+        condition: &[i64],
+    ) -> Result<bool> {
+        if !staging.join("item.json").exists() {
+            return Ok(false);
+        }
+        let Some((format_key, entries)) = read_manifest(staging) else {
+            return Ok(false);
+        };
+        if format_key != self.export.format().format_key() {
+            return Ok(false);
+        }
+        let outputs = self.outputs(key, main, condition)?;
+        if outputs.len() != entries.len() {
+            return Ok(false);
+        }
+        for output in outputs {
+            let Some(entry) = entries.get(&output.name) else {
+                return Ok(false);
+            };
+            let raw = self.store.photo(output.photo_id)?.raw_path;
+            if entry.photo_id != output.photo_id
+                || entry.slot != slot_name(output.slot)
+                || entry.adjusted_gen != self.store.adjusted_gen(&raw)?
+                || entry.composition_rev != self.store.composition(output.photo_id)?.revision
+                || !staging.join(&output.name).is_file()
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
     fn split(&self, session_id: i64) -> Result<(Vec<i64>, Vec<i64>, usize)> {
         let mut main = Vec::new();
@@ -205,6 +322,22 @@ impl PublishService {
     }
     pub fn confirm(&self, session_ids: &[i64], summary_text: &str) -> Result<i64> {
         let preview = self.preview(session_ids)?;
+        // 10D MC-27 §Revisions: refused, naming the photos, while any of them needs re-framing.
+        let mut flagged = Vec::new();
+        for p in &preview.items {
+            flagged.extend(self.needs_review(&p.main, &p.condition)?);
+        }
+        if !flagged.is_empty() {
+            return Err(Error::NeedsReview { photos: flagged });
+        }
+        let mut totals = HashMap::new();
+        for p in &preview.items {
+            let mut total = 0;
+            for id in p.main.iter().chain(&p.condition) {
+                total += self.store.composition(*id)?.kind.slots().len() as i64;
+            }
+            totals.insert(p.session_id, total);
+        }
         let condition_key = self.condition_key()?;
         let at = self.clock.now_ms();
         let mut run_id = 0;
@@ -276,7 +409,7 @@ impl PublishService {
                     step: PublishStep::Prepare,
                     failed_step: None,
                     uploaded: 0,
-                    total: (p.main.len() + p.condition.len()) as i64,
+                    total: totals.get(&p.session_id).copied().unwrap_or(0),
                     error: None,
                     export_run_id: None,
                 };
@@ -322,6 +455,15 @@ impl PublishService {
         }
         if item.step == PublishStep::Prepare {
             self.emit(&item, PublishStep::Prepare);
+        }
+        if item.step == PublishStep::Upload && !self.upload_staging_current(&item)? {
+            // M35: a staging folder from an earlier attempt that no longer matches the photos'
+            // current outputs is rendered again (prepare) before anything is uploaded.
+            let now = self.clock.now_ms();
+            self.store
+                .set_publish_step(item.id, PublishStep::Prepare, None, None, now)?;
+            self.store.enqueue_publish_item(item.id, now)?;
+            return Ok(());
         }
         let token = ConfirmedRun::from_persisted(self.store.as_ref(), item.run_id)?;
         let outcome = match item.step {
@@ -375,6 +517,13 @@ impl PublishService {
                     }
                     self.store
                         .complete_publish_item(item.id, self.clock.now_ms(), &text)?;
+                    // MC-28 §Master: the session's masters are released once its publish
+                    // completes and the session is not dirty.
+                    if !self.store.session(item.session_id)?.dirty
+                        && let Err(error) = self.export.release_masters(item.session_id)
+                    {
+                        tracing::warn!(%error, "masters not released after publish");
+                    }
                 } else {
                     self.store
                         .set_publish_step(item.id, next, None, None, self.clock.now_ms())?;
@@ -397,6 +546,25 @@ impl PublishService {
             }
         }
     }
+    /// Whether the staging folder the upload step would read still holds the current outputs.
+    fn upload_staging_current(&self, item: &PublishItem) -> Result<bool> {
+        let Some(export_id) = item.export_run_id else {
+            return Ok(true);
+        };
+        let session = self.store.session(item.session_id)?;
+        let Some(item_id) = session.session.item_id else {
+            return Ok(true);
+        };
+        let key = folder_key(&self.store.item(item_id)?.sku)?;
+        let main = self.selected(item.session_id, &item.frozen_main)?;
+        let condition = self.selected(item.session_id, &item.frozen_condition)?;
+        self.staging_current(
+            &self.export.staging_folder(&key, export_id),
+            &key,
+            &main,
+            &condition,
+        )
+    }
     fn prepare(&self, item: &PublishItem, run: &ConfirmedRun) -> Result<bool> {
         let local = self.store.item(
             self.store
@@ -405,6 +573,14 @@ impl PublishService {
                 .item_id
                 .unwrap(),
         )?;
+        let main = self.selected(item.session_id, &item.frozen_main)?;
+        let condition = self.selected(item.session_id, &item.frozen_condition)?;
+        // 10D MC-27 §Revisions: a photo flagged after confirmation fails the item here, before
+        // any remote write; Retry re-runs prepare.
+        let flagged = self.needs_review(&main, &condition)?;
+        if !flagged.is_empty() {
+            return Err(Error::NeedsReview { photos: flagged });
+        }
         if self.store.item_link(local.id, "shopify")?.is_none() {
             let matches = self.commerce.item_search(&local.sku)?;
             let remote = match matches.len() {
@@ -420,8 +596,6 @@ impl PublishService {
             self.store
                 .transaction(&mut |tx| tx.insert_item_link(local.id, "shopify", &remote, None))?;
         }
-        let main = self.selected(item.session_id, &item.frozen_main)?;
-        let condition = self.selected(item.session_id, &item.frozen_condition)?;
         for id in main.iter().chain(&condition) {
             match IntegrityCheck::new(self.store.as_ref()).verify(*id)? {
                 Integrity::Ok => {}
@@ -435,28 +609,29 @@ impl PublishService {
                 .exports
                 .lock()
                 .map_err(|e| Error::InvalidData(e.to_string()))?;
-            if let Some(id) = exports.get(&item.id) {
-                *id
-            } else if let Some(id) = item.export_run_id.filter(|id| {
-                let staging = self.export.staging_folder(&key, *id);
-                staging.join("item.json").exists()
-                    && [
-                        (ExportGroup::Main, &main),
-                        (ExportGroup::Condition, &condition),
-                    ]
-                    .into_iter()
-                    .all(|(group, ids)| {
-                        ids.iter().enumerate().all(|(index, _)| {
-                            staging
-                                .join(export_file_name(&key, index + 1, ids.len(), group))
-                                .exists()
-                        })
-                    })
+            let known = exports.get(&item.id).copied();
+            if let Some(id) = known.filter(|id| self.export.has_run(*id)) {
+                // The export of this attempt is still rendering.
+                id
+            } else if let Some(id) =
+                known.filter(|id| self.store.job(*id).is_ok_and(|job| job.status == "failed"))
+            {
+                exports.remove(&item.id);
+                let reason = self.store.job(id)?.error.unwrap_or_default();
+                return Err(Error::Provider(format!("export failed: {reason}")));
+            } else if let Some(id) = known.or(item.export_run_id).filter(|id| {
+                self.staging_current(
+                    &self.export.staging_folder(&key, *id),
+                    &key,
+                    &main,
+                    &condition,
+                )
+                .unwrap_or(false)
             }) {
                 exports.insert(item.id, id);
                 id
             } else {
-                if let Some(old) = item.export_run_id {
+                for old in known.into_iter().chain(item.export_run_id) {
                     let _ = self
                         .export
                         .discard_staging(&self.export.staging_folder(&key, old));
@@ -474,62 +649,80 @@ impl PublishService {
             return Ok(false);
         }
         let staging = self.export.staging_folder(&key, export_id);
-        for (group, ids, role) in [
-            (ExportGroup::Main, &main, "gallery".to_string()),
-            (
-                ExportGroup::Condition,
-                &condition,
-                format!("attribute:{}", self.condition_key()?.unwrap_or_default()),
-            ),
-        ] {
-            for (index, id) in ids.iter().enumerate() {
-                let file = staging.join(export_file_name(&key, index + 1, ids.len(), group));
-                let hash = sha256_file(&file)?;
-                let mut link = self
-                    .store
-                    .photo_link(*id, local.id, &role)?
-                    .unwrap_or(PhotoLink {
-                        photo_id: *id,
-                        item_id: local.id,
-                        role: role.clone(),
-                        external_id: None,
-                        upload_state: "none".into(),
-                        export_sha256: None,
-                        superseded_ids: Vec::new(),
-                        revision: 0,
-                        retouch_gen: self.store.export_retouch_gen(export_id, *id)?.unwrap_or(0),
-                    });
-                let export_gen = self.store.export_retouch_gen(export_id, *id)?.unwrap_or(0);
-                let replaced =
-                    replacement_candidates(&[link.clone()], &HashMap::from([(*id, export_gen)]))
-                        .contains(id);
-                if replaced {
-                    if let Some(old_id) = link.external_id.take() {
-                        link.superseded_ids.push(old_id);
-                    }
-                    link.revision += 1;
-                    link.retouch_gen = export_gen;
-                    link.upload_state = "none".into();
-                }
-                link.export_sha256 = Some(hash);
-                if link.upload_state == "none" && !replaced {
-                    link.upload_state = "exported".into();
-                }
-                self.store.upsert_photo_link(&link, self.clock.now_ms())?;
+        let manifest = read_manifest(&staging)
+            .map(|(_, entries)| entries)
+            .unwrap_or_default();
+        let condition_role = format!("attribute:{}", self.condition_key()?.unwrap_or_default());
+        let now = self.clock.now_ms();
+        for (ids, role) in [(&main, "gallery"), (&condition, condition_role.as_str())] {
+            for id in ids.iter() {
+                // 10D MC-29 §Links: a slot the photo no longer has is retired (its id stays own).
+                let slots = self.store.composition(*id)?.kind.slots();
+                self.store
+                    .retire_photo_links(local.id, *id, role, slots, now)?;
             }
         }
+        for output in self.outputs(&key, &main, &condition)? {
+            let role = match output.group {
+                ExportGroup::Main => "gallery",
+                ExportGroup::Condition => condition_role.as_str(),
+            };
+            let id = output.photo_id;
+            let hash = sha256_file(&staging.join(&output.name))?;
+            let composition_rev = manifest
+                .get(&output.name)
+                .map(|entry| entry.composition_rev)
+                .ok_or(Error::UploadIncomplete)?;
+            let export_gen = self.store.export_retouch_gen(export_id, id)?.unwrap_or(0);
+            let mut link = self
+                .store
+                .photo_link(id, local.id, role, output.slot)?
+                .unwrap_or(PhotoLink {
+                    photo_id: id,
+                    item_id: local.id,
+                    role: role.to_string(),
+                    slot: output.slot,
+                    external_id: None,
+                    upload_state: "none".into(),
+                    export_sha256: None,
+                    superseded_ids: Vec::new(),
+                    revision: 0,
+                    retouch_gen: export_gen,
+                    composition_rev,
+                });
+            if link.upload_state == "retired" {
+                // A slot the photo has again (Normal → Split → Normal) is uploaded anew under its
+                // revision; the retired media id stays own as a superseded id, never adopted.
+                if let Some(old_id) = link.external_id.take() {
+                    link.superseded_ids.push(old_id);
+                }
+                link.upload_state = "none".into();
+            }
+            let replaced = replacement_candidates(
+                &[link.clone()],
+                &HashMap::from([(id, export_gen)]),
+                &HashMap::from([(id, composition_rev)]),
+            )
+            .contains(&id);
+            if replaced {
+                if let Some(old_id) = link.external_id.take() {
+                    link.superseded_ids.push(old_id);
+                }
+                link.revision += 1;
+                link.upload_state = "none".into();
+            }
+            if link.upload_state != "ready" {
+                // What this link will upload: the staged file's generation and revision.
+                link.retouch_gen = export_gen;
+                link.composition_rev = composition_rev;
+            }
+            link.export_sha256 = Some(hash);
+            if link.upload_state == "none" && !replaced {
+                link.upload_state = "exported".into();
+            }
+            self.store.upsert_photo_link(&link, now)?;
+        }
         Ok(true)
-    }
-    fn upload_stem(folder_key: &str, uid: &str) -> String {
-        format!(
-            "{}-{}",
-            folder_key,
-            uid.chars()
-                .filter(|c| *c != '-')
-                .take(12)
-                .collect::<String>()
-                .to_lowercase()
-        )
     }
     fn upload(&self, item: &PublishItem, run: &ConfirmedRun) -> Result<bool> {
         let local = self.store.item(
@@ -549,18 +742,22 @@ impl PublishService {
         let staging = self.export.staging_folder(&key, export_id);
         let main = self.selected(item.session_id, &item.frozen_main)?;
         let condition = self.selected(item.session_id, &item.frozen_condition)?;
-        let total = (main.len() + condition.len()) as i64;
+        let outputs = self.outputs(&key, &main, &condition)?;
+        let total = outputs.len() as i64;
+        let condition_key = self.condition_key()?;
+        let condition_role = format!("attribute:{}", condition_key.clone().unwrap_or_default());
         let mut uploaded = 0;
-        for (group, ids, role) in [
-            (ExportGroup::Main, &main, "gallery".to_string()),
-            (
-                ExportGroup::Condition,
-                &condition,
-                format!("attribute:{}", self.condition_key()?.unwrap_or_default()),
-            ),
-        ] {
-            for (index, id) in ids.iter().enumerate() {
-                if group == ExportGroup::Condition && self.condition_key()?.is_none() {
+        // 10D MC-29: one upload per output, main then condition, a split's Left then Right;
+        // retired links are not outputs, so they are never uploaded or counted.
+        for output in outputs {
+            let group = output.group;
+            let id = &output.photo_id;
+            let role = match group {
+                ExportGroup::Main => "gallery",
+                ExportGroup::Condition => condition_role.as_str(),
+            };
+            {
+                if group == ExportGroup::Condition && condition_key.is_none() {
                     continue;
                 }
                 // Safety recheck immediately before any remote write.
@@ -572,21 +769,14 @@ impl PublishService {
                 }
                 let mut link = self
                     .store
-                    .photo_link(*id, local.id, &role)?
+                    .photo_link(*id, local.id, role, output.slot)?
                     .ok_or(Error::UploadIncomplete)?;
                 if link.upload_state == "ready" {
                     uploaded += 1;
                     continue;
                 }
-                let stem = format!(
-                    "{}{}",
-                    Self::upload_stem(&local.folder_key, &photo.uid),
-                    if link.revision > 0 {
-                        format!("-r{}", link.revision)
-                    } else {
-                        String::new()
-                    }
-                );
+                let stem =
+                    upload_name::stem(&local.folder_key, &photo.uid, output.slot, link.revision);
                 let existing = if group == ExportGroup::Main {
                     self.commerce.list_media(&remote)?
                 } else {
@@ -604,9 +794,10 @@ impl PublishService {
                 }
                 if link.external_id.is_none()
                     && let Some(found) = existing.iter().find(|m| {
-                        m.filename.as_deref().is_some_and(|name| {
-                            crate::mechanisms::upload_name::matches(&stem, name)
-                        })
+                        !link.superseded_ids.contains(&m.id)
+                            && m.filename
+                                .as_deref()
+                                .is_some_and(|name| upload_name::matches(&stem, name))
                     })
                 {
                     link.external_id = Some(found.id.clone());
@@ -614,15 +805,10 @@ impl PublishService {
                     self.store.upsert_photo_link(&link, self.clock.now_ms())?;
                 }
                 if link.external_id.is_none() {
-                    let file = staging.join(export_file_name(&key, index + 1, ids.len(), group));
-                    let bytes = std::fs::read(&file)?;
-                    let target = self.commerce.staged_uploads_create(
-                        run,
-                        &local.folder_key,
-                        &photo.uid,
-                        link.revision,
-                        bytes.len() as u64,
-                    )?;
+                    let bytes = std::fs::read(staging.join(&output.name))?;
+                    let target =
+                        self.commerce
+                            .staged_uploads_create(run, &stem, bytes.len() as u64)?;
                     link.upload_state = "staged".into();
                     self.store.upsert_photo_link(&link, self.clock.now_ms())?;
                     self.commerce.upload(run, &target, &bytes)?;
@@ -677,16 +863,19 @@ impl PublishService {
             .item_link(local.id, "shopify")?
             .ok_or(Error::UploadIncomplete)?
             .external_id;
+        // MC-12 `D`: one ready link per main output, in order (10D MC-29 §Gallery and cover).
         let mut desired = Vec::new();
         for id in self.selected(item.session_id, &item.frozen_main)? {
-            let link = self
-                .store
-                .photo_link(id, local.id, "gallery")?
-                .ok_or(Error::UploadIncomplete)?;
-            if link.upload_state != "ready" {
-                return Err(Error::UploadIncomplete);
+            for slot in self.store.composition(id)?.kind.slots() {
+                let link = self
+                    .store
+                    .photo_link(id, local.id, "gallery", *slot)?
+                    .ok_or(Error::UploadIncomplete)?;
+                if link.upload_state != "ready" {
+                    return Err(Error::UploadIncomplete);
+                }
+                desired.push(link.external_id.ok_or(Error::UploadIncomplete)?);
             }
-            desired.push(link.external_id.ok_or(Error::UploadIncomplete)?);
         }
         let current_media = self.commerce.list_media(&external)?;
         let current: Vec<String> = current_media.iter().map(|m| m.id.clone()).collect();
@@ -694,20 +883,26 @@ impl PublishService {
         let mut stems = Vec::new();
         for link in self.store.photo_links_for_item(local.id)? {
             if link.role == "gallery" {
+                // Retired links included: their media is own and is removed here.
                 own.extend(link.external_id);
                 own.extend(link.superseded_ids);
-                stems.push(Self::upload_stem(
-                    &local.folder_key,
-                    &self.store.photo(link.photo_id)?.uid,
-                ));
+                let uid = self.store.photo(link.photo_id)?.uid;
+                for revision in 0..=link.revision {
+                    stems.push(upload_name::stem(
+                        &local.folder_key,
+                        &uid,
+                        link.slot,
+                        revision,
+                    ));
+                }
             }
         }
         for media in &current_media {
-            if media.filename.as_deref().is_some_and(|name| {
-                stems
-                    .iter()
-                    .any(|stem| crate::mechanisms::upload_name::matches(stem, name))
-            }) {
+            if media
+                .filename
+                .as_deref()
+                .is_some_and(|name| stems.iter().any(|stem| upload_name::matches(stem, name)))
+            {
                 own.insert(media.id.clone());
             }
         }
@@ -750,16 +945,19 @@ impl PublishService {
         if let Some(key) = self.condition_key()? {
             let selected = self.selected(item.session_id, &item.frozen_condition)?;
             if !selected.is_empty() || item.frozen_attributes.contains_key(&key) {
+                // 10D MC-29 §Damage report: the selected condition outputs in order.
                 let mut ids = Vec::new();
                 for photo_id in selected {
-                    let link = self
-                        .store
-                        .photo_link(photo_id, local.id, &format!("attribute:{key}"))?
-                        .ok_or(Error::UploadIncomplete)?;
-                    if link.upload_state != "ready" {
-                        return Err(Error::UploadIncomplete);
+                    for slot in self.store.composition(photo_id)?.kind.slots() {
+                        let link = self
+                            .store
+                            .photo_link(photo_id, local.id, &format!("attribute:{key}"), *slot)?
+                            .ok_or(Error::UploadIncomplete)?;
+                        if link.upload_state != "ready" {
+                            return Err(Error::UploadIncomplete);
+                        }
+                        ids.push(link.external_id.ok_or(Error::UploadIncomplete)?);
                     }
-                    ids.push(link.external_id.ok_or(Error::UploadIncomplete)?);
                 }
                 let value = serde_json::json!(ids);
                 if !remote_values.iter().any(|(k, v)| k == &key && v == &value) {

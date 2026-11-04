@@ -8,10 +8,11 @@ use psm_core::{
         },
         composition::{
             Composition, CompositionState, CompositionValues, Fingerprint, Frame, FrameSource,
-            Origin, Rect,
+            Origin, OutputSlot, Rect,
         },
         editing::Job,
         item::{Item, ItemOrigin, NewItem},
+        output::slot_name,
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
         publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
         session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
@@ -41,17 +42,23 @@ impl SqliteStore {
     ) -> rusqlite_migration::Result<Self> {
         let mut conn = Connection::open(paths.db())?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
-        Migrations::new(vec![
-            M::up(include_str!("migrations/001_init.sql")),
-            M::up(include_str!("migrations/002_domain.sql")),
-            M::up(include_str!("migrations/003_retire_shape_on_arrival.sql")),
-            M::up(include_str!("migrations/004_compositions.sql")),
-        ])
-        .to_latest(&mut conn)?;
+        Migrations::new(Self::migrations()).to_latest(&mut conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             default_shape: shape.to_string(),
         })
+    }
+
+    /// The schema migrations in order (001…005); public so a test can stop at an earlier version
+    /// and check a later migration over existing rows.
+    pub fn migrations() -> Vec<M<'static>> {
+        vec![
+            M::up(include_str!("migrations/001_init.sql")),
+            M::up(include_str!("migrations/002_domain.sql")),
+            M::up(include_str!("migrations/003_retire_shape_on_arrival.sql")),
+            M::up(include_str!("migrations/004_compositions.sql")),
+            M::up(include_str!("migrations/005_photo_link_slots.sql")),
+        ]
     }
 
     pub fn event_rows(&self) -> Result<Vec<(String, String, String)>> {
@@ -402,6 +409,8 @@ fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
     })
 }
 
+/// The columns `photo_link_row` reads, in order.
+const PHOTO_LINK_COLUMNS: &str = "photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids,revision,retouch_gen,slot,composition_rev";
 type PhotoLinkRow = (
     i64,
     i64,
@@ -411,6 +420,8 @@ type PhotoLinkRow = (
     Option<String>,
     Option<String>,
     i64,
+    i64,
+    String,
     i64,
 );
 fn photo_link_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<PhotoLinkRow> {
@@ -424,6 +435,8 @@ fn photo_link_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<PhotoLinkRow> {
         r.get(6)?,
         r.get(7)?,
         r.get(8)?,
+        r.get(9)?,
+        r.get(10)?,
     ))
 }
 fn map_photo_link(row: PhotoLinkRow) -> Result<PhotoLink> {
@@ -431,13 +444,19 @@ fn map_photo_link(row: PhotoLinkRow) -> Result<PhotoLink> {
         photo_id: row.0,
         item_id: row.1,
         role: row.2,
+        slot: parse_slot(&row.9)?,
         external_id: row.3,
         upload_state: row.4,
         export_sha256: row.5,
         superseded_ids: from_json(row.6.as_deref().unwrap_or("[]"))?,
         revision: row.7,
         retouch_gen: row.8,
+        composition_rev: row.10,
     })
+}
+fn parse_slot(text: &str) -> Result<OutputSlot> {
+    serde_json::from_value(serde_json::Value::String(text.into()))
+        .map_err(|_| Error::InvalidData(format!("unknown output slot {text}")))
 }
 
 struct SqliteTx<'a> {
@@ -1666,23 +1685,78 @@ impl Store for SqliteStore {
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         conn.query_row("SELECT json_extract(payload,'$.retouch_gens.\"' || ?2 || '\"') FROM jobs WHERE id=?1 AND kind='render_export'", params![export_run_id,photo_id], |r| r.get(0)).optional().map_err(db).map(|value| value.flatten())
     }
-    fn photo_link(&self, photo_id: i64, item_id: i64, role: &str) -> Result<Option<PhotoLink>> {
+    fn photo_link(
+        &self,
+        photo_id: i64,
+        item_id: i64,
+        role: &str,
+        slot: OutputSlot,
+    ) -> Result<Option<PhotoLink>> {
         let conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        conn.query_row("SELECT photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids,revision,retouch_gen FROM photo_links WHERE photo_id=?1 AND integration='shopify' AND item_id=?2 AND role=?3",params![photo_id,item_id,role],photo_link_row).optional().map_err(db)?.map(map_photo_link).transpose()
+        conn.query_row(
+            &format!("SELECT {PHOTO_LINK_COLUMNS} FROM photo_links WHERE photo_id=?1 AND integration='shopify' AND item_id=?2 AND role=?3 AND slot=?4"),
+            params![photo_id, item_id, role, slot_name(slot)],
+            photo_link_row,
+        )
+        .optional()
+        .map_err(db)?
+        .map(map_photo_link)
+        .transpose()
     }
     fn upsert_photo_link(&self, link: &PhotoLink, at: i64) -> Result<()> {
-        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?.execute("INSERT INTO photo_links(photo_id,integration,item_id,role,external_id,upload_state,export_sha256,superseded_ids,updated_at,revision,retouch_gen) VALUES (?1,'shopify',?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(photo_id,integration,item_id,role) DO UPDATE SET external_id=excluded.external_id,upload_state=excluded.upload_state,export_sha256=excluded.export_sha256,superseded_ids=excluded.superseded_ids,updated_at=excluded.updated_at,revision=excluded.revision,retouch_gen=excluded.retouch_gen",params![link.photo_id,link.item_id,link.role,link.external_id,link.upload_state,link.export_sha256,to_json(&link.superseded_ids)?,at,link.revision,link.retouch_gen]).map_err(db)?;
+        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?.execute("INSERT INTO photo_links(photo_id,integration,item_id,role,slot,external_id,upload_state,export_sha256,superseded_ids,updated_at,revision,retouch_gen,composition_rev) VALUES (?1,'shopify',?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12) ON CONFLICT(photo_id,integration,item_id,role,slot) DO UPDATE SET external_id=excluded.external_id,upload_state=excluded.upload_state,export_sha256=excluded.export_sha256,superseded_ids=excluded.superseded_ids,updated_at=excluded.updated_at,revision=excluded.revision,retouch_gen=excluded.retouch_gen,composition_rev=excluded.composition_rev",params![link.photo_id,link.item_id,link.role,slot_name(link.slot),link.external_id,link.upload_state,link.export_sha256,to_json(&link.superseded_ids)?,at,link.revision,link.retouch_gen,link.composition_rev]).map_err(db)?;
         Ok(())
+    }
+    fn retire_photo_links(
+        &self,
+        item_id: i64,
+        photo_id: i64,
+        role: &str,
+        keep: &[OutputSlot],
+        at: i64,
+    ) -> Result<Vec<PhotoLink>> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let candidates = {
+            let mut stmt = tx
+                .prepare(&format!("SELECT {PHOTO_LINK_COLUMNS} FROM photo_links WHERE photo_id=?1 AND integration='shopify' AND item_id=?2 AND role=?3 AND upload_state IS NOT 'retired' ORDER BY id"))
+                .map_err(db)?;
+            stmt.query_map(params![photo_id, item_id, role], photo_link_row)
+                .map_err(db)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(db)?
+        };
+        let mut retired = Vec::new();
+        for row in candidates {
+            let mut link = map_photo_link(row)?;
+            if keep.contains(&link.slot) {
+                continue;
+            }
+            tx.execute(
+                "UPDATE photo_links SET upload_state='retired', updated_at=?5 WHERE photo_id=?1 AND integration='shopify' AND item_id=?2 AND role=?3 AND slot=?4",
+                params![photo_id, item_id, role, slot_name(link.slot), at],
+            )
+            .map_err(db)?;
+            link.upload_state = "retired".into();
+            retired.push(link);
+        }
+        tx.commit().map_err(db)?;
+        Ok(retired)
     }
     fn photo_links_for_item(&self, item_id: i64) -> Result<Vec<PhotoLink>> {
         let conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let mut stmt=conn.prepare("SELECT photo_id,item_id,role,external_id,upload_state,export_sha256,superseded_ids,revision,retouch_gen FROM photo_links WHERE integration='shopify' AND item_id=?1 ORDER BY id").map_err(db)?;
+        let mut stmt = conn
+            .prepare(&format!("SELECT {PHOTO_LINK_COLUMNS} FROM photo_links WHERE integration='shopify' AND item_id=?1 ORDER BY id"))
+            .map_err(db)?;
         stmt.query_map([item_id], photo_link_row)
             .map_err(db)?
             .collect::<rusqlite::Result<Vec<_>>>()

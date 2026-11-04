@@ -1364,7 +1364,8 @@ mod steps {
     /// deleted at the end.
     fn adapter_smoke(probe: &Probe) {
         use psm_core::{
-            domain::publish::ConfirmedRun,
+            domain::{composition::OutputSlot, publish::ConfirmedRun},
+            mechanisms::upload_name,
             ports::{clock::SystemClock, commerce::CommerceAdapter},
         };
         use psm_integrations::commerce::shopify::{PollConfig, ShopifyAdapter, ShopifyConfig};
@@ -1445,7 +1446,11 @@ mod steps {
         {
             let bytes = fs::read(probe.dir.join(format!("probe{}.jpg", i + 2))).unwrap();
             let target = adapter
-                .staged_uploads_create(&run, "psm-probe-smoke", uid, 0, bytes.len() as u64)
+                .staged_uploads_create(
+                    &run,
+                    &upload_name::stem("psm-probe-smoke", uid, OutputSlot::Single, 0),
+                    bytes.len() as u64,
+                )
                 .unwrap();
             adapter.upload(&run, &target, &bytes).unwrap();
             let m = adapter
@@ -1490,9 +1495,12 @@ mod steps {
         let target = adapter
             .staged_uploads_create(
                 &run,
-                "psm-probe-smoke",
-                "5e5e5e5e-0003-4000-8000-000000000003",
-                0,
+                &upload_name::stem(
+                    "psm-probe-smoke",
+                    "5e5e5e5e-0003-4000-8000-000000000003",
+                    OutputSlot::Single,
+                    0,
+                ),
                 bytes.len() as u64,
             )
             .unwrap();

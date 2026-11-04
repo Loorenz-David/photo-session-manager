@@ -22,3 +22,4 @@ tracing-subscriber = { version = "0.3", features = ["fmt"] }
 
 [dev-dependencies]
 kamadak-exif = "0.6"
+rusqlite_migration = "2.6"

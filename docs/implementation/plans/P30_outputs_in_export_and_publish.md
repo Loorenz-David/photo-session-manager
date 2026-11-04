@@ -172,3 +172,48 @@ outputs); the `FakeCommerce` field name for uploaded hashes; whether `SqliteStor
 - Estimated size: ~16 files, ~1 100 lines (≈ 450 publish/export/store, ≈ 100 migration + adapter, ≈ 550 tests).
 
 ## Review log
+
+### 2026-11-04 — implement r1 (claude-opus, Claude fallback for the Codex implementer)
+**Built.** Migration `005_photo_link_slots.sql` (table recreated, rows kept as `single`/`composition_rev 0`, UNIQUE over the five
+columns) and `SqliteStore::migrations()` (pub). `PhotoLink { slot, composition_rev }`; `Store::photo_link(.., slot)`,
+`upsert_photo_link` (both columns), `retire_photo_links`. `CommerceAdapter::staged_uploads_create(run, stem, byte_size)`: the Shopify
+adapter and the fake only append `.jpg`. `upload_name::stem(folder_key, uid, slot, revision)`. `replacement_candidates(links, retouch_gens,
+composition_revs)` (unit test extended + one new case). Publish: `confirm` refuses with `NeedsReview` (labels) before writing, `total` =
+outputs; `prepare` checks `needs_review` first (before any remote write), reuses a staging only when its `manifest.json` matches the
+current outputs (photo, slot, `adjusted_gen`, composition revision, format key, entry count), retires links of slots the photo no longer has,
+and writes one link per output; `upload` walks the outputs (stem per slot and revision); `update` builds `D` and the damage report per
+output, `own` includes retired links and stems per slot/revision. Masters released in `run_item`'s `Done` branch when the session is not
+dirty (`ExportService::release_masters(session_id)`). Session view: first slot's link. Fake: `staged_filenames`, `uploaded_sha`,
+`media_poll_entered`. Tests: `p30_outputs_in_export_and_publish.rs` (20 rows); signature amendments in p01 (schema columns), p12, p13,
+p14, p15.
+
+**Delegated choices.** `NeedsReview` reuses `Error::NeedsReview` (message `Re-frame first: Main 02`). Retirement runs at `prepare` only.
+`output_names` carries the group as the loop's group (helper `outputs`). `total`/`uploaded` count outputs, also in the progress event.
+Fake field `uploaded_sha` (+ `uploaded_sha(filename)`). `migrations()` is `pub`.
+
+**Assumptions.** (1) `UploadState::Retired` is the string `"retired"`: `upload_state` is a `String` throughout the code (the registry's
+enum was never introduced). (2) Stem case: the stored folder key as is, the uid hex lowercase, `-L`/`-R` uppercase as 10D writes them;
+`upload_name::matches` now ignores case so names the adapter lowercased before 10D are still recognised (folder keys are unique ignoring
+case, 05B). (3) A publish item resumed at `upload` whose staging no longer matches the current outputs goes back to `prepare` (C8(a): Retry
+re-runs the failed `upload` step, and the stale staging must not be uploaded). (4) A known export run that failed fails the item with
+`export failed: <reason>` instead of waiting forever (the P29 backlog's stuck-run note); Retry starts a fresh export. (5) Links not yet
+`ready` take the staged file's `retouch_gen`/`composition_rev` at `prepare` (they record what they will upload). (6) Adoption by stem
+skips ids in the link's `superseded_ids`. (7) The fake's `fail_before_effect` on `staged_uploads_create`, `product_create_media` and
+`file_create` now fails before anything is created (before, the media was pushed and then the error returned).
+
+**Deviations.** (a) C4(b)/(c): the plan's own UNIQUE key allows one `(a, single)` row, so the returning `single` slot reuses its retired
+row: state back to `none`, old media id moved to `superseded_ids` (still `own`), revision kept (0 → `K-<uid12>.jpg`, as C4(b) asks).
+After C4(b) there are therefore **two** retired rows (left, right) plus the first single media id in the single row's `superseded_ids`,
+not "three retired rows"; C4(c) asserts that. (b) C3(d): `CompositionService::set` with identical values on a **default-origin**
+composition is a change under P28 (origin default → user, revision +1), and `reset` recomputes the default rect on the master frame; the
+row therefore publishes a user composition first (revision 1) and re-saves it identically: no revision change, no upload, link
+`composition_rev 1` (not 0). Note for P31: an editor that opens and closes without a change must not call `set` on a default composition.
+(c) C8(c): the photo change happens while `upload` holds at its first media poll (a worker tick cannot be stopped between `upload` and
+`update`). (d) Files outside the listed perimeter, all forced by the signature changes: `crates/integrations/examples/shopify_probe.rs`
+(two call sites), `crates/testkit/tests/p01_storage_identity.rs` (schema column list), `p15_publish_backend.rs` (`PhotoLink` literals),
+`crates/testkit/Cargo.toml` + `Cargo.lock` (`rusqlite_migration` dev-dependency for C3(b)). The adapter's `upload_filename` and its unit
+test were removed (the name is core's `stem` now, covered by C2).
+
+**Observation.** A link that crashed between media create and record and whose photo's composition then changed would adopt the stale
+media by stem at the same revision (the replacement rule only fires on `ready` links). Not reachable by the plan's rows; candidate backlog
+note.

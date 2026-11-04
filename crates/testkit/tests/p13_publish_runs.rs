@@ -258,6 +258,8 @@ fn c1c_preview_removals_and_exact_confirmation_text() {
                 superseded_ids: Vec::new(),
                 revision: 0,
                 retouch_gen: 0,
+                slot: psm_core::domain::composition::OutputSlot::Single,
+                composition_rev: 0,
             },
             a.clock.now_ms(),
         )
@@ -324,7 +326,12 @@ fn ready_nameless_announced_media_is_removed_and_publish_completes() {
     let gallery = a.fake_shop().item_get(&external).unwrap().media;
     let desired = a
         .store()
-        .photo_link(p, item_id, "gallery")
+        .photo_link(
+            p,
+            item_id,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap();
     assert_eq!(item.run_id, run);
@@ -505,7 +512,12 @@ fn c3e_prepare_exports_to_staging_and_records_exact_file_hash() {
     let item_id = a.store().session(s).unwrap().session.item_id.unwrap();
     let link = a
         .store()
-        .photo_link(p, item_id, "gallery")
+        .photo_link(
+            p,
+            item_id,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap();
     assert_eq!(link.export_sha256, Some(sha256_file(&file).unwrap()));
@@ -690,7 +702,12 @@ fn c4e_moved_photo_uploads_for_new_item_without_changing_old_link() {
     let first_item = a.store().session(first).unwrap().session.item_id.unwrap();
     let old = a
         .store()
-        .photo_link(p, first_item, "gallery")
+        .photo_link(
+            p,
+            first_item,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap();
     a.review().move_photos(&[p], second).unwrap();
@@ -698,13 +715,23 @@ fn c4e_moved_photo_uploads_for_new_item_without_changing_old_link() {
     let second_item = a.store().session(second).unwrap().session.item_id.unwrap();
     let new = a
         .store()
-        .photo_link(p, second_item, "gallery")
+        .photo_link(
+            p,
+            second_item,
+            "gallery",
+            psm_core::domain::composition::OutputSlot::Single,
+        )
         .unwrap()
         .unwrap();
     assert_eq!(
         old,
         a.store()
-            .photo_link(p, first_item, "gallery")
+            .photo_link(
+                p,
+                first_item,
+                "gallery",
+                psm_core::domain::composition::OutputSlot::Single
+            )
             .unwrap()
             .unwrap()
     );
@@ -723,7 +750,12 @@ fn c5c_update_mirrors_main_order_and_keeps_condition_out_of_gallery() {
     let item_id = a.store().session(s).unwrap().session.item_id.unwrap();
     let expected = [first, second].map(|p| {
         a.store()
-            .photo_link(p, item_id, "gallery")
+            .photo_link(
+                p,
+                item_id,
+                "gallery",
+                psm_core::domain::composition::OutputSlot::Single,
+            )
             .unwrap()
             .unwrap()
             .external_id
@@ -741,7 +773,12 @@ fn c5c_update_mirrors_main_order_and_keeps_condition_out_of_gallery() {
     assert_eq!(shop.products[0].media[0].id, expected[0]);
     assert!(
         a.store()
-            .photo_link(cond, item_id, "attribute:custom.damage_report")
+            .photo_link(
+                cond,
+                item_id,
+                "attribute:custom.damage_report",
+                psm_core::domain::composition::OutputSlot::Single
+            )
             .unwrap()
             .is_some()
     );
@@ -785,6 +822,8 @@ fn c5e_update_refuses_unready_desired_media_before_deletion() {
                 superseded_ids: Vec::new(),
                 revision: 0,
                 retouch_gen: 0,
+                slot: psm_core::domain::composition::OutputSlot::Single,
+                composition_rev: 0,
             },
             a.clock.now_ms(),
         )
@@ -854,13 +893,23 @@ fn c6a_deleted_after_confirmation_is_not_uploaded_or_in_gallery() {
     let item_id = a.store().session(s).unwrap().session.item_id.unwrap();
     assert!(
         a.store()
-            .photo_link(gone, item_id, "gallery")
+            .photo_link(
+                gone,
+                item_id,
+                "gallery",
+                psm_core::domain::composition::OutputSlot::Single
+            )
             .unwrap()
             .is_none()
     );
     assert!(
         a.store()
-            .photo_link(keep, item_id, "gallery")
+            .photo_link(
+                keep,
+                item_id,
+                "gallery",
+                psm_core::domain::composition::OutputSlot::Single
+            )
             .unwrap()
             .is_some()
     );
@@ -887,7 +936,12 @@ fn c6b_moved_after_confirmation_is_skipped() {
     let item_id = a.store().session(s).unwrap().session.item_id.unwrap();
     assert!(
         a.store()
-            .photo_link(p, item_id, "gallery")
+            .photo_link(
+                p,
+                item_id,
+                "gallery",
+                psm_core::domain::composition::OutputSlot::Single
+            )
             .unwrap()
             .is_none()
     );

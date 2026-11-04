@@ -71,13 +71,12 @@ pub trait CommerceAdapter: Send + Sync {
         values: &[WriteValue],
     ) -> Result<()>;
 
-    /// Reserves an upload target for the photo's upload filename (07A MC-11, 07B MC-21).
+    /// Reserves an upload target named `<stem>.jpg` (07A MC-11, 07B MC-21, 10D MC-29); core
+    /// builds the stem with `mechanisms::upload_name::stem`.
     fn staged_uploads_create(
         &self,
         run: &ConfirmedRun,
-        folder_key: &str,
-        uid: &str,
-        revision: i64,
+        stem: &str,
         byte_size: u64,
     ) -> Result<StagedTarget>;
     fn upload(&self, run: &ConfirmedRun, target: &StagedTarget, bytes: &[u8]) -> Result<()>;

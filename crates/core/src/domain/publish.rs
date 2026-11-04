@@ -146,12 +146,16 @@ pub struct PhotoLink {
     pub photo_id: i64,
     pub item_id: i64,
     pub role: String,
+    /// The output slot this link uploads (10D MC-29): `single`, or `left`/`right` of a split.
+    pub slot: crate::domain::composition::OutputSlot,
     pub external_id: Option<String>,
     pub upload_state: String,
     pub export_sha256: Option<String>,
     pub superseded_ids: Vec<String>,
     pub revision: i64,
     pub retouch_gen: i64,
+    /// The composition revision the uploaded output was rendered from (10D MC-29 §Links).
+    pub composition_rev: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

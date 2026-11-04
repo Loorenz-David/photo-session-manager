@@ -224,8 +224,28 @@ pub trait Store: Send + Sync {
     fn set_publish_export(&self, item_id: i64, export_run_id: i64) -> Result<()>;
     /// RAW retouch generation captured when this export run started (the run row records it).
     fn export_retouch_gen(&self, export_run_id: i64, photo_id: i64) -> Result<Option<i64>>;
-    fn photo_link(&self, photo_id: i64, item_id: i64, role: &str) -> Result<Option<PhotoLink>>;
+    /// The link of one output slot of the photo for this item and role (10D MC-29 §Links).
+    fn photo_link(
+        &self,
+        photo_id: i64,
+        item_id: i64,
+        role: &str,
+        slot: crate::domain::composition::OutputSlot,
+    ) -> Result<Option<PhotoLink>>;
+    /// Inserts or updates the link keyed by `(photo, integration, item, role, slot)`; writes
+    /// `composition_rev` too.
     fn upsert_photo_link(&self, link: &PhotoLink, at: i64) -> Result<()>;
+    /// 10D MC-29 §Links: every link of that photo/item/role whose slot is not in `keep` and whose
+    /// state is not already `retired` becomes `upload_state = 'retired'` (external id kept, so it
+    /// stays in the item's `own` set); returns the links retired by this call.
+    fn retire_photo_links(
+        &self,
+        item_id: i64,
+        photo_id: i64,
+        role: &str,
+        keep: &[crate::domain::composition::OutputSlot],
+        at: i64,
+    ) -> Result<Vec<PhotoLink>>;
     fn photo_links_for_item(&self, item_id: i64) -> Result<Vec<PhotoLink>>;
     fn complete_publish_item(&self, item_id: i64, at: i64, text: &str) -> Result<()>;
     fn notifications(&self, session_id: Option<i64>) -> Result<Vec<Notification>>;

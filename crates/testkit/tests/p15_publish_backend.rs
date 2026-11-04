@@ -125,6 +125,8 @@ fn c7b_session_photos_show_link_states_only_with_integration() {
                 superseded_ids: vec![],
                 revision: 0,
                 retouch_gen: 0,
+                slot: psm_core::domain::composition::OutputSlot::Single,
+                composition_rev: 0,
             },
             a.clock.now_ms(),
         )
@@ -141,6 +143,8 @@ fn c7b_session_photos_show_link_states_only_with_integration() {
                 superseded_ids: vec![],
                 revision: 0,
                 retouch_gen: 0,
+                slot: psm_core::domain::composition::OutputSlot::Single,
+                composition_rev: 0,
             },
             a.clock.now_ms(),
         )

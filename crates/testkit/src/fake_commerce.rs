@@ -13,6 +13,7 @@ use psm_core::{
     },
 };
 use serde_json::Value as Json;
+use sha2::Digest;
 use std::{
     collections::HashMap,
     sync::{Arc, Condvar, Mutex},
@@ -44,6 +45,10 @@ pub struct FakeShop {
     pub not_found_delivered: bool,
     pub next_id: i64,
     pub staged: HashMap<String, String>,
+    /// Every staged-upload filename, in request order.
+    pub staged_filenames: Vec<String>,
+    /// SHA-256 (hex) of the bytes last uploaded under each filename.
+    pub uploaded_sha: HashMap<String, String>,
     pub tags: HashMap<String, Vec<String>>,
     pub descriptions: HashMap<String, String>,
     pub readback_override: Option<(String, Json)>,
@@ -84,6 +89,10 @@ impl FakeCommerce {
             .wait_timeout_while(gate, Duration::from_secs(5), |gate| !gate.entered)
             .unwrap();
         gate.entered
+    }
+    /// Whether a held media poll has been entered (non-blocking).
+    pub fn media_poll_entered(&self) -> bool {
+        self.media_poll.0.lock().unwrap().entered
     }
     pub fn release_media_poll(&self) {
         let mut gate = self.media_poll.0.lock().unwrap();
@@ -127,6 +136,28 @@ impl FakeCommerce {
         } else {
             Ok(())
         }
+    }
+    /// SHA-256 (hex) of the bytes last uploaded as `filename`.
+    pub fn uploaded_sha(&self, filename: &str) -> Option<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .uploaded_sha
+            .get(filename)
+            .cloned()
+    }
+    /// The staged-upload filenames, in request order.
+    pub fn staged_filenames(&self) -> Vec<String> {
+        self.state.lock().unwrap().staged_filenames.clone()
+    }
+    /// A `fail_before_effect` on a creating call fails before anything is created.
+    fn before(&self, op: &str) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        if s.fail_before.as_deref() == Some(op) {
+            s.fail_before = None;
+            return Err(Error::Provider(format!("{op} unavailable")));
+        }
+        Ok(())
     }
     fn effect(&self, run: &ConfirmedRun, op: &str) -> Result<()> {
         let mut s = self.state.lock().unwrap();
@@ -308,27 +339,16 @@ impl CommerceAdapter for FakeCommerce {
     fn staged_uploads_create(
         &self,
         run: &ConfirmedRun,
-        folder_key: &str,
-        uid: &str,
-        revision: i64,
+        stem: &str,
         _size: u64,
     ) -> Result<StagedTarget> {
-        let clean = uid
-            .chars()
-            .filter(|c| *c != '-')
-            .take(12)
-            .collect::<String>()
-            .to_lowercase();
-        let suffix = if revision > 0 {
-            format!("-r{revision}")
-        } else {
-            String::new()
-        };
-        let filename = format!("{folder_key}-{clean}{suffix}.jpg");
+        self.before("staged_uploads_create")?;
+        let filename = format!("{stem}.jpg");
         let mut s = self.state.lock().unwrap();
         s.next_id += 1;
         let resource_url = format!("staged-{}", s.next_id);
         s.staged.insert(resource_url.clone(), filename.clone());
+        s.staged_filenames.push(filename.clone());
         drop(s);
         self.effect(run, "staged_uploads_create")?;
         Ok(StagedTarget {
@@ -338,8 +358,18 @@ impl CommerceAdapter for FakeCommerce {
             parameters: Vec::new(),
         })
     }
-    fn upload(&self, run: &ConfirmedRun, _target: &StagedTarget, _bytes: &[u8]) -> Result<()> {
-        self.effect(run, "upload")
+    fn upload(&self, run: &ConfirmedRun, target: &StagedTarget, bytes: &[u8]) -> Result<()> {
+        self.effect(run, "upload")?;
+        let hash: String = sha2::Sha256::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        self.state
+            .lock()
+            .unwrap()
+            .uploaded_sha
+            .insert(target.filename.clone(), hash);
+        Ok(())
     }
     fn product_create_media(
         &self,
@@ -348,6 +378,7 @@ impl CommerceAdapter for FakeCommerce {
         resource_url: &str,
         _alt: &str,
     ) -> Result<String> {
+        self.before("product_create_media")?;
         let mut s = self.state.lock().unwrap();
         let filename = s
             .staged
@@ -455,6 +486,7 @@ impl CommerceAdapter for FakeCommerce {
         resource_url: &str,
         _filename: &str,
     ) -> Result<String> {
+        self.before("file_create")?;
         let mut s = self.state.lock().unwrap();
         let name = s
             .staged

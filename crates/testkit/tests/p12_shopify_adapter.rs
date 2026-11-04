@@ -723,7 +723,16 @@ fn c6a_staged_upload_request() {
     shop.fake.replay_any(&fixture("sv2_staged"));
     let target = shop
         .adapter
-        .staged_uploads_create(&run, "k-1", UID, 0, 3029)
+        .staged_uploads_create(
+            &run,
+            &psm_core::mechanisms::upload_name::stem(
+                "k-1",
+                UID,
+                psm_core::domain::composition::OutputSlot::Single,
+                0,
+            ),
+            3029,
+        )
         .unwrap();
     let sent = shop.fake.graphql("StagedUploadsCreate");
     assert_eq!(sent.len(), 1);
@@ -1278,7 +1287,16 @@ fn c9g_secret_and_tokens_never_leave_the_token_request() {
         shop.fake.replay_any(&fixture("sv2_staged"));
         let target = shop
             .adapter
-            .staged_uploads_create(&run, "k-1", UID, 0, 10)
+            .staged_uploads_create(
+                &run,
+                &psm_core::mechanisms::upload_name::stem(
+                    "k-1",
+                    UID,
+                    psm_core::domain::composition::OutputSlot::Single,
+                    0,
+                ),
+                10,
+            )
             .unwrap();
         shop.fake.on_put(&target.url, fixture("sv2_put").reply());
         shop.adapter.upload(&run, &target, b"bytes").unwrap();
