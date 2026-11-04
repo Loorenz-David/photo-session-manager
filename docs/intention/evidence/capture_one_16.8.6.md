@@ -339,3 +339,24 @@ Do not derive the capture root from it.
 - `delete` on a recipe works (`a.delete(r)`).
 - Styles: `a.availableStyles()` = 110 names (no `PSM House`); `doc.nextCaptureSettings.applyStyles` reads `[]`, set
   `['Bright Contrast']` read back, set back to `[]` read back.
+
+## VERIFY-15 result — uncropped master and preview (orchestrator, 2026-11-04, `session test 1`)
+Opened alongside the owner's document by the VERIFY-14 throwaway-window form; two temporary recipes
+(`PSM Probe Master`, `PSM Probe Preview`) created, used and deleted; output folder removed afterwards.
+- Properties set and read back on a fresh recipe: `outputFormat 'TIFF'`, `bits 16`, `tiffCompression 'ZIP'` /
+  `'Uncompressed'`, `colorProfile 'sRGB Color Space Profile'`, `exportCropMethod 'ignore'`; JPEG preview with
+  `scalingMethod 'Long_Edge'`, `scalingUnit 'pixels'`, `primaryScalingValue 2560`, `jpegQuality 85`. A fresh
+  recipe's scaling is `Fixed` 100 `percent` = full size. `rootFolderType` reads `output location`; files land in
+  `<session>/Output/<outputSubFolder>/<image name>.<ext>`.
+- **Crop ignored works.** DSC03615.ARW (ZV-E10) with variant crop `Square` 3987 × 3987 exported 5981 × 3987 as
+  16-bit TIFF and 2560 × 1707 as JPEG; both tagged `sRGB IEC61966-2.1`.
+- **a7R (9504 × 6336, 61 MP) master times** (process call → output file size stable, Capture One otherwise idle):
+  16-bit uncompressed 2.1–2.4 s, 361,365,630 bytes (3 runs); 16-bit ZIP 8.0–8.5 s, 306.99–312.75 MB (3 runs).
+  2560 px JPEG q85 preview: 1.3–1.8 s, 0.5–1.0 MB. → the master is uncompressed (10D MC-28).
+- **Capture One geometry vs the uncropped export** (DSC03615, restored exactly afterwards: rotation 0, keystone 0,
+  crop Square 3987 at centre 3001,1994 read back): `adjustments.rotation = 3` → export 5553 × 3702;
+  `adjustments.keystoneVertical = 20` → export 5712 × 3808. Both keep 3:2 and only shrink, so an aspect check
+  cannot detect them; 10D MC-27 fingerprints the geometry values (`rotation`, `flip`, `keystoneVertical`,
+  `keystoneHorizontal`, `keystoneAmount`, default amount reads 100) and the master size instead. Writing rotation or
+  keystone also changed the variant's crop (3794 / 3891 square, moved centre); resetting the values restored it.
+- `session test 1` was left open in Capture One beside the owner's document.

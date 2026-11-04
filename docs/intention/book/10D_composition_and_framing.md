@@ -57,7 +57,9 @@ photographer's tool in Capture One (assumed, owner 2026-11-04: "keystone stays i
 - `straighten`: degrees, −45…45, rotation about the image centre after the quarter turns and flip.
 - `rect`: `x, y, w, h` as fractions (0–1) of the **turned, flipped, unstraightened** frame, origin top-left,
   y down. With `straighten ≠ 0` the rect must lie inside the rotated image (no empty corners).
-- `frame_w`, `frame_h`: the source frame size in pixels when the composition was saved (the fingerprint).
+- `frame_w`, `frame_h`: the source frame size in pixels when the composition was saved (the master's size
+  once one exists, else the preview's), plus the Capture One geometry values read with that render: together
+  the fingerprint (Revisions, below).
 - `origin`: `default` | `user`. `revision`: integer, +1 on every saved change. `state`: `ok` |
   `needs_review`. `updated_at`.
 
@@ -76,22 +78,27 @@ save is refused and the previous composition stays.
 is made even (rounded down to even) and the two halves are `[left, left + width/2)` and
 `[left + width/2, left + width)`, same `top` and `height`, and `height = width/2`. Rounding is half away from zero.
 
-**Revisions from Capture One.** Each new adjusted preview (10A MC-17) and each new master is compared with
-the fingerprint: same orientation (landscape/portrait) and `width/height` within 0.2 %. Compatible → the
-composition stands (colour and light edits). Incompatible (Capture One rotated, straightened, keystoned or
-changed size) → `state needs_review`: the tile shows an amber corner and "Re-frame", publish confirmation and export refuse while
+**Revisions from Capture One.** With every preview and master render the adapter also reads the variant's
+Capture One geometry (rotation, flip, keystone vertical, horizontal and amount). The fingerprint is those
+values, the orientation, and (once a master exists) the master's pixel size. A later render is
+**compatible** when the geometry values and orientation are unchanged and the master size, when both exist,
+is equal: colour and light edits stay compatible and the composition stands. The aspect ratio alone is not
+enough: VERIFY-15 showed that a Capture One straighten or keystone keeps 3:2 and only shrinks the export
+(5981 × 3987 → 5553 × 3702 at 3°). Anything else → `state needs_review`, with the notice "Changed in Capture
+One: straighten here instead" when a geometry value moved (straightening is Session Manager's, R37). In
+`needs_review` the tile shows an amber corner and "Re-frame", publish confirmation and export refuse while
 any of the session's main or condition photos needs it (naming them), and the editor shows the old rect mapped proportionally for confirmation with Return. Nothing
 is cropped silently.
 
 **Invariant (M33).** A saved composition reads back identically after a relaunch; the core refuses any rect
-outside the image or off its shape; a photo whose source frame changed shape is `needs_review` until
-confirmed, and is never rendered for publish or export meanwhile.
+outside the image or off its shape; a photo whose source frame changed (Capture One geometry or master
+size) is `needs_review` until confirmed, and is never rendered for publish or export meanwhile.
 
 ## MC-28 — Master and output render
 
 **Recipes** (10C step 4, provisioned the same way): `PSM Preview` — JPEG, sRGB, long edge 2560, quality 85,
-`export crop method = ignore`; `PSM Master` — TIFF, 16 bits, sRGB, full size, lossless compression (none
-or ZIP, chosen from the VERIFY-15 measurements), `export crop method = ignore`. Both disabled, as today.
+`export crop method = ignore`; `PSM Master` — TIFF, 16 bits, sRGB, full size, **uncompressed** (VERIFY-15: a 61 MP
+master in 2.1–2.4 s and 361 MB; ZIP took 8.0–8.5 s for 307–313 MB), `export crop method = ignore`. Both disabled, as today.
 `PSM Web` is no longer created or repaired.
 
 **Master.** Rendered by Capture One through MC-16 (purpose `master`), only when an output is needed (publish
@@ -154,17 +161,13 @@ is not.
 halves adjacent, Left first), the damage report exactly the selected condition outputs in order, and every
 uploaded file was rendered from the photo's current composition revision.
 
-## Grounding to verify before relying on it (VERIFY-15, evidence file)
+## Grounding (VERIFY-15, evidence file, verified 2026-11-04)
 
-On Capture One 16.8.6 (dev Mac, then once on the work Mac with an a7R RAW):
-1. A recipe with `export crop method = ignore` exports the full developed frame regardless of the variant's
-   crop, for JPEG and for 16-bit TIFF, and its size equals the RAW's developed size.
-2. What a Capture One straighten, rotation and keystone do to that export's size and content (to set the
-   fingerprint check).
-3. Time and file size of a full-size 16-bit TIFF master (uncompressed and ZIP) and of the 2560 px preview.
-4. That the recipe properties the app sets read back.
-
-If 1 fails, the implementer stops and the owner decides (the uncropped source is the base of this chapter).
+Live on Capture One 16.8.6 (dev Mac) with ZV-E10 and a7R (9504 × 6336) RAWs: a recipe with `export crop
+method = ignore` exports the full developed frame of a Square-cropped variant (5981 × 3987) in 16-bit sRGB
+TIFF and in JPEG; every recipe property the app sets reads back; Capture One's straighten and keystone keep
+3:2 and shrink the export (fingerprint rule above); the master and preview times are above. Owed on the work
+Mac: the same times on its hardware (operational, not blocking).
 
 ## Performance targets (measured in the build, not tests)
 
