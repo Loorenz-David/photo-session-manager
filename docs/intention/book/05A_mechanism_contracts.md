@@ -175,7 +175,8 @@ change** (add, classify, reorder, move in or out, copy in, delete, undo). `dirty
 when that item reaches `done` **(ratify R-I13)**. A change made while a publish is running
 therefore keeps the session dirty after that publish completes. Attribute edits do not change
 `change_seq` (chapter 07). A Capture One retouch of a reviewed photo is a photo change (owner
-decision I1: 07B MC-21).
+decision I1: 07B MC-21). A saved composition change (revision + 1) is a photo change (owner 2026-11-04:
+10D MC-29).
 
 **Invariant (M13).** A session whose photos changed after the confirmation of its latest
 completed publish is dirty; one with no photo change since that confirmation is not.
@@ -225,6 +226,9 @@ The stored folder key names `Capture/<key>/` (MC-2); the export folder and files
 `<export folder>/.<key>.partial-<run id>/` and then swapped in place of `<key>/` with renames;
 the previous `<key>/` is removed only after the swap succeeds, so no stale file from an earlier
 export with more photos survives (M7 "exactly").
+
+**Outputs (10D MC-29, owner 2026-11-04).** `NN` numbers **outputs**, not photos: a split photo writes two
+files (Left, then Right) at consecutive numbers and later photos move down; the files are rendered by 10D MC-28.
 
 **item.json**: UTF-8, keys sorted, two-space indent, trailing newline:
 `{"schema": 1, "sku", "barcode", "title", "item_type", "attributes": {key: canonical value

@@ -27,7 +27,8 @@ MC-17 records `g`).
 **Replacement (prepare step, before upload).** For each frozen photo whose link for this item
 and role is `ready` and whose RAW `retouch_gen` is greater than the link's: in one transaction,
 `revision += 1`, `state = none`, and the previous media or file id is kept as
-`superseded_ids` on the link. The upload step then treats the link as new (07A MC-11).
+`superseded_ids` on the link. The upload step then treats the link as new (07A MC-11). The same replacement fires when the photo's
+composition revision is greater than the link's `composition_rev` (owner 2026-11-04, 10D MC-29).
 
 **Upload filename.** Revision 0: `<folder_key>-<first 12 hex of uid>.jpg` (unchanged). Revision
 n ≥ 1: `<folder_key>-<first 12 hex of uid>-r<n>.jpg`. Adoption after a crash (MC-11) matches the

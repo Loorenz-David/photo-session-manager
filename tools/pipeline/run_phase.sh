@@ -19,6 +19,9 @@ WRAP="$ROOT/tools/pipeline/wrappers/codex_implementer.md"
 CWRAP="$ROOT/tools/pipeline/wrappers/claude_implementer.md"
 # Implementer/fix runner: codex (default; owner 2026-10-26) or claude (PSM_IMPLEMENTER=claude: Opus for gpt-6-sol, Sonnet for gpt-6-luna)
 IMPLEMENTER="${PSM_IMPLEMENTER:-codex}"
+# Per-phase override: plan frontmatter `implementer: fable` runs implement and fix with Claude Fable
+# (owner 2026-11-04: frontend logic and interactions are written and fixed by Fable).
+PHASE_IMPLEMENTER=""
 DATE="$(date +%F)"
 DRY_RUN="${DRY_RUN:-0}"
 CLAUDE_TOOLS="Bash Read Edit Write Grep Glob"
@@ -136,9 +139,10 @@ PY
 }
 
 run_impl() {  # run_impl CODEX_MODEL EFFORT PROMPT LAST LOG → codex, or claude pipeline-implementer
-  local model="$1" effort="$2" prompt="$3" last="$4" logf="$5"
-  if [[ "$IMPLEMENTER" == codex ]]; then run_codex "$@"; return $?; fi
-  local cm=opus; [[ "$model" == gpt-6-luna ]] && cm=sonnet
+  local model="$1" effort="$2" prompt="$3" last="$4" logf="$5" cm
+  if [[ "$PHASE_IMPLEMENTER" == fable ]]; then cm=fable
+  elif [[ "$IMPLEMENTER" == codex ]]; then run_codex "$@"; return $?
+  else cm=opus; [[ "$model" == gpt-6-luna ]] && cm=sonnet; fi
   local full="$RUNS/$(basename "${prompt%.md}").full.md"
   cat "$CWRAP" "$prompt" > "$full"
   run_claude pipeline-implementer "$cm" "$full" "$last" "$logf" "$effort"
@@ -165,7 +169,8 @@ run_phase() {
   local title difficulty projection effort
   title="$(frontmatter "$plan" title)"; difficulty="$(frontmatter "$plan" difficulty)"; projection="$(frontmatter "$plan" projection)"
   effort=medium; [[ "$difficulty" == high ]] && effort=high
-  log "=== phase $phase: $title (difficulty=${difficulty:-normal}, projection=${projection:-no})"
+  PHASE_IMPLEMENTER="$(frontmatter "$plan" implementer)"
+  log "=== phase $phase: $title (difficulty=${difficulty:-normal}, projection=${projection:-no}, implementer=${PHASE_IMPLEMENTER:-$IMPLEMENTER})"
   local H="$IMPL/handoffs" P="$IMPL/prompts" narrative="$IMPL/narratives/$phase.md"
 
   # 0. projection (opt-in)

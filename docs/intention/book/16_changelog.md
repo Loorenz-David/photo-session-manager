@@ -132,3 +132,10 @@
     `PSM House`, a style Capture One does not have, so a fresh setup started with a red Health item. Owner accepted
     the orchestrator's recommendation (an empty default): 10C step 5 now states `style_name` defaults to empty, so
     the next-capture settings are left as the photographer set them. Owner decision, header stays RATIFIED.
+27. **2026-11-04 — Owner: composition and framing in Session Manager** (brief "Native image composition &
+    framing", proposal reviewed in a shared doc). New chapter 10D (MC-27…MC-29, M33–M35, VERIFY-15): Capture
+    One exports an uncropped 16-bit master, the app frames and renders the final files once. H3 narrowed (01),
+    R9 narrowed and R37 added (15), 10B retired (no more Capture One crop writes; `crop_on_arrival` becomes
+    `default_shape`), 10C recipes become PSM Preview 2560 px and PSM Master, M15 counts outputs, M31 retired;
+    05, 05A MC-6/MC-8, 07A MC-11/12/14, 07B MC-21 and 10A MC-16/17 point to 10D for what changed. Owner
+    decision, header stays RATIFIED.

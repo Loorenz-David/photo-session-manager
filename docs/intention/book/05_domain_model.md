@@ -47,6 +47,13 @@ Status is **derived**, never stored (chapter 07).
 ## photo_links (per photo per integration; H7)
 photo_id, integration, external_media_id or external_file_id, role (`gallery` / `attribute:<key>`),
 upload_state (`none` → `exported` → `staged` → `uploaded` → `attached` → `ready` / `failed`), error.
+**slot** (`single` / `left` / `right`) and **composition_rev** (owner 2026-11-04, 10D MC-29); the key includes slot.
+
+## compositions (one per photo row; 10D MC-27, owner 2026-11-04)
+photo_id (key), kind, shape, orientation, quarter_turns, flip, straighten, rect x/y/w/h (fractions),
+frame_w, frame_h, origin, revision, state (`ok` / `needs_review`), updated_at. Owner S/U: the default is
+written by the app, changes by the photographer. Masters, thumbnails and outputs are files in app storage
+keyed as 10D MC-28 says (a cache, not facts).
 
 ## attribute schema and values (chapter 08 defines semantics)
 - `attribute_definitions`: integration, key, label, type, choices (JSON), validations (JSON),

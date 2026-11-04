@@ -11,7 +11,7 @@
 | R6 | A Session is one item's photography job (C2). | 2026-10-24 |
 | R7 | Attribute schema and provenance in the MVP; the AI agent is the first post-MVP phase (C3). | 2026-10-24 |
 | R8 | ~~One transport, HTTP + WebSocket, under Tauri and on the phone; Tauri is lifecycle only (C4).~~ Reopened as card A1 by R21. | 2026-10-24 |
-| R9 | Capture One is the only editing provider in the MVP; no pixel processing in the repo (C5). | 2026-10-24 |
+| R9 | Capture One is the only editing provider in the MVP; no pixel processing in the repo (C5). **Narrowed by R37:** framing and final files are the app's (10D). | 2026-10-24 |
 | R10 | ~~Tauri desktop shell with Python sidecar.~~ Superseded by R21. | 2026-10-24 |
 | R11 (shaper) | `capture-one-mcp` not adopted: extra Node/MCP runtime designed for LLM clients; the dictionary covers every command. | 2026-10-23 |
 | R12 (shaper) | Review and group collapse into one classification state (design: approve / condition / delete). | 2026-10-24 |
@@ -39,6 +39,7 @@
 | R35 | **Shape on arrival (owner 2026-10-29).** The camera's 1:1 setting does not reach Capture One's RAW rendering, so the app asks Capture One to set the configured crop ratio (setting `crop_on_arrival`, default `Square`, or `off`) once on each newly arrived or imported RAW whose crop is untouched; never on a photographer-set crop or a published RAW. Tiles show true proportions. (10B MC-25, M31) | 2026-10-29 |
 | R36 | **Capture One set up by the app (owner 2026-11-03).** The app provisions its own Capture One session document (default `~/Pictures/Session Manager/Session Manager.cosessiondb`, or one the photographer picks), launches Capture One and opens the document when needed (alongside other documents, never closing them), creates and repairs the two recipes, applies the named next-capture style, and brings its document to the front when a session is active. (10C MC-26, M32) | 2026-11-03 |
 | R27 | **A2 camera through Capture One** for the MVP. How the camera physically connects (USB tether today, wireless under exploration) stays open and must not disturb the implementation: everything camera-specific sits behind the camera provider interface, and capture arrival is defined by the editing provider's hook and the capture folder, not by the link. | 2026-10-24 |
+| R37 | **Composition and framing in Session Manager (owner 2026-11-04).** Capture One develops and exports a lossless, full-size, uncropped 16-bit master; Session Manager owns the framing (shape, position, size, 90° turns, flip, straighten, Normal or Split into two exact squares, for Main and Condition photos) and renders every exported and published file from the master, compressing once (default 2048 px JPEG q90 4:4:4). Capture One's crop is ignored; the app no longer writes it (10B retired). Split takes two consecutive places, Left first; a split cover uses the left half; changes save automatically; new photos default to Square, centred; no zoom past the photo's edge; the window opens larger. Option B was chosen over Capture One rendering with an app-written crop, for future app-side image adjustments. (10D MC-27…MC-29, M33–M35) | 2026-11-04 |
 
 ## Open owner cards
 None. I1 (retouch after publishing) answered Yes on 2026-10-25: R30.

@@ -45,11 +45,12 @@ the sequence with its own health item; nothing blocks review, export or the rest
    (Capture One's `open` replaces the front document's window — evidence VERIFY-14; the app first makes a throwaway
    document, which opens in a new window, opens its own into that window, and deletes the throwaway folder). **Other open
    documents are never closed, saved, switched or modified.**
-4. **Recipes.** `PSM Preview` and `PSM Web` (names from settings) exist with the
-   properties the app depends on: JPEG, sRGB, long edge 1600 / q80 (preview) and 2048 / q90 (web),
-   output location as the render contract needs (MC-16), **disabled** so the photographer's own
+4. **Recipes.** `PSM Preview` and `PSM Master` (names from settings) exist with the properties the app
+   depends on, **as 10D MC-28 defines them** (preview: JPEG, sRGB, long edge 2560, q85, crop ignored; master:
+   16-bit TIFF, sRGB, full size, lossless, crop ignored; owner 2026-11-04 replaced `PSM Web`), output location as
+   the render contract needs (MC-16), **disabled** so the photographer's own
    batch processing never runs them. Missing → created; a dependent property drifted → set back;
-   other properties are left alone. Recipes with other names are never touched. Capture One's recipes are application-wide (evidence
+   other properties are left alone. Recipes with other names (including a `PSM Web` left from before) are never touched. Capture One's recipes are application-wide (evidence
    VERIFY-14), so these two are shared by every document the photographer opens; being disabled, they are inert there.
 5. **Next-capture style.** If `style_name` is set and Capture One lists it, the document's next
    capture settings apply that style; if it is not listed, health "Style '<name>' not found in

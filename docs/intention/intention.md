@@ -34,8 +34,9 @@ the meaning, the contract gives the exact rule.
 | [09A Shopify credentials and condition field](book/09A_shopify_credentials_and_condition_field.md) | client-credentials token, store switch by settings, the configured condition-photos metafield (MC-23, MC-24, owner answers 2026-10-26) |
 | [10 Camera and editing providers](book/10_imaging_providers.md) | camera adapter, Capture One events and commands, live previews, rendering |
 | [10A Mechanism contracts: Capture One](book/10A_capture_one_contracts.md) | hook install and delivery, render jobs, live-preview staleness, capture-folder switch, document/variant addressing and tags, original preview extraction (MC-15…MC-20) |
-| [10B Shape on arrival](book/10B_shape_on_arrival.md) | the crop shape (Square by default) the app asks Capture One to set on each new photo, the `crop_on_arrival` setting, true-proportion tiles (MC-25, owner 2026-10-29) |
+| [10B Shape on arrival](book/10B_shape_on_arrival.md) | **retired 2026-11-04 by 10D**; history of the Capture One crop write (MC-25) |
 | [10C Capture One set up by the app](book/10C_capture_one_setup_by_the_app.md) | the app's own Capture One session document, launching/opening it, creating and repairing the recipes, next-capture style, front document; how products divide inside Capture One (MC-26, owner 2026-11-03) |
+| [10D Composition and framing](book/10D_composition_and_framing.md) | the editor (Compose mode, Tools panel, gestures), the composition values and pixel rule, default shape, Split, the master and output render, outputs in export/upload/gallery/damage report, dirty on composition change (MC-27…MC-29, owner 2026-11-04) |
 | [11 Architecture and packaging](book/11_architecture_and_packaging.md) | Tauri + Rust, layers, commands/events, repo layout, packaging spike, phone remote |
 | [12 Operations](book/12_operations.md) | settings, logs, backup, health |
 | [13 Scope ladder](book/13_scope_ladder.md) | must ship / only if cheap / deferred |

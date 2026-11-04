@@ -55,7 +55,8 @@ running, busy or closed when it fired; no hook makes Capture One wait on the app
 
 ## MC-16 — Render jobs (preview and export)
 
-**Recipes.** Two recipe names in settings (preview, web). At startup the adapter checks both
+**Recipes.** Two recipe names in settings (preview, **master**: owner 2026-11-04, 10D MC-28 replaced web; a
+render's purpose is `preview` or `master`, and the export file is the app's output render from the master). At startup the adapter checks both
 exist, then sets on each: `existing files = overwrite` (with `add suffix`, the processing-done
 hook reports the unsuffixed path while Capture One writes `name 1.jpg`, `name 2.jpg`: the app
 would silently record the old file), and `output sub folder = _session_manager` (sub folders

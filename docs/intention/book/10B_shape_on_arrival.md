@@ -1,4 +1,8 @@
-# 10B — Shape on arrival (owner decision 2026-10-29)
+# 10B — Shape on arrival (owner decision 2026-10-29) — RETIRED 2026-11-04
+
+> **Retired by 10D** (owner 2026-11-04, chapter 16 entry 27). The app no longer writes Capture One's crop;
+> new photos get a default composition in Session Manager (10D MC-27, setting `default_shape`), and Capture
+> One's crop is ignored. Kept for history; M31 is retired.
 
 Owner decision 2026-10-29 (chapter 15 R35, chapter 16 entry 22), after the second real run: **every
 new photo gets the configured crop shape in Capture One when it arrives, Square by default, so the

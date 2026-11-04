@@ -74,7 +74,9 @@ never reused. The filename sent with every upload (staged upload, media create, 
 `<folder_key>-<first 12 hex of uid>.jpg` (lowercase). The local export file keeps its
 position-based name (05A MC-8); only the uploaded copy's name differs. Position-based names are
 never used to identify remote media: they change with every reorder. A retouched photo is
-re-uploaded under a revision suffix and replaces its media in place (07B MC-21).
+re-uploaded under a revision suffix and replaces its media in place (07B MC-21). **Outputs (10D MC-29, owner
+2026-11-04):** links are per output slot; split halves add `-L` / `-R` to the stem; the export render is the
+app's output render from the Capture One master (10D MC-28).
 
 **upload** (for each frozen main photo, then each frozen condition photo; role `gallery` or
 `attribute:<key>`): state `none → exported → staged → uploaded → attached → ready`, each
@@ -101,7 +103,7 @@ uninterrupted run, with no duplicate product, media or file (M4 restated per key
 ## MC-12 — Gallery reconciliation (update step, first half)
 
 Inputs, read at step time: `D` = the media ids of the `ready` gallery links (this item) of the
-filtered `frozen_main`, in order; `current` = the product's gallery media ids in order;
+filtered `frozen_main`, in order, one per **output** (a split photo gives Left then Right: 10D MC-29); `current` = the product's gallery media ids in order;
 `own` = media ids of any gallery link for this item (any photo, including photos since moved,
 deleted or reclassified, and the link's `superseded_ids`: 07B MC-21) plus media whose filename matches an upload stem of this item;
 `announced` = `announced_removals`.
@@ -183,7 +185,8 @@ equal.
 
 Publishing: each selected photo is uploaded as a file (role `attribute:<key>`, where `<key>` is the
 configured `condition_photos_key`, 09A MC-24; MC-11 rules),
-then the attribute is set to the JSON array of their file ids in order. Files for photos no
+then the attribute is set to the JSON array of their file ids in order (one per output; a split condition
+photo gives Left then Right: 10D MC-29). Files for photos no
 longer selected stay in the shop's Files (not deleted, not on the product).
 
 **Invariant (M21).** After `update`, the condition attribute lists exactly the selected condition
