@@ -75,7 +75,7 @@ fn c1a_first_open_creates_layout_and_defaults() {
     assert_eq!(settings["document_id"], serde_json::Value::Null);
     assert_eq!(settings["preview_recipe"], "PSM Preview");
     assert_eq!(settings["web_recipe"], "PSM Web");
-    assert_eq!(settings["style_name"], "PSM House");
+    assert_eq!(settings["style_name"], "");
     assert_eq!(
         settings["export_folder"],
         format!(

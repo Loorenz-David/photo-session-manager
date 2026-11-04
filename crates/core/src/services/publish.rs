@@ -531,18 +531,6 @@ impl PublishService {
                 .to_lowercase()
         )
     }
-    fn name_matches(stem: &str, name: &str) -> bool {
-        if name == format!("{stem}.jpg") {
-            return true;
-        }
-        let Some(suffix) = name
-            .strip_prefix(&format!("{stem}_"))
-            .and_then(|s| s.strip_suffix(".jpg"))
-        else {
-            return false;
-        };
-        uuid::Uuid::parse_str(suffix).is_ok()
-    }
     fn upload(&self, item: &PublishItem, run: &ConfirmedRun) -> Result<bool> {
         let local = self.store.item(
             self.store
@@ -616,9 +604,9 @@ impl PublishService {
                 }
                 if link.external_id.is_none()
                     && let Some(found) = existing.iter().find(|m| {
-                        m.filename
-                            .as_deref()
-                            .is_some_and(|name| Self::name_matches(&stem, name))
+                        m.filename.as_deref().is_some_and(|name| {
+                            crate::mechanisms::upload_name::matches(&stem, name)
+                        })
                     })
                 {
                     link.external_id = Some(found.id.clone());
@@ -715,11 +703,11 @@ impl PublishService {
             }
         }
         for media in &current_media {
-            if media
-                .filename
-                .as_deref()
-                .is_some_and(|name| stems.iter().any(|stem| Self::name_matches(stem, name)))
-            {
+            if media.filename.as_deref().is_some_and(|name| {
+                stems
+                    .iter()
+                    .any(|stem| crate::mechanisms::upload_name::matches(stem, name))
+            }) {
                 own.insert(media.id.clone());
             }
         }

@@ -12,7 +12,7 @@ vi.mock('sonner', () => ({ toast:{ success:vi.fn(), error:vi.fn() } }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const base: Settings = {
-  document_id:null, effective_document_id:'/Users/me/Pictures/Session Manager',
+  document_id:null, effective_document_id:'/Users/me/Pictures/Session Manager', default_document_id: '/Users/me/Pictures/Session Manager',
   preview_recipe:'PSM Preview', web_recipe:'PSM Web', style_name:'PSM House', crop_on_arrival:'Square',
   export_folder:'/tmp/export', preview_delay_s:15, effective_preview_delay_s:15,
   theme:'light', sku_prefix:null, integration:null,

@@ -155,10 +155,23 @@ fn specta_builder() -> Builder<tauri::Wry> {
     ])
 }
 
+pub fn open_logged(
+    paths: AppPaths,
+    open: impl FnOnce(AppPaths) -> psm_core::Result<psm_integrations::App>,
+) -> psm_core::Result<(
+    Option<tracing_appender::non_blocking::WorkerGuard>,
+    psm_integrations::App,
+)> {
+    paths.create()?;
+    let guard = psm_infra::logging::init(&paths);
+    let app = open(paths)?;
+    Ok((guard, app))
+}
+
 pub fn run() {
     let paths = AppPaths::from_env_or_default();
-    let app = psm_integrations::App::open(paths).expect("open Session Manager data");
-    let _logging = psm_infra::logging::init(&app.paths);
+    let (_logging, app) =
+        open_logged(paths, psm_integrations::App::open).expect("open Session Manager data");
     let builder = specta_builder();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -203,6 +216,49 @@ mod tests {
                 "../src/services/bindings.ts",
             )
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod p25_tests {
+    use super::*;
+    use psm_testkit::{clock::ManualClock, fake_capture_one::FakeCaptureOneScripting};
+
+    #[test]
+    fn c6a_startup_marker_is_written_before_app_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut paths = AppPaths::for_dir(tmp.path());
+        paths.home = tmp.path().to_path_buf();
+        let (guard, app) = open_logged(paths, |p| {
+            let doc = tmp
+                .path()
+                .join("Capture One Session")
+                .to_string_lossy()
+                .into_owned();
+            let root = tmp
+                .path()
+                .join("Capture One Session/Capture")
+                .to_string_lossy()
+                .into_owned();
+            psm_integrations::App::open_with(
+                p,
+                Arc::new(FakeCaptureOneScripting::new(doc, root)),
+                Arc::new(ManualClock::new(0)),
+                false,
+            )
+        })
+        .unwrap();
+        drop(app);
+        drop(guard);
+        let entries: Vec<_> = std::fs::read_dir(tmp.path().join("logs"))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].file_name().to_string_lossy().starts_with("psm."));
+        let log = std::fs::read_to_string(entries[0].path()).unwrap();
+        assert!(log.contains("app open"));
+        assert!(log.contains(&tmp.path().to_string_lossy().to_string()));
     }
 }
 

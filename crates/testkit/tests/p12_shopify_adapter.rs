@@ -789,6 +789,7 @@ fn c6c_create_media_returns_the_new_media_id() {
     let (_app, run) = run();
     let create = fixture("sv2_media_create");
     shop.fake.replay_any(&create);
+    shop.fake.replay_any(&fixture("sv2_media_poll_ready"));
     let resource = staged_target().resource_url;
     let id = shop
         .adapter
@@ -797,6 +798,74 @@ fn c6c_create_media_returns_the_new_media_id() {
     assert_eq!(id, "gid://shopify/MediaImage/46644767260825");
     let sent = shop.fake.graphql("ProductCreateMedia");
     assert_eq!(sent[0].1["media"][0]["originalSource"], json!(resource));
+}
+
+#[test]
+fn c8a_created_media_is_found_by_filename_not_gallery_position() {
+    let resource = staged_target().resource_url;
+    let gallery = fixture("sv2_item_get").reply();
+    let nodes = gallery.body["data"]["product"]["media"]["nodes"]
+        .as_array()
+        .unwrap();
+    for case in 0..4 {
+        let shop = shop();
+        let (_app, run) = run();
+        let mut created = fixture("sv2_media_create").reply();
+        let mut poll = fixture("sv2_media_poll_ready").reply();
+        let mut read = gallery.clone();
+        let expected = match case {
+            0 => "gid://shopify/MediaImage/46644767260825",
+            1 => {
+                created.body["data"]["productUpdate"]["product"]["newest"]["nodes"][0]["id"] =
+                    nodes[2]["id"].clone();
+                poll.body["data"]["node"]["id"] = nodes[2]["id"].clone();
+                poll.body["data"]["node"]["image"] = nodes[2]["image"].clone();
+                poll.body["data"]["node"]["originalSource"] = nodes[2]["originalSource"].clone();
+                "gid://shopify/MediaImage/46644767260825"
+            }
+            2 => {
+                created.body["data"]["productUpdate"]["product"]["newest"]["nodes"][0]["id"] =
+                    nodes[1]["id"].clone();
+                poll.body["data"]["node"]["id"] = nodes[1]["id"].clone();
+                poll.body["data"]["node"]["image"] = nodes[1]["image"].clone();
+                poll.body["data"]["node"]["originalSource"] = nodes[1]["originalSource"].clone();
+                "gid://shopify/MediaImage/46644767457433"
+            }
+            _ => {
+                created.body["data"]["productUpdate"]["product"]["newest"]["nodes"][0]["id"] =
+                    nodes[2]["id"].clone();
+                poll.body["data"]["node"]["id"] = nodes[2]["id"].clone();
+                poll.body["data"]["node"]["image"] = nodes[2]["image"].clone();
+                poll.body["data"]["node"]["originalSource"] = nodes[2]["originalSource"].clone();
+                read.body["data"]["product"]["media"]["nodes"] = json!([nodes[2]]);
+                ""
+            }
+        };
+        shop.fake
+            .on_graphql("ProductCreateMedia", None, vec![created]);
+        shop.fake.on_graphql("MediaPoll", None, vec![poll]);
+        if case == 1 || case == 3 {
+            shop.fake.on_graphql("ProductRead", None, vec![read]);
+        }
+        let result = shop
+            .adapter
+            .product_create_media(&run, PRODUCT, &resource, "psm probe 1");
+        if case == 3 {
+            assert!(
+                matches!(result, Err(Error::Provider(message)) if message.contains("psm-probe-ab12cd34ef56"))
+            );
+        } else {
+            assert_eq!(result.unwrap(), expected);
+        }
+        assert_eq!(shop.fake.graphql("MediaPoll").len(), 1);
+        assert_eq!(
+            shop.fake.graphql("ProductRead").len(),
+            usize::from(case == 1 || case == 3)
+        );
+        let sent = shop.fake.graphql("ProductCreateMedia");
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].1["media"][0]["originalSource"], json!(resource));
+    }
 }
 
 #[test]

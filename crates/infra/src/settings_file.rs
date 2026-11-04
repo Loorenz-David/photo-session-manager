@@ -44,7 +44,7 @@ impl Default for Settings {
             document_id: None,
             preview_recipe: "PSM Preview".into(),
             web_recipe: "PSM Web".into(),
-            style_name: "PSM House".into(),
+            style_name: String::new(),
             crop_on_arrival: "Square".into(),
             export_folder: PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
                 .join("Pictures/Session Manager Export")
@@ -59,12 +59,15 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub fn default_document_id(&self, paths: &AppPaths) -> PathBuf {
+        paths.home.join("Pictures/Session Manager")
+    }
     pub fn effective_document_id(&self, paths: &AppPaths) -> PathBuf {
         self.document_id
             .as_deref()
             .filter(|id| !id.is_empty())
             .map(PathBuf::from)
-            .unwrap_or_else(|| paths.home.join("Pictures/Session Manager"))
+            .unwrap_or_else(|| self.default_document_id(paths))
     }
     pub fn open_lenient(paths: &AppPaths) -> Result<(Self, Option<String>)> {
         let path = paths.settings();

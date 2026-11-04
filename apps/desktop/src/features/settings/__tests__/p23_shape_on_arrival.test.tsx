@@ -11,7 +11,7 @@ vi.mock('@/services/health', () => ({ getHealth: vi.fn(), getAppPaths: vi.fn() }
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const shown: Settings = {
-  document_id: '/tmp/session', effective_document_id: '/tmp/session', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House',
+  document_id: '/tmp/session', effective_document_id: '/tmp/session', default_document_id: '/Users/me/Pictures/Session Manager', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House',
   crop_on_arrival: 'Square', export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15,
   theme: 'light', sku_prefix: null, integration: null,
 };

@@ -83,6 +83,16 @@ fn c1a_fresh_default_document_is_created_alongside_and_recipes_are_idempotent() 
     );
     assert_eq!(detail(&a, "recipes"), Some((true, "Ready".into())));
     assert_eq!(detail(&a, "hooks"), Some((true, "Installed".into())));
+    for code in [
+        "document_not_open",
+        "document_not_session",
+        "document_not_front",
+        "editor_not_running",
+        "recipe_missing",
+    ] {
+        assert!(detail(&a, code).is_none(), "{code}");
+    }
+    assert!(!ops(&a).iter().any(|op| op.starts_with("open_document:")));
     a.fake.state.lock().unwrap().ops.clear();
     a.app.health_check().unwrap();
     for prefix in [
@@ -122,6 +132,9 @@ fn c1b_drifted_recipe_repairs_only_dependent_fields() {
     );
     let s = a.fake.state.lock().unwrap();
     assert_eq!(s.recipes["PSM Preview"], preview);
+    assert!(!s.ops.iter().any(|op| op.starts_with("make_document:")
+        || op.starts_with("open_document:")
+        || op.starts_with("make_recipe:")));
     let mut web = s.recipes["PSM Web"].clone();
     assert_eq!(web.root_folder_type.as_deref(), Some("image folder"));
     web.root_folder_type = None;
@@ -272,11 +285,13 @@ fn c1e_non_session_folder_and_closed_document() {
         Some((true, "Capture One Session.cosessiondb open".into()))
     );
     assert_eq!(detail(&c, "recipes"), Some((true, "Ready".into())));
+    assert_eq!(detail(&c, "hooks"), Some((true, "Installed".into())));
 }
 
 #[test]
 fn c1f_style_setting_applies_reports_missing_and_preserves_when_empty() {
     let mut a = TestApp::with_fake_document().unwrap();
+    a.settings_set(&json!({"style_name":"PSM House"})).unwrap();
     a.app.health_check().unwrap();
     a.app.health_check().unwrap();
     assert_eq!(
@@ -426,6 +441,10 @@ fn c3a_document_setting_defaults_clears_validates_and_honours_existing() {
         .settings_set(&json!({"document_id":"/Users/me/Pictures/Other"}))
         .unwrap();
     assert_eq!(shown["effective_document_id"], "/Users/me/Pictures/Other");
+    assert_eq!(
+        a.app.settings_get().unwrap()["document_id"],
+        "/Users/me/Pictures/Other"
+    );
     let shown = a.settings_set(&json!({"document_id":""})).unwrap();
     assert!(shown["document_id"].is_null());
     assert_eq!(
@@ -441,10 +460,12 @@ fn c3a_document_setting_defaults_clears_validates_and_honours_existing() {
         serde_json::from_slice(&fs::read(a.app.paths.settings()).unwrap()).unwrap();
     stored["document_id"] = json!("/Users/davidloorenz/Pictures/session test 1");
     fs::write(a.app.paths.settings(), serde_json::to_vec(&stored).unwrap()).unwrap();
+    let before = fs::read(a.app.paths.settings()).unwrap();
     a.kill_and_restart().unwrap();
     let shown = a.app.settings_get().unwrap();
     assert_eq!(shown["document_id"], stored["document_id"]);
     assert_eq!(shown["effective_document_id"], stored["document_id"]);
+    assert_eq!(fs::read(a.app.paths.settings()).unwrap(), before);
 }
 
 const JXA_HARNESS: &str = r#"
@@ -467,8 +488,8 @@ const doc={id:()=>'/tmp/x/Session Manager',recipes:{byName:()=>recipe,name:()=>[
 const app={documents:{byId:()=>doc},availableStyles:()=>['PSM House','Clean'],
   make(x){calls.push({op:'make',value:{new:x.new,at:!!x.at,withProperties:{...x.withProperties,path:x.withProperties?.path?.toString()}}});exists=true;return mode==='make_document'?doc:recipe;},
   open(x){calls.push({op:'open',value:x.toString()});},
-  currentDocument(){return {id:()=>front};}};
-Object.defineProperty(app,'currentDocument',{get(){return ()=>({id:()=>front});},set(value){calls.push({op:'front',value:value.id()});front=value.id();}});
+  currentDocument(){return {id:()=>front,name:()=>front.split('/').at(-1)};}};
+Object.defineProperty(app,'currentDocument',{get(){return ()=>({id:()=>front,name:()=>front.split('/').at(-1)});},set(value){calls.push({op:'front',value:value.id()});front=value.id();}});
 global.Application=()=>app;
 vm.runInThisContext(fs.readFileSync(file,'utf8'));
 let args;

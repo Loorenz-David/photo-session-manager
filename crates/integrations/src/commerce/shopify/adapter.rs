@@ -19,7 +19,7 @@ use psm_core::{
         ConfirmedRun, DefinitionLink, RemoteIdentity, RemoteItem, RemoteMedia, RemoteMediaStatus,
         StagedTarget, WriteValue,
     },
-    mechanisms::values::canonical_decimal,
+    mechanisms::{upload_name, values::canonical_decimal},
     ports::{
         clock::Clock,
         commerce::{ALL_CAPABILITIES, CommerceAdapter},
@@ -830,11 +830,63 @@ impl CommerceAdapter for ShopifyAdapter {
         if let Some(message) = errors::user_errors(payload) {
             return Err(errors::provider("product_create_media", message));
         }
-        // SV-2: the new media is the last in gallery order, returned as `newest`.
-        payload["product"]["newest"]["nodes"][0]["id"]
+        let candidate = payload["product"]["newest"]["nodes"][0]["id"]
             .as_str()
             .map(str::to_owned)
-            .ok_or_else(|| errors::provider("product_create_media", "no media id in the reply"))
+            .ok_or_else(|| errors::provider("product_create_media", "no media id in the reply"))?;
+        let stem = resource_url
+            .split('?')
+            .next()
+            .and_then(|url| url.rsplit('/').next())
+            .and_then(|name| name.strip_suffix(".jpg"))
+            .ok_or_else(|| {
+                errors::provider("product_create_media", "resource filename is not a jpg")
+            })?;
+        for attempt in 0..self.poll.attempts {
+            if attempt > 0 {
+                Self::sleep(self.poll.interval_ms);
+            }
+            let data = self.call(graphql::MEDIA_POLL, json!({ "id": candidate }))?;
+            let node = &data["node"];
+            match node["status"].as_str() {
+                Some("READY") => {
+                    let media: MediaNode = parse(node, "product_create_media")?;
+                    if media
+                        .filename()
+                        .as_deref()
+                        .is_some_and(|name| upload_name::matches(stem, name))
+                    {
+                        return Ok(candidate);
+                    }
+                    return self
+                        .list_media(external_id)?
+                        .into_iter()
+                        .find(|media| {
+                            media
+                                .filename
+                                .as_deref()
+                                .is_some_and(|name| upload_name::matches(stem, name))
+                        })
+                        .map(|media| media.id)
+                        .ok_or_else(|| {
+                            errors::provider(
+                                "product_create_media",
+                                format!("created media {stem}.jpg not found in the gallery"),
+                            )
+                        });
+                }
+                Some("FAILED") => {
+                    let message = node["mediaErrors"]
+                        .as_array()
+                        .and_then(|errors| errors.first())
+                        .and_then(|error| error["message"].as_str())
+                        .unwrap_or("media processing failed");
+                    return Err(Error::Provider(message.to_owned()));
+                }
+                _ => {}
+            }
+        }
+        Err(Error::Timeout)
     }
 
     fn poll_media_ready(&self, media_id: &str) -> Result<()> {

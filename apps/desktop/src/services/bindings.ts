@@ -525,6 +525,7 @@ export type SettingsDto = SettingsDto_Serialize | SettingsDto_Deserialize;
 export type SettingsDto_Deserialize = {
 	document_id?: string | null,
 	effective_document_id: string,
+	default_document_id: string,
 	preview_recipe: string,
 	web_recipe: string,
 	style_name: string,
@@ -544,6 +545,7 @@ export type SettingsDto_Deserialize = {
 export type SettingsDto_Serialize = {
 	document_id: string | null,
 	effective_document_id: string,
+	default_document_id: string,
 	preview_recipe: string,
 	web_recipe: string,
 	style_name: string,

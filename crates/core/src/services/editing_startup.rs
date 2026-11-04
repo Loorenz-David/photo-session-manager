@@ -58,6 +58,8 @@ impl EditingStartup<'_> {
         let active = self.store.active_session_id()?;
         if active.is_some() {
             self.provider.bring_document_to_front()?;
+        } else {
+            self.health.clear("document_not_front");
         }
         let folder = if let Some(id) = active {
             let session = self.store.session(id)?;

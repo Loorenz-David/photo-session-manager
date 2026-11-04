@@ -123,7 +123,12 @@ pub trait Store: Send + Sync {
     fn job_retry(&self, id: i64, code: &str, next_attempt_at: i64, now_ms: i64) -> Result<()>;
     fn job_fail(&self, id: i64, code: &str, now_ms: i64) -> Result<()>;
     fn count_jobs(&self, kind: &str, status: &str, exclude_error: Option<&str>) -> Result<i64>;
-    fn requeue_failed_jobs(&self, kind: &str, now_ms: i64) -> Result<usize>;
+    fn requeue_failed_jobs(
+        &self,
+        kind: &str,
+        exclude_error: Option<&str>,
+        now_ms: i64,
+    ) -> Result<usize>;
     fn requeue_running_jobs(&self) -> Result<()>;
     fn mark_own_write(&self, raw_path: &str, now_ms: i64) -> Result<()>;
     fn job(&self, id: i64) -> Result<Job>;

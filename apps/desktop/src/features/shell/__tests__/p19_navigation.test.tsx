@@ -152,7 +152,7 @@ async function openWorkspace(views: SessionView[], sessionId = SESSION) {
 
 const shown: Settings = {
   crop_on_arrival: 'Square',
-  document_id: null, effective_document_id: '/tmp/session', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House',
+  document_id: null, effective_document_id: '/tmp/session', default_document_id: '/Users/me/Pictures/Session Manager', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House',
   export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null,
   integration: { kind: 'shopify', shop_domain: 'shop.myshopify.com', api_version: '2026-10', client_id: 'client', client_secret: 'masked', condition_photos_key: 'custom.damage_report' },
 };

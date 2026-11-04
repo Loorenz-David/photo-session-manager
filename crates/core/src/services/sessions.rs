@@ -76,6 +76,7 @@ impl<'a> SessionsService<'a> {
             return Err(Error::CaptureFolderNotSet);
         }
         self.store.set_active_session_id(None)?;
+        health.clear("document_not_front");
         health.clear("capture_folder_not_set");
         Ok(())
     }

@@ -125,7 +125,7 @@ it('C2(d) health and settings show placeholders, then their loaded content', asy
   await act(async () => {
     health.resolve({ items: [{ code: 'nudge_listening', ok: true, detail: 'Listening' }] });
     paths.resolve({ data_dir: '/tmp/psm', database: '/tmp/psm/session_manager.db', settings: '/tmp/psm/settings.json' });
-    settings.resolve({ document_id: '/tmp/session', effective_document_id: '/tmp/session', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House', crop_on_arrival: 'Square', export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null, integration: null });
+    settings.resolve({ document_id: '/tmp/session', effective_document_id: '/tmp/session', default_document_id: '/Users/me/Pictures/Session Manager', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House', crop_on_arrival: 'Square', export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null, integration: null });
   });
   expect(screen.getByText('Listening')).toBeInTheDocument();
   expect(screen.getByLabelText('Preview recipe')).toHaveValue('PSM Preview');

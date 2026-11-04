@@ -938,9 +938,14 @@ impl Store for SqliteStore {
         self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
             .query_row("SELECT COUNT(*) FROM jobs WHERE kind=?1 AND status=?2 AND (?3 IS NULL OR error IS NULL OR error<>?3)", params![kind,status,exclude_error], |r| r.get(0)).map_err(db)
     }
-    fn requeue_failed_jobs(&self, kind: &str, now_ms: i64) -> Result<usize> {
+    fn requeue_failed_jobs(
+        &self,
+        kind: &str,
+        exclude_error: Option<&str>,
+        now_ms: i64,
+    ) -> Result<usize> {
         self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
-            .execute("UPDATE jobs SET status='queued',attempts=0,error=NULL,next_attempt_at=?1,updated_at=?1 WHERE kind=?2 AND status='failed'", params![now_ms,kind]).map_err(db)
+            .execute("UPDATE jobs SET status='queued',attempts=0,error=NULL,next_attempt_at=?1,updated_at=?1 WHERE kind=?2 AND status='failed' AND (?3 IS NULL OR error IS NULL OR error<>?3)", params![now_ms,kind,exclude_error]).map_err(db)
     }
     fn requeue_running_jobs(&self) -> Result<()> {
         self.conn

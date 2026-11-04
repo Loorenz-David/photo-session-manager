@@ -13,6 +13,10 @@ impl<'a> IntegrityCheck<'a> {
         let photo = self.store.photo(photo_id)?;
         let integrity = match sha256_file(Path::new(&photo.raw_path)) {
             Ok(actual) if photo.raw_hash.as_deref() == Some(&actual) => Integrity::Ok,
+            Ok(actual) if photo.raw_hash.is_none() => {
+                self.store.set_raw_hash(&photo.raw_path, &actual)?;
+                Integrity::Ok
+            }
             Ok(_) => Integrity::RawChanged,
             Err(crate::Error::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => {
                 Integrity::RawMissing

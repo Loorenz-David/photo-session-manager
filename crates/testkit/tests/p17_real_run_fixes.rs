@@ -74,8 +74,18 @@ fn c1a_settings_rebuild_addresses_new_document() {
 #[test]
 fn c1b_recipe_names_take_effect_without_relaunch() {
     let mut app = TestApp::with_fake_document().unwrap();
+    let preview = app.fake.state.lock().unwrap().recipes["PSM Preview"].clone();
     app.settings_set(&serde_json::json!({"preview_recipe":"Nope"}))
         .unwrap();
+    assert_eq!(
+        app.fake.state.lock().unwrap().recipes["PSM Preview"],
+        preview
+    );
+    assert!(
+        !ops(&app)
+            .iter()
+            .any(|op| op.starts_with("set_recipe_props:PSM Preview:"))
+    );
     let first = app.app.health_check().unwrap();
     assert!(report_item(&first, "recipe_missing").is_empty());
     assert!(app.fake.state.lock().unwrap().recipes.contains_key("Nope"));

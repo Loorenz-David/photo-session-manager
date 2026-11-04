@@ -190,10 +190,6 @@ impl SettingsSetContext {
 impl AppHandles {
     pub fn health_check(&self) -> Result<psm_core::domain::HealthReport> {
         refresh_shape_health(self.store.as_ref(), self.health.as_ref())?;
-        if self.settings.crop_on_arrival != "off" {
-            self.store
-                .requeue_failed_jobs("crop_on_arrival", self.clock.now_ms())?;
-        }
         {
             if let Err(error) = (EditingStartup {
                 provider: self.editing.as_ref(),
@@ -212,6 +208,15 @@ impl AppHandles {
             {
                 tracing::warn!(%error, "health: camera status failed");
             }
+        }
+        if self.settings.crop_on_arrival != "off" {
+            self.store.requeue_failed_jobs(
+                "crop_on_arrival",
+                self.health
+                    .has("crop_ratio_unknown")
+                    .then_some("crop_ratio_unknown"),
+                self.clock.now_ms(),
+            )?;
         }
         self.health.check_integration(
             self.store.as_ref(),
@@ -236,6 +241,12 @@ impl AppHandles {
         shown["effective_document_id"] = serde_json::Value::String(
             self.settings
                 .effective_document_id(&self.paths)
+                .to_string_lossy()
+                .into_owned(),
+        );
+        shown["default_document_id"] = serde_json::Value::String(
+            self.settings
+                .default_document_id(&self.paths)
                 .to_string_lossy()
                 .into_owned(),
         );
@@ -352,6 +363,7 @@ impl App {
     ) -> Result<Self> {
         let (user_scripting, background_scripting) = lanes;
         paths.create()?;
+        tracing::info!(data_dir = %paths.root.display(), start = start_backup, "app open");
         let (settings, settings_problem) = Settings::open_lenient(&paths)?;
         let integration_result = settings.integration_settings();
         let integration_invalid = integration_result.is_err();
@@ -400,7 +412,7 @@ impl App {
         }
         refresh_shape_health(store.as_ref(), health.as_ref())?;
         if start_backup && settings.crop_on_arrival != "off" {
-            store.requeue_failed_jobs("crop_on_arrival", clock.now_ms())?;
+            store.requeue_failed_jobs("crop_on_arrival", None, clock.now_ms())?;
         }
         let document_id = settings
             .effective_document_id(&paths)
