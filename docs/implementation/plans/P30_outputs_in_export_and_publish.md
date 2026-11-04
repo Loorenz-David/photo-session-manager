@@ -267,3 +267,22 @@ crash, restart, re-frame, drain → one media for `a`, its `uploaded_sha` and th
 Judgment: existing C8(a) (failure *before* the effect, state `uploaded`, no media) now also takes the replacement path, since `prepare`
 cannot tell whether media exists; its file is uploaded as `K-<uid12>-r1.jpg` instead of `K-<uid12>.jpg`. The test's name key was updated;
 the hash and cleanup assertions are unchanged. Plan row C8(a) names the unsuffixed file: candidate plan amendment.
+
+### Re-review r2 (2026-11-04, opus, pipeline-reviewer) — APPROVED_WITH_NOTES
+**Perimeter.** `git show --stat c96cbd9`: `crates/core/src/services/publish.rs` (+7/−1), `crates/testkit/tests/p30_outputs_in_export_and_publish.rs`
+(+36/−1), master plan P30 row, this Review log. All inside F1's allowed files; `mechanisms/publish.rs` untouched (optional). `c96cbd9..c54508c`
+adds only the fix handoff and this round's prompt. **Suite (L4, clean `c54508c`, run once as the prompt directs):** `cargo test --workspace`
+529 passed / 0 failed; clippy `-D warnings` clean; `cargo fmt --check` clean; `npm run typecheck` clean; `npm test` 132 passed.
+**F1 resolved.** `prepare` sets `replaced` also for a link in `staged`/`uploaded`/`attached` whose `composition_rev` or `retouch_gen` is
+below the staged file's; the existing branch moves `external_id` → `superseded_ids`, `revision += 1`, state `none`. Read against `upload`:
+`staged` is written before `commerce.upload`/`product_create_media`/`file_create`, so every state in which remote media can exist is in the
+set (`exported` precedes only `staged_uploads_create`, which creates no media). Adoption then matches only the `-r1` stem and skips
+superseded ids (07B MC-21 "current revision only"); `update`'s `own` covers stems 0…`revision` and superseded ids, so the stale media is
+deleted. No double bump: a replaced link is stamped and left `none`, so a re-run `prepare` on the same staging sees equal values (and `none`
+is outside the set). New test `c8a_a_media_created_before_a_crash_is_replaced_when_the_photo_is_reframed` asserts one media for `a`, its
+`uploaded_sha` = r1 output hash, link `export_sha256`/`external_id`; under the r1 code the probe showed the only media carrying the
+revision-0 hash, so the `uploaded_sha` assertion fails on the defect. **Divergence (C8(a) `-r1`)** judged sound: it follows F1's correction
+as written; `prepare` cannot know whether media exists for an `uploaded` link, and a revision bump on such a link is the book-consistent
+safe side (07B MC-21 naming); the row's hash/link/staging assertions are unchanged. Plan lesson: C8(a)'s filename key should read
+`K-<uid12(a)>-r1.jpg`. **Triage:** no blocking items remain; nothing MUST, nothing to DROP. **Notes → backlog (2):** C8(a) filename key
+(plan lesson); an output-format change between a crashed upload and its resume is not a replacement trigger (code reading, not reproduced).
