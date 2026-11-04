@@ -25,3 +25,11 @@ P23_shape_on_arrival
 P24_capture_one_provisioning
 P25_tidy_up_after_provisioning
 P26_frontend_leftovers
+P27_retire_shape_on_arrival
+P28_composition_foundation
+P29_master_and_output_render
+P30_outputs_in_export_and_publish
+P31_compose_mode
+P32_composition_tools
+P33_split_ui
+P34_composition_polish
