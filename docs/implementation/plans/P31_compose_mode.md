@@ -292,3 +292,37 @@ prompt template's `codex`. (e) `lib/keyboard.ts` untouched (see 5).
 the test zooms in first so both clamps are real saves. C7(b): under task 4's one-in-flight rule `pB` cannot exist before `pA` settles; the test
 resolves them in the row's order and asserts the row's outcome (B's rect shown, exactly two calls).
 **Not done.** No live try-out in the Tauri window from this session (no interactive display); the owner's Manual try-out stands. Rust untouched.
+
+### 2026-11-05 — review r1 (opus, `pipeline-reviewer`) — CHANGES_REQUESTED
+**Gate.** Tracker `IMPLEMENTED`; checkpoint `7d98764` in `git log`. **Perimeter.** `git show --stat 7d98764` = the handoff's 25 paths exactly
+(the two unlisted files, `useWorkspaceState.ts` `patchPhoto` and `__tests__/harness.tsx`, are declared; `patchPhoto` is the plan's suggested seam).
+`7d98764..c88ba28` adds only the implement handoff and this round's prompt. **Suite** (clean `c88ba28`, run once): `cargo test --workspace` 529/0;
+clippy `-D warnings` clean; `cargo fmt --check` clean; `npm run typecheck` clean; `npm test` 222 passed.
+**Verified correct.** `geometry.ts` runs every op of the shared `composition_cases.json` at the Rust tolerances (count guard on 11/5/13); the view
+maths (`frameBox`, `viewTransform`, `zoomAbout`, `clampRect`) checked by hand against C1(b), and the implementer's corrected zoom values
+(`w = 0.404433`, `x = 0.297784`) are the right arithmetic from unrounded `w₀`. `machine.ts` is pure and matches rules 1–16; `machine.test.ts` has one
+discriminating row per rule (+ the declared `Resize` extension). The binding coalesces `View` to one rAF write (C3(a) counts it), prevents wheel /
+WebKit gesture defaults, and adds the document-level `gesturestart` guard only while mounted (C5(b)). Rows C2(a)–(e), C3–C6, C7(a), C7(c), C8(a)–(c)
+observe their outcome at the row's boundary and would fail on a wrong one. Assumptions 1–16: none contradicts the intention (1 and 3 are plan
+slips, see backlog). H1–H8 hold (frontend only; CSS display transforms are not pixel processing; machine and geometry are plain TS).
+**F1 (B1, route production) — a successful earlier save snaps the stage back while a newer save is queued.** `useCompositionSaves` hands every
+successful answer to the machine as `Saved`; with save A in flight and B queued (machine `values = B`), A's answer differs from `values`, so rule 16
+sets `values = live = A` and the stage jumps back to A until B's answer lands; a drag started in that window starts from A, so B is lost. Probe
+(temporary test file, removed): two quick +50 drags, resolve A → placement 61.1 px instead of 111.1 px; a following +10 drag starts at 71.1 px.
+Authority: C7(b) ("the view … show B's rect (pA's stale answer is ignored)"); Goal ("a save that settles late … one defined outcome"). The C7(b)
+test only looks after both answers and one coalesced flush, so it cannot see this. Correction: send the machine `Saved` only when nothing newer is
+queued for that photo (or only for a refusal); the tile may still take the stored row. Extend C7(b) to check the placement after A settles while
+B is in flight. Files: `useCompositionSaves.ts`, `ComposeMode.tsx`, (`machine.ts` if rule 16's input changes), `__tests__/p31_gestures.test.tsx`.
+**F2 (B1, route production) — Esc that closes a menu over the editor also reverts the photo.** `useComposeGesture`'s `window` keydown handler
+dispatches `KeyEsc` / `KeyReturn` without checking for an open layer; Radix closes the ⋯ menu on the same Esc without stopping propagation. Probe:
+drag +50 (saved), open ⋯, Esc → menu closes **and** a second `setComposition` with the entry rect, placement back to 11.1 px: the framing is
+discarded and nothing brings it back. The same holds for the right-click menu in the edge browser, the picker dialogs and the product form reachable
+while composing; Enter on a menu item also exits the editor. Authority: 10D §What the photographer sees ("Gestures and keys (stage only, while
+composing)"); design handoff §Keyboard ("Esc (close topmost)"); the app's own `useBackKeys` guard. Correction: the compose keyboard ignores
+keys while a `[role="dialog"], [role="alertdialog"], [role="menu"]` layer is open (the `useBackKeys` guard) or the event was already handled;
+one behaviour test: drag, open ⋯, Esc → menu closed, one `setComposition` only, placement unchanged. Files: `useComposeGesture.ts`,
+`__tests__/p31_compose_mode.test.tsx` or `__tests__/p31_gestures.test.tsx`.
+**Notes → backlog (5).** Editor half of the P30 → P31 row resolved; compose keys swallow Space on focused buttons; ⌘[ still leaves while
+composing; `FINGERPRINT_TOLERANCE` plan slip; plan arithmetic/sign literals. **Probe declaration.** One temporary test file
+`apps/desktop/src/features/compose/__tests__/zz_review_probe.test.tsx`, created, run, deleted; `git status --porcelain` empty afterwards. No
+production file touched.
