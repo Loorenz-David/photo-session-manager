@@ -217,3 +217,42 @@ test were removed (the name is core's `stem` now, covered by C2).
 **Observation.** A link that crashed between media create and record and whose photo's composition then changed would adopt the stale
 media by stem at the same revision (the replacement rule only fires on `ready` links). Not reachable by the plan's rows; candidate backlog
 note.
+
+### 2026-11-04 — review r1 (opus): CHANGES_REQUESTED
+**Gate.** Tracker `IMPLEMENTED`; checkpoint `a3d561f` in `git log`. Perimeter: `git show --stat a3d561f` = the 23 paths the handoff
+declares (the 4 outside the plan's list are declared under Deviations (d), forced by the signature changes). Suite/lint/typecheck run once
+on clean `fd9c240` (= `a3d561f` + two docs files): `cargo test --workspace` exit 0, clippy `-D warnings` clean, `fmt --check` clean,
+`npm run typecheck` clean, `npm test` 132 passed.
+
+**Verified correct.** Migration 005 (table recreated, rows kept as `single`/`composition_rev 0`, same `id`, UNIQUE over the five
+columns) and C3(b)'s test over a real v4 database. `upload_name::stem` (`-L`/`-R`, `-r<n>` only for n ≥ 1) and `matches` (exact or
+`_<uuid v4>` uniquifier; a `-L` suffix can't pass as a uniquifier). `replacement_candidates` retouch **or** composition clause, ready
+links only. `confirm` checks `needs_review` before any write and sets `total` = outputs; `prepare` checks it before any remote call.
+`staging_current`: format key, entry count, per-output photo/slot/`adjusted_gen`/composition revision, file present. Retirement at
+`prepare` (state only, external id kept), `own` = every gallery link's id + superseded ids + stems for every slot and revision 0…n;
+`D` and the damage report per current slot; session view on the first slot. Masters released in `run_item`'s `Done` branch only when not
+dirty, skipping RAWs an export in flight or a pending master still needs. Every row's test observes its outcome at its boundary and
+would fail on a wrong outcome (C3(d) and C4(c) as amended by the implementer's deviations (a) and (b), whose outcomes are the rows'
+intent under the plan's own UNIQUE key and P28's origin rule). H1–H8 hold except as F1 says for H4.
+
+**F1 — B1, route production.** `prepare` stamps a non-`ready` link with the staged file's `composition_rev`/`retouch_gen` (assumption 5),
+including a link in `staged`/`uploaded`/`attached` whose remote media was already created from the **previous** rendering. `upload` then
+adopts that media (by stem when `external_id` is `None`, or polls the recorded id when `attached`) and marks it `ready`. The shop keeps
+the old framing, while the link claims the current revision and the new hash, so no later publish replaces it. Reviewer probe (scratch
+worktree at `a3d561f`, removed afterwards): `K` main `[a]`, `fail_after_effect("product_create_media")`, kill, `kill_and_restart`,
+`other_square(a)` (revision 1), drain → `done`; link `ready`, `composition_rev 1`, `export_sha256` = sha(r1 output) `b904…`; the gallery's
+only media `K-<uid12>.jpg` was uploaded with sha `a114…` (revision-0 bytes); staged filenames `[K-<uid12>.jpg]` (no new upload);
+publish again → nothing uploaded, `dirty` cleared. Authority: 10D M35 ("every uploaded file was rendered from the photo's current
+composition revision"), MC-28 §Cache key ("Stale outputs are never … uploaded"), 01 H4, plan C8(a) intent (Notes: "the exact M35 defect").
+Before P30 the link kept its old `retouch_gen`, so the next publish replaced it; assumption 5 removed that self-healing.
+**Correction.** At `prepare`, a link not `ready` whose state shows remote media may exist (`staged`, `uploaded`, `attached`) and whose
+recorded `composition_rev` or `retouch_gen` is older than the staged file's is replaced like a ready one: old `external_id` →
+`superseded_ids`, `revision += 1`, state `none`. The stale media then matches an `own` stem/superseded id and reconciliation removes it.
+One test in `p30_outputs_in_export_and_publish.rs` of the probe's shape: after the resume, the gallery holds exactly one media for `a`,
+whose `uploaded_sha` equals the r1 output's hash. **Files:** `crates/core/src/services/publish.rs`, optionally
+`crates/core/src/mechanisms/publish.rs` (+ its unit test), `crates/testkit/tests/p30_outputs_in_export_and_publish.rs`.
+
+**Notes → backlog (5):** stem keeps the folder key's case against 07A's "(lowercase)"; Normal↔Split change between `upload` and
+`update` fails `update` with `UploadIncomplete` on every retry; first publish after migration 005 re-uploads photos whose composition
+revision is ≥ 1; identical `set` on a default composition bumps the revision (P31); C4(c) "three retired rows" is impossible under the
+plan's own key (plan lesson).
