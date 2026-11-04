@@ -81,3 +81,16 @@ Whether `reloadWanted` survives as a flag or the last-settling command always re
 
 ## Review log
 - **2026-11-04 implement r1 (codex).** Settings now displays the backend's full default document folder immediately after choosing the app's own session. Workspace review commands defer reloads until the final in-flight command settles, preserving both quick drags. C1(a) and C2(a) have one new frontend boundary test each; both were red before the production edits and pass now, as do the inherited P22/P24 cases. Assumption: the last-settling command always reloads once and clears `reloadWanted`, including when no event arrived; this is the delegated choice and preserves the prior single-command refresh. No deviations. Rust workspace suite, frontend suite (131 tests), Clippy, formatting, and TypeScript typecheck pass. No live drag or Capture One try-out was run.
+- **2026-11-04 review r1 (opus): APPROVED_WITH_NOTES.** Gate: tracker `IMPLEMENTED`, checkpoint `791446e` in `git log`; its paths equal the
+  7 declared files. Suite on clean `033791e`: `cargo test --workspace` 457 passed, clippy `-D warnings` and `fmt --check` clean, `npm run
+  typecheck` clean, `npm test` 131 passed. **C1(a)** holds: `SettingsPage.tsx:92` renders `settings.document_id || settings.default_document_id`
+  over the edited draft; `default_document_id` is the backend's `SettingsFile::default_document_id` (the same path `effective_document_id`
+  falls back to), so the line names the document the app will use (10C §Setting); the literal and the `page.data` branch are gone; the
+  test asserts the exact text, no `~/`, the picked folder, and no save. **C2(a)** holds: `run`'s `finally` decrements first, reloads once at
+  zero (clearing `reloadWanted`), otherwise marks wanted; out-of-order settling also reloads once, at the last; `undo` keeps its own reload;
+  the test fixes the count of `getSessionView` calls at the service boundary (row-required) and a stale `original` answer before `p1`, so
+  an early reload and a missing final reload both fail it. Both new tests run against `791446e~1` in a scratch worktree failed (C1: `~/`
+  literal; C2: `[1, 2, 5]` after `p1`); worktree removed, no production file touched. Assumption (last-settling command always reloads)
+  is the plan's delegated choice and consistent with ch06 §Order. H1–H8: frontend-only UI state, no external write, no RAW, no Tauri logic.
+  Notes → backlog: a pre-drag in-flight reload can still land after the optimistic order (ticket not bumped by `run`); `reloadWanted`
+  is write-only; the drag test copies the P22 harness verbatim; not verified live. Backlog rows "→ P26 · P22" and "P24 (UI)" marked resolved.
