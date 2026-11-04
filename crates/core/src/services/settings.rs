@@ -74,9 +74,9 @@ impl SettingsService {
                 continue;
             }
             if key == "default_shape"
-                && !value.as_str().is_some_and(|s| {
-                    ["original", "1:1", "4:5", "3:2", "2:3", "16:9", "free"].contains(&s)
-                })
+                && !value
+                    .as_str()
+                    .is_some_and(|s| crate::domain::composition::Shape::parse(s).is_some())
             {
                 return Err(Error::InvalidValue("default_shape".into()));
             }

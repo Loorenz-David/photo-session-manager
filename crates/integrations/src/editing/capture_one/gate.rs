@@ -123,7 +123,12 @@ impl CaptureOneScripting for GatedScripting {
     fn set_color_tag(&self, id: &str, variant: &str, tag: i32) -> Result<()> {
         self.call(|i| i.set_color_tag(id, variant, tag))
     }
-    fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<String> {
+    fn process(
+        &self,
+        id: &str,
+        variant: &str,
+        recipe: &str,
+    ) -> Result<super::scripting::ProcessStarted> {
         self.call(|i| i.process(id, variant, recipe))
     }
     fn capture(&self) -> Result<()> {

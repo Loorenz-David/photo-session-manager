@@ -1,5 +1,6 @@
 use crate::{
     commands::{
+        compositions::CompositionDto,
         items::{CommandError, CommandId, ItemDto},
         photos::PhotoClassification,
     },
@@ -126,6 +127,8 @@ pub struct PhotoResponse {
     pub captured_at: Option<i64>,
     pub original_preview_path: Option<String>,
     pub adjusted_preview_path: Option<String>,
+    pub thumbnail_path: Option<String>,
+    pub composition: CompositionDto,
     #[specta(type = Option<specta_typescript::Number>)]
     pub orientation: Option<i64>,
     pub source: String,
@@ -133,8 +136,8 @@ pub struct PhotoResponse {
     pub upload_state: Option<String>,
 }
 
-impl From<Photo> for PhotoResponse {
-    fn from(photo: Photo) -> Self {
+impl PhotoResponse {
+    fn from_photo(photo: Photo, composition: CompositionDto) -> Self {
         use psm_core::domain::photo::{Classification, Integrity, PhotoSource};
         Self {
             id: photo.id,
@@ -149,6 +152,8 @@ impl From<Photo> for PhotoResponse {
             captured_at: photo.captured_at,
             original_preview_path: photo.original_preview_path,
             adjusted_preview_path: photo.adjusted_preview_path,
+            thumbnail_path: photo.thumbnail_path,
+            composition,
             orientation: photo.orientation,
             source: match photo.source {
                 PhotoSource::Capture => "capture",
@@ -185,8 +190,9 @@ impl From<SessionView> for SessionViewResponse {
                 .photos
                 .into_iter()
                 .zip(view.upload_states)
-                .map(|(photo, upload_state)| {
-                    let mut response: PhotoResponse = photo.into();
+                .zip(view.compositions)
+                .map(|((photo, upload_state), composition)| {
+                    let mut response = PhotoResponse::from_photo(photo, composition.into());
                     response.upload_state = upload_state;
                     response
                 })

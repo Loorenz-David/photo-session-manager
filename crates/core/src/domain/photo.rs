@@ -11,6 +11,7 @@ pub struct Photo {
     pub provider_ref: Option<String>,
     pub original_preview_path: Option<String>,
     pub adjusted_preview_path: Option<String>,
+    pub thumbnail_path: Option<String>,
     pub orientation: Option<i64>,
     pub classification: Classification,
     pub position: Option<i64>,

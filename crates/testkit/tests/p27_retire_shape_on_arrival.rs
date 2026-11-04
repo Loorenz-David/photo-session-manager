@@ -345,6 +345,9 @@ fn c4a_migration_removes_old_jobs_and_health_codes() {
         for status in ["queued", "failed"] {
             conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,error,created_at,updated_at) VALUES ('crop_on_arrival','/tmp/old.ARW','{}',?1,0,0,?2,0,0)", (status, if status == "failed" {Some("provider")} else {None})).unwrap();
         }
+        conn.execute("DROP TABLE compositions", []).unwrap();
+        conn.execute("ALTER TABLE photos DROP COLUMN thumbnail_path", [])
+            .unwrap();
         conn.pragma_update(None, "user_version", 2).unwrap();
     }
     a.kill_and_restart().unwrap();

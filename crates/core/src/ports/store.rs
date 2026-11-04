@@ -1,6 +1,7 @@
 use crate::Result;
 use crate::domain::{
     attribute::{AttributeGroup, Definition, Preset, Value as AttributeValue},
+    composition::{Composition, CompositionValues, Fingerprint, Origin},
     editing::Job,
     item::{Item, NewItem},
     photo::{Classification, Integrity, NewPhoto, Photo, UndoSlot},
@@ -20,6 +21,8 @@ pub struct RawPreviewState {
 
 pub struct PreviewCommit {
     pub previous_path: Option<String>,
+    pub previous_thumbnail: Option<String>,
+    pub needs_review: Vec<(i64, i64)>,
     pub photos: Vec<(i64, i64)>,
 }
 
@@ -96,7 +99,26 @@ pub trait Store: Send + Sync {
     fn preview_state(&self, raw: &str) -> Result<Option<RawPreviewState>>;
     fn ensure_initial_generation(&self, raw: &str) -> Result<Option<i64>>;
     fn adjusted_event(&self, raw: &str, retouch: bool) -> Result<Option<Vec<i64>>>;
-    fn complete_preview(&self, raw: &str, generation: i64, path: &str) -> Result<PreviewCommit>;
+    fn complete_preview(
+        &self,
+        raw: &str,
+        generation: i64,
+        path: &str,
+        thumbnail: Option<&str>,
+        observed: Option<Fingerprint>,
+    ) -> Result<PreviewCommit>;
+    fn composition(&self, photo_id: i64) -> Result<Composition>;
+    fn compositions_in_session(&self, session_id: i64) -> Result<Vec<Composition>>;
+    fn save_composition(
+        &self,
+        photo_id: i64,
+        values: &CompositionValues,
+        origin: Origin,
+        now_ms: i64,
+    ) -> Result<(Composition, bool)>;
+    fn backfill_compositions(&self, default_shape: &str, now_ms: i64) -> Result<usize>;
+    fn mark_previews_stale_once(&self, flag_key: &str, now_ms: i64) -> Result<usize>;
+    fn adopt_frame(&self, raw: &str, observed: Fingerprint) -> Result<Vec<(i64, i64)>>;
     fn set_missing_preview_paths(&self, raw: &str, path: &str) -> Result<Vec<(i64, i64)>>;
     fn new_render_job(&self, raw: &str, now_ms: i64) -> Result<i64>;
     fn finish_render_job(&self, id: i64, error: Option<&str>, now_ms: i64) -> Result<()>;

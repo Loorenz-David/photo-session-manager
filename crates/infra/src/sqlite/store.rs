@@ -6,13 +6,20 @@ use psm_core::{
             AiConfidence, AiStatus, AttributeGroup, CoreType, Definition, Preset, Provenance,
             Value as AttributeValue,
         },
+        composition::{
+            Composition, CompositionState, CompositionValues, Fingerprint, Frame, FrameSource,
+            Origin, Rect,
+        },
         editing::Job,
         item::{Item, ItemOrigin, NewItem},
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
         publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
         session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
     },
-    mechanisms::canon::canon,
+    mechanisms::{
+        canon::canon,
+        composition::{default_rect, fingerprint_compatible, review_reason, turned_frame},
+    },
     ports::store::{PreviewCommit, RawPreviewState, Store, StoreTx},
 };
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -21,20 +28,29 @@ use std::sync::Mutex;
 
 pub struct SqliteStore {
     conn: Mutex<Connection>,
+    default_shape: String,
 }
 
 impl SqliteStore {
     pub fn open(paths: &AppPaths) -> rusqlite_migration::Result<Self> {
+        Self::open_with_default_shape(paths, "1:1")
+    }
+    pub fn open_with_default_shape(
+        paths: &AppPaths,
+        shape: &str,
+    ) -> rusqlite_migration::Result<Self> {
         let mut conn = Connection::open(paths.db())?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         Migrations::new(vec![
             M::up(include_str!("migrations/001_init.sql")),
             M::up(include_str!("migrations/002_domain.sql")),
             M::up(include_str!("migrations/003_retire_shape_on_arrival.sql")),
+            M::up(include_str!("migrations/004_compositions.sql")),
         ])
         .to_latest(&mut conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
+            default_shape: shape.to_string(),
         })
     }
 
@@ -64,6 +80,120 @@ impl SqliteStore {
 
 fn db(error: rusqlite::Error) -> Error {
     Error::InvalidData(error.to_string())
+}
+
+fn insert_default_composition(conn: &Connection, id: i64, shape: &str, at: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO compositions(photo_id,kind,shape,updated_at) VALUES (?1,'normal',?2,?3)",
+        params![id, shape, at],
+    )
+    .map_err(db)?;
+    Ok(())
+}
+
+fn parse_enum<T: serde::de::DeserializeOwned>(value: String) -> rusqlite::Result<T> {
+    serde_json::from_value(serde_json::Value::String(value)).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+    })
+}
+fn composition_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Composition> {
+    let x: Option<f64> = r.get(7)?;
+    let fw: Option<i64> = r.get(11)?;
+    let geometry: Option<String> = r.get(14)?;
+    Ok(Composition {
+        photo_id: r.get(0)?,
+        kind: parse_enum(r.get(1)?)?,
+        shape: parse_enum(r.get(2)?)?,
+        orientation: parse_enum(r.get(3)?)?,
+        quarter_turns: r.get(4)?,
+        flip: parse_enum(r.get(5)?)?,
+        straighten: r.get(6)?,
+        rect: x
+            .map(|x| -> rusqlite::Result<Rect> {
+                Ok(Rect {
+                    x,
+                    y: r.get(8)?,
+                    w: r.get(9)?,
+                    h: r.get(10)?,
+                })
+            })
+            .transpose()?,
+        fingerprint: fw
+            .map(|w| -> rusqlite::Result<Fingerprint> {
+                Ok(Fingerprint {
+                    frame: Frame { w, h: r.get(12)? },
+                    source: parse_enum(r.get(13)?)?,
+                    geometry: serde_json::from_str(geometry.as_deref().unwrap_or("{}")).map_err(
+                        |e| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                14,
+                                rusqlite::types::Type::Text,
+                                Box::new(e),
+                            )
+                        },
+                    )?,
+                })
+            })
+            .transpose()?,
+        origin: parse_enum(r.get(15)?)?,
+        revision: r.get(16)?,
+        state: parse_enum(r.get(17)?)?,
+        review_reason: r
+            .get::<_, Option<String>>(18)?
+            .map(parse_enum)
+            .transpose()?,
+        updated_at: r.get(19)?,
+    })
+}
+const COMPOSITION_SELECT: &str = "SELECT c.photo_id,c.kind,c.shape,c.orientation,c.quarter_turns,c.flip,c.straighten,c.x,c.y,c.w,c.h,c.frame_w,c.frame_h,c.frame_source,c.geometry,c.origin,c.revision,c.state,c.review_reason,c.updated_at FROM compositions c";
+fn composition(conn: &Connection, photo_id: i64) -> Result<Composition> {
+    conn.query_row(
+        &format!("{COMPOSITION_SELECT} WHERE c.photo_id=?1"),
+        [photo_id],
+        composition_row,
+    )
+    .optional()
+    .map_err(db)?
+    .ok_or_else(|| Error::NotFound(format!("composition {photo_id}")))
+}
+fn adopt_frame_tx(conn: &Connection, raw: &str, observed: &Fingerprint) -> Result<Vec<(i64, i64)>> {
+    let mut stmt = conn
+        .prepare("SELECT id,session_id FROM photos WHERE raw_path=?1 ORDER BY id")
+        .map_err(db)?;
+    let rows: Vec<(i64, i64)> = stmt
+        .query_map([raw], |r| Ok((r.get(0)?, r.get(1)?)))
+        .map_err(db)?
+        .collect::<rusqlite::Result<_>>()
+        .map_err(db)?;
+    drop(stmt);
+    let geometry =
+        serde_json::to_string(&observed.geometry).map_err(|e| Error::InvalidData(e.to_string()))?;
+    let mut needs_review = Vec::new();
+    for &(id, session_id) in &rows {
+        let current = composition(conn, id)?;
+        if current.fingerprint.is_none() {
+            let rect = current.rect.unwrap_or_else(|| {
+                default_rect(
+                    current.kind,
+                    current.shape,
+                    current.orientation,
+                    turned_frame(observed.frame, current.quarter_turns),
+                )
+            });
+            conn.execute("UPDATE compositions SET x=?1,y=?2,w=?3,h=?4,frame_w=?5,frame_h=?6,frame_source=?7,geometry=?8 WHERE photo_id=?9", params![rect.x,rect.y,rect.w,rect.h,observed.frame.w,observed.frame.h,observed.source.as_str(),geometry,id]).map_err(db)?;
+        } else if let Some(stored) = &current.fingerprint {
+            if !fingerprint_compatible(stored, observed) {
+                let reason = review_reason(stored, observed);
+                conn.execute("UPDATE compositions SET frame_w=?1,frame_h=?2,frame_source=?3,geometry=?4,state='needs_review',review_reason=?5 WHERE photo_id=?6", params![observed.frame.w,observed.frame.h,observed.source.as_str(),geometry,reason.as_str(),id]).map_err(db)?;
+                needs_review.push((id, session_id));
+            } else if stored.source == FrameSource::Preview
+                && observed.source == FrameSource::Master
+            {
+                conn.execute("UPDATE compositions SET frame_w=?1,frame_h=?2,frame_source='master',geometry=?3 WHERE photo_id=?4", params![observed.frame.w,observed.frame.h,geometry,id]).map_err(db)?;
+            }
+        }
+    }
+    Ok(needs_review)
 }
 
 fn item_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Item> {
@@ -137,6 +267,7 @@ fn photo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Photo> {
         provider_ref: r.get(6)?,
         original_preview_path: r.get(7)?,
         adjusted_preview_path: r.get(8)?,
+        thumbnail_path: r.get(15)?,
         orientation: r.get(9)?,
         classification: match classification.as_str() {
             "main" => Classification::Main,
@@ -156,7 +287,7 @@ fn photo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Photo> {
 }
 
 fn photo(conn: &Connection, id: i64) -> Result<Photo> {
-    conn.query_row("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at FROM photos WHERE id=?1", [id], photo_row)
+    conn.query_row("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at,thumbnail_path FROM photos WHERE id=?1", [id], photo_row)
         .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("photo {id}")))
 }
 
@@ -332,7 +463,7 @@ impl StoreTx for SqliteTx<'_> {
         photo(&self.tx, id)
     }
     fn photos(&self, session_id: i64) -> Result<Vec<Photo>> {
-        let mut stmt = self.tx.prepare("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at FROM photos WHERE session_id=?1 ORDER BY CASE classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END,position,captured_at,id").map_err(db)?;
+        let mut stmt = self.tx.prepare("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at,thumbnail_path FROM photos WHERE session_id=?1 ORDER BY CASE classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END,position,captured_at,id").map_err(db)?;
         let rows = stmt.query_map([session_id], photo_row).map_err(db)?;
         rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db)
     }
@@ -369,8 +500,10 @@ impl StoreTx for SqliteTx<'_> {
         position: Option<i64>,
     ) -> Result<i64> {
         let uid = uuid::Uuid::new_v4().to_string();
-        self.tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)", params![uid,target_session,photo.raw_path,photo.raw_hash,photo.integrity.as_str(),photo.provider_ref,photo.original_preview_path,photo.adjusted_preview_path,photo.orientation,photo.classification.as_str(),position,photo.captured_at,photo.source.as_str(),photo.created_at]).map_err(db)?;
-        Ok(self.tx.last_insert_rowid())
+        self.tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at,thumbnail_path) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)", params![uid,target_session,photo.raw_path,photo.raw_hash,photo.integrity.as_str(),photo.provider_ref,photo.original_preview_path,photo.adjusted_preview_path,photo.orientation,photo.classification.as_str(),position,photo.captured_at,photo.source.as_str(),photo.created_at,photo.thumbnail_path]).map_err(db)?;
+        let id = self.tx.last_insert_rowid();
+        self.tx.execute("INSERT INTO compositions SELECT ?1,kind,shape,orientation,quarter_turns,flip,straighten,x,y,w,h,frame_w,frame_h,frame_source,geometry,origin,revision,state,review_reason,updated_at FROM compositions WHERE photo_id=?2", params![id,photo.id]).map_err(db)?;
+        Ok(id)
     }
     fn set_undo_slot(&mut self, session_id: i64, slot: Option<&UndoSlot>) -> Result<()> {
         let json = slot
@@ -740,7 +873,14 @@ impl Store for SqliteStore {
         tx.commit().map_err(db)?;
         Ok(Some(sessions))
     }
-    fn complete_preview(&self, raw: &str, generation: i64, path: &str) -> Result<PreviewCommit> {
+    fn complete_preview(
+        &self,
+        raw: &str,
+        generation: i64,
+        path: &str,
+        thumbnail: Option<&str>,
+        observed: Option<Fingerprint>,
+    ) -> Result<PreviewCommit> {
         let mut conn = self
             .conn
             .lock()
@@ -749,6 +889,15 @@ impl Store for SqliteStore {
         let prior: Option<String> = tx
             .query_row(
                 "SELECT adjusted_preview_path FROM photos WHERE raw_path=?1 ORDER BY id LIMIT 1",
+                [raw],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?
+            .flatten();
+        let prior_thumbnail: Option<String> = tx
+            .query_row(
+                "SELECT thumbnail_path FROM photos WHERE raw_path=?1 ORDER BY id LIMIT 1",
                 [raw],
                 |r| r.get(0),
             )
@@ -765,8 +914,8 @@ impl Store for SqliteStore {
             .map_err(db)?;
         drop(stmt);
         tx.execute(
-            "UPDATE photos SET adjusted_preview_path=?1 WHERE raw_path=?2",
-            params![path, raw],
+            "UPDATE photos SET adjusted_preview_path=?1,thumbnail_path=?2 WHERE raw_path=?3",
+            params![path, thumbnail, raw],
         )
         .map_err(db)?;
         tx.execute(
@@ -774,11 +923,103 @@ impl Store for SqliteStore {
             params![generation, raw],
         )
         .map_err(db)?;
+        let needs_review = observed
+            .as_ref()
+            .map(|f| adopt_frame_tx(&tx, raw, f))
+            .transpose()?
+            .unwrap_or_default();
         tx.commit().map_err(db)?;
         Ok(PreviewCommit {
             previous_path: prior,
+            previous_thumbnail: prior_thumbnail,
+            needs_review,
             photos: ids,
         })
+    }
+    fn composition(&self, photo_id: i64) -> Result<Composition> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        composition(&conn, photo_id)
+    }
+    fn compositions_in_session(&self, session_id: i64) -> Result<Vec<Composition>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt = conn.prepare(&format!("{COMPOSITION_SELECT} JOIN photos p ON p.id=c.photo_id WHERE p.session_id=?1 ORDER BY CASE p.classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END,p.position,p.captured_at,p.id")).map_err(db)?;
+        stmt.query_map([session_id], composition_row)
+            .map_err(db)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db)
+    }
+    fn save_composition(
+        &self,
+        photo_id: i64,
+        values: &CompositionValues,
+        origin: Origin,
+        now_ms: i64,
+    ) -> Result<(Composition, bool)> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let current = composition(&tx, photo_id)?;
+        if current.values().as_ref() == Some(values)
+            && current.state == CompositionState::Ok
+            && current.origin == origin
+        {
+            return Ok((current, false));
+        }
+        tx.execute("UPDATE compositions SET kind=?1,shape=?2,orientation=?3,quarter_turns=?4,flip=?5,straighten=?6,x=?7,y=?8,w=?9,h=?10,origin=?11,revision=revision+1,state='ok',review_reason=NULL,updated_at=?12 WHERE photo_id=?13", params![values.kind.as_str(),values.shape.as_str(),values.orientation.as_str(),values.quarter_turns,values.flip.as_str(),values.straighten,values.rect.x,values.rect.y,values.rect.w,values.rect.h,origin.as_str(),now_ms,photo_id]).map_err(db)?;
+        tx.execute("UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=(SELECT session_id FROM photos WHERE id=?2 AND classification!='deleted')", params![now_ms,photo_id]).map_err(db)?;
+        let saved = composition(&tx, photo_id)?;
+        tx.commit().map_err(db)?;
+        Ok((saved, true))
+    }
+    fn backfill_compositions(&self, default_shape: &str, now_ms: i64) -> Result<usize> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.execute("INSERT INTO compositions(photo_id,kind,shape,updated_at) SELECT p.id,'normal',?1,?2 FROM photos p WHERE NOT EXISTS(SELECT 1 FROM compositions c WHERE c.photo_id=p.id)", params![default_shape,now_ms]).map_err(db)
+    }
+    fn mark_previews_stale_once(&self, flag_key: &str, _now_ms: i64) -> Result<usize> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let already: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM settings WHERE key=?1)",
+                [flag_key],
+                |r| r.get(0),
+            )
+            .map_err(db)?;
+        if already {
+            return Ok(0);
+        }
+        let count = tx.execute("UPDATE raw_state SET adjusted_gen=adjusted_gen+1 WHERE EXISTS(SELECT 1 FROM photos WHERE photos.raw_path=raw_state.raw_path AND photos.adjusted_preview_path IS NOT NULL)", []).map_err(db)?;
+        tx.execute(
+            "INSERT INTO settings(key,value) VALUES (?1,'done')",
+            [flag_key],
+        )
+        .map_err(db)?;
+        tx.commit().map_err(db)?;
+        Ok(count)
+    }
+    fn adopt_frame(&self, raw: &str, observed: Fingerprint) -> Result<Vec<(i64, i64)>> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let result = adopt_frame_tx(&tx, raw, &observed)?;
+        tx.commit().map_err(db)?;
+        Ok(result)
     }
     fn set_missing_preview_paths(&self, raw: &str, path: &str) -> Result<Vec<(i64, i64)>> {
         let mut conn = self
@@ -1059,6 +1300,7 @@ impl Store for SqliteStore {
         let uid = uuid::Uuid::new_v4().to_string();
         tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,source,captured_at,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![uid,new.session_id,new.raw_path,shared_hash.or(new.raw_hash),new.source.as_str(),new.captured_at,new.created_at]).map_err(db)?;
         let id = tx.last_insert_rowid();
+        insert_default_composition(&tx, id, &self.default_shape, new.created_at)?;
         tx.execute(
             "UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=?2",
             params![new.created_at, new.session_id],
@@ -1106,6 +1348,7 @@ impl Store for SqliteStore {
         let uid = uuid::Uuid::new_v4().to_string();
         tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,source,captured_at,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![uid,new.session_id,new.raw_path,shared_hash.clone().or(new.raw_hash),new.source.as_str(),new.captured_at,new.created_at]).map_err(db)?;
         let id = tx.last_insert_rowid();
+        insert_default_composition(&tx, id, &self.default_shape, new.created_at)?;
         tx.execute("INSERT INTO raw_state(raw_path,path_key) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET path_key=excluded.path_key", params![new.raw_path,path_key]).map_err(db)?;
         for kind in ["original_preview", "hash", "render_preview"] {
             if kind == "hash" && (shared_hash.is_some() || hash_job_exists) {
@@ -1150,7 +1393,7 @@ impl Store for SqliteStore {
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let mut stmt = conn.prepare("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at FROM photos WHERE session_id=?1 ORDER BY CASE classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END,position,captured_at,id").map_err(db)?;
+        let mut stmt = conn.prepare("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at,thumbnail_path FROM photos WHERE session_id=?1 ORDER BY CASE classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END,position,captured_at,id").map_err(db)?;
         stmt.query_map([session_id], photo_row)
             .map_err(db)?
             .collect::<rusqlite::Result<_>>()

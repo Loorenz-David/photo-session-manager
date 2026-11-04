@@ -106,7 +106,7 @@ it('C2(c) workspace shows a stage and eight photo placeholders before two photos
   const panel = screen.getByLabelText('Photos');
   expect(panel.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(8);
   expect(document.querySelector('.stage-column [data-slot="skeleton"]')).toBeInTheDocument();
-  const photo = (id: number) => ({ id, session_id: 5, classification: 'main', position: id, captured_at: id, original_preview_path: null, adjusted_preview_path: null, orientation: 1, source: 'capture', integrity: 'ok', upload_state: null });
+  const photo = (id: number) => ({ id, session_id: 5, classification: 'main', position: id, captured_at: id, original_preview_path: null, adjusted_preview_path: null, thumbnail_path: null, composition: { photo_id: id, kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: null, frame: null, origin: 'default', revision: 0, state: 'ok', review_reason: null, updated_at: 0 }, orientation: 1, source: 'capture', integrity: 'ok', upload_state: null });
   await act(async () => pending.resolve({ session: { id: 5, item_id: null, published_at: null, published_seq: 0, change_seq: 0, dirty: false, last_activity_at: 0, created_at: 0, photo_count: 2, unreviewed_count: 0, main_count: 2, condition_count: 0, publish: null }, item: null, photos: [photo(1), photo(2)] } as SessionView));
   expect(within(screen.getByLabelText('Photos')).getAllByRole('button', { name: /^Photo 0/ })).toHaveLength(2);
   expect(document.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(0);

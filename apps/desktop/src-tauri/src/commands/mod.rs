@@ -1,5 +1,6 @@
 pub mod attributes;
 pub mod camera;
+pub mod compositions;
 pub mod export;
 pub mod health;
 pub mod items;

@@ -446,7 +446,7 @@ const documentId = '/Users/davidloorenz/Pictures/session test 1';
 const folder = documentId + '/Capture/PSM_PROBE_A';
 const raw = folder + '/session test 12199.ARW';
 let currentCollection = 'Capture';
-const image = { variants: { byId: id => ({ id, colorTag: () => 0 }) } };
+const image = { variants: { byId: id => ({ id, colorTag: () => 0, adjustments: { rotation: () => 0, flip: () => 'none', keystoneVertical: () => 0, keystoneHorizontal: () => 0, keystoneAmount: () => 100 } }) } };
 const target = { folder: () => ({toString: () => folder}), images: {whose: ({path}) => () => path === raw ? [image] : []} };
 const doc = { images: {whose: () => () => []}, collections: () => [target], set currentCollection(v) { currentCollection = v; } };
 const app = {running: () => true, documents: {byId: id => id === documentId ? doc : null}, process: () => ({toString: () => 'job-130'})};
@@ -470,9 +470,12 @@ console.log(JSON.stringify({job, tag, currentCollection}));
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["tag"], "0");
+    assert_eq!(result["currentCollection"], "Capture");
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
-        serde_json::json!({"job":"\"job-130\"","tag":"0","currentCollection":"Capture"})
+        serde_json::from_str::<serde_json::Value>(result["job"].as_str().unwrap()).unwrap(),
+        serde_json::json!({"job":"job-130","geometry":{"rotation":0,"flip":"none","keystoneVertical":0,"keystoneHorizontal":0,"keystoneAmount":100}})
     );
 }
 

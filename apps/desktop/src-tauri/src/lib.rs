@@ -134,6 +134,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::photos::photos_copy,
         commands::photos::photos_import,
         commands::photos::photos_assign_unassigned,
+        commands::compositions::composition_set,
+        commands::compositions::composition_reset,
         commands::export::export_run,
         commands::export::export_open_folder,
         commands::export::integration_get,
@@ -394,5 +396,119 @@ mod p21_tests {
             assert_eq!(shown[key], value);
             assert_eq!(stored[key], value);
         }
+    }
+}
+
+#[cfg(test)]
+mod p28_tests {
+    use super::*;
+    use psm_core::ports::store::Store;
+    use serde_json::{Value, json};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+    fn request(cmd: &str, args: Value) -> InvokeRequest {
+        InvokeRequest {
+            cmd: cmd.into(),
+            callback: CallbackFn(0),
+            error: CallbackFn(1),
+            url: "tauri://localhost".parse().unwrap(),
+            body: InvokeBody::Json(args),
+            headers: Default::default(),
+            invoke_key: INVOKE_KEY.to_string(),
+        }
+    }
+    fn result(
+        webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(webview, request(cmd, args)).map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw response"),
+        })
+    }
+    #[test]
+    fn c7b_commands_validate_and_serialize_compositions() {
+        let test = psm_testkit::TestApp::with_fake_document().unwrap();
+        let sid = test
+            .items()
+            .create_local("S1", "S1", "object", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let p = test.add_photo(sid, "a.ARW").unwrap();
+        test.app.store.upsert_raw_state(&p.raw_path, None).unwrap();
+        test.fake.add_image(&p.raw_path, &["7"], false);
+        test.app.previews.request_initial(&p.raw_path).unwrap();
+        test.complete_render_with(
+            "job-1",
+            &psm_testkit::fixtures::synthetic_jpeg::SyntheticJpeg::rgb(2560, 1707, [200, 100, 50]),
+        )
+        .unwrap();
+        let frameless = test.add_photo(sid, "b.ARW").unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = test;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::compositions::composition_set,
+                commands::compositions::composition_reset,
+                commands::sessions::session_get
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let webview = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let values = json!({"kind":"normal","shape":"1:1","orientation":"turned","quarter_turns":1,"flip":"horizontal","straighten":2.5,"rect":{"x":0.1,"y":0.3,"w":0.8,"h":0.5334375}});
+        let good = result(
+            &webview,
+            "composition_set",
+            json!({"photoId":p.id,"values":values}),
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                good["revision"].as_i64(),
+                good["origin"].as_str(),
+                good["state"].as_str()
+            ),
+            (Some(1), Some("user"), Some("ok"))
+        );
+        assert_eq!(good["review_reason"], Value::Null);
+        assert_eq!(good["rect"]["w"], json!(0.8));
+        assert_eq!(good["frame"], json!({"w":2560,"h":1707}));
+        assert!(good.get("geometry").is_none());
+        let bad=result(&webview,"composition_set",json!({"photoId":p.id,"values":{"kind":"normal","shape":"1:1","orientation":"named","quarter_turns":0,"flip":"none","straighten":0,"rect":{"x":0.2,"y":0,"w":0.666,"h":1}}})).unwrap_err();
+        assert_eq!(
+            (bad["code"].as_str(), bad["data"]["reason"].as_str()),
+            (Some("composition_invalid"), Some("off_shape"))
+        );
+        let unknown = result(
+            &webview,
+            "composition_set",
+            json!({"photoId":frameless.id,"values":values}),
+        )
+        .unwrap_err();
+        assert_eq!(unknown["code"], "frame_unknown");
+        let reset = result(&webview, "composition_reset", json!({"photoId":p.id})).unwrap();
+        assert_eq!(reset["origin"], "default");
+        let view = result(&webview, "session_get", json!({"sessionId":sid})).unwrap();
+        let photo = view["photos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["id"] == p.id)
+            .unwrap();
+        assert_eq!(photo["composition"], reset);
+        assert!(
+            photo["thumbnail_path"]
+                .as_str()
+                .unwrap()
+                .ends_with("thumb-1.jpg")
+        );
     }
 }

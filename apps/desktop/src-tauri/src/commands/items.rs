@@ -39,6 +39,11 @@ impl From<Error> for CommandError {
     fn from(error: Error) -> Self {
         let mut data = BTreeMap::new();
         let code = match &error {
+            Error::CompositionInvalid { reason } => {
+                data.insert("reason".into(), reason.clone());
+                "composition_invalid"
+            }
+            Error::FrameUnknown => "frame_unknown",
             Error::SkuCollision { existing_sku } => {
                 data.insert("existing_sku".into(), existing_sku.clone());
                 "sku_collision"

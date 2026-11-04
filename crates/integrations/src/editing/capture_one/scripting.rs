@@ -1,4 +1,5 @@
 use psm_core::Result;
+use psm_core::domain::composition::EditorGeometry;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +56,11 @@ pub struct StyleEnsure {
     pub listed: bool,
     pub applied: Vec<String>,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessStarted {
+    pub job_id: String,
+    pub geometry: EditorGeometry,
+}
 
 pub trait CaptureOneScripting: Send + Sync {
     fn editor_info(&self) -> Result<EditorInfo>;
@@ -75,7 +81,7 @@ pub trait CaptureOneScripting: Send + Sync {
     fn find_image_in_folder(&self, id: &str, folder: &str, raw: &str) -> Result<Option<String>>;
     fn get_color_tag(&self, id: &str, variant: &str) -> Result<i32>;
     fn set_color_tag(&self, id: &str, variant: &str, tag: i32) -> Result<()>;
-    fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<String>;
+    fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<ProcessStarted>;
     fn capture(&self) -> Result<()>;
     fn import(&self, id: &str, paths: &[String]) -> Result<()>;
 }

@@ -100,11 +100,25 @@ impl JxaScripting {
         Ok((raw, folder))
     }
 }
-pub fn parse_process_result(value: &str) -> Result<String> {
+pub fn parse_process_result(value: &str) -> Result<super::scripting::ProcessStarted> {
     if value.starts_with("ERROR") {
         Err(Error::Provider(value.into()))
     } else {
-        Ok(value.into())
+        let parsed: serde_json::Value =
+            serde_json::from_str(value).map_err(|e| Error::InvalidData(e.to_string()))?;
+        let geometry = serde_json::from_value(
+            parsed
+                .get("geometry")
+                .cloned()
+                .ok_or_else(|| Error::InvalidData("missing geometry".into()))?,
+        )
+        .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let job_id = parsed
+            .get("job")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::InvalidData("missing job".into()))?
+            .to_owned();
+        Ok(super::scripting::ProcessStarted { job_id, geometry })
     }
 }
 impl CaptureOneScripting for JxaScripting {
@@ -193,10 +207,17 @@ impl CaptureOneScripting for JxaScripting {
             &[id, &raw, &folder, variant, &tag.to_string()],
         )
     }
-    fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<String> {
+    fn process(
+        &self,
+        id: &str,
+        variant: &str,
+        recipe: &str,
+    ) -> Result<super::scripting::ProcessStarted> {
         let (raw, folder) = self.variant_location(variant)?;
         parse_process_result(
-            &self.call::<String>("process", &[id, &raw, &folder, variant, recipe])?,
+            &self
+                .call::<serde_json::Value>("process", &[id, &raw, &folder, variant, recipe])?
+                .to_string(),
         )
     }
     fn capture(&self) -> Result<()> {
@@ -217,7 +238,7 @@ mod tests {
     use super::*;
     #[test]
     fn mc16_process_result() {
-        assert_eq!(parse_process_result("job-1").unwrap(), "job-1");
+        assert_eq!(parse_process_result(r#"{"job":"job-1","geometry":{"rotation":0,"flip":"none","keystoneVertical":0,"keystoneHorizontal":0,"keystoneAmount":100}}"#).unwrap().job_id, "job-1");
         assert!(matches!(
             parse_process_result("ERROR failed"),
             Err(Error::Provider(_))

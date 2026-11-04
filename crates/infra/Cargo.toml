@@ -18,6 +18,8 @@ axum = "0.8"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
 chrono = "0.4"
+image = "0.25"
+fast_image_resize = "6"
 
 [dev-dependencies]
 tempfile = "3"

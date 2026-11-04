@@ -1,5 +1,9 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("composition_invalid: {reason}")]
+    CompositionInvalid { reason: String },
+    #[error("frame_unknown")]
+    FrameUnknown,
     #[error("operation timed out")]
     Timeout,
     #[error("I/O: {0}")]

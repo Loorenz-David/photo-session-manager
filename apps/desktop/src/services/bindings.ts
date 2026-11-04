@@ -30,6 +30,8 @@ export const commands = {
 	photosCopy: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_copy", { photoIds, targetSessionId })),
 	photosImport: (paths: string[]) => typedError<null, CommandError>(__TAURI_INVOKE("photos_import", { paths })),
 	photosAssignUnassigned: (itemId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_assign_unassigned", { itemId })),
+	compositionSet: (photoId: CommandId, values: CompositionValuesDto) => typedError<CompositionDto_Serialize, CommandError>(__TAURI_INVOKE("composition_set", { photoId, values })),
+	compositionReset: (photoId: CommandId) => typedError<CompositionDto_Serialize, CommandError>(__TAURI_INVOKE("composition_reset", { photoId })),
 	/**
 	 *  Starts the local export of the session (ch07 §Completion without an integration). Progress and
 	 *  the outcome arrive as `export_progress` events; a changed or missing RAW fails here, before any render.
@@ -132,6 +134,52 @@ export type CommandError = {
 
 export type CommandId = number;
 
+export type CompositionDto = CompositionDto_Serialize | CompositionDto_Deserialize;
+
+export type CompositionDto_Deserialize = {
+	photo_id: number,
+	kind: string,
+	shape: string,
+	orientation: string,
+	quarter_turns: number,
+	flip: string,
+	straighten: number | null,
+	rect?: RectDto | null,
+	frame?: FrameDto | null,
+	origin: string,
+	revision: number,
+	state: string,
+	review_reason?: string | null,
+	updated_at: number,
+};
+
+export type CompositionDto_Serialize = {
+	photo_id: number,
+	kind: string,
+	shape: string,
+	orientation: string,
+	quarter_turns: number,
+	flip: string,
+	straighten: number | null,
+	rect: RectDto | null,
+	frame: FrameDto | null,
+	origin: string,
+	revision: number,
+	state: string,
+	review_reason: string | null,
+	updated_at: number,
+};
+
+export type CompositionValuesDto = {
+	kind: string,
+	shape: string,
+	orientation: string,
+	quarter_turns: number,
+	flip: string,
+	straighten: number | null,
+	rect: RectDto,
+};
+
 /**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */
 export type DefinitionDto = DefinitionDto_Serialize | DefinitionDto_Deserialize;
 
@@ -211,6 +259,11 @@ export type FormGroupDto_Serialize = {
 	fields: FormFieldDto_Serialize[],
 	filled: number,
 	total: number,
+};
+
+export type FrameDto = {
+	w: number,
+	h: number,
 };
 
 export type HealthItemDto = {
@@ -308,6 +361,8 @@ export type PhotoResponse_Deserialize = {
 	captured_at?: number | null,
 	original_preview_path?: string | null,
 	adjusted_preview_path?: string | null,
+	thumbnail_path?: string | null,
+	composition: CompositionDto_Deserialize,
 	orientation?: number | null,
 	source: string,
 	integrity: string,
@@ -323,6 +378,8 @@ export type PhotoResponse_Serialize = {
 	captured_at: number | null,
 	original_preview_path: string | null,
 	adjusted_preview_path: string | null,
+	thumbnail_path: string | null,
+	composition: CompositionDto_Serialize,
 	orientation: number | null,
 	source: string,
 	integrity: string,
@@ -374,6 +431,13 @@ export type PreviewItemDto = {
 	unreviewed: number,
 	announced_removals: string[],
 	create_item: boolean,
+};
+
+export type RectDto = {
+	x: number | null,
+	y: number | null,
+	w: number | null,
+	h: number | null,
 };
 
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;

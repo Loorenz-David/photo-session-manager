@@ -78,6 +78,9 @@ impl TestApp {
     pub fn store(&self) -> &dyn Store {
         self.app.store.as_ref()
     }
+    pub fn composition(&self, photo_id: i64) -> Result<psm_core::domain::composition::Composition> {
+        self.app.store.composition(photo_id)
+    }
     pub fn new() -> Result<Self> {
         Self::create(false, false, "custom.damage_report")
     }
@@ -201,6 +204,9 @@ impl TestApp {
         self.app.previews.on_focus()
     }
     pub fn complete_render(&self, job_id: &str) -> Result<PathBuf> {
+        self.complete_render_with(job_id, &FakeCaptureOneScripting::output_bytes(job_id))
+    }
+    pub fn complete_render_with(&self, job_id: &str, bytes: &[u8]) -> Result<PathBuf> {
         let entry = self
             .app
             .editing
@@ -214,7 +220,7 @@ impl TestApp {
                 .to_string_lossy()
         ));
         std::fs::create_dir_all(output.parent().unwrap())?;
-        std::fs::write(&output, FakeCaptureOneScripting::output_bytes(job_id))?;
+        std::fs::write(&output, bytes)?;
         std::fs::File::options()
             .write(true)
             .open(&output)?

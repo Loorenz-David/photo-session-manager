@@ -1,5 +1,6 @@
 use crate::{
     Result,
+    domain::composition::{Fingerprint, FrameSource},
     domain::editing::RenderPurpose,
     events::AppEvent,
     mechanisms::{
@@ -11,6 +12,7 @@ use crate::{
         clock::Clock,
         editing::{EditingProvider, RenderCompletion},
         events::EventSink,
+        images::Imaging,
         store::Store,
     },
 };
@@ -23,6 +25,7 @@ use std::{
 
 pub trait PreviewFiles: Send + Sync {
     fn copy_adjusted(&self, raw: &str, generation: i64, source: &Path) -> Result<PathBuf>;
+    fn thumbnail_path(&self, raw: &str, generation: i64) -> PathBuf;
     fn remove(&self, path: &Path) -> Result<()>;
 }
 
@@ -38,6 +41,7 @@ pub struct PreviewService {
     pub events: Arc<dyn EventSink>,
     pub clock: Arc<dyn Clock>,
     pub files: Arc<dyn PreviewFiles>,
+    pub imaging: Arc<dyn Imaging>,
     pub delay: Duration,
     pub export_staging: Option<Arc<dyn ExportStaging>>,
     last_adjusted: Mutex<HashMap<String, Instant>>,
@@ -61,6 +65,7 @@ impl PreviewService {
             events,
             clock,
             files,
+            imaging: Arc::new(crate::ports::images::NoImaging),
             delay: clamp_delay(delay_setting),
             export_staging: None,
             last_adjusted: Mutex::new(HashMap::new()),
@@ -147,11 +152,29 @@ impl PreviewService {
                     .files
                     .copy_adjusted(&entry.raw, entry.generation, output)?;
                 let dest_str = dest.to_string_lossy().into_owned();
-                let commit =
-                    self.store
-                        .complete_preview(&entry.raw, entry.generation, &dest_str)?;
+                let frame = self.imaging.dimensions(&dest)?;
+                let thumb = self.files.thumbnail_path(&entry.raw, entry.generation);
+                let made = self.imaging.thumbnail(&dest, &thumb, 640)?;
+                let thumb_str = thumb.to_string_lossy().into_owned();
+                let observed = frame.map(|frame| Fingerprint {
+                    frame,
+                    source: FrameSource::Preview,
+                    geometry: entry.geometry.clone(),
+                });
+                let commit = self.store.complete_preview(
+                    &entry.raw,
+                    entry.generation,
+                    &dest_str,
+                    made.then_some(thumb_str.as_str()),
+                    observed,
+                )?;
                 if let Some(prior) = commit.previous_path
                     && prior != dest_str
+                {
+                    self.files.remove(Path::new(&prior))?;
+                }
+                if let Some(prior) = commit.previous_thumbnail
+                    && (!made || prior != thumb_str)
                 {
                     self.files.remove(Path::new(&prior))?;
                 }

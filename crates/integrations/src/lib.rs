@@ -30,14 +30,15 @@ use psm_core::{
     },
     services::{
         arrival::ArrivalService, attributes::AttributesService, camera::CameraService,
-        editing_events::EditingEventsDispatcher, editing_startup::EditingStartup,
-        export::ExportService, health::HealthService, previews::PreviewService,
-        publish::PublishService, settings::SettingsService,
+        composition::CompositionService, editing_events::EditingEventsDispatcher,
+        editing_startup::EditingStartup, export::ExportService, health::HealthService,
+        previews::PreviewService, publish::PublishService, settings::SettingsService,
     },
 };
 use psm_infra::{
     backup,
     export_fs::ExportFs,
+    imaging::ImageOpsImpl,
     jobs::{JobHandler, JobRunner},
     nudge::NudgeServer,
     paths::AppPaths,
@@ -75,6 +76,7 @@ pub struct App {
     pub publish_jobs: Arc<JobRunner>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
+    pub compositions: Arc<CompositionService>,
     pub export: Arc<ExportService>,
     pub publish: Option<Arc<PublishService>>,
     pub events: Arc<EventHub>,
@@ -102,6 +104,7 @@ pub struct AppHandles {
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
+    pub compositions: Arc<CompositionService>,
     pub export: Arc<ExportService>,
     pub publish: Option<Arc<PublishService>>,
     pub events: Arc<EventHub>,
@@ -282,6 +285,7 @@ impl App {
             commerce: self.commerce.clone(),
             arrival: self.arrival.clone(),
             previews: self.previews.clone(),
+            compositions: self.compositions.clone(),
             export: self.export.clone(),
             publish: self.publish.clone(),
             events: self.events.clone(),
@@ -355,8 +359,10 @@ impl App {
             _ => None,
         };
         let store = Arc::new(
-            SqliteStore::open(&paths).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
+            SqliteStore::open_with_default_shape(&paths, &settings.default_shape)
+                .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
         );
+        store.backfill_compositions(&settings.default_shape, clock.now_ms())?;
         // ch12 §Backup: a copy at every start (a settings reopen is not a start).
         let backup_problem = if start_backup {
             backup::create(&paths).err().map(|e| e.to_string())
@@ -364,6 +370,7 @@ impl App {
             None
         };
         if start_backup {
+            store.mark_previews_stale_once("rerender_after_composition", clock.now_ms())?;
             store.requeue_running_jobs()?;
             if commerce.is_some() {
                 for id in store.active_publish_items()? {
@@ -405,6 +412,13 @@ impl App {
             document_id: document_id.clone(),
         });
         let events = Arc::new(EventHub::default());
+        let compositions = Arc::new(CompositionService {
+            store: store.clone(),
+            clock: clock.clone(),
+            events: events.clone(),
+            default_shape: psm_core::domain::composition::Shape::parse(&settings.default_shape)
+                .unwrap_or(psm_core::domain::composition::Shape::Square),
+        });
         let arrival = Arc::new(ArrivalService::new(
             store.clone(),
             editing.clone(),
@@ -436,6 +450,7 @@ impl App {
             Arc::new(PreviewStore(paths.clone())),
             Some(&settings.preview_delay_s.to_string()),
         );
+        previews.imaging = Arc::new(ImageOpsImpl);
         previews.export_staging = Some(export.clone());
         let previews = Arc::new(previews);
         spool.set_dispatcher(Arc::new(EditingEventsDispatcher {
@@ -610,6 +625,7 @@ impl App {
             publish_jobs,
             arrival,
             previews,
+            compositions,
             export,
             publish,
             events,

@@ -1,6 +1,6 @@
 use super::{
     renders::{PendingRender, RenderEntry, RenderRegistry, accept_output, base_name},
-    scripting::CaptureOneScripting,
+    scripting::{CaptureOneScripting, ProcessStarted},
 };
 use psm_core::{
     Error, Result,
@@ -85,6 +85,19 @@ impl CaptureOneAdapter {
             return Err(Error::CaptureFolderNotSet);
         }
         Ok(())
+    }
+    fn render_started(&self, raw: &str, purpose: RenderPurpose) -> Result<ProcessStarted> {
+        let recipe = match purpose {
+            RenderPurpose::Preview => &self.preview_recipe,
+            RenderPurpose::Export => &self.web_recipe,
+        };
+        if !self.background.recipe_exists(&self.document_id, recipe)? {
+            return Err(Error::RecipeMissing {
+                name: recipe.clone(),
+            });
+        }
+        let variant = self.variant_background(raw)?;
+        self.background.process(&self.document_id, &variant, recipe)
     }
 }
 pub fn capture_root(document_id: &str) -> Result<PathBuf> {
@@ -203,17 +216,8 @@ impl EditingProvider for CaptureOneAdapter {
         result
     }
     fn render(&self, raw: &str, purpose: RenderPurpose) -> Result<String> {
-        let recipe = match purpose {
-            RenderPurpose::Preview => &self.preview_recipe,
-            RenderPurpose::Export => &self.web_recipe,
-        };
-        if !self.background.recipe_exists(&self.document_id, recipe)? {
-            return Err(Error::RecipeMissing {
-                name: recipe.clone(),
-            });
-        }
-        let variant = self.variant_background(raw)?;
-        self.background.process(&self.document_id, &variant, recipe)
+        self.render_started(raw, purpose)
+            .map(|started| started.job_id)
     }
     fn request_render(
         &self,
@@ -249,13 +253,14 @@ impl EditingProvider for CaptureOneAdapter {
                 return Ok(());
             }
         }
-        let result = self.render(raw, purpose);
+        let result = self.render_started(raw, purpose);
         let mut state = self
             .renders
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         match result {
-            Ok(job_id) => {
+            Ok(started) => {
+                let job_id = started.job_id;
                 state.jobs.insert(
                     job_id.clone(),
                     RenderEntry {
@@ -266,6 +271,7 @@ impl EditingProvider for CaptureOneAdapter {
                             generation,
                             issued_at_ms: now_ms,
                             tracking_job_id,
+                            geometry: started.geometry,
                         },
                         issued_mono: now,
                         attempts: 0,
@@ -313,13 +319,14 @@ impl EditingProvider for CaptureOneAdapter {
             }
         };
         if let Some(next) = next {
-            let result = self.render(&next.raw, next.purpose);
+            let result = self.render_started(&next.raw, next.purpose);
             let mut state = self
                 .renders
                 .lock()
                 .map_err(|e| Error::InvalidData(e.to_string()))?;
             match result {
-                Ok(job_id) => {
+                Ok(started) => {
+                    let job_id = started.job_id;
                     state.jobs.insert(
                         job_id.clone(),
                         RenderEntry {
@@ -330,6 +337,7 @@ impl EditingProvider for CaptureOneAdapter {
                                 generation: next.generation,
                                 issued_at_ms: now_ms,
                                 tracking_job_id: next.tracking_job_id,
+                                geometry: started.geometry,
                             },
                             issued_mono: now,
                             attempts: 0,
@@ -391,15 +399,17 @@ impl EditingProvider for CaptureOneAdapter {
                 (entry, next)
             };
             if entry.attempts == 0 {
-                let result = self.render(&entry.completion.raw, entry.completion.purpose);
+                let result = self.render_started(&entry.completion.raw, entry.completion.purpose);
                 let mut state = self
                     .renders
                     .lock()
                     .map_err(|e| Error::InvalidData(e.to_string()))?;
                 match result {
-                    Ok(new_id) => {
+                    Ok(started) => {
+                        let new_id = started.job_id;
                         let mut entry = entry;
                         entry.completion.job_id = new_id.clone();
+                        entry.completion.geometry = started.geometry;
                         entry.completion.issued_at_ms = now_ms;
                         entry.issued_mono = now;
                         entry.attempts = 1;
@@ -416,13 +426,14 @@ impl EditingProvider for CaptureOneAdapter {
                     entry.completion.generation,
                 ));
                 if let Some(next) = next {
-                    let result = self.render(&next.raw, next.purpose);
+                    let result = self.render_started(&next.raw, next.purpose);
                     let mut state = self
                         .renders
                         .lock()
                         .map_err(|e| Error::InvalidData(e.to_string()))?;
                     match result {
-                        Ok(job_id) => {
+                        Ok(started) => {
+                            let job_id = started.job_id;
                             state.jobs.insert(
                                 job_id.clone(),
                                 RenderEntry {
@@ -433,6 +444,7 @@ impl EditingProvider for CaptureOneAdapter {
                                         generation: next.generation,
                                         issued_at_ms: now_ms,
                                         tracking_job_id: next.tracking_job_id,
+                                        geometry: started.geometry,
                                     },
                                     issued_mono: now,
                                     attempts: 0,

@@ -143,6 +143,12 @@ impl<'a> SessionsService<'a> {
         Ok(crate::domain::session::SessionView {
             session,
             item,
+            compositions: self
+                .store
+                .compositions_in_session(id)?
+                .into_iter()
+                .filter(|c| photos.iter().any(|p| p.id == c.photo_id))
+                .collect(),
             photos,
             publish,
             upload_states,

@@ -1,6 +1,7 @@
 use crate::{
     Result,
     domain::{
+        composition::EditorGeometry,
         editing::{
             DocumentState, EditingCapabilities, ProvisionInputs, ProvisionReport, RenderPurpose,
         },
@@ -20,6 +21,7 @@ pub struct RenderCompletion {
     pub generation: i64,
     pub issued_at_ms: i64,
     pub tracking_job_id: i64,
+    pub geometry: EditorGeometry,
 }
 
 pub trait EditingProvider: Send + Sync {

@@ -6,7 +6,21 @@ use std::{
 };
 
 pub struct PreviewStore(pub AppPaths);
+impl PreviewStore {
+    pub fn thumbnail_path(&self, raw: &str, generation: i64) -> PathBuf {
+        let key = path_key(raw);
+        self.0
+            .root
+            .join("previews")
+            .join(&key[..2])
+            .join(key)
+            .join(format!("thumb-{generation}.jpg"))
+    }
+}
 impl PreviewFiles for PreviewStore {
+    fn thumbnail_path(&self, raw: &str, generation: i64) -> PathBuf {
+        self.thumbnail_path(raw, generation)
+    }
     fn copy_adjusted(&self, raw: &str, generation: i64, source: &Path) -> Result<PathBuf> {
         let key = path_key(raw);
         let dir = self.0.root.join("previews").join(&key[..2]).join(key);

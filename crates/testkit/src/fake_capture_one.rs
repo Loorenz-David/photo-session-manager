@@ -10,6 +10,7 @@ use std::{collections::HashMap, fs, path::Path, sync::Mutex};
 pub struct FakeVariant {
     pub id: String,
     pub tag: i32,
+    pub geometry: psm_core::domain::composition::EditorGeometry,
 }
 pub struct FakeState {
     pub document_id: String,
@@ -171,12 +172,30 @@ impl FakeCaptureOneScripting {
             .map(|id| FakeVariant {
                 id: (*id).into(),
                 tag: 3,
+                geometry: Default::default(),
             })
             .collect();
         if in_folder {
             s.folder_images.insert(raw.into(), value);
         } else {
             s.images.insert(raw.into(), value);
+        }
+    }
+    pub fn set_variant_geometry(
+        &self,
+        variant: &str,
+        geometry: psm_core::domain::composition::EditorGeometry,
+    ) {
+        let mut s = self.state.lock().unwrap();
+        for v in s.images.values_mut().flat_map(|v| v.iter_mut()) {
+            if v.id == variant {
+                v.geometry = geometry.clone();
+            }
+        }
+        for v in s.folder_images.values_mut().flat_map(|v| v.iter_mut()) {
+            if v.id == variant {
+                v.geometry = geometry.clone();
+            }
         }
     }
 }
@@ -497,7 +516,12 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         }
         if timeout { Err(Error::Timeout) } else { Ok(()) }
     }
-    fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<String> {
+    fn process(
+        &self,
+        id: &str,
+        variant: &str,
+        recipe: &str,
+    ) -> Result<psm_integrations::editing::capture_one::scripting::ProcessStarted> {
         self.check_id(id)?;
         let mut s = self.state.lock().unwrap();
         s.ops.push(format!("process:{variant}:{recipe}"));
@@ -507,7 +531,20 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         let id = format!("job-{}", s.next_job);
         s.next_job += 1;
         s.issued.push((id.clone(), variant.into(), recipe.into()));
-        Ok(id)
+        let geometry = s
+            .images
+            .values()
+            .chain(s.folder_images.values())
+            .flat_map(|v| v.iter())
+            .find(|v| v.id == variant)
+            .map(|v| v.geometry.clone())
+            .unwrap_or_default();
+        Ok(
+            psm_integrations::editing::capture_one::scripting::ProcessStarted {
+                job_id: id,
+                geometry,
+            },
+        )
     }
     fn capture(&self) -> Result<()> {
         self.state.lock().unwrap().ops.push("capture".into());
