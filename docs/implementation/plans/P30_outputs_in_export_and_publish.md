@@ -256,3 +256,14 @@ whose `uploaded_sha` equals the r1 output's hash. **Files:** `crates/core/src/se
 `update` fails `update` with `UploadIncomplete` on every retry; first publish after migration 005 re-uploads photos whose composition
 revision is ≥ 1; identical `set` on a default composition bumps the revision (P31); C4(c) "three retired rows" is impossible under the
 plan's own key (plan lesson).
+
+### Fix 1 (2026-11-04, sonnet, pipeline-implementer)
+**F1 resolved.** `services/publish.rs` `prepare`: `replaced` also holds for a link in `staged`/`uploaded`/`attached` whose recorded
+`composition_rev < staged composition_rev` or `retouch_gen < export_gen`. The existing replacement branch then moves the old
+`external_id` to `superseded_ids`, bumps `revision`, sets state `none`; the stale media matches an own stem/superseded id and is removed
+by reconciliation. `mechanisms/publish.rs` untouched (the rule lives in `prepare`, `replacement_candidates` stays ready-only).
+Tests: new `c8a_a_media_created_before_a_crash_is_replaced_when_the_photo_is_reframed` (probe shape: `fail_after_effect("product_create_media")`,
+crash, restart, re-frame, drain → one media for `a`, its `uploaded_sha` and the link's `export_sha256` equal the r1 output's hash).
+Judgment: existing C8(a) (failure *before* the effect, state `uploaded`, no media) now also takes the replacement path, since `prepare`
+cannot tell whether media exists; its file is uploaded as `K-<uid12>-r1.jpg` instead of `K-<uid12>.jpg`. The test's name key was updated;
+the hash and cleanup assertions are unchanged. Plan row C8(a) names the unsuffixed file: candidate plan amendment.

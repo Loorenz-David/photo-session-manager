@@ -703,7 +703,13 @@ impl PublishService {
                 &HashMap::from([(id, export_gen)]),
                 &HashMap::from([(id, composition_rev)]),
             )
-            .contains(&id);
+            .contains(&id)
+                // A link whose remote media may already exist from an earlier staging (staged,
+                // uploaded, attached) and whose recorded generation or revision is older than
+                // the staged file's holds a stale rendering: replace it like a ready link, so
+                // the stale media is never adopted and reconciliation removes it.
+                || (matches!(link.upload_state.as_str(), "staged" | "uploaded" | "attached")
+                    && (link.composition_rev < composition_rev || link.retouch_gen < export_gen));
             if replaced {
                 if let Some(old_id) = link.external_id.take() {
                     link.superseded_ids.push(old_id);

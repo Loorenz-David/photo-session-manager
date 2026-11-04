@@ -983,7 +983,7 @@ fn c8a_a_stale_staging_from_a_failed_attempt_is_rendered_again() {
     ));
     let expected = sha256_file(&output).unwrap();
     assert_eq!(
-        a.fake_shop().uploaded_sha(&name(&pa, "")),
+        a.fake_shop().uploaded_sha(&name(&pa, "-r1")),
         Some(expected.clone())
     );
     assert_eq!(
@@ -1003,6 +1003,41 @@ fn c8a_a_stale_staging_from_a_failed_attempt_is_rendered_again() {
         manifest["outputs"]["K_01_main.jpg"]["composition_rev"],
         json!(1)
     );
+}
+
+#[test]
+fn c8a_a_media_created_before_a_crash_is_replaced_when_the_photo_is_reframed() {
+    let mut a = shop_app();
+    let s = session(&a);
+    let pa = photo(&a, s, "a", C::Main);
+    a.fake_shop().fail_after_effect("product_create_media");
+    confirm(&a, s).unwrap();
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drain(&a))).is_err());
+    a.kill_and_restart().unwrap();
+    other_square(&a, &pa);
+    assert_eq!(a.composition(pa.id).unwrap().revision, 1);
+    drain(&a);
+    assert_eq!(latest(&a, s).step, PublishStep::Done);
+    let g = a.store().adjusted_gen(&pa.raw_path).unwrap();
+    let output = a.outputs_dir(&pa.raw_path).join(format!(
+        "{}-single-g{g}-r1-jpeg-2048-q90.jpg",
+        uid12(&pa.uid)
+    ));
+    let expected = sha256_file(&output).unwrap();
+    let uid = uid12(&pa.uid);
+    let of_a: Vec<(String, String)> = media(&a)
+        .into_iter()
+        .filter(|(_, n)| n.contains(&uid))
+        .collect();
+    assert_eq!(of_a.len(), 1, "the stale media is removed: {of_a:?}");
+    assert_eq!(
+        a.fake_shop().uploaded_sha(&of_a[0].1),
+        Some(expected.clone()),
+        "the media on the shop is the re-framed rendering"
+    );
+    let la = link(&a, s, &pa, "gallery", OutputSlot::Single).unwrap();
+    assert_eq!(la.export_sha256, Some(expected));
+    assert_eq!(la.external_id, Some(of_a[0].0.clone()));
 }
 
 #[test]
