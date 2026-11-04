@@ -89,7 +89,7 @@ export function SettingsPage() {
       <div className="flex flex-col gap-1">
         <p>Capture One session</p>
         <p>{settings.document_id || 'Session Manager (created by the app)'}</p>
-        <p className="health-detail">Effective path: {settings.document_id || (page.data?.document_id ? '~/Pictures/Session Manager' : settings.effective_document_id)}</p>
+        <p className="health-detail">Effective path: {settings.document_id || settings.default_document_id}</p>
         <div className="flex gap-2">
           <Button type="button" variant="outline" disabled={chooseSession.busy} onClick={() => void chooseSession.run()}>Use another session…</Button>
           {settings.document_id && <Button type="button" variant="outline" onClick={() => edit({ document_id: null })}>Use the app&apos;s own session</Button>}

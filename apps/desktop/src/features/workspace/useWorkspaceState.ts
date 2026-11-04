@@ -136,12 +136,11 @@ export function useWorkspaceState(sessionId: number) {
         toast.error(refusalText(error));
         return null;
       } finally {
-        try {
+        commandsInFlight.current -= 1;
+        if (commandsInFlight.current === 0) {
+          reloadWanted.current = false;
           await reload();
-        } finally {
-          commandsInFlight.current -= 1;
-          if (commandsInFlight.current === 0) reloadWanted.current = false;
-        }
+        } else reloadWanted.current = true;
       }
     },
     [reload, setActiveId],
