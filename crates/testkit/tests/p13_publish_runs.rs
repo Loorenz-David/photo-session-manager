@@ -131,6 +131,8 @@ fn start_upload(a: &TestApp, session_id: i64) -> i64 {
         .unwrap();
     a.tick(1100).unwrap();
     a.complete_all_renders().unwrap();
+    // P29: the staged files are the app's own renders, made by the `render_output` runner.
+    a.app.render_jobs.tick(a.clock.now_ms()).unwrap();
     run
 }
 fn interrupted_publish(op: &str) -> (TestApp, i64, i64) {

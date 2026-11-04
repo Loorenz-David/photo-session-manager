@@ -352,6 +352,7 @@ fn c5c_export_of_recent_unhashed_photo_writes_image() {
         .unwrap();
     a.app.export.run(s).unwrap();
     a.complete_all_renders().unwrap();
+    a.tick(0).unwrap(); // P29: the `render_output` job writes the exported file
     assert!(a.dir.path().join("Export/K1/K1_01_main.jpg").exists());
     assert_eq!(
         a.store().photo(id).unwrap().raw_hash,

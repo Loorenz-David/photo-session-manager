@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod commerce;
 pub mod editing;
+pub mod render_output;
 
 use camera::via_capture_one::CameraViaCaptureOne;
 use commerce::shopify::{
@@ -29,10 +30,17 @@ use psm_core::{
         store::Store,
     },
     services::{
-        arrival::ArrivalService, attributes::AttributesService, camera::CameraService,
-        composition::CompositionService, editing_events::EditingEventsDispatcher,
-        editing_startup::EditingStartup, export::ExportService, health::HealthService,
-        previews::PreviewService, publish::PublishService, settings::SettingsService,
+        arrival::ArrivalService,
+        attributes::AttributesService,
+        camera::CameraService,
+        composition::CompositionService,
+        editing_events::EditingEventsDispatcher,
+        editing_startup::EditingStartup,
+        export::{ExportRender, ExportService},
+        health::HealthService,
+        previews::PreviewService,
+        publish::PublishService,
+        settings::SettingsService,
     },
 };
 use psm_infra::{
@@ -40,6 +48,7 @@ use psm_infra::{
     export_fs::ExportFs,
     imaging::ImageOpsImpl,
     jobs::{JobHandler, JobRunner},
+    media_store::{MasterFiles, OutputFiles},
     nudge::NudgeServer,
     paths::AppPaths,
     previews_store::PreviewStore,
@@ -74,6 +83,8 @@ pub struct App {
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub jobs: Arc<JobRunner>,
     pub publish_jobs: Arc<JobRunner>,
+    /// The `render_output` runner (10D MC-28: one output render at a time, on its own thread).
+    pub render_jobs: Arc<JobRunner>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
     pub compositions: Arc<CompositionService>,
@@ -89,6 +100,7 @@ pub struct App {
     stop: Arc<AtomicBool>,
     background: Option<thread::JoinHandle<()>>,
     publish_background: Option<thread::JoinHandle<()>>,
+    render_background: Option<thread::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
@@ -403,7 +415,6 @@ impl App {
             health.clone(),
             document_id.clone(),
             settings.preview_recipe.clone(),
-            settings.web_recipe.clone(),
             settings.master_recipe.clone(),
             paths.clone(),
         ));
@@ -426,12 +437,23 @@ impl App {
             events.clone(),
             clock.clone(),
         ));
+        let imaging: Arc<dyn psm_core::ports::images::Imaging> = Arc::new(ImageOpsImpl);
+        let masters: Arc<dyn psm_core::ports::images::MasterStore> =
+            Arc::new(MasterFiles(paths.clone()));
+        let outputs: Arc<dyn psm_core::ports::images::OutputStore> =
+            Arc::new(OutputFiles(paths.clone()));
         let export = Arc::new(ExportService::new(
             store.clone(),
             editing.clone(),
             events.clone(),
             clock.clone(),
             Arc::new(ExportFs::new(&settings.export_folder)),
+            ExportRender {
+                imaging: imaging.clone(),
+                masters: masters.clone(),
+                outputs: outputs.clone(),
+                format: settings.output_format,
+            },
         ));
         let publish = commerce.as_ref().map(|adapter| {
             Arc::new(PublishService::new(
@@ -450,7 +472,7 @@ impl App {
             Arc::new(PreviewStore(paths.clone())),
             Some(&settings.preview_delay_s.to_string()),
         );
-        previews.imaging = Arc::new(ImageOpsImpl);
+        previews.imaging = imaging.clone();
         previews.export_staging = Some(export.clone());
         let previews = Arc::new(previews);
         spool.set_dispatcher(Arc::new(EditingEventsDispatcher {
@@ -468,8 +490,20 @@ impl App {
         if let Err(error) = previews.on_startup() {
             tracing::warn!(%error, "startup sidecar check deferred");
         }
-        let mut runner = JobRunner::new(store.clone()).excluding_kind("publish_step");
+        let mut runner =
+            JobRunner::new(store.clone()).excluding_kinds(&["publish_step", "render_output"]);
         let mut publish_runner = JobRunner::new(store.clone()).only_kind("publish_step");
+        let mut render_runner = JobRunner::new(store.clone()).only_kind("render_output");
+        render_runner.register(
+            "render_output",
+            Arc::new(render_output::RenderOutputJob {
+                store: store.clone(),
+                imaging: imaging.clone(),
+                masters: masters.clone(),
+                outputs: outputs.clone(),
+                export: export.clone(),
+            }),
+        );
         runner.register(
             "mirror_tag",
             Arc::new(MirrorTag {
@@ -498,6 +532,7 @@ impl App {
             }),
         );
         runner.register("render_export", Arc::new(InterruptedExport));
+        runner.register("render_master", Arc::new(InterruptedExport));
         if let Some(service) = publish.clone() {
             publish_runner.register(
                 "publish_step",
@@ -511,6 +546,7 @@ impl App {
         }
         let jobs = Arc::new(runner);
         let publish_jobs = Arc::new(publish_runner);
+        let render_jobs = Arc::new(render_runner);
         if run_startup {
             let startup_editing = editing.clone();
             let startup_store = store.clone();
@@ -609,6 +645,19 @@ impl App {
         } else {
             None
         };
+        let render_background = if run_startup {
+            let worker_stop = stop.clone();
+            let worker_jobs = render_jobs.clone();
+            let worker_clock = clock.clone();
+            Some(thread::spawn(move || {
+                while !worker_stop.load(Ordering::Relaxed) {
+                    let _ = worker_jobs.tick(worker_clock.now_ms());
+                    thread::sleep(Duration::from_millis(50));
+                }
+            }))
+        } else {
+            None
+        };
         Ok(Self {
             paths,
             settings,
@@ -623,6 +672,7 @@ impl App {
             commerce,
             jobs,
             publish_jobs,
+            render_jobs,
             arrival,
             previews,
             compositions,
@@ -638,6 +688,7 @@ impl App {
             stop,
             background: Some(background),
             publish_background,
+            render_background,
         })
     }
     pub fn nudge_port(&self) -> u16 {
@@ -686,6 +737,9 @@ impl App {
             let _ = bg.join();
         }
         if let Some(bg) = self.publish_background.take() {
+            let _ = bg.join();
+        }
+        if let Some(bg) = self.render_background.take() {
             let _ = bg.join();
         }
     }
@@ -821,7 +875,8 @@ impl JobHandler for RenderPreviewJob {
 }
 
 /// An export interrupted by a restart: its renders and staging folder belonged to the previous
-/// process, so the run is abandoned (the user exports again); its row must not block the queue.
+/// process, so the run (and its `render_master` tracking rows) is abandoned (the user exports
+/// again); its rows must not block the queue.
 struct InterruptedExport;
 impl JobHandler for InterruptedExport {
     fn run(&self, job: &Job, _: i64) -> Result<()> {

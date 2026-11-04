@@ -56,7 +56,8 @@ fn report_item<'a>(
 fn c1a_settings_rebuild_addresses_new_document() {
     let mut app = TestApp::new().unwrap();
     let id = document(&app);
-    app.settings_set(&serde_json::json!({"document_id":id,"preview_recipe":"PSM Preview","web_recipe":"PSM Web"})).unwrap();
+    app.settings_set(&serde_json::json!({"document_id":id,"preview_recipe":"PSM Preview"}))
+        .unwrap();
     let report = app.app.health_check().unwrap();
     assert!(report_item(&report, "document_not_open").is_empty());
     assert!(report_item(&report, "recipe_missing").is_empty());
@@ -121,7 +122,7 @@ fn settings_rebuild_preserves_running_job_and_does_not_duplicate_active_publish_
     let job = app
         .app
         .store
-        .job_due(app.clock.now_ms(), Some("publish_step"), None)
+        .job_due(app.clock.now_ms(), Some("publish_step"), &[])
         .unwrap()
         .unwrap();
     assert_eq!(job.target, item_id.to_string());

@@ -218,6 +218,8 @@ fn c3a_ensure_repairs_preview_to_2560_crop_ignored() {
 #[test]
 fn c3b_ensure_creates_uncompressed_master() {
     let a = TestApp::with_fake_document().unwrap();
+    // P29: the fake document now holds `PSM Master` by default; remove it so the ensure creates it.
+    a.fake.state.lock().unwrap().recipes.remove("PSM Master");
     a.app.startup().unwrap();
     let s = a.fake.state.lock().unwrap();
     assert!(s.ops.contains(&"ensure_recipe:PSM Master".into()));
@@ -259,7 +261,8 @@ fn c3b_ensure_creates_uncompressed_master() {
 fn c3c_web_remains_and_renamed_master_leaves_old_recipe() {
     let mut a = TestApp::with_fake_document().unwrap();
     a.app.startup().unwrap();
-    assert!(ops(&a).contains(&"ensure_recipe:PSM Web".into()));
+    // P29 ends the interim rule: `PSM Web` is no longer ensured.
+    assert!(!ops(&a).contains(&"ensure_recipe:PSM Web".into()));
     a.settings_set(&json!({"master_recipe":"PSM Master 2"}))
         .unwrap();
     a.fake.state.lock().unwrap().ops.clear();

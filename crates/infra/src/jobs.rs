@@ -11,7 +11,7 @@ pub struct JobRunner {
     store: Arc<dyn Store>,
     handlers: HashMap<String, Arc<dyn JobHandler>>,
     only_kind: Option<String>,
-    excluded_kind: Option<String>,
+    excluded_kinds: Vec<String>,
 }
 impl JobRunner {
     pub fn new(store: Arc<dyn Store>) -> Self {
@@ -19,15 +19,16 @@ impl JobRunner {
             store,
             handlers: HashMap::new(),
             only_kind: None,
-            excluded_kind: None,
+            excluded_kinds: Vec::new(),
         }
     }
     pub fn only_kind(mut self, kind: &str) -> Self {
         self.only_kind = Some(kind.into());
         self
     }
-    pub fn excluding_kind(mut self, kind: &str) -> Self {
-        self.excluded_kind = Some(kind.into());
+    /// This runner leaves jobs of these kinds to their own runners.
+    pub fn excluding_kinds(mut self, kinds: &[&str]) -> Self {
+        self.excluded_kinds = kinds.iter().map(|k| (*k).to_string()).collect();
         self
     }
     pub fn register(&mut self, kind: &str, handler: Arc<dyn JobHandler>) {
@@ -38,11 +39,11 @@ impl JobRunner {
             return Ok(0);
         }
         let mut count = 0;
-        while let Some(job) = self.store.job_due(
-            now_ms,
-            self.only_kind.as_deref(),
-            self.excluded_kind.as_deref(),
-        )? {
+        let excluded: Vec<&str> = self.excluded_kinds.iter().map(String::as_str).collect();
+        while let Some(job) = self
+            .store
+            .job_due(now_ms, self.only_kind.as_deref(), &excluded)?
+        {
             let Some(handler) = self.handlers.get(&job.kind) else {
                 self.store
                     .job_retry(job.id, "unknown_job_kind", now_ms + 60_000, now_ms)?;

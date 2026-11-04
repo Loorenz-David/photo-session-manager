@@ -1,12 +1,15 @@
-//! P09 local export: ordered web renders under MC-8 names, item.json, the swap (M7, M15, M10, M23, MC-16).
+//! P09 local export (P29: through the app's own render): ordered outputs under MC-8 names, item.json, the swap (M7, M15, M10, M23, MC-16).
 
 use psm_core::{
     Error,
-    domain::photo::{Classification as C, NewPhoto, Photo, PhotoSource},
+    domain::{
+        composition::{CompositionKind, CompositionValues, Flip, Orientation, Rect, Shape},
+        photo::{Classification as C, NewPhoto, Photo, PhotoSource},
+    },
     events::{AppEvent, ExportState},
     mechanisms::hash::sha256_file,
 };
-use psm_testkit::{TestApp, fake_capture_one::FakeCaptureOneScripting};
+use psm_testkit::TestApp;
 use std::{fs, io::Write, path::Path};
 
 const NOW_MS: i64 = 1_761_350_400_000; // 2025-10-25T00:00:00Z
@@ -109,9 +112,21 @@ fn c1_session(a: &TestApp) -> (i64, Vec<Photo>) {
     (s, photos)
 }
 
+/// P29: masters are completed by the fake, then `tick(0)` runs the `render_output` jobs.
 fn export(a: &TestApp, session_id: i64) {
     a.app.export.run(session_id).unwrap();
     a.complete_all_renders().unwrap();
+    a.tick(0).unwrap();
+}
+
+/// The one cached output of a photo (P29: every exported file is the app's own render).
+fn cached_output(a: &TestApp, photo: &Photo) -> Vec<u8> {
+    let files: Vec<_> = fs::read_dir(a.outputs_dir(&photo.raw_path))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(files.len(), 1, "{files:?}");
+    fs::read(&files[0]).unwrap()
 }
 
 #[test]
@@ -126,7 +141,8 @@ fn c1a_export_folder_holds_exactly_the_named_files() {
             "K_02_main.jpg",
             "K_03_main.jpg",
             "K_01_condition.jpg",
-            "item.json"
+            "item.json",
+            "manifest.json"
         ])
     );
     assert!(a.fake.jobs_for(&variant(&photos[4])).is_empty());
@@ -149,13 +165,14 @@ fn c2a_ten_mains_named_in_order_with_their_own_render() {
         let file = dir.join(format!("K_{:02}_main.jpg", index + 1));
         assert_eq!(
             fs::read(&file).unwrap(),
-            FakeCaptureOneScripting::output_bytes(&jobs[0]),
+            cached_output(&a, photo),
             "{}",
             file.display()
         );
     }
     let mut expected: Vec<String> = (1..=10).map(|n| format!("K_{n:02}_main.jpg")).collect();
     expected.push("item.json".into());
+    expected.push("manifest.json".into());
     expected.sort();
     assert_eq!(names(&dir), expected);
 }
@@ -170,6 +187,7 @@ fn c2b_hundred_mains_pad_to_three_digits() {
     export(&a, s);
     let mut expected: Vec<String> = (1..=100).map(|n| format!("K_{n:03}_main.jpg")).collect();
     expected.push("item.json".into());
+    expected.push("manifest.json".into());
     expected.sort();
     assert_eq!(names(&a.export_root().join("K")), expected);
 }
@@ -199,7 +217,12 @@ fn c4a_second_export_leaves_no_stale_file() {
     export(&a, s);
     assert_eq!(
         names(&a.export_root().join("K")),
-        sorted(&["K_01_main.jpg", "K_02_main.jpg", "item.json"])
+        sorted(&[
+            "K_01_main.jpg",
+            "K_02_main.jpg",
+            "item.json",
+            "manifest.json"
+        ])
     );
     assert_eq!(names(&a.export_root()), vec!["K".to_string()]);
 }
@@ -247,6 +270,28 @@ fn c6a_stray_completion_of_an_old_job_is_ignored() {
     let main = photo(&a, s, "a", C::Main);
     export(&a, s);
     let old_job = a.fake.jobs_for(&variant(&main))[0].clone();
+    // P29: a new composition revision makes the cached output stale, so the second run needs a
+    // new master (the first was released when the first export completed).
+    a.app
+        .compositions
+        .set(
+            main.id,
+            CompositionValues {
+                kind: CompositionKind::Normal,
+                shape: Shape::Original,
+                orientation: Orientation::Named,
+                quarter_turns: 0,
+                flip: Flip::None,
+                straighten: 0.0,
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 1.0,
+                    h: 1.0,
+                },
+            },
+        )
+        .unwrap();
     a.app.export.run(s).unwrap();
     let stray = a.dir.path().join("Output/stray.jpg");
     fs::create_dir_all(stray.parent().unwrap()).unwrap();
@@ -257,12 +302,16 @@ fn c6a_stray_completion_of_an_old_job_is_ignored() {
     )
     .unwrap();
     a.complete_all_renders().unwrap();
+    a.tick(0).unwrap();
     let jobs = a.fake.jobs_for(&variant(&main));
     assert_eq!(jobs.len(), 2);
     assert_eq!(
-        fs::read(a.export_root().join("K/K_01_main.jpg")).unwrap(),
-        FakeCaptureOneScripting::output_bytes(&jobs[1])
+        export_states(&a).last().map(|s| s.2),
+        Some(ExportState::Done)
     );
+    let exported = a.export_root().join("K/K_01_main.jpg");
+    assert_eq!(fs::read(&exported).unwrap(), cached_output(&a, &main));
+    assert_eq!(a.decode(&exported).unwrap().dimensions(), (600, 400));
 }
 
 #[test]

@@ -46,6 +46,40 @@ pub fn export_file_name(key: &str, position: usize, n_g: usize, group: ExportGro
     format!("{key}_{position:0width$}_{}.jpg", group.as_str())
 }
 
+/// 10D MC-29 §Export: outputs expand in photo order (a split's `left` then `right`) and are
+/// numbered per output within the group, so `NN` counts outputs, not photos. Returns
+/// `(photo_id, slot, file name)` in that order.
+pub fn output_names(
+    key: &str,
+    group: ExportGroup,
+    group_photos: &[(i64, &[crate::domain::composition::OutputSlot])],
+) -> Vec<(i64, crate::domain::composition::OutputSlot, String)> {
+    let total: usize = group_photos.iter().map(|(_, slots)| slots.len()).sum();
+    group_photos
+        .iter()
+        .flat_map(|(photo_id, slots)| slots.iter().map(move |slot| (*photo_id, *slot)))
+        .enumerate()
+        .map(|(index, (photo_id, slot))| {
+            (
+                photo_id,
+                slot,
+                export_file_name(key, index + 1, total, group),
+            )
+        })
+        .collect()
+}
+
+/// The label of a photo in a `needs_review` refusal: `Main 02`, `Condition 01` (its place in the
+/// group, padded like the export names).
+pub fn review_label(group: ExportGroup, position: usize, n_g: usize) -> String {
+    let width = n_g.max(1).to_string().len().max(2);
+    let name = match group {
+        ExportGroup::Main => "Main",
+        ExportGroup::Condition => "Condition",
+    };
+    format!("{name} {position:0width$}")
+}
+
 /// MC-8 `item.json`: UTF-8, keys sorted at every level, two-space indent, trailing newline; absent
 /// (or empty) identity values are omitted, never written as empty strings.
 pub fn item_json(

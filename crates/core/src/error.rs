@@ -4,6 +4,10 @@ pub enum Error {
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]
     FrameUnknown,
+    /// Export or publish refused while main or condition photos need re-framing (10D MC-27
+    /// §Revisions); `photos` are their labels in display order (`Main 02`, `Condition 01`).
+    #[error("Re-frame first: {}", photos.join(", "))]
+    NeedsReview { photos: Vec<String> },
     #[error("operation timed out")]
     Timeout,
     #[error("I/O: {0}")]

@@ -32,15 +32,6 @@ impl RecipeSpec {
         jpeg_quality: 100,
         export_crop_method: "ignore",
     };
-    pub const WEB: Self = Self {
-        output_format: "JPEG",
-        bits: 8,
-        scaling_method: "Long_Edge",
-        scaling_unit: "pixels",
-        long_edge: 2048,
-        jpeg_quality: 90,
-        export_crop_method: "respect",
-    };
     pub fn props(&self) -> RecipeProps {
         RecipeProps {
             enabled: false,

@@ -259,3 +259,73 @@ input components.
   TIFF writer).
 
 ## Review log
+
+### 2026-11-04 — implement r1 (claude-opus, pipeline-implementer; Claude fallback run)
+**Built.** `RenderPurpose::Master` (recipe `master_recipe`, timeout 120 s) replaces `Export`; `PSM Web` left the recipe specs, the
+ensure loop, the adapter and the settings. `psm_core::domain::output::{OutputFormat (2048/90, format_key), OutputInfo, slot_name}`;
+`Error::NeedsReview{photos}` (code `needs_review`, `data.photos` = labels joined `", "`). `ports::images`: `Imaging::render_output`,
+`MasterStore`, `OutputStore` (two traits), `uid12`. `Store`: `adopt_frame -> FrameCommit`, `adjusted_gen`, `enqueue_render_output(raw,
+payload, now)`, `new_master_render_job` (replaces `new_export_render_job`; kind `render_master`), `job_due(.., excluded_kinds: &[&str])`.
+`ExportService` reworked around targets `(photo, slot)`: snapshot → integrity → needs_review gate (no run row, `Failed` emitted) → per
+target cached output copied / `render_output` queued (master on disk) / one master `process` per RAW; `master_ready` commits the master,
+reads its size, `adopt_frame(Master, geometry)`; needs_review fails every run holding a flagged photo (master kept); else queues the RAW's
+waiting outputs. `output_ready`/`output_failed`; `finalize` writes `manifest.json` then `item.json`, swaps, and on a local export of a
+non-dirty session releases the run's masters. `mechanisms::naming::{output_names, review_label}`. Infra: `imaging/{mod.rs, render.rs
+(the contract verbatim in the doc comment), linear.rs, metadata.rs}`, `media_store.rs` (`MasterFiles`, `OutputFiles`), `jobs.rs`
+`excluding_kinds`, `settings_file.rs` `output_format` (legacy `web_recipe` ignored, dropped on save), SQLite store additions.
+Integrations: `render_output.rs` (`RenderOutputJob`), `App.render_jobs` on its own thread, general runner excludes `publish_step` and
+`render_output`, `InterruptedExport` also closes `render_master`. Desktop: `OutputFormatDto` in `SettingsDto`/`SettingsPatchDto`,
+bindings regenerated; Settings screen: "Output size (long edge, px)" and "Output JPEG quality" replace "Web recipe". Testkit:
+`SyntheticMaster` (hand-written 16-bit LE TIFF, EXIF/GPS sub-IFDs, four patterns), `TestApp::{complete_master_render, is_master_job,
+decode, outputs_dir, masters_dir}`, `complete_all_renders` writes a 600×400 solid master for master jobs, `tick` ticks `render_jobs`.
+
+**Tests.** `crates/testkit/tests/p29_master_and_output_render.rs` — 26 tests, one per Rust row (C1(a)–C8(d) minus C4(f)); C8(a)'s
+command half is `apps/desktop/src-tauri/src/lib.rs` `p29_tests::c8a_export_run_rejects_with_needs_review`; C4(f) is
+`apps/desktop/src/features/settings/__tests__/p29_output_format.test.tsx`. Stamp: `cargo test --workspace` 508 passed / 0 failed,
+clippy `-D warnings` and `fmt --check` clean, `npm run typecheck` clean, `npm test` 132 passed.
+
+**Judgment calls (Delegated choices and holes).**
+1. Interpolation: hand-written Catmull-Rom bicubic over the turned frame (no `imageproc`); linear light held as `u16` between steps.
+2. EXIF writer: `kamadak-exif`'s `experimental::Writer` (no `little_exif`); the metadata is read before the pixels are decoded so the
+   EXIF buffer of a 361 MB master is freed first.
+3. ICC: built in code (`metadata::srgb_profile`, ICC v4.3, D50 PCS, Bradford-adapted colorants, parametric sRGB curve, desc
+   `sRGB IEC61966-2.1`) — no profile file shipped or read at runtime. macOS `sips` reads it as `sRGB IEC61966-2.1`.
+4. `MasterStore`/`OutputStore` are two traits; the render runner is one dedicated thread.
+5. Several runs sharing a RAW: one `process`; every waiting run proceeds on `master_ready` or fails on the final timeout.
+6. **Prune keeps the other slot of the same key.** Task 4 says `prune` deletes "the other `<uid12>-*.jpg` files"; read literally a
+   split's right half would delete its left half's cache. `prune` deletes the photo's files whose key (`-g…-r…-<fmt>`) differs from
+   the kept file's.
+7. **Capture One's master TIFF is removed from its output folder after it is copied into `masters/`** (manual try-out step 1:
+   "`Output/_session_manager/` fill, then empty"; 361 MB per master). The RAW and the committed master are never written.
+8. A master completion no run waits for is ignored (not committed).
+9. Masters released at finalize skip a RAW another in-flight run still needs.
+10. `RenderOutputJob` names the output by the composition revision it actually rendered (read in the same row as the values) and
+    passes it to `output_ready(.., revision)` — a save between enqueue and render can never mislabel the cache key. `output_ready`
+    therefore carries `revision`; `enqueue_render_output` carries the RAW as the job target; `output_names` takes `key` and `group`.
+11. Publish's retouch generation: a cached output has no master tracking row, so the run row's payload records `retouch_gens`
+    (per photo, at run start) and `export_retouch_gen` reads it (P13/P14 unchanged in behaviour).
+12. `adopt_frame`: any compatible **master** observation replaces the fingerprint (task 0), not only a preview → master one.
+13. Labels padded like export names (`max(2, digits(n))`): `Main 02`, `Condition 01`.
+14. `TestApp::tick` order: general jobs → `render_jobs` → `publish_jobs`, so a publish step sees its export done in the same tick
+    (keeps P13/P15 timings).
+15. Fixture shapes: C3(a) previews at 1001×601 and C4(d) at 2048×2048 (the composition must validate on the stored frame and the
+    master must be compatible — a square master against a landscape preview is a frame change); the C6 chain uses 3000×2000
+    masters (a 600×400 master cannot yield a 1024 px output: never upscaled); C8(a)/(b) flag photos with P28 C5(a)'s geometry change
+    (the row's "incompatible second preview 2560×1700" is compatible by P28 C5(b)); C5(a)'s allowlist admits `ExifIFDPointer`
+    (the structural pointer to the Exif IFD holding `DateTimeOriginal`, `ExifVersion`, `ColorSpace`, `PixelX/YDimension`).
+
+**Deviations.**
+- C3(a)'s rect `h = 0.831946755` is refused by P28's split check (`|1001 − 2·h·601| = 1.0000005 > 1`); the test uses `h = 0.83194676`,
+  which gives the same pixel rect `{0, 50, 1001 → 1000, 500}`, so the asserted outcome is the row's.
+- Tests outside the plan's amendment list changed because `RecipeSpec::WEB`/`web_recipe`/`job_due` changed: `p04` c3a/c3b (master
+  recipe instead of web), `p17` c1a and the `job_due` call, `p24` c1a/c1b/c4a (a local "owner JPEG" spec stands in for the web spec),
+  `p25` c5c (`tick(0)` after the renders), `p13` `start_upload` (runs the render runner), desktop `p21_tests` (`master_recipe` instead
+  of `web_recipe`), seven frontend settings fixtures (`output_format` instead of `web_recipe`). P14 needed no change.
+- The plan lists `crates/infra/src/imaging/sRGB.icc`; no profile file exists (judgment call 3).
+
+**Observations.** Live probe (scratch crate outside the repo, read-only on `~/Pictures/session test 1/Output/session test 11952 1.tif`,
+a Capture One 16.8.6 TIFF of a ZV-E10 RAW): decoded, `Make SONY`, `Model ZV-E10`, `DateTimeOriginal 2026:10:25 13:34:20` read from the
+TIFF and copied; 2048×2048 rendered with a 2° straighten in 0.38 s (release build); embedded profile read by `sips` as `sRGB
+IEC61966-2.1`. That file is an 8-bit export, not a `PSM Master` output; no live master render was triggered (camera not needed; the
+suite never depends on Capture One). The metadata grounding the Notes call owed is thereby partly answered: Capture One TIFFs carry
+Make/Model/DateTimeOriginal as EXIF tags, as step 8 assumes.

@@ -20,7 +20,7 @@ use psm_core::{
         canon::canon,
         composition::{default_rect, fingerprint_compatible, review_reason, turned_frame},
     },
-    ports::store::{PreviewCommit, RawPreviewState, Store, StoreTx},
+    ports::store::{FrameCommit, PreviewCommit, RawPreviewState, Store, StoreTx},
 };
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use rusqlite_migration::{M, Migrations};
@@ -186,9 +186,8 @@ fn adopt_frame_tx(conn: &Connection, raw: &str, observed: &Fingerprint) -> Resul
                 let reason = review_reason(stored, observed);
                 conn.execute("UPDATE compositions SET frame_w=?1,frame_h=?2,frame_source=?3,geometry=?4,state='needs_review',review_reason=?5 WHERE photo_id=?6", params![observed.frame.w,observed.frame.h,observed.source.as_str(),geometry,reason.as_str(),id]).map_err(db)?;
                 needs_review.push((id, session_id));
-            } else if stored.source == FrameSource::Preview
-                && observed.source == FrameSource::Master
-            {
+            } else if observed.source == FrameSource::Master {
+                // A compatible master replaces the fingerprint: its size becomes the frame.
                 conn.execute("UPDATE compositions SET frame_w=?1,frame_h=?2,frame_source='master',geometry=?3 WHERE photo_id=?4", params![observed.frame.w,observed.frame.h,geometry,id]).map_err(db)?;
             }
         }
@@ -1011,15 +1010,37 @@ impl Store for SqliteStore {
         tx.commit().map_err(db)?;
         Ok(count)
     }
-    fn adopt_frame(&self, raw: &str, observed: Fingerprint) -> Result<Vec<(i64, i64)>> {
+    fn adopt_frame(&self, raw: &str, observed: Fingerprint) -> Result<FrameCommit> {
         let mut conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         let tx = conn.transaction().map_err(db)?;
-        let result = adopt_frame_tx(&tx, raw, &observed)?;
+        let needs_review = adopt_frame_tx(&tx, raw, &observed)?;
         tx.commit().map_err(db)?;
-        Ok(result)
+        Ok(FrameCommit { needs_review })
+    }
+    fn adjusted_gen(&self, raw: &str) -> Result<i64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.query_row(
+            "SELECT adjusted_gen FROM raw_state WHERE raw_path=?1",
+            [raw],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(db)
+        .map(|g| g.unwrap_or(0))
+    }
+    fn enqueue_render_output(&self, raw: &str, payload: &str, now_ms: i64) -> Result<i64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_output',?1,?2,'queued',0,?3,?3,?3)", params![raw,payload,now_ms]).map_err(db)?;
+        Ok(conn.last_insert_rowid())
     }
     fn set_missing_preview_paths(&self, raw: &str, path: &str) -> Result<Vec<(i64, i64)>> {
         let mut conn = self
@@ -1054,30 +1075,21 @@ impl Store for SqliteStore {
         conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_export',?1,?2,'running',0,?3,?3,?3)", params![format!("session:{session_id}"),snapshot,now_ms]).map_err(db)?;
         Ok(conn.last_insert_rowid())
     }
-    fn new_export_render_job(
+    fn new_master_render_job(
         &self,
         raw: &str,
         run_id: i64,
         photo_id: i64,
+        adjusted_gen: i64,
         now_ms: i64,
     ) -> Result<i64> {
         let conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let retouch_gen: i64 = conn
-            .query_row(
-                "SELECT retouch_gen FROM raw_state WHERE raw_path=?1",
-                [raw],
-                |r| r.get(0),
-            )
-            .optional()
-            .map_err(db)?
-            .unwrap_or(0);
-        let payload =
-            serde_json::json!({"run_id": run_id, "photo_id": photo_id, "retouch_gen": retouch_gen})
-                .to_string();
-        conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_export',?1,?2,'running',0,?3,?3,?3)", params![raw,payload,now_ms]).map_err(db)?;
+        let payload = serde_json::json!({"run_id": run_id, "photo_id": photo_id, "adjusted_gen": adjusted_gen})
+            .to_string();
+        conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('render_master',?1,?2,'running',0,?3,?3,?3)", params![raw,payload,now_ms]).map_err(db)?;
         Ok(conn.last_insert_rowid())
     }
     fn finish_render_job(&self, id: i64, error: Option<&str>, now_ms: i64) -> Result<()> {
@@ -1130,16 +1142,18 @@ impl Store for SqliteStore {
         &self,
         now_ms: i64,
         only_kind: Option<&str>,
-        excluded_kind: Option<&str>,
+        excluded_kinds: &[&str],
     ) -> Result<Option<Job>> {
+        let excluded =
+            serde_json::to_string(excluded_kinds).map_err(|e| Error::InvalidData(e.to_string()))?;
         let mut conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         let tx = conn.transaction().map_err(db)?;
         let id: Option<i64> = tx.query_row(
-            "SELECT id FROM jobs WHERE status='queued' AND next_attempt_at<=?1 AND (?2 IS NULL OR kind=?2) AND (?3 IS NULL OR kind<>?3) ORDER BY next_attempt_at,id LIMIT 1",
-            rusqlite::params![now_ms, only_kind, excluded_kind],
+            "SELECT id FROM jobs WHERE status='queued' AND next_attempt_at<=?1 AND (?2 IS NULL OR kind=?2) AND kind NOT IN (SELECT value FROM json_each(?3)) ORDER BY next_attempt_at,id LIMIT 1",
+            rusqlite::params![now_ms, only_kind, excluded],
             |r| r.get(0),
         ).optional().map_err(db)?;
         let job = if let Some(id) = id {
@@ -1650,7 +1664,7 @@ impl Store for SqliteStore {
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        conn.query_row("SELECT json_extract(payload,'$.retouch_gen') FROM jobs WHERE kind='render_export' AND json_extract(payload,'$.run_id')=?1 AND json_extract(payload,'$.photo_id')=?2 ORDER BY id DESC LIMIT 1", params![export_run_id,photo_id], |r| r.get(0)).optional().map_err(db).map(|value| value.flatten())
+        conn.query_row("SELECT json_extract(payload,'$.retouch_gens.\"' || ?2 || '\"') FROM jobs WHERE id=?1 AND kind='render_export'", params![export_run_id,photo_id], |r| r.get(0)).optional().map_err(db).map(|value| value.flatten())
     }
     fn photo_link(&self, photo_id: i64, item_id: i64, role: &str) -> Result<Option<PhotoLink>> {
         let conn = self

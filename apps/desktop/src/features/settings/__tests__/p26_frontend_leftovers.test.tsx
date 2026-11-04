@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 const base: Settings = {
   document_id: '/Users/me/Pictures/Other', effective_document_id: '/Users/me/Pictures/Other',
   default_document_id: '/Users/me/Pictures/Session Manager', preview_recipe: 'PSM Preview',
-  web_recipe: 'PSM Web', style_name: '', default_shape: '1:1', master_recipe: 'PSM Master', export_folder: '/tmp/export',
+  output_format: { long_edge: 2048, quality: 90 }, style_name: '', default_shape: '1:1', master_recipe: 'PSM Master', export_folder: '/tmp/export',
   preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null, integration: null,
 };
 

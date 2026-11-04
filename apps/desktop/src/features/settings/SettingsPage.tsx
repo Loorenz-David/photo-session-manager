@@ -11,7 +11,7 @@ const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
 };
 
-type TextKey = 'preview_recipe' | 'web_recipe' | 'master_recipe' | 'style_name' | 'export_folder';
+type TextKey = 'preview_recipe' | 'master_recipe' | 'style_name' | 'export_folder';
 type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition_photos_key';
 
 /** ch12 §Settings: a plain form over `settings.json` (undesigned in the handoff). The theme stays on the header toggle. */
@@ -44,7 +44,7 @@ export function SettingsPage() {
     const saved = await saveSettings({
       document_id: settings.document_id ?? '',
       preview_recipe: settings.preview_recipe,
-      web_recipe: settings.web_recipe,
+      output_format: settings.output_format,
       style_name: settings.style_name,
       default_shape: settings.default_shape,
       master_recipe: settings.master_recipe,
@@ -96,7 +96,6 @@ export function SettingsPage() {
       </div>
       {text('Preview recipe', 'preview_recipe')}
       {text('Master recipe', 'master_recipe')}
-      {text('Web recipe', 'web_recipe')}
       {text('Style', 'style_name')}
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-default_shape">Default shape</label>
@@ -112,6 +111,16 @@ export function SettingsPage() {
       </div>
       <h2>Export and previews</h2>
       {text('Export folder', 'export_folder', 'Export folder')}
+      <div className="flex flex-col gap-1">
+        <label htmlFor="settings-output_long_edge">Output size (long edge, px)</label>
+        <Input id="settings-output_long_edge" type="number" min={512} max={8192} value={settings.output_format.long_edge}
+          onChange={e => edit({ output_format: { ...settings.output_format, long_edge: Math.round(Number(e.target.value) || 0) } })} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="settings-output_quality">Output JPEG quality</label>
+        <Input id="settings-output_quality" type="number" min={60} max={100} value={settings.output_format.quality}
+          onChange={e => edit({ output_format: { ...settings.output_format, quality: Math.round(Number(e.target.value) || 0) } })} />
+      </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-preview_delay_s">Preview refresh delay (seconds)</label>
         <Input id="settings-preview_delay_s" type="number" min={10} max={30} value={settings.preview_delay_s}

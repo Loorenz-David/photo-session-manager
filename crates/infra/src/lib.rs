@@ -3,6 +3,7 @@ pub mod export_fs;
 pub mod imaging;
 pub mod jobs;
 pub mod logging;
+pub mod media_store;
 pub mod nudge;
 pub mod osascript;
 pub mod paths;

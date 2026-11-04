@@ -1,27 +1,36 @@
-//! Local export (ch07 §Completion without an integration, 05A MC-8, 10A MC-16): every main and
-//! condition photo rendered through the web recipe into a staging folder under its position name,
-//! `item.json` beside them, then the staging folder swapped in place of `<export folder>/<key>/`.
-//! The same path is step one of every publish.
+//! Local export (ch07 §Completion without an integration, 05A MC-8, 10A MC-16, 10D MC-28/MC-29):
+//! every output of every main and condition photo — one per slot, in photo order — is the app's
+//! own render of the composition from the RAW's master, cached under its key
+//! `(master adjusted_gen, composition revision, output_format)`. A run copies cached outputs into
+//! a staging folder, queues `render_output` jobs where the master exists, and asks Capture One for
+//! the master (once per RAW) where it does not; `manifest.json` and `item.json` are written beside
+//! the files and the staging folder is swapped in place of `<export folder>/<key>/`. The same path
+//! is step one of every publish (the swap deferred).
 
 use crate::{
     Error, Result,
     domain::{
+        composition::{CompositionState, Fingerprint, FrameSource, OutputSlot},
         editing::RenderPurpose,
         item::Item,
+        output::{OutputFormat, slot_name},
         photo::{Classification, Integrity},
     },
     events::{AppEvent, ExportState},
-    mechanisms::naming::{ExportGroup, export_file_name, folder_key, item_json},
+    mechanisms::naming::{
+        ExportGroup, export_file_name, folder_key, item_json, output_names, review_label,
+    },
     ports::{
         clock::Clock,
         editing::{EditingProvider, RenderCompletion},
         events::EventSink,
+        images::{Imaging, MasterStore, OutputStore, uid12},
         store::Store,
     },
     services::{integrity::IntegrityCheck, previews::ExportStaging},
 };
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
 };
@@ -44,6 +53,15 @@ pub trait ExportFiles: Send + Sync {
     fn folder(&self, key: &str) -> PathBuf;
 }
 
+/// The render side of an export (10D MC-28): the renderer, the master and output caches and the
+/// output setting in effect.
+pub struct ExportRender {
+    pub imaging: Arc<dyn Imaging>,
+    pub masters: Arc<dyn MasterStore>,
+    pub outputs: Arc<dyn OutputStore>,
+    pub format: OutputFormat,
+}
+
 type Snapshot = (
     Item,
     Vec<i64>,
@@ -55,12 +73,26 @@ type Snapshot = (
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExportRunId(pub i64);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Progress {
+    /// The RAW has no master for the target's generation: Capture One renders it.
+    WaitingMaster,
+    /// A `render_output` job is queued for the target.
+    Rendering,
+    /// The output is in the staging folder.
+    Copied,
+}
+
 struct Target {
     photo_id: i64,
+    raw: String,
+    uid12: String,
     group: ExportGroup,
+    slot: OutputSlot,
     name: String,
-    tracking_job_id: i64,
-    copied: bool,
+    adjusted_gen: i64,
+    revision: i64,
+    progress: Progress,
 }
 
 struct Run {
@@ -77,8 +109,19 @@ struct Run {
 
 impl Run {
     fn done(&self) -> usize {
-        self.targets.iter().filter(|t| t.copied).count()
+        self.targets
+            .iter()
+            .filter(|t| t.progress == Progress::Copied)
+            .count()
     }
+}
+
+#[derive(Default)]
+struct State {
+    runs: HashMap<i64, Run>,
+    /// RAW → tracking job id of the master render in flight (one `process` per RAW; every run
+    /// that needs it waits for it).
+    masters: HashMap<String, i64>,
 }
 
 pub struct ExportService {
@@ -87,7 +130,8 @@ pub struct ExportService {
     events: Arc<dyn EventSink>,
     clock: Arc<dyn Clock>,
     files: Arc<dyn ExportFiles>,
-    runs: Mutex<HashMap<i64, Run>>,
+    render: ExportRender,
+    state: Mutex<State>,
 }
 
 impl ExportService {
@@ -97,6 +141,7 @@ impl ExportService {
         events: Arc<dyn EventSink>,
         clock: Arc<dyn Clock>,
         files: Arc<dyn ExportFiles>,
+        render: ExportRender,
     ) -> Self {
         Self {
             store,
@@ -104,14 +149,27 @@ impl ExportService {
             events,
             clock,
             files,
-            runs: Mutex::new(HashMap::new()),
+            render,
+            state: Mutex::new(State::default()),
         }
     }
 
-    fn runs(&self) -> Result<MutexGuard<'_, HashMap<i64, Run>>> {
-        self.runs
+    fn state(&self) -> Result<MutexGuard<'_, State>> {
+        self.state
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))
+    }
+
+    /// The output setting this service renders with.
+    pub fn format(&self) -> OutputFormat {
+        self.render.format
+    }
+
+    /// Whether the run is in flight in this process (a `render_output` row of an earlier process
+    /// finds none and closes).
+    pub fn has_run(&self, run_id: i64) -> bool {
+        self.state()
+            .is_ok_and(|state| state.runs.contains_key(&run_id))
     }
 
     /// `<export folder>/<folder_key(current SKU)>/` of the session's item.
@@ -121,21 +179,22 @@ impl ExportService {
     }
 
     /// Starts an export of the session. Fails before any render when a photo's RAW changed or went
-    /// missing (MC-3 check a); a second call while a run of the session is in flight returns that run.
+    /// missing (MC-3 check a) or a main or condition photo needs re-framing (MC-27 §Revisions); a
+    /// second call while a run of the session is in flight returns that run.
     pub fn run(&self, session_id: i64) -> Result<ExportRunId> {
-        let mut runs = self.runs()?;
-        if let Some(run) = runs.values().find(|r| r.session_id == session_id) {
+        let mut state = self.state()?;
+        if let Some(run) = state.runs.values().find(|r| r.session_id == session_id) {
             return Ok(ExportRunId(run.id));
         }
-        match self.start(session_id, None) {
+        match self.start(&mut state, session_id, None) {
             Ok(run) => {
                 let id = run.id;
                 let total = run.targets.len();
-                self.emit(session_id, 0, total, ExportState::Running);
-                if total == 0 {
-                    self.finalize(run);
+                self.emit(session_id, run.done(), total, ExportState::Running);
+                if run.done() == total {
+                    self.finalize(&state, run);
                 } else {
-                    runs.insert(id, run);
+                    state.runs.insert(id, run);
                 }
                 Ok(ExportRunId(id))
             }
@@ -146,8 +205,8 @@ impl ExportService {
         }
     }
 
-    /// Render a confirmed publish snapshot through the web recipe. The staging folder is kept
-    /// until the publish reaches done; repeat calls during one process return the same export.
+    /// Render a confirmed publish snapshot. The staging folder is kept until the publish reaches
+    /// done; repeat calls during one process return the same export.
     pub fn run_staged(
         &self,
         session_id: i64,
@@ -155,8 +214,9 @@ impl ExportService {
         condition: &[i64],
         attributes: &BTreeMap<String, serde_json::Value>,
     ) -> Result<ExportRunId> {
-        let mut runs = self.runs()?;
-        if let Some(run) = runs
+        let mut state = self.state()?;
+        if let Some(run) = state
+            .runs
             .values()
             .find(|r| r.session_id == session_id && r.defer_swap)
         {
@@ -170,14 +230,15 @@ impl ExportService {
                 .ok_or_else(|| Error::InvalidValue("unassigned".into()))?,
         )?;
         let run = self.start(
+            &mut state,
             session_id,
             Some((item, main.to_vec(), condition.to_vec(), attributes.clone())),
         )?;
         let id = run.id;
-        if run.targets.is_empty() {
-            self.finalize(run);
+        if run.done() == run.targets.len() {
+            self.finalize(&state, run);
         } else {
-            runs.insert(id, run);
+            state.runs.insert(id, run);
         }
         Ok(ExportRunId(id))
     }
@@ -234,7 +295,7 @@ impl ExportService {
         snapshot.ok_or_else(|| Error::InvalidData("export snapshot".into()))
     }
 
-    fn start(&self, session_id: i64, frozen: Option<Snapshot>) -> Result<Run> {
+    fn start(&self, state: &mut State, session_id: i64, frozen: Option<Snapshot>) -> Result<Run> {
         let defer_swap = frozen.is_some();
         let (item, main, condition, attributes) = match frozen {
             Some(snapshot) => snapshot,
@@ -249,12 +310,44 @@ impl ExportService {
                 Integrity::RawMissing => return Err(Error::RawMissing { photo_id }),
             }
         }
+        let groups = [
+            (ExportGroup::Main, &main),
+            (ExportGroup::Condition, &condition),
+        ];
+        // M33: never rendered for export while a main or condition photo needs re-framing.
+        let mut flagged = Vec::new();
+        let mut compositions = HashMap::new();
+        for (group, ids) in groups {
+            for (index, &photo_id) in ids.iter().enumerate() {
+                let composition = self.store.composition(photo_id)?;
+                if composition.state == CompositionState::NeedsReview {
+                    flagged.push(review_label(group, index + 1, ids.len()));
+                }
+                compositions.insert(photo_id, composition);
+            }
+        }
+        if !flagged.is_empty() {
+            return Err(Error::NeedsReview { photos: flagged });
+        }
+        let mut photos = HashMap::new();
+        let mut retouch_gens = BTreeMap::new();
+        for &photo_id in main.iter().chain(&condition) {
+            let photo = self.store.photo(photo_id)?;
+            let retouch = self
+                .store
+                .preview_state(&photo.raw_path)?
+                .map_or(0, |state| state.retouch_gen);
+            retouch_gens.insert(photo_id.to_string(), retouch);
+            let generation = self.store.adjusted_gen(&photo.raw_path)?;
+            photos.insert(photo_id, (photo, generation));
+        }
         let now_ms = self.clock.now_ms();
         let payload = serde_json::json!({
             "session_id": session_id,
             "key": key,
             "main": main,
             "condition": condition,
+            "retouch_gens": retouch_gens,
         })
         .to_string();
         let run_id = self.store.new_export_run(session_id, &payload, now_ms)?;
@@ -276,56 +369,102 @@ impl ExportService {
             targets: Vec::new(),
             defer_swap,
         };
-        for (group, ids) in [
-            (ExportGroup::Main, &main),
-            (ExportGroup::Condition, &condition),
-        ] {
-            for (index, &photo_id) in ids.iter().enumerate() {
-                let issued = self.issue(&run, photo_id, group, index + 1, ids.len());
-                match issued {
-                    Ok(target) => run.targets.push(target),
-                    Err(error) => {
-                        self.abandon(&run, "provider");
-                        return Err(error);
-                    }
-                }
+        for (group, ids) in groups {
+            let slots: Vec<(i64, &[OutputSlot])> = ids
+                .iter()
+                .map(|id| (*id, compositions[id].kind.slots()))
+                .collect();
+            for (photo_id, slot, name) in output_names(&run.key, group, &slots) {
+                let (photo, generation) = &photos[&photo_id];
+                run.targets.push(Target {
+                    photo_id,
+                    raw: photo.raw_path.clone(),
+                    uid12: uid12(&photo.uid),
+                    group,
+                    slot,
+                    name,
+                    adjusted_gen: *generation,
+                    revision: compositions[&photo_id].revision,
+                    progress: Progress::WaitingMaster,
+                });
+            }
+        }
+        for index in 0..run.targets.len() {
+            if let Err(error) = self.begin_target(state, &mut run, index) {
+                self.abandon(&run, "provider");
+                return Err(error);
             }
         }
         Ok(run)
     }
 
-    fn issue(
-        &self,
-        run: &Run,
-        photo_id: i64,
-        group: ExportGroup,
-        position: usize,
-        n_g: usize,
-    ) -> Result<Target> {
-        let photo = self.store.photo(photo_id)?;
-        let now_ms = self.clock.now_ms();
-        let tracking_job_id =
-            self.store
-                .new_export_render_job(&photo.raw_path, run.id, photo_id, now_ms)?;
-        if let Err(error) = self.editing.request_render(
-            &photo.raw_path,
-            RenderPurpose::Export,
-            run.id,
-            tracking_job_id,
-            self.clock.mono(),
-            now_ms,
-        ) {
-            self.store
-                .finish_render_job(tracking_job_id, Some("provider"), now_ms)?;
-            return Err(error);
+    /// A cached output is copied; else a master on disk gets a `render_output` job; else the
+    /// master is requested from Capture One (once per RAW).
+    fn begin_target(&self, state: &mut State, run: &mut Run, index: usize) -> Result<()> {
+        let format_key = self.render.format.format_key();
+        let target = &run.targets[index];
+        let dest = self.render.outputs.path(
+            &target.raw,
+            &target.uid12,
+            target.slot,
+            target.adjusted_gen,
+            target.revision,
+            &format_key,
+        );
+        if dest.is_file() {
+            self.files.copy_in(&run.staging, &target.name, &dest)?;
+            run.targets[index].progress = Progress::Copied;
+            return Ok(());
         }
-        Ok(Target {
-            photo_id,
-            group,
-            name: export_file_name(&run.key, position, n_g, group),
-            tracking_job_id,
-            copied: false,
+        if self
+            .render
+            .masters
+            .path(&target.raw, target.adjusted_gen)
+            .is_file()
+        {
+            self.enqueue_output(run.id, target)?;
+            run.targets[index].progress = Progress::Rendering;
+            return Ok(());
+        }
+        if !state.masters.contains_key(&target.raw) {
+            let now_ms = self.clock.now_ms();
+            let tracking = self.store.new_master_render_job(
+                &target.raw,
+                run.id,
+                target.photo_id,
+                target.adjusted_gen,
+                now_ms,
+            )?;
+            if let Err(error) = self.editing.request_render(
+                &target.raw,
+                RenderPurpose::Master,
+                target.adjusted_gen,
+                tracking,
+                self.clock.mono(),
+                now_ms,
+            ) {
+                self.store
+                    .finish_render_job(tracking, Some("provider"), now_ms)?;
+                return Err(error);
+            }
+            state.masters.insert(target.raw.clone(), tracking);
+        }
+        Ok(())
+    }
+
+    fn enqueue_output(&self, run_id: i64, target: &Target) -> Result<()> {
+        let payload = serde_json::json!({
+            "run_id": run_id,
+            "photo_id": target.photo_id,
+            "slot": slot_name(target.slot),
+            "adjusted_gen": target.adjusted_gen,
+            "revision": target.revision,
+            "format_key": self.render.format.format_key(),
         })
+        .to_string();
+        self.store
+            .enqueue_render_output(&target.raw, &payload, self.clock.now_ms())?;
+        Ok(())
     }
 
     fn emit(&self, session_id: i64, done: usize, total: usize, state: ExportState) {
@@ -361,9 +500,25 @@ impl ExportService {
         }
     }
 
-    /// All renders are in: drop photos deleted or moved out of the session meanwhile (07A R-I6
-    /// analogue), name the rest by their position in the frozen lists, write `item.json`, swap.
-    fn finalize(&self, run: Run) {
+    /// Fails every run holding a target that matches `holds`.
+    fn fail_runs(&self, state: &mut State, holds: impl Fn(&Target) -> bool, reason: &str) {
+        let ids: Vec<i64> = state
+            .runs
+            .values()
+            .filter(|run| run.targets.iter().any(&holds))
+            .map(|run| run.id)
+            .collect();
+        for id in ids {
+            if let Some(run) = state.runs.remove(&id) {
+                self.fail(run, reason);
+            }
+        }
+    }
+
+    /// All outputs are in: drop photos deleted or moved out of the session meanwhile (07A R-I6
+    /// analogue), name the rest by their output order, write `manifest.json` and `item.json`,
+    /// swap; after a local export of a session that is not dirty the run's masters are released.
+    fn finalize(&self, state: &State, run: Run) {
         match self.write_and_swap(&run) {
             Ok(count) => {
                 if let Err(error) = self
@@ -373,6 +528,9 @@ impl ExportService {
                     tracing::warn!(%error, "export run not recorded as done");
                 }
                 self.emit(run.session_id, count, count, ExportState::Done);
+                if !run.defer_swap {
+                    self.release_masters(state, &run);
+                }
             }
             Err(error) => {
                 tracing::warn!(%error, "export could not be completed");
@@ -381,8 +539,38 @@ impl ExportService {
         }
     }
 
+    /// MC-28 §Master: masters are a cache, deleted once the export completes and the session is
+    /// not dirty. A RAW another run still needs keeps its master.
+    fn release_masters(&self, state: &State, run: &Run) {
+        match self.store.session(run.session_id) {
+            Ok(session) if !session.dirty => {}
+            Ok(_) => return,
+            Err(error) => {
+                tracing::warn!(%error, "masters kept: session not read");
+                return;
+            }
+        }
+        let in_use: HashSet<&str> = state
+            .runs
+            .values()
+            .filter(|other| other.id != run.id)
+            .flat_map(|other| other.targets.iter())
+            .filter(|t| t.progress != Progress::Copied)
+            .map(|t| t.raw.as_str())
+            .collect();
+        let raws: BTreeSet<&str> = run.targets.iter().map(|t| t.raw.as_str()).collect();
+        for raw in raws {
+            if in_use.contains(raw) || state.masters.contains_key(raw) {
+                continue;
+            }
+            if let Err(error) = self.render.masters.remove_all(raw) {
+                tracing::warn!(%error, raw, "master not released");
+            }
+        }
+    }
+
     fn write_and_swap(&self, run: &Run) -> Result<usize> {
-        let mut kept: BTreeMap<u8, Vec<&Target>> = BTreeMap::new();
+        let mut kept: [Vec<&Target>; 2] = [Vec::new(), Vec::new()];
         for target in &run.targets {
             let photo = self.store.photo(target.photo_id)?;
             if photo.classification == Classification::Deleted || photo.session_id != run.session_id
@@ -394,18 +582,37 @@ impl ExportService {
                 ExportGroup::Main => 0,
                 ExportGroup::Condition => 1,
             };
-            kept.entry(slot).or_default().push(target);
+            kept[slot].push(target);
         }
         let mut lists: [Vec<String>; 2] = [Vec::new(), Vec::new()];
-        for (slot, targets) in &kept {
+        let mut manifest = serde_json::Map::new();
+        for (slot, targets) in kept.iter().enumerate() {
             for (index, target) in targets.iter().enumerate() {
                 let name = export_file_name(&run.key, index + 1, targets.len(), target.group);
                 if name != target.name {
                     self.files.rename_in(&run.staging, &target.name, &name)?;
                 }
-                lists[usize::from(*slot)].push(name);
+                manifest.insert(
+                    name.clone(),
+                    serde_json::json!({
+                        "photo_id": target.photo_id,
+                        "slot": slot_name(target.slot),
+                        "adjusted_gen": target.adjusted_gen,
+                        "composition_rev": target.revision,
+                    }),
+                );
+                lists[slot].push(name);
             }
         }
+        let manifest = serde_json::json!({
+            "format_key": self.render.format.format_key(),
+            "outputs": manifest,
+        });
+        let mut text = serde_json::to_string_pretty(&manifest)
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        text.push('\n');
+        self.files
+            .write_in(&run.staging, "manifest.json", text.as_bytes())?;
         let json = item_json(&run.item, &run.attributes, &lists[0], &lists[1]);
         self.files
             .write_in(&run.staging, "item.json", json.as_bytes())?;
@@ -414,65 +621,153 @@ impl ExportService {
         }
         Ok(lists[0].len() + lists[1].len())
     }
-}
 
-impl ExportStaging for ExportService {
-    fn completed(&self, render: &RenderCompletion, output: &Path) -> Result<()> {
-        let mut runs = self.runs()?;
-        let Some(run_id) = runs
-            .values()
-            .find(|run| {
-                run.targets
-                    .iter()
-                    .any(|t| t.tracking_job_id == render.tracking_job_id && !t.copied)
-            })
-            .map(|run| run.id)
-        else {
-            tracing::info!(job = render.job_id, "render for no running export ignored");
+    /// A `render_output` job wrote the output of `(photo, slot)` at `path` (rendered from
+    /// composition revision `revision`): copied into the run's staging folder; the last one
+    /// finalizes the run.
+    pub fn output_ready(
+        &self,
+        run_id: i64,
+        photo_id: i64,
+        slot: OutputSlot,
+        path: &Path,
+        revision: i64,
+    ) -> Result<()> {
+        let mut state = self.state()?;
+        let Some(mut run) = state.runs.remove(&run_id) else {
             return Ok(());
         };
-        let Some(mut run) = runs.remove(&run_id) else {
-            return Ok(());
-        };
-        let Some(index) = run
-            .targets
-            .iter()
-            .position(|t| t.tracking_job_id == render.tracking_job_id)
-        else {
+        let Some(index) = run.targets.iter().position(|t| {
+            t.photo_id == photo_id && t.slot == slot && t.progress == Progress::Rendering
+        }) else {
+            state.runs.insert(run_id, run);
             return Ok(());
         };
         if let Err(error) = self
             .files
-            .copy_in(&run.staging, &run.targets[index].name, output)
+            .copy_in(&run.staging, &run.targets[index].name, path)
         {
-            tracing::warn!(%error, "export render not copied");
+            tracing::warn!(%error, "export output not copied");
             self.fail(run, "files");
             return Ok(());
         }
-        run.targets[index].copied = true;
+        run.targets[index].progress = Progress::Copied;
+        run.targets[index].revision = revision;
         let (done, total) = (run.done(), run.targets.len());
         if done == total {
-            self.finalize(run);
+            self.finalize(&state, run);
         } else {
             self.emit(run.session_id, done, total, ExportState::Running);
-            runs.insert(run_id, run);
+            state.runs.insert(run_id, run);
+        }
+        Ok(())
+    }
+
+    /// A `render_output` job could not render: the run fails (no retry, the failure is
+    /// deterministic).
+    pub fn output_failed(&self, run_id: i64, reason: &str) -> Result<()> {
+        let mut state = self.state()?;
+        if let Some(run) = state.runs.remove(&run_id) {
+            self.fail(run, reason);
+        }
+        Ok(())
+    }
+}
+
+impl ExportStaging for ExportService {
+    /// Capture One delivered a master: committed to the cache, its size and geometry compared
+    /// with the fingerprint (materialise, adopt the master size, or `needs_review`), then the
+    /// waiting outputs of that RAW are queued — or every run holding a photo that now needs
+    /// review fails with `needs_review` (the master stays).
+    fn master_ready(&self, render: &RenderCompletion, output: &Path) -> Result<()> {
+        let mut state = self.state()?;
+        if state.masters.get(&render.raw) == Some(&render.tracking_job_id) {
+            state.masters.remove(&render.raw);
+        }
+        let raw = render.raw.as_str();
+        let waiting = |t: &Target| t.raw == raw && t.progress == Progress::WaitingMaster;
+        if !state
+            .runs
+            .values()
+            .any(|run| run.targets.iter().any(waiting))
+        {
+            tracing::info!(job = render.job_id, "master for no running export ignored");
+            return Ok(());
+        }
+        let generation = render.generation;
+        let committed = match self.render.masters.commit(raw, generation, output) {
+            Ok(path) => path,
+            Err(error) => {
+                tracing::warn!(%error, "master not committed");
+                self.fail_runs(&mut state, waiting, "files");
+                return Ok(());
+            }
+        };
+        let Some(frame) = self.render.imaging.dimensions(&committed)? else {
+            tracing::warn!(master = %committed.display(), "master not readable");
+            self.fail_runs(&mut state, waiting, "render");
+            return Ok(());
+        };
+        let commit = self.store.adopt_frame(
+            raw,
+            Fingerprint {
+                frame,
+                source: FrameSource::Master,
+                geometry: render.geometry.clone(),
+            },
+        )?;
+        if !commit.needs_review.is_empty() {
+            let flagged: HashSet<i64> = commit.needs_review.iter().map(|(id, _)| *id).collect();
+            for &(photo_id, session_id) in &commit.needs_review {
+                self.events.emit(AppEvent::PhotoChanged {
+                    photo_id,
+                    session_id,
+                });
+            }
+            self.fail_runs(
+                &mut state,
+                |t| flagged.contains(&t.photo_id),
+                "needs_review",
+            );
+        }
+        let mut broken = Vec::new();
+        for run in state.runs.values_mut() {
+            for index in 0..run.targets.len() {
+                if !waiting(&run.targets[index]) {
+                    continue;
+                }
+                run.targets[index].adjusted_gen = generation;
+                if self.enqueue_output(run.id, &run.targets[index]).is_err() {
+                    broken.push(run.id);
+                    break;
+                }
+                run.targets[index].progress = Progress::Rendering;
+            }
+        }
+        for id in broken {
+            if let Some(run) = state.runs.remove(&id) {
+                self.fail(run, "files");
+            }
         }
         Ok(())
     }
 
     fn failed(&self, tracking_job_id: i64, reason: &str) -> Result<()> {
-        let mut runs = self.runs()?;
-        let run_id = runs
-            .values()
-            .find(|run| {
-                run.targets
-                    .iter()
-                    .any(|t| t.tracking_job_id == tracking_job_id)
-            })
-            .map(|run| run.id);
-        if let Some(run) = run_id.and_then(|id| runs.remove(&id)) {
-            self.fail(run, reason);
-        }
+        let mut state = self.state()?;
+        let Some(raw) = state
+            .masters
+            .iter()
+            .find(|(_, id)| **id == tracking_job_id)
+            .map(|(raw, _)| raw.clone())
+        else {
+            return Ok(());
+        };
+        state.masters.remove(&raw);
+        self.fail_runs(
+            &mut state,
+            |t| t.raw == raw && t.progress == Progress::WaitingMaster,
+            reason,
+        );
         Ok(())
     }
 }

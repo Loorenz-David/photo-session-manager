@@ -35,6 +35,21 @@ fn detail(a: &TestApp, code: &str) -> Option<(bool, String)> {
         .map(|i| (i.ok, i.detail))
 }
 
+/// A JPEG recipe of the photographer's own (the retired web recipe's values): the ensure must
+/// leave it alone, and the recipe script is exercised with it.
+fn owner_jpeg() -> psm_integrations::editing::capture_one::scripting::RecipeProps {
+    RecipeSpec {
+        output_format: "JPEG",
+        bits: 8,
+        scaling_method: "Long_Edge",
+        scaling_unit: "pixels",
+        long_edge: 2048,
+        jpeg_quality: 90,
+        export_crop_method: "respect",
+    }
+    .props()
+}
+
 #[test]
 fn c1a_fresh_default_document_is_created_alongside_and_recipes_are_idempotent() {
     let a = TestApp::new().unwrap();
@@ -42,7 +57,7 @@ fn c1a_fresh_default_document_is_created_alongside_and_recipes_are_idempotent() 
     let doc = home.join("Pictures/Session Manager");
     let own = a.fake.state.lock().unwrap().document_id.clone();
     a.fake.state.lock().unwrap().recipes.clear();
-    let owner = RecipeSpec::WEB.props();
+    let owner = owner_jpeg();
     a.fake
         .state
         .lock()
@@ -62,7 +77,6 @@ fn c1a_fresh_default_document_is_created_alongside_and_recipes_are_idempotent() 
     for (name, spec) in [
         ("PSM Preview", RecipeSpec::PREVIEW),
         ("PSM Master", RecipeSpec::MASTER),
-        ("PSM Web", RecipeSpec::WEB),
     ] {
         let mut got = s.recipes[name].clone();
         got.root_folder_type = None;
@@ -78,7 +92,6 @@ fn c1a_fresh_default_document_is_created_alongside_and_recipes_are_idempotent() 
     );
     assert!(ops(&a).contains(&"make_recipe:PSM Preview".into()));
     assert!(ops(&a).contains(&"make_recipe:PSM Master".into()));
-    assert!(ops(&a).contains(&"make_recipe:PSM Web".into()));
     assert_eq!(
         detail(&a, "document"),
         Some((true, "Session Manager.cosessiondb open".into()))
@@ -119,28 +132,29 @@ fn c1b_drifted_recipe_repairs_only_dependent_fields() {
     let a = TestApp::with_fake_document().unwrap();
     a.app.health_check().unwrap();
     a.fake.state.lock().unwrap().ops.clear();
-    let preview = a.fake.state.lock().unwrap().recipes["PSM Preview"].clone();
+    let master = a.fake.state.lock().unwrap().recipes["PSM Master"].clone();
     {
         let mut s = a.fake.state.lock().unwrap();
-        let web = s.recipes.get_mut("PSM Web").unwrap();
-        web.enabled = true;
-        web.jpeg_quality = 70;
-        web.output_sub_folder = "".into();
-        web.root_folder_type = Some("image folder".into());
+        let preview = s.recipes.get_mut("PSM Preview").unwrap();
+        preview.enabled = true;
+        preview.jpeg_quality = 70;
+        preview.output_sub_folder = "".into();
+        preview.root_folder_type = Some("image folder".into());
     }
     a.app.health_check().unwrap();
     assert!(
-        ops(&a).contains(&"set_recipe_props:PSM Web:enabled,jpegQuality,outputSubFolder".into())
+        ops(&a)
+            .contains(&"set_recipe_props:PSM Preview:enabled,jpegQuality,outputSubFolder".into())
     );
     let s = a.fake.state.lock().unwrap();
-    assert_eq!(s.recipes["PSM Preview"], preview);
+    assert_eq!(s.recipes["PSM Master"], master);
     assert!(!s.ops.iter().any(|op| op.starts_with("make_document:")
         || op.starts_with("open_document:")
         || op.starts_with("make_recipe:")));
-    let mut web = s.recipes["PSM Web"].clone();
-    assert_eq!(web.root_folder_type.as_deref(), Some("image folder"));
-    web.root_folder_type = None;
-    assert_eq!(web, RecipeSpec::WEB.props());
+    let mut preview = s.recipes["PSM Preview"].clone();
+    assert_eq!(preview.root_folder_type.as_deref(), Some("image folder"));
+    preview.root_folder_type = None;
+    assert_eq!(preview, RecipeSpec::PREVIEW.props());
 }
 
 #[test]
@@ -528,7 +542,7 @@ fn script_result(name: &str, mode: &str, want: Option<&serde_json::Value>) -> se
 
 #[test]
 fn c4a_recipe_script_creates_repairs_only_drift_and_skips_exact() {
-    let want = serde_json::to_value(RecipeSpec::WEB.props()).unwrap();
+    let want = serde_json::to_value(owner_jpeg()).unwrap();
     let created = script_result("ensure_recipe", "recipe_new", Some(&want));
     assert_eq!(created["first"]["created"], true);
     assert_eq!(

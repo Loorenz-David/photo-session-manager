@@ -30,8 +30,9 @@ pub trait PreviewFiles: Send + Sync {
 }
 
 pub trait ExportStaging: Send + Sync {
-    fn completed(&self, render: &RenderCompletion, output: &Path) -> Result<()>;
-    /// An export render that will not complete (final timeout, MC-16).
+    /// Capture One finished a master render (10D MC-28 §Master).
+    fn master_ready(&self, render: &RenderCompletion, output: &Path) -> Result<()>;
+    /// A master render that will not complete (final timeout, MC-16).
     fn failed(&self, tracking_job_id: i64, reason: &str) -> Result<()>;
 }
 
@@ -185,9 +186,9 @@ impl PreviewService {
                     });
                 }
             }
-            RenderPurpose::Export => {
+            RenderPurpose::Master => {
                 if let Some(callback) = &self.export_staging {
-                    callback.completed(&entry, output)?;
+                    callback.master_ready(&entry, output)?;
                 }
             }
         }
@@ -238,7 +239,7 @@ impl PreviewService {
             .expire_renders(self.clock.mono(), self.clock.now_ms())?
         {
             let job = self.store.job(id)?;
-            if job.kind == "render_export" {
+            if job.kind == "render_master" {
                 if let Some(callback) = &self.export_staging {
                     callback.failed(id, "timeout")?;
                 }

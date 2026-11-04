@@ -1,4 +1,17 @@
-use psm_core::{Result, domain::composition::Frame, ports::images::Imaging};
+//! The only crate that decodes pixels (H3 as narrowed by 10D): header-only dimensions, 640 px
+//! thumbnails (P28) and the output renderer of MC-28 (P29).
+pub mod linear;
+pub mod metadata;
+pub mod render;
+
+use psm_core::{
+    Result,
+    domain::{
+        composition::{CompositionValues, Frame, OutputSlot},
+        output::{OutputFormat, OutputInfo},
+    },
+    ports::images::Imaging,
+};
 use std::{fs, path::Path};
 
 pub struct ImageOpsImpl;
@@ -28,5 +41,15 @@ impl Imaging for ImageOpsImpl {
         drop(writer);
         fs::rename(temp, dest)?;
         Ok(true)
+    }
+    fn render_output(
+        &self,
+        master: &Path,
+        values: &CompositionValues,
+        slot: OutputSlot,
+        format: &OutputFormat,
+        dest: &Path,
+    ) -> Result<OutputInfo> {
+        render::render_output(master, values, slot, format, dest)
     }
 }

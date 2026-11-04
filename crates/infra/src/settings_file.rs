@@ -1,5 +1,5 @@
 use crate::paths::AppPaths;
-use psm_core::{Error, Result};
+use psm_core::{Error, Result, domain::output::OutputFormat};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, OpenOptions},
@@ -13,8 +13,10 @@ use std::{
 pub struct Settings {
     pub document_id: Option<String>,
     pub preview_recipe: String,
-    pub web_recipe: String,
     pub master_recipe: String,
+    /// 10D MC-28: the size and quality of every output (replaces the retired `web_recipe`, which
+    /// is ignored on read and dropped on the next save).
+    pub output_format: OutputFormat,
     pub style_name: String,
     pub default_shape: String,
     pub export_folder: String,
@@ -44,8 +46,8 @@ impl Default for Settings {
         Self {
             document_id: None,
             preview_recipe: "PSM Preview".into(),
-            web_recipe: "PSM Web".into(),
             master_recipe: "PSM Master".into(),
+            output_format: OutputFormat::default(),
             style_name: String::new(),
             default_shape: "1:1".into(),
             export_folder: PathBuf::from(std::env::var_os("HOME").unwrap_or_default())

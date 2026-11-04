@@ -347,6 +347,15 @@ export type NotificationDto = {
 	created_at: number,
 };
 
+/**
+ *  The output setting (10D MC-28): the long edge in pixels (512–8192) and the JPEG quality
+ *  (60–100) of every exported or uploaded file; JPEG, 4:4:4 and sRGB are fixed.
+ */
+export type OutputFormatDto = {
+	long_edge: number,
+	quality: number,
+};
+
 export type PhotoClassification = "unreviewed" | "main" | "condition" | "deleted";
 
 /**  One visible photo of the workspace (P08): what the stage, grid and strip need. */
@@ -590,7 +599,7 @@ export type SettingsDto_Deserialize = {
 	effective_document_id: string,
 	default_document_id: string,
 	preview_recipe: string,
-	web_recipe: string,
+	output_format: OutputFormatDto,
 	style_name: string,
 	default_shape: string,
 	master_recipe: string,
@@ -611,7 +620,7 @@ export type SettingsDto_Serialize = {
 	effective_document_id: string,
 	default_document_id: string,
 	preview_recipe: string,
-	web_recipe: string,
+	output_format: OutputFormatDto,
 	style_name: string,
 	default_shape: string,
 	master_recipe: string,
@@ -630,7 +639,7 @@ export type SettingsPatchDto = SettingsPatchDto_Serialize | SettingsPatchDto_Des
 export type SettingsPatchDto_Deserialize = {
 	document_id?: string | null,
 	preview_recipe?: string | null,
-	web_recipe?: string | null,
+	output_format?: OutputFormatDto | null,
 	style_name?: string | null,
 	default_shape?: string | null,
 	master_recipe?: string | null,
@@ -645,7 +654,7 @@ export type SettingsPatchDto_Deserialize = {
 export type SettingsPatchDto_Serialize = {
 	document_id?: string,
 	preview_recipe?: string,
-	web_recipe?: string,
+	output_format?: OutputFormatDto,
 	style_name?: string,
 	default_shape?: string,
 	master_recipe?: string,

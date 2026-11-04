@@ -158,13 +158,11 @@ fn c3a_existing_recipes_are_corrected() {
     let a = app();
     a.app.editing.ensure(&a.app.provision).unwrap();
     let s = a.fake.state.lock().unwrap();
-    for name in ["PSM Preview", "PSM Master", "PSM Web"] {
+    for name in ["PSM Preview", "PSM Master"] {
         let spec = if name == "PSM Preview" {
             psm_integrations::editing::capture_one::recipes::RecipeSpec::PREVIEW
-        } else if name == "PSM Master" {
-            psm_integrations::editing::capture_one::recipes::RecipeSpec::MASTER
         } else {
-            psm_integrations::editing::capture_one::recipes::RecipeSpec::WEB
+            psm_integrations::editing::capture_one::recipes::RecipeSpec::MASTER
         };
         let mut got = s.recipes.get(name).unwrap().clone();
         got.root_folder_type = None;
@@ -175,17 +173,13 @@ fn c3a_existing_recipes_are_corrected() {
 #[test]
 fn c3b_missing_recipe_only_blocks_its_render() {
     let a = app();
-    a.fake.state.lock().unwrap().recipes.remove("PSM Web");
-    a.fake.state.lock().unwrap().recipes.insert(
-        "PSM Master".into(),
-        psm_integrations::editing::capture_one::recipes::RecipeSpec::MASTER.props(),
-    );
+    a.fake.state.lock().unwrap().recipes.remove("PSM Master");
     a.fake.state.lock().unwrap().fail_make_recipe = Some("busy".into());
     let s = session(&a, "K1");
     let p = photo(&a, s, "a.ARW", "7");
     let raw = a.store().photo(p).unwrap().raw_path;
     assert!(
-        matches!(a.app.editing.ensure(&a.app.provision), Err(Error::RecipeMissing{name}) if name=="PSM Web")
+        matches!(a.app.editing.ensure(&a.app.provision), Err(Error::RecipeMissing{name}) if name=="PSM Master")
     );
     let mut got = a
         .fake
@@ -208,10 +202,10 @@ fn c3b_missing_recipe_only_blocks_its_render() {
             .filter(|i| i.code == "recipe_missing")
             .map(|i| i.detail.as_str())
             .collect::<Vec<_>>(),
-        ["PSM Web could not be created or repaired: provider: busy"]
+        ["PSM Master could not be created or repaired: provider: busy"]
     );
     assert!(
-        matches!(a.app.editing.render(&raw,RenderPurpose::Export),Err(Error::RecipeMissing{name}) if name=="PSM Web")
+        matches!(a.app.editing.render(&raw,RenderPurpose::Master),Err(Error::RecipeMissing{name}) if name=="PSM Master")
     );
     assert_eq!(
         a.app.editing.render(&raw, RenderPurpose::Preview).unwrap(),

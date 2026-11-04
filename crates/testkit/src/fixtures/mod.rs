@@ -1,4 +1,5 @@
 pub mod definitions;
 pub mod shopify;
 pub mod synthetic_jpeg;
+pub mod synthetic_master;
 pub mod synthetic_raw;

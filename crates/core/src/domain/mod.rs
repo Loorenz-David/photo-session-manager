@@ -5,6 +5,7 @@ pub mod attribute;
 pub mod composition;
 pub mod editing;
 pub mod item;
+pub mod output;
 pub mod photo;
 pub mod publish;
 pub mod session;

@@ -44,6 +44,10 @@ impl From<Error> for CommandError {
                 "composition_invalid"
             }
             Error::FrameUnknown => "frame_unknown",
+            Error::NeedsReview { photos } => {
+                data.insert("photos".into(), photos.join(", "));
+                "needs_review"
+            }
             Error::SkuCollision { existing_sku } => {
                 data.insert("existing_sku".into(), existing_sku.clone());
                 "sku_collision"

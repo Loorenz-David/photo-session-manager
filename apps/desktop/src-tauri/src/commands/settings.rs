@@ -15,6 +15,14 @@ pub struct IntegrationSettingsDto {
     pub condition_photos_key: String,
 }
 
+/// The output setting (10D MC-28): the long edge in pixels (512–8192) and the JPEG quality
+/// (60–100) of every exported or uploaded file; JPEG, 4:4:4 and sRGB are fixed.
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct OutputFormatDto {
+    pub long_edge: u32,
+    pub quality: u8,
+}
+
 /// `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the
 /// stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
 #[derive(Serialize, Deserialize, Type)]
@@ -23,7 +31,7 @@ pub struct SettingsDto {
     pub effective_document_id: String,
     pub default_document_id: String,
     pub preview_recipe: String,
-    pub web_recipe: String,
+    pub output_format: OutputFormatDto,
     pub style_name: String,
     pub default_shape: String,
     pub master_recipe: String,
@@ -43,7 +51,7 @@ pub struct SettingsPatchDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preview_recipe: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub web_recipe: Option<String>,
+    pub output_format: Option<OutputFormatDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

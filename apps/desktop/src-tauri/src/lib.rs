@@ -370,7 +370,7 @@ mod p21_tests {
         let state = Arc::new(AppState::new(test.app));
         let patches = [
             json!({"preview_recipe":"R1"}),
-            json!({"web_recipe":"W1"}),
+            json!({"master_recipe":"M1"}),
             json!({"style_name":"S1"}),
             json!({"sku_prefix":"PX"}),
         ];
@@ -389,7 +389,7 @@ mod p21_tests {
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
         for (key, value) in [
             ("preview_recipe", "R1"),
-            ("web_recipe", "W1"),
+            ("master_recipe", "M1"),
             ("style_name", "S1"),
             ("sku_prefix", "PX"),
         ] {
@@ -510,5 +510,123 @@ mod p28_tests {
                 .unwrap()
                 .ends_with("thumb-1.jpg")
         );
+    }
+}
+
+#[cfg(test)]
+mod p29_tests {
+    use super::*;
+    use psm_core::{
+        domain::{composition::EditorGeometry, photo::Classification},
+        ports::store::Store,
+    };
+    use psm_testkit::fixtures::synthetic_jpeg::SyntheticJpeg;
+    use serde_json::{Value, json};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+
+    fn last_job(test: &psm_testkit::TestApp) -> String {
+        test.fake
+            .state
+            .lock()
+            .unwrap()
+            .issued
+            .last()
+            .unwrap()
+            .0
+            .clone()
+    }
+
+    /// C8(a) at the command boundary: `export_run` refuses with `needs_review`, naming the photo.
+    #[test]
+    fn c8a_export_run_rejects_with_needs_review() {
+        let test = psm_testkit::TestApp::with_fake_document().unwrap();
+        let sid = test
+            .items()
+            .create_local("K", "Oak", "Sideboard", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let mut photos = Vec::new();
+        for name in ["a.ARW", "b.ARW"] {
+            // The integrity check (MC-3) runs before the review gate: a RAW with its real hash.
+            let raw = test.dir.path().join(name);
+            std::fs::write(&raw, name).unwrap();
+            let p = test
+                .app
+                .store
+                .photo_insert_or_get(psm_core::domain::photo::NewPhoto {
+                    session_id: sid,
+                    raw_path: raw.to_string_lossy().into_owned(),
+                    raw_hash: Some(psm_core::mechanisms::hash::sha256_file(&raw).unwrap()),
+                    captured_at: Some(0),
+                    source: psm_core::domain::photo::PhotoSource::Capture,
+                    created_at: 0,
+                })
+                .unwrap();
+            test.app.store.upsert_raw_state(&p.raw_path, None).unwrap();
+            test.fake
+                .add_image(&p.raw_path, &[&format!("v{}", p.id)], false);
+            test.app.previews.request_initial(&p.raw_path).unwrap();
+            test.complete_render_with(
+                &last_job(&test),
+                &SyntheticJpeg::rgb(2560, 1707, [200, 100, 50]),
+            )
+            .unwrap();
+            test.review().classify(p.id, Classification::Main).unwrap();
+            photos.push(p);
+        }
+        let b = &photos[1];
+        test.fake.set_variant_geometry(
+            &format!("v{}", b.id),
+            EditorGeometry {
+                rotation: 3.0,
+                ..Default::default()
+            },
+        );
+        test.clock.advance(31_000);
+        test.app
+            .previews
+            .on_variant_adjusted(&format!("v{}", b.id), &b.raw_path)
+            .unwrap();
+        test.tick(20_000).unwrap();
+        test.complete_render_with(
+            &last_job(&test),
+            &SyntheticJpeg::rgb(2560, 1707, [200, 100, 50]),
+        )
+        .unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = test;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![commands::export::export_run])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let webview = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let error = get_ipc_response(
+            &webview,
+            InvokeRequest {
+                cmd: "export_run".into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(json!({"sessionId": sid})),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str::<Value>(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw response"),
+        })
+        .unwrap_err();
+        assert_eq!(error["code"], "needs_review");
+        assert_eq!(error["data"]["photos"], "Main 02");
+        assert_eq!(error["message"], "Re-frame first: Main 02");
     }
 }

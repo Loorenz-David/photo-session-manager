@@ -43,7 +43,8 @@ pub struct CameraCapabilities {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderPurpose {
     Preview,
-    Export,
+    /// The full-size, uncropped 16-bit master (10D MC-28) that every output is rendered from.
+    Master,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

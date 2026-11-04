@@ -13,7 +13,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const shown: Settings = {
   document_id: null, effective_document_id: '/tmp/doc', default_document_id: '/tmp/doc',
-  preview_recipe: 'PSM Preview', master_recipe: 'PSM Master', web_recipe: 'PSM Web', style_name: '', default_shape: '1:1',
+  preview_recipe: 'PSM Preview', master_recipe: 'PSM Master', output_format: { long_edge: 2048, quality: 90 }, style_name: '', default_shape: '1:1',
   export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null, integration: null,
 };
 

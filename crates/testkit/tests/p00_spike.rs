@@ -74,7 +74,12 @@ fn c1a_first_open_creates_layout_and_defaults() {
         serde_json::from_slice(&fs::read(root.join("settings.json")).unwrap()).unwrap();
     assert_eq!(settings["document_id"], serde_json::Value::Null);
     assert_eq!(settings["preview_recipe"], "PSM Preview");
-    assert_eq!(settings["web_recipe"], "PSM Web");
+    assert_eq!(settings["master_recipe"], "PSM Master");
+    assert_eq!(
+        settings["output_format"],
+        serde_json::json!({"long_edge": 2048, "quality": 90})
+    );
+    assert!(settings.get("web_recipe").is_none());
     assert_eq!(settings["style_name"], "");
     assert_eq!(
         settings["export_folder"],

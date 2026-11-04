@@ -19,3 +19,6 @@ chrono = "0.4"
 chrono-tz = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
+
+[dev-dependencies]
+kamadak-exif = "0.6"

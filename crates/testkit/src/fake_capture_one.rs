@@ -63,7 +63,7 @@ impl FakeCaptureOneScripting {
         let mut recipes = HashMap::new();
         for (name, spec) in [
             ("PSM Preview", RecipeSpec::PREVIEW),
-            ("PSM Web", RecipeSpec::WEB),
+            ("PSM Master", RecipeSpec::MASTER),
         ] {
             let mut props = spec.props();
             if name == "PSM Preview" {

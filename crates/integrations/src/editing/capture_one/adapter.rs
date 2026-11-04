@@ -32,7 +32,6 @@ pub struct CaptureOneAdapter {
     pub health: Arc<HealthService>,
     pub document_id: String,
     pub preview_recipe: String,
-    pub web_recipe: String,
     pub master_recipe: String,
     pub paths: AppPaths,
     renders: Mutex<RenderRegistry>,
@@ -46,7 +45,6 @@ impl CaptureOneAdapter {
         health: Arc<HealthService>,
         document_id: String,
         preview_recipe: String,
-        web_recipe: String,
         master_recipe: String,
         paths: AppPaths,
     ) -> Self {
@@ -57,7 +55,6 @@ impl CaptureOneAdapter {
             health,
             document_id,
             preview_recipe,
-            web_recipe,
             master_recipe,
             paths,
             renders: Mutex::new(RenderRegistry::default()),
@@ -89,7 +86,7 @@ impl CaptureOneAdapter {
     fn render_started(&self, raw: &str, purpose: RenderPurpose) -> Result<ProcessStarted> {
         let recipe = match purpose {
             RenderPurpose::Preview => &self.preview_recipe,
-            RenderPurpose::Export => &self.web_recipe,
+            RenderPurpose::Master => &self.master_recipe,
         };
         if !self.background.recipe_exists(&self.document_id, recipe)? {
             return Err(Error::RecipeMissing {
@@ -365,7 +362,7 @@ impl EditingProvider for CaptureOneAdapter {
                     now.duration_since(entry.issued_mono).as_secs()
                         >= match entry.completion.purpose {
                             RenderPurpose::Preview => 60,
-                            RenderPurpose::Export => 120,
+                            RenderPurpose::Master => 120,
                         }
                 })
                 .map(|(id, _)| id.clone())

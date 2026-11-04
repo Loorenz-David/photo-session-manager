@@ -196,6 +196,8 @@ impl TestApp {
         self.clock.advance(ms);
         self.app.arrival.tick()?;
         let count = self.app.jobs.tick(self.clock.now_ms())?;
+        // Output renders before publish steps, so a publish sees its export done in the same tick.
+        let count = count + self.app.render_jobs.tick(self.clock.now_ms())?;
         let count = count + self.app.publish_jobs.tick(self.clock.now_ms())?;
         self.app.previews.tick()?;
         Ok(count)
@@ -207,13 +209,34 @@ impl TestApp {
         self.complete_render_with(job_id, &FakeCaptureOneScripting::output_bytes(job_id))
     }
     pub fn complete_render_with(&self, job_id: &str, bytes: &[u8]) -> Result<PathBuf> {
+        self.complete_render_as(job_id, bytes, "jpg")
+    }
+    /// Completes master render `job_id` with `master` written as Capture One's TIFF output.
+    pub fn complete_master_render(
+        &self,
+        job_id: &str,
+        master: &crate::fixtures::synthetic_master::SyntheticMaster,
+    ) -> Result<PathBuf> {
+        self.complete_render_as(job_id, &master.bytes(), "tif")
+    }
+    /// Whether `job_id` was issued with the master recipe of this app's settings.
+    pub fn is_master_job(&self, job_id: &str) -> bool {
+        self.fake
+            .state
+            .lock()
+            .unwrap()
+            .issued
+            .iter()
+            .any(|(job, _, recipe)| job == job_id && *recipe == self.app.settings.master_recipe)
+    }
+    fn complete_render_as(&self, job_id: &str, bytes: &[u8], extension: &str) -> Result<PathBuf> {
         let entry = self
             .app
             .editing
             .render_completion(job_id)
             .ok_or_else(|| psm_core::Error::NotFound(job_id.into()))?;
         let output = self.dir.path().join("Output").join(format!(
-            "{}.jpg",
+            "{}.{extension}",
             Path::new(&entry.raw)
                 .file_stem()
                 .unwrap_or_default()
@@ -232,7 +255,8 @@ impl TestApp {
         Ok(output)
     }
     /// Completes every render still in flight (in issue order), including renders the adapter
-    /// queued behind a busy base name and issued as earlier ones finished. Returns the job ids.
+    /// queued behind a busy base name and issued as earlier ones finished: a master job gets a
+    /// 600×400 solid synthetic master, a preview the stub JPEG. Returns the job ids.
     pub fn complete_all_renders(&self) -> Result<Vec<String>> {
         let mut completed = Vec::new();
         loop {
@@ -250,10 +274,39 @@ impl TestApp {
                 return Ok(completed);
             }
             for job in open {
-                self.complete_render(&job)?;
+                if self.is_master_job(&job) {
+                    self.complete_master_render(
+                        &job,
+                        &crate::fixtures::synthetic_master::SyntheticMaster::solid(
+                            600,
+                            400,
+                            crate::fixtures::synthetic_master::PAPER,
+                        ),
+                    )?;
+                } else {
+                    self.complete_render(&job)?;
+                }
                 completed.push(job);
             }
         }
+    }
+    /// Decodes an image file (an exported output) to 8-bit RGB.
+    pub fn decode(&self, path: &Path) -> Result<image::RgbImage> {
+        image::open(path)
+            .map(|img| img.to_rgb8())
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))
+    }
+    /// `outputs/<pk[0..2]>/<pk>/` of the RAW (the output cache).
+    pub fn outputs_dir(&self, raw: &str) -> PathBuf {
+        self.media_dir("outputs", raw)
+    }
+    /// `masters/<pk[0..2]>/<pk>/` of the RAW (the master cache).
+    pub fn masters_dir(&self, raw: &str) -> PathBuf {
+        self.media_dir("masters", raw)
+    }
+    fn media_dir(&self, kind: &str, raw: &str) -> PathBuf {
+        let key = psm_core::mechanisms::arrival::path_key(raw);
+        self.app.paths.root.join(kind).join(&key[..2]).join(key)
     }
     /// `<export folder>` from the settings of this app (inside the test's temporary directory).
     pub fn export_root(&self) -> PathBuf {

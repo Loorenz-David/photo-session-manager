@@ -26,6 +26,13 @@ pub struct PreviewCommit {
     pub photos: Vec<(i64, i64)>,
 }
 
+/// The outcome of comparing an observed frame with the stored fingerprints of a RAW's photos.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FrameCommit {
+    /// `(photo_id, session_id)` of the compositions this observation made `needs_review`.
+    pub needs_review: Vec<(i64, i64)>,
+}
+
 pub trait StoreTx {
     fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()>;
     fn session(&self, id: i64) -> Result<Session>;
@@ -118,19 +125,28 @@ pub trait Store: Send + Sync {
     ) -> Result<(Composition, bool)>;
     fn backfill_compositions(&self, default_shape: &str, now_ms: i64) -> Result<usize>;
     fn mark_previews_stale_once(&self, flag_key: &str, now_ms: i64) -> Result<usize>;
-    fn adopt_frame(&self, raw: &str, observed: Fingerprint) -> Result<Vec<(i64, i64)>>;
+    /// The materialise/fingerprint rule of P28 for any render: a frameless composition gets its
+    /// rect and fingerprint, an incompatible observation sets `needs_review` and replaces the
+    /// fingerprint, a compatible master observation replaces it (the master size becomes the frame).
+    fn adopt_frame(&self, raw: &str, observed: Fingerprint) -> Result<FrameCommit>;
+    /// The RAW's current `adjusted_gen` (0 when the RAW has no state row yet).
+    fn adjusted_gen(&self, raw: &str) -> Result<i64>;
+    /// Queues one `render_output` job (target = the RAW) and returns its id.
+    fn enqueue_render_output(&self, raw: &str, payload: &str, now_ms: i64) -> Result<i64>;
     fn set_missing_preview_paths(&self, raw: &str, path: &str) -> Result<Vec<(i64, i64)>>;
     fn new_render_job(&self, raw: &str, now_ms: i64) -> Result<i64>;
     fn finish_render_job(&self, id: i64, error: Option<&str>, now_ms: i64) -> Result<()>;
     /// Records an export run (a running `render_export` job row whose payload is the frozen photo
     /// lists) and returns its id, the export run id.
     fn new_export_run(&self, session_id: i64, snapshot: &str, now_ms: i64) -> Result<i64>;
-    /// The tracking row of one export render (`render_export`, target = the RAW).
-    fn new_export_render_job(
+    /// The tracking row of one master render (`render_master`, target = the RAW, payload
+    /// `{run_id, photo_id, adjusted_gen}`).
+    fn new_master_render_job(
         &self,
         raw: &str,
         run_id: i64,
         photo_id: i64,
+        adjusted_gen: i64,
         now_ms: i64,
     ) -> Result<i64>;
     fn active_session_id(&self) -> Result<Option<i64>>;
@@ -139,7 +155,7 @@ pub trait Store: Send + Sync {
         &self,
         now_ms: i64,
         only_kind: Option<&str>,
-        excluded_kind: Option<&str>,
+        excluded_kinds: &[&str],
     ) -> Result<Option<Job>>;
     fn job_done(&self, id: i64, now_ms: i64) -> Result<()>;
     fn job_retry(&self, id: i64, code: &str, next_attempt_at: i64, now_ms: i64) -> Result<()>;
@@ -206,7 +222,7 @@ pub trait Store: Send + Sync {
     fn set_publish_progress(&self, item_id: i64, uploaded: i64, total: i64) -> Result<()>;
     fn enqueue_publish_item(&self, item_id: i64, at: i64) -> Result<()>;
     fn set_publish_export(&self, item_id: i64, export_run_id: i64) -> Result<()>;
-    /// RAW retouch generation captured when this publish export's render was requested.
+    /// RAW retouch generation captured when this export run started (the run row records it).
     fn export_retouch_gen(&self, export_run_id: i64, photo_id: i64) -> Result<Option<i64>>;
     fn photo_link(&self, photo_id: i64, item_id: i64, role: &str) -> Result<Option<PhotoLink>>;
     fn upsert_photo_link(&self, link: &PhotoLink, at: i64) -> Result<()>;

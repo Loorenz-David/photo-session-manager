@@ -38,8 +38,8 @@ impl SettingsService {
             if ![
                 "document_id",
                 "preview_recipe",
-                "web_recipe",
                 "master_recipe",
+                "output_format",
                 "style_name",
                 "export_folder",
                 "preview_delay_s",
@@ -80,6 +80,10 @@ impl SettingsService {
             {
                 return Err(Error::InvalidValue("default_shape".into()));
             }
+            // 10D MC-28: JPEG, 4:4:4 and sRGB are fixed; the long edge and quality are settings.
+            if key == "output_format" && !valid_output_format(value) {
+                return Err(Error::InvalidValue("output_format".into()));
+            }
             if key == "master_recipe" && !value.as_str().is_some_and(|s| !s.is_empty()) {
                 return Err(Error::InvalidValue("master_recipe".into()));
             }
@@ -114,4 +118,15 @@ impl SettingsService {
         }
         Ok(next)
     }
+}
+
+/// `{"long_edge": 512..=8192, "quality": 60..=100}`, both integers.
+fn valid_output_format(value: &Value) -> bool {
+    let in_range = |key: &str, range: std::ops::RangeInclusive<u64>| {
+        value
+            .get(key)
+            .and_then(Value::as_u64)
+            .is_some_and(|v| range.contains(&v))
+    };
+    value.is_object() && in_range("long_edge", 512..=8192) && in_range("quality", 60..=100)
 }
