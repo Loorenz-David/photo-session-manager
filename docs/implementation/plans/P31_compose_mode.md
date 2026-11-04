@@ -326,3 +326,25 @@ one behaviour test: drag, open ⋯, Esc → menu closed, one `setComposition` on
 composing; `FINGERPRINT_TOLERANCE` plan slip; plan arithmetic/sign literals. **Probe declaration.** One temporary test file
 `apps/desktop/src/features/compose/__tests__/zz_review_probe.test.tsx`, created, run, deleted; `git status --porcelain` empty afterwards. No
 production file touched.
+
+### 2026-11-05 — fix r2 (Fable, `pipeline-implementer`, role fix) — F1 and F2 resolved
+**F1 (saves).** `useCompositionSaves` now takes two callbacks instead of `onSaved`: `onStored(photoId, composition)` after every successful
+save (the workspace row is patched, so tiles redraw at once) and `onSettled(photoId, composition)` only when the photo's queue is quiet — a
+success with nothing newer pending, or a refusal (with the last stored row). `ComposeMode` wires `onStored → patchPhoto` and `onSettled → Saved`
+to the machine. So an older answer that lands while a newer save is queued never reaches rule 16 and the stage stays on what the photographer
+sees; the queue's final answer still snaps the view on a refusal. `machine.ts` unchanged (rule 16's input is the same). C7(b) extended: after the
+two drags, `setComposition` has been called once (B waits behind A); resolving A leaves the placement at 111.09 px (B's) while B is in flight;
+then B resolves, tile 1 shows B, exactly two calls. Red on the r1 code (placement 61.09 — the snap-back), green now.
+**F2 (keys).** `useComposeGesture`'s keydown handler returns first when `event.defaultPrevented` or when a `[role="dialog"], [role="alertdialog"],
+[role="menu"]` layer is open (the selector `useBackKeys` already uses, inlined — `lib/keyboard.ts` is not in F2's file list). Grounded: Radix's
+`DismissableLayer` listens for Esc on the document in the capture phase and calls `preventDefault()` before dismissing, so both guards bite on
+the ⋯ menu, the right-click menu, the pickers and the form. New test in `p31_gestures.test.tsx`: drag (+50, saved), open ⋯, Esc on the menu →
+the menu is gone, `setComposition` called once, placement 61.09, editor open. Red on the r1 code (two calls), green now.
+**Judgment calls.** (1) The C7(b) row resolves `pB` before `pA`; under task 4's one-in-flight rule B is only sent after A settles, so the extended
+test resolves A first (the only order in which "after A settles while B is in flight" is observable) and B second — the row's outcome (B's rect
+shown, two calls) is asserted unchanged. (2) The tile is allowed to show A's stored row between the two settles (the correction's "the tile may
+still take the stored row"); the test does not pin that interim tile state, only the stage placement the finding is about. (3) The F2 test
+dispatches Esc on the menu element, not on `window`: a `window`-targeted keydown never passes the document's capture listener, so Radix would not
+see it and the scenario would not be the owner's.
+**Suite.** `npm test` 26 files / 223 passed (222 + F2); `npm run typecheck` exit 0; Rust untouched — `cargo test --workspace`, clippy `-D warnings`
+and `cargo fmt --check` re-run for the stamp (see the fix handoff). No backlog change; the r1 notes stand.
