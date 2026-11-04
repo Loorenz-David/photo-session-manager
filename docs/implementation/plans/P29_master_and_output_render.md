@@ -329,3 +329,46 @@ TIFF and copied; 2048×2048 rendered with a 2° straighten in 0.38 s (release bu
 IEC61966-2.1`. That file is an 8-bit export, not a `PSM Master` output; no live master render was triggered (camera not needed; the
 suite never depends on Capture One). The metadata grounding the Notes call owed is thereby partly answered: Capture One TIFFs carry
 Make/Model/DateTimeOriginal as EXIF tags, as step 8 assumes.
+
+### 2026-11-04 — review r1 (opus, pipeline-reviewer) — APPROVED_WITH_NOTES
+**Gate.** Tracker `IMPLEMENTED`; checkpoint `1d43c22` in `git log`. `git show --stat 1d43c22` = the 55 declared paths, none extra
+or missing. Reviewer run on clean `b78cbae` (it differs from the checkpoint only in pipeline docs): `cargo test --workspace
+--no-fail-fast` 508 passed / 0 failed; clippy `-D warnings` and `fmt --check` clean; `npm run typecheck` clean; `npm test` 132 passed.
+
+**Verified correct (by reading the production code, then the row's test).**
+- Render contract (`imaging/render.rs`). Inverse index maps for turns 1/2/3 match "source `(x, y)` → turned `(H0−1−y, x)`", and the
+  flip is applied in the turned frame. Straighten `s = c + R(−θ)(p − c)` with pixel centres. Catmull-Rom only when θ ≠ 0. The
+  65 536-entry sRGB→linear LUT runs before every resampling step. Lanczos3 (`fast_image_resize`, U16x3) only when the long edge
+  exceeds the setting, short edge `round(..)`, never upscaled. Linear→sRGB 8-bit, one `jpeg-encoder` pass with `F_1_1`, ICC in
+  APP2 and the allowlisted APP1. The EXIF writer can only emit the 9 structural tags and the 4 copied ones.
+- Tests that fail on the wrong outcome: C2(b) (flip before turn → rows 498/499 dark, so it fails), C2(c) (opposite sign → row 0 at
+  [81,84], so it fails), C4(d) (gamma-space average ≈ 128, so it fails), C3(a) (a shared or missing column turns 498/1 dark or light),
+  C1(b)/C7(c) (any `process` or `render_output` row fails them), C6(a)/(b) (exact single cache file name), C8(a)–(d) (exact
+  labels, states, fingerprints).
+- Export rework. The needs_review gate runs after integrity and before the run row, emits `Failed` and leaves no staging. Targets are
+  (photo, slot) through `output_names`. Cached output → copy; master on disk → `render_output`; else one master `process` per RAW.
+  `master_ready` commits the master, then `adopt_frame(Master, geometry)`, then fails the flagged runs (master kept) or queues
+  outputs. `manifest.json` is written before `item.json`. Masters are released only for `!defer_swap` and a non-dirty session.
+  `RenderOutputJob` names the output by the revision it read, so a stale key is never labelled fresh. Settings change → runtime
+  rebuild, so `format` is current.
+- `adopt_frame`: a compatible master replaces the fingerprint. A preview after a master stays compatible (C8(d)).
+- Settings: `output_format` is validated as integers in 512–8192 and 60–100; `web_recipe` is refused in a patch, ignored on read
+  (`#[serde(default)]`, unknown key) and dropped on save. `PSM Web` has left the specs, the ensure loop and the adapter.
+- Assumptions 1–15: none contradicts the intention. A7 (deleting Capture One's copy of the master from its output folder) touches
+  neither a RAW (H2) nor the committed master, and it matches the plan's manual try-out "fill, then empty". The deviations (C3(a)
+  `h`, C8 flag through geometry, C6 3000×2000 masters) keep each row's asserted outcome.
+- H1–H8: no platform write (H1). RAW opened by hash only (H2). Pixel ops are exactly MC-28's (H3). `render_output` is idempotent
+  and a restart closes orphan rows (H4). Core stays free of Capture One/Shopify terms (H7). The desktop change is a DTO and an
+  error-code arm (H8). No secret in the diff, and the suite needs no live services.
+
+**Findings.** None blocking.
+
+**Notes (backlog).** (1) → P30: a queued `render_output` does not re-check `state`, so a photo flagged `needs_review` between
+`master_ready` and its render is still exported (M33 window of seconds). (2) `master_ready` `?` on `dimensions`/`adopt_frame` leaves
+waiting runs stuck until restart. (3) Not verified live: no real `PSM Master` render yet. (4) The P27 `tiff_compression` note is
+still open, now only for `PSM Preview`.
+
+**Lessons for the plans.** C8(a)'s input "incompatible second preview 2560×1700" was compatible under P28's own C5(b) rule (preview
+sizes are not compared). Rows that need `needs_review` should name a geometry change. C3(a)'s `h = 0.831946755` misses P28's split
+tolerance by 5e-7 px. Derive split rects from the validator's own formula. The C6 chain needed masters ≥ the output size, because a
+600×400 master cannot show a 1024 px format change.
