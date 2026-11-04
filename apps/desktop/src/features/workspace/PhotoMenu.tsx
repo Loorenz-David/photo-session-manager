@@ -1,15 +1,17 @@
 import type { ReactNode } from 'react';
 import { ContextMenu, DropdownMenu } from 'radix-ui';
 import { MoreHorizontal } from 'lucide-react';
+import { canCompose } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
 
-export type PhotoMenuAction = 'toggle' | 'assign' | 'move' | 'copy' | 'delete';
+export type PhotoMenuAction = 'compose' | 'toggle' | 'assign' | 'move' | 'copy' | 'delete';
 
-type Entry = { action: PhotoMenuAction; label: string; hint?: string; danger?: boolean };
+type Entry = { action: PhotoMenuAction; label: string; hint?: string; danger?: boolean; disabled?: boolean };
 
-/** Entries of the ⋯ menu and the right-click menu (COMPONENTS.md §Workspace: Photo ⋯ menu / right-click). */
+/** Entries of the ⋯ menu and the right-click menu (COMPONENTS.md §Workspace: Photo ⋯ menu / right-click; 10D: Compose…). */
 function entries(photo: Photo): Entry[] {
   return [
+    { action: 'compose', label: 'Compose…', hint: 'R', disabled: !canCompose(photo) },
     photo.classification === 'condition'
       ? { action: 'toggle', label: 'Move to Main', hint: 'A' }
       : { action: 'toggle', label: 'Move to Condition', hint: 'C' },
@@ -36,6 +38,7 @@ export function PhotoMenuButton({ photo, onAction }: MenuProps) {
               key={entry.action}
               className="photo-menu-item"
               data-danger={entry.danger || undefined}
+              disabled={entry.disabled}
               onSelect={() => onAction(entry.action, photo)}
             >
               <span>{entry.label}</span>
@@ -60,6 +63,7 @@ export function PhotoContextMenu({ photo, onAction, children }: MenuProps & { ch
               key={entry.action}
               className="photo-menu-item"
               data-danger={entry.danger || undefined}
+              disabled={entry.disabled}
               onSelect={() => onAction(entry.action, photo)}
             >
               <span>{entry.label}</span>

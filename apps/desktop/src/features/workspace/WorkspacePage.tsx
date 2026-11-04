@@ -21,6 +21,8 @@ import { assignUnassigned, type Photo } from '@/services/photos';
 import { createSession } from '@/services/sessions';
 import { adoptItem, type Item } from '@/services/items';
 import { useKeyboard } from '@/lib/keyboard';
+import { canCompose } from '@/services/compositions';
+import { ComposeMode } from '@/features/compose/ComposeMode';
 import { FormDialog } from '@/features/form/FormDialog';
 import { FailurePopover } from '@/features/publish/FailurePopover';
 import { publishRetry } from '@/services/publish';
@@ -124,6 +126,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [overId, setOverId] = useState<string | number | null>(null);
   const [failureOpen, setFailureOpen] = useState(false);
+  const [composing, setComposing] = useState(false);
   const shownFailure = useRef<number | null>(null);
   const shownFailureSession = useRef(sessionId);
   const drop = useDrop(state);
@@ -184,17 +187,32 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     [active, state],
   );
 
+  /** Compose (10D): R, a double-click on the stage photo, or Compose… in a menu; only a photo with a preview and a frame. */
+  const enterCompose = useCallback(
+    (photo: Photo) => {
+      if (!canCompose(photo)) return;
+      if (state.activeId !== photo.id) state.setActiveId(photo.id);
+      setComposing(true);
+    },
+    [state],
+  );
+  // The editor needs a frame: when the stage photo loses it (or the stage empties) the normal stage returns.
+  useEffect(() => {
+    if (composing && (!active || !canCompose(active))) setComposing(false);
+  }, [composing, active]);
+
   /** The ⋯ / right-click menu acts on the selection when the photo is part of it, else on the photo alone. */
   const onMenu = useCallback(
     (action: PhotoMenuAction, photo: Photo) => {
       const photoIds = state.selection.has(photo.id)
         ? displaySequence(state.photos).filter(p => state.selection.has(p.id)).map(p => p.id)
         : [photo.id];
-      if (action === 'toggle') void state.classify(photo.id, photo.classification === 'condition' ? 'main' : 'condition', false);
+      if (action === 'compose') enterCompose(photo);
+      else if (action === 'toggle') void state.classify(photo.id, photo.classification === 'condition' ? 'main' : 'condition', false);
       else if (action === 'delete') void state.remove(photo.id);
       else setPicker({ kind: action, photoIds });
     },
-    [state],
+    [state, enterCompose],
   );
 
   const assignWhole = useCallback(
@@ -230,7 +248,9 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const item = state.view?.item ?? null;
   const dialogOpen = picker !== null || assignOpen || formOpen;
   // D opens the product details form (design handoff §Keyboard); Esc closes it (the dialog's own Esc).
-  useKeyboard({ d: () => setFormOpen(true) }, !dialogOpen && item !== null);
+  useKeyboard({ d: () => setFormOpen(true) }, !dialogOpen && item !== null && !composing);
+  // R opens Compose on the stage photo (10D); while composing the workspace keys are off and the editor owns the keyboard.
+  useKeyboard({ r: () => { if (active) enterCompose(active); } }, !dialogOpen && !composing && active !== null && canCompose(active));
   useWorkspaceKeyboard(
     {
       approve: () => review('approve'),
@@ -247,7 +267,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         else state.clearSelection();
       },
     },
-    !dialogOpen,
+    !dialogOpen && !composing,
   );
 
   function onDragStart(event: DragStartEvent) {
@@ -294,16 +314,32 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDraggingId(null); setOverId(null); }}>
       <main className="workspace" data-folded={folded || undefined}>
         <div className="stage-column">
-          <Stage
-            photos={state.photos}
-            active={active}
-            mode={state.mode}
-            onToggleMode={state.toggleMode}
-            onStep={state.step}
-            onAction={review}
-            onMenu={onMenu}
-            onItemCard={() => setItemCardOpen(current => !current)}
-          />
+          {composing && active && canCompose(active) ? (
+            <ComposeMode
+              photos={state.photos}
+              active={active}
+              mode={state.mode}
+              onStep={state.step}
+              onMenu={onMenu}
+              onItemCard={() => setItemCardOpen(current => !current)}
+              tiles={{ activeId: state.activeId, selection: state.selection, onToggleSelected: state.toggleSelected, onMenu }}
+              onExit={() => setComposing(false)}
+              onSwitch={state.setActiveId}
+              patchPhoto={state.patchPhoto}
+            />
+          ) : (
+            <Stage
+              photos={state.photos}
+              active={active}
+              mode={state.mode}
+              onToggleMode={state.toggleMode}
+              onStep={state.step}
+              onAction={review}
+              onMenu={onMenu}
+              onItemCard={() => setItemCardOpen(current => !current)}
+              onCompose={() => { if (active) enterCompose(active); }}
+            />
+          )}
           {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} />}
           {item && (
             <button type="button" className="sessions-toggle" style={{ top: sessionsOpen ? 42 : 74 }} onClick={() => setFormOpen(true)} aria-label="Product details" title="Product details (D)">
@@ -316,7 +352,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
             </button>
           )}
         </div>
-        {folded ? (
+        {composing ? null : folded ? (
           <FoldedStrip photos={state.photos} onUnfold={() => setFolded(false)} {...tileHandlers} />
         ) : (
           <PhotoPanel photos={state.photos} onFold={() => setFolded(true)} onImport={() => pickAndImport()} {...tileHandlers} />

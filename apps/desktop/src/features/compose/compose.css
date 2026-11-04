@@ -1,0 +1,18 @@
+/* Compose mode (book 10D §What the photographer sees; plan P31). The frame stays, the photo moves under it. */
+.compose-stage { position: absolute; inset: 0; overflow: hidden; background: var(--stage); touch-action: none; overscroll-behavior: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.compose-stage:active { cursor: grabbing; }
+.compose-image { position: absolute; left: 0; top: 0; transform-origin: center; will-change: transform; container-type: size; }
+.compose-image img { position: absolute; left: 50%; top: 50%; width: 100%; height: 100%; max-width: none; translate: -50% -50%; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.compose-image[data-turned] img { width: 100cqh; height: 100cqw; }
+.compose-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.compose-dim { fill: color-mix(in srgb, var(--color-bg) 72%, transparent); }
+.compose-frame { fill: none; stroke: var(--color-text); stroke-width: 1.5; }
+.compose-done { height: 26px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: var(--color-accent); color: var(--color-bg); font-size: var(--text-sm); font-weight: var(--weight-bold); cursor: pointer; }
+.compose-done:hover { background: var(--color-accent-600); }
+.compose-hint { position: absolute; top: var(--space-2); left: 50%; margin: 0; padding: 4px 10px; translate: -50% 0; border-radius: var(--r-pill); background: var(--color-bg); box-shadow: var(--shadow-sm); color: var(--muted); font-size: var(--text-sm); white-space: nowrap; pointer-events: none; }
+
+/* The photo browser slides in over the image from the window's right edge (never during a drag). */
+.compose-browser { position: absolute; top: 0; right: 0; bottom: 0; z-index: 20; width: var(--photo-panel-width, 340px); transform: translateX(100%); transition: transform var(--dur-med) var(--ease-out); box-shadow: var(--shadow-lg); }
+.compose-browser[data-open="true"] { transform: none; }
+.compose-browser .photo-panel { height: 100%; }
+.compose-browser [aria-label="Fold panel"] { display: none; }

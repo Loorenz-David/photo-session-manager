@@ -234,3 +234,61 @@ during a gesture; the wheel settle timer granularity; how the `BrowserOverlay` w
 - Estimated size: ~14 files, ~1 900 lines (≈ 450 geometry + machine, ≈ 500 components and hooks, ≈ 950 tests).
 
 ## Review log
+### 2026-11-05 — implement r1 (Fable, `pipeline-implementer`)
+**Built.** Compose mode as the Goal describes: `services/compositions.ts` (`setComposition`, `resetComposition`, `valuesOf`, `canCompose`,
+types `Composition`, `CompositionValues`, `Rect`, `Frame`); `features/compose/geometry.ts` (the TS mirror of P28's contract — `turnedFrame`,
+`shapeRatio`, `defaultRect`, `validate`, `pixelRect`, `splitHalves`, `fingerprintCompatible`, `reviewReason`, `insideAfterStraighten` — and
+the view maths `frameBox`, `viewTransform`, `transformCss`, `anchorIn`, `panBy`, `zoomAbout`, `clampRect`); `machine.ts` (`reduce(state, event)
+→ { state, effects }`, rules 1–16 in its doc comment, pure); `useComposeGesture.ts` (DOM → machine; one `requestAnimationFrame` write per frame;
+settle timer; keyboard swallow; document-level `gesturestart` off); `useCompositionSaves.ts` (one save in flight per photo, pending latest-wins,
+ticketed settle, refusal toast + stored snap-back); `ComposeMode.tsx`, `ComposeStage.tsx`, `ComposeFrame.tsx` (SVG mask + border), `BrowserOverlay.tsx`
+(edge reveal, never during a gesture), `compose.css`; workspace changes: `WorkspacePage` (`composing`, R / dblclick / menu entry, keys off, right
+column hidden), `Stage` (`compose` and `onCompose` props, Done button), `PhotoMenu` (`compose` entry first, disabled when not composable),
+`PhotoTile` (`Thumb` prefers `thumbnail_path`; `TileComposition` with `.tile-composition`/`.tile-frame`; `.tile-review` "Re-frame"), `workspace.css`
+(`--photo-panel-width`, tile overlay rules), `tokens.css` (`--warn`). No Rust, no bindings change.
+**Tests.** `geometry.test.ts` (C1(a): every case of the shared table, 43 cases + a count guard; C1(b): 5 view-maths rows), `machine.test.ts`
+(C1(c): one `it` per rule 1–16 + the `Resize` extension), `p31_compose_mode.test.tsx` (C2(a)–(e)), `p31_gestures.test.tsx` (C3–C7, 16 tests),
+`p31_browser_and_tiles.test.tsx` (C8(a)–(c)); shared fixture module `__tests__/harness.tsx`.
+**Judgment calls (Assumptions).**
+1. `panBy(rect, delta)` moves the rect by `delta` (frame fractions); the machine negates the pointer displacement for a drag (`x −= dx/(W_t·s)`, rule
+   2's parenthetical) and passes the wheel deltas as they are for a two-finger swipe (natural scrolling: `deltaX < 0` = fingers right = photo right =
+   `x` decreases). The literal argument expressions written in rules 2 and 7 (`(p − origin)` / `(−dx, −dy)`) have the opposite sign from this
+   convention, but every stated outcome — rule 2's parenthetical, C1(b)'s `panBy(rect, (−50/977.81, 0)) → x = 0.115466`, C3(a), C5(a) — holds with it;
+   the two literals cannot both hold under either sign, so the convention follows the outcomes.
+2. `Composition = CompositionDto_Serialize` (what the commands return and what `PhotoResponse.composition` carries), `CompositionValues` = the DTO with a
+   non-null `Rect`; both assignable to the DTOs the plan names.
+3. `FINGERPRINT_TOLERANCE = 0.002` (task 0) is **not defined**: P28's contract compares geometry reals with `1e-6` and nothing else uses a tolerance;
+   a defined-but-unused constant would be dead code. Reported for the coordinator (task-0 list vs. contract).
+4. Machine extension: `Resize { stage }` recomputes the view for a new stage box and yields `View` (a window resize otherwise leaves the frame
+   misplaced). Tested in `machine.test.ts` as a declared candidate row.
+5. Esc/`useBackKeys`: the workspace page's `PageHeader` has `escapeGoesBack = false`, so Esc never navigates back there; no `role="dialog"` and no
+   `lib/keyboard.ts` change. ⌘[ still leaves the workspace while composing (not suppressed).
+6. `Blur`/`Hidden` while `wheeling` also commit (rule 4 names dragging and pinching; the same "never lose what was on screen" applies).
+   `GestureStart` while `wheeling { pan }` commits the pan first, then pinches (rule 11 names zoom).
+7. First-time line: a caption (`.compose-hint`) inside the stage for the whole first editor session; key set at open.
+8. Overlay mask: SVG `<mask>`; the dim is `--color-bg` at 72 %; the frame border is `--color-text` (visible on both themes).
+9. Inner turn/flip on the `<img>` inside the `.compose-image` wrapper; the wrapper is `W_t·s × H_t·s` (its `width`/`height`/`transform` are written
+   imperatively, never through React — a late `Saved` re-render would otherwise snap the image mid-gesture); the image is sized to the unturned frame
+   with container units (`100cqh × 100cqw` when turned).
+10. Store: `stateRef` in `useComposeGesture`; nothing in React state during a gesture. Settle timer: `setInterval` every `WHEEL_SETTLE_MS / 2` on
+    `Date.now()`.
+11. `BrowserOverlay` width follows `--photo-panel-width` set on `.workspace` (340 / 280 px under 1000 px), now also used by `.photo-panel`; the fold
+    button is hidden by a CSS rule inside the overlay (PhotoPanel untouched).
+12. `onSaved` → `patchPhoto(photoId, { composition })` on `useWorkspaceState` (the suggested seam) + `Saved` to the machine. On a refused save the
+    pending values are dropped (they were built on the refused state); `lastStored` = the workspace photo's composition.
+13. The prev/next arrows stay while composing; any change of the active photo (arrows, a capture arriving) dispatches `SwitchPhoto` from the binding's
+    layout effect; a photo that cannot be composed returns the normal stage; an unmount mid-gesture commits the visible state (rule 4).
+14. `Compose… (R)` is the first menu entry; `.tile-review` sits bottom-right (the unreviewed dot owns top-right) and only on grid tiles.
+15. `sameRect`/`sameValues` compare with `1e-9` so a no-op gesture (zoom-out at full frame) never saves an ulp-different rect — that would bump
+    `revision` and dirty a published session (MC-6/MC-29).
+16. `--warn`: `oklch(0.74 0.16 72)` light, `oklch(0.8 0.15 78)` dark.
+**Deviations.** (a) `useWorkspaceState.ts` gained `patchPhoto` (file not in "Files expected to change"; the plan's Delegated choices suggest it).
+(b) `__tests__/harness.tsx` is a shared fixture module (not listed) so the three behaviour files stay readable. (c) `geometry.test.ts` loads the shared
+table with a static JSON import instead of `fs` — the frontend tsconfig has no Node types; same single file. (d) Tracker actor is `fable`, not the
+prompt template's `codex`. (e) `lib/keyboard.ts` untouched (see 5).
+**Plan arithmetic noted (not adapted around).** C1(b)/C4(a): with `w₀ = 0.666796875` and `f = e^0.5`, `w = 0.404433`, `x = 0.297784` (the plan's
+`0.404440` / `0.297780` come from the rounded `w₀ = 0.6668`); tests assert the contract values ± 1e-6. C7(a): `x = 0.11546683` → `.tile-frame` left
+`11.5467%` (plan `11.5466%`). C4(d) as literally written starts from the default square, where a zoom-out changes nothing and rule 3 saves nothing;
+the test zooms in first so both clamps are real saves. C7(b): under task 4's one-in-flight rule `pB` cannot exist before `pA` settles; the test
+resolves them in the row's order and asserts the row's outcome (B's rect shown, exactly two calls).
+**Not done.** No live try-out in the Tauri window from this session (no interactive display); the owner's Manual try-out stands. Rust untouched.

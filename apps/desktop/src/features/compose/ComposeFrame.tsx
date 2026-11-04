@@ -1,0 +1,21 @@
+import { useId } from 'react';
+import type { Box } from './geometry';
+
+type ComposeFrameProps = { width: number; height: number; frameBox: Box };
+
+/** The fixed frame over the stage: everything outside it dimmed through an SVG mask, a hairline border, no handles (P32). */
+export function ComposeFrame({ width, height, frameBox }: ComposeFrameProps) {
+  const maskId = `compose-mask-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  return (
+    <svg className="compose-overlay" viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true">
+      <defs>
+        <mask id={maskId}>
+          <rect width={width} height={height} fill="white" />
+          <rect x={frameBox.left} y={frameBox.top} width={frameBox.width} height={frameBox.height} fill="black" />
+        </mask>
+      </defs>
+      <rect className="compose-dim" width={width} height={height} mask={`url(#${maskId})`} />
+      <rect className="compose-frame" x={frameBox.left} y={frameBox.top} width={frameBox.width} height={frameBox.height} />
+    </svg>
+  );
+}

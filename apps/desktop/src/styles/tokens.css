@@ -26,6 +26,7 @@
 
   /* status */
   --ok: oklch(0.62 0.15 150);          /* camera connected dot */
+  --warn: oklch(0.74 0.16 72);         /* amber: a composition that needs review ("Re-frame", 10D) */
 
   /* type */
   --font-heading: "Archivo", system-ui, sans-serif;
@@ -76,6 +77,7 @@
   --ai: oklch(0.7 0.05 245);
   --ai-700: oklch(0.82 0.04 245);
   --ai-tint: oklch(0.32 0.018 250);
+  --warn: oklch(0.8 0.15 78);
   --shadow-md: 0 0 0 1px color-mix(in srgb, #fff 8%, transparent), 0 6px 18px rgba(0,0,0,.45);
   --shadow-lg: 0 0 0 1px color-mix(in srgb, #fff 10%, transparent), 0 18px 44px rgba(0,0,0,.55);
 }

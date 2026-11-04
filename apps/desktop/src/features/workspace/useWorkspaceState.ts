@@ -245,7 +245,13 @@ export function useWorkspaceState(sessionId: number) {
   }, []);
   const clearSelection = useCallback(() => setSelection(new Set()), []);
 
+  /** Writes a backend answer for one photo into the view in place (no reload): the Compose saves (P31) use it. */
+  const patchPhoto = useCallback((photoId: number, patch: Partial<Photo>) => {
+    setView(current => current ? { ...current, photos: current.photos.map(photo => photo.id === photoId ? { ...photo, ...patch } : photo) } : current);
+  }, []);
+
   return {
+    patchPhoto,
     sessionId,
     view,
     loadError,
