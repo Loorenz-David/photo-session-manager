@@ -95,25 +95,27 @@ restated so no session has to infer them:
 | P22_frontend_tidy_up | APPROVED | 2026-10-29 | opus | re-review r2 APPROVED_WITH_NOTES: F1 resolved (`2f5308b`: shared `projectedSlot` for overlay and `useDrop`; C3(b) extended with a hover over a to-review tile, `03` then `reorderPhoto(1, 3)`); perimeter = allowed files; suite 421 Rust / 124 UI, clippy/fmt/typecheck green (re-run by reviewer); r1's 5 backlog notes stand, none new; overlay and glide not verified live (owner try-out step 3) |
 | P23_shape_on_arrival | APPROVED | 2026-10-29 | opus | re-review r2 APPROVED_WITH_NOTES: F1 and F2 resolved (`5d2210d`: untouched check accepts `null`; maximum size read as `x+width`/`y+height`; C1 harness uses the live values); perimeter = allowed files (2 code + tracker + Review log); suite 432 Rust / 127 UI, clippy/fmt/typecheck green (re-run by reviewer); live C6(a) re-run on Capture One 16.8.6 passes (applied Square 3987×3987, repeat skipped, restored `[null,5981,3987]`); r1's 6 backlog notes stand, none new |
 | P24_capture_one_provisioning | APPROVED | 2026-11-03 | opus | re-review r2 APPROVED_WITH_NOTES: F1 and F2 resolved (`79e5c44`: p00 c1b/c4d over the fake with startup off, no test builds the real `App`; `open_document.js` makes the `PSM Open Window` throwaway then opens, C4(b) asserts the ordered calls); perimeter = the 4 allowed files; suite 445 Rust / 129 UI, clippy/fmt/typecheck green, Capture One state identical before and after the suite; live: new `open_document.js` reopened a probe session beside the owner's document; 1 new backlog note (silent `open` failure leaves the throwaway) |
+| P25_tidy_up_after_provisioning | NOT_STARTED | 2026-11-04 | planner | planned from the owner's 2026-11-04 "go": backlog 173/168/106/133/164/107/167, the P24 narrative's "Not yet", the empty default style (10C step 5, changelog 26); 8 criteria / 12 rows; backend only |
+| P26_frontend_leftovers | NOT_STARTED | 2026-11-04 | planner | planned with P25 (its frontend halves): the app's own session path shown in full after "Use the app's own session"; two quick drags never jump back (backlog 157); 2 criteria / 2 rows |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 24 phases in execution order (17 MVP phases, the two real-run fix phases added
+`phases.txt` lists the 26 phases in execution order (17 MVP phases, the two real-run fix phases added
 2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, the two tidy-up phases P21/P22 planned
-2026-10-29 from `backlog.md`, P23_shape_on_arrival planned 2026-10-29 from book 10B, and P24_capture_one_provisioning planned
-2026-11-03 from book 10C); the runner is sequential and a
+2026-10-29 from `backlog.md`, P23_shape_on_arrival planned 2026-10-29 from book 10B, P24_capture_one_provisioning planned
+2026-11-03 from book 10C, and the second tidy-up pair P25/P26 planned 2026-11-04 from `backlog.md` and the P24 narrative); the runner is sequential and a
 phase starts only when every phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24 → P25 → P26
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
-P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23].
+P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23] · P25[P24] · P26[P25].
 
 - **Local workflow usable after P09** (shoot → arrive → review → live previews → export). Attributes and the
   form (P10, P11) complete the local item data; Shopify starts at P12.
@@ -202,7 +204,8 @@ UnknownRatio}` (10B MC-25: set the ratio only on an untouched full frame, one pr
 writing) ·
 `RawPreviews` (`extract(raw, dest) -> Option<Extracted{orientation}>`) · `EventSink` (`emit(AppEvent)`).
 `Store` (P23): `arrival_insert(photo, path_key, shape_on_arrival: bool)` enqueues the `crop_on_arrival` job in the arrival
-transaction; `job_fail(id, code, now_ms)`, `count_jobs(kind, status, exclude_error)`, `requeue_failed_jobs(kind, now_ms)`.
+transaction; `job_fail(id, code, now_ms)`, `count_jobs(kind, status, exclude_error)`, `requeue_failed_jobs(kind, exclude_error, now_ms)` (P25: the
+`exclude_error` filter mirrors `count_jobs`; a health check passes `Some("crop_ratio_unknown")` while that item is set, a real start passes `None`).
 Capture One internals: `psm_integrations::editing::capture_one::scripting::CaptureOneScripting` (typed
 operations over the dictionary; impls `JxaScripting`, testkit `FakeCaptureOneScripting`; P23 adds `crop_aspect_ratios(id)`
 and `apply_crop_if_untouched(id, variant, ratio) -> ShapeOutcome`, scripts `jxa/crop_aspect_ratios.js`, `jxa/apply_crop.js`;
@@ -240,7 +243,8 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
 
 ### 6.6 Enums, codes and kinds (Rust `enum` names in `psm_core::domain`, serialized snake_case)
 - `Classification {Unreviewed, Main, Condition, Deleted}` · `PhotoSource {Capture, Import}` · `ItemOrigin {Linked, Local}` ·
-  `Integrity {Ok, RawChanged, RawMissing}` · `UploadState {None, Exported, Staged, Uploaded, Attached, Ready, Failed}` ·
+  `Integrity {Ok, RawChanged, RawMissing}` (P25: `IntegrityCheck::verify` on a photo whose `raw_hash` is NULL hashes the file now
+  through `set_raw_hash` and reports `Ok`; `RawChanged` only against a stored hash — 05A MC-3) · `UploadState {None, Exported, Staged, Uploaded, Attached, Ready, Failed}` ·
   link `role`: `gallery` or `attribute:<key>` · `PublishStep {Prepare, Upload, Update, Describe, Done, Failed}` ·
   `JobKind {OriginalPreview, Hash, RenderPreview, RenderExport, MirrorTag, PublishStep, VerifyHash, CropOnArrival}` (P23:
   `crop_on_arrival`, target = the RAW, once per RAW; terminal `failed` with `error = crop_ratio_unknown`, or with the last
@@ -269,7 +273,8 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   allowed Session Manager to control Capture One. Allow it under System Settings › Privacy & Security › Automation`),
   `editor_not_running` (`Capture One did not start within <n> s`), `document_not_created` (`Capture One could not create the session
   <file>: <error>`), `document_not_front` (`Capture One is showing another session; captures would land there`; also gates camera
-  status and capture like `capture_folder_not_set`), `style_not_found` (`Style '<name>' not found in Capture One`, or `Style '<name>'
+  status and capture like `capture_folder_not_set`; P25: cleared by a successful front switch, by any editing check while **no**
+  session is active, and by `deactivate` — it describes an active session only, M32), `style_not_found` (`Style '<name>' not found in Capture One`, or `Style '<name>'
   could not be applied: <error>`); the ok items `document` (detail `<file name> open`), `recipes` (`Ready`), `hooks` (`Installed`) are set
   by the ensure and cleared when their step or an earlier one fails; `integration_token_invalid` (detail = the 09A MC-23
   message), `condition_field_missing` (detail = key, "not found" or "not a file list"; 09A MC-24; from P21 also
@@ -296,7 +301,8 @@ P21: `item_update_identity` reads `barcode: ""` as "clear the barcode" (`null` =
 with code `provider` when the shop cannot be reached (no silent `[]`) · P23 `crop_ratios_list` → `Vec<String>` (the editing
 adapter's crop-shape names; rejects with the provider error when Capture One cannot answer); `settings_get`/`settings_set`
 carry `crop_on_arrival` · P24: `settings_get` adds `effective_document_id` (the folder the app uses: the stored `document_id` or
-the default); `settings_set` reads `document_id: ""` as "back to the app's own document" (stored `null`; a non-empty value must be
+the default); P25: `settings_get` also adds `default_document_id` (always `<home>/Pictures/Session Manager`, so the Settings screen can
+show the app's own path before a save; `SettingsDto.default_document_id: String`); `settings_set` reads `document_id: ""` as "back to the app's own document" (stored `null`; a non-empty value must be
 absolute, else `relative_path`); `session_activate` runs the editing ensure, brings the app's document to the front and only then
 switches the capture folder (rejects with `document_not_front` when the front cannot be verified); no new command.
 From P17 every command is `pub async fn` over `AppState(RwLock<App>)` through `AppState::handles()` / `mutate()`
@@ -313,7 +319,9 @@ exported by the test `psm-desktop::export_bindings` to `apps/desktop/src/service
 `<home>/Pictures/Session Manager` holding `Session Manager.cosessiondb`, created and opened by the app; an explicit value is honoured
 and provisioned the same way; the Settings screen shows the default as "Capture One session: Session Manager (created by the app)"
 with "Use another session…" (a `.cosessiondb` picker; the parent folder is stored) and "Use the app's own session") · `preview_recipe` (default `"PSM Preview"`) · `web_recipe`
-(`"PSM Web"`) · `style_name` (`"PSM House"`) · `export_folder` (default `~/Pictures/Session Manager Export`) ·
+(`"PSM Web"`) · `style_name` (default `""` — owner 2026-11-04, 10C step 5 / changelog 26, P25; empty = the next-capture settings are left as
+the photographer set them and no Style health item; was `"PSM House"` until P24 — a file that explicitly holds a name keeps it) ·
+`export_folder` (default `~/Pictures/Session Manager Export`) ·
 `preview_delay_s` (15; read clamped 10–30, MC-17) · `theme` (`"light"`) · `sku_prefix` (owner card 2 answered
 "generate", 05B MC-22; absent or empty = no proposal) · `integration` (`null` or `{"kind":"shopify","shop_domain","api_version":"2026-10","client_id","client_secret","condition_photos_key":"custom.damage_report"}`, 09A MC-23/MC-24; no stored access token) ·
 `crop_on_arrival` (P23, 10B MC-25: `"off"` = leave as shot, or one of the editing adapter's crop-shape names, e.g. `"Square"`,
@@ -398,7 +406,8 @@ left at head. Migrations are applied by `rusqlite_migration::Migrations::to_late
   real write is recorded as op `set_crop:<variant>:<ratio>`. P24: editor state (`running`, `pro`, `automation_denied`,
   `launch_fails`, `running_after_polls`), `open_documents` / `front_document` (the configured document initially; `make_document`
   creates the session layout on disk in the temp dir and opens it; `open_document` needs the `.cosessiondb` on disk; `front:<id>`),
-  faults `fail_make_document`, `fail_open_document`, `fail_front`, `fail_make_recipe`, `styles` (default `["PSM House"]`) and
+  faults `fail_make_document`, `fail_open_document`, `fail_front`, `fail_make_recipe`, `styles` (default `["PSM House"]` — kept after P25
+  made the settings default empty; a test that wants a style applied saves `style_name` explicitly) and
   `next_capture_styles`; `recipes` become `HashMap<String, RecipeProps>`; `check_id` accepts any open document. `TestApp` sets
   `paths.home` to its temp dir and writes an empty `Capture One Session.cosessiondb` marker beside the temp document's `Capture/`.
 - `FakeCommerce`: in-memory shop (products with variant SKU, media list in order with filenames incl. Shopify-style
@@ -434,3 +443,9 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   `session_activate` order), §6.8 (`document_id` default rule and the Settings wording), §7.5 (fake editor/document/style state,
   `TestApp` home and marker). No intention-book change; two readings recorded in the plan's Notes (folder vs file in `document_id`;
   M32's "frontmost while active" enforced at activation and at every ensure, not polled).
+- 2026-11-04 second tidy-up — planner added P25_tidy_up_after_provisioning (backend) and P26_frontend_leftovers (frontend) from
+  `backlog.md` rows 173, 168, 106 (+15, 69), 133 (+11), 164, 107 (first clause), 167, 157, the P24 narrative's "Not yet" and the owner's
+  empty-default-style decision (10C step 5, changelog 26, written by the orchestrator 2026-11-04). §4 two rows, §5 count 26 / graph tail /
+  `P25[P24]` / `P26[P25]`, §6.4 `requeue_failed_jobs(kind, exclude_error, now_ms)`, §6.6 the `document_not_front` clearing rule and the
+  `Integrity` NULL-hash rule, §6.7 `default_document_id`, §6.8 `style_name` default `""`, §7.5 the fake's style list kept. Every owner item
+  was verified still present in the code at `c90b95d`; none dropped. Backlog 107's second clause (P09 staging sweep) stays open.

@@ -23,3 +23,5 @@ P21_backend_robustness
 P22_frontend_tidy_up
 P23_shape_on_arrival
 P24_capture_one_provisioning
+P25_tidy_up_after_provisioning
+P26_frontend_leftovers

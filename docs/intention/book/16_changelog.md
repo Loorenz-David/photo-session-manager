@@ -128,3 +128,7 @@
 25. **2026-11-03 — 10C grounded** (orchestrator, P24 task 0 live probe). Recipes are application-wide (step 4 no
     longer says "in that document"); Capture One's `open` replaces the front window, so step 3 opens the app's
     document via a throwaway new window, keeping the "alongside" decision. No product sentence changed.
+26. **2026-11-04 — Owner: no house style by default** (relayed by the orchestrator). The default `style_name` was
+    `PSM House`, a style Capture One does not have, so a fresh setup started with a red Health item. Owner accepted
+    the orchestrator's recommendation (an empty default): 10C step 5 now states `style_name` defaults to empty, so
+    the next-capture settings are left as the photographer set them. Owner decision, header stays RATIFIED.

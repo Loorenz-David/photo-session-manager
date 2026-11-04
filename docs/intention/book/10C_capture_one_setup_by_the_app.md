@@ -54,7 +54,8 @@ the sequence with its own health item; nothing blocks review, export or the rest
 5. **Next-capture style.** If `style_name` is set and Capture One lists it, the document's next
    capture settings apply that style; if it is not listed, health "Style '<name>' not found in
    Capture One" (capture still works). Empty `style_name` → the next-capture settings are left as
-   the photographer set them.
+   the photographer set them. **Default empty** (owner 2026-11-04, changelog 26): a fresh setup applies no style
+   and Health starts green; the photographer names a style in Settings only if they want one.
 6. **Hooks** as MC-15 (unchanged).
 
 **Front document.** When a Session Manager session is activated (MC-18), the app brings its document
