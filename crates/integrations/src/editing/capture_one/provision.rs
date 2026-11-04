@@ -222,6 +222,7 @@ impl CaptureOneAdapter {
         let mut recipes_created = Vec::new();
         for (name, spec) in [
             (&self.preview_recipe, RecipeSpec::PREVIEW),
+            (&self.master_recipe, RecipeSpec::MASTER),
             (&self.web_recipe, RecipeSpec::WEB),
         ] {
             let want = spec.props();

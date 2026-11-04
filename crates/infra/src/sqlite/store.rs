@@ -30,6 +30,7 @@ impl SqliteStore {
         Migrations::new(vec![
             M::up(include_str!("migrations/001_init.sql")),
             M::up(include_str!("migrations/002_domain.sql")),
+            M::up(include_str!("migrations/003_retire_shape_on_arrival.sql")),
         ])
         .to_latest(&mut conn)?;
         Ok(Self {
@@ -1067,12 +1068,7 @@ impl Store for SqliteStore {
         photo(&conn, id)
     }
 
-    fn arrival_insert(
-        &self,
-        mut new: NewPhoto,
-        path_key: &str,
-        shape_on_arrival: bool,
-    ) -> Result<(Photo, bool)> {
+    fn arrival_insert(&self, mut new: NewPhoto, path_key: &str) -> Result<(Photo, bool)> {
         new.raw_path = canon(std::path::Path::new(&new.raw_path))?;
         let mut conn = self
             .conn
@@ -1099,20 +1095,6 @@ impl Store for SqliteStore {
         if let Some(id) = existing {
             return Ok((photo(&tx, id)?, false));
         }
-        let raw_seen: bool = tx
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM photos WHERE raw_path=?1)",
-                [&new.raw_path],
-                |r| r.get(0),
-            )
-            .map_err(db)?;
-        let shape_job_exists: bool = tx
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM jobs WHERE kind='crop_on_arrival' AND target=?1)",
-                [&new.raw_path],
-                |r| r.get(0),
-            )
-            .map_err(db)?;
         let shared_hash: Option<String> = tx.query_row("SELECT raw_hash FROM photos WHERE raw_path=?1 AND raw_hash IS NOT NULL ORDER BY id LIMIT 1", [&new.raw_path], |r| r.get(0)).optional().map_err(db)?;
         let hash_job_exists: bool = tx
             .query_row(
@@ -1125,15 +1107,7 @@ impl Store for SqliteStore {
         tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,source,captured_at,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![uid,new.session_id,new.raw_path,shared_hash.clone().or(new.raw_hash),new.source.as_str(),new.captured_at,new.created_at]).map_err(db)?;
         let id = tx.last_insert_rowid();
         tx.execute("INSERT INTO raw_state(raw_path,path_key) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET path_key=excluded.path_key", params![new.raw_path,path_key]).map_err(db)?;
-        for kind in [
-            "original_preview",
-            "crop_on_arrival",
-            "hash",
-            "render_preview",
-        ] {
-            if kind == "crop_on_arrival" && (!shape_on_arrival || raw_seen || shape_job_exists) {
-                continue;
-            }
+        for kind in ["original_preview", "hash", "render_preview"] {
             if kind == "hash" && (shared_hash.is_some() || hash_job_exists) {
                 continue;
             }

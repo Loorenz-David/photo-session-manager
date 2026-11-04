@@ -61,6 +61,7 @@ fn c1a_fresh_default_document_is_created_alongside_and_recipes_are_idempotent() 
     assert_eq!(s.recipes["Owner JPEG"], owner);
     for (name, spec) in [
         ("PSM Preview", RecipeSpec::PREVIEW),
+        ("PSM Master", RecipeSpec::MASTER),
         ("PSM Web", RecipeSpec::WEB),
     ] {
         let mut got = s.recipes[name].clone();
@@ -76,6 +77,7 @@ fn c1a_fresh_default_document_is_created_alongside_and_recipes_are_idempotent() 
         1
     );
     assert!(ops(&a).contains(&"make_recipe:PSM Preview".into()));
+    assert!(ops(&a).contains(&"make_recipe:PSM Master".into()));
     assert!(ops(&a).contains(&"make_recipe:PSM Web".into()));
     assert_eq!(
         detail(&a, "document"),
@@ -475,7 +477,7 @@ const want=wantText?JSON.parse(wantText):null;
 const calls=[],writes=[];
 global.Path=v=>({toString:()=>v});
 let front='/elsewhere/Instagram';
-let props=mode==='recipe_new'?{enabled:false,outputFormat:'TIFF',colorProfile:'Adobe RGB (1998)',scalingMethod:'Fixed',scalingUnit:'percent',primaryScalingValue:100,jpegQuality:100,existingFiles:'add suffix',outputSubFolder:'',rootFolderType:'output location'}:
+let props=mode==='recipe_new'?{enabled:false,outputFormat:'TIFF',bits:16,tiffCompression:'Uncompressed',exportCropMethod:'respect',colorProfile:'Adobe RGB (1998)',scalingMethod:'Fixed',scalingUnit:'percent',primaryScalingValue:100,jpegQuality:100,existingFiles:'add suffix',outputSubFolder:'',rootFolderType:'output location'}:
   mode==='recipe_drift'?{...want,enabled:true,jpegQuality:70,rootFolderType:'image folder',sharpening:'standard'}:{...want,rootFolderType:'output location'};
 let exists=mode!=='recipe_new';
 const recipe=new Proxy({}, {
@@ -539,7 +541,8 @@ fn c4a_recipe_script_creates_repairs_only_drift_and_skips_exact() {
             "primaryScalingValue",
             "jpegQuality",
             "existingFiles",
-            "outputSubFolder"
+            "outputSubFolder",
+            "bits"
         ])
     );
     assert_eq!(created["calls"].as_array().unwrap().len(), 1);

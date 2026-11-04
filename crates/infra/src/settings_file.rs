@@ -14,8 +14,9 @@ pub struct Settings {
     pub document_id: Option<String>,
     pub preview_recipe: String,
     pub web_recipe: String,
+    pub master_recipe: String,
     pub style_name: String,
-    pub crop_on_arrival: String,
+    pub default_shape: String,
     pub export_folder: String,
     #[serde(deserialize_with = "deserialize_preview_delay")]
     pub preview_delay_s: u32,
@@ -44,8 +45,9 @@ impl Default for Settings {
             document_id: None,
             preview_recipe: "PSM Preview".into(),
             web_recipe: "PSM Web".into(),
+            master_recipe: "PSM Master".into(),
             style_name: String::new(),
-            crop_on_arrival: "Square".into(),
+            default_shape: "1:1".into(),
             export_folder: PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
                 .join("Pictures/Session Manager Export")
                 .to_string_lossy()
@@ -59,6 +61,18 @@ impl Default for Settings {
 }
 
 impl Settings {
+    fn from_legacy(raw: &[u8]) -> Result<Self> {
+        let value: serde_json::Value =
+            serde_json::from_slice(raw).map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut settings: Self =
+            serde_json::from_value(value.clone()).map_err(|e| Error::InvalidData(e.to_string()))?;
+        if value.get("default_shape").is_none()
+            && let Some(legacy) = value.get("crop_on_arrival").and_then(|v| v.as_str())
+        {
+            settings.default_shape = legacy_default_shape(legacy).into();
+        }
+        Ok(settings)
+    }
     pub fn default_document_id(&self, paths: &AppPaths) -> PathBuf {
         paths.home.join("Pictures/Session Manager")
     }
@@ -81,7 +95,7 @@ impl Settings {
                 .map_err(|e| Error::InvalidData(e.to_string()))?;
         }
         let raw = fs::read(&path)?;
-        match serde_json::from_slice(&raw) {
+        match Self::from_legacy(&raw) {
             Ok(settings) => Ok((settings, None)),
             Err(error) => {
                 tracing::warn!(%error, "settings.json invalid; using defaults");
@@ -104,8 +118,7 @@ impl Settings {
             )?;
         }
         let raw = fs::read(&path)?;
-        let settings: Self =
-            serde_json::from_slice(&raw).map_err(|e| Error::InvalidData(e.to_string()))?;
+        let settings = Self::from_legacy(&raw)?;
         Ok(settings)
     }
 
@@ -130,6 +143,16 @@ impl Settings {
             let _ = fs::remove_file(&temp);
         }
         result
+    }
+}
+
+pub fn legacy_default_shape(value: &str) -> &'static str {
+    match value {
+        "off" => "original",
+        "4x5" => "4:5",
+        "2x3" => "2:3",
+        "16x9" => "16:9",
+        _ => "1:1",
     }
 }
 

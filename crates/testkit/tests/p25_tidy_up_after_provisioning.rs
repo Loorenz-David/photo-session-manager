@@ -4,7 +4,7 @@ use psm_core::{
         editing::CameraStatus,
         photo::{Classification, Integrity, NewPhoto, PhotoSource},
     },
-    mechanisms::{canon::canon, hash::sha256_file},
+    mechanisms::hash::sha256_file,
     ports::clock::Clock,
     services::{camera::CameraService, integrity::IntegrityCheck},
 };
@@ -358,67 +358,4 @@ fn c5c_export_of_recent_unhashed_photo_writes_image() {
         Some(sha256_file(&raw).unwrap())
     );
     assert_eq!(a.store().photo(id).unwrap().integrity, Integrity::Ok);
-}
-
-#[test]
-fn c7a_unknown_shape_does_not_requeue_until_listed() {
-    let mut a = TestApp::with_fake_document().unwrap();
-    a.settings_set(&json!({"crop_on_arrival":"Squircle"}))
-        .unwrap();
-    let raw = a.dir.path().join("Capture One Session/Capture/K1/g.ARW");
-    fs::create_dir_all(raw.parent().unwrap()).unwrap();
-    fs::write(&raw, b"raw").unwrap();
-    a.fake.add_image(&canon(&raw).unwrap(), &["15"], false);
-    a.deliver_hook(&json!({"hook":"capture_done","argv":[raw.to_string_lossy()]}).to_string())
-        .unwrap();
-    a.tick(0).unwrap();
-    let job = || {
-        let db = rusqlite::Connection::open(a.app.paths.db()).unwrap();
-        db.query_row(
-            "SELECT status,attempts,coalesce(error,'') FROM jobs WHERE kind='crop_on_arrival'",
-            [],
-            |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, i64>(1)?,
-                    r.get::<_, String>(2)?,
-                ))
-            },
-        )
-        .unwrap()
-    };
-    assert_eq!(job(), ("failed".into(), 1, "crop_ratio_unknown".into()));
-    a.fake.state.lock().unwrap().ops.clear();
-    for _ in 0..2 {
-        let report = a.app.health_check().unwrap();
-        assert!(
-            report
-                .items
-                .iter()
-                .any(|i| i.code == "crop_ratio_unknown" && !i.ok)
-        );
-        assert!(!report.items.iter().any(|i| i.code == "crop_not_applied"));
-        assert_eq!(job(), ("failed".into(), 1, "crop_ratio_unknown".into()));
-    }
-    assert!(!ops(&a).iter().any(|op| op.starts_with("set_crop:")));
-    a.fake
-        .state
-        .lock()
-        .unwrap()
-        .crop_ratios
-        .push("Squircle".into());
-    let report = a.app.health_check().unwrap();
-    assert!(!report.items.iter().any(|i| i.code == "crop_ratio_unknown"));
-    assert_eq!(job(), ("queued".into(), 0, "".into()));
-    a.tick(0).unwrap();
-    assert_eq!(job().0, "done");
-    let state = a.fake.state.lock().unwrap();
-    assert!(
-        state
-            .images
-            .values()
-            .chain(state.folder_images.values())
-            .flatten()
-            .any(|v| v.id == "15" && v.crop_ratio == "Squircle")
-    );
 }

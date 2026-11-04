@@ -4,14 +4,14 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { SettingsPage } from '../SettingsPage';
 import { getSettings, pickSessionFile, saveSettings, type Settings } from '@/services/settings';
 
-vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), saveSettings: vi.fn(), pickSessionFile: vi.fn(), pickFolder: vi.fn(), listCropRatios: vi.fn(async () => []) }));
+vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), saveSettings: vi.fn(), pickSessionFile: vi.fn(), pickFolder: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const base: Settings = {
   document_id: '/Users/me/Pictures/Other', effective_document_id: '/Users/me/Pictures/Other',
   default_document_id: '/Users/me/Pictures/Session Manager', preview_recipe: 'PSM Preview',
-  web_recipe: 'PSM Web', style_name: '', crop_on_arrival: 'Square', export_folder: '/tmp/export',
+  web_recipe: 'PSM Web', style_name: '', default_shape: '1:1', master_recipe: 'PSM Master', export_folder: '/tmp/export',
   preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null, integration: null,
 };
 

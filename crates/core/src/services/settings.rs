@@ -39,13 +39,14 @@ impl SettingsService {
                 "document_id",
                 "preview_recipe",
                 "web_recipe",
+                "master_recipe",
                 "style_name",
                 "export_folder",
                 "preview_delay_s",
                 "theme",
                 "sku_prefix",
                 "integration",
-                "crop_on_arrival",
+                "default_shape",
             ]
             .contains(&key.as_str())
             {
@@ -72,8 +73,15 @@ impl SettingsService {
                 };
                 continue;
             }
-            if key == "crop_on_arrival" && !value.as_str().is_some_and(|s| !s.is_empty()) {
-                return Err(Error::InvalidValue("crop_on_arrival".into()));
+            if key == "default_shape"
+                && !value.as_str().is_some_and(|s| {
+                    ["original", "1:1", "4:5", "3:2", "2:3", "16:9", "free"].contains(&s)
+                })
+            {
+                return Err(Error::InvalidValue("default_shape".into()));
+            }
+            if key == "master_recipe" && !value.as_str().is_some_and(|s| !s.is_empty()) {
+                return Err(Error::InvalidValue("master_recipe".into()));
             }
             if key == "integration" && !value.is_null() {
                 let mut integration = value.clone();

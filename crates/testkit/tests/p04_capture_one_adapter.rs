@@ -158,9 +158,11 @@ fn c3a_existing_recipes_are_corrected() {
     let a = app();
     a.app.editing.ensure(&a.app.provision).unwrap();
     let s = a.fake.state.lock().unwrap();
-    for name in ["PSM Preview", "PSM Web"] {
+    for name in ["PSM Preview", "PSM Master", "PSM Web"] {
         let spec = if name == "PSM Preview" {
             psm_integrations::editing::capture_one::recipes::RecipeSpec::PREVIEW
+        } else if name == "PSM Master" {
+            psm_integrations::editing::capture_one::recipes::RecipeSpec::MASTER
         } else {
             psm_integrations::editing::capture_one::recipes::RecipeSpec::WEB
         };
@@ -174,6 +176,10 @@ fn c3a_existing_recipes_are_corrected() {
 fn c3b_missing_recipe_only_blocks_its_render() {
     let a = app();
     a.fake.state.lock().unwrap().recipes.remove("PSM Web");
+    a.fake.state.lock().unwrap().recipes.insert(
+        "PSM Master".into(),
+        psm_integrations::editing::capture_one::recipes::RecipeSpec::MASTER.props(),
+    );
     a.fake.state.lock().unwrap().fail_make_recipe = Some("busy".into());
     let s = session(&a, "K1");
     let p = photo(&a, s, "a.ARW", "7");

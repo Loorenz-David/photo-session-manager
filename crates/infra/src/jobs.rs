@@ -57,14 +57,12 @@ impl JobRunner {
                         Error::VariantNotFound => "variant_not_found",
                         Error::TagVerification => "tag_verification",
                         Error::Timeout => "timeout",
-                        Error::CropRatioUnknown { .. } => "crop_ratio_unknown",
                         _ => "provider",
                     };
                     let attempts = job.attempts + 1;
-                    if matches!(error, Error::CropRatioUnknown { .. })
-                        || handler
-                            .max_attempts()
-                            .is_some_and(|limit| attempts >= limit)
+                    if handler
+                        .max_attempts()
+                        .is_some_and(|limit| attempts >= limit)
                     {
                         self.store.job_fail(job.id, code, now_ms)?;
                     } else {

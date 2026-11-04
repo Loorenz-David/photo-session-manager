@@ -1,7 +1,6 @@
 use super::scripting::{
     CaptureOneScripting, DocumentInfo, EditorInfo, RecipeEnsure, RecipeProps, StyleEnsure,
 };
-use psm_core::domain::editing::ShapeOutcome;
 use psm_core::{Error, Result};
 use std::sync::{Arc, Condvar, Mutex};
 
@@ -123,17 +122,6 @@ impl CaptureOneScripting for GatedScripting {
     }
     fn set_color_tag(&self, id: &str, variant: &str, tag: i32) -> Result<()> {
         self.call(|i| i.set_color_tag(id, variant, tag))
-    }
-    fn crop_aspect_ratios(&self, id: &str) -> Result<Vec<String>> {
-        self.call(|i| i.crop_aspect_ratios(id))
-    }
-    fn apply_crop_if_untouched(
-        &self,
-        id: &str,
-        variant: &str,
-        ratio: &str,
-    ) -> Result<ShapeOutcome> {
-        self.call(|i| i.apply_crop_if_untouched(id, variant, ratio))
     }
     fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<String> {
         self.call(|i| i.process(id, variant, recipe))

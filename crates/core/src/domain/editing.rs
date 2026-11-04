@@ -46,13 +46,6 @@ pub enum RenderPurpose {
     Export,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShapeOutcome {
-    Applied,
-    Skipped,
-    UnknownRatio,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditingCapabilities {
     pub capture_folder: bool,

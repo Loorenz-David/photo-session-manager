@@ -9,7 +9,7 @@ use commerce::shopify::{
 };
 use editing::capture_one::{
     adapter::CaptureOneAdapter, jxa::JxaScripting, mirror::MirrorTag,
-    scripting::CaptureOneScripting, shape::ShapeOnArrival,
+    scripting::CaptureOneScripting,
 };
 use psm_core::{
     Result,
@@ -58,22 +58,6 @@ use std::{
 };
 
 pub const EDITOR_WAIT: Duration = Duration::from_secs(45);
-
-fn refresh_shape_health(store: &dyn Store, health: &HealthService) -> Result<()> {
-    let count = store.count_jobs("crop_on_arrival", "failed", Some("crop_ratio_unknown"))?;
-    if count == 0 {
-        health.clear("crop_not_applied");
-    } else {
-        health.set(
-            "crop_not_applied",
-            format!(
-                "Shape not applied to {count} photo{}",
-                if count == 1 { "" } else { "s" }
-            ),
-        );
-    }
-    Ok(())
-}
 
 pub struct App {
     pub paths: AppPaths,
@@ -189,14 +173,11 @@ impl SettingsSetContext {
 
 impl AppHandles {
     pub fn health_check(&self) -> Result<psm_core::domain::HealthReport> {
-        refresh_shape_health(self.store.as_ref(), self.health.as_ref())?;
         {
             if let Err(error) = (EditingStartup {
                 provider: self.editing.as_ref(),
                 store: self.store.as_ref(),
                 health: self.health.as_ref(),
-                crop_on_arrival: (self.settings.crop_on_arrival != "off")
-                    .then_some(self.settings.crop_on_arrival.as_str()),
                 provision: &self.provision,
             })
             .run()
@@ -208,15 +189,6 @@ impl AppHandles {
             {
                 tracing::warn!(%error, "health: camera status failed");
             }
-        }
-        if self.settings.crop_on_arrival != "off" {
-            self.store.requeue_failed_jobs(
-                "crop_on_arrival",
-                self.health
-                    .has("crop_ratio_unknown")
-                    .then_some("crop_ratio_unknown"),
-                self.clock.now_ms(),
-            )?;
         }
         self.health.check_integration(
             self.store.as_ref(),
@@ -410,10 +382,6 @@ impl App {
             tracing::warn!(problem, "startup backup failed");
             health.set("backup_failed", problem);
         }
-        refresh_shape_health(store.as_ref(), health.as_ref())?;
-        if start_backup && settings.crop_on_arrival != "off" {
-            store.requeue_failed_jobs("crop_on_arrival", None, clock.now_ms())?;
-        }
         let document_id = settings
             .effective_document_id(&paths)
             .to_string_lossy()
@@ -429,6 +397,7 @@ impl App {
             document_id.clone(),
             settings.preview_recipe.clone(),
             settings.web_recipe.clone(),
+            settings.master_recipe.clone(),
             paths.clone(),
         ));
         let camera: Arc<dyn CameraProvider> = Arc::new(CameraViaCaptureOne {
@@ -436,16 +405,13 @@ impl App {
             document_id: document_id.clone(),
         });
         let events = Arc::new(EventHub::default());
-        let arrival = Arc::new(
-            ArrivalService::new(
-                store.clone(),
-                editing.clone(),
-                camera.clone(),
-                events.clone(),
-                clock.clone(),
-            )
-            .with_shape_on_arrival(settings.crop_on_arrival != "off"),
-        );
+        let arrival = Arc::new(ArrivalService::new(
+            store.clone(),
+            editing.clone(),
+            camera.clone(),
+            events.clone(),
+            clock.clone(),
+        ));
         let export = Arc::new(ExportService::new(
             store.clone(),
             editing.clone(),
@@ -498,16 +464,6 @@ impl App {
             }),
         );
         runner.register(
-            "crop_on_arrival",
-            Arc::new(ShapeOnArrival {
-                editing: editing.clone(),
-                store: store.clone(),
-                health: health.clone(),
-                previews: previews.clone(),
-                ratio: settings.crop_on_arrival.clone(),
-            }),
-        );
-        runner.register(
             "hash",
             Arc::new(HashJob {
                 store: store.clone(),
@@ -545,14 +501,12 @@ impl App {
             let startup_store = store.clone();
             let startup_health = health.clone();
             let startup_camera = camera.clone();
-            let startup_crop = settings.crop_on_arrival.clone();
             let startup_provision = provision.clone();
             thread::spawn(move || {
                 let _ = (EditingStartup {
                     provider: startup_editing.as_ref(),
                     store: startup_store.as_ref(),
                     health: startup_health.as_ref(),
-                    crop_on_arrival: (startup_crop != "off").then_some(startup_crop.as_str()),
                     provision: &startup_provision,
                 })
                 .run();
@@ -681,8 +635,6 @@ impl App {
             provider: self.editing.as_ref(),
             store: self.store.as_ref(),
             health: self.health.as_ref(),
-            crop_on_arrival: (self.settings.crop_on_arrival != "off")
-                .then_some(self.settings.crop_on_arrival.as_str()),
             provision: &self.provision,
         })
         .run()

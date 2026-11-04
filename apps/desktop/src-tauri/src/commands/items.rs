@@ -95,7 +95,6 @@ impl From<Error> for CommandError {
             Error::ShopNotPermitted => "shop_not_permitted",
             Error::AppNotInstalled => "app_not_installed",
             Error::CredentialsRejected => "credentials_rejected",
-            Error::CropRatioUnknown { .. } => "crop_ratio_unknown",
         };
         Self {
             code: code.into(),

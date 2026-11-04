@@ -138,12 +138,7 @@ pub trait Store: Send + Sync {
     fn session_list_records(&self) -> Result<Vec<SessionListRecord>>;
     fn latest_publish(&self, session_id: i64) -> Result<Option<LatestPublish>>;
     fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;
-    fn arrival_insert(
-        &self,
-        photo: NewPhoto,
-        path_key: &str,
-        shape_on_arrival: bool,
-    ) -> Result<(Photo, bool)>;
+    fn arrival_insert(&self, photo: NewPhoto, path_key: &str) -> Result<(Photo, bool)>;
     fn session_folders(&self) -> Result<Vec<(String, i64)>>;
     fn session_for_item(&self, item_id: i64) -> Result<Option<i64>>;
     fn photos_in_session(&self, session_id: i64) -> Result<Vec<Photo>>;

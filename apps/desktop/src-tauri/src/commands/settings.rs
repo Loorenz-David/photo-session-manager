@@ -25,7 +25,8 @@ pub struct SettingsDto {
     pub preview_recipe: String,
     pub web_recipe: String,
     pub style_name: String,
-    pub crop_on_arrival: String,
+    pub default_shape: String,
+    pub master_recipe: String,
     pub export_folder: String,
     pub preview_delay_s: u32,
     pub effective_preview_delay_s: u32,
@@ -46,7 +47,9 @@ pub struct SettingsPatchDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub crop_on_arrival: Option<String>,
+    pub default_shape: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub master_recipe: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub export_folder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,17 +72,6 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsDto, Com
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<SettingsDto, CommandError> {
         to_dto(app.settings_get()?)
-    })
-    .await
-    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn crop_ratios_list(state: State<'_, AppState>) -> Result<Vec<String>, CommandError> {
-    let app = state.handles().map_err(CommandError::from)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        app.editing.crop_aspect_ratios().map_err(CommandError::from)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?

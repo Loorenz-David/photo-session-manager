@@ -4,26 +4,24 @@ import { Button } from '@/components/ui/button';
 import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Input } from '@/components/ui/input';
 import { useAction, usePageData } from '@/lib/pending';
-import { getSettings, listCropRatios, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
+import { getSettings, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
 };
 
-type TextKey = 'preview_recipe' | 'web_recipe' | 'style_name' | 'export_folder';
+type TextKey = 'preview_recipe' | 'web_recipe' | 'master_recipe' | 'style_name' | 'export_folder';
 type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition_photos_key';
 
 /** ch12 §Settings: a plain form over `settings.json` (undesigned in the handoff). The theme stays on the header toggle. */
 export function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cropRatios, setCropRatios] = useState<string[]>([]);
   const page = usePageData(getSettings);
   const loadedSecret = useRef('');
   useEffect(() => { if (page.data) setSettings(page.data); }, [page.data]);
   useEffect(() => { if (page.data) loadedSecret.current = page.data.integration?.client_secret ?? ''; }, [page.data]);
-  useEffect(() => { void listCropRatios().then(setCropRatios).catch(() => setCropRatios([])); }, []);
 
   const edit = (patch: Partial<Settings>) => setSettings(current => current ? { ...current, ...patch } : current);
   const editIntegration = (key: IntegrationKey, value: string) =>
@@ -48,7 +46,8 @@ export function SettingsPage() {
       preview_recipe: settings.preview_recipe,
       web_recipe: settings.web_recipe,
       style_name: settings.style_name,
-      crop_on_arrival: settings.crop_on_arrival,
+      default_shape: settings.default_shape,
+      master_recipe: settings.master_recipe,
       export_folder: settings.export_folder,
       preview_delay_s: settings.preview_delay_s,
       integration,
@@ -96,14 +95,19 @@ export function SettingsPage() {
         </div>
       </div>
       {text('Preview recipe', 'preview_recipe')}
+      {text('Master recipe', 'master_recipe')}
       {text('Web recipe', 'web_recipe')}
       {text('Style', 'style_name')}
       <div className="flex flex-col gap-1">
-        <label htmlFor="settings-crop_on_arrival">Shape on arrival</label>
-        <select id="settings-crop_on_arrival" value={settings.crop_on_arrival} onChange={e => edit({ crop_on_arrival: e.target.value })}>
-          <option value="off">Leave as shot</option>
-          {settings.crop_on_arrival !== 'off' && !cropRatios.includes(settings.crop_on_arrival) && <option value={settings.crop_on_arrival}>{settings.crop_on_arrival}</option>}
-          {cropRatios.filter(name => name !== 'off').map(name => <option key={name} value={name}>{name}</option>)}
+        <label htmlFor="settings-default_shape">Default shape</label>
+        <select id="settings-default_shape" value={settings.default_shape} onChange={e => edit({ default_shape: e.target.value })}>
+          <option value="original">Original</option>
+          <option value="1:1">Square (1:1)</option>
+          <option value="4:5">4:5</option>
+          <option value="3:2">3:2</option>
+          <option value="2:3">2:3</option>
+          <option value="16:9">16:9</option>
+          <option value="free">Free</option>
         </select>
       </div>
       <h2>Export and previews</h2>

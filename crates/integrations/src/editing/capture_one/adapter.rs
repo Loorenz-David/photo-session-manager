@@ -7,7 +7,6 @@ use psm_core::{
     domain::{
         editing::{
             DocumentState, EditingCapabilities, ProvisionInputs, ProvisionReport, RenderPurpose,
-            ShapeOutcome,
         },
         photo::Classification,
     },
@@ -34,11 +33,13 @@ pub struct CaptureOneAdapter {
     pub document_id: String,
     pub preview_recipe: String,
     pub web_recipe: String,
+    pub master_recipe: String,
     pub paths: AppPaths,
     renders: Mutex<RenderRegistry>,
     pub(crate) provision_lock: Mutex<()>,
 }
 impl CaptureOneAdapter {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         lanes: (Arc<dyn CaptureOneScripting>, Arc<dyn CaptureOneScripting>),
         store: Arc<dyn Store>,
@@ -46,6 +47,7 @@ impl CaptureOneAdapter {
         document_id: String,
         preview_recipe: String,
         web_recipe: String,
+        master_recipe: String,
         paths: AppPaths,
     ) -> Self {
         Self {
@@ -56,6 +58,7 @@ impl CaptureOneAdapter {
             document_id,
             preview_recipe,
             web_recipe,
+            master_recipe,
             paths,
             renders: Mutex::new(RenderRegistry::default()),
             provision_lock: Mutex::new(()),
@@ -470,20 +473,6 @@ impl EditingProvider for CaptureOneAdapter {
             return Err(Error::TagVerification);
         }
         Ok(())
-    }
-    fn crop_aspect_ratios(&self) -> Result<Vec<String>> {
-        self.background.crop_aspect_ratios(&self.document_id)
-    }
-    fn shape_on_arrival(&self, raw: &str, ratio: &str, now_ms: i64) -> Result<ShapeOutcome> {
-        let variant = self.variant_background(raw)?;
-        self.store.mark_own_write(raw, now_ms)?;
-        match self
-            .background
-            .apply_crop_if_untouched(&self.document_id, &variant, ratio)?
-        {
-            ShapeOutcome::UnknownRatio => Err(Error::CropRatioUnknown { name: ratio.into() }),
-            outcome => Ok(outcome),
-        }
     }
     fn import(&self, paths: &[String]) -> Result<()> {
         self.user.import(&self.document_id, paths)

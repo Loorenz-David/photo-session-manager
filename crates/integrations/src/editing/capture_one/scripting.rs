@@ -1,4 +1,4 @@
-use psm_core::{Result, domain::editing::ShapeOutcome};
+use psm_core::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +30,9 @@ pub struct EditorInfo {
 pub struct RecipeProps {
     pub enabled: bool,
     pub output_format: String,
+    pub bits: i64,
+    pub tiff_compression: String,
+    pub export_crop_method: String,
     pub color_profile: String,
     pub scaling_method: String,
     pub scaling_unit: String,
@@ -72,9 +75,6 @@ pub trait CaptureOneScripting: Send + Sync {
     fn find_image_in_folder(&self, id: &str, folder: &str, raw: &str) -> Result<Option<String>>;
     fn get_color_tag(&self, id: &str, variant: &str) -> Result<i32>;
     fn set_color_tag(&self, id: &str, variant: &str, tag: i32) -> Result<()>;
-    fn crop_aspect_ratios(&self, id: &str) -> Result<Vec<String>>;
-    fn apply_crop_if_untouched(&self, id: &str, variant: &str, ratio: &str)
-    -> Result<ShapeOutcome>;
     fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<String>;
     fn capture(&self) -> Result<()>;
     fn import(&self, id: &str, paths: &[String]) -> Result<()>;

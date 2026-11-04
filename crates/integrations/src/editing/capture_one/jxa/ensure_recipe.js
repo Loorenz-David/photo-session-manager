@@ -16,7 +16,8 @@ function run(argv) {
     }
   }
   const keys = ['enabled','outputFormat','colorProfile','scalingMethod','scalingUnit',
-    'primaryScalingValue','jpegQuality','existingFiles','outputSubFolder'];
+    'primaryScalingValue','jpegQuality','existingFiles','outputSubFolder',
+    'exportCropMethod','bits','tiffCompression'];
   const changed = [];
   for (const key of keys) {
     if (r[key]() !== want[key]) { r[key] = want[key]; changed.push(key); }

@@ -6,14 +6,14 @@ import { NotificationsDrawer } from '@/features/publish/NotificationsDrawer';
 import { PageHeader } from '@/features/shell/PageHeader';
 import { getSettings, saveSettings, type Settings } from '@/services/settings';
 
-vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), saveSettings: vi.fn(), pickFolder: vi.fn(), pickSessionFile: vi.fn(), listCropRatios: vi.fn(async () => []) }));
+vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), saveSettings: vi.fn(), pickFolder: vi.fn(), pickSessionFile: vi.fn() }));
 vi.mock('@/services/publish', () => ({ publishRetry: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); window.location.hash = '#/'; });
 
 const shown: Settings = {
-  crop_on_arrival: 'Square',
+  default_shape: '1:1', master_recipe: 'PSM Master',
   document_id: '/session', effective_document_id: '/session', default_document_id: '/Users/me/Pictures/Session Manager', preview_recipe: 'PSM Preview', web_recipe: 'PSM Web', style_name: 'PSM House',
   export_folder: '/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null,
   integration: { kind: 'shopify', shop_domain: 'shop.myshopify.com', api_version: '2026-10', client_id: 'client-id', client_secret: '••••1234', condition_photos_key: 'custom.damage_report' },

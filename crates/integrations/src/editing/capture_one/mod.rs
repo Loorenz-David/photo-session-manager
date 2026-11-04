@@ -7,4 +7,3 @@ pub mod provision;
 pub mod recipes;
 pub mod renders;
 pub mod scripting;
-pub mod shape;
