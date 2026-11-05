@@ -201,3 +201,21 @@ while composing and while dialogs are open, so `App` is recommended); the icons 
   C7(c)). The Edit menu labels follow the same strings through `edit_menu_set`.
 
 - **2026-11-05, implement r1 (codex).** Added the open-session history service and one shared command path for keys, header controls, delete toast and Edit menu; notices, active-photo restoration, view refresh, editor revision sync, and one-call Apply for multi-photo grid Split/Normal. Removed `photos_undo` / `undoDelete` and regenerated bindings. Wrote P41 UI/editor boundary cases and repointed P08 undo cases; retired the P39 compatibility test with its command. **Assumptions:** the module store uses `useSyncExternalStore`; a successful history outcome selects its active photo and queues the workspace reload, while `history_changed` also refreshes attribute-only changes; revision is the editor sync key; no live Capture One probe is needed for this UI phase. **Deviations:** the shared compose harness has session id 5 instead of the plan fixture’s 7, with the same session-scoped assertions; no behavior or file-perimeter deviation. Full suite, clippy, fmt and typecheck passed.
+
+- **2026-11-05, review r1 (opus): APPROVED_WITH_NOTES.** Gate: tracker `IMPLEMENTED`, checkpoint `84fb443` present. Perimeter: the 28
+  committed paths equal the handoff's declared list (the plan's estimate missed `p19_navigation.test.tsx`'s `undoDelete` mock line; the handoff disclosed it, so no finding).
+  Evidence (reviewer, clean tree `7e72698`, code = `84fb443`): `cargo test --workspace` green, clippy `-D warnings` green, `cargo fmt --check`
+  green, `tsc --noEmit` rc 0, `vitest run` 369/369 (the known `p33_split_grid` C4(d) flake failed 1 of 10 runs; backlog). **Verified
+  correct:** C1(a)–(c) one window `keydown` hook in `App` with only the `isTyping`/`defaultPrevented` guards; `useWorkspaceKeyboard` lost ⌘Z;
+  `useComposeKeys` untouched. C1(b) discriminates: a changed-input probe (scratch test, deleted) sent ⌘Z/⌘⇧Z from the Product tab and the
+  label inside the open dialog and both reached the history, so only the field guard keeps the row green. C2(a)–(c) exact notice texts under
+  toast id `history`, `step_cannot_apply` message verbatim. C3(a)–(c) `Undo2`/`Redo2` icon-only buttons after the divider and before the bell,
+  `aria-disabled` (never `disabled`), cards per task 0, session-header only; foreign `session_id` events ignored. C4(a)/(b) the delete toast's
+  Undo and late ⌘Z go through `historyUndo`, `toast.dismiss('photo-deleted')`, active photo via `registerActivePhoto`; `undoDelete`/`photos_undo`
+  gone from service, command list and bindings. C5(a) the revision-keyed `Saved` dispatch, skipped while a save is pending; without it Esc
+  saves nothing, so the row bites. C6(a)/(b) ≥ 2 changed photos → one `applyComposition` with re-fitted values; one photo → `setComposition`.
+  C7(a)/(b) `editMenuSet` on every label change via `publish`; `edit_menu` → the same `undo`/`redo`; Rust menu built from `Menu::default`
+  with Edit rebuilt, handles in managed `EditMenu`, `edit_menu_set` async. H1–H8: no core change; the new command is thin shell (H8).
+  Assumptions: all within MC-30 and Delegated choices (session id 5 is the shared harness's id). **Notes (backlog):** custom Edit-menu ⌘Z inside a text
+  field unverified live (MC-30 §Not steps; owner try-out); multi-photo grid Split is silent about refused photos; up to three reloads per undo;
+  P33 flake recurrence.
