@@ -2,7 +2,7 @@
 plan: P39_undo_history_core
 role: implement
 round: 1
-state: BLOCKED
+state: DONE
 date: 2026-11-05
 actor: codex
 ---
@@ -93,3 +93,9 @@ Checkpoint: `apps/desktop/src-tauri/src/commands/{history,items,mod,photos}.rs`,
 ## ⚠ OWNER DECISIONS REQUIRED (0)
 
 None. The planner/orchestrator can resolve the C4(h) contract contradiction from the existing intention.
+
+## Orchestrator note (2026-11-05)
+State BLOCKED → DONE. The plan contradicted itself on C4(h); ruled from MC-30 (an inapplicable step changes nothing and is dropped) and the
+row amended (plan Review log, commit a0dd570). The orchestrator updated `c4h_raw_collision_blocks_move_undo`'s last clause to the amended
+row: the second undo is refused with `that photo already changed`, changes nothing, and empties the undo list. No production code was
+touched. After the edit: `cargo test -p psm-testkit --test p39_undo_history_core` 24/24, `cargo test --workspace` green, `cargo fmt --check` clean.

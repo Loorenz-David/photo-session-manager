@@ -483,7 +483,16 @@ fn c4h_raw_collision_blocks_move_undo() {
     assert_eq!(state(&a, t, C::Main), vec![(p[0], Some(1))]);
     assert_eq!(state(&a, s, C::Main).len(), 1);
     assert_eq!(hs(&a, s).undo.as_deref(), Some("Approve 01"));
-    a.history().undo(s).unwrap();
+    let (before_s, before_t) = (state(&a, s, C::Main), state(&a, t, C::Main));
+    err(
+        a.history().undo(s).unwrap_err(),
+        "undo",
+        "Approve 01",
+        "that photo already changed",
+    );
+    assert_eq!(state(&a, s, C::Main), before_s);
+    assert_eq!(state(&a, t, C::Main), before_t);
+    assert_eq!(hs(&a, s).undo, None);
 }
 #[test]
 fn c4i_copy_undo_repoints_mirror() {
