@@ -526,7 +526,7 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   after }`, `FieldState::{ Row(Option<Value>), Title(String) }`; `HistoryService { store, clock, history }::{ undo, redo } -> HistoryOutcome
   { label, direction: Direction::{Undone, Redone}, sessions, active_photo_id }`. Recording happens **after** the transaction committed, in
   `ReviewService` (P39; `ReviewService::new(store, clock, &History)`; `PhotosService.history`), `CompositionService` (P40; field `history:
-  Arc<History>`) and `AttributesService` (P40; `new(store, clock, integration, Option<&History>)`, `None` for schema refresh). Every reversal is
+  Arc<History>`) and `AttributesService` (P40; `new(store, clock, integration)` unchanged + `with_history(&History)` — the two command sites attach it, schema refresh does not). Every reversal is
   one `Store::transaction` (rollback on `Err`) run under **one operation lock per `History`** (take → transaction → place/drop; lock order History
   → store; `HistoryChanged` emitted after release — projection D10); **only `Error::StepCannotApply` drops the step**, any other error leaves the
   lists as they were (D11); a reversal whose computed state equals the current one writes nothing and touches nothing (D12); photos re-inserted
@@ -697,3 +697,8 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   `plans/P39_undo_history_core.md` (rows 22 → 27; `projection: done`), carried D7/D10–D12 into `plans/P40_…` tasks 2 and 5 (its projection stays
   on), and amended §6.4 (`StoreTx::publish_confirmed_since`), §6.6 (`that session already has this photo`), §6.10 (the lock, drop, no-op and
   ascending-order rules; the copy-undo refusal; `Unreview` labels). Nothing declined.
+- 2026-11-05 P40 projection r0 folded — planner (Fable) folded `handoff_P40_undo_history_compositions_and_attributes_projection_r0.md` (D1–D16,
+  reality checks) into `plans/P40_…` (criteria 7 → 8, rows 19 → 20; `projection: done`): fixtures classify through `ReviewService` (a step),
+  `ai_suggest` never records, only `set_value` saves coalesce, `AttributesService::with_history(&History)` (`new` unchanged), the command rows in
+  `lib.rs mod p40_tests`, `product.description` for the command row, the copy-redo `that photo is gone` fix folded from the backlog (task 8, C8(a)),
+  D10–D16 delegations written down. §6.10 amended (`with_history`). P41 needs no change. Nothing declined.

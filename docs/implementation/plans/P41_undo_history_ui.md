@@ -195,3 +195,7 @@ while composing and while dialogs are open, so `App` is recommended); the icons 
 
 ## Review log
 
+- **2026-11-05, planner note after P40's projection r0.** Checked for carry-over: none needed. The step labels P41 shows (`Edit Description`,
+  `Clear Title`, `Unreview 03`, `Compose photo`) and the refusal texts (`that photo is gone`, `that session already has this photo`) come from the
+  backend; P41's rows use literal label strings on mocked services, and `history_changed` is emitted by the backend for every step kind (P39
+  C7(c)). The Edit menu labels follow the same strings through `edit_menu_set`.
