@@ -158,3 +158,30 @@ stage photo must go through the machine — see assumption 3). (b) `workspace/Fo
 (no copy). (d) Tracker actor is `fable`, not the prompt template's `codex`.
 **Not done.** No live try-out in the Tauri window (no interactive display); the owner's Manual try-out stands. No backend change: export and publish
 of split outputs are P30's.
+
+### 2026-11-05 — review r1 (opus, `pipeline-reviewer`): **APPROVED_WITH_NOTES**
+Gate: tracker `IMPLEMENTED`; checkpoint `d47b6ce` present. **Perimeter:** `git show --stat d47b6ce` = the handoff's 22 declared paths exactly; the
+three beyond the plan list (`machine.ts`, `ComposeStage.tsx`, `ComposeMode.tsx`) are disclosed and each is a seam the plan implies; `FoldedStrip.tsx`
+unchanged (it renders `PhotoGrid`). No code change after the checkpoint (`git diff d47b6ce HEAD -- apps crates` empty). **Suite** (master plan
+commands, Node 22): `cargo test --workspace` 529/0, clippy `-D warnings` clean, `fmt --check` 0, `npm run typecheck` 0, `npm test` 34 files / 291.
+**Verified correct (by reading the production code, then the test).**
+- C1(a): `refit` `kind` case → `reshaped` with `shapeRatio(kind 'split') = 2` (`original` short-circuit skipped while split); back to Normal uses the
+  kept shape (`free` keeps the rect, `original` whole frame); shape/orientation while split return the field only. Plan literals re-derived:
+  (1) `w = 1707√2/2560 = 0.943052`, `h = 0.707107`, `x = 0.028474`, `y = 0.146447`; (4) `h = 853.5/2560 = 0.333398`, `y = 0.333301`. Test asserts
+  exact values and `validate`.
+- C1(b): `outputNumbers`/`outputLabel`/`outputTotal` — unreviewed counts one; en dash; test exact `toEqual` per photo.
+- C2(a)–(d): S and the segmented control both dispatch `SetValues { cause 'kind' }` (machine treats it as `'set'`: save when values differ); the
+  2:1 box 952×476 at (24, 112) and `.compose-middle` at x = 500 re-derived; C2(c) 5:4 back-rect `w_px = 1707·√1.25 = 1908.5`; C2(d) the trim ratio
+  comes from `shapeRatio(...) = 2` (`machine.ts:221`), nw anchor, `w·852/952`.
+- C3(a): `SplitPreviews` halves `x0 = x`, `x1 = x + w/2` / `x + w/2 … x + w`, same `previewUrl`, `aspect-ratio 1 / 1`, Left/Right labels.
+- C4(a)–(d): `PhotoGrid` numbers from `outputNumbers(photos)`; tile hairline at `(x + w/2)·100 %`; Cover stays `number === 1`; strip has no
+  numbers but the hairline; overlay label from `outputNumbers(placedAt(...))` (03–04 and 05 re-derived), drops still `reorderPhoto(id, slot)`;
+  `Stage.placement` `Main 4–5 of 6`.
+- C5(a)–(c): `entries` shows exactly one of Split/Normal (disabled without a frame, Split disabled for unreviewed); `setKind` skips photos already
+  of the kind, saves sequentially, patches in place; condition photos allowed.
+- C6(a): navigation, Esc revert to the entry split values, Return exit, no save when unchanged.
+- Assumptions 1–9: none contradicts 10D ("Allowed for Main and Condition photos" covers 1). H1–H8: frontend only, no external writes, no
+  pixel processing, no Tauri-coupled logic added; backend validation (P28) unchanged.
+**Findings:** none blocking. **Notes → backlog (4):** C4(c) `toHaveTextContent('05')` is a substring match (not B2: every wrong label the slot
+arithmetic can produce still fails); a second Split/Normal from the grid menu before the answer is duplicated or dropped; grid kind saves bypass
+the per-photo save queue; the P30 publish-race row is now reachable from the grid menu.
