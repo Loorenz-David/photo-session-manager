@@ -3,7 +3,6 @@ phase: P34_composition_polish
 title: Composition polish — the Z loupe, snapping to the centre and edges (⌥ suspends), copy and paste a composition and apply it to the selection, the unsaved dot, reduced motion, a larger default window, and the measured frame and render times for the owner
 difficulty: normal
 projection: no
-implementer: fable
 depends_on: [P33_split_ui]
 ---
 # P34 — Composition polish: the Z loupe, snapping to the centre and edges (⌥ suspends), copy and paste a composition and apply it to the selection, the unsaved dot, reduced motion, a larger default window, and the measured frame and render times for the owner
