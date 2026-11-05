@@ -20,8 +20,10 @@ it('C3(a) copies values in memory and pastes a fitted composition on the next po
   const [id, values] = vi.mocked(setComposition).mock.calls[0];
   expect(id).toBe(2);
   expect(values).toMatchObject({ kind: 'normal', shape: '4:5', straighten: 2, orientation: 'named', quarter_turns: 0, flip: 'none' });
-  expect(values.rect.x + values.rect.w / 2).toBeCloseTo(0.5, 4);
-  expect(values.rect.y + values.rect.h / 2).toBeCloseTo(0.42, 1);
+  expect(values.rect.x).toBeCloseTo(0.26002, 4);
+  expect(values.rect.y).toBeCloseTo(0.21998, 4);
+  expect(values.rect.w).toBeCloseTo(0.47995, 4);
+  expect(values.rect.h).toBeCloseTo(0.40004, 4);
 });
 
 it('C3(b) applies the clipboard to selected photos in one call and names refusals', async () => {

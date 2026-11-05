@@ -9,7 +9,8 @@
 .compose-frame { fill: none; stroke: var(--color-text); stroke-width: 1.5; }
 .compose-guide { stroke: var(--color-accent); stroke-width: 1; stroke-dasharray: 4 4; }
 .compose-loupe { position: absolute; z-index: 30; width: 240px; height: 240px; overflow: hidden; border: 2px solid var(--color-bg); border-radius: 50%; box-shadow: var(--shadow-lg); pointer-events: none; background: var(--stage); }
-.compose-loupe img { position: absolute; left: 0; top: 0; max-width: none; }
+.compose-loupe-view { position: absolute; transform-origin: center; }
+.compose-loupe-view img { position: absolute; left: 50%; top: 50%; max-width: none; }
 .frame-meter { position: absolute; z-index: 31; right: 16px; bottom: 16px; padding: 5px 9px; border-radius: var(--r); background: var(--color-bg); color: var(--color-text); font-variant-numeric: tabular-nums; pointer-events: none; }
 /* Split (P33): the 2:1 frame with a 1 px hairline at its exact middle — the cut between Left and Right. */
 .compose-frame[data-kind="split"] { stroke-width: 1.5; }

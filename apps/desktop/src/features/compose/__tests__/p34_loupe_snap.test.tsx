@@ -7,18 +7,42 @@ it('C2(a) Z shows a pointer-following 100 percent loupe and releases without sav
   layoutStage();
   await openWorkspace([twoPhotos()]);
   await compose();
-  fireEvent.keyDown(window, { key: 'z' });
   pointer('pointermove', 600, 300);
+  fireEvent.keyDown(window, { key: 'z' });
   const loupe = document.querySelector<HTMLElement>('.compose-loupe')!;
   expect(loupe.style.left).toBe('616px');
   expect(loupe.style.top).toBe('316px');
+  const view = loupe.querySelector<HTMLElement>('.compose-loupe-view')!;
   const img = loupe.querySelector('img')!;
   expect(img.getAttribute('src')).toBe('asset:///previews/1/adjusted-1.jpg');
   expect(img.style.width).toBe('2560px');
-  expect(img.style.transform).toContain('translate(');
+  expect(Number.parseFloat(view.style.left)).toBeCloseTo(-1421.8, 1);
+  expect(Number.parseFloat(view.style.top)).toBeCloseTo(-602.6, 1);
   fireEvent.keyUp(window, { key: 'z' });
   await waitFor(() => expect(document.querySelector('.compose-loupe')).toBeNull());
   expect(setComposition).not.toHaveBeenCalled();
+});
+
+it('C2(a) renders the source-sized preview with the photo turn, flip and straighten', async () => {
+  layoutStage();
+  const turned = twoPhotos();
+  turned.photos[0].composition = { ...turned.photos[0].composition, quarter_turns: 1, flip: 'horizontal', straighten: 8 };
+  await openWorkspace([turned]);
+  await compose();
+  pointer('pointermove', 600, 300);
+  fireEvent.keyDown(window, { key: 'z' });
+  const loupe = document.querySelector<HTMLElement>('.compose-loupe')!;
+  const view = loupe.querySelector<HTMLElement>('.compose-loupe-view')!;
+  const img = loupe.querySelector('img')!;
+  expect(view.style.width).toBe('1707px');
+  expect(view.style.height).toBe('2560px');
+  expect(view.style.transform).toBe('rotate(8deg)');
+  expect(Number.parseFloat(view.style.left) + Number.parseFloat(view.style.transformOrigin.split(' ')[0])).toBeCloseTo(120, 8);
+  expect(Number.parseFloat(view.style.top) + Number.parseFloat(view.style.transformOrigin.split(' ')[1])).toBeCloseTo(120, 8);
+  expect(img.style.width).toBe('2560px');
+  expect(img.style.height).toBe('1707px');
+  expect(img.style.transform).toBe('rotate(90deg) scaleX(-1)');
+  fireEvent.keyUp(window, { key: 'z' });
 });
 
 it('C2(b) Alt suspends drag snapping and the guide disappears after release', async () => {

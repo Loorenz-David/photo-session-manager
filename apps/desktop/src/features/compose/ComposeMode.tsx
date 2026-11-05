@@ -202,7 +202,7 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
           compose={{
             onDone: done,
             children: <>
-              <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} onPointer={loupe ? setPointer : undefined} />
+              <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} onPointer={setPointer} />
               {loupe && state && active.adjusted_preview_path && <Loupe src={previewUrl(active.adjusted_preview_path)} pointer={pointer} state={state} />}
               {meter && <FrameMeter controller={controller} />}
             </>,

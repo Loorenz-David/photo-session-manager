@@ -166,3 +166,4 @@ whether the meter counts frames via rAF deltas or `PerformanceObserver`; the toa
     Files: `__tests__/p34_clipboard.test.tsx`.
   Notes (backlog): edge-snap guide drawn at the centre line; batch apply leaves a stale `Re-frame` badge; Apply outside the per-photo save queue;
   C2(b) hardening; tracker not set by the resume ruling; two undisclosed perimeter paths.
+- 2026-11-05, codex fix 1 — Resolved F1–F4 from review r1. The loupe renders the preview at source dimensions with the stage's turn, flip and straighten; it tracks pointer movement while composing so Z opens at the resting pointer. C2(a) now checks the centring offsets to 0.1 px and covers a turned/flipped/straightened preview; C3(a) checks fitted x, y, width and height to four decimals. Full Rust and UI suites, clippy, fmt and typecheck pass; handoff `handoffs/implementer/handoff_P34_composition_polish_fix_r2.md`.
