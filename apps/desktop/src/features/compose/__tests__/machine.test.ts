@@ -266,3 +266,129 @@ describe('C1(c) the interaction contract, one row per rule', () => {
     expect(resized.effects).toEqual([{ type: 'View', rect: DEFAULT }]);
   });
 });
+
+describe('P32 C1(b) SetValues, Nudge and the trim events', () => {
+  const other = (): CompositionValues => ({ ...idle().values, rect: { x: 0.3, y: 0, w: 0.666796875, h: 1 } });
+  const trimStart = (handle: 'se' | 'e' = 'se'): ComposeEvent => ({ type: 'TrimStart', handle, pointerId: 1, point: { x: 826, y: 676 } });
+  const trimMove = (x: number, y: number): ComposeEvent => ({ type: 'TrimMove', pointerId: 1, point: { x, y } });
+  // The se corner by (−100, −100) px at s = 652/1707: h = 1 − 100/652 = 0.846626, w = h·1707/2560 = 0.564526.
+  const TRIMMED: Rect = { x: 0.16660156250000002, y: 0, w: ((1 - 100 / 652) * 1707) / 2560, h: 1 - 100 / 652 };
+
+  it('SetValues while idle applies the values, views and saves them once', () => {
+    const step = reduce(idle(), { type: 'SetValues', values: other() });
+    expect(types(step.effects)).toEqual(['View', 'Save']);
+    expect(saves(step.effects)[0].values).toEqual(other());
+    expect(step.state.phase.kind).toBe('idle');
+    expect(step.state.values).toEqual(other());
+    expect(step.state.live).toEqual(other().rect);
+    expect(reduce(idle(), { type: 'SetValues', values: idle().values }).effects).toEqual([{ type: 'View', rect: DEFAULT }]);
+  });
+
+  it('SetValues while wheeling saves the wheel first, then the set: two Saves', () => {
+    const step = run(idle(), [wheel({ dx: -50, at: 0 }), { type: 'SetValues', values: other() }]);
+    const all = saves(step.effects);
+    expect(all).toHaveLength(2);
+    near(all[0].values.rect.x, PANNED_X);
+    expect(all[1].values).toEqual(other());
+  });
+
+  it('SetValues while dragging is ignored', () => {
+    const dragging = run(idle(), DRAG_50);
+    expect(reduce(dragging.state, { type: 'SetValues', values: other() })).toEqual({ state: dragging.state, effects: [] });
+  });
+
+  it('Nudge{1, 0} pans the photo one screen pixel: x −= 1/977.81, one Save', () => {
+    const step = reduce(idle(), { type: 'Nudge', dx: 1, dy: 0 });
+    expect(types(step.effects)).toEqual(['View', 'Save']);
+    near(saves(step.effects)[0].values.rect.x, DEFAULT.x - 1 / 977.81, 1e-7);
+    expect(step.state.phase.kind).toBe('idle');
+  });
+
+  it('TrimStart, TrimMove, TrimEnd: the view stays on the start rect during the trim, then re-fits with one Save of the trimmed rect', () => {
+    const started = reduce(idle(), trimStart());
+    expect(started.state.phase).toEqual({ kind: 'trimming', handle: 'se', pointerId: 1, startRect: DEFAULT, origin: { x: 826, y: 676 } });
+    expect(started.effects).toEqual([]);
+    const moved = reduce(started.state, trimMove(726, 576));
+    expect(moved.effects).toEqual([]);
+    rectNear(moved.state.live, TRIMMED, 1e-5);
+    expect(moved.state.view).toEqual(started.state.view);
+    expect(moved.state.values.rect).toEqual(DEFAULT);
+    const ended = reduce(moved.state, { type: 'TrimEnd', pointerId: 1 });
+    expect(types(ended.effects)).toEqual(['View', 'Save']);
+    rectNear(saves(ended.effects)[0].values.rect, TRIMMED, 1e-5);
+    expect(ended.state.phase.kind).toBe('idle');
+    expect(ended.state.view.frameBox).toEqual({ left: 174, top: 24, width: 652, height: 652 });
+    near(ended.state.view.scale, 652 / (TRIMMED.w * 2560), 1e-5);
+    const viaPointer = run(idle(), [trimStart(), move(726, 576), up()]);
+    expect(saves(viaPointer.effects)).toHaveLength(1);
+    rectNear(saves(viaPointer.effects)[0].values.rect, TRIMMED, 1e-5);
+    const untouched = run(idle(), [trimStart(), { type: 'TrimEnd', pointerId: 1 }]);
+    expect(untouched.effects).toEqual([]);
+  });
+
+  it('TrimStart, TrimMove, KeyEsc restores the start rect without a Save', () => {
+    const step = run(idle(), [trimStart(), trimMove(726, 576), { type: 'KeyEsc' }]);
+    expect(step.state.phase.kind).toBe('idle');
+    expect(step.state.live).toEqual(DEFAULT);
+    expect(step.state.values.rect).toEqual(DEFAULT);
+    expect(saves(step.effects)).toHaveLength(0);
+    expect(step.effects).toEqual([{ type: 'View', rect: DEFAULT }]);
+  });
+
+  it('TrimStart, TrimMove, Blur commits the trimmed rect (one Save), like any interrupted gesture', () => {
+    const step = run(idle(), [trimStart(), trimMove(726, 576), { type: 'Blur' }]);
+    expect(step.state.phase.kind).toBe('idle');
+    expect(saves(step.effects)).toHaveLength(1);
+    rectNear(saves(step.effects)[0].values.rect, TRIMMED, 1e-5);
+  });
+
+  it('a free e-edge trim moves one edge: w = 0.56454, h = 1, x unchanged', () => {
+    const free = initialState(1, composition(1, { shape: 'free' }), STAGE)!;
+    const step = run(free, [trimStart('e'), trimMove(726, 676), { type: 'TrimEnd', pointerId: 1 }]);
+    const rect = saves(step.effects)[0].values.rect;
+    near(rect.w, TRIMMED.w, 1e-9);
+    expect(rect.h).toBe(1);
+    expect(rect.x).toBe(DEFAULT.x);
+  });
+
+  it('SetValues{live} adjusts without saving; the following set saves once; Esc mid-adjust restores the start', () => {
+    const tilted: CompositionValues = { ...idle().values, straighten: 5 };
+    const live = reduce(idle(), { type: 'SetValues', values: tilted, cause: 'live' });
+    expect(live.state.phase).toEqual({ kind: 'adjusting', startValues: idle().values });
+    expect(live.effects).toEqual([{ type: 'View', rect: DEFAULT }]);
+    expect(live.state.values.straighten).toBe(5);
+    expect(live.state.view.rotateDeg).toBe(5);
+    const more: CompositionValues = { ...tilted, straighten: 10 };
+    const set = reduce(live.state, { type: 'SetValues', values: more, cause: 'set' });
+    expect(types(set.effects)).toEqual(['View', 'Save']);
+    expect(saves(set.effects)[0].values.straighten).toBe(10);
+    expect(set.state.phase.kind).toBe('idle');
+    const escaped = reduce(live.state, { type: 'KeyEsc' });
+    expect(escaped.state.values).toEqual(idle().values);
+    expect(escaped.effects).toEqual([{ type: 'View', rect: DEFAULT }]);
+    const blurred = reduce(live.state, { type: 'Blur' });
+    expect(saves(blurred.effects)).toHaveLength(1);
+    expect(saves(blurred.effects)[0].values.straighten).toBe(5);
+    const same = reduce(live.state, { type: 'SetValues', values: idle().values });
+    expect(same.effects).toEqual([{ type: 'View', rect: DEFAULT }]);
+  });
+
+  it('a needs_review photo enters re-fitted to its frame and Return saves once to confirm even when nothing changed', () => {
+    const turnedFrame = composition(1, { frame: { w: 1707, h: 2560 }, state: 'needs_review', review_reason: 'frame' });
+    const state = initialState(1, turnedFrame, STAGE)!;
+    expect(state.needsConfirm).toBe(true);
+    rectNear(state.values.rect, { x: 0, y: 0.166601562, w: 1, h: 0.666796875 }, 1e-9);
+    expect(state.entry).toEqual(state.values);
+    const confirmed = reduce(state, { type: 'KeyReturn' });
+    expect(types(confirmed.effects)).toEqual(['Save', 'Exit']);
+    expect(saves(confirmed.effects)[0].values).toEqual(state.values);
+    expect(confirmed.state.needsConfirm).toBe(false);
+    const geometry = initialState(1, composition(1, { state: 'needs_review', review_reason: 'geometry' }), STAGE)!;
+    expect(geometry.values).toEqual(idle().values);
+    const afterDrag = run(geometry, [...DRAG_50, up()]);
+    expect(afterDrag.state.needsConfirm).toBe(false);
+    expect(types(reduce(afterDrag.state, { type: 'KeyReturn' }).effects)).toEqual(['Exit']);
+    const forced = reduce(idle(), { type: 'SetValues', values: idle().values, cause: 'confirm' });
+    expect(types(forced.effects)).toEqual(['View', 'Save']);
+  });
+});

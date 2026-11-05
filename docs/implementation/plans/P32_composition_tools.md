@@ -178,3 +178,69 @@ stays in the stage bar as well as the panel; how `trim` splits between `geometry
 - Estimated size: ~16 files, ~2 000 lines (≈ 400 re-fit + machine, ≈ 650 panel/controls/handles/keys, ≈ 950 tests).
 
 ## Review log
+### 2026-11-05 — implement r1 (Fable, `pipeline-implementer`)
+**Built.** The second half of 10D's editor for Normal compositions. New: `features/compose/refit.ts` (`refit(values, change, frame)` for
+`shape`, `orientation`, `turn`, `flip`, `straighten`, `centre`, `reframe` per §The re-fit contract — centre and area preserved, `fit` with the
+24-step bisection, straighten clamped ±45 and rounded to 0.1°; `trim(startRect, handle, deltaPx, { turned, scale, ratio })` — locked corners
+follow the pointer's projection onto the diagonal from the opposite corner, locked edges scale about the opposite edge's centre, free handles move
+their edges, clamped to the frame and the minimum); `ToolsPanel.tsx` (a list of `{ id, title, content }` sections, `aside.tools-panel`,
+`.tools-section[data-open]` with a header button); `useToolsPanelState.ts` (`tools.hidden` / `tools.sections` in `localStorage`);
+`CompositionSection.tsx` (Normal | Split with Split `aria-disabled`, `#compose-shape`, Turn frame, Rotate left/right, Flip, `#compose-straighten`
++ `n.n°` readout with double-click → 0, Centre, Reset, Done, the output preview); `OutputPreview.tsx` (`.output-preview` of the rect's pixel ratio,
+the same adjusted preview clipped by CSS); `Handles.tsx` (eight `.compose-handle[data-handle]` rects in the overlay); `useComposeKeys.ts` (arrows
+± 1 / Shift × 10, `.`, 1–6 / 0, X, `[` `]`, ⌘⌥R, ⌘T, every other key swallowed; a `window` **capture** listener so the app's own maps — ⌘[ Back among
+them — never see a swallowed key). Changed: `machine.ts` (phases `trimming { handle, pointerId, startRect, origin }` and `adjusting { startValues }`;
+events `SetValues { values, cause: set | live | confirm }`, `TrimStart/TrimMove/TrimEnd`; `needsConfirm` in the state; entry re-fit for `needs_review`
+photos; `KeyReturn` saves once to confirm), `useComposeGesture.ts` (handle pointer-down → `TrimStart`; `subscribe`/`getSnapshot` for React; the glide:
+`data-gliding` on the stage until `transitionend`, 400 ms fallback), `ComposeStage.tsx` (renders from the machine's snapshot: trimmed box during a
+trim, handles, `.compose-review` banner), `ComposeFrame.tsx` (children), `ComposeMode.tsx` (owns the Tools panel and the stage column; Reset →
+`resetComposition` → `Saved`; `[`/`]` through `displaySequence`), `compose.css`, `workspace/WorkspacePage.tsx` (the editor replaces the stage column
+and adds the left panel; `stageExtras` shared), `workspace.css` (`.tools-panel` 260 px), `shell/Header.tsx` and `publish/PublishPopover.tsx` (a
+`needs_review` refusal shows the backend's message bare). No Rust, no bindings change.
+**Tests.** `refit.test.ts` (C1(a): the 11 cases + clamp/round), `machine.test.ts` (+10 rows for C1(b)), `p32_tools_panel.test.tsx` (C2(a)–(b)),
+`p32_controls.test.tsx` (C3(a)–(e), C4(a)–(c)), `p32_keys.test.tsx` (C5(a)–(e), C6(a)–(b)), `p32_reframe.test.tsx` (C7(a)–(d), C8(a)–(b)).
+45 new tests; `npm test` 31 files / 268 passed; `npm run typecheck` clean; Rust suite, clippy and fmt unchanged and green (see the handoff stamp).
+**Judgment calls (Assumptions).**
+1. **`Nudge` keeps P31's pointer convention** (`Nudge{dx: 1}` → `x −= 1/(W_t·s)`, as C1(b) states) and the key layer negates it: ArrowRight → `Nudge{dx: −1}`
+   so the frame moves right over the photo (`x += 1/977.81`, C5(a)). The two rows are both satisfied; the machine stays the gesture-level truth.
+2. **ArrowDown with `h = 1` sends no save** (C5(a) "y stays 0 (clamped)"): the clamped rect equals the committed one and the machine saves only on a
+   change (P31 rule 3 / assumption 15). The row's "each a separate `setComposition`" is read as "the arrows are not batched"; the test asserts 2 saves for
+   the three presses and `y = 0` on every call.
+3. **Straighten-live is a machine phase** (`adjusting { startValues }`, Delegated choice): React `onChange` (the native `input`) dispatches
+   `SetValues{cause:'live'}` (view only), a native `change` listener dispatches `SetValues{cause:'set'}` (one save), double-click → straighten 0.
+   Esc mid-slide restores the start values; Blur / a pointer down / a wheel commit it first, like a wheel gesture.
+4. **Re-fit on a `free` rect during a quarter turn turns the rect with the content** (`(x, y, w, h) → (1 − y − h, x, h, w)` for right) — the contract's
+   "centre follows the content" with the area preserved; `original` → `(0, 0, 1, 1)`. **Flip** also runs the straighten guard (identical result while
+   `θ = 0`; with a tilt the mirrored rect may leave the rotated image and shrinks about its centre) — the contract's "nothing else" would otherwise send a
+   rect the backend refuses. When even the minimum size at the rect's centre is outside the tilted image, the centre moves to the frame's centre before
+   the bisection (a corner-hugging sliver at 45°).
+5. **`TrimMove` carries `{ pointerId, point }`** (the handle lives in the phase); `PointerMove`/`PointerUp`/`PointerCancel`/`LostCapture` of the trimming
+   pointer are treated as `TrimMove`/`TrimEnd`, so the P31 window listeners need no branching. A handle's pointer down is recognised by the stage listener
+   (`closest('.compose-handle')`) because the native stage listener fires before React's synthetic handlers on the handle.
+6. **The glide** is detected in the binding (phase `trimming → idle` with `live ≠ startRect`): `data-gliding="true"` on `.compose-stage`, cleared on the
+   image's `transitionend` or after 400 ms; CSS transitions `--dur-med --ease-out` on the image transform/size and the overlay geometry.
+7. **Controls render from the machine's published snapshot** (`useSyncExternalStore`; published after every event except the moves of a continuous
+   drag, pinch or wheel), so the frame box, handles, output preview and inner turn/flip follow the editor and not the stored row; the image transform
+   stays imperative (P31 assumption 9).
+8. **Reset** calls `resetComposition` directly, patches the workspace row and hands the answer to the machine as `Saved` (rule 16 snaps the view); `entry`
+   is left alone so Esc still reverts to how the editor came to the photo. A failure shows `Not reset: <message>`.
+9. **Done stays in the stage bar** as well as the panel (the panel can be hidden with ⌘T); the panel copy carries `.compose-done.tools-done`.
+10. **Keys**: ⌘ combinations other than ⌘T, ⌘⌥R and ⌘[ are left to the app/webview (swallowing ⌘Q or ⌘C in the webview would change nothing useful);
+    ⌥ alone is left for P34's snap suspension; Tab keeps moving the focus (the panel's controls stay reachable); `event.code === 'KeyR'` also
+    matches ⌘⌥R (Option changes `key` on macOS).
+11. **Re-frame**: the banner reads `photo.composition.state` from the workspace row, so it disappears when the saved row (`state ok`) is patched in; the
+    `needs_review` toasts check `error.code` duck-typed (p15's mock of `@/services/sessions` has no `ServiceError`).
+12. **`[`/`]` on a photo whose save is still in flight** show the stored row until the answer lands (then rule 16 snaps to it) — the same semantics as
+    P31 C7(a); C5(d) asserts the placement after `p1` resolves.
+13. A side within 1e-12 of the whole frame is snapped to exactly 1 in the re-fit so `x`/`y` clamp to exactly 0 (`1707²/2560` is not a dyadic rational).
+**Plan arithmetic noted (not adapted around; the contract values are asserted).** Re-fit (4) / C3(b): `sqrt(1365.6·1707·1.25) = 1707` exactly, so
+`w = 0.666796875`, `h = 0.8`, `x = 0.1666015625`, `y = 0.1` (the plan's `0.666760 / 0.799941 / 0.166620 / 0.100030` carry a rounding slip beyond the
+± 1e-5). Re-fit (8) / C3(d): the largest centred square inside the 10° tilted frame is `h = 1/(cos 10° + sin 10°) = 0.8632`, not `0.816` (bisection
+confirms). Re-fit (10) / C4(a): `h = 1 − 100/652 = 0.846626`, `w = 0.564526` (plan `0.84664 / 0.56454`). C1(b) "TrimStart, Blur → Save": without a
+`TrimMove` nothing changed and nothing is saved; the row is tested with a move in between. C7(d): under the machine (rule 2, unchanged by the plan)
+a pointer moved **up** 50 px moves the photo up, so the frame sits lower: `y = 0.166601562 + 50/977.81 = 0.217737` (the plan's `− 50/652` divides by
+the wrong side and has the wrong sign); `x = 0` clamped as the row says.
+**Deviations.** (a) `ComposeFrame.tsx` changed (children slot for the handles; listed as changed in the plan — no deviation) and `trim` lives in
+`refit.ts` (Delegated). (b) `useComposeGesture.ts` exports `LAYER_OPEN` for `useComposeKeys`. (c) Tracker actor is `fable`, not the prompt
+template's `codex`. (d) No new files beyond the plan's list.
+**Not done.** No live try-out in the Tauri window from this session (no interactive display); the owner's Manual try-out stands. Rust untouched.

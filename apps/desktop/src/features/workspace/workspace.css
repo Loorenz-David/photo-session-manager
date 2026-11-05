@@ -4,6 +4,8 @@
 .workspace { --photo-panel-width: 340px; position: relative; display: flex; height: calc(100vh - 56px); overflow: hidden; background: var(--color-bg); }
 .workspace-error { align-items: center; justify-content: center; color: var(--danger-700); }
 .stage-column { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--stage); }
+/* The editor's three columns (10D): the Tools panel on the left, the stage, the browser hidden behind the edge reveal. */
+.tools-panel { width: 260px; flex: none; overflow-y: auto; border-right: 1px solid var(--hair); background: var(--color-bg); }
 
 .stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .stage-empty { align-items: center; justify-content: center; gap: var(--space-2); text-align: center; }

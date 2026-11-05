@@ -65,6 +65,12 @@ function files(n: number): string {
   return n === 1 ? '1 file' : `${n} files`;
 }
 
+/** A refused export: `needs_review` carries the backend's own naming of the photos ("Re-frame first: Main 02", MC-27 §Revisions). */
+function exportFailureText(error: unknown): string {
+  const message = (error as Error).message;
+  return (error as { code?: string }).code === 'needs_review' ? message : `Export failed: ${message}`;
+}
+
 /**
  * Export progress and outcome as one toast (ch07 §Completion without an integration): "Exporting n of N", then
  * "Exported n files" with "Open folder", or the failure. Returns the sessions with an export in flight.
@@ -170,7 +176,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
               <ClipboardList /> Details
             </Button>
             {integration === null && (
-              <ActionButton action={() => runExport(sessionId)} onError={error => toast.error(`Export failed: ${(error as Error).message}`, { id: EXPORT_TOAST_ID })} disabled={exporting.has(sessionId)} title="Export the main and condition photos to the export folder">
+              <ActionButton action={() => runExport(sessionId)} onError={error => toast.error(exportFailureText(error), { id: EXPORT_TOAST_ID })} disabled={exporting.has(sessionId)} title="Export the main and condition photos to the export folder">
                 <FolderDown /> Export
               </ActionButton>
             )}

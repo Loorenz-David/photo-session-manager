@@ -309,25 +309,45 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     <aside className="photo-panel" aria-label="Photos"><div className="panel-scroll"><SkeletonTiles n={8} /></div></aside>
   </main>;
 
+  // The stage column's other occupants, in both the normal stage and the editor.
+  const stageExtras = (
+    <>
+      {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} />}
+      {item && (
+        <button type="button" className="sessions-toggle" style={{ top: sessionsOpen ? 42 : 74 }} onClick={() => setFormOpen(true)} aria-label="Product details" title="Product details (D)">
+          <ClipboardList /> Details
+        </button>
+      )}
+      {!sessionsOpen && (
+        <button type="button" className="sessions-toggle" onClick={() => setSessionsOpen(true)} aria-label="Show sessions panel">
+          <PanelsRightBottom /> Sessions
+        </button>
+      )}
+    </>
+  );
+
   return (
     <PublishFailedContext.Provider value={failure !== null}>
     <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDraggingId(null); setOverId(null); }}>
-      <main className="workspace" data-folded={folded || undefined}>
-        <div className="stage-column">
-          {composing && active && canCompose(active) ? (
-            <ComposeMode
-              photos={state.photos}
-              active={active}
-              mode={state.mode}
-              onStep={state.step}
-              onMenu={onMenu}
-              onItemCard={() => setItemCardOpen(current => !current)}
-              tiles={{ activeId: state.activeId, selection: state.selection, onToggleSelected: state.toggleSelected, onMenu }}
-              onExit={() => setComposing(false)}
-              onSwitch={state.setActiveId}
-              patchPhoto={state.patchPhoto}
-            />
-          ) : (
+      <main className="workspace" data-folded={folded || undefined} data-composing={composing || undefined}>
+        {composing && active && canCompose(active) ? (
+          // The editor (10D): the Tools panel on the left, the stage column as the editor, the browser behind the edge reveal.
+          <ComposeMode
+            photos={state.photos}
+            active={active}
+            mode={state.mode}
+            onStep={state.step}
+            onMenu={onMenu}
+            onItemCard={() => setItemCardOpen(current => !current)}
+            tiles={{ activeId: state.activeId, selection: state.selection, onToggleSelected: state.toggleSelected, onMenu }}
+            onExit={() => setComposing(false)}
+            onSwitch={state.setActiveId}
+            patchPhoto={state.patchPhoto}
+          >
+            {stageExtras}
+          </ComposeMode>
+        ) : (
+          <div className="stage-column">
             <Stage
               photos={state.photos}
               active={active}
@@ -339,19 +359,9 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
               onItemCard={() => setItemCardOpen(current => !current)}
               onCompose={() => { if (active) enterCompose(active); }}
             />
-          )}
-          {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} />}
-          {item && (
-            <button type="button" className="sessions-toggle" style={{ top: sessionsOpen ? 42 : 74 }} onClick={() => setFormOpen(true)} aria-label="Product details" title="Product details (D)">
-              <ClipboardList /> Details
-            </button>
-          )}
-          {!sessionsOpen && (
-            <button type="button" className="sessions-toggle" onClick={() => setSessionsOpen(true)} aria-label="Show sessions panel">
-              <PanelsRightBottom /> Sessions
-            </button>
-          )}
-        </div>
+            {stageExtras}
+          </div>
+        )}
         {composing ? null : folded ? (
           <FoldedStrip photos={state.photos} onUnfold={() => setFolded(false)} {...tileHandlers} />
         ) : (

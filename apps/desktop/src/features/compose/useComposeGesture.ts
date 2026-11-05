@@ -3,7 +3,8 @@ import { isTyping } from '@/lib/keyboard';
 import type { CompositionValues } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
 import { transformCss, viewTransform, type Box, type Point } from './geometry';
-import { initialState, reduce, WHEEL_SETTLE_MS, type ComposeEvent, type ComposeState } from './machine';
+import { initialState, reduce, sameRect, WHEEL_SETTLE_MS, type ComposeEvent, type ComposeState } from './machine';
+import type { Handle } from './refit';
 import type { Rect } from '@/services/compositions';
 
 type GestureOptions = {
@@ -22,29 +23,47 @@ export type ComposeController = {
   /** Feeds the machine; returns true when the event's default must be prevented. */
   dispatch: (event: ComposeEvent) => boolean;
   isIdle: () => boolean;
+  /** The machine's state for React (`useSyncExternalStore`): published after every event except the moves of a continuous drag, pinch or wheel. */
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => ComposeState | null;
 };
 
 /** Workspace keys that are off while composing (design handoff §Keyboard; 10D). */
 const SWALLOWED = new Set(['a', 'c', 'backspace', 'delete', ' ', 'f', 'i', 'd', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown']);
 
 /** An open layer owns its own keyboard (the guard `useBackKeys` in `lib/keyboard.ts` uses; design handoff §Keyboard "Esc (close topmost)"). */
-const LAYER_OPEN = '[role="dialog"], [role="alertdialog"], [role="menu"]';
+export const LAYER_OPEN = '[role="dialog"], [role="alertdialog"], [role="menu"]';
+
+/** The glide back after a trim ends (`--dur-med` 280 ms) plus a margin, for a transition that never reports its end. */
+const GLIDE_FALLBACK_MS = 400;
 
 type GestureLike = Event & { clientX?: number; clientY?: number; scale?: number };
 
+const CONTINUOUS = new Set(['dragging', 'pinching', 'wheeling']);
+
 /**
- * Binds the DOM to the machine (plan P31 task 3): pointer, wheel, WebKit gesture, blur, visibility and keyboard
- * events become machine events; `View` effects are coalesced into one transform write per animation frame; the
- * wheel settle runs on a timer; nothing here waits for Rust.
+ * Binds the DOM to the machine (plan P31 task 3, P32 tasks 2 and 5): pointer, wheel, WebKit gesture, blur, visibility
+ * and keyboard events become machine events; a pointer down on a `.compose-handle` starts a trim instead of a drag;
+ * `View` effects are coalesced into one transform write per animation frame; the wheel settle runs on a timer; a trim
+ * that changed the rect glides the view back (`data-gliding` on the stage until `transitionend`); nothing here waits
+ * for Rust.
  */
 export function useComposeGesture(options: GestureOptions): ComposeController {
   const latest = useRef(options);
   latest.current = options;
   const stateRef = useRef<ComposeState | null>(null);
+  const snapshotRef = useRef<ComposeState | null>(null);
+  const listeners = useRef(new Set<() => void>());
   const pending = useRef<Rect | null>(null);
   const raf = useRef<number | null>(null);
   const timer = useRef<number | null>(null);
+  const glideTimer = useRef<number | null>(null);
   const dispatchRef = useRef<(event: ComposeEvent) => boolean>(() => false);
+
+  const publish = useCallback(() => {
+    snapshotRef.current = stateRef.current;
+    listeners.current.forEach(listener => listener());
+  }, []);
 
   const write = useCallback((rect: Rect) => {
     const state = stateRef.current;
@@ -81,12 +100,31 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
     }
   }, []);
 
+  /** The frame glides back to fill the stage: a CSS transition on the image and overlay while `data-gliding` is set. */
+  const glide = useCallback(() => {
+    const stage = latest.current.stageRef.current;
+    const image = latest.current.imageRef.current;
+    if (!stage) return;
+    stage.dataset.gliding = 'true';
+    const done = () => {
+      delete stage.dataset.gliding;
+      image?.removeEventListener('transitionend', done);
+      if (glideTimer.current !== null) window.clearTimeout(glideTimer.current);
+      glideTimer.current = null;
+    };
+    image?.addEventListener('transitionend', done);
+    if (glideTimer.current !== null) window.clearTimeout(glideTimer.current);
+    glideTimer.current = window.setTimeout(done, GLIDE_FALLBACK_MS);
+  }, []);
+
   const dispatch = useCallback(
     (event: ComposeEvent): boolean => {
       const current = stateRef.current;
       if (!current) return false;
       const { state, effects } = reduce(current, event);
       stateRef.current = state;
+      const before = current.phase;
+      if (before.kind === 'trimming' && state.phase.kind === 'idle' && !sameRect(state.live, before.startRect)) glide();
       let prevent = false;
       for (const effect of effects) {
         switch (effect.type) {
@@ -109,9 +147,10 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
         }
       }
       syncTimer();
+      if (!(CONTINUOUS.has(state.phase.kind) && state.phase.kind === before.kind)) publish();
       return prevent;
     },
-    [flush, syncTimer],
+    [flush, glide, publish, syncTimer],
   );
   dispatchRef.current = dispatch;
 
@@ -123,6 +162,7 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
     if (!state) {
       stateRef.current = initialState(photo.id, photo.composition, stage);
       if (stateRef.current) write(stateRef.current.live);
+      publish();
       return;
     }
     if (state.photoId !== photo.id) {
@@ -134,7 +174,7 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
       dispatch({ type: 'Resize', stage });
       flushNow();
     }
-  }, [stageBox, photo, dispatch, flushNow, write]);
+  }, [stageBox, photo, dispatch, flushNow, publish, write]);
 
   useEffect(() => {
     const element = latest.current.stageRef.current;
@@ -143,15 +183,24 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
       const rect = element.getBoundingClientRect();
       return { x: (event.clientX ?? 0) - rect.left, y: (event.clientY ?? 0) - rect.top };
     };
-    const onPointerDown = (event: PointerEvent) => {
-      dispatch({ type: 'PointerDown', pointerId: event.pointerId, isPrimary: event.isPrimary, button: event.button, point: local(event) });
-      if (stateRef.current?.phase.kind === 'dragging' && typeof element.setPointerCapture === 'function') {
-        try {
-          element.setPointerCapture(event.pointerId);
-        } catch {
-          // The pointer cannot be captured (already released); the window listeners still follow it.
-        }
+    const capture = (pointerId: number) => {
+      if (typeof element.setPointerCapture !== 'function') return;
+      try {
+        element.setPointerCapture(pointerId);
+      } catch {
+        // The pointer cannot be captured (already released); the window listeners still follow it.
       }
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      const handle = target?.closest?.('.compose-handle')?.getAttribute('data-handle') as Handle | null | undefined;
+      if (handle && event.isPrimary && event.button === 0) {
+        dispatch({ type: 'TrimStart', handle, pointerId: event.pointerId, point: local(event) });
+        if (stateRef.current?.phase.kind === 'trimming') capture(event.pointerId);
+        return;
+      }
+      dispatch({ type: 'PointerDown', pointerId: event.pointerId, isPrimary: event.isPrimary, button: event.button, point: local(event) });
+      if (stateRef.current?.phase.kind === 'dragging') capture(event.pointerId);
     };
     const onPointerMove = (event: PointerEvent) => dispatch({ type: 'PointerMove', pointerId: event.pointerId, point: local(event) });
     const onPointerUp = (event: PointerEvent) => dispatch({ type: 'PointerUp', pointerId: event.pointerId });
@@ -232,8 +281,11 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
         }
       }
       stateRef.current = null;
+      snapshotRef.current = null;
       if (timer.current !== null) window.clearInterval(timer.current);
       timer.current = null;
+      if (glideTimer.current !== null) window.clearTimeout(glideTimer.current);
+      glideTimer.current = null;
       if (raf.current !== null) cancelAnimationFrame(raf.current);
       raf.current = null;
       pending.current = null;
@@ -241,5 +293,12 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
   }, [dispatch]);
 
   const isIdle = useCallback(() => (stateRef.current?.phase.kind ?? 'idle') === 'idle', []);
-  return { dispatch, isIdle };
+  const subscribe = useCallback((listener: () => void) => {
+    listeners.current.add(listener);
+    return () => {
+      listeners.current.delete(listener);
+    };
+  }, []);
+  const getSnapshot = useCallback(() => snapshotRef.current, []);
+  return { dispatch, isIdle, subscribe, getSnapshot };
 }

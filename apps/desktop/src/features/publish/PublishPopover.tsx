@@ -7,6 +7,12 @@ import { useAction, usePageData } from '@/lib/pending';
 import { previewUrl } from '@/services/sessions';
 import { publishConfirm, publishPreview, type PreviewDto } from '@/services/publish';
 
+/** A refused confirmation: `needs_review` carries the backend's own naming of the photos ("Re-frame first: Main 02", MC-27 §Revisions); the popover stays open. */
+function publishFailureText(error: unknown): string {
+  const message = (error as Error).message;
+  return (error as { code?: string }).code === 'needs_review' ? message : `Could not publish: ${message}`;
+}
+
 /**
  * The publish confirmation surface (07A MC-10). `modal` renders it as a dialog of its own, for callers that sit inside
  * another modal (the batch queue's form dialog): mounted in that dialog's tree, it stacks as the top layer.
@@ -20,7 +26,7 @@ export function PublishPopover({ sessionIds, onClose, onConfirmed, modal = false
     if (!preview) return;
     await publishConfirm(sessionIds, preview.summary);
     (onConfirmed ?? onClose)();
-  }, error => toast.error(`Could not publish: ${(error as Error).message}`));
+  }, error => toast.error(publishFailureText(error)));
   const body = !preview ? <SkeletonRows n={3} /> : <>
       {preview.items.map(item => <div key={item.session_id} className="space-y-2 py-2">
         <p>Main images</p><div className="flex gap-1">{item.main_thumbnails.map((path, index) => path ? <img key={item.main[index]} src={previewUrl(path)} alt={`Main ${index + 1}`} className="size-12 object-cover" /> : <span key={item.main[index]}>Main {index + 1}</span>)}</div>

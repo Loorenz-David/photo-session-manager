@@ -1,16 +1,22 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { toast } from 'sonner';
+import { displaySequence } from '@/features/workspace/order';
 import type { TileHandlers } from '@/features/workspace/PhotoGrid';
 import type { PhotoMenuAction } from '@/features/workspace/PhotoMenu';
 import { Stage } from '@/features/workspace/Stage';
 import type { ViewMode } from '@/features/workspace/useWorkspaceState';
-import { canCompose, type Composition } from '@/services/compositions';
+import { canCompose, resetComposition, type Composition } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
 import { BrowserOverlay } from './BrowserOverlay';
 import { ComposeStage } from './ComposeStage';
+import { CompositionSection } from './CompositionSection';
 import type { Box } from './geometry';
 import type { ComposeEvent } from './machine';
+import { ToolsPanel } from './ToolsPanel';
 import { useComposeGesture } from './useComposeGesture';
+import { useComposeKeys } from './useComposeKeys';
 import { useCompositionSaves } from './useCompositionSaves';
+import { useToolsPanelState } from './useToolsPanelState';
 import './compose.css';
 
 /** `localStorage` key of the first-time line. */
@@ -28,6 +34,8 @@ type ComposeModeProps = {
   onExit: () => void;
   onSwitch: (photoId: number) => void;
   patchPhoto: (photoId: number, patch: Partial<Photo>) => void;
+  /** The stage column's other occupants (item card, the Details and Sessions buttons). */
+  children?: ReactNode;
 };
 
 /** True exactly once per Mac: the line is shown and the key set (guarded: `localStorage` may be unavailable). */
@@ -44,17 +52,21 @@ function firstOpen(): boolean {
 const sameBox = (a: Box | null, b: Box) => a !== null && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height;
 
 /**
- * Compose mode (10D §What the photographer sees, plan P31): the stage becomes the editor, the right browser hides
- * behind the edge reveal, every gesture runs through the machine, changes save when a gesture ends.
+ * Compose mode (10D §What the photographer sees, plans P31 and P32): the Tools panel on the left, the stage as the
+ * editor, the right browser behind the edge reveal; every gesture, control and key runs through the machine and the
+ * changes save when a gesture ends.
  */
-export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, tiles, onExit, onSwitch, patchPhoto }: ComposeModeProps) {
+export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, tiles, onExit, onSwitch, patchPhoto, children }: ComposeModeProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
   const [stageBox, setStageBox] = useState<Box | null>(null);
   const [hint] = useState(firstOpen);
   const photosRef = useRef(photos);
   photosRef.current = photos;
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const dispatchRef = useRef<(event: ComposeEvent) => boolean>(() => false);
+  const tools = useToolsPanelState();
 
   useLayoutEffect(() => {
     const element = stageRef.current;
@@ -80,6 +92,7 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
 
   const controller = useComposeGesture({ stageRef, imageRef, photo: active, stageBox, onSave: save, onExit, onSwitch });
   dispatchRef.current = controller.dispatch;
+  const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
 
   const pick = useCallback(
     (photoId: number) => {
@@ -94,23 +107,64 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
     [controller, onSwitch],
   );
 
+  /** `[` / `]`: the neighbour in the display sequence; no wrap at the ends (plan Notes). */
+  const stepPhoto = useCallback(
+    (delta: -1 | 1) => {
+      const sequence = displaySequence(photosRef.current);
+      const index = sequence.findIndex(photo => photo.id === activeRef.current.id);
+      const target = sequence[index + delta];
+      if (target) pick(target.id);
+    },
+    [pick],
+  );
+
+  /** Reset (⌘⌥R): the backend's default composition becomes the stored row and the view (machine rule 16). */
+  const reset = useCallback(() => {
+    const photoId = activeRef.current.id;
+    resetComposition(photoId).then(
+      composition => {
+        patchPhoto(photoId, { composition });
+        dispatchRef.current({ type: 'Saved', photoId, composition });
+      },
+      error => toast.error(`Not reset: ${(error as Error).message}`),
+    );
+  }, [patchPhoto]);
+
+  const done = useCallback(() => controller.dispatch({ type: 'KeyReturn' }), [controller]);
+  useComposeKeys({ controller, onToggleTools: tools.toggleHidden, onReset: reset, onStepPhoto: stepPhoto });
+
   return (
     <>
-      <Stage
-        photos={photos}
-        active={active}
-        mode={mode}
-        onToggleMode={() => undefined}
-        onStep={onStep}
-        onAction={() => undefined}
-        onMenu={onMenu}
-        onItemCard={onItemCard}
-        compose={{
-          onDone: () => controller.dispatch({ type: 'KeyReturn' }),
-          children: <ComposeStage photo={active} stageBox={stageBox} stageRef={stageRef} imageRef={imageRef} hint={hint} />,
-        }}
+      <ToolsPanel
+        hidden={tools.hidden}
+        isOpen={tools.isOpen}
+        onToggle={tools.toggleSection}
+        sections={[
+          {
+            id: 'composition',
+            title: 'Composition',
+            content: state ? <CompositionSection photo={active} state={state} controller={controller} onReset={reset} onDone={done} /> : null,
+          },
+        ]}
       />
-      <BrowserOverlay photos={photos} isIdle={controller.isIdle} onPick={pick} {...tiles} />
+      <div className="stage-column">
+        <Stage
+          photos={photos}
+          active={active}
+          mode={mode}
+          onToggleMode={() => undefined}
+          onStep={onStep}
+          onAction={() => undefined}
+          onMenu={onMenu}
+          onItemCard={onItemCard}
+          compose={{
+            onDone: done,
+            children: <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} />,
+          }}
+        />
+        <BrowserOverlay photos={photos} isIdle={controller.isIdle} onPick={pick} {...tiles} />
+        {children}
+      </div>
     </>
   );
 }
