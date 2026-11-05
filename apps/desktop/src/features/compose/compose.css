@@ -12,9 +12,10 @@
 .compose-loupe-view { position: absolute; transform-origin: center; }
 .compose-loupe-view img { position: absolute; left: 50%; top: 50%; max-width: none; }
 .frame-meter { position: absolute; z-index: 31; right: 16px; bottom: 16px; padding: 5px 9px; border-radius: var(--r); background: var(--color-bg); color: var(--color-text); font-variant-numeric: tabular-nums; pointer-events: none; }
-/* Split (P33): the 2:1 frame with a 1 px hairline at its exact middle — the cut between Left and Right. */
+/* Split: a white middle line with a dark edge over any photo. */
 .compose-frame[data-kind="split"] { stroke-width: 1.5; }
-.compose-middle { stroke: var(--hair-strong); stroke-width: 1; shape-rendering: crispEdges; }
+.compose-middle-edge { stroke: rgba(0, 0, 0, .6); shape-rendering: crispEdges; }
+.compose-middle { stroke: #fff; shape-rendering: crispEdges; }
 .compose-done { height: 26px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: var(--color-accent); color: var(--color-bg); font-size: var(--text-sm); font-weight: var(--weight-bold); cursor: pointer; }
 .compose-done:hover { background: var(--color-accent-600); }
 .compose-hint { position: absolute; top: var(--space-2); left: 50%; margin: 0; padding: 4px 10px; translate: -50% 0; border-radius: var(--r-pill); background: var(--color-bg); box-shadow: var(--shadow-sm); color: var(--muted); font-size: var(--text-sm); white-space: nowrap; pointer-events: none; }
@@ -37,13 +38,12 @@
 .compose-overlay pattern path { fill: none; stroke: var(--color-bg); stroke-width: 1; }
 .editor-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .editor-toolbar .compose-tool { padding: 0; width: 28px; justify-content: center; }
-.compose-drawer { border: 1px solid var(--hair); border-radius: var(--r); }
-.compose-drawer-toggle { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border: 0; background: transparent; color: var(--color-text); font-size: var(--text-sm); font-weight: var(--weight-bold); cursor: pointer; }
-.compose-drawer-toggle svg { width: 14px; height: 14px; }
-.compose-drawer-toggle svg:last-child { margin-left: auto; transition: transform var(--dur-fast) var(--ease-out); }
-.compose-drawer[data-open="true"] .compose-drawer-toggle svg:last-child { transform: rotate(180deg); }
-.compose-drawer-body { display: flex; gap: 6px; padding: 6px 8px; border-top: 1px solid var(--hair); }
-.compose-nudge-pad { display: grid; grid-template-columns: repeat(3, 28px); grid-template-areas: ". up ." "left down right"; justify-content: center; gap: 4px; padding: 6px; border-top: 1px solid var(--hair); }
+.compose-menu, .compose-dropdown { background: var(--color-bg); border: 1px solid var(--hair); border-radius: var(--r); box-shadow: var(--shadow-sm); z-index: 100; }
+.compose-menu { padding: 4px; }
+.compose-menu-item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: var(--r-sm); font-size: var(--text-sm); cursor: pointer; outline: none; }
+.compose-menu-item svg { width: 14px; height: 14px; }
+.compose-menu-item[data-highlighted] { background: var(--color-surface); }
+.compose-nudge-pad { display: grid; grid-template-columns: repeat(3, 28px); grid-template-areas: ". up ." "left down right"; justify-content: center; gap: 4px; padding: 6px; }
 .compose-nudge-pad button[aria-label="Nudge up"] { grid-area: up; }
 .compose-nudge-pad button[aria-label="Nudge left"] { grid-area: left; }
 .compose-nudge-pad button[aria-label="Nudge down"] { grid-area: down; }
@@ -52,6 +52,8 @@
 .compose-degrees input { width: 65px; min-width: 0; padding: 4px; border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--color-bg); color: var(--color-text); }
 .compose-degrees > span { width: auto; }
 .compose-degrees .compose-tool, .compose-field > .compose-tool { width: 28px; padding: 0; justify-content: center; }
+.compose-tool[data-on] { color: var(--color-accent); border-color: var(--color-accent); }
+.compose-tool[data-on] svg { fill: currentColor; }
 
 /* The Tools panel (10D bullet 3): sections that fold open and closed; Composition first. */
 .tools-section { border-bottom: 1px solid var(--hair); }

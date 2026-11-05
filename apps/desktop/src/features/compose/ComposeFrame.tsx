@@ -30,7 +30,10 @@ export function ComposeFrame({ width, height, frameBox, kind = 'normal', guides,
       <rect className="compose-frame" data-kind={kind} x={frameBox.left} y={frameBox.top} width={frameBox.width} height={frameBox.height} />
       <g className="compose-overlay-guides" data-overlay={overlay}>{overlayLines(overlay, frameBox, kind === 'split').map((line, index) => <line key={index} {...line} />)}</g>
       {straightenGrid && <rect className="compose-straighten-grid" width={width} height={height} fill={`url(#${gridId})`} />}
-      {kind === 'split' && <line className="compose-middle" x1={middle} y1={frameBox.top} x2={middle} y2={frameBox.top + frameBox.height} />}
+      {kind === 'split' && <>
+        <line className="compose-middle-edge" strokeWidth={4} x1={middle} y1={frameBox.top} x2={middle} y2={frameBox.top + frameBox.height} />
+        <line className="compose-middle" strokeWidth={2} x1={middle} y1={frameBox.top} x2={middle} y2={frameBox.top + frameBox.height} />
+      </>}
       {guides?.x && <line className="compose-guide" data-axis="x" x1={guideX} x2={guideX} y1={0} y2={height} />}
       {guides?.y && <line className="compose-guide" data-axis="y" x1={0} x2={width} y1={guideY} y2={guideY} />}
       {children}

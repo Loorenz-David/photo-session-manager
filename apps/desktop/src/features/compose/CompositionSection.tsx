@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, FlipHorizontal2, Move, RectangleVertical, RotateCcw, RotateCw } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, FlipHorizontal2, Move, RectangleVertical, RotateCcw, RotateCw } from 'lucide-react';
+import { DropdownMenu, Popover } from 'radix-ui';
 import { Hint } from '@/components/ui/tooltip';
 import type { Photo } from '@/services/photos';
 import type { ComposeState } from './machine';
@@ -34,10 +35,6 @@ type CompositionSectionProps = {
   straightenGrid: boolean;
   onStraightenGrid: (value: boolean) => void;
   onStraightening: (value: boolean) => void;
-  rotateFlipOpen: boolean;
-  onRotateFlipOpen: (value: boolean) => void;
-  nudgeOpen: boolean;
-  onNudgeOpen: (value: boolean) => void;
 };
 
 /**
@@ -46,8 +43,18 @@ type CompositionSectionProps = {
  * machine as a `SetValues` of `refit(values, change)`; the straighten slider is live on `input` and saves on `change`;
  * while split the frame is 2:1 and the preview shows the two squares, Left and Right.
  */
-export function CompositionSection({ photo, state, controller, onReset, onDone, overlay, onOverlay, straightenGrid, onStraightenGrid, onStraightening, rotateFlipOpen, onRotateFlipOpen, nudgeOpen, onNudgeOpen }: CompositionSectionProps) {
+export function CompositionSection({ photo, state, controller, onReset, onDone, overlay, onOverlay, straightenGrid, onStraightenGrid, onStraightening }: CompositionSectionProps) {
   const { values } = state;
+  const [nudgeOpen, setNudgeOpen] = useState(false);
+  useEffect(() => {
+    if (!nudgeOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('#compose-nudge-pad, [aria-label="Nudge"][data-state]')) setNudgeOpen(false);
+    };
+    document.addEventListener('pointerdown', dismiss, true);
+    return () => document.removeEventListener('pointerdown', dismiss, true);
+  }, [nudgeOpen]);
 
   const set = useCallback(
     (change: RefitChange, cause: SetValuesCause = 'set') => {
@@ -94,23 +101,23 @@ export function CompositionSection({ photo, state, controller, onReset, onDone, 
         </select></Hint>
       </label>
 
-      <div className="compose-drawer" data-open={rotateFlipOpen}>
-        <Hint text={{ name: 'Rotate and flip', description: 'Quarter turns and a mirror for the photo' }}><button type="button" className="compose-drawer-toggle" aria-label="Rotate and flip" aria-expanded={rotateFlipOpen} aria-controls="compose-rotate-flip" onClick={() => onRotateFlipOpen(!rotateFlipOpen)}><RotateCw aria-hidden /><span>Rotate and flip</span><ChevronDown aria-hidden /></button></Hint>
-        {rotateFlipOpen && <div id="compose-rotate-flip" className="compose-drawer-body">
-          <Hint text={{ name: 'Rotate 90° left', description: 'Turns the photo anticlockwise' }}><button type="button" className="compose-tool" aria-label="Rotate left" onClick={() => set({ kind: 'turn', direction: 'left' })}><RotateCcw aria-hidden /></button></Hint>
-          <Hint text={{ name: 'Rotate 90° right', description: 'Turns the photo clockwise' }}><button type="button" className="compose-tool" aria-label="Rotate right" onClick={() => set({ kind: 'turn', direction: 'right' })}><RotateCw aria-hidden /></button></Hint>
-          <Hint text={{ name: 'Flip horizontally', description: 'Mirrors the photo left to right' }}><button type="button" className="compose-tool" aria-label="Flip" onClick={() => set({ kind: 'flip' })}><FlipHorizontal2 aria-hidden /></button></Hint>
-        </div>}
-      </div>
-
-      <StraightenControl value={straighten} onSet={(degrees, live) => set({ kind: 'straighten', degrees }, live ? 'live' : 'set')} onStraightening={onStraightening} grid={straightenGrid} onGrid={onStraightenGrid} />
-      <div className="compose-drawer" data-open={nudgeOpen}>
-        <Hint text={{ name: 'Nudge', key: '← ↑ → ↓', description: 'Moves the frame one screen pixel, ⇧ ×10' }}><button type="button" className="compose-drawer-toggle" aria-label="Nudge" aria-expanded={nudgeOpen} aria-controls="compose-nudge-pad" onClick={() => onNudgeOpen(!nudgeOpen)}><Move aria-hidden /><span>Nudge</span><ChevronDown aria-hidden /></button></Hint>
-        {nudgeOpen && <div id="compose-nudge-pad" className="compose-nudge-pad" role="group" aria-label="Nudge">
-          {([['up', 0, -1, '↑', ArrowUp], ['left', -1, 0, '←', ArrowLeft], ['down', 0, 1, '↓', ArrowDown], ['right', 1, 0, '→', ArrowRight]] as const).map(([direction, x, y, key, Icon]) =>
-            <Hint key={direction} text={{ name: `Nudge ${direction}`, key, description: `One screen pixel ${direction}, ⇧ ×10` }}><button type="button" className="compose-tool" aria-label={`Nudge ${direction}`} onClick={event => controller.dispatch({ type: 'Nudge', dx: -x * (event.shiftKey ? 10 : 1), dy: -y * (event.shiftKey ? 10 : 1) })}><Icon aria-hidden /></button></Hint>)}
-        </div>}
-      </div>
+      <StraightenControl value={straighten} onSet={(degrees, live) => set({ kind: 'straighten', degrees }, live ? 'live' : 'set')} onStraightening={onStraightening} grid={straightenGrid} onGrid={onStraightenGrid}>
+        <DropdownMenu.Root>
+          <Hint text={{ name: 'Rotate and flip', description: 'Quarter turns and a mirror for the photo' }}><DropdownMenu.Trigger asChild><button type="button" className="compose-tool" aria-label="Rotate and flip"><RotateCw aria-hidden /></button></DropdownMenu.Trigger></Hint>
+          <DropdownMenu.Portal><DropdownMenu.Content className="compose-menu" sideOffset={4}>
+            <DropdownMenu.Item className="compose-menu-item" onSelect={() => set({ kind: 'turn', direction: 'left' })}><RotateCcw aria-hidden />Rotate 90° left</DropdownMenu.Item>
+            <DropdownMenu.Item className="compose-menu-item" onSelect={() => set({ kind: 'turn', direction: 'right' })}><RotateCw aria-hidden />Rotate 90° right</DropdownMenu.Item>
+            <DropdownMenu.Item className="compose-menu-item" onSelect={() => set({ kind: 'flip' })}><FlipHorizontal2 aria-hidden />Flip horizontal</DropdownMenu.Item>
+          </DropdownMenu.Content></DropdownMenu.Portal>
+        </DropdownMenu.Root>
+        <Popover.Root modal={false} open={nudgeOpen} onOpenChange={setNudgeOpen}>
+          <Hint text={{ name: 'Nudge', key: '← ↑ → ↓', description: 'Moves the frame one screen pixel, ⇧ ×10' }}><Popover.Trigger asChild><button type="button" className="compose-tool" aria-label="Nudge"><Move aria-hidden /></button></Popover.Trigger></Hint>
+          <Popover.Portal><Popover.Content id="compose-nudge-pad" role="group" aria-label="Nudge" className="compose-nudge-pad compose-dropdown" onOpenAutoFocus={event => event.preventDefault()} sideOffset={4}>
+            {([['up', 0, -1, '↑', ArrowUp], ['left', -1, 0, '←', ArrowLeft], ['down', 0, 1, '↓', ArrowDown], ['right', 1, 0, '→', ArrowRight]] as const).map(([direction, x, y, key, Icon]) =>
+              <Hint key={direction} text={{ name: `Nudge ${direction}`, key, description: `One screen pixel ${direction}, ⇧ ×10` }}><button type="button" className="compose-tool" aria-label={`Nudge ${direction}`} onClick={event => controller.dispatch({ type: 'Nudge', dx: -x * (event.shiftKey ? 10 : 1), dy: -y * (event.shiftKey ? 10 : 1) })}><Icon aria-hidden /></button></Hint>)}
+          </Popover.Content></Popover.Portal>
+        </Popover.Root>
+      </StraightenControl>
 
       {photo.composition.frame && (values.kind === 'split' ? <SplitPreviews photo={photo} values={values} frame={state.frame} /> : <OutputPreview photo={photo} values={values} frame={state.frame} />)}
 

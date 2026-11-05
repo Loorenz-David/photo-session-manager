@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Hint } from '@/components/ui/tooltip';
 import { Grid3x3 } from 'lucide-react';
 import { STRAIGHTEN_STEP, STRAIGHTEN_STEP_SHIFT } from './useComposePrefs';
@@ -9,9 +9,10 @@ type Props = {
   onStraightening: (value: boolean) => void;
   grid: boolean;
   onGrid: (value: boolean) => void;
+  children?: ReactNode;
 };
 
-export function StraightenControl({ value, onSet, onStraightening, grid, onGrid }: Props) {
+export function StraightenControl({ value, onSet, onStraightening, grid, onGrid, children }: Props) {
   const rangeRef = useRef<HTMLInputElement>(null);
   const fieldRef = useRef<HTMLInputElement>(null);
   const skipBlur = useRef(false);
@@ -59,7 +60,8 @@ export function StraightenControl({ value, onSet, onStraightening, grid, onGrid 
           setText(Math.max(-45, Math.min(45, next)).toFixed(1));
         }
       }} /></Hint><span aria-hidden>°</span>
-      <Hint text={{ name: 'Straightening grid', description: 'A fine grid over the photo while straightening' }}><button type="button" role="switch" className="compose-tool" aria-label="Straightening grid" aria-checked={grid} onClick={() => onGrid(!grid)}><Grid3x3 aria-hidden /></button></Hint>
+      <Hint text={{ name: 'Straightening grid', description: 'A fine grid over the photo while straightening' }}><button type="button" role="switch" className="compose-tool" aria-label="Straightening grid" aria-checked={grid} data-on={grid || undefined} onClick={() => onGrid(!grid)}><Grid3x3 aria-hidden fill={grid ? 'currentColor' : 'none'} /></button></Hint>
+      {children}
     </div>
   </>;
 }

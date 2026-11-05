@@ -31,7 +31,7 @@ const boxNear = (box: { x: number; y: number; width: number; height: number }, t
   near(actual.height, box.height, tolerance);
 };
 const button = (name: string) => screen.getByRole('button', { name });
-const click = (name: string) => act(async () => { fireEvent.click(button(name)); });
+const click = (name: string) => act(async () => { if (name === 'Rotate and flip') fireEvent.pointerDown(button(name), { button: 0, ctrlKey: false, pointerType: 'mouse' }); fireEvent.click(button(name)); });
 const chooseShape = (value: string) => act(async () => { fireEvent.change(document.querySelector('#compose-shape')!, { target: { value } }); });
 const innerTransform = () => image()!.querySelector('img')!.style.transform;
 const handle = (name: string) => document.querySelector<SVGElement>(`.compose-handle[data-handle="${name}"]`)!;
@@ -85,7 +85,7 @@ describe('C3 the Composition section', () => {
   it('C3(c) Rotate right / left turn the photo under the frame (a 1:1 shape re-fits identically); Flip mirrors a free rect', async () => {
     const frames = await editor();
     await click('Rotate and flip');
-    await click('Rotate right');
+    await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Rotate 90° right' })));
     expect(setComposition).toHaveBeenCalledTimes(1);
     expect(savedValues(0).quarter_turns).toBe(1);
     rectNear(savedValues(0).rect, ROTATED, 1e-9);
@@ -95,9 +95,11 @@ describe('C3 the Composition section', () => {
     // The turned frame 1707 × 2560 at s = 652/1707: the image is 652 × 977.81, centred at (500, 350).
     placedAt(174, -138.9);
 
-    await click('Rotate left');
+    await click('Rotate and flip');
+    await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Rotate 90° left' })));
     expect(savedValues(1).quarter_turns).toBe(0);
-    await click('Rotate left');
+    await click('Rotate and flip');
+    await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Rotate 90° left' })));
     expect(setComposition).toHaveBeenCalledTimes(3);
     expect(savedValues(2).quarter_turns).toBe(3);
     rectNear(savedValues(2).rect, ROTATED, 1e-9);
@@ -108,7 +110,7 @@ describe('C3 the Composition section', () => {
     vi.mocked(setComposition).mockClear();
     await editor(view([free, photo(2, 'main', { position: 2 })]));
     await click('Rotate and flip');
-    await click('Flip');
+    await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Flip horizontal' })));
     expect(setComposition).toHaveBeenCalledTimes(1);
     expect(savedValues(0).flip).toBe('horizontal');
     near(savedValues(0).rect.x, 0.4, 1e-12);

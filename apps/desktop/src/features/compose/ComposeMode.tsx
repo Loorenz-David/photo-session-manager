@@ -77,8 +77,6 @@ export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, o
   const [meter, setMeter] = useState(false);
   const [browserFolded, setBrowserFolded] = useState(true);
   const [straightening, setStraightening] = useState(false);
-  const [rotateFlipOpen, setRotateFlipOpen] = useState(false);
-  const [nudgeOpen, setNudgeOpen] = useState(false);
   const prefs = useComposePrefs();
   const clipboard = useClipboardComposition();
   const photosRef = useRef(photos);
@@ -199,7 +197,7 @@ export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, o
           {
             id: 'composition',
             title: 'Composition',
-            content: state ? <CompositionSection photo={active} state={state} controller={controller} onReset={reset} onDone={done} overlay={prefs.overlay} onOverlay={prefs.setOverlay} straightenGrid={prefs.straightenGrid} onStraightenGrid={prefs.setStraightenGrid} onStraightening={setStraightening} rotateFlipOpen={rotateFlipOpen} onRotateFlipOpen={setRotateFlipOpen} nudgeOpen={nudgeOpen} onNudgeOpen={setNudgeOpen} /> : null,
+            content: state ? <CompositionSection photo={active} state={state} controller={controller} onReset={reset} onDone={done} overlay={prefs.overlay} onOverlay={prefs.setOverlay} straightenGrid={prefs.straightenGrid} onStraightenGrid={prefs.setStraightenGrid} onStraightening={setStraightening} /> : null,
           },
         ]}
       />

@@ -92,7 +92,7 @@
 .composed-frame { position: absolute; transform-origin: center; container-type: size; }
 .composed-frame img { position: absolute; left: 50%; top: 50%; right: auto; bottom: auto; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; translate: -50% -50%; object-fit: fill; pointer-events: none; }
 .composed-frame img[data-swapped] { width: 100cqh; height: 100cqw; }
-.composed-split { position: absolute; top: 0; height: 100%; width: 1px; margin-left: -0.5px; background: #fff; opacity: .9; }
+.composed-split { position: absolute; top: 0; height: 100%; width: 2px; margin-left: -1px; background: #fff; opacity: 1; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); }
 .tile-crop-mark { position: absolute; right: 6px; top: 21px; width: 15px; height: 15px; display: grid; place-items: center; border-radius: 3px; background: var(--color-bg); color: var(--color-text); }
 .tile-crop-mark svg { width: 11px; height: 11px; }
 .tile-review { position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 4px; background: var(--warn); color: #fff; font-size: 10px; font-weight: var(--weight-heavy); letter-spacing: .06em; text-transform: uppercase; }

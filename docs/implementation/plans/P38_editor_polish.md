@@ -192,3 +192,5 @@ is C5(a)).
 
 ## Review log
 
+- **2026-11-05, implement r1 (codex).** Built the two-layer split line, 2 px stage/tile split marker, filled accent state for Loupe/Snapping/grid, a Radix rotate menu and nudge popover, and moved their icon triggers onto the degrees row. Replaced the retired drawer expectations and covered the 12 P38 boundary rows (the 29-card T3 check lives in the adjusted P37 test). Assumptions: use the suggested translucent black edge and token-based menu surfaces; keep the existing popover focus so editor arrows continue working; add a document capture pointer handler for nudge outside dismissal because the stage pointerdown did not dismiss Radix in the DOM boundary test. No deviations from the plan. Full frontend 355/355, Rust suite, clippy, fmt and typecheck pass. Visual contrast and placement await the owner's manual try-out.
+

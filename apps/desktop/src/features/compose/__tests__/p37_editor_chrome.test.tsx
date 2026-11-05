@@ -22,7 +22,7 @@ it('C1(a) shows exactly five icon tools and no retired buttons', async () => {
   expect(within(document.querySelector('.stage-bar') as HTMLElement).getByRole('button',{name:'Done'})).toBeTruthy();
 });
 
-it('C2(a) gives every editor control its exact hover card', async () => {
+it('P38 C6(a) gives all 29 editor controls their exact hover card', async () => {
   await start();
   const rows: [string,string,string,string][] = [
     ['.tools-panel-head','button','Hide Tools panel','Hide Tools panel · ⌘T — Folds the panel into a rail on the left'],
@@ -31,18 +31,15 @@ it('C2(a) gives every editor control its exact hover card', async () => {
     ['.composition-section','combobox','Shape','Shape · 1–6, 0 — Original, Square, 4:5, 3:2, 2:3, 16:9 or Free'],
     ['.composition-section','button','Turn frame','Turn frame · X — Portrait or landscape, same centre and area'],
     ['.composition-section','button','Rotate and flip','Rotate and flip — Quarter turns and a mirror for the photo'],
-    ['.composition-section','button','Rotate left','Rotate 90° left — Turns the photo anticlockwise'],
-    ['.composition-section','button','Rotate right','Rotate 90° right — Turns the photo clockwise'],
-    ['.composition-section','button','Flip','Flip horizontally — Mirrors the photo left to right'],
     ['.composition-section','slider','Straighten','Straighten — Tilts the photo; double-click levels it'],
     ['.composition-section','textbox','Straighten degrees','Straighten degrees · ↑ ↓ — Typed degrees; ↑ ↓ step 0.1°, ⇧ 1°'],
     ['.composition-section','switch','Straightening grid','Straightening grid — A fine grid over the photo while straightening'],
     ['.composition-section','combobox','Overlay','Overlay · O — Guides inside the frame; O cycles them'],
     ['.composition-section','button','Nudge','Nudge · ← ↑ → ↓ — Moves the frame one screen pixel, ⇧ ×10'],
-    ['.composition-section','button','Nudge up','Nudge up · ↑ — One screen pixel up, ⇧ ×10'],
-    ['.composition-section','button','Nudge left','Nudge left · ← — One screen pixel left, ⇧ ×10'],
-    ['.composition-section','button','Nudge down','Nudge down · ↓ — One screen pixel down, ⇧ ×10'],
-    ['.composition-section','button','Nudge right','Nudge right · → — One screen pixel right, ⇧ ×10'],
+    ['#compose-nudge-pad','button','Nudge up','Nudge up · ↑ — One screen pixel up, ⇧ ×10'],
+    ['#compose-nudge-pad','button','Nudge left','Nudge left · ← — One screen pixel left, ⇧ ×10'],
+    ['#compose-nudge-pad','button','Nudge down','Nudge down · ↓ — One screen pixel down, ⇧ ×10'],
+    ['#compose-nudge-pad','button','Nudge right','Nudge right · → — One screen pixel right, ⇧ ×10'],
     ['.composition-section','button','Centre','Centre · . — Centres the frame on the photo'],
     ['.composition-section','button','Reset','Reset · ⌘⌥R — Back to the default framing'],
     ['.composition-section','button','Done','Done · Return — Keeps the changes and leaves the editor'],
@@ -61,10 +58,10 @@ it('C2(a) gives every editor control its exact hover card', async () => {
     await act(async () => { (document.activeElement as HTMLElement)?.blur(); control.focus(); });
     await waitFor(() => expect(screen.getByRole('tooltip').textContent?.replace(/\s+/g,' ').trim()).toBe(expected));
   };
-  for (const row of rows.slice(0,6)) await check(row);
-  await click('Rotate and flip'); for (const row of rows.slice(6,9)) await check(row);
-  for (const row of rows.slice(9,14)) await check(row);
-  await click('Nudge'); for (const row of rows.slice(14)) await check(row);
+  expect(rows).toHaveLength(27); // plus Show Tools panel and Fold panel below = T3's 29
+  for (const row of rows.slice(0,11)) await check(row);
+  await act(async () => { fireEvent.pointerDown(btn('Nudge'), { button: 0, ctrlKey: false, pointerType: 'mouse' }); fireEvent.click(btn('Nudge')); });
+  for (const row of rows.slice(11)) await check(row);
   await click('Hide Tools panel'); await check(['.tools-rail','button','Show Tools panel','Show Tools panel · ⌘T — Brings the Tools panel back']);
   await click('Show Tools panel'); await key('f'); await check(['.photo-panel','button','Fold panel','Fold panel · F — Folds the panel to the strip']);
 });
@@ -100,16 +97,6 @@ it('C4(c) remembers a hidden panel across editor entry but removes it on exit', 
   expect(first()).toHaveClass('stage-column');
 });
 
-it('C5(a) opens the rotate drawer and saves the turned square', async () => {
-  await start(); expect(btn('Rotate and flip')).toHaveAttribute('aria-expanded','false'); expect(document.querySelector('#compose-rotate-flip')).toBeNull();
-  for (const name of ['Rotate left','Rotate right','Flip']) expect(screen.queryByRole('button',{name})).toBeNull();
-  await click('Rotate and flip'); expect(btn('Rotate and flip')).toHaveAttribute('aria-expanded','true');
-  const body = document.querySelector('#compose-rotate-flip.compose-drawer-body')!;
-  expect(names(body)).toEqual(['Rotate left','Rotate right','Flip']); body.querySelectorAll('button').forEach(icon);
-  await click('Rotate right'); expect(setComposition).toHaveBeenCalledTimes(1); expect(savedValues(0).quarter_turns).toBe(1);
-  for (const [actual,want] of [[savedValues(0).rect.x,0],[savedValues(0).rect.y,0.166602],[savedValues(0).rect.w,1],[savedValues(0).rect.h,0.666797]]) expect(Math.abs(actual-want)).toBeLessThan(1e-6);
-});
-
 it('C5(b) puts an icon Turn beside Shape and saves the unchanged square', async () => {
   await start(); const turn = btn('Turn frame'); icon(turn); expect(turn.parentElement).toBe(document.querySelector('#compose-shape')!.parentElement);
   await click('Turn frame'); expect(setComposition).toHaveBeenCalledTimes(1);
@@ -122,28 +109,4 @@ it('C6(a) puts an icon grid switch beside the degrees field and persists off', a
   expect(grid.parentElement).toBe(document.querySelector('#compose-straighten-degrees')!.parentElement);
   expect(grid).toHaveAttribute('aria-checked','true'); await act(async () => fireEvent.click(grid));
   expect(grid).toHaveAttribute('aria-checked','false'); expect(window.localStorage.getItem('compose.straightenGrid')).toBe('0');
-});
-
-it('C7(a) opens the four-arrow pad in keyboard order', async () => {
-  await start(); expect(btn('Nudge')).toHaveAttribute('aria-expanded','false'); expect(document.querySelector('#compose-nudge-pad')).toBeNull();
-  for (const name of ['Nudge up','Nudge left','Nudge down','Nudge right']) expect(screen.queryByRole('button',{name})).toBeNull();
-  await click('Nudge'); expect(btn('Nudge')).toHaveAttribute('aria-expanded','true');
-  const pad = document.querySelector('#compose-nudge-pad[role="group"]')!;
-  expect(names(pad)).toEqual(['Nudge up','Nudge left','Nudge down','Nudge right']); pad.querySelectorAll('button').forEach(icon);
-});
-
-it('C7(b) nudges in screen pixels and clamps at the image edge', async () => {
-  await start(); await click('Nudge'); await click('Nudge right'); await click('Nudge right',true); await click('Nudge left'); await click('Nudge up');
-  expect(setComposition).toHaveBeenCalledTimes(3);
-  for (const [i,x] of [0.167624,0.177851,0.176828].entries()) { expect(Math.abs(savedValues(i).rect.x-x)).toBeLessThan(1e-5); expect(savedValues(i).rect.y).toBe(0); }
-});
-
-it('C8(a) keeps drawers open during one visit and closes them on reopen', async () => {
-  await start(); await click('Rotate and flip'); await click('Nudge'); await key(']');
-  await key('t',{metaKey:true}); await key('t',{metaKey:true}); await click('Composition'); await click('Composition');
-  for (const name of ['Rotate and flip','Nudge']) expect(btn(name)).toHaveAttribute('aria-expanded','true');
-  expect(document.querySelector('#compose-rotate-flip')).not.toBeNull(); expect(document.querySelector('#compose-nudge-pad')).not.toBeNull();
-  await key('Enter'); await key('r');
-  for (const name of ['Rotate and flip','Nudge']) expect(btn(name)).toHaveAttribute('aria-expanded','false');
-  expect(document.querySelector('#compose-rotate-flip')).toBeNull(); expect(document.querySelector('#compose-nudge-pad')).toBeNull();
 });
