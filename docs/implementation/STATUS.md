@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-05 (afternoon): P37_editor_chrome running** — the owner's second editor corrections (10D, R39): icon toolbar with name/key/description hover cards, Tools panel hide button in its own header with a left rail, Rotate and flip drawer, Turn and grid icons, folded nudge pad, frame meter without a button. Plan e04393f; implementer Codex.
+
 Updated: 2026-11-04 by the orchestrator.
 
 **Composition corrections done (2026-11-05 09:57): P35 and P36 APPROVED (with notes, 0 owner cards); narratives relayed; app rebuilt into /Applications.** P27–P36 APPROVED. Owner 2026-11-05: no Fable for implementation until the owner says so. Owed by the owner: on-screen try-out of P35/P36, P34 step 8 timings; rotate the Shopify client secret (displayed in chat by mistake, never committed). Known leftovers: a flaky P33 stage-bar place-count test under the full suite; typed straighten dropped if a drag starts before Enter; one shared save queue for all editor actions. Next: the owner's new intention `docs/intention/improved-session-manager/` (untracked, excluded locally). Owner's camera FTP/SDK tests live outside the repo in ../Camera-Connection-Tests.
