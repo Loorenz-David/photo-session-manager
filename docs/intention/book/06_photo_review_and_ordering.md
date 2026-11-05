@@ -14,9 +14,9 @@ processing-done hook or the watcher. Until then the photo is "Processing".
 ## Classification (one state, owned by the photographer)
 `unreviewed` → `main` (A, swipe right) · → `condition` (C, swipe up) · → `deleted` (⌫, swipe left).
 A condition photo's middle action is "Move to Main". After an action the next unreviewed photo
-opens. `deleted` hides the photo; the RAW stays (H2). Only the last delete is undoable (⌘Z, toast
-4.5 s, works after the toast until the next delete); undo restores the original position and
-makes the photo active.
+opens. `deleted` hides the photo; the RAW stays (H2). Every classification is undoable (⌘Z, ⌘⇧Z
+redoes; up to 25 steps per session, 05A MC-30); deleting shows a toast for 4.5 s; undo restores the
+original position and makes the photo active.
 
 **Mirror to the editing provider (D2, resolved R17):** when the photographer classifies in the
 app, the provider's variant gets the mapped color tag: `main` → green, `condition` → blue,

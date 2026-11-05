@@ -23,8 +23,8 @@ folder is switched for this session (decision D1).
 **S-C. Shooting and sorting.** Each shutter press lands a RAW. Within about a second the photo
 appears on the stage from the camera's embedded preview, marked unreviewed and "Processing".
 Seconds later the adjusted version fades in. The photographer presses A, C or Delete, or swipes;
-the next unreviewed photo opens. Deleting shows "Photo deleted · Undo ⌘Z" for 4.5 s; ⌘Z keeps
-working until the next delete. Main 01 is the cover. Drag reorders in the grid or the folded strip.
+the next unreviewed photo opens. Deleting shows "Photo deleted · Undo ⌘Z" for 4.5 s; ⌘Z steps back through
+the last 25 actions and ⌘⇧Z forward again (05A MC-30). Main 01 is the cover. Drag reorders in the grid or the folded strip.
 
 **S-D. New item.** Searching "Brass floor lamp" finds nothing; the row "Create 'Brass floor lamp'"
 creates a local item with a new SKU; the integration creates the product at first publish.

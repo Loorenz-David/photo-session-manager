@@ -29,15 +29,20 @@ the app no longer writes Capture One's crop) and narrows H3 (chapter 01). 05, 05
   the right (owner 2026-11-05: "that should be on the tool panel and when hidden remain on the left side").
   **Composition** is its first section: Normal | Split, the Shape menu with a Turn icon beside it
   (portrait/landscape, X), a straighten control, the output previews at their real proportions, and Centre,
-  Reset and Done. Rotate 90° left/right and flip are rarely used: they sit as icons in a folded **Rotate and
-  flip** drawer of the section, closed at first, as photo editors keep them out of the way (owner 2026-11-05).
+  Reset and Done. Rotate 90° left/right and flip are rarely used: one small **rotate icon with a dropdown** opens an
+  ordinary menu (Rotate 90° left, Rotate 90° right, Flip horizontal) that closes after a pick, as photo editors keep
+  them out of the way (owner 2026-11-05: "too many buttons now, i imagine something more simple in terms of drop
+  down"). No inline drawer, no words beside the icon.
   The straighten control takes a typed number of degrees and the up/down arrows (0.1° a step, Shift 1°),
   besides its slider (owner 2026-11-05). Beside it a grid icon switches the **straightening grid**: a fine
-  square grid over the image while straightening, so lines can be aligned (as Capture One does). An
+  square grid over the image while straightening, so lines can be aligned (as Capture One does). On and off must
+  be told apart at a glance (owner 2026-11-05: "i can't tell if it is active or not"): on is a filled accent
+  icon, off a plain outline one; the same holds for every on/off icon in the editor (Loupe, Snapping). An
   **Overlay** control picks the alignment guides drawn inside the frame (Off, Thirds, Grid, Golden ratio,
   Diagonals; O cycles them) and is remembered. The nudge arrows are a small keyboard-arrow pad (← ↑ → ↓ laid
-  out as on a keyboard), folded behind one arrows icon and shown only when the photographer opens it (owner
-  2026-11-05: "should be hidden at first"). Later colour and light tools arrive as more sections of the same
+  out as on a keyboard) in a dropdown from one arrows icon, shown only when the photographer opens it (owner
+  2026-11-05: "should be hidden at first") and closed by a click outside; it stays open while its arrows are
+  clicked. The rotate and nudge icons sit on one row with the straighten control, no words. Later colour and light tools arrive as more sections of the same
   panel.
 - The **toolbar above the stage** shows **icons, not names** (owner 2026-11-05): Revert, Loupe, Snapping, Copy
   framing (takes this photo's composition), Paste framing (puts the copied composition on this photo, refitted
@@ -50,8 +55,10 @@ the app no longer writes Capture One's crop) and narrows H3 (chapter 01). 05, 05
   the frame meter's ⌥⌘P excepted.
 - **Split**: one 2:1 composition whose exact middle makes two square files, Left and Right. Allowed for **any
   photo**, unreviewed included (owner 2026-11-05: "split shouldn't be limited"); places and outputs are counted
-  only once it is Main or Condition. In the grid a split photo shows a middle hairline and the two places it fills
-  ("03–04").
+  only once it is Main or Condition. In the grid a split photo shows a middle line and the two places it fills
+  ("03–04"). The middle line, in the editor, on the stage and on tiles, is visible on any photo, light or dark
+  (owner 2026-11-05: "the line in the middle is hard to see"): a light line with a dark edge, at least 2 screen
+  pixels in the editor and on the stage.
 - Gestures and keys (stage only, while composing): drag or two-finger swipe moves the photo; pinch, or ⌘ +
   mouse wheel, zooms the composition around the pointer; corner and edge handles trim the frame (a locked
   shape keeps its ratio) and on release the frame glides back to the centre; arrows nudge one screen pixel
@@ -60,6 +67,9 @@ the app no longer writes Capture One's crop) and narrows H3 (chapter 01). 05, 05
   was when the editor came to it; ⌘⌥R resets to the default; hold Z for a 100 % loupe that changes nothing.
   Snapping to the centre and the image edges; ⌥ suspends it. All other workspace keys (A, C, Delete, Space…; F stays and folds or unfolds the strip),
   stage swipes, the webview's page zoom and the two-finger "back" swipe are off while composing.
+- **Undo and redo** (⌘Z, ⌘⇧Z) work in the editor as everywhere in the app (05A MC-30): each saved
+  change (a finished gesture, a control change, Apply composition to selected) is one step. Esc still reverts the
+  photo to how it was when the editor came to it, and that revert is itself one step.
 - Changes save automatically when a gesture ends and when leaving the photo; a dot marks unsaved changes in
   between. The composition can never extend past the photo's edge.
 - The first time the editor opens, one line says "Crops made in Capture One are not used."

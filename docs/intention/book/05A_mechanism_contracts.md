@@ -154,15 +154,15 @@ after the last main photo, ordered by `captured_at`, then id.
 | remove photo at position k from g (to deleted, unreviewed, or other group; move out) | every photo in g with position > k gets position − 1 |
 | reorder within g from i to j (`j` clamped to `1..n_g`) | i < j: positions i+1..j get −1; i > j: positions j..i−1 get +1; photo gets j |
 | move or copy into another session | same classification in the target, appended at the end of its group (moved/copied set appended in its source order: group, then position, then `captured_at`); unreviewed stays null |
-| delete | remember `(prior classification, prior position k)` as the session's single undo slot (replacing any previous slot); remove as above |
-| undo (only the slot; valid until the next delete) | classification restored; if positioned, insert at `min(k, n_g + 1)`, photos at ≥ that position get +1; photo becomes active; slot cleared |
+| delete | remove as above; the prior classification and position are recorded as an undo step (MC-30) |
+| undo of a classify or delete (MC-30) | classification restored; if positioned, insert at `min(k, n_g + 1)`, photos at ≥ that position get +1; photo becomes active |
 
 Drag between groups uses "classify into g" (end of target), whatever the drop index (chapter 06).
 Provider sort order is never read.
 
 **Invariant (M12).** After any sequence of the operations above, each (session, group) holds
 positions exactly `1..n` with no gaps or duplicates, `unreviewed`/`deleted` rows hold null, and
-undo of the last delete restores the prior classification and the prior index (clamped).
+undo of a classify or delete restores the prior classification and the prior index (clamped).
 
 ---
 
@@ -272,3 +272,49 @@ unless the photographer edits it.
 
 **Invariant (M16).** Reading a value from the integration and writing it back unchanged produces
 no write (canonical equality); numeric-looking choices are never coerced to numbers.
+
+---
+
+## MC-30 — Undo and redo history (owner 2026-11-05, R41)
+
+Owner: "the ability to do command z and move back also to do command shift z and go forward … not only on the
+editing panel but over all … reliably and save up to 25 actions." This replaces the single delete slot of MC-5.
+
+**Where it lives.** The history is kept by the application services (Rust), not by the UI, so every route to an
+action (keys, buttons, menus, drag, the phone remote later) records the same steps and undo never depends on what
+the screen happens to show. One history per session, kept while the app runs; quitting clears it.
+
+**A step** is one owner action, reversed and re-applied as a whole, in one SQLite transaction each way:
+| Action (where it is done) | Undo restores |
+|---|---|
+| classify (A, C, Delete, Move to Main, swipe, drag between groups; one photo or a selection) | each photo's prior classification and position (MC-5 insert, clamped `min(k, n_g + 1)`) |
+| reorder within a group | the prior position |
+| move to another session, Assign product, drag onto a session | the photos back in the source session at their prior classification and position; recorded in the source session's history |
+| copy to another session | the copies removed from the target; recorded in the source session's history |
+| composition saved (finished gesture, control change, Esc revert, Reset, Paste framing, Split/Normal) | the prior composition values, saved as a new revision (MC-27) |
+| Apply composition to selected | every touched photo's prior composition, as one step |
+| attribute value saved in the details form (a field committed, Accept all, Clear) | the prior value and provenance of every field the action changed |
+
+**Not steps** (never recorded, never reversed; earlier steps stay undoable): capture and import arrival,
+Capture One retouches, export, publish and its retries, SKU change (it renames folders and files, 05B), session
+create and rename, settings. Typing inside a text field is the field's own undo while the field has the keyboard;
+⌘Z there never reaches the history.
+
+**Rules.**
+- ⌘Z undoes the open session's newest step; ⌘⇧Z redoes the newest undone step. A new step clears the redo list.
+- At most **25** steps per session; recording the 26th drops the oldest. Redo holds at most what was undone.
+- Undo and redo are photo changes where the step is one (MC-6 `change_seq` + 1, dirty as usual) and mirror
+  colour tags to the editing provider as classification does (chapter 06); a reversed composition is a saved
+  composition (new revision, outputs re-rendered, MC-28).
+- A step that can no longer apply (its photo was removed by a later action that is not a step, its target
+  session is now published) is not partly applied: nothing changes, it is dropped from the list, and the app says
+  why ("Can't undo Move to Lamp 2: that session is published"). The next ⌘Z goes on to the step before it.
+- Every undo and redo shows a short notice naming the step ("Undone: Approve 03 · Redo ⌘⇧Z"). The header has an
+  Undo and a Redo icon whose hover card names the step they would act on; they are disabled when there is none.
+  The app's Edit menu carries "Undo <step>" and "Redo <step>" with the same keys.
+- The delete toast ("Photo deleted · Undo ⌘Z", 4.5 s) stays; its Undo is the history's ⌘Z.
+
+**Invariant (M36).** For any sequence of steps, undos and redos within the limit, undoing k steps leaves the
+session's photos (classification, positions, compositions' values, attribute values and provenance) exactly as
+they were before those k steps, and redoing them leaves them exactly as after; MC-5's position invariant (M12)
+holds after every undo and redo; a step that cannot apply changes nothing.

@@ -45,6 +45,7 @@ cite either the `M` id or the `MC` id.
 | **M33** | MC-27 (10D) | A saved composition reads back identically after a relaunch; no rect outside the image or off its shape is stored; a photo whose source frame changed (Capture One geometry or master size) is `needs_review` and never rendered until confirmed. | a crop drifting, a silent wrong crop after a Capture One change |
 | **M34** | MC-28 (10D) | Every exported or uploaded image equals the composition's pixel rect of the current master (within resize tolerance), sRGB, compressed once; split halves are adjacent equal squares; the RAW and master are never written. | off-by-one splits, colour shift, double compression |
 | **M35** | MC-29 (10D) | After a publish, the gallery is exactly the main outputs in order (split Left then Right), the damage report the selected condition outputs in order, all from the current composition revision; a composition change dirties a published session. | old framing left on the shop, halves swapped |
+| **M36** | MC-30 (05A) | Undoing k steps restores the session's photos (classification, positions, composition values, attribute values and provenance) exactly as before them, redoing restores exactly as after; at most 25 steps; a step that cannot apply changes nothing. | partial undo, lost or extra steps, order drift, redo kept after a new step |
 
 Operational measurements (recorded in S0 and S8, not tests): shot-to-original-preview and
 shot-to-adjusted-preview times; cold start of the packaged app on a fresh Mac.
