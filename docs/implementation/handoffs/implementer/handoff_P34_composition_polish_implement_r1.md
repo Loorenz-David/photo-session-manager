@@ -2,7 +2,7 @@
 plan: P34_composition_polish
 role: implement
 round: 1
-state: BLOCKED
+state: DONE
 date: 2026-11-05
 actor: codex
 ---
@@ -90,3 +90,5 @@ Checkpoint `a4f9b96` contains only the 38 paths shown by `git show --pretty='' -
 3. Drag and watch the unsaved dot on the tile and stage. Turn on macOS **Reduce motion** and check the trim glide, browser reveal and Original/Adjusted swap.
 4. Relaunch and inspect the 1440 × 900 window and 1100 × 720 minimum.
 5. Press ⌥⌘P, drag and pinch a 2560 px adjusted preview, and record the meter's average/worst frame times. Export ZV-E10 photos and read `master rendered` / `render_output done` durations from the app log. **No dev-Mac values were measured in this blocked session.** Repeat on the a7R/work Mac when available.
+
+_Orchestrator 2026-11-05: state BLOCKED → DONE after the rulings recorded in the plan's Review log (live timings move to the owner try-out; C2(b) and C3(c) accepted as built). The owner card is answered by those rulings._
