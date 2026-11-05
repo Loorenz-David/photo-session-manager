@@ -45,7 +45,7 @@ the app no longer writes Capture One's crop) and narrows H3 (chapter 01). 05, 05
   (Shift ×10); `.` centres; 1–6 and 0 pick Original, 1:1, 4:5, 3:2, 2:3, 16:9, Free; X turns the frame; S
   toggles Split; [ ] previous/next photo keeping changes; Return finishes; Esc reverts this photo to how it
   was when the editor came to it; ⌘⌥R resets to the default; hold Z for a 100 % loupe that changes nothing.
-  Snapping to the centre and the image edges; ⌥ suspends it. All workspace keys (A, C, Delete, Space, F…),
+  Snapping to the centre and the image edges; ⌥ suspends it. All other workspace keys (A, C, Delete, Space…; F stays and folds or unfolds the strip),
   stage swipes, the webview's page zoom and the two-finger "back" swipe are off while composing.
 - Changes save automatically when a gesture ends and when leaving the photo; a dot marks unsaved changes in
   between. The composition can never extend past the photo's edge.
