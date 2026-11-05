@@ -35,3 +35,4 @@ P33_split_ui
 P34_composition_polish
 P35_composed_display_and_chrome
 P36_editor_controls_and_overlays
+P37_editor_chrome

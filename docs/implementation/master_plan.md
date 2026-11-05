@@ -107,27 +107,31 @@ restated so no session has to infer them:
 | P34_composition_polish | APPROVED | 2026-11-05 | opus (pipeline-reviewer) | re-review r2 APPROVED_WITH_NOTES: fix perimeter = the allowed files (`34299ba`: `Loupe.tsx`, `ComposeMode.tsx`, `compose.css`, `p34_loupe_snap.test.tsx`, `p34_clipboard.test.tsx` + tracker/Review log); F1–F4 resolved as corrected (loupe at source size with the stage's turn/flip/straighten, inverse-straighten mapping re-derived; pointer tracked while composing; C2(a) pins `−1421.8/−602.6`; C3(a) pins the re-fitted rect); suite 531 Rust / 301 UI, clippy/fmt/typecheck green (reviewer run, code tree = `34299ba`); triage: no blocking item remains, 0 MUST; 2 new backlog notes |
 | P35_composed_display_and_chrome | APPROVED | 2026-11-05 | opus (pipeline-reviewer) | re-review r2 APPROVED_WITH_NOTES: fix perimeter = the allowed files (`bd90002`: `workspace.css` + tracker/Review log/handoff); F1 resolved as corrected (`.composed-frame img` resets right/bottom/margin; WebKit probe on the committed CSS: img rect = frame rect on C2(a), C2(b), a turned camera original and a tile); Rust tests, clippy, fmt, typecheck green; UI suite flaky on pre-existing `p33_split_grid` C4(d) (4/8 runs here, 1/6 on the pre-P35 tree), not P35's delta, backlog N1; triage 0 MUST |
 | P36_editor_controls_and_overlays | APPROVED | 2026-11-05 | opus (pipeline-reviewer) | re-review r2 APPROVED_WITH_NOTES: fix perimeter = the allowed files (`9cbfd24`: `p36_straighten.test.tsx`, `p36_strip_overlays.test.tsx` + tracker/Review log/handoff); F1 resolved as corrected (C7(a)/(b) focus the control, `x` dispatched at `document.activeElement`; changed-input probe: `x` at a still-focused select/slider does nothing, so both tests now need the blur); F2 resolved (C1(b) panel tile 2 moves the editor 1 → 2); Rust 532, clippy, fmt, typecheck, UI 339/339 green (reviewer run, code tree = `9cbfd24`); triage 0 MUST; backlog P32/P34 focus, guide and ⌥-drag rows marked resolved |
+| P37_editor_chrome | NOT_STARTED | 2026-11-05 | planner | planned from the 10D amendment `3c7623e` (R39, changelog 29): icon toolbar, hover cards (name · key — one line, table T2), Tools panel hide button in its header + left rail, Rotate and flip drawer, Turn and grid icons, folded nudge pad, frame meter without a button; 8 criteria / 12 rows / 10 `[rule]`; default implementer |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 36 phases in execution order (17 MVP phases, the two real-run fix phases added
+`phases.txt` lists the 37 phases in execution order (17 MVP phases, the two real-run fix phases added
 2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, the two tidy-up phases P21/P22 planned
 2026-10-29 from `backlog.md`, P23_shape_on_arrival planned 2026-10-29 from book 10B, P24_capture_one_provisioning planned
 2026-11-03 from book 10C, the second tidy-up pair P25/P26 planned 2026-11-04 from `backlog.md` and the P24 narrative, and the eight
-composition phases P27–P34 planned 2026-11-04 from book 10D, and the two composition-correction phases P35/P36 planned 2026-11-05 from the 10D amendment R38); the runner is sequential and a
+composition phases P27–P34 planned 2026-11-04 from book 10D, the two composition-correction phases P35/P36 planned 2026-11-05 from the 10D amendment R38, and P37_editor_chrome planned 2026-11-05 from the 10D amendment R39); the runner is sequential and a
 phase starts only when every phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24 → P25 → P26 → P27 → P28 → P29 → P30 → P33 → P34 → P35 → P36
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24 → P25 → P26 → P27 → P28 → P29 → P30 → P33 → P34 → P35 → P36 → P37
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗                                                                          ↘ P31 → P32 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15; P28 → P31; P30 + P32 → P33)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
 P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23] · P25[P24] · P26[P25] ·
-P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35].
+P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35] · P37[P36].
+- **Editor chrome (planner 2026-11-05).** P37 follows P36: it re-skins the controls P36 introduced (toolbar, hints, nudge pad, straightening
+  grid switch) and moves the Tools panel's hide button, so it needs P36's `EditorToolbar`, `StraightenControl`, `Hint` usage and tests in place.
+  Frontend only; **no `implementer: fable`** (the owner's rule of 2026-11-05 stands): default implementer.
 - **Composition corrections (planner 2026-11-05).** P35 (workspace: composed display, Compose button, Split for any photo, header Details,
   Sessions icon) precedes P36 (editor: strip, overlays, straighten, controls and hints) because P36 builds on P35's shared `Hint` and its
   Sessions toggle on `PhotoPanel`/`FoldedStrip`. **No `implementer: fable`** (owner 2026-11-05: no Fable for implementation until the owner
@@ -460,6 +464,19 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   `useComposePrefs.ts`; ids `#compose-overlay`, `#compose-straighten-degrees`; CSS `.compose-overlay-guides[data-overlay]`,
   `.compose-straighten-grid`, `.editor-toolbar`, `.compose-nudge`; **retired** `EDGE_REVEAL_PX`, `BrowserOverlay`, `.compose-browser` (the
   edge-reveal browser of P31, dropped by R38). No command, table, setting or Rust change in either phase.
+- **Editor chrome (P37, book 10D amended `3c7623e`, R39, changelog 29; planned 2026-11-05).** `components/ui/tooltip.tsx` → `type HintCard = {
+  name, key?, description }`, `Hint({ text: string | HintCard, children })`; a card's tooltip text is exactly `name · key — description` (U+00B7,
+  U+2014) or `name — description` without a key, rendered as `.hint-card` > `.hint-name`, `kbd.hint-key`, `.hint-description`. Accessible names
+  `Hide Tools panel` (in `.tools-panel-head`, with `.tools-panel-title` "Tools"), `Show Tools panel` (the only button of `aside.tools-rail[aria-
+  label="Tools"]`, rendered **instead of** `.tools-panel` while hidden — the `hidden` attribute is no longer used), `Rotate and flip` and `Nudge`
+  (drawer toggles, `aria-expanded`, `aria-controls` → `#compose-rotate-flip.compose-drawer-body`, `#compose-nudge-pad[role="group"]`; open state in
+  `ComposeMode`, closed at every mount, not remembered); icon-only buttons keep their P36 names (`Revert`, `Loupe`, `Snapping`, `Copy framing`,
+  `Paste framing`, `Turn frame`, `Rotate left`, `Rotate right`, `Flip`, `Straightening grid` (switch), `Nudge up|left|down|right` in that DOM
+  order). `ToolsPanel` prop `onToggleHidden`. CSS `.tools-panel-head`, `.tools-panel-title`, `.tools-rail`, `.compose-drawer`,
+  `.compose-drawer-toggle`, `.compose-drawer-body`, `.compose-nudge-pad`, `.hint-card`, `.hint-name`, `.hint-key`, `.hint-description`.
+  **Retired:** the stage-bar buttons `Tools panel` and `Frame meter` (⌘T and ⌥⌘P stay keys), `EditorToolbar` props `tools`/`onTools`/`meter`/
+  `onMeter`, `.compose-buttons`, the dead `.compose-readout` and `.compose-straighten-grid + path`. P36's table T is superseded by P37's T2.
+  `localStorage` keys unchanged. No command, table, setting or Rust change.
 
 ## 7. Environment topology (verified 2026-10-25 on the dev Mac; "if reality disagrees, update this section")
 ### 7.1 Verified facts
@@ -592,3 +609,8 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   `composed.ts`, `overlays.ts`, `localStorage` keys, keys `o`/`f`, CSS, retirements incl. `EDGE_REVEAL_PX`). Folded in from the P31–P34 narratives'
   "Not yet": Re-frame badge after Apply, the item card's "Edit details →", focus back to the editor after the Shape/Overlay menus and a slider
   drag, the snap guide at the line it snapped to. No intention-book change; no owner card.
+- 2026-11-05 editor chrome — planner (Fable) added P37_editor_chrome from the owner's corrections after the second editor try-out (book 10D
+  amended `3c7623e`, R39, changelog 29; MC-27…29 unchanged). §4 one NOT_STARTED row, §5 count 37 / graph tail / `P37[P36]` / the editor-chrome
+  note (no Fable), §6.10 the P37 block (`HintCard`, the card text rule, the rail, the drawers, retired toolbar buttons and props). Tests of P36
+  (C5(a), C5(b) text, C6(f), C6(g), C6(h)) and P32 (C3(c)) change their expectation as listed in the plan's Read first. No intention-book change;
+  no owner card.
