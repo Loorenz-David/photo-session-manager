@@ -361,3 +361,28 @@ the correction says "ignores keys".
 529 passed / 0 failed (no Rust change); `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo fmt --all -- --check` exit 0.
 Red check: the three production files stashed, the test file kept → 2 failed / 15 passed (F2 and C7(b) as quoted); stash popped. No backlog
 change; the r1 notes stand.
+
+### 2026-11-05 — re-review r2 (opus, `pipeline-reviewer`) — APPROVED_WITH_NOTES
+**Gate.** Tracker `IMPLEMENTED` (fix 1); checkpoint `f937a9c` in `git log`. The fix session's gate divergence (it launched on a tracker row its
+aborted first attempt had pre-written) is sound: the tree at launch was review r1's `CHANGES_REQUESTED` state, and the runner resumed it on purpose.
+**Perimeter.** `git show --stat f937a9c` = `useCompositionSaves.ts`, `ComposeMode.tsx`, `useComposeGesture.ts`, `__tests__/p31_gestures.test.tsx`
+(all within F1/F2's allowed files) + the P31 tracker row + this Review log. `f937a9c..24bd3d6` adds only the fix handoff and this round's prompt.
+**Suite** (clean `24bd3d6`, run once): `cargo test --workspace` 529/0; clippy `-D warnings` clean; `cargo fmt --check` clean; `npm run typecheck`
+clean; `npm test` 26 files / 223 passed.
+**F1 resolved.** `settle` calls `onStored` (tile patch) on every success and `onSettled` (machine `Saved`) only when nothing is pending or on a
+refusal. Traced: A ok + B pending → tiles take A, B sent, stage stays on B; B ok → `Saved(B)`, no change; A ok then B refused → `storedOf` = A
+(patched by `onStored`) → snap to A, which is what is stored; A refused → B dropped, snap to stored (C7(c), unchanged). A late `Saved` after
+unmount is guarded (`dispatch` returns on a null state). Extended C7(b) asserts one call before A settles, placement 111.09 between the settles,
+then two calls and B's tile: it fails on the r1 behaviour (fix's red check: 61.09).
+**F2 resolved.** The keydown handler returns on `defaultPrevented` or an open `dialog`/`alertdialog`/`menu`; the new test (drag, ⋯, Esc on the menu
+→ menu closed, one call, placement 61.09, editor open) fails on r1 code. No other `window` keydown listener `preventDefault`s Esc/Enter while
+composing (`useWorkspaceKeyboard` and `useKeyboard({d})` are off; workspace `PageHeader` has no Esc-back). Divergences 2–4 of the fix handoff
+(C7(b) resolve order, interim tile state unpinned, Esc dispatched on the menu element) are sound.
+**N1 (new, B1-class on the changed seam; triaged DROP).** The guard's selector also matches non-modal `role="dialog"` panels that do not take
+Esc themselves: the item card (`ItemDetailsCard`, opened from the compose stage bar's Item details button, or left open from the workspace) and
+the header's Publish / Notifications popovers. Probe (temporary test file, removed): compose, drag (+50, saved), click Item details, Esc on
+`window` → no revert, card still open; Enter → editor still open. Authority: 10D ("Return finishes; Esc reverts"); design handoff §Keyboard
+("Esc (close topmost)"). DROP: no stored value changes and no framing is lost; Done and the card's close button work; P32 grows this keyboard
+(1–6, X, S, [ ], arrows) and must settle which layers own it → backlog.
+**Probe declaration.** One temporary test file `apps/desktop/src/features/compose/__tests__/zz_review_probe_r2.test.tsx`, created, run twice,
+deleted; `git status --porcelain` empty afterwards. No production file touched.
