@@ -2,6 +2,9 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { previewUrl } from '@/services/sessions';
 import type { Photo } from '@/services/photos';
 import type { ViewMode } from './useWorkspaceState';
+import { valuesOf } from '@/services/compositions';
+import { composedLayout } from '@/features/compose/composed';
+import { ComposedPicture } from '@/features/compose/ComposedPicture';
 
 /**
  * CSS transform for EXIF orientation 1–8 (MC-20: the embedded camera JPEG carries no orientation of its own,
@@ -66,17 +69,21 @@ export function StageImage({ photo, mode }: StageImageProps) {
   // The original stays up until an adjusted render has actually loaded, so nothing flashes empty.
   const showAdjusted = mode === 'adjusted' && layers.some(url => loaded.has(url));
   const originalStyle: CSSProperties = { ...crossfade, transform: orientationTransform(photo.orientation) };
-
-  return (
-    <div className="stage-frame">
+  const values = valuesOf(photo.composition);
+  const frame = photo.composition.frame;
+  const layout = values && frame ? composedLayout(values, frame) : null;
+  const originalTurned = layout ? (Number(layout.swapped) + Number(quarterTurn(photo.orientation))) % 2 === 1 : false;
+  const originalOrientation = orientationTransform(photo.orientation);
+  const pictures = <>
       {originalUrl ? (
         <img
           className="stage-layer stage-original crossfade"
-          data-quarter-turn={quarterTurn(photo.orientation) || undefined}
+          data-quarter-turn={!layout && quarterTurn(photo.orientation) || undefined}
+          data-swapped={layout && originalTurned || undefined}
           data-visible={!showAdjusted}
           src={originalUrl}
           alt="Camera original"
-          style={originalStyle}
+          style={layout ? { ...crossfade, transform: `${layout.imageTransform}${originalOrientation ? ` ${originalOrientation}` : ''}` } : originalStyle}
           draggable={false}
         />
       ) : (
@@ -86,19 +93,24 @@ export function StageImage({ photo, mode }: StageImageProps) {
         <img
           key={url}
           className="stage-layer stage-adjusted crossfade"
+          data-swapped={layout?.swapped || undefined}
           data-visible={mode === 'adjusted' && loaded.has(url)}
           data-newest={url === newest || undefined}
           src={url}
           alt="Adjusted"
-          style={crossfade}
+          style={layout ? { ...crossfade, transform: layout.imageTransform } : crossfade}
           draggable={false}
           onLoad={() => {
             setLoaded(current => new Set(current).add(url));
-            // Once the newest render is in, older layers can go after the crossfade.
             window.setTimeout(() => setLayers(current => current.slice(current.indexOf(url))), CROSSFADE_MS);
           }}
         />
       ))}
+    </>;
+
+  return (
+    <div className="stage-frame">
+      {values && frame ? <ComposedPicture values={values} frame={frame} className="stage-composed">{pictures}</ComposedPicture> : pictures}
     </div>
   );
 }

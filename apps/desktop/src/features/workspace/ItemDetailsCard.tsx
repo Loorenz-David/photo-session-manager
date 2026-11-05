@@ -1,11 +1,12 @@
 import { X } from 'lucide-react';
 import type { SessionView } from '@/services/photos';
 import { SkeletonFields } from '@/components/pending/SkeletonFields';
+import { Hint } from '@/components/ui/tooltip';
 
-type ItemDetailsCardProps = { view: SessionView | null; onClose: () => void };
+type ItemDetailsCardProps = { view: SessionView | null; onClose: () => void; onEdit?: () => void };
 
 /** Item details card (I): the item's identity and the session's photo counts; editing arrives with the form. */
-export function ItemDetailsCard({ view, onClose }: ItemDetailsCardProps) {
+export function ItemDetailsCard({ view, onClose, onEdit }: ItemDetailsCardProps) {
   if (!view) return <div className="item-card" role="dialog" aria-label="Item details"><SkeletonFields n={4} /></div>;
   const { item, session } = view;
   return (
@@ -34,9 +35,9 @@ export function ItemDetailsCard({ view, onClose }: ItemDetailsCardProps) {
           {session.main_count} main · {session.condition_count} condition · {session.unreviewed_count} to review
         </dd>
       </dl>
-      <button type="button" className="item-card-edit" disabled title="The details form arrives in a later phase">
+      <Hint text="Edit details"><button type="button" className="item-card-edit" onClick={onEdit}>
         Edit details →
-      </button>
+      </button></Hint>
     </div>
   );
 }

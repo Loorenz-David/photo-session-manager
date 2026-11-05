@@ -13,13 +13,15 @@ type BrowserOverlayProps = Omit<TileHandlers, 'onOpen'> & {
   isIdle: () => boolean;
   /** A tile click moves the editor to that photo, keeping the changes. */
   onPick: (photoId: number) => void;
+  sessionsOpen: boolean;
+  onToggleSessions: () => void;
 };
 
 /**
  * The photo browser while composing (10D): hidden, it slides in over the image when the pointer reaches the
  * window's right edge and hides again when the pointer leaves it — never during a drag.
  */
-export function BrowserOverlay({ photos, isIdle, onPick, ...tiles }: BrowserOverlayProps) {
+export function BrowserOverlay({ photos, isIdle, onPick, sessionsOpen, onToggleSessions, ...tiles }: BrowserOverlayProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -41,7 +43,7 @@ export function BrowserOverlay({ photos, isIdle, onPick, ...tiles }: BrowserOver
 
   return (
     <div ref={ref} className="compose-browser" data-open={open ? 'true' : 'false'}>
-      <PhotoPanel photos={photos} onFold={() => undefined} onImport={() => pickAndImport()} onOpen={onPick} {...tiles} />
+      <PhotoPanel photos={photos} onFold={() => undefined} onImport={() => pickAndImport()} onOpen={onPick} sessionsOpen={sessionsOpen} onToggleSessions={onToggleSessions} {...tiles} />
     </div>
   );
 }

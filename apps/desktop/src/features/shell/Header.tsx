@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Bell, ClipboardList, CloudUpload, FolderDown, Info, Settings, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/tooltip';
 import { ActionButton } from '@/components/ui/action-button';
 import { integrationKind, onExportProgress, openExportFolder, runExport } from '@/services/export';
 import { listSessions } from '@/services/sessions';
@@ -20,6 +21,7 @@ type HeaderProps = {
   onNewSession: () => void;
   /** Unassigned workspace: "Assign product" replaces Publish (ch06 §Unassigned). */
   onAssignProduct?: () => void;
+  onDetails?: () => void;
 };
 
 type SessionIdentity = { name: string; sku: string };
@@ -122,7 +124,7 @@ function useExportToasts(): Set<number> {
 }
 
 /** App header (COMPONENTS.md §App shell): Sessions page or session view. */
-export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssignProduct }: HeaderProps) {
+export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssignProduct, onDetails }: HeaderProps) {
   const identity = useSessionIdentity(sessionId);
   const integration = useIntegration();
   const exporting = useExportToasts();
@@ -172,9 +174,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
           </ActionButton>
         ) : (
           <>
-            <Button variant="outline" disabled title="The details form arrives in a later phase">
-              <ClipboardList /> Details
-            </Button>
+            <Hint text="Details (D)"><Button variant="outline" onClick={onDetails}><ClipboardList /> Details</Button></Hint>
             {integration === null && (
               <ActionButton action={() => runExport(sessionId)} onError={error => toast.error(exportFailureText(error), { id: EXPORT_TOAST_ID })} disabled={exporting.has(sessionId)} title="Export the main and condition photos to the export folder">
                 <FolderDown /> Export

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ContextMenu, DropdownMenu } from 'radix-ui';
 import { MoreHorizontal } from 'lucide-react';
-import { canCompose } from '@/services/compositions';
+import { canCompose, COMPOSE_WAITING } from '@/services/compositions';
 import { useClipboardComposition } from '@/features/compose/useClipboardComposition';
 import type { Photo } from '@/services/photos';
 
@@ -17,7 +17,7 @@ function entries(photo: Photo, canApply: boolean): Entry[] {
   const kindEntry: Entry =
     photo.composition.kind === 'split'
       ? { action: 'normal', label: 'Normal', hint: 'S', disabled: !canCompose(photo) }
-      : { action: 'split', label: 'Split', hint: 'S', disabled: !canCompose(photo) || photo.classification === 'unreviewed' };
+      : { action: 'split', label: 'Split', hint: 'S', disabled: !canCompose(photo) };
   return [
     { action: 'compose', label: 'Compose…', hint: 'R', disabled: !canCompose(photo) },
     photo.classification === 'condition'
@@ -53,7 +53,7 @@ export function PhotoMenuButton({ photo, onAction, canApply = false }: MenuProps
               onSelect={() => onAction(entry.action, photo)}
             >
               <span>{entry.label}</span>
-              {entry.hint && <kbd>{entry.hint}</kbd>}
+              {entry.action === 'compose' && entry.disabled ? <small className="photo-menu-why">{COMPOSE_WAITING}</small> : entry.hint && <kbd>{entry.hint}</kbd>}
             </DropdownMenu.Item>
           ))}
         </DropdownMenu.Content>
@@ -79,7 +79,7 @@ export function PhotoContextMenu({ photo, onAction, children, canApply = false }
               onSelect={() => onAction(entry.action, photo)}
             >
               <span>{entry.label}</span>
-              {entry.hint && <kbd>{entry.hint}</kbd>}
+              {entry.action === 'compose' && entry.disabled ? <small className="photo-menu-why">{COMPOSE_WAITING}</small> : entry.hint && <kbd>{entry.hint}</kbd>}
             </ContextMenu.Item>
           ))}
         </ContextMenu.Content>

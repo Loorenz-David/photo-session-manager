@@ -44,3 +44,5 @@ export function valuesOf(composition: Composition): CompositionValues | null {
 export function canCompose(photo: Photo): boolean {
   return photo.adjusted_preview_path !== null && photo.composition.rect !== null && photo.composition.frame !== null;
 }
+
+export const COMPOSE_WAITING = "Waiting for Capture One's full-frame preview";

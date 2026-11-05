@@ -116,9 +116,9 @@ describe('C5 the editor keys', () => {
     placedAt(61.09);
     fireEvent.pointerMove(document.querySelector('main.workspace')!, { clientX: window.innerWidth - 5, clientY: 300 });
     const browser = document.querySelector('.compose-browser')!;
-    expect(tile(1, browser).querySelector<HTMLElement>('.tile-frame')!.style.left).toBe('11.5467%');
-    expect(tile(2, browser).querySelector<HTMLElement>('.tile-frame')!.style.left).toBe('16.6602%');
-    expect(tile(5, browser).querySelector<HTMLElement>('.tile-frame')!.style.left).toBe('16.6602%');
+    expect(tile(1, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-17.3166%');
+    expect(tile(2, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-24.9854%');
+    expect(tile(5, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-24.9854%');
     expect(setComposition).toHaveBeenCalledTimes(1);
     expect(vi.mocked(getSessionView).mock.calls.length).toBe(loads);
   });

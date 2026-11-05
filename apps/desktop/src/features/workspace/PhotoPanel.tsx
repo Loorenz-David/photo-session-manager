@@ -1,4 +1,5 @@
-import { FolderInput, PanelRightClose } from 'lucide-react';
+import { FolderInput, PanelRightClose, PanelsRightBottom } from 'lucide-react';
+import { Hint } from '@/components/ui/tooltip';
 import { useAction } from '@/lib/pending';
 import type { Photo } from '@/services/photos';
 import { displayOrder } from './order';
@@ -8,10 +9,12 @@ type PhotoPanelProps = TileHandlers & {
   photos: readonly Photo[];
   onFold: () => void;
   onImport: () => Promise<unknown>;
+  sessionsOpen: boolean;
+  onToggleSessions: () => void;
 };
 
 /** The photo panel (NOTES.md §Screens 4): Main images (unreviewed shown after Main), then Condition. */
-export function PhotoPanel({ photos, onFold, onImport, ...handlers }: PhotoPanelProps) {
+export function PhotoPanel({ photos, onFold, onImport, sessionsOpen, onToggleSessions, ...handlers }: PhotoPanelProps) {
   const importing = useAction(onImport);
   const order = displayOrder(photos);
   const mainShown = [...order.main, ...order.unreviewed];
@@ -23,12 +26,13 @@ export function PhotoPanel({ photos, onFold, onImport, ...handlers }: PhotoPanel
           {order.main.length} main · {order.condition.length} condition
         </span>
         <span className="panel-tools">
-          <button type="button" className="stage-icon-button" onClick={() => void importing.run()} disabled={importing.busy} aria-busy={importing.busy ? 'true' : undefined} aria-label="Import photos" title="Import photos">
+          <Hint text="Sessions"><button type="button" className="stage-icon-button panel-sessions" onClick={onToggleSessions} aria-label="Sessions" aria-pressed={sessionsOpen}><PanelsRightBottom /></button></Hint>
+          <Hint text="Import photos"><button type="button" className="stage-icon-button" onClick={() => void importing.run()} aria-disabled={importing.busy || undefined} aria-busy={importing.busy ? 'true' : undefined} aria-label="Import photos">
             <FolderInput />{importing.busy && <span aria-hidden>…</span>}
-          </button>
-          <button type="button" className="stage-icon-button" onClick={onFold} aria-label="Fold panel" title="Fold panel (F)">
+          </button></Hint>
+          <Hint text="Fold panel (F)"><button type="button" className="stage-icon-button" onClick={onFold} aria-label="Fold panel">
             <PanelRightClose />
-          </button>
+          </button></Hint>
         </span>
       </div>
       <div className="panel-scroll">

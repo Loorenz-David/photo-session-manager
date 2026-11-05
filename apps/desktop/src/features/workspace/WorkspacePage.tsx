@@ -13,7 +13,6 @@ import {
   type DragStartEvent,
   type DropAnimation,
 } from '@dnd-kit/core';
-import { ClipboardList, PanelsRightBottom } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkeletonTiles } from '@/components/pending/SkeletonTiles';
@@ -21,7 +20,7 @@ import { assignUnassigned, type Photo } from '@/services/photos';
 import { createSession } from '@/services/sessions';
 import { adoptItem, type Item } from '@/services/items';
 import { useKeyboard } from '@/lib/keyboard';
-import { applyComposition, canCompose, setComposition, valuesOf } from '@/services/compositions';
+import { applyComposition, canCompose, COMPOSE_WAITING, setComposition, valuesOf } from '@/services/compositions';
 import { clipboardComposition, refitClipboard } from '@/features/compose/useClipboardComposition';
 import { ComposeMode } from '@/features/compose/ComposeMode';
 import { refit } from '@/features/compose/refit';
@@ -51,6 +50,8 @@ type WorkspacePageProps = {
   /** "Assign product" in the header of the Unassigned workspace opens the item search. */
   assignOpen: boolean;
   onAssignOpenChange: (open: boolean) => void;
+  detailsOpen?: boolean;
+  onDetailsOpenChange?: (open: boolean) => void;
   navigate: (sessionId?: number) => void;
 };
 
@@ -127,13 +128,12 @@ function useDrop(state: WorkspaceState) {
 }
 
 /** The session workspace (NOTES.md §Screens 4–5): stage, photo panel or strip, and in Unassigned the sessions panel. */
-export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navigate }: WorkspacePageProps) {
+export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detailsOpen = false, onDetailsOpenChange = () => undefined, navigate }: WorkspacePageProps) {
   const state = useWorkspaceState(sessionId);
   const unassigned = sessionId === UNASSIGNED_SESSION_ID;
   const [folded, setFolded] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(unassigned);
   const [itemCardOpen, setItemCardOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
   const [picker, setPicker] = useState<Picker>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [overId, setOverId] = useState<string | number | null>(null);
@@ -203,7 +203,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   /** Compose (10D): R, a double-click on the stage photo, or Compose… in a menu; only a photo with a preview and a frame. */
   const enterCompose = useCallback(
     (photo: Photo) => {
-      if (!canCompose(photo)) return;
+      if (!canCompose(photo)) { toast(COMPOSE_WAITING, { id: 'compose-waiting' }); return; }
       if (state.activeId !== photo.id) state.setActiveId(photo.id);
       setComposing(true);
     },
@@ -224,7 +224,6 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
       for (const photoId of photoIds) {
         const photo = state.photos.find(candidate => candidate.id === photoId);
         if (!photo || !canCompose(photo) || photo.composition.kind === to) continue;
-        if (to === 'split' && photo.classification === 'unreviewed') continue;
         if (composing && photo.id === state.activeId) continue;
         const values = valuesOf(photo.composition);
         const frame = photo.composition.frame;
@@ -257,7 +256,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
           for (const item of items) {
             if (!result.applied.includes(item.photo_id)) continue;
             const target = selected.find(p => p.id === item.photo_id)!;
-            state.patchPhoto(item.photo_id, { composition: { ...target.composition, ...item.values, revision: target.composition.revision + 1, origin: 'user' } });
+            state.patchPhoto(item.photo_id, { composition: { ...target.composition, ...item.values, revision: target.composition.revision + 1, origin: 'user', state: 'ok', review_reason: null } });
           }
           const refused = [...frameless, ...result.refused.map(r => selected.find(p => p.id === r.photo_id)).filter((p): p is Photo => !!p)];
           const labels = refused.map(p => String(displaySequence(state.photos).indexOf(p) + 1).padStart(2, '0'));
@@ -304,11 +303,11 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   );
 
   const item = state.view?.item ?? null;
-  const dialogOpen = picker !== null || assignOpen || formOpen;
+  const dialogOpen = picker !== null || assignOpen || detailsOpen;
   // D opens the product details form (design handoff §Keyboard); Esc closes it (the dialog's own Esc).
-  useKeyboard({ d: () => setFormOpen(true) }, !dialogOpen && item !== null && !composing);
+  useKeyboard({ d: () => onDetailsOpenChange(true) }, !dialogOpen && item !== null && !composing);
   // R opens Compose on the stage photo (10D); while composing the workspace keys are off and the editor owns the keyboard.
-  useKeyboard({ r: () => { if (active) enterCompose(active); } }, !dialogOpen && !composing && active !== null && canCompose(active));
+  useKeyboard({ r: () => { if (active) enterCompose(active); } }, !dialogOpen && !composing && active !== null);
   useWorkspaceKeyboard(
     {
       approve: () => review('approve'),
@@ -370,17 +369,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   // The stage column's other occupants, in both the normal stage and the editor.
   const stageExtras = (
     <>
-      {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} />}
-      {item && (
-        <button type="button" className="sessions-toggle" style={{ top: sessionsOpen ? 42 : 74 }} onClick={() => setFormOpen(true)} aria-label="Product details" title="Product details (D)">
-          <ClipboardList /> Details
-        </button>
-      )}
-      {!sessionsOpen && (
-        <button type="button" className="sessions-toggle" onClick={() => setSessionsOpen(true)} aria-label="Show sessions panel">
-          <PanelsRightBottom /> Sessions
-        </button>
-      )}
+      {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} onEdit={() => onDetailsOpenChange(true)} />}
     </>
   );
 
@@ -401,6 +390,8 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
             onExit={() => setComposing(false)}
             onSwitch={state.setActiveId}
             patchPhoto={state.patchPhoto}
+            sessionsOpen={sessionsOpen}
+            onToggleSessions={() => setSessionsOpen(open => !open)}
           >
             {stageExtras}
           </ComposeMode>
@@ -421,9 +412,9 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
           </div>
         )}
         {composing ? null : folded ? (
-          <FoldedStrip photos={state.photos} onUnfold={() => setFolded(false)} {...tileHandlers} />
+          <FoldedStrip photos={state.photos} onUnfold={() => setFolded(false)} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
         ) : (
-          <PhotoPanel photos={state.photos} onFold={() => setFolded(true)} onImport={() => pickAndImport()} {...tileHandlers} />
+          <PhotoPanel photos={state.photos} onFold={() => setFolded(true)} onImport={() => pickAndImport()} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
         )}
         {sessionsOpen && <SessionsPanel currentSessionId={sessionId} onClose={() => setSessionsOpen(false)} />}
         <ImportDropZone />
@@ -453,7 +444,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         onOpenChange={open => !open && setPicker(null)}
         onPick={item => { if (picker) return assignSome(item, picker.photoIds); }}
       />
-      {item && <FormDialog open={formOpen} onOpenChange={setFormOpen} item={item} photos={state.photos} onItemChanged={() => void state.reload()} />}
+      {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} onItemChanged={() => void state.reload()} />}
       {unassigned && <ItemPickerDialog open={assignOpen} title="Assign product" onOpenChange={onAssignOpenChange} onPick={assignWhole} />}
     </DndContext>
     </PublishFailedContext.Provider>

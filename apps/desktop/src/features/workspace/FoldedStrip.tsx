@@ -1,18 +1,20 @@
-import { PanelRightOpen } from 'lucide-react';
+import { PanelRightOpen, PanelsRightBottom } from 'lucide-react';
+import { Hint } from '@/components/ui/tooltip';
 import type { Photo } from '@/services/photos';
 import { displayOrder } from './order';
 import { PhotoGrid, type TileHandlers } from './PhotoGrid';
 
-type FoldedStripProps = TileHandlers & { photos: readonly Photo[]; onUnfold: () => void };
+type FoldedStripProps = TileHandlers & { photos: readonly Photo[]; onUnfold: () => void; sessionsOpen: boolean; onToggleSessions: () => void };
 
 /** The panel folded to a 64 px strip (F): thumbnails in display order with a "COND" divider before Condition. */
-export function FoldedStrip({ photos, onUnfold, ...handlers }: FoldedStripProps) {
+export function FoldedStrip({ photos, onUnfold, sessionsOpen, onToggleSessions, ...handlers }: FoldedStripProps) {
   const order = displayOrder(photos);
   return (
     <aside className="folded-strip" aria-label="Photo strip">
-      <button type="button" className="stage-icon-button" onClick={onUnfold} aria-label="Unfold panel" title="Unfold panel (F)">
+      <Hint text="Unfold panel (F)"><button type="button" className="stage-icon-button" onClick={onUnfold} aria-label="Unfold panel">
         <PanelRightOpen />
-      </button>
+      </button></Hint>
+      <Hint text="Sessions"><button type="button" className="stage-icon-button panel-sessions" onClick={onToggleSessions} aria-label="Sessions" aria-pressed={sessionsOpen}><PanelsRightBottom /></button></Hint>
       <PhotoGrid group="main" photos={[...order.main, ...order.unreviewed]} variant="strip" {...handlers} />
       <span className="strip-divider" role="separator">
         COND

@@ -318,8 +318,8 @@ describe('C7 saves', () => {
     await act(async () => {
       resolveP1(saved(1, savedValues(0), 1));
     });
-    expect(tile(1, browser).querySelector<HTMLElement>('.tile-frame')!.style.left).toBe('11.5467%');
-    expect(tile(2, browser).querySelector<HTMLElement>('.tile-frame')!.style.left).toBe('11.5467%');
+    expect(tile(1, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-17.3166%');
+    expect(tile(2, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-17.3166%');
     frames.flush();
     placedAt(61.09);
     expect(vi.mocked(getSessionView).mock.calls.length).toBe(loads);
@@ -354,7 +354,7 @@ describe('C7 saves', () => {
     });
     fireEvent.pointerMove(document.querySelector('main.workspace')!, { clientX: window.innerWidth - 5, clientY: 300 });
     const browser = document.querySelector('.compose-browser')!;
-    await waitFor(() => expect(tile(1, browser).querySelector<HTMLElement>('.tile-frame')!.style.left).toBe('6.4332%'));
+    await waitFor(() => expect(tile(1, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-9.6479%'));
     frames.flush();
     placedAt(111.09);
     expect(setComposition).toHaveBeenCalledTimes(2);

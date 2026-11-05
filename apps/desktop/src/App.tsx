@@ -94,6 +94,8 @@ export default function App() {
   const [theme, setTheme] = useTheme();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  useEffect(() => { setDetailsOpen(false); }, [sessionId]);
   useCaptureTarget(sessionId);
 
   useKeyboard({ n: () => setNewSessionOpen(true) }, sessionId === undefined && !health && !settings && !newSessionOpen);
@@ -110,6 +112,7 @@ export default function App() {
         onThemeChange={setTheme}
         onNewSession={() => setNewSessionOpen(true)}
         onAssignProduct={() => setAssignOpen(true)}
+        onDetails={() => setDetailsOpen(true)}
       />
       {sessionId === undefined ? (
         <SessionsPage navigate={navigate} />
@@ -119,6 +122,8 @@ export default function App() {
           sessionId={sessionId}
           assignOpen={assignOpen}
           onAssignOpenChange={setAssignOpen}
+          detailsOpen={detailsOpen}
+          onDetailsOpenChange={setDetailsOpen}
           navigate={navigate}
         />
       )}

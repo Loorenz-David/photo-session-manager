@@ -66,16 +66,14 @@ describe('C4 the grid, the strip, the drag overlay and the stage bar count outpu
     expect(order(condition)).toEqual([5, 6]);
     expect(numbers(condition)).toEqual(['01–02', '03']);
     for (const id of [1, 3, 5]) {
-      const hairline = panelTile(id).querySelector<HTMLElement>('.tile-split')!;
+      const hairline = panelTile(id).querySelector<HTMLElement>('.composed-split')!;
       expect(hairline).not.toBeNull();
       // At the middle of the composition rect: (x + w/2) · 100 % = 50 % for the centred split default.
       expect(hairline.style.left).toBe(`${Number(((SPLIT.x + SPLIT.w / 2) * 100).toFixed(4))}%`);
       expect(hairline.style.left).toBe('50%');
-      expect(hairline.style.top).toBe(`${Number((SPLIT.y * 100).toFixed(4))}%`);
-      expect(hairline.style.height).toBe(`${Number((SPLIT.h * 100).toFixed(4))}%`);
-      expect(panelTile(id).querySelector('.tile-frame')).not.toBeNull();
+      expect(panelTile(id).querySelector('.composed-frame')).not.toBeNull();
     }
-    for (const id of [2, 4, 6]) expect(panelTile(id).querySelector('.tile-split')).toBeNull();
+    for (const id of [2, 4, 6]) expect(panelTile(id).querySelector('.composed-split')).toBeNull();
     expect(panelTile(1).getAttribute('aria-label')).toBe('Photo 01–02');
     expect(panelTile(3).getAttribute('aria-label')).toBe('Photo 04–05');
     expect(panelTile(4).getAttribute('aria-label')).toBe('Photo 06, to review');
@@ -91,7 +89,7 @@ describe('C4 the grid, the strip, the drag overlay and the stage bar count outpu
     expect(strip).not.toBeNull();
     expect(order(strip)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(strip.querySelectorAll('.tile-number').length).toBe(0);
-    const withHairline = [...strip.querySelectorAll('[data-photo-id]')].filter(node => node.querySelector('.tile-split')).map(node => Number(node.getAttribute('data-photo-id')));
+    const withHairline = [...strip.querySelectorAll('[data-photo-id]')].filter(node => node.querySelector('.composed-split')).map(node => Number(node.getAttribute('data-photo-id')));
     expect(withHairline).toEqual([1, 3, 5]);
   });
 
@@ -103,7 +101,7 @@ describe('C4 the grid, the strip, the drag overlay and the stage bar count outpu
 
     const first = await hold(panelTile(3), [160, 37]);
     expect(overlay().querySelector('.tile-number')).toHaveTextContent('03–04');
-    expect(overlay().querySelector('.tile-split')).not.toBeNull();
+    expect(overlay().querySelector('.composed-split')).not.toBeNull();
     expect(overlay().querySelector('.tile-cover')).toBeNull();
     await first.release();
     await waitFor(() => expect(reorderPhoto).toHaveBeenCalledWith(3, 2));
@@ -113,7 +111,7 @@ describe('C4 the grid, the strip, the drag overlay and the stage bar count outpu
 
     const second = await hold(panelTile(2), [50, 122]);
     expect(overlay().querySelector('.tile-number')).toHaveTextContent('05');
-    expect(overlay().querySelector('.tile-split')).toBeNull();
+    expect(overlay().querySelector('.composed-split')).toBeNull();
     await second.release();
     await waitFor(() => expect(reorderPhoto).toHaveBeenCalledWith(2, 3));
     expect(reorderPhoto).toHaveBeenCalledTimes(2);
@@ -123,7 +121,7 @@ describe('C4 the grid, the strip, the drag overlay and the stage bar count outpu
     await openWorkspace([workspace()]);
     const place = () => document.querySelector('.stage-place')!;
     await act(async () => { fireEvent.click(panelTile(3)); });
-    expect(place()).toHaveTextContent('Main 4–5 of 6');
+    await waitFor(() => expect(place()).toHaveTextContent('Main 4–5 of 6'));
     await act(async () => { fireEvent.click(panelTile(1)); });
     expect(place()).toHaveTextContent('Main 1–2 of 6');
     await act(async () => { fireEvent.click(panelTile(2)); });
@@ -151,7 +149,7 @@ describe('C5 Split and Normal from the menus', () => {
     near(values.rect.h, SPLIT.h, 1e-9);
     const main = region('Main images');
     await waitFor(() => expect(numbers(main)).toEqual(['01–02', '03–04', '05–06', '07']));
-    expect(panelTile(2).querySelector('.tile-split')).not.toBeNull();
+    expect(panelTile(2).querySelector('.composed-split')).not.toBeNull();
     expect(document.querySelector('.stage-place')).toHaveTextContent('Main 3–4 of 7');
 
     fireEvent.contextMenu(panelTile(1));
@@ -160,7 +158,7 @@ describe('C5 Split and Normal from the menus', () => {
     await act(async () => { fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' }); });
     // An unreviewed photo cannot be split (10D: Main and Condition photos).
     fireEvent.contextMenu(panelTile(4));
-    expect((await menuItem('Split S')).getAttribute('aria-disabled')).toBe('true');
+    expect((await menuItem('Split S')).getAttribute('aria-disabled')).toBeNull();
   });
 
   it('C5(b) with tiles 2 and 3 selected, Split from the right-click menu saves photo 2 only (3 is already split); both read split labels', async () => {

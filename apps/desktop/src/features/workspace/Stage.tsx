@@ -1,5 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crop, Info } from 'lucide-react';
+import { Hint } from '@/components/ui/tooltip';
+import { canCompose, COMPOSE_WAITING } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
 import { displayOrder } from './order';
 import { outputNumbers, outputTotal } from './outputs';
@@ -65,6 +67,11 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
           {compose && pending.has(active.id) && <span className="tile-unsaved" aria-label="Unsaved composition" />}
         </span>
         <span className="stage-tools">
+          {!compose && <Hint text={canCompose(active) ? 'Compose (R)' : COMPOSE_WAITING}>
+            <button type="button" className="stage-compose" aria-label="Compose" aria-disabled={!canCompose(active) || undefined} onClick={onCompose}>
+              <Crop /> Compose
+            </button>
+          </Hint>}
           {compose && (
             <button type="button" className="compose-done" onClick={compose.onDone} title="Done (Return)">
               Done

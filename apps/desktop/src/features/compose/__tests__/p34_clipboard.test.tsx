@@ -52,5 +52,5 @@ it('C3(b) applies the clipboard to selected photos in one call and names refusal
   expect(items.map(item => item.photo_id)).toEqual([2, 3]);
   expect(items[0].values.shape).toBe('4:5');
   await waitFor(() => expect(success).toHaveBeenCalledWith('Applied to 1 photo; 1 refused: 03'));
-  expect(document.querySelector('[data-photo-id="2"] .tile-frame')?.getAttribute('style')).not.toContain('left: 16.6602%');
+  expect(document.querySelector('[data-photo-id="2"] .composed-frame')?.getAttribute('style')).not.toContain('left: -24.9854%');
 });

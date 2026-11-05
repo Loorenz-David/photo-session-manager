@@ -1,7 +1,9 @@
-import { createContext, useContext, type CSSProperties, type MouseEvent } from 'react';
+import { createContext, useContext, type MouseEvent } from 'react';
+import { Crop } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { turnedFrame } from '@/features/compose/geometry';
+import { ComposedPicture } from '@/features/compose/ComposedPicture';
+import { composedLayout, leavesFrameOut } from '@/features/compose/composed';
 import { usePendingCompositions } from '@/features/compose/useCompositionSaves';
 import { valuesOf } from '@/services/compositions';
 import { previewUrl } from '@/services/sessions';
@@ -13,13 +15,13 @@ import { PhotoUploadBadge } from '@/features/publish/PhotoUploadBadge';
 export const photoDragId = (photoId: number) => `photo:${photoId}`;
 export const PublishFailedContext = createContext(false);
 
-type ThumbProps = { photo: Photo; transform?: string };
+type ThumbProps = { photo: Photo; transform?: string; swapped?: boolean };
 
 /** Thumbnail: the 640 px thumbnail (MC-28) or the adjusted preview when it exists, else the camera original with its orientation (MC-20). */
-export function Thumb({ photo, transform }: ThumbProps) {
+export function Thumb({ photo, transform, swapped }: ThumbProps) {
   const developed = photo.thumbnail_path ?? photo.adjusted_preview_path;
   if (developed) {
-    return <img className="thumb-image" src={previewUrl(developed)} alt="" draggable={false} style={transform ? { transform } : undefined} />;
+    return <img className="thumb-image" src={previewUrl(developed)} alt="" draggable={false} data-swapped={swapped || undefined} style={transform ? { transform } : undefined} />;
   }
   if (photo.original_preview_path) {
     return (
@@ -28,14 +30,13 @@ export function Thumb({ photo, transform }: ThumbProps) {
         src={previewUrl(photo.original_preview_path)}
         alt=""
         draggable={false}
-        style={{ transform: orientationTransform(photo.orientation) }}
+        data-swapped={(Number(swapped) + Number(photo.orientation !== null && photo.orientation >= 5 && photo.orientation <= 8)) % 2 === 1 || undefined}
+        style={{ transform: `${transform ? `${transform} ` : ''}${orientationTransform(photo.orientation) ?? ''}` }}
       />
     );
   }
   return <span className="thumb-empty" aria-hidden />;
 }
-
-const percent = (fraction: number) => `${Number((fraction * 100).toFixed(4))}%`;
 
 /**
  * The thumbnail in its turned frame with the composition drawn over it in CSS (MC-28 §Thumbnail); a split photo also
@@ -45,16 +46,10 @@ function TileComposition({ photo }: { photo: Photo }) {
   const values = valuesOf(photo.composition);
   const frame = photo.composition.frame;
   if (!values || !frame) return <Thumb photo={photo} />;
-  const turned = turnedFrame(frame, values.quarter_turns);
-  const style = { aspectRatio: `${turned.w} / ${turned.h}`, '--tile-ratio': String(turned.w / turned.h) } as CSSProperties;
-  const { rect } = values;
-  return (
-    <div className="tile-composition" data-turned={values.quarter_turns % 2 === 1 || undefined} style={style}>
-      <Thumb photo={photo} transform={`rotate(${values.quarter_turns * 90}deg) scaleX(${values.flip === 'horizontal' ? -1 : 1})`} />
-      <span className="tile-frame" style={{ left: percent(rect.x), top: percent(rect.y), width: percent(rect.w), height: percent(rect.h) }} aria-hidden />
-      {values.kind === 'split' && <span className="tile-split" style={{ left: percent(rect.x + rect.w / 2), top: percent(rect.y), height: percent(rect.h) }} aria-hidden />}
-    </div>
-  );
+  const layout = composedLayout(values, frame);
+  return <ComposedPicture className="tile-composed" values={values} frame={frame}>
+    <Thumb photo={photo} transform={layout.imageTransform} swapped={layout.swapped} />
+  </ComposedPicture>;
 }
 
 type PhotoTileProps = {
@@ -77,6 +72,7 @@ export function PhotoTileFace({ photo, number, last = number, variant }: Pick<Ph
   const isCover = photo.classification === 'main' && number === 1;
   const failed = useContext(PublishFailedContext);
   const composed = photo.composition.rect !== null && photo.composition.frame !== null;
+  const values = valuesOf(photo.composition);
   return <>
     {composed ? <TileComposition photo={photo} /> : <Thumb photo={photo} />}
     {variant === 'grid' && <>
@@ -85,6 +81,7 @@ export function PhotoTileFace({ photo, number, last = number, variant }: Pick<Ph
       {!photo.adjusted_preview_path && <span className="tile-processing">Processing</span>}
       {(photo.upload_state || failed) && <PhotoUploadBadge state={photo.upload_state ?? 'none'} />}
       {photo.composition.state === 'needs_review' && <span className="tile-review">Re-frame</span>}
+      {values && photo.composition.frame && leavesFrameOut(values, photo.composition.frame) && <span className="tile-crop-mark" aria-label="Part of the frame is left out"><Crop aria-hidden /></span>}
     </>}
     {unreviewed && <span className="tile-unreviewed" aria-hidden />}
     {pending && <span className="tile-unsaved" aria-label="Unsaved composition" />}

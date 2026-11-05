@@ -8,9 +8,6 @@ import { refit, type RefitChange } from './refit';
 import { SplitPreviews } from './SplitPreviews';
 import type { ComposeController } from './useComposeGesture';
 
-/** Split is for Main and Condition photos (10D); an unreviewed photo keeps Normal. */
-export const canSplit = (photo: Pick<Photo, 'classification'>) => photo.classification !== 'unreviewed';
-
 /** The Shape menu's entries (10D: Original, 1:1, 4:5, 3:2, 2:3, 16:9, Free; labels are the contract). */
 export const SHAPE_OPTIONS: readonly { value: string; label: string }[] = [
   { value: 'original', label: 'Original' },
@@ -40,7 +37,6 @@ type CompositionSectionProps = {
 export function CompositionSection({ photo, state, controller, onReset, onDone }: CompositionSectionProps) {
   const rangeRef = useRef<HTMLInputElement>(null);
   const { values } = state;
-  const splitAllowed = canSplit(photo);
 
   const set = useCallback(
     (change: RefitChange, cause: SetValuesCause = 'set') => {
@@ -52,7 +48,7 @@ export function CompositionSection({ photo, state, controller, onReset, onDone }
   );
 
   const setKind = (to: 'normal' | 'split') => {
-    if (values.kind === to || (to === 'split' && !splitAllowed)) return;
+    if (values.kind === to) return;
     set({ kind: 'kind', to }, 'kind');
   };
 
@@ -76,9 +72,8 @@ export function CompositionSection({ photo, state, controller, onReset, onDone }
           type="button"
           className="compose-segment"
           aria-pressed={values.kind === 'split'}
-          aria-disabled={splitAllowed ? undefined : 'true'}
           onClick={() => setKind('split')}
-          title={splitAllowed ? 'Split: one 2:1 composition, two square files (S)' : 'Split is for Main and Condition photos'}
+          title="Split (S)"
         >
           Split
         </button>

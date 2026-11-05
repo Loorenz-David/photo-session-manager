@@ -10,7 +10,7 @@ import { previewUrl } from '@/services/sessions';
 import type { Photo } from '@/services/photos';
 import { BrowserOverlay } from './BrowserOverlay';
 import { ComposeStage } from './ComposeStage';
-import { canSplit, CompositionSection } from './CompositionSection';
+import { CompositionSection } from './CompositionSection';
 import type { Box } from './geometry';
 import type { ComposeEvent } from './machine';
 import { refit } from './refit';
@@ -39,6 +39,8 @@ type ComposeModeProps = {
   onExit: () => void;
   onSwitch: (photoId: number) => void;
   patchPhoto: (photoId: number, patch: Partial<Photo>) => void;
+  sessionsOpen?: boolean;
+  onToggleSessions?: () => void;
   /** The stage column's other occupants (item card, the Details and Sessions buttons). */
   children?: ReactNode;
 };
@@ -61,7 +63,7 @@ const sameBox = (a: Box | null, b: Box) => a !== null && a.left === b.left && a.
  * editor, the right browser behind the edge reveal; every gesture, control and key runs through the machine and the
  * changes save when a gesture ends.
  */
-export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, tiles, onExit, onSwitch, patchPhoto, children }: ComposeModeProps) {
+export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, tiles, onExit, onSwitch, patchPhoto, sessionsOpen = false, onToggleSessions = () => undefined, children }: ComposeModeProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
   const [stageBox, setStageBox] = useState<Box | null>(null);
@@ -144,7 +146,7 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
   const setKind = useCallback(
     (to: 'normal' | 'split') => {
       const state = controller.getSnapshot();
-      if (!state || state.values.kind === to || (to === 'split' && !canSplit(activeRef.current))) return;
+      if (!state || state.values.kind === to) return;
       controller.dispatch({ type: 'SetValues', values: refit(state.values, { kind: 'kind', to }, state.frame), cause: 'kind' });
     },
     [controller],
@@ -208,7 +210,7 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
             </>,
           }}
         />
-        <BrowserOverlay photos={photos} isIdle={controller.isIdle} onPick={pick} {...tiles} onMenu={menu} />
+        <BrowserOverlay photos={photos} isIdle={controller.isIdle} onPick={pick} sessionsOpen={sessionsOpen} onToggleSessions={onToggleSessions} {...tiles} onMenu={menu} />
         {children}
       </div>
     </>

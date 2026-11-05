@@ -94,7 +94,7 @@ describe('C2 entering and leaving Compose', () => {
     fireEvent.keyDown(window, { key: 'r' });
     expect(stage()).toBeNull();
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Photo actions' }), { button: 0, ctrlKey: false });
-    expect((await screen.findByRole('menuitem', { name: 'Compose… R' })).getAttribute('aria-disabled')).toBe('true');
+    expect((await screen.findByRole('menuitem', { name: /Compose… Waiting for Capture One/ })).getAttribute('aria-disabled')).toBe('true');
     cleanup();
 
     const unframed = photo(1, 'main', { position: 1 });
@@ -103,7 +103,7 @@ describe('C2 entering and leaving Compose', () => {
     fireEvent.keyDown(window, { key: 'r' });
     expect(stage()).toBeNull();
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Photo actions' }), { button: 0, ctrlKey: false });
-    expect((await screen.findByRole('menuitem', { name: 'Compose… R' })).getAttribute('aria-disabled')).toBe('true');
+    expect((await screen.findByRole('menuitem', { name: /Compose… Waiting for Capture One/ })).getAttribute('aria-disabled')).toBe('true');
   });
 
   it('C2(e) the first-time line shows once and the key is set', async () => {
