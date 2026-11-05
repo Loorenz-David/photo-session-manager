@@ -2,7 +2,7 @@
 
 Updated: 2026-11-04 by the orchestrator.
 
-**Composition feature complete (2026-11-05 07:05): P27–P34 all APPROVED (with notes, 0 owner cards).** Narratives relayed to the owner. Owed by the owner: on-screen try-outs (P31–P34 were checked by tests only), P34 step 8 frame/render timings (dev Mac, then the a7R on the work Mac). Owner 2026-11-05: no Fable for implementation until the owner says so. Next: the owner's new intention `docs/intention/improved-session-manager/` (untracked, kept out of commits via .git/info/exclude until the owner says to add it). Local stashes of cut-off partials (P29 Codex, P31 fix, P34 Fable) are obsolete and can be dropped.
+**Composition corrections in planning (2026-11-05): planner (Opus) writing P35+ from 10D as amended (R38, changelog 28) after the owner's try-out.** P27–P34 APPROVED. Owner 2026-11-05: no Fable for implementation until the owner says so. Owed by the owner: P34 step 8 timings. Next after the corrections: the owner's new intention `docs/intention/improved-session-manager/` (untracked, kept out of commits via .git/info/exclude). Owner should rotate the Shopify client secret (displayed in the orchestrator's chat by mistake 2026-11-05; never committed).
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
