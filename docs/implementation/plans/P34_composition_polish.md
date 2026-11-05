@@ -134,3 +134,35 @@ whether the meter counts frames via rAF deltas or `PerformanceObserver`; the toa
   (3) **C3(c)** at the application-service boundary (`CompositionService::apply`) is accepted; `psm-testkit` cannot depend on the desktop crate. The Tauri command stays a thin mapping.
   (4) **C5(a,b)** computed transitions in jsdom are accepted at the level tested (crossfade); glide and browser-slide durations are checked by the reviewer by reading the CSS.
   Handoff state set to DONE; the run resumes at review r1.
+- 2026-11-05, opus review r1 — **CHANGES_REQUESTED** (handoff `handoffs/reviewer/handoff_P34_composition_polish_review_r1.md`).
+  Gate: tracker still read `IMPLEMENTING`; proceeded on the orchestrator ruling above (handoff DONE, checkpoint `a4f9b96` exists).
+  Verified correct: perimeter = the 38 paths of `a4f9b96` (extras disclosed except `ComposeMode.tsx`, `p34_meter.test.tsx`: note); suite 531 Rust /
+  300 UI, clippy, fmt, typecheck green (reviewer run; no code change since `a4f9b96`); C1(a) exact; C3(b) one call, ids `[2, 3]`, exact toast, tile
+  updated; C3(c) `applied [a, c]`, `refused [(b, off_shape)]`, revisions `1, 0, 1`, `change_seq + 2`; C4(a) dot on stage bar and overlay tile,
+  cleared on success and on refusal with the P31 toast; C5(a,b) crossfade 0 ms / 700 ms by test, glide (`.compose-image`, overlay) and browser
+  slide (`.compose-browser`) use `--dur-med`, overridden to `0ms` under `prefers-reduced-motion` in `globals.css` after `tokens.css` (by reading,
+  per ruling 4); C6(a) exact; C7(a) avg 19 / worst 48 and toggle; C7(b) both log lines with integer `ms`; the loupe's translate for the C2(a) input
+  is `(−1421.81, −602.60)` = the plan's values (scratch probe). Assumptions (in-memory clipboard; frameless selected photo refused in the toast;
+  meter samples only during a gesture) do not contradict 10D. H1–H8 hold (`composition_apply` is a DTO loop over `CompositionService::apply`).
+  - **F1 (B1, route: production)** The loupe ignores the photo's quarter turns, flip and straighten: `Loupe.tsx` sizes the unrotated preview to
+    the *turned* frame (`view.turned.w × h`) and maps the pointer in turned space, while the stage image carries `rotate(turns·90°) scaleX(±1)`
+    and the straighten. Probe (scratch test, deleted): `quarter_turns 1, flip horizontal` → stage img `rotate(90deg) scaleX(-1)`, loupe img
+    `1707 × 2560` with no rotation: a landscape preview squeezed into a portrait box, showing unrelated pixels. Authority: 10D §What the
+    photographer sees ("rotate 90° left/right, flip …; hold Z for a 100 % loupe"), plan task 1 ("shows the preview at 100 % centred on the image
+    point under the pointer"). Correction: render the loupe image at the preview's source size with the same turn/flip/straighten as the stage
+    image, so the point under the pointer is the point at the loupe's centre. Files: `features/compose/Loupe.tsx`, `compose.css`,
+    `__tests__/p34_loupe_snap.test.tsx`.
+  - **F2 (B1, route: production)** The pointer is tracked only while the loupe is shown (`onPointer={loupe ? setPointer : undefined}`), so pressing
+    Z with the pointer resting on the photo opens the loupe at the last stored point (`{0, 0}` the first time). Probe: pointer at `(600, 300)`,
+    then Z → loupe at `left 16px, top 16px` showing the stage's top-left corner until the pointer moves. Authority: plan task 1 ("follows the
+    pointer … centred on the image point under the pointer"). Correction: keep the last pointer position while composing regardless of the loupe,
+    so Z opens it under the resting pointer. Files: `ComposeMode.tsx`, `ComposeStage.tsx`, `__tests__/p34_loupe_snap.test.tsx`.
+  - **F3 (B2, route: production)** C2(a) asserts `img.style.transform` only `toContain('translate(')`; any centring passes. The row's exact
+    outcome is `translate(−(ix − 120), −(iy − 120))` with `ix = 1542`, `iy = 722.6`. Correction: assert the translate values (≈ `−1421.8px`,
+    `−602.6px`, to 0.1 px), and add a turned/flipped case (F1) and a Z-without-move case (F2). Files: `__tests__/p34_loupe_snap.test.tsx`.
+  - **F4 (B2, route: production)** C3(a) asserts the pasted rect's centre only; the copied rect `(0.3, 0.18, 0.4, 0.48)` already has centre
+    `(0.5, 0.42)`, so pasting the raw values without re-fit passes. Probe: `refitClipboard(V, 1707×2560).rect = (0.26002, 0.21998, 0.47995,
+    0.40004)`. Correction: assert the re-fitted rect (w, h, x, y to 4 decimals, i.e. the 4:5 ratio in portrait pixels at the preserved area).
+    Files: `__tests__/p34_clipboard.test.tsx`.
+  Notes (backlog): edge-snap guide drawn at the centre line; batch apply leaves a stale `Re-frame` badge; Apply outside the per-photo save queue;
+  C2(b) hardening; tracker not set by the resume ruling; two undisclosed perimeter paths.
