@@ -105,27 +105,33 @@ restated so no session has to infer them:
 | P32_composition_tools | APPROVED | 2026-11-05 | opus (pipeline-reviewer) | review r1 APPROVED_WITH_NOTES: perimeter = the 25 declared paths (`c0cc169`); suite 529 Rust / 268 UI, clippy/fmt/typecheck green (reviewer run on clean `59cb210`); all 25 rows have a boundary test that fails on a wrong outcome (plan arithmetic slips in re-fit (4)/(8)/(10) and C7(d) asserted at the contract's exact values, re-derived by the reviewer); H1–H8 hold; no assumption contradicts the book; 5 new backlog notes (one probe-confirmed: a control used while a scroll is still settling re-fits from the pre-scroll rect) |
 | P33_split_ui | APPROVED | 2026-11-05 | opus (pipeline-reviewer) | review r1 APPROVED_WITH_NOTES: perimeter = the 22 declared paths (`d47b6ce`; machine/ComposeStage/ComposeMode disclosed, FoldedStrip needed no change); suite 529 Rust / 291 UI, clippy/fmt/typecheck green (reviewer run, code tree = `d47b6ce`); all 15 rows have a boundary test that fails on a wrong outcome (plan arithmetic re-derived); H1–H8 hold; no assumption contradicts 10D; 4 new backlog notes (overlay `05` asserted as a substring; a quick second Split/Normal from the grid menu before the answer is dropped or duplicated) |
 | P34_composition_polish | APPROVED | 2026-11-05 | opus (pipeline-reviewer) | re-review r2 APPROVED_WITH_NOTES: fix perimeter = the allowed files (`34299ba`: `Loupe.tsx`, `ComposeMode.tsx`, `compose.css`, `p34_loupe_snap.test.tsx`, `p34_clipboard.test.tsx` + tracker/Review log); F1–F4 resolved as corrected (loupe at source size with the stage's turn/flip/straighten, inverse-straighten mapping re-derived; pointer tracked while composing; C2(a) pins `−1421.8/−602.6`; C3(a) pins the re-fitted rect); suite 531 Rust / 301 UI, clippy/fmt/typecheck green (reviewer run, code tree = `34299ba`); triage: no blocking item remains, 0 MUST; 2 new backlog notes |
+| P35_composed_display_and_chrome | NOT_STARTED | 2026-11-05 | planner | composition corrections (R38), workspace half: composed stage and tiles + crop mark, Compose button and the waiting reason, Split for any photo, header Details, Sessions icon; 7 criteria / 18 rows |
+| P36_editor_controls_and_overlays | NOT_STARTED | 2026-11-05 | planner | composition corrections (R38), editor half: strip while composing (F), overlays (O), straightening grid, typed straighten, a control and hint for every shortcut, focus and snap-guide fold-ins; 8 criteria / 22 rows |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 34 phases in execution order (17 MVP phases, the two real-run fix phases added
+`phases.txt` lists the 36 phases in execution order (17 MVP phases, the two real-run fix phases added
 2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, the two tidy-up phases P21/P22 planned
 2026-10-29 from `backlog.md`, P23_shape_on_arrival planned 2026-10-29 from book 10B, P24_capture_one_provisioning planned
 2026-11-03 from book 10C, the second tidy-up pair P25/P26 planned 2026-11-04 from `backlog.md` and the P24 narrative, and the eight
-composition phases P27–P34 planned 2026-11-04 from book 10D); the runner is sequential and a
+composition phases P27–P34 planned 2026-11-04 from book 10D, and the two composition-correction phases P35/P36 planned 2026-11-05 from the 10D amendment R38); the runner is sequential and a
 phase starts only when every phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24 → P25 → P26 → P27 → P28 → P29 → P30 → P33 → P34
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24 → P25 → P26 → P27 → P28 → P29 → P30 → P33 → P34 → P35 → P36
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗                                                                          ↘ P31 → P32 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15; P28 → P31; P30 + P32 → P33)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
 P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23] · P25[P24] · P26[P25] ·
-P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33].
+P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35].
+- **Composition corrections (planner 2026-11-05).** P35 (workspace: composed display, Compose button, Split for any photo, header Details,
+  Sessions icon) precedes P36 (editor: strip, overlays, straighten, controls and hints) because P36 builds on P35's shared `Hint` and its
+  Sessions toggle on `PhotoPanel`/`FoldedStrip`. **No `implementer: fable`** (owner 2026-11-05: no Fable for implementation until the owner
+  says so): both run on the default implementer (Codex; Claude Opus/Sonnet as the fallback, flow §2).
 - **Composition order (planner 2026-11-04).** `phases.txt` runs the backend render and publish phases (P29, P30) **before** the editor
   (P31, P32): from P29 on every exported or published file is the app's own render of the (default, square) composition, so no build
   between phases saves compositions that the files silently ignore (M33/M34's "silent wrong crop"). P31 depends on P28 only, so the
@@ -417,7 +423,7 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
 ### 6.10 Composition skeleton (book 10D, planned 2026-11-04; the names P27–P34 share)
 - **Constants:** `MIN_RECT_FRACTION = 0.05` (a rect's short side is at least 5 % of the turned frame's short side), `MASTER_TIFF_COMPRESSION =
   "Uncompressed"` (10D MC-28 after VERIFY-15), `FRAME_MARGIN_PX = 24`, `ZOOM_PER_PX = 0.005` (wheel zoom factor `exp(−deltaY · ZOOM_PER_PX)`),
-  `WHEEL_SETTLE_MS = 120`, `EDGE_REVEAL_PX = 12`, `SNAP_PX = 6`, `COMPOSE_HINT_KEY = 'compose.hintShown'`, `localStorage` `tools.hidden`,
+  `WHEEL_SETTLE_MS = 120`, `EDGE_REVEAL_PX = 12` (retired by P36), `SNAP_PX = 6`, `COMPOSE_HINT_KEY = 'compose.hintShown'`, `localStorage` `tools.hidden`,
   `tools.sections`; the app-state `settings` key `rerender_after_composition` (`done`) marks the one-time re-render of pre-10D previews.
 - **Geometry contract** (one text, in `P28_composition_foundation.md` §The geometry contract; `crates/core/src/mechanisms/composition.rs` and
   `apps/desktop/src/features/compose/geometry.ts` implement it; the case table proves both): turned frame; shape ratio (`split` → 2, `original`
@@ -439,6 +445,21 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   `zoomAbout`, `clampRect`); saves latest-wins per photo, ticketed; `refit.ts` (centre- and area-preserving re-fit; `trim`); keys: R, Esc, Return,
   arrows (Shift ×10), `.`, 1–6/0, X, S, `[`/`]`, ⌘⌥R, ⌘T, Z, ⌥ (snap off), ⌥⌘C/V/P; CSS classes per plan; `PhotoMenuAction` gains `compose`,
   `split`, `normal`, `apply`.
+- **Composition corrections (P35–P36, book 10D amended `b75ad61`/`163857a`, R38; planned 2026-11-05).**
+  P35: `COMPOSE_WAITING = "Waiting for Capture One's full-frame preview"` (exported from `services/compositions.ts` beside `canCompose`, the
+  only availability rule), toast id `compose-waiting`, `HINT_DELAY_MS = 400`; `components/ui/tooltip.tsx` → `Hint({ text, children })` (Radix
+  Tooltip, own provider; a control that cannot act is `aria-disabled`, never `disabled`); `features/compose/composed.ts` → `composedLayout`,
+  `leavesFrameOut` (crop mark: straighten ≠ 0 or the pixel rect smaller than the turned frame); `ComposedPicture` (callers `StageImage`,
+  `PhotoTileFace`); CSS `.stage-composed`, `.tile-composed`, `.composed-frame`, `.composed-split`, `img[data-swapped]`, `--composed-ratio`,
+  `.tile-crop-mark`, `.stage-compose`, `.panel-sessions`, `.photo-menu-why`; retired `.tile-composition`, `.tile-frame`, `.tile-split`,
+  `.sessions-toggle`, `canSplit`; `App` holds `detailsOpen` (the `assignOpen` pattern).
+  P36: keys while composing `o` (cycle overlay) and `f` (fold/unfold the browser; no longer swallowed); `localStorage` `compose.overlay`
+  (`off | thirds | grid | golden | diagonals`, default `thirds`), `compose.straightenGrid` and `compose.snap` (`'0'` = off, default on);
+  `OVERLAY_ORDER`, `STRAIGHTEN_GRID_PX = 24`, `STRAIGHTEN_STEP = 0.1`, `STRAIGHTEN_STEP_SHIFT = 1`; `features/compose/overlays.ts` →
+  `overlayLines`; `snap` guides become `'centre' | 'start' | 'end' | null`; new `EditorToolbar.tsx`, `StraightenControl.tsx`,
+  `useComposePrefs.ts`; ids `#compose-overlay`, `#compose-straighten-degrees`; CSS `.compose-overlay-guides[data-overlay]`,
+  `.compose-straighten-grid`, `.editor-toolbar`, `.compose-nudge`; **retired** `EDGE_REVEAL_PX`, `BrowserOverlay`, `.compose-browser` (the
+  edge-reveal browser of P31, dropped by R38). No command, table, setting or Rust change in either phase.
 
 ## 7. Environment topology (verified 2026-10-25 on the dev Mac; "if reality disagrees, update this section")
 ### 7.1 Verified facts
@@ -565,3 +586,9 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   shared case table, **new §6.10** (the composition skeleton), §7.5 harness. Owner's phasing kept except: the foundation split into P27
   (retire) + P28 (compositions), outputs before the editor (reason in §5), outputs split into P29 (render) + P30 (publish), the editor split
   into P31 (compose mode) + P32 (tools). No intention-book change; no owner card.
+- 2026-11-05 composition corrections — planner added P35_composed_display_and_chrome and P36_editor_controls_and_overlays from the owner's
+  corrections after the first composition try-out (book 10D amended `b75ad61` + `163857a`, R38, changelog 28). §4 two rows, §5 count 36 / graph
+  tail / `P35[P34]` / `P36[P35]` / the no-Fable implementer note (owner 2026-11-05), §6.10 the P35–P36 block (constants, `Hint`, `ComposedPicture`,
+  `composed.ts`, `overlays.ts`, `localStorage` keys, keys `o`/`f`, CSS, retirements incl. `EDGE_REVEAL_PX`). Folded in from the P31–P34 narratives'
+  "Not yet": Re-frame badge after Apply, the item card's "Edit details →", focus back to the editor after the Shape/Overlay menus and a slider
+  drag, the snap guide at the line it snapped to. No intention-book change; no owner card.

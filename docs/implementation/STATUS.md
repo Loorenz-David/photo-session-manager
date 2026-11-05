@@ -2,7 +2,7 @@
 
 Updated: 2026-11-04 by the orchestrator.
 
-**Composition corrections in planning (2026-11-05): planner (Opus) writing P35+ from 10D as amended (R38, changelog 28) after the owner's try-out.** P27–P34 APPROVED. Owner 2026-11-05: no Fable for implementation until the owner says so. Owed by the owner: P34 step 8 timings. Next after the corrections: the owner's new intention `docs/intention/improved-session-manager/` (untracked, kept out of commits via .git/info/exclude). Owner should rotate the Shopify client secret (displayed in the orchestrator's chat by mistake 2026-11-05; never committed).
+**Run in flight (2026-11-05, orchestrator): `run_phase.sh all` over P35–P36 (composition corrections, R38), default implementer Codex.** Plans by the planner (Opus), 0 owner cards (handoff_composition_corrections_plan_r1.md). P27–P34 APPROVED. Owner 2026-11-05: no Fable for implementation until the owner says so. Owed by the owner: P34 step 8 timings; rotate the Shopify client secret (displayed in chat by mistake, never committed). Next: the owner's new intention `docs/intention/improved-session-manager/` (untracked, excluded locally). Owner's camera FTP/SDK tests live outside the repo in ../Camera-Connection-Tests.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
