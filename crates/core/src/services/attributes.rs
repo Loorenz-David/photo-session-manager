@@ -21,6 +21,7 @@ use crate::{
         commerce::CommerceAdapter,
         store::{Store, StoreTx},
     },
+    services::history::{FieldChange, FieldState, History, Step, StepKind},
 };
 use serde_json::Value as Json;
 use std::collections::{BTreeMap, HashSet};
@@ -154,6 +155,7 @@ pub struct AttributesService<'a> {
     store: &'a dyn Store,
     clock: &'a dyn Clock,
     integration: Option<&'a str>,
+    history: Option<&'a History>,
 }
 
 impl<'a> AttributesService<'a> {
@@ -179,7 +181,33 @@ impl<'a> AttributesService<'a> {
             store,
             clock,
             integration,
+            history: None,
         }
+    }
+    pub fn with_history(mut self, history: &'a History) -> Self {
+        self.history = Some(history);
+        self
+    }
+    fn record(&self, item_id: i64, label: String, fields: Vec<FieldChange>) -> Result<()> {
+        if fields.is_empty() {
+            return Ok(());
+        }
+        if let (Some(history), Some(session_id)) =
+            (self.history, self.store.session_for_item(item_id)?)
+        {
+            history.record(
+                session_id,
+                Step {
+                    label,
+                    kind: StepKind::Attribute {
+                        session_id,
+                        item_id,
+                        fields,
+                    },
+                },
+            );
+        }
+        Ok(())
     }
 
     /// Replaces the definition set of `integration`. `reference` definitions are never writable
@@ -226,15 +254,24 @@ impl<'a> AttributesService<'a> {
     /// One read-modify-write of the value (`item_id`, `key`) in a transaction. `next` gets the
     /// definition and the stored row and returns the row to store; a row with the same content as
     /// the stored one is not written and leaves `updated_at` and `last_activity_at` alone (M16).
-    fn write(&self, item_id: i64, key: &str, next: &mut NextRow<'_>) -> Result<Option<Value>> {
+    fn write(
+        &self,
+        item_id: i64,
+        key: &str,
+        action: Option<&str>,
+        next: &mut NextRow<'_>,
+    ) -> Result<Option<Value>> {
         let now = self.clock.now_ms();
         let mut result = None;
+        let mut change = None;
+        let mut label = String::new();
         self.store.transaction(&mut |tx| {
             tx.item(item_id)?;
             let definition = active_definitions(tx, self.integration)?
                 .into_iter()
                 .find(|d| d.key == key)
                 .ok_or_else(|| unknown(key))?;
+            label = definition.label.clone();
             let stored = tx
                 .attribute_values(item_id)?
                 .into_iter()
@@ -248,22 +285,32 @@ impl<'a> AttributesService<'a> {
             }
             tx.put_attribute_value(&row)?;
             tx.set_item_activity(item_id, now)?;
+            change = Some(FieldChange {
+                key: key.into(),
+                before: FieldState::Row(stored),
+                after: FieldState::Row(Some(row.clone())),
+            });
             result = Some(row).filter(Value::is_live);
             Ok(())
         })?;
+        if let (Some(action), Some(change)) = (action, change) {
+            self.record(item_id, format!("{action} {label}"), vec![change])?;
+        }
         Ok(result)
     }
 
     /// Sets the item's title, the single home of `product.title` (ch05): `items.title`, not a value
     /// row. `None` empties it. A title equal to the stored one is not written (H4); a write sets the
     /// item's sessions' activity and leaves `change_seq` alone (MC-4, MC-6).
-    fn write_title(&self, item_id: i64, title: Option<String>) -> Result<Value> {
+    fn write_title(&self, item_id: i64, title: Option<String>, action: &str) -> Result<Value> {
         let now = self.clock.now_ms();
         let title = title.unwrap_or_default();
         let mut result = None;
+        let mut before = None;
         self.store.transaction(&mut |tx| {
             let item = tx.item(item_id)?;
             if item.title != title {
+                before = Some(item.title.clone());
                 tx.update_item_title(item_id, &title, now)?;
                 tx.set_item_activity(item_id, now)?;
             }
@@ -282,6 +329,17 @@ impl<'a> AttributesService<'a> {
             });
             Ok(())
         })?;
+        if let Some(old) = before {
+            self.record(
+                item_id,
+                format!("{action} Title"),
+                vec![FieldChange {
+                    key: PRODUCT_TITLE.into(),
+                    before: FieldState::Title(old),
+                    after: FieldState::Title(title),
+                }],
+            )?;
+        }
         result.ok_or_else(|| Error::InvalidData("title not stored".into()))
     }
 
@@ -310,31 +368,36 @@ impl<'a> AttributesService<'a> {
                 .map_err(|e| Error::InvalidValue(format!("{key}: {}", e.0)))?;
             let title: String = serde_json::from_str(&canonical.0)
                 .map_err(|e| Error::InvalidData(e.to_string()))?;
-            return self.write_title(item_id, Some(title));
+            return self.write_title(item_id, Some(title), "Edit");
         }
         let mut raw = Some(raw);
-        self.write(item_id, key, &mut |definition, stored, now| {
-            if provenance != Provenance::Human
-                && stored.is_some_and(|s| s.is_live() && s.provenance == Provenance::Human)
-            {
-                return Err(Error::InvalidValue(format!(
-                    "{key} holds a human value; only a human edit replaces it"
-                )));
-            }
-            let (value, valid) = stored_form(definition, raw.take().unwrap_or(Json::Null));
-            Ok(Some(Value {
-                item_id,
-                key: key.to_owned(),
-                value,
-                valid,
-                provenance,
-                ai_confidence: None,
-                ai_status: None,
-                ai_reason: None,
-                ai_sources: None,
-                updated_at: now,
-            }))
-        })?
+        self.write(
+            item_id,
+            key,
+            Some("Edit"),
+            &mut |definition, stored, now| {
+                if provenance != Provenance::Human
+                    && stored.is_some_and(|s| s.is_live() && s.provenance == Provenance::Human)
+                {
+                    return Err(Error::InvalidValue(format!(
+                        "{key} holds a human value; only a human edit replaces it"
+                    )));
+                }
+                let (value, valid) = stored_form(definition, raw.take().unwrap_or(Json::Null));
+                Ok(Some(Value {
+                    item_id,
+                    key: key.to_owned(),
+                    value,
+                    valid,
+                    provenance,
+                    ai_confidence: None,
+                    ai_status: None,
+                    ai_reason: None,
+                    ai_sources: None,
+                    updated_at: now,
+                }))
+            },
+        )?
         .ok_or_else(|| Error::InvalidData(format!("value {key} not stored")))
     }
 
@@ -350,7 +413,7 @@ impl<'a> AttributesService<'a> {
         sources: Vec<String>,
     ) -> Result<Value> {
         let mut raw = Some(raw);
-        self.write(item_id, key, &mut |definition, stored, now| {
+        self.write(item_id, key, None, &mut |definition, stored, now| {
             if stored.is_some_and(|s| s.provenance == Provenance::Human) {
                 return Err(Error::InvalidValue(format!(
                     "{key} holds a human value; AI never overwrites it"
@@ -378,6 +441,7 @@ impl<'a> AttributesService<'a> {
     pub fn accept_all(&self, item_id: i64) -> Result<usize> {
         let now = self.clock.now_ms();
         let mut count = 0;
+        let mut changes = Vec::new();
         self.store.transaction(&mut |tx| {
             tx.item(item_id)?;
             count = 0;
@@ -386,9 +450,15 @@ impl<'a> AttributesService<'a> {
                     && value.ai_status == Some(AiStatus::Suggested)
                     && value.ai_confidence != Some(AiConfidence::Low)
                 {
+                    let before = value.clone();
                     value.ai_status = Some(AiStatus::Accepted);
                     value.updated_at = now;
                     tx.put_attribute_value(&value)?;
+                    changes.push(FieldChange {
+                        key: value.key.clone(),
+                        before: FieldState::Row(Some(before)),
+                        after: FieldState::Row(Some(value)),
+                    });
                     count += 1;
                 }
             }
@@ -397,6 +467,7 @@ impl<'a> AttributesService<'a> {
             }
             Ok(())
         })?;
+        self.record(item_id, "Accept all suggestions".into(), changes)?;
         Ok(count)
     }
 
@@ -404,10 +475,10 @@ impl<'a> AttributesService<'a> {
     /// item's values. Clearing an empty or already cleared field changes nothing.
     pub fn clear(&self, item_id: i64, key: &str) -> Result<()> {
         if key == PRODUCT_TITLE {
-            self.write_title(item_id, None)?;
+            self.write_title(item_id, None, "Clear")?;
             return Ok(());
         }
-        self.write(item_id, key, &mut |_, stored, now| {
+        self.write(item_id, key, Some("Clear"), &mut |_, stored, now| {
             Ok(stored.filter(|s| s.is_live()).map(|s| Value {
                 ai_status: Some(AiStatus::Cleared),
                 updated_at: now,

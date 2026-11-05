@@ -250,6 +250,8 @@ for a cross-session `apply` (D14); whole-row equality (D15); the test-local help
 
 ## Review log
 
+- **2026-11-05, implement r1 (codex).** Built composition set/reset/Apply recording, transactional composition undo/redo with new revisions and post-commit photo/session events; attribute set/title/clear/accept-all recording, exact stored-row reversal and same-field save coalescing; command wiring, one-call Apply, and the missing-source copy-redo refusal. Added 20 boundary tests, one coalescing mechanism unit test. **Assumptions:** the existing `composition_apply` nested item DTO uses `photo_id` (as its Rust serde and generated TypeScript binding require), though C2(c)'s fixture spells `photoId`; retained the DTO and used `photo_id` in the command test. `CompositionService::apply` keeps the existing partial-success behavior and records only successful changes, as tasks 1–3 direct. **Deviations:** C2(c)'s request fixture spelling only; no product behavior or file-perimeter deviation. The test app attaches history through its new `attributes` helper; existing three-argument attribute constructors remain untouched. Live camera and Capture One were not needed for the automated tests.
+
 - **2026-11-05, orchestrator amendments after projection r0** (`handoffs/reviewer/handoff_P40_undo_history_compositions_and_attributes_projection_r0
   .md`, folded by the planner; `projection: yes` → `done`). D1 → F-comp states that a position needs `R.classify`, which records `Approve 01`;
   C1(a), C3(a), C6(a) carry it (C3(a) and C6(a) end on `Some("Approve 01")`), C2(a) keeps its photos unreviewed. D2 → task 4: `ai_suggest` records

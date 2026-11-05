@@ -196,13 +196,10 @@ pub async fn composition_apply(
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut result = ApplyResult::default();
+        let mut valid: Vec<(i64, CompositionValues)> = Vec::new();
         for item in items {
             match item.values.try_into() {
-                Ok(values) => {
-                    let one = app.compositions.apply(vec![(item.photo_id.0, values)]);
-                    result.applied.extend(one.applied);
-                    result.refused.extend(one.refused);
-                }
+                Ok(values) => valid.push((item.photo_id.0, values)),
                 Err(error) => result
                     .refused
                     .push(psm_core::services::composition::ApplyRefusal {
@@ -211,6 +208,9 @@ pub async fn composition_apply(
                     }),
             }
         }
+        let applied = app.compositions.apply(valid);
+        result.applied.extend(applied.applied);
+        result.refused.extend(applied.refused);
         Ok(ApplyResultDto::from(result))
     })
     .await

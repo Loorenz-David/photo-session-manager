@@ -1,11 +1,11 @@
 use crate::domain::{
     attribute::Value as AttributeValue,
-    composition::{CompositionValues, Origin},
+    composition::{CompositionState, CompositionValues, Origin},
     photo::Classification,
     session::SessionDto,
 };
 use crate::events::AppEvent;
-use crate::mechanisms::position;
+use crate::mechanisms::{composition::validate, position};
 use crate::ports::{
     clock::Clock,
     events::EventSink,
@@ -138,7 +138,16 @@ impl History {
         {
             let mut all = self.store.lock().unwrap();
             let list = all.entry(session_id).or_default();
-            list.undo.push_back(step);
+            let merged = if list.redo.is_empty() {
+                list.undo
+                    .back_mut()
+                    .is_some_and(|last| coalesce_attribute(last, &step))
+            } else {
+                false
+            };
+            if !merged {
+                list.undo.push_back(step);
+            }
             if list.undo.len() > HISTORY_LIMIT {
                 list.undo.pop_front();
             }
@@ -164,6 +173,32 @@ impl History {
             redo: state.redo,
         });
     }
+}
+
+fn coalesce_attribute(last: &mut Step, next: &Step) -> bool {
+    if !last.label.starts_with("Edit ") || !next.label.starts_with("Edit ") {
+        return false;
+    }
+    let (
+        StepKind::Attribute {
+            item_id: old_item,
+            fields: old,
+            ..
+        },
+        StepKind::Attribute {
+            item_id: new_item,
+            fields: new,
+            ..
+        },
+    ) = (&mut last.kind, &next.kind)
+    else {
+        return false;
+    };
+    if old_item != new_item || old.len() != 1 || new.len() != 1 || old[0].key != new[0].key {
+        return false;
+    }
+    old[0].after = new[0].after.clone();
+    true
 }
 
 pub struct HistoryService<'a> {
@@ -204,10 +239,19 @@ impl<'a> HistoryService<'a> {
         };
         let mut touched = Vec::new();
         let mut active = None;
+        let mut changed_photos = Vec::new();
         let at = self.clock.now_ms();
-        let result = self
-            .store
-            .transaction(&mut |tx| apply(tx, &mut step, direction, at, &mut touched, &mut active));
+        let result = self.store.transaction(&mut |tx| {
+            apply(
+                tx,
+                &mut step,
+                direction,
+                at,
+                &mut touched,
+                &mut active,
+                &mut changed_photos,
+            )
+        });
         match &result {
             Ok(()) | Err(Error::StepCannotApply { .. }) => {
                 let mut all = self.history.store.lock().unwrap();
@@ -234,6 +278,17 @@ impl<'a> HistoryService<'a> {
             self.history.emit(session_id);
         }
         result?;
+        if !changed_photos.is_empty() {
+            for photo_id in changed_photos {
+                self.history.events.emit(AppEvent::PhotoChanged {
+                    photo_id,
+                    session_id,
+                });
+            }
+            self.history
+                .events
+                .emit(AppEvent::SessionChanged { session_id });
+        }
         Ok(HistoryOutcome {
             label: step.label,
             direction,
@@ -318,6 +373,7 @@ fn apply(
     at: i64,
     touched: &mut Vec<i64>,
     active: &mut Option<i64>,
+    changed_photos: &mut Vec<i64>,
 ) -> Result<()> {
     match step.kind.clone() {
         StepKind::Classify { session_id, photos } => {
@@ -520,7 +576,15 @@ fn apply(
                 let existing = tx.photos(target)?;
                 let sources: Vec<_> = copies
                     .iter()
-                    .map(|(id, _)| tx.photo(*id))
+                    .map(|(id, _)| {
+                        tx.photo(*id).map_err(|e| {
+                            if matches!(e, Error::NotFound(_)) {
+                                cannot(step, direction, "that photo is gone")
+                            } else {
+                                e
+                            }
+                        })
+                    })
                     .collect::<Result<_>>()?;
                 if sources.iter().any(|p| p.session_id != source) {
                     return Err(cannot(step, direction, "that photo already changed"));
@@ -557,8 +621,95 @@ fn apply(
             }
             touched.push(target);
         }
-        StepKind::Composition { .. } | StepKind::Attribute { .. } => {
-            return Err(Error::InvalidData("history step belongs to P40".into()));
+        StepKind::Composition { session_id, photos } => {
+            for change in photos {
+                let p = tx.photo(change.photo_id).map_err(|e| {
+                    if matches!(e, Error::NotFound(_)) {
+                        cannot(step, direction, "that photo is gone")
+                    } else {
+                        e
+                    }
+                })?;
+                if p.session_id != session_id {
+                    return Err(cannot(step, direction, "that photo already changed"));
+                }
+                let current = tx.composition(change.photo_id).map_err(|e| {
+                    if matches!(e, Error::NotFound(_)) {
+                        cannot(step, direction, "that photo is gone")
+                    } else {
+                        e
+                    }
+                })?;
+                if current.state == CompositionState::NeedsReview {
+                    return Err(cannot(
+                        step,
+                        direction,
+                        "that photo changed in Capture One — re-frame it first",
+                    ));
+                }
+                let frame = current
+                    .frame()
+                    .ok_or_else(|| cannot(step, direction, "that photo has no frame"))?;
+                let target = if direction == Direction::Undone {
+                    &change.before
+                } else {
+                    &change.after
+                };
+                validate(&target.0, frame).map_err(|_| {
+                    cannot(step, direction, "the framing no longer fits this photo")
+                })?;
+                let (_, changed) = tx.save_composition(change.photo_id, &target.0, target.1, at)?;
+                if changed {
+                    changed_photos.push(change.photo_id);
+                }
+            }
+            touched.push(session_id);
+        }
+        StepKind::Attribute {
+            session_id,
+            item_id,
+            fields,
+        } => {
+            tx.item(item_id).map_err(|e| {
+                if matches!(e, Error::NotFound(_)) {
+                    cannot(step, direction, "that product is gone")
+                } else {
+                    e
+                }
+            })?;
+            let mut changed = false;
+            for field in fields {
+                let target = if direction == Direction::Undone {
+                    &field.before
+                } else {
+                    &field.after
+                };
+                match target {
+                    FieldState::Row(row) => {
+                        let current = tx
+                            .attribute_values(item_id)?
+                            .into_iter()
+                            .find(|v| v.key == field.key);
+                        if &current != row {
+                            match row {
+                                Some(value) => tx.put_attribute_value(value)?,
+                                None => tx.delete_attribute_value(item_id, &field.key)?,
+                            }
+                            changed = true;
+                        }
+                    }
+                    FieldState::Title(title) => {
+                        if tx.item(item_id)?.title != *title {
+                            tx.update_item_title(item_id, title, at)?;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            if changed {
+                tx.set_item_activity(item_id, at)?;
+            }
+            touched.push(session_id);
         }
     }
     Ok(())
@@ -650,5 +801,44 @@ mod tests {
                 redo: None
             }
         );
+    }
+    #[test]
+    fn mc30_attribute_steps_coalesce() {
+        fn edit(label: &str, key: &str, before: &str, after: &str) -> Step {
+            Step {
+                label: label.into(),
+                kind: StepKind::Attribute {
+                    session_id: 1,
+                    item_id: 2,
+                    fields: vec![FieldChange {
+                        key: key.into(),
+                        before: FieldState::Title(before.into()),
+                        after: FieldState::Title(after.into()),
+                    }],
+                },
+            }
+        }
+        let mut first = edit("Edit Title", "product.title", "Oak", "O");
+        let next = edit("Edit Title", "product.title", "O", "Oak table");
+        assert!(coalesce_attribute(&mut first, &next));
+        match first.kind {
+            StepKind::Attribute { fields, .. } => {
+                assert!(matches!(&fields[0].before,FieldState::Title(v) if v=="Oak"));
+                assert!(matches!(&fields[0].after,FieldState::Title(v) if v=="Oak table"));
+            }
+            _ => unreachable!(),
+        }
+        assert!(!coalesce_attribute(
+            &mut edit("Edit Color", "color", "Oak", "Oak"),
+            &edit("Clear Color", "color", "Oak", "")
+        ));
+        assert!(!coalesce_attribute(
+            &mut edit("Accept all suggestions", "color", "Oak", "Oak"),
+            &edit("Edit Color", "color", "Oak", "Teak")
+        ));
+        assert!(!coalesce_attribute(
+            &mut edit("Edit Color", "color", "Oak", "Oak"),
+            &edit("Edit Condition report", "report", "Oak", "Teak")
+        ));
     }
 }

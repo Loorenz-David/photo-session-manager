@@ -215,7 +215,8 @@ fn with_service<T>(
     op: impl FnOnce(&AttributesService<'_>) -> psm_core::Result<T>,
 ) -> Result<T, CommandError> {
     let integration = integration(app);
-    let service = AttributesService::new(app.store.as_ref(), &SystemClock, integration.as_deref());
+    let service = AttributesService::new(app.store.as_ref(), &SystemClock, integration.as_deref())
+        .with_history(app.history.as_ref());
     op(&service).map_err(Into::into)
 }
 
@@ -229,6 +230,7 @@ pub async fn attributes_definitions_list(
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<DefinitionDto>, CommandError> {
         let integration = integration(&app);
         AttributesService::new(app.store.as_ref(), &SystemClock, integration.as_deref())
+            .with_history(app.history.as_ref())
             .definitions(integration.as_deref())
             .map(|defs| defs.into_iter().map(Into::into).collect())
             .map_err(Into::into)

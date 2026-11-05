@@ -163,6 +163,24 @@ fn composition(conn: &Connection, photo_id: i64) -> Result<Composition> {
     .map_err(db)?
     .ok_or_else(|| Error::NotFound(format!("composition {photo_id}")))
 }
+fn save_composition_in(
+    conn: &Connection,
+    photo_id: i64,
+    values: &CompositionValues,
+    origin: Origin,
+    now_ms: i64,
+) -> Result<(Composition, bool)> {
+    let current = composition(conn, photo_id)?;
+    if current.values().as_ref() == Some(values)
+        && current.state == CompositionState::Ok
+        && current.origin == origin
+    {
+        return Ok((current, false));
+    }
+    conn.execute("UPDATE compositions SET kind=?1,shape=?2,orientation=?3,quarter_turns=?4,flip=?5,straighten=?6,x=?7,y=?8,w=?9,h=?10,origin=?11,revision=revision+1,state='ok',review_reason=NULL,updated_at=?12 WHERE photo_id=?13", params![values.kind.as_str(),values.shape.as_str(),values.orientation.as_str(),values.quarter_turns,values.flip.as_str(),values.straighten,values.rect.x,values.rect.y,values.rect.w,values.rect.h,origin.as_str(),now_ms,photo_id]).map_err(db)?;
+    conn.execute("UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=(SELECT session_id FROM photos WHERE id=?2 AND classification!='deleted')", params![now_ms,photo_id]).map_err(db)?;
+    Ok((composition(conn, photo_id)?, true))
+}
 fn adopt_frame_tx(conn: &Connection, raw: &str, observed: &Fingerprint) -> Result<Vec<(i64, i64)>> {
     let mut stmt = conn
         .prepare("SELECT id,session_id FROM photos WHERE raw_path=?1 ORDER BY id")
@@ -751,6 +769,27 @@ impl StoreTx for SqliteTx<'_> {
             )
             .collect()
     }
+    fn delete_attribute_value(&mut self, item_id: i64, key: &str) -> Result<()> {
+        self.tx
+            .execute(
+                "DELETE FROM attribute_values WHERE item_id=?1 AND key=?2",
+                params![item_id, key],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn composition(&self, photo_id: i64) -> Result<Composition> {
+        composition(&self.tx, photo_id)
+    }
+    fn save_composition(
+        &mut self,
+        photo_id: i64,
+        values: &CompositionValues,
+        origin: Origin,
+        now_ms: i64,
+    ) -> Result<(Composition, bool)> {
+        save_composition_in(&self.tx, photo_id, values, origin, now_ms)
+    }
     fn put_attribute_value(&mut self, v: &AttributeValue) -> Result<()> {
         let sources = v.ai_sources.as_ref().map(to_json).transpose()?;
         self.tx.execute("INSERT INTO attribute_values(item_id,key,value,valid,provenance,ai_confidence,ai_status,ai_reason,ai_sources,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(item_id,key) DO UPDATE SET value=excluded.value,valid=excluded.valid,provenance=excluded.provenance,ai_confidence=excluded.ai_confidence,ai_status=excluded.ai_status,ai_reason=excluded.ai_reason,ai_sources=excluded.ai_sources,updated_at=excluded.updated_at", params![v.item_id,v.key,v.value,v.valid,v.provenance.as_str(),v.ai_confidence.map(AiConfidence::as_str),v.ai_status.map(AiStatus::as_str),v.ai_reason,sources,v.updated_at]).map_err(db)?;
@@ -983,18 +1022,9 @@ impl Store for SqliteStore {
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         let tx = conn.transaction().map_err(db)?;
-        let current = composition(&tx, photo_id)?;
-        if current.values().as_ref() == Some(values)
-            && current.state == CompositionState::Ok
-            && current.origin == origin
-        {
-            return Ok((current, false));
-        }
-        tx.execute("UPDATE compositions SET kind=?1,shape=?2,orientation=?3,quarter_turns=?4,flip=?5,straighten=?6,x=?7,y=?8,w=?9,h=?10,origin=?11,revision=revision+1,state='ok',review_reason=NULL,updated_at=?12 WHERE photo_id=?13", params![values.kind.as_str(),values.shape.as_str(),values.orientation.as_str(),values.quarter_turns,values.flip.as_str(),values.straighten,values.rect.x,values.rect.y,values.rect.w,values.rect.h,origin.as_str(),now_ms,photo_id]).map_err(db)?;
-        tx.execute("UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=(SELECT session_id FROM photos WHERE id=?2 AND classification!='deleted')", params![now_ms,photo_id]).map_err(db)?;
-        let saved = composition(&tx, photo_id)?;
+        let saved = save_composition_in(&tx, photo_id, values, origin, now_ms)?;
         tx.commit().map_err(db)?;
-        Ok((saved, true))
+        Ok(saved)
     }
     fn backfill_compositions(&self, default_shape: &str, now_ms: i64) -> Result<usize> {
         let conn = self

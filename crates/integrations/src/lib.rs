@@ -441,6 +441,7 @@ impl App {
             store: store.clone(),
             clock: clock.clone(),
             events: events.clone(),
+            history: history.clone(),
             default_shape: psm_core::domain::composition::Shape::parse(&settings.default_shape)
                 .unwrap_or(psm_core::domain::composition::Shape::Square),
         });

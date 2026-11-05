@@ -7,8 +7,8 @@ use psm_core::{
     events::AppEvent,
     ports::{clock::Clock, events::EventSink, store::Store},
     services::{
-        history::HistoryService, items::ItemsService, review::ReviewService,
-        sessions::SessionsService,
+        attributes::AttributesService, history::HistoryService, items::ItemsService,
+        review::ReviewService, sessions::SessionsService,
     },
 };
 use psm_infra::paths::AppPaths;
@@ -66,6 +66,10 @@ impl TestApp {
             self.clock.as_ref(),
             self.app.history.as_ref(),
         )
+    }
+    pub fn attributes<'a>(&'a self, integration: Option<&'a str>) -> AttributesService<'a> {
+        AttributesService::new(self.app.store.as_ref(), self.clock.as_ref(), integration)
+            .with_history(self.app.history.as_ref())
     }
     pub fn add_photo(&self, session_id: i64, raw: &str) -> Result<Photo> {
         let path = self.dir.path().join(raw);

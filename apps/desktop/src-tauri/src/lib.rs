@@ -175,6 +175,142 @@ mod p39_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod p40_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+
+    fn call(w: &tauri::WebviewWindow<tauri::test::MockRuntime>, cmd: &str, args: Value) -> Value {
+        let body = get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .unwrap();
+        match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        }
+    }
+    #[test]
+    fn c2c_composition_apply_command_is_one_step() {
+        let a = psm_testkit::TestApp::with_fake_document().unwrap();
+        let s = a
+            .items()
+            .create_local("K", "Oak", "object", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let ids: Vec<_> = ["q.ARW", "r.ARW"]
+            .iter()
+            .map(|name| {
+                let p = a.add_photo(s, name).unwrap();
+                a.store().upsert_raw_state(&p.raw_path, None).unwrap();
+                a.fake
+                    .add_image(&p.raw_path, &[&format!("v{}", p.id)], false);
+                a.app.previews.request_initial(&p.raw_path).unwrap();
+                let job = a
+                    .fake
+                    .state
+                    .lock()
+                    .unwrap()
+                    .issued
+                    .last()
+                    .unwrap()
+                    .0
+                    .clone();
+                a.complete_render_with(
+                    &job,
+                    &psm_testkit::fixtures::synthetic_jpeg::SyntheticJpeg::rgb(
+                        2560,
+                        1707,
+                        [80, 80, 80],
+                    ),
+                )
+                .unwrap();
+                p.id
+            })
+            .collect();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::compositions::composition_apply,
+                commands::history::history_get
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let v1 = json!({"kind":"normal","shape":"1:1","orientation":"named","quarter_turns":0,"flip":"none","straighten":0.0,"rect":{"x":0.25,"y":(1.0-1280.0/1707.0)/2.0,"w":0.5,"h":1280.0/1707.0}});
+        let mut v2 = v1.clone();
+        v2["rect"]["x"] = json!(0.3);
+        assert_eq!(
+            call(
+                &w,
+                "composition_apply",
+                json!({"items":[{"photo_id":ids[0],"values":v1},{"photo_id":ids[1],"values":v2}]})
+            ),
+            json!({"applied":ids,"refused":[]})
+        );
+        assert_eq!(
+            call(&w, "history_get", json!({"sessionId":s})),
+            json!({"undo":"Apply framing to 2 photos","redo":null})
+        );
+    }
+    #[test]
+    fn c7b_attribute_command_undo_restores_absence() {
+        let a = psm_testkit::TestApp::with_fake_document().unwrap();
+        let (item, session) = a.items().create_local("K", "Oak", "object", None).unwrap();
+        let s = session.session.id;
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::attributes::attribute_values_set,
+                commands::attributes::attribute_values_get,
+                commands::history::history_undo
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        call(
+            &w,
+            "attribute_values_set",
+            json!({"itemId":item.id,"key":"product.description","value":"\"Scuffed top\""}),
+        );
+        let out = call(&w, "history_undo", json!({"sessionId":s}));
+        assert_eq!(out["label"], "Edit Description");
+        assert_eq!(out["direction"], "undone");
+        assert_eq!(out["active_photo_id"], Value::Null);
+        assert_eq!(out["sessions"].as_array().unwrap().len(), 1);
+        assert_eq!(out["sessions"][0]["id"], s);
+        assert!(
+            call(&w, "attribute_values_get", json!({"itemId":item.id}))
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|v| v["key"] != "product.description")
+        );
+    }
+}
 #[derive(serde::Serialize, Clone)]
 struct SessionChangedPayload {
     session_id: i64,

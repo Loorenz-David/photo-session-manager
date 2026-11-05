@@ -94,8 +94,17 @@ pub trait StoreTx {
     ) -> Result<()>;
     /// Every stored value row of the item, cleared rows included, ordered by key.
     fn attribute_values(&self, item_id: i64) -> Result<Vec<AttributeValue>>;
+    fn delete_attribute_value(&mut self, item_id: i64, key: &str) -> Result<()>;
     /// Inserts or replaces the row (`item_id`, `key`).
     fn put_attribute_value(&mut self, value: &AttributeValue) -> Result<()>;
+    fn composition(&self, photo_id: i64) -> Result<Composition>;
+    fn save_composition(
+        &mut self,
+        photo_id: i64,
+        values: &CompositionValues,
+        origin: Origin,
+        now_ms: i64,
+    ) -> Result<(Composition, bool)>;
     /// Sets `last_activity_at` of the item's sessions; `change_seq` is left as it is (MC-6).
     fn set_item_activity(&mut self, item_id: i64, at: i64) -> Result<()>;
     fn attribute_preset(&self, item_type: &str, group: AttributeGroup) -> Result<Option<Preset>>;
