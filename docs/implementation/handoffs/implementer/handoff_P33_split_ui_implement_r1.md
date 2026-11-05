@@ -2,7 +2,7 @@
 plan: P33_split_ui
 role: implement
 round: 1
-state: IMPLEMENTED
+state: DONE
 date: 2026-11-05
 actor: fable (pipeline-implementer, Claude Fable 5.1)
 ---
@@ -117,3 +117,5 @@ Pre-existing failures: none.
    photo is Main 01.
 
 ⚠ OWNER DECISIONS REQUIRED (0): none.
+
+_Orchestrator 2026-11-05 02:40: frontmatter `state` corrected IMPLEMENTED → DONE (the session reported STATE: DONE; IMPLEMENTED is the tracker word). No content change._

@@ -2,7 +2,7 @@
 
 Updated: 2026-11-04 by the orchestrator.
 
-**Run in flight (2026-11-05 01:12, owner asleep, orchestrator in control): `RESUME=1 PSM_IMPLEMENTER=claude run_phase.sh all` over P31–P34.** P27–P30 APPROVED (with notes; narratives to relay). P31 implement r1 and review r1 (CHANGES_REQUESTED) are kept; the run resumes at the Fable fix r2, which the usage limit cut off at 00:49. Stashes "P31 fix r2 partial…" (Fable's cut-off fix, not applied) and "P29 partial codex attempt" can both be dropped once their phases are approved.
+**Run in flight (2026-11-05 02:41, owner asleep, orchestrator in control): `RESUME=1 PSM_IMPLEMENTER=claude run_phase.sh all` over P33–P34.** P27–P32 APPROVED (all with notes; narratives to relay). P33 implement r1 done (checkpoint d47b6ce); the runner stopped only because the handoff frontmatter said `IMPLEMENTED` instead of `DONE` (corrected, noted in the handoff); resuming at the P33 review. Stashes "P31 fix r2 partial…" and "P29 partial codex attempt" can be dropped (both phases approved).
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
