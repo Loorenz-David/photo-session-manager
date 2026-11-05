@@ -9,6 +9,8 @@
 # Exit codes: 0 approved/done · 10 orchestrator must look · 20 runner error
 # Env: DRY_RUN=1 prints the commands instead of running sessions.
 #      PSM_IMPL_DIR overrides docs/implementation (used by the dry run).
+#      RESUME=1 skips the implement and first review sessions of a phase whose handoffs already say
+#      state DONE (a later session was cut off, e.g. by a usage limit); the next step runs as usual.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -24,6 +26,7 @@ IMPLEMENTER="${PSM_IMPLEMENTER:-codex}"
 PHASE_IMPLEMENTER=""
 DATE="$(date +%F)"
 DRY_RUN="${DRY_RUN:-0}"
+RESUME="${RESUME:-0}"
 CLAUDE_TOOLS="Bash Read Edit Write Grep Glob"
 mkdir -p "$RUNS" "$IMPL/prompts/implementer" "$IMPL/prompts/reviewer" \
          "$IMPL/handoffs/implementer" "$IMPL/handoffs/reviewer" "$IMPL/narratives" "$IMPL/state"
@@ -148,6 +151,9 @@ run_impl() {  # run_impl CODEX_MODEL EFFORT PROMPT LAST LOG → codex, or claude
   run_claude pipeline-implementer "$cm" "$full" "$last" "$logf" "$effort"
 }
 
+# finished HANDOFF → true when RESUME=1 and that session's handoff already says state DONE
+finished() { [[ "$RESUME" == 1 && -f "$1" && "$(frontmatter "$1" state)" == DONE ]]; }
+
 # session_state LAST HANDOFF → prints STATE, preferring the handoff frontmatter
 session_state() {
   local st; st="$(frontmatter "$2" state)"; [[ -z "$st" ]] && st="$(chatfield "$1" STATE)"; echo "${st:-MISSING}"
@@ -187,20 +193,24 @@ run_phase() {
   # 1. implement
   local ip="$P/implementer/${phase}_implement_r1.md" ih="$H/implementer/handoff_${phase}_implement_r1.md"
   DRY_HANDOFF="$ih"
+  if finished "$ih"; then log "resume: implement r1 already DONE"; else
   render "$TPL/implement.md" "$ip" PHASE="$phase" ROUND=1 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" HANDOFF="$ih"
   commit_artifacts "pipeline: $phase implement prompt"
   run_impl gpt-6-sol "$effort" "$ip" "$RUNS/${phase}_implement_r1.last.md" "$RUNS/${phase}_implement_r1.log" || true
   commit_artifacts "pipeline: $phase implement handoff"
+  fi
   local st; st="$(session_state "$RUNS/${phase}_implement_r1.last.md" "$ih")"
   [[ "$st" == DONE ]] || stop_for_orchestrator "$phase" "implementer state $st"
 
   # 2. review
   local rp="$P/reviewer/${phase}_review_r1.md" rh="$H/reviewer/handoff_${phase}_review_r1.md"
   DRY_HANDOFF="$rh"; DRY_VERDICT="${DRY_VERDICT_R1:-APPROVED}"
+  if finished "$rh"; then log "resume: review r1 already DONE"; else
   render "$TPL/review.md" "$rp" PHASE="$phase" ROUND=1 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" IMPL_HANDOFF="$ih" HANDOFF="$rh" NARRATIVE="$narrative"
   commit_artifacts "pipeline: $phase review prompt"
   run_claude pipeline-reviewer opus "$rp" "$RUNS/${phase}_review_r1.last.md" "$RUNS/${phase}_review_r1.log" || true
   commit_artifacts "pipeline: $phase review r1"
+  fi
   local v; v="$(session_verdict "$RUNS/${phase}_review_r1.last.md" "$rh")"
   st="$(session_state "$RUNS/${phase}_review_r1.last.md" "$rh")"
   [[ "$st" == DONE || "$st" == OWNER_DECISIONS_PENDING ]] || stop_for_orchestrator "$phase" "reviewer state $st"

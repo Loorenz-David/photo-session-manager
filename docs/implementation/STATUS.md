@@ -2,7 +2,7 @@
 
 Updated: 2026-11-04 by the orchestrator.
 
-**Stopped 2026-11-05 00:49 (usage limit, not a code problem).** P27, P28, P29 and P30 are APPROVED, all with notes; their narratives are to be relayed. P31_compose_mode: Fable implemented it and Opus reviewed it (r1, findings in handoff_P31_compose_mode_review_r1.md). The automatic fix (Fable, r2) was cut off by the account's usage limit, so the runner stopped with "fix state MISSING". Fable's partial fix is in `git stash` "P31 fix r2 partial…"; the stash "P29 partial codex attempt" can be dropped. **Next:** once the limit resets, archive the P31 fix r2 attempt (or apply the stash) and relaunch `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh all` for P31–P34.
+**Run in flight (2026-11-05 01:12, owner asleep, orchestrator in control): `RESUME=1 PSM_IMPLEMENTER=claude run_phase.sh all` over P31–P34.** P27–P30 APPROVED (with notes; narratives to relay). P31 implement r1 and review r1 (CHANGES_REQUESTED) are kept; the run resumes at the Fable fix r2, which the usage limit cut off at 00:49. Stashes "P31 fix r2 partial…" (Fable's cut-off fix, not applied) and "P29 partial codex attempt" can both be dropped once their phases are approved.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
