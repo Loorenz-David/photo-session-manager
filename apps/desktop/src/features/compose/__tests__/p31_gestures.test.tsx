@@ -17,7 +17,7 @@ import {
   twoPhotos,
   wheel,
 } from './harness';
-import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import { setComposition, type Composition, type CompositionValues } from '@/services/compositions';
@@ -270,6 +270,24 @@ describe('C6 interrupted gestures and Esc', () => {
     placedAt(11.09);
     expect(stage()).not.toBeNull();
   });
+
+  it('F2 (review r1) Esc that closes the ⋯ menu over the editor closes the menu only: no revert, one save, placement kept', async () => {
+    const frames = await editor();
+    await drag(500, 550, 350, frames.flush);
+    expect(setComposition).toHaveBeenCalledTimes(1);
+    frames.flush();
+    placedAt(61.09);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Photo actions' }), { button: 0, ctrlKey: false });
+    const menu = await screen.findByRole('menu');
+    await act(async () => {
+      fireEvent.keyDown(menu, { key: 'Escape' });
+    });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(setComposition).toHaveBeenCalledTimes(1);
+    frames.flush();
+    placedAt(61.09);
+    expect(stage()).not.toBeNull();
+  });
 });
 
 describe('C7 saves', () => {
@@ -307,7 +325,7 @@ describe('C7 saves', () => {
     expect(vi.mocked(getSessionView).mock.calls.length).toBe(loads);
   });
 
-  it('C7(b) two quick drags: the later save wins, the stale answer is ignored, exactly two calls', async () => {
+  it('C7(b) two quick drags: B waits behind A, A\'s answer leaves the stage on B while B is in flight, B\'s answer wins, exactly two calls', async () => {
     let resolveA!: (composition: Composition) => void;
     let resolveB!: (composition: Composition) => void;
     vi.mocked(setComposition)
@@ -316,17 +334,24 @@ describe('C7 saves', () => {
     const frames = await editor();
     await drag(500, 550, 350, frames.flush);
     await drag(500, 550, 350, frames.flush);
+    // One save in flight per photo: B is queued behind A, and the stage shows B (+100 px).
+    expect(setComposition).toHaveBeenCalledTimes(1);
     const a = savedValues(0);
     near(a.rect.x, PANNED_X);
-    await act(async () => {
-      resolveB(saved(1, { ...a, rect: { ...a.rect, x: DEFAULT_RECT.x - 2 * (DEFAULT_RECT.x - PANNED_X) } }, 2));
-    });
+    frames.flush();
+    placedAt(111.09);
     await act(async () => {
       resolveA(saved(1, a, 1));
     });
-    await waitFor(() => expect(setComposition).toHaveBeenCalledTimes(2));
+    // A settled and B was sent: the stage must still show B, not snap back to A (review r1 F1).
+    expect(setComposition).toHaveBeenCalledTimes(2);
     const b = savedValues(1);
     near(b.rect.x, DEFAULT_RECT.x - 2 * (DEFAULT_RECT.x - PANNED_X));
+    frames.flush();
+    placedAt(111.09);
+    await act(async () => {
+      resolveB(saved(1, b, 2));
+    });
     fireEvent.pointerMove(document.querySelector('main.workspace')!, { clientX: window.innerWidth - 5, clientY: 300 });
     const browser = document.querySelector('.compose-browser')!;
     await waitFor(() => expect(tile(1, browser).querySelector<HTMLElement>('.tile-frame')!.style.left).toBe('6.4332%'));

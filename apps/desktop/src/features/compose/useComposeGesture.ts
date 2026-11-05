@@ -27,6 +27,9 @@ export type ComposeController = {
 /** Workspace keys that are off while composing (design handoff §Keyboard; 10D). */
 const SWALLOWED = new Set(['a', 'c', 'backspace', 'delete', ' ', 'f', 'i', 'd', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown']);
 
+/** An open layer owns its own keyboard (the guard `useBackKeys` in `lib/keyboard.ts` uses; design handoff §Keyboard "Esc (close topmost)"). */
+const LAYER_OPEN = '[role="dialog"], [role="alertdialog"], [role="menu"]';
+
 type GestureLike = Event & { clientX?: number; clientY?: number; scale?: number };
 
 /**
@@ -176,6 +179,9 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
       if (document.visibilityState === 'hidden') dispatch({ type: 'Hidden' });
     };
     const onKey = (event: KeyboardEvent) => {
+      // The compose keyboard is the stage's only (10D): a key an open menu / dialog already took, or one pressed while
+      // such a layer is open, is not the editor's (review r1 F2).
+      if (event.defaultPrevented || document.querySelector(LAYER_OPEN)) return;
       if (isTyping(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();
       if (key === 'escape') {

@@ -3,8 +3,13 @@ import { toast } from 'sonner';
 import { setComposition, type Composition, type CompositionValues } from '@/services/compositions';
 
 type SavesOptions = {
-  /** Called with the stored composition after every settled save (success: the backend's row; failure: the last stored row). */
-  onSaved: (photoId: number, composition: Composition) => void;
+  /** Called with the backend's row after every successful save (the workspace row is patched, tiles redraw). */
+  onStored: (photoId: number, composition: Composition) => void;
+  /**
+   * Called only when the photo's queue is quiet — a success with nothing newer waiting, or a refusal (with the last
+   * stored row) — so the editor (machine rule 16) never hears an older answer while a newer save is still queued.
+   */
+  onSettled: (photoId: number, composition: Composition) => void;
   /** The last composition known to be stored for the photo (the workspace view's row). */
   storedOf: (photoId: number) => Composition | null;
 };
@@ -14,7 +19,9 @@ type Entry = { inFlight: boolean; pending: CompositionValues | null; latest: num
 /**
  * Autosave, latest-wins per photo (plan P31 task 4): one save in flight per photo, the newest values waiting behind
  * it; a settle older than the photo's latest ticket is ignored; a refused save tells the photographer and hands the
- * stored composition back so the editor snaps to it (machine rule 16). Leaving the editor flushes nothing extra.
+ * stored composition back so the editor snaps to it (machine rule 16). An older success that lands while a newer save
+ * is queued reaches the tiles (`onStored`) but not the editor (`onSettled`), so the stage stays on what the
+ * photographer sees (review r1 F1). Leaving the editor flushes nothing extra.
  */
 export function useCompositionSaves(options: SavesOptions): (photoId: number, values: CompositionValues) => void {
   const latest = useRef(options);
@@ -26,16 +33,17 @@ export function useCompositionSaves(options: SavesOptions): (photoId: number, va
       if (!entry || ticket !== entry.latest) return;
       entry.inFlight = false;
       if (composition) {
-        latest.current.onSaved(photoId, composition);
+        latest.current.onStored(photoId, composition);
         const next = entry.pending;
         entry.pending = null;
         if (next) send(photoId, next);
+        else latest.current.onSettled(photoId, composition);
         return;
       }
       entry.pending = null;
       toast.error(`Not saved: ${(error as Error).message}`);
       const stored = latest.current.storedOf(photoId);
-      if (stored) latest.current.onSaved(photoId, stored);
+      if (stored) latest.current.onSettled(photoId, stored);
     };
     const send = (photoId: number, values: CompositionValues) => {
       const entry = entries.get(photoId)!;

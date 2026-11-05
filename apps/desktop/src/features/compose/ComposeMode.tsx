@@ -71,13 +71,10 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
   }, []);
 
   const save = useCompositionSaves({
-    onSaved: useCallback(
-      (photoId: number, composition: Composition) => {
-        patchPhoto(photoId, { composition });
-        dispatchRef.current({ type: 'Saved', photoId, composition });
-      },
-      [patchPhoto],
-    ),
+    onStored: useCallback((photoId: number, composition: Composition) => patchPhoto(photoId, { composition }), [patchPhoto]),
+    onSettled: useCallback((photoId: number, composition: Composition) => {
+      dispatchRef.current({ type: 'Saved', photoId, composition });
+    }, []),
     storedOf: useCallback((photoId: number) => photosRef.current.find(photo => photo.id === photoId)?.composition ?? null, []),
   });
 
