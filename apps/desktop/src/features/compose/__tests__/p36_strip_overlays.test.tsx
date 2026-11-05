@@ -24,8 +24,8 @@ describe('P36 strip and overlays', () => {
     await key('f');
     expect(document.querySelector('main.workspace > .photo-panel')).not.toBeNull();
     expect(document.querySelector('.folded-strip')).toBeNull();
-    await act(async () => fireEvent.click(tile(1, document.querySelector('.photo-panel')!)));
-    expect(document.querySelector('.compose-image img')?.getAttribute('src')).toBe('asset:///previews/1/adjusted-1.jpg');
+    await act(async () => fireEvent.click(tile(2, document.querySelector('.photo-panel')!)));
+    expect(document.querySelector('.compose-image img')?.getAttribute('src')).toBe('asset:///previews/2/adjusted-1.jpg');
     fireEvent.click(document.querySelector('.photo-panel [aria-label="Fold panel"]')!);
     expect(document.querySelector('main.workspace > .folded-strip')).not.toBeNull();
     await key('Enter');

@@ -68,8 +68,10 @@ describe('P36 straightening', () => {
   });
   it('C7(a) returns the keyboard to the editor after choosing Shape', async () => {
     await start();
-    fireEvent.change(document.querySelector('#compose-shape')!, { target: { value: '4:5' } });
-    await act(async () => press(window, 'x'));
+    const shape = document.querySelector<HTMLSelectElement>('#compose-shape')!;
+    act(() => shape.focus());
+    fireEvent.change(shape, { target: { value: '4:5' } });
+    await act(async () => press(document.activeElement!, 'x'));
     expect(setComposition).toHaveBeenCalledTimes(2);
     expect(savedValues(0).shape).toBe('4:5');
     expect(savedValues(1).orientation).toBe('turned');
@@ -77,9 +79,10 @@ describe('P36 straightening', () => {
   });
   it('C7(b) returns the keyboard to the editor after dragging the slider', async () => {
     await start();
+    act(() => slider().focus());
     fireEvent.pointerDown(slider()); fireEvent.input(slider(), { target: { value: '10' } });
     await act(async () => { fireEvent.change(slider(), { target: { value: '10' } }); fireEvent.pointerUp(slider()); });
-    await act(async () => press(window, 'x'));
+    await act(async () => press(document.activeElement!, 'x'));
     expect(setComposition).toHaveBeenCalledTimes(2);
     expect(savedValues(0).straighten).toBe(10);
     expect(savedValues(1).orientation).toBe('turned');
