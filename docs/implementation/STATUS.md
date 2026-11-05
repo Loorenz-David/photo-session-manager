@@ -2,7 +2,7 @@
 
 Updated: 2026-11-04 by the orchestrator.
 
-**Run in flight (2026-11-05 06:35, orchestrator): `RESUME=1 run_phase.sh all`, P34 at review r1.** P27–P33 APPROVED (all with notes; narratives to relay). P34 implement r1 (Codex, checkpoint a4f9b96) stopped BLOCKED only on live verification and two fixtures; ruled from the book in the plan's Review log (live timings → owner try-out). Owner 2026-11-05: no Fable for implementation until the owner says so. Next after P34: the owner's new intention `docs/intention/improved-session-manager/` (untracked, kept out of commits via .git/info/exclude). Stashes for P29/P31/P34 partials can be dropped.
+**Composition feature complete (2026-11-05 07:05): P27–P34 all APPROVED (with notes, 0 owner cards).** Narratives relayed to the owner. Owed by the owner: on-screen try-outs (P31–P34 were checked by tests only), P34 step 8 frame/render timings (dev Mac, then the a7R on the work Mac). Owner 2026-11-05: no Fable for implementation until the owner says so. Next: the owner's new intention `docs/intention/improved-session-manager/` (untracked, kept out of commits via .git/info/exclude until the owner says to add it). Local stashes of cut-off partials (P29 Codex, P31 fix, P34 Fable) are obsolete and can be dropped.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
