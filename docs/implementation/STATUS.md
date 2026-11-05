@@ -1,6 +1,6 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
-**2026-11-05 (afternoon): P37_editor_chrome running** — the owner's second editor corrections (10D, R39): icon toolbar with name/key/description hover cards, Tools panel hide button in its own header with a left rail, Rotate and flip drawer, Turn and grid icons, folded nudge pad, frame meter without a button. Plan e04393f; implementer Codex.
+**2026-11-05 13:10: P37_editor_chrome APPROVED_WITH_NOTES** (first review) — the owner's second editor corrections (10D, R39): icon toolbar with name/key/description hover cards, Tools panel hide button in its own header with a left rail, Rotate and flip drawer, Turn and grid icons, folded nudge pad, frame meter without a button. Plan e04393f; implementer Codex. Leftovers: the stage ⓘ and ⋯ buttons still use the old tooltip; the flaky P33 stage-bar test.
 
 Updated: 2026-11-04 by the orchestrator.
 
