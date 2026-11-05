@@ -73,7 +73,7 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
             </button>
           </Hint>}
           {compose && (
-            <>{compose.toolbar}<Hint text="Done (Return)"><button type="button" className="compose-done" onClick={compose.onDone}>
+            <>{compose.toolbar}<Hint text={{ name: 'Done', key: 'Return', description: 'Keeps the changes and leaves the editor' }}><button type="button" className="compose-done" onClick={compose.onDone}>
               Done
             </button></Hint></>
           )}
@@ -84,7 +84,7 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
         </span>
       </div>
       <div className="stage-body" onDoubleClick={onDoubleClick}>
-        <Hint text="Previous photo ([)"><button type="button" className="stage-nav stage-prev" onClick={() => onStep(-1)} aria-label="Previous photo">
+        <Hint text={{ name: 'Previous photo', key: '[', description: 'The photo before, keeping the changes' }}><button type="button" className="stage-nav stage-prev" onClick={() => onStep(-1)} aria-label="Previous photo">
           <ChevronLeft />
         </button></Hint>
         {compose ? (
@@ -94,7 +94,7 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
             <StageImage key={active.id} photo={active} mode={mode} />
           </SwipeLayer>
         )}
-        <Hint text="Next photo (])"><button type="button" className="stage-nav stage-next" onClick={() => onStep(1)} aria-label="Next photo">
+        <Hint text={{ name: 'Next photo', key: ']', description: 'The photo after, keeping the changes' }}><button type="button" className="stage-nav stage-next" onClick={() => onStep(1)} aria-label="Next photo">
           <ChevronRight />
         </button></Hint>
       </div>

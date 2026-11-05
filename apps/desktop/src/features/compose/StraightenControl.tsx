@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Hint } from '@/components/ui/tooltip';
+import { Grid3x3 } from 'lucide-react';
 import { STRAIGHTEN_STEP, STRAIGHTEN_STEP_SHIFT } from './useComposePrefs';
 
 type Props = {
@@ -43,11 +44,11 @@ export function StraightenControl({ value, onSet, onStraightening, grid, onGrid 
   return <>
     <div className="compose-field compose-straighten">
       <label htmlFor="compose-straighten">Straighten</label>
-      <Hint text="Straighten (double-click to level)"><input ref={rangeRef} id="compose-straighten" aria-label="Straighten" type="range" min={-45} max={45} step={0.1} value={value} onChange={event => onSet(Number(event.target.value), true)} onDoubleClick={() => onSet(0)} onPointerDown={() => setHeld(true)} onPointerUp={event => { setHeld(false); event.currentTarget.blur(); }} onPointerCancel={() => setHeld(false)} /></Hint>
+      <Hint text={{ name: 'Straighten', description: 'Tilts the photo; double-click levels it' }}><input ref={rangeRef} id="compose-straighten" aria-label="Straighten" type="range" min={-45} max={45} step={0.1} value={value} onChange={event => onSet(Number(event.target.value), true)} onDoubleClick={() => onSet(0)} onPointerDown={() => setHeld(true)} onPointerUp={event => { setHeld(false); event.currentTarget.blur(); }} onPointerCancel={() => setHeld(false)} /></Hint>
     </div>
     <div className="compose-field compose-degrees">
       <label htmlFor="compose-straighten-degrees">Degrees</label>
-      <Hint text="Straighten in degrees (↑ ↓ 0.1°, ⇧ 1°)"><input ref={fieldRef} id="compose-straighten-degrees" aria-label="Straighten degrees" inputMode="decimal" value={text} onChange={event => setText(event.target.value)} onFocus={() => setFocused(true)} onBlur={() => { if (!skipBlur.current) commit(); skipBlur.current = false; setFocused(false); }} onKeyDown={event => {
+      <Hint text={{ name: 'Straighten degrees', key: '↑ ↓', description: 'Typed degrees; ↑ ↓ step 0.1°, ⇧ 1°' }}><input ref={fieldRef} id="compose-straighten-degrees" aria-label="Straighten degrees" inputMode="decimal" value={text} onChange={event => setText(event.target.value)} onFocus={() => setFocused(true)} onBlur={() => { if (!skipBlur.current) commit(); skipBlur.current = false; setFocused(false); }} onKeyDown={event => {
         event.stopPropagation();
         if (event.key === 'Enter') { event.preventDefault(); commit(); skipBlur.current = true; fieldRef.current?.blur(); }
         else if (event.key === 'Escape') { event.preventDefault(); setText(valueRef.current.toFixed(1)); skipBlur.current = true; fieldRef.current?.blur(); }
@@ -58,7 +59,7 @@ export function StraightenControl({ value, onSet, onStraightening, grid, onGrid 
           setText(Math.max(-45, Math.min(45, next)).toFixed(1));
         }
       }} /></Hint><span aria-hidden>°</span>
+      <Hint text={{ name: 'Straightening grid', description: 'A fine grid over the photo while straightening' }}><button type="button" role="switch" className="compose-tool" aria-label="Straightening grid" aria-checked={grid} onClick={() => onGrid(!grid)}><Grid3x3 aria-hidden /></button></Hint>
     </div>
-    <Hint text="Straightening grid"><button type="button" role="switch" className="compose-tool" aria-label="Straightening grid" aria-checked={grid} onClick={() => onGrid(!grid)}>Straightening grid</button></Hint>
   </>;
 }

@@ -84,6 +84,7 @@ describe('C3 the Composition section', () => {
 
   it('C3(c) Rotate right / left turn the photo under the frame (a 1:1 shape re-fits identically); Flip mirrors a free rect', async () => {
     const frames = await editor();
+    await click('Rotate and flip');
     await click('Rotate right');
     expect(setComposition).toHaveBeenCalledTimes(1);
     expect(savedValues(0).quarter_turns).toBe(1);
@@ -106,6 +107,7 @@ describe('C3 the Composition section', () => {
     cleanup();
     vi.mocked(setComposition).mockClear();
     await editor(view([free, photo(2, 'main', { position: 2 })]));
+    await click('Rotate and flip');
     await click('Flip');
     expect(setComposition).toHaveBeenCalledTimes(1);
     expect(savedValues(0).flip).toBe('horizontal');

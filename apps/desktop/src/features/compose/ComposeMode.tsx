@@ -77,6 +77,8 @@ export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, o
   const [meter, setMeter] = useState(false);
   const [browserFolded, setBrowserFolded] = useState(true);
   const [straightening, setStraightening] = useState(false);
+  const [rotateFlipOpen, setRotateFlipOpen] = useState(false);
+  const [nudgeOpen, setNudgeOpen] = useState(false);
   const prefs = useComposePrefs();
   const clipboard = useClipboardComposition();
   const photosRef = useRef(photos);
@@ -192,11 +194,12 @@ export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, o
         hidden={tools.hidden}
         isOpen={tools.isOpen}
         onToggle={tools.toggleSection}
+        onToggleHidden={tools.toggleHidden}
         sections={[
           {
             id: 'composition',
             title: 'Composition',
-            content: state ? <CompositionSection photo={active} state={state} controller={controller} onReset={reset} onDone={done} overlay={prefs.overlay} onOverlay={prefs.setOverlay} straightenGrid={prefs.straightenGrid} onStraightenGrid={prefs.setStraightenGrid} onStraightening={setStraightening} /> : null,
+            content: state ? <CompositionSection photo={active} state={state} controller={controller} onReset={reset} onDone={done} overlay={prefs.overlay} onOverlay={prefs.setOverlay} straightenGrid={prefs.straightenGrid} onStraightenGrid={prefs.setStraightenGrid} onStraightening={setStraightening} rotateFlipOpen={rotateFlipOpen} onRotateFlipOpen={setRotateFlipOpen} nudgeOpen={nudgeOpen} onNudgeOpen={setNudgeOpen} /> : null,
           },
         ]}
       />
@@ -212,7 +215,7 @@ export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, o
           onItemCard={onItemCard}
           compose={{
             onDone: done,
-            toolbar: <EditorToolbar onRevert={() => controller.dispatch({ type: 'KeyEsc' })} loupe={loupePinned} onLoupe={() => setLoupePinned(value => !value)} snap={prefs.snap} onSnap={() => prefs.setSnap(!prefs.snap)} onCopy={copy} onPaste={paste} canPaste={clipboard !== null} tools={!tools.hidden} onTools={tools.toggleHidden} meter={meter} onMeter={() => setMeter(value => !value)} />,
+            toolbar: <EditorToolbar onRevert={() => controller.dispatch({ type: 'KeyEsc' })} loupe={loupePinned} onLoupe={() => setLoupePinned(value => !value)} snap={prefs.snap} onSnap={() => prefs.setSnap(!prefs.snap)} onCopy={copy} onPaste={paste} canPaste={clipboard !== null} />,
             children: <>
               <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} onPointer={setPointer} overlay={prefs.overlay} straightenGrid={prefs.straightenGrid && straightening} />
               {(loupeHeld || loupePinned) && state && active.adjusted_preview_path && <Loupe src={previewUrl(active.adjusted_preview_path)} pointer={pointer} state={state} />}

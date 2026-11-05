@@ -30,7 +30,7 @@ export function PhotoPanel({ photos, onFold, onImport, sessionsOpen, onToggleSes
           <Hint text="Import photos"><button type="button" className="stage-icon-button" onClick={() => void importing.run()} aria-disabled={importing.busy || undefined} aria-busy={importing.busy ? 'true' : undefined} aria-label="Import photos">
             <FolderInput />{importing.busy && <span aria-hidden>…</span>}
           </button></Hint>
-          <Hint text="Fold panel (F)"><button type="button" className="stage-icon-button" onClick={onFold} aria-label="Fold panel">
+          <Hint text={{ name: 'Fold panel', key: 'F', description: 'Folds the panel to the strip' }}><button type="button" className="stage-icon-button" onClick={onFold} aria-label="Fold panel">
             <PanelRightClose />
           </button></Hint>
         </span>

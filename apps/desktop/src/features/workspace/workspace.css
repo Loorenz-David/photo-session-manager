@@ -6,6 +6,7 @@
 .stage-column { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--stage); }
 /* The editor's three columns (10D): the Tools panel on the left, the stage, the browser hidden behind the edge reveal. */
 .tools-panel { width: 260px; flex: none; overflow-y: auto; border-right: 1px solid var(--hair); background: var(--color-bg); }
+.tools-rail { width: 36px; flex: none; display: flex; flex-direction: column; align-items: center; padding-top: var(--space-2); border-right: 1px solid var(--hair); background: var(--color-bg); }
 
 .stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .stage-empty { align-items: center; justify-content: center; gap: var(--space-2); text-align: center; }
@@ -23,6 +24,10 @@
 .stage-compose[aria-disabled="true"] { opacity: .5; cursor: default; }
 .panel-sessions[aria-pressed="true"] { background: var(--color-surface); }
 .hint-tooltip { z-index: 100; padding: 5px 8px; border-radius: var(--r-sm); background: var(--color-text); color: var(--color-bg); box-shadow: var(--shadow-sm); font-size: var(--text-sm); }
+.hint-card { white-space: nowrap; }
+.hint-name { font-weight: var(--weight-heavy); }
+.hint-key { font: inherit; }
+.hint-description { font-weight: normal; }
 
 .stage-body { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-4) 64px; }
 .stage-nav { position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 32px; height: 32px; margin-top: -16px; border: 0; border-radius: 50%; background: var(--color-bg); box-shadow: var(--shadow-sm); color: var(--color-text); cursor: pointer; }

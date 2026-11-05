@@ -11,7 +11,7 @@ export function FoldedStrip({ photos, onUnfold, sessionsOpen, onToggleSessions, 
   const order = displayOrder(photos);
   return (
     <aside className="folded-strip" aria-label="Photo strip">
-      <Hint text="Unfold panel (F)"><button type="button" className="stage-icon-button" onClick={onUnfold} aria-label="Unfold panel">
+      <Hint text={{ name: 'Unfold panel', key: 'F', description: 'Opens the full photo panel beside the editor' }}><button type="button" className="stage-icon-button" onClick={onUnfold} aria-label="Unfold panel">
         <PanelRightOpen />
       </button></Hint>
       <Hint text="Sessions"><button type="button" className="stage-icon-button panel-sessions" onClick={onToggleSessions} aria-label="Sessions" aria-pressed={sessionsOpen}><PanelsRightBottom /></button></Hint>

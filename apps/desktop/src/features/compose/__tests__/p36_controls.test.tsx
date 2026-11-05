@@ -1,5 +1,5 @@
 import { compose, composition, layoutStage, openWorkspace, photo, pointer, savedValues, twoPhotos, view } from './harness';
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { setComposition } from '@/services/compositions';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,43 +9,12 @@ const bar = () => document.querySelector('.stage-bar')!;
 const click = async (scope: ParentNode, name: string) => act(async () => { fireEvent.click(Array.from(scope.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === name || button.textContent?.trim() === name)!); });
 
 describe('P36 editor controls', () => {
-  it('C5(a) gives every editor shortcut its named control and exact hint', async () => {
-    await start();
-    const entries: [string, string, string, string][] = [
-      ['.tools-panel', 'button', 'Normal', 'Normal (S)'], ['.tools-panel', 'button', 'Split', 'Split (S)'],
-      ['.tools-panel', 'combobox', 'Shape', 'Shape (1–6, 0)'], ['.tools-panel', 'button', 'Turn frame', 'Turn frame (X)'],
-      ['.tools-panel', 'button', 'Rotate left', 'Rotate 90° left'], ['.tools-panel', 'button', 'Rotate right', 'Rotate 90° right'],
-      ['.tools-panel', 'button', 'Flip', 'Flip horizontally'], ['.tools-panel', 'slider', 'Straighten', 'Straighten (double-click to level)'],
-      ['.tools-panel', 'textbox', 'Straighten degrees', 'Straighten in degrees (↑ ↓ 0.1°, ⇧ 1°)'],
-      ['.tools-panel', 'switch', 'Straightening grid', 'Straightening grid'], ['.tools-panel', 'combobox', 'Overlay', 'Overlay (O)'],
-      ['.tools-panel', 'button', 'Nudge left', 'Nudge left (←)'], ['.tools-panel', 'button', 'Nudge right', 'Nudge right (→)'],
-      ['.tools-panel', 'button', 'Nudge up', 'Nudge up (↑)'], ['.tools-panel', 'button', 'Nudge down', 'Nudge down (↓)'],
-      ['.tools-panel', 'button', 'Centre', 'Centre (.)'], ['.tools-panel', 'button', 'Reset', 'Reset (⌘⌥R)'],
-      ['.tools-panel', 'button', 'Done', 'Done (Return)'],
-      ['.stage-bar', 'button', 'Revert', 'Revert (Esc)'], ['.stage-bar', 'button', 'Loupe', 'Loupe (hold Z)'],
-      ['.stage-bar', 'button', 'Snapping', 'Snapping (hold ⌥ to suspend)'], ['.stage-bar', 'button', 'Copy framing', 'Copy framing (⌥⌘C)'],
-      ['.stage-bar', 'button', 'Paste framing', 'Paste framing (⌥⌘V)'], ['.stage-bar', 'button', 'Tools panel', 'Tools panel (⌘T)'],
-      ['.stage-bar', 'button', 'Frame meter', 'Frame meter (⌥⌘P)'], ['.stage-bar', 'button', 'Done', 'Done (Return)'],
-      ['.stage-body', 'button', 'Previous photo', 'Previous photo ([)'], ['.stage-body', 'button', 'Next photo', 'Next photo (])'],
-      ['.folded-strip', 'button', 'Unfold panel', 'Unfold panel (F)'],
-    ];
-    for (const [place, role, name, hint] of entries) {
-      const scope = document.querySelector(place)!;
-      const control = within(scope as HTMLElement).getByRole(role, { name });
-      await act(async () => { (document.activeElement as HTMLElement)?.blur(); control.focus(); });
-      await waitFor(() => expect(screen.getByRole('tooltip').textContent?.trim()).toBe(hint));
-    }
-    fireEvent.keyDown(window, { key: 'f' });
-    const fold = screen.getByRole('button', { name: 'Fold panel' });
-    await act(async () => { (document.activeElement as HTMLElement)?.blur(); fold.focus(); });
-    await waitFor(() => expect(screen.getByRole('tooltip').textContent?.trim()).toBe('Fold panel (F)'));
-  });
   it('C5(b) keeps unavailable Paste hintable, inert, then enables it after Copy', async () => {
     await start();
     const paste = screen.getByRole('button', { name: 'Paste framing' });
     expect(paste).toHaveAttribute('aria-disabled', 'true');
     await act(async () => paste.focus());
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Paste framing (⌥⌘V)');
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Paste framing · ⌥⌘V — Puts the copied composition on this photo, refitted to its frame');
     fireEvent.click(paste); expect(setComposition).not.toHaveBeenCalled();
     await click(bar(), 'Copy framing'); expect(paste).not.toHaveAttribute('aria-disabled');
   });
@@ -108,26 +77,10 @@ describe('P36 editor controls', () => {
     expect(savedValues(0).rect.w).toBeCloseTo(0.47995, 4);
     expect(savedValues(0).rect.h).toBeCloseTo(0.40004, 4);
   });
-  it('C6(f) Tools panel button toggles the panel and remembered state', async () => {
-    await start(); await click(bar(), 'Tools panel');
-    expect(document.querySelector('.tools-panel')).toHaveAttribute('hidden');
-    expect(screen.getByRole('button', { name: 'Tools panel' })).toHaveAttribute('aria-pressed', 'false');
-    expect(window.localStorage.getItem('tools.hidden')).toBe('1');
-    await click(bar(), 'Tools panel'); expect(document.querySelector('.tools-panel')).not.toHaveAttribute('hidden');
-    expect(screen.getByRole('button', { name: 'Tools panel' })).toHaveAttribute('aria-pressed', 'true');
-  });
-  it('C6(g) Frame meter button toggles the meter', async () => {
-    await start();
-    await click(bar(), 'Frame meter');
-    expect(document.querySelector('.frame-meter')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Frame meter' })).toHaveAttribute('aria-pressed', 'true');
-    await click(bar(), 'Frame meter');
-    expect(document.querySelector('.frame-meter')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Frame meter' })).toHaveAttribute('aria-pressed', 'false');
-  });
   it('C6(h) the nudge pad follows arrow step sizes', async () => {
     await start();
-    await click(document.querySelector('.compose-nudge')!, 'Nudge right');
+    await click(document.querySelector('.composition-section')!, 'Nudge');
+    await click(document.querySelector('#compose-nudge-pad')!, 'Nudge right');
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Nudge right' }), { shiftKey: true }));
     expect(setComposition).toHaveBeenCalledTimes(2);
     expect(savedValues(0).rect.x).toBeCloseTo(0.167624, 5);

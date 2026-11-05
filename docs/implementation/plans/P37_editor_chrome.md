@@ -235,3 +235,5 @@ is the contract); keeping or dropping the `Tools` title text in the panel head (
 
 ## Review log
 
+
+- **2026-11-05, implement r1 (codex).** Built the five-icon stage toolbar, exact T2 hover cards, a Tools header and remembered left rail, closed Rotate and flip and Nudge drawers, the Turn icon beside Shape, and the grid icon beside degrees. Adjusted only the P36 and P32 tests named in Read first; added 12 P37 boundary tests. Assumptions: rail width 36 px; drawer toggles have visible short labels plus icons; hover card typography stays the existing tooltip's font. No deviations from the plan. Rust suite, clippy, fmt, typecheck and UI suite (348 tests) passed; the first full UI run encountered the previously documented intermittent P33 C4(d) failure and passed on rerun.

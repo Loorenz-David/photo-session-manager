@@ -1,24 +1,21 @@
-import { Hint } from '@/components/ui/tooltip';
+import { ClipboardPaste, Copy, Magnet, Undo2, ZoomIn } from 'lucide-react';
+import { Hint, type HintCard } from '@/components/ui/tooltip';
 
 type Props = {
   onRevert: () => void;
   loupe: boolean; onLoupe: () => void;
   snap: boolean; onSnap: () => void;
   onCopy: () => void; onPaste: () => void; canPaste: boolean;
-  tools: boolean; onTools: () => void;
-  meter: boolean; onMeter: () => void;
 };
 
 export function EditorToolbar(props: Props) {
-  const button = (name: string, hint: string, action: () => void, pressed?: boolean, unavailable?: boolean) =>
-    <Hint key={name} text={hint}><button type="button" className="compose-tool" aria-label={name} aria-pressed={pressed} aria-disabled={unavailable || undefined} onClick={() => { if (!unavailable) action(); }}>{name}</button></Hint>;
+  const button = (card: HintCard, icon: React.ReactNode, action: () => void, pressed?: boolean, unavailable?: boolean) =>
+    <Hint key={card.name} text={card}><button type="button" className="compose-tool" aria-label={card.name} aria-pressed={pressed} aria-disabled={unavailable || undefined} onClick={() => { if (!unavailable) action(); }}>{icon}</button></Hint>;
   return <div className="editor-toolbar">
-    {button('Revert', 'Revert (Esc)', props.onRevert)}
-    {button('Loupe', 'Loupe (hold Z)', props.onLoupe, props.loupe)}
-    {button('Snapping', 'Snapping (hold ⌥ to suspend)', props.onSnap, props.snap)}
-    {button('Copy framing', 'Copy framing (⌥⌘C)', props.onCopy)}
-    {button('Paste framing', 'Paste framing (⌥⌘V)', props.onPaste, undefined, !props.canPaste)}
-    {button('Tools panel', 'Tools panel (⌘T)', props.onTools, props.tools)}
-    {button('Frame meter', 'Frame meter (⌥⌘P)', props.onMeter, props.meter)}
+    {button({ name: 'Revert', key: 'Esc', description: 'Back to how this photo was when the editor opened' }, <Undo2 aria-hidden />, props.onRevert)}
+    {button({ name: 'Loupe', key: 'Z', description: '100 % view under the pointer' }, <ZoomIn aria-hidden />, props.onLoupe, props.loupe)}
+    {button({ name: 'Snapping', key: '⌥', description: 'Snaps to the centre and the image edges; hold ⌥ to suspend' }, <Magnet aria-hidden />, props.onSnap, props.snap)}
+    {button({ name: 'Copy framing', key: '⌥⌘C', description: "Takes this photo's composition" }, <Copy aria-hidden />, props.onCopy)}
+    {button({ name: 'Paste framing', key: '⌥⌘V', description: 'Puts the copied composition on this photo, refitted to its frame' }, <ClipboardPaste aria-hidden />, props.onPaste, undefined, !props.canPaste)}
   </div>;
 }
