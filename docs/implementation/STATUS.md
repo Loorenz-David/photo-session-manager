@@ -2,7 +2,7 @@
 
 Updated: 2026-11-04 by the orchestrator.
 
-**Stopped 2026-11-05 02:59.** P27–P33 APPROVED (all with notes; narratives to relay). P34_composition_polish: the Fable implement r1 session exited 1 (see .pipeline/runs/P34_composition_polish_implement_r1.last.md; likely the usage limit) before writing a handoff. Its partial work is in `git stash` "P34 implement r1 partial…" (not applied). **Next:** `tools/pipeline/run_phase.sh archive P34_composition_polish`, then relaunch `RESUME=1 PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh all`. The stashes for P29 and P31 can be dropped.
+**Run in flight (2026-11-05, orchestrator): `RESUME=1 run_phase.sh all` for P34 on Codex (default).** P27–P33 APPROVED (all with notes; narratives to relay). P34's cut-off Fable attempt is archived and its partial work kept in `git stash` "P34 implement r1 partial…" (not applied). Owner 2026-11-05: no Fable for implementation until the owner says so (session limit); `implementer: fable` removed from P34. Next after P34: the owner's new intention `docs/intention/improved-session-manager/` (untracked, kept out of commits via .git/info/exclude until the owner says to add it). Stashes for P29/P31 can be dropped.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
