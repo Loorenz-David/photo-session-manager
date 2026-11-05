@@ -193,4 +193,15 @@ is C5(a)).
 ## Review log
 
 - **2026-11-05, implement r1 (codex).** Built the two-layer split line, 2 px stage/tile split marker, filled accent state for Loupe/Snapping/grid, a Radix rotate menu and nudge popover, and moved their icon triggers onto the degrees row. Replaced the retired drawer expectations and covered the 12 P38 boundary rows (the 29-card T3 check lives in the adjusted P37 test). Assumptions: use the suggested translucent black edge and token-based menu surfaces; keep the existing popover focus so editor arrows continue working; add a document capture pointer handler for nudge outside dismissal because the stage pointerdown did not dismiss Radix in the DOM boundary test. No deviations from the plan. Full frontend 355/355, Rust suite, clippy, fmt and typecheck pass. Visual contrast and placement await the owner's manual try-out.
+- **2026-11-05, review r1 (opus): APPROVED_WITH_NOTES.** The perimeter equals the 13 declared paths (`1b7a328`; `ComposedPicture.tsx` was
+  unchanged because the CSS alone covers stage and tiles; `p36_controls` was unchanged and green). The reviewer ran typecheck, UI 355/355,
+  `cargo test --workspace`, clippy and fmt, all green. Every row was verified by reading the code and its test. C1(a) checks order, widths
+  and middle against the rendered rect. C2(a–c) check fill, `data-on` and the persisted `'0'`. C3(a)/(b) check menu roles, names in order,
+  the `ROTATED` save and close-after-pick. C4(a–d) check that `role="group"` overrides the dialog role, that the pad survives each arrow
+  click with the P37 values, outside dismissal without a save, and that Esc saves nothing more (a revert would add a call, so this
+  discriminates). C5(a) checks `slice(3)` is exactly grid, rotate, nudge. C6(a) checks 27 + 2 = 29 cards with exact text. Changed-input
+  probes (scratch test, deleted) found: arrows nudge while the pad is open, keys are off while the menu is open, a second Esc reverts, and
+  the trigger toggles the pad closed. The assumptions are within Delegated choices or match 10D (the extra capture-phase outside handler).
+  H1–H8 hold. Notes to backlog: the pad `id` overrides Radix's content id, so the trigger's `aria-controls` dangles; a duplicate
+  outside-dismiss handler; the WebKit look is unchecked.
 
