@@ -93,11 +93,15 @@ label unchanged); any other newest step → a new step.
    label; `changed == false` records nothing. `apply(items)` records **one** step with every photo whose save changed (refused or unchanged photos
    are not in it); zero changed photos → nothing. A photo whose `values()` is `None` (no rect yet) cannot be `set` (FrameUnknown) and records
    nothing.
-2. **Composition reversal** (`history.rs`): undo = for every `CompositionChange` (reverse order) inside one `store.transaction`: `tx.composition
-   (photo_id)` (`NotFound` → gone); `state == NeedsReview` → cannot apply (reason above); `frame()` `None` → cannot apply; `validate(&before.values,
-   frame)` fails → cannot apply; `tx.save_composition(photo_id, &before.values, before.origin, now)`; after the commit emit `PhotoChanged` for every
-   photo and `SessionChanged` once (what `CompositionService::save` emits). Redo = the same with `after`. The saved row has `revision = previous +
-   1` (never `− 1`), `state ok`; `change_seq + 1` comes from `save_composition_in` as today.
+2. **Composition reversal** (`history.rs`): undo = for every `CompositionChange` inside one `store.transaction`, **under the `History` operation
+   lock of P39 §Serialisation** (one undo or redo at a time per app): `tx.photo(photo_id)` (`NotFound` → `that photo is gone`; `session_id !=
+   step.session_id` → `that photo already changed`, a later non-step move); `tx.composition(photo_id)`; `state == NeedsReview` → cannot apply
+   (reason above); `frame()` `None` → cannot apply; `validate(&before.values, frame)` fails → cannot apply; `tx.save_composition(photo_id,
+   &before.values, before.origin, now)` — when it answers `changed == false` for every photo (the stored values already equal the target) nothing
+   was written and nothing is emitted (P39 D12: a reversal that changes nothing is not a photo change); after the commit emit `PhotoChanged` for
+   every photo whose save changed and `SessionChanged` once (what `CompositionService::save` emits). Redo = the same with `after`. The saved row has
+   `revision = previous + 1` (never `− 1`), `state ok`; `change_seq + 1` comes from `save_composition_in` as today. Only `StepCannotApply` drops the
+   step; a SQLite or I/O error leaves both lists unchanged (P39 D11).
 3. **`composition_apply` as one step** (`commands/compositions.rs:189–216`): the command converts every item first (collecting conversion
    refusals) and calls `app.compositions.apply(valid_items)` **once**, so the service records one step; the DTO is unchanged.
 4. **Attribute recording** (`attributes.rs`): `write` already holds `stored` (the prior row) and the row it writes → after a real write record
@@ -106,10 +110,12 @@ label unchanged); any other newest step → a new step.
    step with every accepted row (`before` = suggested, `after` = accepted) when `count > 0`; `clear` records `{ before: Row(live), after: Row(cleared
    row) }` (nothing when there was nothing live). Recording after the commit; `same_content` no-ops record nothing. The coalescing rule of §Core
    mechanisms applies to `set_value` and `clear` single-field steps (never to `accept_all`).
-5. **Attribute reversal** (`history.rs`): undo = one `store.transaction`: `tx.item(item_id)` (`NotFound` → cannot apply, `that product is gone`);
-   for every field (reverse): `Row(Some(v))` → `put_attribute_value(&v)` (byte-identical row, `updated_at` included); `Row(None)` →
-   `delete_attribute_value(item_id, key)`; `Title(t)` → `update_item_title(item_id, &t, now)`; then `set_item_activity(item_id, now)` once.
-   `change_seq` is never touched. Redo = the same with `after`. `active_photo_id` is `None`; `sessions` = the item's session.
+5. **Attribute reversal** (`history.rs`): undo = one `store.transaction` under the same operation lock: `tx.item(item_id)` (`NotFound` → cannot
+   apply, `that product is gone`); for every field: `Row(Some(v))` → `put_attribute_value(&v)` (byte-identical row, `updated_at` included);
+   `Row(None)` → `delete_attribute_value(item_id, key)`; `Title(t)` → `update_item_title(item_id, &t, now)`; each write is skipped when the stored
+   row (or title) already equals the target, and when every field was skipped `set_item_activity` is skipped too (P39 D12); otherwise
+   `set_item_activity(item_id, now)` once. `change_seq` is never touched. Redo = the same with `after`. `active_photo_id` is `None`; `sessions` =
+   the item's session. Only `StepCannotApply` drops the step (P39 D11).
 6. **Wiring**: `CompositionService { history }` in `lib.rs:426`; `AttributesService::new(…, Some(app.history.as_ref()))` in `commands/attributes.rs`
    (`with_service` and `attributes_definitions_list`), `None` in `health.rs:36` and `lib.rs:572`; `TestApp::attributes(integration) ->
    AttributesService` with the history; `p10_attributes.rs` `attrs()` gets its fourth argument.
@@ -194,4 +200,10 @@ key)`).
 - Estimated size: ~12 paths, ~900 lines (≈ 400 core/infra, ≈ 500 tests).
 
 ## Review log
+
+- **2026-11-05, planner carry-over from P39's projection r0** (`handoff_P39_undo_history_core_projection_r0.md` D10–D12, D7): tasks 2 and 5 now
+  state that composition and attribute reversals run under the `History` operation lock (D10), that only `StepCannotApply` drops a step (D11),
+  that a reversal whose target equals the stored state writes nothing and does not touch activity or `change_seq` (D12), and that a composition
+  step checks the photo is still in the step's session (D7's analogue). No row change: C1(d) already pins "no change, no step"; the lock and the
+  drop rule are P39's rows C2(e)/C4(c) over the shared `HistoryService`. P40's own projection remains on.
 

@@ -282,7 +282,9 @@ P29 renames `RenderPurpose::Export` → `Master`, adds `Imaging::render_output(m
 P30 changes `CommerceAdapter::staged_uploads_create(run, stem, byte_size)` (core builds the stem: `mechanisms::upload_name::stem(folder_key, uid,
 slot, revision)`), `Store::photo_link(photo, item, role, slot)`, `retire_photo_links`, and `replacement_candidates(links, retouch_gens,
 composition_revs)`.
-**P39** removes `StoreTx::set_undo_slot` and adds `StoreTx::delete_photo_row(id)` (the `photos` row and its `compositions` row); **P40** adds
+**P39** removes `StoreTx::set_undo_slot` and adds `StoreTx::delete_photo_row(id)` (the `photos` row and its `compositions` row) and
+`StoreTx::publish_confirmed_since(session_id, seq) -> bool` (any `publish_items` row of the session with `confirmed_change_seq >= seq`; the
+copy-undo guard, projection D5); **P40** adds
 `StoreTx::composition(photo_id)`, `StoreTx::save_composition(photo_id, &CompositionValues, Origin, now_ms) -> (Composition, bool)` (the same body
 as `Store::save_composition`, shared through `save_composition_in(conn, …)`) and `StoreTx::delete_attribute_value(item_id, key)`. `EventSink`
 gains nothing; `AppEvent::HistoryChanged` (§6.7) is emitted by `History`.
@@ -336,8 +338,8 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   `needs_review{photos}` (data `photos` = labels `Main 02`, message `Re-frame first: Main 02, Condition 01`). P30 adds `UploadState::Retired`.
 - Error codes (`psm_core::Error`, snake_case, carried to the UI as `{code, message, data}`): `relative_path`,
   `sku_collision{existing_sku}`, `sku_in_shop{sku}`, `target_has_raw`, `target_published`, `nothing_to_undo`, P39: `nothing_to_redo`,
-  `step_cannot_apply{label, reason}` (message `Can't undo|redo <label>: <reason>`; reasons `that session is published`, `that photo is gone`,
-  `that photo already changed`, `the copy is gone`; P40 adds `that photo changed in Capture One — re-frame it first`, `that photo has no frame`,
+  `step_cannot_apply{label, reason}` (message `Can't undo|redo <label>: <reason>`; reasons `that session is published`, `that session already
+  has this photo`, `that photo is gone`, `that photo already changed`, `the copy is gone`; P40 adds `that photo changed in Capture One — re-frame it first`, `that photo has no frame`,
   `the framing no longer fits this photo`, `that product is gone`),
   `variant_not_found`, `capture_folder_not_set`, `hooks_not_installed`, `recipe_missing{name}`, `tag_verification`,
   `raw_changed{photo_id}`, `raw_missing{photo_id}`, `several_products_carry_sku{sku}`, `foreign_media_added{n}`,
@@ -525,8 +527,13 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   { label, direction: Direction::{Undone, Redone}, sessions, active_photo_id }`. Recording happens **after** the transaction committed, in
   `ReviewService` (P39; `ReviewService::new(store, clock, &History)`; `PhotosService.history`), `CompositionService` (P40; field `history:
   Arc<History>`) and `AttributesService` (P40; `new(store, clock, integration, Option<&History>)`, `None` for schema refresh). Every reversal is
-  one `Store::transaction` (rollback on `Err`); a failed precondition drops the step and returns `Error::StepCannotApply`. **Labels** (P39
-  §Labels): `Approve 03`, `Condition 02`, `Delete 03` / `Delete photo`, `Approve 3 photos`, `Reorder 03 → 01`, `Move to <title|SKU|Unassigned>`,
+  one `Store::transaction` (rollback on `Err`) run under **one operation lock per `History`** (take → transaction → place/drop; lock order History
+  → store; `HistoryChanged` emitted after release — projection D10); **only `Error::StepCannotApply` drops the step**, any other error leaves the
+  lists as they were (D11); a reversal whose computed state equals the current one writes nothing and touches nothing (D12); photos re-inserted
+  into a group go in **ascending `before.position`** (positions read before the whole operation, D4); copy undo is refused once any publish was
+  confirmed after the copy (`publish_confirmed_since`), repoints the RAW's mirror job to the surviving row, and redo rewrites `seq_after` (D5, D8,
+  D9). **Labels** (P39 §Labels): `Approve 03`, `Condition 02`, `Delete 03` / `Delete photo`, `Unreview 03` / `Unreview photo`, `Approve 3 photos`,
+  `Reorder 03 → 01`, `Move to <title|SKU|Unassigned>`,
   `Move 2 photos to …`, `Copy to …`, `Compose 03` / `Compose photo`, `Apply framing to 4 photos`, `Edit <label>`, `Accept all suggestions`, `Clear
   <label>`. `App.history: Arc<History>` and `AppHandles.history`; `SettingsSetContext.history_store`; `App::build(…, history: Option<HistoryStore>)`
   (carried across a runtime settings rebuild, built with the **new** `events` hub; empty after a relaunch). `TestApp::{history(), attributes(…)}`.
@@ -686,3 +693,7 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   step model, labels, App wiring, frontend and menu names). Tests of P37 (C2(a) table, C5(a), C7(a)/(b), C8(a)), P32 (C3(c)), P36 (C6(h)), P02
   (c3b–c3f, the MC-6 row), P10 (`attrs()`), P08 (C2(b)/(c)) change their expectation as listed in the plans' Read first. Mechanism check of MC-30
   against the code recorded in `handoffs/reviewer/handoff_polish_and_undo_plan_r1.md`. No intention-book change; no owner card.
+- 2026-11-05 P39 projection r0 folded — planner (Fable) folded `handoff_P39_undo_history_core_projection_r0.md` (D1–D18, R1–R5) into
+  `plans/P39_undo_history_core.md` (rows 22 → 27; `projection: done`), carried D7/D10–D12 into `plans/P40_…` tasks 2 and 5 (its projection stays
+  on), and amended §6.4 (`StoreTx::publish_confirmed_since`), §6.6 (`that session already has this photo`), §6.10 (the lock, drop, no-op and
+  ascending-order rules; the copy-undo refusal; `Unreview` labels). Nothing declined.
