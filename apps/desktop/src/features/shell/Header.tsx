@@ -13,6 +13,7 @@ import { PublishProgress } from '@/features/publish/PublishProgress';
 import { NotificationsDrawer } from '@/features/publish/NotificationsDrawer';
 import { usePublish } from '@/features/publish/usePublish';
 import { PageHeader } from './PageHeader';
+import { HistoryButtons } from '@/features/history/HistoryButtons';
 
 type HeaderProps = {
   sessionId?: number;
@@ -166,6 +167,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
       </>}>
         <CameraDot />
         <span className="header-divider" aria-hidden />
+        <HistoryButtons sessionId={sessionId} />
         {bell}{drawer}
         <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => { window.location.hash = '#/settings'; }}><Settings /></Button>
         {sessionId === 1 ? (

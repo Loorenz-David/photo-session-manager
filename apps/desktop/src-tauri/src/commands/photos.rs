@@ -112,30 +112,6 @@ pub async fn photos_delete(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn photos_undo(
-    state: State<'_, AppState>,
-    session_id: CommandId,
-) -> Result<ReviewResponse, CommandError> {
-    let app = state.handles().map_err(CommandError::from)?;
-    tauri::async_runtime::spawn_blocking(move || -> Result<ReviewResponse, CommandError> {
-        psm_core::services::history::HistoryService::new(
-            app.store.as_ref(),
-            &SystemClock,
-            app.history.as_ref(),
-        )
-        .undo(session_id.0)
-        .map(|out| ReviewResponse {
-            sessions: out.sessions.into_iter().map(Into::into).collect(),
-            active_photo_id: out.active_photo_id,
-        })
-        .map_err(Into::into)
-    })
-    .await
-    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
-}
-
-#[tauri::command]
-#[specta::specta]
 pub async fn photos_move(
     state: State<'_, AppState>,
     photo_ids: Vec<CommandId>,

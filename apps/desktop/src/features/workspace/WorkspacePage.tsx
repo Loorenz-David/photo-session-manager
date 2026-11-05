@@ -216,11 +216,12 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
 
   /**
    * Split / Normal from the grid (10D: "Allowed for Main and Condition photos"; plan P33 task 4): every named photo whose
-   * kind differs gets its own save, one after the other, re-fitted at the same centre and area; the answer updates its
+   * kind differs is re-fitted at the same centre and area; the answer updates its
    * tile in place. While composing, the stage photo belongs to the editor's machine (`ComposeMode` handles it).
    */
   const setKind = useCallback(
     async (photoIds: number[], to: 'split' | 'normal') => {
+      const items = [] as { photo_id: number; values: NonNullable<ReturnType<typeof valuesOf>> }[];
       for (const photoId of photoIds) {
         const photo = state.photos.find(candidate => candidate.id === photoId);
         if (!photo || !canCompose(photo) || photo.composition.kind === to) continue;
@@ -228,12 +229,23 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         const values = valuesOf(photo.composition);
         const frame = photo.composition.frame;
         if (!values || !frame) continue;
-        try {
-          const composition = await setComposition(photoId, refit(values, { kind: 'kind', to }, frame));
-          state.patchPhoto(photoId, { composition });
-        } catch (error) {
-          toast.error(`Not saved: ${(error as Error).message}`);
+        items.push({ photo_id: photoId, values: refit(values, { kind: 'kind', to }, frame) });
+      }
+      if (items.length === 0) return;
+      try {
+        if (items.length === 1) {
+          const item = items[0];
+          state.patchPhoto(item.photo_id, { composition: await setComposition(item.photo_id, item.values) });
+          return;
         }
+        const result = await applyComposition(items);
+        for (const item of items) {
+          if (!result.applied.includes(item.photo_id)) continue;
+          const photo = state.photos.find(candidate => candidate.id === item.photo_id)!;
+          state.patchPhoto(item.photo_id, { composition: { ...photo.composition, ...item.values, revision: photo.composition.revision + 1, origin: 'user', state: 'ok', review_reason: null } });
+        }
+      } catch (error) {
+        toast.error(`Not saved: ${(error as Error).message}`);
       }
     },
     [state, composing],
@@ -313,7 +325,6 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
       approve: () => review('approve'),
       condition: () => review('condition'),
       remove: () => review('delete'),
-      undo: () => void state.undo(),
       previous: () => state.step(-1),
       next: () => state.step(1),
       toggleMode: state.toggleMode,

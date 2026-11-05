@@ -3,9 +3,12 @@ mod state;
 
 use psm_core::{events::AppEvent, ports::events::EventSink};
 use psm_infra::paths::AppPaths;
-use state::AppState;
+use state::{AppState, EditMenu};
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::{
+    Emitter, Manager,
+    menu::{Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu},
+};
 
 struct TauriEvents<R: tauri::Runtime>(tauri::AppHandle<R>);
 #[derive(serde::Serialize, Clone)]
@@ -109,40 +112,6 @@ mod p39_tests {
         assert_eq!(
             result(&w, "history_redo", s).unwrap_err()["code"],
             "nothing_to_redo"
-        );
-    }
-    #[test]
-    fn c7b_photos_undo_compatibility() {
-        let a = psm_testkit::TestApp::with_fake_document().unwrap();
-        let s = a
-            .items()
-            .create_local("s", "s", "object", None)
-            .unwrap()
-            .1
-            .session
-            .id;
-        let id = a.add_photo(s, "a").unwrap().id;
-        a.review().classify(id, Classification::Main).unwrap();
-        a.review().delete(id).unwrap();
-        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
-        let tauri_app = mock_builder()
-            .manage(AppState::new(app))
-            .invoke_handler(tauri::generate_handler![commands::photos::photos_undo])
-            .build(mock_context(noop_assets()))
-            .unwrap();
-        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
-            .build()
-            .unwrap();
-        let first = result(&w, "photos_undo", s).unwrap();
-        assert_eq!(first["active_photo_id"], id);
-        assert_eq!(first["sessions"][0]["id"], s);
-        assert_eq!(first["sessions"][0]["main_count"], 1);
-        let second = result(&w, "photos_undo", s).unwrap();
-        assert_eq!(second["active_photo_id"], id);
-        assert_eq!(second["sessions"][0]["unreviewed_count"], 1);
-        assert_eq!(
-            result(&w, "photos_undo", s).unwrap_err()["code"],
-            "nothing_to_undo"
         );
     }
     #[test]
@@ -447,7 +416,6 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::photos::photos_classify,
         commands::photos::photos_reorder,
         commands::photos::photos_delete,
-        commands::photos::photos_undo,
         commands::photos::photos_move,
         commands::photos::photos_copy,
         commands::photos::photos_import,
@@ -455,6 +423,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::history::history_get,
         commands::history::history_undo,
         commands::history::history_redo,
+        commands::history::edit_menu_set,
         commands::compositions::composition_set,
         commands::compositions::composition_apply,
         commands::compositions::composition_reset,
@@ -499,6 +468,31 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new(app))
+        .menu(|handle| {
+            let menu = Menu::default(handle)?;
+            let undo = MenuItem::with_id(handle, "edit.undo", "Undo", false, Some("CmdOrCtrl+Z"))?;
+            let redo = MenuItem::with_id(handle, "edit.redo", "Redo", false, Some("CmdOrCtrl+Shift+Z"))?;
+            let edit = Submenu::with_id_and_items(handle, "edit", "Edit", true, &[
+                &undo, &redo, &PredefinedMenuItem::separator(handle)?,
+                &PredefinedMenuItem::cut(handle, None)?,
+                &PredefinedMenuItem::copy(handle, None)?,
+                &PredefinedMenuItem::paste(handle, None)?,
+                &PredefinedMenuItem::select_all(handle, None)?,
+            ])?;
+            let position = menu.items()?.iter().position(|item| matches!(item, MenuItemKind::Submenu(sub) if sub.text().ok().as_deref() == Some("Edit"))).expect("default Edit menu");
+            menu.remove_at(position)?;
+            menu.insert(&edit, position)?;
+            handle.manage(EditMenu { undo, redo });
+            Ok(menu)
+        })
+        .on_menu_event(|app, event| {
+            let action = match event.id().as_ref() {
+                "edit.undo" => "undo",
+                "edit.redo" => "redo",
+                _ => return,
+            };
+            let _ = app.emit("edit_menu", serde_json::json!({ "action": action }));
+        })
         .setup(|handle| {
             let state = handle.state::<AppState>();
             let previews = {

@@ -28,14 +28,9 @@ export async function reorderPhoto(photoId: number, position: number): Promise<R
   return unwrap(await commands.photosReorder(photoId, position));
 }
 
-/** Deletes (hides) the photo; it becomes the session's single undo slot. The RAW is never touched. */
+/** Deletes (hides) the photo; the delete is one undo step (MC-30). The RAW is never touched. */
 export async function deletePhoto(photoId: number): Promise<ReviewResult> {
   return unwrap(await commands.photosDelete(photoId));
-}
-
-/** Undoes the session's last delete; `active_photo_id` is the restored photo. */
-export async function undoDelete(sessionId: number): Promise<ReviewResult> {
-  return unwrap(await commands.photosUndo(sessionId));
 }
 
 export async function movePhotos(photoIds: number[], targetSessionId: number): Promise<ReviewResult> {

@@ -1,6 +1,12 @@
 use psm_core::{Error, Result};
 use psm_integrations::{App, AppHandles};
 use std::sync::{Mutex, RwLock};
+use tauri::{Runtime, menu::MenuItem};
+
+pub struct EditMenu<R: Runtime> {
+    pub undo: MenuItem<R>,
+    pub redo: MenuItem<R>,
+}
 
 pub struct AppState {
     app: RwLock<App>,

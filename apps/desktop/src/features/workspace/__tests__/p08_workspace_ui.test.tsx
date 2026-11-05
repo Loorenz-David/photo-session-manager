@@ -17,7 +17,6 @@ vi.mock('@/services/photos', () => ({
   classifyPhoto: vi.fn(),
   reorderPhoto: vi.fn(),
   deletePhoto: vi.fn(),
-  undoDelete: vi.fn(),
   movePhotos: vi.fn(),
   copyPhotos: vi.fn(),
   importPhotos: vi.fn(),
@@ -52,7 +51,17 @@ vi.mock('@/services/events', () => ({
   }),
 }));
 
+vi.mock('@/services/history', () => ({
+  historyGet: vi.fn(async () => ({ undo: null, redo: null })),
+  historyUndo: vi.fn(),
+  historyRedo: vi.fn(),
+  editMenuSet: vi.fn(async () => undefined),
+  onHistoryChanged: vi.fn(async () => () => undefined),
+  onEditMenu: vi.fn(async () => () => undefined),
+}));
+
 import App from '@/App';
+import { historyUndo } from '@/services/history';
 import { displayOrder } from '@/features/workspace/order';
 import { cameraStatus } from '@/services/camera';
 import { searchItems } from '@/services/items';
@@ -65,7 +74,6 @@ import {
   importPhotos,
   movePhotos,
   reorderPhoto,
-  undoDelete,
 } from '@/services/photos';
 import { activateSession, activeSession, deactivateSession, listSessions } from '@/services/sessions';
 
@@ -333,7 +341,7 @@ describe('C2 undo', () => {
   });
 
   it('C2(b) ⌘Z at 6 000 ms, after the toast has gone, undoes and makes the restored photo active', async () => {
-    vi.mocked(undoDelete).mockResolvedValue({ sessions: [], active_photo_id: 1 });
+    vi.mocked(historyUndo).mockResolvedValue({ label: 'Delete 01', direction: 'undone', sessions: [], active_photo_id: 1 });
     await openWorkspace([view([p, q]), view([q]), view([p, q])]);
     vi.useFakeTimers();
     press('Backspace');
@@ -353,18 +361,19 @@ describe('C2 undo', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(undoDelete).toHaveBeenCalledTimes(1);
-    expect(undoDelete).toHaveBeenCalledWith(SESSION);
+    expect(historyUndo).toHaveBeenCalledTimes(1);
+    expect(historyUndo).toHaveBeenCalledWith(SESSION);
     expect(activeTile()).toBe(1);
   });
 
   it('C2(c) the toast Undo button undoes', async () => {
-    vi.mocked(undoDelete).mockResolvedValue({ sessions: [], active_photo_id: 1 });
+    vi.mocked(historyUndo).mockResolvedValue({ label: 'Delete 01', direction: 'undone', sessions: [], active_photo_id: 1 });
     await openWorkspace([view([p, q]), view([q]), view([p, q])]);
     press('Backspace');
-    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
-    await waitFor(() => expect(undoDelete).toHaveBeenCalledTimes(1));
-    expect(undoDelete).toHaveBeenCalledWith(SESSION);
+    const deleted = await screen.findByText('Photo deleted · Undo ⌘Z');
+    fireEvent.click(within(deleted.closest('[data-sonner-toast]')!).getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(historyUndo).toHaveBeenCalledTimes(1));
+    expect(historyUndo).toHaveBeenCalledWith(SESSION);
   });
 });
 

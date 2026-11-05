@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { displaySequence } from '@/features/workspace/order';
 import type { TileHandlers } from '@/features/workspace/PhotoGrid';
@@ -20,7 +20,7 @@ import { refit } from './refit';
 import { ToolsPanel } from './ToolsPanel';
 import { useComposeGesture } from './useComposeGesture';
 import { useComposeKeys } from './useComposeKeys';
-import { useCompositionSaves } from './useCompositionSaves';
+import { useCompositionSaves, usePendingCompositions } from './useCompositionSaves';
 import { useToolsPanelState } from './useToolsPanelState';
 import { clipboardComposition, copyComposition, refitClipboard, useClipboardComposition } from './useClipboardComposition';
 import { useComposePrefs } from './useComposePrefs';
@@ -111,6 +111,20 @@ export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, o
   const controller = useComposeGesture({ stageRef, imageRef, photo: active, stageBox, onSave: save, onExit, onSwitch, snapEnabled: prefs.snap });
   dispatchRef.current = controller.dispatch;
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
+  const pending = usePendingCompositions();
+  const seenRevision = useRef(new Map<number, number>([[active.id, active.composition.revision]]));
+  useEffect(() => {
+    if (!state || state.photoId !== active.id || pending.has(active.id)) return;
+    const previous = seenRevision.current.get(active.id);
+    if (previous === undefined) {
+      seenRevision.current.set(active.id, active.composition.revision);
+      return;
+    }
+    if (previous !== active.composition.revision) {
+      seenRevision.current.set(active.id, active.composition.revision);
+      controller.dispatch({ type: 'Saved', photoId: active.id, composition: active.composition });
+    }
+  }, [active.id, active.composition, controller, pending, state]);
 
   const pick = useCallback(
     (photoId: number) => {

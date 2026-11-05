@@ -5,7 +5,6 @@ export type WorkspaceKeys = {
   approve: () => void;
   condition: () => void;
   remove: () => void;
-  undo: () => void;
   previous: () => void;
   next: () => void;
   toggleMode: () => void;
@@ -15,8 +14,8 @@ export type WorkspaceKeys = {
 };
 
 /**
- * Workspace keyboard map (design handoff §Keyboard): A, C, ⌫/Delete, ⌘Z, ←/→ (↑/↓), Space, F, I, Esc.
- * Presses inside text fields are left to the field; letters with ⌘/Ctrl/Alt are not shortcuts (except ⌘Z).
+ * Workspace keyboard map (design handoff §Keyboard): A, C, ⌫/Delete, ←/→ (↑/↓), Space, F, I, Esc.
+ * Presses inside text fields are left to the field; letters with ⌘/Ctrl/Alt are not shortcuts.
  */
 export function useWorkspaceKeyboard(keys: WorkspaceKeys, enabled: boolean): void {
   const current = useRef(keys);
@@ -27,11 +26,6 @@ export function useWorkspaceKeyboard(keys: WorkspaceKeys, enabled: boolean): voi
       if (isTyping(event.target)) return;
       const map = current.current;
       const key = event.key.toLowerCase();
-      if (key === 'z' && (event.metaKey || event.ctrlKey) && !event.shiftKey) {
-        event.preventDefault();
-        map.undo();
-        return;
-      }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const action: Record<string, (() => void) | undefined> = {
         a: map.approve,

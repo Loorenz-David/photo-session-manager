@@ -23,7 +23,6 @@ vi.mock('@/services/photos', () => ({
   classifyPhoto: vi.fn(),
   reorderPhoto: vi.fn(),
   deletePhoto: vi.fn(),
-  undoDelete: vi.fn(),
   movePhotos: vi.fn(),
   copyPhotos: vi.fn(),
   importPhotos: vi.fn(),

@@ -9,6 +9,8 @@ import { NewSessionDialog } from './features/sessions/NewSessionDialog';
 import { SessionsPage } from './features/sessions/SessionsPage';
 import { ArrivalToasts } from './features/shell/ArrivalToasts';
 import { WorkspacePage } from './features/workspace/WorkspacePage';
+import { useHistory } from './features/history/useHistory';
+import { useHistoryKeys } from './features/history/useHistoryKeys';
 import { useKeyboard } from './lib/keyboard';
 export { parentRoute, routeLabel } from './lib/routes';
 import { activateSession, activeSession, deactivateSession } from './services/sessions';
@@ -97,6 +99,8 @@ export default function App() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => { setDetailsOpen(false); }, [sessionId]);
   useCaptureTarget(sessionId);
+  useHistory(sessionId);
+  useHistoryKeys(sessionId);
 
   useKeyboard({ n: () => setNewSessionOpen(true) }, sessionId === undefined && !health && !settings && !newSessionOpen);
 

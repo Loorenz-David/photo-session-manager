@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { onWorkspaceEvents } from '@/services/events';
+import { onHistoryChanged } from '@/services/history';
+import { registerActivePhoto, undo as historyUndo } from '@/features/history/useHistory';
 import {
   classifyPhoto,
   copyPhotos,
@@ -8,7 +10,6 @@ import {
   getSessionView,
   movePhotos,
   reorderPhoto,
-  undoDelete,
   type Classification,
   type Photo,
   type ReviewResult,
@@ -27,7 +28,6 @@ function refusalText(error: unknown): string {
   if (error instanceof ServiceError) {
     if (error.code === 'target_published') return 'Published sessions cannot receive photos.';
     if (error.code === 'target_has_raw') return 'That session already has this photo.';
-    if (error.code === 'nothing_to_undo') return 'Nothing to undo.';
   }
   return (error as Error).message || 'Something went wrong.';
 }
@@ -66,6 +66,7 @@ export function useWorkspaceState(sessionId: number) {
   const request = useRef(0);
   const commandsInFlight = useRef(0);
   const reloadWanted = useRef(false);
+  const reloadScheduled = useRef(false);
 
   const setActiveId = useCallback((id: number | null) => {
     activeRef.current = id;
@@ -93,6 +94,17 @@ export function useWorkspaceState(sessionId: number) {
     }
   }, [sessionId, setActiveId]);
 
+  const scheduleReload = useCallback(() => {
+    if (commandsInFlight.current > 0) { reloadWanted.current = true; return; }
+    if (reloadScheduled.current) return;
+    reloadScheduled.current = true;
+    queueMicrotask(() => {
+      reloadScheduled.current = false;
+      if (commandsInFlight.current > 0) reloadWanted.current = true;
+      else void reload();
+    });
+  }, [reload]);
+
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -104,8 +116,7 @@ export function useWorkspaceState(sessionId: number) {
       if (event.session_id !== sessionId) return;
       // A new capture appears on the stage (ch04 S-C).
       if (event.kind === 'photo_added') setActiveId(event.photo_id);
-      if (commandsInFlight.current > 0) reloadWanted.current = true;
-      else void reload();
+      scheduleReload();
     })
       .then(stop => {
         if (alive) unlisten = stop;
@@ -116,7 +127,7 @@ export function useWorkspaceState(sessionId: number) {
       alive = false;
       unlisten?.();
     };
-  }, [sessionId, reload, setActiveId]);
+  }, [sessionId, scheduleReload, setActiveId]);
 
   const photos = useMemo(() => view?.photos ?? [], [view]);
   const photosRef = useRef(photos);
@@ -171,17 +182,19 @@ export function useWorkspaceState(sessionId: number) {
     [setActiveId],
   );
 
-  const undo = useCallback(async () => {
-    try {
-      const result = await undoDelete(sessionId);
-      toast.dismiss(UNDO_TOAST_ID);
-      if (result.active_photo_id !== null) activeRef.current = result.active_photo_id;
-      setActiveId(result.active_photo_id ?? activeRef.current);
-      await reload();
-    } catch (error) {
-      toast.error(refusalText(error));
-    }
-  }, [sessionId, reload, setActiveId]);
+  useEffect(() => registerActivePhoto(id => { setActiveId(id); scheduleReload(); }), [setActiveId, scheduleReload]);
+
+  useEffect(() => {
+    let alive = true;
+    let stop: (() => void) | undefined;
+    void onHistoryChanged(event => {
+      if (!alive || event.session_id !== sessionId) return;
+      scheduleReload();
+    }).then(unlisten => { if (alive) stop = unlisten; else unlisten(); }).catch(() => undefined);
+    return () => { alive = false; stop?.(); };
+  }, [sessionId, scheduleReload]);
+
+  const undo = useCallback(() => historyUndo(sessionId), [sessionId]);
 
   const remove = useCallback(
     async (photoId: number) => {

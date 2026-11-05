@@ -1,3 +1,4 @@
+use crate::state::EditMenu;
 use crate::{
     commands::{
         items::{CommandError, CommandId},
@@ -11,7 +12,7 @@ use psm_core::{
 };
 use serde::Serialize;
 use specta::Type;
-use tauri::State;
+use tauri::{State, Wry};
 
 #[derive(Serialize, Type)]
 pub struct HistoryStateDto {
@@ -94,4 +95,34 @@ pub async fn history_redo(
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn edit_menu_set(
+    menu: State<'_, EditMenu<Wry>>,
+    undo: Option<String>,
+    redo: Option<String>,
+) -> Result<(), CommandError> {
+    menu.undo
+        .set_text(
+            undo.as_ref()
+                .map(|s| format!("Undo {s}"))
+                .unwrap_or_else(|| "Undo".into()),
+        )
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+    menu.undo
+        .set_enabled(undo.is_some())
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+    menu.redo
+        .set_text(
+            redo.as_ref()
+                .map(|s| format!("Redo {s}"))
+                .unwrap_or_else(|| "Redo".into()),
+        )
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+    menu.redo
+        .set_enabled(redo.is_some())
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
+    Ok(())
 }
