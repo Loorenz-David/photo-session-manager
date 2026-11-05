@@ -135,6 +135,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::photos::photos_import,
         commands::photos::photos_assign_unassigned,
         commands::compositions::composition_set,
+        commands::compositions::composition_apply,
         commands::compositions::composition_reset,
         commands::export::export_run,
         commands::export::export_open_folder,

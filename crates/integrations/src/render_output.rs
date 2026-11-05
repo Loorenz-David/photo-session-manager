@@ -15,6 +15,7 @@ use psm_core::{
 use psm_infra::jobs::JobHandler;
 use serde::Deserialize;
 use std::sync::Arc;
+use std::time::Instant;
 
 #[derive(Deserialize)]
 struct Payload {
@@ -78,6 +79,7 @@ impl JobHandler for RenderOutputJob {
             &format.format_key(),
         );
         let temp = dest.with_extension("jpg.render");
+        let started = Instant::now();
         let rendered = values
             .ok_or_else(|| psm_core::Error::InvalidData("master frame unknown".into()))
             .and_then(|values| {
@@ -90,6 +92,7 @@ impl JobHandler for RenderOutputJob {
             let _ = std::fs::remove_file(&temp);
             return self.export.output_failed(payload.run_id, "render");
         }
+        tracing::info!(photo_id = payload.photo_id, slot = ?payload.slot, ms = started.elapsed().as_millis() as u64, "render_output done");
         if let Err(error) = self.outputs.prune(&photo.raw_path, &uid, &dest) {
             tracing::warn!(%error, "stale outputs not pruned");
         }

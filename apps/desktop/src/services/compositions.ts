@@ -20,6 +20,11 @@ export async function resetComposition(photoId: number): Promise<Composition> {
   return unwrap(await commands.compositionReset(photoId));
 }
 
+export type CompositionApplyItem = { photo_id: number; values: CompositionValues };
+export async function applyComposition(items: CompositionApplyItem[]) {
+  return unwrap(await commands.compositionApply(items));
+}
+
 /** The composition's values when the backend has materialised its rect, else null. */
 export function valuesOf(composition: Composition): CompositionValues | null {
   const r = composition.rect;

@@ -13,6 +13,10 @@ type KeysOptions = {
   onStepPhoto: (delta: -1 | 1) => void;
   /** S: Normal ⇄ Split (P33). */
   onToggleKind: () => void;
+  onCopy?: () => void;
+  onPaste?: () => void;
+  onToggleMeter?: () => void;
+  onLoupe?: (shown: boolean) => void;
 };
 
 /** 1–6 and 0 pick Original, 1:1, 4:5, 3:2, 2:3, 16:9, Free (10D). */
@@ -33,7 +37,7 @@ export function useComposeKeys(options: KeysOptions): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector(LAYER_OPEN) || isTyping(event.target)) return;
-      const { controller, onToggleTools, onReset, onStepPhoto, onToggleKind } = latest.current;
+      const { controller, onToggleTools, onReset, onStepPhoto, onToggleKind, onCopy, onPaste, onToggleMeter } = latest.current;
       const key = event.key.toLowerCase();
       const swallow = () => {
         event.preventDefault();
@@ -46,12 +50,19 @@ export function useComposeKeys(options: KeysOptions): void {
         } else if (event.metaKey && event.altKey && (key === 'r' || event.code === 'KeyR')) {
           swallow();
           onReset();
+        } else if (event.metaKey && event.altKey && key === 'c') {
+          swallow(); onCopy?.();
+        } else if (event.metaKey && event.altKey && key === 'v') {
+          swallow(); onPaste?.();
+        } else if (event.metaKey && event.altKey && key === 'p') {
+          swallow(); onToggleMeter?.();
         } else if (key === '[') {
           swallow(); // ⌘[ Back is a page key; the editor owns the keyboard while composing.
         }
         return;
       }
       // Esc and Return are P31's; Tab keeps moving the focus between the panel's controls.
+      if (key === 'z' && !event.altKey && !event.repeat) { swallow(); latest.current.onLoupe?.(true); return; }
       if (event.altKey || key === 'escape' || key === 'enter' || key === 'tab') return;
       const state = controller.getSnapshot();
       const set = (change: RefitChange) => {
@@ -71,6 +82,10 @@ export function useComposeKeys(options: KeysOptions): void {
       swallow();
     };
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    const onUp = (event: KeyboardEvent) => { if (event.key.toLowerCase() === 'z') latest.current.onLoupe?.(false); };
+    const onBlur = () => latest.current.onLoupe?.(false);
+    window.addEventListener('keyup', onUp, true);
+    window.addEventListener('blur', onBlur);
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('keyup', onUp, true); window.removeEventListener('blur', onBlur); };
   }, []);
 }

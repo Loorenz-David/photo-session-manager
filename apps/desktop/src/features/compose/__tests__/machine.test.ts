@@ -240,7 +240,7 @@ describe('C1(c) the interaction contract, one row per rule', () => {
     const refused = run(tilted, [down(500, 350), move(1500, 350)]); // would clamp to x = 0: the left corners leave the tilted image
     expect(refused.state.live).toEqual(tilted.live);
     expect(refused.effects).toEqual([{ type: 'View', rect: tilted.live }]);
-    const accepted = run(tilted, [down(500, 350), move(505, 350)]);
+    const accepted = run(tilted, [down(500, 350), { type: 'PointerMove', pointerId: 1, point: { x: 505, y: 350 }, altKey: true }]);
     expect(accepted.state.live).not.toEqual(tilted.live);
   });
 

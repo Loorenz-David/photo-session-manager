@@ -36,13 +36,21 @@ type StageImageProps = { photo: Photo; mode: ViewMode };
 
 /** Original ⇄ Adjusted crossfade (ch06: 700 ms), also used when a new render replaces the previous one. */
 export const CROSSFADE_MS = 700;
-const crossfade: CSSProperties = { transitionProperty: 'opacity', transitionDuration: `${CROSSFADE_MS}ms` };
 
 /**
  * The stacked original and adjusted images (ch06 §Original / Adjusted). The adjusted layer fades over 700 ms;
  * a new render (a new path per generation) is laid over the previous one and fades in the same way.
  */
 export function StageImage({ photo, mode }: StageImageProps) {
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!query) return;
+    const changed = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    query.addEventListener?.('change', changed);
+    return () => query.removeEventListener?.('change', changed);
+  }, []);
+  const crossfade: CSSProperties = { transitionProperty: 'opacity', transitionDuration: reducedMotion ? '0ms' : `${CROSSFADE_MS}ms` };
   const adjustedUrl = photo.adjusted_preview_path ? previewUrl(photo.adjusted_preview_path) : null;
   const originalUrl = photo.original_preview_path ? previewUrl(photo.original_preview_path) : null;
   // Adjusted renders shown for this photo, oldest first; the newest fades in over the one before it.

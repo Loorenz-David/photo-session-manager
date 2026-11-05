@@ -6,6 +6,7 @@ import { outputNumbers, outputTotal } from './outputs';
 import { PhotoMenuButton, type PhotoMenuAction } from './PhotoMenu';
 import { ReviewButtons } from './ReviewButtons';
 import { StageImage } from './StageImage';
+import { usePendingCompositions } from '@/features/compose/useCompositionSaves';
 import { SwipeLayer, type SwipeAction } from './SwipeLayer';
 import { TogglePill } from './TogglePill';
 import type { ViewMode } from './useWorkspaceState';
@@ -38,6 +39,7 @@ function placement(photos: readonly Photo[], photo: Photo): { label: string; ran
 
 /** The photo stage (COMPONENTS.md §Workspace): stacked images, prev/next, the pill and the round review buttons. */
 export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, onMenu, onItemCard, onCompose, compose }: StageProps) {
+  const pending = usePendingCompositions();
   const toReview = displayOrder(photos).unreviewed.length;
 
   if (!active) {
@@ -60,6 +62,7 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
         <span className="stage-place">
           <strong>{where.label}</strong> {where.range} of {where.total}
           {toReview > 0 && <em>{toReview} to review</em>}
+          {compose && pending.has(active.id) && <span className="tile-unsaved" aria-label="Unsaved composition" />}
         </span>
         <span className="stage-tools">
           {compose && (

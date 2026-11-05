@@ -6,6 +6,7 @@ import type { PhotoMenuAction } from '@/features/workspace/PhotoMenu';
 import { Stage } from '@/features/workspace/Stage';
 import type { ViewMode } from '@/features/workspace/useWorkspaceState';
 import { canCompose, resetComposition, type Composition } from '@/services/compositions';
+import { previewUrl } from '@/services/sessions';
 import type { Photo } from '@/services/photos';
 import { BrowserOverlay } from './BrowserOverlay';
 import { ComposeStage } from './ComposeStage';
@@ -18,6 +19,9 @@ import { useComposeGesture } from './useComposeGesture';
 import { useComposeKeys } from './useComposeKeys';
 import { useCompositionSaves } from './useCompositionSaves';
 import { useToolsPanelState } from './useToolsPanelState';
+import { clipboardComposition, copyComposition, refitClipboard } from './useClipboardComposition';
+import { FrameMeter } from './FrameMeter';
+import { Loupe } from './Loupe';
 import './compose.css';
 
 /** `localStorage` key of the first-time line. */
@@ -62,6 +66,9 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
   const imageRef = useRef<HTMLDivElement>(null);
   const [stageBox, setStageBox] = useState<Box | null>(null);
   const [hint] = useState(firstOpen);
+  const [loupe, setLoupe] = useState(false);
+  const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const [meter, setMeter] = useState(false);
   const photosRef = useRef(photos);
   photosRef.current = photos;
   const activeRef = useRef(active);
@@ -163,7 +170,10 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
     [onMenu, setKind, tiles],
   );
 
-  useComposeKeys({ controller, onToggleTools: tools.toggleHidden, onReset: reset, onStepPhoto: stepPhoto, onToggleKind: toggleKind });
+  useComposeKeys({ controller, onToggleTools: tools.toggleHidden, onReset: reset, onStepPhoto: stepPhoto, onToggleKind: toggleKind,
+    onCopy: () => { const current = controller.getSnapshot(); if (current) copyComposition(current.values); },
+    onPaste: () => { const current = controller.getSnapshot(); const clip = clipboardComposition(); if (current && clip) controller.dispatch({ type: 'SetValues', values: refitClipboard(clip, current.frame), cause: 'paste' }); },
+    onToggleMeter: () => setMeter(value => !value), onLoupe: setLoupe });
 
   return (
     <>
@@ -191,7 +201,11 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
           onItemCard={onItemCard}
           compose={{
             onDone: done,
-            children: <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} />,
+            children: <>
+              <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} onPointer={loupe ? setPointer : undefined} />
+              {loupe && state && active.adjusted_preview_path && <Loupe src={previewUrl(active.adjusted_preview_path)} pointer={pointer} state={state} />}
+              {meter && <FrameMeter controller={controller} />}
+            </>,
           }}
         />
         <BrowserOverlay photos={photos} isIdle={controller.isIdle} onPick={pick} {...tiles} onMenu={menu} />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react';
 import { isTyping } from '@/lib/keyboard';
 import type { CompositionValues } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
@@ -147,7 +147,7 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
         }
       }
       syncTimer();
-      if (!(CONTINUOUS.has(state.phase.kind) && state.phase.kind === before.kind)) publish();
+      if (!(CONTINUOUS.has(state.phase.kind) && state.phase.kind === before.kind) || state.guides.x !== current.guides.x || state.guides.y !== current.guides.y) publish();
       return prevent;
     },
     [flush, glide, publish, syncTimer],
@@ -202,7 +202,7 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
       dispatch({ type: 'PointerDown', pointerId: event.pointerId, isPrimary: event.isPrimary, button: event.button, point: local(event) });
       if (stateRef.current?.phase.kind === 'dragging') capture(event.pointerId);
     };
-    const onPointerMove = (event: PointerEvent) => dispatch({ type: 'PointerMove', pointerId: event.pointerId, point: local(event) });
+    const onPointerMove = (event: PointerEvent) => dispatch({ type: 'PointerMove', pointerId: event.pointerId, point: local(event), altKey: event.altKey });
     const onPointerUp = (event: PointerEvent) => dispatch({ type: 'PointerUp', pointerId: event.pointerId });
     const onPointerCancel = (event: PointerEvent) => dispatch({ type: 'PointerCancel', pointerId: event.pointerId });
     const onLostCapture = (event: PointerEvent) => dispatch({ type: 'LostCapture', pointerId: event.pointerId });
@@ -300,5 +300,5 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
     };
   }, []);
   const getSnapshot = useCallback(() => snapshotRef.current, []);
-  return { dispatch, isIdle, subscribe, getSnapshot };
+  return useMemo(() => ({ dispatch, isIdle, subscribe, getSnapshot }), [dispatch, isIdle, subscribe, getSnapshot]);
 }

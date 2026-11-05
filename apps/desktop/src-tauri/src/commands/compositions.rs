@@ -7,6 +7,7 @@ use psm_core::{
     domain::composition::{
         Composition, CompositionKind, CompositionValues, Flip, Orientation, Rect, Shape,
     },
+    services::composition::ApplyResult,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -35,6 +36,38 @@ pub struct CompositionValuesDto {
     pub flip: String,
     pub straighten: f64,
     pub rect: RectDto,
+}
+#[derive(Serialize, Deserialize, Type)]
+pub struct CompositionApplyItemDto {
+    pub photo_id: CommandId,
+    pub values: CompositionValuesDto,
+}
+#[derive(Serialize, Type)]
+pub struct ApplyRefusalDto {
+    #[specta(type = specta_typescript::Number)]
+    pub photo_id: i64,
+    pub reason: String,
+}
+#[derive(Serialize, Type)]
+pub struct ApplyResultDto {
+    #[specta(type = Vec<specta_typescript::Number>)]
+    pub applied: Vec<i64>,
+    pub refused: Vec<ApplyRefusalDto>,
+}
+impl From<ApplyResult> for ApplyResultDto {
+    fn from(result: ApplyResult) -> Self {
+        Self {
+            applied: result.applied,
+            refused: result
+                .refused
+                .into_iter()
+                .map(|r| ApplyRefusalDto {
+                    photo_id: r.photo_id,
+                    reason: r.reason,
+                })
+                .collect(),
+        }
+    }
 }
 impl TryFrom<CompositionValuesDto> for CompositionValues {
     type Error = Error;
@@ -150,6 +183,35 @@ pub async fn composition_reset(
             .reset(photo_id.0)
             .map(Into::into)
             .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn composition_apply(
+    state: State<'_, AppState>,
+    items: Vec<CompositionApplyItemDto>,
+) -> Result<ApplyResultDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut result = ApplyResult::default();
+        for item in items {
+            match item.values.try_into() {
+                Ok(values) => {
+                    let one = app.compositions.apply(vec![(item.photo_id.0, values)]);
+                    result.applied.extend(one.applied);
+                    result.refused.extend(one.refused);
+                }
+                Err(error) => result
+                    .refused
+                    .push(psm_core::services::composition::ApplyRefusal {
+                        photo_id: item.photo_id.0,
+                        reason: error.to_string(),
+                    }),
+            }
+        }
+        Ok(ApplyResultDto::from(result))
     })
     .await
     .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?

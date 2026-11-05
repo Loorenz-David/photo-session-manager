@@ -2,9 +2,10 @@ import type { ReactNode } from 'react';
 import { ContextMenu, DropdownMenu } from 'radix-ui';
 import { MoreHorizontal } from 'lucide-react';
 import { canCompose } from '@/services/compositions';
+import { useClipboardComposition } from '@/features/compose/useClipboardComposition';
 import type { Photo } from '@/services/photos';
 
-export type PhotoMenuAction = 'compose' | 'split' | 'normal' | 'toggle' | 'assign' | 'move' | 'copy' | 'delete';
+export type PhotoMenuAction = 'compose' | 'split' | 'normal' | 'apply' | 'toggle' | 'assign' | 'move' | 'copy' | 'delete';
 
 type Entry = { action: PhotoMenuAction; label: string; hint?: string; danger?: boolean; disabled?: boolean };
 
@@ -12,7 +13,7 @@ type Entry = { action: PhotoMenuAction; label: string; hint?: string; danger?: b
  * Entries of the ⋯ menu and the right-click menu (COMPONENTS.md §Workspace: Photo ⋯ menu / right-click; 10D: Compose…,
  * and Split / Normal — the one that changes the photo's kind, for Main and Condition photos with a frame).
  */
-function entries(photo: Photo): Entry[] {
+function entries(photo: Photo, canApply: boolean): Entry[] {
   const kindEntry: Entry =
     photo.composition.kind === 'split'
       ? { action: 'normal', label: 'Normal', hint: 'S', disabled: !canCompose(photo) }
@@ -23,6 +24,7 @@ function entries(photo: Photo): Entry[] {
       ? { action: 'toggle', label: 'Move to Main', hint: 'A' }
       : { action: 'toggle', label: 'Move to Condition', hint: 'C' },
     kindEntry,
+    ...(canApply ? [{ action: 'apply' as const, label: 'Apply composition to selected' }] : []),
     { action: 'assign', label: 'Assign to product…' },
     { action: 'move', label: 'Move to session…' },
     { action: 'copy', label: 'Copy to session…' },
@@ -30,10 +32,11 @@ function entries(photo: Photo): Entry[] {
   ];
 }
 
-type MenuProps = { photo: Photo; onAction: (action: PhotoMenuAction, photo: Photo) => void };
+type MenuProps = { photo: Photo; onAction: (action: PhotoMenuAction, photo: Photo) => void; canApply?: boolean };
 
 /** The ⋯ button on the stage bar: actions for the active photo. */
-export function PhotoMenuButton({ photo, onAction }: MenuProps) {
+export function PhotoMenuButton({ photo, onAction, canApply = false }: MenuProps) {
+  const hasClipboard = useClipboardComposition() !== null;
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger className="stage-icon-button" aria-label="Photo actions">
@@ -41,7 +44,7 @@ export function PhotoMenuButton({ photo, onAction }: MenuProps) {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="photo-menu" align="center" sideOffset={6}>
-          {entries(photo).map(entry => (
+          {entries(photo, canApply && hasClipboard).map(entry => (
             <DropdownMenu.Item
               key={entry.action}
               className="photo-menu-item"
@@ -60,13 +63,14 @@ export function PhotoMenuButton({ photo, onAction }: MenuProps) {
 }
 
 /** Right-click menu around a tile. */
-export function PhotoContextMenu({ photo, onAction, children }: MenuProps & { children: ReactNode }) {
+export function PhotoContextMenu({ photo, onAction, children, canApply = false }: MenuProps & { children: ReactNode }) {
+  const hasClipboard = useClipboardComposition() !== null;
   return (
     <ContextMenu.Root modal={false}>
       <ContextMenu.Trigger asChild>{children}</ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content className="photo-menu">
-          {entries(photo).map(entry => (
+          {entries(photo, canApply && hasClipboard).map(entry => (
             <ContextMenu.Item
               key={entry.action}
               className="photo-menu-item"

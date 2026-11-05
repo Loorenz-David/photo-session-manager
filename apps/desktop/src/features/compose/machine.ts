@@ -61,6 +61,7 @@
 import { type Composition, type CompositionValues, type Frame, type Rect, valuesOf } from '@/services/compositions';
 import { anchorIn, clampRect, insideAfterStraighten, panBy, shapeRatio, viewTransform, zoomAbout, type Box, type Point, type ViewTransform } from './geometry';
 import { refit, trim, type Handle } from './refit';
+import { snap, SNAP_PX, type SnapGuides } from './snapping';
 
 /** Wheel zoom factor per pixel of `deltaY`: `exp(−deltaY · ZOOM_PER_PX)`. */
 export const ZOOM_PER_PX = 0.005;
@@ -79,6 +80,7 @@ export type Phase =
 export type ViewGeometry = ViewTransform & { stage: Box };
 
 export type ComposeState = {
+  guides: SnapGuides;
   phase: Phase;
   values: CompositionValues;
   entry: CompositionValues;
@@ -90,11 +92,11 @@ export type ComposeState = {
   needsConfirm: boolean;
 };
 
-export type SetValuesCause = 'set' | 'live' | 'confirm' | 'kind';
+export type SetValuesCause = 'set' | 'live' | 'confirm' | 'kind' | 'paste';
 
 export type ComposeEvent =
   | { type: 'PointerDown'; pointerId: number; isPrimary: boolean; button: number; point: Point }
-  | { type: 'PointerMove'; pointerId: number; point: Point }
+  | { type: 'PointerMove'; pointerId: number; point: Point; altKey?: boolean }
   | { type: 'PointerUp'; pointerId: number }
   | { type: 'PointerCancel'; pointerId: number }
   | { type: 'LostCapture'; pointerId: number }
@@ -126,6 +128,7 @@ export type Effect =
 export type Step = { state: ComposeState; effects: Effect[] };
 
 const IDLE: Phase = { kind: 'idle' };
+const NO_GUIDES: SnapGuides = { x: false, y: false };
 const PREVENT: Effect = { type: 'PreventDefault' };
 
 export function sameRect(a: Rect, b: Rect): boolean {
@@ -162,7 +165,7 @@ export function initialState(photoId: number, composition: Composition, stage: B
   const entry = entryValues(composition);
   if (!entry) return null;
   const { values, frame, needsConfirm } = entry;
-  return { phase: IDLE, values, entry: values, live: values.rect, photoId, frame, view: viewFor(values, values.rect, frame, stage), needsConfirm };
+  return { phase: IDLE, values, entry: values, live: values.rect, photoId, frame, view: viewFor(values, values.rect, frame, stage), needsConfirm, guides: NO_GUIDES };
 }
 
 const noop = (state: ComposeState): Step => ({ state, effects: [] });
@@ -182,7 +185,7 @@ function settle(state: ComposeState, candidate: Rect): Rect {
 /** Rule 3: back to idle; the visible rect becomes the committed values and is saved when it changed. */
 function commit(state: ComposeState): Step {
   const { phase } = state;
-  const idle = { ...state, phase: IDLE };
+  const idle = { ...state, phase: IDLE, guides: NO_GUIDES };
   if (phase.kind === 'adjusting') {
     if (sameValues(state.values, phase.startValues)) return { state: idle, effects: [] };
     return { state: idle, effects: [{ type: 'Save', photoId: state.photoId, values: state.values }] };
@@ -213,7 +216,7 @@ function adopt(state: ComposeState, photoId: number, composition: Composition): 
   const entry = entryValues(composition);
   if (!entry) return { ...state, phase: IDLE };
   const { values, frame, needsConfirm } = entry;
-  return { phase: IDLE, values, entry: values, live: values.rect, photoId, frame, view: viewFor(values, values.rect, frame, state.view.stage), needsConfirm };
+  return { phase: IDLE, values, entry: values, live: values.rect, photoId, frame, view: viewFor(values, values.rect, frame, state.view.stage), needsConfirm, guides: NO_GUIDES };
 }
 
 /** The trimmed rect for the pointer at `point` (rule 15 refuses one that leaves the straightened image). */
@@ -251,8 +254,11 @@ function reduceEvent(state: ComposeState, event: ComposeEvent): Step {
       if (phase.kind !== 'dragging' || phase.pointerId !== event.pointerId) return noop(state);
       const dx = event.point.x - phase.origin.x;
       const dy = event.point.y - phase.origin.y;
-      const live = settle(state, panBy(phase.startRect, { x: -dx / state.view.width, y: -dy / state.view.height }));
-      return { state: withLive(state, live), effects: [{ type: 'View', rect: live }] };
+      const proposed = settle(state, panBy(phase.startRect, { x: -dx / state.view.width, y: -dy / state.view.height }));
+      const snapped = event.altKey ? { rect: proposed, guides: NO_GUIDES } : snap(proposed, { x: SNAP_PX / state.view.width, y: SNAP_PX / state.view.height });
+      const live = settle(state, snapped.rect);
+      const guides = sameRect(live, snapped.rect) ? snapped.guides : NO_GUIDES;
+      return { state: { ...withLive(state, live), guides }, effects: [{ type: 'View', rect: live }] };
     }
     case 'PointerUp':
     case 'PointerCancel':

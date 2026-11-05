@@ -2,6 +2,7 @@ import { createContext, useContext, type CSSProperties, type MouseEvent } from '
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { turnedFrame } from '@/features/compose/geometry';
+import { usePendingCompositions } from '@/features/compose/useCompositionSaves';
 import { valuesOf } from '@/services/compositions';
 import { previewUrl } from '@/services/sessions';
 import type { Photo } from '@/services/photos';
@@ -71,6 +72,7 @@ type PhotoTileProps = {
 
 /** The same visible tile contents in the grid and in its drag overlay; the number reads the places the photo fills (`03` or `03–04`). */
 export function PhotoTileFace({ photo, number, last = number, variant }: Pick<PhotoTileProps, 'photo' | 'number' | 'last' | 'variant'>) {
+  const pending = usePendingCompositions().has(photo.id);
   const unreviewed = photo.classification === 'unreviewed';
   const isCover = photo.classification === 'main' && number === 1;
   const failed = useContext(PublishFailedContext);
@@ -85,6 +87,7 @@ export function PhotoTileFace({ photo, number, last = number, variant }: Pick<Ph
       {photo.composition.state === 'needs_review' && <span className="tile-review">Re-frame</span>}
     </>}
     {unreviewed && <span className="tile-unreviewed" aria-hidden />}
+    {pending && <span className="tile-unsaved" aria-label="Unsaved composition" />}
   </>;
 }
 

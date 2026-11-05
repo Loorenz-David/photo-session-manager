@@ -21,7 +21,8 @@ import { assignUnassigned, type Photo } from '@/services/photos';
 import { createSession } from '@/services/sessions';
 import { adoptItem, type Item } from '@/services/items';
 import { useKeyboard } from '@/lib/keyboard';
-import { canCompose, setComposition, valuesOf } from '@/services/compositions';
+import { applyComposition, canCompose, setComposition, valuesOf } from '@/services/compositions';
+import { clipboardComposition, refitClipboard } from '@/features/compose/useClipboardComposition';
 import { ComposeMode } from '@/features/compose/ComposeMode';
 import { refit } from '@/features/compose/refit';
 import { FormDialog } from '@/features/form/FormDialog';
@@ -246,6 +247,24 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         ? displaySequence(state.photos).filter(p => state.selection.has(p.id)).map(p => p.id)
         : [photo.id];
       if (action === 'compose') enterCompose(photo);
+      else if (action === 'apply') {
+        const clip = clipboardComposition();
+        if (!clip || state.selection.size === 0) return;
+        const selected = displaySequence(state.photos).filter(p => state.selection.has(p.id));
+        const frameless = selected.filter(p => !p.composition.frame);
+        const items = selected.filter(p => p.composition.frame).map(p => ({ photo_id: p.id, values: refitClipboard(clip, p.composition.frame!) }));
+        void applyComposition(items).then(result => {
+          for (const item of items) {
+            if (!result.applied.includes(item.photo_id)) continue;
+            const target = selected.find(p => p.id === item.photo_id)!;
+            state.patchPhoto(item.photo_id, { composition: { ...target.composition, ...item.values, revision: target.composition.revision + 1, origin: 'user' } });
+          }
+          const refused = [...frameless, ...result.refused.map(r => selected.find(p => p.id === r.photo_id)).filter((p): p is Photo => !!p)];
+          const labels = refused.map(p => String(displaySequence(state.photos).indexOf(p) + 1).padStart(2, '0'));
+          const n = result.applied.length;
+          toast.success(`Applied to ${n} ${n === 1 ? 'photo' : 'photos'}${refused.length ? `; ${refused.length} refused: ${labels.join(', ')}` : ''}`);
+        }).catch(error => toast.error(`Not applied: ${(error as Error).message}`));
+      }
       else if (action === 'split' || action === 'normal') void setKind(photoIds, action);
       else if (action === 'toggle') void state.classify(photo.id, photo.classification === 'condition' ? 'main' : 'condition', false);
       else if (action === 'delete') void state.remove(photo.id);

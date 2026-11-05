@@ -16,6 +16,7 @@ type ComposeStageProps = {
   imageRef: RefObject<HTMLDivElement | null>;
   /** The first-time line (10D: "Crops made in Capture One are not used."). */
   hint: boolean;
+  onPointer?: (point: { x: number; y: number }) => void;
 };
 
 /** The Re-frame notice (MC-27 §Revisions). */
@@ -43,13 +44,13 @@ function drawnBox(state: ComposeState): Box {
  * never through React, so a gesture never waits for a render; the inner image carries the turn and flip; the overlay
  * carries the frame, the handles and, while composing a `needs_review` photo, the Re-frame banner.
  */
-export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint }: ComposeStageProps) {
+export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint, onPointer }: ComposeStageProps) {
   const values = state?.values ?? valuesOf(photo.composition);
   const turns = values?.quarter_turns ?? 0;
   const flipped = values?.flip === 'horizontal';
   const review = photo.composition.state === 'needs_review';
   return (
-    <div ref={stageRef} className="compose-stage" aria-label="Compose">
+    <div ref={stageRef} className="compose-stage" aria-label="Compose" onPointerMove={event => { const box = event.currentTarget.getBoundingClientRect(); onPointer?.({ x: event.clientX - box.left, y: event.clientY - box.top }); }}>
       <div ref={imageRef} className="compose-image" data-turned={turns % 2 === 1 || undefined}>
         {photo.adjusted_preview_path && (
           <img
@@ -62,7 +63,7 @@ export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint 
         )}
       </div>
       {state && stageBox && (
-        <ComposeFrame width={stageBox.width} height={stageBox.height} frameBox={drawnBox(state)} kind={state.values.kind}>
+        <ComposeFrame width={stageBox.width} height={stageBox.height} frameBox={drawnBox(state)} kind={state.values.kind} guides={state.guides}>
           <Handles box={drawnBox(state)} />
         </ComposeFrame>
       )}

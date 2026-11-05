@@ -37,7 +37,7 @@ export function PhotoGrid({ group, photos, variant, activeId, selection, onOpen,
     >
       <div ref={setNodeRef} className={`photo-group group-${variant}`} data-group={group} data-over={isOver || undefined}>
         {photos.map((photo, index) => (
-          <PhotoContextMenu key={photo.id} photo={photo} onAction={onMenu}>
+          <PhotoContextMenu key={photo.id} photo={photo} onAction={onMenu} canApply={selection.size > 0}>
             <div className="tile-wrap">
               <PhotoTile
                 photo={photo}

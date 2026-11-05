@@ -16,6 +16,22 @@ pub struct CompositionService {
     pub default_shape: Shape,
 }
 impl CompositionService {
+    pub fn apply(&self, items: Vec<(i64, CompositionValues)>) -> ApplyResult {
+        let mut result = ApplyResult::default();
+        for (photo_id, values) in items {
+            match self.set(photo_id, values) {
+                Ok(_) => result.applied.push(photo_id),
+                Err(error) => result.refused.push(ApplyRefusal {
+                    photo_id,
+                    reason: match error {
+                        Error::CompositionInvalid { reason } => reason,
+                        other => other.to_string(),
+                    },
+                }),
+            }
+        }
+        result
+    }
     pub fn set(&self, photo_id: i64, values: CompositionValues) -> Result<Composition> {
         let frame = self
             .store
@@ -68,4 +84,16 @@ impl CompositionService {
         }
         Ok(result)
     }
+}
+
+#[derive(Debug, Default)]
+pub struct ApplyResult {
+    pub applied: Vec<i64>,
+    pub refused: Vec<ApplyRefusal>,
+}
+
+#[derive(Debug)]
+pub struct ApplyRefusal {
+    pub photo_id: i64,
+    pub reason: String,
 }

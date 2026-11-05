@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { setComposition, type Composition, type CompositionValues } from '@/services/compositions';
 
@@ -15,6 +15,19 @@ type SavesOptions = {
 };
 
 type Entry = { inFlight: boolean; pending: CompositionValues | null; latest: number };
+
+let pendingIds = new Set<number>();
+const listeners = new Set<() => void>();
+function markPending(photoId: number, pending: boolean) {
+  const next = new Set(pendingIds);
+  if (pending) next.add(photoId);
+  else next.delete(photoId);
+  pendingIds = next;
+  listeners.forEach(listener => listener());
+}
+export function usePendingCompositions(): ReadonlySet<number> {
+  return useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => pendingIds);
+}
 
 /**
  * Autosave, latest-wins per photo (plan P31 task 4): one save in flight per photo, the newest values waiting behind
@@ -37,10 +50,14 @@ export function useCompositionSaves(options: SavesOptions): (photoId: number, va
         const next = entry.pending;
         entry.pending = null;
         if (next) send(photoId, next);
-        else latest.current.onSettled(photoId, composition);
+        else {
+          markPending(photoId, false);
+          latest.current.onSettled(photoId, composition);
+        }
         return;
       }
       entry.pending = null;
+      markPending(photoId, false);
       toast.error(`Not saved: ${(error as Error).message}`);
       const stored = latest.current.storedOf(photoId);
       if (stored) latest.current.onSettled(photoId, stored);
@@ -62,6 +79,7 @@ export function useCompositionSaves(options: SavesOptions): (photoId: number, va
       }
       if (entry.inFlight) entry.pending = values;
       else send(photoId, values);
+      markPending(photoId, true);
     };
   }, []);
 }

@@ -31,6 +31,7 @@ export const commands = {
 	photosImport: (paths: string[]) => typedError<null, CommandError>(__TAURI_INVOKE("photos_import", { paths })),
 	photosAssignUnassigned: (itemId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_assign_unassigned", { itemId })),
 	compositionSet: (photoId: CommandId, values: CompositionValuesDto) => typedError<CompositionDto_Serialize, CommandError>(__TAURI_INVOKE("composition_set", { photoId, values })),
+	compositionApply: (items: CompositionApplyItemDto[]) => typedError<ApplyResultDto, CommandError>(__TAURI_INVOKE("composition_apply", { items })),
 	compositionReset: (photoId: CommandId) => typedError<CompositionDto_Serialize, CommandError>(__TAURI_INVOKE("composition_reset", { photoId })),
 	/**
 	 *  Starts the local export of the session (ch07 §Completion without an integration). Progress and
@@ -77,6 +78,16 @@ export type AppPathsDto = {
 	data_dir: string,
 	database: string,
 	settings: string,
+};
+
+export type ApplyRefusalDto = {
+	photo_id: number,
+	reason: string,
+};
+
+export type ApplyResultDto = {
+	applied: number[],
+	refused: ApplyRefusalDto[],
 };
 
 export type AttributeGroupDto = "details" | "condition" | "product";
@@ -133,6 +144,11 @@ export type CommandError = {
 };
 
 export type CommandId = number;
+
+export type CompositionApplyItemDto = {
+	photo_id: CommandId,
+	values: CompositionValuesDto,
+};
 
 export type CompositionDto = CompositionDto_Serialize | CompositionDto_Deserialize;
 

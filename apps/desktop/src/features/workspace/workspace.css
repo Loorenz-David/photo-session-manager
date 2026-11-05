@@ -31,6 +31,7 @@
 .stage-original[data-quarter-turn] { max-width: 100cqh; max-height: 100cqw; }
 /* Original ⇄ Adjusted crossfade (ch06: 700 ms). */
 .crossfade { opacity: 0; transition: opacity var(--dur-crossfade, 700ms) ease; }
+.tile-unsaved { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--color-accent); margin-left: 6px; }
 .crossfade[data-visible="true"] { opacity: 1; }
 .stage-processing { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-weight: var(--weight-semibold); }
 .swipe-stamp { position: absolute; top: 24px; padding: 4px 12px; border: 2px solid currentColor; border-radius: var(--r); background: var(--color-bg); font-size: var(--text-md); font-weight: var(--weight-heavy); letter-spacing: .08em; text-transform: uppercase; pointer-events: none; }

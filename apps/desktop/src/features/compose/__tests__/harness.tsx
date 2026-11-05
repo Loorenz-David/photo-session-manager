@@ -33,6 +33,7 @@ vi.mock('@/services/photos', () => ({
 vi.mock('@/services/compositions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/compositions')>()),
   setComposition: vi.fn(),
+  applyComposition: vi.fn(),
   resetComposition: vi.fn(),
 }));
 vi.mock('@/services/sessions', async importOriginal => ({

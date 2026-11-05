@@ -708,6 +708,7 @@ impl ExportStaging for ExportService {
     /// waiting outputs of that RAW are queued — or every run holding a photo that now needs
     /// review fails with `needs_review` (the master stays).
     fn master_ready(&self, render: &RenderCompletion, output: &Path) -> Result<()> {
+        tracing::info!(raw = %render.raw, adjusted_gen = render.generation, ms = (self.clock.now_ms() - render.issued_at_ms).max(0), "master rendered");
         let mut state = self.state()?;
         if state.masters.get(&render.raw) == Some(&render.tracking_job_id) {
             state.masters.remove(&render.raw);

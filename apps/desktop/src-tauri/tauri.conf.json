@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "Session Manager", "width": 1100, "height": 720 }],
+    "windows": [{ "title": "Session Manager", "width": 1440, "height": 900, "minWidth": 1100, "minHeight": 720 }],
     "security": { "csp": null, "assetProtocol": { "enable": true, "scope": [] } }
   },
   "bundle": {
