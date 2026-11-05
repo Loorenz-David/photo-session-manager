@@ -88,6 +88,7 @@ fn c1b_import_arrives_without_crop_job_or_crop_write() {
         editing: a.app.editing.as_ref(),
         store: a.store(),
         clock: a.clock.as_ref(),
+        history: a.app.history.as_ref(),
     }
     .import(std::slice::from_ref(&raw))
     .unwrap();

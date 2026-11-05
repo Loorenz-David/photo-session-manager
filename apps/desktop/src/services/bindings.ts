@@ -30,6 +30,9 @@ export const commands = {
 	photosCopy: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_copy", { photoIds, targetSessionId })),
 	photosImport: (paths: string[]) => typedError<null, CommandError>(__TAURI_INVOKE("photos_import", { paths })),
 	photosAssignUnassigned: (itemId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_assign_unassigned", { itemId })),
+	historyGet: (sessionId: CommandId) => typedError<HistoryStateDto_Serialize, CommandError>(__TAURI_INVOKE("history_get", { sessionId })),
+	historyUndo: (sessionId: CommandId) => typedError<HistoryOutcomeDto_Serialize, CommandError>(__TAURI_INVOKE("history_undo", { sessionId })),
+	historyRedo: (sessionId: CommandId) => typedError<HistoryOutcomeDto_Serialize, CommandError>(__TAURI_INVOKE("history_redo", { sessionId })),
 	compositionSet: (photoId: CommandId, values: CompositionValuesDto) => typedError<CompositionDto_Serialize, CommandError>(__TAURI_INVOKE("composition_set", { photoId, values })),
 	compositionApply: (items: CompositionApplyItemDto[]) => typedError<ApplyResultDto, CommandError>(__TAURI_INVOKE("composition_apply", { items })),
 	compositionReset: (photoId: CommandId) => typedError<CompositionDto_Serialize, CommandError>(__TAURI_INVOKE("composition_reset", { photoId })),
@@ -290,6 +293,36 @@ export type HealthItemDto = {
 
 export type HealthReportDto = {
 	items: HealthItemDto[],
+};
+
+export type HistoryDirectionDto = "undone" | "redone";
+
+export type HistoryOutcomeDto = HistoryOutcomeDto_Serialize | HistoryOutcomeDto_Deserialize;
+
+export type HistoryOutcomeDto_Deserialize = {
+	label: string,
+	direction: HistoryDirectionDto,
+	sessions: SessionResponse_Deserialize[],
+	active_photo_id?: number | null,
+};
+
+export type HistoryOutcomeDto_Serialize = {
+	label: string,
+	direction: HistoryDirectionDto,
+	sessions: SessionResponse_Serialize[],
+	active_photo_id: number | null,
+};
+
+export type HistoryStateDto = HistoryStateDto_Serialize | HistoryStateDto_Deserialize;
+
+export type HistoryStateDto_Deserialize = {
+	undo?: string | null,
+	redo?: string | null,
+};
+
+export type HistoryStateDto_Serialize = {
+	undo: string | null,
+	redo: string | null,
 };
 
 /**

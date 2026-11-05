@@ -78,6 +78,7 @@ fn service(a: &TestApp) -> PhotosService<'_> {
         editing: a.app.editing.as_ref(),
         store: a.store(),
         clock: a.clock.as_ref(),
+        history: a.app.history.as_ref(),
     }
 }
 

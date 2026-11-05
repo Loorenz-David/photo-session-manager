@@ -13,7 +13,7 @@ use psm_core::{
         editing::Job,
         item::{Item, ItemOrigin, NewItem},
         output::slot_name,
-        photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource, UndoSlot},
+        photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource},
         publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
         session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
     },
@@ -523,18 +523,17 @@ impl StoreTx for SqliteTx<'_> {
         self.tx.execute("INSERT INTO compositions SELECT ?1,kind,shape,orientation,quarter_turns,flip,straighten,x,y,w,h,frame_w,frame_h,frame_source,geometry,origin,revision,state,review_reason,updated_at FROM compositions WHERE photo_id=?2", params![id,photo.id]).map_err(db)?;
         Ok(id)
     }
-    fn set_undo_slot(&mut self, session_id: i64, slot: Option<&UndoSlot>) -> Result<()> {
-        let json = slot
-            .map(serde_json::to_string)
-            .transpose()
-            .map_err(|e| Error::InvalidData(e.to_string()))?;
+    fn delete_photo_row(&mut self, id: i64) -> Result<()> {
         self.tx
-            .execute(
-                "UPDATE sessions SET undo_slot=?1 WHERE id=?2",
-                params![json, session_id],
-            )
+            .execute("DELETE FROM compositions WHERE photo_id=?1", [id])
+            .map_err(db)?;
+        self.tx
+            .execute("DELETE FROM photos WHERE id=?1", [id])
             .map_err(db)?;
         Ok(())
+    }
+    fn publish_confirmed_since(&self, session_id: i64, seq: i64) -> Result<bool> {
+        self.tx.query_row("SELECT EXISTS(SELECT 1 FROM publish_items WHERE session_id=?1 AND confirmed_change_seq IS NOT NULL AND confirmed_change_seq>=?2)", params![session_id, seq], |r| r.get(0)).map_err(db)
     }
     fn touch_session(&mut self, session_id: i64, at: i64) -> Result<()> {
         self.tx

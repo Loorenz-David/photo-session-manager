@@ -7,15 +7,183 @@ use state::AppState;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
-struct TauriEvents(tauri::AppHandle);
+struct TauriEvents<R: tauri::Runtime>(tauri::AppHandle<R>);
 #[derive(serde::Serialize, Clone)]
 struct PhotoAddedPayload {
     photo_id: i64,
     session_id: i64,
 }
+
+#[cfg(test)]
+mod p39_tests {
+    use super::*;
+    use psm_core::domain::photo::Classification;
+    use serde_json::{Value, json};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        Listener,
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+
+    fn result(
+        webview: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        sid: i64,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            webview,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(json!({"sessionId":sid})),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+    fn setup() -> (psm_testkit::TestApp, i64, Vec<i64>) {
+        let a = psm_testkit::TestApp::with_fake_document().unwrap();
+        let sid = a
+            .items()
+            .create_local("s", "s", "object", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let ids = ["a", "b"]
+            .iter()
+            .map(|name| {
+                let id = a.add_photo(sid, name).unwrap().id;
+                a.review().classify(id, Classification::Main).unwrap();
+                id
+            })
+            .collect();
+        (a, sid, ids)
+    }
+    #[test]
+    fn c7a_history_commands() {
+        let (a, s, ids) = setup();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::history::history_get,
+                commands::history::history_undo,
+                commands::history::history_redo
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        assert_eq!(
+            result(&w, "history_get", s).unwrap(),
+            json!({"undo":"Approve 02","redo":null})
+        );
+        let undo = result(&w, "history_undo", s).unwrap();
+        assert_eq!(
+            (
+                undo["label"].as_str(),
+                undo["direction"].as_str(),
+                undo["active_photo_id"].as_i64()
+            ),
+            (Some("Approve 02"), Some("undone"), Some(ids[1]))
+        );
+        assert_eq!(undo["sessions"][0]["id"], s);
+        assert_eq!(
+            result(&w, "history_get", s).unwrap(),
+            json!({"undo":"Approve 01","redo":"Approve 02"})
+        );
+        let redo = result(&w, "history_redo", s).unwrap();
+        assert_eq!(
+            (redo["label"].as_str(), redo["direction"].as_str()),
+            (Some("Approve 02"), Some("redone"))
+        );
+        assert_eq!(
+            result(&w, "history_redo", s).unwrap_err()["code"],
+            "nothing_to_redo"
+        );
+    }
+    #[test]
+    fn c7b_photos_undo_compatibility() {
+        let a = psm_testkit::TestApp::with_fake_document().unwrap();
+        let s = a
+            .items()
+            .create_local("s", "s", "object", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let id = a.add_photo(s, "a").unwrap().id;
+        a.review().classify(id, Classification::Main).unwrap();
+        a.review().delete(id).unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![commands::photos::photos_undo])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let first = result(&w, "photos_undo", s).unwrap();
+        assert_eq!(first["active_photo_id"], id);
+        assert_eq!(first["sessions"][0]["id"], s);
+        assert_eq!(first["sessions"][0]["main_count"], 1);
+        let second = result(&w, "photos_undo", s).unwrap();
+        assert_eq!(second["active_photo_id"], id);
+        assert_eq!(second["sessions"][0]["unreviewed_count"], 1);
+        assert_eq!(
+            result(&w, "photos_undo", s).unwrap_err()["code"],
+            "nothing_to_undo"
+        );
+    }
+    #[test]
+    fn c7c_tauri_history_changed_event() {
+        let (a, s, _ids) = setup();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![commands::history::history_undo])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let handles = tauri_app.state::<AppState>().handles().unwrap();
+        handles
+            .events
+            .set_target(Arc::new(TauriEvents(tauri_app.handle().clone())));
+        let payloads = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+        let seen = payloads.clone();
+        tauri_app.listen_any("history_changed", move |event| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(event.payload()).unwrap());
+        });
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        result(&w, "history_undo", s).unwrap();
+        assert_eq!(
+            *payloads.lock().unwrap(),
+            vec![json!({"session_id":s,"undo":"Approve 01","redo":"Approve 02"})]
+        );
+    }
+}
 #[derive(serde::Serialize, Clone)]
 struct SessionChangedPayload {
     session_id: i64,
+}
+#[derive(serde::Serialize, Clone)]
+struct HistoryChangedPayload {
+    session_id: i64,
+    undo: Option<String>,
+    redo: Option<String>,
 }
 #[derive(serde::Serialize, Clone)]
 struct ExportProgressPayload {
@@ -32,9 +200,23 @@ struct PublishProgressPayload {
     uploaded: i64,
     total: i64,
 }
-impl EventSink for TauriEvents {
+impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
     fn emit(&self, event: AppEvent) {
         match event {
+            AppEvent::HistoryChanged {
+                session_id,
+                undo,
+                redo,
+            } => {
+                let _ = self.0.emit(
+                    "history_changed",
+                    HistoryChangedPayload {
+                        session_id,
+                        undo,
+                        redo,
+                    },
+                );
+            }
             AppEvent::PhotoAdded {
                 photo_id,
                 session_id,
@@ -134,6 +316,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::photos::photos_copy,
         commands::photos::photos_import,
         commands::photos::photos_assign_unassigned,
+        commands::history::history_get,
+        commands::history::history_undo,
+        commands::history::history_redo,
         commands::compositions::composition_set,
         commands::compositions::composition_apply,
         commands::compositions::composition_reset,

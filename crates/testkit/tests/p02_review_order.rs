@@ -170,7 +170,7 @@ fn c3b_undo_restores_position_and_active() {
     let s = session(&a, "s1");
     let p = main(&a, s, &["a", "b", "c"]);
     a.review().delete(p[1]).unwrap();
-    let result = a.review().undo(s).unwrap();
+    let result = a.history().undo(s).unwrap();
     assert_eq!(result.active_photo_id, Some(p[1]));
     assert_eq!(
         state(&a, s, C::Main),
@@ -185,7 +185,7 @@ fn c3c_only_last_delete_undoes() {
     for id in [p[2], p[0], p[1]] {
         a.review().delete(id).unwrap();
     }
-    a.review().undo(s).unwrap();
+    a.history().undo(s).unwrap();
     assert_eq!(state(&a, s, C::Main), vec![(p[1], Some(1))]);
     assert_eq!(state(&a, s, C::Deleted), vec![(p[0], None), (p[2], None)]);
 }
@@ -197,19 +197,16 @@ fn c3d_undo_clamps_prior_position() {
     a.review().delete(p[2]).unwrap();
     a.review().classify(p[0], C::Condition).unwrap();
     a.review().classify(p[1], C::Condition).unwrap();
-    a.review().undo(s).unwrap();
-    assert_eq!(state(&a, s, C::Main), vec![(p[2], Some(1))]);
-    assert_eq!(
-        state(&a, s, C::Condition),
-        vec![(p[0], Some(1)), (p[1], Some(2))]
-    );
+    a.history().undo(s).unwrap();
+    assert_eq!(state(&a, s, C::Main), vec![(p[1], Some(1))]);
+    assert_eq!(state(&a, s, C::Condition), vec![(p[0], Some(1))]);
 }
 #[test]
 fn c3e_empty_undo_fails_without_change() {
     let a = app();
     let s = session(&a, "s1");
     let before = a.store().session(s).unwrap();
-    assert!(matches!(a.review().undo(s), Err(Error::NothingToUndo)));
+    assert!(matches!(a.history().undo(s), Err(Error::NothingToUndo)));
     assert_eq!(a.store().session(s).unwrap(), before);
 }
 #[test]
@@ -218,7 +215,7 @@ fn c3f_unreviewed_undo_stays_unpositioned() {
     let s = session(&a, "s1");
     let u = add(&a, s, "u", C::Unreviewed);
     a.review().delete(u).unwrap();
-    let result = a.review().undo(s).unwrap();
+    let result = a.history().undo(s).unwrap();
     assert_eq!(result.active_photo_id, Some(u));
     assert_eq!(state(&a, s, C::Unreviewed), vec![(u, None)]);
 }
@@ -338,7 +335,7 @@ fn c5a_each_operation_bumps_touched_sessions_once() {
     a.review().delete(u).unwrap();
     assert_eq!(seq(&a, s), n + 1);
     let n = seq(&a, s);
-    a.review().undo(s).unwrap();
+    a.history().undo(s).unwrap();
     assert_eq!(seq(&a, s), n + 1);
     let (ns, nt) = (seq(&a, s), seq(&a, t));
     a.review().move_photos(&[p[0]], t).unwrap();

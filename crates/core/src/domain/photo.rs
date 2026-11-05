@@ -62,13 +62,6 @@ impl Classification {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UndoSlot {
-    pub photo_id: i64,
-    pub prior_classification: Classification,
-    pub prior_position: Option<i64>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PhotoSource {

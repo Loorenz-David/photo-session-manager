@@ -4,7 +4,7 @@ use crate::domain::{
     composition::{Composition, CompositionValues, Fingerprint, Origin},
     editing::Job,
     item::{Item, NewItem},
-    photo::{Classification, Integrity, NewPhoto, Photo, UndoSlot},
+    photo::{Classification, Integrity, NewPhoto, Photo},
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{LatestPublish, Session, SessionDto, SessionListRecord},
 };
@@ -52,7 +52,8 @@ pub trait StoreTx {
         target_session: i64,
         position: Option<i64>,
     ) -> Result<i64>;
-    fn set_undo_slot(&mut self, session_id: i64, slot: Option<&UndoSlot>) -> Result<()>;
+    fn delete_photo_row(&mut self, id: i64) -> Result<()>;
+    fn publish_confirmed_since(&self, session_id: i64, seq: i64) -> Result<bool>;
     fn touch_session(&mut self, session_id: i64, at: i64) -> Result<()>;
     fn items(&self) -> Result<Vec<Item>>;
     fn item(&self, id: i64) -> Result<Item>;

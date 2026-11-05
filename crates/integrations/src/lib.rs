@@ -38,6 +38,7 @@ use psm_core::{
         editing_startup::EditingStartup,
         export::{ExportRender, ExportService},
         health::HealthService,
+        history::{History, HistoryStore},
         previews::PreviewService,
         publish::PublishService,
         settings::SettingsService,
@@ -91,6 +92,7 @@ pub struct App {
     pub export: Arc<ExportService>,
     pub publish: Option<Arc<PublishService>>,
     pub events: Arc<EventHub>,
+    pub history: Arc<History>,
     pub clock: Arc<dyn Clock>,
     scripting: Arc<dyn CaptureOneScripting>,
     user_scripting: Arc<dyn CaptureOneScripting>,
@@ -120,6 +122,7 @@ pub struct AppHandles {
     pub export: Arc<ExportService>,
     pub publish: Option<Arc<PublishService>>,
     pub events: Arc<EventHub>,
+    pub history: Arc<History>,
     pub hooks_compiled: bool,
     pub nudge_running: bool,
 }
@@ -133,6 +136,7 @@ pub struct SettingsSetContext {
     clock: Arc<dyn Clock>,
     run_startup: bool,
     commerce_override: Option<Arc<dyn CommerceAdapter>>,
+    history_store: HistoryStore,
 }
 
 pub enum PreparedSettings {
@@ -165,6 +169,7 @@ impl SettingsSetContext {
             self.run_startup,
             self.commerce_override,
             false,
+            Some(self.history_store),
         ) {
             Ok(app) => {
                 if let Some(failure) = self
@@ -263,6 +268,7 @@ impl App {
             clock: self.clock.clone(),
             run_startup: self.run_startup,
             commerce_override: self.commerce_override.clone(),
+            history_store: self.history.store(),
         }
     }
     pub fn apply_settings(
@@ -301,6 +307,7 @@ impl App {
             export: self.export.clone(),
             publish: self.publish.clone(),
             events: self.events.clone(),
+            history: self.history.clone(),
             hooks_compiled: self.hooks_compiled,
             nudge_running: self.nudge_port() != 0,
         }
@@ -337,9 +344,11 @@ impl App {
             run_startup,
             commerce_override,
             true,
+            None,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build(
         paths: AppPaths,
         scripting: Arc<dyn CaptureOneScripting>,
@@ -348,6 +357,7 @@ impl App {
         run_startup: bool,
         commerce_override: Option<Arc<dyn CommerceAdapter>>,
         start_backup: bool,
+        history_store: Option<HistoryStore>,
     ) -> Result<Self> {
         let (user_scripting, background_scripting) = lanes;
         paths.create()?;
@@ -423,6 +433,10 @@ impl App {
             document_id: document_id.clone(),
         });
         let events = Arc::new(EventHub::default());
+        let history = Arc::new(match history_store {
+            Some(store) => History::with_store(store, events.clone()),
+            None => History::new(events.clone()),
+        });
         let compositions = Arc::new(CompositionService {
             store: store.clone(),
             clock: clock.clone(),
@@ -679,6 +693,7 @@ impl App {
             export,
             publish,
             events,
+            history,
             clock,
             scripting,
             user_scripting,
@@ -757,6 +772,7 @@ impl App {
             self.run_startup,
             self.commerce_override.clone(),
             false,
+            Some(self.history.store()),
         )?;
         self.shutdown();
         self.events.transfer_target_to(&next.events);

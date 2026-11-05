@@ -6,7 +6,10 @@ use psm_core::{
     domain::photo::{NewPhoto, Photo, PhotoSource},
     events::AppEvent,
     ports::{clock::Clock, events::EventSink, store::Store},
-    services::{items::ItemsService, review::ReviewService, sessions::SessionsService},
+    services::{
+        history::HistoryService, items::ItemsService, review::ReviewService,
+        sessions::SessionsService,
+    },
 };
 use psm_infra::paths::AppPaths;
 use psm_integrations::App;
@@ -51,7 +54,18 @@ impl TestApp {
         )
     }
     pub fn review(&self) -> ReviewService<'_> {
-        ReviewService::new(self.app.store.as_ref(), self.clock.as_ref())
+        ReviewService::new(
+            self.app.store.as_ref(),
+            self.clock.as_ref(),
+            self.app.history.as_ref(),
+        )
+    }
+    pub fn history(&self) -> HistoryService<'_> {
+        HistoryService::new(
+            self.app.store.as_ref(),
+            self.clock.as_ref(),
+            self.app.history.as_ref(),
+        )
     }
     pub fn add_photo(&self, session_id: i64, raw: &str) -> Result<Photo> {
         let path = self.dir.path().join(raw);

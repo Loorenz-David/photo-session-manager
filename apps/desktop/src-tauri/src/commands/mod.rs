@@ -3,6 +3,7 @@ pub mod camera;
 pub mod compositions;
 pub mod export;
 pub mod health;
+pub mod history;
 pub mod items;
 pub mod photos;
 pub mod publish;

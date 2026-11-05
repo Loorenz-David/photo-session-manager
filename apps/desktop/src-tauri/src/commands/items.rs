@@ -77,6 +77,12 @@ impl From<Error> for CommandError {
             Error::TargetHasRaw => "target_has_raw",
             Error::TargetPublished => "target_published",
             Error::NothingToUndo => "nothing_to_undo",
+            Error::NothingToRedo => "nothing_to_redo",
+            Error::StepCannotApply { label, reason, .. } => {
+                data.insert("label".into(), label.clone());
+                data.insert("reason".into(), reason.clone());
+                "step_cannot_apply"
+            }
             Error::CaptureFolderNotSet => "capture_folder_not_set",
             Error::HooksNotInstalled => "hooks_not_installed",
             Error::RecipeMissing { name } => {

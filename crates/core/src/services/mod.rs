@@ -6,6 +6,7 @@ pub mod editing_events;
 pub mod editing_startup;
 pub mod export;
 pub mod health;
+pub mod history;
 pub mod integrity;
 pub mod items;
 pub mod photos;

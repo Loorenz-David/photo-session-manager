@@ -307,6 +307,8 @@ to record; the `HistoryChanged` payload after a dropped step (emit once, after t
 
 ## Review log
 
+- **2026-11-05, implement r1 (codex), BLOCKED.** Built the 25-step per-session in-memory history, review-step recording, transactional undo/redo, mirror and publish guards, events, Tauri commands, compatibility wrapper and boundary tests. The 26 non-conflicting criterion rows pass in focused runs. C4(h) cannot satisfy both its final assertion and this plan's §Reversal rules: after the move undo is dropped, the original photo remains in `t`, while the earlier approval step requires `photo.session_id == s`; its next undo must return `StepCannotApply` rather than succeed. The boundary test keeps the row's asserted success and fails, so the tracker remains NOT_STARTED pending a plan correction. Assumptions: source session owns transfer history; a multi-source transfer records one step per source; title falls back to SKU; the operation lock is per `History` instance. No semantic deviation was made to force C4(h) green.
+
 - **2026-11-05, orchestrator amendments after projection r0** (`handoffs/reviewer/handoff_P39_undo_history_core_projection_r0.md`, folded by the
   planner; `projection: yes` → `done`). D1 → Read first: `c3d` changes its assertions (newest step `b → Condition`), the clamp proof is C2(b).
   D2 → Read first / Files: p05 `:76` and p27 `:86` `PhotosService` literals gain `history`; `photos_import :171` and `photos_assign_unassigned

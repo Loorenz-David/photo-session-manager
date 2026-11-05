@@ -42,6 +42,14 @@ pub enum Error {
     TargetPublished,
     #[error("nothing_to_undo")]
     NothingToUndo,
+    #[error("nothing_to_redo")]
+    NothingToRedo,
+    #[error("Can't {direction} {label}: {reason}")]
+    StepCannotApply {
+        direction: String,
+        label: String,
+        reason: String,
+    },
     #[error("capture_folder_not_set")]
     CaptureFolderNotSet,
     #[error("hooks_not_installed")]

@@ -55,9 +55,13 @@ fn with_review(
     app: &psm_integrations::AppHandles,
     op: impl FnOnce(&ReviewService<'_>) -> psm_core::Result<ReviewResult>,
 ) -> Result<ReviewResponse, CommandError> {
-    op(&ReviewService::new(app.store.as_ref(), &SystemClock))
-        .map(Into::into)
-        .map_err(Into::into)
+    op(&ReviewService::new(
+        app.store.as_ref(),
+        &SystemClock,
+        app.history.as_ref(),
+    ))
+    .map(Into::into)
+    .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -114,7 +118,17 @@ pub async fn photos_undo(
 ) -> Result<ReviewResponse, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<ReviewResponse, CommandError> {
-        with_review(&app, |service| service.undo(session_id.0))
+        psm_core::services::history::HistoryService::new(
+            app.store.as_ref(),
+            &SystemClock,
+            app.history.as_ref(),
+        )
+        .undo(session_id.0)
+        .map(|out| ReviewResponse {
+            sessions: out.sessions.into_iter().map(Into::into).collect(),
+            active_photo_id: out.active_photo_id,
+        })
+        .map_err(Into::into)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -173,6 +187,7 @@ pub async fn photos_import(
             editing: app.editing.as_ref(),
             store: app.store.as_ref(),
             clock: &SystemClock,
+            history: app.history.as_ref(),
         }
         .import(&paths)
         .map_err(Into::into)
@@ -194,6 +209,7 @@ pub async fn photos_assign_unassigned(
             editing: app.editing.as_ref(),
             store: app.store.as_ref(),
             clock: &SystemClock,
+            history: app.history.as_ref(),
         }
         .assign_unassigned(item_id.0)
         .map(Into::into)

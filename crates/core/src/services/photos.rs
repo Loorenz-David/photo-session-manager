@@ -3,6 +3,7 @@ use crate::{
     ports::{clock::Clock, editing::EditingProvider, store::Store},
     services::{
         arrival::ArrivalService,
+        history::History,
         review::{ReviewResult, ReviewService},
         sessions::SessionsService,
     },
@@ -14,6 +15,7 @@ pub struct PhotosService<'a> {
     pub editing: &'a dyn EditingProvider,
     pub store: &'a dyn Store,
     pub clock: &'a dyn Clock,
+    pub history: &'a History,
 }
 impl PhotosService<'_> {
     pub fn import(&self, paths: &[String]) -> Result<()> {
@@ -39,6 +41,6 @@ impl PhotosService<'_> {
             .iter()
             .map(|p| p.id)
             .collect();
-        ReviewService::new(self.store, self.clock).move_photos(&ids, target)
+        ReviewService::new(self.store, self.clock, self.history).move_photos(&ids, target)
     }
 }
