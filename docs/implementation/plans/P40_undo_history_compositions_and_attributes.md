@@ -250,6 +250,24 @@ for a cross-session `apply` (D14); whole-row equality (D15); the test-local help
 
 ## Review log
 
+- **2026-11-05, review r1 (opus): APPROVED_WITH_NOTES.** Gate: tracker `IMPLEMENTED`, checkpoint `69d3842` in `git log`. Perimeter: `git show --stat` = the 10
+  declared paths + tracker + plan (13), nothing extra or missing. Rust suite, clippy `-D warnings`, fmt, `npm run typecheck` green (one run, clean tree
+  `57495ec`). Verified correct, reading the code and then its test: `save_composition_in` is shared by `Store::save_composition` and `StoreTx::save_composition`
+  (revision + 1, `state ok`, `change_seq + 1` per non-deleted photo); a composition reversal reads `needs_review`, frame and `validate` **inside** the
+  transaction, under the operation lock, and emits `PhotoChanged` per changed photo + one `SessionChanged` after the lock is released (C1(a) red on
+  `− 1` revision or a missing event; C3(a) pins reason text, unchanged revision and values, and the drop); `apply` records one step of only the changed
+  photos (C2(a): p untouched at revision 0); `composition_apply` calls `apply` once (C2(c) would read `… to 1 photo` if it looped); attribute reversal
+  restores whole rows with `put_attribute_value` / `delete_attribute_value` and skips a write when whole-row `==` (C4(a) compares the full `Value`,
+  `updated_at` included); `ai_suggest` records nothing (`write(…, None, …)`); coalescing only on `Edit …` single-field steps with the same item and key and
+  redo empty (C4(e) would leave `"Oa"` without it; C4(f) fails if a later same-key save merged past another field; C5(b) pins Clear as its own step);
+  attribute reversals emit only `HistoryChanged` (C7(a)); copy-redo with source gone → `that photo is gone`, dropped (C8(a)). Assumptions: nested
+  `photo_id` = `CompositionApplyItemDto` and `bindings.ts` (plan fixture slip, not a deviation in behaviour); partial-success Apply and no recording on
+  schema refresh are as tasks 1–4 direct. None contradicts the book. H1–H8: no external write, no RAW touched, no pixel work, transactional reversals
+  (H4), no platform concept in core, commands stay thin (H8). Notes (backlog, 6): **probe-confirmed** undo of a re-frame on a `needs_review` photo
+  restores the old rect with `state ok` (MC-30's letter vs M33's "until confirmed"; owner choice before P41); cross-session Apply undo always refused by the
+  session check; `expect("saved photo")` in `apply`; coalesced no-op step; three missing secondary asserts (c4f, c5b, c2a); C2(c) `photoId` plan slip.
+  Probe file `crates/testkit/tests/zz_p40_review_probe.rs` created, run, deleted; no production file touched.
+
 - **2026-11-05, implement r1 (codex).** Built composition set/reset/Apply recording, transactional composition undo/redo with new revisions and post-commit photo/session events; attribute set/title/clear/accept-all recording, exact stored-row reversal and same-field save coalescing; command wiring, one-call Apply, and the missing-source copy-redo refusal. Added 20 boundary tests, one coalescing mechanism unit test. **Assumptions:** the existing `composition_apply` nested item DTO uses `photo_id` (as its Rust serde and generated TypeScript binding require), though C2(c)'s fixture spells `photoId`; retained the DTO and used `photo_id` in the command test. `CompositionService::apply` keeps the existing partial-success behavior and records only successful changes, as tasks 1–3 direct. **Deviations:** C2(c)'s request fixture spelling only; no product behavior or file-perimeter deviation. The test app attaches history through its new `attributes` helper; existing three-argument attribute constructors remain untouched. Live camera and Capture One were not needed for the automated tests.
 
 - **2026-11-05, orchestrator amendments after projection r0** (`handoffs/reviewer/handoff_P40_undo_history_compositions_and_attributes_projection_r0
