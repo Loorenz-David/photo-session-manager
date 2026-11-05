@@ -21,8 +21,9 @@ import { assignUnassigned, type Photo } from '@/services/photos';
 import { createSession } from '@/services/sessions';
 import { adoptItem, type Item } from '@/services/items';
 import { useKeyboard } from '@/lib/keyboard';
-import { canCompose } from '@/services/compositions';
+import { canCompose, setComposition, valuesOf } from '@/services/compositions';
 import { ComposeMode } from '@/features/compose/ComposeMode';
+import { refit } from '@/features/compose/refit';
 import { FormDialog } from '@/features/form/FormDialog';
 import { FailurePopover } from '@/features/publish/FailurePopover';
 import { publishRetry } from '@/services/publish';
@@ -30,6 +31,7 @@ import { FoldedStrip } from './FoldedStrip';
 import { ImportDropZone, pickAndImport } from './ImportDropZone';
 import { ItemDetailsCard } from './ItemDetailsCard';
 import { displayOrder, displaySequence } from './order';
+import { outputNumbers, type OutputNumbers } from './outputs';
 import { ItemPickerDialog, SessionPickerDialog } from './PickerDialogs';
 import { PhotoPanel } from './PhotoPanel';
 import type { PhotoMenuAction } from './PhotoMenu';
@@ -60,6 +62,15 @@ function projectedSlot(group: Photo[], photoId: number): number {
   const index = group.findIndex(candidate => candidate.id === photoId);
   return index === -1 ? group.length : index + 1;
 }
+
+/** The group with `photo` at the 1-based `slot` (moved from wherever it was): what the drop would make. */
+function placedAt(group: readonly Photo[], photo: Photo, slot: number): Photo[] {
+  const rest = group.filter(candidate => candidate.id !== photo.id);
+  rest.splice(Math.max(0, Math.min(rest.length, slot - 1)), 0, photo);
+  return rest;
+}
+
+const NO_NUMBERS: OutputNumbers = { first: 0, last: 0 };
 
 /** Drops land on what is under the pointer; a tile wins over the group around it. */
 const collisions: CollisionDetection = args => {
@@ -135,8 +146,8 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
   const dragging = state.photos.find(photo => photo.id === draggingId) ?? null;
   const ordered = displayOrder(state.photos);
   const draggedGroup = dragging?.classification === 'condition' ? ordered.condition : [...ordered.main, ...ordered.unreviewed];
-  const draggedNumber = dragging ? draggedGroup.findIndex(photo => photo.id === dragging.id) + 1 : 0;
-  let projectedNumber = draggedNumber;
+  // The overlay's number: the places the photo would fill after the drop (MC-29: outputs expand in photo order; a split fills two).
+  let projectedList: readonly Photo[] = draggedGroup;
   let projectedGroup = dragging?.classification;
   if (dragging && overId !== null && idNumber(overId, 'session:') === null && String(overId) !== `photo:${dragging.id}`) {
     const overPhotoId = idNumber(overId, 'photo:');
@@ -147,12 +158,13 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     if (target === 'main' || target === 'condition') {
       if (dragging.classification !== target) {
         projectedGroup = target;
-        projectedNumber = ordered[target].length + 1;
+        projectedList = [...ordered[target], { ...dragging, classification: target }];
       } else if (overPhoto) {
-        projectedNumber = projectedSlot(ordered[target], overPhoto.id);
+        projectedList = placedAt(draggedGroup, dragging, projectedSlot(ordered[target], overPhoto.id));
       }
     }
   }
+  const projected = dragging ? outputNumbers(projectedList).get(dragging.id) ?? NO_NUMBERS : NO_NUMBERS;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const failure = state.view?.session.publish?.step === 'failed' ? state.view.session.publish : null;
   const retry = useCallback(() => {
@@ -201,6 +213,32 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
     if (composing && (!active || !canCompose(active))) setComposing(false);
   }, [composing, active]);
 
+  /**
+   * Split / Normal from the grid (10D: "Allowed for Main and Condition photos"; plan P33 task 4): every named photo whose
+   * kind differs gets its own save, one after the other, re-fitted at the same centre and area; the answer updates its
+   * tile in place. While composing, the stage photo belongs to the editor's machine (`ComposeMode` handles it).
+   */
+  const setKind = useCallback(
+    async (photoIds: number[], to: 'split' | 'normal') => {
+      for (const photoId of photoIds) {
+        const photo = state.photos.find(candidate => candidate.id === photoId);
+        if (!photo || !canCompose(photo) || photo.composition.kind === to) continue;
+        if (to === 'split' && photo.classification === 'unreviewed') continue;
+        if (composing && photo.id === state.activeId) continue;
+        const values = valuesOf(photo.composition);
+        const frame = photo.composition.frame;
+        if (!values || !frame) continue;
+        try {
+          const composition = await setComposition(photoId, refit(values, { kind: 'kind', to }, frame));
+          state.patchPhoto(photoId, { composition });
+        } catch (error) {
+          toast.error(`Not saved: ${(error as Error).message}`);
+        }
+      }
+    },
+    [state, composing],
+  );
+
   /** The ⋯ / right-click menu acts on the selection when the photo is part of it, else on the photo alone. */
   const onMenu = useCallback(
     (action: PhotoMenuAction, photo: Photo) => {
@@ -208,11 +246,12 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
         ? displaySequence(state.photos).filter(p => state.selection.has(p.id)).map(p => p.id)
         : [photo.id];
       if (action === 'compose') enterCompose(photo);
+      else if (action === 'split' || action === 'normal') void setKind(photoIds, action);
       else if (action === 'toggle') void state.classify(photo.id, photo.classification === 'condition' ? 'main' : 'condition', false);
       else if (action === 'delete') void state.remove(photo.id);
       else setPicker({ kind: action, photoIds });
     },
-    [state, enterCompose],
+    [state, enterCompose, setKind],
   );
 
   const assignWhole = useCallback(
@@ -372,7 +411,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, navig
       </main>
       <DragOverlay dropAnimation={reducedMotion ? null : dropAnimation}>
         {dragging && <div className={`photo-tile tile-${folded ? 'strip' : 'grid'} drag-overlay`} style={{ width: '100%', height: '100%' }} data-active={state.activeId === dragging.id || undefined} data-selected={state.selection.has(dragging.id) || undefined} aria-hidden="true">
-          <PhotoTileFace photo={{ ...dragging, classification: projectedGroup ?? dragging.classification }} number={projectedNumber} variant={folded ? 'strip' : 'grid'} />
+          <PhotoTileFace photo={{ ...dragging, classification: projectedGroup ?? dragging.classification }} number={projected.first} last={projected.last} variant={folded ? 'strip' : 'grid'} />
         </div>}
       </DragOverlay>
       {failureOpen && failure && <FailurePopover reason={failure.error ?? 'Publish failed'} onRetry={retry} onClose={() => setFailureOpen(false)} />}

@@ -2,6 +2,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import type { Photo } from '@/services/photos';
 import { displayOrder } from './order';
+import { outputNumbers, outputTotal } from './outputs';
 import { PhotoMenuButton, type PhotoMenuAction } from './PhotoMenu';
 import { ReviewButtons } from './ReviewButtons';
 import { StageImage } from './StageImage';
@@ -24,14 +25,15 @@ type StageProps = {
   compose?: { onDone: () => void; children: ReactNode };
 };
 
-/** Where the active photo sits: "Main 5 of 7" (unreviewed photos count after Main) or "Condition 1 of 2". */
-function placement(photos: readonly Photo[], photo: Photo): { label: string; index: number; total: number } {
+/**
+ * Where the active photo sits, counted in outputs (MC-29): "Main 5 of 7" (unreviewed photos count after Main),
+ * "Condition 1 of 2", or "Main 3–4 of 8" for a split photo (the two places it fills).
+ */
+function placement(photos: readonly Photo[], photo: Photo): { label: string; range: string; total: number } {
   const order = displayOrder(photos);
-  if (photo.classification === 'condition') {
-    return { label: 'Condition', index: order.condition.indexOf(photo) + 1, total: order.condition.length };
-  }
-  const shown = [...order.main, ...order.unreviewed];
-  return { label: 'Main', index: shown.indexOf(photo) + 1, total: shown.length };
+  const group = photo.classification === 'condition' ? order.condition : [...order.main, ...order.unreviewed];
+  const own = outputNumbers(group).get(photo.id) ?? { first: 0, last: 0 };
+  return { label: photo.classification === 'condition' ? 'Condition' : 'Main', range: own.first === own.last ? String(own.first) : `${own.first}–${own.last}`, total: outputTotal(group) };
 }
 
 /** The photo stage (COMPONENTS.md §Workspace): stacked images, prev/next, the pill and the round review buttons. */
@@ -56,7 +58,7 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
     <section className="stage" aria-label="Stage" data-composing={compose ? 'true' : undefined}>
       <div className="stage-bar">
         <span className="stage-place">
-          <strong>{where.label}</strong> {where.index} of {where.total}
+          <strong>{where.label}</strong> {where.range} of {where.total}
           {toReview > 0 && <em>{toReview} to review</em>}
         </span>
         <span className="stage-tools">

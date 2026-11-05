@@ -43,7 +43,7 @@
  *     clamped (rule 15), one `Save`. `SetValues { values, cause }`: `cause 'live'` → `adjusting { startValues }`,
  *     `values = live = new`, `View`, no `Save` (a slider between `input` and `change`); `cause 'set'` (default) →
  *     `idle`, apply, `View`, `Save` when the values differ from the gesture's start; `cause 'confirm'` → the same with
- *     the `Save` forced.
+ *     the `Save` forced; `cause 'kind'` (P33: S / Normal | Split) → as `'set'`.
  * 15. Clamps (`clampRect`, `zoomAbout`): the rect keeps its ratio inside the frame and never shrinks below
  *     `MIN_RECT_FRACTION`; with `straighten ≠ 0` a move, zoom or trim whose result fails `insideAfterStraighten` is
  *     refused (the previous `live` stays).
@@ -90,7 +90,7 @@ export type ComposeState = {
   needsConfirm: boolean;
 };
 
-export type SetValuesCause = 'set' | 'live' | 'confirm';
+export type SetValuesCause = 'set' | 'live' | 'confirm' | 'kind';
 
 export type ComposeEvent =
   | { type: 'PointerDown'; pointerId: number; isPrimary: boolean; button: number; point: Point }

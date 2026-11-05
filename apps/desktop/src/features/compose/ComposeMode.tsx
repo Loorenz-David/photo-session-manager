@@ -9,9 +9,10 @@ import { canCompose, resetComposition, type Composition } from '@/services/compo
 import type { Photo } from '@/services/photos';
 import { BrowserOverlay } from './BrowserOverlay';
 import { ComposeStage } from './ComposeStage';
-import { CompositionSection } from './CompositionSection';
+import { canSplit, CompositionSection } from './CompositionSection';
 import type { Box } from './geometry';
 import type { ComposeEvent } from './machine';
+import { refit } from './refit';
 import { ToolsPanel } from './ToolsPanel';
 import { useComposeGesture } from './useComposeGesture';
 import { useComposeKeys } from './useComposeKeys';
@@ -131,7 +132,38 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
   }, [patchPhoto]);
 
   const done = useCallback(() => controller.dispatch({ type: 'KeyReturn' }), [controller]);
-  useComposeKeys({ controller, onToggleTools: tools.toggleHidden, onReset: reset, onStepPhoto: stepPhoto });
+
+  /** S / Normal | Split / the menu's Split–Normal on the stage photo: the kind change runs through the machine like any control (P33). */
+  const setKind = useCallback(
+    (to: 'normal' | 'split') => {
+      const state = controller.getSnapshot();
+      if (!state || state.values.kind === to || (to === 'split' && !canSplit(activeRef.current))) return;
+      controller.dispatch({ type: 'SetValues', values: refit(state.values, { kind: 'kind', to }, state.frame), cause: 'kind' });
+    },
+    [controller],
+  );
+  const toggleKind = useCallback(() => {
+    const state = controller.getSnapshot();
+    if (state) setKind(state.values.kind === 'split' ? 'normal' : 'split');
+  }, [controller, setKind]);
+
+  /**
+   * The ⋯ and right-click menus while composing: Split / Normal on the stage photo (alone or as part of the selection)
+   * goes through the machine so the editor follows; the workspace handles every other photo (it skips the stage photo).
+   */
+  const menu = useCallback(
+    (action: PhotoMenuAction, photo: Photo) => {
+      if (action === 'split' || action === 'normal') {
+        const activeId = activeRef.current.id;
+        const { selection } = tiles;
+        if (photo.id === activeId || (selection.has(photo.id) && selection.has(activeId))) setKind(action);
+      }
+      onMenu(action, photo);
+    },
+    [onMenu, setKind, tiles],
+  );
+
+  useComposeKeys({ controller, onToggleTools: tools.toggleHidden, onReset: reset, onStepPhoto: stepPhoto, onToggleKind: toggleKind });
 
   return (
     <>
@@ -155,14 +187,14 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
           onToggleMode={() => undefined}
           onStep={onStep}
           onAction={() => undefined}
-          onMenu={onMenu}
+          onMenu={menu}
           onItemCard={onItemCard}
           compose={{
             onDone: done,
             children: <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} />,
           }}
         />
-        <BrowserOverlay photos={photos} isIdle={controller.isIdle} onPick={pick} {...tiles} />
+        <BrowserOverlay photos={photos} isIdle={controller.isIdle} onPick={pick} {...tiles} onMenu={menu} />
         {children}
       </div>
     </>

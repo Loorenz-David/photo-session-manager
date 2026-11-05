@@ -82,6 +82,8 @@
 .tile-composition[data-turned] .thumb-image { width: 100cqh; height: 100cqw; }
 .tile-frame { position: absolute; box-sizing: border-box; border: 1.5px solid #fff; box-shadow: 0 0 0 999px color-mix(in srgb, #000 40%, transparent); }
 .tile-strip .tile-frame { border-width: 1px; }
+/* A split photo (P33, 10D): a hairline at the middle of its composition rect — where Left ends and Right begins. */
+.tile-split { position: absolute; width: 1px; margin-left: -0.5px; background: #fff; opacity: .9; }
 .tile-review { position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 4px; background: var(--warn); color: #fff; font-size: 10px; font-weight: var(--weight-heavy); letter-spacing: .06em; text-transform: uppercase; }
 .drag-overlay { width: 100%; height: 100%; }
 .drag-overlay.tile-strip { border-radius: var(--r-sm); }

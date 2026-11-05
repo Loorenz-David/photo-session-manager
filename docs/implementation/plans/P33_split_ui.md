@@ -110,3 +110,51 @@ being dragged (two outputs: the label shows `first–last` of its projected slot
 - Estimated size: ~12 files, ~900 lines (≈ 300 editor + grid, ≈ 600 tests).
 
 ## Review log
+### 2026-11-05 — implement r1 (Fable, `pipeline-implementer`)
+**Built.** 10D's Split in the editor and the grid. New: `features/workspace/outputs.ts` (`outputCount`, `outputNumbers(group) → Map<photoId,
+{ first, last }>`, `outputTotal`, `outputLabel(first, last)` → `"03"` / `"03–04"`); `features/compose/SplitPreviews.tsx` (two square boxes
+`.split-preview[data-side]` labelled Left / Right, the same adjusted preview clipped to each half by the P32 CSS technique; `data-half`, `data-x0`,
+`data-x1` on the clipped frame). Changed: `refit.ts` (`RefitChange { kind: 'kind', to }` — `normal → split` ratio 2 at the same centre and area then
+`fit`, the shape kept; `split → normal` the kept shape's ratio, `free` keeps the rect, `original` the whole frame; while split a shape or
+orientation change updates the field only and leaves the 2:1 rect; `reshaped` no longer treats `original` as the whole frame while split),
+`machine.ts` (`SetValuesCause` gains `'kind'`, handled as `'set'`), `CompositionSection.tsx` (Normal | Split enabled, `canSplit`, the previews
+switch to `SplitPreviews` while split), `ComposeFrame.tsx` (`kind` prop, `.compose-frame[data-kind]`, `.compose-middle` hairline at
+`left + width/2`), `ComposeStage.tsx` (passes the kind), `useComposeKeys.ts` (`s` → `onToggleKind`), `ComposeMode.tsx` (`setKind`/`toggleKind`
+through the machine with `cause 'kind'`; the menus' Split / Normal on the stage photo — alone or inside the selection — go through the machine,
+the rest to the workspace), `compose.css`; `workspace/{outputs.ts, PhotoTile.tsx (last, outputLabel, .tile-split at (x + w/2)·100 %, aria-label
+Photo 03–04), PhotoGrid.tsx (outputNumbers per group), PhotoMenu.tsx (PhotoMenuAction split | normal; the entry that changes the kind, hint S,
+disabled like Compose… and for unreviewed photos), WorkspacePage.tsx (setKind: one save per named photo whose kind differs, in display order, each
+answer patched in place; the overlay's projected label from outputNumbers of the projected list), Stage.tsx (placement counts outputs: Main 4–5
+of 6), workspace.css}`. No Rust, no bindings change.
+**Tests.** `refit.test.ts` (+5: C1(a)(1)–(4) and the shape-while-split rule), `workspace/__tests__/outputs.test.ts` (C1(b), 4), `compose/__tests__/
+p33_split_editor.test.tsx` (C2(a) ×2, C2(b)–(d), C3(a), C6(a)), `workspace/__tests__/p33_split_grid.test.tsx` (C4(a)–(d), C5(a)–(c)). 23 new tests;
+`npm test` 34 files / 291 passed; `npm run typecheck` clean; Rust suite, clippy and fmt unchanged and green (handoff stamp). Red check: with the 14
+changed production files stashed and the tests kept, 19 of the 23 fail (the 4 `outputs.test.ts` cases pass because `outputs.ts` is a new file).
+**Judgment calls (Assumptions).**
+1. **Split is for Main and Condition photos (10D)**: on an unreviewed photo the Split control is `aria-disabled`, S does nothing and the menu's Split
+   entry is disabled; `outputNumbers` counts an unreviewed photo as one place whatever its kind (the plan's "each unreviewed counting one place as
+   today").
+2. **The menu's Split / Normal entry carries the hint `S`** like `Compose… R` (menuitem name `Split S` / `Normal S`); the label is the plan's.
+3. **While composing, the stage photo's kind change from a menu runs through the machine** (so the editor follows and the next gesture does not
+   overwrite it); `WorkspacePage.setKind` skips the stage photo while composing. For a selection containing the stage photo both paths run: the
+   machine for the stage photo, the workspace for the others.
+4. **Saves from the grid run one after the other** (`for … await`), each with its own `Not saved: <message>` toast on failure; a photo already of
+   the asked kind, without a frame, or unreviewed (for Split) is skipped.
+5. **The preview's clip surface**: `data-half`, `data-x0 = x₀`, `data-x1 = x₀ + w/2` on the clipped `.output-preview-frame` inside each
+   `.split-preview`; the box carries `aria-label` Left / Right and a caption below (the box itself is `aspect-ratio 1 / 1`); size cap 110 px.
+6. **The 2:1 hairline in the editor is an SVG `<line>`** (`.compose-middle`, 1 px, `--hair-strong`, `crispEdges`) drawn on the box the overlay draws
+   (the trimmed box during a trim); the tile hairline is a 1 px white span the height of the rect.
+7. **`Stage.placement`** writes `first–last` with an en dash (Delegated: yes) and the total as the group's outputs.
+8. The drag overlay's projected list for a same-group hover is the group with the dragged photo moved to the P22 `projectedSlot`; for a cross-group
+   hover the target group plus the photo (reclassified) at its end — `outputNumbers` of that list gives `first–last`.
+**Plan arithmetic (asserted at the contract's exact values, plan literals ± 1e-3 also asserted where given).** C1(a)(1): `w_px = 1707·√2 =
+2414.21`, `w = 0.943052`, `h = 0.707107`, `x = 0.028474`, `y = 0.146447`. C1(a)(4): `h = 0.333398438`, `y = 0.333300781`. C2(c)'s "5:4 rect of the
+same centre and area": `w_px = sqrt(1707²·1.25) = 1908.5`, `w = 0.745508`, `h = 0.894454`. C2(d): the plan's `(−100, −50)` on the 2:1 frame is
+exactly along the diagonal, so the trim is `0.943·852/952` wide and still 2:1.
+**Deviations.** (a) Files changed beyond the plan's list, each one line or a small seam the plan implies: `compose/machine.ts` (the `'kind'` cause the
+plan's task 0 names), `compose/ComposeStage.tsx` (passes the kind to `ComposeFrame`), `compose/ComposeMode.tsx` (S and the menu's Split / Normal on the
+stage photo must go through the machine — see assumption 3). (b) `workspace/FoldedStrip.tsx` is listed as changed but needed no change (it renders
+`PhotoGrid`, which carries the numbering and the hairline). (c) The grid test imports the P31 harness from `features/compose/__tests__/harness.tsx`
+(no copy). (d) Tracker actor is `fable`, not the prompt template's `codex`.
+**Not done.** No live try-out in the Tauri window (no interactive display); the owner's Manual try-out stands. No backend change: export and publish
+of split outputs are P30's.

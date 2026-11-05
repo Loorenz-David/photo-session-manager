@@ -2,9 +2,14 @@ import { useCallback, useEffect, useRef } from 'react';
 import { FlipHorizontal2, RotateCcw, RotateCw } from 'lucide-react';
 import type { Photo } from '@/services/photos';
 import type { ComposeState } from './machine';
+import type { SetValuesCause } from './machine';
 import { OutputPreview } from './OutputPreview';
 import { refit, type RefitChange } from './refit';
+import { SplitPreviews } from './SplitPreviews';
 import type { ComposeController } from './useComposeGesture';
+
+/** Split is for Main and Condition photos (10D); an unreviewed photo keeps Normal. */
+export const canSplit = (photo: Pick<Photo, 'classification'>) => photo.classification !== 'unreviewed';
 
 /** The Shape menu's entries (10D: Original, 1:1, 4:5, 3:2, 2:3, 16:9, Free; labels are the contract). */
 export const SHAPE_OPTIONS: readonly { value: string; label: string }[] = [
@@ -27,22 +32,29 @@ type CompositionSectionProps = {
 };
 
 /**
- * The Composition section of the Tools panel (10D bullet 3; plan P32 task 4): Normal | Split, the Shape menu, Turn,
- * rotate, flip, straighten, the output preview and Centre / Reset / Done. Every control runs through the machine as a
- * `SetValues` of `refit(values, change)`; the straighten slider is live on `input` and saves on `change`.
+ * The Composition section of the Tools panel (10D bullet 3; plan P32 task 4, P33 task 2): Normal | Split, the Shape
+ * menu, Turn, rotate, flip, straighten, the output preview(s) and Centre / Reset / Done. Every control runs through the
+ * machine as a `SetValues` of `refit(values, change)`; the straighten slider is live on `input` and saves on `change`;
+ * while split the frame is 2:1 and the preview shows the two squares, Left and Right.
  */
 export function CompositionSection({ photo, state, controller, onReset, onDone }: CompositionSectionProps) {
   const rangeRef = useRef<HTMLInputElement>(null);
   const { values } = state;
+  const splitAllowed = canSplit(photo);
 
   const set = useCallback(
-    (change: RefitChange, cause: 'set' | 'live' = 'set') => {
+    (change: RefitChange, cause: SetValuesCause = 'set') => {
       const current = controller.getSnapshot();
       if (!current) return;
       controller.dispatch({ type: 'SetValues', values: refit(current.values, change, current.frame), cause });
     },
     [controller],
   );
+
+  const setKind = (to: 'normal' | 'split') => {
+    if (values.kind === to || (to === 'split' && !splitAllowed)) return;
+    set({ kind: 'kind', to }, 'kind');
+  };
 
   // A slider drag is one gesture (plan Notes): `input` moves the view, the native `change` on release saves once.
   useEffect(() => {
@@ -57,10 +69,17 @@ export function CompositionSection({ photo, state, controller, onReset, onDone }
   return (
     <div className="composition-section">
       <div className="compose-kind" role="group" aria-label="Kind">
-        <button type="button" className="compose-segment" aria-pressed={values.kind === 'normal'}>
+        <button type="button" className="compose-segment" aria-pressed={values.kind === 'normal'} onClick={() => setKind('normal')} title="Normal (S)">
           Normal
         </button>
-        <button type="button" className="compose-segment" aria-pressed={values.kind === 'split'} aria-disabled="true" title="Split arrives in a later phase">
+        <button
+          type="button"
+          className="compose-segment"
+          aria-pressed={values.kind === 'split'}
+          aria-disabled={splitAllowed ? undefined : 'true'}
+          onClick={() => setKind('split')}
+          title={splitAllowed ? 'Split: one 2:1 composition, two square files (S)' : 'Split is for Main and Condition photos'}
+        >
           Split
         </button>
       </div>
@@ -110,7 +129,7 @@ export function CompositionSection({ photo, state, controller, onReset, onDone }
         </output>
       </div>
 
-      {photo.composition.frame && <OutputPreview photo={photo} values={values} frame={state.frame} />}
+      {photo.composition.frame && (values.kind === 'split' ? <SplitPreviews photo={photo} values={values} frame={state.frame} /> : <OutputPreview photo={photo} values={values} frame={state.frame} />)}
 
       <div className="compose-actions">
         <button type="button" className="compose-tool" onClick={() => set({ kind: 'centre' })} title="Centre (.)">

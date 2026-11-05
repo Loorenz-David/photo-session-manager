@@ -129,3 +129,64 @@ describe('C1(a) the re-fit keeps the centre and the area where the new ratio and
     valid({ ...free, rect: result });
   });
 });
+
+/** The portrait frame of P33 C1(a)(4) and its default square (P28 case 11's start). */
+const PORTRAIT_FRAME = { w: 1707, h: 2560 };
+const PORTRAIT_DEFAULT: Rect = { x: 0, y: 0.166601562, w: 1, h: 0.666796875 };
+
+describe('P33 C1(a) the kind change: split is 2:1 at the same centre and area; back to Normal restores the kept shape', () => {
+  it('(1) default square → split: w_px = sqrt(1707²·2) = 2414 fits the 2560 frame, so w = 0.943, h = 0.7071 centred at (0.5, 0.5); the shape is kept', () => {
+    const result = refit(values(DEFAULT), { kind: 'kind', to: 'split' }, FRAME);
+    expect(result.kind).toBe('split');
+    expect(result.shape).toBe('1:1');
+    const wPx = Math.sqrt(1707 * 1707 * 2);
+    rectNear(result.rect, { x: 0.5 - wPx / 2560 / 2, y: 0.5 - wPx / 2 / 1707 / 2, w: wPx / 2560, h: wPx / 2 / 1707 }, 1e-9);
+    rectNear(result.rect, { x: 0.0285, y: 0.1465, w: 0.943, h: 0.7071 }, 1e-3);
+    // Exactly 2:1 in pixels (MC-27 §Validation: a split exactly 2:1).
+    near(result.rect.w * 2560, 2 * result.rect.h * 1707, 1e-6);
+    valid(result);
+  });
+
+  it('(2) that split rect → normal with shape 1:1: a square of area 2414·1207 is 1707 px — the default square exactly', () => {
+    const split = refit(values(DEFAULT), { kind: 'kind', to: 'split' }, FRAME);
+    const result = refit(split, { kind: 'kind', to: 'normal' }, FRAME);
+    expect(result.kind).toBe('normal');
+    expect(result.shape).toBe('1:1');
+    rectNear(result.rect, DEFAULT, 1e-6);
+    valid(result);
+  });
+
+  it('(3) split rect → normal with shape original gives the whole frame', () => {
+    const split = refit(values(DEFAULT, { shape: 'original' }), { kind: 'kind', to: 'split' }, FRAME);
+    expect(split.kind).toBe('split');
+    near(split.rect.w * 2560, 2 * split.rect.h * 1707, 1e-6); // split ignores the shape: still 2:1
+    const result = refit(split, { kind: 'kind', to: 'normal' }, FRAME);
+    expect(result.rect).toEqual({ x: 0, y: 0, w: 1, h: 1 });
+    valid(result);
+  });
+
+  it('(4) split on a portrait frame from its default square: 2414 px does not fit 1707, so w = 1, h = 853.5/2560 = 0.333398 centred (P28 case 11)', () => {
+    const result = refit(values(PORTRAIT_DEFAULT), { kind: 'kind', to: 'split' }, PORTRAIT_FRAME);
+    rectNear(result.rect, { x: 0, y: 0.333300781, w: 1, h: 0.333398438 }, 1e-6);
+    expect(validate(result, PORTRAIT_FRAME)).toBeNull();
+  });
+
+  it('while split a shape or orientation change stores the field and leaves the 2:1 rect untouched; the kept shape applies when toggling back', () => {
+    const split = refit(values(DEFAULT), { kind: 'kind', to: 'split' }, FRAME);
+    const shaped = refit(split, { kind: 'shape', shape: '4:5' }, FRAME);
+    expect(shaped.shape).toBe('4:5');
+    expect(shaped.rect).toEqual(split.rect);
+    const turned = refit(shaped, { kind: 'orientation', orientation: 'turned' }, FRAME);
+    expect(turned.orientation).toBe('turned');
+    expect(turned.rect).toEqual(split.rect);
+    valid(turned);
+    const back = refit(turned, { kind: 'kind', to: 'normal' }, FRAME);
+    expect(back.kind).toBe('normal');
+    // The 5:4 rect of the same area (1707²) and centre: w_px = sqrt(1707²·1.25) = 1908.5, h_px = 1526.8.
+    const wPx = Math.sqrt(1707 * 1707 * 1.25);
+    rectNear(back.rect, { x: 0.5 - wPx / 2560 / 2, y: 0.5 - wPx / 1.25 / 1707 / 2, w: wPx / 2560, h: wPx / 1.25 / 1707 }, 1e-9);
+    valid(back);
+    // A no-op toggle returns the same values.
+    expect(refit(split, { kind: 'kind', to: 'split' }, FRAME)).toBe(split);
+  });
+});

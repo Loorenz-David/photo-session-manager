@@ -11,6 +11,8 @@ type KeysOptions = {
   onReset: () => void;
   /** `[` / `]`: the previous / next photo of the display sequence, keeping the changes. */
   onStepPhoto: (delta: -1 | 1) => void;
+  /** S: Normal ⇄ Split (P33). */
+  onToggleKind: () => void;
 };
 
 /** 1–6 and 0 pick Original, 1:1, 4:5, 3:2, 2:3, 16:9, Free (10D). */
@@ -18,8 +20,9 @@ const SHAPE_KEYS: Record<string, string> = { '1': 'original', '2': '1:1', '3': '
 const ARROWS: Record<string, [number, number]> = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
 
 /**
- * The editor's keys (10D §What the photographer sees, bullet 5; plan P32 task 6): arrows nudge one screen pixel (Shift
- * ×10), `.` centres, 1–6 / 0 pick the shape, X turns the frame, `[` `]` step photos, ⌘⌥R resets, ⌘T toggles the panel;
+ * The editor's keys (10D §What the photographer sees, bullet 5; plan P32 task 6, P33 task 2): arrows nudge one screen
+ * pixel (Shift ×10), `.` centres, 1–6 / 0 pick the shape, X turns the frame, S toggles Split, `[` `]` step photos, ⌘⌥R
+ * resets, ⌘T toggles the panel;
  * Esc and Return stay in P31's binding. Every other key while composing is swallowed (presses inside a field belong to
  * the field; an open menu or dialog owns its own keys). The listener runs in the capture phase so the workspace's and
  * the app's own key maps — ⌘[ Back among them — never see a swallowed key.
@@ -30,7 +33,7 @@ export function useComposeKeys(options: KeysOptions): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector(LAYER_OPEN) || isTyping(event.target)) return;
-      const { controller, onToggleTools, onReset, onStepPhoto } = latest.current;
+      const { controller, onToggleTools, onReset, onStepPhoto, onToggleKind } = latest.current;
       const key = event.key.toLowerCase();
       const swallow = () => {
         event.preventDefault();
@@ -62,6 +65,7 @@ export function useComposeKeys(options: KeysOptions): void {
       } else if (key === '.') set({ kind: 'centre' });
       else if (key in SHAPE_KEYS) set({ kind: 'shape', shape: SHAPE_KEYS[key] });
       else if (key === 'x' && state) set({ kind: 'orientation', orientation: state.values.orientation === 'turned' ? 'named' : 'turned' });
+      else if (key === 's') onToggleKind();
       else if (key === '[') onStepPhoto(-1);
       else if (key === ']') onStepPhoto(1);
       swallow();

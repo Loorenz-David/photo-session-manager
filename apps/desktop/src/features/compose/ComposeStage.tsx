@@ -62,7 +62,7 @@ export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint 
         )}
       </div>
       {state && stageBox && (
-        <ComposeFrame width={stageBox.width} height={stageBox.height} frameBox={drawnBox(state)}>
+        <ComposeFrame width={stageBox.width} height={stageBox.height} frameBox={drawnBox(state)} kind={state.values.kind}>
           <Handles box={drawnBox(state)} />
         </ComposeFrame>
       )}

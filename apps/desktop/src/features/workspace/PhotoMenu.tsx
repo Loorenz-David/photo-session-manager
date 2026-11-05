@@ -4,17 +4,25 @@ import { MoreHorizontal } from 'lucide-react';
 import { canCompose } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
 
-export type PhotoMenuAction = 'compose' | 'toggle' | 'assign' | 'move' | 'copy' | 'delete';
+export type PhotoMenuAction = 'compose' | 'split' | 'normal' | 'toggle' | 'assign' | 'move' | 'copy' | 'delete';
 
 type Entry = { action: PhotoMenuAction; label: string; hint?: string; danger?: boolean; disabled?: boolean };
 
-/** Entries of the ⋯ menu and the right-click menu (COMPONENTS.md §Workspace: Photo ⋯ menu / right-click; 10D: Compose…). */
+/**
+ * Entries of the ⋯ menu and the right-click menu (COMPONENTS.md §Workspace: Photo ⋯ menu / right-click; 10D: Compose…,
+ * and Split / Normal — the one that changes the photo's kind, for Main and Condition photos with a frame).
+ */
 function entries(photo: Photo): Entry[] {
+  const kindEntry: Entry =
+    photo.composition.kind === 'split'
+      ? { action: 'normal', label: 'Normal', hint: 'S', disabled: !canCompose(photo) }
+      : { action: 'split', label: 'Split', hint: 'S', disabled: !canCompose(photo) || photo.classification === 'unreviewed' };
   return [
     { action: 'compose', label: 'Compose…', hint: 'R', disabled: !canCompose(photo) },
     photo.classification === 'condition'
       ? { action: 'toggle', label: 'Move to Main', hint: 'A' }
       : { action: 'toggle', label: 'Move to Condition', hint: 'C' },
+    kindEntry,
     { action: 'assign', label: 'Assign to product…' },
     { action: 'move', label: 'Move to session…' },
     { action: 'copy', label: 'Copy to session…' },

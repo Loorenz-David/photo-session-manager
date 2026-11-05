@@ -19,6 +19,10 @@
  *   fixed and the size follows the pointer's projection onto the diagonal; free → both edges move. Edge handles: locked →
  *   scale about the opposite edge's centre; free → move that edge only. Then clamp to the frame and the minimum (the
  *   `insideAfterStraighten` guard is the machine's, rule 15: a refused trim keeps the previous live rect).
+ * - Kind (P33, 10D "Split: one 2:1 composition"): `normal → split` → ratio 2, centre and area preserved, then `fit` (the
+ *   shape value is kept); `split → normal` → the ratio of the kept shape (free → keep the rect; original → the whole
+ *   frame), centre and area preserved, `fit`. While split, a shape or orientation change updates the field only — the
+ *   frame stays 2:1 and the new shape applies when toggling back to Normal.
  */
 import type { CompositionValues, Frame, Rect } from '@/services/compositions';
 import { clampRect, insideAfterStraighten, MIN_RECT_FRACTION, shapeRatio, turnedFrame, type Point } from './geometry';
@@ -32,7 +36,9 @@ export type RefitChange =
   /** `.` / Centre: the rect centred in the frame. */
   | { kind: 'centre' }
   /** Re-frame (MC-27 §Revisions): the stored fractions re-fitted to the composition's current frame. */
-  | { kind: 'reframe' };
+  | { kind: 'reframe' }
+  /** S / Normal | Split (10D): the composition's kind; `split` is always 2:1. */
+  | { kind: 'kind'; to: 'normal' | 'split' };
 
 export type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export const HANDLES: readonly Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -91,7 +97,7 @@ function fit(centre: Point, wPx: number, hPx: number, turned: Frame, straighten:
 
 /** The rect of ratio `r` (null = free) with `area` pixels about `centre`, per the shape rule. */
 function reshaped(values: CompositionValues, rect: Rect, centre: Point, area: number, turned: Frame): Rect {
-  if (values.shape === 'original') return { x: 0, y: 0, w: 1, h: 1 };
+  if (values.kind !== 'split' && values.shape === 'original') return { x: 0, y: 0, w: 1, h: 1 };
   const r = shapeRatio(values.kind, values.shape, values.orientation, turned);
   if (r === null) return shrinkInside(clampRect(rect), turned, values.straighten ?? 0);
   const wPx = Math.sqrt(area * r);
@@ -105,10 +111,17 @@ export function refit(values: CompositionValues, change: RefitChange, frame: Fra
   const area = rect.w * turned.w * (rect.h * turned.h);
   switch (change.kind) {
     case 'shape':
-    case 'orientation':
-    case 'reframe': {
-      const next: CompositionValues =
-        change.kind === 'shape' ? { ...values, shape: change.shape } : change.kind === 'orientation' ? { ...values, orientation: change.orientation } : { ...values };
+    case 'orientation': {
+      const next: CompositionValues = change.kind === 'shape' ? { ...values, shape: change.shape } : { ...values, orientation: change.orientation };
+      // While split the frame is 2:1 whatever the shape: the field is stored for Normal and the rect stays.
+      if (values.kind === 'split') return next;
+      return { ...next, rect: reshaped(next, rect, centre, area, turned) };
+    }
+    case 'reframe':
+      return { ...values, rect: reshaped(values, rect, centre, area, turned) };
+    case 'kind': {
+      if (values.kind === change.to) return values;
+      const next: CompositionValues = { ...values, kind: change.to };
       return { ...next, rect: reshaped(next, rect, centre, area, turned) };
     }
     case 'turn': {

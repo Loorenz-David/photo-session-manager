@@ -6,6 +6,7 @@ import { valuesOf } from '@/services/compositions';
 import { previewUrl } from '@/services/sessions';
 import type { Photo } from '@/services/photos';
 import { orientationTransform } from './StageImage';
+import { outputLabel } from './outputs';
 import { PhotoUploadBadge } from '@/features/publish/PhotoUploadBadge';
 
 export const photoDragId = (photoId: number) => `photo:${photoId}`;
@@ -35,7 +36,10 @@ export function Thumb({ photo, transform }: ThumbProps) {
 
 const percent = (fraction: number) => `${Number((fraction * 100).toFixed(4))}%`;
 
-/** The thumbnail in its turned frame with the composition drawn over it in CSS (MC-28 §Thumbnail). */
+/**
+ * The thumbnail in its turned frame with the composition drawn over it in CSS (MC-28 §Thumbnail); a split photo also
+ * shows a hairline at the middle of its rect (10D: "In the grid a split photo shows a middle hairline").
+ */
 function TileComposition({ photo }: { photo: Photo }) {
   const values = valuesOf(photo.composition);
   const frame = photo.composition.frame;
@@ -47,14 +51,17 @@ function TileComposition({ photo }: { photo: Photo }) {
     <div className="tile-composition" data-turned={values.quarter_turns % 2 === 1 || undefined} style={style}>
       <Thumb photo={photo} transform={`rotate(${values.quarter_turns * 90}deg) scaleX(${values.flip === 'horizontal' ? -1 : 1})`} />
       <span className="tile-frame" style={{ left: percent(rect.x), top: percent(rect.y), width: percent(rect.w), height: percent(rect.h) }} aria-hidden />
+      {values.kind === 'split' && <span className="tile-split" style={{ left: percent(rect.x + rect.w / 2), top: percent(rect.y), height: percent(rect.h) }} aria-hidden />}
     </div>
   );
 }
 
 type PhotoTileProps = {
   photo: Photo;
-  /** Display number in its section (01 = cover in Main). */
+  /** Display number in its section (01 = cover in Main): the first place the photo fills. */
   number: number;
+  /** The last place it fills (`number + 1` for a split photo; defaults to `number`). */
+  last?: number;
   active: boolean;
   selected: boolean;
   variant: 'grid' | 'strip';
@@ -62,8 +69,8 @@ type PhotoTileProps = {
   onToggleSelected: (photoId: number) => void;
 };
 
-/** The same visible tile contents in the grid and in its drag overlay. */
-export function PhotoTileFace({ photo, number, variant }: Pick<PhotoTileProps, 'photo' | 'number' | 'variant'>) {
+/** The same visible tile contents in the grid and in its drag overlay; the number reads the places the photo fills (`03` or `03–04`). */
+export function PhotoTileFace({ photo, number, last = number, variant }: Pick<PhotoTileProps, 'photo' | 'number' | 'last' | 'variant'>) {
   const unreviewed = photo.classification === 'unreviewed';
   const isCover = photo.classification === 'main' && number === 1;
   const failed = useContext(PublishFailedContext);
@@ -71,7 +78,7 @@ export function PhotoTileFace({ photo, number, variant }: Pick<PhotoTileProps, '
   return <>
     {composed ? <TileComposition photo={photo} /> : <Thumb photo={photo} />}
     {variant === 'grid' && <>
-      <span className="tile-number">{String(number).padStart(2, '0')}</span>
+      <span className="tile-number">{outputLabel(number, last)}</span>
       {isCover && <span className="tile-cover">Cover</span>}
       {!photo.adjusted_preview_path && <span className="tile-processing">Processing</span>}
       {(photo.upload_state || failed) && <PhotoUploadBadge state={photo.upload_state ?? 'none'} />}
@@ -82,7 +89,7 @@ export function PhotoTileFace({ photo, number, variant }: Pick<PhotoTileProps, '
 }
 
 /** One sortable photo in the grid or the folded strip. ⌘-click adds it to the selection. */
-export function PhotoTile({ photo, number, active, selected, variant, onOpen, onToggleSelected }: PhotoTileProps) {
+export function PhotoTile({ photo, number, last = number, active, selected, variant, onOpen, onToggleSelected }: PhotoTileProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: photoDragId(photo.id) });
   const unreviewed = photo.classification === 'unreviewed';
 
@@ -100,14 +107,14 @@ export function PhotoTile({ photo, number, active, selected, variant, onOpen, on
       data-selected={selected || undefined}
       data-dragging={isDragging || undefined}
       aria-current={active ? 'true' : undefined}
-      aria-label={`Photo ${String(number).padStart(2, '0')}${unreviewed ? ', to review' : ''}`}
+      aria-label={`Photo ${outputLabel(number, last)}${unreviewed ? ', to review' : ''}`}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1 }}
       onClick={onClick}
       {...attributes}
       {...listeners}
       role="button"
     >
-      <PhotoTileFace photo={photo} number={number} variant={variant} />
+      <PhotoTileFace photo={photo} number={number} last={last} variant={variant} />
     </div>
   );
 }

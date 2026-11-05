@@ -1,6 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Photo } from '@/services/photos';
+import { outputNumbers } from './outputs';
 import { PhotoContextMenu, type PhotoMenuAction } from './PhotoMenu';
 import { PhotoTile, photoDragId } from './PhotoTile';
 
@@ -23,10 +24,11 @@ type PhotoGridProps = TileHandlers & {
 
 /**
  * One sortable group (Main with its unreviewed photos after it, or Condition). The group itself is a drop target,
- * so a photo can be dropped into an empty group.
+ * so a photo can be dropped into an empty group. Tiles are numbered per output (MC-29): a split photo fills two places.
  */
 export function PhotoGrid({ group, photos, variant, activeId, selection, onOpen, onToggleSelected, onMenu }: PhotoGridProps) {
   const { setNodeRef, isOver } = useDroppable({ id: groupDropId(group) });
+  const numbers = outputNumbers(photos);
   return (
     <SortableContext
       id={group}
@@ -39,7 +41,8 @@ export function PhotoGrid({ group, photos, variant, activeId, selection, onOpen,
             <div className="tile-wrap">
               <PhotoTile
                 photo={photo}
-                number={index + 1}
+                number={numbers.get(photo.id)?.first ?? index + 1}
+                last={numbers.get(photo.id)?.last ?? index + 1}
                 active={photo.id === activeId}
                 selected={selection.has(photo.id)}
                 variant={variant}
