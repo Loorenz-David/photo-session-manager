@@ -1,0 +1,76 @@
+---
+plan: P40_undo_history_compositions_and_attributes
+role: projection
+round: 0
+verdict: AMENDMENTS_REQUIRED
+date: 2026-11-05
+actor: opus (pipeline-projectionist)
+---
+# Projection of P40: composition and attribute undo steps (round 0)
+
+The plan can be built, and its two risky mechanisms are specified correctly: undo writes a new composition revision inside one transaction, and an attribute undo puts back the exact earlier row. But 7 of its 19 test rows can't pass as written, for three reasons. First, the test photos must be approved before they can be numbered, and approving adds undo steps that some rows forget. Second, the plan's merge-while-typing rule would also swallow a Clear, and would swallow AI suggestions too. Third, two rows name a test location or a field that the app's test harness can't reach. The plan's file list also leaves out six files that the change has to touch. All of this is a few paragraphs of amendment for the coordinator, and nothing needs the owner; once the amendments are in, the implementer prompt can be compiled.
+
+## ⚠ OWNER DECISIONS REQUIRED (0)
+Nothing needs the owner. Every gap below can be settled from MC-30 or is the coordinator's call on scope.
+
+## Decision ledger
+
+| # | Decision point | Classification | Proposed routing |
+|---|---|---|---|
+| D1 | **The fixture's own classify steps break three "list is empty" cells.** "Compose 01" needs `p` at Main 1, and the only real way to get there is `a.review().classify(p, Main)`, which records `Approve 01` (P39; desktop `p39_tests::setup` relies on it, `lib.rs:51–70`). The p34 fixture adds photos **unreviewed** (`p34_composition_apply.rs:21–40`, `add_photo` only). So C2(a) "Main 1–3 … `{ undo: None, … }`", C3(a) "`H.state(s).undo == None` (dropped)" and C6(a)'s final "`→ None`" cannot hold: under each of them sits an `Approve` step. | plan gap | Amend F-comp to say how `p` becomes Main 1 (through `a.review().classify`, a step). C2(a): leave `p, q, r` unreviewed (the label doesn't depend on positions) and drop "Main 1–3", so `{ undo: None, redo: Some("Apply framing to 2 photos") }` holds. C3(a): expect `H.state(s).undo == Some("Approve 01")` (the dropped compose step was on top). C6(a): the last reading becomes `Some("Approve 01")`. |
+| D2 | **AI suggestions would be recorded as steps.** Task 4 hooks recording into `write`, which `ai_suggest` shares (`attributes.rs:343–374` calls `self.write`). If `ai_suggest` records, C5(a) fails: after one undo of Accept all, three `Edit …` steps remain, but the row expects `{ None, Some("Accept all suggestions") }`. C4(a) also fails under the coalescing rule: `set_value` K1 merges onto the suggestion's `Edit Color` step with `before = Row(None)`, so the undo deletes the row instead of restoring the AI row. | plan gap | Amend task 4: `ai_suggest` records nothing. MC-30's table lists only owner actions in the details form, and `ai_suggest` has no production caller (grep: only tests). Recording is driven by `set_value`, `clear`, `accept_all` and the title, not by `write` itself, so `write` needs a "record as <label> / don't record" input. |
+| D3 | **Coalescing swallows Clear (contradicts C5(b)).** §Core mechanisms keys the merge on `(item, key)` alone, and task 4's last sentence applies it to `clear`. In C5(b), `set_value(K1,"Oak")` then `clear(K1)` therefore merge into one `Edit Color` step with `before = Row(None)`. The undo then removes the row, while C5(b) expects `Clear Color` in redo and the `Oak` human row back. The same applies to a `set_value` that follows an Accept all that accepted exactly one field (that step is single-field for the same key, so the literal rule merges onto `Accept all suggestions`). | plan gap (contradiction between task 4 / §Core mechanisms and C5(b)) | Settle from MC-30, whose table lists "a field committed, Accept all, Clear" as separate owner actions: **only a `set_value` save merges, and only onto a newest step that is itself a `set_value` step for the same `(item, key)`**, with redo empty. Clear and Accept all never merge, and nothing merges onto them. Rewrite §Core mechanisms and task 4's last sentence. The discriminator is a free choice: label equality (`Edit <label>`) needs no registry change, while a flag on `StepKind::Attribute` changes §6.10. Extend the `mc30_attribute_steps_coalesce` unit test with the negative case (Clear after Edit gives two steps). |
+| D4 | **Changing `AttributesService::new` breaks 16 unlisted call sites.** Adding a 4th parameter breaks every 3-argument caller: `p11_title_binding.rs:15`, `p13_publish_runs.rs:75,166,209,212,1111,1124,1134`, `p14_publish_update.rs:82,87,401`, `p21_backend_robustness.rs:277,286` and `p30_outputs_in_export_and_publish.rs:205`, plus the listed `p10_attributes.rs:41`, `health.rs:36`, `integrations/src/lib.rs:586` and `commands/attributes.rs:218,231`. The plan says "Tests that change their expectation: `p10_attributes.rs` `attrs()` only", so five test files are missing from the file list. | plan gap (perimeter) | Either list the five files (a mechanical `, None` each, assertions unchanged), or (recommended, smaller) keep `new(store, clock, integration)` and add `with_history(&'a History) -> Self` (the `SessionsService::with_editing` pattern), so that `health.rs`, `lib.rs:586`, p10 and the five test files stay untouched. Update task 0, task 6, Files expected to change and master plan §6.10 (`new(…, Option<&History>)`) to match. |
+| D5 | **C2(c) and C7(b) can't live in the named test file.** Both are mock-webview tests. Task 7 puts C1–C7 in `crates/testkit/tests/p40_undo_history_values.rs`, but `commands` is a private module of the desktop crate, and testkit can't depend on `psm-desktop` (the desktop crate dev-depends on testkit, `apps/desktop/src-tauri/Cargo.toml:29`). Every existing mock test sits in `apps/desktop/src-tauri/src/lib.rs` (`p28_tests`, `p39_tests`). That file is not in Files expected to change. | plan gap (perimeter) | Add `apps/desktop/src-tauri/src/lib.rs` (`mod p40_tests`, carrying C2(c) and C7(b)) to Files expected to change, and say so in task 7. |
+| D6 | **C7(b)'s field doesn't exist in the command's app.** `attribute_values_set` resolves the active definitions from `settings.integration.kind` (`commands/attributes.rs:204–219`). No `TestApp` constructor sets `settings.integration` (grep `test_app.rs`: no match), and nothing imports `shop_definitions()` into the mock app. The command therefore answers `unknown attribute custom.color_furniture` instead of the asserted DTO. | plan gap (producibility) | Amend C7(b) to use the built-in `product.description` (label `Description`, always active, `attributes.rs:36–55`; a JSON string canonicalises through `paragraphs`, `values.rs:183`). The expected outcome becomes `"label":"Edit Description"`, and afterwards `attribute_values_get` has no `product.description`. The alternative is to spell out the seeding (settings file `integration {kind:"shopify"}` + `import_definitions`), which is more fixture for no added coverage. |
+| D7 | C2(a)'s `INVALID` is not defined in the fixtures. | plan gap (low) | Name it as p34's `invalid` = `V1` with `rect {0.2, 0, 0.5, 1}`, which is refused with `off_shape` (`p34_composition_apply.rs:55–63, 75`). |
+| D8 | A composition reversal's `HistoryOutcome.sessions` / `active_photo_id` are not stated. Task 5 states them for attributes; task 2 is silent, and C1(a) pins only `active_photo_id == None`. | plan gap (low) | Task 2: `sessions = [step.session_id]` (also when nothing was written, D12), `active_photo_id = None`. This fits P41, which re-reads the composition through `Saved`, not through the active photo. |
+| D9 | **A backlog item is routed to P40, but the plan doesn't mention it.** `backlog.md:242` ("P39 → P40 (by probe)") asks P40 to map `NotFound` on the copy-redo source read to `StepCannotApply("that photo is gone")`, because "P40 edits the same reversal code". Without that, the step is stuck in the redo list once P41 wires Redo. P40's tasks and rows don't mention it. | plan gap (coordinator's scope call) | The coordinator decides between folding it in as a one-line task plus one row (P40 has 7 criteria, room for one under the ≤ 8 cap; boundary `H.redo`, input as in the backlog probe, outcome `Err(StepCannotApply{…"that photo is gone"})` with `redo` dropped) and leaving it in the backlog with a recorded reason. Either way the routing is written down. |
+| D10 | Where the composition reversal's `PhotoChanged` / `SessionChanged` come from. `HistoryService` holds no `EventSink`. `History.events` is private but in the same module (`history.rs:28–32`) and is the app's `EventHub`, which the `TestApp` collector receives (`integrations/src/lib.rs:435–438`, `test_app.rs` `set_target`). The plan doesn't say whether attribute reversals emit anything; attribute writes emit nothing today. | free choice | Delegate in writing: emit through `History`'s sink after the commit (after the operation lock is released, as P39 D10 does for `HistoryChanged`). Attribute reversals emit no `PhotoChanged` / `SessionChanged` (same as today's attribute writes; `HistoryChanged` covers the UI). |
+| D11 | `change_seq` in a multi-photo composition reversal: the shared `save_composition_in` adds 1 per photo saved, so a 2-photo Apply undo adds 2. No row observes the difference. | free choice | Delegate: per photo (reuse the shared body unchanged), the same as `apply` today. |
+| D12 | `composition_apply`'s `refused` order after task 3's convert-first: conversion refusals now come before service refusals instead of interleaving with them. No test asserts mixed order (there is no mock test of `composition_apply`; the frontend tests mock it). | free choice | Delegate: conversion refusals first, then the service's, each in input order. |
+| D13 | The label (and recording) for `clear(product.title)`, which goes through `write_title(None)`. | free choice | Delegate: records a `Title` step labelled `Clear Title` when the title changed. |
+| D14 | Which session's history an `apply` spanning two sessions records into. The undo's `session_id` check would then refuse the photos from the other session. | free choice | Delegate: the first changed photo's session (the UI applies within one session's selection). |
+| D15 | The equality behind "each write is skipped when the stored row already equals the target" (task 5, D12): whole row including `updated_at`, or `same_content`. | free choice | Delegate: whole-row `==` (`Value: PartialEq`, `domain/attribute.rs:203`); `Title` by string. |
+| D16 | Undefined test helpers in the rows: `seq(s)`, `session(s)`, `state(s, Main)`, `R`, `u`, and the missing provenance argument in C4(f)/C5/C6 (`Human` meant). | free choice | Delegate: test-local helpers (`seq` = `store.session(s).session.change_seq`, `R = a.review()`, `u` = a second photo added unreviewed in `s`); `Human` wherever the argument is omitted. |
+
+## Criteria decidability (both questions per row)
+
+"Write now?" = one exact outcome, at the named boundary, from the artifacts alone. "Producible?" = the fixture is a shape the system can actually build.
+
+| Row | Write now? | Producible? | Note |
+|---|---|---|---|
+| C1(a) | yes once D1 says how `p` is Main 1 | yes | `save_composition` bumps `revision` and `change_seq` (`store.rs` `save_composition`, the `UPDATE … revision=revision+1` / `change_seq+1`); collect events after the undo only |
+| C1(b) | yes | yes | |
+| C1(c) | yes | yes | `reset` saves `Origin::Default`, so origin differs and the save is not idempotent |
+| C1(d) | yes | yes | idempotence compares values, `Ok`, origin |
+| C2(a) | **no** (D1, D7) | yes (p34 render loop) | |
+| C2(b) | yes | yes | |
+| C2(c) | yes | yes (p28 render pattern, two photos) | **location** D5 |
+| C3(a) | **no** (D1) | yes: `flag()` in `p29_master_and_output_render.rs:1006–1020` | the plan's "`lib.rs:289–330` (c8a)" points at desktop `specta_builder`; cite `flag()` |
+| C4(a) | **no** (D2) | yes | `ai_suggest` signature matches `attributes.rs:343–351`; `put_attribute_value` writes `updated_at` verbatim (`store.rs` upsert) |
+| C4(b) | yes | yes | label `Condition report` (`fixtures/definitions.rs:58–59`) |
+| C4(c) | yes | yes | `set_value` writes `ai_*: None` (`attributes.rs:325–336`) |
+| C4(d) | yes | yes | p10 `item()` creates title `Oak`; `update_item_title` leaves `change_seq` alone |
+| C4(e) | yes | yes | holds under D3's narrowed rule |
+| C4(f) | yes (D16) | yes | |
+| C5(a) | **no** (D2) | yes | `Condition.Cracks` is a severity choice and `Minor` is one of its values |
+| C5(b) | **no** (D3) | yes | |
+| C6(a) | **no** (D1) | yes (F-attr is `with_fake_document`, so a render works) | |
+| C7(a) | yes | yes | `HistoryChanged` reaches `a.events` (shared `EventHub`) |
+| C7(b) | **no** (D5, D6) | **no** as written (D6) | |
+
+Rule 17 (fixtures whose shape a dependency owns): the only externally owned shapes are the Tauri mock IPC envelope (already proven in `p39_tests`) and SQLite REAL round-tripping the `f64` rect (already asserted equal in p34). Nothing new to ground.
+
+## Reality checks
+
+- **Dependencies verified in code.** P39's registry has already shipped: `StepKind::{Composition, Attribute}`, `CompositionChange`, `FieldState::{Row, Title}`, `FieldChange` (`history.rs:63–101`). Task 0's type half is therefore done, and only the `StoreTx` methods, labels and wiring are new. `apply()` holds the placeholder `InvalidData("history step belongs to P40")` (`history.rs:560–562`). `History::record` has no coalescing yet (`history.rs:136–149`). The operation lock and the D11 drop rule live in `HistoryService::reverse` (`history.rs:191–246`).
+- **Store.** `Store::save_composition` runs its own transaction with the values + `Ok` + origin idempotence. The `composition(conn, id)` reader resolves at `store.rs:156–165`. `put_attribute_value` is an upsert that writes every column, `updated_at` included. `set_item_activity` updates every session of the item. `session_for_item` returns the latest session.
+- **Path and line drift (symbols resolve; cosmetic).** In `attributes.rs`, `write` is at 229–255 (plan says 205–235), `write_title` at 260–286, `set_value` at 292–339, `accept_all` at 378–401, `clear` at 405–418 and `same_content` at 79–87. In `integrations/src/lib.rs`, `CompositionService {` is at 440 (plan: 426) and `AttributesService::new` at 586 (plan: 572). The `ports/store.rs` attribute methods are at about 94–100 (plan: 84–92). The plan's c8a citation is corrected under C3(a) above.
+- **Wiring order.** `history` is built before `compositions` in `App::build` (`lib.rs:436–440`), so `CompositionService { history }` is reachable. `AppHandles.history` exists for `commands/attributes.rs`.
+- **Bindings.** No DTO changes, so "`npm run typecheck` (no binding change)" is correct.
+- **Trace.** Every row cites MC-30 / M36 / MC-6 / MC-4 / MC-27 / M33. Read-first lists M16, but no row cites it. Either cite M16 on C5(b)'s "records nothing" half and C1(d), or drop it from Read-first (low).
+
+## Write perimeter of this session
+- Created: `docs/implementation/handoffs/reviewer/handoff_P40_undo_history_compositions_and_attributes_projection_r0.md` (this file).
+- No other file was edited. Nothing was committed, and no tool-recorded state (archgraph) was written.
