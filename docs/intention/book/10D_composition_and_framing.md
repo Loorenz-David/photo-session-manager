@@ -17,18 +17,27 @@ the app no longer writes Capture One's crop) and narrows H3 (chapter 01). 05, 05
 
 - A new photo arrives already framed with the default shape (`default_shape`, Square unless changed in
   Settings), centred and as large as fits. Often nothing more is needed.
-- **Compose** (R, double-click, or Compose… in the ⋯ and right-click menus) turns the stage into the editor.
-  The frame stays centred and fills the stage; the photo moves under it. While composing, the photo browser
-  on the right hides and slides in **over** the image when the pointer reaches the window's right edge, hiding
-  again when the pointer leaves it (never during a drag). Clicking a photo there moves the editor to it and
-  keeps the changes.
+- **Compose** (R, double-click, Compose… in the ⋯ and right-click menus, or the **Compose button** on the stage,
+  owner 2026-11-05) turns the stage into the editor. The frame stays centred and fills the stage; the photo moves
+  under it. While composing, the photo browser on the right shows as its **single strip** (the folded view of F)
+  and stays put: no hiding, no edge reveal (owner 2026-11-05: "the hidden panel is uncomfortable … i prefer the
+  single strip mode"). Clicking a photo in the strip moves the editor to it and keeps the changes; F still unfolds
+  and folds the panel.
 - A **Tools panel** on the left is made of sections that fold open and closed (Capture One tool tabs,
   Photoshop panels), remembered across launches and hidden with ⌘T. **Composition** is its first section:
   Normal | Split, the Shape menu, Turn (portrait/landscape), rotate 90° left/right, flip, a straighten
-  control, the output previews at their real proportions, and Centre, Reset and Done. Later colour and light
+  control, the output previews at their real proportions, and Centre, Reset and Done. The straighten control
+  takes a typed number of degrees and the up/down arrows (0.1° a step, Shift 1°), besides its slider (owner
+  2026-11-05). An **Overlay** control picks the alignment guides drawn inside the frame (Off, Thirds, Grid,
+  Golden ratio, Diagonals; O cycles them) and is remembered; while straightening, a fine square grid covers
+  the image so lines can be aligned (as Capture One does), with its own on/off switch. Later colour and light
   tools arrive as more sections of the same panel.
-- **Split**: one 2:1 composition whose exact middle makes two square files, Left and Right. Allowed for Main
-  and Condition photos. In the grid a split photo shows a middle hairline and the two places it fills
+- **Every shortcut has a control** (owner 2026-11-05: "all this keyboard commands … should have a clicking
+  interface, hover over shows the shortcut"): each editor action reachable by a key also has a button or menu
+  entry in the Tools panel or above the stage, and hovering any of them shows its name and key ("Split (S)").
+- **Split**: one 2:1 composition whose exact middle makes two square files, Left and Right. Allowed for **any
+  photo**, unreviewed included (owner 2026-11-05: "split shouldn't be limited"); places and outputs are counted
+  only once it is Main or Condition. In the grid a split photo shows a middle hairline and the two places it fills
   ("03–04").
 - Gestures and keys (stage only, while composing): drag or two-finger swipe moves the photo; pinch, or ⌘ +
   mouse wheel, zooms the composition around the pointer; corner and edge handles trim the frame (a locked
@@ -41,6 +50,15 @@ the app no longer writes Capture One's crop) and narrows H3 (chapter 01). 05, 05
 - Changes save automatically when a gesture ends and when leaving the photo; a dot marks unsaved changes in
   between. The composition can never extend past the photo's edge.
 - The first time the editor opens, one line says "Crops made in Capture One are not used."
+- **The result is shown** (owner 2026-11-05): outside the editor the stage shows the photo **as composed**
+  (turned, flipped, straightened, cut to the frame; a split shows both halves with the middle hairline), not the
+  whole frame. Tiles show the composed picture too, with a small **crop mark** when the composition leaves part
+  of the frame out, so the photographer knows there is more to re-frame. Compose is unavailable only for a photo
+  without a full-frame preview yet; its button and menu entry say why ("Waiting for Capture One's full-frame
+  preview").
+- **Workspace chrome** (owner 2026-11-05): the header's **Details** button opens the product details form (D);
+  the duplicate Details button on the stage is removed. The **Sessions** button moves from the stage to the photo
+  panel's header (beside fold and export) as an icon with a tooltip. The stage's corner stays free for later tools.
 
 ## MC-27 — The composition
 
@@ -118,7 +136,8 @@ sRGB profile embedded; never upscaled. Metadata: capture date, camera, copyright
 One private tags dropped; orientation written as upright. No other pixel operation is allowed (H3).
 
 **Thumbnail.** From each adjusted preview, a 640 px long-edge JPEG of the whole frame for grid tiles, which
-draw the composition over it with CSS.
+show the composition's result from it with CSS (owner 2026-11-05: tiles show the composed picture, with a crop
+mark when part of the frame is left out).
 
 **Cache key.** An output is valid for `(master adjusted_gen, composition revision, output_format)`; a change
 to any of them makes it stale. Stale outputs are never exported or uploaded.
