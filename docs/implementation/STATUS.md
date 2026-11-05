@@ -2,7 +2,7 @@
 
 Updated: 2026-11-04 by the orchestrator.
 
-**Run in flight (2026-11-05 02:41, owner asleep, orchestrator in control): `RESUME=1 PSM_IMPLEMENTER=claude run_phase.sh all` over P33–P34.** P27–P32 APPROVED (all with notes; narratives to relay). P33 implement r1 done (checkpoint d47b6ce); the runner stopped only because the handoff frontmatter said `IMPLEMENTED` instead of `DONE` (corrected, noted in the handoff); resuming at the P33 review. Stashes "P31 fix r2 partial…" and "P29 partial codex attempt" can be dropped (both phases approved).
+**Stopped 2026-11-05 02:59.** P27–P33 APPROVED (all with notes; narratives to relay). P34_composition_polish: the Fable implement r1 session exited 1 (see .pipeline/runs/P34_composition_polish_implement_r1.last.md; likely the usage limit) before writing a handoff. Its partial work is in `git stash` "P34 implement r1 partial…" (not applied). **Next:** `tools/pipeline/run_phase.sh archive P34_composition_polish`, then relaunch `RESUME=1 PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh all`. The stashes for P29 and P31 can be dropped.
 
 ## Where things stand
 - Intention: **RATIFIED** 2026-10-24 (`docs/intention/intention.md`).
