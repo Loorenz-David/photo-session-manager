@@ -331,3 +331,24 @@ to record; the `HistoryChanged` payload after a dropped step (emit once, after t
   refused, since the approved row stays in `t`. C4(h)'s final clause is amended to expect that second undo to be refused with
   `that photo already changed`, change nothing, and leave the undo list empty. No other row or rule changes. Resume with RESUME=1: the
   implementer updates the C4(h) test to the amended row; the reviewer checks the rest as usual.
+- **2026-11-05, review r1 (opus), APPROVED_WITH_NOTES.** Gate: checkpoint `bbfede7` exists; the tracker still read `NOT_STARTED` (the
+  implementer stopped BLOCKED), so the orchestrator's ruling above was taken as the phase's state (process note in backlog). Perimeter:
+  `git show --stat bbfede7` = the 22 declared paths (21 planned + this plan's Review log), plus the orchestrator's C4(h) test edit in
+  `a22dc41`; nothing extra, nothing missing. Stamp on code tree `a22dc41`: `cargo test --workspace` 561 passed, clippy `-D warnings`, fmt
+  `--check`, `npm run typecheck` green. **Verified correct:** `History` (25-step `VecDeque`, oldest dropped, redo cleared on record, emit
+  after the lock is released); `HistoryService::reverse` holds the operation lock across take → transaction → place-or-drop and drops only
+  on `StepCannotApply` (D10, D11); classify/delete reversal re-inserts through `undo_insert` with `set_photo_review(None)` first so the
+  group excludes the photo, mirrors tags, touches once; reorder no-op writes nothing (D12); move undo/redo check published-and-clean,
+  the RAW collision (D6) and each photo's session and classification, re-insert ascending by `before.position` (D4); copy undo refuses on
+  `published_seq >= seq_after` or `publish_confirmed_since` (D5), checks `copy.session_id` (D7), deletes the `photos` + `compositions`
+  rows and re-points the RAW's tag job at the source (D9); copy redo rewrites ids and `seq_after` (D8); recording happens after commit in
+  `classify`/`delete`/`reorder`/`transfer`, one step per source session; labels per §Labels; `App::build(…, Some(store))` on every rebuild
+  path, the history built on the new App's `EventHub`; `photos_undo` keeps `ReviewResponse`; `TauriEvents` has the `history_changed` arm;
+  the error map gives `nothing_to_redo` and `step_cannot_apply` with `label`/`reason`. Each of the 27 rows has a test at its boundary that
+  fails on a wrong outcome; changed-input probes in a temporary test file (deleted, tree clean): the C4(c) message text, C4(a)'s
+  `out.sessions` ids `[s, t]`, `Unreview 02`. C7(c) runs on the mock runtime (no fallback needed). Assumptions within MC-30 and Delegated
+  choices; H1–H8 hold (copy undo removes database rows only, never a RAW). **Notes (backlog, none blocking):** copy redo with its source
+  row gone returns `NotFound` and stays in the redo list (→ P40; unreachable from any screen until P41); move redo inserts at the recorded
+  place instead of appending when the target changed meanwhile (M36-consistent, differs from the plan text); two row clauses checked by
+  probe, not by the suite; the D10 lock is per `History` instance across a rebuild; the stale tracker row. **Carry-forward:** the copy-redo
+  note → P40 (same reversal code); the move-redo wording → P41 (notice text) or a plan amendment.
