@@ -36,3 +36,7 @@ P34_composition_polish
 P35_composed_display_and_chrome
 P36_editor_controls_and_overlays
 P37_editor_chrome
+P38_editor_polish
+P39_undo_history_core
+P40_undo_history_compositions_and_attributes
+P41_undo_history_ui

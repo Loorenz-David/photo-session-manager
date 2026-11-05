@@ -15,7 +15,7 @@ differ, the book wins and this file is amended.
 |---|---|
 | Product semantics, hard constraints H1–H8, domain, scenarios | `docs/intention/book/01…13` |
 | Mechanism contracts MC-1…MC-26 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/09A_shopify_credentials_and_condition_field.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md`, `book/10B_shape_on_arrival.md` (MC-25, owner 2026-10-29; **retired 2026-11-04 by 10D**), `book/10C_capture_one_setup_by_the_app.md` (MC-26, owner 2026-11-03), `book/10D_composition_and_framing.md` (MC-27…MC-29, owner 2026-11-04; amended 069eca4 after VERIFY-15) |
-| Measurement ledger M1–M35 (root of every criterion's trace; M31 retired) | `book/14_measurement_ledger.md` |
+| Measurement ledger M1–M36 (root of every criterion's trace; M31 retired) | `book/14_measurement_ledger.md` |
 | Capture One facts and VERIFY probes | `docs/intention/evidence/capture_one_16.8.6.md`; dictionary `docs/reference/capture_one_16.8.6.sdef` |
 | Design rules (field kinds, timings, keyboard, components) | `docs/intention/evidence/design_handoff.md`; pictures/prototype `claude_design/` |
 | Shopify facts | `docs/intention/evidence/shopify_admin.md` — **does not exist yet**; written in phase P12 (SHOPIFY-VERIFY-1…7) |
@@ -54,7 +54,7 @@ restated so no session has to infer them:
 - **Perimeter**: a phase touches only the files its plan lists (plus the test file(s) it names). A new file not
   listed is declared in the handoff's **Deviations**.
 - **Trace conventions** (charter trace chain, flow §9): every criterion row's trace cell names an `M` id
-  (M1–M35; M31 retired), an `MC` id (MC-1…MC-29; MC-25 retired) or a hard constraint (H1–H8). A row may instead cite a chapter rule
+  (M1–M36; M31 retired), an `MC` id (MC-1…MC-30; MC-25 retired) or a hard constraint (H1–H8). A row may instead cite a chapter rule
   (`ch07 §Open filter`, `evidence/design_handoff §Field kind map`) **only** for UI-rendering rows, operations
   rows the inventory listed as "not contracted", and packaging rows (ch11); such a cell is prefixed `[rule]` so
   the reviewer knows the row has no ledger measurement behind it. Every plan file derives its own counts of
@@ -108,27 +108,38 @@ restated so no session has to infer them:
 | P35_composed_display_and_chrome | APPROVED | 2026-11-05 | opus (pipeline-reviewer) | re-review r2 APPROVED_WITH_NOTES: fix perimeter = the allowed files (`bd90002`: `workspace.css` + tracker/Review log/handoff); F1 resolved as corrected (`.composed-frame img` resets right/bottom/margin; WebKit probe on the committed CSS: img rect = frame rect on C2(a), C2(b), a turned camera original and a tile); Rust tests, clippy, fmt, typecheck green; UI suite flaky on pre-existing `p33_split_grid` C4(d) (4/8 runs here, 1/6 on the pre-P35 tree), not P35's delta, backlog N1; triage 0 MUST |
 | P36_editor_controls_and_overlays | APPROVED | 2026-11-05 | opus (pipeline-reviewer) | re-review r2 APPROVED_WITH_NOTES: fix perimeter = the allowed files (`9cbfd24`: `p36_straighten.test.tsx`, `p36_strip_overlays.test.tsx` + tracker/Review log/handoff); F1 resolved as corrected (C7(a)/(b) focus the control, `x` dispatched at `document.activeElement`; changed-input probe: `x` at a still-focused select/slider does nothing, so both tests now need the blur); F2 resolved (C1(b) panel tile 2 moves the editor 1 → 2); Rust 532, clippy, fmt, typecheck, UI 339/339 green (reviewer run, code tree = `9cbfd24`); triage 0 MUST; backlog P32/P34 focus, guide and ⌥-drag rows marked resolved |
 | P37_editor_chrome | APPROVED | 2026-11-05 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 17 declared paths (`4b4fbba`); Rust 532, clippy, fmt, typecheck, UI 348/348 green (reviewer run, clean `4b4fbba`); all 12 rows have a boundary test that fails on a wrong outcome (C2(a) all 32 T2 cards with exact text; C8(a) changed-input probe: `]` really switches photo with both drawers open); assumptions within Delegated choices; H1–H8 hold; 4 backlog notes (Item details/⋯ hover outside T2, WebKit layout unchecked, dead CSS resolved, P33 flake recurred) |
+| P38_editor_polish | NOT_STARTED | 2026-11-05 | planner (fable) | planned from the 10D amendment R40 (changelog 30): visible split line, filled on/off icons, Rotate and flip dropdown menu, Nudge dropdown, one row; 6 criteria / 12 rows |
+| P39_undo_history_core | NOT_STARTED | 2026-11-05 | planner (fable) | planned from 05A MC-30 (R41, M36): the per-session 25-step `History`, review steps (classify, delete, reorder, move, copy), undo/redo transactions, `history_changed`, `history_get/undo/redo`; `UndoSlot` retired; projection on; 7 criteria / 22 rows |
+| P40_undo_history_compositions_and_attributes | NOT_STARTED | 2026-11-05 | planner (fable) | planned from 05A MC-30: composition saves and Apply as steps (new revision on reversal), attribute edits as steps (byte-identical rows, title), needs_review blocks, coalescing; projection on; 7 criteria / 19 rows |
+| P41_undo_history_ui | NOT_STARTED | 2026-11-05 | planner (fable) | planned from 05A MC-30 §Rules: ⌘Z/⌘⇧Z everywhere, notices, header Undo/Redo icons, editor sync, grid Split as one step, the Edit menu; `photos_undo`/`undoDelete` retired; 7 criteria / 16 rows |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 37 phases in execution order (17 MVP phases, the two real-run fix phases added
+`phases.txt` lists the 41 phases in execution order (17 MVP phases, the two real-run fix phases added
 2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, the two tidy-up phases P21/P22 planned
 2026-10-29 from `backlog.md`, P23_shape_on_arrival planned 2026-10-29 from book 10B, P24_capture_one_provisioning planned
 2026-11-03 from book 10C, the second tidy-up pair P25/P26 planned 2026-11-04 from `backlog.md` and the P24 narrative, and the eight
-composition phases P27–P34 planned 2026-11-04 from book 10D, the two composition-correction phases P35/P36 planned 2026-11-05 from the 10D amendment R38, and P37_editor_chrome planned 2026-11-05 from the 10D amendment R39); the runner is sequential and a
+composition phases P27–P34 planned 2026-11-04 from book 10D, the two composition-correction phases P35/P36 planned 2026-11-05 from the 10D amendment R38, P37_editor_chrome planned 2026-11-05 from the 10D amendment R39, and the four phases P38–P41 planned 2026-11-05 from the 10D amendment R40 and the new 05A MC-30 (R41)); the runner is sequential and a
 phase starts only when every phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
-P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24 → P25 → P26 → P27 → P28 → P29 → P30 → P33 → P34 → P35 → P36 → P37
-   ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗                                                                          ↘ P31 → P32 ↗
-    ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15; P28 → P31; P30 + P32 → P33)
+P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24 → P25 → P26 → P27 → P28 → P29 → P30 → P33 → P34 → P35 → P36 → P37 → P38 → P41
+   ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗                                                                          ↘ P31 → P32 ↗           ↘ P39 → P40 ↗
+    ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15; P28 → P31; P30 + P32 → P33; P40 + P38 → P41)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
 P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23] · P25[P24] · P26[P25] ·
-P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35] · P37[P36].
+P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35] · P37[P36] · P38[P37] ·
+P39[P37] · P40[P39] · P41[P40,P38].
+- **Editor polish and undo history (planner 2026-11-05).** P38 (frontend: the R40 polish of what P37 built) runs first so the owner sees the
+  cheap corrections at once; P39 (Rust: the `History`, review steps, undo/redo, commands) and P40 (Rust: composition and attribute steps)
+  carry `projection: yes` — MC-30 is a new load-bearing mechanism (charter rule 6) and both phases write reversal transactions whose silent
+  failure is a wrong undo; P41 (frontend + the Tauri Edit menu) wires the keys, notices and icons and needs P40 (every step kind recorded) and
+  P38 (the Composition section it adjusts). The frontend keeps working through P39/P40: `photos_undo` stays as a compatibility wrapper until
+  P41 removes it. **No `implementer: fable`** (owner 2026-11-05): all four run on the default implementer.
 - **Editor chrome (planner 2026-11-05).** P37 follows P36: it re-skins the controls P36 introduced (toolbar, hints, nudge pad, straightening
   grid switch) and moves the Tools panel's hide button, so it needs P36's `EditorToolbar`, `StraightenControl`, `Hint` usage and tests in place.
   Frontend only; **no `implementer: fable`** (the owner's rule of 2026-11-05 stands): default implementer.
@@ -271,6 +282,10 @@ P29 renames `RenderPurpose::Export` → `Master`, adds `Imaging::render_output(m
 P30 changes `CommerceAdapter::staged_uploads_create(run, stem, byte_size)` (core builds the stem: `mechanisms::upload_name::stem(folder_key, uid,
 slot, revision)`), `Store::photo_link(photo, item, role, slot)`, `retire_photo_links`, and `replacement_candidates(links, retouch_gens,
 composition_revs)`.
+**P39** removes `StoreTx::set_undo_slot` and adds `StoreTx::delete_photo_row(id)` (the `photos` row and its `compositions` row); **P40** adds
+`StoreTx::composition(photo_id)`, `StoreTx::save_composition(photo_id, &CompositionValues, Origin, now_ms) -> (Composition, bool)` (the same body
+as `Store::save_composition`, shared through `save_composition_in(conn, …)`) and `StoreTx::delete_attribute_value(item_id, key)`. `EventSink`
+gains nothing; `AppEvent::HistoryChanged` (§6.7) is emitted by `History`.
 
 ### 6.5 Tables (migration `001_init.sql` in P00: `settings`, `capture_events`; `002_domain.sql` in P01: the rest)
 All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stored as snake_case TEXT; JSON as TEXT.
@@ -280,7 +295,7 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
 | `capture_events` | `id`, `source` (`hook`/`watcher`/`scan`/`import`), `hook` (nullable), `payload`, `received_at`, `error` |
 | `items` | `id`, `sku` UNIQUE, `folder_key`, `folder_key_ci` UNIQUE (lower-cased, MC-8), `barcode`, `item_type`, `title`, `origin`, `created_at`, `updated_at` |
 | `item_links` | `item_id`, `integration`, `external_id`, `external_url`, `last_synced_at`, `create_pending`, `tags_base` (JSON), PK(`item_id`,`integration`) |
-| `sessions` | `id`, `item_id` (NULL only for Unassigned, which is row id 1 created by the migration), `published_at`, `published_seq` DEFAULT 0, `change_seq` DEFAULT 0, `last_activity_at`, `created_at`, `undo_slot` (JSON, MC-5) |
+| `sessions` | `id`, `item_id` (NULL only for Unassigned, which is row id 1 created by the migration), `published_at`, `published_seq` DEFAULT 0, `change_seq` DEFAULT 0, `last_activity_at`, `created_at`, `undo_slot` (JSON, MC-5 single slot — **unused from P39**: MC-30's history is in memory; the column stays, never written again) |
 | `photos` | `id`, `uid` UNIQUE (UUID v4), `session_id`, `raw_path` (canonical), `raw_hash`, `integrity` (`ok`/`raw_changed`/`raw_missing`), `provider_ref`, `original_preview_path`, `adjusted_preview_path`, `orientation`, `classification`, `position`, `captured_at`, `source`, `created_at`; UNIQUE(`session_id`,`raw_path`) |
 | `raw_state` | `raw_path` PK, `path_key`, `adjusted_gen`, `rendered_gen`, `retouch_gen`, `last_own_write_at` (MC-17/19/21 per-RAW counters) |
 | `photo_links` | `id`, `photo_id`, `integration`, `item_id`, `role`, `external_id`, `revision` DEFAULT 0, `retouch_gen` DEFAULT 0, `superseded_ids` (JSON), `upload_state`, `export_sha256`, `error`, `updated_at`; UNIQUE(`photo_id`,`integration`,`item_id`,`role`) |
@@ -320,7 +335,10 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   job kinds `render_master` (tracking rows, replaces per-photo `render_export`) and `render_output`, `psm_core::domain::output::OutputFormat`, and
   `needs_review{photos}` (data `photos` = labels `Main 02`, message `Re-frame first: Main 02, Condition 01`). P30 adds `UploadState::Retired`.
 - Error codes (`psm_core::Error`, snake_case, carried to the UI as `{code, message, data}`): `relative_path`,
-  `sku_collision{existing_sku}`, `sku_in_shop{sku}`, `target_has_raw`, `target_published`, `nothing_to_undo`,
+  `sku_collision{existing_sku}`, `sku_in_shop{sku}`, `target_has_raw`, `target_published`, `nothing_to_undo`, P39: `nothing_to_redo`,
+  `step_cannot_apply{label, reason}` (message `Can't undo|redo <label>: <reason>`; reasons `that session is published`, `that photo is gone`,
+  `that photo already changed`, `the copy is gone`; P40 adds `that photo changed in Capture One — re-frame it first`, `that photo has no frame`,
+  `the framing no longer fits this photo`, `that product is gone`),
   `variant_not_found`, `capture_folder_not_set`, `hooks_not_installed`, `recipe_missing{name}`, `tag_verification`,
   `raw_changed{photo_id}`, `raw_missing{photo_id}`, `several_products_carry_sku{sku}`, `foreign_media_added{n}`,
   `gallery_verification`, `upload_incomplete`, `attribute_verification{keys}`, `not_confirmed`, `timeout`,
@@ -373,12 +391,18 @@ switches the capture folder (rejects with `document_not_front` when the front ca
 `composition_invalid{reason}`, `frame_unknown`); `PhotoResponse` gains `thumbnail_path` and `composition: CompositionDto` (`rect`, `frame`,
 `review_reason` nullable; the geometry is not sent) · **P29** `settings_get`/`settings_set` carry `output_format {long_edge, quality}` and no
 `web_recipe`; `export_run` rejects with `needs_review` · **P34** `composition_apply(items: [{photo_id, values}]) -> {applied, refused[{photo_id,
-reason}]}`.
+reason}]}` · **P39** `history_get(session_id) -> {undo: Option<String>, redo: Option<String>}`, `history_undo(session_id) -> {label, direction:
+"undone" | "redone", sessions: [SessionResponse], active_photo_id}`, `history_redo(session_id)` (same DTO; errors `nothing_to_undo`,
+`nothing_to_redo`, `step_cannot_apply`); `photos_undo` answers in its old `ReviewResponse` shape through the history until **P41** removes it ·
+**P40** `composition_apply` calls `CompositionService::apply` once (one step) · **P41** `edit_menu_set(undo: Option<String>, redo: Option<String>)`
+(sets the Edit menu items `edit.undo` / `edit.redo`: text `Undo <label>` / `Undo`, enabled when set; accelerators `CmdOrCtrl+Z`, `CmdOrCtrl+Shift+Z`).
 From P17 every command is `pub async fn` over `AppState(RwLock<App>)` through `AppState::handles()` / `mutate()`
 (`state.rs`), work inside `tauri::async_runtime::spawn_blocking`; no command holds the app lock across provider work.
 Events (`AppEvent` → Tauri event name): `session_changed{session_id}`, `photo_added{photo_id, session_id}`,
 `photo_changed{photo_id, session_id}`, `publish_progress{session_id, item_id, step, uploaded, total}`,
-`export_progress{session_id, done, total, state}`, `health_changed{}`, `camera_status_changed{status}`.
+`export_progress{session_id, done, total, state}`, `health_changed{}`, `camera_status_changed{status}`, P39 `history_changed{session_id, undo,
+redo}` (the labels of the steps ⌘Z / ⌘⇧Z would act on, after every record, undo, redo and dropped step), P41 `edit_menu{action: "undo" | "redo"}`
+(emitted by `on_menu_event` for the Edit menu's two items; not an `AppEvent`).
 Bindings: `tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![…]).events(collect_events![…])`;
 exported by the test `psm-desktop::export_bindings` to `apps/desktop/src/services/bindings.ts`
 (`specta_typescript::Typescript::default()`); the committed file must equal the regenerated one.
@@ -477,6 +501,45 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   **Retired:** the stage-bar buttons `Tools panel` and `Frame meter` (⌘T and ⌥⌘P stay keys), `EditorToolbar` props `tools`/`onTools`/`meter`/
   `onMeter`, `.compose-buttons`, the dead `.compose-readout` and `.compose-straighten-grid + path`. P36's table T is superseded by P37's T2.
   `localStorage` keys unchanged. No command, table, setting or Rust change.
+- **Editor polish (P38, book 10D amended `3e4b760`, R40, changelog 30; planned 2026-11-05).** Split line: in the editor two SVG lines at the
+  frame's middle, `line.compose-middle-edge` (`strokeWidth 4`, dark) under `line.compose-middle` (`strokeWidth 2`, light); on the stage and tiles
+  `.composed-split` becomes 2 px white with a 1 px dark `box-shadow`. On/off icons (`Loupe`, `Snapping`, `Straightening grid`): the lucide icon
+  gets `fill={on ? 'currentColor' : 'none'}` and the button `data-on`; CSS `.compose-tool[data-on]` = accent. **Rotate and flip** = Radix
+  `DropdownMenu` (trigger `button.compose-tool[aria-label="Rotate and flip"]`, `aria-haspopup="menu"`; content `.compose-menu` with `menuitem`s
+  `Rotate 90° left`, `Rotate 90° right`, `Flip horizontal` as `.compose-menu-item`; closes after a pick). **Nudge** = Radix `Popover`
+  (`modal={false}`; trigger `button.compose-tool[aria-label="Nudge"]`; content **is** `#compose-nudge-pad[role="group"][aria-label="Nudge"]`, never
+  `role="dialog"` — `LAYER_OPEN` would switch the editor keys off; the four `Nudge up|left|down|right` buttons as P37; closes on an outside
+  `pointerdown` and Esc). The three icons sit in `.compose-degrees` after the `°` span (grid, rotate, nudge); `StraightenControl` takes
+  `children`. Hover table **T3** = T2 minus the three rotate/flip entries (29). **Retired:** `.compose-drawer`, `.compose-drawer-toggle`,
+  `.compose-drawer-body`, `#compose-rotate-flip`, buttons `Rotate left` / `Rotate right` / `Flip`, props `rotateFlipOpen` / `onRotateFlipOpen` /
+  `nudgeOpen` / `onNudgeOpen`. No command, table, setting or Rust change.
+- **Undo history (P39–P41, book 05A MC-30, M36, R41, changelog 30; planned 2026-11-05).** `crates/core/src/services/history.rs`:
+  `HISTORY_LIMIT = 25`; `HistoryStore = Arc<Mutex<HashMap<session_id, SessionHistory { undo: VecDeque<Step>, redo: Vec<Step> }>>>`; `History {
+  store, events: Arc<dyn EventSink> }` with `new`, `with_store`, `store()`, `record(session_id, Step)` (drops the oldest beyond 25, clears redo,
+  coalesces consecutive single-field `Attribute` steps of the same `(item, key)` while redo is empty, emits `HistoryChanged`), `state(session_id)
+  -> HistoryState { undo, redo }`; `Step { label, kind: StepKind }`; `StepKind::{ Classify { session_id, photos: Vec<PhotoPlace> }, Reorder {
+  session_id, photo_id, from, to }, Move { source, target, photos }, Copy { source, target, seq_after, copies: Vec<(source_id, copy_id)> },
+  Composition { session_id, photos: Vec<CompositionChange { photo_id, before: (CompositionValues, Origin), after }> }, Attribute { session_id,
+  item_id, fields: Vec<FieldChange { key, before: FieldState, after }> } }`; `Place { classification, position }`, `PhotoPlace { photo_id, before,
+  after }`, `FieldState::{ Row(Option<Value>), Title(String) }`; `HistoryService { store, clock, history }::{ undo, redo } -> HistoryOutcome
+  { label, direction: Direction::{Undone, Redone}, sessions, active_photo_id }`. Recording happens **after** the transaction committed, in
+  `ReviewService` (P39; `ReviewService::new(store, clock, &History)`; `PhotosService.history`), `CompositionService` (P40; field `history:
+  Arc<History>`) and `AttributesService` (P40; `new(store, clock, integration, Option<&History>)`, `None` for schema refresh). Every reversal is
+  one `Store::transaction` (rollback on `Err`); a failed precondition drops the step and returns `Error::StepCannotApply`. **Labels** (P39
+  §Labels): `Approve 03`, `Condition 02`, `Delete 03` / `Delete photo`, `Approve 3 photos`, `Reorder 03 → 01`, `Move to <title|SKU|Unassigned>`,
+  `Move 2 photos to …`, `Copy to …`, `Compose 03` / `Compose photo`, `Apply framing to 4 photos`, `Edit <label>`, `Accept all suggestions`, `Clear
+  <label>`. `App.history: Arc<History>` and `AppHandles.history`; `SettingsSetContext.history_store`; `App::build(…, history: Option<HistoryStore>)`
+  (carried across a runtime settings rebuild, built with the **new** `events` hub; empty after a relaunch). `TestApp::{history(), attributes(…)}`.
+  **Retired:** `UndoSlot`, `StoreTx::set_undo_slot`, `ReviewService::undo` (P39); `photos_undo`, `services/photos.ts undoDelete`,
+  `WorkspaceKeys.undo` (P41). **Frontend (P41):** `services/history.ts` (`historyGet`, `historyUndo`, `historyRedo`, `editMenuSet`,
+  `onHistoryChanged`, `onEditMenu` — the listeners live here, not in `events.ts`, so the eleven tests that enumerate `events.ts`'s exports keep
+  passing); `features/history/{useHistory.ts, HistoryButtons.tsx, useHistoryKeys.ts}`; header buttons `Undo`, `Redo` (`.history-button`, icon-only,
+  `aria-disabled` when none; cards `Undo · ⌘Z — <label>` / `… — Nothing to undo`, `Redo · ⌘⇧Z — …`); toast id `history`, texts `Undone: <label> ·
+  Redo ⌘⇧Z`, `Redone: <label> · Undo ⌘Z`, `Nothing to undo.`, `Nothing to redo.`; ⌘Z / ⌘⇧Z handled at window level while a session is open,
+  never when `isTyping(target)`; the editor dispatches `Saved` when the stage photo's stored revision changes without a pending save; a grid
+  Split/Normal on ≥ 2 photos goes through `composition_apply`. **Tauri Edit menu (P41):** `Menu::default` with Edit rebuilt as `edit.undo`,
+  `edit.redo` (custom `MenuItem`s), separator, cut, copy, paste, select all; `EditMenu { undo, redo }` in managed state; `on_menu_event` →
+  `edit_menu{action}`.
 
 ## 7. Environment topology (verified 2026-10-25 on the dev Mac; "if reality disagrees, update this section")
 ### 7.1 Verified facts
@@ -614,3 +677,12 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   note (no Fable), §6.10 the P37 block (`HintCard`, the card text rule, the rail, the drawers, retired toolbar buttons and props). Tests of P36
   (C5(a), C5(b) text, C6(f), C6(g), C6(h)) and P32 (C3(c)) change their expectation as listed in the plan's Read first. No intention-book change;
   no owner card.
+- 2026-11-05 editor polish and undo history — planner (Fable) added P38_editor_polish (frontend; R40, changelog 30), P39_undo_history_core
+  (Rust; 05A MC-30, M36, R41; projection on), P40_undo_history_compositions_and_attributes (Rust; projection on) and P41_undo_history_ui
+  (frontend + the Tauri Edit menu). §4 four NOT_STARTED rows, §5 count 41 / graph tail / `P38[P37] · P39[P37] · P40[P39] · P41[P40,P38]` / the
+  phasing note (no Fable), §6.4 (`delete_photo_row`, tx `composition`/`save_composition`, `delete_attribute_value`; `set_undo_slot` removed),
+  §6.5 (`undo_slot` unused from P39), §6.6 (`nothing_to_redo`, `step_cannot_apply{label, reason}` and its reasons), §6.7 (`history_get/undo/redo`,
+  `photos_undo` compatibility until P41, `edit_menu_set`, events `history_changed`, `edit_menu`), §6.10 the P38 block and the P39–P41 block (the
+  step model, labels, App wiring, frontend and menu names). Tests of P37 (C2(a) table, C5(a), C7(a)/(b), C8(a)), P32 (C3(c)), P36 (C6(h)), P02
+  (c3b–c3f, the MC-6 row), P10 (`attrs()`), P08 (C2(b)/(c)) change their expectation as listed in the plans' Read first. Mechanism check of MC-30
+  against the code recorded in `handoffs/reviewer/handoff_polish_and_undo_plan_r1.md`. No intention-book change; no owner card.
