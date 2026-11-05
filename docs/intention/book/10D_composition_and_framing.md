@@ -24,17 +24,30 @@ the app no longer writes Capture One's crop) and narrows H3 (chapter 01). 05, 05
   single strip mode"). Clicking a photo in the strip moves the editor to it and keeps the changes; F still unfolds
   and folds the panel.
 - A **Tools panel** on the left is made of sections that fold open and closed (Capture One tool tabs,
-  Photoshop panels), remembered across launches and hidden with ⌘T. **Composition** is its first section:
-  Normal | Split, the Shape menu, Turn (portrait/landscape), rotate 90° left/right, flip, a straighten
-  control, the output previews at their real proportions, and Centre, Reset and Done. The straighten control
-  takes a typed number of degrees and the up/down arrows (0.1° a step, Shift 1°), besides its slider (owner
-  2026-11-05). An **Overlay** control picks the alignment guides drawn inside the frame (Off, Thirds, Grid,
-  Golden ratio, Diagonals; O cycles them) and is remembered; while straightening, a fine square grid covers
-  the image so lines can be aligned (as Capture One does), with its own on/off switch. Later colour and light
-  tools arrive as more sections of the same panel.
+  Photoshop panels), remembered across launches. Its own header carries the button that hides it (⌘T); hidden,
+  it leaves a slim rail on the left edge with the button that shows it again, the way the photo strip stays on
+  the right (owner 2026-11-05: "that should be on the tool panel and when hidden remain on the left side").
+  **Composition** is its first section: Normal | Split, the Shape menu with a Turn icon beside it
+  (portrait/landscape, X), a straighten control, the output previews at their real proportions, and Centre,
+  Reset and Done. Rotate 90° left/right and flip are rarely used: they sit as icons in a folded **Rotate and
+  flip** drawer of the section, closed at first, as photo editors keep them out of the way (owner 2026-11-05).
+  The straighten control takes a typed number of degrees and the up/down arrows (0.1° a step, Shift 1°),
+  besides its slider (owner 2026-11-05). Beside it a grid icon switches the **straightening grid**: a fine
+  square grid over the image while straightening, so lines can be aligned (as Capture One does). An
+  **Overlay** control picks the alignment guides drawn inside the frame (Off, Thirds, Grid, Golden ratio,
+  Diagonals; O cycles them) and is remembered. The nudge arrows are a small keyboard-arrow pad (← ↑ → ↓ laid
+  out as on a keyboard), folded behind one arrows icon and shown only when the photographer opens it (owner
+  2026-11-05: "should be hidden at first"). Later colour and light tools arrive as more sections of the same
+  panel.
+- The **toolbar above the stage** shows **icons, not names** (owner 2026-11-05): Revert, Loupe, Snapping, Copy
+  framing (takes this photo's composition), Paste framing (puts the copied composition on this photo, refitted
+  to its frame). Hovering any editor control shows a small card with its **name, its key and one short line of
+  what it does** ("Loupe · Z — 100 % view under the pointer"). The frame meter is a measuring aid for the
+  performance targets, not a tool: it keeps its key (⌥⌘P) and has no button.
 - **Every shortcut has a control** (owner 2026-11-05: "all this keyboard commands … should have a clicking
   interface, hover over shows the shortcut"): each editor action reachable by a key also has a button or menu
-  entry in the Tools panel or above the stage, and hovering any of them shows its name and key ("Split (S)").
+  entry in the Tools panel or above the stage, and hovering any of them shows its name and key ("Split (S)"),
+  the frame meter's ⌥⌘P excepted.
 - **Split**: one 2:1 composition whose exact middle makes two square files, Left and Right. Allowed for **any
   photo**, unreviewed included (owner 2026-11-05: "split shouldn't be limited"); places and outputs are counted
   only once it is Main or Condition. In the grid a split photo shows a middle hairline and the two places it fills
