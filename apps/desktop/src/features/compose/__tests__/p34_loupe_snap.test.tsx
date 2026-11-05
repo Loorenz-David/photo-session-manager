@@ -51,7 +51,7 @@ it('C2(b) Alt suspends drag snapping and the guide disappears after release', as
   await compose();
   pointer('pointerdown', 500, 350);
   pointer('pointermove', 503.7, 350);
-  expect(stage()?.querySelector('.compose-guide[data-axis="x"]')).not.toBeNull();
+  expect(stage()?.querySelector('.compose-guide[data-axis="x"]')).toHaveAttribute('x1', '500');
   pointer('pointerup', 503.7, 350);
   expect(stage()?.querySelector('.compose-guide')).toBeNull();
   pointer('pointerdown', 500, 350);

@@ -17,6 +17,8 @@ type KeysOptions = {
   onPaste?: () => void;
   onToggleMeter?: () => void;
   onLoupe?: (shown: boolean) => void;
+  onCycleOverlay?: () => void;
+  onToggleBrowser?: () => void;
 };
 
 /** 1–6 and 0 pick Original, 1:1, 4:5, 3:2, 2:3, 16:9, Free (10D). */
@@ -37,7 +39,7 @@ export function useComposeKeys(options: KeysOptions): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector(LAYER_OPEN) || isTyping(event.target)) return;
-      const { controller, onToggleTools, onReset, onStepPhoto, onToggleKind, onCopy, onPaste, onToggleMeter } = latest.current;
+      const { controller, onToggleTools, onReset, onStepPhoto, onToggleKind, onCopy, onPaste, onToggleMeter, onCycleOverlay, onToggleBrowser } = latest.current;
       const key = event.key.toLowerCase();
       const swallow = () => {
         event.preventDefault();
@@ -77,6 +79,8 @@ export function useComposeKeys(options: KeysOptions): void {
       else if (key in SHAPE_KEYS) set({ kind: 'shape', shape: SHAPE_KEYS[key] });
       else if (key === 'x' && state) set({ kind: 'orientation', orientation: state.values.orientation === 'turned' ? 'named' : 'turned' });
       else if (key === 's') onToggleKind();
+      else if (key === 'o') onCycleOverlay?.();
+      else if (key === 'f') onToggleBrowser?.();
       else if (key === '[') onStepPhoto(-1);
       else if (key === ']') onStepPhoto(1);
       swallow();

@@ -6,6 +6,7 @@ import { ComposeFrame } from './ComposeFrame';
 import type { Box } from './geometry';
 import { Handles } from './Handles';
 import type { ComposeState } from './machine';
+import type { OverlayKind } from './useComposePrefs';
 
 type ComposeStageProps = {
   photo: Photo;
@@ -17,6 +18,8 @@ type ComposeStageProps = {
   /** The first-time line (10D: "Crops made in Capture One are not used."). */
   hint: boolean;
   onPointer?: (point: { x: number; y: number }) => void;
+  overlay?: OverlayKind;
+  straightenGrid?: boolean;
 };
 
 /** The Re-frame notice (MC-27 §Revisions). */
@@ -44,7 +47,7 @@ function drawnBox(state: ComposeState): Box {
  * never through React, so a gesture never waits for a render; the inner image carries the turn and flip; the overlay
  * carries the frame, the handles and, while composing a `needs_review` photo, the Re-frame banner.
  */
-export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint, onPointer }: ComposeStageProps) {
+export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint, onPointer, overlay, straightenGrid }: ComposeStageProps) {
   const values = state?.values ?? valuesOf(photo.composition);
   const turns = values?.quarter_turns ?? 0;
   const flipped = values?.flip === 'horizontal';
@@ -63,7 +66,7 @@ export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint,
         )}
       </div>
       {state && stageBox && (
-        <ComposeFrame width={stageBox.width} height={stageBox.height} frameBox={drawnBox(state)} kind={state.values.kind} guides={state.guides}>
+        <ComposeFrame width={stageBox.width} height={stageBox.height} frameBox={drawnBox(state)} kind={state.values.kind} guides={state.guides} overlay={overlay} straightenGrid={straightenGrid}>
           <Handles box={drawnBox(state)} />
         </ComposeFrame>
       )}

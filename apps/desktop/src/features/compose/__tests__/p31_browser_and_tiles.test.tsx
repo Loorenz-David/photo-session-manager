@@ -1,42 +1,8 @@
 // The harness registers the service mocks; it must be evaluated before this file's own imports.
-import { compose, layoutStage, openWorkspace, photo, pointer, tile, twoPhotos, view } from './harness';
-import { act, fireEvent } from '@testing-library/react';
+import { openWorkspace, photo, tile, view } from './harness';
 import { describe, expect, it } from 'vitest';
 
-const browser = () => document.querySelector<HTMLElement>('.compose-browser')!;
-const edge = (target: Element) => fireEvent.pointerMove(target, { clientX: window.innerWidth - 5, clientY: 300 });
-
 describe('C8 the browser overlay and the tiles', () => {
-  it('C8(a) the browser slides in over the stage at the window\'s right edge and hides when the pointer leaves it', async () => {
-    layoutStage();
-    await openWorkspace([twoPhotos()]);
-    await compose();
-    expect(browser().getAttribute('data-open')).toBe('false');
-    edge(document.querySelector('main.workspace')!);
-    expect(browser().getAttribute('data-open')).toBe('true');
-    expect([...browser().querySelectorAll('[data-photo-id]')].map(t => t.getAttribute('data-photo-id'))).toEqual(['1', '2']);
-    fireEvent.pointerLeave(browser());
-    expect(browser().getAttribute('data-open')).toBe('false');
-    expect(browser().className).toContain('compose-browser');
-    expect(browser().closest('.stage-column')).not.toBeNull();
-    expect(browser().parentElement?.matches('main.workspace')).toBe(false);
-  });
-
-  it('C8(b) the edge never opens the browser during a drag; it opens on the next move after the release', async () => {
-    layoutStage();
-    await openWorkspace([twoPhotos()]);
-    await compose();
-    pointer('pointerdown', 500, 350);
-    pointer('pointermove', window.innerWidth - 5, 350);
-    expect(browser().getAttribute('data-open')).toBe('false');
-    await act(async () => {
-      pointer('pointerup', window.innerWidth - 5, 350);
-    });
-    expect(browser().getAttribute('data-open')).toBe('false');
-    pointer('pointermove', window.innerWidth - 5, 350);
-    expect(browser().getAttribute('data-open')).toBe('true');
-  });
-
   it('C8(c) grid tiles show the thumbnail with the composition drawn over it; a turned frame and the Re-frame corner', async () => {
     const framed = photo(1, 'main', { position: 1 });
     const unframed = photo(2, 'main', { position: 2 });

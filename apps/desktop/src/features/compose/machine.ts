@@ -128,7 +128,7 @@ export type Effect =
 export type Step = { state: ComposeState; effects: Effect[] };
 
 const IDLE: Phase = { kind: 'idle' };
-const NO_GUIDES: SnapGuides = { x: false, y: false };
+const NO_GUIDES: SnapGuides = { x: null, y: null };
 const PREVENT: Effect = { type: 'PreventDefault' };
 
 export function sameRect(a: Rect, b: Rect): boolean {

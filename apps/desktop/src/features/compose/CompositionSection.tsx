@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import { FlipHorizontal2, RotateCcw, RotateCw } from 'lucide-react';
+import { Hint } from '@/components/ui/tooltip';
 import type { Photo } from '@/services/photos';
 import type { ComposeState } from './machine';
 import type { SetValuesCause } from './machine';
@@ -7,6 +8,8 @@ import { OutputPreview } from './OutputPreview';
 import { refit, type RefitChange } from './refit';
 import { SplitPreviews } from './SplitPreviews';
 import type { ComposeController } from './useComposeGesture';
+import { StraightenControl } from './StraightenControl';
+import { OVERLAY_ORDER, type OverlayKind } from './useComposePrefs';
 
 /** The Shape menu's entries (10D: Original, 1:1, 4:5, 3:2, 2:3, 16:9, Free; labels are the contract). */
 export const SHAPE_OPTIONS: readonly { value: string; label: string }[] = [
@@ -26,6 +29,11 @@ type CompositionSectionProps = {
   controller: ComposeController;
   onReset: () => void;
   onDone: () => void;
+  overlay: OverlayKind;
+  onOverlay: (value: OverlayKind) => void;
+  straightenGrid: boolean;
+  onStraightenGrid: (value: boolean) => void;
+  onStraightening: (value: boolean) => void;
 };
 
 /**
@@ -34,8 +42,7 @@ type CompositionSectionProps = {
  * machine as a `SetValues` of `refit(values, change)`; the straighten slider is live on `input` and saves on `change`;
  * while split the frame is 2:1 and the preview shows the two squares, Left and Right.
  */
-export function CompositionSection({ photo, state, controller, onReset, onDone }: CompositionSectionProps) {
-  const rangeRef = useRef<HTMLInputElement>(null);
+export function CompositionSection({ photo, state, controller, onReset, onDone, overlay, onOverlay, straightenGrid, onStraightenGrid, onStraightening }: CompositionSectionProps) {
   const { values } = state;
 
   const set = useCallback(
@@ -52,90 +59,73 @@ export function CompositionSection({ photo, state, controller, onReset, onDone }
     set({ kind: 'kind', to }, 'kind');
   };
 
-  // A slider drag is one gesture (plan Notes): `input` moves the view, the native `change` on release saves once.
-  useEffect(() => {
-    const element = rangeRef.current;
-    if (!element) return;
-    const onChange = () => set({ kind: 'straighten', degrees: Number(element.value) }, 'set');
-    element.addEventListener('change', onChange);
-    return () => element.removeEventListener('change', onChange);
-  }, [set]);
-
   const straighten = values.straighten ?? 0;
   return (
     <div className="composition-section">
       <div className="compose-kind" role="group" aria-label="Kind">
-        <button type="button" className="compose-segment" aria-pressed={values.kind === 'normal'} onClick={() => setKind('normal')} title="Normal (S)">
+        <Hint text="Normal (S)"><button type="button" className="compose-segment" aria-pressed={values.kind === 'normal'} onClick={() => setKind('normal')}>
           Normal
-        </button>
-        <button
+        </button></Hint>
+        <Hint text="Split (S)"><button
           type="button"
           className="compose-segment"
           aria-pressed={values.kind === 'split'}
           onClick={() => setKind('split')}
-          title="Split (S)"
         >
           Split
-        </button>
+        </button></Hint>
       </div>
 
       <label className="compose-field" htmlFor="compose-shape">
         <span>Shape</span>
-        <select id="compose-shape" value={values.shape} onChange={event => set({ kind: 'shape', shape: event.target.value })}>
+        <Hint text="Shape (1–6, 0)"><select id="compose-shape" value={values.shape} onChange={event => { set({ kind: 'shape', shape: event.target.value }); event.target.blur(); }}>
           {SHAPE_OPTIONS.map(option => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </select></Hint>
+      </label>
+
+      <label className="compose-field" htmlFor="compose-overlay"><span>Overlay</span>
+        <Hint text="Overlay (O)"><select id="compose-overlay" value={overlay} onChange={event => { onOverlay(event.target.value as OverlayKind); event.target.blur(); }}>
+          {OVERLAY_ORDER.map(value => <option key={value} value={value}>{value === 'golden' ? 'Golden ratio' : value[0].toUpperCase() + value.slice(1)}</option>)}
+        </select></Hint>
       </label>
 
       <div className="compose-buttons">
-        <button type="button" className="compose-tool" onClick={() => set({ kind: 'orientation', orientation: values.orientation === 'turned' ? 'named' : 'turned' })} title="Turn frame (X)">
+        <Hint text="Turn frame (X)"><button type="button" className="compose-tool" onClick={() => set({ kind: 'orientation', orientation: values.orientation === 'turned' ? 'named' : 'turned' })}>
           Turn frame
-        </button>
-        <button type="button" className="compose-tool" onClick={() => set({ kind: 'turn', direction: 'left' })} title="Rotate 90° left">
+        </button></Hint>
+        <Hint text="Rotate 90° left"><button type="button" className="compose-tool" onClick={() => set({ kind: 'turn', direction: 'left' })}>
           <RotateCcw aria-hidden /> Rotate left
-        </button>
-        <button type="button" className="compose-tool" onClick={() => set({ kind: 'turn', direction: 'right' })} title="Rotate 90° right">
+        </button></Hint>
+        <Hint text="Rotate 90° right"><button type="button" className="compose-tool" onClick={() => set({ kind: 'turn', direction: 'right' })}>
           <RotateCw aria-hidden /> Rotate right
-        </button>
-        <button type="button" className="compose-tool" onClick={() => set({ kind: 'flip' })} title="Flip horizontally">
+        </button></Hint>
+        <Hint text="Flip horizontally"><button type="button" className="compose-tool" onClick={() => set({ kind: 'flip' })}>
           <FlipHorizontal2 aria-hidden /> Flip
-        </button>
+        </button></Hint>
       </div>
 
-      <div className="compose-field compose-straighten">
-        <label htmlFor="compose-straighten">Straighten</label>
-        <input
-          ref={rangeRef}
-          id="compose-straighten"
-          type="range"
-          min={-45}
-          max={45}
-          step={0.1}
-          value={straighten}
-          onChange={event => set({ kind: 'straighten', degrees: Number(event.target.value) }, 'live')}
-          onDoubleClick={() => set({ kind: 'straighten', degrees: 0 })}
-          title="Double-click to level"
-        />
-        <output htmlFor="compose-straighten" className="compose-readout">
-          {straighten.toFixed(1)}°
-        </output>
+      <StraightenControl value={straighten} onSet={(degrees, live) => set({ kind: 'straighten', degrees }, live ? 'live' : 'set')} onStraightening={onStraightening} grid={straightenGrid} onGrid={onStraightenGrid} />
+      <div className="compose-nudge" role="group" aria-label="Nudge">
+        {([['left', -1, 0, '←'], ['right', 1, 0, '→'], ['up', 0, -1, '↑'], ['down', 0, 1, '↓']] as const).map(([direction, x, y, key]) =>
+          <Hint key={direction} text={`Nudge ${direction} (${key})`}><button type="button" className="compose-tool" onClick={event => controller.dispatch({ type: 'Nudge', dx: -x * (event.shiftKey ? 10 : 1), dy: -y * (event.shiftKey ? 10 : 1) })}>Nudge {direction}</button></Hint>)}
       </div>
 
       {photo.composition.frame && (values.kind === 'split' ? <SplitPreviews photo={photo} values={values} frame={state.frame} /> : <OutputPreview photo={photo} values={values} frame={state.frame} />)}
 
       <div className="compose-actions">
-        <button type="button" className="compose-tool" onClick={() => set({ kind: 'centre' })} title="Centre (.)">
+        <Hint text="Centre (.)"><button type="button" className="compose-tool" onClick={() => set({ kind: 'centre' })}>
           Centre
-        </button>
-        <button type="button" className="compose-tool" onClick={onReset} title="Reset to the default (⌘⌥R)">
+        </button></Hint>
+        <Hint text="Reset (⌘⌥R)"><button type="button" className="compose-tool" onClick={onReset}>
           Reset
-        </button>
-        <button type="button" className="compose-done tools-done" onClick={onDone} title="Done (Return)">
+        </button></Hint>
+        <Hint text="Done (Return)"><button type="button" className="compose-done tools-done" onClick={onDone}>
           Done
-        </button>
+        </button></Hint>
       </div>
     </div>
   );

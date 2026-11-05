@@ -114,8 +114,7 @@ describe('C5 the editor keys', () => {
     // Photo 1 kept its change: the stored answer is what the editor shows on it (machine rule 16), tile 1 follows.
     frames.flush();
     placedAt(61.09);
-    fireEvent.pointerMove(document.querySelector('main.workspace')!, { clientX: window.innerWidth - 5, clientY: 300 });
-    const browser = document.querySelector('.compose-browser')!;
+    const browser = document.querySelector('.folded-strip')!;
     expect(tile(1, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-17.3166%');
     expect(tile(2, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-24.9854%');
     expect(tile(5, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-24.9854%');

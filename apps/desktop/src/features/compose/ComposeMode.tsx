@@ -4,11 +4,14 @@ import { displaySequence } from '@/features/workspace/order';
 import type { TileHandlers } from '@/features/workspace/PhotoGrid';
 import type { PhotoMenuAction } from '@/features/workspace/PhotoMenu';
 import { Stage } from '@/features/workspace/Stage';
+import { FoldedStrip } from '@/features/workspace/FoldedStrip';
+import { PhotoPanel } from '@/features/workspace/PhotoPanel';
+import { pickAndImport } from '@/features/workspace/ImportDropZone';
 import type { ViewMode } from '@/features/workspace/useWorkspaceState';
 import { canCompose, resetComposition, type Composition } from '@/services/compositions';
 import { previewUrl } from '@/services/sessions';
 import type { Photo } from '@/services/photos';
-import { BrowserOverlay } from './BrowserOverlay';
+import { EditorToolbar } from './EditorToolbar';
 import { ComposeStage } from './ComposeStage';
 import { CompositionSection } from './CompositionSection';
 import type { Box } from './geometry';
@@ -19,7 +22,8 @@ import { useComposeGesture } from './useComposeGesture';
 import { useComposeKeys } from './useComposeKeys';
 import { useCompositionSaves } from './useCompositionSaves';
 import { useToolsPanelState } from './useToolsPanelState';
-import { clipboardComposition, copyComposition, refitClipboard } from './useClipboardComposition';
+import { clipboardComposition, copyComposition, refitClipboard, useClipboardComposition } from './useClipboardComposition';
+import { useComposePrefs } from './useComposePrefs';
 import { FrameMeter } from './FrameMeter';
 import { Loupe } from './Loupe';
 import './compose.css';
@@ -32,7 +36,6 @@ type ComposeModeProps = {
   /** The photo on the stage; `canCompose(active)` holds while this is mounted. */
   active: Photo;
   mode: ViewMode;
-  onStep: (delta: number) => void;
   onMenu: (action: PhotoMenuAction, photo: Photo) => void;
   onItemCard: () => void;
   tiles: Omit<TileHandlers, 'onOpen'>;
@@ -63,14 +66,19 @@ const sameBox = (a: Box | null, b: Box) => a !== null && a.left === b.left && a.
  * editor, the right browser behind the edge reveal; every gesture, control and key runs through the machine and the
  * changes save when a gesture ends.
  */
-export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, tiles, onExit, onSwitch, patchPhoto, sessionsOpen = false, onToggleSessions = () => undefined, children }: ComposeModeProps) {
+export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, onExit, onSwitch, patchPhoto, sessionsOpen = false, onToggleSessions = () => undefined, children }: ComposeModeProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLDivElement>(null);
   const [stageBox, setStageBox] = useState<Box | null>(null);
   const [hint] = useState(firstOpen);
-  const [loupe, setLoupe] = useState(false);
+  const [loupeHeld, setLoupeHeld] = useState(false);
+  const [loupePinned, setLoupePinned] = useState(false);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [meter, setMeter] = useState(false);
+  const [browserFolded, setBrowserFolded] = useState(true);
+  const [straightening, setStraightening] = useState(false);
+  const prefs = useComposePrefs();
+  const clipboard = useClipboardComposition();
   const photosRef = useRef(photos);
   photosRef.current = photos;
   const activeRef = useRef(active);
@@ -100,7 +108,7 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
     storedOf: useCallback((photoId: number) => photosRef.current.find(photo => photo.id === photoId)?.composition ?? null, []),
   });
 
-  const controller = useComposeGesture({ stageRef, imageRef, photo: active, stageBox, onSave: save, onExit, onSwitch });
+  const controller = useComposeGesture({ stageRef, imageRef, photo: active, stageBox, onSave: save, onExit, onSwitch, snapEnabled: prefs.snap });
   dispatchRef.current = controller.dispatch;
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
 
@@ -172,10 +180,11 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
     [onMenu, setKind, tiles],
   );
 
+  const copy = () => { const current = controller.getSnapshot(); if (current) copyComposition(current.values); };
+  const paste = () => { const current = controller.getSnapshot(); const clip = clipboardComposition(); if (current && clip) controller.dispatch({ type: 'SetValues', values: refitClipboard(clip, current.frame), cause: 'paste' }); };
   useComposeKeys({ controller, onToggleTools: tools.toggleHidden, onReset: reset, onStepPhoto: stepPhoto, onToggleKind: toggleKind,
-    onCopy: () => { const current = controller.getSnapshot(); if (current) copyComposition(current.values); },
-    onPaste: () => { const current = controller.getSnapshot(); const clip = clipboardComposition(); if (current && clip) controller.dispatch({ type: 'SetValues', values: refitClipboard(clip, current.frame), cause: 'paste' }); },
-    onToggleMeter: () => setMeter(value => !value), onLoupe: setLoupe });
+    onCopy: copy, onPaste: paste, onToggleMeter: () => setMeter(value => !value), onLoupe: setLoupeHeld,
+    onCycleOverlay: prefs.cycleOverlay, onToggleBrowser: () => setBrowserFolded(value => !value) });
 
   return (
     <>
@@ -187,7 +196,7 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
           {
             id: 'composition',
             title: 'Composition',
-            content: state ? <CompositionSection photo={active} state={state} controller={controller} onReset={reset} onDone={done} /> : null,
+            content: state ? <CompositionSection photo={active} state={state} controller={controller} onReset={reset} onDone={done} overlay={prefs.overlay} onOverlay={prefs.setOverlay} straightenGrid={prefs.straightenGrid} onStraightenGrid={prefs.setStraightenGrid} onStraightening={setStraightening} /> : null,
           },
         ]}
       />
@@ -197,22 +206,23 @@ export function ComposeMode({ photos, active, mode, onStep, onMenu, onItemCard, 
           active={active}
           mode={mode}
           onToggleMode={() => undefined}
-          onStep={onStep}
+          onStep={delta => stepPhoto(delta < 0 ? -1 : 1)}
           onAction={() => undefined}
           onMenu={menu}
           onItemCard={onItemCard}
           compose={{
             onDone: done,
+            toolbar: <EditorToolbar onRevert={() => controller.dispatch({ type: 'KeyEsc' })} loupe={loupePinned} onLoupe={() => setLoupePinned(value => !value)} snap={prefs.snap} onSnap={() => prefs.setSnap(!prefs.snap)} onCopy={copy} onPaste={paste} canPaste={clipboard !== null} tools={!tools.hidden} onTools={tools.toggleHidden} meter={meter} onMeter={() => setMeter(value => !value)} />,
             children: <>
-              <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} onPointer={setPointer} />
-              {loupe && state && active.adjusted_preview_path && <Loupe src={previewUrl(active.adjusted_preview_path)} pointer={pointer} state={state} />}
+              <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} onPointer={setPointer} overlay={prefs.overlay} straightenGrid={prefs.straightenGrid && straightening} />
+              {(loupeHeld || loupePinned) && state && active.adjusted_preview_path && <Loupe src={previewUrl(active.adjusted_preview_path)} pointer={pointer} state={state} />}
               {meter && <FrameMeter controller={controller} />}
             </>,
           }}
         />
-        <BrowserOverlay photos={photos} isIdle={controller.isIdle} onPick={pick} sessionsOpen={sessionsOpen} onToggleSessions={onToggleSessions} {...tiles} onMenu={menu} />
         {children}
       </div>
+      {browserFolded ? <FoldedStrip photos={photos} onUnfold={() => setBrowserFolded(false)} onOpen={pick} sessionsOpen={sessionsOpen} onToggleSessions={onToggleSessions} {...tiles} onMenu={menu} /> : <PhotoPanel photos={photos} onFold={() => setBrowserFolded(true)} onImport={() => pickAndImport()} onOpen={pick} sessionsOpen={sessionsOpen} onToggleSessions={onToggleSessions} {...tiles} onMenu={menu} />}
     </>
   );
 }

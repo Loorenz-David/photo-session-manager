@@ -17,6 +17,7 @@ type GestureOptions = {
   onSave: (photoId: number, values: CompositionValues) => void;
   onExit: () => void;
   onSwitch: (photoId: number) => void;
+  snapEnabled?: boolean;
 };
 
 export type ComposeController = {
@@ -29,7 +30,7 @@ export type ComposeController = {
 };
 
 /** Workspace keys that are off while composing (design handoff §Keyboard; 10D). */
-const SWALLOWED = new Set(['a', 'c', 'backspace', 'delete', ' ', 'f', 'i', 'd', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown']);
+const SWALLOWED = new Set(['a', 'c', 'backspace', 'delete', ' ', 'i', 'd', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown']);
 
 /** An open layer owns its own keyboard (the guard `useBackKeys` in `lib/keyboard.ts` uses; design handoff §Keyboard "Esc (close topmost)"). */
 export const LAYER_OPEN = '[role="dialog"], [role="alertdialog"], [role="menu"]';
@@ -121,7 +122,8 @@ export function useComposeGesture(options: GestureOptions): ComposeController {
     (event: ComposeEvent): boolean => {
       const current = stateRef.current;
       if (!current) return false;
-      const { state, effects } = reduce(current, event);
+      const input = event.type === 'PointerMove' && latest.current.snapEnabled === false ? { ...event, altKey: true } : event;
+      const { state, effects } = reduce(current, input);
       stateRef.current = state;
       const before = current.phase;
       if (before.kind === 'trimming' && state.phase.kind === 'idle' && !sameRect(state.live, before.startRect)) glide();

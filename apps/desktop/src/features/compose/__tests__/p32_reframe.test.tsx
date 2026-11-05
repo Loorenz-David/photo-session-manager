@@ -60,7 +60,8 @@ describe('C7 the Re-frame confirmation', () => {
 
   it('C7(b) Return confirms: one save with the re-fitted rect, and the ok answer removes the banner and the tile\'s Re-frame corner', async () => {
     await editor();
-    expect(tile(1, document.querySelector('.compose-browser')!).querySelector('.tile-review')).toHaveTextContent('Re-frame');
+    fireEvent.keyDown(window, { key: 'f' });
+    expect(tile(1, document.querySelector('.photo-panel')!).querySelector('.tile-review')).toHaveTextContent('Re-frame');
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Enter' });
     });

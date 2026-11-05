@@ -17,8 +17,8 @@ function expectEditorOpen() {
   expect(document.querySelector('.swipe-layer')).toBeNull();
   expect(document.querySelector('.toggle-pill')).toBeNull();
   expect(document.querySelector('.review-buttons')).toBeNull();
-  const panels = [...document.querySelectorAll('main.workspace aside.photo-panel')];
-  expect(panels.every(panel => panel.closest('.compose-browser') !== null)).toBe(true);
+  expect(document.querySelector('main.workspace > .folded-strip')).not.toBeNull();
+  expect(document.querySelector('main.workspace aside.photo-panel')).toBeNull();
 }
 
 describe('C2 entering and leaving Compose', () => {

@@ -298,9 +298,7 @@ describe('C7 saves', () => {
     const loads = vi.mocked(getSessionView).mock.calls.length;
     await drag(500, 550, 350, frames.flush);
     expect(setComposition).toHaveBeenCalledTimes(1);
-    fireEvent.pointerMove(document.querySelector('main.workspace')!, { clientX: window.innerWidth - 5, clientY: 300 });
-    const browser = document.querySelector('.compose-browser')!;
-    expect(browser.getAttribute('data-open')).toBe('true');
+    const browser = document.querySelector('.folded-strip')!;
     await act(async () => {
       fireEvent.click(tile(2, browser));
     });
@@ -352,8 +350,7 @@ describe('C7 saves', () => {
     await act(async () => {
       resolveB(saved(1, b, 2));
     });
-    fireEvent.pointerMove(document.querySelector('main.workspace')!, { clientX: window.innerWidth - 5, clientY: 300 });
-    const browser = document.querySelector('.compose-browser')!;
+    const browser = document.querySelector('.folded-strip')!;
     await waitFor(() => expect(tile(1, browser).querySelector<HTMLElement>('.composed-frame')!.style.left).toBe('-9.6479%'));
     frames.flush();
     placedAt(111.09);

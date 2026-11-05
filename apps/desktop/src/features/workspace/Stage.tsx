@@ -25,7 +25,7 @@ type StageProps = {
   /** A double-click on the stage photo opens Compose (10D). */
   onCompose?: () => void;
   /** Compose mode (P31): the editor's stage replaces the swipe layer, the pill and the review buttons; Done finishes. */
-  compose?: { onDone: () => void; children: ReactNode };
+  compose?: { onDone: () => void; children: ReactNode; toolbar?: ReactNode };
 };
 
 /**
@@ -73,9 +73,9 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
             </button>
           </Hint>}
           {compose && (
-            <button type="button" className="compose-done" onClick={compose.onDone} title="Done (Return)">
+            <>{compose.toolbar}<Hint text="Done (Return)"><button type="button" className="compose-done" onClick={compose.onDone}>
               Done
-            </button>
+            </button></Hint></>
           )}
           <PhotoMenuButton photo={active} onAction={onMenu} />
           <button type="button" className="stage-icon-button" onClick={onItemCard} aria-label="Item details" title="Item details (I)">
@@ -84,9 +84,9 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
         </span>
       </div>
       <div className="stage-body" onDoubleClick={onDoubleClick}>
-        <button type="button" className="stage-nav stage-prev" onClick={() => onStep(-1)} aria-label="Previous photo">
+        <Hint text="Previous photo ([)"><button type="button" className="stage-nav stage-prev" onClick={() => onStep(-1)} aria-label="Previous photo">
           <ChevronLeft />
-        </button>
+        </button></Hint>
         {compose ? (
           compose.children
         ) : (
@@ -94,9 +94,9 @@ export function Stage({ photos, active, mode, onToggleMode, onStep, onAction, on
             <StageImage key={active.id} photo={active} mode={mode} />
           </SwipeLayer>
         )}
-        <button type="button" className="stage-nav stage-next" onClick={() => onStep(1)} aria-label="Next photo">
+        <Hint text="Next photo (])"><button type="button" className="stage-nav stage-next" onClick={() => onStep(1)} aria-label="Next photo">
           <ChevronRight />
-        </button>
+        </button></Hint>
       </div>
       {!compose && (
         <div className="stage-foot">

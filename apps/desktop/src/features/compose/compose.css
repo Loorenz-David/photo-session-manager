@@ -32,11 +32,15 @@
 /* The Re-frame notice (MC-27 §Revisions) over a photo that needs review. */
 .compose-review { position: absolute; left: 50%; bottom: var(--space-3); margin: 0; padding: 6px 12px; translate: -50% 0; border-radius: var(--r-pill); background: var(--warn); color: #fff; font-size: var(--text-sm); font-weight: var(--weight-bold); white-space: nowrap; box-shadow: var(--shadow-sm); pointer-events: none; }
 
-/* The photo browser slides in over the image from the window's right edge (never during a drag). */
-.compose-browser { position: absolute; top: 0; right: 0; bottom: 0; z-index: 20; width: var(--photo-panel-width, 340px); transform: translateX(100%); transition: transform var(--dur-med) var(--ease-out); box-shadow: var(--shadow-lg); }
-.compose-browser[data-open="true"] { transform: none; }
-.compose-browser .photo-panel { height: 100%; }
-.compose-browser [aria-label="Fold panel"] { display: none; }
+.compose-overlay-guides { pointer-events: none; stroke: var(--color-bg); stroke-width: 1; filter: drop-shadow(0 0 1px var(--color-text)); }
+.compose-straighten-grid { pointer-events: none; stroke: var(--color-bg); opacity: .7; }
+.compose-straighten-grid + path, .compose-overlay pattern path { fill: none; stroke: var(--color-bg); stroke-width: 1; }
+.editor-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.editor-toolbar .compose-tool { padding: 0 6px; }
+.compose-nudge { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.compose-nudge .compose-tool { justify-content: center; }
+.compose-degrees input { width: 65px; min-width: 0; padding: 4px; border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--color-bg); color: var(--color-text); }
+.compose-degrees > span { width: auto; }
 
 /* The Tools panel (10D bullet 3): sections that fold open and closed; Composition first. */
 .tools-section { border-bottom: 1px solid var(--hair); }

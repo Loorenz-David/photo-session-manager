@@ -378,12 +378,11 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
     <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDraggingId(null); setOverId(null); }}>
       <main className="workspace" data-folded={folded || undefined} data-composing={composing || undefined}>
         {composing && active && canCompose(active) ? (
-          // The editor (10D): the Tools panel on the left, the stage column as the editor, the browser behind the edge reveal.
+          // The editor owns its folded strip while composing; workspace folding is restored when it closes.
           <ComposeMode
             photos={state.photos}
             active={active}
             mode={state.mode}
-            onStep={state.step}
             onMenu={onMenu}
             onItemCard={() => setItemCardOpen(current => !current)}
             tiles={{ activeId: state.activeId, selection: state.selection, onToggleSelected: state.toggleSelected, onMenu }}

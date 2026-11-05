@@ -126,7 +126,7 @@ describe('C3 the Composition section', () => {
     frames.flush();
     expect(image()!.style.transform).toMatch(/rotate\(10deg\)$/);
     expect(setComposition).not.toHaveBeenCalled();
-    expect(document.querySelector('.compose-readout')).toHaveTextContent('10.0°');
+    expect(document.querySelector<HTMLInputElement>('#compose-straighten-degrees')?.value).toBe('10.0');
 
     await act(async () => {
       fireEvent.change(range, { target: { value: '10' } });
@@ -149,7 +149,7 @@ describe('C3 the Composition section', () => {
     expect(savedValues(1).straighten).toBe(0);
     // Area is preserved: only the tilt goes, the rect stays at the shrunk size.
     rectNear(savedValues(1).rect, tilted.rect, 1e-9);
-    expect(document.querySelector('.compose-readout')).toHaveTextContent('0.0°');
+    expect(document.querySelector<HTMLInputElement>('#compose-straighten-degrees')?.value).toBe('0.0');
     frames.flush();
     expect(image()!.style.transform).toMatch(/rotate\(0deg\)$/);
   });
