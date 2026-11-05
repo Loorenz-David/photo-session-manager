@@ -244,3 +244,43 @@ the wrong side and has the wrong sign); `x = 0` clamped as the row says.
 `refit.ts` (Delegated). (b) `useComposeGesture.ts` exports `LAYER_OPEN` for `useComposeKeys`. (c) Tracker actor is `fable`, not the prompt
 template's `codex`. (d) No new files beyond the plan's list.
 **Not done.** No live try-out in the Tauri window from this session (no interactive display); the owner's Manual try-out stands. Rust untouched.
+
+### 2026-11-05 — review r1 (Opus, `pipeline-reviewer`): APPROVED_WITH_NOTES
+**Gate.** Tracker `IMPLEMENTED`; checkpoint `c0cc169` in `git log`. Reviewed on clean `59cb210` (`c0cc169..59cb210` adds only the implement
+handoff and the review prompt).
+**Perimeter.** `git show --stat c0cc169` = the handoff's 25 paths exactly (7 new + 5 new tests, 11 changed, tracker row, Review log); no file
+outside the plan's list; no Rust, no bindings.
+**Suite (run once).** `cargo test --workspace` 529 passed / 0 failed; clippy `-D warnings` clean; `cargo fmt --check` exit 0; `npm run typecheck`
+exit 0; `npm test` 31 files / 268 passed. No B4.
+**Verified correct (code read, then its test).**
+- C1(a) `refit.ts`: shape/orientation/turn/flip/straighten/centre/reframe per the contract; the 11 cases assert exact rects and `validate`. The
+  plan's literals that disagree are plan slips, re-derived independently: (4) `1365.6·1.25 = 1707` so `w_px = 1707`, `h = 0.8`; (8) a centred square
+  inside a 10° tilted 2560×1707 needs `s(cos θ + sin θ) ≤ 1707` → `h = 0.8632` (the test also shows a slightly larger rect is `rect_outside`); (10)
+  `1 − (100/0.381956)/1707 = 1 − 100/652 = 0.846626`. Quarter-turn maps (`(cx, cy) → (1 − cy, cx)`, rect `(1 − y − h, x, h, w)`) are the clockwise
+  rotation MC-27 defines; flip `x → 1 − x − w` keeps the same content.
+- C1(b) machine: `SetValues` idle/wheeling/dragging, `Nudge` sign (P31 pointer convention; the key layer negates it), `Trim*` with the view frozen
+  during the trim and re-fitted on end, Esc restores `startRect`, Blur commits; `adjusting` for the live slider; `needsConfirm` cleared by any `Save`,
+  forced once by Return. React's value tracker drops the `onChange` that would follow the native `change` with the same value, so the slider ends
+  `idle` (Esc after a slide still reverts to the entry).
+- C2 panel: `aside.tools-panel` only in the compose branch of `WorkspacePage`; fold and hide persisted in `tools.sections` / `tools.hidden`; tests
+  remount through the hash. C3(a)–(e), C4(a)–(c): each asserts the `setComposition` payload, the overlay frame box and the image transform; C4(a)
+  checks the 552 × 552 box during the trim, one save, `data-gliding` until `transitionend`.
+- C5(a)–(e), C6(a)–(b): `useComposeKeys` is a window **capture** listener, so ⌘[ and every non-editor key are stopped before the app's maps; the
+  workspace keyboard (incl. ⌘Z) is already disabled while composing; `isTyping` targets keep their keys (C6(b) asserts `defaultPrevented false`).
+  `[` `]` use `displaySequence` with no wrap.
+- C7(a)–(d): entry re-fit for `needs_review` (`entryValues`, also on `SwitchPhoto`), banner text from `review_reason`, Return/any save confirms;
+  C7(d)'s `y = 0.1666 + 50/977.81` follows P31 rule 2 (the photo follows the pointer; the plan divided by the wrong side). C8(a)–(b): `needs_review`
+  refusals show the backend message bare; the popover stays open (same node).
+**Assumptions.** None contradicts 10D/MC-27. Notable: ArrowDown with no room sends nothing (P31 "save only on change"); Flip also runs the straighten
+guard (keeps the "never past the photo's edge" rule); Done stays in the stage bar too; ⌘ combinations other than ⌘T/⌘⌥R/⌘[ are left to the app.
+**Hard constraints.** H1–H8 hold: frontend only, no external write, no pixel processing (CSS transforms only), the backend still validates every save.
+**Notes (backlog, non-blocking).** (1) probe-confirmed: a re-fitting control used while a wheel is still settling re-fits from the pre-wheel rect,
+discarding the scroll (→ P34); (2) focus left on the Shape select / straighten range turns every editor key, Return included, into a field key (→ P34);
+(3) Reset bypasses the save queue, a queued save can land after it (→ P34); (4) the P31 layer-guard note now covers all P32 keys (→ P34); (5) not
+verified live: panel layout, glide, output-preview clipping for turned/tilted photos.
+**Probe declaration.** One scratch test `apps/desktop/src/features/compose/__tests__/zz_review_probe.test.tsx` created, run, deleted; no production
+file touched; `git status` clean afterwards.
+**Lessons for the plans.** Hand-computed literals in criterion rows were wrong four times (re-fit (4), (8), (10), C7(d)); rows that state a
+contract formula and a derived number should carry the formula as the authority and the number as "≈". C1(b) "TrimStart, Blur → Save" is
+unreachable without a move (nothing changed). `SetValues { values }` computed outside the machine cannot honour "commit the wheel first; apply";
+P33/P34 rows that add controls should pass the change, not the result.
