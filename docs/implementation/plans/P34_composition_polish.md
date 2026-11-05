@@ -167,3 +167,18 @@ whether the meter counts frames via rAF deltas or `PerformanceObserver`; the toa
   Notes (backlog): edge-snap guide drawn at the centre line; batch apply leaves a stale `Re-frame` badge; Apply outside the per-photo save queue;
   C2(b) hardening; tracker not set by the resume ruling; two undisclosed perimeter paths.
 - 2026-11-05, codex fix 1 — Resolved F1–F4 from review r1. The loupe renders the preview at source dimensions with the stage's turn, flip and straighten; it tracks pointer movement while composing so Z opens at the resting pointer. C2(a) now checks the centring offsets to 0.1 px and covers a turned/flipped/straightened preview; C3(a) checks fitted x, y, width and height to four decimals. Full Rust and UI suites, clippy, fmt and typecheck pass; handoff `handoffs/implementer/handoff_P34_composition_polish_fix_r2.md`.
+- 2026-11-05, opus re-review r2 — **APPROVED_WITH_NOTES** (handoff `handoffs/reviewer/handoff_P34_composition_polish_review_r2.md`).
+  Gate: tracker `IMPLEMENTED` with the fix-1 note; checkpoint `34299ba` exists. Perimeter: `git show --stat 34299ba` = `Loupe.tsx`,
+  `ComposeMode.tsx`, `compose.css`, `p34_loupe_snap.test.tsx`, `p34_clipboard.test.tsx`, tracker row, this log; all inside the r1 fix perimeter
+  (`ComposeStage.tsx` allowed, not needed). Suite 531 Rust / 301 UI, clippy, fmt, typecheck green (reviewer run on `48503a1`, code tree = `34299ba`).
+  - F1 resolved: the loupe draws a turned-frame box (`view.turned`) rotated by `straighten` about the image point under the pointer, with the
+    source-sized img (`state.frame`) centred inside carrying `rotate(turns·90°) scaleX(±1)`, the same composition the stage uses (img centred via
+    `translate: -50% -50%`, turn/flip on the img, straighten on the wrapper about the view centre). The pointer is mapped through the inverse
+    straighten rotation (`Lx = cx + cos·dx + sin·dy`, `Ly = cy − sin·dx + cos·dy`), re-derived by hand (90° case: a pointer right of centre maps to
+    the local up direction, as a clockwise CSS rotation requires).
+  - F2 resolved: `onPointer={setPointer}` unconditionally; the C2(a) test moves the pointer before Z and asserts `left 616px` (fails on r1 code).
+  - F3 resolved: C2(a) asserts the view offset `−1421.8 / −602.6` to 0.05 px; a turned/flipped/straightened case asserts box `1707×2560`,
+    `rotate(8deg)`, img `2560×1707`, `rotate(90deg) scaleX(-1)`.
+  - F4 resolved: C3(a) asserts `(0.26002, 0.21998, 0.47995, 0.40004)` to 4 decimals (raw paste `0.3, 0.18, 0.4, 0.48` fails).
+  Notes (backlog): the turned case's centring assertion (`left + originX = 120`) holds by construction, so the inverse-straighten sign is
+  pinned only by derivation; the pointer is now React state updated on every hover move, re-rendering the whole compose tree.
