@@ -27,15 +27,16 @@ MC-33 (**R-I26** normalisation by the adapter, **R-I29** `ftp-status`, reconnect
 evidence `sony_camera_lab.md` C3 (ack ≠ exposure ≠ file), C4, C9, §V6 · process `flow.md` §4, §6, §9 · master plan §3, §6.4, §6.6, §6.7 (`camera_capture`
 → `{capture_id}`, `camera_reconnect`, `camera_files_not_received_dismiss`, `camera_status_changed`), **§6.11** (Domain, Ports, Mechanisms `camera_status`,
 Services `LedgerService`, Runtime, Sidecar `SidecarEvent`, Direct adapter, Support `installed`), §7.5.
-Code at `41bef14` (+ P42–P45 by their §6.11 names): `crates/core/src/services/camera.rs` (P42 version), `crates/integrations/src/camera/
+Code at `635930b` (+ P42–P45 by their §6.11 names): `crates/core/src/services/camera.rs` (P42 version), `crates/integrations/src/camera/
 via_capture_one.rs`, `crates/integrations/src/camera/runtime.rs` (`bind`, `provider` slot), `crates/integrations/src/camera/sidecar/{protocol.rs,
 client.rs}`, `crates/core/src/services/camera_ledger.rs` (`watchdog` → `WatchdogState.first_raise`), `crates/infra/src/ftp` (`ReceiverHandle::
 uploads_in_progress`), `apps/desktop/src-tauri/src/commands/camera.rs`, `apps/desktop/src/services/camera.ts`, `crates/testkit/src/bin/fake_sidecar.rs`
 (script mode), `crates/testkit/src/test_app.rs` (`with_camera_script`, `sidecar_events`, `ledger`, `ftp`).
 Lab (read-only): `docs/session-manager-handoff.md` §4.4 (event meanings), §8 rows 5, 6, 13; `sdk/src/camera_connection.cpp:23–30` (`describe_error`:
 `ssh user authentication failed (check Access Authen. user/password)` ↔ `AuthenticationRefused`, `ssh server authentication failed (fingerprint mismatch)`
-↔ `FingerprintMismatch`; the texts the `connect.failed.message` carries), `sdk/src/transport_manager.cpp:302–304` (`connection.ready` emit),
-`sdk/src/camera_capture.cpp:160–185` (`sdk.download.completed`).
+↔ `FingerprintMismatch`; the texts the `connect.failed.error` field carries — prefixed `connection failed: ` on the callback path, `:511–512`; the field
+is **`error`**, never `message`, P45 projection L9), `sdk/src/transport_manager.cpp:301–304` (`connection.ready` emit), `sdk/src/camera_capture.cpp:160–185`
+(`sdk.download.completed`).
 
 ## Files expected to change
 Integrations (new): `crates/integrations/src/camera/direct/{mod.rs, adapter.rs, filenames.rs}`. Integrations (changed): `crates/integrations/src/camera/
@@ -53,7 +54,7 @@ appends the completion line through the script channel — see §Fixtures), `cra
 Estimated: 3 new source paths, 14 changed, 1 new test, new script fixtures — 21 paths.
 
 ## Core mechanisms (unit tests allowed)
-`direct/filenames.rs::normalize_camera_filename` (rows C2(d)); `direct/adapter.rs::needs_action_from_connect_failed(message) -> Option<NeedsActionReason>`
+`direct/filenames.rs::normalize_camera_filename` (rows C2(d)); `direct/adapter.rs::needs_action_from_connect_failed(error) -> Option<NeedsActionReason>`
 (C4(c)). Everything else is a behaviour row through `TestApp`.
 
 ## The adapter contract
@@ -73,9 +74,9 @@ Estimated: 3 new source paths, 14 changed, 1 new test, new script fixtures — 2
   timestamp_ms })`; then `expected_transfer = None`, `busy = None` (if it was `Transfer`), `transfer_in_progress(Cable, false)`; otherwise log and leave
   the file (never promoted, never deleted) · `expected_transfer` older than `TRANSFER_EXPECTED_MS` → cleared the same way (R-I20 "at most 10 s") ·
   `CaptureUncertain` → `sink.session_uncertain()` · `UsbClaimedBy { owners }` → add `HeldByOtherProgram` with `holder = process name after the last
-  comma of the first owner` (`"pid 512, ptpcamerad"` → `"ptpcamerad"`) · `UsbFallbackToWifi` → `usb_fallen_back = true` (cleared by `UsbArrived` and by
-  `usb.retry_requested`) · `SshFingerprint { status: "unknown" }` → add `FingerprintUnconfirmed`; `"MISMATCH"` → add `FingerprintMismatch`; `"match" |
-  "pinned"` → remove both · `ConnectFailed { message }`: `needs_action_from_connect_failed` (contains `ssh user authentication failed` → `AuthenticationRefused`;
+  comma of the first owner` (`"pid 512, ptpcamerad"` → `"ptpcamerad"`) · `UsbFallbackToWifi { .. }` → `usb_fallen_back = true` (cleared by `UsbArrived` and by
+  `UsbRetryRequested`) · `SshFingerprint { status: "unknown" }` → add `FingerprintUnconfirmed`; `"MISMATCH"` → add `FingerprintMismatch`; `"match" |
+  "pinned"` → remove both · `ConnectFailed { error, .. }`: `needs_action_from_connect_failed(error)` (contains `ssh user authentication failed` → `AuthenticationRefused`;
   contains `fingerprint mismatch` → `FingerprintMismatch`; else `None`) · `SdkUnavailable` → the helper is useless: `Error::SidecarUnavailable` on
   `capture()`, health `camera_sidecar_unavailable` · `CmdRejected`/`CmdDone` → `client.outcome`. `helper_running` = the supervisor has a live child.
 - **`capture()`**: `session.is_none()` → `Err(CameraNotConnected)`; else `id = CaptureId(uuid)`, `client.send(Capture { id, af: true, cmd_id })`, return
@@ -96,8 +97,9 @@ store_destination:"verified", store_value:"0x0003"}`), `ready_wifi.txt`, `ready_
 `camera.busy {reason:"exposure"}`, `capture.requested`, `capture.acknowledged`, `capture.exposed {capture_id:"{capture_id}", transport:"usb", association:
 "latest_release_provisional"}`, `camera.busy {reason:"none"}`, `cmd.done`), `camera_shutter.txt` (`capture.exposed {transport:"wifi", association:"none: no
 SDK capture pending (camera-initiated?)"}` with no `capture_id`), `claimed.txt` (`usb.claimed_by {owners:"pid 512, ptpcamerad", hint:"…"}`, `connect.failed
-{transport:"usb", sdk_error:"0x00008208", message:"connection error"}`), `fingerprint_unknown.txt`, `auth_refused.txt` (`connect.failed {…, message:"ssh user
-authentication failed (check Access Authen. user/password)"}`). `TestApp::sdk_download(name, bytes)` writes `bytes` to `<staging>/<name>` and makes the fake
+{transport:"usb", sdk_error:"0x00008208", error:"connection error", duration_ms:12}`), `fingerprint_unknown.txt`, `auth_refused.txt` (`connect.failed {transport:"wifi",
+sdk_error:"0x00008208", error:"connection failed: ssh user authentication failed (check Access Authen. user/password)", duration_ms:900, timeout:false}` — the
+callback path's shape, `camera_connection.cpp:511–512`; the adapter reads the text, the hex code is not asserted). `TestApp::sdk_download(name, bytes)` writes `bytes` to `<staging>/<name>` and makes the fake
 print `sdk.download.completed {filename:<path>, size_bytes:<len>, success:true, transport:"usb"}` (the fake reads an `inject` file the test appends to; the
 timestamp is the fake's clock). `a.capture()` = `CameraService::new(provider, health).capture()`.
 
@@ -132,7 +134,7 @@ timestamp is the fake's clock). `a.capture()` = `CameraService::new(provider, he
 | C3(d) | a `_1` re-send by cable keys to the original | `sdk_download("DSC00008_1.ARW", data)` after a Wireless delivery of `DSC00008.ARW` with `data` | outcome `duplicate` (same `file_key` `DSC00008.ARW`, same hash) → `.duplicates/DSC00008_1.ARW` | R-I26; R-I27; M37 |
 | C4(a) | store destination failed | `ready_usb_store_failed.txt` | `st() == NeedsAction { reason: StoreDestinationUnverified, holder: None }`; `H.has("camera_store_destination_unverified")`; the session is kept (`capture()` still sends the command) | R-I19 ("`failed` → `NeedsAction { StoreDestinationUnverified }`, and the session is kept"); M39 ("Every store-destination write is verified") |
 | C4(b) | verified clears it | after C4(a): inject `session.lost` then `connection.ready {store_destination:"verified"}` | `Connected`; the health item is gone | R-I19 |
-| C4(c) | connect failures map to reasons (unit + boundary) | `needs_action_from_connect_failed` on the two `describe_error` texts and on `connection error`; boundary: `auth_refused.txt` | `Some(AuthenticationRefused)`, `Some(FingerprintMismatch)`, `None`; `st() == NeedsAction { AuthenticationRefused }` with `H` detail `The camera refused the password` | 10E §What the photographer gets ("The camera refused the password"); R-I37; lab `camera_connection.cpp:23–30` |
+| C4(c) | connect failures map to reasons (unit + boundary) | `needs_action_from_connect_failed` on the two `describe_error` texts (with and without the `connection failed: ` prefix) and on `connection error`; boundary: `auth_refused.txt` | `Some(AuthenticationRefused)`, `Some(FingerprintMismatch)`, `None`; `st() == NeedsAction { AuthenticationRefused }` with `H` detail `The camera refused the password` | 10E §What the photographer gets ("The camera refused the password"); R-I37; lab `camera_connection.cpp:23–30` |
 | C4(d) | fingerprint unknown | `fingerprint_unknown.txt` (`ssh.fingerprint {status:"unknown", success:false}`) | `NeedsAction { FingerprintUnconfirmed }`; detail `Confirm the camera's fingerprint`; a later `{status:"pinned"}` clears it | MC-31 §Fingerprint; R-I37 |
 | C5(a) | first copy wins: cable then FTP | `ready_usb.txt` + `capture_usb.txt`; `a.capture()`; `a.sdk_download("DSC04622.ARW", data)`; `a.ftp().stor("DSC04622.ARW", data)`; ticks + watcher | one photo in `s`; `root/<key>/DSC04622.ARW` (cable) and `root/.duplicates/DSC04622.ARW` (wireless) both read `data`; two delivery rows `photo` / `duplicate` | M37, M38 ("whichever path delivered it first"); C4 (H-14) |
 | C5(b) | first copy wins: FTP then cable | the order reversed | the FTP copy is the photo, the cable copy the duplicate; still one photo | M37, M38 |
@@ -162,11 +164,13 @@ row as before. 3. No other visible change.
   the camera's network/FTP settings (the store destination write is the one agreed setting, R-I19), delete a camera file (a zero-size or unmatched download
   is left in place) or kill any process; live view out of scope; the suite never needs the camera. Implemented by Claude agents (owner 2026-11-06, `PSM_IMPLEMENTER=claude`).
 - **Planner readings (reversible):** (1) the camera's display name is `connection.ready.model` (P45 adds it), `Camera` when absent. (2) A `connect.failed`
-  with an unrecognised message changes no `NeedsAction` (the transport manager keeps retrying). (3) `reconnect` is a new sidecar command, not the lab's
+  whose `error` text is unrecognised changes no `NeedsAction` (the transport manager keeps retrying). (3) `reconnect` is a new sidecar command, not the lab's
   watchdog hypothesis — "offered as a button, never done automatically" (MC-33) is P51's button over this command. (4) `HeldByOtherProgram` is cleared
   by our own `connection.ready usb` (we hold the interface then).
 - **Hazards:** `timestamp_ms` of the fake's lines is the fake's wall clock while `a.clock` is manual — C2(a) compares `exposed_at` with the **event's**
-  timestamp, not `a.clock`. The staging folder path must be the one passed as `--save-dir` (P45): `root/.incoming/sdk-<run id>/`; `is_candidate` ignores it.
+  timestamp, not `a.clock`. The staging folder path must be the one passed as `--save-dir` (P45 §Staging): `<binding document>/Capture/.incoming/sdk-<run id>/`, computed at
+  the **first** spawn and never moved; `is_candidate` ignores it. A later settings save that moves the document to another volume makes the ledger's
+  rename cross-device (`EXDEV` → `Err`, the file stays in staging, the card copy arrives by FTP) — P45 projection L14; not a row here.
   Health codes are set/cleared **from the derived inputs on every change**, never incrementally, or a cleared reason leaves a stale item. The receiver's
   `uploads_in_progress` is read on every watchdog tick. `CameraService::capture` for the direct adapter must not consult `document_not_front` (P42 C6(a)).
 - **Projection** is on: the event table above is the adapter's whole semantics against externally owned event shapes; the projectionist checks each row's
@@ -184,3 +188,8 @@ row as before. 3. No other visible change.
   is P42's `settle(a, pred)` (L7); `rec()` reads follow P42's positive/negative settle rule. C2(a) compares `exposed_at` with the **event's** timestamp.
 - **2026-11-06, carried from P44 projection r0 (L18)** (planner, orchestrator ruling): R-I28's last sentence had no owning phase; P44 does not take
   it. This phase owns it as Task 2's capture-root paragraph and row C8(c) (25 → 26 rows; `services/arrival.rs` added to the perimeter, 20 → 21 paths).
+- **2026-11-06, consistency edits from P45 projection r0** (planner, orchestrator ruling): `connect.failed` carries `error`, never `message` (L9) —
+  `ConnectFailed { error, .. }`, `needs_action_from_connect_failed(error)`, the `claimed.txt`/`auth_refused.txt` fixtures rewritten to the two real emit
+  shapes (`camera_connection.cpp:492–493`, `:511–512`), C4(c)'s unit input covers the `connection failed: ` prefix; `usb.retry_requested` is the variant
+  `UsbRetryRequested` and `UsbFallbackToWifi` carries fields (L8); the staging path and the cross-device note (L14) in Hazards; code anchor `41bef14` →
+  `635930b`. No row added or removed (26 rows, 21 paths unchanged).

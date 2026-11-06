@@ -123,7 +123,7 @@ restated so no session has to infer them:
 | P42_camera_runtime | APPROVED | 2026-11-06 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 47 committed paths (`cd76ef3`, = handoff list: plan's 45 + `Cargo.lock` + plan Review log); Rust 606/0, clippy, fmt, typecheck, UI 369/369 green (reviewer run, clean `8f1facb`); all 26 rows have a boundary test that fails on a wrong outcome (C3(b) at the orchestrator-amended 8 s); `bind` last in `build`, `RunEvent::Exit` hook read; assumptions within Delegated choices; H1–H8 hold; 6 backlog notes (a failed sidecar spawn never retries and never raises `camera_sidecar_unavailable` → P46) |
 | P43_ftp_receiver | APPROVED | 2026-11-06 | opus | re-review r3 APPROVED_WITH_NOTES: perimeter = the 1 allowed test file + tracker + log (`7e8178d`); F3 resolved (`c7b` pid wait 15 s, other settles and assertions unchanged); Rust suite 634/0, clippy, fmt, typecheck, UI 369/369 green (reviewer run, clean `1818599`); `p43` binary 19/20 green: run 8 red on a ~70 s OS stall of fresh fake-sidecar execs (3 apps held, receiver uninvolved) → triaged DROP, backlog → P44/testkit (copy the sidecar once per test process) |
 | P44_capture_ledger | APPROVED | 2026-11-06 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 26 committed paths (`046d3c5`, = handoff list: plan's 24 + tracker + plan log); Rust 671/0 (p44 25/25), clippy, fmt, typecheck, UI 369/369 green (reviewer run, code tree `046d3c5`); all 36 rows have a boundary test that fails on a wrong outcome; association order, `RENAME_EXCL` with no fallback, pending-before-rename, take-over, recovery, freeze and rule 0 read against MC-33 R-I25…R-I29; no assumption contradicts 10E; H1–H8 hold; 5 backlog notes (recovery's EEXIST→duplicate does not re-evaluate the exposure; `first_raise` re-fires after each transfer → P46) |
-| P45_sidecar_and_protocol | NOT_STARTED | 2026-11-06 | planner | 10E MC-31 R-I19/R-I20/R-I23, 11, R45: the lab sidecar imported under `native/camera-sidecar/` without Sony files, stub build from `build.rs`, C++ tests, protocol client against the fake sidecar replaying lab event lines; projection on (external fixtures) |
+| P45_sidecar_and_protocol | PROJECTED | 2026-11-06 | planner | 10E MC-31 R-I19/R-I20/R-I23, 11, R45: the lab sidecar imported under `native/camera-sidecar/` without Sony files, stub build from `build.rs`, C++ tests, protocol client against the fake sidecar replaying lab event lines; projection r0 AMENDMENTS_REQUIRED, L1–L23 folded by the planner (0 owner cards): 7 criteria, 21 rows, 4 `[rule]` rows, 42 paths; §6.11 `SidecarEvent` re-aligned; P46 edited for `ConnectFailed.error` |
 | P46_direct_camera_adapter | NOT_STARTED | 2026-11-06 | planner | 10E MC-31 R-I19/R-I20/R-I22, MC-33 R-I26/R-I29: the direct adapter over the sidecar client, exposure and Save-to-PC deliveries into the ledger, store-destination outcome, first copy wins end to end, adapter selection; projection on |
 | P47_support_package_spike | NOT_STARTED | 2026-11-06 | planner | **owner-attended, camera needed**: 10E §Camera support packages S1–S6 from a packaged build with a hand-installed support folder; answers folded into P50 |
 | P48_camera_ownership | NOT_STARTED | 2026-11-06 | planner | 10E MC-34 R-I30…R-I33, M39/M40: holder detection and naming, start order, the editor-launch gate, "Take the camera back" on click, activation independent of Capture One, sleep assertion; projection on |
@@ -734,7 +734,10 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   `receiver: Mutex<Option<ReceiverHandle>>`, `provider: ArcSwap-like RwLock<Arc<dyn CameraProvider>>`, `binding: RwLock<Option<AppBinding>>`, `sink:
   RwLock<Arc<dyn EventSink>>`, `secrets: Arc<dyn SecretStore>`, `credentials: Mutex<Option<(String, String)>>` (read from the `SecretStore` once at
   the first spawn and cached; restarts reuse it; P50's `camera_secrets_set` refreshes it — a Keychain prompt never stalls the background loop), `clock`,
-  `run_id: String /* uuid; the staging folder suffix */`; `bind(AppBinding { store, events, health, previous_health, capture_root, editing,
+  `run_id: String /* uuid; the staging folder suffix */`; from P45 the sidecar client's seam: `send_command(Command) -> Result<CmdId>` (the returned id is
+  the one on the wire), `command_outcome(&str) -> Option<CommandOutcome { Done, Rejected { reason }, Error { error } }>`, `sidecar_events() -> Vec<SidecarEvent>`
+  (the last 1 000 delivered; `TestApp::camera_runtime()` reaches them; P45 projection r0 L12), and the staging folder `<binding document>/Capture/.incoming/
+  sdk-<run_id>` computed at the first spawn and never moved (L14); `bind(AppBinding { store, events, health, previous_health, capture_root, editing,
   camera_settings: CameraSettings, support: Option<InstalledSupport>, paths })` is **the last statement of every `App::build`** (after every `?` and
   thread spawn, right before `Ok(Self {..})`, so a failed build never re-targets or spawns) and (a) re-targets events and health (P42–P45: copying the
   camera-family health items from `previous_health`; from P46: re-publishing the runtime's own `StatusInputs` through `health_items`), (b) rebuilds the
@@ -748,19 +751,29 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   (`quit`, `QUIT_GRACE_MS`, then kill + wait; the receiver stopped; no restart afterwards), called by `impl Drop` (tests) and by the desktop `run()`'s
   `RunEvent::Exit` hook (production: tao ends the process with `process::exit`, the managed state is never dropped). `App::shutdown` **does not** stop
   the runtime.
-- **Sidecar** (`crates/integrations/src/camera/sidecar/`): `SidecarSpec { program: PathBuf, args: Vec<String> /* ["auto", "--save-dir", <staging>]
-  */, env: Vec<(String, String)> /* CRLAB_FINGERPRINT_DIR only */, first_line: String /* `credentials user=<pct> password=<pct>` */ }`; `Supervisor
-  { spec, child: Option<Child>, attempts, next_spawn_at, events_tx, stop }` with `spawn()`, `send(&Command)`, `tick(now) -> Vec<SupervisorEvent>`
-  (`Started { pid }`, `Exited { code }`, `Line(String)`, `Stderr(String)`), `quit_and_wait()`; `protocol.rs` — `SidecarEvent` (variants named after the
-  lab events: `TransportState {from, to, reason, transport}`, `ConnectionReady {transport, camera_id?, store_destination: Option<Verified|Failed>,
-  store_value?}`, `SessionClosed {transport, reason}`, `SessionLost {transport, reason, busy}`, `CmdReceived {cmd, cmd_id}`, `CmdDone {cmd, cmd_id}`,
-  `CmdRejected {cmd, reason}`, `CaptureRequested {capture_id, transport, af}`, `CaptureAcknowledged {capture_id, success, sdk_error}`, `CaptureExposed
-  {capture_id: Option<String>, transport, association}`, `CaptureExposureMissing {capture_id}`, `CaptureUncertain {operation}`, `CameraBusy {reason,
-  safe_point}`, `SwitchDeferred {to, busy}`, `UsbArrived {detail}`, `UsbRemoved {detail}`, `UsbInitial {present}`, `UsbClaimedBy {owners}`,
-  `UsbFallbackToWifi`, `SdkDownloadCompleted {filename, size_bytes, success, provisional_capture_id}`, `SshFingerprint {status, fingerprint?}`,
-  `CameraFtpState {fields}`, `SdkUnavailable`, `ConnectFailed {transport, sdk_error, message}`, `Unknown {event}`) with `timestamp_ms: i64`;
-  `parse_line(&str) -> Result<SidecarEvent, ProtocolError>`; `Command::{Credentials {user, password}, Capture {id, af: true, cmd_id}, Props, FtpStatus,
-  Status, UsbRetry, Quit}::encode() -> String` (percent-encoding of `user`/`password` per RFC 3986 unreserved set).
+- **Sidecar** (`crates/integrations/src/camera/sidecar/`): `SidecarSpec { program: PathBuf, args: Vec<String> /* ["auto", "--save-dir", <staging>,
+  "--usb-product-id", "0x0E0C"] */, env: Vec<(String, String)> /* CRLAB_FINGERPRINT_DIR only */, first_line: String /* `credentials user=<pct>
+  password=<pct>` */ }`; `Supervisor { spec, child: Option<Child>, attempts, next_spawn_at, events_tx, stop }` with `spawn()`, `send_line(&str) ->
+  io::Result<()>` (P45; the client writes `Command::encode()` through it), `tick(now) -> Vec<SupervisorEvent>` (`Started { pid }`, `Exited { code }`,
+  `Line(String)`, `Stderr(String)`), `quit_and_wait()`; `client.rs` — `SidecarClient { supervisor, pending, events: Sender<SidecarEvent> }` with
+  `send(Command) -> io::Result<CmdId>`, `poll() -> Vec<SidecarEvent>`, `outcome(&str) -> Option<CommandOutcome>` (a `CmdRejected`/`CmdError` attaches to
+  the most recent `CmdReceived` whose id has no `CmdDone` yet; `CmdDone` yields `Done` only when nothing was attached; an absent or empty `cmd_id` is never
+  tracked); `protocol.rs` — **field sets aligned to the lab's emit sites after P45 projection r0 (L8, L9); the P45 plan's `SidecarEvent` table is the
+  authority, required = written unconditionally at the site, everything else `Option`:** `Transport { Usb, Wifi, None }`, `StoreDestination { Verified,
+  Failed }`; `SidecarEvent::{TransportState {from, to, reason, transport}, ConnectionReady {transport, connect_ms: Option<i64>, model: Option<String>,
+  store_destination: Option<StoreDestination>, store_value: Option<String>} /* no `camera_id` — the sidecar never sends one */, SessionClosed {transport,
+  reason}, SessionLost {transport, reason, busy}, CmdReceived {cmd, cmd_id: Option<String>}, CmdDone {cmd, cmd_id: Option<String>}, CmdRejected {cmd,
+  reason}, CmdError {cmd, error}, CaptureRequested {capture_id, transport, af}, CaptureAf {capture_id, af_result}, CaptureAcknowledged {capture_id,
+  success, sdk_error}, CaptureExposed {capture_id: Option<String>, transport, association}, CaptureExposureMissing {capture_id}, CaptureUncertain
+  {operation}, CameraBusy {reason, safe_point}, SwitchDeferred {to, busy}, UsbArrived {detail}, UsbRemoved {detail}, UsbInitial {present}, UsbClaimedBy
+  {owners, hint: Option<String>}, UsbFallbackToWifi {usb_failures: i64, usb_retry}, UsbRetryRequested, SdkDownloadCompleted {filename, size_bytes: i64 /*
+  −1 when the sidecar's file_size fails */, success, transport, r#type: Option<String>, provisional_capture_id: Option<String>, ms_since_capture_request:
+  Option<i64>}, SshFingerprint {status, success: Option<bool>, fingerprint: Option<String>}, CameraFtpState {fields}, SdkUnavailable {error}, ConnectFailed
+  {transport, sdk_error, error /* never `message` */, timeout: Option<bool>}, Unknown {event}}` with `timestamp_ms: i64`; `sdk.download.hashed` and
+  `usb.detected_by_discovery` parse to `Unknown`; `parse_line(&str) -> Result<SidecarEvent, ProtocolError { Json, MissingTimestamp, BadTimestamp }>`
+  (`iso_to_ms` accepts `YYYY-MM-DDTHH:MM:SS[.f{1,9}]Z`); `Command::{Credentials {user, password}, Capture {id, af: true, cmd_id}, Props {cmd_id}, FtpStatus
+  {cmd_id}, Status {cmd_id}, UsbRetry {cmd_id}, Quit}::encode() -> String` (percent-encoding of `user`/`password` per RFC 3986 unreserved set; P46 adds
+  `Reconnect {cmd_id}`).
 - **Direct adapter** (`crates/integrations/src/camera/direct/`): `DirectCameraAdapter` (Sony SDK sidecar driver; implements `CameraProvider` and
   `ArrivalSource {via: Cable}`), `normalize_camera_filename(name) -> String` (Sony: `_<1–2 digits>` after the stem's trailing digits removed, e.g.
   `DSC01234_1.ARW → DSC01234.ARW`; `IMG_1234.CR3` would be untouched here too because the rule needs trailing digits before the suffix), `HolderReport
