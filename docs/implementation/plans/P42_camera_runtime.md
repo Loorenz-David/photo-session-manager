@@ -259,3 +259,18 @@ names (tests have one folder; P50 replaces it). (L22) `CameraDot`: `data-state =
   8, 16 s, so the spawn after the 4th exit comes 8 s later; C3(b)'s "16 s" was an arithmetic slip. Row amended to 8 s. No other change;
   the implementation and test already use 8 s and the suite is green (handoff stamp). `Cargo.lock` changing for the declared dependencies is
   accepted. Resume with RESUME=1 at review.
+- **2026-11-06, opus review r1 — APPROVED_WITH_NOTES** (`handoffs/reviewer/handoff_P42_camera_runtime_review_r1.md`). Gate: tracker row read
+  `NOT_STARTED`, as the implementer disclosed; the orchestrator ruling above cleared its only cause and directed review; checkpoint `cd76ef3`
+  exists. Perimeter: 47 committed paths = the handoff list (the plan's 45 + `Cargo.lock` + this file). Rust 606 passed / 0 failed, clippy,
+  fmt, `tsc`, vitest 369/369 green on clean `8f1facb` (code = `cd76ef3`); no stray fake sidecars. Verified correct: one `CameraRuntime` per
+  `open_with_adapter`, passed (same `Arc`) by `prepare` and `reopen`; `bind` is the last statement of `build` (after every `?` and thread
+  spawn); the health copy of `camera`/`camera_*` items; the spawn guard (`supervisor.is_some()`); the serialised `tick` (lines before exit);
+  backoff `[1,2,4,8,16]` then 30, reset after a 60 s life, the item set at ≥ 3 consecutive exits and cleared by a line without a counter
+  reset; terminal, idempotent `shutdown` (quit → 3 s → kill + wait); the credentials (cached once, two values registered, RFC 3986
+  percent-encoding, first stdin line only, no secret in argv/env); stderr → `redact_registered` → 50-line ring; `derive_status` precedence
+  and `health_items`; the capability-gated `CameraService`; `camera_retry` through `handles.events`, `TauriCameraEvents` deleted, the
+  `TauriEvents` arm; the `RunEvent::Exit` hook (no row; read). Every row's test observes its outcome at its boundary and fails on a wrong
+  one. Assumptions: all within Delegated choices. H1–H8 hold. Six notes to the backlog: a failed spawn leaves the supervisor stuck without
+  `camera_sidecar_unavailable` (→ P46); that item's detail differs from §6.6 (→ P46); a failed Keychain read is cached as empty credentials
+  (→ P50); C8(a) cannot tell a hub bypass (production read correct); C3(b) lacks the before-3 absence check (code read correct); new
+  `CameraDot` kinds have no colour (→ P51).
