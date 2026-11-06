@@ -171,3 +171,5 @@
 33. **2026-11-06 — Owner: card CI1 answered "always jump"** (relayed by the orchestrator). Capture One's browser switches to the session's folder on every arrival, even while the photographer works in Capture One. 10E §Capture One alongside and 10A MC-18 step 6 updated; R46. Header stays RATIFIED.
 
 34. **2026-11-06 — Orchestrator wording folds from the P42 projection** (no semantic change): MC-31 §Secrets now defers to R-I21 (credentials on the sidecar's first stdin line, not its environment); R-I37 states that `Connecting` needs the sidecar to report a connecting attempt, otherwise `Disconnected`. Header stays RATIFIED.
+
+35. **2026-11-06 — Owner: inventory ratify items R-I18…R-I38 approved as a list** ("perfect, all approved"), after the orchestrator's plain-language summary of all twenty (R-I34 unused: it became card CI1, answered as R46). Entry 32's items are now ratified. Header stays RATIFIED.
