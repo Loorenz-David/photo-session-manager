@@ -308,6 +308,12 @@ struct PublishProgressPayload {
 impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
     fn emit(&self, event: AppEvent) {
         match event {
+            AppEvent::CameraStatusChanged { status } => {
+                let _ = self.0.emit(
+                    "camera_status_changed",
+                    commands::camera::CameraStatusResponse::from(status),
+                );
+            }
             AppEvent::HistoryChanged {
                 session_id,
                 undo,
@@ -388,7 +394,6 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
             AppEvent::HealthChanged => {
                 let _ = self.0.emit("health_changed", ());
             }
-            _ => {}
         }
     }
 }
@@ -519,8 +524,85 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(builder.invoke_handler())
-        .run(tauri::generate_context!())
-        .expect("run Session Manager");
+        .build(tauri::generate_context!())
+        .expect("build Session Manager")
+        .run(|handle, event| {
+            if let tauri::RunEvent::Exit = event
+                && let Ok(h) = handle.state::<AppState>().handles()
+            {
+                h.camera_runtime.shutdown();
+            }
+        });
+}
+
+#[cfg(test)]
+mod p42_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        Listener,
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+    fn call(w: &tauri::WebviewWindow<tauri::test::MockRuntime>, cmd: &str) -> Value {
+        let body = get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(json!({})),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .unwrap();
+        match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        }
+    }
+    #[test]
+    fn c8a_camera_commands_emit_retry_through_hub() {
+        let a = psm_testkit::TestApp::with_fake_document().unwrap();
+        let fake = a.fake.clone();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::camera::camera_status,
+                commands::camera::camera_retry
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let handles = tauri_app.state::<AppState>().handles().unwrap();
+        handles
+            .events
+            .set_target(Arc::new(TauriEvents(tauri_app.handle().clone())));
+        let payloads = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+        let seen = payloads.clone();
+        tauri_app.listen_any("camera_status_changed", move |event| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(event.payload()).unwrap());
+        });
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        assert_eq!(
+            call(&w, "camera_status"),
+            json!({"kind":"connected","name":"Sony ZV-E10","link":"cable"})
+        );
+        assert!(payloads.lock().unwrap().is_empty());
+        fake.state.lock().unwrap().camera = None;
+        assert_eq!(call(&w, "camera_retry"), json!({"kind":"disconnected"}));
+        assert_eq!(
+            *payloads.lock().unwrap(),
+            vec![json!({"kind":"disconnected"})]
+        );
+    }
 }
 
 #[cfg(test)]

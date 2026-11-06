@@ -1,7 +1,7 @@
 use psm_core::{
     Error,
     domain::{
-        editing::CameraStatus,
+        camera::{CameraStatus, Link},
         photo::{Classification, Integrity, NewPhoto, PhotoSource},
     },
     mechanisms::hash::sha256_file,
@@ -124,7 +124,10 @@ fn c2a_failed_activation_lapses_when_no_session_is_active() {
     let camera = CameraService::new(a.app.camera.as_ref(), a.app.health.as_ref());
     assert_eq!(
         camera.status().unwrap(),
-        CameraStatus::Connected("Sony ZV-E10".into())
+        CameraStatus::Connected {
+            name: "Sony ZV-E10".into(),
+            link: Link::Cable
+        }
     );
     camera.capture().unwrap();
     assert!(ops(&a).contains(&"capture".into()));

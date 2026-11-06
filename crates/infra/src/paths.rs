@@ -29,7 +29,16 @@ impl AppPaths {
     }
 
     pub fn create(&self) -> Result<()> {
-        for name in ["previews", "hooks", "spool", "spool/bad", "logs"] {
+        for name in [
+            "previews",
+            "hooks",
+            "spool",
+            "spool/bad",
+            "logs",
+            "camera",
+            "camera/fingerprints",
+            "camera/staging",
+        ] {
             fs::create_dir_all(self.root.join(name))?;
         }
         if let Err(error) = fs::create_dir_all(self.root.join("backup")) {

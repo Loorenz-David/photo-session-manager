@@ -245,7 +245,7 @@ beforeEach(() => {
   vi.mocked(activeSession).mockResolvedValue(null);
   vi.mocked(activateSession).mockResolvedValue();
   vi.mocked(deactivateSession).mockResolvedValue();
-  vi.mocked(cameraStatus).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10' });
+  vi.mocked(cameraStatus).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10', link: 'cable' });
   vi.mocked(classifyPhoto).mockResolvedValue(reviewed);
   vi.mocked(reorderPhoto).mockResolvedValue(reviewed);
   vi.mocked(deletePhoto).mockResolvedValue(reviewed);

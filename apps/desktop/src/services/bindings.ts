@@ -19,8 +19,8 @@ export const commands = {
 	sessionActivate: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("session_activate", { sessionId })),
 	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
 	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
-	cameraStatus: () => typedError<CameraStatusResponse, CommandError>(__TAURI_INVOKE("camera_status")),
-	cameraRetry: () => typedError<CameraStatusResponse, CommandError>(__TAURI_INVOKE("camera_retry")),
+	cameraStatus: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_status")),
+	cameraRetry: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_retry")),
 	cameraCapture: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_capture")),
 	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
@@ -138,7 +138,11 @@ export type AttributeValueDto_Serialize = {
 	updated_at: number,
 };
 
-export type CameraStatusResponse = { kind: "connected"; name: string } | { kind: "disconnected" };
+export type CameraStatusResponse = CameraStatusResponse_Serialize | CameraStatusResponse_Deserialize;
+
+export type CameraStatusResponse_Deserialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder?: string | null; message: string } | { kind: "disconnected" };
+
+export type CameraStatusResponse_Serialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder: string | null; message: string } | { kind: "disconnected" };
 
 export type CommandError = {
 	code: string,

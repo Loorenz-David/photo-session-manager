@@ -1,34 +1,75 @@
 use crate::{commands::items::CommandError, state::AppState};
 use psm_core::{
-    domain::editing::CameraStatus, events::AppEvent, ports::events::EventSink,
+    domain::camera::{BusyReason, CameraStatus, Link, NeedsActionReason},
+    mechanisms::camera_status::status_message,
     services::camera::CameraService,
 };
 use serde::Serialize;
 use specta::Type;
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 #[derive(Clone, Serialize, Type)]
-#[serde(tag = "kind", content = "name", rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CameraStatusResponse {
-    Connected(String),
+    Connected {
+        name: String,
+        link: String,
+    },
+    Connecting {
+        link: String,
+    },
+    Busy {
+        reason: String,
+    },
+    NeedsAction {
+        reason: String,
+        holder: Option<String>,
+        message: String,
+    },
     Disconnected,
 }
 impl From<CameraStatus> for CameraStatusResponse {
     fn from(value: CameraStatus) -> Self {
         match value {
-            CameraStatus::Connected(name) => Self::Connected(name),
+            CameraStatus::Connected { name, link } => Self::Connected {
+                name,
+                link: link_name(link),
+            },
+            CameraStatus::Connecting { link } => Self::Connecting {
+                link: link_name(link),
+            },
+            CameraStatus::Busy { reason } => Self::Busy {
+                reason: busy_name(reason).into(),
+            },
+            CameraStatus::NeedsAction { reason, holder } => Self::NeedsAction {
+                reason: reason_name(&reason).into(),
+                message: status_message(&reason, holder.as_deref()),
+                holder,
+            },
             CameraStatus::Disconnected => Self::Disconnected,
         }
     }
 }
-struct TauriCameraEvents(AppHandle);
-impl EventSink for TauriCameraEvents {
-    fn emit(&self, event: AppEvent) {
-        if let AppEvent::CameraStatusChanged { status } = event {
-            let _ = self
-                .0
-                .emit("camera_status_changed", CameraStatusResponse::from(status));
-        }
+fn link_name(link: Link) -> String {
+    link.label().into()
+}
+fn busy_name(reason: BusyReason) -> &'static str {
+    match reason {
+        BusyReason::Exposure => "exposure",
+        BusyReason::Transfer => "transfer",
+        BusyReason::Switching => "switching",
+    }
+}
+fn reason_name(reason: &NeedsActionReason) -> &'static str {
+    match reason {
+        NeedsActionReason::AuthenticationRefused => "authentication_refused",
+        NeedsActionReason::FingerprintMismatch => "fingerprint_mismatch",
+        NeedsActionReason::FingerprintUnconfirmed => "fingerprint_unconfirmed",
+        NeedsActionReason::PhoneAppConnected => "phone_app_connected",
+        NeedsActionReason::HeldByOtherProgram => "held_by_other_program",
+        NeedsActionReason::StoreDestinationUnverified => "store_destination_unverified",
+        NeedsActionReason::FilesNotReceived { .. } => "files_not_received",
+        NeedsActionReason::SupportNotInstalled => "support_not_installed",
     }
 }
 fn providers(
@@ -61,14 +102,13 @@ pub async fn camera_status(
 #[specta::specta]
 pub async fn camera_retry(
     state: State<'_, AppState>,
-    app_handle: AppHandle,
 ) -> Result<CameraStatusResponse, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     let (camera, health) = providers(&app)?;
+    let events = app.events.clone();
     let status = tauri::async_runtime::spawn_blocking(move || {
-        let events = TauriCameraEvents(app_handle);
         CameraService::new(camera.as_ref(), health.as_ref())
-            .with_events(&events)
+            .with_events(events.as_ref())
             .retry()
     })
     .await
@@ -86,5 +126,6 @@ pub async fn camera_capture(state: State<'_, AppState>) -> Result<(), CommandErr
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    .map(|_| ())
     .map_err(Into::into)
 }

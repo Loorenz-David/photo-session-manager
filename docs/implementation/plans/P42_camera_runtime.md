@@ -232,6 +232,8 @@ names (tests have one folder; P50 replaces it). (L22) `CameraDot`: `data-state =
 
 ## Review log
 
+- **2026-11-06, codex implement r1 — BLOCKED on a criterion contradiction.** Built the shared camera runtime, sidecar supervisor, status model, Keychain port, fake helper and credential handling, command DTO/event path, and hardware-free tests. The runtime uses MC-31's cumulative restart schedule 0, 1, 3, 7, 15, 31, 61 seconds. C3(b) says the next spawn after the fourth consecutive exit is 16 seconds later; C3(a) and MC-31 require 8 seconds later. Both exact outcomes cannot hold for the same state. The C3(b) test asserts the contract's 8 seconds and this phase remains unapproved pending a plan correction. Assumptions: lexical newest support version, a staging directory under `camera/staging` keyed by `run_id`, `HeldByOtherProgram`'s P42 placeholder, and an in-memory 50-line stderr ring. Deviation: `Cargo.lock` changed for declared dependencies; the fake binary is resolved from Cargo's integration-test environment or the workspace target directory because `CARGO_BIN_EXE_fake_sidecar` is not a compile-time variable in the testkit library. The tracker stays `NOT_STARTED` while this contradictory row blocks an honest `IMPLEMENTED` claim.
+
 - **2026-11-06, orchestrator amendments after projection r0** (`handoffs/reviewer/handoff_P42_camera_runtime_projection_r0.md`, folded by the planner;
   `projection: yes` → `done`). L1 → `TestApp::with_camera_behaviour(json)` writes `behaviour.json` before the first spawn, `set_fake_sidecar_behaviour(json)`
   for mid-test rewrites; C2(b), C3(a), C3(b), C4(b) reworded. L2 → the fake derives its recording dir from `current_exe().parent()/rec`; `fs::copy` + 0o755

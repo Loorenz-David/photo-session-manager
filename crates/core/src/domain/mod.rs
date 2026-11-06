@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub const MECHANISMS_VERSION: &str = "1";
 pub mod attribute;
+pub mod camera;
 pub mod composition;
 pub mod editing;
 pub mod item;

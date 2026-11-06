@@ -1,6 +1,7 @@
 pub mod arrival;
 pub mod attribute_write;
 pub mod backoff;
+pub mod camera_status;
 pub mod canon;
 pub mod composition;
 pub mod hash;

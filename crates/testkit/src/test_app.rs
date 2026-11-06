@@ -1,6 +1,7 @@
 use crate::clock::ManualClock;
 use crate::fake_capture_one::FakeCaptureOneScripting;
 use crate::fake_commerce::FakeCommerce;
+use crate::fake_secrets::FakeSecrets;
 use psm_core::Result;
 use psm_core::{
     domain::photo::{NewPhoto, Photo, PhotoSource},
@@ -28,6 +29,7 @@ pub struct TestApp {
     pub fake: Arc<FakeCaptureOneScripting>,
     pub events: Arc<CollectingEventSink>,
     pub commerce: Option<Arc<FakeCommerce>>,
+    pub secrets: Arc<FakeSecrets>,
     next_hook: AtomicU64,
 }
 
@@ -100,22 +102,54 @@ impl TestApp {
         self.app.store.composition(photo_id)
     }
     pub fn new() -> Result<Self> {
-        Self::create(false, false, "custom.damage_report")
+        Self::create(false, false, "custom.damage_report", None)
     }
     pub fn with_fake_document() -> Result<Self> {
-        Self::create(true, false, "custom.damage_report")
+        Self::create(true, false, "custom.damage_report", None)
     }
     pub fn with_fake_shop() -> Result<Self> {
-        Self::create(true, true, "custom.damage_report")
+        Self::create(true, true, "custom.damage_report", None)
     }
     pub fn with_fake_shop_key(key: &str) -> Result<Self> {
-        Self::create(true, true, key)
+        Self::create(true, true, key, None)
     }
-    fn create(configure_document: bool, configure_shop: bool, condition_key: &str) -> Result<Self> {
+    pub fn with_camera() -> Result<Self> {
+        Self::with_camera_behaviour(serde_json::json!({}))
+    }
+    pub fn with_camera_behaviour(behaviour: serde_json::Value) -> Result<Self> {
+        Self::create(true, false, "custom.damage_report", Some(behaviour))
+    }
+    fn create(
+        configure_document: bool,
+        configure_shop: bool,
+        condition_key: &str,
+        sidecar: Option<serde_json::Value>,
+    ) -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let mut paths = AppPaths::for_dir(dir.path());
         paths.home = dir.path().to_path_buf();
         paths.create()?;
+        if let Some(behaviour) = sidecar {
+            let support = paths.root.join("camera/sony/test");
+            let rec = support.join("rec");
+            std::fs::create_dir_all(&rec)?;
+            std::fs::write(
+                rec.join("behaviour.json"),
+                serde_json::to_vec(&behaviour).unwrap(),
+            )?;
+            let source = std::env::var_os("CARGO_BIN_EXE_fake_sidecar")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    let exe = std::env::current_exe().expect("test exe");
+                    exe.parent().unwrap().parent().unwrap().join("fake_sidecar")
+                });
+            std::fs::copy(source, support.join("camera-sidecar"))?;
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                support.join("camera-sidecar"),
+                std::fs::Permissions::from_mode(0o755),
+            )?;
+        }
         let document_id = dir
             .path()
             .join("Capture One Session")
@@ -146,6 +180,11 @@ impl TestApp {
         }
         let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
         let clock = Arc::new(ManualClock::new(0));
+        let secrets = Arc::new(FakeSecrets::default());
+        use psm_core::ports::secrets::SecretStore;
+        secrets.set("access-auth-user", "u name")?;
+        secrets.set("access-auth-password", "p/w")?;
+        secrets.set("ftp-password", "ftp-pw-unique-1")?;
         let commerce = configure_shop.then(|| {
             Arc::new(FakeCommerce::with_condition_key(
                 clock.clone(),
@@ -160,6 +199,7 @@ impl TestApp {
             commerce
                 .as_ref()
                 .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
+            secrets.clone(),
         )?;
         let events = Arc::new(CollectingEventSink::default());
         app.events.set_target(events.clone());
@@ -170,6 +210,7 @@ impl TestApp {
             fake,
             events,
             commerce,
+            secrets,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -192,6 +233,7 @@ impl TestApp {
             self.commerce
                 .as_ref()
                 .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
+            self.secrets.clone(),
         )?;
         let old = std::mem::replace(&mut self.app, next);
         drop(old);
@@ -218,7 +260,70 @@ impl TestApp {
         let count = count + self.app.render_jobs.tick(self.clock.now_ms())?;
         let count = count + self.app.publish_jobs.tick(self.clock.now_ms())?;
         self.app.previews.tick()?;
+        self.app.camera_runtime.tick(self.clock.mono());
         Ok(count)
+    }
+    pub fn camera_runtime(&self) -> Arc<psm_integrations::camera::runtime::CameraRuntime> {
+        self.app.camera_runtime.clone()
+    }
+    pub fn set_fake_sidecar_behaviour(&self, behaviour: serde_json::Value) -> Result<()> {
+        std::fs::write(
+            self.app
+                .paths
+                .root
+                .join("camera/sony/test/rec/behaviour.json"),
+            serde_json::to_vec(&behaviour).unwrap(),
+        )?;
+        Ok(())
+    }
+    pub fn fake_sidecar_recording(&self) -> Recording {
+        let rec = self.app.paths.root.join("camera/sony/test/rec");
+        let lines = |name: &str| {
+            std::fs::read_to_string(rec.join(name))
+                .unwrap_or_default()
+                .lines()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        };
+        let pids: Vec<u32> = lines("pids")
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        Recording {
+            argv: pids
+                .iter()
+                .map(|p| {
+                    serde_json::from_slice(
+                        &std::fs::read(rec.join(format!("argv.{p}.json"))).unwrap_or_default(),
+                    )
+                    .unwrap_or_default()
+                })
+                .collect(),
+            env: pids
+                .iter()
+                .map(|p| {
+                    serde_json::from_slice(
+                        &std::fs::read(rec.join(format!("env.{p}.json"))).unwrap_or_default(),
+                    )
+                    .unwrap_or_default()
+                })
+                .collect(),
+            stdin: lines("stdin.log")
+                .iter()
+                .filter_map(|s| {
+                    s.split_once(' ')
+                        .and_then(|(p, l)| Some((p.parse().ok()?, l.to_owned())))
+                })
+                .collect(),
+            exits: lines("exits")
+                .iter()
+                .filter_map(|s| {
+                    s.split_once(' ')
+                        .and_then(|(p, c)| Some((p.parse().ok()?, c.parse().ok()?)))
+                })
+                .collect(),
+            pids,
+        }
     }
     pub fn focus(&self) -> Result<()> {
         self.app.previews.on_focus()
@@ -351,6 +456,14 @@ impl TestApp {
     pub fn scan(&self) -> Result<()> {
         self.app.arrival.scan()
     }
+}
+
+pub struct Recording {
+    pub pids: Vec<u32>,
+    pub argv: Vec<Vec<String>>,
+    pub env: Vec<std::collections::HashMap<String, String>>,
+    pub stdin: Vec<(u32, String)>,
+    pub exits: Vec<(u32, i32)>,
 }
 
 impl TestApp {

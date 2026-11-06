@@ -8,6 +8,7 @@ psm-core = { path = "../core" }
 psm-infra = { path = "../infra" }
 serde.workspace = true
 serde_json.workspace = true
+uuid = { version = "1", features = ["v4"] }
 tracing.workspace = true
 tokio.workspace = true
 unicode-normalization = "0.1"

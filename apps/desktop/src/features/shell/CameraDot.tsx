@@ -35,6 +35,9 @@ export function CameraDot() {
     ? `Camera connected: ${status.name}`
     : unknown
       ? 'Checking the camera…'
+      : status.kind === 'connecting' ? 'Connecting…'
+      : status.kind === 'busy' ? 'Busy'
+      : status.kind === 'needs_action' ? status.message
       : 'Camera disconnected. Click to retry.';
 
   return (
@@ -42,7 +45,7 @@ export function CameraDot() {
       <button
         type="button"
         className="camera-button"
-        data-state={connected ? 'connected' : unknown ? 'unknown' : 'disconnected'}
+        data-state={status?.kind ?? 'unknown'}
         title={title}
         aria-label={title}
         onClick={() => void retry.run()}
@@ -52,9 +55,9 @@ export function CameraDot() {
         onBlur={() => setHelpOpen(false)}
       >
         <span className="camera-light" data-testid="camera-light" aria-hidden />
-        <span className="camera-text">{retry.busy ? 'Retrying…' : connected ? status.name : unknown ? '' : 'Camera disconnected'}</span>
+        <span className="camera-text">{retry.busy ? 'Retrying…' : connected ? status.name : unknown ? '' : status.kind === 'connecting' ? 'Connecting…' : status.kind === 'busy' ? 'Busy' : status.kind === 'needs_action' ? status.message : 'Camera disconnected'}</span>
       </button>
-      {!connected && !unknown && helpOpen && (
+      {status?.kind === 'disconnected' && helpOpen && (
         <div role="tooltip" className="camera-help">
           {CAMERA_HELP}
         </div>

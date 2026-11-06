@@ -32,6 +32,14 @@ pub fn redact(line: &str, secrets: &[String]) -> String {
         })
 }
 
+pub fn redact_registered(line: &str) -> String {
+    let secrets = SECRETS
+        .get_or_init(|| RwLock::new(Vec::new()))
+        .read()
+        .expect("logging secrets");
+    redact(line, &secrets)
+}
+
 /// Wraps a writer factory so every line written is passed through [`redact`] with the
 /// registered secrets (the production log file uses it).
 pub fn redacting<M>(inner: M) -> RedactingMakeWriter<M> {

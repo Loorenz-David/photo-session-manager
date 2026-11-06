@@ -1,6 +1,6 @@
 use crate::{
     Error, Result,
-    domain::editing::CameraStatus,
+    domain::camera::{CameraStatus, CaptureId, Link},
     events::AppEvent,
     ports::{camera::CameraProvider, events::EventSink},
     services::health::HealthService,
@@ -24,7 +24,9 @@ impl<'a> CameraService<'a> {
         self
     }
     pub fn status(&self) -> Result<CameraStatus> {
-        if self.health.has("capture_folder_not_set") || self.health.has("document_not_front") {
+        if self.provider.capabilities().depends_on_editing_provider
+            && (self.health.has("capture_folder_not_set") || self.health.has("document_not_front"))
+        {
             return Ok(CameraStatus::Disconnected);
         }
         let status = self.provider.status()?;
@@ -34,10 +36,22 @@ impl<'a> CameraService<'a> {
                     .set("camera_disconnected", "No camera connected");
                 self.health.clear("camera");
             }
-            CameraStatus::Connected(name) => {
+            CameraStatus::Connected { name, link } => {
                 self.health.clear("camera_disconnected");
-                self.health.set_ok("camera", name);
+                self.health.set_ok(
+                    "camera",
+                    format!(
+                        "{name} · {}",
+                        match link {
+                            Link::Cable => "cable",
+                            Link::Wireless => "wireless",
+                        }
+                    ),
+                );
             }
+            CameraStatus::Connecting { .. }
+            | CameraStatus::Busy { .. }
+            | CameraStatus::NeedsAction { .. } => {}
         }
         Ok(status)
     }
@@ -50,11 +64,15 @@ impl<'a> CameraService<'a> {
         }
         Ok(status)
     }
-    pub fn capture(&self) -> Result<()> {
-        if self.health.has("document_not_front") {
+    pub fn capture(&self) -> Result<CaptureId> {
+        if self.provider.capabilities().depends_on_editing_provider
+            && self.health.has("document_not_front")
+        {
             return Err(Error::DocumentNotFront);
         }
-        if self.health.has("capture_folder_not_set") {
+        if self.provider.capabilities().depends_on_editing_provider
+            && self.health.has("capture_folder_not_set")
+        {
             return Err(Error::CaptureFolderNotSet);
         }
         self.provider.capture()

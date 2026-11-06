@@ -3,6 +3,7 @@ pub mod commerce;
 pub mod editing;
 pub mod render_output;
 
+use camera::runtime::{AppBinding, CameraRuntime};
 use camera::via_capture_one::CameraViaCaptureOne;
 use commerce::shopify::{
     adapter::{PollConfig, ShopifyAdapter, ShopifyConfig},
@@ -27,6 +28,7 @@ use psm_core::{
         editing::EditingProvider,
         events::EventSink,
         raw_previews::RawPreviews,
+        secrets::SecretStore,
         store::Store,
     },
     services::{
@@ -49,6 +51,7 @@ use psm_infra::{
     export_fs::ExportFs,
     imaging::ImageOpsImpl,
     jobs::{JobHandler, JobRunner},
+    keychain::KeychainSecrets,
     media_store::{MasterFiles, OutputFiles},
     nudge::NudgeServer,
     paths::AppPaths,
@@ -81,6 +84,7 @@ pub struct App {
     pub health: Arc<HealthService>,
     pub editing: Arc<dyn EditingProvider>,
     pub camera: Arc<dyn CameraProvider>,
+    pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub jobs: Arc<JobRunner>,
     pub publish_jobs: Arc<JobRunner>,
@@ -115,6 +119,7 @@ pub struct AppHandles {
     pub clock: Arc<dyn Clock>,
     pub editing: Arc<dyn EditingProvider>,
     pub camera: Arc<dyn CameraProvider>,
+    pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
@@ -131,6 +136,7 @@ pub struct SettingsSetContext {
     paths: AppPaths,
     settings: Settings,
     health: Arc<HealthService>,
+    camera_runtime: Arc<CameraRuntime>,
     scripting: Arc<dyn CaptureOneScripting>,
     lanes: (Arc<dyn CaptureOneScripting>, Arc<dyn CaptureOneScripting>),
     clock: Arc<dyn Clock>,
@@ -170,6 +176,8 @@ impl SettingsSetContext {
             self.commerce_override,
             false,
             Some(self.history_store),
+            self.camera_runtime,
+            Some(self.health.clone()),
         ) {
             Ok(app) => {
                 if let Some(failure) = self
@@ -260,6 +268,7 @@ impl App {
             paths: self.paths.clone(),
             settings: self.settings.clone(),
             health: self.health.clone(),
+            camera_runtime: self.camera_runtime.clone(),
             scripting: self.scripting.clone(),
             lanes: (
                 self.user_scripting.clone(),
@@ -300,6 +309,7 @@ impl App {
             clock: self.clock.clone(),
             editing: self.editing.clone(),
             camera: self.camera.clone(),
+            camera_runtime: self.camera_runtime.clone(),
             commerce: self.commerce.clone(),
             arrival: self.arrival.clone(),
             previews: self.previews.clone(),
@@ -324,7 +334,14 @@ impl App {
         clock: Arc<dyn Clock>,
         run_startup: bool,
     ) -> Result<Self> {
-        Self::open_with_adapter(paths, scripting, clock, run_startup, None)
+        Self::open_with_adapter(
+            paths,
+            scripting,
+            clock,
+            run_startup,
+            None,
+            Arc::new(KeychainSecrets::default()),
+        )
     }
 
     pub fn open_with_adapter(
@@ -333,9 +350,11 @@ impl App {
         clock: Arc<dyn Clock>,
         run_startup: bool,
         commerce_override: Option<Arc<dyn CommerceAdapter>>,
+        secrets: Arc<dyn SecretStore>,
     ) -> Result<Self> {
         let (user_scripting, background_scripting) =
             editing::capture_one::gate::GatedScripting::pair(scripting.clone());
+        let camera_runtime = CameraRuntime::new(secrets, clock.clone(), paths.clone());
         Self::build(
             paths,
             scripting,
@@ -344,6 +363,8 @@ impl App {
             run_startup,
             commerce_override,
             true,
+            None,
+            camera_runtime,
             None,
         )
     }
@@ -358,6 +379,8 @@ impl App {
         commerce_override: Option<Arc<dyn CommerceAdapter>>,
         start_backup: bool,
         history_store: Option<HistoryStore>,
+        camera_runtime: Arc<CameraRuntime>,
+        previous_health: Option<Arc<HealthService>>,
     ) -> Result<Self> {
         let (user_scripting, background_scripting) = lanes;
         paths.create()?;
@@ -603,6 +626,7 @@ impl App {
         let bg_clock = clock.clone();
         let bg_arrival = arrival.clone();
         let bg_previews = previews.clone();
+        let bg_camera_runtime = camera_runtime.clone();
         let spool_dir = paths.spool();
         let background = thread::spawn(move || {
             let mut watcher = FsWatcher::watch(&spool_dir).ok();
@@ -635,6 +659,7 @@ impl App {
                     last_drain = std::time::Instant::now();
                 }
                 if run_startup {
+                    bg_camera_runtime.tick(bg_clock.mono());
                     if let Some((_, rx)) = capture_watcher.as_mut() {
                         while let Ok(event) = rx.try_recv() {
                             let _ = bg_arrival.watcher_event(&event.path);
@@ -673,6 +698,13 @@ impl App {
         } else {
             None
         };
+        camera_runtime.bind(AppBinding {
+            events: events.clone(),
+            health: health.clone(),
+            previous_health,
+            provider: camera.clone(),
+            paths: paths.clone(),
+        });
         Ok(Self {
             paths,
             settings,
@@ -684,6 +716,7 @@ impl App {
             health,
             editing,
             camera,
+            camera_runtime,
             commerce,
             jobs,
             publish_jobs,
@@ -774,6 +807,8 @@ impl App {
             self.commerce_override.clone(),
             false,
             Some(self.history.store()),
+            self.camera_runtime.clone(),
+            Some(self.health.clone()),
         )?;
         self.shutdown();
         self.events.transfer_target_to(&next.events);

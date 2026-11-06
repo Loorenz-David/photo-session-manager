@@ -21,7 +21,7 @@ pub enum AppEvent {
     },
     HealthChanged,
     CameraStatusChanged {
-        status: crate::domain::editing::CameraStatus,
+        status: crate::domain::camera::CameraStatus,
     },
     ExportProgress {
         session_id: i64,

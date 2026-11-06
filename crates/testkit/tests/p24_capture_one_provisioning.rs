@@ -1,6 +1,6 @@
 use psm_core::{
     Error,
-    domain::editing::{CameraStatus, ProvisionInputs},
+    domain::{camera::CameraStatus, editing::ProvisionInputs},
     services::camera::CameraService,
 };
 use psm_integrations::editing::capture_one::recipes::RecipeSpec;

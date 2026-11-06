@@ -3335,6 +3335,7 @@ dependencies = [
  "psm-core",
  "rusqlite",
  "rusqlite_migration",
+ "security-framework",
  "serde",
  "serde_json",
  "tempfile",
@@ -3360,6 +3361,7 @@ dependencies = [
  "tokio",
  "tracing",
  "unicode-normalization",
+ "uuid",
 ]
 
 [[package]]
@@ -3370,6 +3372,7 @@ dependencies = [
  "chrono-tz",
  "image",
  "kamadak-exif",
+ "libc",
  "psm-core",
  "psm-infra",
  "psm-integrations",

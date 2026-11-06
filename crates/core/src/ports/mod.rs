@@ -5,4 +5,5 @@ pub mod editing;
 pub mod events;
 pub mod images;
 pub mod raw_previews;
+pub mod secrets;
 pub mod store;

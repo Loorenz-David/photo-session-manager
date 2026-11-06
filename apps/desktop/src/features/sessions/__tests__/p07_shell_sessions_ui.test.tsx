@@ -80,7 +80,7 @@ beforeEach(() => {
   vi.mocked(activateSession).mockResolvedValue();
   vi.mocked(activeSession).mockResolvedValue(null);
   vi.mocked(deactivateSession).mockResolvedValue();
-  vi.mocked(cameraStatus).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10' });
+  vi.mocked(cameraStatus).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10', link: 'cable' });
   vi.mocked(nextSku).mockResolvedValue(null);
   vi.mocked(searchItems).mockResolvedValue([]);
   vi.mocked(searchItemsShop).mockResolvedValue([]);
@@ -207,7 +207,7 @@ describe('C4 camera dot', () => {
 
   it('C4(c) clicking the dot calls camera_retry once', async () => {
     vi.mocked(cameraStatus).mockResolvedValue({ kind: 'disconnected' });
-    vi.mocked(cameraRetry).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10' });
+    vi.mocked(cameraRetry).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10', link: 'cable' });
     render(<CameraDot />);
     const button = await screen.findByRole('button', { name: /Camera disconnected/ });
 

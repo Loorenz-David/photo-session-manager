@@ -1,7 +1,8 @@
 use psm_core::{
     Error,
     domain::{
-        editing::{CameraStatus, RenderPurpose},
+        camera::{CameraStatus, Link},
+        editing::RenderPurpose,
         photo::Classification as C,
     },
     ports::clock::Clock,
@@ -401,7 +402,13 @@ fn c6a_timeout_read_first_on_retry() {
 #[test]
 fn c7a_connected_camera_name() {
     let a = app();
-    assert_eq!(status(&a), CameraStatus::Connected("Sony ZV-E10".into()));
+    assert_eq!(
+        status(&a),
+        CameraStatus::Connected {
+            name: "Sony ZV-E10".into(),
+            link: Link::Cable
+        }
+    );
 }
 #[test]
 fn c7b_absent_camera_is_disconnected() {

@@ -3,6 +3,10 @@ name = "psm-testkit"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "fake_sidecar"
+path = "src/bin/fake_sidecar.rs"
+
 [dependencies]
 psm-core = { path = "../core" }
 psm-infra = { path = "../infra" }
@@ -14,6 +18,7 @@ sha2 = "0.11"
 unicode-normalization = "0.1"
 rusqlite = { version = "0.40", features = ["bundled"] }
 image = "0.25"
+libc = "0.2"
 
 chrono = "0.4"
 chrono-tz = "0.10"

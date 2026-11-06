@@ -27,19 +27,6 @@ pub struct DocumentState {
     pub capture_folder: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CameraStatus {
-    Connected(String),
-    Disconnected,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CameraCapabilities {
-    pub status: bool,
-    pub capture: bool,
-    pub transfer: bool,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderPurpose {
     Preview,
