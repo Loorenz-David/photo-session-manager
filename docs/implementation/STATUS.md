@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-06: direct camera adapter — DRAFT amendment, waiting for the owner.** Lab evidence (Camera-Connection-Tests 221aa49) recorded in `docs/intention/evidence/sony_camera_lab.md`; draft chapter `book/10E_direct_camera_adapter.md` (MC-31 sidecar, MC-32 FTP receiver, MC-33 ledger; M37–M39 proposed). Owner decisions D1–D8 and Capture One verifications V1–V6 owed before planning. Still owed from P41: owner checks of steps 4 and 5, and the re-frame-on-undo choice.
+
 **2026-11-05 21:01: P38–P41 APPROVED** — editor polish (R40) and undo/redo history MC-30 (R41). P39 and P40 projections amended (0 owner decisions); P39 C4(h) ruled by the orchestrator from MC-30. Owner checks owed: P41 step 5 (⌘Z inside a text field must undo typing only, not a history step); the open choice "undoing a re-frame should ask me to re-frame again". App build for the owner to install with ditto.
 
 **2026-11-05 13:10: P37_editor_chrome APPROVED_WITH_NOTES** (first review) — the owner's second editor corrections (10D, R39): icon toolbar with name/key/description hover cards, Tools panel hide button in its own header with a left rail, Rotate and flip drawer, Turn and grid icons, folded nudge pad, frame meter without a button. Plan e04393f; implementer Codex. Leftovers: the stage ⓘ and ⋯ buttons still use the old tooltip; the flaky P33 stage-bar test.
