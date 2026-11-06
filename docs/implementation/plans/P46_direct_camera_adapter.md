@@ -16,6 +16,8 @@ and its `CaptureId`, the Sony filename normalisation (`_N`, R-I26), `usb.claimed
 programs is P48), the watchdog's first raise → `ftp-status`, reconnect only on Wi-Fi (R-I29), transfer-in-progress for the watchdog; the runtime selects
 this adapter whenever a camera support package is installed and keeps `CameraViaCaptureOne` otherwise. **First copy wins** is proven end to end: a
 Save-to-PC copy and the same bytes by FTP through the real receiver become one photo and one `.duplicates/` file, in either order (M37, M38).
+**Taken from P44 projection r0 (L18):** R-I28's last sentence — with the direct runtime bound, `ArrivalService` takes the capture root from the
+settings formula (the receiver's, P43 C6(b)), never from Capture One — is this phase's Task 2 and row C8(c).
 **Not in this phase:** naming the programs behind `ptpcamerad`, the start order, the launch gate and "Take the camera back" (P48); the collection switch
 and style (P49); settings, Keychain UI, fingerprint confirmation and support install (P50/P51); anything against the camera.
 
@@ -40,14 +42,15 @@ Integrations (new): `crates/integrations/src/camera/direct/{mod.rs, adapter.rs, 
 {mod.rs, runtime.rs}` (adapter selection, the adapter's tick), `crates/integrations/src/camera/support/mod.rs` (`installed(paths) -> Option<InstalledSupport>`:
 version folder + `camera-sidecar` present; the manifest check is P50's), `crates/integrations/src/lib.rs`.
 Core (changed): `crates/core/src/ports/camera.rs` (`reconnect`, `request_ftp_status`), `crates/core/src/services/camera.rs` (`capture() -> CaptureId`,
-`reconnect()`, `dismiss_files_not_received()`), `crates/core/src/error.rs` (`CameraNotConnected`, `ReconnectOnCableRefused`, `SidecarUnavailable`).
+`reconnect()`, `dismiss_files_not_received()`), `crates/core/src/error.rs` (`CameraNotConnected`, `ReconnectOnCableRefused`, `SidecarUnavailable`),
+`crates/core/src/services/arrival.rs` (`capture_root` from the settings formula while the direct adapter is selected, L18).
 Desktop (changed): `apps/desktop/src-tauri/src/commands/camera.rs` (`camera_capture -> CaptureResponse { capture_id }`, `camera_reconnect`,
 `camera_files_not_received_dismiss`), `apps/desktop/src-tauri/src/lib.rs` (`collect_commands!`), `apps/desktop/src/services/bindings.ts` (regenerated),
 `apps/desktop/src/services/camera.ts` (`cameraCapture` returns the id; callers ignore it), `apps/desktop/src-tauri/src/commands/items.rs` (error codes).
 Testkit (changed): `crates/testkit/src/test_app.rs` (`with_camera_script`, `capture()`, `sdk_download(name, bytes)` writes into the staging folder and
 appends the completion line through the script channel — see §Fixtures), `crates/testkit/src/fixtures/sidecar_scripts/*.txt` (new scripts). Tests (new):
 `crates/testkit/tests/p46_direct_camera_adapter.rs`.
-Estimated: 3 new source paths, 13 changed, 1 new test, new script fixtures — 20 paths.
+Estimated: 3 new source paths, 14 changed, 1 new test, new script fixtures — 21 paths.
 
 ## Core mechanisms (unit tests allowed)
 `direct/filenames.rs::normalize_camera_filename` (rows C2(d)); `direct/adapter.rs::needs_action_from_connect_failed(message) -> Option<NeedsActionReason>`
@@ -103,10 +106,13 @@ timestamp is the fake's clock). `a.capture()` = `CameraService::new(provider, he
    `InstalledSupport`/`installed`, `CaptureResponse`.
 1. `direct/filenames.rs` + unit tests; `direct/adapter.rs` per §The adapter contract; `needs_action_from_connect_failed`.
 2. Runtime: adapter selection, the adapter's `tick`, the watchdog glue, `provider()` accessor used by `App::build` for `App.camera`/`AppHandles.camera`.
+   **Capture root (P44 projection L18, R-I28):** while the direct adapter is selected, `ArrivalService::capture_root()` resolves `<settings document>/
+   Capture` by the receiver's formula (P43 C6(b)) and never calls `EditingProvider::inspect_document`; with `CameraViaCaptureOne` it asks Capture One as
+   today. The cache rule (`services/arrival.rs:57–68`) is unchanged. Row C8(c).
 3. `CameraService`: `capture() -> Result<CaptureId>`, `reconnect`, `dismiss_files_not_received`; commands + bindings; `services/camera.ts`.
 4. Testkit fixtures and helpers; tests `p46_direct_camera_adapter.rs`; suite, clippy, fmt, typecheck, `npm test`.
 
-## Criteria (8 criteria, 25 rows; 0 `[rule]` rows)
+## Criteria (8 criteria, 26 rows; 0 `[rule]` rows)
 `a = TestApp::with_camera_script(<script>)`; `st()` = `a.camera_status()` (`CameraService::status`); `ev()` = the `CameraStatusChanged` payloads in
 `a.events`; `H` = health; `L = a.ledger()`; `s` the active session; `rec()` the fake's recording.
 
@@ -137,11 +143,14 @@ timestamp is the fake's clock). `a.capture()` = `CameraService::new(provider, he
 | C7(a) | holder reported | `claimed.txt` | `st() == NeedsAction { reason: HeldByOtherProgram, holder: Some("ptpcamerad") }`; `H.has("camera_held")` | MC-34 §Detect; R-I37 (naming the programs is P48) |
 | C8(a) | adapter selection | `TestApp::with_fake_document()` (no support folder) → `a.app.camera.capabilities()`; `TestApp::with_camera_script(ready_usb)` → the same | `depends_on_editing_provider: true` and `CameraStatus` from the fake document's `camera` (Capture One adapter); vs `depends_on_editing_provider: false`, `settings_write_store_destination: true` and the status of C1(a); `rec().pids.len() == 1` only in the second case | 10E §Port changes (capabilities of the direct adapter); 10E §Camera support packages (adapter active iff support installed) |
 | C8(b) | `camera_capture` command (mock webview) | `with_camera_script(ready_usb + capture_usb)`; `camera_capture` | `{"capture_id": "<uuid>"}` and the exposure row has that id; `camera_reconnect` → error `{"code":"reconnect_on_cable_refused"}` | master plan §6.7 |
+| C8(c) | with the direct runtime bound, the arrival path takes the capture root from the settings formula, not from Capture One | `with_camera_script(ready_usb + capture_usb)`; `activate(s)`; `a.fake.state`: `running = false`, `ops.clear()` (Capture One "not running", the P43 C6(b) pattern); `a.capture()`; `a.ftp().stor("DSC00020.ARW", data)`; until the row is `done`; `a.watcher_event(final_path)` + `a.tick(1_000)` | `photos(s).len() == 1` with `raw_path == final_path` (= `a.capture_root()/<key(s)>/DSC00020.ARW`); `a.fake.state.ops` contains no `document_info` (the arrival path never asked Capture One); with `TestApp::with_fake_document()` (no support folder) the same arrival still goes through `inspect_document` | R-I28 ("With the direct adapter, `ArrivalService` takes the capture root from the same formula as the receiver (MC-32 additions), so `final_path` and MC-2 compare like with like"); M38 |
 
 ## Delegated choices
 How the fake receives `inject` lines (a file the test appends to and the fake tails, recommended); whether `AdapterState` is one `Mutex` or atomics;
 the exact helper-log texts; the C++ `reconnect` implementation detail (`intentional_disconnect("reconnect requested")` + immediate retry on the same
-transport); the uuid crate call site (`uuid::Uuid::new_v4()` is already a dependency of core).
+transport); the uuid crate call site (`uuid::Uuid::new_v4()` is already a dependency of core); how `ArrivalService` learns the adapter selection for
+C8(c) (recommended: `App::build` injects a `capture_root: Arc<dyn Fn() -> Result<PathBuf> + Send + Sync>` chosen from the runtime's selection, the same
+closure shape the receiver already takes, so `ArrivalService` keeps no knowledge of adapters).
 
 ## Manual try-out
 (Hardware-free unless the owner wants to: with the real sidecar built and a hand-installed support folder this phase already connects — that is P47's
@@ -173,3 +182,5 @@ row as before. 3. No other visible change.
   retry-only emission (L4, L5; C1(a)'s `ev()` and the health assertions are the rows); the adapter's `tick` runs under the runtime's serialised tick
   (L18: two App loops during a rebuild never double-process an event); the `--save-dir` becomes R-I20's staging folder (L16); every "`a.tick(0)` until …"
   is P42's `settle(a, pred)` (L7); `rec()` reads follow P42's positive/negative settle rule. C2(a) compares `exposed_at` with the **event's** timestamp.
+- **2026-11-06, carried from P44 projection r0 (L18)** (planner, orchestrator ruling): R-I28's last sentence had no owning phase; P44 does not take
+  it. This phase owns it as Task 2's capture-root paragraph and row C8(c) (25 → 26 rows; `services/arrival.rs` added to the perimeter, 20 → 21 paths).

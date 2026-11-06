@@ -122,7 +122,7 @@ restated so no session has to infer them:
 | P41_undo_history_ui | APPROVED | 2026-11-05 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 28 committed paths (`84fb443`, = handoff's declared list; `p19_navigation` mock line disclosed); Rust suite, clippy, fmt, typecheck green; UI 369/369 (reviewer run, clean `7e72698`; known P33 C4(d) flake 1 of 10 runs); all 16 rows have a boundary test that fails on a wrong outcome (changed-input probe: ⌘Z from the dialog outside a field reaches the history, so C1(b) discriminates); assumptions within MC-30 and Delegated choices; H1–H8 hold; 4 backlog notes (custom Edit-menu ⌘Z inside a text field unverified live → owner try-out; multi-photo Split silent on refusals) |
 | P42_camera_runtime | APPROVED | 2026-11-06 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 47 committed paths (`cd76ef3`, = handoff list: plan's 45 + `Cargo.lock` + plan Review log); Rust 606/0, clippy, fmt, typecheck, UI 369/369 green (reviewer run, clean `8f1facb`); all 26 rows have a boundary test that fails on a wrong outcome (C3(b) at the orchestrator-amended 8 s); `bind` last in `build`, `RunEvent::Exit` hook read; assumptions within Delegated choices; H1–H8 hold; 6 backlog notes (a failed sidecar spawn never retries and never raises `camera_sidecar_unavailable` → P46) |
 | P43_ftp_receiver | APPROVED | 2026-11-06 | opus | re-review r3 APPROVED_WITH_NOTES: perimeter = the 1 allowed test file + tracker + log (`7e8178d`); F3 resolved (`c7b` pid wait 15 s, other settles and assertions unchanged); Rust suite 634/0, clippy, fmt, typecheck, UI 369/369 green (reviewer run, clean `1818599`); `p43` binary 19/20 green: run 8 red on a ~70 s OS stall of fresh fake-sidecar execs (3 apps held, receiver uninvolved) → triaged DROP, backlog → P44/testkit (copy the sidecar once per test process) |
-| P44_capture_ledger | NOT_STARTED | 2026-11-06 | planner | 10E MC-33 R-I25…R-I29, 05A MC-2 rule 0 / MC-4, 05B MC-22 freeze: the ledger mechanism (lab's 15 tests ported + window, global duplicates), migration 006, the single worker and no-replace rename, arrival seam; projection on |
+| P44_capture_ledger | PROJECTED | 2026-11-06 | planner | projection r0 folded (L1–L24; card 1 closed by the orchestrator's R-I26 clarification, changelog 36): rules (1)/(2) bounded, pending-row take-over, one process-wide worker lock (`LedgerShared`), `written_path` in 006, `CompletedNames` to core, `item_folder_key_frozen`, registry §6.4/§6.5/§6.11 aligned; 8 criteria / 36 rows; L18 moved to P46 C8(c); prompt may be compiled |
 | P45_sidecar_and_protocol | NOT_STARTED | 2026-11-06 | planner | 10E MC-31 R-I19/R-I20/R-I23, 11, R45: the lab sidecar imported under `native/camera-sidecar/` without Sony files, stub build from `build.rs`, C++ tests, protocol client against the fake sidecar replaying lab event lines; projection on (external fixtures) |
 | P46_direct_camera_adapter | NOT_STARTED | 2026-11-06 | planner | 10E MC-31 R-I19/R-I20/R-I22, MC-33 R-I26/R-I29: the direct adapter over the sidecar client, exposure and Save-to-PC deliveries into the ledger, store-destination outcome, first copy wins end to end, adapter selection; projection on |
 | P47_support_package_spike | NOT_STARTED | 2026-11-06 | planner | **owner-attended, camera needed**: 10E §Camera support packages S1–S6 from a packaged build with a hand-installed support folder; answers folded into P50 |
@@ -295,7 +295,7 @@ version; `package-lock.json` committed). Exact versions in `package.json`, no `^
   fingerprints, `CRLAB_FINGERPRINT_DIR`; never committed). Under the **capture root** (`canon(<document folder>/Capture)`, 05A MC-2):
   `.incoming/.<name>.part` (the receiver's staging files, kept on failure for a resume), `.incoming/sdk-<sidecar run id>/` (Save-to-PC
   downloads of one sidecar process), `.duplicates/` (identical later copies, never a photo, never deleted). `is_candidate` already ignores every
-  dot-prefixed component (`mechanisms/arrival.rs:308–313`). `AppPaths::create` adds `camera` and `camera/fingerprints`.
+  dot-prefixed component (`mechanisms/arrival.rs:23–28`). `AppPaths::create` adds `camera` and `camera/fingerprints`.
 - `osascript` is always spawned with **cwd = the data dir** (MC-18 evidence).
 
 ### 6.4 Ports (traits in `psm_core::ports`)
@@ -350,8 +350,12 @@ gains nothing; `AppEvent::HistoryChanged` (§6.7) is emitted by `History`.
 Result<CaptureId>, capabilities() -> CameraCapabilities, reconnect() -> Result<()> (P46), request_ftp_status() (P46) }`; `CameraStatus` moves to
 `domain/camera.rs` and grows to five variants (R-I37). New ports: `CaptureSink` (the ledger's inbound face: `exposure_observed`, `delivery`,
 `session_uncertain`, `transfer_in_progress`), `ArrivalSource` (what the receiver and the Save-to-PC path are: `via`, `transfer_in_progress`),
-`SecretStore` (Keychain), `DeliveryFs` (`rename_exclusive`, `create_dir_all`, `file_size`), `ProcessList`, `SleepInhibitor`. `Store` gains the
-ledger methods (P44) and `StoreTx::freeze_folder_key(item_id)` (05B MC-22 at a committed delivery). `CaptureOneScripting` gains `quit()`
+`SecretStore` (Keychain), `DeliveryFs` (`rename_exclusive`, `create_dir_all`, `file_size`), `ProcessList`, `SleepInhibitor`, and from P44
+`CompletedNames { fn completed_names_since(&self, since_ms: i64) -> Vec<(String, u64, i64)> }` in `psm_core::ports::camera` (defined by P43 in
+`psm_infra::ftp`, moved to core by P44 because core's `LedgerService` implements it; `psm_infra::ftp` re-exports it). `Store`/`StoreTx` gain the
+ledger methods (P44; the list is in §6.11 Services) and `StoreTx::item_folder_key_frozen(item_id) -> bool` (05B MC-22 at a committed delivery:
+**derived, no write** — `item_has_photos OR` a `photo`/`renamed_photo` delivery in state `pending` or `done` for one of the item's sessions; a `Store`
+variant with the same body for tests; replaces the earlier `freeze_folder_key`, struck after P44 projection r0 L9/L23). `CaptureOneScripting` gains `quit()`
 (P48), `set_current_collection(id, folder)`, `apply_style(id, variant, name)` (P49) and loses `import` (P49);
 `EditingProvider` gains `set_current_collection(folder)`, `apply_style(raw, name) -> StyleOutcome`, `find_variant(raw) -> bool` and loses `import`.
 
@@ -378,7 +382,7 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
 | **003** (P27) `003_retire_shape_on_arrival.sql` | `DELETE FROM jobs WHERE kind='crop_on_arrival'` |
 | **004** (P28) `compositions` | `photo_id` PK → photos, `kind` (`normal`/`split`), `shape` (`original`/`1:1`/`4:5`/`3:2`/`2:3`/`16:9`/`free`), `orientation` (`named`/`turned`), `quarter_turns` 0–3, `flip` (`none`/`horizontal`), `straighten` REAL, `x`,`y`,`w`,`h` REAL (NULL until the first frame), `frame_w`,`frame_h` INTEGER, `frame_source` (`preview`/`master`), `geometry` (JSON `EditorGeometry`) — the three NULL together until the first render, `origin` (`default`/`user`), `revision`, `state` (`ok`/`needs_review`), `review_reason` (`geometry`/`frame`/NULL), `updated_at`; plus `photos.thumbnail_path TEXT` |
 | **005** (P30) `photo_links` recreated | as before plus `slot` (`single`/`left`/`right`, default `single`) and `composition_rev` DEFAULT 0; UNIQUE(`photo_id`,`integration`,`item_id`,`role`,`slot`); `upload_state` gains the value `retired` |
-| **006** (P44) `006_camera_ledger.sql` | `camera_exposures(id, capture_id TEXT NULL, exposed_at INTEGER NOT NULL, initiated TEXT NOT NULL (`app`/`camera`), session_id INTEGER NULL, status TEXT NOT NULL (`expecting`/`received`/`missing_at_deadline`/`uncertain`/`dismissed`), expected_files INTEGER NULL, created_at INTEGER NOT NULL)`; `camera_deliveries(id, exposure_id INTEGER NULL, camera_filename TEXT NOT NULL, file_key TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL, via TEXT NOT NULL (`cable`/`wireless`), completed_at INTEGER NOT NULL, association TEXT NOT NULL (`filename`/`stem`/`fifo`/`none`), outcome TEXT NOT NULL (`photo`/`duplicate`/`renamed_photo`), session_id INTEGER NULL, final_path TEXT NOT NULL, state TEXT NOT NULL (`pending`/`done`), created_at INTEGER NOT NULL)`; indexes on `camera_deliveries(file_key)`, `(final_path)`, `camera_exposures(status, exposed_at)`. Rows are kept (10E R-I25) |
+| **006** (P44) `006_camera_ledger.sql` | `camera_exposures(id, capture_id TEXT NULL, exposed_at INTEGER NOT NULL, initiated TEXT NOT NULL (`app`/`camera`), session_id INTEGER NULL, status TEXT NOT NULL (`expecting`/`received`/`missing_at_deadline`/`uncertain`/`dismissed`), expected_files INTEGER NULL, created_at INTEGER NOT NULL)`; `camera_deliveries(id, exposure_id INTEGER NULL, camera_filename TEXT NOT NULL, file_key TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL, via TEXT NOT NULL (`cable`/`wireless`), completed_at INTEGER NOT NULL, association TEXT NOT NULL (`filename`/`stem`/`fifo`/`none`), outcome TEXT NOT NULL (`photo`/`duplicate`/`renamed_photo`), session_id INTEGER NULL, written_path TEXT NOT NULL (the staging path, needed by R-I25's recovery sentence and the re-send take-over; added after P44 projection r0 L7 — the R-I25 column list is short of it), final_path TEXT NOT NULL, state TEXT NOT NULL (`pending`/`done`), created_at INTEGER NOT NULL)`; indexes on `camera_deliveries(file_key)`, `(final_path)`, `(written_path)`, `camera_exposures(status, exposed_at)`. `missing_at_deadline` is reserved: nothing writes it in P44. Rows are kept (10E R-I25) |
 | **007** (P49) `007_style_applied.sql` | `ALTER TABLE raw_state ADD COLUMN style_applied_at INTEGER` (10E R-I35: the style is applied at most once per RAW) |
 
 ### 6.6 Enums, codes and kinds (Rust `enum` names in `psm_core::domain`, serialized snake_case)
@@ -695,21 +699,36 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
 - **Mechanisms** (`crates/core/src/mechanisms/`): `camera_status.rs` — `StatusInputs { needs_action: Vec<(NeedsActionReason, Option<String>)>,
   busy: Option<BusyReason>, session: Option<(CameraName, Link)>, connecting: Option<Link>, helper_running: bool }`, `derive_status(&StatusInputs)
   -> CameraStatus` (R-I37 order; `NeedsAction` chosen by `NeedsActionReason::rank()`), `health_items(&StatusInputs) -> Vec<HealthItem>` (every
-  reason that holds, codes of §6.6), `status_message(&NeedsActionReason, holder) -> String` (the §6.6 details). `capture_ledger.rs` — `file_key(name)
-  -> String` (strips only `__dup<n>` before the extension, upper-cases), `stem_key(file_key)`, `normalize_dup_suffix`, `FifoCandidate { exposure_id,
-  exposed_at, session_id }`, `associate(file_key, completed_at, prior: &[PriorDelivery], candidates: &[FifoCandidate]) -> AssociationDecision
-  { exposure_id: Option<i64>, association: Association, session_id: Option<i64>, ambiguous_with: Vec<i64> /* other sessions in the window */ }`,
-  `duplicate_decision(file_key, sha256, prior: &[PriorDelivery]) -> DuplicateDecision { Photo, Duplicate { of: i64 }, RenamedPhoto { n: u32 } }`,
-  `dup_name(camera_filename, n) -> String` (`DSC01234__dup1.ARW`), `target_folder(capture_root, folder_key: Option<&str>) -> PathBuf`
-  (`_Unassigned` when `None`), `pending_count(exposures: &[(ExposureStatus, i64)], now_ms) -> usize`, `sequence_gaps(stems: &[&str]) -> Vec<Gap
-  { prefix, after, before, missing }>` (the lab's `seq_of` rule: `_<1–2 digits>` stripped **only here**, for gap reporting).
-- **Services** (`crates/core/src/services/camera_ledger.rs`): `LedgerService { store, clock, fs: Arc<dyn DeliveryFs>, events, health, capture_root:
-  Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>, worker: Mutex<()> }` implementing `CaptureSink` — one decision at a time under `worker`: decide →
-  `insert_delivery(pending, final_path)` → `rename_exclusive` (on `Exists`: compare SHA-256 → `.duplicates/` or the next `__dupN`) → `set_delivery_done`;
-  `record_exposure` reads `active_session_id` at that moment; `recover_pending()` at bind (pending + staging file present → rename again; final present
-  → done); `watchdog(now_ms) -> WatchdogState { pending_count, gaps, raised }` sets/clears `camera_files_not_received`; `dismiss()`;
-  `completed_names_since(ms) -> Vec<(String, u64, i64)>` (for the receiver's listings); `session_for_path(canonical) -> Option<(Option<i64>, i64)>`
-  (MC-2 rule 0: the delivery's session and `captured_at`).
+  reason that holds, codes of §6.6), `status_message(&NeedsActionReason, holder) -> String` (the §6.6 details). `capture_ledger.rs` (names aligned to
+  the P44 plan after projection r0 L5/L6/L14/L23) — `file_key(name) -> String` (strips only `__dup<n>` before the extension, upper-cases),
+  `stem_key(file_key)`, `FifoCandidate { exposure_id, exposed_at, session_id: Option<i64>, expected_files: Option<u32> }`, `PriorDelivery { id, file_key,
+  stem_key, sha256, exposure_id: Option<i64>, session_id: Option<i64>, outcome, completed_at, final_name }`, `associate(file_key, stem_key, sha256,
+  completed_at, prior: &[PriorDelivery], candidates: &[FifoCandidate]) -> AssociationDecision { exposure_id: Option<i64>, association: Association,
+  session_id: Option<i64>, ambiguous_with: Vec<Option<i64>> /* other sessions in the candidate set; `None` = Unassigned */ }` (applies every filter
+  itself: rule (1) same key **and** sha, rule (2) same stem within `FIFO_WINDOW_MS`, rule (3) `exposed_at ≤ completed_at`, the window and "still
+  expecting" = non-duplicate priors `< expected_files.unwrap_or(1)`; the service passes every `expecting` exposure and every `done` prior with the same
+  key or stem), `is_complete(expected_files: Option<u32>, non_duplicate_count: u32) -> bool`, `duplicate_decision(file_key, sha256, prior:
+  &[PriorDelivery]) -> DuplicateDecision { Photo, Duplicate { of: i64 }, RenamedPhoto { n: u32 } }`, `dup_name(camera_filename, n) -> String`
+  (`DSC01234__dup1.ARW`), `target_folder(capture_root, folder_key: Option<&str>) -> PathBuf` (`_Unassigned` when `None`), `pending_count(exposures:
+  &[(ExposureStatus, i64)], now_ms) -> usize` (both age bounds exclusive), `sequence_gaps(stems: &[&str]) -> Vec<Gap { prefix, after, before, missing }>`
+  (the lab's `seq_of` rule: `_<1–2 digits>` stripped **only here**, for gap reporting).
+- **Services** (`crates/core/src/services/camera_ledger.rs`): `LedgerShared { worker: Mutex<()>, raised: Mutex<bool> }` — **one per app process, owned
+  by the `CameraRuntime`** (R-I18; P44 projection r0 L3) and shared by every `LedgerService` the runtime builds; `LedgerService { store, clock, fs:
+  Arc<dyn DeliveryFs>, events, health, capture_root: Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>, shared: Arc<LedgerShared> }` implementing
+  `CaptureSink` and `CompletedNames` — one decision at a time under `shared.worker`, against `done` rows only: decide → `insert_delivery(pending,
+  written_path, final_path)` + the exposure's `received` transition in the same transaction (when `expected_files` is `None` or met) → `rename_exclusive`
+  (on `Exists`: compare SHA-256 → `.duplicates/` or the next `__dupN`; any non-`EEXIST` error → `Err`, no fallback) → `set_delivery_done`; a delivery whose
+  `written_path` matches a `pending` row **takes that row over** (no second row); `exposure_observed` reads `active_session_id` at that moment;
+  `transfer_in_progress` is a no-op in P44 (P46 computes `transfer_active`); `recover_pending()` at every bind under `shared.worker` (pending + staging
+  file present → rename again to the stored `final_path`; final present → done; neither → left pending, logged); `watchdog(now_ms, transfer_active: bool)
+  -> WatchdogState { pending_count, gaps, raised, first_raise }` sets/clears `camera_files_not_received` (gaps over deliveries completed within
+  `WATCHDOG_MAX_AGE_MS`; `gaps` = the number of `Gap` entries; the raised flag lives in `shared` so it survives a settings save); `dismiss()`;
+  `complete_for(exposure_id) -> bool` (over `is_complete`); `completed_names_since(ms) -> Vec<(String, u64, i64)>` (`done` deliveries, deduplicated by
+  name keeping the latest, for the receiver's listings). MC-2 rule 0 is served by `Store::delivery_for_path(canonical) -> Option<(Option<i64>, i64)>`
+  (the delivery's session and `captured_at`; reads `pending` rows too), called by `ArrivalService::accept` — there is no `session_for_path` on the
+  service. `Store`/`StoreTx` ledger methods (P44 Task 0): `insert_exposure`, `set_exposure_status`, `set_exposures_status_where(from, to)`,
+  `exposures(Option<ExposureStatus>)`, `insert_delivery`, `update_pending_delivery(..)`, `set_delivery_done`, `deliveries_by_key`, `deliveries_by_stem`,
+  `pending_deliveries`, `pending_delivery_for_written_path`, `delivery_for_path`, `completed_names_since`, `item_folder_key_frozen` (§6.4).
 - **Runtime** (`crates/integrations/src/camera/runtime.rs`): `CameraRuntime` (one `Arc` per process, created in `App::open_with_adapter` and carried
   through `SettingsSetContext`, `App::build(…, camera: Arc<CameraRuntime>)` and `App::reopen`): fields `supervisor: Mutex<Option<Supervisor>>`,
   `receiver: Mutex<Option<ReceiverHandle>>`, `provider: ArcSwap-like RwLock<Arc<dyn CameraProvider>>`, `binding: RwLock<Option<AppBinding>>`, `sink:
@@ -719,7 +738,10 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   camera_settings: CameraSettings, support: Option<InstalledSupport>, paths })` is **the last statement of every `App::build`** (after every `?` and
   thread spawn, right before `Ok(Self {..})`, so a failed build never re-targets or spawns) and (a) re-targets events and health (P42–P45: copying the
   camera-family health items from `previous_health`; from P46: re-publishing the runtime's own `StatusInputs` through `health_items`), (b) rebuilds the
-  `LedgerService` over the new store and runs `recover_pending`, (c) starts the supervisor and the receiver on the **first** bind that finds support
+  `LedgerService` over the new store **sharing the runtime's one `ledger_shared: Arc<LedgerShared>`** (created with the runtime, so the worker lock and
+  the watchdog's raised flag are process-wide and survive a settings save; P44 projection r0 L3) and runs `recover_pending` under that lock; the
+  `DeliveryFs` the service uses comes from the runtime's `delivery_fs: RwLock<Arc<dyn DeliveryFs>>` slot (default `CameraFiles`; `set_delivery_fs(fs)` is
+  the test seam, P44 L11), (c) starts the supervisor and the receiver on the **first** bind that finds support
   installed, (d) applies changed camera settings in place (receiver port/range → close + reopen; credentials → the cache, used at the next spawn, restart
   only while no USB session is open), never spawning a second sidecar or listener; `tick()` from the App's background thread (supervisor restarts,
   watchdog), **serialised under the supervisor `Mutex`** (two background loops run during a rebuild); `shutdown()` is public, idempotent and terminal
@@ -750,7 +772,7 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   */, passive: RangeInclusive<u16> /* 0..=0 = ephemeral */, allowed_peers: Vec<IpNet>, username, password: String }`, `FtpReceiver::start(config,
   sink: Arc<dyn CaptureSink>, names: Arc<dyn CompletedNames>, capture_root: Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>) -> Result<ReceiverHandle
   { port(), passive(), stop(), uploads_in_progress() }>`; `CompletedNames { fn completed_names_since(&self, since_ms) -> Vec<(String, u64, i64)> }`
-  (the ledger implements it). Reply codes fixed by MC-32 (R-I24): 421 peer refused, 530 bad login, 553 hidden/staging/`..` names and every `RNTO`,
+  (the ledger implements it; defined in `psm_core::ports::camera` from P44 and re-exported by `psm_infra::ftp`, §6.4). Reply codes fixed by MC-32 (R-I24): 421 peer refused, 530 bad login, 553 hidden/staging/`..` names and every `RNTO`,
   550 `DELE`/`RMD`/`RNFR`/unknown name in `SIZE`/`MDTM`, 450 a second `STOR` of a name in flight, 554 `REST` past the `.part` length, 451 capture root
   missing, 426 data connection failed, 226 completed, 502 `PORT`/`EPRT` and unknown commands.
 - **Support packages** (`crates/integrations/src/camera/support/`): `InstalledSupport { make: &'static str /* "sony" */, version: String, sidecar_path:
