@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-06 17:15: P43 APPROVED_WITH_NOTES (after fix 2); narrative relayed. P44 projection r0 AMENDMENTS_REQUIRED (L1–L24, 1 card).** Card 1 (counter wrap matched new photos to old sessions) answered from the book: R-I26 clarification, changelog 36. The planner is folding L1–L24 (L18 → P46). Next: `projection: done`, commit, `tools/pipeline/run_phase.sh phase P44_capture_ledger`, then P45–P46; stop before P47 (owner + camera).
+
 **2026-11-06 16:35: P43 re-review r2 CHANGES_REQUESTED with one MUST (F3: test `c7b` waits only 3 s for the fake sidecar pid; suite red ~25 % under parallel load; receiver correct).** Orchestrator: FIX2_AUTHORISED (test file only, 15 s pid wait). The runner now skips a DONE fix r2 and review r2 on RESUME. Running: `RESUME=1 … P43` (fix 2 + re-review 2), then P44–P46; stop before P47 (owner + camera). P42 narrative relayed.
 
 **2026-11-06 15:02: direct camera adapter — P42 APPROVED; P43 implement r1 DONE, review cut off by the usage limit (resets 15:30).** Next: `RESUME=1 tools/pipeline/run_phase.sh phase P43_ftp_receiver`, then P44–P46; stop before P47 (owner + camera). R-I18–R-I38 approved by the owner (changelog 35). Still owed from P41: owner checks of steps 4 and 5, and the re-frame-on-undo choice.

@@ -243,14 +243,16 @@ Port of the lab ledger's semantics (its 15 tests become unit tests of this mecha
   Core never strips `_N`, because `IMG_1234.CR3` would collapse (H7). The lab's `file_key` strips only `__dupN`; its `_N` rule exists only
   for gap reporting.
 - **Association, in a fixed order (ratify R-I26).** A delivered file gets its exposure from the first rule that matches:
-  (1) a delivery with the same `file_key` exists → that delivery's exposure; (2) a delivery with the same normalised stem exists → its
-  exposure (RAW + JPEG); (3) **FIFO in a window**: the oldest exposure with status `expecting`, `exposed_at ≤ completed_at` and
+  (1) a delivery with the same `file_key` **and the same SHA-256** exists (an identical copy) → that delivery's exposure; (2) a delivery
+  with the same normalised stem, completed within 300 s of this one, exists → its exposure (RAW + JPEG); (3) **FIFO in a window**: the oldest exposure with status `expecting`, `exposed_at ≤ completed_at` and
   `completed_at − exposed_at ≤ 300 s` → `fifo`, provisional; (4) no exposure.
   The whole FIFO candidate set, not only the pick, decides the session. If every candidate in the window has the same `session_id`, that
   is the file's session, whichever exposure was picked. If they differ, the pick decides, and the health screen lists the photo ("may
   belong to <other session>"), so a lost or reordered file is visible instead of shifting every later file. The window keeps one lost file
   (an exposure that never yields a file) from capturing every later file forever. The lab's FIFO has no window, and the ledger now
   persists across restarts.
+  *Clarification (orchestrator, 2026-11-06, from line 28 and R-I27):* the camera's counter wraps after DSC09999, so a name alone never
+  ties a new file to an old exposure; a reused name with other bytes goes through rule (3) and lands in the session open at its exposure.
 - **Duplicates (ratify R-I27).** A delivery is a duplicate iff an earlier delivery has the same `file_key` and the same SHA-256, whatever
   its exposure (or none) and however long ago. The lab compares only inside one capture and never for unassociated files, so a
   camera-initiated shot delivered twice would have become two photos. Same key with a different hash → a new photo, named with the lowest
