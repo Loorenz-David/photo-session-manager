@@ -223,20 +223,24 @@ run_phase() {
   # 3. fix 1
   local fp="$P/implementer/${phase}_fix_r2.md" fh="$H/implementer/handoff_${phase}_fix_r2.md"
   DRY_HANDOFF="$fh"
+  if finished "$fh"; then log "resume: fix r2 already DONE"; else
   render "$TPL/fix.md" "$fp" PHASE="$phase" ROUND=2 FIXN=1 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" REVIEW_HANDOFF="$rh" IMPL_HANDOFF="$ih" HANDOFF="$fh"
   commit_artifacts "pipeline: $phase fix prompt"
   run_impl gpt-6-luna high "$fp" "$RUNS/${phase}_fix_r2.last.md" "$RUNS/${phase}_fix_r2.log" || true
   commit_artifacts "pipeline: $phase fix handoff"
+  fi
   st="$(session_state "$RUNS/${phase}_fix_r2.last.md" "$fh")"
   [[ "$st" == DONE ]] || stop_for_orchestrator "$phase" "fix state $st"
 
   # 4. re-review
   local rp2="$P/reviewer/${phase}_review_r2.md" rh2="$H/reviewer/handoff_${phase}_review_r2.md"
   DRY_HANDOFF="$rh2"; DRY_VERDICT="${DRY_VERDICT_R2:-APPROVED_WITH_NOTES}"
+  if finished "$rh2"; then log "resume: review r2 already DONE"; else
   render "$TPL/rereview.md" "$rp2" PHASE="$phase" ROUND=2 FIXN=1 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" PREV_REVIEW="$rh" FIX_HANDOFF="$fh" HANDOFF="$rh2" NARRATIVE="$narrative"
   commit_artifacts "pipeline: $phase re-review prompt"
   run_claude pipeline-reviewer opus "$rp2" "$RUNS/${phase}_review_r2.last.md" "$RUNS/${phase}_review_r2.log" || true
   commit_artifacts "pipeline: $phase review r2"
+  fi
   v="$(session_verdict "$RUNS/${phase}_review_r2.last.md" "$rh2")"
   case "$v" in
     APPROVED|APPROVED_WITH_NOTES) approve "$phase" "$title" "$v" "$rh2"; return 0 ;;
