@@ -1,6 +1,6 @@
 # 10E — Direct camera adapter: camera sidecar, file paths, capture ledger, camera ownership
 
-**Status: DRAFT r2, 2026-11-06, owner answers folded in; awaiting the owner's acceptance.** Not ratified; nothing may be planned
+**Status: DRAFT r3, 2026-11-06, owner answers and V1–V6 folded in; awaiting the owner's acceptance.** Not ratified; nothing may be planned
 from it until the owner accepts it. Evidence: `evidence/sony_camera_lab.md` (lab finding ids H-n, F-n, constraints C1–C10, and
 Session Manager's own Capture One checks V1–V5).
 
@@ -128,12 +128,20 @@ program or system service (`ptpcamerad` included).
   `usb.claimed_by`). When the holder is the system camera service (`ptpcamerad`), it names the programs behind it: running applications
   that use macOS camera services (seen on the dev Mac 2026-11-06: Capture One, Imaging Edge Desktop, a Photos widget). On Wi-Fi, a camera
   that refuses PC control because a phone app is connected is reported the same way.
-- **Get there first.** The app connects over USB as soon as the cable event settles, and at app start it connects to the camera **before**
-  it launches Capture One (it launches Capture One itself, 10C MC-26) — if the owner check V6 shows this keeps the interface ours.
-- **Guide.** For known programs the notice says exactly what to change: Capture One → Preferences → Capture → *Enabled Tether Support*:
-  untick USB and Wireless (candidate, V6); Imaging Edge Desktop → quit it and stop it opening at login; Photos / Image Capture → "Connecting
-  this camera opens: No application". Unknown programs: "<name> is using the camera: close it or stop it from using cameras". The health
-  screen keeps the item until the holder is gone; the camera dot shows `NeedsAction` with the holder's name; Wi-Fi continues.
+- **Get there first and never let go (V6).** Capture One triggers the system camera service's claim even with its Sony tethering
+  switched off, but the claim fails while our SDK session already holds the interface. So: at app start the app opens the USB session
+  **before** it launches Capture One (it launches Capture One itself, 10C MC-26); while Capture One runs, the sidecar **keeps the USB
+  session open without a break** (no disconnect for idle, no periodic reconnect; a transport switch away from USB happens only when the
+  cable is pulled). The sidecar is restarted only when it has died.
+- **Take it back from Capture One.** If the USB interface is held by the system camera service on Capture One's behalf (after a sidecar
+  crash, or a cable re-plug the service wins), the app offers **"Take the camera back"**: when no file is in transit and no exposure is
+  pending it saves the Capture One document, quits Capture One, opens the USB session, relaunches Capture One and reopens the document
+  (about 15–20 s; Wi-Fi shooting continues until then). It runs automatically only when the photographer has allowed it in Settings →
+  Camera; otherwise it waits for the click. It never touches any other program.
+- **Guide.** For other programs the notice says what to change: Imaging Edge Desktop → quit it and stop it opening at login; Photos / Image
+  Capture → "Connecting this camera opens: No application"; unknown programs: "<name> is using the camera: close it or stop it from using
+  cameras". The health screen keeps the item until the holder is gone; the camera dot shows `NeedsAction` with the holder's name; Wi-Fi
+  continues.
 - **Setup check.** Settings → Camera runs the same check on demand ("Test camera connection") and lists every program that could take
   the camera.
 
@@ -155,11 +163,9 @@ and capture groups (one result from many files: the owner's research intent, tra
 (untested); a second camera.
 
 ## Owed before planning
-- **V6 (owner, lab, camera on USB):** `make exp-05` (or a plain USB connect) with Capture One open and *Enabled Tether Support* USB and
-  Wireless unticked; again with the camera connected over USB **before** Capture One launches; again with Imaging Edge Desktop quit. The
-  result decides MC-34's "get there first" and the Capture One guidance.
-- **Store-destination write over USB** (lab, one run): set Host PC + Memory Card on a USB session, verify, shoot, confirm the SDK copy and
-  the FTP copy are identical; set Memory Card only on Wi-Fi, verify. (Over Wi-Fi the write and restore were verified in H-3.)
+- ~~V6~~ done 2026-11-06 (evidence §V6): Capture One is the trigger; its tether checkboxes do not help; SDK-first holds; release loses
+  the camera within 1 s. ~~Store-destination write over USB~~ verified both ways (evidence §V6). Still open, owner present: the cable
+  re-plug race with Capture One running (expected lost, covered by "Take the camera back").
 - **Camera support package spike:** install the SDK runtime through the flow above on a second macOS user account, confirm the sidecar
   loads it and connects on USB and Wi-Fi from the packaged app.
 

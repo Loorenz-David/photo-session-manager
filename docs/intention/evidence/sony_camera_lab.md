@@ -73,3 +73,18 @@ collection back to the session root.
 - **USB contenders running now:** Capture One (loads ImageCaptureCore; `ptpcamerad` started 4 s after it, as in H-16), Imaging Edge
   Desktop (loads ImageCaptureCore), a Photos widget. Capture One's Preferences → Capture has **"Enabled Tether Support: USB /
   Wireless"** checkboxes: the candidate configuration for V6.
+
+## V6 — camera ownership with Capture One (2026-11-06, A7R V on USB-C, lab `crlab` built out of tree against SDK 2.02)
+- Capture One 16.8.6 running, **its Sony USB and Wireless tether support already unticked** (Preferences → Capture → Enabled
+  Tether Support), Imaging Edge Desktop running: `UsbExclusiveOwner = ptpcamerad`; SDK USB connect fails in 6 ms with 0x8208 and
+  `usb.claimed_by ptpcamerad`. **The tether checkboxes do not prevent the claim.**
+- Imaging Edge Desktop quit: still claimed. Capture One quit (Session Manager quit first, since it relaunches Capture One itself):
+  `ptpcamerad` exits and the interface is free immediately. **Capture One is the trigger.**
+- **SDK first:** SDK USB session opened (`UsbExclusiveOwner = crlab`), then Capture One launched: `ptpcamerad` started 6 s later and
+  **could not take the interface** (still `crlab` 15 s later).
+- **Release while Capture One runs:** when the SDK session ended, `ptpcamerad` took the interface within about 1 s and a new SDK
+  connect failed (0x8208). Getting the camera back needs Capture One quit (or, untested, a cable re-plug race, which the SDK is
+  expected to lose: `crlab auto` attempts its connect about 3.6 s after arrival because of discovery).
+- **Store destination over USB:** set *Host PC + Memory Card* (0x3) verified in 208 ms; set *Camera only* (0x2) verified in 205 ms;
+  left on Camera only. Camera FTP status read over USB: connection error (no receiver running), as expected.
+- The cable re-plug race with Capture One running was not exercised (no re-plug during the 4-minute window).
