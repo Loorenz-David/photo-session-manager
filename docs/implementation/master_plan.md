@@ -14,9 +14,10 @@ differ, the book wins and this file is amended.
 | Content | Artifact |
 |---|---|
 | Product semantics, hard constraints H1–H8, domain, scenarios | `docs/intention/book/01…13` |
-| Mechanism contracts MC-1…MC-26 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/09A_shopify_credentials_and_condition_field.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md`, `book/10B_shape_on_arrival.md` (MC-25, owner 2026-10-29; **retired 2026-11-04 by 10D**), `book/10C_capture_one_setup_by_the_app.md` (MC-26, owner 2026-11-03), `book/10D_composition_and_framing.md` (MC-27…MC-29, owner 2026-11-04; amended 069eca4 after VERIFY-15) |
-| Measurement ledger M1–M36 (root of every criterion's trace; M31 retired) | `book/14_measurement_ledger.md` |
+| Mechanism contracts MC-1…MC-34 (exact rules) | `book/05A_mechanism_contracts.md`, `book/05B_sku_generation_and_change.md`, `book/09A_shopify_credentials_and_condition_field.md`, `book/07A_publish_contracts.md` (+ `07C` grounding fold-back), `book/07B_retouch_after_publish.md`, `book/10A_capture_one_contracts.md`, `book/10B_shape_on_arrival.md` (MC-25, owner 2026-10-29; **retired 2026-11-04 by 10D**), `book/10C_capture_one_setup_by_the_app.md` (MC-26, owner 2026-11-03), `book/10D_composition_and_framing.md` (MC-27…MC-29, owner 2026-11-04; amended 069eca4 after VERIFY-15), `book/10E_direct_camera_adapter.md` (MC-31…MC-34, owner 2026-11-06 at `53d6ea4`; inventory additions R-I18…R-I38 at `41bef14`; card CI1 answered "always jump", R46 at `e0ce354`) |
+| Measurement ledger M1–M40 (root of every criterion's trace; M31 retired) | `book/14_measurement_ledger.md` |
 | Capture One facts and VERIFY probes | `docs/intention/evidence/capture_one_16.8.6.md`; dictionary `docs/reference/capture_one_16.8.6.sdef` |
+| Sony camera facts (lab findings H-n/F-n, constraints C1–C10, the app's own checks V1–V6, the spike and acceptance results written by P47/P52) | `docs/intention/evidence/sony_camera_lab.md`; the lab repo `/Users/davidloorenz/Desktop/Developer/Camera-Connection-Tests` at `221aa49` (**read-only**; `sdk/` is copied by P45, `camlab/ftp` and `camlab/ledger.py` are ported by P43/P44, `docs/session-manager-handoff.md` §4 is the protocol) |
 | Design rules (field kinds, timings, keyboard, components) | `docs/intention/evidence/design_handoff.md`; pictures/prototype `claude_design/` |
 | Shopify facts | `docs/intention/evidence/shopify_admin.md` — **does not exist yet**; written in phase P12 (SHOPIFY-VERIFY-1…7) |
 | Process (roles, tests, verdicts, fix budget, narratives) | `docs/process/flow.md` |
@@ -54,11 +55,18 @@ restated so no session has to infer them:
 - **Perimeter**: a phase touches only the files its plan lists (plus the test file(s) it names). A new file not
   listed is declared in the handoff's **Deviations**.
 - **Trace conventions** (charter trace chain, flow §9): every criterion row's trace cell names an `M` id
-  (M1–M36; M31 retired), an `MC` id (MC-1…MC-30; MC-25 retired) or a hard constraint (H1–H8). A row may instead cite a chapter rule
+  (M1–M40; M31 retired), an `MC` id (MC-1…MC-34; MC-25 retired) or a hard constraint (H1–H8). A row may instead cite a chapter rule
   (`ch07 §Open filter`, `evidence/design_handoff §Field kind map`) **only** for UI-rendering rows, operations
   rows the inventory listed as "not contracted", and packaging rows (ch11); such a cell is prefixed `[rule]` so
   the reviewer knows the row has no ledger measurement behind it. Every plan file derives its own counts of
-  criteria, rows and `[rule]` rows.
+  criteria, rows and `[rule]` rows. **Owner-attended phases** (P47 spike, P52 hardware acceptance; planner 2026-11-06) carry
+  `[manual]` rows: flow §4 rule 1's exemption for environment-lifecycle checks, each recorded in `evidence/sony_camera_lab.md` and the
+  plan's Review log by the orchestrator who runs the phase with the owner; `run_phase.sh` never dispatches them (the plan's task 0 makes
+  an implementer report `BLOCKED`).
+- **Camera hard rules (owner, 2026-11-06; restated in every P42–P52 plan):** never commit a Sony SDK file, the lab's hand-written
+  `sdk_shim` headers, a `.env` file, a credential or an SSH fingerprint (the repo is public); no Python; never change the camera's network
+  or FTP settings, delete a camera file, or kill `ptpcamerad` or any other process; live view is out of scope; the automated suite never
+  needs the camera (flow §6A). **No `implementer: fable`** on any camera phase (owner).
 - **Migrations are never rewritten once a checkpoint commit contains them** (charter rule 7); add the next
   numbered file.
 - **Secrets** (09A MC-23): the Shopify client ID and client secret live only in `settings.json` (mode 0600), or in
@@ -112,28 +120,55 @@ restated so no session has to infer them:
 | P39_undo_history_core | APPROVED | 2026-11-05 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 22 declared paths (`bbfede7`) + the orchestrator's C4(h) test edit (`a22dc41`); Rust 561, clippy, fmt, typecheck green (reviewer run, code tree `a22dc41`); all 27 rows have a boundary test that fails on a wrong outcome (changed-input probes: the C4(c) message text, C4(a) session ids, `Unreview 02`); assumptions within MC-30 and Delegated choices; H1–H8 hold; 5 backlog notes (copy redo with its source row gone is stuck in the redo list → P40; move redo inserts at the old place instead of appending); the tracker read NOT_STARTED at review start (the implementer was BLOCKED, the orchestrator's ruling resumed it) |
 | P40_undo_history_compositions_and_attributes | APPROVED | 2026-11-05 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 13 committed paths (`69d3842`: 10 declared + tracker + plan); Rust suite, clippy, fmt, typecheck green (reviewer run, clean tree `57495ec`); all 20 rows have a boundary test that fails on a wrong outcome; the `photo_id` assumption matches the generated binding; H1–H8 hold; 6 backlog notes (probe-confirmed: undoing a re-frame of a `needs_review` photo restores the old rect as `ok`, not `needs_review` → P41/owner) |
 | P41_undo_history_ui | APPROVED | 2026-11-05 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 28 committed paths (`84fb443`, = handoff's declared list; `p19_navigation` mock line disclosed); Rust suite, clippy, fmt, typecheck green; UI 369/369 (reviewer run, clean `7e72698`; known P33 C4(d) flake 1 of 10 runs); all 16 rows have a boundary test that fails on a wrong outcome (changed-input probe: ⌘Z from the dialog outside a field reaches the history, so C1(b) discriminates); assumptions within MC-30 and Delegated choices; H1–H8 hold; 4 backlog notes (custom Edit-menu ⌘Z inside a text field unverified live → owner try-out; multi-photo Split silent on refusals) |
+| P42_camera_runtime | NOT_STARTED | 2026-11-06 | planner | book 10E MC-31 R-I18/R-I21/R-I33/R-I37: the process-wide `CameraRuntime`, sidecar supervisor over a fake sidecar, secrets port, the new `CameraStatus` and its precedence; projection on |
+| P43_ftp_receiver | NOT_STARTED | 2026-11-06 | planner | 10E MC-32 R-I24: the Rust FTP receiver (hand-written over tokio) with the lab's 18 receiver tests ported to a testkit FTP client; camera settings keys applied in place |
+| P44_capture_ledger | NOT_STARTED | 2026-11-06 | planner | 10E MC-33 R-I25…R-I29, 05A MC-2 rule 0 / MC-4, 05B MC-22 freeze: the ledger mechanism (lab's 15 tests ported + window, global duplicates), migration 006, the single worker and no-replace rename, arrival seam; projection on |
+| P45_sidecar_and_protocol | NOT_STARTED | 2026-11-06 | planner | 10E MC-31 R-I19/R-I20/R-I23, 11, R45: the lab sidecar imported under `native/camera-sidecar/` without Sony files, stub build from `build.rs`, C++ tests, protocol client against the fake sidecar replaying lab event lines; projection on (external fixtures) |
+| P46_direct_camera_adapter | NOT_STARTED | 2026-11-06 | planner | 10E MC-31 R-I19/R-I20/R-I22, MC-33 R-I26/R-I29: the direct adapter over the sidecar client, exposure and Save-to-PC deliveries into the ledger, store-destination outcome, first copy wins end to end, adapter selection; projection on |
+| P47_support_package_spike | NOT_STARTED | 2026-11-06 | planner | **owner-attended, camera needed**: 10E §Camera support packages S1–S6 from a packaged build with a hand-installed support folder; answers folded into P50 |
+| P48_camera_ownership | NOT_STARTED | 2026-11-06 | planner | 10E MC-34 R-I30…R-I33, M39/M40: holder detection and naming, start order, the editor-launch gate, "Take the camera back" on click, activation independent of Capture One, sleep assertion; projection on |
+| P49_capture_one_alongside | NOT_STARTED | 2026-11-06 | planner | 10E §Capture One alongside R-I35, 10A MC-18 step 6, R46 (CI1 answered "always jump"): current collection on every arrival and activation, variant wait, style once per RAW, import fixed (copy into the capture folder) |
+| P50_camera_settings_and_support | NOT_STARTED | 2026-11-06 | planner | 10E §Camera support packages R-I36, 12: the `camera` settings block, support-package install/verify/sign, fingerprint pinning, FTP password, health items, the camera commands; backend only |
+| P51_camera_setup_ui | NOT_STARTED | 2026-11-06 | planner | frontend: Settings → Camera, the header camera dot states and sentences, Health camera items, "Take the camera back" and "Test camera connection" buttons |
+| P52_hardware_acceptance | NOT_STARTED | 2026-11-06 | planner | **owner-attended, camera needed**: 10E §Hardware acceptance (18 rows) on the packaged build; results in the evidence; the Capture One camera adapter is retired by a later tidy-up |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
 
 ## 5. Sequencing and gates
-`phases.txt` lists the 41 phases in execution order (17 MVP phases, the two real-run fix phases added
+`phases.txt` lists the 52 phases in execution order (17 MVP phases, the two real-run fix phases added
 2026-10-26, the second real run's fix phases P19/P20 added 2026-10-29, the two tidy-up phases P21/P22 planned
 2026-10-29 from `backlog.md`, P23_shape_on_arrival planned 2026-10-29 from book 10B, P24_capture_one_provisioning planned
 2026-11-03 from book 10C, the second tidy-up pair P25/P26 planned 2026-11-04 from `backlog.md` and the P24 narrative, and the eight
-composition phases P27–P34 planned 2026-11-04 from book 10D, the two composition-correction phases P35/P36 planned 2026-11-05 from the 10D amendment R38, P37_editor_chrome planned 2026-11-05 from the 10D amendment R39, and the four phases P38–P41 planned 2026-11-05 from the 10D amendment R40 and the new 05A MC-30 (R41)); the runner is sequential and a
+composition phases P27–P34 planned 2026-11-04 from book 10D, the two composition-correction phases P35/P36 planned 2026-11-05 from the 10D amendment R38, P37_editor_chrome planned 2026-11-05 from the 10D amendment R39, the four phases P38–P41 planned 2026-11-05 from the 10D amendment R40 and the new 05A MC-30 (R41), and the eleven direct-camera phases P42–P52 planned 2026-11-06 from book 10E (R42–R45, inventory R-I18…R-I38)); the runner is sequential and a
 phase starts only when every phase in its `depends_on` is APPROVED (checked by the implementer's gate). Dependency graph:
 
 ```
 P00 → P01 → P02 → P03 ─────────→ P07 → P08 → P11 → P15 → P16 → P17 → P18 → P19 → P20 → P21 → P22 → P23 → P24 → P25 → P26 → P27 → P28 → P29 → P30 → P33 → P34 → P35 → P36 → P37 → P38 → P41
    ↘        ↘ P04 → P05 → P06 → P09 → P10 → P12 → P13 → P14 ↗                                                                          ↘ P31 → P32 ↗           ↘ P39 → P40 ↗
     ─────────↗            (P06 + P07 → P08; P09 + P12 → P13; P10 + P08 → P11; P14 + P11 → P15; P28 → P31; P30 + P32 → P33; P40 + P38 → P41)
+P41 → P42 → P43 → P44 → P45 → P46 → P47 (spike, owner) → P50 → P51 → P52 (acceptance, owner)
+                                   ↘ P48 → P49 ↗                 (P46 → P47; P46 → P48; P48 → P49; P47 + P49 → P50; P50 → P51; P51 → P52)
 ```
 Exact `depends_on` per plan: P01[P00] · P02[P01] · P03[P02] · P04[P00,P01] · P05[P04] · P06[P05] ·
 P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[P10] · P13[P09,P12] · P14[P13] ·
 P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23] · P25[P24] · P26[P25] ·
 P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35] · P37[P36] · P38[P37] ·
-P39[P37] · P40[P39] · P41[P40,P38].
+P39[P37] · P40[P39] · P41[P40,P38] · P42[P41] · P43[P42] · P44[P43] · P45[P44] · P46[P45] · P47[P46] · P48[P46] · P49[P48] · P50[P47,P49] ·
+P51[P50] · P52[P51].
+- **Direct camera adapter (planner 2026-11-06; book 10E).** Order: the risky, hardware-free core first. P42 (the one-camera-layer-per-process
+  rule, R-I18, which every later camera phase builds on; the sidecar supervisor over a fake sidecar binary; the new `CameraStatus`), P43 (the
+  FTP receiver, MC-32), P44 (the capture ledger, MC-33, the single worker and the no-replace rename), P45 (the lab sidecar imported without any
+  Sony file, the stub build, the protocol client), P46 (the direct adapter: exposures, Save-to-PC, store destination, first copy wins). Then
+  **P47, the support-package spike, owner-attended with the camera**, placed before P50 because P50's install/sign rules depend on its answers
+  S1–S3 (library validation, Gatekeeper); the spike needs only P46's runtime and a hand-installed support folder (its plan says how). P48
+  (camera ownership guard, MC-34) and P49 (Capture One alongside, CI1 as a one-line policy) do not depend on the spike, so the orchestrator may
+  run them before P47 by reordering `phases.txt` when the owner cannot spare the camera (their `depends_on` allow it). P50 (settings, support
+  package, secrets, health items, commands) and P51 (the setup UI) close the hardware-free work; **P52, hardware acceptance, owner-attended with
+  the camera**, is last. Only P47 and P52 need the camera; every other phase's suite runs on fakes (fake sidecar binary, loopback FTP client).
+  `projection: yes` on P42, P44, P45, P46 and P48 (silent-failure mechanisms: runtime lifetime, ledger, external sidecar fixtures, ownership).
+  **No `implementer: fable`** anywhere (owner). The Capture One camera adapter (A2) stays the fallback whenever no camera support package is
+  installed and is retired by a later tidy-up after P52 passes on the work Mac (10E §Port changes).
 - **Editor polish and undo history (planner 2026-11-05).** P38 (frontend: the R40 polish of what P37 built) runs first so the owner sees the
   cheap corrections at once; P39 (Rust: the `History`, review steps, undo/redo, commands) and P40 (Rust: composition and attribute steps)
   carry `projection: yes` — MC-30 is a new load-bearing mechanism (charter rule 6) and both phases write reversal transactions whose silent
@@ -172,7 +207,13 @@ P39[P37] · P40[P39] · P41[P40,P38].
   One cannot keep two documents open, the phase stops with the owner card drafted in the plan's Notes (book 10C stop rule). P27 — VERIFY-15
   (10D §Grounding) **was run live by the orchestrator on 2026-11-04 and recorded** (`069eca4`); the implementer reads the evidence and never
   re-runs it; the only owed measurement is the work-Mac master timing (operational). The optional live rows (P27 C6(a)) run where Apple
-  events are allowed, as before.
+  events are allowed, as before. **P45** — the implementer must be able to **read** the lab repo
+  `/Users/davidloorenz/Desktop/Developer/Camera-Connection-Tests` (Codex: reads outside the workspace are allowed by the sandbox; if refused,
+  the orchestrator copies `sdk/` minus `sdk/tests/sdk_shim/` into `native/camera-sidecar/` before dispatch and says so in the prompt) and
+  `cmake` + `clang` must be installed (§7.1: cmake 4.4.5, Apple clang 17). The SDK-dependent sources are compiled only by `tools/sidecar/build.sh
+  --sdk <root>` on a machine holding the SDK (the dev Mac: the lab's `vendor/sony-sdk`); no session needs that build before P47. **P47 and P52** —
+  owner present with the A7R V, the cable, the Wi-Fi network and the lab's camera configuration; the orchestrator runs them (`--pause` or outside
+  the runner) and records results in the evidence; the runner never dispatches them.
 
 ## 6. Shared skeleton and naming registry
 Fixed up front so sessions cannot diverge. Anything **new** below does not exist yet; P00/P01 create it.
@@ -188,6 +229,11 @@ Fixed up front so sessions cannot diverge. Anything **new** below does not exist
 | `apps/desktop/src-tauri/` | `psm-desktop` (bin + lib `psm_desktop_lib`): `commands/`, `events.rs`, `state.rs`, `tauri.conf.json`, `Info.plist`, `capabilities/default.json`, `build.rs` | all of the above, tauri, tauri-specta |
 | `apps/desktop/` | Vite + React + TS: `package.json`, `src/services/bindings.ts` (**generated, never hand-edited**), `src/services/*.ts`, `src/components/ui/` (shadcn), `src/features/{shell,sessions,workspace,form,publish,settings,health}/`, **P31+ `src/features/compose/`** (`geometry.ts` — the TS mirror of `psm_core::mechanisms::composition`, `machine.ts` — the interaction state machine, `refit.ts`, `snapping.ts`, hooks and components; `src/services/compositions.ts`), `src/lib/`, `src/styles/tokens.css` (copied from `claude_design/tokens/tokens.css`) | — |
 | `crates/integrations/src/render_output.rs` (P29) | `RenderOutputJob` (`JobHandler` for kind `render_output`, on its own runner `App.render_jobs`) | psm-core, psm-infra |
+| **10E (P42–P50)** `crates/core/src/domain/camera.rs`, `crates/core/src/mechanisms/{camera_status.rs, capture_ledger.rs}`, `crates/core/src/services/camera_ledger.rs`, `crates/core/src/ports/{camera.rs (grown), secrets.rs, system.rs}` | neutral camera domain (status, link, reasons, exposure, delivery), the status precedence and the ledger mechanisms, the `LedgerService` (single worker), the ports `SecretStore`, `ProcessList`, `SleepInhibitor`, `DeliveryFs` | — |
+| `crates/infra/src/{ftp/ (mod.rs, server.rs, session.rs, peers.rs), camera_files.rs, keychain.rs, processes.rs, sleep.rs}` | the FTP receiver (hand-written over tokio, passive only), `rename_exclusive` (`libc::renamex_np` + `RENAME_EXCL`), `KeychainSecrets` (security-framework), `PsProcessList` (`ps -axo comm=`), `IokitSleepInhibitor` (`IOPMAssertionCreateWithName`) | psm-core, tokio, libc, security-framework, ipnet |
+| `crates/integrations/src/camera/{runtime.rs, sidecar/ (supervisor.rs, protocol.rs, client.rs, fixtures/*.jsonl), direct/ (adapter.rs, filenames.rs, ownership.rs, take_back.rs), support/ (mod.rs, sony.rs, manifest.rs)}`; `crates/integrations/src/editing/capture_one/{launch_gate.rs, follow.rs}` | the process-wide `CameraRuntime`, the sidecar process supervisor and protocol client, the direct (Sony SDK sidecar) adapter, the camera ownership guard and "Take the camera back", camera support packages, the editor-launch gate, the follow service (current collection on every arrival and activation, R46; variant wait; style once) | psm-core, psm-infra, zip, getrandom |
+| `native/camera-sidecar/` (CMake project; **no Sony file, no `sdk_shim`**), `tools/sidecar/{build.sh, manifest.sh}`, `apps/desktop/src-tauri/binaries/camera-sidecar-aarch64-apple-darwin` (**gitignored**, built by `build.rs` as the stub when absent) | the C++ camera sidecar copied from the lab's `sdk/` (P45), its mock-camera tests, the stub backend for machines without the SDK | CMake ≥ 3.20, Apple clang; the Sony SDK only on the build machine |
+| `crates/testkit/src/{bin/fake_sidecar.rs, ftp_client.rs, fake_secrets.rs, fake_processes.rs, fake_sleep.rs, fixtures/sidecar_scripts/*.txt}` | the scripted fake sidecar binary (`CARGO_BIN_EXE_fake_sidecar`), the minimal FTP test client (STOR/REST/APPE/ABOR, RST by `SO_LINGER 0`), fakes for the new ports | psm-core, psm-infra |
 
 Layer rule (ch11): core ← nothing above it; services (in core) depend on ports only; infra and integrations
 implement ports; `psm-desktop` commands are thin (parse → service → serialize).
@@ -207,6 +253,12 @@ P12's handoff), `tempfile = "3"` (dev).
 encode for thumbnails and fixtures), `fast_image_resize = "6"` (6.1.0; Lanczos3), `jpeg-encoder = "0.7"` (0.7.1; 4:4:4, ICC and APP
 segments), `kamadak-exif = "0.6"` (0.6.1; reads TIFF and JPEG EXIF). Delegated to P29's implementer: `imageproc = "0.27"` (0.27.0; bicubic
 rotation) and/or `little_exif = "0.6"` (0.6.23; EXIF writing) — or hand-written equivalents. libvips, ImageIO and Python are out (owner).
+**Camera crates (verified on crates.io 2026-11-06 by the planner):** `libc = "0.2"` (0.2.191 is already in the local registry; it exports
+`renamex_np` and `RENAME_EXCL` for Apple targets — `libc-0.2.191/src/unix/bsd/apple/mod.rs:3557,5010`; **not** the 1.0.0-alpha line),
+`security-framework = "3"` (3.7.0; `passwords::{set_generic_password, get_generic_password, delete_generic_password}`), `ipnet = "2"` (2.12.2;
+peer ranges), `zip = "9"` (9.4.1; the support archive is extracted by the app so no quarantine attribute reaches the copies), `getrandom = "0.4"`
+(0.4.3; the FTP password). No FTP server crate: the receiver is hand-written over the `tokio` already pinned (P43 Notes say why). No `cmake`
+crate: `build.rs` invokes `/usr/bin/env cmake` directly.
 Note: `tauri-specta` **1.0.2 is Tauri-v1 only**; the 2.0.0-rc line is the Tauri-v2 one and must be pinned with `=`.
 **Corrected by the orchestrator 2026-10-25:** rc.27 of `tauri-specta` was never published; rc.26 requires
 `specta = "=2.0.0-rc.26"` and `specta-typescript = "^0.0.13"`. This trio with `tauri 2.12.5` (feature `specta`) was
@@ -238,6 +290,12 @@ version; `package-lock.json` committed). Exact versions in `package.json`, no `^
   also holds `manifest.json` (`{"format_key", "outputs": {"<file>": {photo_id, slot, adjusted_gen, composition_rev}}}`).
 - `AppPaths` (P24) also carries `home` (`$HOME`; tests set it to their temp dir) — the base of the default Capture One document
   `<home>/Pictures/Session Manager` (10C MC-26, §6.8).
+- **10E (P42–P50):** under the data dir, `camera/sony/<sdk version>/` (the installed support package: the Sony runtime dylibs, `CrAdapter/`,
+  **and a copy of the bundled sidecar**, `camera-sidecar`, signed ad hoc after copying; P50) and `camera/fingerprints/` (pinned SSH host-key
+  fingerprints, `CRLAB_FINGERPRINT_DIR`; never committed). Under the **capture root** (`canon(<document folder>/Capture)`, 05A MC-2):
+  `.incoming/.<name>.part` (the receiver's staging files, kept on failure for a resume), `.incoming/sdk-<sidecar run id>/` (Save-to-PC
+  downloads of one sidecar process), `.duplicates/` (identical later copies, never a photo, never deleted). `is_candidate` already ignores every
+  dot-prefixed component (`mechanisms/arrival.rs:308–313`). `AppPaths::create` adds `camera` and `camera/fingerprints`.
 - `osascript` is always spawned with **cwd = the data dir** (MC-18 evidence).
 
 ### 6.4 Ports (traits in `psm_core::ports`)
@@ -288,6 +346,14 @@ copy-undo guard, projection D5); **P40** adds
 `StoreTx::composition(photo_id)`, `StoreTx::save_composition(photo_id, &CompositionValues, Origin, now_ms) -> (Composition, bool)` (the same body
 as `Store::save_composition`, shared through `save_composition_in(conn, …)`) and `StoreTx::delete_attribute_value(item_id, key)`. `EventSink`
 gains nothing; `AppEvent::HistoryChanged` (§6.7) is emitted by `History`.
+**10E (P42–P50; the exact signatures are in §6.11):** `CameraProvider` becomes `{ raw_extensions, status() -> CameraStatus, capture() ->
+Result<CaptureId>, capabilities() -> CameraCapabilities, reconnect() -> Result<()> (P46), request_ftp_status() (P46) }`; `CameraStatus` moves to
+`domain/camera.rs` and grows to five variants (R-I37). New ports: `CaptureSink` (the ledger's inbound face: `exposure_observed`, `delivery`,
+`session_uncertain`, `transfer_in_progress`), `ArrivalSource` (what the receiver and the Save-to-PC path are: `via`, `transfer_in_progress`),
+`SecretStore` (Keychain), `DeliveryFs` (`rename_exclusive`, `create_dir_all`, `file_size`), `ProcessList`, `SleepInhibitor`. `Store` gains the
+ledger methods (P44) and `StoreTx::freeze_folder_key(item_id)` (05B MC-22 at a committed delivery). `CaptureOneScripting` gains `quit()`
+(P48), `set_current_collection(id, folder)`, `apply_style(id, variant, name)` (P49) and loses `import` (P49);
+`EditingProvider` gains `set_current_collection(folder)`, `apply_style(raw, name) -> StyleOutcome`, `find_variant(raw) -> bool` and loses `import`.
 
 ### 6.5 Tables (migration `001_init.sql` in P00: `settings`, `capture_events`; `002_domain.sql` in P01: the rest)
 All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stored as snake_case TEXT; JSON as TEXT.
@@ -312,6 +378,8 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
 | **003** (P27) `003_retire_shape_on_arrival.sql` | `DELETE FROM jobs WHERE kind='crop_on_arrival'` |
 | **004** (P28) `compositions` | `photo_id` PK → photos, `kind` (`normal`/`split`), `shape` (`original`/`1:1`/`4:5`/`3:2`/`2:3`/`16:9`/`free`), `orientation` (`named`/`turned`), `quarter_turns` 0–3, `flip` (`none`/`horizontal`), `straighten` REAL, `x`,`y`,`w`,`h` REAL (NULL until the first frame), `frame_w`,`frame_h` INTEGER, `frame_source` (`preview`/`master`), `geometry` (JSON `EditorGeometry`) — the three NULL together until the first render, `origin` (`default`/`user`), `revision`, `state` (`ok`/`needs_review`), `review_reason` (`geometry`/`frame`/NULL), `updated_at`; plus `photos.thumbnail_path TEXT` |
 | **005** (P30) `photo_links` recreated | as before plus `slot` (`single`/`left`/`right`, default `single`) and `composition_rev` DEFAULT 0; UNIQUE(`photo_id`,`integration`,`item_id`,`role`,`slot`); `upload_state` gains the value `retired` |
+| **006** (P44) `006_camera_ledger.sql` | `camera_exposures(id, capture_id TEXT NULL, exposed_at INTEGER NOT NULL, initiated TEXT NOT NULL (`app`/`camera`), session_id INTEGER NULL, status TEXT NOT NULL (`expecting`/`received`/`missing_at_deadline`/`uncertain`/`dismissed`), expected_files INTEGER NULL, created_at INTEGER NOT NULL)`; `camera_deliveries(id, exposure_id INTEGER NULL, camera_filename TEXT NOT NULL, file_key TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL, via TEXT NOT NULL (`cable`/`wireless`), completed_at INTEGER NOT NULL, association TEXT NOT NULL (`filename`/`stem`/`fifo`/`none`), outcome TEXT NOT NULL (`photo`/`duplicate`/`renamed_photo`), session_id INTEGER NULL, final_path TEXT NOT NULL, state TEXT NOT NULL (`pending`/`done`), created_at INTEGER NOT NULL)`; indexes on `camera_deliveries(file_key)`, `(final_path)`, `camera_exposures(status, exposed_at)`. Rows are kept (10E R-I25) |
+| **007** (P49) `007_style_applied.sql` | `ALTER TABLE raw_state ADD COLUMN style_applied_at INTEGER` (10E R-I35: the style is applied at most once per RAW) |
 
 ### 6.6 Enums, codes and kinds (Rust `enum` names in `psm_core::domain`, serialized snake_case)
 - `Classification {Unreviewed, Main, Condition, Deleted}` · `PhotoSource {Capture, Import}` · `ItemOrigin {Linked, Local}` ·
@@ -370,6 +438,31 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   the startup/health ratio check when the adapter's list is readable and lacks the name, and by the job; cleared when the
   list contains the name, when a job applies, or when the setting is `off`).
 - Colour-tag mapping (MC-19): `main 4`, `condition 5`, `deleted 1`, `unreviewed 0`.
+- **10E (P42–P51).** `psm_core::domain::camera::{CameraStatus {Connected {name, link}, Connecting {link}, Busy {reason}, NeedsAction {reason,
+  holder: Option<String>}, Disconnected}, Link {Cable, Wireless}, BusyReason {Exposure, Transfer, Switching}, NeedsActionReason
+  {AuthenticationRefused, FingerprintMismatch, FingerprintUnconfirmed, PhoneAppConnected, HeldByOtherProgram, StoreDestinationUnverified,
+  FilesNotReceived {count}, SupportNotInstalled} (this is the precedence order), CaptureId(String), ExposureInitiator {App, Camera},
+  ExposureObserved, Delivery, CameraCapabilities {status, capture, transfer, exposure_events, settings_read, settings_write_store_destination,
+  depends_on_editing_provider}}` (serialized snake_case; `CameraStatus` moves out of `domain/editing.rs`). Ledger enums: `ExposureStatus
+  {Expecting, Received, MissingAtDeadline, Uncertain, Dismissed}`, `Association {Filename, Stem, Fifo, None}`, `DeliveryOutcome {Photo,
+  Duplicate, RenamedPhoto}`, `DeliveryState {Pending, Done}`.
+  Error codes: `camera_not_connected`, `editor_launch_deferred` (P48; a script that would launch Capture One was refused while "Take the camera
+  back" holds the gate), `take_back_blocked{reason}` (P48; reasons `a file is still arriving`, `a photo is still expected`, `an export is
+  running`, `a publish is running`, `a preview is rendering`, `Capture One is not holding the camera`), `take_back_failed{step}` (P48; the
+  step number 2–5 and the cause), `reconnect_on_cable_refused` (P46), `sidecar_unavailable` (P46), `support_archive_invalid{file}`,
+  `support_version_unsupported{version}`, `support_not_installed` (P50), `fingerprint_not_pending` (P50).
+  Health codes (`HealthItem{code, ok, detail}`; the camera dot shows the first that holds in the precedence order, the Health page lists them
+  all — R-I37): ok item `camera` (detail `<camera name> · cable` / `… · wireless`; replaces P04's `camera` detail), `camera_disconnected`
+  (kept), `camera_connecting` (detail `Connecting over the cable…` / `… Wi-Fi…`), `camera_busy` (detail `Taking a photo` / `Receiving a
+  photo` / `Switching connection`), `camera_auth_refused` (`The camera refused the password`), `camera_fingerprint_mismatch` (`The camera's
+  fingerprint changed: confirm it in Settings → Camera before shooting over Wi-Fi`), `camera_fingerprint_unconfirmed` (`Confirm the camera's
+  fingerprint`), `camera_phone_connected` (`A phone app is connected to the camera: disconnect it`), `camera_held` (P48; detail = the MC-34
+  sentence, e.g. `Capture One is holding the camera's USB connection — Take the camera back` or `programs that can take the camera: Capture
+  One, Imaging Edge Desktop`), `camera_store_destination_unverified` (`The camera did not confirm where photos are saved`),
+  `camera_files_not_received` (`<n> photos taken but not received for 60 s`, plus ` · <g> gaps in the camera's numbering` when any),
+  `camera_photo_session_uncertain` (P44; `Photo <camera filename> may belong to <other session title>`), `camera_support_not_installed`
+  (P50; `Add camera support in Settings → Camera`), `editor_not_following` (P48; `Capture One will not show this session's new photos until
+  it is reachable`), `camera_sidecar_unavailable` (P42; `The camera helper could not start`).
 
 ### 6.7 Tauri commands (`#[tauri::command] #[specta::specta]`, snake_case) and events
 Commands by phase (payload types are the service DTOs; thin wrappers only):
@@ -397,14 +490,24 @@ reason}]}` · **P39** `history_get(session_id) -> {undo: Option<String>, redo: O
 "undone" | "redone", sessions: [SessionResponse], active_photo_id}`, `history_redo(session_id)` (same DTO; errors `nothing_to_undo`,
 `nothing_to_redo`, `step_cannot_apply`); `photos_undo` answers in its old `ReviewResponse` shape through the history until **P41** removes it ·
 **P40** `composition_apply` calls `CompositionService::apply` once (one step) · **P41** `edit_menu_set(undo: Option<String>, redo: Option<String>)`
-(sets the Edit menu items `edit.undo` / `edit.redo`: text `Undo <label>` / `Undo`, enabled when set; accelerators `CmdOrCtrl+Z`, `CmdOrCtrl+Shift+Z`).
+(sets the Edit menu items `edit.undo` / `edit.redo`: text `Undo <label>` / `Undo`, enabled when set; accelerators `CmdOrCtrl+Z`, `CmdOrCtrl+Shift+Z`) ·
+**P42** `camera_status` / `camera_retry` answer the new `CameraStatusResponse` (tag `kind`: `connected {name, link}`, `connecting {link}`, `busy
+{reason}`, `needs_action {reason, holder, message}`, `disconnected`; `link` = `cable` | `wireless`, `reason`s snake_case, `message` = the
+health detail sentence) · **P46** `camera_capture -> { capture_id: string }`, `camera_reconnect` (Wi-Fi only; `reconnect_on_cable_refused`),
+`camera_files_not_received_dismiss` · **P48** `camera_take_back -> { completed_steps: number }` (errors `take_back_blocked`, `take_back_failed`),
+`camera_test_connection -> { holder: string | null, programs: string[], sentence: string | null }` · **P50** `camera_support_get -> { make:
+"sony", version, sidecar_path } | null`, `camera_support_install(archive_path) -> CameraSupportDto`, `camera_secrets_set({ access_auth_user,
+access_auth_password })` (writes the Keychain; never echoed back), `camera_ftp_password_generate -> { password }` (the one time it is shown),
+`camera_fingerprint_confirm`, `camera_fingerprint_reject`; `settings_get` / `settings_set` carry the `camera` block (§6.8).
 From P17 every command is `pub async fn` over `AppState(RwLock<App>)` through `AppState::handles()` / `mutate()`
 (`state.rs`), work inside `tauri::async_runtime::spawn_blocking`; no command holds the app lock across provider work.
 Events (`AppEvent` → Tauri event name): `session_changed{session_id}`, `photo_added{photo_id, session_id}`,
 `photo_changed{photo_id, session_id}`, `publish_progress{session_id, item_id, step, uploaded, total}`,
-`export_progress{session_id, done, total, state}`, `health_changed{}`, `camera_status_changed{status}`, P39 `history_changed{session_id, undo,
+`export_progress{session_id, done, total, state}`, `health_changed{}`, `camera_status_changed{status}` (P42: the payload is the new
+`CameraStatusResponse`; emitted by the runtime on every status change, not only on `camera_retry`), P39 `history_changed{session_id, undo,
 redo}` (the labels of the steps ⌘Z / ⌘⇧Z would act on, after every record, undo, redo and dropped step), P41 `edit_menu{action: "undo" | "redo"}`
-(emitted by `on_menu_event` for the Edit menu's two items; not an `AppEvent`).
+(emitted by `on_menu_event` for the Edit menu's two items; not an `AppEvent`), P50 `camera_fingerprint_pending{fingerprint}` (the sidecar
+reported an unpinned Wi-Fi fingerprint; Settings → Camera shows it for confirmation).
 Bindings: `tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![…]).events(collect_events![…])`;
 exported by the test `psm-desktop::export_bindings` to `apps/desktop/src/services/bindings.ts`
 (`specta_typescript::Typescript::default()`); the committed file must equal the regenerated one.
@@ -429,6 +532,13 @@ original`, `4x5 → 4:5`, `2x3 → 2:3`, `16x9 → 16:9`, anything else → `1:1
 dropped on save) and `output_format` (`{"long_edge": 2048, "quality": 90}`; `long_edge` 512–8192, `quality` 60–100; JPEG, 4:4:4, sRGB fixed;
 `format_key = jpeg-<long_edge>-q<quality>`) replaces the PSM Web recipe values; the Settings screen shows "Output size (long edge, px)" and
 "Output JPEG quality" instead of "Web recipe".
+**10E (P43, P50):** `camera` (object, defaults filled on read and shown by Settings → Camera): `{"receiver_port": 2121,
+"passive_port_start": 50000, "passive_port_end": 50009}`; validation in `SettingsService::set`: each port 1024–65535, `passive_port_start ≤
+passive_port_end`, at least 2 passive ports (MC-32 guarantee 5: two concurrent uploads), the control port outside the passive range; a save
+that changes any of the three closes and reopens the receiver's listener **in place** (R-I18: never two listeners; the sidecar is untouched).
+Nothing secret is ever in `settings.json`: the camera's Access Authentication user and password and the FTP password live in the Keychain
+(service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`; R-I21). The receiver's FTP
+**username** is the constant `sessionmanager` (not a setting; shown in camera setup).
 Naming rule: snake_case keys; booleans prefixed `is_`/`has_` if any are added; durations carry their unit suffix.
 **Reading rule (P21):** a `settings.json` that does not parse, or an `integration` block that is not a complete
 `IntegrationSettings`, never stops the app: the defaults are used in memory (Export mode for the block), the file is
@@ -449,6 +559,14 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   (`composition::tests`) and by `apps/desktop/src/features/compose/__tests__/geometry.test.ts` (read with `fs`); a geometry change edits the
   table once. Compose tests live in `apps/desktop/src/features/compose/__tests__/`; pure-TS mechanisms (`geometry.ts`, `machine.ts`, `refit.ts`,
   `snapping.ts`, `workspace/outputs.ts`) are the only frontend units with unit tests (flow §4 Core mechanisms).
+- **10E (P42–P50):** the sidecar is never real in the suite: `crates/testkit/src/bin/fake_sidecar.rs` (`[[bin]] fake_sidecar` of psm-testkit,
+  reached from `crates/testkit/tests/*` as `env!("CARGO_BIN_EXE_fake_sidecar")`) speaks the stdio protocol from a script file (P45 §The fake
+  sidecar), records every stdin line and its own argv/env into files under the test's temp dir, and can exit on command. The FTP receiver is
+  tested at its socket boundary on `127.0.0.1:0` through `psm_testkit::ftp_client` (a minimal hand-written client, so a reset mid-transfer is
+  a real `RST`). The C++ transport-manager tests run through `ctest` from `tools/sidecar/build.sh --stub` (one Rust test in
+  `p45_sidecar_and_protocol.rs` drives it; build dir under `target/camera-sidecar/`). Sidecar event fixtures (`crates/integrations/src/camera/
+  sidecar/fixtures/*.jsonl`) are the lab's real event lines (handoff §4.2) plus lines whose shape is cited to a `Fields` emit site in the
+  lab's C++ (rule 17; P45 names each).
 
 ### 6.10 Composition skeleton (book 10D, planned 2026-11-04; the names P27–P34 share)
 - **Constants:** `MIN_RECT_FRACTION = 0.05` (a rect's short side is at least 5 % of the turned frame's short side), `MASTER_TIFF_COMPRESSION =
@@ -548,6 +666,101 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   `edit.redo` (custom `MenuItem`s), separator, cut, copy, paste, select all; `EditMenu { undo, redo }` in managed state; `on_menu_event` →
   `edit_menu{action}`.
 
+### 6.11 Direct camera skeleton (book 10E, planned 2026-11-06; the names P42–P52 share)
+- **Constants** (`psm_core::domain::camera` unless noted): `FIFO_WINDOW_MS = 300_000`, `WATCHDOG_MIN_AGE_MS = 60_000`, `WATCHDOG_MAX_AGE_MS =
+  1_800_000`, `TRANSFER_EXPECTED_MS = 10_000` (busy `Transfer` from `capture.exposed` on a USB session to the matching completion),
+  `COMPLETED_NAMES_WINDOW_MS = 86_400_000` (LIST/NLST/SIZE/MDTM answer for names completed in the last 24 h); `psm_integrations::camera::sidecar::
+  {RESTART_BACKOFF_S: [u64; 5] = [1, 2, 4, 8, 16], RESTART_STEADY_S = 30, QUIT_GRACE_MS = 3_000}`; `psm_integrations::camera::direct::
+  {START_ORDER_WAIT_MS = 15_000, TAKE_BACK_QUIT_WAIT_MS = 20_000, TAKE_BACK_FREE_WAIT_MS = 5_000, TAKE_BACK_READY_WAIT_MS = 15_000,
+  TAKE_BACK_EXPOSURE_GRACE_MS = 10_000, USB_FAILURES_BEFORE_WIFI = 3 (mirrors the sidecar's `usb_failures_before_wifi_fallback`)}`;
+  `psm_integrations::editing::capture_one::follow::{VARIANT_WAIT_POLL_MS = 1_000, VARIANT_WAIT_MAX_MS = 15_000}` (the current-collection rule is fixed by
+  R46 — switch on every arrival while Capture One shows another collection and on every activation, frontmost or not — so there is no policy constant); `psm_infra::ftp::{FTP_USERNAME = "sessionmanager", DEFAULT_CONTROL_PORT = 2121,
+  DEFAULT_PASSIVE = 50000..=50009}`; `psm_core::domain::camera::secrets::{SERVICE = "com.loorenz.sessionmanager.camera", ACCESS_AUTH_USER =
+  "access-auth-user", ACCESS_AUTH_PASSWORD = "access-auth-password", FTP_PASSWORD = "ftp-password"}`; `FTP_PASSWORD_LEN = 32` over `[A-Za-z0-9]`.
+- **Domain** (`crates/core/src/domain/camera.rs`): the enums of §6.6; `ExposureObserved { capture_id: Option<CaptureId>, at: i64 /* Mac-clock UTC
+  ms = the sidecar envelope's timestamp */, initiated: ExposureInitiator, provisional: bool }`; `Delivery { camera_filename: String /* as the
+  camera named it, after the adapter's normalisation */, written_path: PathBuf, sha256: String, size: u64, via: Link, completed_at: i64 }`;
+  `CameraName(String)`.
+- **Ports** (`crates/core/src/ports/`): `camera.rs` — `CameraProvider { fn raw_extensions(&self) -> &'static [&'static str]; fn status(&self) ->
+  Result<CameraStatus>; fn capture(&self) -> Result<CaptureId>; fn capabilities(&self) -> CameraCapabilities; fn reconnect(&self) -> Result<()>;
+  fn request_ftp_status(&self) -> Result<()> }` (the last two added in P46; the Capture One adapter answers `Err(Error::Provider("not supported"))`),
+  `CaptureSink { fn exposure_observed(&self, e: ExposureObserved) -> Result<i64>; fn delivery(&self, d: Delivery) -> Result<DeliveryOutcome>; fn
+  session_uncertain(&self) -> Result<()>; fn transfer_in_progress(&self, source: Link, active: bool) }`, `ArrivalSource { fn via(&self) -> Link;
+  fn transfer_in_progress(&self) -> bool }`, `DeliveryFs { fn rename_exclusive(&self, from: &Path, to: &Path) -> Result<RenameOutcome {Moved,
+  Exists}>; fn create_dir_all(&self, dir: &Path) -> Result<()>; fn file_size(&self, path: &Path) -> Result<u64> }`; `secrets.rs` — `SecretStore
+  { fn get(&self, account: &str) -> Result<Option<String>>; fn set(&self, account: &str, value: &str) -> Result<()>; fn delete(&self, account:
+  &str) -> Result<()> }`; `system.rs` — `ProcessList { fn running(&self) -> Result<Vec<String>> /* process names */ }`, `SleepInhibitor { fn hold(&self,
+  reason: &str) -> Result<()>; fn release(&self) }`.
+- **Mechanisms** (`crates/core/src/mechanisms/`): `camera_status.rs` — `StatusInputs { needs_action: Vec<(NeedsActionReason, Option<String>)>,
+  busy: Option<BusyReason>, session: Option<(CameraName, Link)>, connecting: Option<Link>, helper_running: bool }`, `derive_status(&StatusInputs)
+  -> CameraStatus` (R-I37 order; `NeedsAction` chosen by `NeedsActionReason::rank()`), `health_items(&StatusInputs) -> Vec<HealthItem>` (every
+  reason that holds, codes of §6.6), `status_message(&NeedsActionReason, holder) -> String` (the §6.6 details). `capture_ledger.rs` — `file_key(name)
+  -> String` (strips only `__dup<n>` before the extension, upper-cases), `stem_key(file_key)`, `normalize_dup_suffix`, `FifoCandidate { exposure_id,
+  exposed_at, session_id }`, `associate(file_key, completed_at, prior: &[PriorDelivery], candidates: &[FifoCandidate]) -> AssociationDecision
+  { exposure_id: Option<i64>, association: Association, session_id: Option<i64>, ambiguous_with: Vec<i64> /* other sessions in the window */ }`,
+  `duplicate_decision(file_key, sha256, prior: &[PriorDelivery]) -> DuplicateDecision { Photo, Duplicate { of: i64 }, RenamedPhoto { n: u32 } }`,
+  `dup_name(camera_filename, n) -> String` (`DSC01234__dup1.ARW`), `target_folder(capture_root, folder_key: Option<&str>) -> PathBuf`
+  (`_Unassigned` when `None`), `pending_count(exposures: &[(ExposureStatus, i64)], now_ms) -> usize`, `sequence_gaps(stems: &[&str]) -> Vec<Gap
+  { prefix, after, before, missing }>` (the lab's `seq_of` rule: `_<1–2 digits>` stripped **only here**, for gap reporting).
+- **Services** (`crates/core/src/services/camera_ledger.rs`): `LedgerService { store, clock, fs: Arc<dyn DeliveryFs>, events, health, capture_root:
+  Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>, worker: Mutex<()> }` implementing `CaptureSink` — one decision at a time under `worker`: decide →
+  `insert_delivery(pending, final_path)` → `rename_exclusive` (on `Exists`: compare SHA-256 → `.duplicates/` or the next `__dupN`) → `set_delivery_done`;
+  `record_exposure` reads `active_session_id` at that moment; `recover_pending()` at bind (pending + staging file present → rename again; final present
+  → done); `watchdog(now_ms) -> WatchdogState { pending_count, gaps, raised }` sets/clears `camera_files_not_received`; `dismiss()`;
+  `completed_names_since(ms) -> Vec<(String, u64, i64)>` (for the receiver's listings); `session_for_path(canonical) -> Option<(Option<i64>, i64)>`
+  (MC-2 rule 0: the delivery's session and `captured_at`).
+- **Runtime** (`crates/integrations/src/camera/runtime.rs`): `CameraRuntime` (one `Arc` per process, created in `App::open_with_adapter` and carried
+  through `SettingsSetContext`, `App::build(…, camera: Arc<CameraRuntime>)` and `App::reopen`): fields `supervisor: Mutex<Option<Supervisor>>`,
+  `receiver: Mutex<Option<ReceiverHandle>>`, `provider: ArcSwap-like RwLock<Arc<dyn CameraProvider>>`, `binding: RwLock<Option<AppBinding>>`, `sink:
+  RwLock<Arc<dyn EventSink>>`, `secrets: Arc<dyn SecretStore>`, `clock`, `run_id: String /* uuid; the staging folder suffix */`; `bind(AppBinding {
+  store, events, health, capture_root, editing, camera_settings: CameraSettings, support: Option<InstalledSupport>, paths })` is called by every
+  `App::build` and (a) re-targets events and health (re-publishing the current status into the new `HealthService`), (b) rebuilds the `LedgerService`
+  over the new store and runs `recover_pending`, (c) starts the supervisor and the receiver on the **first** bind that finds support installed,
+  (d) applies changed camera settings in place (receiver port/range → close + reopen; credentials → used at the next spawn, restart only while no
+  USB session is open), never spawning a second sidecar or listener; `tick()` from the App's background thread (supervisor restarts, watchdog);
+  `shutdown()` at process exit only (`quit`, `QUIT_GRACE_MS`, then kill; the receiver stopped). `App::shutdown` **does not** stop the runtime.
+- **Sidecar** (`crates/integrations/src/camera/sidecar/`): `SidecarSpec { program: PathBuf, args: Vec<String> /* ["auto", "--save-dir", <staging>]
+  */, env: Vec<(String, String)> /* CRLAB_FINGERPRINT_DIR only */, first_line: String /* `credentials user=<pct> password=<pct>` */ }`; `Supervisor
+  { spec, child: Option<Child>, attempts, next_spawn_at, events_tx, stop }` with `spawn()`, `send(&Command)`, `tick(now) -> Vec<SupervisorEvent>`
+  (`Started { pid }`, `Exited { code }`, `Line(String)`, `Stderr(String)`), `quit_and_wait()`; `protocol.rs` — `SidecarEvent` (variants named after the
+  lab events: `TransportState {from, to, reason, transport}`, `ConnectionReady {transport, camera_id?, store_destination: Option<Verified|Failed>,
+  store_value?}`, `SessionClosed {transport, reason}`, `SessionLost {transport, reason, busy}`, `CmdReceived {cmd, cmd_id}`, `CmdDone {cmd, cmd_id}`,
+  `CmdRejected {cmd, reason}`, `CaptureRequested {capture_id, transport, af}`, `CaptureAcknowledged {capture_id, success, sdk_error}`, `CaptureExposed
+  {capture_id: Option<String>, transport, association}`, `CaptureExposureMissing {capture_id}`, `CaptureUncertain {operation}`, `CameraBusy {reason,
+  safe_point}`, `SwitchDeferred {to, busy}`, `UsbArrived {detail}`, `UsbRemoved {detail}`, `UsbInitial {present}`, `UsbClaimedBy {owners}`,
+  `UsbFallbackToWifi`, `SdkDownloadCompleted {filename, size_bytes, success, provisional_capture_id}`, `SshFingerprint {status, fingerprint?}`,
+  `CameraFtpState {fields}`, `SdkUnavailable`, `ConnectFailed {transport, sdk_error, message}`, `Unknown {event}`) with `timestamp_ms: i64`;
+  `parse_line(&str) -> Result<SidecarEvent, ProtocolError>`; `Command::{Credentials {user, password}, Capture {id, af: true, cmd_id}, Props, FtpStatus,
+  Status, UsbRetry, Quit}::encode() -> String` (percent-encoding of `user`/`password` per RFC 3986 unreserved set).
+- **Direct adapter** (`crates/integrations/src/camera/direct/`): `DirectCameraAdapter` (Sony SDK sidecar driver; implements `CameraProvider` and
+  `ArrivalSource {via: Cable}`), `normalize_camera_filename(name) -> String` (Sony: `_<1–2 digits>` after the stem's trailing digits removed, e.g.
+  `DSC01234_1.ARW → DSC01234.ARW`; `IMG_1234.CR3` would be untouched here too because the rule needs trailing digits before the suffix), `HolderReport
+  { holder: Option<String>, programs: Vec<String>, sentence: Option<String> }` and `name_programs(owners: &str, running: &[String]) -> HolderReport`
+  (R-I30 list, Capture One first), `TakeBackService` (R-I32 steps with the bounds above), `StartOrder` (R-I31 conditions) and `LaunchGate` (`editing/
+  capture_one/launch_gate.rs`: `hold() -> GateGuard`, `is_held()`; `GatedScripting` consults it for `launch`, `front_document`, `make_document`,
+  `open_document`, `ensure_recipe`, `ensure_capture_style`, `quit` → `Error::EditorLaunchDeferred` while held).
+- **Receiver** (`crates/infra/src/ftp/`): `ReceiverConfig { bind: IpAddr /* 0.0.0.0 in production, 127.0.0.1 in tests */, port: u16 /* 0 = ephemeral
+  */, passive: RangeInclusive<u16> /* 0..=0 = ephemeral */, allowed_peers: Vec<IpNet>, username, password: String }`, `FtpReceiver::start(config,
+  sink: Arc<dyn CaptureSink>, names: Arc<dyn CompletedNames>, capture_root: Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>) -> Result<ReceiverHandle
+  { port(), passive(), stop(), uploads_in_progress() }>`; `CompletedNames { fn completed_names_since(&self, since_ms) -> Vec<(String, u64, i64)> }`
+  (the ledger implements it). Reply codes fixed by MC-32 (R-I24): 421 peer refused, 530 bad login, 553 hidden/staging/`..` names and every `RNTO`,
+  550 `DELE`/`RMD`/`RNFR`/unknown name in `SIZE`/`MDTM`, 450 a second `STOR` of a name in flight, 554 `REST` past the `.part` length, 451 capture root
+  missing, 426 data connection failed, 226 completed, 502 `PORT`/`EPRT` and unknown commands.
+- **Support packages** (`crates/integrations/src/camera/support/`): `InstalledSupport { make: &'static str /* "sony" */, version: String, sidecar_path:
+  PathBuf, folder: PathBuf }`; `SupportPackages::installed(paths) -> Option<InstalledSupport>` (the newest `camera/sony/<version>/` folder holding
+  every manifest file and `camera-sidecar`), `install(paths, archive, bundled_sidecar) -> Result<InstalledSupport>` (extract with `zip`, verify
+  against `manifest::SONY` (`native/camera-sidecar/manifest/sony-<version>.json`: `{version, files: [{path, sha256}]}` — hashes only, generated
+  by `tools/sidecar/manifest.sh` on the build machine), copy the runtime + the sidecar, `codesign -s - --force` each Mach-O, run `camera-sidecar
+  version` and require `sdk_version` on the supported list), `refresh_sidecar_copy(paths, bundled)` at each start (SHA-256 mismatch → copy and sign
+  again). The Capture One camera adapter is used whenever `installed()` is `None`.
+- **Frontend (P51):** `services/camera.ts` (`cameraStatus`, `cameraRetry`, `cameraCapture`, `cameraTakeBack`, `cameraTestConnection`, `cameraSupportGet`,
+  `cameraSupportInstall`, `cameraSecretsSet`, `cameraFtpPasswordGenerate`, `cameraFingerprintConfirm/Reject`, `onCameraStatus`, `onFingerprintPending`),
+  `features/shell/CameraDot.tsx` (five states by `data-state`: `connected` (green; text `<name> · Cable|Wi-Fi`), `connecting` (amber pulse), `busy`
+  (amber), `needs_action` (red; the sentence as the tooltip and the `Take the camera back` button when `reason === 'held_by_other_program'` and the
+  holder is Capture One), `disconnected` (red)), `features/settings/CameraSection.tsx` (Add camera support → Sony, installed version, FTP password
+  (generate, shown once, copy), receiver port and passive range, Access Authentication user/password, fingerprint card, Test camera connection),
+  Health names for the §6.6 codes.
+
 ## 7. Environment topology (verified 2026-10-25 on the dev Mac; "if reality disagrees, update this section")
 ### 7.1 Verified facts
 | Check | Command run | Result |
@@ -570,6 +783,10 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
 | Codex sandbox | runner `run_codex` | `workspace-write` plus `--add-dir` for the repo `.git`, `~/.cargo` and `~/.npm` (orchestrator fix 2026-10-25 after P00 r1: Cargo's registry cache and npm's cache were refused; `npm install` of `apps/desktop/package.json` succeeds outside the sandbox). Use the default Cargo home and npm cache; no local `CARGO_HOME`. Codex's command review rejects `rm -rf`: remove generated files with `git rm`/`git clean -n` + targeted deletes or avoid creating them. |
 | P00 bundle launch | `open -n --env PSM_DATA_DIR=/tmp/psm-spike-bundle -a '/Users/davidloorenz/Desktop/Developer/Photo-Session-Manager/apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app'` | Build and ad-hoc signing succeeded; `codesign --verify --deep --strict` succeeded. LaunchServices returned `NSOSStatusErrorDomain Code=-10827 kLSNoExecutableErr` inside the Codex sandbox. The orchestrator launched the bundle outside the sandbox and the owner saw the Health page (evidence `packaging_spike.md`). Automation attribution with the corrected real-event probe awaits an interactive check. |
 | Claude sessions | `.claude/settings.json` | Bash allowlist includes `cargo`, `rustup`, `npm`, `npx`, `node`, `osascript`, git read/write (no force-push) |
+| CMake / C++ (planner, 2026-11-06) | `cmake --version`, `c++ --version` | cmake 4.4.5; Apple clang 17.0.0 (Command Line Tools). Enough for the stub sidecar build (P45) and the C++ mock-camera tests. |
+| Sony Camera Remote SDK (planner, 2026-11-06) | `ls ~/Library/Developer/SonyCrSDK` | **absent** there; the SDK the lab built against lives at `/Users/davidloorenz/Desktop/Developer/Camera-Connection-Tests/vendor/sony-sdk` (gitignored in the lab). `tools/sidecar/build.sh --sdk <that path>` is the only SDK build; nothing in this repo ever reads a Sony file at test time. |
+| Camera | owner | Sony A7R V, configured once by the owner for Auto FTP to this Mac (lab `camera_steps.py`: `Directory Hierarchy: Standard`, `Same File Name: Does Not Overwrite`, port 2121, user `sony` in the lab — **P50's setup names the user `sessionmanager` and a generated password; the owner re-enters both on the camera once**) and Access Authentication over Wi-Fi. Used daily: only P47 and P52 may ask for it. |
+| macOS firewall / Local Network | — | Unknown for a packaged app (spike S4). Tests bind the receiver to `127.0.0.1` to avoid the "accept incoming connections" prompt. |
 
 ### 7.2 Commands (standard invocations; Rust is installed and the corrected SQLite pair resolves;
 P00 records command outcomes and timings)
@@ -584,6 +801,8 @@ P00 records command outcomes and timings)
 | Dev app | `cd apps/desktop && npm run tauri -- dev` (Vite dev server inside the Tauri window) |
 | Build `.app` (ad-hoc signed) | `cd apps/desktop && npm run tauri -- build --bundles app` → `apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app` |
 | Run with a scratch data dir | `PSM_DATA_DIR=/tmp/psm-dev npm run tauri -- dev` |
+| Camera sidecar, stub (P45+) | `tools/sidecar/build.sh --stub` → `apps/desktop/src-tauri/binaries/camera-sidecar-aarch64-apple-darwin` (also run by `apps/desktop/src-tauri/build.rs` when the file is absent) · C++ tests: `tools/sidecar/build.sh --stub --test` (`ctest` in `target/camera-sidecar/`) |
+| Camera sidecar, with the SDK (build machine only) | `tools/sidecar/build.sh --sdk /Users/davidloorenz/Desktop/Developer/Camera-Connection-Tests/vendor/sony-sdk` (never commits anything; the Sony runtime is **not** bundled — the user installs it as a support package, P50) · manifest: `tools/sidecar/manifest.sh <sdk root> <version>` → `native/camera-sidecar/manifest/sony-<version>.json` |
 "Suite, lint and typecheck green" (flow §4, B4) means: `cargo test --workspace`, `cargo clippy … -D warnings`,
 `cargo fmt --check`, `npm run typecheck`, `npm test` — all exit 0.
 
@@ -629,6 +848,15 @@ left at head. Migrations are applied by `rusqlite_migration::Migrations::to_late
   decode(path), outputs_dir(raw), masters_dir(raw)}`; `complete_all_renders` writes a default `SyntheticMaster` for master jobs and the stub
   JPEG for previews; `tick` also ticks `render_jobs`. P30: `FakeCommerce` records `uploaded_sha[filename]`; `SqliteStore::migrations()`
   exposed for the migration-005 row.
+- **10E (P42–P50):** `TestApp::with_camera()` (P42; `with_fake_document` plus a "support folder" under the temp data dir holding the fake sidecar
+  binary as `camera/sony/test/camera-sidecar`, `FakeSecrets` pre-filled with `access-auth-user = u`, `access-auth-password = p`, `ftp-password = f`,
+  the receiver bound to `127.0.0.1:0` with loopback allowed (P43), `ManualClock` driving `CameraRuntime::tick`); `TestApp::sidecar_script(path)`
+  / `with_camera_script(script)` (P45: the fake replays a script); `TestApp::camera_runtime()`, `camera_status()`, `ledger()` (P44),
+  `receiver_port()` (P43), `ftp()` → `FtpClient` connected and logged in (P43), `fake_sidecar_recording()` (the files the fake writes: `argv`,
+  `env`, `stdin`, `pids`), `fake_processes` (`FakeProcessList`, P48), `fake_sleep` (`FakeSleepInhibitor`, P48). The fake Capture One gains
+  `quit()` (`running` false after `quit_after_polls`, default 1; op `quit`), `set_current_collection` (op `set_current_collection:<folder>`, state
+  `current_collection`, fault `fail_set_current_collection`; `find_image` answers only for images in the current collection, MC-19), `apply_style`
+  (op `apply_style:<variant>:<name>`, per-variant `styles` list) and loses `import` (P49).
 
 ## 8. Tool protocols
 No architecture graph, no contract system in this repo (ch03). Sessions use this file and the plan file only.
@@ -702,3 +930,15 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   `ai_suggest` never records, only `set_value` saves coalesce, `AttributesService::with_history(&History)` (`new` unchanged), the command rows in
   `lib.rs mod p40_tests`, `product.description` for the command row, the copy-redo `that photo is gone` fix folded from the backlog (task 8, C8(a)),
   D10–D16 delegations written down. §6.10 amended (`with_history`). P41 needs no change. Nothing declined.
+- 2026-11-06 direct camera adapter — planner (Fable) added P42_camera_runtime, P43_ftp_receiver, P44_capture_ledger, P45_sidecar_and_protocol,
+  P46_direct_camera_adapter, P47_support_package_spike (owner-attended), P48_camera_ownership, P49_capture_one_alongside,
+  P50_camera_settings_and_support, P51_camera_setup_ui and P52_hardware_acceptance (owner-attended) from book 10E (MC-31…MC-34, M37–M40, R42–R45
+  at `53d6ea4`; inventory R-I18…R-I38 at `41bef14`). §2 (10E, M1–M40, the Sony evidence and the read-only lab repo), §3 (trace ranges, `[manual]`
+  rows, the camera hard rules), §4 eleven NOT_STARTED rows, §5 count 52 / graph / `depends_on` / the direct-camera phasing note / P45, P47, P52
+  preconditions, §6.1 new modules (core camera domain and mechanisms, infra ftp/keychain/processes/sleep, integrations camera runtime/sidecar/direct/
+  support, `native/camera-sidecar/`, testkit fakes), §6.2 camera crates (libc, security-framework, ipnet, zip, getrandom; no FTP crate), §6.3
+  support folder, fingerprints, `.incoming`/`.duplicates`, §6.4 port changes, §6.5 migrations 006/007, §6.6 camera enums, error and health codes,
+  §6.7 camera commands and events, §6.8 the `camera` settings block, §6.9 fake sidecar / FTP client / C++ tests, **new §6.11** (the camera
+  skeleton), §7.1 cmake/clang/SDK/camera facts, §7.2 sidecar build commands, §7.5 harness. Owner card CI1 was answered "always jump" during
+  planning (R46 at `e0ce354`, relayed by the orchestrator): P49 plans the fixed rule, no policy constant. No intention-book change by the planner;
+  one planner reading on the Import feature recorded in P49 Notes.

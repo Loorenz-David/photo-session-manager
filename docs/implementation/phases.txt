@@ -40,3 +40,14 @@ P38_editor_polish
 P39_undo_history_core
 P40_undo_history_compositions_and_attributes
 P41_undo_history_ui
+P42_camera_runtime
+P43_ftp_receiver
+P44_capture_ledger
+P45_sidecar_and_protocol
+P46_direct_camera_adapter
+P47_support_package_spike
+P48_camera_ownership
+P49_capture_one_alongside
+P50_camera_settings_and_support
+P51_camera_setup_ui
+P52_hardware_acceptance
