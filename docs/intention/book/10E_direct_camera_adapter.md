@@ -6,7 +6,7 @@
 **Mechanism inventory (2026-11-06, changelog 32).** The "Inventory additions" under each contract make it contract-grade
 against the lab code and this repo. Items marked **(ratify R-In)** settle a gap or a contradiction without changing what the
 photographer gets; they are listed for the owner in `implementation/handoffs/reviewer/handoff_direct_camera_inventory_r1.md`.
-One proposal waits on owner card CI1 (§Capture One alongside); until it is answered the ratified sentence stands.
+Owner card CI1 (§Capture One alongside) was answered "always jump" on 2026-11-06 (R46).
 
 Resolves chapter 10's research item ("A direct Sony adapter (Camera Remote SDK or PTP) is a later provider … its feasibility is a
 research item"): **feasible on the A7R V over Wi-Fi and USB-C.** Session Manager becomes the camera's controller; Capture One stays
@@ -350,10 +350,8 @@ program or system service (`ptpcamerad` included).
 - Not used: `import` (copies the file into the session root, V1), Hot Folder (not scriptable, V5).
 
 **Inventory additions (2026-11-06).**
-- **Current collection on arrival: owner card CI1 (proposal, not in force).** The proposal: on arrival, the switch is made only while
-  Capture One is not the frontmost app; while it is frontmost, the switch waits until it stops being frontmost, because a photographer
-  working in another collection chose it. Previews wait meanwhile (next bullet). On session activation the switch is always made. Until the
-  owner answers, the ratified sentence above (switch on every such arrival) stands.
+- **Current collection on arrival: owner card CI1, answered "always jump" (owner 2026-11-06, R46).** The switch is made on every
+  arrival while Capture One shows another collection, whether or not Capture One is the frontmost app, and on every session activation.
 - **Waiting for the variant (ratify R-I35).** After an arrival, the adjusted-preview render and the style apply wait until Capture One
   finds the variant: `find_image` is polled every 1 s for up to 15 s, then the normal render backoff applies (1, 2, 4 … 60 s) for as long
   as the photo exists and is stale. `variant_not_found` never ends the retries and never marks a generation failed; a current-collection

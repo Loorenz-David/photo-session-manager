@@ -132,7 +132,7 @@ When a session becomes active (or the last one closes, target `_Unassigned`, MC-
    retried at the next ensure (chapter 10E MC-34, **ratify R-I33**). M25's "blocks capture" applies to the Capture One camera
    adapter only.
 6. with the direct camera adapter, also set the document's **current collection** to the target folder, so Capture One scans it
-   and sees files written by the receiver (chapter 10E §Capture One alongside, V1; on-arrival switching: owner card CI1).
+   and sees files written by the receiver (chapter 10E §Capture One alongside, V1; on every arrival too: owner card CI1 answered "always jump", R46).
 
 Evidence for step 4: setting a missing folder fails with "Cannot set because there is no file at
 this location", and afterwards `captures` reads back as `<working directory of the calling

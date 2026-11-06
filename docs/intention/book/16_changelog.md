@@ -167,3 +167,5 @@
     location, signing, spike S1–S6; R-I37 camera status values and precedence; R-I38 M37–M40 wording. (R-I34 is not used: the
     current-collection rule went to card CI1.) Open owner card CI1 (Capture One's browser on arrival), chapter 15. Header stays
     RATIFIED: no material semantic change.
+
+33. **2026-11-06 — Owner: card CI1 answered "always jump"** (relayed by the orchestrator). Capture One's browser switches to the session's folder on every arrival, even while the photographer works in Capture One. 10E §Capture One alongside and 10A MC-18 step 6 updated; R46. Header stays RATIFIED.

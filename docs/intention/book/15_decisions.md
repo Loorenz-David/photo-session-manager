@@ -48,12 +48,10 @@
 | R43 | **Two file paths, one photo (owner 2026-11-06).** On USB files come over the cable (SDK Save-to-PC; the app sets the store destination, verified, Host PC + card on USB, card only on Wi-Fi); the camera's Auto FTP runs always as the Wi-Fi path and the safety net; the first complete copy of a camera file wins and identical copies are set aside, never photos, never deleted; files land in the session capture folder of the session active at exposure. Plain FTP on the private network now, FTPS later. (10E MC-32, MC-33, M37, M38) | 2026-11-06 |
 | R44 | **Camera ownership and secrets (owner 2026-11-06).** Session Manager must keep control of the camera: it detects and names any program holding it, connects over USB before launching Capture One and never lets go while Capture One runs, and offers "Take the camera back" (save, quit and relaunch Capture One) on the photographer's click, automatic later; it never kills or reconfigures other programs. Camera and FTP passwords in the Keychain now. (10E MC-34, MC-31, M39) | 2026-11-06 |
 | R45 | **Camera support packages (owner 2026-11-06).** The app ships each make's adapter; the user installs the make's SDK runtime through the app (download from the maker, version check, local signing); no vendor SDK file, nor the lab's hand-written SDK stand-in headers, ever enters the public repo; CI builds a stub sidecar. (10E, 11) | 2026-11-06 |
+| R46 | **Capture One follows every arrival (owner 2026-11-06, card CI1: "always jump").** With the direct camera adapter, Capture One's current collection is switched to the session's capture folder on every arrival while it shows another collection, even while the photographer works in Capture One, so each photo and its adjusted preview appear at once. (10E §Capture One alongside, 10A MC-18 step 6) | 2026-11-06 |
 
 ## Open owner cards
-- **CI1 (mechanism inventory of 10E, 2026-11-06): Capture One's browser on arrival.** Should Capture One jump to the
-  session's folder on every new photo, or only when the photographer is not working in Capture One? Card text in
-  `implementation/handoffs/reviewer/handoff_direct_camera_inventory_r1.md`; proposal in 10E §Capture One alongside. On silence
-  the ratified rule (jump on every arrival) stands.
+None open. CI1 (Capture One's browser on arrival) answered "always jump" on 2026-11-06: R46.
 
 I1 (retouch after publishing) answered Yes on 2026-10-25: R30.
 
