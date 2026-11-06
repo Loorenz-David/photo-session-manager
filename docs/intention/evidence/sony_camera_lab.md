@@ -87,4 +87,7 @@ collection back to the session root.
   expected to lose: `crlab auto` attempts its connect about 3.6 s after arrival because of discovery).
 - **Store destination over USB:** set *Host PC + Memory Card* (0x3) verified in 208 ms; set *Camera only* (0x2) verified in 205 ms;
   left on Camera only. Camera FTP status read over USB: connection error (no receiver running), as expected.
-- The cable re-plug race with Capture One running was not exercised (no re-plug during the 4-minute window).
+- **Cable re-plug with Capture One running (owner re-plugged, 11:07 UTC):** cable out → interface free; cable in → IOKit arrival at
+  40.862, **`ptpcamerad` held the interface by 40.890 (≤ 28 ms, the poll's resolution)**; the SDK's first attempt came 3.7 s later
+  (discovery) and failed 0x8208, as did every retry. The re-plug race is lost by orders of magnitude; even a direct connect by serial
+  could not beat it. Recovery while Capture One runs therefore needs Capture One quit and relaunched (10E MC-34).

@@ -164,8 +164,8 @@ and capture groups (one result from many files: the owner's research intent, tra
 
 ## Owed before planning
 - ~~V6~~ done 2026-11-06 (evidence §V6): Capture One is the trigger; its tether checkboxes do not help; SDK-first holds; release loses
-  the camera within 1 s. ~~Store-destination write over USB~~ verified both ways (evidence §V6). Still open, owner present: the cable
-  re-plug race with Capture One running (expected lost, covered by "Take the camera back").
+  the camera within 1 s. ~~Store-destination write over USB~~ verified both ways (evidence §V6). Cable re-plug with Capture One running: lost,
+  `ptpcamerad` holds the interface within 28 ms of the plug-in (evidence §V6); covered by "Take the camera back".
 - **Camera support package spike:** install the SDK runtime through the flow above on a second macOS user account, confirm the sidecar
   loads it and connects on USB and Wi-Fi from the packaged app.
 
