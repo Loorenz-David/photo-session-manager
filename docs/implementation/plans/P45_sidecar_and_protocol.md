@@ -332,3 +332,26 @@ nothing changes on screen; `git status` shows no `binaries/` or build output (ig
   `<document>/Capture/.incoming/sdk-<run_id>`, `--usb-product-id 0x0E0C`; fake sidecar script mode; `TestApp::{with_camera_script,
   sidecar_events}`. Assumptions and deviations: see the handoff (notably `Stamped` wrapper for `timestamp_ms`; `poll(now, side)` signature;
   no `events: Sender` field yet; the `StoreDestHostPC` probe line removed from `sdk_symbols.def` for C1(d)).
+- **2026-11-06, review r1 — APPROVED_WITH_NOTES** (reviewer, Opus; handoff `handoffs/reviewer/handoff_P45_sidecar_and_protocol_review_r1.md`).
+  **Verified correct:** perimeter = the 44 declared paths of `db3cdae`, no drift to HEAD outside runner docs; `git ls-files native/` = the 24
+  expected sources, `git ls-files` holds no `CrSDK*`/`CameraRemote*`/`sdk_shim`/`vendor/`/`*.dylib`/`*.fingerprint`/`.env*`; `diff -r` against the
+  lab `sdk/` at `221aa49` shows only `sdk_shim/` absent, `README.md` added, and the C++ edits 1–7, each matching the plan and 10E R-I19–R-I23
+  (credentials read synchronously before the adapter copies `base`, EOF first → exit 0; `usb.initial` from `present_count()` after `mon.start`;
+  `usb-retry` queued `Input` resetting the four counters, accepted before the `!connected` rejection; product filter before `present` is counted,
+  same filter in `usb_exclusive_owners`; `after_connect` = `configure_save(dir,"")` then `set_store_destination(usb ? "pc+camera" : "camera", 3000)`
+  with value read back, `try_connect` appends `model`/`store_destination`/`store_value`; `restore_store_destination` and the `"pc"` mapping removed;
+  `before_voluntary_stop` only on USB, after the safe-point wait, nothing in `disconnect()`; deferred stop measured from the draining step with
+  `>=`, no connect/switch meanwhile, cable loss ends it; `None` after `run_capture` only without a USB exposure; 10 s deadline in the 100 ms loop).
+  `percent_decode` reads no byte past the end. `lab_auto_switching.jsonl` = handoff §4.2's 13 lines byte-for-byte; `emit_sites.jsonl` matches the
+  C3(b) shapes (`connect.failed` carries `error`). Staging = `<document>/Capture/.incoming/sdk-<run_id>` (`capture_root` holds the document dir,
+  as `capture_root_fn` shows). Client correlation follows §The client; the returned id is the wire id. Each of the 21 rows read against its
+  test: every test asserts the row's exact outcome at its boundary (whole-variant equality for C3/C5, exact stdin line once for C5(b), exactly
+  one helper-log entry for C5(d), before/after tree walk for C2(c), `[ OK ] <name>` lines from the `--verbose` ctest run for C6, which
+  `mt_run_all` prints only when no CHECK threw). Suite (reviewer run, tree `c4bdab2` = `db3cdae` + runner docs): `cargo test --workspace` 693/0,
+  clippy and fmt exit 0, `npm run typecheck` exit 0; `npm test` 368/369 on the first run (P33 `p33_split_grid` C4(d), no frontend file in this
+  perimeter), then the file 3/3 alone and 369/369 in a full re-run → flake, noted. H1–H8, secrets (no credential in env/argv; unparsable
+  lines reach the helper log through the redactor) and no-live-services hold. Assumptions 1–13: none contradicts the book.
+  **Notes (backlog, 7):** busy Transfer cleared by any download completion, not the matching one (→ P46); an unknown optional enum value drops a
+  whole line (→ P46); C2's build re-copies the binary and makes the next cargo build rebuild `psm-desktop`; `build.rs` TARGET name vs `build.sh`'s
+  fixed aarch64 name (→ P47/P50); §6.11 registry drift (`Stamped`, `poll(now, side)`, no `events` sender, `StoreDestinationResult`, 60 probes);
+  `outcomes` never pruned (→ P46); P33 vitest flake.
