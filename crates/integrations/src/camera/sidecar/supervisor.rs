@@ -129,6 +129,23 @@ impl Supervisor {
         }
         events
     }
+    /// Writes one line (plus `\n`) to the running sidecar's stdin. Stdin stays open for the
+    /// sidecar's lifetime: its end of file means `quit`.
+    pub fn send_line(&mut self, line: &str) -> std::io::Result<()> {
+        let input = self
+            .child
+            .as_mut()
+            .and_then(|child| child.stdin.as_mut())
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotConnected,
+                    "camera sidecar not running",
+                )
+            })?;
+        input.write_all(line.as_bytes())?;
+        input.write_all(b"\n")?;
+        input.flush()
+    }
     pub fn consecutive_exits(&self) -> usize {
         self.attempts
     }

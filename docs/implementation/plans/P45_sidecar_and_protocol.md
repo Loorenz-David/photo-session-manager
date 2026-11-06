@@ -318,3 +318,17 @@ nothing changes on screen; `git status` shows no `binaries/` or build output (ig
   `[rule] ch11` on C2(a)/C2(b). L22 C1(d). Lab citations re-anchored (`:115`, `:481`, `:498`, `:128–130`, `:139–163`, `transport.hpp:158`, constructor
   vendor). Code anchor `41bef14` → `635930b`. Counts: 18 → 21 rows (C1(d), C2(c), C6(c)); 1 → 4 `[rule]` rows; 36 → 42 paths. Frontmatter
   `projection: done`.
+- **2026-11-06, implement r1** (implementer, Claude Opus; handoff `handoffs/implementer/handoff_P45_sidecar_and_protocol_implement_r1.md`).
+  Built: the lab's `sdk/` (at `221aa49`, minus `tests/sdk_shim/`; the lab has no `sdk/build/`) copied with `cp -R` into `native/camera-sidecar/`
+  (23 files + README); CMake renamed (`camera_sidecar` / `camera-sidecar`, tests `camera_sidecar_tests`, ctest `transport_manager`),
+  `CRLAB_SDK_SHIM` and the `CRSDK_ROOT` default dropped, `-DCAMERA_SIDECAR_WITH_SDK=ON` requires `CRSDK_ROOT`; `tools/sidecar/build.sh` and
+  `manifest.sh`; `build.rs` runs the stub build when `binaries/camera-sidecar-<TARGET>` is missing (rerun paths dropped); `externalBin`;
+  `NSLocalNetworkUsageDescription`. C++ changes 1–7 as specified; three new `TEST_CASE`s; `tools/sidecar/build.sh --stub --test` →
+  `20 tests, 0 failed`, `100% tests passed out of 1`. **SDK build run once** (`--sdk …/Camera-Connection-Tests/vendor/sony-sdk`): configures
+  (60 probes present, `DCVersion` absent), compiles with 0 warnings, `version` → `sdk_version:"2.02.00"`, `auto` with an empty stdin → exit 0
+  without connecting; nothing of it committed, the stub rebuilt afterwards. Rust: `protocol.rs` (`SidecarEvent` per the table, `Stamped`,
+  `parse_line`, `iso_to_ms`, `percent_encode`, `Command::encode`), `client.rs` (`SidecarClient`, `CommandOutcome`, correlation rule),
+  `Supervisor::send_line`, runtime seam (`send_command`, `command_outcome`, `sidecar_events` ring of 1 000), staging
+  `<document>/Capture/.incoming/sdk-<run_id>`, `--usb-product-id 0x0E0C`; fake sidecar script mode; `TestApp::{with_camera_script,
+  sidecar_events}`. Assumptions and deviations: see the handoff (notably `Stamped` wrapper for `timestamp_ms`; `poll(now, side)` signature;
+  no `events: Sender` field yet; the `StoreDestHostPC` probe line removed from `sdk_symbols.def` for C1(d)).

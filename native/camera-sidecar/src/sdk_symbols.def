@@ -1,0 +1,73 @@
+# Optional Sony SDK symbols probed at configure time against the INSTALLED
+# headers. For each line, CMake generates CRLAB_HAS_<name> (0/1) in
+# crlab_sdk_features.h. Code only references a symbol when its macro is 1, so
+# nothing here is assumed to exist: the installed SDK is authoritative.
+#
+# Format:  KIND NAME [EXPR]
+#   prop     NAME           -> SCRSDK::CrDeviceProperty_NAME
+#   sym      NAME EXPR      -> an arbitrary expression that must compile
+#   callback NAME SIGNATURE -> IDeviceCallback override that must compile
+
+prop ExposureProgramMode
+prop FNumber
+prop ShutterSpeed
+prop IsoSensitivity
+prop WhiteBalance
+prop DriveMode
+prop FileType
+prop StillImageQuality
+prop RAW_FileCompressionType
+prop MediaSLOT1_FileType
+prop BatteryRemain
+prop BatteryLevel
+prop StillImageStoreDestination
+prop RAW_J_PC_Save_Image
+prop MediaSLOT1_Status
+prop MediaSLOT2_Status
+prop MediaSLOT1_RemainingNumber
+prop SdkControlMode
+prop FTP_Function
+prop FTP_AutoTransfer
+prop FTP_TransferTarget
+prop FTP_ConnectionStatus
+prop FTP_ConnectionErrorInfo
+prop FTP_AutoTransferTarget
+prop FTP_AutoTransferTarget_StillImage
+prop FTP_PowerSave
+prop RecordingMedia
+prop S1
+
+sym ModelILCE7RM5        SCRSDK::CrCameraDeviceModel_ILCE_7RM5
+sym UsbConnectionFactory &SCRSDK::CreateCameraObjectInfoUSBConnection
+sym EthernetConnectionFactory &SCRSDK::CreateCameraObjectInfoEthernetConnection
+sym GetFingerprint       &SCRSDK::GetFingerprint
+sym IPAddressChar        &SCRSDK::ICrCameraObjectInfo::GetIPAddressChar
+sym MACAddressChar       &SCRSDK::ICrCameraObjectInfo::GetMACAddressChar
+sym SetSaveInfo          &SCRSDK::SetSaveInfo
+sym RequestFTPTransferResult &SCRSDK::RequestFTPTransferResult
+sym ControlModeRemoteTransfer SCRSDK::CrSdkControlMode_RemoteTransfer
+sym ControlModeContentsTransfer SCRSDK::CrSdkControlMode_ContentsTransfer
+sym ReconnectingOff      SCRSDK::CrReconnecting_OFF
+sym SSHsupportOn         SCRSDK::CrSSHsupport_ON
+sym StoreDestHostPCAndCard SCRSDK::CrStillImageStoreDestination_HostPCAndMemoryCard
+sym StoreDestCard        SCRSDK::CrStillImageStoreDestination_MemoryCard
+sym ErrSSHUserAuth       SCRSDK::CrError_Connect_SSH_UserAuthenticationFailed
+sym ErrSSHServerAuth     SCRSDK::CrError_Connect_SSH_ServerAuthenticationFailed
+sym ErrFailRejected      SCRSDK::CrError_Connect_FailRejected
+sym ErrSessionAlreadyOpened SCRSDK::CrError_Connect_SessionAlreadyOpened
+sym LockIndicatorLocked  SCRSDK::CrLockIndicator_Locked
+sym NotifyCapturedEvent  SCRSDK::CrNotify_Captured_Event
+sym WarningExtAFStatus   SCRSDK::CrWarningExt_AFStatus
+sym AFStatusFocused      SCRSDK::CrWarningExt_AFStatusParam_Focused_AF_S
+sym SlotNumber1          SCRSDK::CrSlotNumber_Slot1
+sym DCVersionTypo        (SCRSDK::DeviceConnectionVersioin)0
+sym DCVersion            (SCRSDK::DeviceConnectionVersion)0
+
+callback OnCompleteDownload2  void OnCompleteDownload(CrChar* filename, CrInt32u type) override {}
+callback OnWarningExt         void OnWarningExt(CrInt32u warning, CrInt32 p1, CrInt32 p2, CrInt32 p3) override {}
+callback OnNotifyFTPTransferResult void OnNotifyFTPTransferResult(CrInt32u notify, CrInt32u ok, CrInt32u ng) override {}
+callback OnNotifyRemoteTransferResultFile void OnNotifyRemoteTransferResult(CrInt32u notify, CrInt32u per, CrChar* filename) override {}
+callback OnNotifyRemoteTransferResultData void OnNotifyRemoteTransferResult(CrInt32u notify, CrInt32u per, CrInt8u* data, CrInt64u size) override {}
+callback OnNotifyRemoteTransferContentsListChanged void OnNotifyRemoteTransferContentsListChanged(CrInt32u notify, CrInt32u slot, CrInt32u add) override {}
+callback OnLvPropertyChangedCodes void OnLvPropertyChangedCodes(CrInt32u num, CrInt32u* codes) override {}
+callback OnNotifyContentsTransfer void OnNotifyContentsTransfer(CrInt32u notify, SCRSDK::CrContentHandle h, CrChar* filename) override {}

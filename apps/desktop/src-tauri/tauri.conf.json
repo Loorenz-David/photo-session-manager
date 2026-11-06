@@ -16,6 +16,7 @@
   "bundle": {
     "active": true,
     "icon": ["icons/icon.png", "icons/icon.icns"],
+    "externalBin": ["binaries/camera-sidecar"],
     "macOS": { "signingIdentity": "-", "minimumSystemVersion": "13.0" }
   }
 }

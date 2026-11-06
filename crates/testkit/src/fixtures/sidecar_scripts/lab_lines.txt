@@ -1,0 +1,13 @@
+{"timestamp":"2026-11-05T14:21:55.084Z","source":"sdk","event":"transport.state","from":"DISCONNECTED","to":"DISCOVERING","reason":"looking for camera over wifi","transport":"none"}
+{"timestamp":"2026-11-05T14:21:59.760Z","source":"sdk","event":"connection.ready","transport":"wifi","connect_ms":914,"total_ms":4675}
+{"timestamp":"2026-11-05T14:21:59.864Z","source":"sdk","event":"cmd.received","cmd":"capture","cmd_id":"4db6be91"}
+{"timestamp":"2026-11-05T14:21:59.865Z","source":"sdk","event":"camera.busy","reason":"exposure","safe_point":false}
+{"timestamp":"2026-11-05T14:21:59.865Z","source":"sdk","event":"capture.requested","capture_id":"53d7…","transport":"wifi","af":true}
+{"timestamp":"2026-11-05T14:22:00.143Z","source":"sdk","event":"capture.af","capture_id":"53d7…","af_result":"focused","duration_ms":279}
+{"timestamp":"2026-11-05T14:22:00.181Z","source":"sdk","event":"capture.acknowledged","capture_id":"53d7…","success":true,"sdk_error":"0x00000000","duration_ms":37,"total_ms":316}
+{"timestamp":"2026-11-05T14:22:00.413Z","source":"sdk","event":"capture.exposed","success":true,"transport":"wifi","capture_id":"53d7…","ms_since_release":269,"association":"latest_release_provisional"}
+{"timestamp":"2026-11-05T14:22:01.182Z","source":"sdk","event":"cmd.done","cmd":"capture","cmd_id":"4db6be91"}
+{"timestamp":"2026-11-05T14:22:09.061Z","source":"sdk","event":"usb.arrived","detail":"pid=0x0E0C ILCE-7RM5"}
+{"timestamp":"2026-11-05T14:22:11.987Z","source":"sdk","event":"session.closed","transport":"wifi","reason":"switching wifi -> usb","duration_ms":414}
+{"timestamp":"2026-11-05T14:22:59.018Z","source":"sdk","event":"session.lost","transport":"usb","reason":"usb device removed","sdk_error":"0x00000000","busy":"none"}
+{"timestamp":"2026-11-05T14:24:57.992Z","source":"sdk","event":"switch.deferred","to":"usb","busy":"pixel_shift"}

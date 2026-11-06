@@ -120,6 +120,12 @@ impl TestApp {
     pub fn with_camera_behaviour(behaviour: serde_json::Value) -> Result<Self> {
         Self::create(true, false, "custom.damage_report", Some(behaviour))
     }
+    /// A camera app whose fake sidecar replays `script` (P45 §The fake sidecar): JSON lines are
+    /// printed (with `{capture_id}`/`{cmd_id}` from the last `capture` command), plus `sleep <ms>`,
+    /// `await <cmd>`, `exit <code>`, `stderr <text>`; no `fake.started` line.
+    pub fn with_camera_script(script: &str) -> Result<Self> {
+        Self::with_camera_behaviour(serde_json::json!({ "script_text": script }))
+    }
     fn create(
         configure_document: bool,
         configure_shop: bool,
@@ -131,10 +137,20 @@ impl TestApp {
         paths.home = dir.path().to_path_buf();
         paths.create()?;
         let with_camera = sidecar.is_some();
-        if let Some(behaviour) = sidecar {
+        if let Some(mut behaviour) = sidecar {
             let support = paths.root.join("camera/sony/test");
             let rec = support.join("rec");
             std::fs::create_dir_all(&rec)?;
+            // `with_camera_script`: the script file sits beside behaviour.json, both written
+            // before the first spawn.
+            if let Some(text) = behaviour
+                .as_object_mut()
+                .and_then(|o| o.remove("script_text"))
+            {
+                let script = rec.join("script.txt");
+                std::fs::write(&script, text.as_str().unwrap_or_default())?;
+                behaviour["script"] = serde_json::Value::String(script.to_string_lossy().into());
+            }
             std::fs::write(
                 rec.join("behaviour.json"),
                 serde_json::to_vec(&behaviour).unwrap(),
@@ -272,6 +288,10 @@ impl TestApp {
     }
     pub fn camera_runtime(&self) -> Arc<psm_integrations::camera::runtime::CameraRuntime> {
         self.app.camera_runtime.clone()
+    }
+    /// The events the sidecar client delivered (the runtime's ring buffer).
+    pub fn sidecar_events(&self) -> Vec<psm_integrations::camera::sidecar::protocol::Stamped> {
+        self.app.camera_runtime.sidecar_events()
     }
     pub fn receiver_port(&self) -> u16 {
         self.app

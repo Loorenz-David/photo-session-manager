@@ -25,3 +25,12 @@ data/
 
 # Pipeline runner raw session output
 .pipeline/
+
+# Camera sidecar (P45): build output and the externalBin copy are generated; nothing from a
+# vendor SDK, no SSH fingerprint and no credential is ever committed (the repo is public).
+apps/desktop/src-tauri/binaries/
+native/camera-sidecar/build/
+target/camera-sidecar/
+*.fingerprint
+vendor/
+CrSDK*

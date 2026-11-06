@@ -1,5 +1,9 @@
 use super::{
-    sidecar::supervisor::{SidecarSpec, Supervisor, SupervisorEvent},
+    sidecar::{
+        client::{CmdId, CommandOutcome, SidecarClient},
+        protocol::{Command, Stamped},
+        supervisor::{SidecarSpec, Supervisor, SupervisorEvent},
+    },
     support::installed_sidecar,
 };
 use psm_core::{
@@ -33,6 +37,13 @@ use std::{
     time::Instant,
 };
 use uuid::Uuid;
+
+/// The sidecar events `sidecar_events()` keeps (P45; also what the Health page shows).
+pub const SIDECAR_EVENTS_KEPT: usize = 1_000;
+/// Stderr lines (redacted) and unparsable stdout lines `helper_log()` keeps.
+const HELPER_LOG_KEPT: usize = 50;
+/// The camera's USB product ids for the sidecar's IOKit match (R-I23): the A7R V.
+const USB_PRODUCT_IDS: &str = "0x0E0C";
 
 pub struct AppBinding {
     pub store: Arc<dyn Store>,
@@ -87,7 +98,10 @@ impl CompletedNames for RoutingNames {
 }
 pub struct CameraRuntime {
     pub run_id: String,
-    supervisor: Mutex<Option<Supervisor>>,
+    /// The sidecar protocol client over its supervisor (P45); one per process (R-I18).
+    supervisor: Mutex<Option<SidecarClient>>,
+    /// The last `SIDECAR_EVENTS_KEPT` events delivered by the client.
+    sidecar_events: Mutex<VecDeque<Stamped>>,
     receiver: Mutex<Option<ReceiverHandle>>,
     receiver_settings: Mutex<Option<CameraSettings>>,
     receiver_generation: std::sync::atomic::AtomicU64,
@@ -121,6 +135,7 @@ impl CameraRuntime {
         Arc::new(Self {
             run_id: Uuid::new_v4().to_string(),
             supervisor: Mutex::new(None),
+            sidecar_events: Mutex::new(VecDeque::new()),
             receiver: Mutex::new(None),
             receiver_settings: Mutex::new(None),
             receiver_generation: std::sync::atomic::AtomicU64::new(0),
@@ -136,7 +151,7 @@ impl CameraRuntime {
             credentials: Mutex::new(None),
             clock,
             paths,
-            helper_log: Mutex::new(VecDeque::with_capacity(50)),
+            helper_log: Mutex::new(VecDeque::with_capacity(HELPER_LOG_KEPT)),
             stopped: AtomicBool::new(false),
         })
     }
@@ -269,10 +284,13 @@ impl CameraRuntime {
             .clone();
         logging::add_secret(&user);
         logging::add_secret(&password);
+        // §Staging (R-I20): `<binding document>/Capture/.incoming/sdk-<run_id>`, computed at the
+        // first spawn and never moved for this process (restarts reuse it).
         let staging = self
-            .paths
-            .root
-            .join("camera/staging")
+            .capture_root
+            .read()
+            .unwrap()
+            .join("Capture/.incoming")
             .join(format!("sdk-{}", self.run_id));
         if let Err(error) = fs::create_dir_all(&staging) {
             tracing::warn!(%error, "camera staging unavailable");
@@ -284,6 +302,8 @@ impl CameraRuntime {
                 "auto".into(),
                 "--save-dir".into(),
                 staging.to_string_lossy().into_owned(),
+                "--usb-product-id".into(),
+                USB_PRODUCT_IDS.into(),
             ],
             env: vec![(
                 "CRLAB_FINGERPRINT_DIR".into(),
@@ -293,17 +313,49 @@ impl CameraRuntime {
                     .to_string_lossy()
                     .into_owned(),
             )],
-            first_line: format!(
-                "credentials user={} password={}",
-                pct(&user),
-                pct(&password)
-            ),
+            first_line: Command::Credentials { user, password }.encode(),
         };
         let mut supervisor = Supervisor::new(spec);
         if let Err(error) = supervisor.spawn(self.clock.mono()) {
             tracing::warn!(%error, "camera sidecar unavailable");
         }
-        *guard = Some(supervisor);
+        *guard = Some(SidecarClient::new(supervisor));
+    }
+    /// Writes `command` to the sidecar; the returned id is the one on the wire.
+    pub fn send_command(&self, command: Command) -> psm_core::Result<CmdId> {
+        let mut guard = self.supervisor.lock().expect("camera supervisor");
+        let client = guard
+            .as_mut()
+            .ok_or_else(|| psm_core::Error::Provider("camera sidecar not running".into()))?;
+        client
+            .send(command)
+            .map_err(|e| psm_core::Error::Provider(format!("camera sidecar: {e}")))
+    }
+    /// The outcome of the command sent as `cmd_id`, once the sidecar reported it.
+    pub fn command_outcome(&self, cmd_id: &str) -> Option<CommandOutcome> {
+        self.supervisor
+            .lock()
+            .expect("camera supervisor")
+            .as_ref()
+            .and_then(|client| client.outcome(cmd_id))
+    }
+    /// The last `SIDECAR_EVENTS_KEPT` events the sidecar delivered, oldest first.
+    pub fn sidecar_events(&self) -> Vec<Stamped> {
+        self.sidecar_events
+            .lock()
+            .expect("sidecar events")
+            .iter()
+            .cloned()
+            .collect()
+    }
+    fn push_helper_log(&self, line: &str) {
+        let redacted = logging::redact_registered(line);
+        let mut log = self.helper_log.lock().expect("helper log");
+        if log.len() == HELPER_LOG_KEPT {
+            log.pop_front();
+        }
+        log.push_back(redacted.clone());
+        tracing::warn!("camera sidecar: {redacted}");
     }
     fn bind_receiver(&self, settings: CameraSettings) {
         let mut receiver = self.receiver.lock().unwrap();
@@ -358,33 +410,39 @@ impl CameraRuntime {
             return;
         }
         let mut guard = self.supervisor.lock().expect("camera supervisor");
-        let Some(supervisor) = guard.as_mut() else {
+        let Some(client) = guard.as_mut() else {
             return;
         };
-        for event in supervisor.tick(now) {
-            match event {
-                SupervisorEvent::Line(_line) => {
-                    if let Some(binding) = self.binding.read().expect("camera binding").as_ref() {
-                        binding.health.clear("camera_sidecar_unavailable");
-                    }
+        let mut side = Vec::new();
+        let events = client.poll(now, &mut |event| side.push(event));
+        let exits = client.supervisor().consecutive_exits();
+        // Output first, exits after (as the supervisor reports them): a sidecar that prints and
+        // then dies within one tick still counts as unavailable.
+        if !events.is_empty() {
+            if let Some(binding) = self.binding.read().expect("camera binding").as_ref() {
+                binding.health.clear("camera_sidecar_unavailable");
+            }
+            let mut kept = self.sidecar_events.lock().expect("sidecar events");
+            for event in events {
+                if kept.len() == SIDECAR_EVENTS_KEPT {
+                    kept.pop_front();
                 }
-                SupervisorEvent::Exited { .. } if supervisor.consecutive_exits() >= 3 => {
+                kept.push_back(event);
+            }
+        }
+        for event in side {
+            match event {
+                SupervisorEvent::Exited { .. } if exits >= 3 => {
                     if let Some(binding) = self.binding.read().expect("camera binding").as_ref() {
                         binding
                             .health
                             .set("camera_sidecar_unavailable", "Camera helper is unavailable");
                     }
                 }
-                SupervisorEvent::Stderr(line) => {
-                    let redacted = logging::redact_registered(&line);
-                    let mut log = self.helper_log.lock().expect("helper log");
-                    if log.len() == 50 {
-                        log.pop_front();
-                    }
-                    log.push_back(redacted.clone());
-                    tracing::warn!("camera sidecar: {redacted}");
-                }
-                SupervisorEvent::Started { .. } | SupervisorEvent::Exited { .. } => {}
+                SupervisorEvent::Stderr(line) => self.push_helper_log(&line),
+                SupervisorEvent::Line(_)
+                | SupervisorEvent::Started { .. }
+                | SupervisorEvent::Exited { .. } => {}
             }
         }
     }
@@ -396,7 +454,7 @@ impl CameraRuntime {
             receiver.stop();
         }
         if let Some(supervisor) = self.supervisor.lock().expect("camera supervisor").as_mut() {
-            supervisor.quit_and_wait();
+            supervisor.supervisor_mut().quit_and_wait();
         }
     }
 }
@@ -404,16 +462,4 @@ impl Drop for CameraRuntime {
     fn drop(&mut self) {
         self.shutdown();
     }
-}
-
-fn pct(value: &str) -> String {
-    let mut result = String::new();
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
-            result.push(byte as char);
-        } else {
-            result.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    result
 }

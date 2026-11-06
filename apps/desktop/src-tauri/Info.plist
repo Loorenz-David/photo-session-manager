@@ -3,5 +3,7 @@
 <plist version="1.0"><dict>
   <key>NSAppleEventsUsageDescription</key>
   <string>Session Manager controls Capture One to manage photo sessions and receive capture events.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Session Manager talks to your camera over the local network to control it and receive photos.</string>
 </dict></plist>
 

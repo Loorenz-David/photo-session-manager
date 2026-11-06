@@ -1,0 +1,16 @@
+{"timestamp":"2026-11-06T09:00:00.001Z","experiment":"adhoc","source":"sdk","event":"usb.claimed_by","owners":"pid 512, ptpcamerad","hint":"another process holds the camera's USB interface; the SDK cannot open it. ptpcamerad claims cameras for apps using Image Capture (e.g. Capture One, Photos). Quit that app, then replug."}
+{"timestamp":"2026-11-06T09:00:00.002Z","experiment":"adhoc","source":"sdk","event":"usb.fallback_to_wifi","usb_failures":3,"usb_retry":"on next USB re-plug"}
+{"timestamp":"2026-11-06T09:00:00.003Z","experiment":"adhoc","source":"sdk","event":"sdk.download.completed","filename":"/Users/x/Session/Capture/.incoming/sdk-r1/DSC00007.ARW","size_bytes":51234567,"success":true,"transport":"usb","type":"0x00000001","provisional_capture_id":"c1","ms_since_capture_request":1960}
+{"timestamp":"2026-11-06T09:00:00.004Z","experiment":"adhoc","source":"sdk","event":"sdk.download.completed","filename":"/Users/x/Session/Capture/.incoming/sdk-r1/X.ARW","size_bytes":-1,"success":false,"transport":"usb"}
+{"timestamp":"2026-11-06T09:00:00.005Z","experiment":"adhoc","source":"sdk","event":"sdk.download.hashed","filename":"/Users/x/Session/Capture/.incoming/sdk-r1/DSC00007.ARW","sha256":"0000000000000000000000000000000000000000000000000000000000000000","hash_ms":180,"success":true}
+{"timestamp":"2026-11-06T09:00:00.006Z","experiment":"adhoc","source":"sdk","event":"ssh.fingerprint","status":"unknown","success":false,"note":"re-run with --accept-fingerprint after comparing with the camera screen"}
+{"timestamp":"2026-11-06T09:00:00.007Z","experiment":"adhoc","source":"sdk","event":"ssh.fingerprint","status":"MISMATCH","success":false}
+{"timestamp":"2026-11-06T09:00:00.008Z","experiment":"adhoc","source":"sdk","event":"capture.uncertain","transport":"wifi","operation":"bracketing","reason":"sdk reported disconnection"}
+{"timestamp":"2026-11-06T09:00:00.009Z","experiment":"adhoc","source":"sdk","event":"capture.exposure_missing","capture_id":"c0","success":false,"reason":"a later capture was exposed first; this release produced no capture notification","association":"latest_release_provisional"}
+{"timestamp":"2026-11-06T09:00:00.010Z","experiment":"adhoc","source":"sdk","event":"cmd.rejected","cmd":"capture","reason":"not connected (DISCOVERING)"}
+{"timestamp":"2026-11-06T09:00:00.011Z","experiment":"adhoc","source":"sdk","event":"cmd.error","cmd":"x","error":"unknown command"}
+{"timestamp":"2026-11-06T09:00:00.012Z","experiment":"adhoc","source":"sdk","event":"sdk.unavailable","error":"camera-sidecar was built without the Sony SDK"}
+{"timestamp":"2026-11-06T09:00:00.013Z","experiment":"adhoc","source":"sdk","event":"connect.failed","transport":"wifi","sdk_error":"0x00008208","error":"connection failed: connection error","duration_ms":5003,"timeout":false}
+{"timestamp":"2026-11-06T09:00:00.014Z","experiment":"adhoc","source":"sdk","event":"connect.failed","transport":"usb","sdk_error":"0x00008208","error":"connection error","duration_ms":12}
+{"timestamp":"2026-11-06T09:00:00.015Z","experiment":"adhoc","source":"sdk","event":"usb.initial","present":true}
+{"timestamp":"2026-11-06T09:00:00.016Z","experiment":"adhoc","source":"sdk","event":"connection.ready","transport":"usb","connect_ms":1200,"total_ms":1500,"model":"ILCE-7RM5","store_destination":"failed","store_value":"0x00000002"}
