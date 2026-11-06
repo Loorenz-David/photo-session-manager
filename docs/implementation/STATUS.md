@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-06 17:36: P44 implement r1 stopped after 10 min: Codex usage limit (resets 18:52; the gpt-5.6-terra fallback is on the same account).** Partial work stashed (`stash@{0}`, P44 implement r1 partial), tree clean. Queued: at 18:55, `RESUME=1` P44 → P46; stop before P47. No Fable (owner rule).
+
 **2026-11-06 17:45: P44 plan amended (L1–L24 folded, 36 rows, `projection: done`; L18 moved to P46 as C8(c)).** Planner reading (5)–(6) accepted: rules (1)/(2) carry the prior's session even when it had no exposure. Running P44 → P46; stop before P47 (owner + camera). Known stale anchors ("code at 41bef14") in P45/P46: the projection and implementer check at HEAD.
 
 **2026-11-06 17:15: P43 APPROVED_WITH_NOTES (after fix 2); narrative relayed. P44 projection r0 AMENDMENTS_REQUIRED (L1–L24, 1 card).** Card 1 (counter wrap matched new photos to old sessions) answered from the book: R-I26 clarification, changelog 36. The planner is folding L1–L24 (L18 → P46). Next: `projection: done`, commit, `tools/pipeline/run_phase.sh phase P44_capture_ledger`, then P45–P46; stop before P47 (owner + camera).
