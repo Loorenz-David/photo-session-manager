@@ -100,7 +100,7 @@ SDK is ever committed to the repo; the sidecar is compiled on a build machine th
   precedence order: `AuthenticationRefused`, `FingerprintMismatch`, `FingerprintUnconfirmed`, `PhoneAppConnected`,
   `HeldByOtherProgram { holder }`, `StoreDestinationUnverified`, `FilesNotReceived { count }`, `SupportNotInstalled`. The status is
   the first that holds of: any `NeedsAction` (the first reason in that order; it wins even while connected on the other link, as MC-34
-  requires) › `Busy` › `Connected` › `Connecting` (sidecar running, no session) › `Disconnected`. The camera dot shows that one; the
+  requires) › `Busy` › `Connected` › `Connecting` (sidecar running, no session, and the sidecar reports it is connecting on a link; a running sidecar that reports no connecting attempt is `Disconnected`) › `Disconnected`. The camera dot shows that one; the
   health screen lists every reason that holds.
 - **Camera independent of Capture One's health (ratify R-I33).** With the direct adapter, the camera status and `capture()` never
   depend on Capture One's health items. Today `CameraService` reports `Disconnected` and refuses capture while
@@ -122,7 +122,7 @@ SDK is ever committed to the repo; the sidecar is compiled on a build machine th
 - **Save-to-PC downloads** are written by the sidecar into a staging folder (`<capture root>/.incoming/`, a dot folder MC-2 ignores) and
   handed to the ledger, which moves the file into the target session folder by atomic rename.
 - **Secrets.** The camera's Access Authentication user and password and the FTP password are kept in the macOS Keychain, passed to the
-  sidecar only through its environment at spawn, never logged, never in settings.json or the repo. Pinned SSH host-key fingerprints live
+  sidecar as R-I21 specifies (its first stdin line, never its environment), never logged, never in settings.json or the repo. Pinned SSH host-key fingerprints live
   under the app's support folder.
 - **Fingerprint.** On the first Wi-Fi connect the app shows the camera's fingerprint and asks the photographer to compare it with the
   camera's menu; it is pinned only on their confirmation. A mismatch later is `NeedsAction`. **An SSH authentication failure is never
