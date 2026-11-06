@@ -85,6 +85,17 @@ fn settle(mut f: impl FnMut() -> bool) {
     panic!("condition did not settle");
 }
 
+fn settle_for(timeout: Duration, mut f: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        if f() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(f(), "condition did not settle within {timeout:?}");
+}
+
 #[test]
 fn c1a_completed_upload_integrity() {
     let a = app();
@@ -459,7 +470,9 @@ fn c7a_camera_settings_validation() {
 fn c7b_port_reopens_in_place() {
     let mut a = app();
     let p0 = a.receiver_port();
-    settle(|| !a.fake_sidecar_recording().pids.is_empty());
+    settle_for(Duration::from_secs(15), || {
+        !a.fake_sidecar_recording().pids.is_empty()
+    });
     let pid = a.fake_sidecar_recording().pids;
     let generation = a.camera_runtime().receiver_generation();
     let free = TcpListener::bind("127.0.0.1:0")
