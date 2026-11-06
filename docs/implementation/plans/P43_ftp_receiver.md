@@ -83,7 +83,7 @@ names::{is_hidden_or_staging(name), base_name(path) -> Result<String>}` (553 rul
 - `ReceiverHandle::uploads_in_progress() -> usize` (the watchdog's "no upload in progress", P44/P46) and `stop()` (closes the listener, aborts open
   transfers as failures — their `.part`s stay).
 - **Runtime:** `CameraRuntime::bind` starts the receiver on the first bind with the sidecar installed **and** a non-empty `ftp-password` secret
-  (`FakeSecrets` in tests), with `ReceiverConfig { bind: 0.0.0.0 (tests: 127.0.0.1), port: settings.camera.receiver_port, passive: start..=end,
+  (`FakeSecrets` in tests: `ftp-pw-unique-1`), with `ReceiverConfig { bind: 0.0.0.0 (tests: 127.0.0.1), port: settings.camera.receiver_port, passive: start..=end,
   allowed_peers: default (tests: loopback), username: FTP_USERNAME, password }` and `capture_root = canon(<effective document folder>/Capture)` read
   **from settings, never from Capture One** (R-I24); on a later bind whose `CameraSettings` differ in any of the three keys it calls `stop()` then
   `start()` again (one listener at any time); a bind with the same keys leaves the receiver untouched.
@@ -121,7 +121,7 @@ test names in brackets are the ported source.
 | C2(c) | `REST` past the staged length | `c.stor_rst("X.ARW", &arw(1 MiB, 7)[..64 KiB])`; `c.stor_resume("X.ARW", 2 MiB, b"tail")` | `554` to the `STOR`; `part("X.ARW")` unchanged (len ≤ 64 KiB); `D` empty | R-I24 ("else 554") |
 | C2(d) | new `STOR` truncates | after C2(c): `c.stor("X.ARW", arw(10 KiB, 8))` | `226`; `fs::read(part("X.ARW")) == arw(10 KiB, 8)`; one delivery of size 10 KiB | R-I24 ("a new `STOR` of the same name truncates its `.part`") |
 | C2(e) | second `STOR` of a name in flight | `c1` opens `STOR Y.ARW` and sends 1 byte (no close); `c2.stor("Y.ARW", b"zz")` | `c2` gets `450`; after `c1` sends the rest and closes → `226` and one delivery for `Y.ARW` | R-I24 ("One upload per name at a time: … 450") |
-| C2(f) | control connection closed with an upload pending | `c` opens `STOR Z.ARW`, sends 1 KiB on the data socket, then drops the **control** socket (no FIN on data first) | no delivery; `part("Z.ARW")` kept; `a.receiver().uploads_in_progress() == 0` within 2 s | R-I24 ("a reset, an abort, a timeout … is a failure") |
+| C2(f) | control connection closed with an upload pending | `c` opens `STOR Z.ARW`, sends 1 KiB on the data socket, then drops the **control** socket (no FIN on data first) | no delivery; `part("Z.ARW")` kept; `settle(a, || a.receiver().uploads_in_progress() == 0)` (P42 L7 fixture) | R-I24 ("a reset, an abort, a timeout … is a failure") |
 | C2(g) | `APPE` resumes at the staged length | after a `stor_rst("W.ARW", first half)`: `c.appe("W.ARW", second half)` | `226`; `fs::read(part("W.ARW")) == data` | R-I24 (`APPE`) |
 | C3(a) | `DELE`, `RMD`, `RNFR` refused [test_delete_and_overwriting_rename_refused] | after `c.stor("A.ARW", …)` and `c.stor("B.ARW", …)`: `c.dele("A.ARW")`, `c.rmd("x")`, `c.rnfr_rnto("A.ARW", "C.ARW")` | `550`, `550`, `550` on `RNFR` (the `RNTO` never runs); both `.part`s unchanged | MC-32 §3; R-I24 ("`DELE`, `RMD` and `RNFR`/`RNTO` are refused (550/553): every rename") |
 | C3(b) | `RNTO` alone | `c.cmd("RNTO C.ARW")` | `553` | R-I24 |
@@ -132,7 +132,7 @@ test names in brackets are the ported source.
 | C4(c) | names older than 24 h are not listed | names provider answers only for `since ≥ now − 86 400 000`; a name completed 25 h ago | absent from `NLST` and `SIZE` → `550` | R-I24 ("last 24 h"); §6.11 `COMPLETED_NAMES_WINDOW_MS` |
 | C5(a) | default peer set (unit) | `ReceiverConfig::default_allowed_peers()` with `is_allowed` over `10.0.0.5`, `172.16.0.1`, `172.31.255.254`, `192.168.1.20`, `169.254.1.1`, `fd00::1`, `fe80::1` (allowed) and `8.8.8.8`, `127.0.0.1`, `172.32.0.1`, `11.0.0.1`, `::1`, `2001:db8::1` (refused) | exactly as listed | R-I24 §Network (the peer list); MC-32 §5 |
 | C5(b) | refused peer at connect [test_peer_outside_allowed_networks_is_refused] | standalone receiver with `allowed_peers: [10.0.0.0/8]` on `127.0.0.1:0`; a raw TCP connect | first line `421 …`, then the server closes; nothing else accepted | R-I24 ("Any other peer gets 421 at connect") |
-| C5(c) | authentication [test_startup_and_authentication_events] | `FtpClient::connect(port)`; `login("sessionmanager", "wrong")`; then `login("sessionmanager", "f")`; `login("other", "f")` on a fresh connection | `530`; `230`; `530`; `a.camera_runtime().helper_log()` and the tracing output contain neither `wrong` nor `f` as the password (the receiver logs `login failed user=sessionmanager` only) | MC-32 §5; R-I21/M39 (secret never in a log) |
+| C5(c) | authentication [test_startup_and_authentication_events] | `FtpClient::connect(port)`; `login("sessionmanager", "wrong")`; then `login("sessionmanager", "ftp-pw-unique-1")`; `login("other", "ftp-pw-unique-1")` on a fresh connection | `530`; `230`; `530`; `a.camera_runtime().helper_log()` and the tracing output contain neither `wrong` nor `ftp-pw-unique-1` (the receiver logs `login failed user=sessionmanager` only) | MC-32 §5; R-I21/M39 (secret never in a log) |
 | C5(d) | passive only | `c.cmd("PORT 127,0,0,1,4,1")`, `c.cmd("EPRT |1|127.0.0.1|1025|")` | `502`, `502`; `c.pasv()` answers `227` with a port inside the configured range when the standalone receiver is started with `passive: 50000..=50009` | MC-32 §5 ("passive mode only on a fixed port range") |
 | C6(a) | capture root missing [R-I24 §Capture root] | standalone receiver whose `capture_root` closure returns a non-existent folder; `c.stor("DSC1.ARW", b"II*\0")` | `451`; no `.part` anywhere; `D` empty | R-I24 ("If that folder does not exist, `STOR` gets 451, and the camera keeps the file queued and retries") |
 | C6(b) | capture root from settings, not Capture One | `a = TestApp::with_camera()` whose fake Capture One is **not running** (`fake.state.running = false`) and `document_info` fails | `c.stor("DSC2.ARW", …)` → `226` and `part("DSC2.ARW")` is under `canon(<settings document folder>/Capture)/.incoming/`; `fake.state.ops` contains no `document_info` call caused by the upload | R-I24 ("never ask Capture One, which is quit during Take the camera back") |
@@ -176,3 +176,7 @@ Whether the hash runs on `spawn_blocking` or a std thread; the exact `LIST` date
 
 ## Review log
 
+- **2026-11-06, carried from P42 projection r0** (planner): the FTP password fixture is `ftp-pw-unique-1` (L10; the receiver registers it with the redactor
+  when it starts — P42 registers only the two credentials it sends); every timed read of the fake or the receiver uses P42's `settle(a, pred)` fixture
+  (L7; C2(f) reworded); the runtime's `bind` is the last statement of `App::build` and `tick` is serialised under the supervisor `Mutex` (L3, L18) — the
+  receiver's in-place reopen (C7(b)) runs inside that serialised `bind`, never from two Apps at once.

@@ -504,7 +504,8 @@ From P17 every command is `pub async fn` over `AppState(RwLock<App>)` through `A
 Events (`AppEvent` → Tauri event name): `session_changed{session_id}`, `photo_added{photo_id, session_id}`,
 `photo_changed{photo_id, session_id}`, `publish_progress{session_id, item_id, step, uploaded, total}`,
 `export_progress{session_id, done, total, state}`, `health_changed{}`, `camera_status_changed{status}` (P42: the payload is the new
-`CameraStatusResponse`; emitted by the runtime on every status change, not only on `camera_retry`), P39 `history_changed{session_id, undo,
+`CameraStatusResponse`; in P42 only `camera_retry` emits it, through the App's `EventHub` — `TauriCameraEvents` is deleted; from P46 the runtime emits it
+on every status change), P39 `history_changed{session_id, undo,
 redo}` (the labels of the steps ⌘Z / ⌘⇧Z would act on, after every record, undo, redo and dropped step), P41 `edit_menu{action: "undo" | "redo"}`
 (emitted by `on_menu_event` for the Edit menu's two items; not an `AppEvent`), P50 `camera_fingerprint_pending{fingerprint}` (the sidecar
 reported an unpinned Wi-Fi fingerprint; Settings → Camera shows it for confirmation).
@@ -712,13 +713,19 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
 - **Runtime** (`crates/integrations/src/camera/runtime.rs`): `CameraRuntime` (one `Arc` per process, created in `App::open_with_adapter` and carried
   through `SettingsSetContext`, `App::build(…, camera: Arc<CameraRuntime>)` and `App::reopen`): fields `supervisor: Mutex<Option<Supervisor>>`,
   `receiver: Mutex<Option<ReceiverHandle>>`, `provider: ArcSwap-like RwLock<Arc<dyn CameraProvider>>`, `binding: RwLock<Option<AppBinding>>`, `sink:
-  RwLock<Arc<dyn EventSink>>`, `secrets: Arc<dyn SecretStore>`, `clock`, `run_id: String /* uuid; the staging folder suffix */`; `bind(AppBinding {
-  store, events, health, capture_root, editing, camera_settings: CameraSettings, support: Option<InstalledSupport>, paths })` is called by every
-  `App::build` and (a) re-targets events and health (re-publishing the current status into the new `HealthService`), (b) rebuilds the `LedgerService`
-  over the new store and runs `recover_pending`, (c) starts the supervisor and the receiver on the **first** bind that finds support installed,
-  (d) applies changed camera settings in place (receiver port/range → close + reopen; credentials → used at the next spawn, restart only while no
-  USB session is open), never spawning a second sidecar or listener; `tick()` from the App's background thread (supervisor restarts, watchdog);
-  `shutdown()` at process exit only (`quit`, `QUIT_GRACE_MS`, then kill; the receiver stopped). `App::shutdown` **does not** stop the runtime.
+  RwLock<Arc<dyn EventSink>>`, `secrets: Arc<dyn SecretStore>`, `credentials: Mutex<Option<(String, String)>>` (read from the `SecretStore` once at
+  the first spawn and cached; restarts reuse it; P50's `camera_secrets_set` refreshes it — a Keychain prompt never stalls the background loop), `clock`,
+  `run_id: String /* uuid; the staging folder suffix */`; `bind(AppBinding { store, events, health, previous_health, capture_root, editing,
+  camera_settings: CameraSettings, support: Option<InstalledSupport>, paths })` is **the last statement of every `App::build`** (after every `?` and
+  thread spawn, right before `Ok(Self {..})`, so a failed build never re-targets or spawns) and (a) re-targets events and health (P42–P45: copying the
+  camera-family health items from `previous_health`; from P46: re-publishing the runtime's own `StatusInputs` through `health_items`), (b) rebuilds the
+  `LedgerService` over the new store and runs `recover_pending`, (c) starts the supervisor and the receiver on the **first** bind that finds support
+  installed, (d) applies changed camera settings in place (receiver port/range → close + reopen; credentials → the cache, used at the next spawn, restart
+  only while no USB session is open), never spawning a second sidecar or listener; `tick()` from the App's background thread (supervisor restarts,
+  watchdog), **serialised under the supervisor `Mutex`** (two background loops run during a rebuild); `shutdown()` is public, idempotent and terminal
+  (`quit`, `QUIT_GRACE_MS`, then kill + wait; the receiver stopped; no restart afterwards), called by `impl Drop` (tests) and by the desktop `run()`'s
+  `RunEvent::Exit` hook (production: tao ends the process with `process::exit`, the managed state is never dropped). `App::shutdown` **does not** stop
+  the runtime.
 - **Sidecar** (`crates/integrations/src/camera/sidecar/`): `SidecarSpec { program: PathBuf, args: Vec<String> /* ["auto", "--save-dir", <staging>]
   */, env: Vec<(String, String)> /* CRLAB_FINGERPRINT_DIR only */, first_line: String /* `credentials user=<pct> password=<pct>` */ }`; `Supervisor
   { spec, child: Option<Child>, attempts, next_spawn_at, events_tx, stop }` with `spawn()`, `send(&Command)`, `tick(now) -> Vec<SupervisorEvent>`
@@ -848,12 +855,17 @@ left at head. Migrations are applied by `rusqlite_migration::Migrations::to_late
   decode(path), outputs_dir(raw), masters_dir(raw)}`; `complete_all_renders` writes a default `SyntheticMaster` for master jobs and the stub
   JPEG for previews; `tick` also ticks `render_jobs`. P30: `FakeCommerce` records `uploaded_sha[filename]`; `SqliteStore::migrations()`
   exposed for the migration-005 row.
-- **10E (P42–P50):** `TestApp::with_camera()` (P42; `with_fake_document` plus a "support folder" under the temp data dir holding the fake sidecar
-  binary as `camera/sony/test/camera-sidecar`, `FakeSecrets` pre-filled with `access-auth-user = u`, `access-auth-password = p`, `ftp-password = f`,
-  the receiver bound to `127.0.0.1:0` with loopback allowed (P43), `ManualClock` driving `CameraRuntime::tick`); `TestApp::sidecar_script(path)`
-  / `with_camera_script(script)` (P45: the fake replays a script); `TestApp::camera_runtime()`, `camera_status()`, `ledger()` (P44),
-  `receiver_port()` (P43), `ftp()` → `FtpClient` connected and logged in (P43), `fake_sidecar_recording()` (the files the fake writes: `argv`,
-  `env`, `stdin`, `pids`), `fake_processes` (`FakeProcessList`, P48), `fake_sleep` (`FakeSleepInhibitor`, P48). The fake Capture One gains
+- **10E (P42–P50):** `TestApp::with_camera()` = `with_camera_behaviour(json!({}))` (P42; `with_fake_document` plus a "support folder" under the temp
+  data dir holding the fake sidecar binary copied (`fs::copy`, 0o755) as `camera/sony/test/camera-sidecar`, the fake's recording dir `camera/sony/test/
+  rec/` (derived by the fake from `current_exe()`; **no test-only environment variable**) with `behaviour.json` written **before** the first spawn,
+  `FakeSecrets` pre-filled with `access-auth-user = "u name"`, `access-auth-password = "p/w"`, `ftp-password = "ftp-pw-unique-1"` (distinctive values that
+  appear in no expected text), the receiver bound to `127.0.0.1:0` with loopback allowed (P43), `ManualClock` driving `CameraRuntime::tick`);
+  `set_fake_sidecar_behaviour(json)` (read by the next spawn); `with_camera_script(script)` (P45: the fake replays a script; the script and `behaviour.json`
+  are written before the spawn); `settle(a, pred)` (loop `a.tick(0)` / 10 ms sleep, 3 s bound — every positive read of the fake's recording goes through
+  it, negative reads after a 500 ms settle); `TestApp::camera_runtime()`, `camera_status()`, `ledger()` (P44), `receiver_port()` (P43), `ftp()` →
+  `FtpClient` connected and logged in (P43), `fake_sidecar_recording() -> Recording { pids: Vec<u32>, argv: Vec<Vec<String>> (from `argv.<pid>.json`),
+  env: Vec<Map> (`env.<pid>.json`), stdin: Vec<(u32, String)>, exits: Vec<(u32, i32)> }`, `fake_processes` (`FakeProcessList`, P48), `fake_sleep`
+  (`FakeSleepInhibitor`, P48), `FakeDirectProvider` (`fake_direct_camera.rs`, P42). The fake Capture One gains
   `quit()` (`running` false after `quit_after_polls`, default 1; op `quit`), `set_current_collection` (op `set_current_collection:<folder>`, state
   `current_collection`, fault `fail_set_current_collection`; `find_image` answers only for images in the current collection, MC-19), `apply_style`
   (op `apply_style:<variant>:<name>`, per-variant `styles` list) and loses `import` (P49).
@@ -942,3 +954,8 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   skeleton), §7.1 cmake/clang/SDK/camera facts, §7.2 sidecar build commands, §7.5 harness. Owner card CI1 was answered "always jump" during
   planning (R46 at `e0ce354`, relayed by the orchestrator): P49 plans the fixed rule, no policy constant. No intention-book change by the planner;
   one planner reading on the Import feature recorded in P49 Notes.
+- 2026-11-06 P42 projection r0 folded — planner (Fable) folded `handoff_P42_camera_runtime_projection_r0.md` (L1–L12, L15–L23 and the reality checks;
+  L13/L14 folded upstream by the orchestrator at `789f035`) into `plans/P42_camera_runtime.md` (`projection: done`; rows 26 → 26, 14 reworded; L6 taken
+  as the `RunEvent::Exit` hook) and amended §6.7 (`camera_status_changed`: only `camera_retry` emits in P42, through the hub), §6.11 Runtime (`bind` last,
+  the health copy until P46, credentials cache, serialised `tick`, terminal `shutdown` + the exit hook), §7.5 (`with_camera_behaviour`, the fake's recording
+  dir and files, distinctive secret fixtures, `settle`). Carried into P43, P44, P45, P46 and P50 Review logs. Nothing declined.

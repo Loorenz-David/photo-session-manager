@@ -168,3 +168,7 @@ gains `camera/sony/2.02.00/` with the runtime and `camera-sidecar`. 2. Generate 
 
 ## Review log
 
+
+- **2026-11-06, carried from P42 projection r0** (planner): `camera_secrets_set` refreshes the runtime's **credentials cache** (L17) — the next spawn,
+  immediate (off USB) or later (on USB), sends the new line; C5(b)/(c) assert that; `rec().argv[0][0]` is the first element of `argv.<pid>.json`'s array
+  (L19); timed reads use `settle` (L7); a `KeychainSecrets` is never called from a test (L23: the fakes hold the three accounts).

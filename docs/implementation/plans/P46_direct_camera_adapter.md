@@ -167,3 +167,9 @@ row as before. 3. No other visible change.
 
 ## Review log
 
+
+- **2026-11-06, carried from P42 projection r0** (planner): from this phase the runtime's `bind` re-publishes health from the adapter's own
+  `StatusInputs` through `health_items` and the adapter emits `camera_status_changed` on every derived change — replacing P42's health copy and
+  retry-only emission (L4, L5; C1(a)'s `ev()` and the health assertions are the rows); the adapter's `tick` runs under the runtime's serialised tick
+  (L18: two App loops during a rebuild never double-process an event); the `--save-dir` becomes R-I20's staging folder (L16); every "`a.tick(0)` until …"
+  is P42's `settle(a, pred)` (L7); `rec()` reads follow P42's positive/negative settle rule. C2(a) compares `exposed_at` with the **event's** timestamp.

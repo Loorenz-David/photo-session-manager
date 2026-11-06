@@ -175,3 +175,8 @@ changes on screen; `git status` shows no `binaries/` or build output (ignored).
 
 ## Review log
 
+
+- **2026-11-06, carried from P42 projection r0** (planner): the fake's `behaviour.json` and the script live in the recording dir the fake derives from its
+  own location (`<data dir>/camera/sony/test/rec/`, L2); `with_camera_script` writes both **before** the spawn (L1); `Recording.argv` is `Vec<Vec<String>>`
+  from `argv.<pid>.json` (L19) and `exits` records voluntary exits (L9); every "`a.tick(0)` until …" in C5 is P42's `settle(a, pred)` (L7); the credentials
+  line is built from the runtime's cached credentials (L17). C1(c)'s grep must also cover the new percent-decoder: no `getenv` of a credential anywhere.

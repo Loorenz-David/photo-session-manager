@@ -190,3 +190,6 @@ gains two empty tables (`sqlite3 … ".tables"` shows `camera_exposures camera_d
 
 ## Review log
 
+
+- **2026-11-06, carried from P42 projection r0** (planner): `bind` is the last statement of `App::build` (L3), so `recover_pending` and the ledger
+  rebuild run only for a build that succeeded; timed reads in C8(a) ("`a.tick(0)` until the row is `done`") use P42's `settle(a, pred)` fixture (L7).
