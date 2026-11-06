@@ -47,6 +47,7 @@ impl SettingsService {
                 "sku_prefix",
                 "integration",
                 "default_shape",
+                "camera",
             ]
             .contains(&key.as_str())
             {
@@ -58,6 +59,9 @@ impl SettingsService {
                     .is_some_and(|s| std::path::Path::new(s).is_absolute())
             {
                 return Err(Error::RelativePath);
+            }
+            if key == "camera" && !valid_camera(value) {
+                return Err(Error::InvalidValue("camera".into()));
             }
             if key == "document_id" {
                 let id = value
@@ -118,6 +122,22 @@ impl SettingsService {
         }
         Ok(next)
     }
+}
+fn valid_camera(value: &Value) -> bool {
+    let port = |key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_u64)
+            .filter(|p| (1024..=65535).contains(p))
+    };
+    let (Some(control), Some(start), Some(end)) = (
+        port("receiver_port"),
+        port("passive_port_start"),
+        port("passive_port_end"),
+    ) else {
+        return false;
+    };
+    start <= end && end - start + 1 >= 2 && !(start..=end).contains(&control)
 }
 
 /// `{"long_edge": 512..=8192, "quality": 60..=100}`, both integers.

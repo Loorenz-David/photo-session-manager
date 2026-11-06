@@ -1,7 +1,9 @@
 use crate::clock::ManualClock;
+use crate::collecting_sink::CollectingSink;
 use crate::fake_capture_one::FakeCaptureOneScripting;
 use crate::fake_commerce::FakeCommerce;
 use crate::fake_secrets::FakeSecrets;
+use crate::ftp_client::FtpClient;
 use psm_core::Result;
 use psm_core::{
     domain::photo::{NewPhoto, Photo, PhotoSource},
@@ -30,6 +32,7 @@ pub struct TestApp {
     pub events: Arc<CollectingEventSink>,
     pub commerce: Option<Arc<FakeCommerce>>,
     pub secrets: Arc<FakeSecrets>,
+    pub ftp_sink: Arc<CollectingSink>,
     next_hook: AtomicU64,
 }
 
@@ -129,6 +132,7 @@ impl TestApp {
         let mut paths = AppPaths::for_dir(dir.path());
         paths.home = dir.path().to_path_buf();
         paths.create()?;
+        let with_camera = sidecar.is_some();
         if let Some(behaviour) = sidecar {
             let support = paths.root.join("camera/sony/test");
             let rec = support.join("rec");
@@ -168,6 +172,11 @@ impl TestApp {
             b"",
         )?;
         let mut settings = psm_infra::settings_file::Settings::open(&paths)?;
+        if with_camera {
+            settings.camera.receiver_port = 0;
+            settings.camera.passive_port_start = 0;
+            settings.camera.passive_port_end = 0;
+        }
         if configure_document {
             settings.document_id = Some(document_id.clone());
             // Exports stay inside the test's temporary directory, never under ~/Pictures.
@@ -201,6 +210,9 @@ impl TestApp {
                 .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
             secrets.clone(),
         )?;
+        let ftp_sink = Arc::new(CollectingSink::default());
+        app.camera_runtime
+            .set_capture_sink(ftp_sink.clone(), ftp_sink.clone());
         let events = Arc::new(CollectingEventSink::default());
         app.events.set_target(events.clone());
         Ok(Self {
@@ -211,6 +223,7 @@ impl TestApp {
             events,
             commerce,
             secrets,
+            ftp_sink,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -265,6 +278,33 @@ impl TestApp {
     }
     pub fn camera_runtime(&self) -> Arc<psm_integrations::camera::runtime::CameraRuntime> {
         self.app.camera_runtime.clone()
+    }
+    pub fn receiver_port(&self) -> u16 {
+        self.app
+            .camera_runtime
+            .receiver_port()
+            .expect("receiver running")
+    }
+    pub fn ftp(&self) -> FtpClient {
+        let mut c = FtpClient::connect(self.receiver_port()).unwrap();
+        assert!(
+            c.login("sessionmanager", "ftp-pw-unique-1")
+                .unwrap()
+                .starts_with("230")
+        );
+        c
+    }
+    pub fn deliveries(&self) -> Vec<psm_core::domain::camera::Delivery> {
+        self.ftp_sink.deliveries()
+    }
+    pub fn capture_root(&self) -> PathBuf {
+        std::fs::canonicalize(
+            self.app
+                .settings
+                .effective_document_id(&self.app.paths)
+                .join("Capture"),
+        )
+        .unwrap()
     }
     pub fn set_fake_sidecar_behaviour(&self, behaviour: serde_json::Value) -> Result<()> {
         std::fs::write(

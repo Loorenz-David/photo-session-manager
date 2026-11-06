@@ -153,7 +153,7 @@ async function openWorkspace(views: SessionView[], sessionId = SESSION) {
 
 const shown: Settings = {
   default_shape: '1:1', master_recipe: 'PSM Master',
-  document_id: null, effective_document_id: '/tmp/session', default_document_id: '/Users/me/Pictures/Session Manager', preview_recipe: 'PSM Preview', output_format: { long_edge: 2048, quality: 90 }, style_name: 'PSM House',
+  camera: { receiver_port: 2121, passive_port_start: 50000, passive_port_end: 50009 }, document_id: null, effective_document_id: '/tmp/session', default_document_id: '/Users/me/Pictures/Session Manager', preview_recipe: 'PSM Preview', output_format: { long_edge: 2048, quality: 90 }, style_name: 'PSM House',
   export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null,
   integration: { kind: 'shopify', shop_domain: 'shop.myshopify.com', api_version: '2026-10', client_id: 'client', client_secret: 'masked', condition_photos_key: 'custom.damage_report' },
 };

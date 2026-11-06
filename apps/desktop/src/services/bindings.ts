@@ -138,6 +138,12 @@ export type AttributeValueDto_Serialize = {
 	updated_at: number,
 };
 
+export type CameraSettingsDto = {
+	receiver_port: number,
+	passive_port_start: number,
+	passive_port_end: number,
+};
+
 export type CameraStatusResponse = CameraStatusResponse_Serialize | CameraStatusResponse_Deserialize;
 
 export type CameraStatusResponse_Deserialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder?: string | null; message: string } | { kind: "disconnected" };
@@ -648,6 +654,7 @@ export type SettingsDto = SettingsDto_Serialize | SettingsDto_Deserialize;
  *  stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
  */
 export type SettingsDto_Deserialize = {
+	camera: CameraSettingsDto,
 	document_id?: string | null,
 	effective_document_id: string,
 	default_document_id: string,
@@ -669,6 +676,7 @@ export type SettingsDto_Deserialize = {
  *  stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
  */
 export type SettingsDto_Serialize = {
+	camera: CameraSettingsDto,
 	document_id: string | null,
 	effective_document_id: string,
 	default_document_id: string,
@@ -690,6 +698,7 @@ export type SettingsPatchDto = SettingsPatchDto_Serialize | SettingsPatchDto_Des
 
 /**  A partial update: absent fields stay as stored. */
 export type SettingsPatchDto_Deserialize = {
+	camera?: CameraSettingsDto | null,
 	document_id?: string | null,
 	preview_recipe?: string | null,
 	output_format?: OutputFormatDto | null,
@@ -705,6 +714,7 @@ export type SettingsPatchDto_Deserialize = {
 
 /**  A partial update: absent fields stay as stored. */
 export type SettingsPatchDto_Serialize = {
+	camera?: CameraSettingsDto,
 	document_id?: string,
 	preview_recipe?: string,
 	output_format?: OutputFormatDto,

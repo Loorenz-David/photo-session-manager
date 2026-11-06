@@ -334,13 +334,14 @@ impl App {
         clock: Arc<dyn Clock>,
         run_startup: bool,
     ) -> Result<Self> {
-        Self::open_with_adapter(
+        Self::open_with_adapter_bind(
             paths,
             scripting,
             clock,
             run_startup,
             None,
             Arc::new(KeychainSecrets::default()),
+            std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
         )
     }
 
@@ -352,9 +353,35 @@ impl App {
         commerce_override: Option<Arc<dyn CommerceAdapter>>,
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Self> {
+        Self::open_with_adapter_bind(
+            paths,
+            scripting,
+            clock,
+            run_startup,
+            commerce_override,
+            secrets,
+            std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn open_with_adapter_bind(
+        paths: AppPaths,
+        scripting: Arc<dyn CaptureOneScripting>,
+        clock: Arc<dyn Clock>,
+        run_startup: bool,
+        commerce_override: Option<Arc<dyn CommerceAdapter>>,
+        secrets: Arc<dyn SecretStore>,
+        receiver_bind: std::net::IpAddr,
+    ) -> Result<Self> {
         let (user_scripting, background_scripting) =
             editing::capture_one::gate::GatedScripting::pair(scripting.clone());
-        let camera_runtime = CameraRuntime::new(secrets, clock.clone(), paths.clone());
+        let camera_runtime = CameraRuntime::new_with_receiver_bind(
+            secrets,
+            clock.clone(),
+            paths.clone(),
+            receiver_bind,
+        );
         Self::build(
             paths,
             scripting,
@@ -704,6 +731,8 @@ impl App {
             previous_health,
             provider: camera.clone(),
             paths: paths.clone(),
+            camera_settings: settings.camera,
+            capture_root: settings.effective_document_id(&paths),
         });
         Ok(Self {
             paths,

@@ -22,11 +22,18 @@ pub struct OutputFormatDto {
     pub long_edge: u32,
     pub quality: u8,
 }
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct CameraSettingsDto {
+    pub receiver_port: u16,
+    pub passive_port_start: u16,
+    pub passive_port_end: u16,
+}
 
 /// `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the
 /// stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
 #[derive(Serialize, Deserialize, Type)]
 pub struct SettingsDto {
+    pub camera: CameraSettingsDto,
     pub document_id: Option<String>,
     pub effective_document_id: String,
     pub default_document_id: String,
@@ -46,6 +53,8 @@ pub struct SettingsDto {
 /// A partial update: absent fields stay as stored.
 #[derive(Serialize, Deserialize, Type, Default)]
 pub struct SettingsPatchDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub camera: Option<CameraSettingsDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

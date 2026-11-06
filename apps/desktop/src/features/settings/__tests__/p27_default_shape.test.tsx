@@ -12,7 +12,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const shown: Settings = {
-  document_id: null, effective_document_id: '/tmp/doc', default_document_id: '/tmp/doc',
+  camera: { receiver_port: 2121, passive_port_start: 50000, passive_port_end: 50009 }, document_id: null, effective_document_id: '/tmp/doc', default_document_id: '/tmp/doc',
   preview_recipe: 'PSM Preview', master_recipe: 'PSM Master', output_format: { long_edge: 2048, quality: 90 }, style_name: '', default_shape: '1:1',
   export_folder: '/tmp/export', preview_delay_s: 15, effective_preview_delay_s: 15, theme: 'light', sku_prefix: null, integration: null,
 };

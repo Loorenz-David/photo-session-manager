@@ -1,16 +1,26 @@
+use super::NoopSink;
 use super::{
     sidecar::supervisor::{SidecarSpec, Supervisor, SupervisorEvent},
     support::installed_sidecar,
 };
 use psm_core::{
-    domain::camera::secrets,
-    ports::{camera::CameraProvider, clock::Clock, secrets::SecretStore},
+    domain::camera::{CameraSettings, Delivery, DeliveryOutcome, ExposureObserved, Link, secrets},
+    ports::{
+        camera::{CameraProvider, CaptureSink},
+        clock::Clock,
+        secrets::SecretStore,
+    },
     services::health::HealthService,
 };
-use psm_infra::{logging, paths::AppPaths};
+use psm_infra::{
+    ftp::{CompletedNames, FTP_USERNAME, FtpReceiver, ReceiverConfig, ReceiverHandle},
+    logging,
+    paths::AppPaths,
+};
 use std::{
     collections::VecDeque,
     fs,
+    net::{IpAddr, Ipv4Addr},
     sync::{
         Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
@@ -25,10 +35,46 @@ pub struct AppBinding {
     pub previous_health: Option<Arc<HealthService>>,
     pub provider: Arc<dyn CameraProvider>,
     pub paths: AppPaths,
+    pub camera_settings: CameraSettings,
+    pub capture_root: std::path::PathBuf,
+}
+struct RoutingSink(RwLock<Arc<dyn CaptureSink>>);
+impl CaptureSink for RoutingSink {
+    fn exposure_observed(&self, e: ExposureObserved) -> psm_core::Result<i64> {
+        self.0.read().unwrap().exposure_observed(e)
+    }
+    fn delivery(&self, d: Delivery) -> psm_core::Result<DeliveryOutcome> {
+        self.0.read().unwrap().delivery(d)
+    }
+    fn session_uncertain(&self) -> psm_core::Result<()> {
+        self.0.read().unwrap().session_uncertain()
+    }
+    fn transfer_in_progress(&self, source: Link, active: bool) {
+        self.0.read().unwrap().transfer_in_progress(source, active);
+    }
+}
+struct EmptyNames;
+impl CompletedNames for EmptyNames {
+    fn completed_names_since(&self, _: i64) -> Vec<(String, u64, i64)> {
+        vec![]
+    }
+}
+struct RoutingNames(RwLock<Arc<dyn CompletedNames>>);
+impl CompletedNames for RoutingNames {
+    fn completed_names_since(&self, since: i64) -> Vec<(String, u64, i64)> {
+        self.0.read().unwrap().completed_names_since(since)
+    }
 }
 pub struct CameraRuntime {
     pub run_id: String,
     supervisor: Mutex<Option<Supervisor>>,
+    receiver: Mutex<Option<ReceiverHandle>>,
+    receiver_settings: Mutex<Option<CameraSettings>>,
+    receiver_generation: std::sync::atomic::AtomicU64,
+    receiver_bind: IpAddr,
+    capture_root: Arc<RwLock<std::path::PathBuf>>,
+    sink: Arc<RoutingSink>,
+    names: Arc<RoutingNames>,
     binding: RwLock<Option<AppBinding>>,
     secrets: Arc<dyn SecretStore>,
     credentials: Mutex<Option<(String, String)>>,
@@ -39,9 +85,24 @@ pub struct CameraRuntime {
 }
 impl CameraRuntime {
     pub fn new(secrets: Arc<dyn SecretStore>, clock: Arc<dyn Clock>, paths: AppPaths) -> Arc<Self> {
+        Self::new_with_receiver_bind(secrets, clock, paths, IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+    }
+    pub fn new_with_receiver_bind(
+        secrets: Arc<dyn SecretStore>,
+        clock: Arc<dyn Clock>,
+        paths: AppPaths,
+        receiver_bind: IpAddr,
+    ) -> Arc<Self> {
         Arc::new(Self {
             run_id: Uuid::new_v4().to_string(),
             supervisor: Mutex::new(None),
+            receiver: Mutex::new(None),
+            receiver_settings: Mutex::new(None),
+            receiver_generation: std::sync::atomic::AtomicU64::new(0),
+            receiver_bind,
+            capture_root: Arc::new(RwLock::new(paths.root.clone())),
+            sink: Arc::new(RoutingSink(RwLock::new(Arc::new(NoopSink)))),
+            names: Arc::new(RoutingNames(RwLock::new(Arc::new(EmptyNames)))),
             binding: RwLock::new(None),
             secrets,
             credentials: Mutex::new(None),
@@ -53,6 +114,28 @@ impl CameraRuntime {
     }
     pub fn run_id(&self) -> &str {
         &self.run_id
+    }
+    pub fn set_capture_sink(&self, sink: Arc<dyn CaptureSink>, names: Arc<dyn CompletedNames>) {
+        *self.sink.0.write().unwrap() = sink;
+        *self.names.0.write().unwrap() = names;
+    }
+    pub fn receiver_port(&self) -> Option<u16> {
+        self.receiver
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(ReceiverHandle::port)
+    }
+    pub fn uploads_in_progress(&self) -> usize {
+        self.receiver
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(ReceiverHandle::uploads_in_progress)
+            .unwrap_or(0)
+    }
+    pub fn receiver_generation(&self) -> u64 {
+        self.receiver_generation.load(Ordering::SeqCst)
     }
     pub fn helper_log(&self) -> Vec<String> {
         self.helper_log
@@ -77,10 +160,14 @@ impl CameraRuntime {
                 }
             }
         }
+        let settings = binding.camera_settings;
+        let capture_root = binding.capture_root.clone();
+        *self.capture_root.write().unwrap() = capture_root;
         *self.binding.write().expect("camera binding") = Some(binding);
         if self.stopped.load(Ordering::SeqCst) {
             return;
         }
+        self.bind_receiver(settings);
         let mut guard = self.supervisor.lock().expect("camera supervisor");
         if guard.is_some() {
             return;
@@ -144,6 +231,59 @@ impl CameraRuntime {
         }
         *guard = Some(supervisor);
     }
+    fn bind_receiver(&self, settings: CameraSettings) {
+        let mut receiver = self.receiver.lock().unwrap();
+        let mut previous = self.receiver_settings.lock().unwrap();
+        if receiver.is_some() && *previous == Some(settings) {
+            return;
+        }
+        if let Some(mut old) = receiver.take() {
+            old.stop();
+        }
+        *previous = None;
+        if installed_sidecar(&self.paths).is_none() {
+            return;
+        }
+        let Some(password) = self
+            .secrets
+            .get(secrets::FTP_PASSWORD)
+            .ok()
+            .flatten()
+            .filter(|s| !s.is_empty())
+        else {
+            return;
+        };
+        logging::add_secret(&password);
+        let config = ReceiverConfig {
+            bind: self.receiver_bind,
+            port: settings.receiver_port,
+            passive: settings.passive_port_start..=settings.passive_port_end,
+            allowed_peers: if self.receiver_bind == IpAddr::V4(Ipv4Addr::LOCALHOST) {
+                vec!["127.0.0.0/8".parse().unwrap()]
+            } else {
+                ReceiverConfig::default_allowed_peers()
+            },
+            username: FTP_USERNAME.into(),
+            password,
+            capture_root: {
+                let document = self.capture_root.clone();
+                Arc::new(move || {
+                    std::fs::canonicalize(document.read().unwrap().join("Capture")).ok()
+                })
+            },
+            sink: self.sink.clone(),
+            names: self.names.clone(),
+            clock: self.clock.clone(),
+        };
+        match FtpReceiver::start(config) {
+            Ok(handle) => {
+                *receiver = Some(handle);
+                *previous = Some(settings);
+                self.receiver_generation.fetch_add(1, Ordering::SeqCst);
+            }
+            Err(error) => tracing::warn!(%error, "camera FTP receiver unavailable"),
+        }
+    }
     pub fn tick(&self, now: Instant) {
         if self.stopped.load(Ordering::SeqCst) {
             return;
@@ -182,6 +322,9 @@ impl CameraRuntime {
     pub fn shutdown(&self) {
         if self.stopped.swap(true, Ordering::SeqCst) {
             return;
+        }
+        if let Some(mut receiver) = self.receiver.lock().unwrap().take() {
+            receiver.stop();
         }
         if let Some(supervisor) = self.supervisor.lock().expect("camera supervisor").as_mut() {
             supervisor.quit_and_wait();

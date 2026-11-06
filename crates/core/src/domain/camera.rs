@@ -130,5 +130,26 @@ pub struct Delivery {
     pub via: Link,
     pub completed_at: i64,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CameraSettings {
+    pub receiver_port: u16,
+    pub passive_port_start: u16,
+    pub passive_port_end: u16,
+}
+impl Default for CameraSettings {
+    fn default() -> Self {
+        Self {
+            receiver_port: 2121,
+            passive_port_start: 50000,
+            passive_port_end: 50009,
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeliveryOutcome {
+    Photo,
+    Duplicate,
+    RenamedPhoto,
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CameraName(pub String);

@@ -1,5 +1,8 @@
 use crate::paths::AppPaths;
-use psm_core::{Error, Result, domain::output::OutputFormat};
+use psm_core::{
+    Error, Result,
+    domain::{camera::CameraSettings, output::OutputFormat},
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, OpenOptions},
@@ -11,6 +14,7 @@ use std::{
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub camera: CameraSettings,
     pub document_id: Option<String>,
     pub preview_recipe: String,
     pub master_recipe: String,
@@ -44,6 +48,7 @@ fn deserialize_preview_delay<'de, D: serde::Deserializer<'de>>(
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            camera: CameraSettings::default(),
             document_id: None,
             preview_recipe: "PSM Preview".into(),
             master_recipe: "PSM Master".into(),
