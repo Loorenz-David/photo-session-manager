@@ -160,7 +160,7 @@ row as before. 3. No other visible change.
 ## Notes
 - **Hard rules (owner):** never commit a Sony SDK file, the lab's `sdk_shim` headers, a `.env`, a credential or an SSH fingerprint; no Python; never change
   the camera's network/FTP settings (the store destination write is the one agreed setting, R-I19), delete a camera file (a zero-size or unmatched download
-  is left in place) or kill any process; live view out of scope; the suite never needs the camera. No `implementer: fable`.
+  is left in place) or kill any process; live view out of scope; the suite never needs the camera. Implemented by Claude agents (owner 2026-11-06, `PSM_IMPLEMENTER=claude`).
 - **Planner readings (reversible):** (1) the camera's display name is `connection.ready.model` (P45 adds it), `Camera` when absent. (2) A `connect.failed`
   with an unrecognised message changes no `NeedsAction` (the transport manager keeps retrying). (3) `reconnect` is a new sidecar command, not the lab's
   watchdog hypothesis — "offered as a button, never done automatically" (MC-33) is P51's button over this command. (4) `HeldByOtherProgram` is cleared

@@ -152,7 +152,7 @@ changes on screen; `git status` shows no `binaries/` or build output (ignored).
 - **Hard rules (owner):** **never commit a Sony SDK file, the lab's `sdk_shim` headers, a `.env`, a credential or an SSH fingerprint** — C1 is the check,
   the reviewer re-runs `git ls-files native/` by eye; no Python (the lab's Python is not copied); never change the camera's network/FTP settings (the
   sidecar writes only the store destination, R-I19, which the photographer agreed to in setup — P51 says so), never delete a camera file or kill any
-  process; live view out of scope; the suite never needs the camera. No `implementer: fable`.
+  process; live view out of scope; the suite never needs the camera. Implemented by Claude agents (owner 2026-11-06, `PSM_IMPLEMENTER=claude`).
 - **SDK-only code is compiled here only if the implementer runs `tools/sidecar/build.sh --sdk /Users/davidloorenz/Desktop/Developer/Camera-Connection-Tests/
   vendor/sony-sdk`** (the SDK is on this Mac in the lab's checkout). The implementer **should** run that build once to prove the R-I19/R-I20 edits compile
   (recorded in the handoff; nothing of it is committed), but the suite never depends on it. If the build cannot run, the edits ship compile-checked

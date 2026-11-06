@@ -250,7 +250,7 @@ gains two empty tables (`sqlite3 … ".tables"` shows `camera_exposures camera_d
 - **Hard rules (owner):** never commit a Sony SDK file, the lab's `sdk_shim` headers, a `.env`, a credential or an SSH fingerprint; no Python
   (`ledger.py` is read, not run); never change the camera's network/FTP settings, delete a camera file (the ledger **moves** staging files it owns
   and never deletes; `.duplicates/` is never emptied) or kill any process; live view out of scope; the suite never needs the camera or Capture One.
-  No `implementer: fable` (Codex implements).
+  Implemented by Claude agents (owner 2026-11-06, `PSM_IMPLEMENTER=claude`: Opus implements, Sonnet fixes).
 - **Planner readings (reversible):** (1) `complete_for` is informational: nothing in the product waits for "complete" (there is no `expected_files`
   source in this chapter). (2) A delivery whose rename fails leaves the row `pending` and returns `Err` (the receiver answers `426`, the camera
   re-sends, the re-send takes the row over); recovery runs at every bind (settings save too), under the process-wide worker lock. (3)
