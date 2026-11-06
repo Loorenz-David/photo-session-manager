@@ -48,3 +48,28 @@ Wi-Fi outage; long sessions (hours, hundreds of shots, battery); FTPS with the c
 the **ZV-E10** (untested; its SDK support must be checked); bracketing and Pixel Shift progress; direct USB connect by serial
 (possible 3.5 s faster switch); live view; **Capture One's handling of files written into its capture folder by another process**
 (visibility, Next Capture Adjustments, scripting) — owed by Session Manager, chapter 10E §Verification.
+
+## Session Manager's own checks (2026-11-06, Capture One 16.8.6, dev Mac, document "session test 1")
+Probe files were copies of existing ARWs written as `.<name>.part` and then renamed, exactly as the FTP receiver will write.
+Nothing was deleted (H2). Capture One's settings were restored afterwards: Next Capture style empty, Hot Folder off, browsed
+collection back to the session root.
+- **V1 — Visibility.** A file written into the current capture folder (`Capture/test-2-photo/`) by another process was **not seen
+  by Capture One in 120 s** while Capture One was browsing another collection; `refresh` and re-setting the capture folder did not
+  help. Selecting that folder as Capture One's **current collection** made it scan and add the files at once, and **while that
+  folder is the current collection, a new file appears in about 2 s**. `synchronize` refuses session favorites ("Can only
+  synchronize collections of kind 'folder'"). `import` with a text path **copied** the file into the session's root folder
+  (a second file at another path), so it is unsuitable.
+- **V2 — Next Capture Adjustments are not applied** to such files (Next Capture style set to "Bright Contrast": the new variants had
+  no styles). The dictionary says the same ("applied when an image is captured from a tethered camera"). **`apply style` by script
+  on the variant's layer works** (styles read back `["Bright Contrast"]`).
+- **V3 — Session Manager's watcher** created exactly one `photos` row per file, about 2 s after the rename, in the session of the
+  folder (photos 64–66, session "test-2"). No capture hook fires (none expected).
+- **V4 — Preview render** works once Capture One knows the variant (photos 65 and 66 got adjusted previews). For the first probe,
+  render jobs failed with `variant_not_found` while Capture One could not see the file and stopped retrying.
+- **V5 — Hot Folder** (Camera menu; not in the dictionary, settable only by GUI scripting): inconclusive, the folder chooser could
+  not be driven reliably; not pursued, since it cannot be set up by the app itself (chapter 10C principle).
+- **Side finding:** the app's `jxa/import.js` (`source: paths.map(p => Path(p))`) fails in 16.8.6 with "Can't convert types"
+  (-1700), so the existing Import feature's Capture One step does not work; and `import` copies files into the session root.
+- **USB contenders running now:** Capture One (loads ImageCaptureCore; `ptpcamerad` started 4 s after it, as in H-16), Imaging Edge
+  Desktop (loads ImageCaptureCore), a Photos widget. Capture One's Preferences → Capture has **"Enabled Tether Support: USB /
+  Wireless"** checkboxes: the candidate configuration for V6.
