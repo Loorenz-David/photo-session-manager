@@ -1,6 +1,6 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
-**2026-11-06 19:15: P45 plan amended (L1–L23 folded: 21 rows, 42 paths, `projection: done`; P46 consistency edits for the `ConnectFailed.error` field and the staging path).** The projection's scratch build `/tmp/p45proj` (Sony dylib copies, outside the repo) was deleted. Running `PSM_IMPLEMENTER=claude` P45 → P46; stop before P47 (owner + camera).
+**2026-11-06 19:15: P45 plan amended (L1–L23 folded: 21 rows, 42 paths, `projection: done`; P46 consistency edits for the `ConnectFailed.error` field and the staging path).** The projection's scratch build `/tmp/p45proj` (Sony dylib copies, outside the repo, 53 MB) is still there: the orchestrator's delete was denied; the owner deletes it (`rm -rf /tmp/p45proj`). Running `PSM_IMPLEMENTER=claude` P45 → P46; stop before P47 (owner + camera).
 
 **2026-11-06 18:55: P44 APPROVED_WITH_NOTES (first review, Claude Opus implementer); narrative relayed. P45 projection r0 AMENDMENTS_REQUIRED (L1–L23, 0 owner cards).** The planner is folding them (plus §6.11 and any P46 consistency edits). Next: commit, `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase P45_sidecar_and_protocol`, then P46; stop before P47 (owner + camera).
 
