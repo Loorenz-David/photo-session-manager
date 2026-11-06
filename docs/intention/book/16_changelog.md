@@ -149,3 +149,21 @@
 
 
 31. **2026-11-06 — Owner: direct camera adapter** (the owner's brief and the Sony Camera Lab handoff, Camera-Connection-Tests `221aa49`; relayed by the orchestrator). New chapter 10E (MC-31 camera sidecar, MC-32 FTP receiver, MC-33 capture ledger and target folder, MC-34 camera ownership guard), evidence `evidence/sony_camera_lab.md` with Session Manager's own Capture One checks V1–V6 (Capture One sees external files only in its current collection; Next Capture Adjustments do not apply, a script-applied style does; Capture One triggers `ptpcamerad`'s USB claim even with its Sony tethering off; an SDK session opened first keeps the camera; a release or cable re-plug while Capture One runs loses it within 28 ms; store-destination writes verified over USB). Chapters 10, 03, 05A MC-2, 10A MC-18, 10C MC-26, 11, 12, 13 and 14 (M37–M39) amended. Decisions R42–R45. Owner answers D1–D7 recorded in 10E; D8 the orchestrator's call; "Take the camera back" on click first (owner: "right when i see it working … we will move to automatic"). Owner decision, header stays RATIFIED.
+
+32. **2026-11-06 — Mechanism inventory of 10E** (pipeline-inventory, Opus; grounded in the lab code at Camera-Connection-Tests
+    `221aa49` and this repo at `53d6ea4`). Inventory additions written into 10E under MC-31…MC-34, §Port changes, §Capture One
+    alongside, §Camera support packages and §Hardware acceptance; pointers in 05A MC-2 (rule 0) and MC-4, 05B MC-22, 10A MC-18,
+    10C MC-26, 11, 12; M37–M39 reworded and M40 added in chapter 14. Gaps and contradictions resolved by contract, pending owner
+    ratification as a list (no change to what the photographer gets): R-I18 one camera runtime per process, outside the settings
+    rebuild; R-I19 the sidecar's connect sequence (Save-to-PC folder, persistent store-destination write, never *Host PC* alone);
+    R-I20 Save-to-PC staging per sidecar run and completion; R-I21 Keychain item names, credentials over stdin, redaction; R-I22 busy
+    reasons (Auto FTP never defers a switch); R-I23 the closed list of reasons a USB session may close, idle-sleep assertion,
+    `usb.initial` and `usb-retry`; R-I24 the receiver's virtual namespace, upload lifecycle, peers and capture root without Capture
+    One; R-I25 ledger tables; R-I26 file key (camera suffixes stripped by the adapter only) and association order with a 300 s FIFO
+    window; R-I27 global duplicate identity, one ledger worker, no-replace rename; R-I28 target folder at rename time, folder-key
+    freeze at a delivery, MC-2 rule 0 and `captured_at`; R-I29 watchdog counts, reconnect on Wi-Fi only; R-I30 naming the holder;
+    R-I31 start order; R-I32 the editor-launch gate and "Take the camera back" step by step; R-I33 camera and session activation
+    independent of Capture One's health; R-I35 waiting for the variant before render and style; R-I36 support-package manifest,
+    location, signing, spike S1–S6; R-I37 camera status values and precedence; R-I38 M37–M40 wording. (R-I34 is not used: the
+    current-collection rule went to card CI1.) Open owner card CI1 (Capture One's browser on arrival), chapter 15. Header stays
+    RATIFIED: no material semantic change.

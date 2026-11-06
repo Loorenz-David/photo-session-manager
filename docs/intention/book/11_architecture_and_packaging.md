@@ -8,6 +8,9 @@ process. **Python is optional**: introduced only as a Tauri sidecar when a concr
 demonstrated (local vision, image processing, a specialised model); none exists in the MVP. **One native sidecar exists:
 the camera sidecar** (C++, built with CMake against a vendor SDK kept outside the repo, shipped as `externalBin`; its vendor runtime
 is installed by the user as a camera support package): chapter 10E. The FTP receiver runs inside the Rust process.
+The camera runtime (sidecar, receiver, ledger) is created once per process, outside the runtime a settings save rebuilds
+(10E MC-31, **ratify R-I18**); the sidecar runs from the support package folder; `Info.plist` declares
+`NSLocalNetworkUsageDescription` (10E §Camera support packages, **ratify R-I36**, spike S4).
 
 ## Frontend ↔ backend (A1, resolved R26)
 The window calls typed Tauri commands and subscribes to Tauri events. Command and event types are

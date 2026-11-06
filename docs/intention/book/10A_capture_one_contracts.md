@@ -127,9 +127,12 @@ When a session becomes active (or the last one closes, target `_Unassigned`, MC-
 4. read `captures` back and compare by `canon` with the target;
 5. on error or mismatch: health error "capture folder not set", camera status red,
    `camera.capture` disabled, and the previous folder re-applied by steps 1–4. Step 3 is never
-   attempted without step 2.
+   attempted without step 2. **With the direct camera adapter** the camera status and capture are not touched: the session is
+   already active for the ledger, the health item says Capture One will not show the session's new photos, and the switch is
+   retried at the next ensure (chapter 10E MC-34, **ratify R-I33**). M25's "blocks capture" applies to the Capture One camera
+   adapter only.
 6. with the direct camera adapter, also set the document's **current collection** to the target folder, so Capture One scans it
-   and sees files written by the receiver (chapter 10E §Capture One alongside, V1).
+   and sees files written by the receiver (chapter 10E §Capture One alongside, V1; on-arrival switching: owner card CI1).
 
 Evidence for step 4: setting a missing folder fails with "Cannot set because there is no file at
 this location", and afterwards `captures` reads back as `<working directory of the calling

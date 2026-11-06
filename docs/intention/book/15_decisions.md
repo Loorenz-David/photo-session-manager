@@ -50,5 +50,10 @@
 | R45 | **Camera support packages (owner 2026-11-06).** The app ships each make's adapter; the user installs the make's SDK runtime through the app (download from the maker, version check, local signing); no vendor SDK file, nor the lab's hand-written SDK stand-in headers, ever enters the public repo; CI builds a stub sidecar. (10E, 11) | 2026-11-06 |
 
 ## Open owner cards
-None. I1 (retouch after publishing) answered Yes on 2026-10-25: R30.
+- **CI1 (mechanism inventory of 10E, 2026-11-06): Capture One's browser on arrival.** Should Capture One jump to the
+  session's folder on every new photo, or only when the photographer is not working in Capture One? Card text in
+  `implementation/handoffs/reviewer/handoff_direct_camera_inventory_r1.md`; proposal in 10E §Capture One alongside. On silence
+  the ratified rule (jump on every arrival) stands.
+
+I1 (retouch after publishing) answered Yes on 2026-10-25: R30.
 

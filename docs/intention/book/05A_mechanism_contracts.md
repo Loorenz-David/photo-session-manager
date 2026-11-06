@@ -68,6 +68,9 @@ same size and mtime; otherwise it is re-checked every 1 s, giving up after 120 s
 **Session attribution (ratify R-I1).** The session is decided by the RAW's parent folder, not by
 the event's processing time, because the folder records which session was active when the
 shutter fired (D1 switches the folder with the session):
+0. with the direct camera adapter, the canonical path is the `final_path` of a `camera_deliveries` row → that row's session
+   (null or deleted → Unassigned), and `captured_at` is the matched exposure's `exposed_at`, else the delivery's `completed_at`,
+   instead of the file mtime (MC-4), because a received file's mtime is its arrival time (chapter 10E MC-33, **ratify R-I28**);
 1. parent = `<capture root>/_Unassigned/` → Unassigned;
 2. parent = `<capture root>/<k>/` and exactly one session's item has stored `items.folder_key = k` (05B MC-22) →
    that session (if that session is `published`, the photo still joins it and makes it dirty;
@@ -122,7 +125,8 @@ export and publish.
   epoch** (`*_at` columns). No local-time strings are stored.
 - **captured_at** = the RAW file's mtime at first stability check. EXIF capture time is **never**
   used: the camera writes local wall time with no zone (evidence: EXIF time 2 h 0 m 30 s ahead of
-  the file mtime on the dev Mac).
+  the file mtime on the dev Mac). Exception: a file delivered by the direct camera adapter's ledger takes its matched exposure's
+  `exposed_at`, else the delivery's `completed_at` (MC-2 rule 0; chapter 10E MC-33, **ratify R-I28**).
 - **Durations and timers** (15 s preview delay, undo window, stability checks, job backoff) use
   the monotonic clock, never wall-clock differences.
 - **Sessions-list grouping** is computed at render time in the Mac's current time zone on

@@ -18,7 +18,8 @@ proposal advances to the next free number). No prefix → the box starts empty a
 
 **Stored folder key.** `items.folder_key` is computed from the SKU (MC-8) at creation and
 **follows the SKU while the item has no photo row in any of its sessions**. From the first photo
-row on, it is **frozen**: it names the capture folder (MC-2), and that folder is never renamed
+row on, or from the first camera delivery the ledger commits to one of its sessions (chapter 10E MC-33, **ratify R-I28**),
+whichever comes first, it is **frozen**: it names the capture folder (MC-2), and that folder is never renamed
 (captures already in it keep their paths; MC-1 identity is unchanged). Session attribution (MC-2
 rule 2) and upload filenames (07A MC-11) use the stored `items.folder_key`, never a key
 recomputed from the current SKU.

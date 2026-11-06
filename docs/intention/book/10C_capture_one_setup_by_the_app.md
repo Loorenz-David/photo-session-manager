@@ -38,6 +38,8 @@ Session Manager session is activated (MC-18). Each step is idempotent; the first
 the sequence with its own health item; nothing blocks review, export or the rest of the app (H6).
 1. **Capture One running.** If not, launch it and wait until it answers scripting (bounded wait). With the direct camera
    adapter, the camera's USB session is opened **before** this launch whenever the camera is on the cable (chapter 10E MC-34).
+   The launch goes through the editor-launch gate and waits for MC-34's start-order conditions; while "Take the camera back"
+   holds the gate, this step returns "deferred" (chapter 10E MC-34, **ratify R-I31, R-I32**).
    Not installed, not Pro, or Automation denied → health item naming that, no further steps.
 2. **Document exists.** If no document is at the path, create it with Capture One's `make new
    document` (kind session) at that location. Never create over an existing folder that is not a
