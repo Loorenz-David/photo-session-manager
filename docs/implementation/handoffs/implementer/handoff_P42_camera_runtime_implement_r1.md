@@ -2,7 +2,7 @@
 plan: P42_camera_runtime
 role: implement
 round: 1
-state: BLOCKED
+state: DONE
 date: 2026-11-06
 actor: codex
 ---
@@ -120,3 +120,6 @@ This handoff is written after the checkpoint for the runner to commit.
 ## ⚠ OWNER DECISIONS REQUIRED (0)
 
 None.
+
+## Orchestrator note (2026-11-06)
+State BLOCKED → DONE: C3(b) amended to 8 s per MC-31 (plan Review log). No code change needed; the stamp above is green.
