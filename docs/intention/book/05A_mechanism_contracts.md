@@ -55,7 +55,8 @@ because folder keys never start with `_` (MC-8).
 a candidate is a regular file whose parent directory is the capture root or exactly one level
 below it; whose name does not start with `.`; that is not inside any directory named
 `CaptureOne` or starting with `.` (Capture One writes captures through `Capture/.capture/` and
-keeps settings and caches under `CaptureOne/`); whose extension, compared case-insensitively,
+keeps settings and caches under `CaptureOne/`; the direct camera adapter stages under `.incoming/` and sets
+duplicates aside under `.duplicates/`, chapter 10E MC-33); whose extension, compared case-insensitively,
 is in the camera adapter's declared RAW extension set (Sony: `arw`). Everything else is
 ignored without a `capture_events` row.
 

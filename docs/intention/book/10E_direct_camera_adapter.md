@@ -1,8 +1,7 @@
 # 10E — Direct camera adapter: camera sidecar, file paths, capture ledger, camera ownership
 
-**Status: DRAFT r3, 2026-11-06, owner answers and V1–V6 folded in; awaiting the owner's acceptance.** Not ratified; nothing may be planned
-from it until the owner accepts it. Evidence: `evidence/sony_camera_lab.md` (lab finding ids H-n, F-n, constraints C1–C10, and
-Session Manager's own Capture One checks V1–V5).
+**Status: RATIFIED amendment (owner 2026-11-06, changelog 31; decisions R42–R45).** Evidence: `evidence/sony_camera_lab.md`
+(lab finding ids H-n, F-n, constraints C1–C10, and Session Manager's own checks V1–V6).
 
 Resolves chapter 10's research item ("A direct Sony adapter (Camera Remote SDK or PTP) is a later provider … its feasibility is a
 research item"): **feasible on the A7R V over Wi-Fi and USB-C.** Session Manager becomes the camera's controller; Capture One stays
@@ -136,8 +135,10 @@ program or system service (`ptpcamerad` included).
 - **Take it back from Capture One.** If the USB interface is held by the system camera service on Capture One's behalf (after a sidecar
   crash, or a cable re-plug the service wins), the app offers **"Take the camera back"**: when no file is in transit and no exposure is
   pending it saves the Capture One document, quits Capture One, opens the USB session, relaunches Capture One and reopens the document
-  (about 15–20 s; Wi-Fi shooting continues until then). It runs automatically only when the photographer has allowed it in Settings →
-  Camera; otherwise it waits for the click. It never touches any other program.
+  (about 15–20 s; Wi-Fi shooting continues until then). **It runs only on the photographer's click** (owner 2026-11-06: "at first is
+  click, right when i see it working … we will move to automatic"); the notice appears as soon as the claim is seen, e.g. right after a
+  cable re-plug, which the system camera service always wins while Capture One runs (V6: within 28 ms). An automatic mode is a later
+  owner decision. It never touches any other program.
 - **Guide.** For other programs the notice says what to change: Imaging Edge Desktop → quit it and stop it opening at login; Photos / Image
   Capture → "Connecting this camera opens: No application"; unknown programs: "<name> is using the camera: close it or stop it from using
   cameras". The health screen keeps the item until the holder is gone; the camera dot shows `NeedsAction` with the holder's name; Wi-Fi
@@ -187,7 +188,7 @@ and capture groups (one result from many files: the owner's research intent, tra
 | Another program holds the USB connection | the header names it with the fix; shooting continues over Wi-Fi; USB resumes once it is released |
 | New photo while Capture One shows another collection | Capture One shows it and the adjusted preview arrives |
 
-## Invariants (to register in chapter 14 on acceptance)
+## Invariants (registered in chapter 14)
 - **M37 (MC-32, MC-31).** Every completed camera transfer yields exactly one visible file under a candidate name, byte-identical to what
   the camera sent; an aborted transfer yields none; nothing is ever overwritten or deleted.
 - **M38 (MC-33, MC-2).** Every camera file becomes exactly one `photos` row, in the session active at its exposure (or at completion when no
@@ -195,7 +196,7 @@ and capture groups (one result from many files: the owner's research intent, tra
 - **M39 (MC-31, MC-34).** At most one SDK session at any time; no transport switch starts while the camera is busy; a store-destination
   write is always verified; a secret never appears in a log, a settings file or the repo; no other process is ever killed.
 
-## Chapters this amends on acceptance
+## Chapters this amended (2026-11-06)
 10 (research item resolved; Session Manager controls the camera; the Capture One camera adapter retired after acceptance), 03 (camera:
 A7R V), 05A MC-2 (`.incoming` and `.duplicates` ignored; arrival via MC-33's target folder), 10A MC-17 (current collection follows the
 session), 10C MC-26 (camera connected before launching Capture One; style applied by script to arrivals), 11 (camera sidecar, camera

@@ -36,7 +36,8 @@ provisioned the same way). Kind must be `session` (chapter 10).
 **Ensure, step by step,** at startup, after a settings save, on Health "Retry checks", and before a
 Session Manager session is activated (MC-18). Each step is idempotent; the first failing step stops
 the sequence with its own health item; nothing blocks review, export or the rest of the app (H6).
-1. **Capture One running.** If not, launch it and wait until it answers scripting (bounded wait).
+1. **Capture One running.** If not, launch it and wait until it answers scripting (bounded wait). With the direct camera
+   adapter, the camera's USB session is opened **before** this launch whenever the camera is on the cable (chapter 10E MC-34).
    Not installed, not Pro, or Automation denied → health item naming that, no further steps.
 2. **Document exists.** If no document is at the path, create it with Capture One's `make new
    document` (kind session) at that location. Never create over an existing folder that is not a
@@ -56,7 +57,9 @@ the sequence with its own health item; nothing blocks review, export or the rest
    capture settings apply that style; if it is not listed, health "Style '<name>' not found in
    Capture One" (capture still works). Empty `style_name` → the next-capture settings are left as
    the photographer set them. **Default empty** (owner 2026-11-04, changelog 26): a fresh setup applies no style
-   and Health starts green; the photographer names a style in Settings only if they want one.
+   and Health starts green; the photographer names a style in Settings only if they want one. Next-capture settings apply only to
+   tethered captures; with the direct camera adapter the app applies the style to each arriving variant by script (chapter 10E
+   §Capture One alongside, V2).
 6. **Hooks** as MC-15 (unchanged).
 
 **Front document.** When a Session Manager session is activated (MC-18), the app brings its document

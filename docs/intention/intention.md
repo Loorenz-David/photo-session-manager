@@ -37,6 +37,7 @@ the meaning, the contract gives the exact rule.
 | [10B Shape on arrival](book/10B_shape_on_arrival.md) | **retired 2026-11-04 by 10D**; history of the Capture One crop write (MC-25) |
 | [10C Capture One set up by the app](book/10C_capture_one_setup_by_the_app.md) | the app's own Capture One session document, launching/opening it, creating and repairing the recipes, next-capture style, front document; how products divide inside Capture One (MC-26, owner 2026-11-03) |
 | [10D Composition and framing](book/10D_composition_and_framing.md) | the editor (Compose mode, Tools panel, gestures), the composition values and pixel rule, default shape, Split, the master and output render, outputs in export/upload/gallery/damage report, dirty on composition change (MC-27…MC-29, owner 2026-11-04) |
+| [10E Direct camera adapter](book/10E_direct_camera_adapter.md) | Session Manager controlling the camera: the camera sidecar and its protocol, USB/Wi-Fi switching, the FTP receiver, Save-to-PC, the capture ledger and target folder, camera ownership against other programs, camera support packages, Capture One alongside (MC-31…MC-34, owner 2026-11-06) |
 | [11 Architecture and packaging](book/11_architecture_and_packaging.md) | Tauri + Rust, layers, commands/events, repo layout, packaging spike, phone remote |
 | [12 Operations](book/12_operations.md) | settings, logs, backup, health |
 | [13 Scope ladder](book/13_scope_ladder.md) | must ship / only if cheap / deferred |
@@ -47,6 +48,7 @@ the meaning, the contract gives the exact rule.
 Evidence (source-contract facts, beside the book):
 - `evidence/capture_one_16.8.6.md` — AppleScript dictionary findings and runtime VERIFY items.
 - `evidence/design_handoff.md` — rules extracted from the Claude Design handoff in `claude_design/`.
+- `evidence/sony_camera_lab.md` — Sony Camera Lab findings (A7R V, SDK 2.02) and the Capture One / camera-ownership checks V1–V6.
 - `evidence/shopify_admin.md` — written when the dev store is provided (not yet).
 
 Stages of the brief are referred to as **S0–S8** (`M` is reserved for measurements).

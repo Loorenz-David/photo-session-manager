@@ -5,7 +5,9 @@ One native process: the Tauri application. Its Rust side is the backend (applica
 domain, persistence, jobs, provider queues, watcher); its webview hosts the React UI. In
 development the UI runs from Vite inside the Tauri dev window. There is no second backend
 process. **Python is optional**: introduced only as a Tauri sidecar when a concrete need is
-demonstrated (local vision, image processing, a specialised model); none exists in the MVP.
+demonstrated (local vision, image processing, a specialised model); none exists in the MVP. **One native sidecar exists:
+the camera sidecar** (C++, built with CMake against a vendor SDK kept outside the repo, shipped as `externalBin`; its vendor runtime
+is installed by the user as a camera support package): chapter 10E. The FTP receiver runs inside the Rust process.
 
 ## Frontend ↔ backend (A1, resolved R26)
 The window calls typed Tauri commands and subscribes to Tauri events. Command and event types are

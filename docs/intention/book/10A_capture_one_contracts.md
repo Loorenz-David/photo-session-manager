@@ -128,6 +128,8 @@ When a session becomes active (or the last one closes, target `_Unassigned`, MC-
 5. on error or mismatch: health error "capture folder not set", camera status red,
    `camera.capture` disabled, and the previous folder re-applied by steps 1–4. Step 3 is never
    attempted without step 2.
+6. with the direct camera adapter, also set the document's **current collection** to the target folder, so Capture One scans it
+   and sees files written by the receiver (chapter 10E §Capture One alongside, V1).
 
 Evidence for step 4: setting a missing folder fails with "Cannot set because there is no file at
 this location", and afterwards `captures` reads back as `<working directory of the calling

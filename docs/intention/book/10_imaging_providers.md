@@ -9,13 +9,17 @@ Capabilities an adapter may declare: `camera.discover`, `camera.connect`, `camer
 `camera.capture`, `camera.transfer`, `camera.settings.read`, `camera.settings.write`. The UI
 hides what is absent: the header dot needs `camera.status`, the capture button `camera.capture`.
 
-**MVP adapter (A2, resolved R27): camera through Capture One.** Capture One holds the USB tether to the
+**Direct adapter (R42, owner 2026-11-06): Session Manager controls the camera** through the camera maker's
+SDK in a sidecar, receives files over the cable and by the camera's Auto FTP, and keeps ownership of the camera: chapter 10E
+(MC-31…MC-34). The research item below is resolved by `evidence/sony_camera_lab.md`. The adapter described next is retired once
+10E's hardware acceptance passes on the work Mac.
+
+**Former MVP adapter (A2, R27): camera through Capture One.** Capture One holds the USB tether to the
 Sony ZV-E10, and one host owns that connection. The adapter reports status from the document's
 `camera` and `available camera identifiers`, fires the shutter with the `capture` command, and
 "transfer" is Capture One writing the RAW into the capture folder. It declares `camera.status`,
-`camera.capture`, `camera.transfer`. A direct Sony adapter (Camera Remote SDK or PTP) is a later
-provider that would take over the tether; its feasibility is a research item, never assumed
-(owner memo, 2026-10-24). The physical link (USB today, wireless under exploration) is the
+`camera.capture`, `camera.transfer`. A direct Sony adapter (Camera Remote SDK or PTP) was a research item (owner memo,
+2026-10-24); feasible on the A7R V, adopted as chapter 10E (2026-11-06). The physical link (USB today, wireless under exploration) is the
 adapter's concern and changes nothing above the interface.
 
 ## Editing provider
