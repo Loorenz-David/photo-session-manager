@@ -70,6 +70,7 @@ impl FtpClient {
             return Ok(reply);
         };
         data.write_all(bytes)?;
+        std::thread::sleep(Duration::from_millis(300));
         let linger = libc::linger {
             l_onoff: 1,
             l_linger: 0,
@@ -84,10 +85,6 @@ impl FtpClient {
                 std::mem::size_of::<libc::linger>() as libc::socklen_t,
             )
         };
-        if rc != 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let rc = unsafe { libc::shutdown(data.as_raw_fd(), libc::SHUT_RDWR) };
         if rc != 0 {
             return Err(io::Error::last_os_error());
         }

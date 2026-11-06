@@ -243,10 +243,10 @@ pub(crate) async fn serve(
                         )
                         .await?;
                     } else {
-                        let octets = match state.config.bind {
-                            IpAddr::V4(v) => v.octets(),
-                            _ => [127, 0, 0, 1],
+                        let IpAddr::V4(address) = control.get_ref().local_addr()?.ip() else {
+                            return Err(io::Error::other("PASV control connection must use IPv4"));
                         };
+                        let octets = address.octets();
                         reply(
                             &mut control,
                             227,
