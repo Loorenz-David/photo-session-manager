@@ -6,6 +6,10 @@ use psm_core::{
             AiConfidence, AiStatus, AttributeGroup, CoreType, Definition, Preset, Provenance,
             Value as AttributeValue,
         },
+        camera::{
+            Association, DeliveryOutcome, DeliveryRow, DeliveryState, Exposure, ExposureInitiator,
+            ExposureStatus, Link, NewDelivery, NewExposure, PendingUpdate,
+        },
         composition::{
             Composition, CompositionState, CompositionValues, Fingerprint, Frame, FrameSource,
             Origin, OutputSlot, Rect,
@@ -49,7 +53,7 @@ impl SqliteStore {
         })
     }
 
-    /// The schema migrations in order (001…005); public so a test can stop at an earlier version
+    /// The schema migrations in order (001…006); public so a test can stop at an earlier version
     /// and check a later migration over existing rows.
     pub fn migrations() -> Vec<M<'static>> {
         vec![
@@ -58,6 +62,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/003_retire_shape_on_arrival.sql")),
             M::up(include_str!("migrations/004_compositions.sql")),
             M::up(include_str!("migrations/005_photo_link_slots.sql")),
+            M::up(include_str!("migrations/006_camera_ledger.sql")),
         ]
     }
 
@@ -828,6 +833,134 @@ impl StoreTx for SqliteTx<'_> {
         self.tx.execute("INSERT INTO attribute_presets(item_type,grp,layout) VALUES (?1,?2,?3) ON CONFLICT(item_type,grp) DO UPDATE SET layout=excluded.layout", params![preset.item_type,preset.group.as_str(),to_json(&preset.layout)?]).map_err(db)?;
         Ok(())
     }
+    fn item_folder_key_frozen(&self, item_id: i64) -> Result<bool> {
+        item_folder_key_frozen(&self.tx, item_id)
+    }
+    fn insert_delivery(&mut self, d: &NewDelivery) -> Result<i64> {
+        self.tx
+            .execute(
+                "INSERT INTO camera_deliveries(exposure_id,camera_filename,file_key,sha256,size,via,completed_at,association,outcome,session_id,written_path,final_path,state,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'pending',?13)",
+                params![
+                    d.exposure_id,
+                    d.camera_filename,
+                    d.file_key,
+                    d.sha256,
+                    d.size as i64,
+                    d.via.label(),
+                    d.completed_at,
+                    d.association.as_str(),
+                    d.outcome.as_str(),
+                    d.session_id,
+                    d.written_path,
+                    d.final_path,
+                    d.created_at
+                ],
+            )
+            .map_err(db)?;
+        Ok(self.tx.last_insert_rowid())
+    }
+    fn update_pending_delivery(&mut self, id: i64, u: &PendingUpdate) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE camera_deliveries SET sha256=?2,size=?3,completed_at=?4,final_path=?5,outcome=?6,association=?7,exposure_id=?8,session_id=?9 WHERE id=?1 AND state='pending'",
+                params![
+                    id,
+                    u.sha256,
+                    u.size as i64,
+                    u.completed_at,
+                    u.final_path,
+                    u.outcome.as_str(),
+                    u.association.as_str(),
+                    u.exposure_id,
+                    u.session_id
+                ],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn set_exposure_status(&mut self, id: i64, status: ExposureStatus) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE camera_exposures SET status=?2 WHERE id=?1",
+                params![id, status.as_str()],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+}
+
+const DELIVERY_COLUMNS: &str = "id,exposure_id,camera_filename,file_key,sha256,size,via,completed_at,association,outcome,session_id,written_path,final_path,state,created_at";
+
+fn bad_enum(column: usize, text: &str) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        column,
+        rusqlite::types::Type::Text,
+        format!("unknown value {text}").into(),
+    )
+}
+
+fn delivery_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<DeliveryRow> {
+    let via: String = r.get(6)?;
+    let association: String = r.get(8)?;
+    let outcome: String = r.get(9)?;
+    let state: String = r.get(13)?;
+    Ok(DeliveryRow {
+        id: r.get(0)?,
+        exposure_id: r.get(1)?,
+        camera_filename: r.get(2)?,
+        file_key: r.get(3)?,
+        sha256: r.get(4)?,
+        size: r.get::<_, i64>(5)? as u64,
+        via: Link::parse(&via).ok_or_else(|| bad_enum(6, &via))?,
+        completed_at: r.get(7)?,
+        association: Association::parse(&association).ok_or_else(|| bad_enum(8, &association))?,
+        outcome: DeliveryOutcome::parse(&outcome).ok_or_else(|| bad_enum(9, &outcome))?,
+        session_id: r.get(10)?,
+        written_path: r.get(11)?,
+        final_path: r.get(12)?,
+        state: DeliveryState::parse(&state).ok_or_else(|| bad_enum(13, &state))?,
+        created_at: r.get(14)?,
+    })
+}
+
+fn exposure_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Exposure> {
+    let initiated: String = r.get(3)?;
+    let status: String = r.get(5)?;
+    Ok(Exposure {
+        id: r.get(0)?,
+        capture_id: r.get(1)?,
+        exposed_at: r.get(2)?,
+        initiated: ExposureInitiator::parse(&initiated).ok_or_else(|| bad_enum(3, &initiated))?,
+        session_id: r.get(4)?,
+        status: ExposureStatus::parse(&status).ok_or_else(|| bad_enum(5, &status))?,
+        expected_files: r.get::<_, Option<i64>>(6)?.map(|n| n.max(0) as u32),
+        created_at: r.get(7)?,
+    })
+}
+
+fn deliveries_where(
+    conn: &Connection,
+    condition: &str,
+    args: impl rusqlite::Params,
+) -> Result<Vec<DeliveryRow>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {DELIVERY_COLUMNS} FROM camera_deliveries WHERE {condition} ORDER BY id"
+        ))
+        .map_err(db)?;
+    stmt.query_map(args, delivery_row)
+        .map_err(db)?
+        .collect::<rusqlite::Result<_>>()
+        .map_err(db)
+}
+
+fn item_folder_key_frozen(conn: &Connection, item_id: i64) -> Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM photos JOIN sessions ON sessions.id=photos.session_id WHERE sessions.item_id=?1) OR EXISTS(SELECT 1 FROM camera_deliveries d JOIN sessions s ON s.id=d.session_id WHERE s.item_id=?1 AND d.outcome IN ('photo','renamed_photo') AND d.state IN ('pending','done'))",
+        [item_id],
+        |r| r.get(0),
+    )
+    .map_err(db)
 }
 
 fn to_json<T: serde::Serialize + ?Sized>(value: &T) -> Result<String> {
@@ -1869,5 +2002,140 @@ impl Store for SqliteStore {
         }
         tx.commit().map_err(|e| Error::InvalidData(e.to_string()))?;
         Ok(())
+    }
+    fn insert_exposure(&self, exposure: &NewExposure) -> Result<i64> {
+        self.ledger_insert_exposure(exposure)
+    }
+    fn set_exposure_status(&self, id: i64, status: ExposureStatus) -> Result<()> {
+        self.locked()?
+            .execute(
+                "UPDATE camera_exposures SET status=?2 WHERE id=?1",
+                params![id, status.as_str()],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn set_exposures_status_where(
+        &self,
+        from: ExposureStatus,
+        to: ExposureStatus,
+    ) -> Result<usize> {
+        self.locked()?
+            .execute(
+                "UPDATE camera_exposures SET status=?2 WHERE status=?1",
+                params![from.as_str(), to.as_str()],
+            )
+            .map_err(db)
+    }
+    fn exposures(&self, status: Option<ExposureStatus>) -> Result<Vec<Exposure>> {
+        self.ledger_exposures(status)
+    }
+    fn set_delivery_done(&self, id: i64) -> Result<()> {
+        self.locked()?
+            .execute(
+                "UPDATE camera_deliveries SET state='done' WHERE id=?1",
+                [id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn deliveries_by_key(&self, file_key: &str) -> Result<Vec<DeliveryRow>> {
+        deliveries_where(&*self.locked()?, "file_key=?1", [file_key])
+    }
+    fn deliveries_by_stem(&self, stem_key: &str) -> Result<Vec<DeliveryRow>> {
+        let escaped = stem_key
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let rows = deliveries_where(
+            &*self.locked()?,
+            "file_key=?1 OR file_key LIKE ?2 ESCAPE '\\'",
+            params![stem_key, format!("{escaped}.%")],
+        )?;
+        Ok(rows
+            .into_iter()
+            .filter(|row| psm_core::mechanisms::capture_ledger::stem_key(&row.file_key) == stem_key)
+            .collect())
+    }
+    fn deliveries_for_exposure(&self, exposure_id: i64) -> Result<Vec<DeliveryRow>> {
+        deliveries_where(&*self.locked()?, "exposure_id=?1", [exposure_id])
+    }
+    fn pending_deliveries(&self) -> Result<Vec<DeliveryRow>> {
+        deliveries_where(&*self.locked()?, "state='pending'", [])
+    }
+    fn pending_delivery_for_written_path(&self, written_path: &str) -> Result<Option<DeliveryRow>> {
+        Ok(deliveries_where(
+            &*self.locked()?,
+            "state='pending' AND written_path=?1",
+            [written_path],
+        )?
+        .pop())
+    }
+    fn delivery_for_path(&self, canonical: &str) -> Result<Option<(Option<i64>, i64)>> {
+        self.locked()?
+            .query_row(
+                "SELECT CASE WHEN EXISTS(SELECT 1 FROM sessions s WHERE s.id=d.session_id) THEN d.session_id END, COALESCE(e.exposed_at,d.completed_at) FROM camera_deliveries d LEFT JOIN camera_exposures e ON e.id=d.exposure_id WHERE d.final_path=?1 ORDER BY d.id DESC LIMIT 1",
+                [canonical],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .map_err(db)
+    }
+    fn completed_names_since(&self, since_ms: i64) -> Result<Vec<(String, u64, i64)>> {
+        self.ledger_completed_names_since(since_ms)
+    }
+    fn item_folder_key_frozen(&self, item_id: i64) -> Result<bool> {
+        item_folder_key_frozen(&*self.locked()?, item_id)
+    }
+    fn deliveries(&self) -> Result<Vec<DeliveryRow>> {
+        deliveries_where(&*self.locked()?, "1=1", [])
+    }
+}
+
+impl SqliteStore {
+    fn locked(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))
+    }
+}
+
+/// Capture ledger (10E MC-33, P44).
+impl SqliteStore {
+    fn ledger_insert_exposure(&self, e: &NewExposure) -> Result<i64> {
+        let conn = self.locked()?;
+        conn.execute(
+            "INSERT INTO camera_exposures(capture_id,exposed_at,initiated,session_id,status,expected_files,created_at) VALUES (?1,?2,?3,?4,'expecting',NULL,?5)",
+            params![e.capture_id, e.exposed_at, e.initiated.as_str(), e.session_id, e.created_at],
+        )
+        .map_err(db)?;
+        Ok(conn.last_insert_rowid())
+    }
+    fn ledger_exposures(&self, status: Option<ExposureStatus>) -> Result<Vec<Exposure>> {
+        let conn = self.locked()?;
+        let mut stmt = conn
+            .prepare("SELECT id,capture_id,exposed_at,initiated,session_id,status,expected_files,created_at FROM camera_exposures WHERE ?1 IS NULL OR status=?1 ORDER BY exposed_at,id")
+            .map_err(db)?;
+        stmt.query_map([status.map(ExposureStatus::as_str)], exposure_row)
+            .map_err(db)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db)
+    }
+    fn ledger_completed_names_since(&self, since_ms: i64) -> Result<Vec<(String, u64, i64)>> {
+        let conn = self.locked()?;
+        let mut stmt = conn
+            .prepare("SELECT camera_filename,size,completed_at FROM camera_deliveries WHERE state='done' AND completed_at>=?1 ORDER BY completed_at,id")
+            .map_err(db)?;
+        let rows: Vec<(String, i64, i64)> = stmt
+            .query_map([since_ms], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map_err(db)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db)?;
+        let mut latest: Vec<(String, u64, i64)> = Vec::new();
+        for (name, size, at) in rows {
+            latest.retain(|(known, _, _)| known != &name);
+            latest.push((name, size.max(0) as u64, at));
+        }
+        Ok(latest)
     }
 }

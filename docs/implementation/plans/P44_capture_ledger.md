@@ -290,3 +290,32 @@ gains two empty tables (`sqlite3 … ".tables"` shows `camera_exposures camera_d
   pinned in C2(g)/C6(a), a `Camera`-initiated fixture in C2(a) · L17 service clauses dropped from pure rows · L18 to P46 Task 2 / C8(c), listed under
   "Not in this phase" · L19–L22 decided in writing (contract) · L23 §6.11/§6.4 aligned to the plan's names · L24 C5(b) exact. Reality: anchors at HEAD
   `2e78bab`, line citations corrected, fixture-helper notes added, 24 paths derived, C2(b)'s trace re-pointed. Rows 33 → 36 (C3 +1, C5 +1, C7 +1).
+- **2026-11-06, implement r1** (opus, `PSM_IMPLEMENTER=claude`): built the 24 declared paths. `capture_ledger.rs` (file key, stem key,
+  `associate` with every filter inside, `is_complete`, `duplicate_decision`, `dup_name`, `target_folder`, `pending_count`, `sequence_gaps` — 11
+  `mc33_*` unit tests for C1, C2, C6(a)); `psm_infra::camera_files` (`renamex_np(RENAME_EXCL)`, `CameraFiles`, one inline test); `LedgerService`
+  (one worker under the runtime's `LedgerShared`; decide → pending row + exposure status in one transaction that also reads the folder key →
+  `create_dir_all` → exclusive rename with the `EEXIST` rules → `done`; take-over of a `pending` row by `written_path`; `recover_pending` at
+  every bind; watchdog, `dismiss`, `complete_for`, `completed_names_since`); migration 006; MC-2 rule 0 + `captured_at` in `ArrivalService::accept`;
+  `item_folder_key_frozen` in `update_identity`; runtime `ledger_shared`/`delivery_fs`/`set_delivery_fs`/`ledger()`, `NoopSink` removed;
+  `p44_capture_ledger.rs` (25 behaviour rows C3–C8). Suite 671/0, clippy, fmt, typecheck, UI 369/369.
+  **Judgment calls:** (1) `update_pending_delivery(id, &PendingUpdate)` — the registry's nine fields grouped in one struct (clippy's argument
+  limit). (2) One `Store` method beyond the registry list: `deliveries_for_exposure(exposure_id)` — the `received` transition and `complete_for`
+  count an exposure's non-duplicate deliveries across all stems (a bracket of `DSC00100..102` shares no key or stem). (3) The matched exposure's
+  status = `received` iff its non-duplicate `pending`/`done` deliveries reach `expected_files.unwrap_or(1)`, else `expecting`; only
+  `expecting`/`received` exposures are moved (an `uncertain` or `dismissed` one is never touched). When a rename's `EEXIST` turns a delivery into a
+  duplicate, or a take-over moves a row's FIFO pick, the old exposure is re-evaluated the same way. (4) The take-over restores the exposure its own
+  FIFO pick had made `received` as a candidate for the re-made decision. (5) The folder key is read inside the transaction that inserts the
+  `pending` row (the "moment of the rename" is the commit of the row whose final path the rename uses; the freeze then holds). (6) Rule 0 applies to
+  the capture path only (hook/watcher/scan), not to imports. (7) `WatchdogState.gaps` is the `Vec<Gap>` (`g` = its length); while a transfer is
+  active the item is cleared and the raised flag reset, so `first_raise` fires again when the notice reappears. (8) `dismiss()` dismisses only the
+  exposures the count covers (60 s < age < 30 min), not a shot taken seconds ago. (9) `session_uncertain` and `dismiss` take the worker lock. (10)
+  Health detail names the first `ambiguous_with` session. (11) Before the first bind the runtime's sink refuses deliveries (`Err` → the receiver
+  answers 426) instead of P43's accept-and-drop `NoopSink`. (12) Final paths are stored NFC-normalised from the canonical capture root, so rule 0
+  compares like with like.
+  **Deviations:** (a) p43: besides C1(a), C2(g) and C4(a)–(c), five more `TestApp` rows read the `.part` after a successful upload — C1(b), C2(b),
+  C2(d), C3(a) and C6(b) — and now read `root/_Unassigned/<name>` (same category the Files section names; assertions otherwise unchanged); C4(a)–(c)
+  use a local `listing_receiver` (a standalone receiver with its own `ManualClock`, because C4(b)/(c) move the clock). (b) Migration 006 uses
+  `IF NOT EXISTS`: `p27 c4a_migration_removes_old_jobs_and_health_codes` rewinds `user_version` to 2 and re-runs every later migration.
+  (c) No red baseline was captured before the first production edit (flow §4 has no baseline step; stated, not reconstructed).
+  **Observations:** no hardware probe — in P44 only the FTP receiver feeds the ledger, and it starts only with an installed support package; the
+  suite covers the path through the real receiver (C8(a)).

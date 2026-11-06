@@ -726,6 +726,7 @@ impl App {
             None
         };
         camera_runtime.bind(AppBinding {
+            store: store.clone(),
             events: events.clone(),
             health: health.clone(),
             previous_health,

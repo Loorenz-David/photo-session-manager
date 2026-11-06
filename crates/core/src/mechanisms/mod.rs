@@ -3,6 +3,7 @@ pub mod attribute_write;
 pub mod backoff;
 pub mod camera_status;
 pub mod canon;
+pub mod capture_ledger;
 pub mod composition;
 pub mod hash;
 pub mod hook_payload;

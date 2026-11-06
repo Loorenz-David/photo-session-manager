@@ -1,6 +1,7 @@
 use crate::Result;
 use crate::domain::{
     attribute::{AttributeGroup, Definition, Preset, Value as AttributeValue},
+    camera::{DeliveryRow, Exposure, ExposureStatus, NewDelivery, NewExposure, PendingUpdate},
     composition::{Composition, CompositionValues, Fingerprint, Origin},
     editing::Job,
     item::{Item, NewItem},
@@ -109,6 +110,15 @@ pub trait StoreTx {
     fn set_item_activity(&mut self, item_id: i64, at: i64) -> Result<()>;
     fn attribute_preset(&self, item_type: &str, group: AttributeGroup) -> Result<Option<Preset>>;
     fn put_attribute_preset(&mut self, preset: &Preset) -> Result<()>;
+    /// 05B MC-22 amended (10E R-I28): the item has a photo row in one of its sessions, or a
+    /// `photo`/`renamed_photo` delivery in state `pending` or `done` for one of its sessions.
+    fn item_folder_key_frozen(&self, item_id: i64) -> Result<bool>;
+    /// Inserts a `pending` `camera_deliveries` row and returns its id.
+    fn insert_delivery(&mut self, delivery: &NewDelivery) -> Result<i64>;
+    /// The take-over of a `pending` row by a re-sent staging file, and the rewrite of a
+    /// `pending` row's final path after `EEXIST`.
+    fn update_pending_delivery(&mut self, id: i64, update: &PendingUpdate) -> Result<()>;
+    fn set_exposure_status(&mut self, id: i64, status: ExposureStatus) -> Result<()>;
 }
 
 pub trait Store: Send + Sync {
@@ -266,4 +276,31 @@ pub trait Store: Send + Sync {
         payload: &str,
         received_at: i64,
     ) -> Result<()>;
+    // Capture ledger (10E MC-33, P44).
+    fn insert_exposure(&self, exposure: &NewExposure) -> Result<i64>;
+    fn set_exposure_status(&self, id: i64, status: ExposureStatus) -> Result<()>;
+    /// Every exposure with status `from` becomes `to`; returns the number changed.
+    fn set_exposures_status_where(&self, from: ExposureStatus, to: ExposureStatus)
+    -> Result<usize>;
+    /// Exposures with that status (all when `None`), oldest `exposed_at` first, then id.
+    fn exposures(&self, status: Option<ExposureStatus>) -> Result<Vec<Exposure>>;
+    fn set_delivery_done(&self, id: i64) -> Result<()>;
+    /// Delivery rows (any state) whose `file_key` equals `file_key`, in id order.
+    fn deliveries_by_key(&self, file_key: &str) -> Result<Vec<DeliveryRow>>;
+    /// Delivery rows (any state) whose file key's stem equals `stem_key`, in id order.
+    fn deliveries_by_stem(&self, stem_key: &str) -> Result<Vec<DeliveryRow>>;
+    /// Delivery rows (any state) associated with that exposure, in id order.
+    fn deliveries_for_exposure(&self, exposure_id: i64) -> Result<Vec<DeliveryRow>>;
+    fn pending_deliveries(&self) -> Result<Vec<DeliveryRow>>;
+    fn pending_delivery_for_written_path(&self, written_path: &str) -> Result<Option<DeliveryRow>>;
+    /// MC-2 rule 0: the delivery (pending or done) whose `final_path` equals `canonical` →
+    /// `(its session if that session still exists, the matched exposure's exposed_at else the
+    /// delivery's completed_at)`.
+    fn delivery_for_path(&self, canonical: &str) -> Result<Option<(Option<i64>, i64)>>;
+    /// `(camera_filename, size, completed_at)` of `done` deliveries completed at or after
+    /// `since_ms`, one per name (the latest), oldest first.
+    fn completed_names_since(&self, since_ms: i64) -> Result<Vec<(String, u64, i64)>>;
+    fn item_folder_key_frozen(&self, item_id: i64) -> Result<bool>;
+    /// Every delivery row in id order (tests).
+    fn deliveries(&self) -> Result<Vec<DeliveryRow>>;
 }

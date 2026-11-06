@@ -3332,6 +3332,7 @@ dependencies = [
  "ipnet",
  "jpeg-encoder",
  "kamadak-exif",
+ "libc",
  "notify",
  "psm-core",
  "rusqlite",

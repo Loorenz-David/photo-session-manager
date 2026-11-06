@@ -35,6 +35,10 @@ fn bytes(n: usize, seed: u8) -> Vec<u8> {
 fn part(root: &Path, name: &str) -> std::path::PathBuf {
     root.join(".incoming").join(format!(".{name}.part"))
 }
+/// Where the capture ledger (P44) puts a completed upload while no session is active.
+fn unassigned(root: &Path, name: &str) -> std::path::PathBuf {
+    root.join("_Unassigned").join(name)
+}
 fn code(s: &str) -> &str {
     &s[..3]
 }
@@ -103,7 +107,7 @@ fn c1a_completed_upload_integrity() {
     let mut c = a.ftp();
     assert_eq!(code(&c.stor("DSC00001.ARW", &data).unwrap()), "226");
     assert_eq!(
-        std::fs::read(part(&a.capture_root(), "DSC00001.ARW")).unwrap(),
+        std::fs::read(unassigned(&a.capture_root(), "DSC00001.ARW")).unwrap(),
         data
     );
     assert_eq!(
@@ -118,7 +122,6 @@ fn c1a_completed_upload_integrity() {
         }]
     );
     assert!(!a.capture_root().join("DSC00001.ARW").exists());
-    assert_eq!(std::fs::read_dir(a.capture_root()).unwrap().count(), 1);
 }
 #[test]
 fn c1b_virtual_subdirectory() {
@@ -130,7 +133,7 @@ fn c1b_virtual_subdirectory() {
         code(&c.stor("DSC00003.ARW", &bytes(65536, 3)).unwrap()),
         "226"
     );
-    assert!(part(&a.capture_root(), "DSC00003.ARW").exists());
+    assert!(unassigned(&a.capture_root(), "DSC00003.ARW").exists());
     assert_eq!(
         a.deliveries().last().unwrap().camera_filename,
         "DSC00003.ARW"
@@ -194,7 +197,7 @@ fn c2b_rest_resume() {
     assert_eq!(code(&rest), "350");
     assert_eq!(code(&done), "226");
     assert_eq!(
-        std::fs::read(part(&a.capture_root(), "DSC00020.ARW")).unwrap(),
+        std::fs::read(unassigned(&a.capture_root(), "DSC00020.ARW")).unwrap(),
         data
     );
     assert_eq!(a.deliveries().len(), 1);
@@ -226,7 +229,7 @@ fn c2d_new_stor_truncates() {
     let data = bytes(10240, 8);
     assert_eq!(code(&c.stor("X.ARW", &data).unwrap()), "226");
     assert_eq!(
-        std::fs::read(part(&a.capture_root(), "X.ARW")).unwrap(),
+        std::fs::read(unassigned(&a.capture_root(), "X.ARW")).unwrap(),
         data
     );
     assert_eq!(a.deliveries()[0].size, 10240);
@@ -268,7 +271,7 @@ fn c2g_appe_at_staged_length() {
         .len() as usize;
     assert_eq!(code(&c.appe("W.ARW", &data[off..]).unwrap()), "226");
     assert_eq!(
-        std::fs::read(part(&a.capture_root(), "W.ARW")).unwrap(),
+        std::fs::read(unassigned(&a.capture_root(), "W.ARW")).unwrap(),
         data
     );
 }
@@ -278,13 +281,19 @@ fn c3a_delete_and_rename_refused() {
     let mut c = a.ftp();
     c.stor("A.ARW", b"a").unwrap();
     c.stor("B.ARW", b"b").unwrap();
-    let a0 = std::fs::read(part(&a.capture_root(), "A.ARW")).unwrap();
-    let b0 = std::fs::read(part(&a.capture_root(), "B.ARW")).unwrap();
+    let a0 = std::fs::read(unassigned(&a.capture_root(), "A.ARW")).unwrap();
+    let b0 = std::fs::read(unassigned(&a.capture_root(), "B.ARW")).unwrap();
     for cmd in ["DELE A.ARW", "RMD x", "RNFR A.ARW"] {
         assert_eq!(code(&c.cmd(cmd).unwrap()), "550");
     }
-    assert_eq!(std::fs::read(part(&a.capture_root(), "A.ARW")).unwrap(), a0);
-    assert_eq!(std::fs::read(part(&a.capture_root(), "B.ARW")).unwrap(), b0);
+    assert_eq!(
+        std::fs::read(unassigned(&a.capture_root(), "A.ARW")).unwrap(),
+        a0
+    );
+    assert_eq!(
+        std::fs::read(unassigned(&a.capture_root(), "B.ARW")).unwrap(),
+        b0
+    );
 }
 #[test]
 fn c3b_rnto_alone() {
@@ -310,15 +319,40 @@ fn c3d_traversal_refused() {
     }
     assert!(!a.dir.path().join("escape.ARW").exists());
 }
+/// A standalone receiver whose listings come from `sink` (P44: a `TestApp`'s receiver lists the
+/// ledger's names), on `clock`.
+fn listing_receiver(
+    sink: Arc<CollectingSink>,
+    clock: Arc<ManualClock>,
+) -> (tempfile::TempDir, psm_infra::ftp::ReceiverHandle, FtpClient) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    let handle = FtpReceiver::start(ReceiverConfig {
+        bind: IpAddr::V4(Ipv4Addr::LOCALHOST),
+        port: 0,
+        passive: 0..=0,
+        allowed_peers: local(),
+        username: "sessionmanager".into(),
+        password: "ftp-pw-unique-1".into(),
+        capture_root: Arc::new(move || Some(root.clone())),
+        sink: sink.clone(),
+        names: sink,
+        clock,
+    })
+    .unwrap();
+    let c = client(handle.port());
+    (dir, handle, c)
+}
 #[test]
 fn c4a_virtual_listings() {
-    let a = app();
-    let t = a.clock.now_ms();
-    a.ftp_sink.set_completed_names(vec![
+    let sink = Arc::new(CollectingSink::default());
+    let clock = Arc::new(ManualClock::new(0));
+    let t = clock.now_ms();
+    sink.set_completed_names(vec![
         ("DSC00001.ARW".into(), 3145728, t),
         ("DSC00003.ARW".into(), 65536, t),
     ]);
-    let mut c = a.ftp();
+    let (_dir, _handle, mut c) = listing_receiver(sink, clock);
     c.cmd("CWD anything").unwrap();
     let (_, nlst) = c.listing("NLST").unwrap();
     assert_eq!(
@@ -333,23 +367,23 @@ fn c4a_virtual_listings() {
 }
 #[test]
 fn c4b_size_and_mdtm() {
-    let a = app();
+    let sink = Arc::new(CollectingSink::default());
+    let clock = Arc::new(ManualClock::new(0));
     let t = 1_700_000_000_000;
-    a.ftp_sink
-        .set_completed_names(vec![("DSC00001.ARW".into(), 3145728, t)]);
-    a.clock.advance(t);
-    let mut c = a.ftp();
+    sink.set_completed_names(vec![("DSC00001.ARW".into(), 3145728, t)]);
+    clock.advance(t);
+    let (_dir, _handle, mut c) = listing_receiver(sink, clock);
     assert_eq!(c.cmd("SIZE DSC00001.ARW").unwrap(), "213 3145728");
     assert_eq!(c.cmd("MDTM DSC00001.ARW").unwrap(), "213 20231114221320");
     assert_eq!(code(&c.cmd("SIZE NOPE.ARW").unwrap()), "550");
 }
 #[test]
 fn c4c_old_names_expire() {
-    let a = app();
-    a.ftp_sink
-        .set_completed_names(vec![("OLD.ARW".into(), 42, 0)]);
-    a.clock.advance(25 * 3600 * 1000);
-    let mut c = a.ftp();
+    let sink = Arc::new(CollectingSink::default());
+    let clock = Arc::new(ManualClock::new(0));
+    sink.set_completed_names(vec![("OLD.ARW".into(), 42, 0)]);
+    clock.advance(25 * 3600 * 1000);
+    let (_dir, _handle, mut c) = listing_receiver(sink, clock);
     let (_, names) = c.listing("NLST").unwrap();
     assert_eq!(names, "226 Transfer complete");
     assert_eq!(code(&c.cmd("SIZE OLD.ARW").unwrap()), "550");
@@ -435,7 +469,7 @@ fn c6b_capture_root_from_settings() {
     }
     let mut c = a.ftp();
     assert_eq!(code(&c.stor("DSC2.ARW", b"II*\0").unwrap()), "226");
-    assert!(part(&a.capture_root(), "DSC2.ARW").exists());
+    assert!(unassigned(&a.capture_root(), "DSC2.ARW").exists());
     assert!(
         !a.fake
             .state

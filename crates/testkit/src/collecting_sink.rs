@@ -1,9 +1,9 @@
+use psm_core::ports::camera::CompletedNames;
 use psm_core::{
     Result,
     domain::camera::{Delivery, DeliveryOutcome, ExposureObserved, Link},
     ports::camera::CaptureSink,
 };
-use psm_infra::ftp::CompletedNames;
 use std::sync::Mutex;
 
 #[derive(Default)]

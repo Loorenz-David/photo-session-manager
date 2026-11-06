@@ -252,6 +252,39 @@ fn c1a_open_creates_all_domain_columns() {
             "notifications",
             &["id", "session_id", "run_id", "kind", "text", "created_at"],
         ),
+        (
+            "camera_exposures",
+            &[
+                "id",
+                "capture_id",
+                "exposed_at",
+                "initiated",
+                "session_id",
+                "status",
+                "expected_files",
+                "created_at",
+            ],
+        ),
+        (
+            "camera_deliveries",
+            &[
+                "id",
+                "exposure_id",
+                "camera_filename",
+                "file_key",
+                "sha256",
+                "size",
+                "via",
+                "completed_at",
+                "association",
+                "outcome",
+                "session_id",
+                "written_path",
+                "final_path",
+                "state",
+                "created_at",
+            ],
+        ),
     ];
     let actual_tables: BTreeSet<String> = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__rusqlite_%'").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
     let expected_tables: BTreeSet<String> = expected

@@ -246,7 +246,16 @@ impl ArrivalService {
         let parent = Path::new(&canonical)
             .parent()
             .expect("canonical file has parent");
-        let session_id = if source == PhotoSource::Import {
+        // MC-2 rule 0 (10E R-I28): a file the capture ledger placed joins that delivery's session
+        // (null or deleted → Unassigned) with the exposure's time, else the completion time.
+        let delivered = if source == PhotoSource::Capture {
+            self.store.delivery_for_path(&canonical)?
+        } else {
+            None
+        };
+        let session_id = if let Some((session, _)) = delivered {
+            session.unwrap_or(1)
+        } else if source == PhotoSource::Import {
             self.store.active_session_id()?.unwrap_or(1)
         } else {
             attribute(
@@ -256,12 +265,14 @@ impl ArrivalService {
                 self.store.active_session_id()?,
             )
         };
-        let metadata = fs::metadata(&canonical)?;
-        let captured_at = metadata
-            .modified()?
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
-            .as_millis() as i64;
+        let captured_at = match delivered {
+            Some((_, at)) => at,
+            None => fs::metadata(&canonical)?
+                .modified()?
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+                .as_millis() as i64,
+        };
         let key = path_key(&canonical);
         let (photo, inserted) = self.store.arrival_insert(
             NewPhoto {

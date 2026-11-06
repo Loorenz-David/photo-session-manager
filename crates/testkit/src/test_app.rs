@@ -1,5 +1,4 @@
 use crate::clock::ManualClock;
-use crate::collecting_sink::CollectingSink;
 use crate::fake_capture_one::FakeCaptureOneScripting;
 use crate::fake_commerce::FakeCommerce;
 use crate::fake_secrets::FakeSecrets;
@@ -32,7 +31,6 @@ pub struct TestApp {
     pub events: Arc<CollectingEventSink>,
     pub commerce: Option<Arc<FakeCommerce>>,
     pub secrets: Arc<FakeSecrets>,
-    pub ftp_sink: Arc<CollectingSink>,
     next_hook: AtomicU64,
 }
 
@@ -210,9 +208,6 @@ impl TestApp {
                 .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
             secrets.clone(),
         )?;
-        let ftp_sink = Arc::new(CollectingSink::default());
-        app.camera_runtime
-            .set_capture_sink(ftp_sink.clone(), ftp_sink.clone());
         let events = Arc::new(CollectingEventSink::default());
         app.events.set_target(events.clone());
         Ok(Self {
@@ -223,7 +218,6 @@ impl TestApp {
             events,
             commerce,
             secrets,
-            ftp_sink,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -294,8 +288,43 @@ impl TestApp {
         );
         c
     }
+    /// The capture ledger of the current binding (re-fetch after a restart or a settings save).
+    pub fn ledger(&self) -> Arc<psm_core::services::camera_ledger::LedgerService> {
+        self.app.camera_runtime.ledger().expect("ledger bound")
+    }
+    /// The ledger's `pending` and `done` delivery rows, as the deliveries that produced them.
     pub fn deliveries(&self) -> Vec<psm_core::domain::camera::Delivery> {
-        self.ftp_sink.deliveries()
+        self.ledger()
+            .deliveries()
+            .unwrap()
+            .into_iter()
+            .map(|row| psm_core::domain::camera::Delivery {
+                camera_filename: row.camera_filename,
+                written_path: PathBuf::from(row.written_path),
+                sha256: row.sha256,
+                size: row.size,
+                via: row.via,
+                completed_at: row.completed_at,
+            })
+            .collect()
+    }
+    /// The next rename the ledger attempts fails with an I/O error (not `EEXIST`); later ones
+    /// use the real `CameraFiles`.
+    pub fn ledger_fs_fail_next_rename(&self) {
+        self.app
+            .camera_runtime
+            .set_delivery_fs(Arc::new(FailNextRename::default()));
+    }
+    /// Fixture write (no input path sets it in 10E): the exposure's expected file count.
+    pub fn set_expected_files(&self, exposure_id: i64, n: u32) -> Result<()> {
+        let conn = rusqlite::Connection::open(self.app.paths.db())
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        conn.execute(
+            "UPDATE camera_exposures SET expected_files=?2 WHERE id=?1",
+            rusqlite::params![exposure_id, n],
+        )
+        .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        Ok(())
     }
     pub fn capture_root(&self) -> PathBuf {
         std::fs::canonicalize(
@@ -495,6 +524,30 @@ impl TestApp {
     }
     pub fn scan(&self) -> Result<()> {
         self.app.arrival.scan()
+    }
+}
+
+/// `CameraFiles` whose first `rename_exclusive` fails like a non-APFS volume would (`ENOTSUP`).
+#[derive(Default)]
+pub struct FailNextRename {
+    failed: std::sync::atomic::AtomicBool,
+}
+impl psm_core::ports::camera::DeliveryFs for FailNextRename {
+    fn rename_exclusive(
+        &self,
+        from: &Path,
+        to: &Path,
+    ) -> Result<psm_core::ports::camera::RenameOutcome> {
+        if !self.failed.swap(true, Ordering::SeqCst) {
+            return Err(std::io::Error::from_raw_os_error(libc::ENOTSUP).into());
+        }
+        psm_infra::camera_files::CameraFiles.rename_exclusive(from, to)
+    }
+    fn create_dir_all(&self, dir: &Path) -> Result<()> {
+        psm_infra::camera_files::CameraFiles.create_dir_all(dir)
+    }
+    fn file_size(&self, path: &Path) -> Result<u64> {
+        psm_infra::camera_files::CameraFiles.file_size(path)
     }
 }
 

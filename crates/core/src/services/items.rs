@@ -266,7 +266,8 @@ impl<'a> ItemsService<'a> {
             let next_sku = sku.unwrap_or(&old.sku);
             let proposed_key = folder_key(next_sku)?;
             Self::collision(tx, Some(item_id), next_sku, &proposed_key)?;
-            let stored_key = if tx.item_has_photos(item_id)? {
+            // 05B MC-22 amended: a first photo row or a committed camera delivery freezes it.
+            let stored_key = if tx.item_folder_key_frozen(item_id)? {
                 old.folder_key
             } else {
                 proposed_key

@@ -1,4 +1,3 @@
-use super::NoopSink;
 use super::{
     sidecar::supervisor::{SidecarSpec, Supervisor, SupervisorEvent},
     support::installed_sidecar,
@@ -6,13 +5,18 @@ use super::{
 use psm_core::{
     domain::camera::{CameraSettings, Delivery, DeliveryOutcome, ExposureObserved, Link, secrets},
     ports::{
-        camera::{CameraProvider, CaptureSink},
+        camera::{CameraProvider, CaptureSink, DeliveryFs},
         clock::Clock,
         secrets::SecretStore,
+        store::Store,
     },
-    services::health::HealthService,
+    services::{
+        camera_ledger::{LedgerService, LedgerShared},
+        health::HealthService,
+    },
 };
 use psm_infra::{
+    camera_files::CameraFiles,
     ftp::{CompletedNames, FTP_USERNAME, FtpReceiver, ReceiverConfig, ReceiverHandle},
     logging,
     paths::AppPaths,
@@ -21,6 +25,7 @@ use std::{
     collections::VecDeque,
     fs,
     net::{IpAddr, Ipv4Addr},
+    path::PathBuf,
     sync::{
         Arc, Mutex, RwLock,
         atomic::{AtomicBool, Ordering},
@@ -30,6 +35,7 @@ use std::{
 use uuid::Uuid;
 
 pub struct AppBinding {
+    pub store: Arc<dyn Store>,
     pub events: Arc<crate::EventHub>,
     pub health: Arc<HealthService>,
     pub previous_health: Option<Arc<HealthService>>,
@@ -53,8 +59,22 @@ impl CaptureSink for RoutingSink {
         self.0.read().unwrap().transfer_in_progress(source, active);
     }
 }
-struct EmptyNames;
-impl CompletedNames for EmptyNames {
+/// Before the first bind there is no ledger: a delivery is refused (the receiver answers 426 and
+/// the camera re-sends) and nothing is listed.
+struct Unbound;
+impl CaptureSink for Unbound {
+    fn exposure_observed(&self, _: ExposureObserved) -> psm_core::Result<i64> {
+        Err(psm_core::Error::Provider("camera ledger not bound".into()))
+    }
+    fn delivery(&self, _: Delivery) -> psm_core::Result<DeliveryOutcome> {
+        Err(psm_core::Error::Provider("camera ledger not bound".into()))
+    }
+    fn session_uncertain(&self) -> psm_core::Result<()> {
+        Err(psm_core::Error::Provider("camera ledger not bound".into()))
+    }
+    fn transfer_in_progress(&self, _: Link, _: bool) {}
+}
+impl CompletedNames for Unbound {
     fn completed_names_since(&self, _: i64) -> Vec<(String, u64, i64)> {
         vec![]
     }
@@ -75,6 +95,11 @@ pub struct CameraRuntime {
     capture_root: Arc<RwLock<std::path::PathBuf>>,
     sink: Arc<RoutingSink>,
     names: Arc<RoutingNames>,
+    /// One per process (R-I18; P44 L3): the ledger worker lock and the watchdog's raised flag,
+    /// shared by every `LedgerService` a bind builds.
+    ledger_shared: Arc<LedgerShared>,
+    ledger: RwLock<Option<Arc<LedgerService>>>,
+    delivery_fs: RwLock<Arc<dyn DeliveryFs>>,
     binding: RwLock<Option<AppBinding>>,
     secrets: Arc<dyn SecretStore>,
     credentials: Mutex<Option<(String, String)>>,
@@ -101,8 +126,11 @@ impl CameraRuntime {
             receiver_generation: std::sync::atomic::AtomicU64::new(0),
             receiver_bind,
             capture_root: Arc::new(RwLock::new(paths.root.clone())),
-            sink: Arc::new(RoutingSink(RwLock::new(Arc::new(NoopSink)))),
-            names: Arc::new(RoutingNames(RwLock::new(Arc::new(EmptyNames)))),
+            sink: Arc::new(RoutingSink(RwLock::new(Arc::new(Unbound)))),
+            names: Arc::new(RoutingNames(RwLock::new(Arc::new(Unbound)))),
+            ledger_shared: Arc::new(LedgerShared::default()),
+            ledger: RwLock::new(None),
+            delivery_fs: RwLock::new(Arc::new(CameraFiles)),
             binding: RwLock::new(None),
             secrets,
             credentials: Mutex::new(None),
@@ -118,6 +146,38 @@ impl CameraRuntime {
     pub fn set_capture_sink(&self, sink: Arc<dyn CaptureSink>, names: Arc<dyn CompletedNames>) {
         *self.sink.0.write().unwrap() = sink;
         *self.names.0.write().unwrap() = names;
+    }
+    /// The ledger of the current binding (rebuilt over the new store at every bind).
+    pub fn ledger(&self) -> Option<Arc<LedgerService>> {
+        self.ledger.read().unwrap().clone()
+    }
+    /// Test seam (P44 L11): the `DeliveryFs` the ledger uses, read at each bind; the current
+    /// ledger is rebuilt over it at once (same store, same shared worker lock).
+    pub fn set_delivery_fs(&self, fs: Arc<dyn DeliveryFs>) {
+        *self.delivery_fs.write().unwrap() = fs;
+        let current = self.ledger();
+        if let Some(ledger) = current {
+            self.install_ledger(LedgerService {
+                store: ledger.store.clone(),
+                clock: ledger.clock.clone(),
+                fs: self.delivery_fs.read().unwrap().clone(),
+                events: ledger.events.clone(),
+                health: ledger.health.clone(),
+                capture_root: ledger.capture_root.clone(),
+                shared: self.ledger_shared.clone(),
+            });
+        }
+    }
+    fn install_ledger(&self, ledger: LedgerService) -> Arc<LedgerService> {
+        let ledger = Arc::new(ledger);
+        *self.ledger.write().unwrap() = Some(ledger.clone());
+        self.set_capture_sink(ledger.clone(), ledger.clone());
+        ledger
+    }
+    /// The capture root formula the receiver uses: `canon(<document>/Capture)`.
+    fn capture_root_fn(&self) -> Arc<dyn Fn() -> Option<PathBuf> + Send + Sync> {
+        let document = self.capture_root.clone();
+        Arc::new(move || std::fs::canonicalize(document.read().unwrap().join("Capture")).ok())
     }
     pub fn receiver_port(&self) -> Option<u16> {
         self.receiver
@@ -163,6 +223,20 @@ impl CameraRuntime {
         let settings = binding.camera_settings;
         let capture_root = binding.capture_root.clone();
         *self.capture_root.write().unwrap() = capture_root;
+        // §6.11 Runtime (b): the ledger over the new store, sharing the process-wide worker lock;
+        // pending rows are recovered under that lock before anything new arrives.
+        let ledger = self.install_ledger(LedgerService {
+            store: binding.store.clone(),
+            clock: self.clock.clone(),
+            fs: self.delivery_fs.read().unwrap().clone(),
+            events: binding.events.clone(),
+            health: binding.health.clone(),
+            capture_root: self.capture_root_fn(),
+            shared: self.ledger_shared.clone(),
+        });
+        if let Err(error) = ledger.recover_pending() {
+            tracing::warn!(%error, "camera ledger recovery failed");
+        }
         *self.binding.write().expect("camera binding") = Some(binding);
         if self.stopped.load(Ordering::SeqCst) {
             return;
@@ -265,12 +339,7 @@ impl CameraRuntime {
             },
             username: FTP_USERNAME.into(),
             password,
-            capture_root: {
-                let document = self.capture_root.clone();
-                Arc::new(move || {
-                    std::fs::canonicalize(document.read().unwrap().join("Capture")).ok()
-                })
-            },
+            capture_root: self.capture_root_fn(),
             sink: self.sink.clone(),
             names: self.names.clone(),
             clock: self.clock.clone(),

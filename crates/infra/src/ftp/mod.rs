@@ -14,9 +14,7 @@ use std::{net::IpAddr, ops::RangeInclusive, path::PathBuf, sync::Arc};
 pub const FTP_USERNAME: &str = "sessionmanager";
 pub const DEFAULT_CONTROL_PORT: u16 = 2121;
 pub const DEFAULT_PASSIVE: RangeInclusive<u16> = 50000..=50009;
-pub trait CompletedNames: Send + Sync {
-    fn completed_names_since(&self, since: i64) -> Vec<(String, u64, i64)>;
-}
+pub use psm_core::ports::camera::CompletedNames;
 
 #[derive(Clone)]
 pub struct ReceiverConfig {

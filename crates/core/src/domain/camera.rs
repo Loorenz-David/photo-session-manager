@@ -28,6 +28,13 @@ impl Link {
             Self::Wireless => "wireless",
         }
     }
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "cable" => Some(Self::Cable),
+            "wireless" => Some(Self::Wireless),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,11 +152,155 @@ impl Default for CameraSettings {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DeliveryOutcome {
     Photo,
     Duplicate,
     RenamedPhoto,
+}
+
+/// Snake-case text of the ledger enums as stored in SQLite (master plan §6.5, §6.6).
+macro_rules! stored_enum {
+    ($name:ident { $($variant:ident => $text:literal),+ $(,)? }) => {
+        impl $name {
+            pub fn as_str(self) -> &'static str {
+                match self { $(Self::$variant => $text),+ }
+            }
+            pub fn parse(text: &str) -> Option<Self> {
+                match text { $($text => Some(Self::$variant),)+ _ => None }
+            }
+        }
+    };
+}
+stored_enum!(DeliveryOutcome { Photo => "photo", Duplicate => "duplicate", RenamedPhoto => "renamed_photo" });
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExposureStatus {
+    Expecting,
+    Received,
+    /// Reserved (10E MC-33: an observation, never proof of loss); nothing writes it in P44.
+    MissingAtDeadline,
+    Uncertain,
+    Dismissed,
+}
+stored_enum!(ExposureStatus {
+    Expecting => "expecting",
+    Received => "received",
+    MissingAtDeadline => "missing_at_deadline",
+    Uncertain => "uncertain",
+    Dismissed => "dismissed",
+});
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Association {
+    Filename,
+    Stem,
+    Fifo,
+    None,
+}
+stored_enum!(Association { Filename => "filename", Stem => "stem", Fifo => "fifo", None => "none" });
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeliveryState {
+    Pending,
+    Done,
+}
+stored_enum!(DeliveryState { Pending => "pending", Done => "done" });
+
+impl ExposureInitiator {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::App => "app",
+            Self::Camera => "camera",
+        }
+    }
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "app" => Some(Self::App),
+            "camera" => Some(Self::Camera),
+            _ => None,
+        }
+    }
+}
+
+/// A `camera_exposures` row (10E MC-33 R-I25).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Exposure {
+    pub id: i64,
+    pub capture_id: Option<String>,
+    pub exposed_at: i64,
+    pub initiated: ExposureInitiator,
+    pub session_id: Option<i64>,
+    pub status: ExposureStatus,
+    pub expected_files: Option<u32>,
+    pub created_at: i64,
+}
+
+/// The fields of a new `camera_exposures` row; `status` is always `expecting` and
+/// `expected_files` unset (no input path sets it in 10E).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewExposure {
+    pub capture_id: Option<String>,
+    pub exposed_at: i64,
+    pub initiated: ExposureInitiator,
+    pub session_id: Option<i64>,
+    pub created_at: i64,
+}
+
+/// A `camera_deliveries` row (10E MC-33 R-I25; `written_path` per master plan §6.5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeliveryRow {
+    pub id: i64,
+    pub exposure_id: Option<i64>,
+    pub camera_filename: String,
+    pub file_key: String,
+    pub sha256: String,
+    pub size: u64,
+    pub via: Link,
+    pub completed_at: i64,
+    pub association: Association,
+    pub outcome: DeliveryOutcome,
+    pub session_id: Option<i64>,
+    pub written_path: String,
+    pub final_path: String,
+    pub state: DeliveryState,
+    pub created_at: i64,
+}
+
+/// The fields of a new `camera_deliveries` row (always written `pending`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewDelivery {
+    pub exposure_id: Option<i64>,
+    pub camera_filename: String,
+    pub file_key: String,
+    pub sha256: String,
+    pub size: u64,
+    pub via: Link,
+    pub completed_at: i64,
+    pub association: Association,
+    pub outcome: DeliveryOutcome,
+    pub session_id: Option<i64>,
+    pub written_path: String,
+    pub final_path: String,
+    pub created_at: i64,
+}
+
+/// The take-over of a `pending` row by a re-sent staging file (P44 contract): every field the
+/// new decision may change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingUpdate {
+    pub sha256: String,
+    pub size: u64,
+    pub completed_at: i64,
+    pub final_path: String,
+    pub outcome: DeliveryOutcome,
+    pub association: Association,
+    pub exposure_id: Option<i64>,
+    pub session_id: Option<i64>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CameraName(pub String);
