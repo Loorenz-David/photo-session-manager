@@ -319,3 +319,29 @@ gains two empty tables (`sqlite3 … ".tables"` shows `camera_exposures camera_d
   (c) No red baseline was captured before the first production edit (flow §4 has no baseline step; stated, not reconstructed).
   **Observations:** no hardware probe — in P44 only the FTP receiver feeds the ledger, and it starts only with an installed support package; the
   suite covers the path through the real receiver (C8(a)).
+- **2026-11-06, review r1 — APPROVED_WITH_NOTES** (opus, pipeline-reviewer). Gate: tracker `IMPLEMENTED`, checkpoint `046d3c5` in `git log`.
+  Perimeter: `git show --stat 046d3c5` = the 26 declared paths (plan's 24 + tracker row + this log); the p43 edits beyond Task 6's named rows
+  (C1(b), C2(b), C2(d), C3(a), C6(b)) are the same `.part` → `_Unassigned/<name>` category with assertions otherwise unchanged; C4(a)–(c) on a
+  standalone `listing_receiver`. Gates (reviewer run, code tree `046d3c5`): `cargo test --workspace` 671/0 (p44 25/25), clippy `-D warnings`,
+  `fmt --check`, `npm run typecheck`, `npm test` 369/369 — all exit 0. **Verified correct by reading:** `associate` applies every filter itself
+  (rule (1) same key + SHA-256 → `filename`; rule (2) same stem within ±300 s → `stem`; FIFO with both bounds inclusive and "still expecting"
+  counted from non-duplicate priors; session = pick's, `ambiguous_with` distinct in candidate order; rules (1)/(2) carry the prior's exposure
+  and session); the service passes every `expecting` exposure and every `done` prior of the key or stem; duplicate decision against `done` rows
+  only, lowest free `__dupN` from the priors' final names; one process-wide `LedgerShared.worker` held from decision to `done` (also by
+  recovery, `session_uncertain`, `dismiss`); `pending` row + exposure status in one transaction that also reads the folder key, before the
+  rename; `renamex_np(RENAME_EXCL)`, `EEXIST` → `Exists`, every other errno → `Err` with no fallback (no `std::fs::rename` on camera files);
+  `EEXIST` loop rewrites the row's final path before each retry (same hash → `.duplicates/`, else next `__dupN`, `.duplicates/` likewise);
+  take-over by `written_path` updates the row in place; recovery to the stored `final_path`, final-present → `done`, neither → logged;
+  `item_folder_key_frozen` = photo row OR `photo`/`renamed_photo` delivery in `pending`/`done`, used in `update_identity`'s transaction; rule 0
+  reads pending rows, deleted session → Unassigned, `captured_at = COALESCE(exposed_at, completed_at)`; `completed_names_since` deduplicated by
+  name; watchdog bounds exclusive, raise iff count > 0 and no transfer, detail strings exact; migration 006 matches R-I25 plus `written_path`,
+  `created_at`. **Tests:** every row's test observes the row's outcome at its boundary and fails on a wrong one (C4(f) discriminates rule 0
+  from rule 3; C4(e) has no photo row; C5(d) pins one row; C2 rows feed all exposures plus the growing priors). C7(b) observes `ambiguous_with`
+  through the health detail only (not stored); C2(h) pins the struct. **Assumptions 1–12:** none contradicts 10E MC-33 (4: reading the key in
+  the pending-row transaction is equivalent to "at the rename" because the freeze holds from that commit). H1–H8 hold (H2 as amended by 10E:
+  the ledger moves only staging files it owns; H7: no `_N` stripping in core, `renamex_np` in infra). **Notes → backlog (5):** recovery's
+  `EEXIST`→duplicate does not re-evaluate the exposure (→ P46); `first_raise` re-fires after each transfer (→ P46); `Unbound` also refuses
+  exposures before the first bind (→ P46); §6.11 registry drift (`deliveries_for_exposure`, `PendingUpdate`) for the coordinator; C7(b)
+  `ambiguous_with` observed via health only. **Lessons for the plans:** Task 6's p43 list named 2 of the 7 `.part`-reading rows: enumerate by
+  grep, not by memory; a status-recomputing path (recovery) that shares a helper with the worker should state which side effects it repeats.
+  Probe declaration: no production file touched; no probe files; no state side effects.
