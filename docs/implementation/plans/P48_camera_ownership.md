@@ -300,3 +300,21 @@ arrives with P51.
   §6.6/§6.7/§6.11 fixed, P51 C2(c) mock corrected; L19 `programs` = known running in every case; L20 Notes + backlog note; L21 `frontmost` seed dropped;
   L22 trace prefixes; L23 anchors at `5eba743`; L24 reading 1 stands; L25 `running` only (C4(c) adds the `queued` case). Rows 38 → 38; paths 33 (typed) →
   43 (derived). Nothing declined.
+- 2026-11-07, implementer r1 (Claude, `PSM_IMPLEMENTER=claude`). **Built:** `ownership.rs` (`KNOWN_CAMERA_PROGRAMS`, `name_programs`,
+  `known_running`), the adapter's holder report on every `usb.claimed_by` (one `process_list.running()` per claim) into `StatusInputs` as
+  `(HeldByOtherProgram, holder, sentence)`; `CameraStatus::NeedsAction.message`; `health_items`/`CameraStatusResponse` use the message;
+  `StartOrder` (process-wide, `AlreadyRunning` from any gated `editor_info` that reports running, deadline from the first `wait()`) and
+  `LaunchGate` (thread-local permit keyed by gate) created in `open_with_adapter_bind` and carried in a new `Lanes` struct through
+  `SettingsSetContext`/`reopen`; `GatedScripting` refuses the six scripts on both lanes, `launch` waits outside the lane mutex off the permitted
+  thread; `ensure_provision` returns `ProvisionReport::deferred()` before each step's health handler, `front_provision_document` returns the
+  deferral before its `.ok()`; `quit.js` (guarded, `SCRIPTS` 19 → 20); `EditingStartup { camera }` stops after a deferred ensure and, with the
+  direct adapter, turns a failed folder step into `editor_not_following`; `SessionsService::with_camera` (R-I33: store first, `editor_not_following`,
+  never `capture_folder_not_set`); `TakeBackService` (preconditions, steps 1–6, step 4 re-checks `editor_info` every 500 ms of clock time and
+  re-sends `usb-retry` 1 s after a claim inside the free wait, `holder_report`); idle-sleep hold/release via `StepOutcome.sleep` (released on USB
+  `session.closed|lost`, on a Wi-Fi `connection.ready`, on `Exited` and at shutdown); `PsProcessList`, `IokitSleepInhibitor` (extern block over
+  CoreFoundation + IOKit, no new dependency); commands `camera_take_back`, `camera_test_connection`; error codes; bindings regenerated.
+  **Tests:** `p48_camera_ownership.rs` 32 rows (C1(e)–C7(a)), desktop `p48_tests` (C5(g), C8(a)), unit tests for `name_programs` (C1(a)–(d)) and
+  `preconditions` (C4 halves + order). **Assumptions** and **deviations** are listed in the handoff (`handoffs/implementer/
+  handoff_P48_camera_ownership_implement_r1.md`): no `EditingProvider::quit` (the take-back calls `CaptureOneScripting::quit` on the ungated
+  scripting), `AlreadyRunning` set in `GatedScripting::editor_info`, test fixture rule (i) also resets the fake's `launched` flag (C2(g)),
+  `services/camera.rs` and `infra/Cargo.toml` unchanged.
