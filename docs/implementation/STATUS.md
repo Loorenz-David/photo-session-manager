@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-07 18:55: P48 APPROVED_WITH_NOTES. Owner: "we can continue with codex as the session has renewed".** P49's Claude implement session was stopped after 49 s (no changes) and relaunched with Codex (runner default). P47 waits for the owner + camera; P50 needs P47 and P49.
+
 **2026-11-07 18:30: P48 implement r1 finished (handoff DONE) but lost its network before the checkpoint commit; the review stopped BLOCKED at the gate.** The orchestrator verified the tree (fmt, clippy, workspace tests, typecheck, UI 369) and committed checkpoint `4da7fe9`, then filled the handoff's SHA. Rerunning `RESUME=1` P48 (review r1) → P49. P47 waits for the owner + camera.
 
 **2026-11-07 12:30: P48 projection r0 AMENDMENTS_REQUIRED (L1–L25, 0 owner cards).** Main issues: six rows would hang, wait 45 s of real time, or pass on wrong code; a deferred ensure would raise a false health warning; take-back step 5 would wait an extra 15 s. The planner is folding them. Next: `PSM_IMPLEMENTER=claude RESUME=1` P48 → P49; P47 waits for the owner + camera.
