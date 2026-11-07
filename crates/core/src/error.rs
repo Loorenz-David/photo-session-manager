@@ -61,6 +61,16 @@ pub enum Error {
     /// The camera helper reported that it cannot run (`sdk.unavailable`).
     #[error("sidecar_unavailable")]
     SidecarUnavailable,
+    /// A script that would launch Capture One was refused while "Take the camera back" holds the
+    /// editor-launch gate (10E MC-34 R-I32).
+    #[error("editor_launch_deferred")]
+    EditorLaunchDeferred,
+    /// "Take the camera back" is not possible now; `reason` says why (R-I32, master plan §6.6).
+    #[error("Take the camera back is not possible: {reason}")]
+    TakeBackBlocked { reason: String },
+    /// "Take the camera back" stopped at `step` (2–5) because of `cause` (R-I32).
+    #[error("Take the camera back stopped at step {step}: {cause}")]
+    TakeBackFailed { step: u8, cause: String },
     #[error("hooks_not_installed")]
     HooksNotInstalled,
     #[error("recipe_missing: {name}")]

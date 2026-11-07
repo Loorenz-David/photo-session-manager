@@ -420,6 +420,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::camera::camera_capture,
         commands::camera::camera_reconnect,
         commands::camera::camera_files_not_received_dismiss,
+        commands::camera::camera_take_back,
+        commands::camera::camera_test_connection,
         commands::photos::photos_classify,
         commands::photos::photos_reorder,
         commands::photos::photos_delete,
@@ -778,6 +780,183 @@ mod p46_tests {
         assert_eq!(
             runtime.ledger().unwrap().exposures(None).unwrap()[0].status,
             ExposureStatus::Dismissed
+        );
+    }
+}
+
+#[cfg(test)]
+mod p48_tests {
+    use super::*;
+    use psm_core::ports::clock::Clock;
+    use serde_json::{Value, json};
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::{Duration, Instant},
+    };
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+    const SCRIPTS: &str = "../../../crates/testkit/src/fixtures/sidecar_scripts";
+    const CO_SENTENCE: &str =
+        "Capture One is holding the camera's USB connection — Take the camera back";
+
+    fn script(name: &str) -> String {
+        std::fs::read_to_string(format!("{SCRIPTS}/{name}")).unwrap()
+    }
+    fn settle(a: &psm_testkit::TestApp, pred: impl Fn() -> bool) {
+        let end = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < end {
+            a.tick(0).unwrap();
+            if pred() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("camera result did not settle: {:?}", a.sidecar_events());
+    }
+    fn call(w: &tauri::WebviewWindow<tauri::test::MockRuntime>, cmd: &str) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(json!({})),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+    fn mock(
+        app: psm_integrations::App,
+    ) -> (
+        tauri::App<tauri::test::MockRuntime>,
+        tauri::WebviewWindow<tauri::test::MockRuntime>,
+    ) {
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::camera::camera_take_back,
+                commands::camera::camera_test_connection
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        (tauri_app, w)
+    }
+    /// Fixture rule (iv): while the command blocks, a ticker thread advances the clock 500 ms and
+    /// ticks the camera runtime every 10 ms.
+    fn with_ticker<T>(
+        runtime: Arc<psm_integrations::camera::runtime::CameraRuntime>,
+        clock: Arc<psm_testkit::clock::ManualClock>,
+        f: impl FnOnce() -> T,
+    ) -> T {
+        let stop = Arc::new(AtomicBool::new(false));
+        let ticker = {
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::SeqCst) {
+                    clock.advance(500);
+                    runtime.tick(clock.mono());
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            })
+        };
+        let out = f();
+        stop.store(true, Ordering::SeqCst);
+        ticker.join().unwrap();
+        out
+    }
+    /// C1(e)/C5(a)'s start: Capture One holds the interface over a Wi-Fi session.
+    fn held(name: &str) -> psm_testkit::TestApp {
+        let a = psm_testkit::TestApp::with_camera_script(&script(name)).unwrap();
+        a.fake_processes.set(vec!["Capture One"]);
+        settle(&a, || a.app.health.has("camera_held"));
+        a
+    }
+
+    #[test]
+    fn c5g_camera_take_back_command() {
+        let a = held("take_back.txt");
+        let (_, session) = a
+            .items()
+            .create_local("P48-CMD", "P48 command", "object", None)
+            .unwrap();
+        a.sessions().activate(session.session.id).unwrap();
+        {
+            let mut f = a.fake.state.lock().unwrap();
+            f.quit_after_polls = Some(1);
+            f.running_after_polls = Some(1);
+        }
+        let runtime = a.camera_runtime();
+        let psm_testkit::TestApp {
+            dir: _dir,
+            app,
+            clock,
+            ..
+        } = a;
+        let (_tauri_app, w) = mock(app);
+        let answer = with_ticker(runtime, clock, || call(&w, "camera_take_back"));
+        assert_eq!(
+            answer.unwrap(),
+            json!({"completed_steps":5,"camera_held":true})
+        );
+
+        let b = held("claimed_wifi.txt");
+        let mut ftp = b.ftp();
+        let (reply, _data) = ftp.open_stor("DSC04807.ARW").unwrap();
+        assert!(reply.starts_with("150"), "{reply}");
+        settle(&b, || b.camera_runtime().uploads_in_progress() == 1);
+        let runtime = b.camera_runtime();
+        let psm_testkit::TestApp {
+            dir: _dir_b,
+            app,
+            clock,
+            ..
+        } = b;
+        let (_tauri_app_b, w) = mock(app);
+        let error = with_ticker(runtime, clock, || call(&w, "camera_take_back")).unwrap_err();
+        assert_eq!(error["code"], "take_back_blocked");
+        assert_eq!(error["data"], json!({"reason":"a file is still arriving"}));
+    }
+
+    #[test]
+    fn c8a_camera_test_connection_command() {
+        let a = held("claimed_wifi.txt");
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let (_tauri_app, w) = mock(app);
+        assert_eq!(
+            call(&w, "camera_test_connection").unwrap(),
+            json!({"holder":"Capture One","programs":["Capture One"],"sentence":CO_SENTENCE})
+        );
+
+        let b = psm_testkit::TestApp::with_camera_script(&script("ready_usb.txt")).unwrap();
+        b.fake_processes.set(vec!["Photos"]);
+        settle(&b, || {
+            matches!(
+                b.camera_status().unwrap(),
+                psm_core::domain::camera::CameraStatus::Connected { .. }
+            )
+        });
+        let psm_testkit::TestApp {
+            dir: _dir_b, app, ..
+        } = b;
+        let (_tauri_app_b, w) = mock(app);
+        assert_eq!(
+            call(&w, "camera_test_connection").unwrap(),
+            json!({"holder":null,"programs":["Photos"],"sentence":null})
         );
     }
 }

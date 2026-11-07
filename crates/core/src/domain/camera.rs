@@ -100,6 +100,9 @@ pub enum CameraStatus {
     NeedsAction {
         reason: NeedsActionReason,
         holder: Option<String>,
+        /// The MC-34 sentence for `HeldByOtherProgram` (R-I30, from `name_programs`); `None` for
+        /// every other reason.
+        message: Option<String>,
     },
     Disconnected,
 }

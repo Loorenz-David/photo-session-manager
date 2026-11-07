@@ -2,6 +2,7 @@ pub mod adapter;
 pub mod gate;
 pub mod hooks;
 pub mod jxa;
+pub mod launch_gate;
 pub mod mirror;
 pub mod provision;
 pub mod recipes;

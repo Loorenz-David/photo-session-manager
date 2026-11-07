@@ -85,6 +85,7 @@ fn needs(reason: NeedsActionReason, holder: Option<&str>) -> CameraStatus {
     CameraStatus::NeedsAction {
         reason,
         holder: holder.map(str::to_owned),
+        message: None,
     }
 }
 fn busy(reason: BusyReason) -> CameraStatus {
@@ -804,7 +805,13 @@ fn c6e_camera_ftp_report_reaches_health() {
 #[test]
 fn c7a_holder_reported() {
     let a = app(&[CLAIMED]);
-    let held = needs(NeedsActionReason::HeldByOtherProgram, Some("ptpcamerad"));
+    let held = CameraStatus::NeedsAction {
+        reason: NeedsActionReason::HeldByOtherProgram,
+        holder: Some("ptpcamerad".into()),
+        message: Some(
+            "The system camera service is holding the camera: close apps that use cameras".into(),
+        ),
+    };
     settle(&a, || st(&a) == held);
     assert!(a.app.health.has("camera_held"));
 }

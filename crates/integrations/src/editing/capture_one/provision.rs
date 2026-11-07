@@ -80,17 +80,23 @@ impl CaptureOneAdapter {
             } else { self.health.set("editor_not_running", e.to_string()); }
         })?;
         if !editor.running {
-            self.user.launch().inspect_err(|e| {
-                self.clear_after(1);
-                if classify_editor_error(&e.to_string()) == Some(EditorFailure::NotInstalled) {
-                    self.health.set(
-                        "editor_not_installed",
-                        "Capture One is not installed on this Mac",
-                    );
-                } else {
-                    self.health.set("editor_not_running", e.to_string());
+            // A deferral (10E MC-34 R-I32) returns before the step's health handler (P48 L2).
+            match self.user.launch() {
+                Err(Error::EditorLaunchDeferred) => return Ok(ProvisionReport::deferred()),
+                Err(e) => {
+                    self.clear_after(1);
+                    if classify_editor_error(&e.to_string()) == Some(EditorFailure::NotInstalled) {
+                        self.health.set(
+                            "editor_not_installed",
+                            "Capture One is not installed on this Mac",
+                        );
+                    } else {
+                        self.health.set("editor_not_running", e.to_string());
+                    }
+                    return Err(e);
                 }
-            })?;
+                Ok(()) => {}
+            }
             let started = Instant::now();
             while !editor.running && started.elapsed() < inputs.wait {
                 thread::sleep(editor_wait_poll(inputs.wait));
@@ -137,10 +143,9 @@ impl CaptureOneAdapter {
         let file = if !folder.exists() {
             let parent = folder.parent().ok_or(Error::DocumentNotSession)?;
             fs::create_dir_all(parent)?;
-            let made = self
-                .user
-                .make_document(&parent.to_string_lossy(), &base)
-                .map_err(|e| {
+            let made = match self.user.make_document(&parent.to_string_lossy(), &base) {
+                Err(Error::EditorLaunchDeferred) => return Ok(ProvisionReport::deferred()),
+                Err(e) => {
                     self.clear_after(2);
                     self.health.set(
                         "document_not_created",
@@ -149,8 +154,10 @@ impl CaptureOneAdapter {
                             expected.display()
                         ),
                     );
-                    e
-                })?;
+                    return Err(e);
+                }
+                Ok(made) => made,
+            };
             if made != self.document_id || !expected.is_file() {
                 self.clear_after(2);
                 self.health.set(
@@ -186,6 +193,9 @@ impl CaptureOneAdapter {
 
         if self.user.document_info(&self.document_id).is_err() {
             let open_error = self.user.open_document(&file.to_string_lossy()).err();
+            if matches!(open_error, Some(Error::EditorLaunchDeferred)) {
+                return Ok(ProvisionReport::deferred());
+            }
             let started = Instant::now();
             let mut opened = self.user.document_info(&self.document_id).is_ok();
             while !opened && open_error.is_none() && started.elapsed() < inputs.wait {
@@ -227,6 +237,7 @@ impl CaptureOneAdapter {
             let want = spec.props();
             let checked = self.user.ensure_recipe(&self.document_id, name, &want);
             match checked {
+                Err(Error::EditorLaunchDeferred) => return Ok(ProvisionReport::deferred()),
                 Ok(value)
                     if {
                         let mut got = value.props.clone();
@@ -261,6 +272,7 @@ impl CaptureOneAdapter {
             StyleOutcome::NotRequested
         } else {
             match self.user.ensure_capture_style(&self.document_id, name) {
+                Err(Error::EditorLaunchDeferred) => return Ok(ProvisionReport::deferred()),
                 Ok(found) if found.listed && found.applied == [name] => {
                     self.health.clear("style_not_found");
                     StyleOutcome::Applied
@@ -299,15 +311,17 @@ impl CaptureOneAdapter {
             document_created: created,
             recipes_created,
             style,
+            deferred: false,
         })
     }
 
     pub(crate) fn front_provision_document(&self) -> Result<()> {
-        let match_front = self
-            .user
-            .front_document(&self.document_id)
-            .ok()
-            .and_then(|front| canon(Path::new(&front)).ok())
+        let front = match self.user.front_document(&self.document_id) {
+            // Deferred (R-I32): nothing is known about the front document; no health write.
+            Err(Error::EditorLaunchDeferred) => return Err(Error::EditorLaunchDeferred),
+            other => other,
+        };
+        let match_front = front.ok().and_then(|front| canon(Path::new(&front)).ok())
             == canon(Path::new(&self.document_id)).ok();
         if !match_front {
             self.health.set(

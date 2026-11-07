@@ -26,6 +26,12 @@ export const commands = {
 	cameraReconnect: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_reconnect")),
 	/**  R-I29: the photographer dismisses "photos taken but not received". */
 	cameraFilesNotReceivedDismiss: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_files_not_received_dismiss")),
+	/**
+	 *  R-I32: runs only on the photographer's click (errors `take_back_blocked{reason}`,
+	 *  `take_back_failed{step, cause}`).
+	 */
+	cameraTakeBack: () => typedError<TakeBackResponse, CommandError>(__TAURI_INVOKE("camera_take_back")),
+	cameraTestConnection: () => typedError<TestConnectionResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_test_connection")),
 	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
 	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
@@ -735,6 +741,38 @@ export type SettingsPatchDto_Serialize = {
 	theme?: string,
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
+};
+
+/**  What "Take the camera back" did (10E MC-34 R-I32). */
+export type TakeBackResponse = {
+	completed_steps: number,
+	camera_held: boolean,
+};
+
+/**
+ *  "Test camera connection" (MC-34 §Setup check): who holds the camera now and every known program
+ *  running that could take it.
+ */
+export type TestConnectionResponse = TestConnectionResponse_Serialize | TestConnectionResponse_Deserialize;
+
+/**
+ *  "Test camera connection" (MC-34 §Setup check): who holds the camera now and every known program
+ *  running that could take it.
+ */
+export type TestConnectionResponse_Deserialize = {
+	holder?: string | null,
+	programs: string[],
+	sentence?: string | null,
+};
+
+/**
+ *  "Test camera connection" (MC-34 §Setup check): who holds the camera now and every known program
+ *  running that could take it.
+ */
+export type TestConnectionResponse_Serialize = {
+	holder: string | null,
+	programs: string[],
+	sentence: string | null,
 };
 
 /* Tauri Specta runtime */

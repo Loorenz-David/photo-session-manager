@@ -1,7 +1,11 @@
 //! The direct camera adapter (10E MC-31 behaviour, MC-33 integration): the `CameraProvider` that
 //! drives the camera sidecar through the runtime's protocol client and turns its events into the
 //! neutral model (P46 plan §The adapter contract is the authority for the event table).
-use super::filenames::normalize_camera_filename;
+use super::{
+    filenames::normalize_camera_filename,
+    ownership::{HolderReport, name_programs},
+    start_order::StartReason,
+};
 use crate::camera::{
     runtime::CameraRuntime,
     sidecar::protocol::{Command, SidecarEvent, Stamped, StoreDestination, Transport},
@@ -65,6 +69,16 @@ pub struct StepOutcome {
     pub ftp_note: Option<String>,
     /// `sdk.unavailable` arrived: `camera_sidecar_unavailable` is set after the runtime's clear.
     pub sdk_unavailable: bool,
+    /// A start-order condition seen in this batch (10E MC-34 R-I31), the first one.
+    pub start: Option<StartReason>,
+    /// The idle-sleep assertion changes (R-I23): `Some(true)` hold, `Some(false)` release; only
+    /// emitted on a change, so a repeated USB `connection.ready` never holds twice (P48 L15).
+    pub sleep: Option<bool>,
+}
+impl StepOutcome {
+    fn start(&mut self, reason: StartReason) {
+        self.start.get_or_insert(reason);
+    }
 }
 
 struct AdapterState {
@@ -77,6 +91,14 @@ struct AdapterState {
     emitted: CameraStatus,
     /// The owned health items last published, as `(code, ok, detail)`.
     published: Option<Vec<(String, bool, String)>>,
+    /// The owner process of the last `usb.claimed_by` and the report built for it (R-I30).
+    holder: Option<(String, HolderReport)>,
+    /// How many `usb.claimed_by` events arrived (the take-back's step 4 watches it).
+    claims: u64,
+    /// Whether the batch wants the idle-sleep assertion held (a USB session is open).
+    want_sleep: Option<bool>,
+    /// Whether the adapter last asked for the assertion to be held.
+    sleep_held: bool,
 }
 
 pub struct DirectCameraAdapter {
@@ -157,13 +179,21 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl AdapterState {
     fn add(&mut self, reason: NeedsActionReason, holder: Option<String>) {
+        self.add_with_message(reason, holder, None);
+    }
+    fn add_with_message(
+        &mut self,
+        reason: NeedsActionReason,
+        holder: Option<String>,
+        message: Option<String>,
+    ) {
         self.remove(&reason);
-        self.inputs.needs_action.push((reason, holder));
+        self.inputs.needs_action.push((reason, holder, message));
     }
     fn remove(&mut self, reason: &NeedsActionReason) {
         self.inputs
             .needs_action
-            .retain(|(r, _)| std::mem::discriminant(r) != std::mem::discriminant(reason));
+            .retain(|(r, _, _)| std::mem::discriminant(r) != std::mem::discriminant(reason));
     }
     fn end_transfer(&mut self, sink: &dyn CaptureSink) {
         if self.expected_transfer.take().is_some() {
@@ -192,8 +222,53 @@ impl DirectCameraAdapter {
                 staging_dir: None,
                 emitted: CameraStatus::Disconnected,
                 published: None,
+                holder: None,
+                claims: 0,
+                want_sleep: None,
+                sleep_held: false,
             }),
         }
+    }
+
+    /// The program holding the camera's USB interface, while that is reported (R-I30): the
+    /// owner process of the last `usb.claimed_by` and its report.
+    fn held(&self) -> Option<(String, HolderReport)> {
+        let state = locked(&self.state);
+        state
+            .inputs
+            .needs_action
+            .iter()
+            .any(|(r, _, _)| *r == NeedsActionReason::HeldByOtherProgram)
+            .then(|| state.holder.clone())
+            .flatten()
+    }
+
+    /// R-I32: the USB interface is held on Capture One's behalf (the take-back's last check).
+    pub fn holder_is_capture_one(&self) -> bool {
+        self.held()
+            .is_some_and(|(_, report)| report.holder.as_deref() == Some("Capture One"))
+    }
+
+    /// The owner process behind the status, while the status is `HeldByOtherProgram`.
+    pub fn status_holder_process(&self) -> Option<String> {
+        let state = locked(&self.state);
+        match derive_status(&state.inputs) {
+            CameraStatus::NeedsAction {
+                reason: NeedsActionReason::HeldByOtherProgram,
+                ..
+            } => state.holder.as_ref().map(|(owner, _)| owner.clone()),
+            _ => None,
+        }
+    }
+
+    /// Our SDK session runs over the cable.
+    pub fn usb_session(&self) -> bool {
+        matches!(locked(&self.state).inputs.session, Some((_, Link::Cable)))
+    }
+
+    /// How many `usb.claimed_by` events arrived so far.
+    pub fn claims_seen(&self) -> u64 {
+        locked(&self.state).claims
     }
 
     /// The first spawn's `--save-dir` (kept for the life of the process, R-I20).
@@ -218,6 +293,7 @@ impl DirectCameraAdapter {
                 NeedsActionReason::FilesNotReceived {
                     count: count as u32,
                 },
+                None,
                 None,
             ));
         }
@@ -284,8 +360,17 @@ impl DirectCameraAdapter {
                     state.inputs.busy = None;
                     state.expected_transfer = None;
                     sink.transfer_in_progress(Link::Cable, false);
+                    // A crashed sidecar must not leave the Mac unable to sleep (P48 L15).
+                    state.want_sleep = Some(false);
+                    out.start(StartReason::SidecarUnavailable);
                 }
             }
+        }
+        if let Some(want) = state.want_sleep.take()
+            && want != state.sleep_held
+        {
+            state.sleep_held = want;
+            out.sleep = Some(want);
         }
         state.inputs.helper_running = helper_running;
         if let Some(t) = state.expected_transfer
@@ -356,6 +441,38 @@ impl DirectCameraAdapter {
             SidecarEvent::SdkUnavailable { .. } => {
                 locked(&self.state).sdk_unavailable = true;
                 out.sdk_unavailable = true;
+                out.start(StartReason::SidecarUnavailable);
+            }
+            SidecarEvent::UsbClaimedBy { owners, .. } => {
+                // R-I30: one process listing per claim, read outside the state lock.
+                let owner = holder_from_owners(owners);
+                let running = self
+                    .runtime
+                    .upgrade()
+                    .map(|rt| rt.process_list().running())
+                    .unwrap_or_else(|| Ok(Vec::new()))
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(%error, "process list unavailable");
+                        Vec::new()
+                    });
+                let report = name_programs(&owner, &running);
+                let mut state = locked(&self.state);
+                state.add_with_message(
+                    NeedsActionReason::HeldByOtherProgram,
+                    report.holder.clone(),
+                    report.sentence.clone(),
+                );
+                state.holder = Some((owner, report));
+                state.claims += 1;
+            }
+            SidecarEvent::UsbInitial { present: false } => out.start(StartReason::NoCameraOnCable),
+            SidecarEvent::UsbFallbackToWifi { .. } => out.start(StartReason::FallbackToWifi),
+            SidecarEvent::ConnectionReady {
+                transport: Transport::Usb,
+                ..
+            } => {
+                out.start(StartReason::UsbReady);
+                self.apply_status(&stamped.event, sink);
             }
             event => self.apply_status(event, sink),
         }
@@ -408,28 +525,27 @@ impl DirectCameraAdapter {
                 }
                 match link {
                     // Our own USB session holds the interface now (planner reading 4).
-                    Link::Cable => state.remove(&NeedsActionReason::HeldByOtherProgram),
+                    Link::Cable => {
+                        state.remove(&NeedsActionReason::HeldByOtherProgram);
+                        state.want_sleep = Some(true);
+                    }
                     Link::Wireless => {
                         state.remove(&NeedsActionReason::AuthenticationRefused);
                         state.remove(&NeedsActionReason::FingerprintMismatch);
+                        // One SDK session at a time: a Wi-Fi session means no USB session.
+                        state.want_sleep = Some(false);
                     }
                 }
             }
-            SidecarEvent::SessionClosed { .. } => {
-                state.inputs.session = None;
-                if state.expected_transfer.take().is_some() {
-                    sink.transfer_in_progress(Link::Cable, false);
-                }
-                if state.inputs.busy != Some(BusyReason::Switching) {
-                    state.inputs.busy = None;
-                }
+            SidecarEvent::SessionClosed { transport, .. }
+            | SidecarEvent::SessionLost { transport, .. }
+                if *transport == Transport::Usb =>
+            {
+                state.want_sleep = Some(false);
+                Self::end_session(&mut state, event, sink);
             }
-            SidecarEvent::SessionLost { .. } => {
-                state.inputs.session = None;
-                state.inputs.busy = None;
-                if state.expected_transfer.take().is_some() {
-                    sink.transfer_in_progress(Link::Cable, false);
-                }
+            SidecarEvent::SessionClosed { .. } | SidecarEvent::SessionLost { .. } => {
+                Self::end_session(&mut state, event, sink);
             }
             SidecarEvent::CameraBusy { reason, .. } => match reason.as_str() {
                 "exposure" => state.inputs.busy = Some(BusyReason::Exposure),
@@ -437,10 +553,6 @@ impl DirectCameraAdapter {
                 "none" => state.inputs.busy = None,
                 _ => {}
             },
-            SidecarEvent::UsbClaimedBy { owners, .. } => state.add(
-                NeedsActionReason::HeldByOtherProgram,
-                Some(holder_from_owners(owners)),
-            ),
             SidecarEvent::SshFingerprint { status, .. } => match status.as_str() {
                 "unknown" => state.add(NeedsActionReason::FingerprintUnconfirmed, None),
                 "MISMATCH" => state.add(NeedsActionReason::FingerprintMismatch, None),
@@ -456,6 +568,19 @@ impl DirectCameraAdapter {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// The session ended (`session.closed` keeps a transport switch's busy state).
+    fn end_session(state: &mut AdapterState, event: &SidecarEvent, sink: &dyn CaptureSink) {
+        state.inputs.session = None;
+        if state.expected_transfer.take().is_some() {
+            sink.transfer_in_progress(Link::Cable, false);
+        }
+        let switching = matches!(event, SidecarEvent::SessionClosed { .. })
+            && state.inputs.busy == Some(BusyReason::Switching);
+        if !switching {
+            state.inputs.busy = None;
         }
     }
 

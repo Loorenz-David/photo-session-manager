@@ -41,9 +41,14 @@ impl From<CameraStatus> for CameraStatusResponse {
             CameraStatus::Busy { reason } => Self::Busy {
                 reason: busy_name(reason).into(),
             },
-            CameraStatus::NeedsAction { reason, holder } => Self::NeedsAction {
+            CameraStatus::NeedsAction {
+                reason,
+                holder,
+                message,
+            } => Self::NeedsAction {
                 reason: reason_name(&reason).into(),
-                message: status_message(&reason, holder.as_deref()),
+                // The same sentence as the health detail (P48 L9).
+                message: message.unwrap_or_else(|| status_message(&reason, holder.as_deref())),
                 holder,
             },
             CameraStatus::Disconnected => Self::Disconnected,
@@ -163,6 +168,60 @@ pub async fn camera_files_not_received_dismiss(
         CameraService::new(camera.as_ref(), health.as_ref())
             .with_ledger(ledger.as_ref())
             .dismiss_files_not_received()
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    .map_err(Into::into)
+}
+
+/// What "Take the camera back" did (10E MC-34 R-I32).
+#[derive(Clone, Serialize, Type)]
+pub struct TakeBackResponse {
+    pub completed_steps: u8,
+    pub camera_held: bool,
+}
+/// R-I32: runs only on the photographer's click (errors `take_back_blocked{reason}`,
+/// `take_back_failed{step, cause}`).
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_take_back(
+    state: State<'_, AppState>,
+) -> Result<TakeBackResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    let runtime = app.camera_runtime.clone();
+    tauri::async_runtime::spawn_blocking(move || runtime.take_back()?.run())
+        .await
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+        .map(|r| TakeBackResponse {
+            completed_steps: r.completed_steps,
+            camera_held: r.camera_held,
+        })
+        .map_err(Into::into)
+}
+/// "Test camera connection" (MC-34 §Setup check): who holds the camera now and every known program
+/// running that could take it.
+#[derive(Clone, Serialize, Type)]
+pub struct TestConnectionResponse {
+    pub holder: Option<String>,
+    pub programs: Vec<String>,
+    pub sentence: Option<String>,
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_test_connection(
+    state: State<'_, AppState>,
+) -> Result<TestConnectionResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    let runtime = app.camera_runtime.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        runtime.take_back().map(|service| {
+            let report = service.holder_report();
+            TestConnectionResponse {
+                holder: report.holder,
+                programs: report.programs,
+                sentence: report.sentence,
+            }
+        })
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?

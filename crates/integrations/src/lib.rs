@@ -3,6 +3,7 @@ pub mod commerce;
 pub mod editing;
 pub mod render_output;
 
+use camera::direct::StartOrder;
 use camera::runtime::{AppBinding, CameraRuntime};
 use camera::via_capture_one::CameraViaCaptureOne;
 use commerce::shopify::{
@@ -10,7 +11,7 @@ use commerce::shopify::{
     transport::ReqwestTransport,
 };
 use editing::capture_one::{
-    adapter::CaptureOneAdapter, jxa::JxaScripting, mirror::MirrorTag,
+    adapter::CaptureOneAdapter, jxa::JxaScripting, launch_gate::LaunchGate, mirror::MirrorTag,
     scripting::CaptureOneScripting,
 };
 use psm_core::{
@@ -99,8 +100,7 @@ pub struct App {
     pub history: Arc<History>,
     pub clock: Arc<dyn Clock>,
     scripting: Arc<dyn CaptureOneScripting>,
-    user_scripting: Arc<dyn CaptureOneScripting>,
-    background_scripting: Arc<dyn CaptureOneScripting>,
+    lanes: Lanes,
     run_startup: bool,
     commerce_override: Option<Arc<dyn CommerceAdapter>>,
     stop: Arc<AtomicBool>,
@@ -132,13 +132,24 @@ pub struct AppHandles {
     pub nudge_running: bool,
 }
 
+/// The Capture One scripting lanes and what guards them, created once per app process in
+/// `open_with_adapter_bind` and carried through every rebuild (P48 L14): a settings save never
+/// produces a lane without the editor-launch gate or a second start order.
+#[derive(Clone)]
+pub struct Lanes {
+    pub user: Arc<dyn CaptureOneScripting>,
+    pub background: Arc<dyn CaptureOneScripting>,
+    pub gate: Arc<LaunchGate>,
+    pub start_order: Arc<StartOrder>,
+}
+
 pub struct SettingsSetContext {
     paths: AppPaths,
     settings: Settings,
     health: Arc<HealthService>,
     camera_runtime: Arc<CameraRuntime>,
     scripting: Arc<dyn CaptureOneScripting>,
-    lanes: (Arc<dyn CaptureOneScripting>, Arc<dyn CaptureOneScripting>),
+    lanes: Lanes,
     clock: Arc<dyn Clock>,
     run_startup: bool,
     commerce_override: Option<Arc<dyn CommerceAdapter>>,
@@ -207,6 +218,7 @@ impl AppHandles {
                 store: self.store.as_ref(),
                 health: self.health.as_ref(),
                 provision: &self.provision,
+                camera: Some(self.camera.as_ref()),
             })
             .run()
             {
@@ -270,10 +282,7 @@ impl App {
             health: self.health.clone(),
             camera_runtime: self.camera_runtime.clone(),
             scripting: self.scripting.clone(),
-            lanes: (
-                self.user_scripting.clone(),
-                self.background_scripting.clone(),
-            ),
+            lanes: self.lanes.clone(),
             clock: self.clock.clone(),
             run_startup: self.run_startup,
             commerce_override: self.commerce_override.clone(),
@@ -374,18 +383,31 @@ impl App {
         secrets: Arc<dyn SecretStore>,
         receiver_bind: std::net::IpAddr,
     ) -> Result<Self> {
-        let (user_scripting, background_scripting) =
-            editing::capture_one::gate::GatedScripting::pair(scripting.clone());
+        // One launch gate and one start order per process (P48 L14), beside the lanes.
+        let gate = LaunchGate::new();
+        let start_order = StartOrder::new(camera::support::installed(&paths).is_some());
+        let (user, background) = editing::capture_one::gate::GatedScripting::pair(
+            scripting.clone(),
+            gate.clone(),
+            start_order.clone(),
+            clock.clone(),
+        );
         let camera_runtime = CameraRuntime::new_with_receiver_bind(
             secrets,
             clock.clone(),
             paths.clone(),
             receiver_bind,
+            start_order.clone(),
         );
         Self::build(
             paths,
             scripting,
-            (user_scripting, background_scripting),
+            Lanes {
+                user,
+                background,
+                gate,
+                start_order,
+            },
             clock,
             run_startup,
             commerce_override,
@@ -400,7 +422,7 @@ impl App {
     fn build(
         paths: AppPaths,
         scripting: Arc<dyn CaptureOneScripting>,
-        lanes: (Arc<dyn CaptureOneScripting>, Arc<dyn CaptureOneScripting>),
+        lanes: Lanes,
         clock: Arc<dyn Clock>,
         run_startup: bool,
         commerce_override: Option<Arc<dyn CommerceAdapter>>,
@@ -409,7 +431,8 @@ impl App {
         camera_runtime: Arc<CameraRuntime>,
         previous_health: Option<Arc<HealthService>>,
     ) -> Result<Self> {
-        let (user_scripting, background_scripting) = lanes;
+        let user_scripting = lanes.user.clone();
+        let background_scripting = lanes.background.clone();
         paths.create()?;
         tracing::info!(data_dir = %paths.root.display(), start = start_backup, "app open");
         let (settings, settings_problem) = Settings::open_lenient(&paths)?;
@@ -641,6 +664,7 @@ impl App {
                     store: startup_store.as_ref(),
                     health: startup_health.as_ref(),
                     provision: &startup_provision,
+                    camera: Some(startup_camera.as_ref()),
                 })
                 .run();
                 let _ =
@@ -751,6 +775,14 @@ impl App {
             paths: paths.clone(),
             camera_settings: settings.camera,
             capture_root: settings.effective_document_id(&paths),
+            editing: editing.clone(),
+            scripting: scripting.clone(),
+            provision: provision.clone(),
+            document_id: settings
+                .effective_document_id(&paths)
+                .to_string_lossy()
+                .into_owned(),
+            gate: lanes.gate.clone(),
         });
         Ok(Self {
             paths,
@@ -777,8 +809,7 @@ impl App {
             history,
             clock,
             scripting,
-            user_scripting,
-            background_scripting,
+            lanes,
             run_startup,
             commerce_override,
             stop,
@@ -799,8 +830,22 @@ impl App {
             store: self.store.as_ref(),
             health: self.health.as_ref(),
             provision: &self.provision,
+            camera: Some(self.camera.as_ref()),
         })
         .run()
+    }
+
+    /// The user-lane scripting (gated; R-I32's check applies to it).
+    pub fn user_lane(&self) -> Arc<dyn CaptureOneScripting> {
+        self.lanes.user.clone()
+    }
+    /// The process-wide editor-launch gate (R-I32).
+    pub fn launch_gate(&self) -> Arc<LaunchGate> {
+        self.lanes.gate.clone()
+    }
+    /// The process-wide start order (R-I31).
+    pub fn start_order(&self) -> Arc<StartOrder> {
+        self.lanes.start_order.clone()
     }
 
     /// ch12 §Health: re-runs the editing startup checks (document, hooks, recipes, capture
@@ -845,10 +890,7 @@ impl App {
         let next = Self::build(
             self.paths.clone(),
             self.scripting.clone(),
-            (
-                self.user_scripting.clone(),
-                self.background_scripting.clone(),
-            ),
+            self.lanes.clone(),
             self.clock.clone(),
             self.run_startup,
             self.commerce_override.clone(),

@@ -464,6 +464,12 @@ impl EditingProvider for CaptureOneAdapter {
                 || s.pending.iter().any(|e| e.raw == raw)
         })
     }
+    fn renders_in_flight(&self) -> usize {
+        self.renders
+            .lock()
+            .map(|s| s.jobs.len() + s.pending.len())
+            .unwrap_or(0)
+    }
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()> {
         let variant = self.variant_background(raw)?;
         let desired = tag_for(classification);

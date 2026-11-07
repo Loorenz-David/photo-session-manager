@@ -1,6 +1,6 @@
 use super::{
     direct::{
-        DirectCameraAdapter,
+        DirectCameraAdapter, SLEEP_REASON, StartOrder, StartReason, TakeBackService,
         adapter::{HelperEvent, StepOutcome},
     },
     sidecar::{
@@ -10,14 +10,18 @@ use super::{
     },
     support::installed_sidecar,
 };
+use crate::editing::capture_one::{launch_gate::LaunchGate, scripting::CaptureOneScripting};
 use psm_core::{
     domain::camera::{CameraSettings, Delivery, DeliveryOutcome, ExposureObserved, Link, secrets},
+    domain::editing::ProvisionInputs,
     events::AppEvent,
     ports::{
         camera::{CameraProvider, CaptureSink, DeliveryFs},
         clock::Clock,
+        editing::EditingProvider,
         secrets::SecretStore,
         store::Store,
+        system::{ProcessList, SleepInhibitor},
     },
     services::{
         camera_ledger::{LedgerService, LedgerShared},
@@ -29,6 +33,8 @@ use psm_infra::{
     ftp::{CompletedNames, FTP_USERNAME, FtpReceiver, ReceiverConfig, ReceiverHandle},
     logging,
     paths::AppPaths,
+    processes::PsProcessList,
+    sleep::IokitSleepInhibitor,
 };
 use std::{
     collections::VecDeque,
@@ -59,6 +65,13 @@ pub struct AppBinding {
     pub paths: AppPaths,
     pub camera_settings: CameraSettings,
     pub capture_root: std::path::PathBuf,
+    /// What "Take the camera back" needs from this build (P48 L14): the editing provider, the
+    /// ungated scripting, the provision inputs, the document and the process-wide launch gate.
+    pub editing: Arc<dyn EditingProvider>,
+    pub scripting: Arc<dyn CaptureOneScripting>,
+    pub provision: ProvisionInputs,
+    pub document_id: String,
+    pub gate: Arc<LaunchGate>,
 }
 struct RoutingSink(RwLock<Arc<dyn CaptureSink>>);
 impl CaptureSink for RoutingSink {
@@ -138,16 +151,32 @@ pub struct CameraRuntime {
     watchdog_at: Mutex<Option<Instant>>,
     /// The pending count of the last watchdog run (the status mirrors it while raised).
     watchdog_pending: AtomicUsize,
+    /// The app-start launch rule (R-I31), one per process (P48 L14).
+    start_order: Arc<StartOrder>,
+    /// Who could hold the camera (R-I30); `set_process_list` is the test seam.
+    process_list: RwLock<Arc<dyn ProcessList>>,
+    /// The idle-sleep assertion (R-I23); `set_sleep_inhibitor` is the test seam.
+    sleep: RwLock<Arc<dyn SleepInhibitor>>,
+    /// "Take the camera back" is running (one at a time per process).
+    take_back_running: Arc<AtomicBool>,
 }
 impl CameraRuntime {
     pub fn new(secrets: Arc<dyn SecretStore>, clock: Arc<dyn Clock>, paths: AppPaths) -> Arc<Self> {
-        Self::new_with_receiver_bind(secrets, clock, paths, IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+        let start_order = StartOrder::new(super::support::installed(&paths).is_some());
+        Self::new_with_receiver_bind(
+            secrets,
+            clock,
+            paths,
+            IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            start_order,
+        )
     }
     pub fn new_with_receiver_bind(
         secrets: Arc<dyn SecretStore>,
         clock: Arc<dyn Clock>,
         paths: AppPaths,
         receiver_bind: IpAddr,
+        start_order: Arc<StartOrder>,
     ) -> Arc<Self> {
         Arc::new(Self {
             run_id: Uuid::new_v4().to_string(),
@@ -175,6 +204,47 @@ impl CameraRuntime {
             helper_running: AtomicBool::new(false),
             watchdog_at: Mutex::new(None),
             watchdog_pending: AtomicUsize::new(0),
+            start_order,
+            process_list: RwLock::new(Arc::new(PsProcessList)),
+            sleep: RwLock::new(Arc::new(IokitSleepInhibitor::default())),
+            take_back_running: Arc::new(AtomicBool::new(false)),
+        })
+    }
+    /// The process-wide start order (R-I31).
+    pub fn start_order(&self) -> Arc<StartOrder> {
+        self.start_order.clone()
+    }
+    /// The process list the adapter reads at each `usb.claimed_by` (R-I30).
+    pub fn process_list(&self) -> Arc<dyn ProcessList> {
+        self.process_list.read().unwrap().clone()
+    }
+    /// Test seam (set before the first tick, like `set_delivery_fs`).
+    pub fn set_process_list(&self, list: Arc<dyn ProcessList>) {
+        *self.process_list.write().unwrap() = list;
+    }
+    /// Test seam (set before the first tick).
+    pub fn set_sleep_inhibitor(&self, sleep: Arc<dyn SleepInhibitor>) {
+        *self.sleep.write().unwrap() = sleep;
+    }
+    /// "Take the camera back" over the current binding (R-I32; also "Test camera connection").
+    pub fn take_back(self: &Arc<Self>) -> psm_core::Result<TakeBackService> {
+        let binding = self.binding.read().expect("camera binding");
+        let binding = binding
+            .as_ref()
+            .ok_or_else(|| psm_core::Error::Provider("camera runtime not bound".into()))?;
+        Ok(TakeBackService {
+            runtime: self.clone(),
+            adapter: self.direct_adapter(),
+            store: binding.store.clone(),
+            health: binding.health.clone(),
+            editing: binding.editing.clone(),
+            camera: binding.provider.clone(),
+            scripting: binding.scripting.clone(),
+            gate: binding.gate.clone(),
+            provision: binding.provision.clone(),
+            document_id: binding.document_id.clone(),
+            clock: self.clock.clone(),
+            running: self.take_back_running.clone(),
         })
     }
     /// The direct camera adapter of this runtime: created at the first call, the same `Arc`
@@ -370,7 +440,10 @@ impl CameraRuntime {
         let mut supervisor = Supervisor::new(spec);
         match supervisor.spawn(self.clock.mono()) {
             Ok(_) => self.helper_running.store(true, Ordering::SeqCst),
-            Err(error) => tracing::warn!(%error, "camera sidecar unavailable"),
+            Err(error) => {
+                tracing::warn!(%error, "camera sidecar unavailable");
+                self.start_order.satisfy(StartReason::SidecarUnavailable);
+            }
         }
         *guard = Some(SidecarClient::new(supervisor));
     }
@@ -530,6 +603,18 @@ impl CameraRuntime {
         for line in &outcome.helper_log {
             self.push_helper_log(line);
         }
+        if let Some(reason) = outcome.start {
+            self.start_order.satisfy(reason);
+        }
+        match outcome.sleep {
+            Some(true) => {
+                if let Err(error) = self.sleep.read().unwrap().hold(SLEEP_REASON) {
+                    tracing::warn!(%error, "idle-sleep assertion not held");
+                }
+            }
+            Some(false) => self.sleep.read().unwrap().release(),
+            None => {}
+        }
         if outcome.sdk_unavailable
             && let Some(binding) = self.binding.read().expect("camera binding").as_ref()
         {
@@ -597,6 +682,7 @@ impl CameraRuntime {
         if let Some(supervisor) = self.supervisor.lock().expect("camera supervisor").as_mut() {
             supervisor.supervisor_mut().quit_and_wait();
         }
+        self.sleep.read().unwrap().release();
     }
 }
 impl Drop for CameraRuntime {

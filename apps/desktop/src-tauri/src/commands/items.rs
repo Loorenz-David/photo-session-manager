@@ -87,6 +87,17 @@ impl From<Error> for CommandError {
             Error::CameraNotConnected => "camera_not_connected",
             Error::ReconnectOnCableRefused => "reconnect_on_cable_refused",
             Error::SidecarUnavailable => "sidecar_unavailable",
+            Error::EditorLaunchDeferred => "editor_launch_deferred",
+            Error::TakeBackBlocked { reason } => {
+                data.insert("reason".into(), reason.clone());
+                "take_back_blocked"
+            }
+            Error::TakeBackFailed { step, cause } => {
+                // `data` is a string map: the step arrives as "2"…"5" (P48 L18).
+                data.insert("step".into(), step.to_string());
+                data.insert("cause".into(), cause.clone());
+                "take_back_failed"
+            }
             Error::HooksNotInstalled => "hooks_not_installed",
             Error::RecipeMissing { name } => {
                 data.insert("name".into(), name.clone());

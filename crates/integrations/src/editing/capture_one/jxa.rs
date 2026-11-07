@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-const SCRIPTS: [(&str, &str); 19] = [
+const SCRIPTS: [(&str, &str); 20] = [
     ("editor_info", include_str!("jxa/editor_info.js")),
     ("make_document", include_str!("jxa/make_document.js")),
     ("open_document", include_str!("jxa/open_document.js")),
@@ -38,6 +38,7 @@ const SCRIPTS: [(&str, &str); 19] = [
     ("set_color_tag", include_str!("jxa/set_color_tag.js")),
     ("process", include_str!("jxa/process.js")),
     ("capture", include_str!("jxa/capture.js")),
+    ("quit", include_str!("jxa/quit.js")),
 ];
 const IMPORT: &str = include_str!("jxa/import.js");
 
@@ -231,6 +232,9 @@ impl CaptureOneScripting for JxaScripting {
                 &serde_json::to_string(paths).map_err(|e| Error::InvalidData(e.to_string()))?,
             ],
         )
+    }
+    fn quit(&self) -> Result<()> {
+        self.call("quit", &[])
     }
 }
 #[cfg(test)]

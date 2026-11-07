@@ -45,6 +45,11 @@ pub trait EditingProvider: Send + Sync {
     fn finish_render(&self, job: &str, now: Instant, now_ms: i64) -> Result<()>;
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>>;
     fn render_in_flight(&self, raw: &str) -> bool;
+    /// How many renders the provider has issued and not finished (or queued behind a busy one):
+    /// "Take the camera back" waits for none (10E MC-34 R-I32).
+    fn renders_in_flight(&self) -> usize {
+        0
+    }
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()>;
     fn settings_changed_at(&self, raw: &str) -> Result<Option<SystemTime>>;
     fn import(&self, paths: &[String]) -> Result<()>;

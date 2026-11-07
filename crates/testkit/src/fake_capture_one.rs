@@ -29,6 +29,18 @@ pub struct FakeState {
     pub launch_fails: Option<String>,
     pub launched: bool,
     pub running_after_polls: Option<u32>,
+    /// After `quit`, `running` turns false once this many `editor_info` calls asked (`None`:
+    /// it never quits — a dialog is open). Default `Some(1)`.
+    pub quit_after_polls: Option<u32>,
+    /// The countdown of a `quit` in progress.
+    pub quitting: Option<u32>,
+    /// The `editor_info` after the first one that reports not-running after a quit reports
+    /// `running = true` (the photographer opened it), with no `launch` op (P48 C5(e)).
+    pub restart_after_quit: bool,
+    /// The last `editor_info` was the first to report not-running after a quit.
+    pub quit_seen: bool,
+    /// `save` fails (P48 C5(b)).
+    pub fail_save: bool,
     pub open_documents: Vec<String>,
     pub front_document: Option<String>,
     pub fail_make_document: Option<String>,
@@ -88,6 +100,11 @@ impl FakeCaptureOneScripting {
                 launch_fails: None,
                 launched: false,
                 running_after_polls: None,
+                quit_after_polls: Some(1),
+                quitting: None,
+                restart_after_quit: false,
+                quit_seen: false,
+                fail_save: false,
                 fail_make_document: None,
                 fail_open_document: None,
                 fail_front: false,
@@ -208,6 +225,19 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
                 "execution error: Not authorized to send Apple events to Capture One. (-1743)"
                     .into(),
             ));
+        }
+        if std::mem::take(&mut s.quit_seen) && std::mem::take(&mut s.restart_after_quit) {
+            s.running = true;
+        }
+        if let Some(polls) = s.quitting.as_mut() {
+            if *polls != u32::MAX {
+                *polls = polls.saturating_sub(1);
+            }
+            if *polls == 0 {
+                s.quitting = None;
+                s.running = false;
+                s.quit_seen = true;
+            }
         }
         if s.launched
             && let Some(polls) = s.running_after_polls.as_mut()
@@ -392,7 +422,13 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
     }
     fn save(&self, id: &str) -> Result<()> {
         self.check_id(id)?;
-        self.state.lock().unwrap().ops.push("save".into());
+        let mut s = self.state.lock().unwrap();
+        s.ops.push("save".into());
+        if s.fail_save {
+            return Err(Error::Provider(
+                "Capture One could not save the document".into(),
+            ));
+        }
         Ok(())
     }
     fn set_captures(&self, id: &str, path: &str) -> Result<()> {
@@ -557,6 +593,22 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
             .unwrap()
             .ops
             .push(format!("import:{}", paths.len()));
+        Ok(())
+    }
+    /// Like `quit.js`: records op `quit` either way; a running editor stops after
+    /// `quit_after_polls` `editor_info` calls (never with `None`).
+    fn quit(&self) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        s.ops.push("quit".into());
+        if s.running {
+            s.launched = false;
+            match s.quit_after_polls {
+                Some(0) => s.running = false,
+                Some(n) => s.quitting = Some(n),
+                // Never quits (a dialog is open): a countdown that never reaches zero.
+                None => s.quitting = Some(u32::MAX),
+            }
+        }
         Ok(())
     }
 }

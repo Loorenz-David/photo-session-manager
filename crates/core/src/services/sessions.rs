@@ -3,8 +3,8 @@ use crate::{
     domain::editing::ProvisionInputs,
     domain::session::SessionDto,
     mechanisms::time::now_ms,
-    ports::{clock::Clock, editing::EditingProvider, store::Store},
-    services::health::HealthService,
+    ports::{camera::CameraProvider, clock::Clock, editing::EditingProvider, store::Store},
+    services::{editing_startup::EDITOR_NOT_FOLLOWING, health::HealthService},
 };
 
 pub struct SessionsService<'a> {
@@ -14,6 +14,7 @@ pub struct SessionsService<'a> {
     health: Option<&'a HealthService>,
     provision: Option<&'a ProvisionInputs>,
     commerce: Option<&'a dyn crate::ports::commerce::CommerceAdapter>,
+    camera: Option<&'a dyn CameraProvider>,
 }
 
 impl<'a> SessionsService<'a> {
@@ -25,6 +26,34 @@ impl<'a> SessionsService<'a> {
             health: None,
             provision: None,
             commerce: None,
+            camera: None,
+        }
+    }
+
+    /// The app's camera provider: when it does not depend on the editing provider (the direct
+    /// adapter), activation stores the session first and Capture One follows when it can
+    /// (10E MC-34 R-I33). Without it, activation behaves as with the Capture One camera adapter.
+    pub fn with_camera(mut self, camera: &'a dyn CameraProvider) -> Self {
+        self.camera = Some(camera);
+        self
+    }
+
+    /// R-I33: the camera does not need Capture One to shoot.
+    fn camera_independent(&self) -> bool {
+        self.camera
+            .is_some_and(|c| !c.capabilities().depends_on_editing_provider)
+    }
+
+    /// R-I33's follow-up after the session is stored: one health item says whether Capture One
+    /// shows it (`editor_not_following`), never `capture_folder_not_set` (P48 L12).
+    fn editor_follows(&self, health: &HealthService, applied: Result<()>) {
+        health.clear("capture_folder_not_set");
+        match applied {
+            Ok(()) => health.clear("editor_not_following"),
+            Err(error) => {
+                tracing::warn!(%error, "Capture One does not follow the session");
+                health.set("editor_not_following", EDITOR_NOT_FOLLOWING);
+            }
         }
     }
 
@@ -55,7 +84,23 @@ impl<'a> SessionsService<'a> {
         let item = self
             .store
             .item(session.session.item_id.ok_or(Error::DocumentNotSession)?)?;
-        editing.ensure(self.provision.ok_or(Error::DocumentNotOpen)?)?;
+        let provision = self.provision.ok_or(Error::DocumentNotOpen)?;
+        if self.camera_independent() {
+            self.store.set_active_session_id(Some(id))?;
+            let applied = (|| {
+                if editing.ensure(provision)?.deferred {
+                    return Err(Error::EditorLaunchDeferred);
+                }
+                editing.bring_document_to_front()?;
+                let root = editing.inspect_document()?.capture_root;
+                editing.set_capture_folder(&format!("{}/{}", root, item.folder_key))
+            })();
+            self.editor_follows(health, applied);
+            return Ok(());
+        }
+        if editing.ensure(provision)?.deferred {
+            return Err(Error::EditorLaunchDeferred);
+        }
         editing.bring_document_to_front()?;
         let root = editing.inspect_document()?.capture_root;
         if let Err(e) = editing.set_capture_folder(&format!("{}/{}", root, item.folder_key)) {
@@ -70,6 +115,15 @@ impl<'a> SessionsService<'a> {
     pub fn deactivate(&self) -> Result<()> {
         let editing = self.editing.ok_or(Error::DocumentNotOpen)?;
         let health = self.health.ok_or(Error::DocumentNotOpen)?;
+        if self.camera_independent() {
+            self.store.set_active_session_id(None)?;
+            health.clear("document_not_front");
+            let applied = editing.inspect_document().and_then(|doc| {
+                editing.set_capture_folder(&format!("{}/_Unassigned", doc.capture_root))
+            });
+            self.editor_follows(health, applied);
+            return Ok(());
+        }
         let root = editing.inspect_document()?.capture_root;
         if let Err(e) = editing.set_capture_folder(&format!("{root}/_Unassigned")) {
             health.set("capture_folder_not_set", e.to_string());

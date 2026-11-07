@@ -399,18 +399,20 @@ pub async fn session_activate(
     state: State<'_, AppState>,
     session_id: CommandId,
 ) -> Result<(), CommandError> {
-    let (store, editing, health, provision) = {
+    let (store, editing, health, provision, camera) = {
         let app = state.handles().map_err(CommandError::from)?;
         (
             app.store.clone(),
             app.editing.clone(),
             app.health.clone(),
             app.provision.clone(),
+            app.camera.clone(),
         )
     };
     tauri::async_runtime::spawn_blocking(move || {
         SessionsService::new(store.as_ref(), &SystemClock)
             .with_editing(editing.as_ref(), health.as_ref(), &provision)
+            .with_camera(camera.as_ref())
             .activate(session_id.0)
     })
     .await
@@ -421,18 +423,20 @@ pub async fn session_activate(
 #[tauri::command]
 #[specta::specta]
 pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), CommandError> {
-    let (store, editing, health, provision) = {
+    let (store, editing, health, provision, camera) = {
         let app = state.handles().map_err(CommandError::from)?;
         (
             app.store.clone(),
             app.editing.clone(),
             app.health.clone(),
             app.provision.clone(),
+            app.camera.clone(),
         )
     };
     tauri::async_runtime::spawn_blocking(move || {
         SessionsService::new(store.as_ref(), &SystemClock)
             .with_editing(editing.as_ref(), health.as_ref(), &provision)
+            .with_camera(camera.as_ref())
             .deactivate()
     })
     .await

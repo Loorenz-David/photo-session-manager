@@ -1,0 +1,7 @@
+{"timestamp":"2026-11-06T10:00:00.000Z","source":"sdk","event":"transport.state","from":"DISCONNECTED","to":"DISCOVERING","reason":"looking for camera over wifi","transport":"none"}
+sleep 300
+{"timestamp":"2026-11-06T10:00:00.400Z","source":"sdk","event":"transport.state","from":"DISCOVERING","to":"CONNECTING_WIFI","reason":"camera found","transport":"none"}
+{"timestamp":"2026-11-06T10:00:00.900Z","source":"sdk","event":"transport.state","from":"CONNECTING_WIFI","to":"CONNECTED_WIFI","reason":"connected","transport":"wifi"}
+{"timestamp":"2026-11-06T10:00:00.950Z","source":"sdk","event":"connection.ready","transport":"wifi","connect_ms":500,"model":"ILCE-7RM5","store_destination":"verified","store_value":"0x0001"}
+{"timestamp":"2026-11-06T10:00:01.000Z","source":"sdk","event":"usb.claimed_by","owners":"pid 512, ptpcamerad","hint":"another process holds the camera's USB interface; the SDK cannot open it."}
+{"timestamp":"2026-11-06T10:00:01.012Z","source":"sdk","event":"connect.failed","transport":"usb","sdk_error":"0x00008208","error":"connection error","duration_ms":12}

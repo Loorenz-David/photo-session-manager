@@ -84,4 +84,7 @@ pub trait CaptureOneScripting: Send + Sync {
     fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<ProcessStarted>;
     fn capture(&self) -> Result<()>;
     fn import(&self, id: &str, paths: &[String]) -> Result<()>;
+    /// Asks a running Capture One to quit (AppleScript `quit`; never a kill). Does nothing when it
+    /// is not running, so it can never launch it (10E MC-34 R-I32 step 3, P48 L13).
+    fn quit(&self) -> Result<()>;
 }

@@ -3,8 +3,12 @@ use crate::domain::{
     camera::{BusyReason, CameraName, CameraStatus, Link, NeedsActionReason},
 };
 
+/// One reason that needs the photographer: `(reason, holder, message)`; `message` is the MC-34
+/// sentence for `HeldByOtherProgram` (P48 R-I30), `None` for every other reason.
+pub type NeedsActionEntry = (NeedsActionReason, Option<String>, Option<String>);
+
 pub struct StatusInputs {
-    pub needs_action: Vec<(NeedsActionReason, Option<String>)>,
+    pub needs_action: Vec<NeedsActionEntry>,
     pub busy: Option<BusyReason>,
     pub session: Option<(CameraName, Link)>,
     pub connecting: Option<Link>,
@@ -12,10 +16,13 @@ pub struct StatusInputs {
 }
 
 pub fn derive_status(input: &StatusInputs) -> CameraStatus {
-    if let Some((reason, holder)) = input.needs_action.iter().min_by_key(|(r, _)| r.rank()) {
+    if let Some((reason, holder, message)) =
+        input.needs_action.iter().min_by_key(|(r, _, _)| r.rank())
+    {
         return CameraStatus::NeedsAction {
             reason: reason.clone(),
             holder: holder.clone(),
+            message: message.clone(),
         };
     }
     if let Some(reason) = &input.busy {
@@ -52,13 +59,15 @@ pub fn status_message(reason: &NeedsActionReason, holder: Option<&str>) -> Strin
 
 pub fn health_items(input: &StatusInputs) -> Vec<HealthItem> {
     let mut reasons = input.needs_action.clone();
-    reasons.sort_by_key(|(r, _)| r.rank());
+    reasons.sort_by_key(|(r, _, _)| r.rank());
     let mut items: Vec<_> = reasons
         .iter()
-        .map(|(r, holder)| HealthItem {
+        .map(|(r, holder, message)| HealthItem {
             code: r.code().into(),
             ok: false,
-            detail: status_message(r, holder.as_deref()),
+            detail: message
+                .clone()
+                .unwrap_or_else(|| status_message(r, holder.as_deref())),
         })
         .collect();
     let (code, ok, detail) = match derive_status(input) {
@@ -116,12 +125,13 @@ mod tests {
             fn $name() {
                 let mut input = empty();
                 let higher = $higher;
-                input.needs_action = vec![($lower, None), (higher.clone(), None)];
+                input.needs_action = vec![($lower, None, None), (higher.clone(), None, None)];
                 assert_eq!(
                     derive_status(&input),
                     CameraStatus::NeedsAction {
                         reason: higher,
-                        holder: None
+                        holder: None,
+                        message: None
                     }
                 );
             }
@@ -169,6 +179,7 @@ mod tests {
         input.needs_action.push((
             NeedsActionReason::HeldByOtherProgram,
             Some("ptpcamerad".into()),
+            None,
         ));
         input.busy = Some(BusyReason::Exposure);
         input.session = Some((CameraName("X".into()), Link::Wireless));
@@ -176,7 +187,8 @@ mod tests {
             derive_status(&input),
             CameraStatus::NeedsAction {
                 reason: NeedsActionReason::HeldByOtherProgram,
-                holder: Some("ptpcamerad".into())
+                holder: Some("ptpcamerad".into()),
+                message: None
             }
         );
     }
@@ -226,15 +238,16 @@ mod tests {
     fn mc31_health_list() {
         let mut input = empty();
         input.needs_action = vec![
-            (NeedsActionReason::FilesNotReceived { count: 3 }, None),
-            (NeedsActionReason::FingerprintUnconfirmed, None),
+            (NeedsActionReason::FilesNotReceived { count: 3 }, None, None),
+            (NeedsActionReason::FingerprintUnconfirmed, None, None),
         ];
         input.session = Some((CameraName("X".into()), Link::Wireless));
         assert_eq!(
             derive_status(&input),
             CameraStatus::NeedsAction {
                 reason: NeedsActionReason::FingerprintUnconfirmed,
-                holder: None
+                holder: None,
+                message: None
             }
         );
         let items = health_items(&input);

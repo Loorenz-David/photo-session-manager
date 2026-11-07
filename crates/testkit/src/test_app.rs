@@ -1,7 +1,9 @@
 use crate::clock::ManualClock;
 use crate::fake_capture_one::FakeCaptureOneScripting;
 use crate::fake_commerce::FakeCommerce;
+use crate::fake_processes::FakeProcessList;
 use crate::fake_secrets::FakeSecrets;
+use crate::fake_sleep::FakeSleepInhibitor;
 use crate::ftp_client::FtpClient;
 use psm_core::Result;
 use psm_core::{
@@ -35,6 +37,10 @@ pub struct TestApp {
     pub events: Arc<CollectingEventSink>,
     pub commerce: Option<Arc<FakeCommerce>>,
     pub secrets: Arc<FakeSecrets>,
+    /// The process names the ownership guard reads (P48; empty by default).
+    pub fake_processes: Arc<FakeProcessList>,
+    /// The idle-sleep assertion (P48).
+    pub fake_sleep: Arc<FakeSleepInhibitor>,
     next_hook: AtomicU64,
 }
 
@@ -54,11 +60,32 @@ impl TestApp {
         ItemsService::new(self.app.store.as_ref(), self.clock.as_ref())
     }
     pub fn sessions(&self) -> SessionsService<'_> {
-        SessionsService::new(self.app.store.as_ref(), self.clock.as_ref()).with_editing(
-            self.app.editing.as_ref(),
-            self.app.health.as_ref(),
-            &self.app.provision,
-        )
+        SessionsService::new(self.app.store.as_ref(), self.clock.as_ref())
+            .with_editing(
+                self.app.editing.as_ref(),
+                self.app.health.as_ref(),
+                &self.app.provision,
+            )
+            .with_camera(self.app.camera.as_ref())
+    }
+    /// "Take the camera back" over the app's camera runtime (P48).
+    pub fn take_back(&self) -> psm_integrations::camera::direct::TakeBackService {
+        self.app
+            .camera_runtime
+            .take_back()
+            .expect("camera runtime bound")
+    }
+    /// The process-wide editor-launch gate (P48).
+    pub fn launch_gate(
+        &self,
+    ) -> Arc<psm_integrations::editing::capture_one::launch_gate::LaunchGate> {
+        self.app.launch_gate()
+    }
+    /// The user-lane `GatedScripting` (P48).
+    pub fn user_lane(
+        &self,
+    ) -> Arc<dyn psm_integrations::editing::capture_one::scripting::CaptureOneScripting> {
+        self.app.user_lane()
     }
     pub fn review(&self) -> ReviewService<'_> {
         ReviewService::new(
@@ -238,6 +265,10 @@ impl TestApp {
         )?;
         let events = Arc::new(CollectingEventSink::default());
         app.events.set_target(events.clone());
+        let fake_processes = Arc::new(FakeProcessList::default());
+        let fake_sleep = Arc::new(FakeSleepInhibitor::default());
+        app.camera_runtime.set_process_list(fake_processes.clone());
+        app.camera_runtime.set_sleep_inhibitor(fake_sleep.clone());
         Ok(Self {
             dir,
             app,
@@ -246,6 +277,8 @@ impl TestApp {
             events,
             commerce,
             secrets,
+            fake_processes,
+            fake_sleep,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -270,10 +303,17 @@ impl TestApp {
                 .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
             self.secrets.clone(),
         )?;
+        self.app_seams(&next);
         let old = std::mem::replace(&mut self.app, next);
         drop(old);
         self.app.events.set_target(self.events.clone());
         Ok(())
+    }
+    fn app_seams(&self, app: &App) {
+        app.camera_runtime
+            .set_process_list(self.fake_processes.clone());
+        app.camera_runtime
+            .set_sleep_inhibitor(self.fake_sleep.clone());
     }
     pub fn deliver_hook(&self, json: &str) -> Result<()> {
         let id = self.next_hook.fetch_add(1, Ordering::Relaxed);

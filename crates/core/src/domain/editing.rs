@@ -14,11 +14,26 @@ pub enum StyleOutcome {
     NotRequested,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProvisionReport {
     pub document_created: bool,
     pub recipes_created: Vec<String>,
     pub style: StyleOutcome,
+    /// A step was refused because "Take the camera back" holds the editor-launch gate (10E MC-34
+    /// R-I32): the ensure stopped there, without running that step's script or writing its
+    /// health item.
+    pub deferred: bool,
+}
+impl ProvisionReport {
+    /// The report of an ensure the editor-launch gate deferred.
+    pub fn deferred() -> Self {
+        Self {
+            document_created: false,
+            recipes_created: Vec::new(),
+            style: StyleOutcome::NotRequested,
+            deferred: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
