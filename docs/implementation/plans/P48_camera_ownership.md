@@ -318,3 +318,6 @@ arrives with P51.
   handoff_P48_camera_ownership_implement_r1.md`): no `EditingProvider::quit` (the take-back calls `CaptureOneScripting::quit` on the ungated
   scripting), `AlreadyRunning` set in `GatedScripting::editor_info`, test fixture rule (i) also resets the fake's `launched` flag (C2(g)),
   `services/camera.rs` and `infra/Cargo.toml` unchanged.
+- 2026-11-07, review r1 (opus): **BLOCKED at the gate.** The handoff has `SHA_PLACEHOLDER`/`STAMP_PLACEHOLDER`; no `CHECKPOINT (not approved): P48`
+  commit exists. The 41 implementation paths are uncommitted in the working tree. Nothing reviewed. Relaunch the review once the checkpoint is
+  committed and the SHA is recorded (`handoffs/reviewer/handoff_P48_camera_ownership_review_r1.md`).
