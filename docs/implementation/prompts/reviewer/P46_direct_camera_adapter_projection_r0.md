@@ -2,7 +2,7 @@
 plan: P46_direct_camera_adapter
 role: projection
 round: 0
-date: 2026-11-06
+date: 2026-11-07
 ---
 # Projection of phase P46_direct_camera_adapter (round 0)
 
