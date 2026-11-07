@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-07 21:05: P49 APPROVED_WITH_NOTES (re-review r3, after the authorised fix 2). Camera chapter: 7 of 11 done (P42–P46, P48, P49).** Next: P47 (owner + camera, ~15 min) gates P50 → P51 → P52. Tonight the orchestrator prepares P47 steps 1–2 (packaged build with the SDK sidecar, hand-installed support folder under `~/Library/Application Support/com.loorenz.sessionmanager/camera/sony/<ver>/`, ad-hoc signed; nothing in the repo; stub sidecar restored afterwards). Keychain items and steps 3–10 wait for the owner.
+
 **2026-11-07 20:25: P49 re-review r2 CHANGES_REQUESTED (1 MUST, F2): fix 1 made the style-eligibility read error on NULL, so tethered Capture One previews would never render while a style is set. Orchestrator authorised fix 2 (one SQL line + one test, `766178d`); running on Codex (gpt-6-luna).** Owner (evening): continue overnight independently; answer from the intention; switch to `PSM_IMPLEMENTER=claude` if Codex runs out. After P49 the camera chain waits on P47 (owner + camera); tonight the orchestrator prepares P47 steps 1–2 (packaged build, hand-installed support folder outside the repo; no Keychain items, no camera).
 
 **2026-11-07 18:55: P48 APPROVED_WITH_NOTES. Owner: "we can continue with codex as the session has renewed".** P49's Claude implement session was stopped after 49 s (no changes) and relaunched with Codex (runner default). P47 waits for the owner + camera; P50 needs P47 and P49.
