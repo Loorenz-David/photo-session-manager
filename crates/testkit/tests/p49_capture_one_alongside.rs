@@ -233,8 +233,8 @@ fn c3b_style_is_applied_before_first_render() {
     let (s, _) = session(&a, "P49I");
     a.sessions().activate(s).unwrap();
     a.fake.state.lock().unwrap().styles = vec!["Bright Contrast".into()];
-    style(&mut a, "Bright Contrast");
     let raw = arrived(&a, s, "DSC7.ARW");
+    style(&mut a, "Bright Contrast");
     clear(&a);
     a.fake.add_image(&raw, &["v1"], false);
     a.tick(1_000).unwrap();
@@ -249,6 +249,28 @@ fn c3b_style_is_applied_before_first_render() {
         .unwrap();
     assert!(applied < processed);
     assert_eq!(a.fake.state.lock().unwrap().issued.len(), 1);
+}
+
+#[test]
+fn f1_retouch_after_first_render_does_not_receive_late_style() {
+    let mut a = app();
+    let (s, _) = session(&a, "P49F1");
+    a.sessions().activate(s).unwrap();
+    let raw = arrived(&a, s, "DSC7F1.ARW");
+    a.fake.add_image(&raw, &["v1"], false);
+    a.tick(1_000).unwrap();
+    let first_job = a.fake.state.lock().unwrap().issued[0].0.clone();
+    a.complete_render(&first_job).unwrap();
+
+    a.fake.state.lock().unwrap().styles = vec!["Bright Contrast".into()];
+    style(&mut a, "Bright Contrast");
+    clear(&a);
+    a.app.previews.on_variant_adjusted("v1", &raw).unwrap();
+    a.tick(16_000).unwrap();
+
+    assert!(a.fake.state.lock().unwrap().issued.len() >= 2);
+    assert!(!ops(&a).iter().any(|op| op.starts_with("apply_style:")));
+    assert_eq!(a.store().style_applied_at(&raw).unwrap(), None);
 }
 #[test]
 fn c3c_late_variant_recovers_with_backoff_and_no_failure() {

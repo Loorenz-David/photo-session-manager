@@ -95,6 +95,8 @@ fn db(error: rusqlite::Error) -> Error {
     Error::InvalidData(error.to_string())
 }
 
+const STYLE_ELIGIBLE_PENDING: i64 = i64::MIN;
+
 fn insert_default_composition(conn: &Connection, id: i64, shape: &str, at: i64) -> Result<()> {
     conn.execute(
         "INSERT INTO compositions(photo_id,kind,shape,updated_at) VALUES (?1,'normal',?2,?3)",
@@ -1685,8 +1687,8 @@ impl Store for SqliteStore {
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?
             .query_row(
-                "SELECT style_applied_at FROM raw_state WHERE raw_path=?1",
-                [raw_path],
+                "SELECT CASE WHEN style_applied_at=?2 THEN NULL ELSE style_applied_at END FROM raw_state WHERE raw_path=?1",
+                params![raw_path, STYLE_ELIGIBLE_PENDING],
                 |r| r.get(0),
             )
             .optional()
@@ -1694,10 +1696,32 @@ impl Store for SqliteStore {
             .map_err(db)
     }
 
+    fn mark_style_eligible(&self, raw_path: &str) -> Result<()> {
+        let raw_path = canon(std::path::Path::new(raw_path))?;
+        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute("INSERT INTO raw_state(raw_path,style_applied_at) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET style_applied_at=CASE WHEN style_applied_at IS NULL THEN excluded.style_applied_at ELSE style_applied_at END", params![raw_path, STYLE_ELIGIBLE_PENDING]).map_err(db)?;
+        Ok(())
+    }
+
+    fn style_eligible_before_first_render(&self, raw_path: &str) -> Result<bool> {
+        let raw_path = canon(std::path::Path::new(raw_path))?;
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .query_row(
+                "SELECT style_applied_at=?2 AND rendered_gen=0 FROM raw_state WHERE raw_path=?1",
+                params![raw_path, STYLE_ELIGIBLE_PENDING],
+                |r| r.get(0),
+            )
+            .optional()
+            .map(|eligible| eligible.unwrap_or(false))
+            .map_err(db)
+    }
+
     fn mark_style_applied(&self, raw_path: &str, now_ms: i64) -> Result<()> {
         let raw_path = canon(std::path::Path::new(raw_path))?;
         self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
-            .execute("INSERT INTO raw_state(raw_path,style_applied_at) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET style_applied_at=COALESCE(style_applied_at,excluded.style_applied_at)", params![raw_path,now_ms]).map_err(db)?;
+            .execute("INSERT INTO raw_state(raw_path,style_applied_at) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET style_applied_at=CASE WHEN style_applied_at IS NULL OR style_applied_at=?3 THEN excluded.style_applied_at ELSE style_applied_at END", params![raw_path,now_ms,STYLE_ELIGIBLE_PENDING]).map_err(db)?;
         Ok(())
     }
 

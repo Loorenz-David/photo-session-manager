@@ -218,6 +218,8 @@ pub trait Store: Send + Sync {
     fn photo(&self, id: i64) -> Result<Photo>;
     fn set_photo_integrity(&self, id: i64, integrity: Integrity) -> Result<()>;
     fn upsert_raw_state(&self, raw_path: &str, path_key: Option<&str>) -> Result<()>;
+    fn mark_style_eligible(&self, raw_path: &str) -> Result<()>;
+    fn style_eligible_before_first_render(&self, raw_path: &str) -> Result<bool>;
     fn style_applied_at(&self, raw_path: &str) -> Result<Option<i64>>;
     fn mark_style_applied(&self, raw_path: &str, now_ms: i64) -> Result<()>;
     fn mechanism_version(&self) -> Result<String>;

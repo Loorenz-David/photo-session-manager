@@ -88,7 +88,10 @@ impl CaptureOneFollow {
             .style_lock
             .lock()
             .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-        if self.style_name.is_empty() || self.store.style_applied_at(raw)?.is_some() {
+        if self.style_name.is_empty()
+            || !self.store.style_eligible_before_first_render(raw)?
+            || self.store.style_applied_at(raw)?.is_some()
+        {
             return Ok(());
         }
         match self.editing.apply_style(raw, &self.style_name)? {
@@ -105,7 +108,10 @@ impl CaptureOneFollow {
         Ok(())
     }
     pub fn prepare_render(&self, raw: &str) -> Result<()> {
-        if self.style_name.is_empty() || self.store.style_applied_at(raw)?.is_some() {
+        if self.style_name.is_empty()
+            || !self.store.style_eligible_before_first_render(raw)?
+            || self.store.style_applied_at(raw)?.is_some()
+        {
             return Ok(());
         }
         if !self.editing.find_variant(raw)? {
@@ -175,6 +181,9 @@ impl ArrivalFollow for CaptureOneFollow {
         Ok(())
     }
     fn photo_arrived(&self, _session_id: i64, raw: &str, folder: &Path) {
+        if let Err(error) = self.store.mark_style_eligible(raw) {
+            tracing::warn!(%error, raw, "style eligibility could not be recorded");
+        }
         self.previews.wait_for_variant(raw);
         let now = self.clock.mono();
         if let Ok(mut waiting) = self.waiting.lock() {
