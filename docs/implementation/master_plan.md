@@ -124,7 +124,7 @@ restated so no session has to infer them:
 | P43_ftp_receiver | APPROVED | 2026-11-06 | opus | re-review r3 APPROVED_WITH_NOTES: perimeter = the 1 allowed test file + tracker + log (`7e8178d`); F3 resolved (`c7b` pid wait 15 s, other settles and assertions unchanged); Rust suite 634/0, clippy, fmt, typecheck, UI 369/369 green (reviewer run, clean `1818599`); `p43` binary 19/20 green: run 8 red on a ~70 s OS stall of fresh fake-sidecar execs (3 apps held, receiver uninvolved) → triaged DROP, backlog → P44/testkit (copy the sidecar once per test process) |
 | P44_capture_ledger | APPROVED | 2026-11-06 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 26 committed paths (`046d3c5`, = handoff list: plan's 24 + tracker + plan log); Rust 671/0 (p44 25/25), clippy, fmt, typecheck, UI 369/369 green (reviewer run, code tree `046d3c5`); all 36 rows have a boundary test that fails on a wrong outcome; association order, `RENAME_EXCL` with no fallback, pending-before-rename, take-over, recovery, freeze and rule 0 read against MC-33 R-I25…R-I29; no assumption contradicts 10E; H1–H8 hold; 5 backlog notes (recovery's EEXIST→duplicate does not re-evaluate the exposure; `first_raise` re-fires after each transfer → P46) |
 | P45_sidecar_and_protocol | APPROVED | 2026-11-06 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 44 declared paths (`db3cdae`; `git ls-files native/` = 24 sources, no Sony file, no `sdk_shim`); suite 693 Rust, clippy/fmt/typecheck green, UI 369/369 on re-run (one unrelated P33 flake, backlog); all 21 rows have a boundary test that fails on a wrong outcome; C++ edits 1–7 read against the lab at `221aa49` and 10E R-I19–R-I23; fixture = handoff §4.2 verbatim; H1–H8 and the secrets rule hold; 7 new backlog notes |
-| P46_direct_camera_adapter | NOT_STARTED | 2026-11-06 | planner | 10E MC-31 R-I19/R-I20/R-I22, MC-33 R-I26/R-I29: the direct adapter over the sidecar client, exposure and Save-to-PC deliveries into the ledger, store-destination outcome, first copy wins end to end, adapter selection; projection on |
+| P46_direct_camera_adapter | PROJECTED | 2026-11-07 | planner | 10E MC-31 R-I19/R-I20/R-I22, MC-33 R-I26/R-I29: the direct adapter over the sidecar client, exposure and Save-to-PC deliveries into the ledger, store-destination outcome, first copy wins end to end, adapter selection; projection r0 AMENDMENTS_REQUIRED, L1–L22 folded 2026-11-07 (one test time base `SCRIPT_EPOCH_MS`, real USB capture order, `Switching` across the switch sequence, FTP report in the not-received detail, 27 rows, 34 paths, 0 owner cards) |
 | P47_support_package_spike | NOT_STARTED | 2026-11-06 | planner | **owner-attended, camera needed**: 10E §Camera support packages S1–S6 from a packaged build with a hand-installed support folder; answers folded into P50 |
 | P48_camera_ownership | NOT_STARTED | 2026-11-06 | planner | 10E MC-34 R-I30…R-I33, M39/M40: holder detection and naming, start order, the editor-launch gate, "Take the camera back" on click, activation independent of Capture One, sleep assertion; projection on |
 | P49_capture_one_alongside | NOT_STARTED | 2026-11-06 | planner | 10E §Capture One alongside R-I35, 10A MC-18 step 6, R46 (CI1 answered "always jump"): current collection on every arrival and activation, variant wait, style once per RAW, import fixed (copy into the capture folder) |
@@ -463,7 +463,10 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   fingerprint`), `camera_phone_connected` (`A phone app is connected to the camera: disconnect it`), `camera_held` (P48; detail = the MC-34
   sentence, e.g. `Capture One is holding the camera's USB connection — Take the camera back` or `programs that can take the camera: Capture
   One, Imaging Edge Desktop`), `camera_store_destination_unverified` (`The camera did not confirm where photos are saved`),
-  `camera_files_not_received` (`<n> photos taken but not received for 60 s`, plus ` · <g> gaps in the camera's numbering` when any),
+  `camera_files_not_received` (`<n> photos taken but not received for 60 s`, plus ` · <g> gaps in the camera's numbering` when any, plus ` · camera FTP:
+  <key>=<value>, …` once a `camera.ftp_state` answer arrived (P46); **its single writer is the ledger's `watchdog`/`dismiss`** — the direct adapter
+  publishes every other camera code it owns (`camera`, `camera_connecting`, `camera_busy`, `camera_disconnected` and the other `NeedsActionReason::code()`s)
+  and never this one, P46 projection r0 L11/L13),
   `camera_photo_session_uncertain` (P44; `Photo <camera filename> may belong to <other session title>`), `camera_support_not_installed`
   (P50; `Add camera support in Settings → Camera`), `editor_not_following` (P48; `Capture One will not show this session's new photos until
   it is reachable`), `camera_sidecar_unavailable` (P42; `The camera helper could not start`).
@@ -688,7 +691,8 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   `CameraName(String)`.
 - **Ports** (`crates/core/src/ports/`): `camera.rs` — `CameraProvider { fn raw_extensions(&self) -> &'static [&'static str]; fn status(&self) ->
   Result<CameraStatus>; fn capture(&self) -> Result<CaptureId>; fn capabilities(&self) -> CameraCapabilities; fn reconnect(&self) -> Result<()>;
-  fn request_ftp_status(&self) -> Result<()> }` (the last two added in P46; the Capture One adapter answers `Err(Error::Provider("not supported"))`),
+  fn request_ftp_status(&self) -> Result<()> }` (the last two added in P46 as **default methods** answering `Err(Error::Provider("not supported"))`, so the
+  Capture One adapter and `FakeDirectProvider` inherit the refusal untouched and only the direct adapter overrides them; P46 projection r0 L14),
   `CaptureSink { fn exposure_observed(&self, e: ExposureObserved) -> Result<i64>; fn delivery(&self, d: Delivery) -> Result<DeliveryOutcome>; fn
   session_uncertain(&self) -> Result<()>; fn transfer_in_progress(&self, source: Link, active: bool) }`, `ArrivalSource { fn via(&self) -> Link;
   fn transfer_in_progress(&self) -> bool }`, `DeliveryFs { fn rename_exclusive(&self, from: &Path, to: &Path) -> Result<RenameOutcome {Moved,
@@ -712,7 +716,9 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   (`DSC01234__dup1.ARW`), `target_folder(capture_root, folder_key: Option<&str>) -> PathBuf` (`_Unassigned` when `None`), `pending_count(exposures:
   &[(ExposureStatus, i64)], now_ms) -> usize` (both age bounds exclusive), `sequence_gaps(stems: &[&str]) -> Vec<Gap { prefix, after, before, missing }>`
   (the lab's `seq_of` rule: `_<1–2 digits>` stripped **only here**, for gap reporting).
-- **Services** (`crates/core/src/services/camera_ledger.rs`): `LedgerShared { worker: Mutex<()>, raised: Mutex<bool> }` — **one per app process, owned
+- **Services** (`crates/core/src/services/camera_ledger.rs`): `LedgerShared { worker: Mutex<()>, raised: Mutex<bool>, ftp_note: Mutex<Option<String>> /* P46:
+  the short form of the last `camera.ftp_state`, set through `LedgerService::set_ftp_note`, appended to the `camera_files_not_received` detail while the
+  watchdog raises, cleared by `dismiss()` and by a non-raising `watchdog` */ }` — **one per app process, owned
   by the `CameraRuntime`** (R-I18; P44 projection r0 L3) and shared by every `LedgerService` the runtime builds; `LedgerService { store, clock, fs:
   Arc<dyn DeliveryFs>, events, health, capture_root: Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>, shared: Arc<LedgerShared> }` implementing
   `CaptureSink` and `CompletedNames` — one decision at a time under `shared.worker`, against `done` rows only: decide → `insert_delivery(pending,
@@ -730,24 +736,34 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   `exposures(Option<ExposureStatus>)`, `insert_delivery`, `update_pending_delivery(..)`, `set_delivery_done`, `deliveries_by_key`, `deliveries_by_stem`,
   `pending_deliveries`, `pending_delivery_for_written_path`, `delivery_for_path`, `completed_names_since`, `item_folder_key_frozen` (§6.4).
 - **Runtime** (`crates/integrations/src/camera/runtime.rs`): `CameraRuntime` (one `Arc` per process, created in `App::open_with_adapter` and carried
-  through `SettingsSetContext`, `App::build(…, camera: Arc<CameraRuntime>)` and `App::reopen`): fields `supervisor: Mutex<Option<Supervisor>>`,
-  `receiver: Mutex<Option<ReceiverHandle>>`, `provider: ArcSwap-like RwLock<Arc<dyn CameraProvider>>`, `binding: RwLock<Option<AppBinding>>`, `sink:
-  RwLock<Arc<dyn EventSink>>`, `secrets: Arc<dyn SecretStore>`, `credentials: Mutex<Option<(String, String)>>` (read from the `SecretStore` once at
+  through `SettingsSetContext`, `App::build(…, camera: Arc<CameraRuntime>)` and `App::reopen`): fields `supervisor: Mutex<Option<SidecarClient>>`,
+  `receiver: Mutex<Option<ReceiverHandle>>`, `binding: RwLock<Option<AppBinding>>`, `sink: RoutingSink`, `secrets: Arc<dyn SecretStore>`; **no provider
+  slot** (P46 projection r0 L18): `provider() -> Arc<dyn CameraProvider>` returns the current `binding.provider`, and `direct_adapter() -> Arc<DirectCameraAdapter>`
+  creates the direct adapter **once per runtime** (lazily) and returns the same `Arc` to every later `App::build`, so its `StatusInputs` survive a settings
+  save (the sidecar does not re-send `connection.ready` for a session that stays open). `App::build` selects **up front** with `support::installed(&paths)`:
+  `Some` → `camera = camera_runtime.direct_adapter()`, `None` → `CameraViaCaptureOne`; that `Arc` goes to `ArrivalService`, `AppBinding.provider` and
+  `App.camera`/`AppHandles.camera`; `credentials: Mutex<Option<(String, String)>>` (read from the `SecretStore` once at
   the first spawn and cached; restarts reuse it; P50's `camera_secrets_set` refreshes it — a Keychain prompt never stalls the background loop), `clock`,
   `run_id: String /* uuid; the staging folder suffix */`; from P45 the sidecar client's seam: `send_command(Command) -> Result<CmdId>` (the returned id is
   the one on the wire), `command_outcome(&str) -> Option<CommandOutcome { Done, Rejected { reason }, Error { error } }>`, `sidecar_events() -> Vec<SidecarEvent>`
   (the last 1 000 delivered; `TestApp::camera_runtime()` reaches them; P45 projection r0 L12), and the staging folder `<binding document>/Capture/.incoming/
-  sdk-<run_id>` computed at the first spawn and never moved (L14); `bind(AppBinding { store, events, health, previous_health, capture_root, editing,
-  camera_settings: CameraSettings, support: Option<InstalledSupport>, paths })` is **the last statement of every `App::build`** (after every `?` and
+  sdk-<run_id>` computed at the first spawn and never moved (L14); `bind(AppBinding { store, events, health, previous_health, provider, paths,
+  camera_settings: CameraSettings, capture_root })` (the fields at HEAD `e907dfb`; no `support`/`editing` field — the selection is `App::build`'s) is **the
+  last statement of every `App::build`** (after every `?` and
   thread spawn, right before `Ok(Self {..})`, so a failed build never re-targets or spawns) and (a) re-targets events and health (P42–P45: copying the
-  camera-family health items from `previous_health`; from P46: re-publishing the runtime's own `StatusInputs` through `health_items`), (b) rebuilds the
+  camera-family health items from `previous_health`; from P46: re-publishing the direct adapter's `StatusInputs` through `health_items` for the codes the
+  adapter owns — never `camera_files_not_received`, §6.6), (b) rebuilds the
   `LedgerService` over the new store **sharing the runtime's one `ledger_shared: Arc<LedgerShared>`** (created with the runtime, so the worker lock and
   the watchdog's raised flag are process-wide and survive a settings save; P44 projection r0 L3) and runs `recover_pending` under that lock; the
   `DeliveryFs` the service uses comes from the runtime's `delivery_fs: RwLock<Arc<dyn DeliveryFs>>` slot (default `CameraFiles`; `set_delivery_fs(fs)` is
   the test seam, P44 L11), (c) starts the supervisor and the receiver on the **first** bind that finds support
   installed, (d) applies changed camera settings in place (receiver port/range → close + reopen; credentials → the cache, used at the next spawn, restart
   only while no USB session is open), never spawning a second sidecar or listener; `tick()` from the App's background thread (supervisor restarts,
-  watchdog), **serialised under the supervisor `Mutex`** (two background loops run during a rebuild); `shutdown()` is public, idempotent and terminal
+  watchdog), **serialised under the supervisor `Mutex`** (two background loops run during a rebuild) — from P46 (projection r0 L10/L13/L19): **one**
+  `client.poll` per tick feeding the ring buffer and the direct adapter's step (the adapter's effects — status event, owned health codes, deliveries, helper-log
+  lines, FTP note — are performed against the current binding; a download's hash runs outside the supervisor lock), then the watchdog glue once per mono
+  second (`transfer_active = uploads_in_progress() > 0 || expected_transfer.is_some()`; `ledger.watchdog`; `first_raise` → `provider().request_ftp_status()`)
+  while the adapter's `FilesNotReceived` input mirrors `LedgerShared.raised` on every tick; `shutdown()` is public, idempotent and terminal
   (`quit`, `QUIT_GRACE_MS`, then kill + wait; the receiver stopped; no restart afterwards), called by `impl Drop` (tests) and by the desktop `run()`'s
   `RunEvent::Exit` hook (production: tao ends the process with `process::exit`, the managed state is never dropped). `App::shutdown` **does not** stop
   the runtime.
@@ -775,7 +791,11 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   {cmd_id}, Status {cmd_id}, UsbRetry {cmd_id}, Quit}::encode() -> String` (percent-encoding of `user`/`password` per RFC 3986 unreserved set; P46 adds
   `Reconnect {cmd_id}`).
 - **Direct adapter** (`crates/integrations/src/camera/direct/`): `DirectCameraAdapter` (Sony SDK sidecar driver; implements `CameraProvider` and
-  `ArrivalSource {via: Cable}`), `normalize_camera_filename(name) -> String` (Sony: `_<1–2 digits>` after the stem's trailing digits removed, e.g.
+  `ArrivalSource {via: Cable}`; created once per runtime by `CameraRuntime::direct_adapter()`; state `StatusInputs`, `expected_transfer: Option<Instant>`,
+  `sdk_unavailable: bool`, `staging_dir` — no `usb_fallen_back`, no `pending_captures`; the P46 plan's §The adapter contract is the authority for its event
+  table, the owned health codes, the refusal clear rules and the `Exited` reset), `needs_action_from_connect_failed(error) -> Option<NeedsActionReason>`,
+  `holder_from_owners(owners) -> String` (first owner before the first `"; "`, then the text after its last comma, trimmed),
+  `normalize_camera_filename(name) -> String` (Sony: `_<1–2 digits>` after the stem's trailing digits removed, e.g.
   `DSC01234_1.ARW → DSC01234.ARW`; `IMG_1234.CR3` would be untouched here too because the rule needs trailing digits before the suffix), `HolderReport
   { holder: Option<String>, programs: Vec<String>, sentence: Option<String> }` and `name_programs(owners: &str, running: &[String]) -> HolderReport`
   (R-I30 list, Capture One first), `TakeBackService` (R-I32 steps with the bounds above), `StartOrder` (R-I31 conditions) and `LaunchGate` (`editing/
@@ -789,8 +809,8 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   550 `DELE`/`RMD`/`RNFR`/unknown name in `SIZE`/`MDTM`, 450 a second `STOR` of a name in flight, 554 `REST` past the `.part` length, 451 capture root
   missing, 426 data connection failed, 226 completed, 502 `PORT`/`EPRT` and unknown commands.
 - **Support packages** (`crates/integrations/src/camera/support/`): `InstalledSupport { make: &'static str /* "sony" */, version: String, sidecar_path:
-  PathBuf, folder: PathBuf }`; `SupportPackages::installed(paths) -> Option<InstalledSupport>` (the newest `camera/sony/<version>/` folder holding
-  every manifest file and `camera-sidecar`), `install(paths, archive, bundled_sidecar) -> Result<InstalledSupport>` (extract with `zip`, verify
+  PathBuf, folder: PathBuf }`; `installed(paths) -> Option<InstalledSupport>` (a free function in `support/mod.rs`, P46: the newest `camera/sony/<version>/`
+  folder holding `camera-sidecar`; P50 adds "every manifest file" — the P50 plan names it `installed(paths)` too), `install(paths, archive, bundled_sidecar) -> Result<InstalledSupport>` (extract with `zip`, verify
   against `manifest::SONY` (`native/camera-sidecar/manifest/sony-<version>.json`: `{version, files: [{path, sha256}]}` — hashes only, generated
   by `tools/sidecar/manifest.sh` on the build machine), copy the runtime + the sidecar, `codesign -s - --force` each Mach-O, run `camera-sidecar
   version` and require `sdk_version` on the supported list), `refresh_sidecar_copy(paths, bundled)` at each start (SHA-256 mismatch → copy and sign
