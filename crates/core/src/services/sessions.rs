@@ -3,7 +3,12 @@ use crate::{
     domain::editing::ProvisionInputs,
     domain::session::SessionDto,
     mechanisms::time::now_ms,
-    ports::{camera::CameraProvider, clock::Clock, editing::EditingProvider, store::Store},
+    ports::{
+        camera::{ArrivalFollow, CameraProvider},
+        clock::Clock,
+        editing::EditingProvider,
+        store::Store,
+    },
     services::{editing_startup::EDITOR_NOT_FOLLOWING, health::HealthService},
 };
 
@@ -15,6 +20,7 @@ pub struct SessionsService<'a> {
     provision: Option<&'a ProvisionInputs>,
     commerce: Option<&'a dyn crate::ports::commerce::CommerceAdapter>,
     camera: Option<&'a dyn CameraProvider>,
+    follow: Option<&'a dyn ArrivalFollow>,
 }
 
 impl<'a> SessionsService<'a> {
@@ -27,6 +33,7 @@ impl<'a> SessionsService<'a> {
             provision: None,
             commerce: None,
             camera: None,
+            follow: None,
         }
     }
 
@@ -35,6 +42,10 @@ impl<'a> SessionsService<'a> {
     /// (10E MC-34 R-I33). Without it, activation behaves as with the Capture One camera adapter.
     pub fn with_camera(mut self, camera: &'a dyn CameraProvider) -> Self {
         self.camera = Some(camera);
+        self
+    }
+    pub fn with_follow(mut self, follow: &'a dyn ArrivalFollow) -> Self {
+        self.follow = Some(follow);
         self
     }
 
@@ -93,7 +104,12 @@ impl<'a> SessionsService<'a> {
                 }
                 editing.bring_document_to_front()?;
                 let root = editing.inspect_document()?.capture_root;
-                editing.set_capture_folder(&format!("{}/{}", root, item.folder_key))
+                let target = format!("{}/{}", root, item.folder_key);
+                editing.set_capture_folder(&target)?;
+                editing.set_current_collection(&target).and_then(|_| {
+                    self.follow
+                        .map_or(Ok(()), |follow| follow.collection_switched())
+                })
             })();
             self.editor_follows(health, applied);
             return Ok(());
@@ -103,11 +119,18 @@ impl<'a> SessionsService<'a> {
         }
         editing.bring_document_to_front()?;
         let root = editing.inspect_document()?.capture_root;
-        if let Err(e) = editing.set_capture_folder(&format!("{}/{}", root, item.folder_key)) {
+        let target = format!("{}/{}", root, item.folder_key);
+        if let Err(e) = editing
+            .set_capture_folder(&target)
+            .and_then(|_| editing.set_current_collection(&target))
+        {
             health.set("capture_folder_not_set", e.to_string());
             return Err(Error::CaptureFolderNotSet);
         }
         self.store.set_active_session_id(Some(id))?;
+        if let Some(follow) = self.follow {
+            follow.collection_switched()?;
+        }
         health.clear("capture_folder_not_set");
         Ok(())
     }
@@ -119,17 +142,29 @@ impl<'a> SessionsService<'a> {
             self.store.set_active_session_id(None)?;
             health.clear("document_not_front");
             let applied = editing.inspect_document().and_then(|doc| {
-                editing.set_capture_folder(&format!("{}/_Unassigned", doc.capture_root))
+                let target = format!("{}/_Unassigned", doc.capture_root);
+                editing.set_capture_folder(&target)?;
+                editing.set_current_collection(&target).and_then(|_| {
+                    self.follow
+                        .map_or(Ok(()), |follow| follow.collection_switched())
+                })
             });
             self.editor_follows(health, applied);
             return Ok(());
         }
         let root = editing.inspect_document()?.capture_root;
-        if let Err(e) = editing.set_capture_folder(&format!("{root}/_Unassigned")) {
+        let target = format!("{root}/_Unassigned");
+        if let Err(e) = editing
+            .set_capture_folder(&target)
+            .and_then(|_| editing.set_current_collection(&target))
+        {
             health.set("capture_folder_not_set", e.to_string());
             return Err(Error::CaptureFolderNotSet);
         }
         self.store.set_active_session_id(None)?;
+        if let Some(follow) = self.follow {
+            follow.collection_switched()?;
+        }
         health.clear("document_not_front");
         health.clear("capture_folder_not_set");
         Ok(())

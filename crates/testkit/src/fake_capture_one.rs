@@ -11,11 +11,14 @@ pub struct FakeVariant {
     pub id: String,
     pub tag: i32,
     pub geometry: psm_core::domain::composition::EditorGeometry,
+    pub styles: Vec<String>,
 }
 pub struct FakeState {
     pub document_id: String,
     pub kind: String,
     pub captures: String,
+    pub current_collection: String,
+    pub fail_set_current_collection: bool,
     pub capture_root: String,
     pub collections: Vec<CollectionInfo>,
     pub delay_document_info_ms: u64,
@@ -51,6 +54,7 @@ pub struct FakeState {
     pub next_capture_styles: Vec<String>,
     pub hooks: HashMap<String, String>,
     pub images: HashMap<String, Vec<FakeVariant>>,
+    pub image_collections: HashMap<String, String>,
     pub folder_images: HashMap<String, Vec<FakeVariant>>,
     pub ops: Vec<String>,
     pub private_prefix: bool,
@@ -113,6 +117,8 @@ impl FakeCaptureOneScripting {
                 next_capture_styles: Vec::new(),
                 kind: "session".into(),
                 captures: capture_root.clone(),
+                current_collection: capture_root.clone(),
+                fail_set_current_collection: false,
                 collections: vec![
                     CollectionInfo {
                         id: "3".into(),
@@ -133,6 +139,7 @@ impl FakeCaptureOneScripting {
                 recipes,
                 hooks: HashMap::new(),
                 images: HashMap::new(),
+                image_collections: HashMap::new(),
                 folder_images: HashMap::new(),
                 ops: Vec::new(),
                 private_prefix: false,
@@ -190,11 +197,14 @@ impl FakeCaptureOneScripting {
                 id: (*id).into(),
                 tag: 3,
                 geometry: Default::default(),
+                styles: Vec::new(),
             })
             .collect();
         if in_folder {
             s.folder_images.insert(raw.into(), value);
         } else {
+            let current = s.current_collection.clone();
+            s.image_collections.insert(raw.into(), current);
             s.images.insert(raw.into(), value);
         }
     }
@@ -457,6 +467,59 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
             .into_owned();
         Ok(())
     }
+    fn set_current_collection(&self, id: &str, folder: &str) -> Result<()> {
+        self.check_id(id)?;
+        let mut s = self.state.lock().unwrap();
+        if !s.running {
+            return Err(Error::DocumentNotOpen);
+        }
+        if s.fail_set_current_collection {
+            return Err(Error::Provider("current collection not set".into()));
+        }
+        if !Path::new(folder).is_dir() {
+            return Err(Error::Provider("current collection not found".into()));
+        }
+        if s.current_collection != folder {
+            s.ops.push(format!("set_current_collection:{folder}"));
+            s.current_collection = folder.into();
+        }
+        Ok(())
+    }
+    fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool> {
+        self.check_id(id)?;
+        let mut s = self.state.lock().unwrap();
+        if !s.styles.iter().any(|v| v == name) {
+            return Ok(false);
+        }
+        let mut found = false;
+        for value in s.images.values_mut().flatten() {
+            if value.id == variant {
+                if value.styles.contains(&name.to_string()) {
+                    return Ok(true);
+                }
+                value.styles.push(name.into());
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            for value in s.folder_images.values_mut().flatten() {
+                if value.id == variant {
+                    if value.styles.contains(&name.to_string()) {
+                        return Ok(true);
+                    }
+                    value.styles.push(name.into());
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if !found {
+            return Err(Error::VariantNotFound);
+        }
+        s.ops.push(format!("apply_style:{variant}:{name}"));
+        Ok(true)
+    }
     fn get_captures(&self, id: &str) -> Result<String> {
         self.check_id(id)?;
         let mut s = self.state.lock().unwrap();
@@ -505,19 +568,27 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         self.check_id(id)?;
         let mut s = self.state.lock().unwrap();
         s.ops.push(format!("find_image:{raw}"));
+        if s.image_collections.get(raw) != Some(&s.current_collection) {
+            return Ok(None);
+        }
         Ok(s.images
             .get(raw)
             .and_then(|v| v.first())
             .map(|v| v.id.clone()))
     }
-    fn find_image_in_folder(&self, id: &str, _folder: &str, raw: &str) -> Result<Option<String>> {
+    fn find_image_in_folder(&self, id: &str, folder: &str, raw: &str) -> Result<Option<String>> {
         self.check_id(id)?;
         let mut s = self.state.lock().unwrap();
         s.ops.push(format!("find_image_in_folder:{raw}"));
-        Ok(s.folder_images
-            .get(raw)
-            .and_then(|v| v.first())
-            .map(|v| v.id.clone()))
+        let images = if Path::new(raw)
+            .parent()
+            .is_some_and(|parent| parent == Path::new(folder))
+        {
+            s.folder_images.get(raw).or_else(|| s.images.get(raw))
+        } else {
+            None
+        };
+        Ok(images.and_then(|v| v.first()).map(|v| v.id.clone()))
     }
     fn get_color_tag(&self, id: &str, variant: &str) -> Result<i32> {
         self.check_id(id)?;
@@ -584,15 +655,6 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
     }
     fn capture(&self) -> Result<()> {
         self.state.lock().unwrap().ops.push("capture".into());
-        Ok(())
-    }
-    fn import(&self, id: &str, paths: &[String]) -> Result<()> {
-        self.check_id(id)?;
-        self.state
-            .lock()
-            .unwrap()
-            .ops
-            .push(format!("import:{}", paths.len()));
         Ok(())
     }
     /// Like `quit.js`: records op `quit` either way; a running editor stops after

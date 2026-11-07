@@ -73,6 +73,8 @@ pub trait CaptureOneScripting: Send + Sync {
     fn document_info(&self, id: &str) -> Result<DocumentInfo>;
     fn save(&self, id: &str) -> Result<()>;
     fn set_captures(&self, id: &str, path: &str) -> Result<()>;
+    fn set_current_collection(&self, id: &str, folder: &str) -> Result<()>;
+    fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool>;
     fn get_captures(&self, id: &str) -> Result<String>;
     fn set_hook(&self, name: &str, path: &str) -> Result<()>;
     fn get_hook(&self, name: &str) -> Result<Option<String>>;
@@ -83,7 +85,6 @@ pub trait CaptureOneScripting: Send + Sync {
     fn set_color_tag(&self, id: &str, variant: &str, tag: i32) -> Result<()>;
     fn process(&self, id: &str, variant: &str, recipe: &str) -> Result<ProcessStarted>;
     fn capture(&self) -> Result<()>;
-    fn import(&self, id: &str, paths: &[String]) -> Result<()>;
     /// Asks a running Capture One to quit (AppleScript `quit`; never a kill). Does nothing when it
     /// is not running, so it can never launch it (10E MC-34 R-I32 step 3, P48 L13).
     fn quit(&self) -> Result<()>;

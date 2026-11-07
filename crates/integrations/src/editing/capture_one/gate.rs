@@ -176,8 +176,11 @@ impl CaptureOneScripting for GatedScripting {
     fn capture(&self) -> Result<()> {
         self.call(|i| i.capture())
     }
-    fn import(&self, id: &str, paths: &[String]) -> Result<()> {
-        self.call(|i| i.import(id, paths))
+    fn set_current_collection(&self, id: &str, folder: &str) -> Result<()> {
+        self.call(|i| i.set_current_collection(id, folder))
+    }
+    fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool> {
+        self.call(|i| i.apply_style(id, variant, name))
     }
     /// Not gated: `quit.js` checks `running()` first (L13).
     fn quit(&self) -> Result<()> {

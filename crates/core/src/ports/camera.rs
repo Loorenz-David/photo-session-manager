@@ -32,6 +32,10 @@ pub trait ArrivalSource: Send + Sync {
     fn via(&self) -> Link;
     fn transfer_in_progress(&self) -> bool;
 }
+pub trait ArrivalFollow: Send + Sync {
+    fn photo_arrived(&self, session_id: i64, raw: &str, folder: &Path);
+    fn collection_switched(&self) -> Result<()>;
+}
 /// The names the FTP receiver lists (MC-32 R-I24): `(camera_filename, size, completed_at)` of the
 /// files completed since `since` (UTC ms). The capture ledger implements it (P44; defined by P43 in
 /// `psm_infra::ftp`, which re-exports it).

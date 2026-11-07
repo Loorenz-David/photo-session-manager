@@ -500,7 +500,7 @@ fn c7b_startup_ignores_cache_and_known_raw() {
 }
 
 #[test]
-fn c8a_import_active_and_provider_called() {
+fn c8a_import_active_copy_in_capture_folder() {
     let a = app();
     let s = session(&a, "K2");
     a.store().set_active_session_id(Some(s)).unwrap();
@@ -509,13 +509,16 @@ fn c8a_import_active_and_provider_called() {
         .import(&[p.to_string_lossy().into_owned()])
         .unwrap();
     assert_eq!(row(&a), (s, "unreviewed".into(), None, "import".into()));
+    assert_eq!(fs::read(root(&a).join("K2/outside.ARW")).unwrap(), b"raw");
+    assert_eq!(fs::read(&p).unwrap(), b"raw");
     assert!(
-        a.fake
+        !a.fake
             .state
             .lock()
             .unwrap()
             .ops
-            .contains(&"import:1".into())
+            .iter()
+            .any(|op| op.starts_with("import:"))
     );
 }
 #[test]
@@ -528,13 +531,14 @@ fn c8b_import_without_active_unassigned() {
     assert_eq!((row(&a).0, row(&a).3), (1, "import".into()));
 }
 #[test]
-fn c8c_import_twice_one_row() {
+fn c8c_import_twice_two_copies() {
     let a = app();
     let p = external(&a, "outside.ARW", b"raw");
     let paths = [p.to_string_lossy().into_owned()];
     service(&a).import(&paths).unwrap();
     service(&a).import(&paths).unwrap();
-    assert_eq!(count(&a, "photos"), 1);
+    assert_eq!(count(&a, "photos"), 2);
+    assert!(root(&a).join("_Unassigned/outside__dup1.ARW").exists());
 }
 #[test]
 fn c8d_assign_whole_unassigned_set() {

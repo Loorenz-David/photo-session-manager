@@ -4,6 +4,7 @@ use crate::{
         composition::EditorGeometry,
         editing::{
             DocumentState, EditingCapabilities, ProvisionInputs, ProvisionReport, RenderPurpose,
+            StyleOutcome,
         },
         photo::Classification,
     },
@@ -29,6 +30,9 @@ pub trait EditingProvider: Send + Sync {
     fn bring_document_to_front(&self) -> Result<()>;
     fn inspect_document(&self) -> Result<DocumentState>;
     fn set_capture_folder(&self, target: &str) -> Result<()>;
+    fn set_current_collection(&self, folder: &str) -> Result<()>;
+    fn apply_style(&self, raw: &str, name: &str) -> Result<StyleOutcome>;
+    fn find_variant(&self, raw: &str) -> Result<bool>;
     fn install_hooks(&self) -> Result<()>;
     fn render(&self, raw: &str, purpose: RenderPurpose) -> Result<String>;
     fn request_render(
@@ -52,6 +56,5 @@ pub trait EditingProvider: Send + Sync {
     }
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()>;
     fn settings_changed_at(&self, raw: &str) -> Result<Option<SystemTime>>;
-    fn import(&self, paths: &[String]) -> Result<()>;
     fn capabilities(&self) -> EditingCapabilities;
 }

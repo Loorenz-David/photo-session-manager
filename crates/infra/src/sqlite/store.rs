@@ -53,7 +53,7 @@ impl SqliteStore {
         })
     }
 
-    /// The schema migrations in order (001…006); public so a test can stop at an earlier version
+    /// The schema migrations in order (001…007); public so a test can stop at an earlier version
     /// and check a later migration over existing rows.
     pub fn migrations() -> Vec<M<'static>> {
         vec![
@@ -63,6 +63,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/004_compositions.sql")),
             M::up(include_str!("migrations/005_photo_link_slots.sql")),
             M::up(include_str!("migrations/006_camera_ledger.sql")),
+            M::up(include_str!("migrations/007_style_applied.sql")),
         ]
     }
 
@@ -1675,6 +1676,28 @@ impl Store for SqliteStore {
         let raw_path = canon(std::path::Path::new(raw_path))?;
         self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
             .execute("INSERT INTO raw_state(raw_path,path_key) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET path_key=excluded.path_key", params![raw_path,path_key]).map_err(db)?;
+        Ok(())
+    }
+
+    fn style_applied_at(&self, raw_path: &str) -> Result<Option<i64>> {
+        let raw_path = canon(std::path::Path::new(raw_path))?;
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .query_row(
+                "SELECT style_applied_at FROM raw_state WHERE raw_path=?1",
+                [raw_path],
+                |r| r.get(0),
+            )
+            .optional()
+            .map(|value| value.flatten())
+            .map_err(db)
+    }
+
+    fn mark_style_applied(&self, raw_path: &str, now_ms: i64) -> Result<()> {
+        let raw_path = canon(std::path::Path::new(raw_path))?;
+        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute("INSERT INTO raw_state(raw_path,style_applied_at) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET style_applied_at=COALESCE(style_applied_at,excluded.style_applied_at)", params![raw_path,now_ms]).map_err(db)?;
         Ok(())
     }
 

@@ -11,8 +11,8 @@ use commerce::shopify::{
     transport::ReqwestTransport,
 };
 use editing::capture_one::{
-    adapter::CaptureOneAdapter, jxa::JxaScripting, launch_gate::LaunchGate, mirror::MirrorTag,
-    scripting::CaptureOneScripting,
+    adapter::CaptureOneAdapter, follow::CaptureOneFollow, jxa::JxaScripting,
+    launch_gate::LaunchGate, mirror::MirrorTag, scripting::CaptureOneScripting,
 };
 use psm_core::{
     Result,
@@ -93,6 +93,7 @@ pub struct App {
     pub render_jobs: Arc<JobRunner>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
+    pub follow: Arc<CaptureOneFollow>,
     pub compositions: Arc<CompositionService>,
     pub export: Arc<ExportService>,
     pub publish: Option<Arc<PublishService>>,
@@ -123,6 +124,7 @@ pub struct AppHandles {
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
+    pub follow: Arc<CaptureOneFollow>,
     pub compositions: Arc<CompositionService>,
     pub export: Arc<ExportService>,
     pub publish: Option<Arc<PublishService>>,
@@ -219,6 +221,7 @@ impl AppHandles {
                 health: self.health.as_ref(),
                 provision: &self.provision,
                 camera: Some(self.camera.as_ref()),
+                follow: Some(self.follow.as_ref()),
             })
             .run()
             {
@@ -322,6 +325,7 @@ impl App {
             commerce: self.commerce.clone(),
             arrival: self.arrival.clone(),
             previews: self.previews.clone(),
+            follow: self.follow.clone(),
             compositions: self.compositions.clone(),
             export: self.export.clone(),
             publish: self.publish.clone(),
@@ -525,23 +529,6 @@ impl App {
             default_shape: psm_core::domain::composition::Shape::parse(&settings.default_shape)
                 .unwrap_or(psm_core::domain::composition::Shape::Square),
         });
-        let arrival = ArrivalService::new(
-            store.clone(),
-            editing.clone(),
-            camera.clone(),
-            events.clone(),
-            clock.clone(),
-        );
-        // R-I28: with the direct adapter the capture root is the receiver's formula,
-        // `canon(<settings document>/Capture)`, never asked of Capture One.
-        let arrival = Arc::new(if direct_camera {
-            let document = settings.effective_document_id(&paths);
-            arrival.with_capture_root(Arc::new(move || {
-                Ok(std::fs::canonicalize(document.join("Capture"))?)
-            }))
-        } else {
-            arrival
-        });
         let imaging: Arc<dyn psm_core::ports::images::Imaging> = Arc::new(ImageOpsImpl);
         let masters: Arc<dyn psm_core::ports::images::MasterStore> =
             Arc::new(MasterFiles(paths.clone()));
@@ -580,6 +567,38 @@ impl App {
         previews.imaging = imaging.clone();
         previews.export_staging = Some(export.clone());
         let previews = Arc::new(previews);
+        let follow = Arc::new(CaptureOneFollow::new(
+            user_scripting.clone(),
+            editing.clone(),
+            store.clone(),
+            previews.clone(),
+            health.clone(),
+            clock.clone(),
+            settings.style_name.clone(),
+        ));
+        let weak_follow = Arc::downgrade(&follow);
+        previews.set_before_render(Arc::new(move |raw| {
+            weak_follow
+                .upgrade()
+                .map_or(Ok(()), |follow| follow.prepare_render(raw))
+        }));
+        let arrival = ArrivalService::new(
+            store.clone(),
+            editing.clone(),
+            camera.clone(),
+            events.clone(),
+            clock.clone(),
+        )
+        .with_follow(follow.clone(), direct_camera);
+        // R-I28: the direct adapter's capture root is the receiver's document formula.
+        let arrival = Arc::new(if direct_camera {
+            let document = settings.effective_document_id(&paths);
+            arrival.with_capture_root(Arc::new(move || {
+                Ok(std::fs::canonicalize(document.join("Capture"))?)
+            }))
+        } else {
+            arrival
+        });
         spool.set_dispatcher(Arc::new(EditingEventsDispatcher {
             arrival: arrival.clone(),
             handler: previews.clone(),
@@ -658,6 +677,7 @@ impl App {
             let startup_health = health.clone();
             let startup_camera = camera.clone();
             let startup_provision = provision.clone();
+            let startup_follow = follow.clone();
             thread::spawn(move || {
                 let _ = (EditingStartup {
                     provider: startup_editing.as_ref(),
@@ -665,6 +685,7 @@ impl App {
                     health: startup_health.as_ref(),
                     provision: &startup_provision,
                     camera: Some(startup_camera.as_ref()),
+                    follow: Some(startup_follow.as_ref()),
                 })
                 .run();
                 let _ =
@@ -694,6 +715,7 @@ impl App {
         let bg_clock = clock.clone();
         let bg_arrival = arrival.clone();
         let bg_previews = previews.clone();
+        let bg_follow = follow.clone();
         let bg_camera_runtime = camera_runtime.clone();
         let spool_dir = paths.spool();
         let background = thread::spawn(move || {
@@ -734,6 +756,7 @@ impl App {
                         }
                     }
                     let _ = bg_arrival.tick();
+                    let _ = bg_follow.tick();
                     let _ = bg_jobs.tick(bg_clock.now_ms());
                     let _ = bg_previews.tick();
                 }
@@ -802,6 +825,7 @@ impl App {
             render_jobs,
             arrival,
             previews,
+            follow,
             compositions,
             export,
             publish,
@@ -831,6 +855,7 @@ impl App {
             health: self.health.as_ref(),
             provision: &self.provision,
             camera: Some(self.camera.as_ref()),
+            follow: Some(self.follow.as_ref()),
         })
         .run()
     }

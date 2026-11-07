@@ -92,8 +92,9 @@ fn c1b_import_arrives_without_crop_job_or_crop_write() {
     }
     .import(std::slice::from_ref(&raw))
     .unwrap();
+    let imported = canon(&a.capture_root().join("_Unassigned/x.ARW")).unwrap();
     assert_eq!(
-        jobs(&a, &raw),
+        jobs(&a, &imported),
         ["hash", "original_preview", "render_preview"]
     );
     a.tick(0).unwrap();
@@ -351,6 +352,8 @@ fn c4a_migration_removes_old_jobs_and_health_codes() {
         }
         conn.execute("DROP TABLE compositions", []).unwrap();
         conn.execute("ALTER TABLE photos DROP COLUMN thumbnail_path", [])
+            .unwrap();
+        conn.execute("ALTER TABLE raw_state DROP COLUMN style_applied_at", [])
             .unwrap();
         conn.pragma_update(None, "user_version", 2).unwrap();
     }

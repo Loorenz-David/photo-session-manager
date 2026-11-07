@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-const SCRIPTS: [(&str, &str); 20] = [
+const SCRIPTS: [(&str, &str); 22] = [
     ("editor_info", include_str!("jxa/editor_info.js")),
     ("make_document", include_str!("jxa/make_document.js")),
     ("open_document", include_str!("jxa/open_document.js")),
@@ -25,6 +25,11 @@ const SCRIPTS: [(&str, &str); 20] = [
     ("document_info", include_str!("jxa/document_info.js")),
     ("save", include_str!("jxa/save.js")),
     ("set_captures", include_str!("jxa/set_captures.js")),
+    (
+        "set_current_collection",
+        include_str!("jxa/set_current_collection.js"),
+    ),
+    ("apply_style", include_str!("jxa/apply_style.js")),
     ("get_captures", include_str!("jxa/get_captures.js")),
     ("set_hook", include_str!("jxa/set_hook.js")),
     ("get_hook", include_str!("jxa/get_hook.js")),
@@ -40,7 +45,6 @@ const SCRIPTS: [(&str, &str); 20] = [
     ("capture", include_str!("jxa/capture.js")),
     ("quit", include_str!("jxa/quit.js")),
 ];
-const IMPORT: &str = include_str!("jxa/import.js");
 
 pub struct JxaScripting {
     runner: OsaRunner,
@@ -57,10 +61,6 @@ impl JxaScripting {
                 format!("{}\n{code}", include_str!("jxa/lib.js")),
             )?;
         }
-        fs::write(
-            dir.join("import.js"),
-            format!("{}\n{IMPORT}", include_str!("jxa/lib.js")),
-        )?;
         Ok(Self {
             runner: OsaRunner::new(&paths.root),
             dir,
@@ -175,6 +175,13 @@ impl CaptureOneScripting for JxaScripting {
     fn set_captures(&self, id: &str, path: &str) -> Result<()> {
         self.call("set_captures", &[id, path])
     }
+    fn set_current_collection(&self, id: &str, folder: &str) -> Result<()> {
+        self.call("set_current_collection", &[id, folder])
+    }
+    fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool> {
+        let (raw, folder) = self.variant_location(variant)?;
+        self.call("apply_style", &[id, &raw, &folder, variant, name])
+    }
     fn get_captures(&self, id: &str) -> Result<String> {
         self.call("get_captures", &[id])
     }
@@ -223,15 +230,6 @@ impl CaptureOneScripting for JxaScripting {
     }
     fn capture(&self) -> Result<()> {
         self.call("capture", &[])
-    }
-    fn import(&self, id: &str, paths: &[String]) -> Result<()> {
-        self.call(
-            "import",
-            &[
-                id,
-                &serde_json::to_string(paths).map_err(|e| Error::InvalidData(e.to_string()))?,
-            ],
-        )
     }
     fn quit(&self) -> Result<()> {
         self.call("quit", &[])

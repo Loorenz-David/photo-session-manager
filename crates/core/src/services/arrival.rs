@@ -7,7 +7,10 @@ use crate::{
         canon::canon,
     },
     ports::{
-        camera::CameraProvider, clock::Clock, editing::EditingProvider, events::EventSink,
+        camera::{ArrivalFollow, CameraProvider},
+        clock::Clock,
+        editing::EditingProvider,
+        events::EventSink,
         store::Store,
     },
 };
@@ -36,6 +39,8 @@ pub struct ArrivalService {
     /// 10E R-I28: with the direct camera adapter the capture root comes from the receiver's
     /// formula (`canon(<document>/Capture)`) instead of the editing provider.
     capture_root_source: Option<CaptureRootFn>,
+    follow: Option<std::sync::Arc<dyn ArrivalFollow>>,
+    follow_capture: bool,
     pending: Mutex<HashMap<PathBuf, Pending>>,
 }
 
@@ -57,12 +62,23 @@ impl ArrivalService {
             clock,
             capture_root_cache: Mutex::new(None),
             capture_root_source: None,
+            follow: None,
+            follow_capture: false,
             pending: Mutex::new(HashMap::new()),
         }
     }
     /// The capture root is resolved by `source` and never asked of the editing provider.
     pub fn with_capture_root(mut self, source: CaptureRootFn) -> Self {
         self.capture_root_source = Some(source);
+        self
+    }
+    pub fn with_follow(
+        mut self,
+        follow: std::sync::Arc<dyn ArrivalFollow>,
+        follow_capture: bool,
+    ) -> Self {
+        self.follow = Some(follow);
+        self.follow_capture = follow_capture;
         self
     }
     pub fn capture_root(&self) -> Result<PathBuf> {
@@ -259,7 +275,8 @@ impl ArrivalService {
         let root = self.capture_root()?;
         let parent = Path::new(&canonical)
             .parent()
-            .expect("canonical file has parent");
+            .expect("canonical file has parent")
+            .to_path_buf();
         // MC-2 rule 0 (10E R-I28): a file the capture ledger placed joins that delivery's session
         // (null or deleted → Unassigned) with the exposure's time, else the completion time.
         let delivered = if source == PhotoSource::Capture {
@@ -273,7 +290,7 @@ impl ArrivalService {
             self.store.active_session_id()?.unwrap_or(1)
         } else {
             attribute(
-                parent,
+                &parent,
                 &root,
                 &self.store.session_folders()?,
                 self.store.active_session_id()?,
@@ -300,6 +317,11 @@ impl ArrivalService {
             &key,
         )?;
         if inserted {
+            if let Some(follow) = &self.follow
+                && (source == PhotoSource::Import || self.follow_capture)
+            {
+                follow.photo_arrived(session_id, &photo.raw_path, &parent);
+            }
             self.events.emit(AppEvent::PhotoAdded {
                 photo_id: photo.id,
                 session_id,

@@ -7,6 +7,7 @@ use psm_core::{
     domain::{
         editing::{
             DocumentState, EditingCapabilities, ProvisionInputs, ProvisionReport, RenderPurpose,
+            StyleOutcome,
         },
         photo::Classification,
     },
@@ -190,6 +191,26 @@ impl EditingProvider for CaptureOneAdapter {
         }
         self.health.clear("capture_folder_not_set");
         Ok(())
+    }
+    fn set_current_collection(&self, folder: &str) -> Result<()> {
+        self.user.set_current_collection(&self.document_id, folder)
+    }
+    fn apply_style(&self, raw: &str, name: &str) -> Result<StyleOutcome> {
+        let variant = self.variant_background(raw)?;
+        if self
+            .background
+            .apply_style(&self.document_id, &variant, name)?
+        {
+            Ok(StyleOutcome::Applied)
+        } else {
+            Ok(StyleOutcome::NotListed)
+        }
+    }
+    fn find_variant(&self, raw: &str) -> Result<bool> {
+        Ok(self
+            .background
+            .find_image(&self.document_id, raw)?
+            .is_some())
     }
     fn install_hooks(&self) -> Result<()> {
         let result = (|| {
@@ -488,9 +509,6 @@ impl EditingProvider for CaptureOneAdapter {
             return Err(Error::TagVerification);
         }
         Ok(())
-    }
-    fn import(&self, paths: &[String]) -> Result<()> {
-        self.user.import(&self.document_id, paths)
     }
     fn capabilities(&self) -> EditingCapabilities {
         EditingCapabilities {

@@ -17,7 +17,7 @@ use crate::{
     },
 };
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -36,6 +36,8 @@ pub trait ExportStaging: Send + Sync {
     fn failed(&self, tracking_job_id: i64, reason: &str) -> Result<()>;
 }
 
+type BeforeRender = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
+
 pub struct PreviewService {
     pub store: Arc<dyn Store>,
     pub editing: Arc<dyn EditingProvider>,
@@ -49,6 +51,9 @@ pub struct PreviewService {
     seen_sidecars: Mutex<HashMap<String, SystemTime>>,
     failed_generation: Mutex<HashMap<String, i64>>,
     retry_after: Mutex<HashMap<String, (u32, Instant)>>,
+    variant_first_request: Mutex<HashMap<String, Instant>>,
+    variant_waiting: Mutex<HashSet<String>>,
+    before_render: Mutex<Option<BeforeRender>>,
 }
 
 impl PreviewService {
@@ -73,6 +78,9 @@ impl PreviewService {
             seen_sidecars: Mutex::new(HashMap::new()),
             failed_generation: Mutex::new(HashMap::new()),
             retry_after: Mutex::new(HashMap::new()),
+            variant_first_request: Mutex::new(HashMap::new()),
+            variant_waiting: Mutex::new(HashSet::new()),
+            before_render: Mutex::new(None),
         }
     }
     pub fn request_initial(&self, raw: &str) -> Result<()> {
@@ -94,28 +102,57 @@ impl PreviewService {
         self.request(raw, generation)
     }
     fn request(&self, raw: &str, generation: i64) -> Result<()> {
+        if self
+            .variant_waiting
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .contains(raw)
+        {
+            return Ok(());
+        }
         if self.editing.render_in_flight(raw) {
             return Ok(());
         }
         let now_ms = self.clock.now_ms();
         let tracking = self.store.new_render_job(raw, now_ms)?;
-        if let Err(error) = self.editing.request_render(
-            raw,
-            RenderPurpose::Preview,
-            generation,
-            tracking,
-            self.clock.mono(),
-            now_ms,
-        ) {
+        let prepare = self
+            .before_render
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .clone();
+        let result = prepare
+            .map_or(Ok(()), |prepare| prepare(raw))
+            .and_then(|_| {
+                self.editing.request_render(
+                    raw,
+                    RenderPurpose::Preview,
+                    generation,
+                    tracking,
+                    self.clock.mono(),
+                    now_ms,
+                )
+            });
+        if let Err(error) = result {
             self.store
                 .finish_render_job(tracking, Some("provider"), now_ms)?;
             let mut retry = self
                 .retry_after
                 .lock()
                 .map_err(|e| crate::Error::InvalidData(e.to_string()))?;
-            let attempts = retry
+            let mut attempts = retry
                 .get(raw)
                 .map_or(1, |(previous, _)| previous.saturating_add(1));
+            if matches!(error, crate::Error::VariantNotFound) {
+                let first = *self
+                    .variant_first_request
+                    .lock()
+                    .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+                    .entry(raw.into())
+                    .or_insert_with(|| self.clock.mono());
+                if self.clock.mono().saturating_duration_since(first) < Duration::from_secs(15) {
+                    attempts = 1;
+                }
+            }
             retry.insert(
                 raw.into(),
                 (attempts, self.clock.mono() + render_backoff(attempts)),
@@ -124,6 +161,10 @@ impl PreviewService {
             return Ok(());
         }
         self.retry_after
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .remove(raw);
+        self.variant_first_request
             .lock()
             .map_err(|e| crate::Error::InvalidData(e.to_string()))?
             .remove(raw);
@@ -254,6 +295,36 @@ impl PreviewService {
         }
         self.schedule_due(false)
     }
+    pub fn retry_now(&self, raw: &str) -> Result<()> {
+        self.retry_after
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .remove(raw);
+        self.schedule_due(false)
+    }
+    pub fn wait_for_variant(&self, raw: &str) {
+        if let Ok(mut first) = self.variant_first_request.lock() {
+            first.entry(raw.into()).or_insert_with(|| self.clock.mono());
+        }
+        if let Ok(mut waiting) = self.variant_waiting.lock() {
+            waiting.insert(raw.into());
+        }
+    }
+    pub fn set_before_render(&self, prepare: BeforeRender) {
+        if let Ok(mut callback) = self.before_render.lock() {
+            *callback = Some(prepare);
+        }
+    }
+    pub fn variant_ready(&self, raw: &str) -> Result<()> {
+        self.variant_waiting
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .remove(raw);
+        self.retry_now(raw)
+    }
+    pub fn failed_generation_for(&self, raw: &str) -> Option<i64> {
+        self.failed_generation.lock().ok()?.get(raw).copied()
+    }
     fn schedule_due(&self, force: bool) -> Result<()> {
         let now = self.clock.mono();
         let last = self
@@ -276,6 +347,10 @@ impl PreviewService {
                 is_stale(state.adjusted_gen, state.rendered_gen)
                     && failed.get(&state.raw_path) != Some(&state.adjusted_gen)
                     && retry.get(&state.raw_path).is_none_or(|(_, at)| now >= *at)
+                    && !self
+                        .variant_waiting
+                        .lock()
+                        .is_ok_and(|waiting| waiting.contains(&state.raw_path))
                     && !self.editing.render_in_flight(&state.raw_path)
                     && (force
                         || last

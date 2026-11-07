@@ -9,7 +9,7 @@ use psm_core::Result;
 use psm_core::{
     domain::photo::{NewPhoto, Photo, PhotoSource},
     events::AppEvent,
-    ports::{clock::Clock, events::EventSink, store::Store},
+    ports::{camera::CaptureSink, clock::Clock, events::EventSink, store::Store},
     services::{
         attributes::AttributesService, history::HistoryService, items::ItemsService,
         review::ReviewService, sessions::SessionsService,
@@ -53,6 +53,39 @@ impl EventSink for CollectingEventSink {
 }
 
 impl TestApp {
+    /// Deliver a camera file to the ledger, then let the watcher accept its final name.
+    pub fn arrival_photo(&self, _session_id: i64, name: &str) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let bytes = name.as_bytes();
+        let staged = self
+            .capture_root()
+            .join(".incoming")
+            .join(format!(".{name}.part"));
+        std::fs::create_dir_all(staged.parent().unwrap())?;
+        std::fs::write(&staged, bytes)?;
+        let hash = Sha256::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        self.ledger().delivery(psm_core::domain::camera::Delivery {
+            camera_filename: name.into(),
+            written_path: staged,
+            sha256: hash,
+            size: bytes.len() as u64,
+            via: psm_core::domain::camera::Link::Wireless,
+            completed_at: self.clock.now_ms(),
+        })?;
+        let final_path = self
+            .ledger()
+            .deliveries()?
+            .last()
+            .expect("delivery recorded")
+            .final_path
+            .clone();
+        self.app.arrival.watcher_event(Path::new(&final_path))?;
+        self.tick(1_000)?;
+        Ok(final_path)
+    }
     pub fn settings_set(&mut self, patch: &serde_json::Value) -> Result<serde_json::Value> {
         self.app.settings_set(patch)
     }
@@ -67,6 +100,7 @@ impl TestApp {
                 &self.app.provision,
             )
             .with_camera(self.app.camera.as_ref())
+            .with_follow(self.app.follow.as_ref())
     }
     /// "Take the camera back" over the app's camera runtime (P48).
     pub fn take_back(&self) -> psm_integrations::camera::direct::TakeBackService {
@@ -330,6 +364,7 @@ impl TestApp {
     pub fn tick(&self, ms: i64) -> Result<usize> {
         self.clock.advance(ms);
         self.app.arrival.tick()?;
+        self.app.follow.tick()?;
         let count = self.app.jobs.tick(self.clock.now_ms())?;
         // Output renders before publish steps, so a publish sees its export done in the same tick.
         let count = count + self.app.render_jobs.tick(self.clock.now_ms())?;

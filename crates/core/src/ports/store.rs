@@ -218,6 +218,8 @@ pub trait Store: Send + Sync {
     fn photo(&self, id: i64) -> Result<Photo>;
     fn set_photo_integrity(&self, id: i64, integrity: Integrity) -> Result<()>;
     fn upsert_raw_state(&self, raw_path: &str, path_key: Option<&str>) -> Result<()>;
+    fn style_applied_at(&self, raw_path: &str) -> Result<Option<i64>>;
+    fn mark_style_applied(&self, raw_path: &str, now_ms: i64) -> Result<()>;
     fn mechanism_version(&self) -> Result<String>;
     /// The run's `confirmed_at` when the `publish_runs` row exists and is confirmed (07A MC-10).
     fn confirmed_run(&self, run_id: i64) -> Result<Option<i64>>;

@@ -194,6 +194,7 @@ impl TakeBackService {
                 health: self.health.as_ref(),
                 provision: &self.provision,
                 camera: Some(self.camera.as_ref()),
+                follow: None,
             }
             .run()
         })

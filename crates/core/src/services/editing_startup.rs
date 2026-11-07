@@ -1,7 +1,11 @@
 use crate::{
     Error, Result,
     domain::editing::ProvisionInputs,
-    ports::{camera::CameraProvider, editing::EditingProvider, store::Store},
+    ports::{
+        camera::{ArrivalFollow, CameraProvider},
+        editing::EditingProvider,
+        store::Store,
+    },
     services::health::HealthService,
 };
 
@@ -17,6 +21,7 @@ pub struct EditingStartup<'a> {
     /// The app's camera provider; with one that does not depend on the editing provider (the
     /// direct adapter) a failed capture-folder step is `editor_not_following` (R-I33, P48 L12).
     pub camera: Option<&'a dyn CameraProvider>,
+    pub follow: Option<&'a dyn ArrivalFollow>,
 }
 impl EditingStartup<'_> {
     pub fn run(&self) -> Result<()> {
@@ -67,9 +72,11 @@ impl EditingStartup<'_> {
         } else {
             "_Unassigned".into()
         };
+        let target = format!("{}/{}", doc.capture_root, folder);
         if let Err(e) = self
             .provider
-            .set_capture_folder(&format!("{}/{}", doc.capture_root, folder))
+            .set_capture_folder(&target)
+            .and_then(|_| self.provider.set_current_collection(&target))
         {
             if camera_independent {
                 self.health.clear("capture_folder_not_set");
@@ -82,6 +89,9 @@ impl EditingStartup<'_> {
         }
         self.health.clear("capture_folder_not_set");
         self.health.clear("editor_not_following");
+        if let Some(follow) = self.follow {
+            follow.collection_switched()?;
+        }
         Ok(())
     }
 }
