@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-07 11:00: P46 projection r0 AMENDMENTS_REQUIRED (L1–L22, 0 owner cards; main issue: the test clock starts in 1970 while the scripts are stamped 2026).** The planner is folding them (L13: the camera's FTP report goes into the "not received" health detail, in P46). Next: commit, `PSM_IMPLEMENTER=claude RESUME=1 tools/pipeline/run_phase.sh phase P46_direct_camera_adapter`; stop before P47 (owner + camera). P45 narrative relayed.
+
 **2026-11-07: P45 APPROVED_WITH_NOTES (first review, Claude Opus implementer). P46 projection r0 cut off: connection dropped (the owner's Mac was closed), no handoff written.** Rerunning `PSM_IMPLEMENTER=claude` P46 from the projection; stop before P47 (owner + camera). The owner is away about 2 h; answer from the book.
 
 **2026-11-06 19:15: P45 plan amended (L1–L23 folded: 21 rows, 42 paths, `projection: done`; P46 consistency edits for the `ConnectFailed.error` field and the staging path).** The projection's scratch build `/tmp/p45proj` (Sony dylib copies, outside the repo, 53 MB) was deleted by the owner. Running `PSM_IMPLEMENTER=claude` P45 → P46; stop before P47 (owner + camera).
