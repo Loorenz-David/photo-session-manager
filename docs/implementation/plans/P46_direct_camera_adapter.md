@@ -355,3 +355,25 @@ row as before. 3. No other visible change.
   amended (i) fails with the closure removed); two lines outside the perimeter: `p45_sidecar_and_protocol.rs` C2(a) count 20 → 21 (the plan's new
   C++ test) and `p42_camera_runtime.rs` C7(a) on `with_fake_document()` (from this phase `with_camera()` selects the direct adapter, regression note).
   Stamp: `cargo test --workspace` 723/0, clippy `-D warnings`, fmt, `npm run typecheck`, `npm test` 369/369, `tools/sidecar/build.sh --stub --test` 21/0.
+- **2026-11-07, review r1 — APPROVED_WITH_NOTES** (reviewer, opus). Gate: tracker `IMPLEMENTED`, checkpoint `64aa4f8` in `git log`; reviewed tree
+  `05cf4f8` = `64aa4f8` + runner files only. **Perimeter:** `git show --stat 64aa4f8` = 38 paths = handoff list (plan's 34 + `p45` count line
+  20→21 + `p42` C7(a) on `with_fake_document()` + tracker + this log); both extras are direct consequences of the plan (new C++ case; a support
+  folder now selects the direct adapter). **Suite (reviewer run):** `cargo test --workspace` 723/0, clippy `-D warnings`, fmt, `npm run
+  typecheck`, `npm test` 50 files 369/369, all exit 0. **Verified correct (by reading the production code, then the test):** `apply`/`apply_status`
+  follow the event table row by row (DISCOVERING suffix rule, `Switching` survives `session.closed` and intermediate `transport.state`, store
+  destination add/remove, held cleared on USB ready, refusals cleared on Wi-Fi ready and on `Started`); the `Exited` reset clears
+  session/connecting/busy/expected transfer and `capture()` checks `sdk_unavailable` → session/helper_running in the planned order; downloads are
+  refused in the order failed → size 0 → outside staging (canonical) → missing, logged as `download ignored: <base> (<reason>)`, and never moved or
+  deleted; accepted ones are re-read, hashed and delivered with `normalize_camera_filename`; `≥ TRANSFER_EXPECTED_MS` deadline; `tick` releases the
+  supervisor lock before the adapter step (serialised by `tick_serial`); `perform` sets `camera_sidecar_unavailable` after the per-batch clear;
+  watchdog glue once per mono second with `uploads_in_progress() > 0 || transfer_expected()`, `ftp-status` through `provider()` on `first_raise`,
+  `FilesNotReceived` mirrored from `LedgerShared.raised` on every tick; the ledger stays the single writer of `camera_files_not_received` (note
+  suffix, cleared by `dismiss` and a non-raising run); `App::build` selects up front by `support::installed`, the same `Arc` reaches arrival,
+  binding and handles, and the arrival closure uses `effective_document_id/Capture` = the receiver's `capture_root_fn`; C++ `reconnect` waits for
+  busy `none`, closes with `reconnect requested` and retries Wi-Fi once; `main.cpp` rejects on USB. Every row C1(a)…C8(c) has a test at its
+  boundary that would fail on a wrong outcome; C8(c)'s disclosed input change (reopen after `ops.clear()`, `restart(false)` so no startup scan)
+  is what makes the row able to fail. **Assumptions** 1–12: none contradicts 10E (1 follows R-I37 "wins even while connected on the other
+  link"; 2 follows MC-33 "at a safe point"). H1–H8, secrets and no-live-services: hold. **Notes** (backlog, 6): `via: Cable` for a Save-to-PC
+  download on a Wi-Fi session vs R-I19's sentence; `ftp-status` re-fires after every transfer gap (P44 note still open) → P48; two texts for
+  `camera_sidecar_unavailable` and the P42 failed-spawn note still open → P50/P51; held notice persists on Wi-Fi after the holder quits → P48;
+  lesson: C8(c) as written could not fail (cached capture root); unknown `store_destination` still drops `connection.ready` → P47.
