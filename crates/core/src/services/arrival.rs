@@ -33,8 +33,13 @@ pub struct ArrivalService {
     pub events: std::sync::Arc<dyn EventSink>,
     pub clock: std::sync::Arc<dyn Clock>,
     capture_root_cache: Mutex<Option<PathBuf>>,
+    /// 10E R-I28: with the direct camera adapter the capture root comes from the receiver's
+    /// formula (`canon(<document>/Capture)`) instead of the editing provider.
+    capture_root_source: Option<CaptureRootFn>,
     pending: Mutex<HashMap<PathBuf, Pending>>,
 }
+
+pub type CaptureRootFn = std::sync::Arc<dyn Fn() -> Result<PathBuf> + Send + Sync>;
 
 impl ArrivalService {
     pub fn new(
@@ -51,8 +56,14 @@ impl ArrivalService {
             events,
             clock,
             capture_root_cache: Mutex::new(None),
+            capture_root_source: None,
             pending: Mutex::new(HashMap::new()),
         }
+    }
+    /// The capture root is resolved by `source` and never asked of the editing provider.
+    pub fn with_capture_root(mut self, source: CaptureRootFn) -> Self {
+        self.capture_root_source = Some(source);
+        self
     }
     pub fn capture_root(&self) -> Result<PathBuf> {
         let mut cache = self
@@ -62,7 +73,10 @@ impl ArrivalService {
         if let Some(root) = cache.as_ref() {
             return Ok(root.clone());
         }
-        let root = fs::canonicalize(self.editing.inspect_document()?.capture_root)?;
+        let root = match &self.capture_root_source {
+            Some(source) => source()?,
+            None => fs::canonicalize(self.editing.inspect_document()?.capture_root)?,
+        };
         *cache = Some(root.clone());
         Ok(root)
     }

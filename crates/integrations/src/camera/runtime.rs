@@ -1,4 +1,8 @@
 use super::{
+    direct::{
+        DirectCameraAdapter,
+        adapter::{HelperEvent, StepOutcome},
+    },
     sidecar::{
         client::{CmdId, CommandOutcome, SidecarClient},
         protocol::{Command, Stamped},
@@ -8,6 +12,7 @@ use super::{
 };
 use psm_core::{
     domain::camera::{CameraSettings, Delivery, DeliveryOutcome, ExposureObserved, Link, secrets},
+    events::AppEvent,
     ports::{
         camera::{CameraProvider, CaptureSink, DeliveryFs},
         clock::Clock,
@@ -31,10 +36,10 @@ use std::{
     net::{IpAddr, Ipv4Addr},
     path::PathBuf,
     sync::{
-        Arc, Mutex, RwLock,
-        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, OnceLock, RwLock,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
-    time::Instant,
+    time::{Duration, Instant},
 };
 use uuid::Uuid;
 
@@ -121,6 +126,18 @@ pub struct CameraRuntime {
     paths: AppPaths,
     helper_log: Mutex<VecDeque<String>>,
     stopped: AtomicBool,
+    /// The direct camera adapter, created once per runtime (P46 L18) so its status inputs
+    /// survive a settings save.
+    direct: OnceLock<Arc<DirectCameraAdapter>>,
+    /// Serialises `tick` (two background loops run during a rebuild) without holding the
+    /// supervisor lock across the adapter step (a download's hash, P46 L19).
+    tick_serial: Mutex<()>,
+    /// The supervisor has a live child (`Started` … `Exited`).
+    helper_running: AtomicBool,
+    /// When the watchdog glue last ran (once per mono second).
+    watchdog_at: Mutex<Option<Instant>>,
+    /// The pending count of the last watchdog run (the status mirrors it while raised).
+    watchdog_pending: AtomicUsize,
 }
 impl CameraRuntime {
     pub fn new(secrets: Arc<dyn SecretStore>, clock: Arc<dyn Clock>, paths: AppPaths) -> Arc<Self> {
@@ -153,7 +170,34 @@ impl CameraRuntime {
             paths,
             helper_log: Mutex::new(VecDeque::with_capacity(HELPER_LOG_KEPT)),
             stopped: AtomicBool::new(false),
+            direct: OnceLock::new(),
+            tick_serial: Mutex::new(()),
+            helper_running: AtomicBool::new(false),
+            watchdog_at: Mutex::new(None),
+            watchdog_pending: AtomicUsize::new(0),
         })
+    }
+    /// The direct camera adapter of this runtime: created at the first call, the same `Arc`
+    /// afterwards (every later `App::build` and bind reuses it, P46 L18).
+    pub fn direct_adapter(self: &Arc<Self>) -> Arc<DirectCameraAdapter> {
+        self.direct
+            .get_or_init(|| Arc::new(DirectCameraAdapter::new(Arc::downgrade(self))))
+            .clone()
+    }
+    /// The camera provider of the current binding.
+    pub fn provider(&self) -> Option<Arc<dyn CameraProvider>> {
+        self.binding
+            .read()
+            .expect("camera binding")
+            .as_ref()
+            .map(|b| b.provider.clone())
+    }
+    /// The direct adapter when it is the current binding's provider.
+    fn bound_direct(&self) -> Option<Arc<DirectCameraAdapter>> {
+        let direct = self.direct.get()?;
+        let provider = self.provider()?;
+        (Arc::as_ptr(&provider) as *const () == Arc::as_ptr(direct) as *const ())
+            .then(|| direct.clone())
     }
     pub fn run_id(&self) -> &str {
         &self.run_id
@@ -237,6 +281,7 @@ impl CameraRuntime {
         }
         let settings = binding.camera_settings;
         let capture_root = binding.capture_root.clone();
+        let health = binding.health.clone();
         *self.capture_root.write().unwrap() = capture_root;
         // §6.11 Runtime (b): the ledger over the new store, sharing the process-wide worker lock;
         // pending rows are recovered under that lock before anything new arrives.
@@ -253,6 +298,10 @@ impl CameraRuntime {
             tracing::warn!(%error, "camera ledger recovery failed");
         }
         *self.binding.write().expect("camera binding") = Some(binding);
+        // From P46 the direct adapter re-publishes the codes it owns from its own inputs.
+        if let Some(adapter) = self.bound_direct() {
+            adapter.publish(&health, true);
+        }
         if self.stopped.load(Ordering::SeqCst) {
             return;
         }
@@ -315,9 +364,13 @@ impl CameraRuntime {
             )],
             first_line: Command::Credentials { user, password }.encode(),
         };
+        if let Some(adapter) = self.direct.get() {
+            adapter.set_staging_dir(&staging);
+        }
         let mut supervisor = Supervisor::new(spec);
-        if let Err(error) = supervisor.spawn(self.clock.mono()) {
-            tracing::warn!(%error, "camera sidecar unavailable");
+        match supervisor.spawn(self.clock.mono()) {
+            Ok(_) => self.helper_running.store(true, Ordering::SeqCst),
+            Err(error) => tracing::warn!(%error, "camera sidecar unavailable"),
         }
         *guard = Some(SidecarClient::new(supervisor));
     }
@@ -409,13 +462,21 @@ impl CameraRuntime {
         if self.stopped.load(Ordering::SeqCst) {
             return;
         }
-        let mut guard = self.supervisor.lock().expect("camera supervisor");
-        let Some(client) = guard.as_mut() else {
-            return;
+        let _serial = self
+            .tick_serial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // One `client.poll` per tick (P46 L19); the supervisor lock is released before the
+        // adapter step so `capture()` never waits on a download's hash.
+        let (events, side, exits) = {
+            let mut guard = self.supervisor.lock().expect("camera supervisor");
+            let Some(client) = guard.as_mut() else {
+                return;
+            };
+            let mut side = Vec::new();
+            let events = client.poll(now, &mut |event| side.push(event));
+            (events, side, client.supervisor().consecutive_exits())
         };
-        let mut side = Vec::new();
-        let events = client.poll(now, &mut |event| side.push(event));
-        let exits = client.supervisor().consecutive_exits();
         // Output first, exits after (as the supervisor reports them): a sidecar that prints and
         // then dies within one tick still counts as unavailable.
         if !events.is_empty() {
@@ -423,28 +484,108 @@ impl CameraRuntime {
                 binding.health.clear("camera_sidecar_unavailable");
             }
             let mut kept = self.sidecar_events.lock().expect("sidecar events");
-            for event in events {
+            for event in &events {
                 if kept.len() == SIDECAR_EVENTS_KEPT {
                     kept.pop_front();
                 }
-                kept.push_back(event);
+                kept.push_back(event.clone());
             }
         }
+        let mut helper = Vec::new();
         for event in side {
             match event {
-                SupervisorEvent::Exited { .. } if exits >= 3 => {
-                    if let Some(binding) = self.binding.read().expect("camera binding").as_ref() {
+                SupervisorEvent::Exited { .. } => {
+                    self.helper_running.store(false, Ordering::SeqCst);
+                    helper.push(HelperEvent::Exited);
+                    if exits >= 3
+                        && let Some(binding) = self.binding.read().expect("camera binding").as_ref()
+                    {
                         binding
                             .health
                             .set("camera_sidecar_unavailable", "Camera helper is unavailable");
                     }
                 }
+                SupervisorEvent::Started { .. } => {
+                    self.helper_running.store(true, Ordering::SeqCst);
+                    helper.push(HelperEvent::Started);
+                }
                 SupervisorEvent::Stderr(line) => self.push_helper_log(&line),
-                SupervisorEvent::Line(_)
-                | SupervisorEvent::Started { .. }
-                | SupervisorEvent::Exited { .. } => {}
+                SupervisorEvent::Line(_) => {}
             }
         }
+        let Some(adapter) = self.bound_direct() else {
+            return;
+        };
+        let outcome = adapter.step(
+            &events,
+            &helper,
+            self.helper_running.load(Ordering::SeqCst),
+            now,
+            self.sink.as_ref(),
+        );
+        self.perform(&adapter, outcome, now);
+    }
+    /// The adapter's effects against the current binding, then the watchdog glue (P46 L10, L13).
+    fn perform(&self, adapter: &DirectCameraAdapter, outcome: StepOutcome, now: Instant) {
+        for line in &outcome.helper_log {
+            self.push_helper_log(line);
+        }
+        if outcome.sdk_unavailable
+            && let Some(binding) = self.binding.read().expect("camera binding").as_ref()
+        {
+            // After the per-batch clear above, so the set wins (L21).
+            binding.health.set(
+                "camera_sidecar_unavailable",
+                "The camera helper could not start",
+            );
+        }
+        let ledger = self.ledger();
+        if let (Some(note), Some(ledger)) = (outcome.ftp_note, ledger.as_ref()) {
+            ledger.set_ftp_note(Some(note));
+        }
+        if let Some(ledger) = ledger.as_ref() {
+            let due = {
+                let mut at = self.watchdog_at.lock().expect("watchdog time");
+                let due =
+                    at.is_none_or(|t| now.saturating_duration_since(t) >= Duration::from_secs(1));
+                if due {
+                    *at = Some(now);
+                }
+                due
+            };
+            if due {
+                let transfer_active = self.uploads_in_progress() > 0 || adapter.transfer_expected();
+                match ledger.watchdog(self.clock.now_ms(), transfer_active) {
+                    Ok(state) => {
+                        self.watchdog_pending
+                            .store(state.pending_count, Ordering::SeqCst);
+                        if state.first_raise
+                            && let Some(provider) = self.provider()
+                            && let Err(error) = provider.request_ftp_status()
+                        {
+                            tracing::warn!(%error, "camera ftp-status not sent");
+                        }
+                    }
+                    Err(error) => tracing::warn!(%error, "camera watchdog failed"),
+                }
+            }
+            adapter.set_files_not_received(
+                ledger
+                    .raised()
+                    .then(|| self.watchdog_pending.load(Ordering::SeqCst)),
+            );
+        }
+        let (events, health) = match self.binding.read().expect("camera binding").as_ref() {
+            Some(binding) => (binding.events.clone(), binding.health.clone()),
+            None => return,
+        };
+        if let Some(status) = adapter.status_change() {
+            psm_core::ports::events::EventSink::emit(
+                events.as_ref(),
+                AppEvent::CameraStatusChanged { status },
+            );
+        }
+        adapter.publish(&health, false);
     }
     pub fn shutdown(&self) {
         if self.stopped.swap(true, Ordering::SeqCst) {

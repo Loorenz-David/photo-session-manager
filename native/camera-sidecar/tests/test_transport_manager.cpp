@@ -418,4 +418,29 @@ TEST_CASE("credentials percent-decoding reverses the app's encoding") {
   CHECK_EQ(percent_decode("abc%G1"), std::string("abc%G1"));
 }
 
+// ---- Session Manager additions (P46) ------------------------------------------------------------
+
+TEST_CASE("reconnect reopens the wifi session once") {
+  Rig r;
+  r.run(2000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  CHECK_EQ(r.log.count("connection.ready"), 1);
+  int wifi_connects = count_calls(r.cam, "connect:wifi");
+  r.tm->reconnect();
+  r.run(3000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  CHECK_EQ(r.log.count("session.closed"), 1);
+  CHECK(r.log.has_field("session.closed", "\"reason\":\"reconnect requested\""));
+  int wifi_ready = 0;
+  for (auto& e : r.log.events)
+    wifi_ready += (e.name == "connection.ready" && e.json.find("\"transport\":\"wifi\"") != std::string::npos);
+  CHECK_EQ(r.log.count("connection.ready"), 2);
+  CHECK_EQ(wifi_ready, 2);
+  CHECK_EQ(count_calls(r.cam, "connect:wifi"), wifi_connects + 1);
+  CHECK_EQ(count_calls(r.cam, "connect:usb"), 0);
+  CHECK_EQ(count_calls(r.cam, "discover:usb"), 0);
+  CHECK_EQ(r.cam.max_sessions, 1);
+  CHECK_EQ(r.cam.active_sessions, 1);
+}
+
 int main() { return mt_run_all(); }

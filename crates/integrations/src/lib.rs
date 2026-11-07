@@ -478,10 +478,17 @@ impl App {
             settings.master_recipe.clone(),
             paths.clone(),
         ));
-        let camera: Arc<dyn CameraProvider> = Arc::new(CameraViaCaptureOne {
-            scripting: user_scripting.clone(),
-            document_id: document_id.clone(),
-        });
+        // 10E §Camera support packages (P46 L18): the direct adapter whenever a camera support
+        // package is installed, the Capture One camera adapter otherwise; decided up front.
+        let direct_camera = camera::support::installed(&paths).is_some();
+        let camera: Arc<dyn CameraProvider> = if direct_camera {
+            camera_runtime.direct_adapter()
+        } else {
+            Arc::new(CameraViaCaptureOne {
+                scripting: user_scripting.clone(),
+                document_id: document_id.clone(),
+            })
+        };
         let events = Arc::new(EventHub::default());
         let history = Arc::new(match history_store {
             Some(store) => History::with_store(store, events.clone()),
@@ -495,13 +502,23 @@ impl App {
             default_shape: psm_core::domain::composition::Shape::parse(&settings.default_shape)
                 .unwrap_or(psm_core::domain::composition::Shape::Square),
         });
-        let arrival = Arc::new(ArrivalService::new(
+        let arrival = ArrivalService::new(
             store.clone(),
             editing.clone(),
             camera.clone(),
             events.clone(),
             clock.clone(),
-        ));
+        );
+        // R-I28: with the direct adapter the capture root is the receiver's formula,
+        // `canon(<settings document>/Capture)`, never asked of Capture One.
+        let arrival = Arc::new(if direct_camera {
+            let document = settings.effective_document_id(&paths);
+            arrival.with_capture_root(Arc::new(move || {
+                Ok(std::fs::canonicalize(document.join("Capture"))?)
+            }))
+        } else {
+            arrival
+        });
         let imaging: Arc<dyn psm_core::ports::images::Imaging> = Arc::new(ImageOpsImpl);
         let masters: Arc<dyn psm_core::ports::images::MasterStore> =
             Arc::new(MasterFiles(paths.clone()));

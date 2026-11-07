@@ -52,6 +52,15 @@ pub enum Error {
     },
     #[error("capture_folder_not_set")]
     CaptureFolderNotSet,
+    /// The direct camera adapter has no SDK session (10E MC-31).
+    #[error("camera_not_connected")]
+    CameraNotConnected,
+    /// A reconnect is offered only on a Wi-Fi session (10E MC-33 R-I29).
+    #[error("reconnect_on_cable_refused")]
+    ReconnectOnCableRefused,
+    /// The camera helper reported that it cannot run (`sdk.unavailable`).
+    #[error("sidecar_unavailable")]
+    SidecarUnavailable,
     #[error("hooks_not_installed")]
     HooksNotInstalled,
     #[error("recipe_missing: {name}")]

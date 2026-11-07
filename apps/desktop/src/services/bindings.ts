@@ -21,7 +21,11 @@ export const commands = {
 	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
 	cameraStatus: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_status")),
 	cameraRetry: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_retry")),
-	cameraCapture: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_capture")),
+	cameraCapture: () => typedError<CaptureResponse, CommandError>(__TAURI_INVOKE("camera_capture")),
+	/**  R-I29: reopen the camera's Wi-Fi session (`reconnect_on_cable_refused` on USB). */
+	cameraReconnect: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_reconnect")),
+	/**  R-I29: the photographer dismisses "photos taken but not received". */
+	cameraFilesNotReceivedDismiss: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_files_not_received_dismiss")),
 	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
 	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
@@ -149,6 +153,11 @@ export type CameraStatusResponse = CameraStatusResponse_Serialize | CameraStatus
 export type CameraStatusResponse_Deserialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder?: string | null; message: string } | { kind: "disconnected" };
 
 export type CameraStatusResponse_Serialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder: string | null; message: string } | { kind: "disconnected" };
+
+/**  The id `camera_capture` answers (MC-31 §Capture; the exposure row carries it). */
+export type CaptureResponse = {
+	capture_id: string,
+};
 
 export type CommandError = {
 	code: string,

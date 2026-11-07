@@ -115,6 +115,9 @@ class TransportManager {
   void request_stop();
   // `usb-retry` (R-I23): clears the three-failure USB fallback without a re-plug.
   void usb_retry();
+  // `reconnect` (R-I29, Session Manager P46): closes the current Wi-Fi session and retries Wi-Fi
+  // at once, at the next safe point. Ignored unless a Wi-Fi session is open.
+  void reconnect();
 
   // --- driver ----------------------------------------------------------
   // Process queued inputs and take at most one blocking action. Call in a
@@ -130,7 +133,7 @@ class TransportManager {
 
  private:
   struct Input {
-    enum Kind { UsbPresence, SdkDisconnected, Busy, Stop, UsbRetry } kind;
+    enum Kind { UsbPresence, SdkDisconnected, Busy, Stop, UsbRetry, Reconnect } kind;
     bool flag = false;
     uint32_t code = 0;
     uint64_t session = 0;
@@ -172,6 +175,7 @@ class TransportManager {
   int64_t usb_retry_at_ = 0;     // after USB fallback: INT64_MAX until USB is re-plugged
   uint64_t session_id_ = 0;
   bool idle_logged_ = false;  // when the last session was lost (for recovery latency)
+  bool reconnect_requested_ = false;  // `reconnect` taken on an open Wi-Fi session
   std::optional<CameraEndpoint> endpoint_;
 };
 

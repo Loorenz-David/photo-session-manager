@@ -1,0 +1,1 @@
+{"timestamp":"2026-11-06T10:00:00.000Z","source":"sdk","event":"ssh.fingerprint","status":"unknown","success":false,"note":"re-run with --accept-fingerprint after comparing with the camera screen"}

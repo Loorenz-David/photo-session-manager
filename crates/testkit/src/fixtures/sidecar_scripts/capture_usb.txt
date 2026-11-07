@@ -1,0 +1,9 @@
+await capture
+{"timestamp":"2026-11-06T10:00:02.000Z","source":"sdk","event":"cmd.received","cmd":"capture","cmd_id":"{cmd_id}"}
+{"timestamp":"2026-11-06T10:00:02.001Z","source":"sdk","event":"camera.busy","reason":"exposure","safe_point":false}
+sleep 300
+{"timestamp":"2026-11-06T10:00:02.002Z","source":"sdk","event":"capture.requested","capture_id":"{capture_id}","transport":"usb","af":true}
+{"timestamp":"2026-11-06T10:00:02.300Z","source":"sdk","event":"capture.acknowledged","capture_id":"{capture_id}","success":true,"sdk_error":"0x00000000"}
+{"timestamp":"2026-11-06T10:00:02.550Z","source":"sdk","event":"capture.exposed","success":true,"transport":"usb","capture_id":"{capture_id}","ms_since_release":269,"association":"latest_release_provisional"}
+{"timestamp":"2026-11-06T10:00:03.300Z","source":"sdk","event":"cmd.done","cmd":"capture","cmd_id":"{cmd_id}"}
+{"timestamp":"2026-11-06T10:00:03.400Z","source":"sdk","event":"camera.busy","reason":"file_transfer","safe_point":false}

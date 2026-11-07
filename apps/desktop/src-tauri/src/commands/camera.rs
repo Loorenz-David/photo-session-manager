@@ -116,9 +116,14 @@ pub async fn camera_retry(
     .map_err(CommandError::from)?;
     Ok(status.into())
 }
+/// The id `camera_capture` answers (MC-31 §Capture; the exposure row carries it).
+#[derive(Clone, Serialize, Type)]
+pub struct CaptureResponse {
+    pub capture_id: String,
+}
 #[tauri::command]
 #[specta::specta]
-pub async fn camera_capture(state: State<'_, AppState>) -> Result<(), CommandError> {
+pub async fn camera_capture(state: State<'_, AppState>) -> Result<CaptureResponse, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     let (camera, health) = providers(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -126,6 +131,40 @@ pub async fn camera_capture(state: State<'_, AppState>) -> Result<(), CommandErr
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
-    .map(|_| ())
+    .map(|id| CaptureResponse { capture_id: id.0 })
+    .map_err(Into::into)
+}
+/// R-I29: reopen the camera's Wi-Fi session (`reconnect_on_cable_refused` on USB).
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_reconnect(state: State<'_, AppState>) -> Result<(), CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    let (camera, health) = providers(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        CameraService::new(camera.as_ref(), health.as_ref()).reconnect()
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    .map_err(Into::into)
+}
+/// R-I29: the photographer dismisses "photos taken but not received".
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_files_not_received_dismiss(
+    state: State<'_, AppState>,
+) -> Result<(), CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    let (camera, health) = providers(&app)?;
+    let runtime = app.camera_runtime.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let ledger = runtime
+            .ledger()
+            .ok_or_else(|| psm_core::Error::Provider("camera ledger not bound".into()))?;
+        CameraService::new(camera.as_ref(), health.as_ref())
+            .with_ledger(ledger.as_ref())
+            .dismiss_files_not_received()
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
     .map_err(Into::into)
 }

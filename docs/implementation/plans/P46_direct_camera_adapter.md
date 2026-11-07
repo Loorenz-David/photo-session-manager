@@ -338,3 +338,20 @@ row as before. 3. No other visible change.
   dropped (P48 names neither); `capture()` order `SidecarUnavailable` → `CameraNotConnected`; the `SdkUnavailable` set runs after the runtime's clear. L22: C8(b)
   traces to MC-31 §Capture. Also: `TestApp::camera_status()` listed (§7.5 names it, HEAD lacks it); code anchor `635930b` → `e907dfb`; `projection: done`.
   26 → **27 rows**; §6.6 and §6.11 aligned (provider accessor, adapter lifetime, `LedgerShared.ftp_note`, the single writer).
+- **2026-11-07, implement r1** (implementer, claude opus): built the plan's 34 paths. `DirectCameraAdapter` in `crates/integrations/src/camera/direct/`
+  (event table, owned health codes, refusal clear rules, `Exited` reset, Save-to-PC deliveries with `normalize_camera_filename`, `download ignored: …`
+  lines, busy `Transfer` to the completion or ≥ 10 s), created once per runtime (`CameraRuntime::direct_adapter()`, `Weak` back-reference for
+  `send_command`); the runtime's `tick` keeps one `client.poll`, releases the supervisor lock before the adapter step (serialised by a separate tick
+  lock), then runs the watchdog glue once per mono second and mirrors `LedgerShared.raised` into `FilesNotReceived` on every tick; `bind` keeps P42's
+  copy and re-publishes the adapter's owned codes on top. `LedgerShared.ftp_note` + `set_ftp_note` + the ` · camera FTP: …` suffix; `CameraProvider::
+  {reconnect, request_ftp_status}` default methods; `Command::Reconnect`; C++ `TransportManager::reconnect()` (at the next safe point) and `main.cpp`
+  `reconnect` (`cmd.rejected {reason:"reconnect only on wifi"}` on USB), ctest 21/21; `support::installed`; `App::build` selects up front and injects
+  the arrival capture-root closure; commands `camera_capture -> {capture_id}`, `camera_reconnect`, `camera_files_not_received_dismiss`; bindings and
+  `services/camera.ts`. Tests: 25 in `p46_direct_camera_adapter.rs`, 2 desktop `p46_tests`, unit tests for the three Core mechanisms.
+  **Assumptions** (handoff §Assumptions): `HeldByOtherProgram` cleared only by a **USB** `connection.ready` (planner reading 4, MC-34 "wins even while
+  connected on the other link"); the C++ reconnect waits for busy `none`; `TestApp::inject_all` added for the plan's one-write injections; the fake's
+  inject tail reads lines appended since the process started; settle bound 10 s. **Deviations:** C8(c) reopens the app (`kill_and_restart`) after
+  `ops.clear()` in both halves — `ArrivalService` caches the root from its build-time scan, so the row as written could not fail (verified: the
+  amended (i) fails with the closure removed); two lines outside the perimeter: `p45_sidecar_and_protocol.rs` C2(a) count 20 → 21 (the plan's new
+  C++ test) and `p42_camera_runtime.rs` C7(a) on `with_fake_document()` (from this phase `with_camera()` selects the direct adapter, regression note).
+  Stamp: `cargo test --workspace` 723/0, clippy `-D warnings`, fmt, `npm run typecheck`, `npm test` 369/369, `tools/sidecar/build.sh --stub --test` 21/0.

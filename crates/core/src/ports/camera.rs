@@ -12,6 +12,15 @@ pub trait CameraProvider: Send + Sync {
     fn status(&self) -> Result<CameraStatus>;
     fn capture(&self) -> Result<CaptureId>;
     fn capabilities(&self) -> CameraCapabilities;
+    /// Closes and reopens the camera session (10E MC-33 R-I29: Wi-Fi only). Fails closed for
+    /// providers that cannot.
+    fn reconnect(&self) -> Result<()> {
+        Err(crate::Error::Provider("not supported".into()))
+    }
+    /// Asks the camera for its FTP state (R-I29: sent when the watchdog first raises).
+    fn request_ftp_status(&self) -> Result<()> {
+        Err(crate::Error::Provider("not supported".into()))
+    }
 }
 pub trait CaptureSink: Send + Sync {
     fn exposure_observed(&self, e: ExposureObserved) -> Result<i64>;

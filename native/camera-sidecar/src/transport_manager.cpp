@@ -77,6 +77,11 @@ void TransportManager::usb_retry() {
   inputs_.push_back({Input::UsbRetry, false, 0, 0, BusyReason::None, ""});
 }
 
+void TransportManager::reconnect() {
+  std::lock_guard<std::mutex> lk(mu_);
+  inputs_.push_back({Input::Reconnect, false, 0, 0, BusyReason::None, ""});
+}
+
 State TransportManager::state() const { return state_; }
 Transport TransportManager::transport() const { return active_; }
 
@@ -165,6 +170,10 @@ void TransportManager::drain_inputs() {
         next_attempt_ms_ = now;
         log_.emit("usb.retry_requested", Fields());
         break;
+      case Input::Reconnect:
+        // Wi-Fi only (R-I29): a reconnect on USB would give the camera to another program (V6).
+        reconnect_requested_ = session_open_ && active_ == Transport::Wifi;
+        break;
     }
   }
 }
@@ -208,6 +217,7 @@ void TransportManager::session_lost(const std::string& reason, uint32_t code) {
                                        .str("reason", reason));
   }
   adapter_.disconnect();  // release invalid resources
+  reconnect_requested_ = false;
   session_open_ = false;
   active_ = Transport::None;
   busy_ = BusyReason::None;
@@ -227,6 +237,7 @@ void TransportManager::intentional_disconnect(const std::string& reason) {
   int64_t t0 = clock_();
   Transport was = active_;
   adapter_.disconnect();
+  reconnect_requested_ = false;
   session_open_ = false;
   active_ = Transport::None;
   log_.emit("session.closed", Fields()
@@ -353,6 +364,12 @@ bool TransportManager::step() {
   switch (state_) {
     case State::ConnectedUsb:
     case State::ConnectedWifi: {
+      if (reconnect_requested_ && active_ == Transport::Wifi) {
+        if (busy_ != BusyReason::None) return true;  // at the next safe point
+        intentional_disconnect("reconnect requested");
+        try_connect(Transport::Wifi);  // the same transport, at once
+        return true;
+      }
       Transport want = desired_transport();
       if (want == active_) return true;
 

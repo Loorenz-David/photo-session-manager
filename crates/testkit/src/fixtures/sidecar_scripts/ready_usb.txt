@@ -1,0 +1,5 @@
+{"timestamp":"2026-11-06T10:00:00.000Z","source":"sdk","event":"transport.state","from":"DISCONNECTED","to":"DISCOVERING","reason":"looking for camera over usb","transport":"none"}
+sleep 300
+{"timestamp":"2026-11-06T10:00:00.400Z","source":"sdk","event":"transport.state","from":"DISCOVERING","to":"CONNECTING_USB","reason":"camera found","transport":"none"}
+{"timestamp":"2026-11-06T10:00:00.900Z","source":"sdk","event":"transport.state","from":"CONNECTING_USB","to":"CONNECTED_USB","reason":"connected","transport":"usb"}
+{"timestamp":"2026-11-06T10:00:00.950Z","source":"sdk","event":"connection.ready","transport":"usb","connect_ms":500,"model":"ILCE-7RM5","store_destination":"verified","store_value":"0x0003"}

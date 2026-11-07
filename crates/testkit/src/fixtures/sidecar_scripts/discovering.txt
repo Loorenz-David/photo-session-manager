@@ -1,0 +1,1 @@
+{"timestamp":"2026-11-06T10:00:00.000Z","source":"sdk","event":"transport.state","from":"DISCONNECTED","to":"DISCOVERING","reason":"looking for camera over usb","transport":"none"}

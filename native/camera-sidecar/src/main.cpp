@@ -537,6 +537,12 @@ int cmd_auto(JsonLog& log, const Args& a) {
         tm.usb_retry();  // accepted in any state (R-I23)
       } else if (!connected) {
         log.emit("cmd.rejected", Fields().str("cmd", c.name).str("reason", std::string("not connected (") + to_string(st) + ")"));
+      } else if (c.name == "reconnect") {
+        // R-I29: offered only on Wi-Fi; on USB the session is never left voluntarily (R-I23).
+        if (tm.transport() == Transport::Usb)
+          log.emit("cmd.rejected", Fields().str("cmd", c.name).str("reason", "reconnect only on wifi"));
+        else
+          tm.reconnect();
       } else if (c.name == "capture") {
         // Mark busy across the exposure so a pending USB switch waits.
         usb_exposure_seen = false;

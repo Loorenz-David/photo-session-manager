@@ -1,0 +1,1 @@
+{"timestamp":"2026-11-06T10:00:00.000Z","source":"sdk","event":"connect.failed","transport":"wifi","sdk_error":"0x00008208","error":"connection failed: ssh user authentication failed (check Access Authen. user/password)","duration_ms":900,"timeout":false}

@@ -224,7 +224,9 @@ fn c6a_direct_provider_ignores_editor_health() {
 }
 #[test]
 fn c7a_camera_health_copied_on_rebuild() {
-    let mut a = TestApp::with_camera().unwrap();
+    // From P46 a support folder selects the direct adapter, which re-publishes its own codes;
+    // P42's copy of the Capture One camera's health is shown without one.
+    let mut a = TestApp::with_fake_document().unwrap();
     a.fake.state.lock().unwrap().camera = None;
     a.app.handles().health_check().unwrap();
     let old = a

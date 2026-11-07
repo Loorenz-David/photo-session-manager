@@ -84,6 +84,9 @@ impl From<Error> for CommandError {
                 "step_cannot_apply"
             }
             Error::CaptureFolderNotSet => "capture_folder_not_set",
+            Error::CameraNotConnected => "camera_not_connected",
+            Error::ReconnectOnCableRefused => "reconnect_on_cable_refused",
+            Error::SidecarUnavailable => "sidecar_unavailable",
             Error::HooksNotInstalled => "hooks_not_installed",
             Error::RecipeMissing { name } => {
                 data.insert("name".into(), name.clone());

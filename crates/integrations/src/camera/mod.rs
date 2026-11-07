@@ -1,3 +1,4 @@
+pub mod direct;
 pub mod runtime;
 pub mod sidecar;
 pub mod support;

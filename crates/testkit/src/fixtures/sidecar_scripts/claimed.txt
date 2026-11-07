@@ -1,0 +1,2 @@
+{"timestamp":"2026-11-06T10:00:00.000Z","source":"sdk","event":"usb.claimed_by","owners":"pid 512, ptpcamerad","hint":"another process holds the camera's USB interface; the SDK cannot open it."}
+{"timestamp":"2026-11-06T10:00:00.012Z","source":"sdk","event":"connect.failed","transport":"usb","sdk_error":"0x00008208","error":"connection error","duration_ms":12}

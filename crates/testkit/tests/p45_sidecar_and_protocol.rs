@@ -197,7 +197,7 @@ fn c2a_stub_build_and_cpp_tests() {
     let bin = installed_binary();
     assert!(bin.is_file());
     assert_ne!(fs::metadata(&bin).unwrap().permissions().mode() & 0o111, 0);
-    assert!(stdout.contains("20 tests, 0 failed"), "{stdout}");
+    assert!(stdout.contains("21 tests, 0 failed"), "{stdout}");
     assert!(stdout.contains("100% tests passed out of 1"), "{stdout}");
 }
 

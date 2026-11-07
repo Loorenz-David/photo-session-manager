@@ -3,13 +3,14 @@ use crate::{
     domain::camera::{CameraStatus, CaptureId, Link},
     events::AppEvent,
     ports::{camera::CameraProvider, events::EventSink},
-    services::health::HealthService,
+    services::{camera_ledger::LedgerService, health::HealthService},
 };
 
 pub struct CameraService<'a> {
     provider: &'a dyn CameraProvider,
     health: &'a HealthService,
     events: Option<&'a dyn EventSink>,
+    ledger: Option<&'a LedgerService>,
 }
 impl<'a> CameraService<'a> {
     pub fn new(provider: &'a dyn CameraProvider, health: &'a HealthService) -> Self {
@@ -17,10 +18,16 @@ impl<'a> CameraService<'a> {
             provider,
             health,
             events: None,
+            ledger: None,
         }
     }
     pub fn with_events(mut self, events: &'a dyn EventSink) -> Self {
         self.events = Some(events);
+        self
+    }
+    /// The capture ledger of the camera runtime's current binding (P46: the dismiss path).
+    pub fn with_ledger(mut self, ledger: &'a LedgerService) -> Self {
+        self.ledger = Some(ledger);
         self
     }
     pub fn status(&self) -> Result<CameraStatus> {
@@ -76,5 +83,16 @@ impl<'a> CameraService<'a> {
             return Err(Error::CaptureFolderNotSet);
         }
         self.provider.capture()
+    }
+    /// R-I29: reopen the camera session; the provider refuses it off Wi-Fi.
+    pub fn reconnect(&self) -> Result<()> {
+        self.provider.reconnect()
+    }
+    /// R-I29: the photographer dismissed "photos taken but not received": those exposures
+    /// become `dismissed` and the notice clears.
+    pub fn dismiss_files_not_received(&self) -> Result<()> {
+        self.ledger
+            .ok_or_else(|| Error::Provider("camera ledger not bound".into()))?
+            .dismiss()
     }
 }

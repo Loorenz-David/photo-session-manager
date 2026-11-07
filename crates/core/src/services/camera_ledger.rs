@@ -34,11 +34,16 @@ pub const FILES_NOT_RECEIVED: &str = "camera_files_not_received";
 pub const PHOTO_SESSION_UNCERTAIN: &str = "camera_photo_session_uncertain";
 
 /// One per app process, owned by the camera runtime and shared by every `LedgerService` it
-/// builds (R-I18; P44 projection L3): the worker lock and the watchdog's raised flag.
+/// builds (R-I18; P44 projection L3): the worker lock, the watchdog's raised flag and the
+/// camera's last FTP report (P46).
 #[derive(Default)]
 pub struct LedgerShared {
     pub worker: Mutex<()>,
     pub raised: Mutex<bool>,
+    /// The short form of the last `camera.ftp_state` (R-I29), appended to the
+    /// `camera_files_not_received` detail while the watchdog raises; cleared by `dismiss()` and
+    /// by a watchdog run that does not raise.
+    pub ftp_note: Mutex<Option<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -467,8 +472,12 @@ impl LedgerService {
             if !gaps.is_empty() {
                 detail.push_str(&format!(" · {} gaps in the camera's numbering", gaps.len()));
             }
+            if let Some(note) = locked(&self.shared.ftp_note).as_deref() {
+                detail.push_str(&format!(" · {note}"));
+            }
             self.health.set(FILES_NOT_RECEIVED, detail);
         } else {
+            *locked(&self.shared.ftp_note) = None;
             self.health.clear(FILES_NOT_RECEIVED);
         }
         *raised = raise;
@@ -493,8 +502,20 @@ impl LedgerService {
             }
         }
         *locked(&self.shared.raised) = false;
+        *locked(&self.shared.ftp_note) = None;
         self.health.clear(FILES_NOT_RECEIVED);
         Ok(())
+    }
+
+    /// P46: the camera's FTP report (the short form of `camera.ftp_state`), shown on the
+    /// `camera_files_not_received` item from the next raising watchdog run.
+    pub fn set_ftp_note(&self, note: Option<String>) {
+        *locked(&self.shared.ftp_note) = note;
+    }
+
+    /// Whether the watchdog's notice is raised (process-wide; survives a settings save).
+    pub fn raised(&self) -> bool {
+        *locked(&self.shared.raised)
     }
 
     /// Test and diagnostics reads.

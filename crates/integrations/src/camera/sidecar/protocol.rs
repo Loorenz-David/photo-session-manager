@@ -448,6 +448,10 @@ pub enum Command {
     UsbRetry {
         cmd_id: String,
     },
+    /// Close and reopen the Wi-Fi session (R-I29; the sidecar refuses it on USB).
+    Reconnect {
+        cmd_id: String,
+    },
     Quit,
 }
 
@@ -474,6 +478,7 @@ impl Command {
             Command::FtpStatus { cmd_id } => with_id("ftp-status".into(), cmd_id),
             Command::Status { cmd_id } => with_id("status".into(), cmd_id),
             Command::UsbRetry { cmd_id } => with_id("usb-retry".into(), cmd_id),
+            Command::Reconnect { cmd_id } => with_id("reconnect".into(), cmd_id),
             Command::Quit => "quit".into(),
         }
     }
@@ -484,7 +489,8 @@ impl Command {
             | Command::Props { cmd_id }
             | Command::FtpStatus { cmd_id }
             | Command::Status { cmd_id }
-            | Command::UsbRetry { cmd_id } => Some(cmd_id),
+            | Command::UsbRetry { cmd_id }
+            | Command::Reconnect { cmd_id } => Some(cmd_id),
             Command::Credentials { .. } | Command::Quit => None,
         }
     }
@@ -495,7 +501,8 @@ impl Command {
             | Command::Props { cmd_id }
             | Command::FtpStatus { cmd_id }
             | Command::Status { cmd_id }
-            | Command::UsbRetry { cmd_id } => *cmd_id = id.to_owned(),
+            | Command::UsbRetry { cmd_id }
+            | Command::Reconnect { cmd_id } => *cmd_id = id.to_owned(),
             Command::Credentials { .. } | Command::Quit => {}
         }
         self

@@ -23,6 +23,10 @@ use std::{
 };
 use tempfile::TempDir;
 
+/// `2026-11-06T10:00:00.000Z`, the day the sidecar scripts are stamped (P46 L1):
+/// `with_camera_script` starts the clock here so script stamps and the clock share one day.
+pub const SCRIPT_EPOCH_MS: i64 = 1_793_959_200_000;
+
 pub struct TestApp {
     pub dir: TempDir,
     pub app: App,
@@ -103,34 +107,42 @@ impl TestApp {
         self.app.store.composition(photo_id)
     }
     pub fn new() -> Result<Self> {
-        Self::create(false, false, "custom.damage_report", None)
+        Self::create(false, false, "custom.damage_report", None, 0)
     }
     pub fn with_fake_document() -> Result<Self> {
-        Self::create(true, false, "custom.damage_report", None)
+        Self::create(true, false, "custom.damage_report", None, 0)
     }
     pub fn with_fake_shop() -> Result<Self> {
-        Self::create(true, true, "custom.damage_report", None)
+        Self::create(true, true, "custom.damage_report", None, 0)
     }
     pub fn with_fake_shop_key(key: &str) -> Result<Self> {
-        Self::create(true, true, key, None)
+        Self::create(true, true, key, None, 0)
     }
     pub fn with_camera() -> Result<Self> {
         Self::with_camera_behaviour(serde_json::json!({}))
     }
     pub fn with_camera_behaviour(behaviour: serde_json::Value) -> Result<Self> {
-        Self::create(true, false, "custom.damage_report", Some(behaviour))
+        Self::create(true, false, "custom.damage_report", Some(behaviour), 0)
     }
     /// A camera app whose fake sidecar replays `script` (P45 §The fake sidecar): JSON lines are
     /// printed (with `{capture_id}`/`{cmd_id}` from the last `capture` command), plus `sleep <ms>`,
-    /// `await <cmd>`, `exit <code>`, `stderr <text>`; no `fake.started` line.
+    /// `await <cmd>`, `exit <code>`, `stderr <text>`; no `fake.started` line. The clock starts at
+    /// `SCRIPT_EPOCH_MS` (P46 L1); after the script the fake runs `inject` lines.
     pub fn with_camera_script(script: &str) -> Result<Self> {
-        Self::with_camera_behaviour(serde_json::json!({ "script_text": script }))
+        Self::create(
+            true,
+            false,
+            "custom.damage_report",
+            Some(serde_json::json!({ "script_text": script })),
+            SCRIPT_EPOCH_MS,
+        )
     }
     fn create(
         configure_document: bool,
         configure_shop: bool,
         condition_key: &str,
         sidecar: Option<serde_json::Value>,
+        clock_start: i64,
     ) -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let mut paths = AppPaths::for_dir(dir.path());
@@ -202,7 +214,7 @@ impl TestApp {
             )?;
         }
         let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
-        let clock = Arc::new(ManualClock::new(0));
+        let clock = Arc::new(ManualClock::new(clock_start));
         let secrets = Arc::new(FakeSecrets::default());
         use psm_core::ports::secrets::SecretStore;
         secrets.set("access-auth-user", "u name")?;
@@ -288,6 +300,83 @@ impl TestApp {
     }
     pub fn camera_runtime(&self) -> Arc<psm_integrations::camera::runtime::CameraRuntime> {
         self.app.camera_runtime.clone()
+    }
+    /// `CameraService::capture` over the app's camera provider.
+    pub fn capture(&self) -> Result<psm_core::domain::camera::CaptureId> {
+        psm_core::services::camera::CameraService::new(
+            self.app.camera.as_ref(),
+            self.app.health.as_ref(),
+        )
+        .capture()
+    }
+    /// `CameraService::status` over the app's camera provider.
+    pub fn camera_status(&self) -> Result<psm_core::domain::camera::CameraStatus> {
+        psm_core::services::camera::CameraService::new(
+            self.app.camera.as_ref(),
+            self.app.health.as_ref(),
+        )
+        .status()
+    }
+    fn inject_line(&self, line: &str) -> Result<()> {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.app.paths.root.join("camera/sony/test/rec/inject.txt"))?;
+        file.write_all(format!("{line}\n").as_bytes())?;
+        Ok(())
+    }
+    /// Has the fake sidecar print `{timestamp: <clock now>, source: "sdk", event, ..fields}`
+    /// (after its script ended; P46 L14). The stamp is the test clock, never wall time.
+    pub fn inject(&self, event: &str, fields: serde_json::Value) -> Result<()> {
+        self.inject_line(&self.inject_text(event, fields))
+    }
+    /// Several injected lines in one write (the fake prints them back to back).
+    pub fn inject_all(&self, lines: &[(&str, serde_json::Value)]) -> Result<()> {
+        let text: Vec<String> = lines
+            .iter()
+            .map(|(event, fields)| self.inject_text(event, fields.clone()))
+            .collect();
+        self.inject_line(&text.join("\n"))
+    }
+    fn inject_text(&self, event: &str, fields: serde_json::Value) -> String {
+        let stamp = chrono::DateTime::from_timestamp_millis(self.clock.now_ms())
+            .expect("clock in range")
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string();
+        let mut line = serde_json::json!({ "timestamp": stamp, "source": "sdk", "event": event });
+        if let (Some(line), Some(fields)) = (line.as_object_mut(), fields.as_object()) {
+            for (k, v) in fields {
+                line.insert(k.clone(), v.clone());
+            }
+        }
+        line.to_string()
+    }
+    /// Has the fake sidecar exit with `code`.
+    pub fn inject_exit(&self, code: i32) -> Result<()> {
+        self.inject_line(&format!("exit {code}"))
+    }
+    /// The Save-to-PC staging folder (`--save-dir`): `<capture root>/.incoming/sdk-<run id>`.
+    pub fn staging_dir(&self) -> PathBuf {
+        self.capture_root()
+            .join(".incoming")
+            .join(format!("sdk-{}", self.app.camera_runtime.run_id()))
+    }
+    /// Writes `bytes` to `staging_dir()/<name>` and injects its `sdk.download.completed`.
+    pub fn sdk_download(&self, name: &str, bytes: &[u8]) -> Result<PathBuf> {
+        let path = self.staging_dir().join(name);
+        std::fs::create_dir_all(self.staging_dir())?;
+        std::fs::write(&path, bytes)?;
+        self.inject(
+            "sdk.download.completed",
+            serde_json::json!({
+                "filename": path.to_string_lossy(),
+                "size_bytes": bytes.len(),
+                "success": true,
+                "transport": "usb",
+            }),
+        )?;
+        Ok(path)
     }
     /// The events the sidecar client delivered (the runtime's ring buffer).
     pub fn sidecar_events(&self) -> Vec<psm_integrations::camera::sidecar::protocol::Stamped> {
