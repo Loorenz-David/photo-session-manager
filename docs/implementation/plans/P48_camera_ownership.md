@@ -321,3 +321,26 @@ arrives with P51.
 - 2026-11-07, review r1 (opus): **BLOCKED at the gate.** The handoff has `SHA_PLACEHOLDER`/`STAMP_PLACEHOLDER`; no `CHECKPOINT (not approved): P48`
   commit exists. The 41 implementation paths are uncommitted in the working tree. Nothing reviewed. Relaunch the review once the checkpoint is
   committed and the SHA is recorded (`handoffs/reviewer/handoff_P48_camera_ownership_review_r1.md`).
+- 2026-11-07, review r1 relaunched (opus): **APPROVED_WITH_NOTES.** Gate: tracker `IMPLEMENTED`, checkpoint `4da7fe9` in `git log` (committed
+  by the orchestrator; reviewed tree `577265d` = `4da7fe9` + handoff SHA/STATUS only). Perimeter: `git show --stat 4da7fe9` = 41 paths = the
+  handoff's list (plan's 43 minus `services/camera.rs` and `infra/Cargo.toml`, disclosed unchanged); docs committed by the runner (`fb036a6`).
+  Suite (reviewer run): `cargo test --workspace` 769/0 over 48 binaries (p48 32/32, desktop `p48_tests` 2/2, unit `ownership` C1(a)–(d) and
+  `take_back` C4 halves + order), clippy `-D warnings`, fmt, typecheck, UI 369/369; bindings unchanged after the run. **Verified correct:**
+  `name_programs` (list order, Capture One first, guides, system-service and unknown-owner sentences); one `ps` listing per `usb.claimed_by`;
+  the sentence in `StatusInputs` → `NeedsAction.message` → health detail and `CameraStatusResponse.message` (one sentence); `GatedScripting`
+  refuses exactly the six scripts on both lanes, `quit`/`editor_info` ungated, `launch` waits for the start order off the permitted thread and
+  outside the lane mutex, then re-checks the gate; `ensure_provision` returns `deferred()` before each of the five step handlers and
+  `front_provision_document` before its `.ok()`; `EditingStartup::run` returns right after a deferred ensure; gate and start order created
+  once in `open_with_adapter_bind` and carried in `Lanes` through `SettingsSetContext`/`reopen`; start order satisfied by USB ready,
+  `usb.initial{present:false}`, fallback, `sdk.unavailable`, failed spawn, `Exited`, a running `editor_info`, or 15 s from the first wait;
+  take-back: preconditions in §6.6 order over `running` jobs only, gate held → save (ungated) → guarded quit + 500 ms polls ≤ 20 s, never
+  killed → step 4 checks `editor_info` at start and every 500 ms, `usb-retry`, re-send 1 s after a claim inside 5 s, ≤ 15 s → step 5
+  under `permit` → guard drop on every path; second run refused; `take_back_failed` step as a string; R-I33 store first with
+  `editor_not_following`, never `capture_folder_not_set`, Capture One adapter unchanged; sleep hold on USB ready (once), release on USB
+  closed/lost, Wi-Fi ready, `Exited`, shutdown. Every row's test observes its outcome at the row's boundary and fails on a wrong one. No
+  assumption contradicts 10E (all within Delegated choices or the contract's smallest reading). H1–H8 hold (core gains only neutral ports;
+  `ps` read-only; Capture One driven only by its dictionary's `quit`; commands thin). **Notes (backlog, 6):** gate checked before the lane
+  mutex (a script waiting on a busy lane can launch Capture One mid-take-back → step 4 false "started meanwhile"); a step 5 folder failure
+  answers `take_back_failed{5}` and drops `camera_held`; the start-order wait holds `provision_lock` (Health may wait ≤ 15 s at start); the
+  `editor_not_following` text names Capture One in core; the "holder gone" clear trigger is still missing (open P46 note); C2(e) would hang
+  rather than fail on a wrong bound.
