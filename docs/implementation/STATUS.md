@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-07 20:25: P49 re-review r2 CHANGES_REQUESTED (1 MUST, F2): fix 1 made the style-eligibility read error on NULL, so tethered Capture One previews would never render while a style is set. Orchestrator authorised fix 2 (one SQL line + one test, `766178d`); running on Codex (gpt-6-luna).** Owner (evening): continue overnight independently; answer from the intention; switch to `PSM_IMPLEMENTER=claude` if Codex runs out. After P49 the camera chain waits on P47 (owner + camera); tonight the orchestrator prepares P47 steps 1–2 (packaged build, hand-installed support folder outside the repo; no Keychain items, no camera).
+
 **2026-11-07 18:55: P48 APPROVED_WITH_NOTES. Owner: "we can continue with codex as the session has renewed".** P49's Claude implement session was stopped after 49 s (no changes) and relaunched with Codex (runner default). P47 waits for the owner + camera; P50 needs P47 and P49.
 
 **2026-11-07 18:30: P48 implement r1 finished (handoff DONE) but lost its network before the checkpoint commit; the review stopped BLOCKED at the gate.** The orchestrator verified the tree (fmt, clippy, workspace tests, typecheck, UI 369) and committed checkpoint `4da7fe9`, then filled the handoff's SHA. Rerunning `RESUME=1` P48 (review r1) → P49. P47 waits for the owner + camera.
