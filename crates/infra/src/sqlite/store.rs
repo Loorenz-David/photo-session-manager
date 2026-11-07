@@ -1709,7 +1709,7 @@ impl Store for SqliteStore {
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?
             .query_row(
-                "SELECT style_applied_at=?2 AND rendered_gen=0 FROM raw_state WHERE raw_path=?1",
+                "SELECT style_applied_at IS ?2 AND rendered_gen=0 FROM raw_state WHERE raw_path=?1",
                 params![raw_path, STYLE_ELIGIBLE_PENDING],
                 |r| r.get(0),
             )

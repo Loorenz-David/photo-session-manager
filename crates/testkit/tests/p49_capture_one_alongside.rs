@@ -272,6 +272,44 @@ fn f1_retouch_after_first_render_does_not_receive_late_style() {
     assert!(!ops(&a).iter().any(|op| op.starts_with("apply_style:")));
     assert_eq!(a.store().style_applied_at(&raw).unwrap(), None);
 }
+
+#[test]
+fn tethered_capture_with_style_renders_without_applying_script_style() {
+    let mut a = TestApp::with_fake_document().unwrap();
+    let (s, key) = session(&a, "P49TETHERED");
+    a.sessions().activate(s).unwrap();
+    a.fake.state.lock().unwrap().styles = vec!["Bright Contrast".into()];
+    style(&mut a, "Bright Contrast");
+
+    let raw_path = folder(&a, &key).join("TETHERED.ARW");
+    fs::write(&raw_path, b"tethered capture").unwrap();
+    a.fake
+        .add_image(raw_path.to_str().unwrap(), &["tethered-v1"], false);
+    a.watcher_event(&raw_path).unwrap();
+    a.tick(1_000).unwrap();
+
+    assert_eq!(
+        a.fake.state.lock().unwrap().issued.last().unwrap().1,
+        "tethered-v1"
+    );
+    assert!(!ops(&a).iter().any(|op| op.starts_with("apply_style:")));
+    let conn = rusqlite::Connection::open(a.app.paths.db()).unwrap();
+    let style_marker: Option<i64> = conn
+        .query_row(
+            "SELECT style_applied_at FROM raw_state WHERE raw_path=?1",
+            [canon(&raw_path).unwrap()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(style_marker, None);
+    assert_eq!(
+        a.store()
+            .style_applied_at(raw_path.to_str().unwrap())
+            .unwrap(),
+        None
+    );
+}
+
 #[test]
 fn c3c_late_variant_recovers_with_backoff_and_no_failure() {
     let mut a = app();
