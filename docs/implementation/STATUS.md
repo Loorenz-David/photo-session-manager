@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-07 18:30: P48 implement r1 finished (handoff DONE) but lost its network before the checkpoint commit; the review stopped BLOCKED at the gate.** The orchestrator verified the tree (fmt, clippy, workspace tests, typecheck, UI 369) and committed checkpoint `4da7fe9`, then filled the handoff's SHA. Rerunning `RESUME=1` P48 (review r1) → P49. P47 waits for the owner + camera.
+
 **2026-11-07 12:30: P48 projection r0 AMENDMENTS_REQUIRED (L1–L25, 0 owner cards).** Main issues: six rows would hang, wait 45 s of real time, or pass on wrong code; a deferred ensure would raise a false health warning; take-back step 5 would wait an extra 15 s. The planner is folding them. Next: `PSM_IMPLEMENTER=claude RESUME=1` P48 → P49; P47 waits for the owner + camera.
 
 **2026-11-07 12:15: P46 APPROVED_WITH_NOTES (first review, Claude Opus). P42–P46 done.** P47 (support package spike) needs the owner and the camera (~15 min); the owner is away. P48 and P49 depend only on P46, so the orchestrator is running `PSM_IMPLEMENTER=claude` P48 → P49 now (no camera, no Capture One in tests). Then P47 with the owner; P50 needs P47 and P49.

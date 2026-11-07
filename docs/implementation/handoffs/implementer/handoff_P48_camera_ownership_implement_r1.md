@@ -106,10 +106,10 @@ Not changed though listed: `crates/core/src/services/camera.rs`, `crates/infra/C
 This handoff is committed by the runner.
 
 ## Checkpoint SHA
-SHA_PLACEHOLDER
+4da7fe9 (committed by the orchestrator, 2026-11-07: the session lost its network after writing this handoff; tree verified green first)
 
 ## Stamp
-STAMP_PLACEHOLDER
+2026-11-07 orchestrator
 
 ## Manual try-out
 Hardware-free (the real take-back is P52's row).
