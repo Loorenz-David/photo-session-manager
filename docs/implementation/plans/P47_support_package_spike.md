@@ -110,3 +110,17 @@ This phase **is** a try-out; the narrative is the evidence section in plain word
 
 ## Review log
 
+- **2026-11-07 evening, orchestrator prep (steps 1–2, no camera, owner away).**
+  - **Step 1.** `build.sh --sdk` → `sdk_version 2.02.00`. `npm run tauri -- build --bundles app` → `apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app` (31 MiB). The app and its bundled sidecar are signed ad hoc **with hardened runtime** (`flags=0x10002(adhoc,runtime)`). Afterwards the stub sidecar was restored at the externalBin path (`sdk_compiled_in:false`), and `git status` is clean.
+  - **Step 2.** Under `~/Library/Application Support/com.loorenz.sessionmanager/camera/sony/2.02.00/`:
+    - the three runtime dylibs, `CrAdapter/` and `Contents/Frameworks/CrAdapter/` copied from the lab SDK;
+    - every dylib re-signed ad hoc with `codesign -s - --force`;
+    - xattrs: only `com.apple.provenance`, **no `com.apple.quarantine`** on any copy (S3 input);
+    - `spctl -a` rejects the sidecar and the dylibs (expected for ad hoc; nothing was removed).
+  - **S2, answered offline (the camera is not needed to load the libraries).** The sidecar copy with hardened runtime and an ad hoc signature **does not start**. dyld refuses `libCr_Core.dylib` with "code signature … not valid for use in process: mapping process and mapped file (non-platform) have different Team IDs" (exit 134). Two variants load and print `version`:
+    - (A) hardened runtime plus `com.apple.security.cs.disable-library-validation`;
+    - (B) ad hoc without hardened runtime.
+
+    Variant A is what P50 should apply: the entitlement on the sidecar copy, and hardened runtime kept. The copy in the support folder is signed as A. The CrAdapter dylibs are loaded only at connect, so their loading is confirmed at step 3.
+  - **Finding for P50.** The SDK build embeds a second `LC_RPATH` holding the build machine's absolute SDK path (`~/Desktop/Developer/Camera-Connection-Tests/vendor/sony-sdk/…/crsdk`) next to `@executable_path`. It is harmless at runtime, because `@executable_path` comes first, but it leaks a home path into a shipped binary. P50 should drop it (CMake `BUILD_RPATH`/`INSTALL_RPATH`, or `install_name_tool -delete_rpath`).
+  - **Parked.** While a runnable `camera-sidecar` sits in that folder, the owner's everyday app picks the direct adapter at start (`support::installed`). The copy is therefore renamed **`camera-sidecar.parked`**, and the app still uses the Capture One adapter. **At the spike:** `mv camera-sidecar.parked camera-sidecar` in that folder, then add the three Keychain items (interactive, owner), then step 3. To remove everything, delete `…/camera/sony/2.02.00/`.
