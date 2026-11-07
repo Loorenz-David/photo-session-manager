@@ -95,7 +95,7 @@ Harness: vitest + jsdom + Testing Library; `services/*` mocked with `vi.mock` (t
 | C1(f) | dot follows events | `status(connected)`; `emit({kind:'disconnected'})` | the dot re-renders `disconnected` without a re-mount | `[rule]` master plan §6.7 (`camera_status_changed`) |
 | C2(a) | take-back button only for Capture One | C1(d)'s status → the card has `Take the camera back`; with `holder:'Photos'` → no such button, `Retry` instead | as stated | `[rule]` MC-34 §Take it back ("the app offers Take the camera back"); §Guide (other programs) |
 | C2(b) | click → command → success toast | click `Take the camera back` with `cameraTakeBack` resolving `{completed_steps:5, camera_held:true}` | `cameraTakeBack` called once; while pending the card shows `Taking the camera back… (about 20 s)`; toast `Camera back on the cable` | `[rule]` MC-34 ("It runs only on the photographer's click"); R-I32 |
-| C2(c) | blocked and failed toasts | `cameraTakeBack` rejecting `{code:'take_back_blocked', data:{reason:'a file is still arriving'}}` / `{code:'take_back_failed', data:{step:3, cause:'Capture One did not quit (a dialog may be open)'}}` | toasts `Can't take the camera back yet: a file is still arriving` / `Taking the camera back stopped at step 3: Capture One did not quit (a dialog may be open)` | `[rule]` R-I32 ("otherwise it is disabled and says why"; "says which step failed") |
+| C2(c) | blocked and failed toasts | `cameraTakeBack` rejecting `{code:'take_back_blocked', data:{reason:'a file is still arriving'}}` / `{code:'take_back_failed', data:{step:'3', cause:'Capture One did not quit (a dialog may be open)'}}` (every `CommandError.data` value is a string, master plan §6.7) | toasts `Can't take the camera back yet: a file is still arriving` / `Taking the camera back stopped at step 3: Capture One did not quit (a dialog may be open)` | `[rule]` R-I32 ("otherwise it is disabled and says why"; "says which step failed") |
 | C2(d) | reconnect and dismiss on the card | `{kind:'needs_action', reason:'files_not_received', link:'wireless', message:'3 photos taken but not received for 60 s'}` → buttons `Reconnect` and `Dismiss`; with `link:'cable'` → `Dismiss` only | clicks call `cameraReconnect` / `cameraFilesNotReceivedDismiss` | `[rule]` R-I29 ("offered as a button, never done automatically"; Wi-Fi only) |
 | C3(a) | Health names | `getHealth` resolving items for every §6.6 camera code | each row's label is `Camera` / `Capture One follows` / `Camera support` / `Camera helper` as mapped; details shown verbatim | `[rule]` 12 §Health screen |
 | C3(b) | Health actions | items `camera_files_not_received` and `camera_held` | the first row has `Dismiss` → `cameraFilesNotReceivedDismiss` then `getHealth` again; the second has `Take the camera back` → `cameraTakeBack` | `[rule]` R-I29; MC-34 |
@@ -138,4 +138,9 @@ connect shows the fingerprint card — compare with the camera menu and confirm.
 - Estimated size: ~17 paths, ~1 600 lines (≈ 800 components, ≈ 800 tests).
 
 ## Review log
+- 2026-11-07, planner (Fable), consistency edit from the P48 projection r0 fold (L18): C2(c)'s `take_back_failed` mock now carries `step:'3'` (a string) —
+  `CommandError.data` is `BTreeMap<String, String>` (`apps/desktop/src-tauri/src/commands/items.rs:28–32`), so the backend never sends a number; the
+  toast text is unchanged. The `camera_held` field this plan already reads from `cameraTakeBack` is now registered in master plan §6.7. Open for P51's
+  projection (from the P48 projection's notes): R-I32 says the button "is disabled and says why", while this plan shows the preconditions only as a toast
+  after the click; P48 offers no read-only precondition query.
 

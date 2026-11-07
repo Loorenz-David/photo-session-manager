@@ -126,7 +126,7 @@ restated so no session has to infer them:
 | P45_sidecar_and_protocol | APPROVED | 2026-11-06 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 44 declared paths (`db3cdae`; `git ls-files native/` = 24 sources, no Sony file, no `sdk_shim`); suite 693 Rust, clippy/fmt/typecheck green, UI 369/369 on re-run (one unrelated P33 flake, backlog); all 21 rows have a boundary test that fails on a wrong outcome; C++ edits 1–7 read against the lab at `221aa49` and 10E R-I19–R-I23; fixture = handoff §4.2 verbatim; H1–H8 and the secrets rule hold; 7 new backlog notes |
 | P46_direct_camera_adapter | APPROVED | 2026-11-07 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 38 committed paths (`64aa4f8`, = handoff list: plan's 34 + 2 disclosed test lines + tracker + plan log); Rust 723/0 (p46 25/25, desktop `p46_tests` 2/2, C++ 21/0 via P45 `c2a`), clippy, fmt, typecheck, UI 369/369 green (reviewer run, code tree `64aa4f8`); all 27 rows have a boundary test that fails on a wrong outcome (C8(c) on the disclosed reopen input, which is the one that can fail); event table, owned codes, clear rules, `Exited` reset, staging guard, watchdog glue and Wi-Fi-only reconnect read against the plan contract and 10E R-I19…R-I29/R-I37; no assumption contradicts 10E; H1–H8 hold; 6 backlog notes (`via` on a Wi-Fi Save-to-PC download, `ftp-status` re-fires after transfer gaps → P48, two `camera_sidecar_unavailable` texts) |
 | P47_support_package_spike | NOT_STARTED | 2026-11-06 | planner | **owner-attended, camera needed**: 10E §Camera support packages S1–S6 from a packaged build with a hand-installed support folder; answers folded into P50 |
-| P48_camera_ownership | NOT_STARTED | 2026-11-06 | planner | 10E MC-34 R-I30…R-I33, M39/M40: holder detection and naming, start order, the editor-launch gate, "Take the camera back" on click, activation independent of Capture One, sleep assertion; projection on |
+| P48_camera_ownership | PROJECTED | 2026-11-07 | planner | 10E MC-34 R-I30…R-I33, M39/M40: holder detection and naming, start order, the editor-launch gate, "Take the camera back" on click, activation independent of Capture One, sleep assertion; projection r0 AMENDMENTS_REQUIRED (L1–L25, 0 owner cards) folded by the planner 2026-11-07 under orchestrator rulings — 38 rows, 43 paths, `projection: done` |
 | P49_capture_one_alongside | NOT_STARTED | 2026-11-06 | planner | 10E §Capture One alongside R-I35, 10A MC-18 step 6, R46 (CI1 answered "always jump"): current collection on every arrival and activation, variant wait, style once per RAW, import fixed (copy into the capture folder) |
 | P50_camera_settings_and_support | NOT_STARTED | 2026-11-06 | planner | 10E §Camera support packages R-I36, 12: the `camera` settings block, support-package install/verify/sign, fingerprint pinning, FTP password, health items, the camera commands; backend only |
 | P51_camera_setup_ui | NOT_STARTED | 2026-11-06 | planner | frontend: Settings → Camera, the header camera dot states and sentences, Health camera items, "Take the camera back" and "Test camera connection" buttons |
@@ -443,7 +443,7 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   list contains the name, when a job applies, or when the setting is `off`).
 - Colour-tag mapping (MC-19): `main 4`, `condition 5`, `deleted 1`, `unreviewed 0`.
 - **10E (P42–P51).** `psm_core::domain::camera::{CameraStatus {Connected {name, link}, Connecting {link}, Busy {reason}, NeedsAction {reason,
-  holder: Option<String>}, Disconnected}, Link {Cable, Wireless}, BusyReason {Exposure, Transfer, Switching}, NeedsActionReason
+  holder: Option<String>, message: Option<String> /* P48: the MC-34 sentence for `HeldByOtherProgram`, `None` for every other reason */}, Disconnected}, Link {Cable, Wireless}, BusyReason {Exposure, Transfer, Switching}, NeedsActionReason
   {AuthenticationRefused, FingerprintMismatch, FingerprintUnconfirmed, PhoneAppConnected, HeldByOtherProgram, StoreDestinationUnverified,
   FilesNotReceived {count}, SupportNotInstalled} (this is the precedence order), CaptureId(String), ExposureInitiator {App, Camera},
   ExposureObserved, Delivery, CameraCapabilities {status, capture, transfer, exposure_events, settings_read, settings_write_store_destination,
@@ -451,9 +451,10 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   {Expecting, Received, MissingAtDeadline, Uncertain, Dismissed}`, `Association {Filename, Stem, Fifo, None}`, `DeliveryOutcome {Photo,
   Duplicate, RenamedPhoto}`, `DeliveryState {Pending, Done}`.
   Error codes: `camera_not_connected`, `editor_launch_deferred` (P48; a script that would launch Capture One was refused while "Take the camera
-  back" holds the gate), `take_back_blocked{reason}` (P48; reasons `a file is still arriving`, `a photo is still expected`, `an export is
-  running`, `a publish is running`, `a preview is rendering`, `Capture One is not holding the camera`), `take_back_failed{step}` (P48; the
-  step number 2–5 and the cause), `reconnect_on_cable_refused` (P46), `sidecar_unavailable` (P46), `support_archive_invalid{file}`,
+  back" holds the gate), `take_back_blocked{reason}` (P48; reasons in check order `a file is still arriving`, `a photo is still expected`, `an export is
+  running`, `a publish is running`, `a preview is rendering`, `Capture One is not holding the camera`, and `already running` for a second `run` while one
+  is in progress; "running" jobs = status `running` only, P48 projection r0 L25), `take_back_failed{step, cause}` (P48; the step number 2–5 and the cause;
+  `CommandError.data` is a `BTreeMap<String, String>`, so on the wire `step` is the string `"2"`…`"5"`, never a number — L18), `reconnect_on_cable_refused` (P46), `sidecar_unavailable` (P46), `support_archive_invalid{file}`,
   `support_version_unsupported{version}`, `support_not_installed` (P50), `fingerprint_not_pending` (P50).
   Health codes (`HealthItem{code, ok, detail}`; the camera dot shows the first that holds in the precedence order, the Health page lists them
   all — R-I37): ok item `camera` (detail `<camera name> · cable` / `… · wireless`; replaces P04's `camera` detail), `camera_disconnected`
@@ -461,8 +462,11 @@ All ids `INTEGER PRIMARY KEY`; all `*_at` are UTC ms integers (MC-4); enums stor
   photo` / `Switching connection`), `camera_auth_refused` (`The camera refused the password`), `camera_fingerprint_mismatch` (`The camera's
   fingerprint changed: confirm it in Settings → Camera before shooting over Wi-Fi`), `camera_fingerprint_unconfirmed` (`Confirm the camera's
   fingerprint`), `camera_phone_connected` (`A phone app is connected to the camera: disconnect it`), `camera_held` (P48; detail = the MC-34
-  sentence, e.g. `Capture One is holding the camera's USB connection — Take the camera back` or `programs that can take the camera: Capture
-  One, Imaging Edge Desktop`), `camera_store_destination_unverified` (`The camera did not confirm where photos are saved`),
+  sentence from `name_programs` (R-I30): `Capture One is holding the camera's USB connection — Take the camera back` whenever Capture One runs;
+  otherwise `programs that can take the camera: Imaging Edge Desktop, Adobe Lightroom — quit it and stop it opening at login` (the running known
+  programs, in list order, with the first one's guide); `The system camera service is holding the camera: close apps that use cameras` when none
+  runs; `<owner> is using the camera: close it or stop it from using cameras` for a holder other than `ptpcamerad`; the same sentence is
+  `CameraStatus::NeedsAction.message`), `camera_store_destination_unverified` (`The camera did not confirm where photos are saved`),
   `camera_files_not_received` (`<n> photos taken but not received for 60 s`, plus ` · <g> gaps in the camera's numbering` when any, plus ` · camera FTP:
   <key>=<value>, …` once a `camera.ftp_state` answer arrived (P46); **its single writer is the ledger's `watchdog`/`dismiss`** — the direct adapter
   publishes every other camera code it owns (`camera`, `camera_connecting`, `camera_busy`, `camera_disconnected` and the other `NeedsActionReason::code()`s)
@@ -501,7 +505,8 @@ reason}]}` · **P39** `history_get(session_id) -> {undo: Option<String>, redo: O
 **P42** `camera_status` / `camera_retry` answer the new `CameraStatusResponse` (tag `kind`: `connected {name, link}`, `connecting {link}`, `busy
 {reason}`, `needs_action {reason, holder, message}`, `disconnected`; `link` = `cable` | `wireless`, `reason`s snake_case, `message` = the
 health detail sentence) · **P46** `camera_capture -> { capture_id: string }`, `camera_reconnect` (Wi-Fi only; `reconnect_on_cable_refused`),
-`camera_files_not_received_dismiss` · **P48** `camera_take_back -> { completed_steps: number }` (errors `take_back_blocked`, `take_back_failed`),
+`camera_files_not_received_dismiss` · **P48** `camera_take_back -> { completed_steps: number, camera_held: boolean }` (errors `take_back_blocked{reason}`, `take_back_failed{step, cause}`;
+every `CommandError.data` value is a string, so `step` arrives as `"3"`, not `3` — P48 projection r0 L18),
 `camera_test_connection -> { holder: string | null, programs: string[], sentence: string | null }` · **P50** `camera_support_get -> { make:
 "sony", version, sidecar_path } | null`, `camera_support_install(archive_path) -> CameraSupportDto`, `camera_secrets_set({ access_auth_user,
 access_auth_password })` (writes the Keychain; never echoed back), `camera_ftp_password_generate -> { password }` (the one time it is shown),
@@ -700,10 +705,11 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   { fn get(&self, account: &str) -> Result<Option<String>>; fn set(&self, account: &str, value: &str) -> Result<()>; fn delete(&self, account:
   &str) -> Result<()> }`; `system.rs` — `ProcessList { fn running(&self) -> Result<Vec<String>> /* process names */ }`, `SleepInhibitor { fn hold(&self,
   reason: &str) -> Result<()>; fn release(&self) }`.
-- **Mechanisms** (`crates/core/src/mechanisms/`): `camera_status.rs` — `StatusInputs { needs_action: Vec<(NeedsActionReason, Option<String>)>,
+- **Mechanisms** (`crates/core/src/mechanisms/`): `camera_status.rs` — `StatusInputs { needs_action: Vec<(NeedsActionReason, Option<String> /* holder */, Option<String> /* message; P48: the MC-34 sentence for `HeldByOtherProgram` */)>,
   busy: Option<BusyReason>, session: Option<(CameraName, Link)>, connecting: Option<Link>, helper_running: bool }`, `derive_status(&StatusInputs)
   -> CameraStatus` (R-I37 order; `NeedsAction` chosen by `NeedsActionReason::rank()`), `health_items(&StatusInputs) -> Vec<HealthItem>` (every
-  reason that holds, codes of §6.6), `status_message(&NeedsActionReason, holder) -> String` (the §6.6 details). `capture_ledger.rs` (names aligned to
+  reason that holds, codes of §6.6), `status_message(&NeedsActionReason, holder) -> String` (the §6.6 details; from P48, `health_items` and the desktop's `CameraStatusResponse` use the
+  entry's `message` when present and fall back to this — P48 projection r0 L9). `capture_ledger.rs` (names aligned to
   the P44 plan after projection r0 L5/L6/L14/L23) — `file_key(name) -> String` (strips only `__dup<n>` before the extension, upper-cases),
   `stem_key(file_key)`, `FifoCandidate { exposure_id, exposed_at, session_id: Option<i64>, expected_files: Option<u32> }`, `PriorDelivery { id, file_key,
   stem_key, sha256, exposure_id: Option<i64>, session_id: Option<i64>, outcome, completed_at, final_name }`, `associate(file_key, stem_key, sha256,
@@ -797,10 +803,21 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   `holder_from_owners(owners) -> String` (first owner before the first `"; "`, then the text after its last comma, trimmed),
   `normalize_camera_filename(name) -> String` (Sony: `_<1–2 digits>` after the stem's trailing digits removed, e.g.
   `DSC01234_1.ARW → DSC01234.ARW`; `IMG_1234.CR3` would be untouched here too because the rule needs trailing digits before the suffix), `HolderReport
-  { holder: Option<String>, programs: Vec<String>, sentence: Option<String> }` and `name_programs(owners: &str, running: &[String]) -> HolderReport`
-  (R-I30 list, Capture One first), `TakeBackService` (R-I32 steps with the bounds above), `StartOrder` (R-I31 conditions) and `LaunchGate` (`editing/
-  capture_one/launch_gate.rs`: `hold() -> GateGuard`, `is_held()`; `GatedScripting` consults it for `launch`, `front_document`, `make_document`,
-  `open_document`, `ensure_recipe`, `ensure_capture_style`, `quit` → `Error::EditorLaunchDeferred` while held).
+  { holder: Option<String>, programs: Vec<String>, sentence: Option<String> }` and `name_programs(owner_process: &str, running: &[String]) -> HolderReport`
+  (`direct/ownership.rs`; R-I30 list `KNOWN_CAMERA_PROGRAMS`, Capture One first; `owner_process` = `holder_from_owners(owners)`), `TakeBackService`
+  (`direct/take_back.rs`; R-I32 steps with the bounds above; `run() -> Result<TakeBackReport { completed_steps: u8, camera_held: bool }>`,
+  `holder_report()` for `camera_test_connection` — `programs` = the known programs running in every case, `holder`/`sentence` only while the status is
+  `HeldByOtherProgram`), `StartOrder` (`direct/start_order.rs`; R-I31 conditions plus `Satisfied(AlreadyRunning)` set by the first ensure whose
+  `editor_info` reports running; the 15 s deadline counts from the first `wait()`) and `LaunchGate` (`editing/capture_one/launch_gate.rs`: `hold() ->
+  GateGuard`, `GateGuard::permit(f)`, `is_held()`, `permitted_here()`). **Both are process-wide** (P48 projection r0 L14): created in
+  `open_with_adapter_bind` beside the lanes, passed to `GatedScripting::pair`, carried through `SettingsSetContext`/`reopen`, never rebuilt by
+  `App::build`. `GatedScripting` (both lanes) refuses exactly the **six** scripts that do not check `running()` first — `launch`, `front_document`,
+  `make_document`, `open_document`, `ensure_recipe`, `ensure_capture_style` — with `Error::EditorLaunchDeferred` while held and not permitted on this
+  thread; `quit` is **not** gated (`quit.js` guards itself with `running()`, L13) and the take-back sends `save`/`quit` through the ungated `App.scripting`.
+  `GatedScripting::launch` waits on `StartOrder` only on a non-permitted thread, outside the lane mutex (L4/L5). `ensure_provision` turns a deferral into
+  `Ok(ProvisionReport::deferred())` before the deferring step's health handler runs (L2); `EditingStartup::run` stops after a deferred ensure and
+  `SessionsService::with_camera(..)` branches R-I33 on the provider's capability (L1/L10). `AppBinding` gains the take-back's inputs (editing provider,
+  ungated scripting, provision inputs, document id, gate; names the P48 implementer's) and the runtime the seams `set_process_list`/`set_sleep_inhibitor`.
 - **Receiver** (`crates/infra/src/ftp/`): `ReceiverConfig { bind: IpAddr /* 0.0.0.0 in production, 127.0.0.1 in tests */, port: u16 /* 0 = ephemeral
   */, passive: RangeInclusive<u16> /* 0..=0 = ephemeral */, allowed_peers: Vec<IpNet>, username, password: String }`, `FtpReceiver::start(config,
   sink: Arc<dyn CaptureSink>, names: Arc<dyn CompletedNames>, capture_root: Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>) -> Result<ReceiverHandle
@@ -920,8 +937,11 @@ left at head. Migrations are applied by `rusqlite_migration::Migrations::to_late
   it, negative reads after a 500 ms settle); `TestApp::camera_runtime()`, `camera_status()`, `ledger()` (P44), `receiver_port()` (P43), `ftp()` →
   `FtpClient` connected and logged in (P43), `fake_sidecar_recording() -> Recording { pids: Vec<u32>, argv: Vec<Vec<String>> (from `argv.<pid>.json`),
   env: Vec<Map> (`env.<pid>.json`), stdin: Vec<(u32, String)>, exits: Vec<(u32, i32)> }`, `fake_processes` (`FakeProcessList`, P48), `fake_sleep`
-  (`FakeSleepInhibitor`, P48), `FakeDirectProvider` (`fake_direct_camera.rs`, P42). The fake Capture One gains
-  `quit()` (`running` false after `quit_after_polls`, default 1; op `quit`), `set_current_collection` (op `set_current_collection:<folder>`, state
+  (`FakeSleepInhibitor`: `held() -> Option<String>`, `holds() -> usize`, P48), `take_back()`, `launch_gate()`, `user_lane()` (the user-lane
+  `GatedScripting`, P48), `FakeDirectProvider` (`fake_direct_camera.rs`, P42). The fake Capture One gains
+  `quit()` (`running` false after `quit_after_polls`, default 1; op `quit`), `restart_after_quit: bool` (the `editor_info` after the first one that reports
+  not-running reports `running = true` with no `launch` op, P48 C5(e)), `fail_save: bool` (P48; every `running = false` in a test is paired with
+  `running_after_polls = Some(1)`, or the ensure's 45 s real-time launch wait runs — P48 projection r0 L6), `set_current_collection` (op `set_current_collection:<folder>`, state
   `current_collection`, fault `fail_set_current_collection`; `find_image` answers only for images in the current collection, MC-19), `apply_style`
   (op `apply_style:<variant>:<name>`, per-variant `styles` list) and loses `import` (P49).
 
@@ -1014,3 +1034,11 @@ No architecture graph, no contract system in this repo (ch03). Sessions use this
   as the `RunEvent::Exit` hook) and amended §6.7 (`camera_status_changed`: only `camera_retry` emits in P42, through the hub), §6.11 Runtime (`bind` last,
   the health copy until P46, credentials cache, serialised `tick`, terminal `shutdown` + the exit hook), §7.5 (`with_camera_behaviour`, the fake's recording
   dir and files, distinctive secret fixtures, `settle`). Carried into P43, P44, P45, P46 and P50 Review logs. Nothing declined.
+- 2026-11-07 P48 projection r0 folded — planner (Fable) folded `handoffs/reviewer/handoff_P48_camera_ownership_projection_r0.md` (L1–L25, 0 owner cards)
+  into `plans/P48_camera_ownership.md` (`projection: done`; rows 38 → 38, paths 33 (typed) → 43 (derived)) under orchestrator rulings (L4 a/b/c, L7 knob,
+  L18 wire shapes, L19 programs in every case, L20 deferred scan, L24 stands, L25 `running` only). Amended §6.6 (`NeedsAction.message`, `take_back_blocked`
+  + `already running`, `take_back_failed{step, cause}` as strings, R-I30-consistent `camera_held` examples), §6.7 (`camera_take_back -> { completed_steps,
+  camera_held }`, string `data`), §6.11 Mechanisms (`StatusInputs` message, `status_message` fallback) and Direct adapter (`name_programs(owner_process, …)`,
+  the six-script gate list without `quit`, process-wide `LaunchGate`/`StartOrder`, `AlreadyRunning`, `holder_report`, `AppBinding` additions, runtime seams),
+  §7.5 (`restart_after_quit`, `fail_save`, `take_back()`, `launch_gate()`, `user_lane()`, `FakeSleepInhibitor::holds`), §4 P48 row → PROJECTED. P51 C2(c)'s
+  mock `step` corrected to a string (P51 Review log). Backlog: Imaging Edge Desktop executable name / `PhotosReliveWidget` (P52, spike S5). Nothing declined.
