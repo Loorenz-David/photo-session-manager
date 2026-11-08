@@ -172,3 +172,10 @@ gains `camera/sony/2.02.00/` with the runtime and `camera-sidecar`. 2. Generate 
 - **2026-11-06, carried from P42 projection r0** (planner): `camera_secrets_set` refreshes the runtime's **credentials cache** (L17) — the next spawn,
   immediate (off USB) or later (on USB), sends the new line; C5(b)/(c) assert that; `rec().argv[0][0]` is the first element of `argv.<pid>.json`'s array
   (L19); timed reads use `settle` (L7); a `KeychainSecrets` is never called from a test (L23: the fakes hold the three accounts).
+- **P47 answers (orchestrator, 2026-11-08; evidence `sony_camera_lab.md` §Spike S1–S7).**
+  - (a) **S2:** sign the copied sidecar with `com.apple.security.cs.disable-library-validation` and keep hardened runtime. Without the entitlement, dyld refuses Sony's dylibs ("different Team IDs").
+  - (b) **S3:** the copies carry no quarantine attribute (only `com.apple.provenance`). Nothing was removed.
+  - (c) **S7:** the camera uses `PASV` + `STOR`, with no `502` seen; the camera's FTP user is `sessionmanager`, set on the camera by the owner.
+  - (d) **Keychain timing (new, must-fix in this phase's scope):** reading the secrets must not delay the sidecar spawn or the receiver start. A Keychain prompt (first use of items created outside the app, and after every ad-hoc update: 3–4 prompts) made the cable connection lose to Capture One twice. Spawn on USB without waiting, and pass the credentials when read.
+  - (e) Drop the absolute `LC_RPATH` from the SDK build.
+  - (f) Do not leave an empty staging folder per launch.
