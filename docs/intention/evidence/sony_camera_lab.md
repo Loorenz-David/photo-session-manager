@@ -156,3 +156,12 @@ Other observations:
 **Findings:** F1 install from Sony's download + wording · F2 no helper/receiver log · F3 no `Connecting`, slow Wi-Fi status · F4 no capture button ·
 F5 restart ~5 s vs ~1 s · F6 no Wi-Fi while another program holds the cable · F7 take-back blocked by deferred renders · F8 camera FTP stops after a receiver
 outage, undetected · F9 duplicate uploads (late `226`) · F10 Capture One relaunch hands the cable to `ptpcamerad` · F11 preview wait blocks reframing.
+
+**Provider test (P52 follow-up, 2026-11-08 16:26).** The owner switched off every camera provider in Capture One (Settings → Capture → Provider) and quit it;
+the app relaunched it at 16:26:26. `ptpcamerad` and `mscamerad-xpc` started at 16:26:41 (~15 s into Capture One's launch, before the plug-in) and
+`ptpcamerad` held the cable at 16:26:58, ~3 s after the owner plugged it in. **The provider setting does not stop Capture One from waking the system camera
+service.** Our helper, running since ~12:58, held neither a USB interface nor an SSH socket at that moment (F14), so it did not compete. (F13: claim at plug-in.)
+
+**Export loop (2026-11-08 16:25).** Capture One showed an export window every few seconds. The app log shows `find_image` → `recipe_exists` → `process`
+about every 0.7 s continuously; `Output/_session_manager/` is rewritten with the same photos (DSC04767, a morning shot, exported again at 16:25), plus
+`session test 1NNNN.jpg/.tif` names and `.jpg.tmp` leftovers (93 files). (F12; likely behind F7 and F11.)

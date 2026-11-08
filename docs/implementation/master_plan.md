@@ -135,6 +135,7 @@ restated so no session has to infer them:
 | P53_camera_upload_and_log | APPROVED | 2026-11-08 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 15 committed paths (`75b249b`, = handoff list); Rust suite (p53 7/7), UI 404/404, clippy, fmt, typecheck green (reviewer run, code tree `75b249b`); all 8 rows have a boundary test that fails on a wrong outcome (C3(a) also green alone, so its upload lines are its own); `226` after `.part`→`.done` rename only, filing spawned after the reply, `active` released before hashing, startup recovery of `.done`, listings include waiting files, same-name STOR while waiting → 450, gap age from the later file's arrival, reset rule, once-per-change gap log, top-level redaction read against MC-32/MC-33 and the plan contract; no assumption contradicts 10E; H1–H8 hold; 7 backlog notes (DEBUG provider calls vs 12 §Logs "every provider call", Sony remedy text in core → plan/book) |
 | P54_camera_cable_and_take_back | IMPLEMENTED | 2026-11-08 | codex | deferred renders allow take-back; relaunch waits for USB, USB failures fall back to Wi-Fi, Connecting/Retry and disabled reasons wired; 834 Rust, 407 UI, 22 helper tests green |
 | P55_camera_setup_polish | NOT_STARTED | 2026-11-08 | orchestrator | P52 F1 (Sony download as is; missing vs changed), Auto FTP step, F4 (Take photo), F5 (first restart at once) |
+| P56_camera_claim_and_render_loop | NOT_STARTED | 2026-11-08 | orchestrator | P52 follow-up: F13 (USB connect at plug-in, before ptpcamerad), F14 (helper never idle), F12 (endless Capture One export loop) |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
@@ -159,7 +160,7 @@ P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[
 P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23] · P25[P24] · P26[P25] ·
 P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35] · P37[P36] · P38[P37] ·
 P39[P37] · P40[P39] · P41[P40,P38] · P42[P41] · P43[P42] · P44[P43] · P45[P44] · P46[P45] · P47[P46] · P48[P46] · P49[P48] · P50[P47,P49] ·
-P51[P50] · P52[P51] · P51b[P51] · P53[P51b] · P54[P53] · P55[P54] (P53–P55: fixes from P52 run 1, orchestrator 2026-11-08; P52 run 2 after P55).
+P51[P50] · P52[P51] · P51b[P51] · P53[P51b] · P54[P53] · P55[P54] · P56[P55] (P53–P56: fixes from P52 run 1, orchestrator 2026-11-08; P52 run 2 after P55).
 - **Direct camera adapter (planner 2026-11-06; book 10E).** Order: the risky, hardware-free core first. P42 (the one-camera-layer-per-process
   rule, R-I18, which every later camera phase builds on; the sidecar supervisor over a fake sidecar binary; the new `CameraStatus`), P43 (the
   FTP receiver, MC-32), P44 (the capture ledger, MC-33, the single worker and the no-replace rename), P45 (the lab sidecar imported without any
