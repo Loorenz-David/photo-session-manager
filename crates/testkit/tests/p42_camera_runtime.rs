@@ -108,10 +108,10 @@ fn c2b_shutdown_kills_ignoring_child_after_grace() {
 #[test]
 fn c3a_restarts_at_bounded_offsets() {
     let a = TestApp::with_camera_behaviour(json!({"exit_after_ms":0})).unwrap();
-    let offsets = [0, 1000, 3000, 7000, 15000, 31000, 61000];
+    let offsets = [0, 0, 1000, 3000, 7000, 15000, 31000];
     let mut now = 0;
     for (index, target) in offsets.into_iter().enumerate() {
-        if index > 0 {
+        if index > 1 {
             while now < target - 100 {
                 a.tick(100).unwrap();
                 now += 100;
@@ -129,7 +129,7 @@ fn c3a_restarts_at_bounded_offsets() {
 #[test]
 fn c3b_health_clears_on_line_without_resetting_backoff() {
     let a = TestApp::with_camera_behaviour(json!({"exit_after_ms":0})).unwrap();
-    for (n, delta) in [(1, 0), (2, 1000), (3, 2000)] {
+    for (n, delta) in [(1, 0), (2, 0), (3, 1000)] {
         if delta > 0 {
             a.tick(delta).unwrap();
         }
@@ -139,7 +139,7 @@ fn c3b_health_clears_on_line_without_resetting_backoff() {
     }
     assert!(a.app.health.has("camera_sidecar_unavailable"));
     a.set_fake_sidecar_behaviour(json!({})).unwrap();
-    a.tick(4000).unwrap();
+    a.tick(2000).unwrap();
     settle(&a, || {
         a.fake_sidecar_recording().pids.len() == 4
             && !a.app.health.has("camera_sidecar_unavailable")
@@ -149,7 +149,7 @@ fn c3b_health_clears_on_line_without_resetting_backoff() {
         libc::kill(p as i32, libc::SIGKILL);
     }
     settle(&a, || !alive(p));
-    a.tick(7_900).unwrap();
+    a.tick(3_900).unwrap();
     settle_absence(&a);
     assert_eq!(a.fake_sidecar_recording().pids.len(), 4);
     a.tick(100).unwrap();

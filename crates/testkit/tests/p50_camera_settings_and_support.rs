@@ -258,7 +258,7 @@ fn c2a_missing_file_names_it_and_leaves_no_install() {
         .collect();
     let archive = a.support_archive(&rows);
     assert!(
-        matches!(support::sony::install(&a.app.paths, &archive, &bundled), Err(Error::SupportArchiveInvalid { file }) if file == "CrAdapter/libssh2.dylib")
+        matches!(support::sony::install(&a.app.paths, &archive, &bundled), Err(Error::SupportArchiveInvalid { file }) if file == "missing CrAdapter/libssh2.dylib")
     );
     assert_no_install(&a);
 }
@@ -269,7 +269,7 @@ fn c2b_wrong_hash_names_the_file() {
     rows[0].1 = b"changed";
     let archive = a.support_archive(&rows);
     assert!(
-        matches!(support::sony::install(&a.app.paths, &archive, &bundled), Err(Error::SupportArchiveInvalid { file }) if file == "libCr_Core.dylib")
+        matches!(support::sony::install(&a.app.paths, &archive, &bundled), Err(Error::SupportArchiveInvalid { file }) if file == "changed libCr_Core.dylib")
     );
     assert_no_install(&a);
 }

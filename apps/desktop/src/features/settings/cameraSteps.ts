@@ -6,7 +6,7 @@ export const ftp = (host: string, port: number, user: string) => [
   `[User Info Settings] › [User] = ${user}; [Password] = the password shown above.`,
   '[FTP Transfer Func.] › [Server Setting] › select Server 1 as the active server.',
   '[FTP Transfer Func.] › [FTP Function] = [On].',
-  '[FTP Transfer Func.] › [Auto FTP Transfer] = [On]; [Auto FTP Target] Still Image = [All].',
+  'MENU › Network › [FTP Transfer] › [FTP Transfer Func.] › [Auto FTP Trnsfr] = [On]; [Auto FTP Target] Still Image = [All].',
   '[FTP Transfer Func.] › [RAW+J/H Transfer Target] = [RAW] when shooting RAW+JPEG.',
   '[FTP Transfer Func.] › [FTP Power Save] = [Off].',
   'MENU › Shooting › [Image Quality] › [File Format] = [RAW].',

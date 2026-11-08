@@ -37,7 +37,7 @@ export function CameraSection({ ports, onPortsChange }: { ports: CameraSettingsD
     setBusy(true);
     try { await task(); } catch (error) {
       const e = error as { code?: string; data?: Record<string, string>; message?: string };
-      toast.error(e.code === 'support_archive_invalid' ? `The archive is missing or has a changed file: ${e.data?.file}`
+      toast.error(e.code === 'support_archive_invalid' ? `The archive ${e.data?.file?.startsWith('changed ') ? 'has' : 'is'} ${e.data?.file}`
         : e.code === 'support_version_unsupported' ? `This SDK version (${e.data?.version}) is not supported; use 2.02.00`
         : e.code === 'fingerprint_changed' ? 'The camera shows a different fingerprint now. Compare the new one.' : e.message ?? String(error));
     } finally { setBusy(false); }

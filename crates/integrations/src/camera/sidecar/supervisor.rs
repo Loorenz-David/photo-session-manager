@@ -106,8 +106,10 @@ impl Supervisor {
                 self.attempts = 0;
             }
             self.attempts += 1;
-            let wait = if self.attempts <= RESTART_BACKOFF_S.len() {
-                RESTART_BACKOFF_S[self.attempts - 1]
+            let wait = if self.attempts == 1 {
+                0
+            } else if self.attempts - 2 < RESTART_BACKOFF_S.len() {
+                RESTART_BACKOFF_S[self.attempts - 2]
             } else {
                 RESTART_STEADY_S
             };

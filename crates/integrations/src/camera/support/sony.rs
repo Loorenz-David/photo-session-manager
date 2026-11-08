@@ -122,16 +122,7 @@ pub fn install_with_manifest(
         .into_owned();
     let file = fs::File::open(archive).map_err(|_| invalid(&archive_name))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|_| invalid(&archive_name))?;
-    let mut entries = Vec::new();
-    for index in 0..zip.len() {
-        let mut entry = zip.by_index(index).map_err(|_| invalid(&archive_name))?;
-        let mut bytes = Vec::new();
-        entry
-            .read_to_end(&mut bytes)
-            .map_err(|_| invalid(&archive_name))?;
-        entries.push((entry.name().to_owned(), bytes));
-    }
-    let located = manifest::verify(&entries, spec).map_err(invalid)?;
+    let located = manifest::verify(&mut zip, spec).map_err(invalid)?;
     let camera_root = paths.root.join("camera");
     fs::create_dir_all(&camera_root)?;
     let temp = tempfile::Builder::new()

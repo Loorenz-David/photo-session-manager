@@ -132,7 +132,7 @@ mod p50_tests {
                 json!({"archivePath":bad_archive.to_string_lossy()})
             )
             .unwrap_err(),
-            json!({"code":"support_archive_invalid","message":"support_archive_invalid: CrAdapter/libssh2.dylib","data":{"file":"CrAdapter/libssh2.dylib"}})
+            json!({"code":"support_archive_invalid","message":"support_archive_invalid: missing CrAdapter/libssh2.dylib","data":{"file":"missing CrAdapter/libssh2.dylib"}})
         );
         let installed = call(
             &w,

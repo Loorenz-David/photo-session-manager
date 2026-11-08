@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { cameraFilesNotReceivedDismiss, cameraReconnect, cameraRetry, cameraTakeBack, cameraTakeBackAvailability, type CameraStatus } from '@/services/camera';
+import { cameraCapture, cameraFilesNotReceivedDismiss, cameraReconnect, cameraRetry, cameraTakeBack, cameraTakeBackAvailability, type CameraStatus } from '@/services/camera';
 
 export function takeBackError(error: unknown): string {
   const e = error as { code?: string; data?: Record<string, string>; message?: string };
@@ -34,6 +34,7 @@ export function CameraCard({ status, onStatus }: { status: CameraStatus; onStatu
     <p>{needs?.message ?? (status.kind === 'connected' ? `Camera connected by ${status.link === 'wireless' ? 'Wi-Fi' : 'cable'}` : status.kind === 'disconnected' ? 'Camera disconnected' : status.kind === 'connecting' ? 'Connecting…' : 'Camera busy')}</p>
     {busy && takeBack && <p>Taking the camera back… (about 20 s)</p>}
     <div className="flex flex-wrap gap-2">
+      <Button disabled={busy || status.kind !== 'connected'} onClick={() => void action(cameraCapture)}>Take photo</Button>
       {takeBack ? <><Button disabled={busy || blocked !== null} onClick={() => void action(async () => {
         const result = await cameraTakeBack();
         toast.success(result.camera_held ? 'Camera back on the cable' : 'Capture One reopened; the camera is still held');
