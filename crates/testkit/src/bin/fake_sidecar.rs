@@ -165,6 +165,17 @@ fn main() {
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(json!({}));
+    if env::args().nth(1).as_deref() == Some("version") {
+        let sdk = behaviour
+            .get("version_sdk")
+            .cloned()
+            .unwrap_or(json!("2.02.00"));
+        println!(
+            "{}",
+            json!({"event":"crlab.version","sdk_compiled_in":!sdk.is_null(),"sdk_version":sdk})
+        );
+        return;
+    }
     let pid = std::process::id();
     append(&rec.join("pids"), &pid.to_string());
     fs::write(

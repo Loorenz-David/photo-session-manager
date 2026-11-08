@@ -87,6 +87,16 @@ impl From<Error> for CommandError {
             Error::CameraNotConnected => "camera_not_connected",
             Error::ReconnectOnCableRefused => "reconnect_on_cable_refused",
             Error::SidecarUnavailable => "sidecar_unavailable",
+            Error::SupportArchiveInvalid { file } => {
+                data.insert("file".into(), file.clone());
+                "support_archive_invalid"
+            }
+            Error::SupportVersionUnsupported { version } => {
+                data.insert("version".into(), version.clone());
+                "support_version_unsupported"
+            }
+            Error::SupportNotInstalled => "support_not_installed",
+            Error::FingerprintNotPending => "fingerprint_not_pending",
             Error::EditorLaunchDeferred => "editor_launch_deferred",
             Error::TakeBackBlocked { reason } => {
                 data.insert("reason".into(), reason.clone());

@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[derive(Clone)]
 pub struct SidecarSpec {
     pub program: PathBuf,
     pub args: Vec<String>,

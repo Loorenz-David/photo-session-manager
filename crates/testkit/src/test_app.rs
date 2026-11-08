@@ -53,6 +53,87 @@ impl EventSink for CollectingEventSink {
 }
 
 impl TestApp {
+    pub fn with_test_manifest(
+        &self,
+        manifest: psm_integrations::camera::support::manifest::Manifest,
+    ) {
+        psm_integrations::camera::support::with_test_manifest(&self.app.paths, manifest);
+    }
+    pub fn bundled_sidecar_path(&self) -> PathBuf {
+        let source = std::env::var_os("CARGO_BIN_EXE_fake_sidecar")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                std::env::current_exe()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("fake_sidecar")
+            });
+        let target = self.dir.path().join("bundled/camera-sidecar");
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::copy(source, &target).unwrap();
+        std::fs::create_dir_all(target.parent().unwrap().join("rec")).unwrap();
+        std::fs::write(
+            target.parent().unwrap().join("rec/behaviour.json"),
+            "{\"version_sdk\":\"2.02.00\"}",
+        )
+        .unwrap();
+        let plist = self.dir.path().join("entitlements.plist");
+        std::fs::write(&plist, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>com.apple.security.cs.disable-library-validation</key><true/></dict></plist>").unwrap();
+        assert!(
+            std::process::Command::new("codesign")
+                .args([
+                    "-s",
+                    "-",
+                    "--force",
+                    "--options",
+                    "runtime",
+                    "--entitlements"
+                ])
+                .arg(&plist)
+                .arg(&target)
+                .status()
+                .unwrap()
+                .success()
+        );
+        psm_integrations::camera::support::with_test_bundled(&self.app.paths, target.clone());
+        target
+    }
+    pub fn support_archive(&self, entries: &[(&str, &[u8])]) -> PathBuf {
+        use std::io::Write;
+        let path = self.dir.path().join(format!(
+            "support-{}.zip",
+            self.next_hook.fetch_add(1, Ordering::SeqCst)
+        ));
+        let file = std::fs::File::create(&path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        for (name, bytes) in entries {
+            zip.start_file(
+                format!("CrSDK_v2.02.00_Mac/external/crsdk/{name}"),
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(bytes).unwrap();
+        }
+        zip.finish().unwrap();
+        path
+    }
+    pub fn camera_support_install(
+        &mut self,
+        archive: &Path,
+        bundled: &Path,
+    ) -> Result<psm_integrations::camera::support::InstalledSupport> {
+        let support =
+            psm_integrations::camera::support::sony::install(&self.app.paths, archive, bundled)?;
+        self.app
+            .camera_runtime
+            .set_bundled_sidecar_path(bundled.to_path_buf());
+        self.app.camera_runtime.support_changed();
+        self.app.reopen()?;
+        Ok(support)
+    }
     /// Deliver a camera file to the ledger, then let the watcher accept its final name.
     pub fn arrival_photo(&self, _session_id: i64, name: &str) -> Result<String> {
         use sha2::{Digest, Sha256};
@@ -211,6 +292,13 @@ impl TestApp {
         paths.create()?;
         let with_camera = sidecar.is_some();
         if let Some(mut behaviour) = sidecar {
+            psm_integrations::camera::support::with_test_manifest(
+                &paths,
+                psm_integrations::camera::support::manifest::Manifest {
+                    version: "test".into(),
+                    files: vec![],
+                },
+            );
             let support = paths.root.join("camera/sony/test");
             let rec = support.join("rec");
             std::fs::create_dir_all(&rec)?;

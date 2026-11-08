@@ -20,6 +20,8 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 image = "0.25"
 libc = "0.2"
 ipnet = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+getrandom = "0.3"
 
 chrono = "0.4"
 chrono-tz = "0.10"

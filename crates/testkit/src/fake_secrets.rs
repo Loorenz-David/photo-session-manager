@@ -3,6 +3,9 @@ use std::{collections::HashMap, sync::Mutex};
 #[derive(Default)]
 pub struct FakeSecrets(pub Mutex<HashMap<String, String>>);
 impl SecretStore for FakeSecrets {
+    fn cached(&self, account: &str) -> Option<String> {
+        self.0.lock().unwrap().get(account).cloned()
+    }
     fn get(&self, account: &str) -> Result<Option<String>> {
         Ok(self.0.lock().unwrap().get(account).cloned())
     }

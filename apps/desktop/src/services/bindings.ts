@@ -32,6 +32,12 @@ export const commands = {
 	 */
 	cameraTakeBack: () => typedError<TakeBackResponse, CommandError>(__TAURI_INVOKE("camera_take_back")),
 	cameraTestConnection: () => typedError<TestConnectionResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_test_connection")),
+	cameraSupportGet: () => typedError<CameraSupportDto | null, CommandError>(__TAURI_INVOKE("camera_support_get")),
+	cameraSupportInstall: (archivePath: string) => typedError<CameraSupportDto, CommandError>(__TAURI_INVOKE("camera_support_install", { archivePath })),
+	cameraSecretsSet: (accessAuthUser: string, accessAuthPassword: string) => typedError<null, CommandError>(__TAURI_INVOKE("camera_secrets_set", { accessAuthUser, accessAuthPassword })),
+	cameraFtpPasswordGenerate: () => typedError<FtpPasswordDto, CommandError>(__TAURI_INVOKE("camera_ftp_password_generate")),
+	cameraFingerprintConfirm: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_fingerprint_confirm")),
+	cameraFingerprintReject: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_fingerprint_reject")),
 	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
 	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
@@ -156,9 +162,15 @@ export type CameraSettingsDto = {
 
 export type CameraStatusResponse = CameraStatusResponse_Serialize | CameraStatusResponse_Deserialize;
 
-export type CameraStatusResponse_Deserialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder?: string | null; message: string } | { kind: "disconnected" };
+export type CameraStatusResponse_Deserialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder?: string | null; message: string; link?: string | null } | { kind: "disconnected" };
 
-export type CameraStatusResponse_Serialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder: string | null; message: string } | { kind: "disconnected" };
+export type CameraStatusResponse_Serialize = { kind: "connected"; name: string; link: string } | { kind: "connecting"; link: string } | { kind: "busy"; reason: string } | { kind: "needs_action"; reason: string; holder: string | null; message: string; link: string | null } | { kind: "disconnected" };
+
+export type CameraSupportDto = {
+	make: string,
+	version: string,
+	sidecar_path: string,
+};
 
 /**  The id `camera_capture` answers (MC-31 §Capture; the exposure row carries it). */
 export type CaptureResponse = {
@@ -308,6 +320,10 @@ export type FormGroupDto_Serialize = {
 export type FrameDto = {
 	w: number,
 	h: number,
+};
+
+export type FtpPasswordDto = {
+	password: string,
 };
 
 export type HealthItemDto = {

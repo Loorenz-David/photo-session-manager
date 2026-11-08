@@ -61,6 +61,14 @@ pub enum Error {
     /// The camera helper reported that it cannot run (`sdk.unavailable`).
     #[error("sidecar_unavailable")]
     SidecarUnavailable,
+    #[error("support_archive_invalid: {file}")]
+    SupportArchiveInvalid { file: String },
+    #[error("support_version_unsupported: {version}")]
+    SupportVersionUnsupported { version: String },
+    #[error("support_not_installed")]
+    SupportNotInstalled,
+    #[error("fingerprint_not_pending")]
+    FingerprintNotPending,
     /// A script that would launch Capture One was refused while "Take the camera back" holds the
     /// editor-launch gate (10E MC-34 R-I32).
     #[error("editor_launch_deferred")]

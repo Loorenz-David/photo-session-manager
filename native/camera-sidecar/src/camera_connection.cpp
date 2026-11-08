@@ -2,6 +2,7 @@
 // Disconnect / ReleaseDevice, SSH fingerprint pinning, error description.
 #include <arpa/inet.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <cctype>
 #include <cerrno>
@@ -11,10 +12,18 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <atomic>
 
 #include "sdk_internal.hpp"
 
 namespace crlab {
+
+static std::atomic<bool> g_accept_fingerprint{false};
+static std::atomic<bool> g_replace_fingerprint{false};
+void accept_fingerprint_on_next_connect(bool replace) {
+  g_accept_fingerprint = true;
+  g_replace_fingerprint = replace;
+}
 
 // Last enumeration, kept alive so connect() can copy the selected entry.
 // (The SDK object list is owned by the SDK until Release() is called.)
@@ -260,6 +269,26 @@ std::string sanitize(const std::string& s) {
   for (char c : s) o += (std::isalnum(static_cast<unsigned char>(c)) ? c : '_');
   return o.empty() ? "unknown" : o;
 }
+std::string fingerprint_for_display(const std::string& raw) {
+  // Sony 2.02 reports printable colon-separated hex; accept raw bytes too so the event contract
+  // stays stable if a later SDK changes that representation.
+  std::string text = raw;
+  while (!text.empty() && text.back() == '\0') text.pop_back();
+  bool printable_hex = !text.empty();
+  for (unsigned char c : text)
+    printable_hex = printable_hex && (std::isxdigit(c) || c == ':');
+  if (printable_hex) {
+    for (char& c : text) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return text;
+  }
+  const char* digits = "0123456789abcdef";
+  std::string out;
+  for (unsigned char c : raw) {
+    if (!out.empty()) out += ':';
+    out += digits[c >> 4]; out += digits[c & 15];
+  }
+  return out;
+}
 
 // Returns true if the connection may proceed with this fingerprint.
 // mkdir -p with private permissions.
@@ -283,25 +312,20 @@ bool check_fingerprint(EventSink& log, const ConnectOptions& opt, const std::str
   if (!mkdir_p(opt.fingerprint_dir))
     log.emit("ssh.fingerprint", Fields().str("status", "dir_create_failed").str("dir", opt.fingerprint_dir));
   std::string path = opt.fingerprint_dir + "/" + sanitize(camera_id) + ".fingerprint";
+  if (g_replace_fingerprint.exchange(false)) ::unlink(path.c_str());
   std::ifstream in(path, std::ios::binary);
   if (in) {
     std::stringstream ss;
     ss << in.rdbuf();
     bool match = ss.str() == fp;
-    log.emit("ssh.fingerprint", Fields().str("status", match ? "match" : "MISMATCH").boolean("success", match));
+    log.emit("ssh.fingerprint", Fields().str("status", match ? "match" : "MISMATCH").boolean("success", match).str("fingerprint", fingerprint_for_display(fp)));
     if (!match)
-      std::fprintf(stderr, "[crlab] SSH fingerprint for %s does not match the pinned value in %s.\n"
-                   "        Compare with MENU > Network > Network Option > Access Authen. Info on the camera.\n"
-                   "        If the camera was reset intentionally, delete the file and reconnect with --accept-fingerprint.\n",
-                   camera_id.c_str(), path.c_str());
+      std::fprintf(stderr, "[crlab] SSH fingerprint mismatch for %s. Compare with the camera's Access Authen. Info.\n", camera_id.c_str());
     return match;
   }
-  std::fprintf(stderr, "[crlab] New camera SSH fingerprint (%zu bytes) for %s:\n        %s\n"
-               "        Compare it with MENU > Network > Network Option > Access Authen. Info.\n",
-               fp.size(), camera_id.c_str(), fp.c_str());
-  if (!opt.accept_fingerprint) {
+  if (!opt.accept_fingerprint && !g_accept_fingerprint.exchange(false)) {
     log.emit("ssh.fingerprint", Fields().str("status", "unknown").boolean("success", false)
-                                    .str("note", "re-run with --accept-fingerprint after comparing with the camera screen"));
+                                    .str("fingerprint", fingerprint_for_display(fp)));
     return false;
   }
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
@@ -312,7 +336,7 @@ bool check_fingerprint(EventSink& log, const ConnectOptions& opt, const std::str
   // The operator accepted this fingerprint for this connection either way;
   // a failed save only means they will be asked again next time.
   log.emit("ssh.fingerprint", Fields().str("status", saved ? "pinned" : "accepted_not_saved").boolean("success", true)
-                                  .boolean("saved", saved).str("path", path));
+                                  .boolean("saved", saved).str("path", path).str("fingerprint", fingerprint_for_display(fp)));
   if (!saved) std::fprintf(stderr, "[crlab] WARNING: could not save fingerprint to %s\n", path.c_str());
   return true;
 }
@@ -442,7 +466,9 @@ ConnectResult CameraSession::connect(const DiscoveredCamera* cam, const ConnectO
     fp.assign(buf, size);
     if (!check_fingerprint(im.log, opt, id, fp)) {
       info->Release();
-      r.fatal = true;
+      // Retry on the sidecar's normal backoff; confirmation arms the next connect. Authentication
+      // failures after this check remain fatal and are never retried.
+      r.fatal = false;
       r.message = "SSH fingerprint not trusted";
       return r;
     }

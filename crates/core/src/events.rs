@@ -23,6 +23,9 @@ pub enum AppEvent {
     CameraStatusChanged {
         status: crate::domain::camera::CameraStatus,
     },
+    FingerprintPending {
+        fingerprint: String,
+    },
     ExportProgress {
         session_id: i64,
         done: usize,

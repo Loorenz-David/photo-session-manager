@@ -452,6 +452,10 @@ pub enum Command {
     Reconnect {
         cmd_id: String,
     },
+    AcceptFingerprint {
+        replace: bool,
+        cmd_id: String,
+    },
     Quit,
 }
 
@@ -479,6 +483,14 @@ impl Command {
             Command::Status { cmd_id } => with_id("status".into(), cmd_id),
             Command::UsbRetry { cmd_id } => with_id("usb-retry".into(), cmd_id),
             Command::Reconnect { cmd_id } => with_id("reconnect".into(), cmd_id),
+            Command::AcceptFingerprint { replace, cmd_id } => with_id(
+                if *replace {
+                    "accept-fingerprint replace=1".into()
+                } else {
+                    "accept-fingerprint".into()
+                },
+                cmd_id,
+            ),
             Command::Quit => "quit".into(),
         }
     }
@@ -490,7 +502,8 @@ impl Command {
             | Command::FtpStatus { cmd_id }
             | Command::Status { cmd_id }
             | Command::UsbRetry { cmd_id }
-            | Command::Reconnect { cmd_id } => Some(cmd_id),
+            | Command::Reconnect { cmd_id }
+            | Command::AcceptFingerprint { cmd_id, .. } => Some(cmd_id),
             Command::Credentials { .. } | Command::Quit => None,
         }
     }
@@ -502,7 +515,8 @@ impl Command {
             | Command::FtpStatus { cmd_id }
             | Command::Status { cmd_id }
             | Command::UsbRetry { cmd_id }
-            | Command::Reconnect { cmd_id } => *cmd_id = id.to_owned(),
+            | Command::Reconnect { cmd_id }
+            | Command::AcceptFingerprint { cmd_id, .. } => *cmd_id = id.to_owned(),
             Command::Credentials { .. } | Command::Quit => {}
         }
         self

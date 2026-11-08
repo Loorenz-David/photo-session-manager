@@ -1,0 +1,9 @@
+{"version": "2.02.00", "files": [
+  {"path": "CrAdapter/libCr_PTP_IP.dylib", "sha256": "dbcadcdd4b0c9307976cfc5ada9d3890f7f7fa7146face5c3c22202eee4a6f77"},
+  {"path": "CrAdapter/libCr_PTP_USB.dylib", "sha256": "42fb8294e63c4e0cb5874440de59bc45a064e900ce3d4d0673aa3fdcefb3ea64"},
+  {"path": "CrAdapter/libssh2.dylib", "sha256": "955a2a328573c6f7c6fb1ebb0f206cb3075cbe3c4c31465c4296380d09b94d45"},
+  {"path": "CrAdapter/libusb-1.0.0.dylib", "sha256": "0e7f3544abbc2eae4afc04ac4d8ad2c8be61237de043cfc4d67fa6dbac399575"},
+  {"path": "libCr_Core.dylib", "sha256": "8613325b6cc98e591b556e71bcabaca962fc8bc5989ec0425efb7df42e57e519"},
+  {"path": "libmonitor_protocol.dylib", "sha256": "6c0c9102957d94beeb337609dadd344231662f7587751ff17663339add1edf1f"},
+  {"path": "libmonitor_protocol_pf.dylib", "sha256": "877570eae4c929f7b5b8f980e82449353300c371a00e47e745564e2a346b99ee"}
+]}

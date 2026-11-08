@@ -18,6 +18,176 @@ struct PhotoAddedPayload {
 }
 
 #[cfg(test)]
+mod p50_tests {
+    use super::*;
+    use psm_integrations::camera::support::manifest::{Manifest, ManifestFile};
+    use serde_json::{Value, json};
+    use sha2::{Digest, Sha256};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        Listener,
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+    #[test]
+    fn c8a_support_and_secret_commands_have_their_wire_shapes() {
+        let mut a = psm_testkit::TestApp::with_fake_document().unwrap();
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        a.settings_set(&json!({"camera":{"receiver_port":port,"passive_port_start":50000,"passive_port_end":50009}})).unwrap();
+        let names = [
+            "libCr_Core.dylib",
+            "libmonitor_protocol.dylib",
+            "libmonitor_protocol_pf.dylib",
+            "CrAdapter/libCr_PTP_USB.dylib",
+            "CrAdapter/libCr_PTP_IP.dylib",
+            "CrAdapter/libssh2.dylib",
+            "CrAdapter/libusb-1.0.0.dylib",
+        ];
+        a.with_test_manifest(Manifest {
+            version: "2.02.00".into(),
+            files: names
+                .iter()
+                .map(|n| ManifestFile {
+                    path: (*n).into(),
+                    sha256: Sha256::digest(n.as_bytes())
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect(),
+                })
+                .collect(),
+        });
+        let bundled = a.bundled_sidecar_path();
+        let complete: Vec<_> = names.iter().map(|n| (*n, n.as_bytes())).collect();
+        let incomplete: Vec<_> = complete
+            .iter()
+            .copied()
+            .filter(|(n, _)| *n != "CrAdapter/libssh2.dylib")
+            .collect();
+        let bad_archive = a.support_archive(&incomplete);
+        let good_archive = a.support_archive(&complete);
+        let root = a.app.paths.root.clone();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::camera::camera_support_get,
+                commands::camera::camera_support_install,
+                commands::camera::camera_secrets_set,
+                commands::camera::camera_ftp_password_generate,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        assert_eq!(
+            call(&w, "camera_support_get", json!({})).unwrap(),
+            Value::Null
+        );
+        assert_eq!(
+            call(
+                &w,
+                "camera_secrets_set",
+                json!({"accessAuthUser":"u2","accessAuthPassword":"p2"})
+            )
+            .unwrap(),
+            Value::Null
+        );
+        let pw = call(&w, "camera_ftp_password_generate", json!({})).unwrap()["password"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(pw.len(), 32);
+        assert_eq!(
+            call(
+                &w,
+                "camera_support_install",
+                json!({"archivePath":bad_archive.to_string_lossy()})
+            )
+            .unwrap_err(),
+            json!({"code":"support_archive_invalid","message":"support_archive_invalid: CrAdapter/libssh2.dylib","data":{"file":"CrAdapter/libssh2.dylib"}})
+        );
+        let installed = call(
+            &w,
+            "camera_support_install",
+            json!({"archivePath":good_archive.to_string_lossy()}),
+        )
+        .unwrap();
+        assert_eq!(installed["make"], "sony");
+        assert_eq!(installed["version"], "2.02.00");
+        assert_eq!(
+            installed["sidecar_path"],
+            root.join("camera/sony/2.02.00/camera-sidecar")
+                .to_string_lossy()
+                .as_ref()
+        );
+        assert_eq!(
+            call(&w, "camera_support_get", json!({})).unwrap(),
+            installed
+        );
+        assert!(
+            !std::fs::read_to_string(root.join("settings.json"))
+                .unwrap()
+                .contains(&pw)
+        );
+        let _ = bundled;
+    }
+    #[test]
+    fn c8b_pending_fingerprint_reaches_tauri_event() {
+        let a = psm_testkit::TestApp::with_fake_document().unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let payloads = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+        let seen = payloads.clone();
+        tauri_app.listen_any("camera_fingerprint_pending", move |event| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(event.payload()).unwrap())
+        });
+        EventSink::emit(
+            &TauriEvents(tauri_app.handle().clone()),
+            AppEvent::FingerprintPending {
+                fingerprint: "ab:cd:ef".into(),
+            },
+        );
+        assert_eq!(
+            *payloads.lock().unwrap(),
+            vec![json!({"fingerprint":"ab:cd:ef"})]
+        );
+    }
+}
+
+#[cfg(test)]
 mod p39_tests {
     use super::*;
     use psm_core::domain::photo::Classification;
@@ -309,9 +479,20 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
     fn emit(&self, event: AppEvent) {
         match event {
             AppEvent::CameraStatusChanged { status } => {
+                let link = self
+                    .0
+                    .try_state::<AppState>()
+                    .and_then(|state| state.handles().ok())
+                    .and_then(|handles| handles.camera_runtime.direct_adapter().current_link());
                 let _ = self.0.emit(
                     "camera_status_changed",
-                    commands::camera::CameraStatusResponse::from(status),
+                    commands::camera::CameraStatusResponse::from(status).with_link(link),
+                );
+            }
+            AppEvent::FingerprintPending { fingerprint } => {
+                let _ = self.0.emit(
+                    "camera_fingerprint_pending",
+                    serde_json::json!({"fingerprint": fingerprint}),
                 );
             }
             AppEvent::HistoryChanged {
@@ -422,6 +603,12 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::camera::camera_files_not_received_dismiss,
         commands::camera::camera_take_back,
         commands::camera::camera_test_connection,
+        commands::camera::camera_support_get,
+        commands::camera::camera_support_install,
+        commands::camera::camera_secrets_set,
+        commands::camera::camera_ftp_password_generate,
+        commands::camera::camera_fingerprint_confirm,
+        commands::camera::camera_fingerprint_reject,
         commands::photos::photos_classify,
         commands::photos::photos_reorder,
         commands::photos::photos_delete,

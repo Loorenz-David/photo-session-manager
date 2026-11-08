@@ -159,6 +159,8 @@ pub struct CameraRuntime {
     sleep: RwLock<Arc<dyn SleepInhibitor>>,
     /// "Take the camera back" is running (one at a time per process).
     take_back_running: Arc<AtomicBool>,
+    bundled_sidecar: RwLock<Option<PathBuf>>,
+    staging_dir: Mutex<Option<PathBuf>>,
 }
 impl CameraRuntime {
     pub fn new(secrets: Arc<dyn SecretStore>, clock: Arc<dyn Clock>, paths: AppPaths) -> Arc<Self> {
@@ -208,6 +210,8 @@ impl CameraRuntime {
             process_list: RwLock::new(Arc::new(PsProcessList)),
             sleep: RwLock::new(Arc::new(IokitSleepInhibitor::default())),
             take_back_running: Arc::new(AtomicBool::new(false)),
+            bundled_sidecar: RwLock::new(None),
+            staging_dir: Mutex::new(None),
         })
     }
     /// The process-wide start order (R-I31).
@@ -334,7 +338,13 @@ impl CameraRuntime {
             .cloned()
             .collect()
     }
-    pub fn bind(&self, binding: AppBinding) {
+    pub fn set_bundled_sidecar_path(&self, path: PathBuf) {
+        *self.bundled_sidecar.write().unwrap() = Some(path);
+    }
+    pub fn secret_store(&self) -> Arc<dyn SecretStore> {
+        self.secrets.clone()
+    }
+    pub fn bind(self: &Arc<Self>, binding: AppBinding) {
         if let Some(old) = &binding.previous_health {
             for item in old
                 .report("", false, false)
@@ -368,6 +378,14 @@ impl CameraRuntime {
             tracing::warn!(%error, "camera ledger recovery failed");
         }
         *self.binding.write().expect("camera binding") = Some(binding);
+        if super::support::damaged(&self.paths) {
+            health.set(
+                "camera_support_not_installed",
+                "Camera support for Sony is damaged: add it again in Settings → Camera",
+            );
+        } else {
+            health.clear("camera_support_not_installed");
+        }
         // From P46 the direct adapter re-publishes the codes it owns from its own inputs.
         if let Some(adapter) = self.bound_direct() {
             adapter.publish(&health, true);
@@ -375,32 +393,53 @@ impl CameraRuntime {
         if self.stopped.load(Ordering::SeqCst) {
             return;
         }
-        self.bind_receiver(settings);
+        if let Some(password) = self.secrets.cached(secrets::FTP_PASSWORD) {
+            self.bind_receiver_with_password(settings, password);
+        } else {
+            let runtime = self.clone();
+            std::thread::spawn(move || {
+                if let Ok(Some(password)) = runtime.secrets.get(secrets::FTP_PASSWORD) {
+                    runtime.bind_receiver_with_password(settings, password);
+                }
+            });
+        }
         let mut guard = self.supervisor.lock().expect("camera supervisor");
         if guard.is_some() {
             return;
         }
+        let bundled = self
+            .bundled_sidecar
+            .read()
+            .unwrap()
+            .clone()
+            .or_else(|| super::support::bundled_for(&self.paths));
+        if let Some(bundled) = bundled
+            && super::support::installed(&self.paths).is_some_and(|s| s.version != "test")
+            && let Err(error) = super::support::sony::refresh_sidecar_copy(&self.paths, &bundled)
+        {
+            tracing::warn!(%error, "camera sidecar refresh failed");
+        }
         let Some(program) = installed_sidecar(&self.paths) else {
             return;
         };
-        let mut credentials = self.credentials.lock().expect("camera credentials");
-        let (user, password) = credentials
-            .get_or_insert_with(|| {
-                let user = self
-                    .secrets
-                    .get(secrets::ACCESS_AUTH_USER)
-                    .ok()
-                    .flatten()
-                    .unwrap_or_default();
-                let password = self
-                    .secrets
-                    .get(secrets::ACCESS_AUTH_PASSWORD)
-                    .ok()
-                    .flatten()
-                    .unwrap_or_default();
-                (user, password)
-            })
-            .clone();
+        if self.credentials.lock().unwrap().is_none()
+            && let (Some(user), Some(password)) = (
+                self.secrets.cached(secrets::ACCESS_AUTH_USER),
+                self.secrets.cached(secrets::ACCESS_AUTH_PASSWORD),
+            )
+        {
+            *self.credentials.lock().unwrap() = Some((user, password));
+        }
+        let (user, password) = self.credentials.lock().unwrap().clone().unwrap_or_else(|| {
+            (
+                self.secrets
+                    .cached(secrets::ACCESS_AUTH_USER)
+                    .unwrap_or_default(),
+                self.secrets
+                    .cached(secrets::ACCESS_AUTH_PASSWORD)
+                    .unwrap_or_default(),
+            )
+        });
         logging::add_secret(&user);
         logging::add_secret(&password);
         // §Staging (R-I20): `<binding document>/Capture/.incoming/sdk-<run_id>`, computed at the
@@ -415,6 +454,7 @@ impl CameraRuntime {
             tracing::warn!(%error, "camera staging unavailable");
             return;
         }
+        *self.staging_dir.lock().unwrap() = Some(staging.clone());
         let spec = SidecarSpec {
             program,
             args: vec![
@@ -446,6 +486,31 @@ impl CameraRuntime {
             }
         }
         *guard = Some(SidecarClient::new(supervisor));
+        drop(guard);
+        if self.credentials.lock().unwrap().is_none() {
+            let runtime = self.clone();
+            std::thread::spawn(move || {
+                let user = runtime
+                    .secrets
+                    .get(secrets::ACCESS_AUTH_USER)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                let password = runtime
+                    .secrets
+                    .get(secrets::ACCESS_AUTH_PASSWORD)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                logging::add_secret(&user);
+                logging::add_secret(&password);
+                let has_credentials = !user.is_empty() || !password.is_empty();
+                *runtime.credentials.lock().unwrap() = Some((user, password));
+                if has_credentials {
+                    runtime.restart_if_not_usb();
+                }
+            });
+        }
     }
     /// Writes `command` to the sidecar; the returned id is the one on the wire.
     pub fn send_command(&self, command: Command) -> psm_core::Result<CmdId> {
@@ -483,12 +548,17 @@ impl CameraRuntime {
         log.push_back(redacted.clone());
         tracing::warn!("camera sidecar: {redacted}");
     }
-    fn bind_receiver(&self, settings: CameraSettings) {
+    fn bind_receiver_with_password(&self, settings: CameraSettings, password: String) {
         let mut receiver = self.receiver.lock().unwrap();
         let mut previous = self.receiver_settings.lock().unwrap();
         if receiver.is_some() && *previous == Some(settings) {
             return;
         }
+        let port = if settings.receiver_port == 0 {
+            receiver.as_ref().map(ReceiverHandle::port).unwrap_or(0)
+        } else {
+            settings.receiver_port
+        };
         if let Some(mut old) = receiver.take() {
             old.stop();
         }
@@ -496,19 +566,13 @@ impl CameraRuntime {
         if installed_sidecar(&self.paths).is_none() {
             return;
         }
-        let Some(password) = self
-            .secrets
-            .get(secrets::FTP_PASSWORD)
-            .ok()
-            .flatten()
-            .filter(|s| !s.is_empty())
-        else {
+        if password.is_empty() {
             return;
-        };
+        }
         logging::add_secret(&password);
         let config = ReceiverConfig {
             bind: self.receiver_bind,
-            port: settings.receiver_port,
+            port,
             passive: settings.passive_port_start..=settings.passive_port_end,
             allowed_peers: if self.receiver_bind == IpAddr::V4(Ipv4Addr::LOCALHOST) {
                 vec!["127.0.0.0/8".parse().unwrap()]
@@ -530,6 +594,64 @@ impl CameraRuntime {
             }
             Err(error) => tracing::warn!(%error, "camera FTP receiver unavailable"),
         }
+    }
+    fn restart_if_not_usb(&self) {
+        if self.direct.get().is_some_and(|a| a.usb_session()) {
+            return;
+        }
+        let credentials = self.credentials.lock().unwrap().clone().unwrap_or_default();
+        let mut guard = self.supervisor.lock().unwrap();
+        if let Some(client) = guard.as_mut() {
+            let mut spec = client.supervisor().spec.clone();
+            spec.first_line = Command::Credentials {
+                user: credentials.0,
+                password: credentials.1,
+            }
+            .encode();
+            client.supervisor_mut().quit_and_wait();
+            let mut supervisor = Supervisor::new(spec);
+            if supervisor.spawn(self.clock.mono()).is_ok() {
+                self.helper_running.store(true, Ordering::SeqCst);
+            }
+            *guard = Some(SidecarClient::new(supervisor));
+        }
+    }
+    pub fn secrets_changed(&self) {
+        let user = self
+            .secrets
+            .get(secrets::ACCESS_AUTH_USER)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        let password = self
+            .secrets
+            .get(secrets::ACCESS_AUTH_PASSWORD)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        logging::add_secret(&user);
+        logging::add_secret(&password);
+        *self.credentials.lock().unwrap() = Some((user.clone(), password.clone()));
+        if let Some(client) = self.supervisor.lock().unwrap().as_mut() {
+            client.supervisor_mut().spec.first_line =
+                Command::Credentials { user, password }.encode();
+        }
+        self.restart_if_not_usb();
+    }
+    pub fn ftp_password_changed(&self) {
+        if let Some(binding) = self.binding.read().unwrap().as_ref()
+            && let Ok(Some(password)) = self.secrets.get(secrets::FTP_PASSWORD)
+        {
+            *self.receiver_settings.lock().unwrap() = None;
+            self.bind_receiver_with_password(binding.camera_settings, password);
+        }
+    }
+    pub fn support_changed(self: &Arc<Self>) {
+        if let Some(client) = self.supervisor.lock().unwrap().as_mut() {
+            client.supervisor_mut().quit_and_wait();
+        }
+        *self.supervisor.lock().unwrap() = None;
+        self.helper_running.store(false, Ordering::SeqCst);
     }
     pub fn tick(&self, now: Instant) {
         if self.stopped.load(Ordering::SeqCst) {
@@ -600,6 +722,16 @@ impl CameraRuntime {
     }
     /// The adapter's effects against the current binding, then the watchdog glue (P46 L10, L13).
     fn perform(&self, adapter: &DirectCameraAdapter, outcome: StepOutcome, now: Instant) {
+        if let Some(binding) = self.binding.read().expect("camera binding").as_ref() {
+            for fingerprint in &outcome.fingerprint_pending {
+                psm_core::ports::events::EventSink::emit(
+                    binding.events.as_ref(),
+                    AppEvent::FingerprintPending {
+                        fingerprint: fingerprint.clone(),
+                    },
+                );
+            }
+        }
         for line in &outcome.helper_log {
             self.push_helper_log(line);
         }
@@ -683,6 +815,10 @@ impl CameraRuntime {
             supervisor.supervisor_mut().quit_and_wait();
         }
         self.sleep.read().unwrap().release();
+        if let Some(staging) = self.staging_dir.lock().unwrap().take() {
+            // Only an empty folder is removed. A camera transfer is never touched (H2).
+            let _ = fs::remove_dir(staging);
+        }
     }
 }
 impl Drop for CameraRuntime {

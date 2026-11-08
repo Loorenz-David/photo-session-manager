@@ -11,6 +11,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+getrandom = "0.3"
 psm-core = { path = "../../../crates/core" }
 psm-infra = { path = "../../../crates/infra" }
 psm-integrations = { path = "../../../crates/integrations" }
@@ -25,6 +26,7 @@ tracing.workspace = true
 tracing-appender = "0.2"
 
 [dev-dependencies]
+sha2 = "0.11"
 tauri = { version = "2", features = ["test"] }
 psm-testkit = { path = "../../../crates/testkit" }
 tempfile = "3"

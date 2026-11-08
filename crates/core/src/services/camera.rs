@@ -1,7 +1,10 @@
 use crate::{
     Error, Result,
+    domain::camera::secrets,
     domain::camera::{CameraStatus, CaptureId, Link},
     events::AppEvent,
+    mechanisms::secrets::ftp_password,
+    ports::secrets::SecretStore,
     ports::{camera::CameraProvider, events::EventSink},
     services::{camera_ledger::LedgerService, health::HealthService},
 };
@@ -13,6 +16,33 @@ pub struct CameraService<'a> {
     ledger: Option<&'a LedgerService>,
 }
 impl<'a> CameraService<'a> {
+    pub fn set_secrets(
+        secrets_store: &dyn SecretStore,
+        user: &str,
+        password: &str,
+        changed: impl FnOnce(),
+    ) -> Result<()> {
+        secrets_store.set(secrets::ACCESS_AUTH_USER, user)?;
+        secrets_store.set(secrets::ACCESS_AUTH_PASSWORD, password)?;
+        changed();
+        Ok(())
+    }
+    pub fn generate_ftp_password(
+        secrets_store: &dyn SecretStore,
+        rng: impl FnMut() -> u8,
+        changed: impl FnOnce(&str),
+    ) -> Result<String> {
+        let password = ftp_password(rng);
+        secrets_store.set(secrets::FTP_PASSWORD, &password)?;
+        changed(&password);
+        Ok(password)
+    }
+    pub fn confirm_fingerprint(confirm: impl FnOnce() -> Result<()>) -> Result<()> {
+        confirm()
+    }
+    pub fn reject_fingerprint(reject: impl FnOnce() -> Result<()>) -> Result<()> {
+        reject()
+    }
     pub fn new(provider: &'a dyn CameraProvider, health: &'a HealthService) -> Self {
         Self {
             provider,

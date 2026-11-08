@@ -166,7 +166,7 @@ add_executable(camera-sidecar ${CRLAB_CLI_SOURCES} ${CRLAB_SDK_SOURCES})
 target_include_directories(camera-sidecar SYSTEM PRIVATE "${CRLAB_SDK_INCLUDE_DIR}")
 target_include_directories(camera-sidecar PRIVATE "${_gen}")
 target_link_libraries(camera-sidecar PRIVATE crlab_core crlab_usb "${CRLAB_SDK_CORE_LIB}")
-set_target_properties(camera-sidecar PROPERTIES BUILD_RPATH "@executable_path" INSTALL_RPATH "@executable_path")
+set_target_properties(camera-sidecar PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE BUILD_RPATH "@executable_path" INSTALL_RPATH "@executable_path")
 
 # Runtime layout for running the build-directory binary on the build machine only: the SDK loads
 # libCr_Core and the CrAdapter plug-ins relative to the executable. These copies stay in the build

@@ -74,6 +74,7 @@ pub struct StepOutcome {
     /// The idle-sleep assertion changes (R-I23): `Some(true)` hold, `Some(false)` release; only
     /// emitted on a change, so a repeated USB `connection.ready` never holds twice (P48 L15).
     pub sleep: Option<bool>,
+    pub fingerprint_pending: Vec<String>,
 }
 impl StepOutcome {
     fn start(&mut self, reason: StartReason) {
@@ -99,6 +100,7 @@ struct AdapterState {
     want_sleep: Option<bool>,
     /// Whether the adapter last asked for the assertion to be held.
     sleep_held: bool,
+    pending_fingerprint: Option<(String, bool)>,
 }
 
 pub struct DirectCameraAdapter {
@@ -226,6 +228,7 @@ impl DirectCameraAdapter {
                 claims: 0,
                 want_sleep: None,
                 sleep_held: false,
+                pending_fingerprint: None,
             }),
         }
     }
@@ -264,6 +267,31 @@ impl DirectCameraAdapter {
     /// Our SDK session runs over the cable.
     pub fn usb_session(&self) -> bool {
         matches!(locked(&self.state).inputs.session, Some((_, Link::Cable)))
+    }
+    pub fn current_link(&self) -> Option<Link> {
+        locked(&self.state)
+            .inputs
+            .session
+            .as_ref()
+            .map(|(_, link)| link.clone())
+    }
+    pub fn confirm_fingerprint(&self) -> Result<()> {
+        let replace = locked(&self.state)
+            .pending_fingerprint
+            .as_ref()
+            .map(|(_, r)| *r)
+            .ok_or(Error::FingerprintNotPending)?;
+        self.runtime()?.send_command(Command::AcceptFingerprint {
+            replace,
+            cmd_id: String::new(),
+        })?;
+        Ok(())
+    }
+    pub fn reject_fingerprint(&self) -> Result<()> {
+        if locked(&self.state).pending_fingerprint.is_none() {
+            return Err(Error::FingerprintNotPending);
+        }
+        Ok(())
     }
 
     /// How many `usb.claimed_by` events arrived so far.
@@ -389,6 +417,15 @@ impl DirectCameraAdapter {
         sink: &dyn CaptureSink,
         out: &mut StepOutcome,
     ) {
+        if let SidecarEvent::SshFingerprint {
+            status,
+            fingerprint: Some(fp),
+            ..
+        } = &stamped.event
+            && (status == "unknown" || status == "MISMATCH")
+        {
+            out.fingerprint_pending.push(fp.clone());
+        }
         match &stamped.event {
             SidecarEvent::SdkDownloadCompleted {
                 filename,
@@ -553,10 +590,25 @@ impl DirectCameraAdapter {
                 "none" => state.inputs.busy = None,
                 _ => {}
             },
-            SidecarEvent::SshFingerprint { status, .. } => match status.as_str() {
-                "unknown" => state.add(NeedsActionReason::FingerprintUnconfirmed, None),
-                "MISMATCH" => state.add(NeedsActionReason::FingerprintMismatch, None),
+            SidecarEvent::SshFingerprint {
+                status,
+                fingerprint,
+                ..
+            } => match status.as_str() {
+                "unknown" => {
+                    state.add(NeedsActionReason::FingerprintUnconfirmed, None);
+                    if let Some(fp) = fingerprint {
+                        state.pending_fingerprint = Some((fp.clone(), false));
+                    }
+                }
+                "MISMATCH" => {
+                    state.add(NeedsActionReason::FingerprintMismatch, None);
+                    if let Some(fp) = fingerprint {
+                        state.pending_fingerprint = Some((fp.clone(), true));
+                    }
+                }
                 "match" | "pinned" => {
+                    state.pending_fingerprint = None;
                     state.remove(&NeedsActionReason::FingerprintUnconfirmed);
                     state.remove(&NeedsActionReason::FingerprintMismatch);
                 }
