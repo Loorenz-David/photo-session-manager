@@ -82,3 +82,12 @@ This phase **is** the try-out; the narrative is the evidence section in plain wo
 
 ## Review log
 
+- 2026-11-08 run 1 (orchestrator + owner, dev Mac, packaged build of `3dfd581`): **partial; stopped by the owner after A15 to fix the findings first.**
+  Results in evidence `sony_camera_lab.md` §Acceptance (P52, 2026-11-08). Pass: A4, A5, A7, A14, A18 (USB + Wi-Fi), A9 so far, A12 with a note.
+  Fail or not runnable: A0 install (F1), A1 (F3), A3 (F4), A6 Wi-Fi fallback (F6), A10 (F8), A15 (F9), A17 (F7). Not run: A2, A8, A11, A13, A16, A18 quit.
+  Routes (orchestrator): **P53_camera_upload_and_log** ← F9 (226 before hashing), F8 (camera stopped sending: tell the photographer), F2 (helper and
+  receiver lines in the app log; osascript noise to debug). **P54_camera_cable_and_take_back** ← F7 (deferred renders do not block), F10 (no Capture One
+  relaunch while the cable is waiting for our helper), F6 (Wi-Fi while another program holds the cable), F3 (`Connecting`, Retry). **P55_camera_setup_polish**
+  ← F1 (Sony's download as is; "missing" vs "changed"), F4 (capture button), F5 (first restart at once), Auto FTP in the setup steps. F11 (faster previews,
+  reframing before Capture One's render) → owner card, planned after P55. 10E's A10 pass value is superseded by the measurement: the camera does **not**
+  re-send after a failed upload; it stops until FTP Function is toggled. Run 2 (remaining rows + reruns of every failed row) after P55; then the work Mac.
