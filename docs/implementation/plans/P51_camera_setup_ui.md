@@ -145,3 +145,10 @@ connect shows the fingerprint card — compare with the camera menu and confirm.
   projection (from the P48 projection's notes): R-I32 says the button "is disabled and says why", while this plan shows the preconditions only as a toast
   after the click; P48 offers no read-only precondition query.
 
+- **2026-11-08, orchestrator ruling on implement r1 (BLOCKED at C8(c)).** P51 deliberately changes the camera dot. The title becomes `Camera connected by cable|Wi-Fi`, and a click opens the card instead of retrying (10E, this plan C1/C2). The older assertions in `apps/desktop/src/features/sessions/__tests__/p07_shell_sessions_ui.test.tsx` that pin the P07 title, hover help and click-to-retry therefore describe superseded behaviour. **The perimeter is extended to that file and to `apps/desktop/src/features/shell/__tests__/p19_navigation.test.tsx`.**
+  - In p07, update only the camera-dot assertions to P51's behaviour. Keep each test's intent: the dot shows the connected state and the click does what P51 says. Delete nothing else.
+  - In p19, add `cameraSupportGet` (and any other new camera service call Settings mounts) to the `@/services/camera` mock so Settings mounts without unhandled errors.
+  - No other old test may change.
+  - The known intermittent `p33_split_grid` case is not P51's (backlog); if it is red in one full run and green on a rerun, record both.
+
+  Resume from checkpoint `67975d9`: finish C8(c), then close normally.
