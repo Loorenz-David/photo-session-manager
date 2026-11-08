@@ -227,3 +227,14 @@ gains `camera/sony/2.02.00/` with the runtime and `camera-sidecar`. 2. Generate 
 
   Files allowed: `crates/integrations/src/camera/runtime.rs`, `crates/testkit/src/fake_secrets.rs` (a get counter), `crates/testkit/tests/p50_camera_settings_and_support.rs`, `apps/desktop/src-tauri/src/lib.rs` (the `c6a` test only, if needed). **Do not run the full workspace suite until the runtime change is in.** The five tests prompt on the owner's Mac. Run them only after the gate, and the re-reviewer then runs the whole suite unskipped. R1 (c5d cannot fail) stays DROP → backlog.
 - **2026-11-08 fix r3 (codex; authorised fix 2).** Resolved F3 by gating the FTP-password cache lookup and asynchronous store read on `support::installed(&self.paths).is_some()` in `CameraRuntime::bind`; the read remains off the start path. Added criterion C5(e), a read counter to `FakeSecrets`, and a boundary test that opens a support-free app, ticks the runtime, allows any incorrectly launched async read to run, then asserts zero store reads. This keeps P00 C1(b)/C4(d), P05 C7(a)/C7(b), and desktop C6(a) away from the real Keychain: the runtime gate returns before the store is queried. No desktop test edit was needed. First full workspace run hit the already-triaged C5(a) random-temp-path failure (R2 DROP); isolated C5(a) rerun passed, then the full unskipped workspace rerun passed (816/816). Clippy, fmt, typecheck and UI 369/369 passed. No new assumption or divergence.
+- **2026-11-08 re-review r3 (opus): APPROVED_WITH_NOTES.** Perimeter: `00d112e` = `runtime.rs`, `fake_secrets.rs` (get counter), the p50 test
+  file (+`c5e`), the C5(e) row and header count, tracker, Review log, fix handoff, exactly as the FIX2 ruling allowed (desktop `lib.rs`
+  untouched). Rust 816/0 unskipped (794 in a full run cut off by the session time limit inside the p50 binary, plus the p50 binary 22/22
+  and doc tests run separately; the five real-Keychain `open_with` tests are green), clippy, fmt, typecheck, UI 369/369 (reviewer run, code tree `00d112e`).
+  - **F3 resolved:** `bind`'s `cached`/thread read of `ftp-password` now sits under `support::installed(&paths).is_some()`, which is the
+    same condition as the old `installed_sidecar` guard, so no receiver case is lost. With support the read stays on a thread (P47 (d)).
+    Install → `support_changed` + `reopen` re-binds and reads. Damaged → no read. The remaining no-support reads are the user actions
+    Generate and set-secrets.
+  - **R3 (B2) → DROP:** C5(e) cannot fail on F3. `with_fake_document` keeps the `FakeSecrets` cache on and seeds `ftp-password`, so the
+    pre-fix `bind` took the synchronous `cached` branch and `get_count()` was also 0 (by reading). Backlog: bind with a cache-less store.
+  - **Note → DROP:** no C5(d) row exists for the F1 test `c5d` (untraced). Backlog.
