@@ -15,6 +15,7 @@ export function CameraSection({ ports, onPortsChange }: { ports: CameraSettingsD
   const [loginPassword, setLoginPassword] = useState('');
   const [fingerprint, setFingerprint] = useState<string | null>(null);
   const [fingerprintChanged, setFingerprintChanged] = useState(false);
+  const [fingerprintNeedsAction, setFingerprintNeedsAction] = useState(false);
   const [check, setCheck] = useState<TestConnectionResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -27,7 +28,7 @@ export function CameraSection({ ports, onPortsChange }: { ports: CameraSettingsD
       if (!alive || status.kind !== 'needs_action') return;
       if (status.reason === 'fingerprint_mismatch' || status.reason === 'fingerprint_unconfirmed') {
         setFingerprintChanged(status.reason === 'fingerprint_mismatch');
-        setFingerprint(current => current ?? 'Check the camera fingerprint');
+        setFingerprintNeedsAction(true);
       }
     }).catch(() => undefined);
     return () => { alive = false; off?.(); };
@@ -62,8 +63,8 @@ export function CameraSection({ ports, onPortsChange }: { ports: CameraSettingsD
       <label>Access Authentication password<Input type="password" value={loginPassword} autoComplete="new-password" onChange={e => setLoginPassword(e.target.value)} /></label>
       <Button type="button" disabled={busy} onClick={() => void run(async () => { await cameraSecretsSet({access_auth_user: user, access_auth_password: loginPassword}); setUser(''); setLoginPassword(''); toast.success('Camera login saved'); })}>Save camera login</Button>
       <ol className="list-decimal pl-5">{cameraSteps.accessAuthentication.map(step => <li key={step}>{step}</li>)}</ol>
-      {fingerprint && <div className="rounded border p-3"><h4>{fingerprintChanged ? 'Fingerprint changed' : 'Confirm camera fingerprint'}</h4><p>Compare with the camera: MENU › Network › Network Option › Access Authen. Info</p><code>{fingerprint}</code>
-        <div className="flex gap-2"><Button type="button" onClick={() => void run(async () => { await cameraFingerprintConfirm(); setFingerprint(null); })}>Confirm</Button><Button type="button" variant="outline" onClick={() => void run(async () => { await cameraFingerprintReject(); setFingerprint(null); })}>Not mine</Button></div>
+      {(fingerprint || fingerprintNeedsAction) && <div className="rounded border p-3"><h4>{fingerprintChanged ? 'Fingerprint changed' : 'Confirm camera fingerprint'}</h4><p>Compare with the camera: MENU › Network › Network Option › Access Authen. Info</p>
+        {fingerprint ? <><code>{fingerprint}</code><div className="flex gap-2"><Button type="button" onClick={() => void run(async () => { await cameraFingerprintConfirm(); setFingerprint(null); setFingerprintNeedsAction(false); })}>Confirm</Button><Button type="button" variant="outline" onClick={() => void run(async () => { await cameraFingerprintReject(); setFingerprint(null); setFingerprintNeedsAction(false); })}>Not mine</Button></div></> : <p>The fingerprint will appear when the camera reports it.</p>}
       </div>}
     </>}
     <h3>Check</h3>
