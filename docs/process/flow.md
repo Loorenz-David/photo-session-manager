@@ -121,6 +121,7 @@ usable before Shopify; each plan file carries frontmatter `phase`, `title`, `dif
 Criteria rows name boundary, input, exact outcome and trace (M1–M7 or a mechanism contract).
 
 ## Log
+- **2026-11-08 v1.3 (owner).** No Fable for now (the owner's Fable allowance is running out): the planner runs on Opus 5.5 (`run_phase.sh` planner session `--model opus`); plans and fix plans written by the orchestrator are written on Opus; no new plan may carry `implementer: fable` (owner standing rule: never Fable for implementation). The table in §2 still names Fable for the orchestrator and planner roles; read it as Opus until the owner says otherwise.
 - **2026-10-24 v1.2.** Orchestrator entry point (§2A), `archive` command, second fix by explicit authorisation.
 - **2026-10-24 v1.1.** §6A: sessions may trigger captures through Capture One; suite stays hardware-free.
 - **2026-10-24 v1.** Created from the owner's brief: Rust/Tauri stack, no tester role, no

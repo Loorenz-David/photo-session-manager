@@ -289,7 +289,7 @@ case "$cmd" in
   plan)
     h="$IMPL/handoffs/reviewer/handoff_master_plan_r1.md"; p="$IMPL/prompts/reviewer/master_plan_r1.md"; DRY_HANDOFF="$h"
     render "$TPL/plan.md" "$p" DATE="$DATE" ROOT="$ROOT" HANDOFF="$h"; commit_artifacts "pipeline: planning prompt"
-    run_claude pipeline-planner fable "$p" "$RUNS/plan_r1.last.md" "$RUNS/plan_r1.log" || true
+    run_claude pipeline-planner opus "$p" "$RUNS/plan_r1.last.md" "$RUNS/plan_r1.log" || true
     commit_artifacts "pipeline: master plan and phase plans"
     st="$(session_state "$RUNS/plan_r1.last.md" "$h")"; log "plan state: $st"; [[ "$st" == DONE ]] || exit 10 ;;
   phase)
