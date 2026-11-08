@@ -39,6 +39,8 @@ pub enum StartState {
 struct Inner {
     state: StartState,
     first_wait: Option<Instant>,
+    usb_present: Option<bool>,
+    usb_ready: bool,
 }
 
 pub struct StartOrder {
@@ -56,6 +58,8 @@ impl StartOrder {
                     StartState::Satisfied(StartReason::NotNeeded)
                 },
                 first_wait: None,
+                usb_present: None,
+                usb_ready: false,
             }),
         })
     }
@@ -69,6 +73,39 @@ impl StartOrder {
     pub fn is_waiting(&self) -> bool {
         let inner = self.lock();
         inner.state == StartState::Waiting && inner.first_wait.is_some()
+    }
+    /// Live cable state is separate from the one-shot app-start gate. A later editor relaunch
+    /// must give the helper another chance to claim an attached cable (V6).
+    pub fn camera_state(&self, present: Option<bool>, ready: Option<bool>) {
+        let mut inner = self.lock();
+        if let Some(present) = present {
+            inner.usb_present = Some(present);
+            if !present {
+                inner.usb_ready = false;
+            }
+        }
+        if let Some(ready) = ready {
+            inner.usb_ready = ready;
+        }
+    }
+    pub fn needs_relaunch_wait(&self) -> bool {
+        let inner = self.lock();
+        inner.usb_present == Some(true) && !inner.usb_ready
+    }
+    pub fn wait_for_relaunch(&self, clock: &dyn Clock) {
+        let first = clock.mono();
+        loop {
+            let inner = self.lock();
+            if inner.usb_present != Some(true)
+                || inner.usb_ready
+                || clock.mono().saturating_duration_since(first)
+                    >= Duration::from_millis(START_ORDER_WAIT_MS)
+            {
+                return;
+            }
+            drop(inner);
+            thread::sleep(Duration::from_millis(50));
+        }
     }
     /// The first condition that holds wins; later ones change nothing.
     pub fn satisfy(&self, reason: StartReason) {

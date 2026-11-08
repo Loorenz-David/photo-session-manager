@@ -488,7 +488,9 @@ impl EditingProvider for CaptureOneAdapter {
     fn renders_in_flight(&self) -> usize {
         self.renders
             .lock()
-            .map(|s| s.jobs.len() + s.pending.len())
+            // Pending work has not been handed to Capture One yet. It survives a quit and is
+            // retried when the editor is available again; only issued jobs can be lost.
+            .map(|s| s.jobs.len().max(s.busy.len()))
             .unwrap_or(0)
     }
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()> {

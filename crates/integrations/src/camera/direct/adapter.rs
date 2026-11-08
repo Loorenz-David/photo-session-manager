@@ -75,6 +75,8 @@ pub struct StepOutcome {
     /// emitted on a change, so a repeated USB `connection.ready` never holds twice (P48 L15).
     pub sleep: Option<bool>,
     pub fingerprint_pending: Vec<(String, bool)>,
+    pub usb_present: Option<bool>,
+    pub usb_ready: Option<bool>,
 }
 impl StepOutcome {
     fn start(&mut self, reason: StartReason) {
@@ -101,6 +103,7 @@ struct AdapterState {
     /// Whether the adapter last asked for the assertion to be held.
     sleep_held: bool,
     pending_fingerprint: Option<(String, bool)>,
+    usb_present: Option<bool>,
 }
 
 pub struct DirectCameraAdapter {
@@ -229,6 +232,7 @@ impl DirectCameraAdapter {
                 want_sleep: None,
                 sleep_held: false,
                 pending_fingerprint: None,
+                usb_present: None,
             }),
         }
     }
@@ -274,6 +278,21 @@ impl DirectCameraAdapter {
             .session
             .as_ref()
             .map(|(_, link)| link.clone())
+    }
+    /// Retry a disconnected helper immediately, with an observable status before its next tick.
+    pub fn retry(&self) -> Result<CameraStatus> {
+        self.runtime()?.send_command(Command::UsbRetry {
+            cmd_id: String::new(),
+        })?;
+        let mut state = locked(&self.state);
+        let link = if state.usb_present == Some(true) {
+            Link::Cable
+        } else {
+            Link::Wireless
+        };
+        state.inputs.connecting = Some(link);
+        state.inputs.busy = None;
+        Ok(derive_status(&state.inputs))
     }
     pub fn confirm_fingerprint(&self, shown: &str) -> Result<()> {
         let (fingerprint, replace) = locked(&self.state)
@@ -387,6 +406,7 @@ impl DirectCameraAdapter {
                     state.remove(&NeedsActionReason::FingerprintMismatch);
                 }
                 HelperEvent::Exited => {
+                    out.usb_ready = Some(false);
                     state.inputs.session = None;
                     state.inputs.connecting = None;
                     state.inputs.busy = None;
@@ -486,6 +506,7 @@ impl DirectCameraAdapter {
                 out.start(StartReason::SidecarUnavailable);
             }
             SidecarEvent::UsbClaimedBy { owners, .. } => {
+                out.usb_ready = Some(false);
                 // R-I30: one process listing per claim, read outside the state lock.
                 let owner = holder_from_owners(owners);
                 let running = self
@@ -507,13 +528,42 @@ impl DirectCameraAdapter {
                 state.holder = Some((owner, report));
                 state.claims += 1;
             }
-            SidecarEvent::UsbInitial { present: false } => out.start(StartReason::NoCameraOnCable),
-            SidecarEvent::UsbFallbackToWifi { .. } => out.start(StartReason::FallbackToWifi),
+            SidecarEvent::UsbInitial { present } => {
+                out.usb_present = Some(*present);
+                locked(&self.state).usb_present = Some(*present);
+                if !present {
+                    out.start(StartReason::NoCameraOnCable);
+                }
+            }
+            SidecarEvent::UsbArrived { .. } => {
+                out.usb_present = Some(true);
+                locked(&self.state).usb_present = Some(true);
+            }
+            SidecarEvent::UsbRemoved { .. } => {
+                out.usb_present = Some(false);
+                locked(&self.state).usb_present = Some(false);
+            }
+            SidecarEvent::UsbFallbackToWifi { .. } => {
+                out.start(StartReason::FallbackToWifi);
+                locked(&self.state).inputs.connecting = Some(Link::Wireless);
+            }
             SidecarEvent::ConnectionReady {
                 transport: Transport::Usb,
                 ..
             } => {
                 out.start(StartReason::UsbReady);
+                out.usb_ready = Some(true);
+                self.apply_status(&stamped.event, sink);
+            }
+            SidecarEvent::SessionClosed {
+                transport: Transport::Usb,
+                ..
+            }
+            | SidecarEvent::SessionLost {
+                transport: Transport::Usb,
+                ..
+            } => {
+                out.usb_ready = Some(false);
                 self.apply_status(&stamped.event, sink);
             }
             event => self.apply_status(event, sink),
@@ -535,7 +585,12 @@ impl DirectCameraAdapter {
                 "CONNECTING_WIFI" => state.inputs.connecting = Some(Link::Wireless),
                 "CONNECTED_USB" | "CONNECTED_WIFI" => state.inputs.connecting = None,
                 "SWITCHING" => state.inputs.busy = Some(BusyReason::Switching),
-                "DISCONNECTED" | "RECOVERING" | "ERROR" => {
+                "DISCONNECTED" | "RECOVERING" => {
+                    // Retryable gaps follow discovery/connect in the same stdout batch. Keep
+                    // the link visible through backoff until ready or a terminal error.
+                    state.inputs.busy = None;
+                }
+                "ERROR" => {
                     state.inputs.connecting = None;
                     state.inputs.busy = None;
                 }

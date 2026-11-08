@@ -155,6 +155,15 @@ impl TakeBackService {
             holder_is_capture_one: self.adapter.holder_is_capture_one(),
         })
     }
+    /// Read-only form of the click guard, for the disabled button (R-I32).
+    pub fn blocked_reason(&self) -> Result<Option<String>> {
+        if self.running.load(Ordering::SeqCst) {
+            return Ok(Some(ALREADY_RUNNING.into()));
+        }
+        Ok(preconditions(&self.inputs()?)
+            .err()
+            .map(|blocked| blocked.reason.into()))
+    }
 
     /// R-I32 steps 1–6 on the caller's thread.
     pub fn run(&self) -> Result<TakeBackReport> {

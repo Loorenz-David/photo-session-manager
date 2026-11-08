@@ -602,6 +602,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::sessions::session_active,
         commands::camera::camera_status,
         commands::camera::camera_retry,
+        commands::camera::camera_take_back_availability,
         commands::camera::camera_capture,
         commands::camera::camera_reconnect,
         commands::camera::camera_files_not_received_dismiss,
@@ -1150,6 +1151,99 @@ mod p48_tests {
             call(&w, "camera_test_connection").unwrap(),
             json!({"holder":null,"programs":["Photos"],"sentence":null})
         );
+    }
+}
+
+#[cfg(test)]
+mod p54_tests {
+    use super::*;
+    use psm_core::domain::camera::CameraStatus;
+    use serde_json::{Value, json};
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+
+    fn call(w: &tauri::WebviewWindow<tauri::test::MockRuntime>, cmd: &str) -> Value {
+        let body = get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(json!({})),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .unwrap();
+        match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        }
+    }
+
+    #[test]
+    fn c4b_retry_command_sends_reconnect_and_returns_connecting() {
+        let script =
+            include_str!("../../../../crates/testkit/src/fixtures/sidecar_scripts/ready_wifi.txt");
+        let a = psm_testkit::TestApp::with_camera_script(script).unwrap();
+        let end = Instant::now() + Duration::from_secs(10);
+        while !matches!(a.camera_status().unwrap(), CameraStatus::Connected { .. }) {
+            assert!(Instant::now() < end);
+            a.tick(0).unwrap();
+            thread::sleep(Duration::from_millis(10));
+        }
+        a.inject_all(&[
+            (
+                "session.closed",
+                json!({"transport":"wifi","reason":"lost"}),
+            ),
+            (
+                "transport.state",
+                json!({"from":"CONNECTED_WIFI","to":"DISCONNECTED","reason":"session closed","transport":"none"}),
+            ),
+        ])
+        .unwrap();
+        while a.camera_status().unwrap() != CameraStatus::Disconnected {
+            assert!(Instant::now() < end);
+            a.tick(0).unwrap();
+            thread::sleep(Duration::from_millis(10));
+        }
+        let rec = a.app.paths.root.join("camera/sony/test/rec");
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![commands::camera::camera_retry])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        assert_eq!(
+            call(&w, "camera_retry"),
+            json!({"kind":"connecting","link":"wireless"})
+        );
+        let sent = loop {
+            let sent = std::fs::read_to_string(rec.join("stdin.log"))
+                .unwrap_or_default()
+                .lines()
+                .any(|line| {
+                    line.split_once(' ')
+                        .is_some_and(|(_, command)| command.starts_with("usb-retry"))
+                });
+            if sent || Instant::now() >= end {
+                break sent;
+            }
+            thread::sleep(Duration::from_millis(10));
+        };
+        assert!(sent, "Retry did not reach the helper");
     }
 }
 

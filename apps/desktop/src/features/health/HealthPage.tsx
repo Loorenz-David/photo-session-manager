@@ -5,7 +5,7 @@ import { SkeletonRows } from '@/components/pending/SkeletonRows';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePageData } from '@/lib/pending';
 import { PageHeader } from '@/features/shell/PageHeader';
-import { cameraFilesNotReceivedDismiss, cameraTakeBack } from '@/services/camera';
+import { cameraFilesNotReceivedDismiss, cameraTakeBack, cameraTakeBackAvailability } from '@/services/camera';
 import { HelperLog } from './HelperLog';
 import { toast } from 'sonner';
 import { takeBackError } from '@/features/shell/CameraCard';
@@ -31,7 +31,17 @@ export function HealthPage() {
   const health = data?.[0];
   const paths = data?.[1];
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [takeBackBlocked, setTakeBackBlocked] = useState<string | null>('Checking…');
   useEffect(() => { if (health) setCheckedAt(new Date().toLocaleTimeString()); }, [health]);
+  const hasHeldCamera = health?.items.some(item => item.code === 'camera_held') ?? false;
+  useEffect(() => {
+    if (!hasHeldCamera) return;
+    let active = true;
+    const check = () => { void cameraTakeBackAvailability().then(reason => { if (active) setTakeBackBlocked(reason); }).catch(() => { if (active) setTakeBackBlocked('Could not check the camera'); }); };
+    check();
+    const interval = setInterval(check, 1000);
+    return () => { active = false; clearInterval(interval); };
+  }, [hasHeldCamera]);
   const refresh = async () => { await reload(); };
   const takeBack = async () => { try { const result = await cameraTakeBack(); toast.success(result.camera_held ? 'Camera back on the cable' : 'Capture One reopened; the camera is still held'); await reload(); } catch (e) { toast.error(takeBackError(e)); } };
 
@@ -40,7 +50,7 @@ export function HealthPage() {
       {loading ? <SkeletonRows n={4} /> : error ? <p role="alert">{String(error)}</p> : <div className="health-list">{health?.items.map((item, index) => <div className="health-row" key={`${item.code}-${index}`} data-ok={item.ok}>
         <div className="health-label"><span className="health-dot" data-ok={item.ok} />{names[item.code] ?? item.code}</div><div className="health-detail">{item.detail}{item.code.startsWith('document') && checkedAt && <span className="health-checked"> · checked {checkedAt}</span>}</div>
         {item.code === 'camera_files_not_received' && <ActionButton variant="outline" action={async () => { await cameraFilesNotReceivedDismiss(); await reload(); }}>Dismiss</ActionButton>}
-        {item.code === 'camera_held' && <ActionButton variant="outline" action={takeBack}>Take the camera back</ActionButton>}
+        {item.code === 'camera_held' && <><ActionButton variant="outline" action={takeBack} disabled={takeBackBlocked !== null}>Take the camera back</ActionButton>{takeBackBlocked && <span>{takeBackBlocked}</span>}</>}
       </div>)}</div>}
       <HelperLog />
     </section>

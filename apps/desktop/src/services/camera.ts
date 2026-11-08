@@ -19,6 +19,7 @@ export async function cameraCapture(): Promise<string> {
 export const cameraReconnect = async () => { unwrap(await commands.cameraReconnect()); };
 export const cameraFilesNotReceivedDismiss = async () => { unwrap(await commands.cameraFilesNotReceivedDismiss()); };
 export const cameraTakeBack = async () => unwrap(await commands.cameraTakeBack());
+export const cameraTakeBackAvailability = async (): Promise<string | null> => unwrap(await commands.cameraTakeBackAvailability()).reason;
 export const cameraTestConnection = async (): Promise<TestConnectionResponse> => unwrap(await commands.cameraTestConnection());
 export const cameraSupportGet = async (): Promise<CameraSupportDto | null> => unwrap(await commands.cameraSupportGet());
 export const cameraSupportInstall = async (path: string): Promise<CameraSupportDto> => unwrap(await commands.cameraSupportInstall(path));

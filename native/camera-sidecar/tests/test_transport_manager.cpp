@@ -45,6 +45,7 @@ struct FakeClock {
 struct MockCamera : CameraAdapter {
   FakeClock& clock;
   bool usb_visible = false;
+  bool usb_endpoint_available = true;
   bool wifi_visible = true;
   int fail_usb_connects = 0;   // next N USB connects fail
   int fail_wifi_connects = 0;
@@ -63,7 +64,7 @@ struct MockCamera : CameraAdapter {
     calls.push_back(std::string("discover:") + to_string(t));
     clock.advance(discover_cost_ms);
     last_saw_usb = usb_visible;
-    if (t == Transport::Usb && usb_visible) return {{"SN123", "ILCE-7RM5", Transport::Usb, "usb:1"}};
+    if (t == Transport::Usb && usb_visible && usb_endpoint_available) return {{"SN123", "ILCE-7RM5", Transport::Usb, "usb:1"}};
     if (t == Transport::Wifi && wifi_visible) return {{"SN123", "ILCE-7RM5", Transport::Wifi, "192.168.1.50"}};
     return {};
   }
@@ -248,6 +249,53 @@ TEST_CASE("repeated usb connect failure falls back to wifi") {
   int usb_connects = 0;
   for (auto& c : r.cam.calls) usb_connects += (c == "connect:usb");
   CHECK_EQ(usb_connects, r.cfg.usb_failures_before_wifi_fallback);
+}
+
+TEST_CASE("P54 C3(a) busy USB claims fall back to Wi-Fi then return at a safe point") {
+  Rig r;
+  r.cam.fail_usb_connects = 100;  // holder rejects every connect
+  r.plug_usb();
+  r.run(10000);
+  int usb_connects = 0;
+  for (auto& call : r.cam.calls) usb_connects += (call == "connect:usb");
+  CHECK_EQ(usb_connects, r.cfg.usb_failures_before_wifi_fallback);
+  CHECK_EQ(r.log.count("usb.fallback_to_wifi"), 1);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  r.unplug_usb();
+  r.run(500);
+  r.cam.fail_usb_connects = 0;  // holder quit
+  r.plug_usb();
+  r.tm->set_busy(BusyReason::FileTransfer);
+  r.run(6000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  r.tm->set_busy(BusyReason::None);
+  r.run(6000);
+  CHECK(r.tm->state() == State::ConnectedUsb);
+
+  // A claimed interface can also disappear from SDK enumeration entirely.
+  Rig hidden;
+  hidden.cam.usb_endpoint_available = false;
+  hidden.plug_usb();
+  hidden.run(10000);
+  CHECK_EQ(hidden.log.count("usb.fallback_to_wifi"), 1);
+  CHECK(hidden.tm->state() == State::ConnectedWifi);
+  hidden.unplug_usb();
+  hidden.run(500);
+  hidden.cam.usb_endpoint_available = true;
+  hidden.plug_usb();
+  hidden.run(6000);
+  CHECK(hidden.tm->state() == State::ConnectedUsb);
+
+  // The general retry backoff may be longer; USB still reaches Wi-Fi within ten seconds.
+  Rig slow;
+  slow.cfg.backoff_initial_ms = 10000;
+  slow.cfg.backoff_max_ms = 30000;
+  slow.tm = std::make_unique<TransportManager>(slow.cam, slow.log, slow.cfg, [&slow] { return slow.clock.now; });
+  slow.cam.fail_usb_connects = 100;
+  slow.plug_usb();
+  slow.run(10000);
+  CHECK(slow.tm->state() == State::ConnectedWifi);
+  CHECK_EQ(slow.log.count("usb.fallback_to_wifi"), 1);
 }
 
 TEST_CASE("replugging usb after fallback gives usb a fresh chance") {

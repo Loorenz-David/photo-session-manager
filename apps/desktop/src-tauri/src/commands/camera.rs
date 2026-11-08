@@ -260,15 +260,45 @@ pub async fn camera_retry(
     let (camera, health) = providers(&app)?;
     let events = app.events.clone();
     let runtime = app.camera_runtime.clone();
+    let direct = runtime.direct_adapter();
     let status = tauri::async_runtime::spawn_blocking(move || {
-        CameraService::new(camera.as_ref(), health.as_ref())
-            .with_events(events.as_ref())
-            .retry()
+        let status = if camera.capabilities().depends_on_editing_provider {
+            CameraService::new(camera.as_ref(), health.as_ref()).retry()?
+        } else {
+            direct.retry()?
+        };
+        psm_core::ports::events::EventSink::emit(
+            events.as_ref(),
+            psm_core::events::AppEvent::CameraStatusChanged {
+                status: status.clone(),
+            },
+        );
+        Ok::<_, psm_core::Error>(status)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
     .map_err(CommandError::from)?;
     Ok(CameraStatusResponse::from(status).with_link(runtime.direct_adapter().current_link()))
+}
+#[derive(Clone, Serialize, Type)]
+pub struct TakeBackAvailability {
+    pub reason: Option<String>,
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_take_back_availability(
+    state: State<'_, AppState>,
+) -> Result<TakeBackAvailability, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    let runtime = app.camera_runtime.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok::<_, psm_core::Error>(TakeBackAvailability {
+            reason: runtime.take_back()?.blocked_reason()?,
+        })
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    .map_err(Into::into)
 }
 /// The id `camera_capture` answers (MC-31 §Capture; the exposure row carries it).
 #[derive(Clone, Serialize, Type)]

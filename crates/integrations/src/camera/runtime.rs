@@ -783,6 +783,8 @@ impl CameraRuntime {
         if let Some(reason) = outcome.start {
             self.start_order.satisfy(reason);
         }
+        self.start_order
+            .camera_state(outcome.usb_present, outcome.usb_ready);
         match outcome.sleep {
             Some(true) => {
                 if let Err(error) = self.sleep.read().unwrap().hold(SLEEP_REASON) {

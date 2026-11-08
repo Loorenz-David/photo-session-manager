@@ -21,6 +21,7 @@ export const commands = {
 	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
 	cameraStatus: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_status")),
 	cameraRetry: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_retry")),
+	cameraTakeBackAvailability: () => typedError<TakeBackAvailability_Serialize, CommandError>(__TAURI_INVOKE("camera_take_back_availability")),
 	cameraCapture: () => typedError<CaptureResponse, CommandError>(__TAURI_INVOKE("camera_capture")),
 	/**  R-I29: reopen the camera's Wi-Fi session (`reconnect_on_cable_refused` on USB). */
 	cameraReconnect: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_reconnect")),
@@ -759,6 +760,16 @@ export type SettingsPatchDto_Serialize = {
 	theme?: string,
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
+};
+
+export type TakeBackAvailability = TakeBackAvailability_Serialize | TakeBackAvailability_Deserialize;
+
+export type TakeBackAvailability_Deserialize = {
+	reason?: string | null,
+};
+
+export type TakeBackAvailability_Serialize = {
+	reason: string | null,
 };
 
 /**  What "Take the camera back" did (10E MC-34 R-I32). */

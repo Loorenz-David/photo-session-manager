@@ -197,7 +197,10 @@ void TransportManager::schedule_retry(Transport t) {
       return;
     }
   }
+  // The cable can be held by another program. Three quick USB attempts must give Wi-Fi its
+  // chance within the take-back window even if the general retry backoff is configured higher.
   int64_t delay = backoff_delay(cfg_, failures_);
+  if (t == Transport::Usb) delay = std::min<int64_t>(delay, 2000);
   next_attempt_ms_ = now + delay;
   log_.emit("connect.retry_scheduled",
             Fields().str("transport", to_string(t)).num("failures", failures_).num("delay_ms", delay));
@@ -277,6 +280,8 @@ bool TransportManager::try_connect(Transport t) {
     return false;
   }
   if (eps.empty()) {
+    // A claimed USB interface can make enumeration return no endpoint at all. Count that
+    // attempt toward the same bounded Wi-Fi fallback as a failed USB connect.
     schedule_retry(t);
     set_state(recovering ? State::Recovering : State::Disconnected, "camera not found");
     return false;

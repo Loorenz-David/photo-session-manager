@@ -16,7 +16,7 @@ export function CameraDot() {
     return () => { alive = false; unlisten?.(); };
   }, []);
   const label = !status ? 'Checking the camera…' : status.kind === 'connected' ? `${status.name} · ${status.link === 'wireless' ? 'Wi-Fi' : 'Cable'}`
-    : status.kind === 'connecting' ? 'Connecting…'
+    : status.kind === 'connecting' ? `Connecting · ${status.link === 'wireless' ? 'Wi-Fi' : 'Cable'}`
     : status.kind === 'busy' ? ({exposure: 'Taking a photo', transfer: 'Receiving a photo', switching: 'Switching connection'}[status.reason] ?? 'Camera busy')
     : status.kind === 'needs_action' ? status.message.length > 48 ? `${status.message.slice(0, 48)}…` : status.message
     : 'Camera disconnected';

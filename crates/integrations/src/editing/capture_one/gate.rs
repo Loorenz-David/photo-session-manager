@@ -65,6 +65,15 @@ impl GatedScripting {
         if self.launch_gate.refuses_here() {
             return Err(Error::EditorLaunchDeferred);
         }
+        if !self.launch_gate.permitted_here()
+            && self.start_order.needs_relaunch_wait()
+            && !self.call(|i| i.editor_info())?.running
+        {
+            self.start_order.wait_for_relaunch(self.clock.as_ref());
+            if self.launch_gate.refuses_here() {
+                return Err(Error::EditorLaunchDeferred);
+            }
+        }
         self.call(f)
     }
     fn call<T>(&self, f: impl FnOnce(&dyn CaptureOneScripting) -> Result<T>) -> Result<T> {
@@ -113,9 +122,16 @@ impl CaptureOneScripting for GatedScripting {
             return Err(Error::EditorLaunchDeferred);
         }
         if !self.launch_gate.permitted_here() {
-            self.start_order.wait(self.clock.as_ref());
+            if self.start_order.state() == crate::camera::direct::start_order::StartState::Waiting {
+                self.start_order.wait(self.clock.as_ref());
+            } else {
+                self.start_order.wait_for_relaunch(self.clock.as_ref());
+            }
         }
-        self.launching(|i| i.launch())
+        if self.launch_gate.refuses_here() {
+            return Err(Error::EditorLaunchDeferred);
+        }
+        self.call(|i| i.launch())
     }
     fn make_document(&self, parent: &str, name: &str) -> Result<String> {
         self.launching(|i| i.make_document(parent, name))

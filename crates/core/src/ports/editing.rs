@@ -49,7 +49,7 @@ pub trait EditingProvider: Send + Sync {
     fn finish_render(&self, job: &str, now: Instant, now_ms: i64) -> Result<()>;
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>>;
     fn render_in_flight(&self, raw: &str) -> bool;
-    /// How many renders the provider has issued and not finished (or queued behind a busy one):
+    /// How many renders the provider has issued and not finished (including a start in progress):
     /// "Take the camera back" waits for none (10E MC-34 R-I32).
     fn renders_in_flight(&self) -> usize {
         0
