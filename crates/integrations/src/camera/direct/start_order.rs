@@ -45,6 +45,7 @@ struct Inner {
 
 pub struct StartOrder {
     inner: Mutex<Inner>,
+    relaunch_retry: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 impl StartOrder {
@@ -61,6 +62,7 @@ impl StartOrder {
                 usb_present: None,
                 usb_ready: false,
             }),
+            relaunch_retry: Mutex::new(None),
         })
     }
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -92,7 +94,23 @@ impl StartOrder {
         let inner = self.lock();
         inner.usb_present == Some(true) && !inner.usb_ready
     }
+    /// Installs the helper command used to give USB another chance during a later relaunch wait.
+    pub fn set_relaunch_retry(&self, retry: Arc<dyn Fn() + Send + Sync>) {
+        *self
+            .relaunch_retry
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(retry);
+    }
     pub fn wait_for_relaunch(&self, clock: &dyn Clock) {
+        if self.needs_relaunch_wait()
+            && let Some(retry) = self
+                .relaunch_retry
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .clone()
+        {
+            retry();
+        }
         let first = clock.mono();
         loop {
             let inner = self.lock();

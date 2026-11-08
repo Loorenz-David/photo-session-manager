@@ -181,7 +181,7 @@ impl CameraRuntime {
         receiver_bind: IpAddr,
         start_order: Arc<StartOrder>,
     ) -> Arc<Self> {
-        Arc::new(Self {
+        let runtime = Arc::new(Self {
             run_id: Uuid::new_v4().to_string(),
             supervisor: Mutex::new(None),
             sidecar_events: Mutex::new(VecDeque::new()),
@@ -214,7 +214,18 @@ impl CameraRuntime {
             take_back_running: Arc::new(AtomicBool::new(false)),
             bundled_sidecar: RwLock::new(None),
             staging_dir: Mutex::new(None),
-        })
+        });
+        let weak = Arc::downgrade(&runtime);
+        runtime.start_order.set_relaunch_retry(Arc::new(move || {
+            if let Some(runtime) = weak.upgrade()
+                && let Err(error) = runtime.send_command(Command::UsbRetry {
+                    cmd_id: String::new(),
+                })
+            {
+                tracing::warn!(%error, "relaunch wait: usb-retry not sent");
+            }
+        }));
+        runtime
     }
     /// The process-wide start order (R-I31).
     pub fn start_order(&self) -> Arc<StartOrder> {

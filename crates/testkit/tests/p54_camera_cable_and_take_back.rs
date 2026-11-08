@@ -129,21 +129,62 @@ fn c2a_relaunch_waits_for_our_usb_session_and_is_bounded() {
     });
     stopped(&a);
     a.fake.state.lock().unwrap().ops.clear();
-    a.app.start_order().camera_state(Some(true), Some(false));
+    a.inject("usb.initial", json!({"present":true})).unwrap();
+    a.inject(
+        "session.closed",
+        json!({"transport":"usb","reason":"Capture One released USB"}),
+    )
+    .unwrap();
+    a.inject(
+        "usb.claimed_by",
+        json!({"owners":"pid 512, Capture One","hint":"Capture One released the cable"}),
+    )
+    .unwrap();
+    settle(&a, || a.app.start_order().needs_relaunch_wait());
     thread::scope(|scope| {
         let handle = scope.spawn(|| a.user_lane().launch());
-        thread::sleep(Duration::from_millis(150));
+        settle(&a, || {
+            a.fake_sidecar_recording()
+                .stdin
+                .iter()
+                .any(|(_, line)| line.starts_with("usb-retry"))
+        });
+        assert_eq!(
+            a.fake_sidecar_recording()
+                .stdin
+                .iter()
+                .filter(|(_, line)| line.starts_with("usb-retry"))
+                .count(),
+            1
+        );
         assert!(!ops(&a).iter().any(|op| op == "launch"));
-        a.app.start_order().camera_state(None, Some(true));
+        a.inject(
+            "connection.ready",
+            json!({"transport":"usb","model":"ILCE-7RM5","store_destination":"verified"}),
+        )
+        .unwrap();
+        settle(&a, || !a.app.start_order().needs_relaunch_wait());
         handle.join().unwrap().unwrap();
     });
     assert!(ops(&a).iter().any(|op| op == "launch"));
     stopped(&a);
     a.fake.state.lock().unwrap().ops.clear();
-    a.app.start_order().camera_state(None, Some(false));
+    a.inject(
+        "session.closed",
+        json!({"transport":"usb","reason":"Capture One released USB"}),
+    )
+    .unwrap();
+    settle(&a, || a.app.start_order().needs_relaunch_wait());
     thread::scope(|scope| {
         let handle = scope.spawn(|| a.user_lane().launch());
-        thread::sleep(Duration::from_millis(150));
+        settle(&a, || {
+            a.fake_sidecar_recording()
+                .stdin
+                .iter()
+                .filter(|(_, line)| line.starts_with("usb-retry"))
+                .count()
+                == 2
+        });
         assert!(!ops(&a).iter().any(|op| op == "launch"));
         a.clock.advance(15_000);
         handle.join().unwrap().unwrap();
@@ -159,10 +200,24 @@ fn c2b_relaunches_immediately_without_cable_or_when_usb_is_ours() {
             &a,
             || matches!(a.camera_status().unwrap(), CameraStatus::Connected {link: l, ..} if l == link),
         );
+        let present = link == Link::Cable;
+        a.inject("usb.initial", json!({"present":present})).unwrap();
+        settle(&a, || {
+            a.sidecar_events().iter().any(|stamped| matches!(
+            stamped.event,
+            psm_integrations::camera::sidecar::protocol::SidecarEvent::UsbInitial { present: value } if value == present
+        ))
+        });
         stopped(&a);
         a.fake.state.lock().unwrap().ops.clear();
         a.user_lane().launch().unwrap();
         assert!(ops(&a).iter().any(|op| op == "launch"));
+        assert!(
+            !a.fake_sidecar_recording()
+                .stdin
+                .iter()
+                .any(|(_, line)| line.starts_with("usb-retry"))
+        );
     }
 }
 
