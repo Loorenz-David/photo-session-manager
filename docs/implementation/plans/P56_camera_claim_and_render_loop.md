@@ -33,6 +33,28 @@ point is that connection and disconnection happen fast and the flow is not distu
 
 **Not in this phase:** preview speed beyond ending the loop (F11, owner card), live view.
 
+## Orchestrator rulings (2026-11-08, after implement r1 BLOCKED; cards answered from the owner's stated intention, flow §6)
+The owner (2026-11-08): "we need a more reliable alternative for Session Manager to take over the camera fast, the whole point is that connection and
+disconnection happen fast and the flow is not disturbed." Both cards are answered from that sentence; the owner can override either.
+- **Ruling 1 (card 1, fast claim): Yes.** A cable plug-in is the photographer's signal to move to the cable. On the USB arrival event (not busy), the helper
+  closes the Wi-Fi session at once and starts the USB connect ≤ 300 ms after the event, retrying at ≤ 500 ms through the old 2.5 s settle window. If no USB
+  session results (interface held, or not ready by 2.5 s), the helper reconnects Wi-Fi **at once** (no backoff for this case). A busy camera still defers
+  the switch (R-I22, M39), then the same at-once rule applies. This supersedes the plan's earlier hazard line "must not drop the Wi-Fi session before USB
+  is ready" and MC-31's 2.5 s settle before the first attempt (the settle stays as the window in which attempts repeat).
+- **Ruling 2 (card 2, retry after three failures): retry on a release signal, not by blind probing.** Each USB probe would drop a working Wi-Fi session
+  (one SDK session at a time), which disturbs the flow. So: no periodic USB attempt while Wi-Fi is connected. Instead the helper (or the app, passing an
+  input to the helper — implementer's choice) watches the camera's USB interface for its holder going away: the IOKit `UsbExclusiveOwner` property on the
+  camera's USB device/interface (readable without privileges; `ioreg -l -r -n <camera>` shows `"UsbExclusiveOwner" = "pid N, ptpcamerad"` while held),
+  polled at ≤ 1 s or by IOKit notification. When it clears (or names our own helper), a USB attempt follows within 1 s under ruling 1. While Wi-Fi is not
+  connected (camera unreachable on Wi-Fi), USB attempts continue on the existing backoff as today. Book changelog entry 37 records both rulings.
+- **Export loop (F12), leading cause from implement r1 (read-only diagnosis):** one RAW has `adjusted_gen=173`, `rendered_gen=169`, 170 completed preview
+  jobs and 201 `processing_done` events but **zero** `variant_adjusted` hook events. `PreviewService::check_sidecars` raises the adjusted generation from a
+  `.cos` sidecar mtime on focus/startup and compares it only with the preview file's mtime and `last_own_write_at`; Capture One's own processing touches
+  the `.cos`, so the next focus classifies the export as an adjustment and orders another export (and, for masters, another 78 MB TIFF). Also 274
+  `render_preview` jobs are left `running` in the database. Fix the cause (an export the app ordered, or Capture One's processing of it, must not count as
+  an adjustment), make leftover `running` jobs recover or expire at startup, and prove it at the boundary (C3(a)–(d)). Do not modify the owner's database
+  or files outside tests.
+
 ## Read first
 Evidence §Acceptance (P52) incl. the two new paragraphs; §V6; §Spike S1(a). Book `10E_direct_camera_adapter.md` MC-31 §Transport policy, MC-34; `10A_capture_one_contracts.md`
 (render/process contract), `10_imaging_providers.md`. Code: `native/camera-sidecar/src/{transport_manager.cpp, usb_monitor_macos.cpp, camera_connection.cpp}`,
@@ -50,9 +72,9 @@ The helper's transport policy (C++); render completion matching.
 ## Criteria (5 criteria, 8 rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
-| C1(a) | helper: connect at plug-in | C++ transport test: Wi-Fi session idle, USB arrival event at t=0 | the first USB connect attempt starts ≤ 300 ms after the event (no 2.5 s wait); while the interface is not yet openable, attempts repeat at ≤ 500 ms intervals until 2.5 s, then the normal policy | `[rule]` MC-31 §Transport policy; P52 F13 |
+| C1(a) | helper: connect at plug-in (ruling 1) | C++ transport test: Wi-Fi session connected and not busy, USB arrival event at t=0 | the Wi-Fi session is closed and the first USB connect attempt starts ≤ 300 ms after the event (no 2.5 s wait); while the interface is not openable, attempts repeat at ≤ 500 ms intervals until 2.5 s; if there is still no USB session then (or the interface is held), Wi-Fi reconnect starts at once (≤ 300 ms); these early attempts do not count towards `usb_failures_before_wifi_fallback` | `[rule]` MC-31 §Transport policy as amended by ruling 1; P52 F13 |
 | C1(b) | helper: busy still defers | USB arrival during a protected operation | the switch still waits for busy to clear (`switch.deferred`), then attempts at once | `[rule]` R-I22; M39 |
-| C2(a) | helper: never idle | C++ test with fake time: USB present, every USB connect fails "held" for 30 simulated minutes; Wi-Fi available | the manager is connected over Wi-Fi within the policy's bound and stays connected; USB is retried on its backoff throughout; when USB succeeds and not busy it switches to USB | `[rule]` MC-31; MC-34 §Guide; P52 F14 |
+| C2(a) | helper: never idle, USB retried on release (ruling 2) | C++ test with fake time: USB present, every USB connect fails "held" → fallback to Wi-Fi; then 30 simulated minutes with the holder still present; then a holder-released input | Wi-Fi is connected within the policy's bound and stays connected for the 30 minutes **with no USB attempt and no Wi-Fi drop**; on the holder-released input, a USB attempt starts ≤ 1 s later (same rule as C1(a): close Wi-Fi, try, fall back at once on failure); success and not busy → USB session | `[rule]` MC-31 as amended by ruling 2; MC-34 §Guide; P52 F14 |
 | C2(b) | helper: never idle, Wi-Fi drops | as C2(a), then the Wi-Fi session is lost | reconnect attempts continue (no terminal idle state); a session again when Wi-Fi returns | `[rule]` MC-31 |
 | C3(a) | render completion | fake Capture One produces the export under the name it really uses (model the observed `session test 1NNNN` / variant naming) for a requested photo | the render is recorded complete once; no second `process` for that photo while its preview is current (assert the fake received exactly one `process` over a long fake-time window) | `[rule]` 10A render contract; P52 F12 |
 | C3(b) | render that cannot complete | fake Capture One never produces output | `process` is issued at most N times (N stated in the handoff, ≤ 3), then the photo shows a preview failure / health detail and no further `process` | `[rule]` 10A; P52 F12 |
@@ -74,9 +96,13 @@ the app for an hour → the helper is on a link the whole time; Capture One show
   Lab repo read-only. Default implementer. If the SDK is present locally, prove the SDK build compiles, then restore the stub; never commit build output.
 - **Hazard:** the 2.5 s settle exists because the SDK reports a lost USB session late (~17 s) and the switch is driven by the hot-plug event (evidence
   §Constraints); an early attempt may fail while the camera's interface is still coming up. Failed early attempts must not count towards
-  `usb_failures_before_wifi_fallback` or drop the Wi-Fi session before the USB session is ready.
+  `usb_failures_before_wifi_fallback`; the Wi-Fi session is closed for the attempt and reopened at once on failure (ruling 1).
+- **Old test changes allowed:** the C++ assertions in `tests/test_transport_manager.cpp` that encode the old 2.5 s first-attempt wait and "no USB retry
+  after the three-failure fallback" change to the rulings' behaviour (list each in the handoff); no other old assertion may change except where C3 changes
+  render accounting.
 - Book: MC-31's "≤ ~8 s incl. the 2.5 s settle" stays an upper bound; this phase makes the plug-in path faster, not slower.
 
 ## Review log
 
 - 2026-11-08 implement r1 (codex): **BLOCKED before production edits.** C1(a) requires a USB connect attempt within 300 ms while a Wi-Fi SDK session is open, but the Notes prohibit dropping that session before USB is ready and MC-31 permits only one SDK session. C2(a) requires USB retries throughout 30 minutes of held-interface failures and switching when a later attempt succeeds, while ratified MC-31 §Transport policy says that after three failed USB connects the sidecar stays on Wi-Fi until re-plug or holder-gone signal, with no periodic USB probing. Both are observable policy contradictions; the implementer cannot implement either rule verbatim without violating the other. Read-only diagnosis for F12: the real database has 170 completed preview jobs for one RAW and its adjustment generation is 173, but it has zero `variant_adjusted` hook rows for that RAW; `PreviewService::check_sidecars` is the remaining generation-raising path and treats a later `.cos` mtime as an edit, while Capture One processing can change that sidecar. This is a likely self-trigger loop, not yet proved by a boundary test. No code, test, tracker or owner-data file was changed. Two owner cards in the handoff request a contract amendment; no suite stamp was run because no implementation tree exists to close.
+- 2026-11-08 orchestrator: **rulings 1 and 2 written above (§Orchestrator rulings), C1(a) and C2(a) amended, export-loop diagnosis folded in; book changelog 37.** Relaunched implement.
