@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-08 09:05: P50 APPROVED_WITH_NOTES (re-review r3, after fix 2; F3 Keychain read gated on camera support). Camera chapter 9 of 11.** Note to watch: confirming a fingerprint trusts the next one the camera shows, not exactly the one displayed (backlog; consider before P52). P51 launched (Codex).
+
 **2026-11-08 06:50: P47 spike DONE with the owner (camera chapter 8 of 11).** Cable and Wi-Fi both connect from the packaged app; Wi-Fi shot → app ~10 s. Main finding: Keychain prompts (first use, and 3–4 after every ad-hoc update) block the sidecar spawn, so Capture One won the cable twice → folded into P50 Notes (d) with S2/S3/S7 answers. Owner set camera FTP Server 2 for Session Manager (`sessionmanager`, port 2121). Support-folder sidecar parked again. Next: P50 (Codex), then P51, then P52 (owner + camera, ~1 h, on the work Mac incl. S1(c)/S3).
 
 **2026-11-07 21:40: P47 prep done (steps 1–2, no camera).** Packaged app built; Sony support folder hand-installed under `~/Library/Application Support/com.loorenz.sessionmanager/camera/sony/2.02.00/` (outside the repo). **S2 answered offline: hardened runtime + ad hoc refuses Sony's dylibs; `disable-library-validation` on the sidecar fixes it** (→ P50). The sidecar copy is **parked** (`camera-sidecar.parked`) so the owner's everyday app keeps using the Capture One adapter until the spike. Stub restored, repo clean. Nothing else runs without the owner: P47 (≈15 min with the camera) gates P50–P52.
