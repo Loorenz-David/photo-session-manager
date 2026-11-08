@@ -332,11 +332,53 @@ fn settle(a: &TestApp, pred: impl Fn() -> bool) {
 }
 fn setting_secrets(a: &TestApp, user: &str, password: &str) {
     CameraService::set_secrets(a.secrets.as_ref(), user, password, || {
-        psm_infra::logging::add_secret(user);
-        psm_infra::logging::add_secret(password);
         a.camera_runtime().secrets_changed();
     })
     .unwrap();
+}
+#[test]
+fn c5d_startup_keychain_read_restarts_after_usb_session_lost() {
+    let a = TestApp::with_camera_script_no_cache(include_str!(
+        "../src/fixtures/sidecar_scripts/ready_usb.txt"
+    ))
+    .unwrap();
+    settle(&a, || {
+        matches!(
+            a.camera_status().unwrap(),
+            CameraStatus::Connected {
+                link: Link::Cable,
+                ..
+            }
+        )
+    });
+    // Give the asynchronous Keychain-like read time to finish while USB still owns the camera.
+    thread::sleep(Duration::from_millis(500));
+    let first = a.fake_sidecar_recording().pids[0];
+    assert!(
+        a.fake_sidecar_recording()
+            .stdin
+            .iter()
+            .any(|(pid, line)| { *pid == first && line == "credentials user= password=" })
+    );
+    a.inject(
+        "session.lost",
+        serde_json::json!({"transport":"usb","reason":"lost","busy":false}),
+    )
+    .unwrap();
+    let end = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < end && a.fake_sidecar_recording().pids.len() < 2 {
+        a.tick(1_000).unwrap();
+        thread::sleep(Duration::from_millis(10));
+    }
+    let recording = a.fake_sidecar_recording();
+    assert_eq!(recording.pids.len(), 2);
+    let second = recording.pids[1];
+    settle(&a, || {
+        a.fake_sidecar_recording()
+            .stdin
+            .iter()
+            .any(|(pid, line)| *pid == second && line == "credentials user=u%20name password=p%2Fw")
+    });
 }
 #[test]
 fn c5a_camera_credentials_are_keychain_only_and_redacted() {

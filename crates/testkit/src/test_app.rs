@@ -271,11 +271,19 @@ impl TestApp {
     /// `await <cmd>`, `exit <code>`, `stderr <text>`; no `fake.started` line. The clock starts at
     /// `SCRIPT_EPOCH_MS` (P46 L1); after the script the fake runs `inject` lines.
     pub fn with_camera_script(script: &str) -> Result<Self> {
+        Self::with_camera_script_cache_mode(script, true)
+    }
+    pub fn with_camera_script_no_cache(script: &str) -> Result<Self> {
+        Self::with_camera_script_cache_mode(script, false)
+    }
+    fn with_camera_script_cache_mode(script: &str, cache_enabled: bool) -> Result<Self> {
         Self::create(
             true,
             false,
             "custom.damage_report",
-            Some(serde_json::json!({ "script_text": script })),
+            Some(
+                serde_json::json!({ "script_text": script, "secret_cache_enabled": cache_enabled }),
+            ),
             SCRIPT_EPOCH_MS,
         )
     }
@@ -291,6 +299,7 @@ impl TestApp {
         paths.home = dir.path().to_path_buf();
         paths.create()?;
         let with_camera = sidecar.is_some();
+        let mut secret_cache_enabled = true;
         if let Some(mut behaviour) = sidecar {
             psm_integrations::camera::support::with_test_manifest(
                 &paths,
@@ -311,6 +320,13 @@ impl TestApp {
                 let script = rec.join("script.txt");
                 std::fs::write(&script, text.as_str().unwrap_or_default())?;
                 behaviour["script"] = serde_json::Value::String(script.to_string_lossy().into());
+            }
+            if let Some(enabled) = behaviour
+                .as_object_mut()
+                .and_then(|o| o.remove("secret_cache_enabled"))
+                .and_then(|value| value.as_bool())
+            {
+                secret_cache_enabled = enabled;
             }
             std::fs::write(
                 rec.join("behaviour.json"),
@@ -365,6 +381,9 @@ impl TestApp {
         let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
         let clock = Arc::new(ManualClock::new(clock_start));
         let secrets = Arc::new(FakeSecrets::default());
+        if !secret_cache_enabled {
+            secrets.disable_cache();
+        }
         use psm_core::ports::secrets::SecretStore;
         secrets.set("access-auth-user", "u name")?;
         secrets.set("access-auth-password", "p/w")?;

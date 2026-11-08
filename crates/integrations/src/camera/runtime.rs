@@ -5,7 +5,7 @@ use super::{
     },
     sidecar::{
         client::{CmdId, CommandOutcome, SidecarClient},
-        protocol::{Command, Stamped},
+        protocol::{Command, SidecarEvent, Stamped, Transport},
         supervisor::{SidecarSpec, Supervisor, SupervisorEvent},
     },
     support::installed_sidecar,
@@ -135,6 +135,7 @@ pub struct CameraRuntime {
     binding: RwLock<Option<AppBinding>>,
     secrets: Arc<dyn SecretStore>,
     credentials: Mutex<Option<(String, String)>>,
+    spawned_credentials: Mutex<Option<String>>,
     clock: Arc<dyn Clock>,
     paths: AppPaths,
     helper_log: Mutex<VecDeque<String>>,
@@ -197,6 +198,7 @@ impl CameraRuntime {
             binding: RwLock::new(None),
             secrets,
             credentials: Mutex::new(None),
+            spawned_credentials: Mutex::new(None),
             clock,
             paths,
             helper_log: Mutex::new(VecDeque::with_capacity(HELPER_LOG_KEPT)),
@@ -479,7 +481,11 @@ impl CameraRuntime {
         }
         let mut supervisor = Supervisor::new(spec);
         match supervisor.spawn(self.clock.mono()) {
-            Ok(_) => self.helper_running.store(true, Ordering::SeqCst),
+            Ok(_) => {
+                self.helper_running.store(true, Ordering::SeqCst);
+                *self.spawned_credentials.lock().unwrap() =
+                    Some(supervisor.spec.first_line.clone());
+            }
             Err(error) => {
                 tracing::warn!(%error, "camera sidecar unavailable");
                 self.start_order.satisfy(StartReason::SidecarUnavailable);
@@ -506,6 +512,7 @@ impl CameraRuntime {
                 logging::add_secret(&password);
                 let has_credentials = !user.is_empty() || !password.is_empty();
                 *runtime.credentials.lock().unwrap() = Some((user, password));
+                runtime.update_spawn_credentials();
                 if has_credentials {
                     runtime.restart_if_not_usb();
                 }
@@ -612,8 +619,20 @@ impl CameraRuntime {
             let mut supervisor = Supervisor::new(spec);
             if supervisor.spawn(self.clock.mono()).is_ok() {
                 self.helper_running.store(true, Ordering::SeqCst);
+                *self.spawned_credentials.lock().unwrap() =
+                    Some(supervisor.spec.first_line.clone());
             }
             *guard = Some(SidecarClient::new(supervisor));
+        }
+    }
+    fn update_spawn_credentials(&self) {
+        let credentials = self.credentials.lock().unwrap().clone().unwrap_or_default();
+        if let Some(client) = self.supervisor.lock().unwrap().as_mut() {
+            client.supervisor_mut().spec.first_line = Command::Credentials {
+                user: credentials.0,
+                password: credentials.1,
+            }
+            .encode();
         }
     }
     pub fn secrets_changed(&self) {
@@ -702,6 +721,10 @@ impl CameraRuntime {
                 }
                 SupervisorEvent::Started { .. } => {
                     self.helper_running.store(true, Ordering::SeqCst);
+                    if let Some(client) = self.supervisor.lock().unwrap().as_ref() {
+                        *self.spawned_credentials.lock().unwrap() =
+                            Some(client.supervisor().spec.first_line.clone());
+                    }
                     helper.push(HelperEvent::Started);
                 }
                 SupervisorEvent::Stderr(line) => self.push_helper_log(&line),
@@ -719,6 +742,25 @@ impl CameraRuntime {
             self.sink.as_ref(),
         );
         self.perform(&adapter, outcome, now);
+        if events.iter().any(|event| {
+            matches!(
+                &event.event,
+                SidecarEvent::SessionLost {
+                    transport: Transport::Usb,
+                    ..
+                }
+            )
+        }) {
+            let credentials = self.credentials.lock().unwrap().clone();
+            if let Some((user, password)) = credentials {
+                let expected = Command::Credentials { user, password }.encode();
+                let has_stale_line =
+                    self.spawned_credentials.lock().unwrap().as_deref() != Some(expected.as_str());
+                if has_stale_line {
+                    self.restart_if_not_usb();
+                }
+            }
+        }
     }
     /// The adapter's effects against the current binding, then the watchdog glue (P46 L10, L13).
     fn perform(&self, adapter: &DirectCameraAdapter, outcome: StepOutcome, now: Instant) {

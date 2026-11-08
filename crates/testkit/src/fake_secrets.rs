@@ -1,20 +1,48 @@
 use psm_core::{Result, ports::secrets::SecretStore};
-use std::{collections::HashMap, sync::Mutex};
-#[derive(Default)]
-pub struct FakeSecrets(pub Mutex<HashMap<String, String>>);
+use std::{
+    collections::HashMap,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+pub struct FakeSecrets {
+    pub values: Mutex<HashMap<String, String>>,
+    cache_enabled: AtomicBool,
+}
+impl Default for FakeSecrets {
+    fn default() -> Self {
+        Self {
+            values: Mutex::new(HashMap::new()),
+            cache_enabled: AtomicBool::new(true),
+        }
+    }
+}
+impl FakeSecrets {
+    pub fn disable_cache(&self) {
+        self.cache_enabled.store(false, Ordering::SeqCst);
+    }
+}
 impl SecretStore for FakeSecrets {
     fn cached(&self, account: &str) -> Option<String> {
-        self.0.lock().unwrap().get(account).cloned()
+        if self.cache_enabled.load(Ordering::SeqCst) {
+            self.values.lock().unwrap().get(account).cloned()
+        } else {
+            None
+        }
     }
     fn get(&self, account: &str) -> Result<Option<String>> {
-        Ok(self.0.lock().unwrap().get(account).cloned())
+        Ok(self.values.lock().unwrap().get(account).cloned())
     }
     fn set(&self, account: &str, value: &str) -> Result<()> {
-        self.0.lock().unwrap().insert(account.into(), value.into());
+        self.values
+            .lock()
+            .unwrap()
+            .insert(account.into(), value.into());
         Ok(())
     }
     fn delete(&self, account: &str) -> Result<()> {
-        self.0.lock().unwrap().remove(account);
+        self.values.lock().unwrap().remove(account);
         Ok(())
     }
 }
