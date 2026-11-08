@@ -35,7 +35,7 @@ vi.mock('@/services/sessions', async importOriginal => ({
   previewUrl: (path: string) => `asset://${path}`,
 }));
 vi.mock('@/services/items', () => ({ searchItems: vi.fn(), searchItemsShop: vi.fn(async () => []), nextSku: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn() }));
-vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(), cameraRetry: vi.fn() }));
+vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(), cameraRetry: vi.fn(), cameraSupportGet: vi.fn(async () => null) }));
 vi.mock('@/services/events', () => ({
   onSessionsChanged: vi.fn(async () => () => undefined),
   onCameraStatus: vi.fn(async () => () => undefined),

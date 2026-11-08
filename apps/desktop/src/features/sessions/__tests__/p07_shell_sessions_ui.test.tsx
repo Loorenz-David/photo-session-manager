@@ -37,7 +37,7 @@ import { CameraDot } from '@/features/shell/CameraDot';
 import { SessionsPage } from '@/features/sessions/SessionsPage';
 import { StatusPill } from '@/features/sessions/StatusPill';
 import { UnassignedCard } from '@/features/sessions/UnassignedCard';
-import { cameraRetry, cameraStatus } from '@/services/camera';
+import { cameraStatus } from '@/services/camera';
 import { createItem, nextSku, searchItems, searchItemsShop } from '@/services/items';
 import { activateSession, activeSession, createSession, deactivateSession, listSessions } from '@/services/sessions';
 
@@ -187,34 +187,28 @@ describe('C3 filters and search', () => {
 describe('C4 camera dot', () => {
   it('C4(a) Connected("Sony ZV-E10") shows a green dot titled with the camera name', async () => {
     render(<CameraDot />);
-    const button = await screen.findByTitle(/Sony ZV-E10/);
+    const button = await screen.findByRole('button', { name: 'Sony ZV-E10 · Cable' });
     expect(button).toHaveAttribute('data-state', 'connected');
-    expect(button).toHaveAttribute('title', 'Camera connected: Sony ZV-E10');
+    expect(button).toHaveAttribute('title', 'Camera connected by cable');
   });
 
-  it('C4(b) Disconnected shows a red dot and help that names USB mode and Imaging Edge', async () => {
+  it('C4(b) Disconnected shows a red dot and its full sentence in the card', async () => {
     vi.mocked(cameraStatus).mockResolvedValue({ kind: 'disconnected' });
     render(<CameraDot />);
     const button = await screen.findByRole('button', { name: /Camera disconnected/ });
     expect(button).toHaveAttribute('data-state', 'disconnected');
-
-    fireEvent.mouseEnter(button.parentElement!);
-
-    const help = screen.getByRole('tooltip');
-    expect(help).toHaveTextContent(/USB mode/);
-    expect(help).toHaveTextContent(/Imaging Edge/);
+    fireEvent.click(button);
+    expect(within(await screen.findByRole('dialog')).getByText('Camera disconnected')).toBeInTheDocument();
   });
 
-  it('C4(c) clicking the dot calls camera_retry once', async () => {
+  it('C4(c) clicking the dot opens a card with Retry', async () => {
     vi.mocked(cameraStatus).mockResolvedValue({ kind: 'disconnected' });
-    vi.mocked(cameraRetry).mockResolvedValue({ kind: 'connected', name: 'Sony ZV-E10', link: 'cable' });
     render(<CameraDot />);
     const button = await screen.findByRole('button', { name: /Camera disconnected/ });
 
     fireEvent.click(button);
 
-    await waitFor(() => expect(button).toHaveAttribute('data-state', 'connected'));
-    expect(cameraRetry).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 });
 
