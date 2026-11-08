@@ -453,6 +453,7 @@ pub enum Command {
         cmd_id: String,
     },
     AcceptFingerprint {
+        fingerprint: String,
         replace: bool,
         cmd_id: String,
     },
@@ -483,11 +484,18 @@ impl Command {
             Command::Status { cmd_id } => with_id("status".into(), cmd_id),
             Command::UsbRetry { cmd_id } => with_id("usb-retry".into(), cmd_id),
             Command::Reconnect { cmd_id } => with_id("reconnect".into(), cmd_id),
-            Command::AcceptFingerprint { replace, cmd_id } => with_id(
+            Command::AcceptFingerprint {
+                fingerprint,
+                replace,
+                cmd_id,
+            } => with_id(
                 if *replace {
-                    "accept-fingerprint replace=1".into()
+                    format!(
+                        "accept-fingerprint fp={} replace=1",
+                        percent_encode(fingerprint)
+                    )
                 } else {
-                    "accept-fingerprint".into()
+                    format!("accept-fingerprint fp={}", percent_encode(fingerprint))
                 },
                 cmd_id,
             ),

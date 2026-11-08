@@ -178,11 +178,12 @@ mod p50_tests {
             &TauriEvents(tauri_app.handle().clone()),
             AppEvent::FingerprintPending {
                 fingerprint: "ab:cd:ef".into(),
+                replace: true,
             },
         );
         assert_eq!(
             *payloads.lock().unwrap(),
-            vec![json!({"fingerprint":"ab:cd:ef"})]
+            vec![json!({"fingerprint":"ab:cd:ef","replace":true})]
         );
     }
 }
@@ -489,10 +490,13 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                     commands::camera::CameraStatusResponse::from(status).with_link(link),
                 );
             }
-            AppEvent::FingerprintPending { fingerprint } => {
+            AppEvent::FingerprintPending {
+                fingerprint,
+                replace,
+            } => {
                 let _ = self.0.emit(
                     "camera_fingerprint_pending",
-                    serde_json::json!({"fingerprint": fingerprint}),
+                    serde_json::json!({"fingerprint": fingerprint, "replace": replace}),
                 );
             }
             AppEvent::HistoryChanged {

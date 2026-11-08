@@ -26,6 +26,6 @@ export const cameraSecretsSet = async (value: {access_auth_user: string; access_
   unwrap(await commands.cameraSecretsSet(value.access_auth_user, value.access_auth_password));
 };
 export const cameraFtpPasswordGenerate = async () => unwrap(await commands.cameraFtpPasswordGenerate());
-export const cameraFingerprintConfirm = async () => { unwrap(await commands.cameraFingerprintConfirm()); };
+export const cameraFingerprintConfirm = async (fingerprint: string) => { unwrap(await commands.cameraFingerprintConfirm(fingerprint)); };
 export const cameraFingerprintReject = async () => { unwrap(await commands.cameraFingerprintReject()); };
 export const cameraHelperLog = async (): Promise<string[]> => unwrap(await commands.cameraHelperLog());

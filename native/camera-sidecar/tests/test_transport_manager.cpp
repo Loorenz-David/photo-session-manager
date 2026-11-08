@@ -10,6 +10,11 @@
 #include "mini_test.hpp"
 
 using namespace crlab;
+void fingerprint_c1a();
+void fingerprint_c1b();
+void fingerprint_c1c();
+void fingerprint_c1d();
+void fingerprint_c2a();
 
 namespace {
 
@@ -411,6 +416,12 @@ TEST_CASE("stop is deferred while busy, bounded by 10 s") {
 }
 
 TEST_CASE("credentials percent-decoding reverses the app's encoding") {
+  // Fingerprint command and policy use the same display/percent wire boundary.
+  fingerprint_c1a();
+  fingerprint_c1b();
+  fingerprint_c1c();
+  fingerprint_c1d();
+  fingerprint_c2a();
   CHECK_EQ(percent_decode("u%20name"), std::string("u name"));
   CHECK_EQ(percent_decode("p%2Fw%3D%26%C3%A9"), std::string("p/w=&\xc3\xa9"));
   CHECK_EQ(percent_decode("abc%"), std::string("abc%"));

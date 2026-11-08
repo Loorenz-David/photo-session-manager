@@ -25,6 +25,7 @@ pub enum AppEvent {
     },
     FingerprintPending {
         fingerprint: String,
+        replace: bool,
     },
     ExportProgress {
         session_id: i64,

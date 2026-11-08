@@ -39,6 +39,7 @@ add_compile_options(-Wall -Wextra -Wno-unused-parameter)
 
 # ----------------------------------------------------------------- core
 add_library(crlab_core STATIC
+  src/fingerprint_policy.cpp
   src/json_log.cpp
   src/transport_manager.cpp
   src/sha256_macos.cpp
@@ -54,7 +55,7 @@ add_executable(crlab-usb-watch src/usb_watch_main.cpp)
 target_link_libraries(crlab-usb-watch PRIVATE crlab_core crlab_usb)
 
 enable_testing()
-add_executable(camera_sidecar_tests tests/test_transport_manager.cpp)
+add_executable(camera_sidecar_tests tests/test_transport_manager.cpp tests/test_fingerprint_policy.cpp)
 target_link_libraries(camera_sidecar_tests PRIVATE crlab_core)
 add_test(NAME transport_manager COMMAND camera_sidecar_tests)
 

@@ -24,7 +24,7 @@
 
 using namespace crlab;
 // The stub has no SSH connection; the SDK build overrides this weak no-op.
-namespace crlab { __attribute__((weak)) void accept_fingerprint_on_next_connect(bool) {} }
+namespace crlab { __attribute__((weak)) std::string accept_fingerprint_on_next_connect(const std::string& fp, bool) { return fp.empty() ? "fingerprint required" : ""; } }
 
 namespace {
 
@@ -68,7 +68,7 @@ output options:
 stdin commands (session/auto):  capture [id=..] [count=N] [interval_ms=M] [af=1] | props [all=1] | ftp-status
                                 | store-dest value=camera|pc+camera
                                 | save dir=.. dest=camera|pc+camera | status | busy reason=..|none
-                                | usb-retry (auto) | accept-fingerprint [replace=1] | sleep ms=N | quit
+                                | usb-retry (auto) | accept-fingerprint fp=<percent-encoded> [replace=1] | sleep ms=N | quit
 )";
 
 struct Args {
@@ -538,7 +538,8 @@ int cmd_auto(JsonLog& log, const Args& a) {
       } else if (c.name == "usb-retry") {
         tm.usb_retry();  // accepted in any state (R-I23)
       } else if (c.name == "accept-fingerprint") {
-        accept_fingerprint_on_next_connect(c.get("replace") == "1");
+        auto reason = accept_fingerprint_on_next_connect(percent_decode(c.get("fp")), c.get("replace") == "1");
+        if (!reason.empty()) log.emit("cmd.rejected", Fields().str("cmd", c.name).str("reason", reason));
       } else if (!connected) {
         log.emit("cmd.rejected", Fields().str("cmd", c.name).str("reason", std::string("not connected (") + to_string(st) + ")"));
       } else if (c.name == "reconnect") {

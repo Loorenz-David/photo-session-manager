@@ -69,6 +69,8 @@ pub enum Error {
     SupportNotInstalled,
     #[error("fingerprint_not_pending")]
     FingerprintNotPending,
+    #[error("fingerprint_changed")]
+    FingerprintChanged,
     /// A script that would launch Capture One was refused while "Take the camera back" holds the
     /// editor-launch gate (10E MC-34 R-I32).
     #[error("editor_launch_deferred")]

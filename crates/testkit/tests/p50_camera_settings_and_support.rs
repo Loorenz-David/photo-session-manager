@@ -570,7 +570,7 @@ fn c7a_unknown_fingerprint_raises_event_status_and_health() {
             .any(|e| matches!(e, AppEvent::FingerprintPending { .. }))
     });
     assert!(a.events.0.lock().unwrap().iter().any(
-        |e| matches!(e, AppEvent::FingerprintPending { fingerprint } if fingerprint == "ab:cd:ef")
+        |e| matches!(e, AppEvent::FingerprintPending { fingerprint, replace: false } if fingerprint == "ab:cd:ef")
     ));
     assert!(matches!(
         a.camera_status().unwrap(),
@@ -598,13 +598,13 @@ fn c7b_confirmation_sends_accept_and_pin_clears_notice() {
     settle(&a, || a.app.health.has("camera_fingerprint_unconfirmed"));
     a.camera_runtime()
         .direct_adapter()
-        .confirm_fingerprint()
+        .confirm_fingerprint("ab:cd:ef")
         .unwrap();
     settle(&a, || {
         a.fake_sidecar_recording()
             .stdin
             .iter()
-            .any(|(_, line)| line.starts_with("accept-fingerprint cmd_id="))
+            .any(|(_, line)| line.starts_with("accept-fingerprint fp=ab%3Acd%3Aef cmd_id="))
     });
     a.inject(
         "ssh.fingerprint",
@@ -631,13 +631,13 @@ fn c7c_rejection_keeps_pending_and_sends_nothing() {
     assert!(a.app.health.has("camera_fingerprint_unconfirmed"));
     a.camera_runtime()
         .direct_adapter()
-        .confirm_fingerprint()
+        .confirm_fingerprint("ab:cd:ef")
         .unwrap();
     settle(&a, || {
         a.fake_sidecar_recording()
             .stdin
             .iter()
-            .any(|(_, line)| line.starts_with("accept-fingerprint cmd_id="))
+            .any(|(_, line)| line.starts_with("accept-fingerprint fp=ab%3Acd%3Aef cmd_id="))
     });
 }
 #[test]
@@ -665,13 +665,13 @@ fn c7d_mismatch_confirmation_replaces() {
     );
     a.camera_runtime()
         .direct_adapter()
-        .confirm_fingerprint()
+        .confirm_fingerprint("ef:12")
         .unwrap();
     settle(&a, || {
         a.fake_sidecar_recording()
             .stdin
             .iter()
-            .any(|(_, line)| line.starts_with("accept-fingerprint replace=1 cmd_id="))
+            .any(|(_, line)| line.starts_with("accept-fingerprint fp=ef%3A12 replace=1 cmd_id="))
     });
 }
 #[test]

@@ -767,11 +767,12 @@ impl CameraRuntime {
     /// The adapter's effects against the current binding, then the watchdog glue (P46 L10, L13).
     fn perform(&self, adapter: &DirectCameraAdapter, outcome: StepOutcome, now: Instant) {
         if let Some(binding) = self.binding.read().expect("camera binding").as_ref() {
-            for fingerprint in &outcome.fingerprint_pending {
+            for (fingerprint, replace) in &outcome.fingerprint_pending {
                 psm_core::ports::events::EventSink::emit(
                     binding.events.as_ref(),
                     AppEvent::FingerprintPending {
                         fingerprint: fingerprint.clone(),
+                        replace: *replace,
                     },
                 );
             }

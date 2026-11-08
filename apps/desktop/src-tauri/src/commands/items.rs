@@ -97,6 +97,7 @@ impl From<Error> for CommandError {
             }
             Error::SupportNotInstalled => "support_not_installed",
             Error::FingerprintNotPending => "fingerprint_not_pending",
+            Error::FingerprintChanged => "fingerprint_changed",
             Error::EditorLaunchDeferred => "editor_launch_deferred",
             Error::TakeBackBlocked { reason } => {
                 data.insert("reason".into(), reason.clone());

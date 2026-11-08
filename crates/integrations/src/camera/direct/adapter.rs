@@ -74,7 +74,7 @@ pub struct StepOutcome {
     /// The idle-sleep assertion changes (R-I23): `Some(true)` hold, `Some(false)` release; only
     /// emitted on a change, so a repeated USB `connection.ready` never holds twice (P48 L15).
     pub sleep: Option<bool>,
-    pub fingerprint_pending: Vec<String>,
+    pub fingerprint_pending: Vec<(String, bool)>,
 }
 impl StepOutcome {
     fn start(&mut self, reason: StartReason) {
@@ -275,13 +275,17 @@ impl DirectCameraAdapter {
             .as_ref()
             .map(|(_, link)| link.clone())
     }
-    pub fn confirm_fingerprint(&self) -> Result<()> {
-        let replace = locked(&self.state)
+    pub fn confirm_fingerprint(&self, shown: &str) -> Result<()> {
+        let (fingerprint, replace) = locked(&self.state)
             .pending_fingerprint
             .as_ref()
-            .map(|(_, r)| *r)
+            .cloned()
             .ok_or(Error::FingerprintNotPending)?;
+        if fingerprint != shown {
+            return Err(Error::FingerprintChanged);
+        }
         self.runtime()?.send_command(Command::AcceptFingerprint {
+            fingerprint,
             replace,
             cmd_id: String::new(),
         })?;
@@ -424,7 +428,8 @@ impl DirectCameraAdapter {
         } = &stamped.event
             && (status == "unknown" || status == "MISMATCH")
         {
-            out.fingerprint_pending.push(fp.clone());
+            out.fingerprint_pending
+                .push((fp.clone(), status == "MISMATCH"));
         }
         match &stamped.event {
             SidecarEvent::SdkDownloadCompleted {

@@ -13,8 +13,8 @@ export async function onCameraStatus(handler: (status: CameraStatus) => void): P
   return listen<CameraStatus>('camera_status_changed', event => handler(event.payload));
 }
 
-export async function onFingerprintPending(handler: (event: {fingerprint: string}) => void): Promise<UnlistenFn> {
-  return listen<{fingerprint: string}>('camera_fingerprint_pending', event => handler(event.payload));
+export async function onFingerprintPending(handler: (event: {fingerprint: string; replace: boolean}) => void): Promise<UnlistenFn> {
+  return listen<{fingerprint: string; replace: boolean}>('camera_fingerprint_pending', event => handler(event.payload));
 }
 
 export type PhotoEvent = { photo_id: number; session_id: number };

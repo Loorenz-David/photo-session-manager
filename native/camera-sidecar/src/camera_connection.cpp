@@ -12,17 +12,15 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
-#include <atomic>
+#include "crlab/fingerprint_policy.hpp"
 
 #include "sdk_internal.hpp"
 
 namespace crlab {
 
-static std::atomic<bool> g_accept_fingerprint{false};
-static std::atomic<bool> g_replace_fingerprint{false};
-void accept_fingerprint_on_next_connect(bool replace) {
-  g_accept_fingerprint = true;
-  g_replace_fingerprint = replace;
+static FingerprintPolicy g_fingerprint_policy;
+std::string accept_fingerprint_on_next_connect(const std::string& fp, bool replace) {
+  return g_fingerprint_policy.arm(fp, replace);
 }
 
 // Last enumeration, kept alive so connect() can copy the selected entry.
@@ -312,22 +310,25 @@ bool check_fingerprint(EventSink& log, const ConnectOptions& opt, const std::str
   if (!mkdir_p(opt.fingerprint_dir))
     log.emit("ssh.fingerprint", Fields().str("status", "dir_create_failed").str("dir", opt.fingerprint_dir));
   std::string path = opt.fingerprint_dir + "/" + sanitize(camera_id) + ".fingerprint";
-  if (g_replace_fingerprint.exchange(false)) ::unlink(path.c_str());
   std::ifstream in(path, std::ios::binary);
+  std::optional<std::string> pinned;
   if (in) {
     std::stringstream ss;
     ss << in.rdbuf();
-    bool match = ss.str() == fp;
-    log.emit("ssh.fingerprint", Fields().str("status", match ? "match" : "MISMATCH").boolean("success", match).str("fingerprint", fingerprint_for_display(fp)));
-    if (!match)
-      std::fprintf(stderr, "[crlab] SSH fingerprint mismatch for %s. Compare with the camera's Access Authen. Info.\n", camera_id.c_str());
-    return match;
+    pinned = ss.str();
   }
-  if (!opt.accept_fingerprint && !g_accept_fingerprint.exchange(false)) {
-    log.emit("ssh.fingerprint", Fields().str("status", "unknown").boolean("success", false)
+  auto display = fingerprint_for_display(fp);
+  auto decision = g_fingerprint_policy.decide(pinned, fp, display, opt.accept_fingerprint);
+  if (decision == FingerprintDecision::Match || decision == FingerprintDecision::Mismatch || decision == FingerprintDecision::Unknown) {
+    const char* status = decision == FingerprintDecision::Match ? "match" : decision == FingerprintDecision::Mismatch ? "MISMATCH" : "unknown";
+    bool success = decision == FingerprintDecision::Match;
+    log.emit("ssh.fingerprint", Fields().str("status", status).boolean("success", success)
                                     .str("fingerprint", fingerprint_for_display(fp)));
-    return false;
+    if (decision == FingerprintDecision::Mismatch)
+      std::fprintf(stderr, "[crlab] SSH fingerprint mismatch for %s. Compare with the camera's Access Authen. Info.\n", camera_id.c_str());
+    return success;
   }
+  // The confirmed replacement is written directly; no old pin is removed first.
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   out << fp;
   out.close();

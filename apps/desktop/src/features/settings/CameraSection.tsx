@@ -23,7 +23,7 @@ export function CameraSection({ ports, onPortsChange }: { ports: CameraSettingsD
     let alive = true;
     let off: (() => void) | undefined;
     Promise.resolve().then(cameraSupportGet).then(value => { if (alive) setSupport(value); }).catch(() => undefined);
-    Promise.resolve().then(() => onFingerprintPending(value => { if (alive) setFingerprint(value.fingerprint); })).then(stop => { if (alive) off = stop; else stop(); }).catch(() => undefined);
+    Promise.resolve().then(() => onFingerprintPending(value => { if (alive) { setFingerprint(value.fingerprint); setFingerprintChanged(value.replace); setFingerprintNeedsAction(true); } })).then(stop => { if (alive) off = stop; else stop(); }).catch(() => undefined);
     Promise.resolve().then(cameraStatus).then(status => {
       if (!alive || status.kind !== 'needs_action') return;
       if (status.reason === 'fingerprint_mismatch' || status.reason === 'fingerprint_unconfirmed') {
@@ -38,7 +38,8 @@ export function CameraSection({ ports, onPortsChange }: { ports: CameraSettingsD
     try { await task(); } catch (error) {
       const e = error as { code?: string; data?: Record<string, string>; message?: string };
       toast.error(e.code === 'support_archive_invalid' ? `The archive is missing or has a changed file: ${e.data?.file}`
-        : e.code === 'support_version_unsupported' ? `This SDK version (${e.data?.version}) is not supported; use 2.02.00` : e.message ?? String(error));
+        : e.code === 'support_version_unsupported' ? `This SDK version (${e.data?.version}) is not supported; use 2.02.00`
+        : e.code === 'fingerprint_changed' ? 'The camera shows a different fingerprint now. Compare the new one.' : e.message ?? String(error));
     } finally { setBusy(false); }
   };
   const field = (label: string, key: keyof CameraSettingsDto) => <label className="flex flex-col gap-1">{label}<Input type="number" min={1024} max={65535} value={ports[key]} onChange={e => onPortsChange({...ports, [key]: Number(e.target.value)})} /></label>;
@@ -64,7 +65,7 @@ export function CameraSection({ ports, onPortsChange }: { ports: CameraSettingsD
       <Button type="button" disabled={busy} onClick={() => void run(async () => { await cameraSecretsSet({access_auth_user: user, access_auth_password: loginPassword}); setUser(''); setLoginPassword(''); toast.success('Camera login saved'); })}>Save camera login</Button>
       <ol className="list-decimal pl-5">{cameraSteps.accessAuthentication.map(step => <li key={step}>{step}</li>)}</ol>
       {(fingerprint || fingerprintNeedsAction) && <div className="rounded border p-3"><h4>{fingerprintChanged ? 'Fingerprint changed' : 'Confirm camera fingerprint'}</h4><p>Compare with the camera: MENU › Network › Network Option › Access Authen. Info</p>
-        {fingerprint ? <><code>{fingerprint}</code><div className="flex gap-2"><Button type="button" onClick={() => void run(async () => { await cameraFingerprintConfirm(); setFingerprint(null); setFingerprintNeedsAction(false); })}>Confirm</Button><Button type="button" variant="outline" onClick={() => void run(async () => { await cameraFingerprintReject(); setFingerprint(null); setFingerprintNeedsAction(false); })}>Not mine</Button></div></> : <p>The fingerprint will appear when the camera reports it.</p>}
+        {fingerprint ? <><code>{fingerprint}</code><div className="flex gap-2"><Button type="button" onClick={() => void run(async () => { await cameraFingerprintConfirm(fingerprint); setFingerprint(null); setFingerprintNeedsAction(false); })}>Confirm</Button><Button type="button" variant="outline" onClick={() => void run(async () => { await cameraFingerprintReject(); setFingerprint(null); setFingerprintNeedsAction(false); })}>Not mine</Button></div></> : <p>The fingerprint will appear when the camera reports it.</p>}
       </div>}
     </>}
     <h3>Check</h3>

@@ -178,13 +178,16 @@ pub async fn camera_ftp_password_generate(
 }
 #[tauri::command]
 #[specta::specta]
-pub async fn camera_fingerprint_confirm(state: State<'_, AppState>) -> Result<(), CommandError> {
+pub async fn camera_fingerprint_confirm(
+    state: State<'_, AppState>,
+    fingerprint: String,
+) -> Result<(), CommandError> {
     let handles = state.handles()?;
     CameraService::confirm_fingerprint(|| {
         handles
             .camera_runtime
             .direct_adapter()
-            .confirm_fingerprint()
+            .confirm_fingerprint(&fingerprint)
     })
     .map_err(Into::into)
 }
