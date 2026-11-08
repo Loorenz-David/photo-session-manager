@@ -1,5 +1,5 @@
 use super::{
-    renders::{PendingRender, RenderEntry, RenderRegistry, accept_output, base_name},
+    renders::{PendingRender, RenderEntry, RenderRegistry, base_name, resolve_output},
     scripting::{CaptureOneScripting, ProcessStarted},
 };
 use psm_core::{
@@ -13,18 +13,54 @@ use psm_core::{
     },
     mechanisms::canon::canon,
     ports::{
-        editing::{EditingProvider, RenderCompletion},
+        editing::{EditingProvider, RenderCompletion, SettingsSidecar},
         store::Store,
     },
     services::health::HealthService,
 };
-use psm_infra::paths::AppPaths;
+use psm_infra::{
+    disk::{FreeSpace, free_space},
+    paths::AppPaths,
+};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+/// Below this much free space on the session's disk no master (full-size TIFF, ~80 MB) render is
+/// ordered (P56 C3(d); P52 F12: 64 GB of copies filled the disk in one afternoon).
+pub const MASTER_MIN_FREE_BYTES: u64 = 5_000_000_000;
+/// Health code while master renders are paused for disk space.
+pub const DISK_SPACE_LOW: &str = "disk_space_low";
+
+pub type FreeSpaceFn = Arc<dyn Fn(&Path) -> std::io::Result<FreeSpace> + Send + Sync>;
+
+/// The free-space source of the master-render guard: the disk itself, or a test's stand-in. One
+/// per app process, carried with the scripting lanes through every rebuild.
+pub struct DiskSpace(RwLock<FreeSpaceFn>);
+impl Default for DiskSpace {
+    fn default() -> Self {
+        Self(RwLock::new(Arc::new(free_space)))
+    }
+}
+impl DiskSpace {
+    pub fn set(&self, source: FreeSpaceFn) {
+        if let Ok(mut slot) = self.0.write() {
+            *slot = source;
+        }
+    }
+    pub fn query(&self, path: &Path) -> std::io::Result<FreeSpace> {
+        let source = self
+            .0
+            .read()
+            .map_err(|e| std::io::Error::other(e.to_string()))?
+            .clone();
+        source(path)
+    }
+}
 
 pub struct CaptureOneAdapter {
     pub user: Arc<dyn CaptureOneScripting>,
@@ -37,6 +73,7 @@ pub struct CaptureOneAdapter {
     pub paths: AppPaths,
     renders: Mutex<RenderRegistry>,
     pub(crate) provision_lock: Mutex<()>,
+    disk: Arc<DiskSpace>,
 }
 impl CaptureOneAdapter {
     #[allow(clippy::too_many_arguments)]
@@ -60,7 +97,40 @@ impl CaptureOneAdapter {
             paths,
             renders: Mutex::new(RenderRegistry::default()),
             provision_lock: Mutex::new(()),
+            disk: Arc::new(DiskSpace::default()),
         }
+    }
+    pub fn with_disk(mut self, disk: Arc<DiskSpace>) -> Self {
+        self.disk = disk;
+        self
+    }
+    /// P56 C3(d): a master render needs 5 GB free on the disk holding the session (Capture One's
+    /// output location defaults to the session's `Output/`). Below that it is refused and the health
+    /// item names the disk; nothing is deleted. An unreadable disk never blocks a render.
+    fn check_master_space(&self) -> Result<()> {
+        let space = match self.disk.query(Path::new(&self.document_id)) {
+            Ok(space) => space,
+            Err(error) => {
+                tracing::warn!(%error, "free disk space not read");
+                return Ok(());
+            }
+        };
+        if space.available_bytes >= MASTER_MIN_FREE_BYTES {
+            self.health.clear(DISK_SPACE_LOW);
+            return Ok(());
+        }
+        let gb = space.available_bytes as f64 / 1e9;
+        self.health.set(
+            DISK_SPACE_LOW,
+            format!(
+                "Only {gb:.1} GB free on {}. Full-size renders for export are paused until 5 GB are free.",
+                space.disk
+            ),
+        );
+        Err(Error::Provider(format!(
+            "not enough disk space: {gb:.1} GB free on {}",
+            space.disk
+        )))
     }
     fn variant_background(&self, raw: &str) -> Result<String> {
         if let Some(id) = self.background.find_image(&self.document_id, raw)? {
@@ -89,6 +159,9 @@ impl CaptureOneAdapter {
             RenderPurpose::Preview => &self.preview_recipe,
             RenderPurpose::Master => &self.master_recipe,
         };
+        if purpose == RenderPurpose::Master {
+            self.check_master_space()?;
+        }
         if !self.background.recipe_exists(&self.document_id, recipe)? {
             return Err(Error::RecipeMissing {
                 name: recipe.clone(),
@@ -111,6 +184,33 @@ fn same_path(a: &str, b: &str) -> bool {
         _ => false,
     }
 }
+/// SHA-256 over the adjustment lists (`<DL>…</DL>`, every variant) of a `.cos` sidecar, or over
+/// the whole text when it has none. Capture One rewrites the sidecar when it processes a variant
+/// or saves the document, changing only bookkeeping outside those lists (`LowResProcessCounter`,
+/// `LastMetadataModificationDate`); an edit changes a list (P56, P52 F12).
+pub fn settings_fingerprint(text: &str) -> String {
+    let mut lists = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("<DL>") {
+        let body = &rest[start..];
+        let end = body.find("</DL>").map_or(body.len(), |i| i + "</DL>".len());
+        lists.push(&body[..end]);
+        rest = &body[end..];
+    }
+    let mut hasher = Sha256::new();
+    if lists.is_empty() {
+        hasher.update(text.as_bytes());
+    } else {
+        for list in lists {
+            hasher.update(list.as_bytes());
+        }
+    }
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
 pub fn tag_for(classification: Classification) -> i32 {
     match classification {
         Classification::Main => 4,
@@ -126,7 +226,7 @@ impl EditingProvider for CaptureOneAdapter {
     fn bring_document_to_front(&self) -> Result<()> {
         self.front_provision_document()
     }
-    fn settings_changed_at(&self, raw: &str) -> Result<Option<SystemTime>> {
+    fn settings_sidecar(&self, raw: &str) -> Result<Option<SettingsSidecar>> {
         let raw = Path::new(raw);
         let (Some(parent), Some(name)) = (raw.parent(), raw.file_name()) else {
             return Ok(None);
@@ -137,7 +237,7 @@ impl EditingProvider for CaptureOneAdapter {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),
         };
-        let mut newest = None;
+        let mut newest: Option<(SystemTime, PathBuf)> = None;
         for entry in entries {
             let entry = entry?;
             if !entry.file_name().to_string_lossy().starts_with("Settings")
@@ -146,11 +246,24 @@ impl EditingProvider for CaptureOneAdapter {
                 continue;
             }
             let sidecar = entry.path().join(format!("{}.cos", name.to_string_lossy()));
-            if let Ok(modified) = sidecar.metadata().and_then(|metadata| metadata.modified()) {
-                newest = Some(newest.map_or(modified, |prior: SystemTime| prior.max(modified)));
+            if let Ok(modified) = sidecar.metadata().and_then(|metadata| metadata.modified())
+                && newest.as_ref().is_none_or(|(prior, _)| modified > *prior)
+            {
+                newest = Some((modified, sidecar));
             }
         }
-        Ok(newest)
+        let Some((modified, path)) = newest else {
+            return Ok(None);
+        };
+        let text = match fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        Ok(Some(SettingsSidecar {
+            modified,
+            fingerprint: settings_fingerprint(&String::from_utf8_lossy(&text)),
+        }))
     }
 
     fn inspect_document(&self) -> Result<DocumentState> {
@@ -311,8 +424,8 @@ impl EditingProvider for CaptureOneAdapter {
             .get(job)
             .map(|e| e.completion.clone())
     }
-    fn accept_render_output(&self, output: &Path, issued_at_ms: i64) -> bool {
-        accept_output(
+    fn resolve_render_output(&self, output: &Path, issued_at_ms: i64) -> Option<PathBuf> {
+        resolve_output(
             output,
             UNIX_EPOCH + Duration::from_millis(issued_at_ms.max(0) as u64),
         )

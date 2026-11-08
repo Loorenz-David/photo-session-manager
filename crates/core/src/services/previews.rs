@@ -15,12 +15,13 @@ use crate::{
         images::Imaging,
         store::Store,
     },
+    services::health::HealthService,
 };
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 
 pub trait PreviewFiles: Send + Sync {
@@ -38,6 +39,11 @@ pub trait ExportStaging: Send + Sync {
 
 type BeforeRender = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
 
+/// The settings fingerprint recorded for a RAW whose sidecar did not exist at that moment.
+pub const NO_SIDECAR: &str = "none";
+/// Health code of the photos whose preview render failed for good (P56 C3(b)).
+pub const PREVIEW_NOT_RENDERED: &str = "preview_not_rendered";
+
 pub struct PreviewService {
     pub store: Arc<dyn Store>,
     pub editing: Arc<dyn EditingProvider>,
@@ -47,8 +53,9 @@ pub struct PreviewService {
     pub imaging: Arc<dyn Imaging>,
     pub delay: Duration,
     pub export_staging: Option<Arc<dyn ExportStaging>>,
+    /// Where a preview that cannot be rendered is reported (P56 C3(b)); `None` in bare services.
+    pub health: Option<Arc<HealthService>>,
     last_adjusted: Mutex<HashMap<String, Instant>>,
-    seen_sidecars: Mutex<HashMap<String, SystemTime>>,
     failed_generation: Mutex<HashMap<String, i64>>,
     retry_after: Mutex<HashMap<String, (u32, Instant)>>,
     variant_first_request: Mutex<HashMap<String, Instant>>,
@@ -74,8 +81,8 @@ impl PreviewService {
             imaging: Arc::new(crate::ports::images::NoImaging),
             delay: clamp_delay(delay_setting),
             export_staging: None,
+            health: None,
             last_adjusted: Mutex::new(HashMap::new()),
-            seen_sidecars: Mutex::new(HashMap::new()),
             failed_generation: Mutex::new(HashMap::new()),
             retry_after: Mutex::new(HashMap::new()),
             variant_first_request: Mutex::new(HashMap::new()),
@@ -178,16 +185,22 @@ impl PreviewService {
         if canon(Path::new(raw)).ok().as_deref() != Some(entry.raw.as_str()) {
             return Ok(());
         }
-        let Some(output) = outputs.first() else {
+        let Some(reported) = outputs.first() else {
             return Ok(());
         };
-        let output = Path::new(output);
-        if !self
+        // 10A MC-16 §Completion: the reported path, or Capture One's suffixed copy beside it.
+        let Some(output) = self
             .editing
-            .accept_render_output(output, entry.issued_at_ms)
-        {
+            .resolve_render_output(Path::new(reported), entry.issued_at_ms)
+        else {
+            tracing::info!(
+                job,
+                reported,
+                "render output not found; waiting for the timeout"
+            );
             return Ok(());
-        }
+        };
+        let output = output.as_path();
         match entry.purpose {
             RenderPurpose::Preview => {
                 let dest = self
@@ -226,6 +239,14 @@ impl PreviewService {
                         session_id,
                     });
                 }
+                // The sidecar as Capture One left it for this render: a later rewrite with the
+                // same adjustments (its processing of this export, a save) is not an edit.
+                self.record_sidecar(&entry.raw);
+                self.failed_generation
+                    .lock()
+                    .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+                    .remove(&entry.raw);
+                self.report_failures();
             }
             RenderPurpose::Master => {
                 if let Some(callback) = &self.export_staging {
@@ -261,6 +282,7 @@ impl PreviewService {
             .lock()
             .map_err(|e| crate::Error::InvalidData(e.to_string()))?
             .remove(&raw);
+        self.report_failures();
         self.retry_after
             .lock()
             .map_err(|e| crate::Error::InvalidData(e.to_string()))?
@@ -285,15 +307,69 @@ impl PreviewService {
                     callback.failed(id, "timeout")?;
                 }
             } else if self.store.preview_state(&job.target)?.is_some() {
+                // MC-16: issued, re-issued once, no output either time. Not ordered again until
+                // the photo is adjusted (MC-17), and the photographer is told.
+                tracing::warn!(raw = job.target, generation, "preview not rendered");
                 self.failed_generation
                     .lock()
                     .map_err(|e| crate::Error::InvalidData(e.to_string()))?
                     .insert(job.target, generation);
+                self.report_failures();
             }
             self.store
                 .finish_render_job(id, Some("timeout"), self.clock.now_ms())?;
         }
         self.schedule_due(false)
+    }
+    /// Health item naming the photos whose last preview render failed (cleared when none is left).
+    fn report_failures(&self) {
+        let Some(health) = &self.health else {
+            return;
+        };
+        let mut names: Vec<String> = self
+            .failed_generation
+            .lock()
+            .map(|failed| {
+                failed
+                    .keys()
+                    .map(|raw| {
+                        Path::new(raw)
+                            .file_name()
+                            .map_or_else(|| raw.clone(), |n| n.to_string_lossy().into_owned())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        names.sort();
+        match names.as_slice() {
+            [] => health.clear(PREVIEW_NOT_RENDERED),
+            [one] => health.set(
+                PREVIEW_NOT_RENDERED,
+                format!("Capture One produced no preview for {one}"),
+            ),
+            many => health.set(
+                PREVIEW_NOT_RENDERED,
+                format!(
+                    "Capture One produced no preview for {} photos ({})",
+                    many.len(),
+                    many.join(", ")
+                ),
+            ),
+        }
+    }
+    /// Records the RAW's current settings-sidecar fingerprint (`NO_SIDECAR` without one).
+    fn record_sidecar(&self, raw: &str) {
+        let fingerprint = match self.editing.settings_sidecar(raw) {
+            Ok(Some(sidecar)) => sidecar.fingerprint,
+            Ok(None) => NO_SIDECAR.into(),
+            Err(error) => {
+                tracing::warn!(%error, raw, "settings sidecar not read");
+                return;
+            }
+        };
+        if let Err(error) = self.store.set_settings_fingerprint(raw, &fingerprint) {
+            tracing::warn!(%error, raw, "settings fingerprint not recorded");
+        }
     }
     pub fn retry_now(&self, raw: &str) -> Result<()> {
         self.retry_after
@@ -377,11 +453,25 @@ impl PreviewService {
     pub fn on_startup(&self) -> Result<()> {
         self.check_sidecars()
     }
+    /// MC-17 §Fallback, P56: a RAW whose sidecar holds other adjustments than at its last render
+    /// or check, and was written after that render and outside the own-write window, gets one
+    /// adjusted event. A rewrite with the same adjustments (Capture One processing an export the
+    /// app ordered, a document save) is never an edit; a RAW with no recorded fingerprint (before
+    /// P56) adopts the current one.
     fn check_sidecars(&self) -> Result<()> {
         for state in self.store.preview_states()? {
-            let Some(mtime) = self.editing.settings_changed_at(&state.raw_path)? else {
+            let Some(sidecar) = self.editing.settings_sidecar(&state.raw_path)? else {
                 continue;
             };
+            let Some(recorded) = state.settings_fingerprint.as_deref() else {
+                self.store
+                    .set_settings_fingerprint(&state.raw_path, &sidecar.fingerprint)?;
+                continue;
+            };
+            if recorded == sidecar.fingerprint {
+                continue;
+            }
+            let mtime = sidecar.modified;
             let rendered = state
                 .adjusted_preview_path
                 .as_ref()
@@ -394,16 +484,9 @@ impl PreviewService {
                     UNIX_EPOCH + Duration::from_millis(ms.max(0) as u64) + Duration::from_secs(30)
                 })
                 .unwrap_or(UNIX_EPOCH);
-            let mut seen = self
-                .seen_sidecars
-                .lock()
-                .map_err(|e| crate::Error::InvalidData(e.to_string()))?;
-            if mtime > rendered
-                && mtime > own
-                && seen.get(&state.raw_path).is_none_or(|prior| mtime > *prior)
-            {
-                seen.insert(state.raw_path.clone(), mtime);
-                drop(seen);
+            self.store
+                .set_settings_fingerprint(&state.raw_path, &sidecar.fingerprint)?;
+            if mtime > rendered && mtime > own {
                 self.on_variant_adjusted("", &state.raw_path)?;
             }
         }

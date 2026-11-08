@@ -48,6 +48,8 @@ struct MockCamera : CameraAdapter {
   bool usb_endpoint_available = true;
   bool wifi_visible = true;
   int fail_usb_connects = 0;   // next N USB connects fail
+  bool usb_held = false;       // failing USB connects report the interface held by another process
+  int64_t usb_fail_cost_ms = -1;  // cost of a failing USB connect (-1: connect_cost_ms)
   int fail_wifi_connects = 0;
   bool fatal_wifi = false;
   int64_t discover_cost_ms = 100;
@@ -57,11 +59,13 @@ struct MockCamera : CameraAdapter {
   uint64_t next_session = 1;
   uint64_t current_session = 0;
   std::vector<std::string> calls;
+  std::vector<std::pair<std::string, int64_t>> timed;  // every call with the clock when it started
 
   explicit MockCamera(FakeClock& c) : clock(c) {}
 
   std::vector<CameraEndpoint> discover(Transport t) override {
     calls.push_back(std::string("discover:") + to_string(t));
+    timed.push_back({calls.back(), clock.now});
     clock.advance(discover_cost_ms);
     last_saw_usb = usb_visible;
     if (t == Transport::Usb && usb_visible && usb_endpoint_available) return {{"SN123", "ILCE-7RM5", Transport::Usb, "usb:1"}};
@@ -70,14 +74,17 @@ struct MockCamera : CameraAdapter {
   }
   ConnectResult connect(const CameraEndpoint& ep) override {
     calls.push_back(std::string("connect:") + to_string(ep.transport));
-    clock.advance(connect_cost_ms);
+    timed.push_back({calls.back(), clock.now});
     ConnectResult r;
     if (ep.transport == Transport::Usb && fail_usb_connects > 0) {
+      clock.advance(usb_fail_cost_ms >= 0 ? usb_fail_cost_ms : connect_cost_ms);
       --fail_usb_connects;
       r.sdk_error = 0x8203;  // illustrative code, not a claim about real SDK values
       r.message = "mock usb failure";
+      r.held = usb_held;
       return r;
     }
+    clock.advance(connect_cost_ms);
     if (ep.transport == Transport::Wifi && (fail_wifi_connects > 0 || fatal_wifi)) {
       if (fail_wifi_connects > 0) --fail_wifi_connects;
       r.fatal = fatal_wifi;
@@ -93,6 +100,7 @@ struct MockCamera : CameraAdapter {
   }
   void disconnect() override {
     calls.push_back("disconnect");
+    timed.push_back({calls.back(), clock.now});
     if (active_sessions > 0) --active_sessions;
   }
   bool read_state(Fields& out) override {
@@ -109,12 +117,17 @@ struct Rig {
   MockCamera cam{clock};
   TransportConfig cfg;
   std::unique_ptr<TransportManager> tm;
-  Rig() {
-    cfg.usb_settle_ms = 1000;
-    cfg.min_dwell_ms = 2000;
-    cfg.after_disconnect_delay_ms = 500;
-    cfg.backoff_initial_ms = 1000;
-    cfg.backoff_max_ms = 8000;
+  // production = the sidecar's `auto` timings (TransportConfig defaults, 2.5 s claim window).
+  explicit Rig(bool production = false) {
+    if (production) {
+      cfg.usb_settle_ms = 2500;
+    } else {
+      cfg.usb_settle_ms = 1000;
+      cfg.min_dwell_ms = 2000;
+      cfg.after_disconnect_delay_ms = 500;
+      cfg.backoff_initial_ms = 1000;
+      cfg.backoff_max_ms = 8000;
+    }
     tm = std::make_unique<TransportManager>(cam, log, cfg, [this] { return clock.now; });
   }
   // Run the loop for `ms` of simulated time in 100 ms ticks.
@@ -245,10 +258,14 @@ TEST_CASE("repeated usb connect failure falls back to wifi") {
   r.run(15000);
   CHECK(r.log.count("usb.fallback_to_wifi") == 1);
   CHECK(r.tm->state() == State::ConnectedWifi);
-  // not flapping back to usb immediately
+  // not flapping back to usb afterwards
   int usb_connects = 0;
   for (auto& c : r.cam.calls) usb_connects += (c == "connect:usb");
-  CHECK_EQ(usb_connects, r.cfg.usb_failures_before_wifi_fallback);
+  r.run(60000);
+  int later = 0;
+  for (auto& c : r.cam.calls) later += (c == "connect:usb");
+  CHECK_EQ(later, usb_connects);
+  CHECK(r.tm->state() == State::ConnectedWifi);
 }
 
 TEST_CASE("P54 C3(a) busy USB claims fall back to Wi-Fi then return at a safe point") {
@@ -256,9 +273,6 @@ TEST_CASE("P54 C3(a) busy USB claims fall back to Wi-Fi then return at a safe po
   r.cam.fail_usb_connects = 100;  // holder rejects every connect
   r.plug_usb();
   r.run(10000);
-  int usb_connects = 0;
-  for (auto& call : r.cam.calls) usb_connects += (call == "connect:usb");
-  CHECK_EQ(usb_connects, r.cfg.usb_failures_before_wifi_fallback);
   CHECK_EQ(r.log.count("usb.fallback_to_wifi"), 1);
   CHECK(r.tm->state() == State::ConnectedWifi);
   r.unplug_usb();
@@ -300,10 +314,12 @@ TEST_CASE("P54 C3(a) busy USB claims fall back to Wi-Fi then return at a safe po
 
 TEST_CASE("replugging usb after fallback gives usb a fresh chance") {
   Rig r;
-  r.cam.fail_usb_connects = 3;
+  r.cam.fail_usb_connects = 100;
   r.plug_usb();
   r.run(15000);
   CHECK(r.tm->state() == State::ConnectedWifi);
+  CHECK_EQ(r.log.count("usb.fallback_to_wifi"), 1);
+  r.cam.fail_usb_connects = 0;
   r.unplug_usb();
   r.run(500);
   r.plug_usb();
@@ -334,9 +350,11 @@ TEST_CASE("usb flapping within settle window does not trigger switching") {
     r.run(200);
   }
   r.run(2000);
+  // P56 ruling 1: every plug-in claims the cable at once (no settle wait), so Wi-Fi may be closed
+  // while the cable flaps; the manager still ends on Wi-Fi and never holds two sessions.
   CHECK(r.tm->state() == State::ConnectedWifi);
-  CHECK_EQ(r.log.count("session.closed"), 0);
   CHECK_EQ(r.cam.max_sessions, 1);
+  CHECK_EQ(r.cam.active_sessions, 1);
 }
 
 TEST_CASE("delayed operations: slow connect still yields single session") {
@@ -405,27 +423,29 @@ int count_calls(const MockCamera& cam, const std::string& call) {
 
 TEST_CASE("usb-retry gives usb a fresh chance without a re-plug") {
   Rig r;
-  r.cam.fail_usb_connects = 3;
+  r.cam.fail_usb_connects = 100;
   r.plug_usb();
   r.run(15000);
   CHECK_EQ(r.log.count("usb.fallback_to_wifi"), 1);
-  CHECK_EQ(count_calls(r.cam, "connect:usb"), 3);
+  int before = count_calls(r.cam, "connect:usb");
   CHECK(r.tm->state() == State::ConnectedWifi);
+  r.cam.fail_usb_connects = 0;
   r.tm->usb_retry();
   r.run(5000);
   CHECK_EQ(r.log.count("usb.retry_requested"), 1);
-  CHECK_EQ(count_calls(r.cam, "connect:usb"), 4);
+  CHECK_EQ(count_calls(r.cam, "connect:usb"), before + 1);
   CHECK(r.tm->state() == State::ConnectedUsb);
   CHECK_EQ(r.cam.active_sessions, 1);
 
   // Control: without the retry, USB is never probed again (no periodic probing).
   Rig control;
-  control.cam.fail_usb_connects = 3;
+  control.cam.fail_usb_connects = 100;
   control.plug_usb();
   control.run(15000);
   CHECK(control.tm->state() == State::ConnectedWifi);
+  int settled = count_calls(control.cam, "connect:usb");
   control.run(60000);
-  CHECK_EQ(count_calls(control.cam, "connect:usb"), 3);
+  CHECK_EQ(count_calls(control.cam, "connect:usb"), settled);
   CHECK(control.tm->state() == State::ConnectedWifi);
 }
 
@@ -500,6 +520,219 @@ TEST_CASE("reconnect reopens the wifi session once") {
   CHECK_EQ(count_calls(r.cam, "discover:usb"), 0);
   CHECK_EQ(r.cam.max_sessions, 1);
   CHECK_EQ(r.cam.active_sessions, 1);
+}
+
+// ---- Session Manager additions (P56: claim at plug-in, never idle) -------------------------------
+
+namespace {
+// Start times of `call` at or after `from` (MockCamera::timed).
+std::vector<int64_t> starts(const MockCamera& cam, const std::string& call, int64_t from) {
+  std::vector<int64_t> out;
+  for (auto& [name, at] : cam.timed)
+    if (name == call && at >= from) out.push_back(at);
+  return out;
+}
+int64_t first_at(const MockCamera& cam, const std::string& call, int64_t from) {
+  auto v = starts(cam, call, from);
+  return v.empty() ? -1 : v.front();
+}
+int count_wifi_ready(const CaptureSink& log) {
+  int n = 0;
+  for (auto& e : log.events)
+    n += (e.name == "connection.ready" && e.json.find("\"transport\":\"wifi\"") != std::string::npos);
+  return n;
+}
+}  // namespace
+
+TEST_CASE("P56 C1(a) a plug-in closes Wi-Fi, claims USB at once, repeats through the window, then Wi-Fi at once") {
+  Rig r(true);
+  r.cam.usb_fail_cost_ms = 10;  // an interface that is not openable refuses within ~10 ms
+  r.run(3000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  r.cam.fail_usb_connects = 1000;  // not openable for the whole window (not held by anyone)
+  const int64_t t0 = r.clock.now;
+  r.plug_usb();
+  r.run(2500 + 400);
+  // Wi-Fi closed and the first USB attempt within 300 ms of the event, in that order.
+  int64_t closed = first_at(r.cam, "disconnect", t0);
+  int64_t first = first_at(r.cam, "discover:usb", t0);
+  CHECK(closed >= t0);
+  CHECK(first >= closed);
+  CHECK(first - t0 <= 300);
+  CHECK(r.log.has_field("session.closed", "\"reason\":\"switching wifi -> usb\""));
+  // Attempts repeat at <= 500 ms through the window and none starts after it.
+  auto usb = starts(r.cam, "discover:usb", t0);
+  CHECK(usb.size() >= 5);
+  for (size_t i = 1; i < usb.size(); ++i) CHECK(usb[i] - usb[i - 1] <= 500);
+  CHECK(usb.back() <= t0 + 2500);
+  // No USB session by the window's end: Wi-Fi reconnect starts at once.
+  int64_t wifi = first_at(r.cam, "discover:wifi", usb.back());
+  CHECK(wifi >= 0);
+  CHECK(wifi <= t0 + 2500 + 300);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  // The window's attempts are not counted: more than usb_failures_before_wifi_fallback of them
+  // failed and the fallback still came only when the window ended, with the window's count.
+  CHECK(int(usb.size()) > r.cfg.usb_failures_before_wifi_fallback);
+  CHECK_EQ(r.log.count("usb.fallback_to_wifi"), 1);
+  CHECK(r.log.has_field("usb.fallback_to_wifi", "\"usb_failures\":" + std::to_string(usb.size())));
+  CHECK(r.log.has_field("usb.fallback_to_wifi", "not ready within the claim window"));
+  // Wi-Fi then stays: no USB probe drops the working session.
+  int window_attempts = count_calls(r.cam, "connect:usb");
+  r.run(30000);
+  CHECK_EQ(count_calls(r.cam, "connect:usb"), window_attempts);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  CHECK_EQ(r.cam.max_sessions, 1);
+
+  // A held interface ends the window at the first refusal: Wi-Fi reconnect starts at once.
+  Rig h(true);
+  h.cam.usb_fail_cost_ms = 10;
+  h.run(3000);
+  h.cam.fail_usb_connects = 1000;
+  h.cam.usb_held = true;
+  const int64_t h0 = h.clock.now;
+  h.plug_usb();
+  h.run(1000);
+  CHECK(first_at(h.cam, "discover:usb", h0) - h0 <= 300);
+  CHECK_EQ(count_calls(h.cam, "connect:usb"), 1);
+  int64_t refused = first_at(h.cam, "connect:usb", h0) + 10;
+  int64_t back = first_at(h.cam, "discover:wifi", h0);
+  CHECK(back >= refused);
+  CHECK(back - refused <= 300);
+  CHECK_EQ(h.log.count("usb.fallback_to_wifi"), 1);
+  CHECK(h.tm->state() == State::ConnectedWifi);
+
+  // Success inside the window: a USB session, Wi-Fi not reconnected.
+  Rig ok(true);
+  ok.cam.usb_fail_cost_ms = 10;
+  ok.run(3000);
+  ok.cam.fail_usb_connects = 2;  // the interface comes up on the third attempt
+  ok.plug_usb();
+  ok.run(2500);
+  CHECK(ok.tm->state() == State::ConnectedUsb);
+  CHECK_EQ(count_calls(ok.cam, "connect:usb"), 3);
+  CHECK_EQ(count_wifi_ready(ok.log), 1);
+}
+
+TEST_CASE("P56 C1(b) a plug-in during a protected operation waits for busy to clear, then claims at once") {
+  Rig r(true);
+  r.run(4000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  r.tm->set_busy(BusyReason::Exposure);
+  r.run(200);
+  const int64_t t0 = r.clock.now;
+  r.plug_usb();
+  r.run(6000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  CHECK(r.log.count("switch.deferred") >= 1);
+  CHECK(r.log.has_field("switch.deferred", "\"busy\":\"exposure\""));
+  CHECK_EQ(first_at(r.cam, "discover:usb", t0), int64_t(-1));
+  CHECK_EQ(r.log.count("session.closed"), 0);
+  const int64_t t1 = r.clock.now;
+  r.tm->set_busy(BusyReason::None);
+  r.run(2000);
+  int64_t closed = first_at(r.cam, "disconnect", t1);
+  int64_t first = first_at(r.cam, "discover:usb", t1);
+  CHECK(closed >= t1);
+  CHECK(first >= closed);
+  CHECK(first - t1 <= 300);
+  CHECK(r.tm->state() == State::ConnectedUsb);
+  CHECK_EQ(r.cam.max_sessions, 1);
+}
+
+TEST_CASE("P56 C2(a) held cable: Wi-Fi for 30 minutes without USB probes, USB within 1 s of the release") {
+  Rig r(true);
+  r.cam.usb_fail_cost_ms = 10;
+  r.cam.fail_usb_connects = 1000000;
+  r.cam.usb_held = true;  // ptpcamerad holds the interface
+  r.plug_usb();
+  r.run(5000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  CHECK_EQ(r.log.count("usb.fallback_to_wifi"), 1);
+  int64_t wifi_up = -1;
+  for (auto& [name, at] : r.cam.timed)
+    if (name == "connect:wifi" && wifi_up < 0) wifi_up = at;
+  CHECK(wifi_up >= 0);
+  CHECK(wifi_up <= 1000);  // the held refusal sends it to Wi-Fi at once
+  const int usb_before = count_calls(r.cam, "connect:usb");
+  const int closed_before = r.log.count("session.closed");
+  const int lost_before = r.log.count("session.lost");
+  const int ready_before = r.log.count("connection.ready");
+  // 30 simulated minutes with the holder still there (the poller keeps reporting it).
+  for (int minute = 0; minute < 30; ++minute) {
+    r.tm->on_usb_holder(true);
+    r.run(60000);
+  }
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  CHECK_EQ(count_calls(r.cam, "connect:usb"), usb_before);
+  CHECK_EQ(count_calls(r.cam, "discover:usb"), usb_before);
+  CHECK_EQ(r.log.count("session.closed"), closed_before);
+  CHECK_EQ(r.log.count("session.lost"), lost_before);
+  CHECK_EQ(r.log.count("connection.ready"), ready_before);
+  // The holder lets go: a USB attempt within 1 s (Wi-Fi closed first), a USB session.
+  r.cam.fail_usb_connects = 0;
+  const int64_t t1 = r.clock.now;
+  r.tm->on_usb_holder(false);
+  r.run(3000);
+  int64_t closed = first_at(r.cam, "disconnect", t1);
+  int64_t first = first_at(r.cam, "discover:usb", t1);
+  CHECK(first >= 0);
+  CHECK(first - t1 <= 1000);
+  CHECK(closed >= t1);
+  CHECK(first >= closed);
+  CHECK_EQ(r.log.count("usb.released"), 1);
+  CHECK(r.tm->state() == State::ConnectedUsb);
+  CHECK_EQ(r.cam.max_sessions, 1);
+
+  // A release that turns out to be short-lived (refused again): back to Wi-Fi at once.
+  Rig b(true);
+  b.cam.usb_fail_cost_ms = 10;
+  b.cam.fail_usb_connects = 1000000;
+  b.cam.usb_held = true;
+  b.plug_usb();
+  b.run(5000);
+  CHECK(b.tm->state() == State::ConnectedWifi);
+  const int64_t b1 = b.clock.now;
+  b.tm->on_usb_holder(false);
+  b.run(3000);
+  int64_t refused = first_at(b.cam, "connect:usb", b1) + 10;
+  int64_t back = first_at(b.cam, "discover:wifi", b1);
+  CHECK(refused >= b1 + 10);
+  CHECK(back >= refused);
+  CHECK(back - refused <= 300);
+  CHECK(b.tm->state() == State::ConnectedWifi);
+}
+
+TEST_CASE("P56 C2(b) never idle: a lost Wi-Fi session is retried for as long as it takes") {
+  Rig r(true);
+  r.cam.usb_fail_cost_ms = 10;
+  r.cam.fail_usb_connects = 1000000;
+  r.cam.usb_held = true;
+  r.plug_usb();
+  r.run(5000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  r.cam.wifi_visible = false;
+  r.tm->on_sdk_disconnected(0x8208, r.cam.current_session);
+  r.run(20 * 60000);
+  const int64_t late = r.clock.now;
+  r.run(10 * 60000);
+  // Still trying both links in the last ten minutes: no terminal idle state.
+  CHECK(starts(r.cam, "discover:wifi", late).size() >= 10);
+  CHECK(starts(r.cam, "discover:usb", late).size() >= 10);
+  CHECK(r.tm->state() != State::Error);
+  CHECK_EQ(r.log.count("transport.idle"), 0);
+  CHECK_EQ(r.log.count("usb.fallback_to_wifi"), 1);
+  r.cam.wifi_visible = true;
+  r.run(60000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  CHECK_EQ(r.cam.active_sessions, 1);
+}
+
+TEST_CASE("P56 holder report: only another process counts as holding the cable") {
+  CHECK(usb_held_by_other({"pid 95408, ptpcamerad"}, 4242));
+  CHECK(!usb_held_by_other({"pid 4242, camera-sidecar"}, 4242));
+  CHECK(!usb_held_by_other({}, 4242));
+  CHECK(usb_held_by_other({"pid 4242, camera-sidecar", "pid 77, ptpcamerad"}, 4242));
+  CHECK(usb_held_by_other({"ptpcamerad"}, 4242));
 }
 
 int main() { return mt_run_all(); }

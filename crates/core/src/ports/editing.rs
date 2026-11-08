@@ -10,9 +10,18 @@ use crate::{
     },
 };
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     time::{Instant, SystemTime},
 };
+
+/// The editor's settings sidecar of a RAW (10A MC-17 §Fallback): when it was last written and a
+/// fingerprint of the adjustments it holds, so a rewrite that changes no adjustment (the editor's
+/// own processing, a document save) is not taken for an edit (P56, P52 F12).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettingsSidecar {
+    pub modified: SystemTime,
+    pub fingerprint: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct RenderCompletion {
@@ -45,7 +54,9 @@ pub trait EditingProvider: Send + Sync {
         now_ms: i64,
     ) -> Result<()>;
     fn render_completion(&self, job: &str) -> Option<RenderCompletion>;
-    fn accept_render_output(&self, output: &Path, issued_at_ms: i64) -> bool;
+    /// The file a finished render produced, from the path the editor reported (10A MC-16
+    /// §Completion): `None` when no file written after the request can be found for it.
+    fn resolve_render_output(&self, output: &Path, issued_at_ms: i64) -> Option<PathBuf>;
     fn finish_render(&self, job: &str, now: Instant, now_ms: i64) -> Result<()>;
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>>;
     fn render_in_flight(&self, raw: &str) -> bool;
@@ -55,6 +66,6 @@ pub trait EditingProvider: Send + Sync {
         0
     }
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()>;
-    fn settings_changed_at(&self, raw: &str) -> Result<Option<SystemTime>>;
+    fn settings_sidecar(&self, raw: &str) -> Result<Option<SettingsSidecar>>;
     fn capabilities(&self) -> EditingCapabilities;
 }

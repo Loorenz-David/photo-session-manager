@@ -1,5 +1,6 @@
 pub mod backup;
 pub mod camera_files;
+pub mod disk;
 pub mod export_fs;
 pub mod ftp;
 pub mod imaging;

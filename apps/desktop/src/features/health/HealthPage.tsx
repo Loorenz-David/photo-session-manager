@@ -24,6 +24,7 @@ const names: Record<string, string> = {
   camera_support_not_installed: 'Camera support', camera_sidecar_unavailable: 'Camera helper',
   editor_not_following: 'Capture One follows',
   integration_token_invalid: 'Shopify token', condition_field_missing: 'Condition photos field',
+  preview_not_rendered: 'Previews', disk_space_low: 'Disk space',
 };
 
 export function HealthPage() {

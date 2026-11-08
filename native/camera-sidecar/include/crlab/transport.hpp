@@ -58,11 +58,18 @@ struct ConnectResult {
   // Empty = not attempted (the mock camera, the stub).
   std::string store_destination;  // "verified" | "failed"
   std::string store_value;        // value read back, "0x%08X"
+  // A USB connect failed because another process holds the camera's USB interface
+  // (IOKit `UsbExclusiveOwner`, e.g. ptpcamerad). Retrying before it lets go cannot succeed.
+  bool held = false;
 };
 
 // Why the camera is not at a safe point for an intentional disconnect.
 enum class BusyReason { None, Exposure, Bracketing, PixelShift, FileTransfer, Other };
 const char* to_string(BusyReason r);
+
+// Whether `owners` (IOKit `UsbExclusiveOwner` values, "pid 95408, ptpcamerad") name a process
+// other than `self_pid` (P56 ruling 2: an interface this helper holds is not held "by another").
+bool usb_held_by_other(const std::vector<std::string>& owners, int self_pid);
 
 class CameraAdapter {
  public:
@@ -87,7 +94,11 @@ class CameraAdapter {
 struct TransportConfig {
   bool wifi_enabled = true;
   bool usb_enabled = true;
-  int64_t usb_settle_ms = 2000;      // wait after USB arrival before acting
+  // The claim window after a USB arrival (MC-31 as amended by P56 ruling 1): the first USB
+  // attempt starts at once and failed attempts repeat every usb_claim_retry_ms until this long
+  // after the arrival; they do not count towards usb_failures_before_wifi_fallback.
+  int64_t usb_settle_ms = 2000;
+  int64_t usb_claim_retry_ms = 200;
   int64_t backoff_initial_ms = 1000;
   int64_t backoff_max_ms = 30000;
   double backoff_factor = 2.0;
@@ -118,6 +129,10 @@ class TransportManager {
   // `reconnect` (R-I29, Session Manager P46): closes the current Wi-Fi session and retries Wi-Fi
   // at once, at the next safe point. Ignored unless a Wi-Fi session is open.
   void reconnect();
+  // Whether another process holds the camera's USB interface (IOKit `UsbExclusiveOwner` names a
+  // process other than this helper), polled by the caller (P56 ruling 2). A change from held to
+  // not held while USB waits for its holder (after a fallback to Wi-Fi) opens a new claim window.
+  void on_usb_holder(bool held_by_other);
 
   // --- driver ----------------------------------------------------------
   // Process queued inputs and take at most one blocking action. Call in a
@@ -133,7 +148,7 @@ class TransportManager {
 
  private:
   struct Input {
-    enum Kind { UsbPresence, SdkDisconnected, Busy, Stop, UsbRetry, Reconnect } kind;
+    enum Kind { UsbPresence, SdkDisconnected, Busy, Stop, UsbRetry, Reconnect, UsbHolder } kind;
     bool flag = false;
     uint32_t code = 0;
     uint64_t session = 0;
@@ -147,7 +162,10 @@ class TransportManager {
   bool try_connect(Transport t);
   void session_lost(const std::string& reason, uint32_t code);
   void intentional_disconnect(const std::string& reason);
-  void schedule_retry(Transport t);
+  void schedule_retry(Transport t, bool held = false);
+  void park_usb(const std::string& why);
+  bool usb_parked() const { return usb_retry_at_ == INT64_MAX; }
+  void arm_claim();
 
   CameraAdapter& adapter_;
   EventSink& log_;
@@ -172,7 +190,12 @@ class TransportManager {
   int64_t next_attempt_ms_ = 0;
   int64_t connected_at_ = 0;
   int64_t lost_at_ = -1;
-  int64_t usb_retry_at_ = 0;     // after USB fallback: INT64_MAX until USB is re-plugged
+  int64_t usb_retry_at_ = 0;     // after USB fallback: INT64_MAX until re-plug, holder release or usb-retry
+  bool claim_pending_ = false;   // a USB arrival (or release) waits for its claim window
+  int64_t claim_until_ = -1;     // end of the claim window in progress, -1 = none
+  int claim_attempts_ = 0;       // USB attempts in the claim window (never counted as failures)
+  bool usb_held_ = false;        // another process holds the USB interface (last report)
+  Transport last_failed_ = Transport::None;  // the transport of the last failed attempt
   uint64_t session_id_ = 0;
   bool idle_logged_ = false;  // when the last session was lost (for recovery latency)
   bool reconnect_requested_ = false;  // `reconnect` taken on an open Wi-Fi session

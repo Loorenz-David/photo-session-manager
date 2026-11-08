@@ -2,6 +2,7 @@
 // Compiled for both the real SDK and the stub (it only uses the facade).
 #include <cstdio>
 #include <cstdlib>
+#include <unistd.h>
 
 #include "crlab/camera.hpp"
 #include "crlab/usb_monitor.hpp"
@@ -52,8 +53,14 @@ ConnectResult SdkCameraAdapter::connect(const CameraEndpoint& ep) {
       return r;
     }
     r = session_.connect(cam, opt);
-    if (!r.ok && ep.transport == Transport::Usb && !report_usb_claim(log_, base_.usb_product_ids).empty())
-      r.message += " (USB interface claimed by another process; see usb.claimed_by)";
+  }
+  // Every failed USB connect (enumerated or direct by serial) says whether another process holds
+  // the interface: the transport manager then falls back to Wi-Fi at once and waits for the
+  // holder to let go (P56 rulings 1 and 2).
+  if (!r.ok && ep.transport == Transport::Usb &&
+      usb_held_by_other(report_usb_claim(log_, base_.usb_product_ids), static_cast<int>(getpid()))) {
+    r.held = true;
+    r.message += " (USB interface claimed by another process; see usb.claimed_by)";
   }
   if (r.ok) after_connect(r, ep.transport);
   return r;

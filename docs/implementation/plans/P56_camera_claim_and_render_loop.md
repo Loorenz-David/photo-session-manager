@@ -106,3 +106,17 @@ the app for an hour → the helper is on a link the whole time; Capture One show
 
 - 2026-11-08 implement r1 (codex): **BLOCKED before production edits.** C1(a) requires a USB connect attempt within 300 ms while a Wi-Fi SDK session is open, but the Notes prohibit dropping that session before USB is ready and MC-31 permits only one SDK session. C2(a) requires USB retries throughout 30 minutes of held-interface failures and switching when a later attempt succeeds, while ratified MC-31 §Transport policy says that after three failed USB connects the sidecar stays on Wi-Fi until re-plug or holder-gone signal, with no periodic USB probing. Both are observable policy contradictions; the implementer cannot implement either rule verbatim without violating the other. Read-only diagnosis for F12: the real database has 170 completed preview jobs for one RAW and its adjustment generation is 173, but it has zero `variant_adjusted` hook rows for that RAW; `PreviewService::check_sidecars` is the remaining generation-raising path and treats a later `.cos` mtime as an edit, while Capture One processing can change that sidecar. This is a likely self-trigger loop, not yet proved by a boundary test. No code, test, tracker or owner-data file was changed. Two owner cards in the handoff request a contract amendment; no suite stamp was run because no implementation tree exists to close.
 - 2026-11-08 orchestrator: **rulings 1 and 2 written above (§Orchestrator rulings), C1(a) and C2(a) amended, export-loop diagnosis folded in; book changelog 37.** Relaunched implement.
+- 2026-11-08 implement r1 relaunch (claude, pipeline-implementer): **IMPLEMENTED.** Helper (C++): a USB arrival (not busy) closes Wi-Fi and
+  starts USB at once; failed attempts repeat every 200 ms until 2.5 s after the arrival and do not count towards the three-failure rule; a held
+  interface (IOKit `UsbExclusiveOwner` names another process, reported by every failed USB connect) or the window's end → Wi-Fi at once and USB
+  waits; the helper polls the holder every 500 ms and a held → free change opens a new claim window (`usb.released`); with USB waiting and Wi-Fi
+  unreachable the links alternate on the backoff (never idle). Export loop — **cause found in the owner's data (read-only)**: Capture One's "add
+  suffix" naming (file `DSC04979 14.tif`, hook reports this morning's `DSC04979.tif`; 875 TIFF completions over 47 reported paths) made the app
+  reject every completion and re-issue after 60 s; the TIFFs were **preview** renders (no `render_master` row exists; the "PSM Preview" recipe had
+  turned TIFF/`Output`/add-suffix around a `recipe_missing` burst at 11:52 UTC); and Capture One's own `.cos` rewrites (all four sidecars at 16:31:03,
+  five minutes after their last export) became adjusted events at the next focus. Fixes: completion resolves the newest fresh `<stem> <n>.<ext>`;
+  the sidecar check compares a fingerprint of the adjustment lists (migration 008), recorded at each completion; N = 2 then a
+  `preview_not_rendered` health item; masters refused below 5 GB free with a `disk_space_low` item naming the disk. Assumptions: window end parks
+  USB even without a holder (changelog 37 "never by blind probing"); RAWs without a fingerprint adopt the current one silently. Deviations: files
+  outside the perimeter (infra `disk.rs`, migration, store/ports, `lib.rs` wiring, `test_app.rs`, Health labels) and the changed old assertions are
+  listed in the handoff. SDK build compiled, stub restored.

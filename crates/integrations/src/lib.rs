@@ -143,6 +143,8 @@ pub struct Lanes {
     pub background: Arc<dyn CaptureOneScripting>,
     pub gate: Arc<LaunchGate>,
     pub start_order: Arc<StartOrder>,
+    /// The master-render disk guard's free-space source (P56 C3(d)).
+    pub disk: Arc<editing::capture_one::adapter::DiskSpace>,
 }
 
 pub struct SettingsSetContext {
@@ -411,6 +413,7 @@ impl App {
                 background,
                 gate,
                 start_order,
+                disk: Arc::new(editing::capture_one::adapter::DiskSpace::default()),
             },
             clock,
             run_startup,
@@ -496,15 +499,18 @@ impl App {
             style_name: settings.style_name.clone(),
             wait: EDITOR_WAIT,
         };
-        let editing: Arc<dyn EditingProvider> = Arc::new(CaptureOneAdapter::new(
-            (user_scripting.clone(), background_scripting.clone()),
-            store.clone(),
-            health.clone(),
-            document_id.clone(),
-            settings.preview_recipe.clone(),
-            settings.master_recipe.clone(),
-            paths.clone(),
-        ));
+        let editing: Arc<dyn EditingProvider> = Arc::new(
+            CaptureOneAdapter::new(
+                (user_scripting.clone(), background_scripting.clone()),
+                store.clone(),
+                health.clone(),
+                document_id.clone(),
+                settings.preview_recipe.clone(),
+                settings.master_recipe.clone(),
+                paths.clone(),
+            )
+            .with_disk(lanes.disk.clone()),
+        );
         // 10E §Camera support packages (P46 L18): the direct adapter whenever a camera support
         // package is installed, the Capture One camera adapter otherwise; decided up front.
         let direct_camera = camera::support::installed(&paths).is_some();
@@ -566,6 +572,7 @@ impl App {
         );
         previews.imaging = imaging.clone();
         previews.export_staging = Some(export.clone());
+        previews.health = Some(health.clone());
         let previews = Arc::new(previews);
         let follow = Arc::new(CaptureOneFollow::new(
             user_scripting.clone(),
@@ -871,6 +878,10 @@ impl App {
     /// The process-wide start order (R-I31).
     pub fn start_order(&self) -> Arc<StartOrder> {
         self.lanes.start_order.clone()
+    }
+    /// The master-render disk guard's free-space source (P56 C3(d); a test stands in for the disk).
+    pub fn disk_space(&self) -> Arc<editing::capture_one::adapter::DiskSpace> {
+        self.lanes.disk.clone()
     }
 
     /// ch12 §Health: re-runs the editing startup checks (document, hooks, recipes, capture

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 
 #include "crlab/transport.hpp"
 
@@ -39,6 +40,16 @@ const char* to_string(BusyReason r) {
     case BusyReason::Other: return "other";
   }
   return "?";
+}
+
+bool usb_held_by_other(const std::vector<std::string>& owners, int self_pid) {
+  for (const auto& owner : owners) {
+    // "pid <n>, <name>": anything that does not parse as our own pid counts as another holder.
+    long pid = -1;
+    if (owner.rfind("pid ", 0) == 0) pid = std::strtol(owner.c_str() + 4, nullptr, 10);
+    if (pid != self_pid) return true;
+  }
+  return false;
 }
 
 TransportManager::TransportManager(CameraAdapter& adapter, EventSink& log, TransportConfig cfg, ClockFn clock)
@@ -82,6 +93,11 @@ void TransportManager::reconnect() {
   inputs_.push_back({Input::Reconnect, false, 0, 0, BusyReason::None, ""});
 }
 
+void TransportManager::on_usb_holder(bool held_by_other) {
+  std::lock_guard<std::mutex> lk(mu_);
+  inputs_.push_back({Input::UsbHolder, held_by_other, 0, 0, BusyReason::None, ""});
+}
+
 State TransportManager::state() const { return state_; }
 Transport TransportManager::transport() const { return active_; }
 
@@ -101,8 +117,35 @@ Transport TransportManager::desired_transport() const {
   int64_t now = clock_();
   bool usb_ok = cfg_.usb_enabled && usb_present_ && now >= usb_retry_at_;
   if (usb_ok) return Transport::Usb;
-  if (cfg_.wifi_enabled) return Transport::Wifi;
+  // P56 ruling 2: USB that waits for its holder is never probed while Wi-Fi is connected, but while
+  // Wi-Fi cannot be reached the two links take turns on the retry backoff (never idle).
+  bool usb_waiting = cfg_.usb_enabled && usb_present_ && usb_parked();
+  if (cfg_.wifi_enabled) return (usb_waiting && last_failed_ == Transport::Wifi) ? Transport::Usb : Transport::Wifi;
+  if (usb_waiting) return Transport::Usb;
   return Transport::None;
+}
+
+// A USB arrival, a holder release or `usb-retry` (P56 ruling 1): the next step claims the cable.
+void TransportManager::arm_claim() {
+  claim_pending_ = cfg_.usb_enabled && usb_present_;
+  claim_until_ = -1;
+  claim_attempts_ = 0;
+}
+
+// After three failed USB connects, or a claim the holder refused: stay on Wi-Fi until a re-plug,
+// a holder release (`on_usb_holder(false)`) or `usb-retry`; no periodic probing (MC-31).
+void TransportManager::park_usb(const std::string& why) {
+  int64_t now = clock_();
+  int failures = claim_until_ >= 0 ? claim_attempts_ : usb_failures_;
+  claim_until_ = -1;
+  claim_pending_ = false;
+  usb_retry_at_ = INT64_MAX;
+  log_.emit("usb.fallback_to_wifi", Fields()
+                                        .num("usb_failures", failures)
+                                        .str("usb_retry", "on holder release or next USB re-plug")
+                                        .str("reason", why));
+  failures_ = 0;
+  next_attempt_ms_ = now;
 }
 
 void TransportManager::drain_inputs() {
@@ -124,13 +167,18 @@ void TransportManager::drain_inputs() {
         usb_changed_at_ = now;
         log_.emit(in.flag ? "usb.arrived" : "usb.removed", Fields().str("detail", in.detail));
         if (in.flag) {
-          // A fresh physical connection deserves a fresh chance.
+          // A fresh physical connection deserves a fresh chance, claimed at once (ruling 1).
           usb_failures_ = 0;
           usb_retry_at_ = 0;
           if (!session_open_) {
             failures_ = 0;
             next_attempt_ms_ = now;
           }
+          arm_claim();
+        } else {
+          usb_held_ = false;
+          claim_pending_ = false;
+          claim_until_ = -1;
         }
         if (state_ == State::Error) {
           set_state(State::Disconnected, "usb presence changed; leaving ERROR");
@@ -169,6 +217,26 @@ void TransportManager::drain_inputs() {
         failures_ = 0;
         next_attempt_ms_ = now;
         log_.emit("usb.retry_requested", Fields());
+        if (!(session_open_ && active_ == Transport::Usb)) arm_claim();
+        break;
+      case Input::UsbHolder:
+        if (in.flag) {
+          usb_held_ = true;
+          break;
+        }
+        if (usb_held_ && usb_present_ && cfg_.usb_enabled && !(session_open_ && active_ == Transport::Usb)) {
+          // Ruling 2: the holder let go of the cable; a USB attempt follows under ruling 1.
+          log_.emit("usb.released", Fields().boolean("usb_waiting", usb_parked()));
+          usb_failures_ = 0;
+          usb_retry_at_ = 0;
+          if (!session_open_) {
+            failures_ = 0;
+            next_attempt_ms_ = now;
+          }
+          arm_claim();
+          if (state_ == State::Error) set_state(State::Disconnected, "usb released; leaving ERROR");
+        }
+        usb_held_ = false;
         break;
       case Input::Reconnect:
         // Wi-Fi only (R-I29): a reconnect on USB would give the camera to another program (V6).
@@ -178,22 +246,43 @@ void TransportManager::drain_inputs() {
   }
 }
 
-void TransportManager::schedule_retry(Transport t) {
+void TransportManager::schedule_retry(Transport t, bool held) {
   int64_t now = clock_();
+  last_failed_ = t;
+  if (t == Transport::Usb && claim_until_ >= 0) {
+    // Claim window (ruling 1): not counted; repeat quickly until the window ends. A holder that
+    // keeps the interface ends the window at once, as does its end: Wi-Fi reconnects at once.
+    ++claim_attempts_;
+    if (held || usb_held_) {
+      park_usb("usb interface held by another process");
+      return;
+    }
+    if (now + cfg_.usb_claim_retry_ms < claim_until_) {
+      next_attempt_ms_ = now + cfg_.usb_claim_retry_ms;
+      log_.emit("connect.retry_scheduled", Fields()
+                                               .str("transport", "usb")
+                                               .num("claim_attempts", claim_attempts_)
+                                               .num("delay_ms", cfg_.usb_claim_retry_ms));
+      return;
+    }
+    // Not ready by the end of the window: Wi-Fi at once; USB waits for a re-plug, a holder
+    // release or usb-retry (no probing that would drop the Wi-Fi session, ruling 2). Without
+    // Wi-Fi there is nothing to fall back to: USB goes on with the regular attempts below.
+    if (cfg_.wifi_enabled) {
+      park_usb("usb not ready within the claim window");
+      return;
+    }
+    claim_until_ = -1;
+  }
   ++failures_;
-  if (t == Transport::Usb) {
+  if (t == Transport::Usb && !usb_parked()) {
     ++usb_failures_;
-    if (usb_failures_ >= cfg_.usb_failures_before_wifi_fallback && cfg_.wifi_enabled) {
+    if (cfg_.wifi_enabled && (held || usb_failures_ >= cfg_.usb_failures_before_wifi_fallback)) {
       // Do not periodically retry USB: each retry would tear down a working
       // Wi-Fi session to probe a USB link that keeps failing (e.g. camera in
-      // Mass Storage mode). USB gets a fresh chance on the next physical
-      // re-plug (see drain_inputs).
-      usb_retry_at_ = INT64_MAX;
-      log_.emit("usb.fallback_to_wifi", Fields()
-                                            .num("usb_failures", usb_failures_)
-                                            .str("usb_retry", "on next USB re-plug"));
-      failures_ = 0;
-      next_attempt_ms_ = now;
+      // Mass Storage mode, or held by another process). USB gets a fresh chance on
+      // the next physical re-plug, a holder release or usb-retry (see drain_inputs).
+      park_usb(held ? "usb interface held by another process" : "usb connect failed");
       return;
     }
   }
@@ -282,7 +371,7 @@ bool TransportManager::try_connect(Transport t) {
   if (eps.empty()) {
     // A claimed USB interface can make enumeration return no endpoint at all. Count that
     // attempt toward the same bounded Wi-Fi fallback as a failed USB connect.
-    schedule_retry(t);
+    schedule_retry(t, t == Transport::Usb && usb_held_);
     set_state(recovering ? State::Recovering : State::Disconnected, "camera not found");
     return false;
   }
@@ -311,7 +400,8 @@ bool TransportManager::try_connect(Transport t) {
       set_state(State::Error, "fatal connection error: " + r.message);
       return false;
     }
-    schedule_retry(t);
+    if (t == Transport::Usb && r.held) usb_held_ = true;
+    schedule_retry(t, t == Transport::Usb && r.held);
     set_state(recovering ? State::Recovering : State::Disconnected, "connect failed");
     return false;
   }
@@ -321,7 +411,13 @@ bool TransportManager::try_connect(Transport t) {
   active_ = t;
   endpoint_ = ep;
   failures_ = 0;
-  if (t == Transport::Usb) usb_failures_ = 0;
+  last_failed_ = Transport::None;
+  if (t == Transport::Usb) {
+    usb_failures_ = 0;
+    usb_held_ = false;
+    claim_until_ = -1;
+    claim_pending_ = false;
+  }
   connected_at_ = t2;
   set_state(t == Transport::Usb ? State::ConnectedUsb : State::ConnectedWifi, "connected");
 
@@ -375,6 +471,26 @@ bool TransportManager::step() {
         try_connect(Transport::Wifi);  // the same transport, at once
         return true;
       }
+      if (active_ == Transport::Wifi && claim_pending_ && usb_present_ && cfg_.usb_enabled) {
+        // Ruling 1: the plug-in is the signal to move to the cable. Close Wi-Fi and try USB at
+        // once (no settle, no dwell); a busy camera still defers the switch (R-I22, M39).
+        if (busy_ != BusyReason::None) {
+          if (busy_logged_at_ < 0 || now - busy_logged_at_ >= cfg_.busy_log_interval_ms) {
+            log_.emit("switch.deferred", Fields().str("to", "usb").str("busy", to_string(busy_)));
+            busy_logged_at_ = now;
+          }
+          return true;
+        }
+        claim_pending_ = false;
+        claim_until_ = now + cfg_.usb_settle_ms;
+        claim_attempts_ = 0;
+        set_state(State::Switching, "usb arrived; claiming usb");
+        intentional_disconnect("switching wifi -> usb");
+        failures_ = 0;
+        next_attempt_ms_ = clock_();
+        try_connect(Transport::Usb);
+        return true;
+      }
       Transport want = desired_transport();
       if (want == active_) return true;
 
@@ -405,6 +521,19 @@ bool TransportManager::step() {
     case State::Disconnected:
     case State::Recovering:
     case State::Switching: {
+      if (claim_pending_ && usb_present_ && cfg_.usb_enabled) {
+        // No session to close: the claim window starts now and the first attempt is immediate.
+        claim_pending_ = false;
+        claim_until_ = now + cfg_.usb_settle_ms;
+        claim_attempts_ = 0;
+        failures_ = 0;
+        next_attempt_ms_ = now;
+      }
+      if (claim_until_ >= 0 && now >= claim_until_) {
+        // The window ran out between attempts: Wi-Fi at once (see schedule_retry).
+        if (cfg_.wifi_enabled) park_usb("usb not ready within the claim window");
+        else claim_until_ = -1;
+      }
       if (now < next_attempt_ms_) return true;
       Transport want = desired_transport();
       if (want == Transport::None) {
@@ -414,7 +543,6 @@ bool TransportManager::step() {
         }
         return true;
       }
-      if (want == Transport::Usb && now - usb_changed_at_ < cfg_.usb_settle_ms) return true;
       try_connect(want);
       return true;
     }

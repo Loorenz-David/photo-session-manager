@@ -64,6 +64,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/005_photo_link_slots.sql")),
             M::up(include_str!("migrations/006_camera_ledger.sql")),
             M::up(include_str!("migrations/007_style_applied.sql")),
+            M::up(include_str!("migrations/008_settings_fingerprint.sql")),
         ]
     }
 
@@ -324,7 +325,7 @@ fn photo(conn: &Connection, id: i64) -> Result<Photo> {
 }
 
 fn raw_preview_state(conn: &Connection, raw: &str) -> Result<Option<RawPreviewState>> {
-    conn.query_row("SELECT r.raw_path,r.adjusted_gen,r.rendered_gen,r.retouch_gen,r.last_own_write_at,(SELECT adjusted_preview_path FROM photos WHERE raw_path=r.raw_path ORDER BY id LIMIT 1) FROM raw_state r WHERE r.raw_path=?1 AND EXISTS(SELECT 1 FROM photos WHERE raw_path=r.raw_path)", [raw], |r| Ok(RawPreviewState { raw_path:r.get(0)?, adjusted_gen:r.get(1)?, rendered_gen:r.get(2)?, retouch_gen:r.get(3)?, last_own_write_at:r.get(4)?, adjusted_preview_path:r.get(5)? })).optional().map_err(db)
+    conn.query_row("SELECT r.raw_path,r.adjusted_gen,r.rendered_gen,r.retouch_gen,r.last_own_write_at,(SELECT adjusted_preview_path FROM photos WHERE raw_path=r.raw_path ORDER BY id LIMIT 1),r.settings_fingerprint FROM raw_state r WHERE r.raw_path=?1 AND EXISTS(SELECT 1 FROM photos WHERE raw_path=r.raw_path)", [raw], |r| Ok(RawPreviewState { raw_path:r.get(0)?, adjusted_gen:r.get(1)?, rendered_gen:r.get(2)?, retouch_gen:r.get(3)?, last_own_write_at:r.get(4)?, adjusted_preview_path:r.get(5)?, settings_fingerprint:r.get(6)? })).optional().map_err(db)
 }
 
 fn job(conn: &Connection, id: i64) -> Result<Job> {
@@ -1393,6 +1394,11 @@ impl Store for SqliteStore {
             .map_err(|e| Error::InvalidData(e.to_string()))?
             .execute("UPDATE jobs SET status='queued' WHERE status='running'", [])
             .map_err(db)?;
+        Ok(())
+    }
+    fn set_settings_fingerprint(&self, raw_path: &str, fingerprint: &str) -> Result<()> {
+        self.conn.lock().map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute("INSERT INTO raw_state(raw_path,settings_fingerprint) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET settings_fingerprint=excluded.settings_fingerprint",params![raw_path,fingerprint]).map_err(db)?;
         Ok(())
     }
     fn mark_own_write(&self, raw_path: &str, now_ms: i64) -> Result<()> {

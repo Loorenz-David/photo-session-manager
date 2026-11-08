@@ -410,6 +410,7 @@ impl TestApp {
         let fake_sleep = Arc::new(FakeSleepInhibitor::default());
         app.camera_runtime.set_process_list(fake_processes.clone());
         app.camera_runtime.set_sleep_inhibitor(fake_sleep.clone());
+        roomy_disk(&app);
         Ok(Self {
             dir,
             app,
@@ -455,6 +456,7 @@ impl TestApp {
             .set_process_list(self.fake_processes.clone());
         app.camera_runtime
             .set_sleep_inhibitor(self.fake_sleep.clone());
+        roomy_disk(app);
     }
     pub fn deliver_hook(&self, json: &str) -> Result<()> {
         let id = self.next_hook.fetch_add(1, Ordering::Relaxed);
@@ -718,23 +720,17 @@ impl TestApp {
             .editing
             .render_completion(job_id)
             .ok_or_else(|| psm_core::Error::NotFound(job_id.into()))?;
-        let output = self.dir.path().join("Output").join(format!(
-            "{}.{extension}",
-            Path::new(&entry.raw)
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-        ));
-        std::fs::create_dir_all(output.parent().unwrap())?;
-        std::fs::write(&output, bytes)?;
-        std::fs::File::options()
-            .write(true)
-            .open(&output)?
-            .set_times(std::fs::FileTimes::new().set_modified(
-                std::time::UNIX_EPOCH
-                    + std::time::Duration::from_millis(self.clock.now_ms().max(0) as u64),
-            ))?;
-        self.deliver_hook(&serde_json::json!({"hook":"processing_done","job":job_id,"raw":entry.raw,"outputs":[output]}).to_string())?;
+        // Named as the fake Capture One names it (P56: "add suffix" when configured); the hook
+        // reports what Capture One reports.
+        let (output, reported) = self.fake.write_output(
+            &entry.raw,
+            &self.dir.path().join("Output"),
+            extension,
+            bytes,
+            std::time::UNIX_EPOCH
+                + std::time::Duration::from_millis(self.clock.now_ms().max(0) as u64),
+        )?;
+        self.deliver_hook(&serde_json::json!({"hook":"processing_done","job":job_id,"raw":entry.raw,"outputs":[reported]}).to_string())?;
         Ok(output)
     }
     /// Completes every render still in flight (in issue order), including renders the adapter
@@ -816,6 +812,17 @@ impl TestApp {
     pub fn scan(&self) -> Result<()> {
         self.app.arrival.scan()
     }
+}
+
+/// The master-render disk guard (P56 C3(d)) sees plenty of space unless a test says otherwise, so no
+/// test depends on the free space of the machine it runs on.
+fn roomy_disk(app: &App) {
+    app.disk_space().set(Arc::new(|_: &Path| {
+        Ok(psm_infra::disk::FreeSpace {
+            available_bytes: 1 << 50,
+            disk: "the test disk".into(),
+        })
+    }));
 }
 
 /// `CameraFiles` whose first `rename_exclusive` fails like a non-APFS volume would (`ENOTSUP`).

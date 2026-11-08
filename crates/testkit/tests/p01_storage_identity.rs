@@ -147,6 +147,7 @@ fn c1a_open_creates_all_domain_columns() {
                 "retouch_gen",
                 "last_own_write_at",
                 "style_applied_at",
+                "settings_fingerprint",
             ],
         ),
         (

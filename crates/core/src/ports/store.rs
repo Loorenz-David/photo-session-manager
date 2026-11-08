@@ -18,6 +18,9 @@ pub struct RawPreviewState {
     pub retouch_gen: i64,
     pub last_own_write_at: Option<i64>,
     pub adjusted_preview_path: Option<String>,
+    /// The settings-sidecar fingerprint recorded at the last preview render or sidecar check
+    /// (`NO_SIDECAR` when there was none; `None` before P56 recorded one).
+    pub settings_fingerprint: Option<String>,
 }
 
 pub struct PreviewCommit {
@@ -189,6 +192,7 @@ pub trait Store: Send + Sync {
     ) -> Result<usize>;
     fn requeue_running_jobs(&self) -> Result<()>;
     fn mark_own_write(&self, raw_path: &str, now_ms: i64) -> Result<()>;
+    fn set_settings_fingerprint(&self, raw_path: &str, fingerprint: &str) -> Result<()>;
     fn job(&self, id: i64) -> Result<Job>;
     fn transaction(&self, op: &mut dyn FnMut(&mut dyn StoreTx) -> Result<()>) -> Result<()>;
     fn item(&self, id: i64) -> Result<Item>;

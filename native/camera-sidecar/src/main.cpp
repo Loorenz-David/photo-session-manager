@@ -17,6 +17,8 @@
 #include <thread>
 #include <vector>
 
+#include <unistd.h>
+
 #include "crlab/camera.hpp"
 #include "crlab/json_log.hpp"
 #include "crlab/transport.hpp"
@@ -480,7 +482,8 @@ int cmd_auto(JsonLog& log, const Args& a) {
   TransportConfig cfg;
   cfg.usb_enabled = !a.has("no-usb");
   cfg.wifi_enabled = !a.has("no-wifi");
-  cfg.usb_settle_ms = a.geti("usb-settle-ms", 2500);
+  cfg.usb_settle_ms = a.geti("usb-settle-ms", 2500);           // the claim window (P56 ruling 1)
+  cfg.usb_claim_retry_ms = a.geti("usb-claim-retry-ms", 200);  // <= 500 ms between claim attempts
   TransportManager tm(adapter, log, cfg);
 
   adapter.session().set_disconnect_handler([&](uint32_t err, uint64_t sid) { tm.on_sdk_disconnected(err, sid); });
@@ -520,7 +523,24 @@ int cmd_auto(JsonLog& log, const Args& a) {
   in.start();
   std::string line;
   bool running = true;
+  // P56 ruling 2: while the camera is plugged in and not on a USB session, the interface's holder
+  // is read every 500 ms (IOKit `UsbExclusiveOwner`, no privileges); the manager retries USB when
+  // another process lets go of it, never by probing a working Wi-Fi session.
+  constexpr int64_t kHolderPollMs = 500;
+  int64_t holder_polled_at = -kHolderPollMs;
+  const int self_pid = static_cast<int>(getpid());
   while (running) {
+    int64_t poll_now = monotonic_ms();
+    bool plugged = false;
+    {
+      std::lock_guard<std::mutex> lk(usb_mu);
+      plugged = usb_count > 0;
+    }
+    if (mon_ok && plugged && cfg.usb_enabled && tm.transport() != Transport::Usb &&
+        poll_now - holder_polled_at >= kHolderPollMs) {
+      holder_polled_at = poll_now;
+      tm.on_usb_holder(usb_held_by_other(usb_exclusive_owners(UsbMonitor::kSonyVendorId, base.usb_product_ids), self_pid));
+    }
     running = tm.step();
     while (running && in.pop(line)) {
       Cmd c = parse_cmd(line);

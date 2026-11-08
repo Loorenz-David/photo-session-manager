@@ -66,6 +66,16 @@ pub struct FakeState {
     pub next_job: i64,
     /// Every `process` call in order: (job id, variant, recipe).
     pub issued: Vec<(String, String, String)>,
+    /// P56 (P52 F12): Capture One's "Existing files: add suffix". An output whose name exists is
+    /// written as `<stem> <n>.<ext>`, while the processing-done hook still reports `<stem>.<ext>`.
+    pub add_suffix: bool,
+    /// P56: processing a variant rewrites its settings sidecar (`.cos`) with the adjustments
+    /// unchanged and Capture One's processing bookkeeping bumped, one second after the output.
+    pub touch_settings_on_process: bool,
+    /// The adjustments of each RAW's settings sidecar the fake writes (raw → exposure).
+    pub settings: HashMap<String, i64>,
+    /// Capture One's processing bookkeeping (`LowResProcessCounter`).
+    pub process_counter: u64,
 }
 pub struct FakeCaptureOneScripting {
     pub state: Mutex<FakeState>,
@@ -150,6 +160,10 @@ impl FakeCaptureOneScripting {
                 hooks_readback_null: false,
                 next_job: 1,
                 issued: Vec::new(),
+                add_suffix: false,
+                touch_settings_on_process: false,
+                settings: HashMap::new(),
+                process_counter: 0,
             }),
         }
     }
@@ -177,6 +191,87 @@ impl FakeCaptureOneScripting {
         bytes.extend_from_slice(format!("image from {job}").as_bytes());
         bytes.extend_from_slice(&[0xFF, 0xD9]);
         bytes
+    }
+    /// Writes a finished render's output as Capture One names it, into `dir`, with `mtime`, and
+    /// returns `(written, reported)`: the file on disk and the path the processing-done hook
+    /// reports. With `add_suffix` and `<stem>.<ext>` present the file is `<stem> <n>.<ext>` (the
+    /// first free n) and the report is still `<stem>.<ext>` (P52 F12). With
+    /// `touch_settings_on_process` the RAW's sidecar is rewritten one second later.
+    pub fn write_output(
+        &self,
+        raw: &str,
+        dir: &Path,
+        extension: &str,
+        bytes: &[u8],
+        mtime: std::time::SystemTime,
+    ) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
+        let stem = Path::new(raw)
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        fs::create_dir_all(dir)?;
+        let reported = dir.join(format!("{stem}.{extension}"));
+        let (add_suffix, touch) = {
+            let s = self.state.lock().unwrap();
+            (s.add_suffix, s.touch_settings_on_process)
+        };
+        let mut written = reported.clone();
+        if add_suffix {
+            let mut n = 1;
+            while written.exists() {
+                written = dir.join(format!("{stem} {n}.{extension}"));
+                n += 1;
+            }
+        }
+        write_with_mtime(&written, bytes, mtime)?;
+        if touch {
+            self.state.lock().unwrap().process_counter += 1;
+            self.write_settings_file(raw, mtime + std::time::Duration::from_secs(1))?;
+        }
+        Ok((written, reported))
+    }
+    /// The photographer changes the RAW's adjustments in Capture One; its autosave writes the
+    /// sidecar at `mtime`.
+    pub fn edit_settings(
+        &self,
+        raw: &str,
+        exposure: i64,
+        mtime: std::time::SystemTime,
+    ) -> Result<()> {
+        self.state
+            .lock()
+            .unwrap()
+            .settings
+            .insert(raw.into(), exposure);
+        self.write_settings_file(raw, mtime)
+    }
+    /// Capture One rewrites the RAW's sidecar without changing an adjustment (a document save).
+    pub fn rewrite_settings(&self, raw: &str, mtime: std::time::SystemTime) -> Result<()> {
+        self.state.lock().unwrap().process_counter += 1;
+        self.write_settings_file(raw, mtime)
+    }
+    /// `<raw folder>/CaptureOne/Settings1680/<raw name>.cos` in Capture One's format: bookkeeping
+    /// outside the adjustment list (`<DL>`), the adjustments inside it.
+    fn write_settings_file(&self, raw: &str, mtime: std::time::SystemTime) -> Result<()> {
+        let (exposure, counter) = {
+            let s = self.state.lock().unwrap();
+            (s.settings.get(raw).copied().unwrap_or(0), s.process_counter)
+        };
+        let raw = Path::new(raw);
+        let folder = raw.parent().unwrap().join("CaptureOne/Settings1680");
+        fs::create_dir_all(&folder)?;
+        let text = format!(
+            "<?xml version=\"1.0\"?>\n<IMG>\n<E K=\"Author\" V=\"16.8.6.25 Pro Mac\" />\n\t<VAR Engine=\"1300\">\n\t\t<E K=\"LastMetadataModificationDate\" V=\"{counter}.5\" />\n\t\t<E K=\"LowResProcessCounter\" V=\"{counter}\" />\n\t\t<DL>\n\t\t\t<E K=\"Basic_Rating\" V=\"0\" />\n\t\t\t<E K=\"Exposure\" V=\"{exposure}\" />\n\t\t</DL>\n\t</VAR>\n</IMG>\n"
+        );
+        write_with_mtime(
+            &folder.join(format!(
+                "{}.cos",
+                raw.file_name().unwrap().to_string_lossy()
+            )),
+            text.as_bytes(),
+            mtime,
+        )
     }
     /// The job ids `process` returned for `variant`, oldest first.
     pub fn jobs_for(&self, variant: &str) -> Vec<String> {
@@ -225,6 +320,14 @@ impl FakeCaptureOneScripting {
             }
         }
     }
+}
+fn write_with_mtime(path: &Path, bytes: &[u8], mtime: std::time::SystemTime) -> Result<()> {
+    fs::write(path, bytes)?;
+    fs::File::options()
+        .write(true)
+        .open(path)?
+        .set_times(fs::FileTimes::new().set_modified(mtime))?;
+    Ok(())
 }
 impl CaptureOneScripting for FakeCaptureOneScripting {
     fn editor_info(&self) -> Result<EditorInfo> {
