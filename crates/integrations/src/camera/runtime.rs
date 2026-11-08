@@ -395,15 +395,17 @@ impl CameraRuntime {
         if self.stopped.load(Ordering::SeqCst) {
             return;
         }
-        if let Some(password) = self.secrets.cached(secrets::FTP_PASSWORD) {
-            self.bind_receiver_with_password(settings, password);
-        } else {
-            let runtime = self.clone();
-            std::thread::spawn(move || {
-                if let Ok(Some(password)) = runtime.secrets.get(secrets::FTP_PASSWORD) {
-                    runtime.bind_receiver_with_password(settings, password);
-                }
-            });
+        if super::support::installed(&self.paths).is_some() {
+            if let Some(password) = self.secrets.cached(secrets::FTP_PASSWORD) {
+                self.bind_receiver_with_password(settings, password);
+            } else {
+                let runtime = self.clone();
+                std::thread::spawn(move || {
+                    if let Ok(Some(password)) = runtime.secrets.get(secrets::FTP_PASSWORD) {
+                        runtime.bind_receiver_with_password(settings, password);
+                    }
+                });
+            }
         }
         let mut guard = self.supervisor.lock().expect("camera supervisor");
         if guard.is_some() {

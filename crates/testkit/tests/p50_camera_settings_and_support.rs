@@ -319,6 +319,17 @@ fn c4b_no_support_is_normal_capture_one_mode() {
     assert!(a.app.camera.capabilities().depends_on_editing_provider);
 }
 
+#[test]
+fn c5e_no_support_does_not_read_keychain_secrets() {
+    let a = TestApp::with_fake_document().unwrap();
+    assert!(support::installed(&a.app.paths).is_none());
+
+    a.tick(0).unwrap();
+    thread::sleep(Duration::from_millis(100));
+
+    assert_eq!(a.secrets.get_count(), 0);
+}
+
 fn settle(a: &TestApp, pred: impl Fn() -> bool) {
     let end = Instant::now() + Duration::from_secs(3);
     while Instant::now() < end {
