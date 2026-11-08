@@ -219,3 +219,9 @@ gains `camera/sony/2.02.00/` with the runtime and `camera-sidecar`. 2. Generate 
     constructed in tests"; L23). Correction as the orchestrator's entry, with one change: the runtime check covers all five tests, so the
     desktop test needs no edit unless the fix chooses to route it through a fake. Test: no support installed → the store's `get` is never
     called (counting fake).
+- **2026-11-08, orchestrator ruling on re-review r2.** FIX2_AUTHORISED: F3 is a user-visible wrong outcome. A Keychain prompt appears at launch with no camera support (after every ad-hoc update, P47 S6), and the suite touches the owner's real Keychain (B3). **The fix:**
+  - read `ftp-password` (and the credentials, already gated) only when `support::installed(&paths).is_some()`, keeping the read off the start path;
+  - add one p50 row: no support folder → `FakeSecrets` get-counter stays 0 after `bind`/`tick`;
+  - make sure the five `open_with` tests (p00 `c1b`, `c4d`; p05 `c7a`, `c7b`; desktop `c6a`) no longer reach the Keychain.
+
+  Files allowed: `crates/integrations/src/camera/runtime.rs`, `crates/testkit/src/fake_secrets.rs` (a get counter), `crates/testkit/tests/p50_camera_settings_and_support.rs`, `apps/desktop/src-tauri/src/lib.rs` (the `c6a` test only, if needed). **Do not run the full workspace suite until the runtime change is in.** The five tests prompt on the owner's Mac. Run them only after the gate, and the re-reviewer then runs the whole suite unskipped. R1 (c5d cannot fail) stays DROP → backlog.
