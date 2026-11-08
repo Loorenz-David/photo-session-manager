@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-08 11:31: P51b APPROVED_WITH_NOTES (first review). Confirm now pins exactly the shown fingerprint; N5 title fixed. Camera chapter: only P52 left.** Narrative relayed. P52 needs the owner (camera, cable, Capture One; the SDK zip is in `~/Downloads/CrSDK_v2.02.00_20260610a_Mac.zip`). Before step 1 the orchestrator builds the SDK app and removes the P47 hand-installed support folder.
+
 **2026-11-08 10:40: owner: fix the fingerprint confirm before P52.** The orchestrator wrote `P51b_fingerprint_exact_confirm` (Confirm carries the shown value; the helper pins only that value; N5 title) and launched it (Codex). Then P52 with the owner.
 
 **2026-11-08 10:20: P51 APPROVED_WITH_NOTES (re-review r2, after fix 1). Camera chapter 10 of 11.** Implement stopped BLOCKED once on old P07/P19 camera-dot assertions (ruled `d64eeec`); review r1 F1: fingerprint Confirm was offered without the value (fixed `6145db7`). Narrative relayed. Next: P52 hardware acceptance (owner + camera, ~1 h, on the work Mac, incl. S1(c)/S3). Before P52, consider the P50 note (confirm trusts the next fingerprint, not the displayed one) and P51 backlog N5/N6. Waiting for the owner.
