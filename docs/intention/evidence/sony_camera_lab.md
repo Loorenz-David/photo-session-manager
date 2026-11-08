@@ -165,3 +165,5 @@ service.** Our helper, running since ~12:58, held neither a USB interface nor an
 **Export loop (2026-11-08 16:25).** Capture One showed an export window every few seconds. The app log shows `find_image` → `recipe_exists` → `process`
 about every 0.7 s continuously; `Output/_session_manager/` is rewritten with the same photos (DSC04767, a morning shot, exported again at 16:25), plus
 `session test 1NNNN.jpg/.tif` names and `.jpg.tmp` leftovers (93 files). (F12; likely behind F7 and F11.)
+The loop also rendered **masters**: `PSM Master` (TIFF, ~78 MB) of the same photos into `Output/`, with Capture One's counter suffix (`DSC04979 14.tif`):
+860 TIFFs, 64.3 GB written on 2026-11-08, until the disk had 167 MB free. The orchestrator quit Session Manager at ~16:35 to stop it.

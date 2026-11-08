@@ -26,7 +26,7 @@ point is that connection and disconnection happen fast and the flow is not distu
 3. **F12: the export loop.** Capture One showed an "exporting" window every few seconds. The app issued `find_image` → `recipe_exists` → `process` about every
    0.7 s for hours, re-exporting the same photos (DSC04767, shot in the morning, re-exported at 16:25) into `Output/_session_manager/`, where files named
    `session test 1NNNN.jpg`/`.tif` and leftover `.jpg.tmp` files sit beside `DSC0xxxx.jpg`. The app does not recognise the finished export and orders it again.
-   This also feeds F7 (take-back blocked by "a preview is rendering") and F11 (slow previews). After this phase a render whose output has been produced is
+   On 2026-11-08 the loop also rendered the **master** (`PSM Master`, 78 MB TIFF) of the same photos again and again into `Output/`, where Capture One adds a counter (`DSC04979 14.tif`): 860 TIFFs, 64 GB in one afternoon, and the disk ran out (167 MB free). This also feeds F7 (take-back blocked by "a preview is rendering") and F11 (slow previews). After this phase a render whose output has been produced is
    recognised as complete and is not re-issued; a render that cannot complete stops after a bounded number of attempts with a health detail; a photo whose
    preview is current is never re-exported. The implementer finds the cause (completion matching by name? output naming from Capture One's variant name?
    `.tmp` rename?) from the code and the evidence, and writes it in the handoff.
@@ -47,7 +47,7 @@ output naming. Existing assertions change only where the contract changes them (
 ## Core mechanisms (unit tests allowed)
 The helper's transport policy (C++); render completion matching.
 
-## Criteria (5 criteria, 7 rows)
+## Criteria (5 criteria, 8 rows)
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | C1(a) | helper: connect at plug-in | C++ transport test: Wi-Fi session idle, USB arrival event at t=0 | the first USB connect attempt starts ≤ 300 ms after the event (no 2.5 s wait); while the interface is not yet openable, attempts repeat at ≤ 500 ms intervals until 2.5 s, then the normal policy | `[rule]` MC-31 §Transport policy; P52 F13 |
@@ -57,6 +57,7 @@ The helper's transport policy (C++); render completion matching.
 | C3(a) | render completion | fake Capture One produces the export under the name it really uses (model the observed `session test 1NNNN` / variant naming) for a requested photo | the render is recorded complete once; no second `process` for that photo while its preview is current (assert the fake received exactly one `process` over a long fake-time window) | `[rule]` 10A render contract; P52 F12 |
 | C3(b) | render that cannot complete | fake Capture One never produces output | `process` is issued at most N times (N stated in the handoff, ≤ 3), then the photo shows a preview failure / health detail and no further `process` | `[rule]` 10A; P52 F12 |
 | C3(c) | no re-export of current previews | app restart with all previews current | no `process` calls at startup | `[rule]` 10A; P52 F12 |
+| C3(d) | master renders do not pile up | the same photo's master (`PSM Master`, TIFF) requested again while its master is current / while the disk has less than 5 GB free | no second `process` with the master recipe while the master is current; below 5 GB free no master render is issued and a health/header warning names the disk (the photographer's existing exports are never deleted by the app) | `[rule]` 10A; P52 F12 (64 GB of ` N.tif` copies in one afternoon) |
 
 Plus the closing gate row: `cargo test --workspace`, clippy, fmt, `npm run typecheck`, `npm test` (known intermittent `p33_split_grid` aside), `tools/sidecar/build.sh --stub --test` green.
 
