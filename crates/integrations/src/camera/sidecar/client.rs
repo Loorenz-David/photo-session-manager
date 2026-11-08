@@ -69,6 +69,47 @@ impl SidecarClient {
             match event {
                 SupervisorEvent::Line(line) => match parse_line(&line) {
                     Ok(stamped) => {
+                        if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&line) {
+                            let name = value
+                                .get("event")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown")
+                                .to_owned();
+                            if let Some(fields) = value.as_object_mut() {
+                                for key in
+                                    ["password", "user", "pass", "credentials", "fingerprint"]
+                                {
+                                    if fields.contains_key(key) {
+                                        fields.insert(
+                                            key.to_owned(),
+                                            serde_json::Value::String("***".into()),
+                                        );
+                                    }
+                                }
+                                fields.remove("event");
+                                fields.remove("timestamp");
+                                fields.remove("source");
+                                fields.remove("experiment");
+                            }
+                            let fields = value
+                                .as_object()
+                                .map(|o| {
+                                    o.iter()
+                                        .map(|(k, v)| {
+                                            format!(
+                                                "{k}={}",
+                                                v.as_str()
+                                                    .map(str::to_owned)
+                                                    .unwrap_or_else(|| v.to_string())
+                                            )
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join(" ")
+                                })
+                                .unwrap_or_default();
+                            let fields = psm_infra::logging::redact_registered(&fields);
+                            tracing::info!(target: "psm::camera", "camera.event {name} {fields}");
+                        }
                         self.correlate(&stamped.event);
                         events.push(stamped);
                     }

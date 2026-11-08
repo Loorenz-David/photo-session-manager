@@ -52,7 +52,7 @@ pub fn status_message(reason: &NeedsActionReason, holder: Option<&str>) -> Strin
         NeedsActionReason::PhoneAppConnected => "A phone app is connected to the camera: disconnect it".into(),
         NeedsActionReason::HeldByOtherProgram => holder.map(|h| format!("{h} is holding the camera")).unwrap_or_else(|| "Another program is holding the camera".into()),
         NeedsActionReason::StoreDestinationUnverified => "The camera did not confirm where photos are saved".into(),
-        NeedsActionReason::FilesNotReceived { count } => format!("{count} photos taken but not received for 60 s"),
+        NeedsActionReason::FilesNotReceived { count } => format!("{count} photos were taken but not received. The camera may have stopped sending: on the camera, switch FTP Function off and on."),
         NeedsActionReason::SupportNotInstalled => "Add camera support in Settings → Camera".into(),
     }
 }
@@ -265,7 +265,7 @@ mod tests {
                 (
                     "camera_files_not_received",
                     false,
-                    "3 photos taken but not received for 60 s"
+                    "3 photos were taken but not received. The camera may have stopped sending: on the camera, switch FTP Function off and on."
                 ),
                 ("camera", true, "X · wireless")
             ]

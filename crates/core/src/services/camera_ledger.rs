@@ -11,8 +11,8 @@ use crate::{
     mechanisms::{
         capture_ledger::{
             DuplicateDecision, FifoCandidate, Gap, PriorDelivery, associate, dup_name,
-            duplicate_decision, file_key, is_complete, pending_count, sequence_gaps, stem_key,
-            target_folder,
+            duplicate_decision, file_key, is_complete, pending_count, seq_of, sequence_gaps,
+            stem_key, target_folder,
         },
         hash::sha256_file,
     },
@@ -25,6 +25,7 @@ use crate::{
     services::health::HealthService,
 };
 use std::{
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
 };
@@ -44,6 +45,9 @@ pub struct LedgerShared {
     /// `camera_files_not_received` detail while the watchdog raises; cleared by `dismiss()` and
     /// by a watchdog run that does not raise.
     pub ftp_note: Mutex<Option<String>>,
+    pub gaps_seen: Mutex<HashMap<(String, u64, u64), i64>>,
+    pub gaps_logged: Mutex<Vec<Gap>>,
+    pub gaps_dismissed: Mutex<HashSet<(String, u64, u64)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -455,20 +459,57 @@ impl LedgerService {
             .map(|(name, _, _)| stem_key(&file_key(name)))
             .collect();
         let gaps = sequence_gaps(&stems.iter().map(String::as_str).collect::<Vec<_>>());
-        for gap in &gaps {
-            tracing::info!(
-                prefix = %gap.prefix,
-                after = gap.after,
-                before = gap.before,
-                missing = gap.missing,
-                "camera.sequence_gap"
-            );
+        let mut seen = locked(&self.shared.gaps_seen);
+        let keys: HashSet<_> = gaps
+            .iter()
+            .map(|g| (g.prefix.clone(), g.after, g.before))
+            .collect();
+        seen.retain(|key, _| keys.contains(key));
+        locked(&self.shared.gaps_dismissed).retain(|key| keys.contains(key));
+        for key in &keys {
+            let detected_at = names
+                .iter()
+                .filter_map(|(name, _, at)| {
+                    let (prefix, number) = seq_of(&stem_key(&file_key(name)))?;
+                    (prefix == key.0 && number == key.2).then_some(*at)
+                })
+                .min()
+                .unwrap_or(now_ms);
+            seen.entry(key.clone()).or_insert(detected_at);
         }
+        let old_count: usize = gaps
+            .iter()
+            .filter(|g| {
+                let key = (g.prefix.clone(), g.after, g.before);
+                now_ms - seen[&key] > WATCHDOG_MIN_AGE_MS
+                    && now_ms - seen[&key] < WATCHDOG_MAX_AGE_MS
+                    && !locked(&self.shared.gaps_dismissed).contains(&key)
+            })
+            .map(|g| g.missing as usize)
+            .sum();
+        drop(seen);
+        let mut logged = locked(&self.shared.gaps_logged);
+        if *logged != gaps {
+            for gap in &gaps {
+                tracing::info!(target: "psm::camera",
+                    prefix = %gap.prefix,
+                    after = gap.after,
+                    before = gap.before,
+                    missing = gap.missing,
+                    "camera.sequence_gap"
+                );
+            }
+            *logged = gaps.clone();
+        }
+        drop(logged);
+        let count = count.max(old_count);
         let raise = count > 0 && !transfer_active;
         let mut raised = locked(&self.shared.raised);
         let first_raise = raise && !*raised;
         if raise {
-            let mut detail = format!("{count} photos taken but not received for 60 s");
+            let mut detail = format!(
+                "{count} photos were taken but not received. The camera may have stopped sending: on the camera, switch FTP Function off and on."
+            );
             if !gaps.is_empty() {
                 detail.push_str(&format!(" · {} gaps in the camera's numbering", gaps.len()));
             }
@@ -501,6 +542,11 @@ impl LedgerService {
                     .set_exposure_status(e.id, ExposureStatus::Dismissed)?;
             }
         }
+        let gaps = locked(&self.shared.gaps_seen)
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        locked(&self.shared.gaps_dismissed).extend(gaps);
         *locked(&self.shared.raised) = false;
         *locked(&self.shared.ftp_note) = None;
         self.health.clear(FILES_NOT_RECEIVED);

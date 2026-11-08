@@ -262,6 +262,7 @@ fn capture_log(f: impl FnOnce()) -> String {
     let buffer = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let output = LogBytes(buffer.clone());
     let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
         .with_writer(psm_infra::logging::redacting(move || output.clone()))
         .without_time()
         .with_ansi(false)

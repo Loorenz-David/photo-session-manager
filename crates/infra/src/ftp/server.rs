@@ -51,6 +51,22 @@ impl FtpReceiver {
                     Ok(l) => l, Err(e) => { let _ = ready_tx.send(Err(e.to_string())); return; }
                 };
                 let _ = ready_tx.send(listener.local_addr().map(|a| a.port()).map_err(|e| e.to_string()));
+                // Completed markers survive a stopped receiver. The ledger's first-copy rule
+                // makes a retry safe if a prior delivery succeeded before the stop.
+                if let Some(root) = (worker.config.capture_root)() {
+                    let incoming = root.join(".incoming");
+                    if let Ok(mut entries) = tokio::fs::read_dir(incoming).await {
+                        while let Ok(Some(entry)) = entries.next_entry().await {
+                            let path = entry.path();
+                            let Some(name) = path.file_name().and_then(|n| n.to_str())
+                                .and_then(|n| n.strip_prefix('.'))
+                                .and_then(|n| n.strip_suffix(".done")) else { continue };
+                            if let Ok(meta) = entry.metadata().await {
+                                session::file_completed(path.clone(), name.to_owned(), meta.len(), worker.config.clock.now_ms(), worker.clone()).await;
+                            }
+                        }
+                    }
+                }
                 loop {
                     tokio::select! {
                         _ = stop_rx.changed() => break,

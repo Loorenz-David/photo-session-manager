@@ -205,7 +205,7 @@ pub fn pending_count(exposures: &[(ExposureStatus, i64)], now_ms: i64) -> usize 
 }
 
 /// The lab's `seq_of`: `_<1–2 digits>` stripped (here only), then `<prefix><4+ digits>`.
-fn seq_of(stem: &str) -> Option<(String, u64)> {
+pub fn seq_of(stem: &str) -> Option<(String, u64)> {
     let mut s = stem;
     if let Some(at) = s.rfind('_') {
         let tail = &s[at + 1..];
@@ -229,7 +229,12 @@ pub fn sequence_gaps(stems: &[&str]) -> Vec<Gap> {
             continue;
         };
         match by_prefix.iter_mut().find(|(p, _)| *p == prefix) {
-            Some((_, numbers)) => numbers.push(number),
+            Some((_, numbers)) => {
+                if numbers.iter().min().is_some_and(|first| number < *first) {
+                    numbers.clear(); // camera counter restarted
+                }
+                numbers.push(number);
+            }
             None => by_prefix.push((prefix, vec![number])),
         }
     }

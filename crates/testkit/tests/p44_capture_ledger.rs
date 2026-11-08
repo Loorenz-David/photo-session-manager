@@ -655,7 +655,9 @@ fn c6b_raise_iff_count_and_no_transfer() {
     assert!(idle.raised && idle.first_raise);
     assert_eq!(
         health(&a, "camera_files_not_received").as_deref(),
-        Some("1 photos taken but not received for 60 s")
+        Some(
+            "1 photos were taken but not received. The camera may have stopped sending: on the camera, switch FTP Function off and on."
+        )
     );
     let again = a.ledger().watchdog(now, false).unwrap();
     assert!(again.raised && !again.first_raise);
@@ -702,7 +704,7 @@ fn c6d_gaps_on_the_health_item() {
     expose(&a, 2_000);
     at(&a, 63_000);
     let state = a.ledger().watchdog(63_000, false).unwrap();
-    assert_eq!(state.pending_count, 1);
+    assert_eq!(state.pending_count, 2);
     assert_eq!(
         state.gaps,
         vec![Gap {
@@ -714,7 +716,9 @@ fn c6d_gaps_on_the_health_item() {
     );
     assert_eq!(
         health(&a, "camera_files_not_received").as_deref(),
-        Some("1 photos taken but not received for 60 s · 1 gaps in the camera's numbering")
+        Some(
+            "2 photos were taken but not received. The camera may have stopped sending: on the camera, switch FTP Function off and on. · 1 gaps in the camera's numbering"
+        )
     );
 }
 

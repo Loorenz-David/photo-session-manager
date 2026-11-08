@@ -650,7 +650,7 @@ fn raised_watchdog() -> TestApp {
     }
     a
 }
-const NOT_RECEIVED_1: &str = "1 photos taken but not received for 60 s";
+const NOT_RECEIVED_1: &str = "1 photos were taken but not received. The camera may have stopped sending: on the camera, switch FTP Function off and on.";
 
 #[test]
 fn c6a_watchdog_raise_sends_ftp_status_once() {

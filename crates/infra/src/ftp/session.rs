@@ -9,7 +9,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     path::PathBuf,
     sync::{Arc, atomic::Ordering},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     fs::OpenOptions,
@@ -48,9 +48,64 @@ impl Drop for UploadGuard {
     }
 }
 fn completed(config: &ReceiverConfig) -> Vec<(String, u64, i64)> {
-    config
+    let mut names = config
         .names
-        .completed_names_since(config.clock.now_ms() - COMPLETED_NAMES_WINDOW_MS)
+        .completed_names_since(config.clock.now_ms() - COMPLETED_NAMES_WINDOW_MS);
+    if let Some(root) = (config.capture_root)()
+        && let Ok(entries) = std::fs::read_dir(root.join(".incoming"))
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(name) = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|n| n.strip_prefix('.'))
+                .and_then(|n| n.strip_suffix(".done"))
+            else {
+                continue;
+            };
+            if let Ok(meta) = entry.metadata() {
+                names.push((name.to_owned(), meta.len(), config.clock.now_ms()));
+            }
+        }
+    }
+    names
+}
+pub(crate) async fn file_completed(
+    path: PathBuf,
+    name: String,
+    size: u64,
+    completed_at: i64,
+    state: Arc<Shared>,
+) {
+    let start = Instant::now();
+    let hash_path = path.clone();
+    let result = tokio::task::spawn_blocking(move || sha256_file(&hash_path)).await;
+    let Ok(Ok(sha256)) = result else {
+        tracing::info!(target: "psm::camera", "ftp.upload failed name={name} reason=hash");
+        return;
+    };
+    let hash_ms = start.elapsed().as_millis();
+    match state.config.sink.delivery(Delivery {
+        camera_filename: name.clone(),
+        written_path: path,
+        sha256,
+        size,
+        via: Link::Wireless,
+        completed_at,
+    }) {
+        Ok(outcome) => {
+            let outcome = match outcome {
+                psm_core::domain::camera::DeliveryOutcome::Photo => "photo",
+                psm_core::domain::camera::DeliveryOutcome::Duplicate => "duplicate",
+                psm_core::domain::camera::DeliveryOutcome::RenamedPhoto => "dup_renamed",
+            };
+            tracing::info!(target: "psm::camera", "ftp.upload filed name={name} outcome={outcome} hash_ms={hash_ms}");
+        }
+        Err(_) => {
+            tracing::info!(target: "psm::camera", "ftp.upload failed name={name} reason=delivery")
+        }
+    }
 }
 async fn passive(config: &ReceiverConfig) -> io::Result<TcpListener> {
     for port in config.passive.clone() {
@@ -82,7 +137,8 @@ async fn upload(
     offset: Option<u64>,
     append: bool,
     state: Arc<Shared>,
-) -> io::Result<()> {
+) -> io::Result<(PathBuf, u64, i64, u128, Instant)> {
+    let transfer_start = Instant::now();
     let mut data = accept_data(listener, peer).await?;
     let mut file = OpenOptions::new()
         .create(true)
@@ -123,28 +179,27 @@ async fn upload(
             "pending data socket error",
         ));
     }
+    let closed = Instant::now();
     file.flush().await?;
     let completed_at = state.config.clock.now_ms();
     drop(file);
     let size = tokio::fs::metadata(&part).await?.len();
-    let hash_path = part.clone();
-    let sha256 = tokio::task::spawn_blocking(move || sha256_file(&hash_path))
-        .await
-        .map_err(io::Error::other)?
-        .map_err(io::Error::other)?;
-    state
-        .config
-        .sink
-        .delivery(Delivery {
-            camera_filename: name,
-            written_path: part,
-            sha256,
-            size,
-            via: Link::Wireless,
-            completed_at,
-        })
-        .map_err(io::Error::other)?;
-    Ok(())
+    let done = part.with_file_name(format!(".{name}.done"));
+    // A completed marker is never replaced, including after a previous filing failure.
+    if tokio::fs::try_exists(&done).await? {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "completed upload waits",
+        ));
+    }
+    tokio::fs::rename(&part, &done).await?;
+    Ok((
+        done,
+        size,
+        completed_at,
+        closed.duration_since(transfer_start).as_millis(),
+        closed,
+    ))
 }
 
 pub(crate) async fn serve(
@@ -302,6 +357,11 @@ pub(crate) async fn serve(
                     continue;
                 }
                 let part = incoming.join(format!(".{name}.part"));
+                if tokio::fs::try_exists(incoming.join(format!(".{name}.done"))).await? {
+                    drop(guard);
+                    reply(&mut control, 450, "File busy").await?;
+                    continue;
+                }
                 let append = cmd == "APPE";
                 let offset = if append && resume.is_none() {
                     Some(
@@ -326,9 +386,10 @@ pub(crate) async fn serve(
                     continue;
                 };
                 reply(&mut control, 150, "Opening data connection").await?;
+                tracing::info!(target: "psm::camera", "ftp.upload started name={name}");
                 let mut pending_line = String::new();
                 let result = tokio::select! {
-                    r = upload(listener, peer.ip(), part, name, offset, append, state.clone()) => r,
+                    r = upload(listener, peer.ip(), part, name.clone(), offset, append, state.clone()) => r,
                     _ = stop.changed() => Err(io::Error::new(io::ErrorKind::Interrupted, "stopped")),
                     r = control.read_line(&mut pending_line) => { let _ = r; Err(io::Error::new(io::ErrorKind::Interrupted, "control closed or aborted")) }
                 };
@@ -336,9 +397,13 @@ pub(crate) async fn serve(
                 if *stop.borrow() {
                     break;
                 }
-                if result.is_ok() {
+                if let Ok((done, size, at, ms, closed)) = result {
                     reply(&mut control, 226, "Transfer complete").await?;
+                    let reply_ms = closed.elapsed().as_millis();
+                    tracing::info!(target: "psm::camera", "ftp.upload completed name={name} size={size} ms={ms} reply_ms={reply_ms}");
+                    tokio::spawn(file_completed(done, name, size, at, state.clone()));
                 } else {
+                    tracing::info!(target: "psm::camera", "ftp.upload failed name={name} reason=transfer");
                     reply(&mut control, 426, "Transfer aborted").await?;
                 }
             }

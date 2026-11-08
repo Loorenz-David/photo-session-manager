@@ -106,6 +106,7 @@ fn c1a_completed_upload_integrity() {
     let data = bytes(3 * 1024 * 1024, 1);
     let mut c = a.ftp();
     assert_eq!(code(&c.stor("DSC00001.ARW", &data).unwrap()), "226");
+    settle(|| unassigned(&a.capture_root(), "DSC00001.ARW").exists());
     assert_eq!(
         std::fs::read(unassigned(&a.capture_root(), "DSC00001.ARW")).unwrap(),
         data
@@ -114,7 +115,7 @@ fn c1a_completed_upload_integrity() {
         a.deliveries(),
         vec![psm_core::domain::camera::Delivery {
             camera_filename: "DSC00001.ARW".into(),
-            written_path: part(&a.capture_root(), "DSC00001.ARW"),
+            written_path: a.capture_root().join(".incoming/.DSC00001.ARW.done"),
             sha256: digest(&data),
             size: data.len() as u64,
             via: Link::Wireless,
@@ -133,6 +134,7 @@ fn c1b_virtual_subdirectory() {
         code(&c.stor("DSC00003.ARW", &bytes(65536, 3)).unwrap()),
         "226"
     );
+    settle(|| unassigned(&a.capture_root(), "DSC00003.ARW").exists());
     assert!(unassigned(&a.capture_root(), "DSC00003.ARW").exists());
     assert_eq!(
         a.deliveries().last().unwrap().camera_filename,
@@ -152,6 +154,7 @@ fn c1c_two_concurrent_uploads() {
     assert_eq!(code(&c2.stor("B.ARW", &y).unwrap()), "226");
     d1.write_all(&x[x.len() / 2..]).unwrap();
     assert_eq!(code(&c1.finish_stor(d1).unwrap()), "226");
+    settle(|| a.deliveries().len() == 2);
     let d = a.deliveries();
     assert_eq!(d.len(), 2);
     assert!(
@@ -196,6 +199,7 @@ fn c2b_rest_resume() {
         .unwrap();
     assert_eq!(code(&rest), "350");
     assert_eq!(code(&done), "226");
+    settle(|| unassigned(&a.capture_root(), "DSC00020.ARW").exists());
     assert_eq!(
         std::fs::read(unassigned(&a.capture_root(), "DSC00020.ARW")).unwrap(),
         data
@@ -228,6 +232,7 @@ fn c2d_new_stor_truncates() {
     assert_eq!(code(&c.stor_rst("X.ARW", &bytes(65536, 7)).unwrap()), "426");
     let data = bytes(10240, 8);
     assert_eq!(code(&c.stor("X.ARW", &data).unwrap()), "226");
+    settle(|| unassigned(&a.capture_root(), "X.ARW").exists());
     assert_eq!(
         std::fs::read(unassigned(&a.capture_root(), "X.ARW")).unwrap(),
         data
@@ -245,6 +250,7 @@ fn c2e_same_name_in_flight() {
     assert_eq!(code(&c2.stor("Y.ARW", b"zz").unwrap()), "450");
     d.write_all(b"tail").unwrap();
     assert_eq!(code(&c1.finish_stor(d).unwrap()), "226");
+    settle(|| a.deliveries().len() == 1);
     assert_eq!(a.deliveries().len(), 1);
 }
 #[test]
@@ -270,6 +276,7 @@ fn c2g_appe_at_staged_length() {
         .unwrap()
         .len() as usize;
     assert_eq!(code(&c.appe("W.ARW", &data[off..]).unwrap()), "226");
+    settle(|| unassigned(&a.capture_root(), "W.ARW").exists());
     assert_eq!(
         std::fs::read(unassigned(&a.capture_root(), "W.ARW")).unwrap(),
         data
@@ -281,6 +288,10 @@ fn c3a_delete_and_rename_refused() {
     let mut c = a.ftp();
     c.stor("A.ARW", b"a").unwrap();
     c.stor("B.ARW", b"b").unwrap();
+    settle(|| {
+        unassigned(&a.capture_root(), "A.ARW").exists()
+            && unassigned(&a.capture_root(), "B.ARW").exists()
+    });
     let a0 = std::fs::read(unassigned(&a.capture_root(), "A.ARW")).unwrap();
     let b0 = std::fs::read(unassigned(&a.capture_root(), "B.ARW")).unwrap();
     for cmd in ["DELE A.ARW", "RMD x", "RNFR A.ARW"] {
@@ -469,6 +480,7 @@ fn c6b_capture_root_from_settings() {
     }
     let mut c = a.ftp();
     assert_eq!(code(&c.stor("DSC2.ARW", b"II*\0").unwrap()), "226");
+    settle(|| unassigned(&a.capture_root(), "DSC2.ARW").exists());
     assert!(unassigned(&a.capture_root(), "DSC2.ARW").exists());
     assert!(
         !a.fake

@@ -36,13 +36,14 @@ impl OsaRunner {
         loop {
             if child.try_wait()?.is_some() {
                 let output = child.wait_with_output()?;
-                tracing::info!(
+                tracing::debug!(
                     duration_ms = start.elapsed().as_millis(),
                     command = "osascript",
                     op = %op,
                     "provider call"
                 );
                 if !output.status.success() {
+                    tracing::warn!(command = "osascript", op = %op, "provider call failed");
                     return Err(Error::Provider(
                         String::from_utf8_lossy(&output.stderr).into_owned(),
                     ));
@@ -54,7 +55,7 @@ impl OsaRunner {
             if start.elapsed() >= timeout {
                 let _ = child.kill();
                 let _ = child.wait();
-                tracing::info!(
+                tracing::warn!(
                     duration_ms = start.elapsed().as_millis(),
                     command = "osascript",
                     op = %op,
