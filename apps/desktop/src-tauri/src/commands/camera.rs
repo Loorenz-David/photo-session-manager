@@ -373,3 +373,11 @@ pub async fn camera_test_connection(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
     .map_err(Into::into)
 }
+
+/// Redacted recent helper output, kept in memory by the camera runtime.
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_helper_log(state: State<'_, AppState>) -> Result<Vec<String>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    Ok(app.camera_runtime.helper_log())
+}

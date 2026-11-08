@@ -603,6 +603,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::camera::camera_files_not_received_dismiss,
         commands::camera::camera_take_back,
         commands::camera::camera_test_connection,
+        commands::camera::camera_helper_log,
         commands::camera::camera_support_get,
         commands::camera::camera_support_install,
         commands::camera::camera_secrets_set,

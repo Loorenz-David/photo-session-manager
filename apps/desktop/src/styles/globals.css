@@ -241,3 +241,9 @@ button.pill:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   :root { --dur-crossfade: 0ms; --dur-med: 0ms; --dur-slow: 0ms; }
 }
+.camera-button[data-state="needs_action"] { color: var(--danger-700); }
+.camera-button[data-state="needs_action"] .camera-light { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent); }
+.camera-button[data-state="connecting"] .camera-light,
+.camera-button[data-state="busy"] .camera-light { background: #d99020; box-shadow: 0 0 0 3px color-mix(in srgb, #d99020 16%, transparent); }
+.camera-button[data-state="connecting"] .camera-light { animation: camera-pulse 1.2s ease-in-out infinite; }
+@keyframes camera-pulse { 50% { opacity: .35; } }

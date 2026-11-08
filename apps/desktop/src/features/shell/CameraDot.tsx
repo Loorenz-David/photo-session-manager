@@ -1,67 +1,27 @@
 import { useEffect, useState } from 'react';
-import { cameraRetry, cameraStatus, type CameraStatus } from '@/services/camera';
+import { cameraStatus, type CameraStatus } from '@/services/camera';
 import { onCameraStatus } from '@/services/events';
-import { useAction } from '@/lib/pending';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CameraCard } from './CameraCard';
 
-export const CAMERA_HELP =
-  'Capture One does not see a camera. Check that the camera is on and connected by USB in PC Remote (USB mode), ' +
-  'and that Imaging Edge is closed, since it holds the camera. Click to retry.';
+export const CAMERA_HELP = 'Camera disconnected';
 
-/** Header camera status (ch04 S-A): green when Capture One reports a camera, red otherwise; click retries. */
 export function CameraDot() {
   const [status, setStatus] = useState<CameraStatus | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
-
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | undefined;
-    cameraStatus()
-      .then(next => alive && setStatus(next))
-      .catch(() => alive && setStatus({ kind: 'disconnected' }));
-    onCameraStatus(next => alive && setStatus(next))
-      .then(off => (alive ? (unlisten = off) : off()))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-      unlisten?.();
-    };
+    cameraStatus().then(next => { if (alive) setStatus(next); }).catch(() => { if (alive) setStatus({kind: 'disconnected'}); });
+    onCameraStatus(next => { if (alive) setStatus(next); }).then(off => { if (alive) unlisten = off; else off(); }).catch(() => undefined);
+    return () => { alive = false; unlisten?.(); };
   }, []);
-
-  const retry = useAction(async () => { setStatus(await cameraRetry()); }, () => setStatus({ kind: 'disconnected' }));
-
-  const connected = status?.kind === 'connected';
-  const unknown = status === null;
-  const title = connected
-    ? `Camera connected: ${status.name}`
-    : unknown
-      ? 'Checking the camera…'
-      : status.kind === 'connecting' ? 'Connecting…'
-      : status.kind === 'busy' ? 'Busy'
-      : status.kind === 'needs_action' ? status.message
-      : 'Camera disconnected. Click to retry.';
-
-  return (
-    <div className="camera-dot" onMouseEnter={() => setHelpOpen(true)} onMouseLeave={() => setHelpOpen(false)}>
-      <button
-        type="button"
-        className="camera-button"
-        data-state={status?.kind ?? 'unknown'}
-        title={title}
-        aria-label={title}
-        onClick={() => void retry.run()}
-        disabled={retry.busy}
-        aria-busy={retry.busy ? 'true' : undefined}
-        onFocus={() => setHelpOpen(true)}
-        onBlur={() => setHelpOpen(false)}
-      >
-        <span className="camera-light" data-testid="camera-light" aria-hidden />
-        <span className="camera-text">{retry.busy ? 'Retrying…' : connected ? status.name : unknown ? '' : status.kind === 'connecting' ? 'Connecting…' : status.kind === 'busy' ? 'Busy' : status.kind === 'needs_action' ? status.message : 'Camera disconnected'}</span>
-      </button>
-      {status?.kind === 'disconnected' && helpOpen && (
-        <div role="tooltip" className="camera-help">
-          {CAMERA_HELP}
-        </div>
-      )}
-    </div>
-  );
+  const label = !status ? 'Checking the camera…' : status.kind === 'connected' ? `${status.name} · ${status.link === 'wireless' ? 'Wi-Fi' : 'Cable'}`
+    : status.kind === 'connecting' ? 'Connecting…'
+    : status.kind === 'busy' ? ({exposure: 'Taking a photo', transfer: 'Receiving a photo', switching: 'Switching connection'}[status.reason] ?? 'Camera busy')
+    : status.kind === 'needs_action' ? status.message.length > 48 ? `${status.message.slice(0, 48)}…` : status.message
+    : 'Camera disconnected';
+  const title = status?.kind === 'connected' ? `Camera connected by ${status.link === 'wireless' ? 'Wi-Fi' : 'cable'}` : label;
+  return <Popover modal={false}><PopoverTrigger asChild><button type="button" className="camera-button" data-state={status?.kind ?? 'unknown'} title={title} aria-label={label}>
+    <span className="camera-light" data-testid="camera-light" aria-hidden /><span className="camera-text">{label}</span>
+  </button></PopoverTrigger><PopoverContent align="end" className="w-80">{status && <CameraCard status={status} onStatus={setStatus} />}</PopoverContent></Popover>;
 }

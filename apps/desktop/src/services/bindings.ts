@@ -32,6 +32,8 @@ export const commands = {
 	 */
 	cameraTakeBack: () => typedError<TakeBackResponse, CommandError>(__TAURI_INVOKE("camera_take_back")),
 	cameraTestConnection: () => typedError<TestConnectionResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_test_connection")),
+	/**  Redacted recent helper output, kept in memory by the camera runtime. */
+	cameraHelperLog: () => typedError<string[], CommandError>(__TAURI_INVOKE("camera_helper_log")),
 	cameraSupportGet: () => typedError<CameraSupportDto | null, CommandError>(__TAURI_INVOKE("camera_support_get")),
 	cameraSupportInstall: (archivePath: string) => typedError<CameraSupportDto, CommandError>(__TAURI_INVOKE("camera_support_install", { archivePath })),
 	cameraSecretsSet: (accessAuthUser: string, accessAuthPassword: string) => typedError<null, CommandError>(__TAURI_INVOKE("camera_secrets_set", { accessAuthUser, accessAuthPassword })),

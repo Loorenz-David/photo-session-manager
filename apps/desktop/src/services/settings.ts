@@ -34,3 +34,9 @@ export async function pickSessionFile(title: string): Promise<string | null> {
     filters: [{ name: 'Capture One session', extensions: ['cosessiondb'] }], title });
   return typeof chosen === 'string' ? chosen : null;
 }
+
+export async function pickArchive(): Promise<string | null> {
+  const chosen = await open({ multiple: false, directory: false,
+    filters: [{ name: 'ZIP archive', extensions: ['zip'] }], title: 'Add camera support → Sony' });
+  return typeof chosen === 'string' ? chosen : null;
+}

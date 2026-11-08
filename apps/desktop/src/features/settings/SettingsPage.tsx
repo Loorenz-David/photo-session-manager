@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useAction, usePageData } from '@/lib/pending';
 import { getSettings, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
+import { CameraSection } from './CameraSection';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
@@ -50,13 +51,14 @@ export function SettingsPage() {
       master_recipe: settings.master_recipe,
       export_folder: settings.export_folder,
       preview_delay_s: settings.preview_delay_s,
+      camera: settings.camera,
       integration,
     });
     setSettings(saved);
     loadedSecret.current = saved.integration?.client_secret ?? '';
     setError(null);
     toast.success('Settings saved');
-  }, e => setError(e instanceof Error ? e.message : String(e)));
+  }, e => setError((e as {code?: string}).code === 'invalid_value' ? 'Ports must be 1024–65535, the passive range at least 2 ports and not containing the receiver port' : e instanceof Error ? e.message : String(e)));
 
   const header = <PageHeader title={<h1 className="health-title">Settings</h1>} escapeGoesBack>
     <Button variant="outline" onClick={() => { window.location.hash = '#/health'; }}>Health</Button>
@@ -97,6 +99,7 @@ export function SettingsPage() {
       {text('Preview recipe', 'preview_recipe')}
       {text('Master recipe', 'master_recipe')}
       {text('Style', 'style_name')}
+      <CameraSection ports={settings.camera} onPortsChange={camera => edit({camera})} />
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-default_shape">Default shape</label>
         <select id="settings-default_shape" value={settings.default_shape} onChange={e => edit({ default_shape: e.target.value })}>

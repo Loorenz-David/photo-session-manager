@@ -1,0 +1,15 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { HealthPage } from '../HealthPage';
+import { getHealth, getAppPaths } from '@/services/health';
+import { cameraFilesNotReceivedDismiss, cameraTakeBack, cameraHelperLog } from '@/services/camera';
+vi.mock('@/services/health', () => ({getHealth:vi.fn(),getAppPaths:vi.fn()}));
+vi.mock('@/services/camera', () => ({cameraFilesNotReceivedDismiss:vi.fn(),cameraTakeBack:vi.fn(),cameraHelperLog:vi.fn()}));
+vi.mock('sonner', () => ({toast:{success:vi.fn(),error:vi.fn()}}));
+beforeEach(()=>{vi.mocked(getAppPaths).mockResolvedValue({data_dir:'/tmp/psm',database:'/tmp/psm/db',settings:'/tmp/psm/settings'}); vi.mocked(cameraHelperLog).mockResolvedValue([]);});
+afterEach(()=>{cleanup();vi.clearAllMocks();});
+const items=(codes:string[])=>vi.mocked(getHealth).mockResolvedValue({items:codes.map(code=>({code,ok:false,detail:`detail for ${code}`}))});
+it('C3(a) camera health names and details',async()=>{const codes=['camera','camera_disconnected','camera_connecting','camera_busy','camera_auth_refused','camera_fingerprint_mismatch','camera_fingerprint_unconfirmed','camera_phone_connected','camera_held','camera_store_destination_unverified','camera_files_not_received','camera_photo_session_uncertain','camera_support_not_installed','camera_sidecar_unavailable','editor_not_following'];items(codes);render(<HealthPage/>);for(const code of codes){const row=(await screen.findByText(`detail for ${code}`)).closest('.health-row');expect(row).toHaveTextContent(code==='camera_support_not_installed'?'Camera support':code==='camera_sidecar_unavailable'?'Camera helper':code==='editor_not_following'?'Capture One follows':'Camera');}});
+it('C3(b) health actions dismiss and take back',async()=>{items(['camera_files_not_received','camera_held']);vi.mocked(cameraFilesNotReceivedDismiss).mockResolvedValue();vi.mocked(cameraTakeBack).mockResolvedValue({completed_steps:5,camera_held:true});render(<HealthPage/>);await screen.findByText('detail for camera_held');fireEvent.click(screen.getByRole('button',{name:'Dismiss'}));await waitFor(()=>expect(getHealth).toHaveBeenCalledTimes(2));expect(cameraFilesNotReceivedDismiss).toHaveBeenCalledTimes(1);fireEvent.click(screen.getByRole('button',{name:'Take the camera back'}));await waitFor(()=>expect(cameraTakeBack).toHaveBeenCalledTimes(1));});
+it('C3(c) helper log starts closed, opens three lines',async()=>{items([]);vi.mocked(cameraHelperLog).mockResolvedValue(['one','two','three']);render(<HealthPage/>);const disclosure=screen.getByText('Camera helper log').closest('details')!;expect(disclosure).not.toHaveAttribute('open');fireEvent.click(screen.getByText('Camera helper log'));await waitFor(()=>expect(disclosure.querySelector('pre')?.textContent).toBe('one\ntwo\nthree'));});
