@@ -181,3 +181,21 @@ gains `camera/sony/2.02.00/` with the runtime and `camera-sidecar`. 2. Generate 
   - (d) **Keychain timing (new, must-fix in this phase's scope):** reading the secrets must not delay the sidecar spawn or the receiver start. A Keychain prompt (first use of items created outside the app, and after every ad-hoc update: 3–4 prompts) made the cable connection lose to Capture One twice. Spawn on USB without waiting, and pass the credentials when read.
   - (e) Drop the absolute `LC_RPATH` from the SDK build.
   - (f) Do not leave an empty staging folder per launch.
+
+- **2026-11-08 review r1 (opus): CHANGES_REQUESTED.** Perimeter = the 33 paths of `06f5e61` (= handoff list). Rust 814/0 (p50 20/20, desktop `p50_tests` 2/2, unit `manifest`/`secrets`), clippy, fmt, typecheck, UI 369/369 green (reviewer run, code tree `06f5e61`) (reviewer
+  run, code tree `06f5e61`). Verified correct: installer (non-zip, `..`/absolute refusal before any write, suffix match first-wins,
+  hash before write, Frameworks copy, 0o755, Mach-O-magic signing, entitlement on the helper, 3 s `version`, temp dropped on every
+  refusal, rename-aside replace); `installed`/`damaged` + health detail; secrets to the store only, redactor registration, Wi-Fi
+  restart / USB defer in `secrets_changed`; FTP password (rejection sampling, store, same-port reopen, shown once, no read-back
+  command); fingerprint C++ and Rust paths; commands, error mapping, event; P47 (a), (b), (e), (f). 22 of 23 rows discriminate; H1–H8 hold.
+  - **F1 (B1, production):** the startup Keychain read (P47 (d)) stores credentials in `self.credentials` but, during a USB session,
+    never writes them into the running supervisor's `spec.first_line` (unlike `secrets_changed`), and nothing restarts the sidecar when
+    the USB session ends. Every later spawn and the running process keep `credentials user= password=`, so Wi-Fi without SSH after a
+    cable pull. Authority R-I18, P47 (d), L17. Fix: update the spec when the read returns; restart once no USB session holds while the
+    process still runs with the empty line; one boundary test with a no-cache (Keychain-like) secret store. Files: `runtime.rs`,
+    `fake_secrets.rs`, `test_app.rs`, the p50 test file.
+  - **F2 (B2, production/test):** `setting_secrets` registers the user and password with the redactor itself, so C5(a)'s redaction cell
+    cannot fail. Fix: drop the two `add_secret` calls from the test closure. File: the p50 test file.
+  - Notes (backlog): SHA copy-vs-bundled never matches in a packaged build (Tauri signs without the entitlement → re-copy and re-sign
+    every start; verified on the P47 packaged helper); repeated pending events (P51); accept-fingerprint pins whatever key comes next;
+    C6(b) "no command returns it" by structure; test seams in production; absolute-name refusal and whole-archive buffering; H8 smell.
