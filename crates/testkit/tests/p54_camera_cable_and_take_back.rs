@@ -120,6 +120,7 @@ fn c1b_issued_render_still_blocks_take_back() {
 #[test]
 fn c2a_relaunch_waits_for_our_usb_session_and_is_bounded() {
     let a = TestApp::with_camera_script(READY_USB).unwrap();
+    a.camera_runtime().set_auto_take_back(false);
     settle(&a, || {
         a.camera_status().unwrap()
             == CameraStatus::Connected {

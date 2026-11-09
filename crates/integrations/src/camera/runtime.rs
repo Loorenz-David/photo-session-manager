@@ -39,7 +39,7 @@ use psm_infra::{
 use std::{
     collections::VecDeque,
     fs,
-    net::{IpAddr, Ipv4Addr},
+    net::{IpAddr, Ipv4Addr, UdpSocket},
     path::PathBuf,
     sync::{
         Arc, Mutex, OnceLock, RwLock,
@@ -55,6 +55,20 @@ pub const SIDECAR_EVENTS_KEPT: usize = 1_000;
 const HELPER_LOG_KEPT: usize = 50;
 /// The camera's USB product ids for the sidecar's IOKit match (R-I23): the A7R V.
 const USB_PRODUCT_IDS: &str = "0x0E0C";
+
+fn local_lan_address() -> String {
+    let Ok(socket) = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)) else {
+        return "this Mac's LAN address".into();
+    };
+    // UDP connect chooses the default route without sending a packet.
+    if socket.connect((Ipv4Addr::new(192, 0, 2, 1), 9)).is_ok()
+        && let Ok(addr) = socket.local_addr()
+        && !addr.ip().is_unspecified()
+    {
+        return addr.ip().to_string();
+    }
+    "this Mac's LAN address".into()
+}
 
 pub struct AppBinding {
     pub store: Arc<dyn Store>,
@@ -160,6 +174,10 @@ pub struct CameraRuntime {
     sleep: RwLock<Arc<dyn SleepInhibitor>>,
     /// "Take the camera back" is running (one at a time per process).
     take_back_running: Arc<AtomicBool>,
+    auto_take_back_enabled: AtomicBool,
+    auto_plugged: AtomicBool,
+    auto_taken_this_plug: AtomicBool,
+    ftp_error_delivery_id: Mutex<Option<i64>>,
     bundled_sidecar: RwLock<Option<PathBuf>>,
     staging_dir: Mutex<Option<PathBuf>>,
 }
@@ -212,6 +230,10 @@ impl CameraRuntime {
             process_list: RwLock::new(Arc::new(PsProcessList)),
             sleep: RwLock::new(Arc::new(IokitSleepInhibitor::default())),
             take_back_running: Arc::new(AtomicBool::new(false)),
+            auto_take_back_enabled: AtomicBool::new(true),
+            auto_plugged: AtomicBool::new(false),
+            auto_taken_this_plug: AtomicBool::new(false),
+            ftp_error_delivery_id: Mutex::new(None),
             bundled_sidecar: RwLock::new(None),
             staging_dir: Mutex::new(None),
         });
@@ -263,6 +285,14 @@ impl CameraRuntime {
             clock: self.clock.clone(),
             running: self.take_back_running.clone(),
         })
+    }
+    pub fn set_auto_take_back(&self, enabled: bool) {
+        self.auto_take_back_enabled.store(enabled, Ordering::SeqCst);
+        if !enabled {
+            self.direct
+                .get()
+                .inspect(|adapter| adapter.set_auto_waiting(None));
+        }
     }
     /// The direct camera adapter of this runtime: created at the first call, the same `Arc`
     /// afterwards (every later `App::build` and bind reuses it, P46 L18).
@@ -391,6 +421,7 @@ impl CameraRuntime {
             tracing::warn!(%error, "camera ledger recovery failed");
         }
         *self.binding.write().expect("camera binding") = Some(binding);
+        self.set_auto_take_back(settings.auto_take_back);
         if super::support::damaged(&self.paths) {
             health.set(
                 "camera_support_not_installed",
@@ -685,7 +716,7 @@ impl CameraRuntime {
         *self.supervisor.lock().unwrap() = None;
         self.helper_running.store(false, Ordering::SeqCst);
     }
-    pub fn tick(&self, now: Instant) {
+    pub fn tick(self: &Arc<Self>, now: Instant) {
         if self.stopped.load(Ordering::SeqCst) {
             return;
         }
@@ -704,6 +735,30 @@ impl CameraRuntime {
             let events = client.poll(now, &mut |event| side.push(event));
             (events, side, client.supervisor().consecutive_exits())
         };
+        for stamped in &events {
+            if let SidecarEvent::CameraDiscovered {
+                transport: Transport::Wifi,
+                ip_address,
+                camera_id,
+            } = &stamped.event
+                && !ip_address.is_empty()
+                && let Some(client) = self.supervisor.lock().unwrap().as_mut()
+            {
+                let args = &mut client.supervisor_mut().spec.args;
+                if let Some(at) = args.iter().position(|arg| arg == "--ip") {
+                    args.drain(at..at + 2);
+                }
+                if let Some(at) = args.iter().position(|arg| arg == "--mac") {
+                    args.drain(at..at + 2);
+                }
+                args.extend([
+                    "--ip".into(),
+                    ip_address.clone(),
+                    "--mac".into(),
+                    camera_id.clone(),
+                ]);
+            }
+        }
         // Output first, exits after (as the supervisor reports them): a sidecar that prints and
         // then dies within one tick still counts as unavailable.
         if !events.is_empty() {
@@ -754,7 +809,13 @@ impl CameraRuntime {
             now,
             self.sink.as_ref(),
         );
+        for stamped in &events {
+            if let SidecarEvent::CameraFtpState { fields } = &stamped.event {
+                self.update_ftp_status(&adapter, fields);
+            }
+        }
         self.perform(&adapter, outcome, now);
+        self.auto_take_back(&events, &adapter);
         if events.iter().any(|event| {
             matches!(
                 &event.event,
@@ -773,6 +834,99 @@ impl CameraRuntime {
                     self.restart_if_not_usb();
                 }
             }
+        }
+    }
+    fn update_ftp_status(
+        &self,
+        adapter: &DirectCameraAdapter,
+        fields: &serde_json::Map<String, serde_json::Value>,
+    ) {
+        let value = |key: &str| {
+            fields
+                .get(key)
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_u64())
+        };
+        let error = value("ftp_connection_error");
+        let status = value("ftp_connection_status");
+        if status == Some(2) {
+            *self.ftp_error_delivery_id.lock().unwrap() = None;
+            adapter.set_ftp_unreachable(None);
+        } else if error.is_some_and(|v| v != 0) {
+            let baseline = self
+                .ledger()
+                .and_then(|ledger| ledger.deliveries().ok())
+                .and_then(|rows| rows.last().map(|row| row.id))
+                .unwrap_or(0);
+            *self.ftp_error_delivery_id.lock().unwrap() = Some(baseline);
+            let port = self
+                .receiver_port()
+                .or_else(|| {
+                    self.binding
+                        .read()
+                        .unwrap()
+                        .as_ref()
+                        .map(|b| b.camera_settings.receiver_port)
+                })
+                .unwrap_or(2121);
+            let address = local_lan_address();
+            adapter.set_ftp_unreachable(Some(format!("The camera can't reach this Mac for uploads. On the camera, set the FTP server's host to {address} and port {port}.")));
+        }
+    }
+    fn auto_take_back(self: &Arc<Self>, events: &[Stamped], adapter: &DirectCameraAdapter) {
+        for stamped in events {
+            match stamped.event {
+                SidecarEvent::UsbInitial { present: true } => {
+                    if !self.auto_plugged.swap(true, Ordering::SeqCst) {
+                        self.auto_taken_this_plug.store(false, Ordering::SeqCst);
+                    }
+                }
+                SidecarEvent::UsbInitial { present: false } => {
+                    self.auto_plugged.store(false, Ordering::SeqCst);
+                    self.auto_taken_this_plug.store(false, Ordering::SeqCst);
+                    adapter.set_auto_waiting(None);
+                }
+                SidecarEvent::UsbArrived { .. } => {
+                    self.auto_plugged.store(true, Ordering::SeqCst);
+                    self.auto_taken_this_plug.store(false, Ordering::SeqCst);
+                }
+                SidecarEvent::UsbRemoved { .. } => {
+                    self.auto_plugged.store(false, Ordering::SeqCst);
+                    self.auto_taken_this_plug.store(false, Ordering::SeqCst);
+                    adapter.set_auto_waiting(None);
+                }
+                _ => {}
+            }
+        }
+        if !self.auto_take_back_enabled.load(Ordering::SeqCst)
+            || !self.auto_plugged.load(Ordering::SeqCst)
+            || self.auto_taken_this_plug.load(Ordering::SeqCst)
+            || !adapter.holder_is_capture_one()
+        {
+            return;
+        }
+        let Ok(service) = self.take_back() else {
+            return;
+        };
+        match service.blocked_reason() {
+            Ok(Some(reason)) => {
+                adapter.set_auto_waiting(Some(format!("Waiting to take the cable: {reason}")))
+            }
+            Ok(None) => {
+                adapter.set_auto_waiting(None);
+                if !self.auto_taken_this_plug.swap(true, Ordering::SeqCst) {
+                    let runtime = self.clone();
+                    std::thread::spawn(move || {
+                        if let Err(error) = service.run() {
+                            if matches!(error, psm_core::Error::TakeBackBlocked { .. }) {
+                                runtime.auto_taken_this_plug.store(false, Ordering::SeqCst);
+                            }
+                            tracing::warn!(%error, "automatic take-back failed");
+                        }
+                    });
+                }
+            }
+            Err(error) => tracing::warn!(%error, "automatic take-back availability failed"),
         }
     }
     /// The adapter's effects against the current binding, then the watchdog glue (P46 L10, L13).
@@ -819,6 +973,23 @@ impl CameraRuntime {
             ledger.set_ftp_note(Some(note));
         }
         if let Some(ledger) = ledger.as_ref() {
+            let mut error_at = self.ftp_error_delivery_id.lock().unwrap();
+            if let Some(baseline) = *error_at
+                && ledger
+                    .deliveries()
+                    .ok()
+                    .and_then(|rows| {
+                        rows.iter()
+                            .rev()
+                            .find(|row| row.via == Link::Wireless)
+                            .map(|row| row.id)
+                    })
+                    .is_some_and(|id| id > baseline)
+            {
+                *error_at = None;
+                adapter.set_ftp_unreachable(None);
+            }
+            drop(error_at);
             let due = {
                 let mut at = self.watchdog_at.lock().expect("watchdog time");
                 let due =

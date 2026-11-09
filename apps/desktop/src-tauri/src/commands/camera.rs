@@ -218,6 +218,7 @@ fn reason_name(reason: &NeedsActionReason) -> &'static str {
         NeedsActionReason::PhoneAppConnected => "phone_app_connected",
         NeedsActionReason::HeldByOtherProgram => "held_by_other_program",
         NeedsActionReason::StoreDestinationUnverified => "store_destination_unverified",
+        NeedsActionReason::FtpUnreachable => "ftp_unreachable",
         NeedsActionReason::FilesNotReceived { .. } => "files_not_received",
         NeedsActionReason::SupportNotInstalled => "support_not_installed",
     }

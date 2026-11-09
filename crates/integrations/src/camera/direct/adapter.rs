@@ -36,7 +36,7 @@ use std::{
 
 /// The health codes the adapter owns (P46 L11): every camera code it derives except
 /// `camera_files_not_received` (the ledger's) — set when present, cleared otherwise.
-const OWNED_CODES: [&str; 11] = [
+const OWNED_CODES: [&str; 12] = [
     "camera",
     "camera_connecting",
     "camera_busy",
@@ -48,6 +48,7 @@ const OWNED_CODES: [&str; 11] = [
     "camera_held",
     "camera_store_destination_unverified",
     "camera_support_not_installed",
+    "camera_ftp_unreachable",
 ];
 const FILES_NOT_RECEIVED: &str = "camera_files_not_received";
 /// The short form of the camera's FTP report is cut to this many characters (P46 L13).
@@ -104,6 +105,7 @@ struct AdapterState {
     sleep_held: bool,
     pending_fingerprint: Option<(String, bool)>,
     usb_present: Option<bool>,
+    auto_waiting: Option<String>,
 }
 
 pub struct DirectCameraAdapter {
@@ -233,6 +235,7 @@ impl DirectCameraAdapter {
                 sleep_held: false,
                 pending_fingerprint: None,
                 usb_present: None,
+                auto_waiting: None,
             }),
         }
     }
@@ -320,6 +323,30 @@ impl DirectCameraAdapter {
     /// How many `usb.claimed_by` events arrived so far.
     pub fn claims_seen(&self) -> u64 {
         locked(&self.state).claims
+    }
+
+    pub fn set_auto_waiting(&self, message: Option<String>) {
+        let mut state = locked(&self.state);
+        if state.auto_waiting == message {
+            return;
+        }
+        state.auto_waiting = message.clone();
+        let default_message = state
+            .holder
+            .as_ref()
+            .and_then(|(_, report)| report.sentence.clone());
+        for (reason, _, shown) in &mut state.inputs.needs_action {
+            if *reason == NeedsActionReason::HeldByOtherProgram {
+                *shown = message.clone().or_else(|| default_message.clone());
+            }
+        }
+    }
+    pub fn set_ftp_unreachable(&self, message: Option<String>) {
+        let mut state = locked(&self.state);
+        state.remove(&NeedsActionReason::FtpUnreachable);
+        if let Some(message) = message {
+            state.add_with_message(NeedsActionReason::FtpUnreachable, None, Some(message));
+        }
     }
 
     /// The first spawn's `--save-dir` (kept for the life of the process, R-I20).
@@ -527,6 +554,13 @@ impl DirectCameraAdapter {
                 );
                 state.holder = Some((owner, report));
                 state.claims += 1;
+                if let Some(waiting) = state.auto_waiting.clone() {
+                    for (reason, _, shown) in &mut state.inputs.needs_action {
+                        if *reason == NeedsActionReason::HeldByOtherProgram {
+                            *shown = Some(waiting.clone());
+                        }
+                    }
+                }
             }
             SidecarEvent::UsbInitial { present } => {
                 out.usb_present = Some(*present);

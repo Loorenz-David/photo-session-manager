@@ -97,6 +97,7 @@ struct Target {
 
 struct Run {
     id: i64,
+    format: OutputFormat,
     session_id: i64,
     key: String,
     staging: PathBuf,
@@ -131,6 +132,7 @@ pub struct ExportService {
     clock: Arc<dyn Clock>,
     files: Arc<dyn ExportFiles>,
     render: ExportRender,
+    format_override: std::sync::RwLock<Option<OutputFormat>>,
     state: Mutex<State>,
 }
 
@@ -150,6 +152,7 @@ impl ExportService {
             clock,
             files,
             render,
+            format_override: std::sync::RwLock::new(None),
             state: Mutex::new(State::default()),
         }
     }
@@ -162,7 +165,13 @@ impl ExportService {
 
     /// The output setting this service renders with.
     pub fn format(&self) -> OutputFormat {
-        self.render.format
+        self.format_override
+            .read()
+            .unwrap()
+            .unwrap_or(self.render.format)
+    }
+    pub fn set_format(&self, format: OutputFormat) {
+        *self.format_override.write().unwrap() = Some(format);
     }
 
     /// Whether the run is in flight in this process (a `render_output` row of an earlier process
@@ -361,6 +370,7 @@ impl ExportService {
         };
         let mut run = Run {
             id: run_id,
+            format: self.format(),
             session_id,
             key,
             staging,
@@ -401,7 +411,7 @@ impl ExportService {
     /// A cached output is copied; else a master on disk gets a `render_output` job; else the
     /// master is requested from Capture One (once per RAW).
     fn begin_target(&self, state: &mut State, run: &mut Run, index: usize) -> Result<()> {
-        let format_key = self.render.format.format_key();
+        let format_key = run.format.format_key();
         let target = &run.targets[index];
         let dest = self.render.outputs.path(
             &target.raw,
@@ -422,7 +432,7 @@ impl ExportService {
             .path(&target.raw, target.adjusted_gen)
             .is_file()
         {
-            self.enqueue_output(run.id, target)?;
+            self.enqueue_output(run, target)?;
             run.targets[index].progress = Progress::Rendering;
             return Ok(());
         }
@@ -452,14 +462,14 @@ impl ExportService {
         Ok(())
     }
 
-    fn enqueue_output(&self, run_id: i64, target: &Target) -> Result<()> {
+    fn enqueue_output(&self, run: &Run, target: &Target) -> Result<()> {
         let payload = serde_json::json!({
-            "run_id": run_id,
+            "run_id": run.id,
             "photo_id": target.photo_id,
             "slot": slot_name(target.slot),
             "adjusted_gen": target.adjusted_gen,
             "revision": target.revision,
-            "format_key": self.render.format.format_key(),
+            "format_key": run.format.format_key(),
         })
         .to_string();
         self.store
@@ -633,7 +643,7 @@ impl ExportService {
             }
         }
         let manifest = serde_json::json!({
-            "format_key": self.render.format.format_key(),
+            "format_key": run.format.format_key(),
             "outputs": manifest,
         });
         let mut text = serde_json::to_string_pretty(&manifest)
@@ -766,7 +776,7 @@ impl ExportStaging for ExportService {
                     continue;
                 }
                 run.targets[index].adjusted_gen = generation;
-                if self.enqueue_output(run.id, &run.targets[index]).is_err() {
+                if self.enqueue_output(run, &run.targets[index]).is_err() {
                     broken.push(run.id);
                     break;
                 }

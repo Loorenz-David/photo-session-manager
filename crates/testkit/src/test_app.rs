@@ -273,6 +273,17 @@ impl TestApp {
     pub fn with_camera_script(script: &str) -> Result<Self> {
         Self::with_camera_script_cache_mode(script, true)
     }
+    pub fn with_camera_script_running(script: &str) -> Result<Self> {
+        Self::create(
+            true,
+            false,
+            "custom.damage_report",
+            Some(serde_json::json!({
+                "script_text": script, "run_startup": true
+            })),
+            SCRIPT_EPOCH_MS,
+        )
+    }
     pub fn with_camera_script_no_cache(script: &str) -> Result<Self> {
         Self::with_camera_script_cache_mode(script, false)
     }
@@ -300,6 +311,7 @@ impl TestApp {
         paths.create()?;
         let with_camera = sidecar.is_some();
         let mut secret_cache_enabled = true;
+        let mut run_startup = false;
         if let Some(mut behaviour) = sidecar {
             psm_integrations::camera::support::with_test_manifest(
                 &paths,
@@ -327,6 +339,13 @@ impl TestApp {
                 .and_then(|value| value.as_bool())
             {
                 secret_cache_enabled = enabled;
+            }
+            if let Some(enabled) = behaviour
+                .as_object_mut()
+                .and_then(|o| o.remove("run_startup"))
+                .and_then(|v| v.as_bool())
+            {
+                run_startup = enabled;
             }
             std::fs::write(
                 rec.join("behaviour.json"),
@@ -398,7 +417,7 @@ impl TestApp {
             paths,
             fake.clone(),
             clock.clone(),
-            false,
+            run_startup,
             commerce
                 .as_ref()
                 .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),

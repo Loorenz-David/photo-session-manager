@@ -575,14 +575,18 @@ impl LedgerService {
 
 impl CaptureSink for LedgerService {
     fn exposure_observed(&self, e: ExposureObserved) -> Result<i64> {
+        let _worker = locked(&self.shared.worker);
         let session_id = self.store.active_session_id()?;
-        self.store.insert_exposure(&NewExposure {
+        let at = e.at;
+        let id = self.store.insert_exposure(&NewExposure {
             capture_id: e.capture_id.map(|c| c.0),
-            exposed_at: e.at,
+            exposed_at: at,
             initiated: e.initiated,
             session_id,
             created_at: self.clock.now_ms(),
-        })
+        })?;
+        self.store.match_late_exposure(id, at)?;
+        Ok(id)
     }
     fn delivery(&self, d: Delivery) -> Result<DeliveryOutcome> {
         let _worker = locked(&self.shared.worker);

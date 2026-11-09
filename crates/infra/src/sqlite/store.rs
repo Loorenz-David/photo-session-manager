@@ -2059,6 +2059,17 @@ impl Store for SqliteStore {
     fn insert_exposure(&self, exposure: &NewExposure) -> Result<i64> {
         self.ledger_insert_exposure(exposure)
     }
+    fn match_late_exposure(&self, exposure_id: i64, at: i64) -> Result<bool> {
+        let conn = self.locked()?;
+        let changed = conn.execute(
+            "UPDATE camera_deliveries SET exposure_id=?1, association='fifo' WHERE id=(SELECT id FROM camera_deliveries WHERE exposure_id IS NULL AND state='done' AND outcome!='duplicate' AND completed_at BETWEEN ?2 AND ?3 ORDER BY completed_at,id LIMIT 1)",
+            params![exposure_id, at - psm_core::domain::camera::FIFO_WINDOW_MS, at],
+        ).map_err(db)?;
+        if changed > 0 {
+            conn.execute("UPDATE camera_exposures SET status='received',session_id=(SELECT session_id FROM camera_deliveries WHERE exposure_id=?1) WHERE id=?1", [exposure_id]).map_err(db)?;
+        }
+        Ok(changed > 0)
+    }
     fn set_exposure_status(&self, id: i64, status: ExposureStatus) -> Result<()> {
         self.locked()?
             .execute(

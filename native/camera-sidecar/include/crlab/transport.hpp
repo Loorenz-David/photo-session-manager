@@ -76,6 +76,7 @@ class CameraAdapter {
   virtual ~CameraAdapter() = default;
   // Blocking discovery restricted to one transport.
   virtual std::vector<CameraEndpoint> discover(Transport t) = 0;
+  virtual void forget_cached_endpoint() {}
   // Blocking connect; returns when connected, failed, or timed out.
   virtual ConnectResult connect(const CameraEndpoint& ep) = 0;
   // Blocking, idempotent. Must release all SDK resources of the session.

@@ -106,6 +106,7 @@ pub struct App {
     commerce_override: Option<Arc<dyn CommerceAdapter>>,
     stop: Arc<AtomicBool>,
     background: Option<thread::JoinHandle<()>>,
+    camera_background: Option<thread::JoinHandle<()>>,
     publish_background: Option<thread::JoinHandle<()>>,
     render_background: Option<thread::JoinHandle<()>>,
 }
@@ -161,7 +162,7 @@ pub struct SettingsSetContext {
 }
 
 pub enum PreparedSettings {
-    Theme(Box<Settings>),
+    Simple(Box<Settings>),
     Runtime(Box<App>),
 }
 
@@ -177,10 +178,14 @@ impl SettingsSetContext {
         Settings::set(&self.paths, &settings)?;
         let mut a = previous;
         let mut b = next;
-        a["theme"] = serde_json::Value::Null;
-        b["theme"] = serde_json::Value::Null;
+        for key in ["theme", "output_format"] {
+            a[key] = serde_json::Value::Null;
+            b[key] = serde_json::Value::Null;
+        }
+        a["camera"]["auto_take_back"] = serde_json::Value::Null;
+        b["camera"]["auto_take_back"] = serde_json::Value::Null;
         if a == b {
-            return Ok(PreparedSettings::Theme(Box::new(settings)));
+            return Ok(PreparedSettings::Simple(Box::new(settings)));
         }
         match App::build(
             self.paths.clone(),
@@ -299,8 +304,11 @@ impl App {
         prepared: PreparedSettings,
     ) -> Result<(serde_json::Value, Option<App>)> {
         let old = match prepared {
-            PreparedSettings::Theme(settings) => {
+            PreparedSettings::Simple(settings) => {
                 self.settings = *settings;
+                self.export.set_format(self.settings.output_format);
+                self.camera_runtime
+                    .set_auto_take_back(self.settings.camera.auto_take_back);
                 self.health.clear("settings_invalid");
                 None
             }
@@ -723,7 +731,17 @@ impl App {
         let bg_arrival = arrival.clone();
         let bg_previews = previews.clone();
         let bg_follow = follow.clone();
+        let camera_stop = stop.clone();
         let bg_camera_runtime = camera_runtime.clone();
+        let camera_clock = clock.clone();
+        let camera_background = run_startup.then(|| {
+            thread::spawn(move || {
+                while !camera_stop.load(Ordering::Relaxed) {
+                    bg_camera_runtime.tick(camera_clock.mono());
+                    thread::sleep(Duration::from_millis(20));
+                }
+            })
+        });
         let spool_dir = paths.spool();
         let background = thread::spawn(move || {
             let mut watcher = FsWatcher::watch(&spool_dir).ok();
@@ -756,7 +774,6 @@ impl App {
                     last_drain = std::time::Instant::now();
                 }
                 if run_startup {
-                    bg_camera_runtime.tick(bg_clock.mono());
                     if let Some((_, rx)) = capture_watcher.as_mut() {
                         while let Ok(event) = rx.try_recv() {
                             let _ = bg_arrival.watcher_event(&event.path);
@@ -845,6 +862,7 @@ impl App {
             commerce_override,
             stop,
             background: Some(background),
+            camera_background,
             publish_background,
             render_background,
         })
@@ -911,6 +929,9 @@ impl App {
     pub fn shutdown(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(bg) = self.background.take() {
+            let _ = bg.join();
+        }
+        if let Some(bg) = self.camera_background.take() {
             let _ = bg.join();
         }
         if let Some(bg) = self.publish_background.take() {

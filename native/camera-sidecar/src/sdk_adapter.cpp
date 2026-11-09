@@ -14,6 +14,11 @@ SdkCameraAdapter::SdkCameraAdapter(EventSink& log, ConnectOptions base, int disc
 
 std::vector<CameraEndpoint> SdkCameraAdapter::discover(Transport t) {
   std::vector<CameraEndpoint> out;
+  // A previous helper run supplied this endpoint. The SDK can create its camera object directly.
+  if (t == Transport::Wifi && !base_.ip.empty()) {
+    out.push_back({base_.mac.empty() ? base_.ip : base_.mac, "ILCE-7RM5", Transport::Wifi, "direct-ip:" + base_.ip});
+    return out;
+  }
   int64_t dt = 0;
   last_found_ = CameraSession::discover(log_, discover_timeout_s_, &dt);
   for (const auto& c : last_found_) {
@@ -31,6 +36,8 @@ std::vector<CameraEndpoint> SdkCameraAdapter::discover(Transport t) {
   }
   return out;
 }
+
+void SdkCameraAdapter::forget_cached_endpoint() { base_.ip.clear(); base_.mac.clear(); }
 
 ConnectResult SdkCameraAdapter::connect(const CameraEndpoint& ep) {
   ConnectOptions opt = base_;

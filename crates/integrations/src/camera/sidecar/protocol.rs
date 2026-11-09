@@ -22,6 +22,11 @@ pub enum StoreDestination {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SidecarEvent {
+    CameraDiscovered {
+        transport: Transport,
+        ip_address: String,
+        camera_id: String,
+    },
     TransportState {
         from: String,
         to: String,
@@ -180,6 +185,11 @@ pub fn parse_line(line: &str) -> Result<Stamped, ProtocolError> {
         .ok_or(ProtocolError::Json)?;
     let f = Fields(obj);
     let event = match name {
+        "camera.discovered" => SidecarEvent::CameraDiscovered {
+            transport: f.transport()?,
+            ip_address: f.opt_str("ip_address").unwrap_or_default(),
+            camera_id: f.opt_str("camera_id").unwrap_or_default(),
+        },
         "transport.state" => SidecarEvent::TransportState {
             from: f.req_str("from")?,
             to: f.req_str("to")?,

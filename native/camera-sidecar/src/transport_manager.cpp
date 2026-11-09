@@ -396,7 +396,9 @@ bool TransportManager::try_connect(Transport t) {
   log_.emit("connect.result", cf);
 
   if (!r.ok) {
-    if (r.fatal) {
+    bool cached_direct = ep.address.rfind("direct-ip:", 0) == 0;
+    if (cached_direct) adapter_.forget_cached_endpoint();
+    if (r.fatal && !cached_direct) {
       set_state(State::Error, "fatal connection error: " + r.message);
       return false;
     }

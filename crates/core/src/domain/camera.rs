@@ -54,6 +54,7 @@ pub enum NeedsActionReason {
     PhoneAppConnected,
     HeldByOtherProgram,
     StoreDestinationUnverified,
+    FtpUnreachable,
     FilesNotReceived { count: u32 },
     SupportNotInstalled,
 }
@@ -66,6 +67,7 @@ impl NeedsActionReason {
             Self::PhoneAppConnected => 3,
             Self::HeldByOtherProgram => 4,
             Self::StoreDestinationUnverified => 5,
+            Self::FtpUnreachable => 4,
             Self::FilesNotReceived { .. } => 6,
             Self::SupportNotInstalled => 7,
         }
@@ -78,6 +80,7 @@ impl NeedsActionReason {
             Self::PhoneAppConnected => "camera_phone_connected",
             Self::HeldByOtherProgram => "camera_held",
             Self::StoreDestinationUnverified => "camera_store_destination_unverified",
+            Self::FtpUnreachable => "camera_ftp_unreachable",
             Self::FilesNotReceived { .. } => "camera_files_not_received",
             Self::SupportNotInstalled => "camera_support_not_installed",
         }
@@ -145,6 +148,11 @@ pub struct CameraSettings {
     pub receiver_port: u16,
     pub passive_port_start: u16,
     pub passive_port_end: u16,
+    #[serde(default = "default_auto_take_back")]
+    pub auto_take_back: bool,
+}
+fn default_auto_take_back() -> bool {
+    true
 }
 impl Default for CameraSettings {
     fn default() -> Self {
@@ -152,6 +160,7 @@ impl Default for CameraSettings {
             receiver_port: 2121,
             passive_port_start: 50000,
             passive_port_end: 50009,
+            auto_take_back: true,
         }
     }
 }

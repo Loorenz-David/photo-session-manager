@@ -51,7 +51,7 @@ export function SettingsPage() {
       master_recipe: settings.master_recipe,
       export_folder: settings.export_folder,
       preview_delay_s: settings.preview_delay_s,
-      camera: settings.camera,
+      camera: { ...settings.camera, auto_take_back: settings.camera.auto_take_back ?? true },
       integration,
     });
     setSettings(saved);
@@ -99,7 +99,7 @@ export function SettingsPage() {
       {text('Preview recipe', 'preview_recipe')}
       {text('Master recipe', 'master_recipe')}
       {text('Style', 'style_name')}
-      <CameraSection ports={settings.camera} onPortsChange={camera => edit({camera})} />
+      <CameraSection ports={settings.camera} onPortsChange={camera => edit({camera: {...camera, auto_take_back: camera.auto_take_back ?? true}})} />
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-default_shape">Default shape</label>
         <select id="settings-default_shape" value={settings.default_shape} onChange={e => edit({ default_shape: e.target.value })}>

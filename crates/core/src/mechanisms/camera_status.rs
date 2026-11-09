@@ -52,6 +52,7 @@ pub fn status_message(reason: &NeedsActionReason, holder: Option<&str>) -> Strin
         NeedsActionReason::PhoneAppConnected => "A phone app is connected to the camera: disconnect it".into(),
         NeedsActionReason::HeldByOtherProgram => holder.map(|h| format!("{h} is holding the camera")).unwrap_or_else(|| "Another program is holding the camera".into()),
         NeedsActionReason::StoreDestinationUnverified => "The camera did not confirm where photos are saved".into(),
+        NeedsActionReason::FtpUnreachable => "The camera can't reach this Mac for uploads".into(),
         NeedsActionReason::FilesNotReceived { count } => format!("{count} photos were taken but not received. The camera may have stopped sending: on the camera, switch FTP Function off and on."),
         NeedsActionReason::SupportNotInstalled => "Add camera support in Settings → Camera".into(),
     }

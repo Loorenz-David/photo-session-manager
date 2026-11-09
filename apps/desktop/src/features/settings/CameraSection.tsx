@@ -42,10 +42,11 @@ export function CameraSection({ ports, onPortsChange }: { ports: CameraSettingsD
         : e.code === 'fingerprint_changed' ? 'The camera shows a different fingerprint now. Compare the new one.' : e.message ?? String(error));
     } finally { setBusy(false); }
   };
-  const field = (label: string, key: keyof CameraSettingsDto) => <label className="flex flex-col gap-1">{label}<Input type="number" min={1024} max={65535} value={ports[key]} onChange={e => onPortsChange({...ports, [key]: Number(e.target.value)})} /></label>;
+  const field = (label: string, key: 'receiver_port' | 'passive_port_start' | 'passive_port_end') => <label className="flex flex-col gap-1">{label}<Input type="number" min={1024} max={65535} value={ports[key]} onChange={e => onPortsChange({...ports, [key]: Number(e.target.value)})} /></label>;
   return <section className="flex flex-col gap-4" aria-label="Camera">
     <h2>Camera</h2>
     <p>Session Manager sets where the camera saves photos: card and computer on the cable, card only on Wi-Fi. The card always keeps a copy.</p>
+    <label className="flex items-center gap-2"><input type="checkbox" checked={ports.auto_take_back ?? true} onChange={e => onPortsChange({...ports, auto_take_back: e.target.checked})} />Take the cable back from Capture One automatically when the camera is plugged in</label>
     <h3>Camera support</h3>
     {support ? <p>Sony Camera Remote SDK {support.version} installed</p> : <>
       <p>Session Manager can control a Sony camera directly. Download Sony&apos;s Camera Remote SDK for Mac from Sony&apos;s developer site (you accept Sony&apos;s terms there), then add it here.</p>

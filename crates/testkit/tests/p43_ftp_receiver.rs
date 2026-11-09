@@ -510,7 +510,10 @@ fn c7a_camera_settings_validation() {
     }
     let patch = serde_json::json!({"camera":{"receiver_port":2222,"passive_port_start":51000,"passive_port_end":51009}});
     let value = a.settings_set(&patch).unwrap();
-    assert_eq!(value["camera"], patch["camera"]);
+    assert_eq!(
+        value["camera"],
+        serde_json::json!({"receiver_port":2222,"passive_port_start":51000,"passive_port_end":51009,"auto_take_back":true})
+    );
 }
 #[test]
 fn c7b_port_reopens_in_place() {

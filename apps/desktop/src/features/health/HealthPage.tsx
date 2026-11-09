@@ -20,7 +20,7 @@ const names: Record<string, string> = {
   camera_connecting: 'Camera', camera_busy: 'Camera', camera_auth_refused: 'Camera',
   camera_fingerprint_mismatch: 'Camera', camera_fingerprint_unconfirmed: 'Camera',
   camera_phone_connected: 'Camera', camera_held: 'Camera', camera_store_destination_unverified: 'Camera',
-  camera_files_not_received: 'Camera', camera_photo_session_uncertain: 'Camera',
+  camera_files_not_received: 'Camera', camera_ftp_unreachable: 'Camera', camera_photo_session_uncertain: 'Camera',
   camera_support_not_installed: 'Camera support', camera_sidecar_unavailable: 'Camera helper',
   editor_not_following: 'Capture One follows',
   integration_token_invalid: 'Shopify token', condition_field_missing: 'Condition photos field',

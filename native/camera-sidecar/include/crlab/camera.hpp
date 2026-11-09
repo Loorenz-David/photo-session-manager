@@ -134,6 +134,7 @@ class SdkCameraAdapter : public CameraAdapter {
  public:
   SdkCameraAdapter(EventSink& log, ConnectOptions base, int discover_timeout_s = 3);
   std::vector<CameraEndpoint> discover(Transport t) override;
+  void forget_cached_endpoint() override;
   ConnectResult connect(const CameraEndpoint& ep) override;
   void disconnect() override;
   bool read_state(Fields& out) override;

@@ -1,5 +1,5 @@
 //! "Take the camera back" (10E MC-34 §Take it back, R-I32; M39, M40): on the photographer's
-//! click only, save the Capture One document, ask Capture One to quit (never kill it), retry the
+//! click or the default-on plug-in trigger, save the Capture One document, ask Capture One to quit (never kill it), retry the
 //! USB session, relaunch Capture One and reopen the document — each step bounded, any failure
 //! stops the sequence and releases the editor-launch gate.
 use super::{

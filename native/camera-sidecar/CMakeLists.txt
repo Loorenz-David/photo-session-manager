@@ -55,8 +55,8 @@ add_executable(crlab-usb-watch src/usb_watch_main.cpp)
 target_link_libraries(crlab-usb-watch PRIVATE crlab_core crlab_usb)
 
 enable_testing()
-add_executable(camera_sidecar_tests tests/test_transport_manager.cpp tests/test_fingerprint_policy.cpp)
-target_link_libraries(camera_sidecar_tests PRIVATE crlab_core)
+add_executable(camera_sidecar_tests tests/test_transport_manager.cpp tests/test_fingerprint_policy.cpp src/sdk_adapter.cpp src/sdk_stub.cpp)
+target_link_libraries(camera_sidecar_tests PRIVATE crlab_core crlab_usb)
 add_test(NAME transport_manager COMMAND camera_sidecar_tests)
 
 set(CRLAB_SDK_SOURCES

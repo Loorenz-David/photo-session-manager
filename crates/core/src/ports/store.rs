@@ -286,6 +286,8 @@ pub trait Store: Send + Sync {
     ) -> Result<()>;
     // Capture ledger (10E MC-33, P44).
     fn insert_exposure(&self, exposure: &NewExposure) -> Result<i64>;
+    /// Link a late camera notification to an already filed, unassociated delivery.
+    fn match_late_exposure(&self, exposure_id: i64, at: i64) -> Result<bool>;
     fn set_exposure_status(&self, id: i64, status: ExposureStatus) -> Result<()>;
     /// Every exposure with status `from` becomes `to`; returns the number changed.
     fn set_exposures_status_where(&self, from: ExposureStatus, to: ExposureStatus)

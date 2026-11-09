@@ -1,4 +1,4 @@
-// Transport manager tests against a scripted mock camera.
+// Transport manager tests against a scripted camera, plus a stub-backed adapter check.
 //
 // These verify OUR state machine only. They say nothing about how the Sony
 // SDK or the A7R V behave; that is what experiments 03/05/06 are for.
@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "crlab/transport.hpp"
+#include "crlab/camera.hpp"
 #include "mini_test.hpp"
 
 using namespace crlab;
@@ -47,6 +48,8 @@ struct MockCamera : CameraAdapter {
   bool usb_visible = false;
   bool usb_endpoint_available = true;
   bool wifi_visible = true;
+  bool cached_wifi = false;
+  bool cached_wifi_fails = false;
   int fail_usb_connects = 0;   // next N USB connects fail
   bool usb_held = false;       // failing USB connects report the interface held by another process
   int64_t usb_fail_cost_ms = -1;  // cost of a failing USB connect (-1: connect_cost_ms)
@@ -64,6 +67,11 @@ struct MockCamera : CameraAdapter {
   explicit MockCamera(FakeClock& c) : clock(c) {}
 
   std::vector<CameraEndpoint> discover(Transport t) override {
+    if (t == Transport::Wifi && cached_wifi) {
+      calls.push_back("cached:wifi");
+      timed.push_back({calls.back(), clock.now});
+      return {{"SN123", "ILCE-7RM5", Transport::Wifi, "direct-ip:192.168.1.50"}};
+    }
     calls.push_back(std::string("discover:") + to_string(t));
     timed.push_back({calls.back(), clock.now});
     clock.advance(discover_cost_ms);
@@ -76,6 +84,11 @@ struct MockCamera : CameraAdapter {
     calls.push_back(std::string("connect:") + to_string(ep.transport));
     timed.push_back({calls.back(), clock.now});
     ConnectResult r;
+    if (ep.address.rfind("direct-ip:", 0) == 0 && cached_wifi_fails) {
+      r.fatal = true;
+      r.message = "cached endpoint failed";
+      return r;
+    }
     if (ep.transport == Transport::Usb && fail_usb_connects > 0) {
       clock.advance(usb_fail_cost_ms >= 0 ? usb_fail_cost_ms : connect_cost_ms);
       --fail_usb_connects;
@@ -108,6 +121,7 @@ struct MockCamera : CameraAdapter {
     return true;
   }
   bool last_saw_usb = false;
+  void forget_cached_endpoint() override { cached_wifi = false; calls.push_back("forget:cached"); }
   bool last_discovery_saw(Transport t) const override { return t == Transport::Usb && last_saw_usb; }
 };
 
@@ -733,6 +747,35 @@ TEST_CASE("P56 holder report: only another process counts as holding the cable")
   CHECK(!usb_held_by_other({}, 4242));
   CHECK(usb_held_by_other({"pid 4242, camera-sidecar", "pid 77, ptpcamerad"}, 4242));
   CHECK(usb_held_by_other({"ptpcamerad"}, 4242));
+}
+
+TEST_CASE("P57 C7(a) cached Wi-Fi endpoint connects before discovery and failure falls back") {
+  CaptureSink log;
+  ConnectOptions options;
+  options.ip = "192.0.2.5";
+  SdkCameraAdapter adapter(log, options);
+  auto direct = adapter.discover(Transport::Wifi);
+  CHECK_EQ(direct.size(), static_cast<size_t>(1));
+  CHECK_EQ(direct[0].address, "direct-ip:192.0.2.5");
+  CHECK_EQ(log.count("discovery.completed"), 0);
+  CHECK(!adapter.connect(direct[0]).ok);
+  adapter.forget_cached_endpoint();
+  CHECK(adapter.discover(Transport::Wifi).empty());
+  CHECK_EQ(log.count("discovery.completed"), 1);
+
+  Rig r;
+  r.cam.cached_wifi = true;
+  r.cam.cached_wifi_fails = true;
+  r.run(100);
+  CHECK(r.cam.calls.size() >= 3);
+  CHECK_EQ(r.cam.calls[0], "cached:wifi");
+  CHECK_EQ(r.cam.calls[1], "connect:wifi");
+  CHECK_EQ(r.cam.calls[2], "forget:cached");
+  r.run(5000);
+  bool discovered = false;
+  for (const auto& call : r.cam.calls) if (call == "discover:wifi") discovered = true;
+  CHECK(discovered);
+  CHECK(r.tm->state() == State::ConnectedWifi);
 }
 
 int main() { return mt_run_all(); }

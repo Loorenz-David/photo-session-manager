@@ -528,6 +528,8 @@ int cmd_auto(JsonLog& log, const Args& a) {
   // another process lets go of it, never by probing a working Wi-Fi session.
   constexpr int64_t kHolderPollMs = 500;
   int64_t holder_polled_at = -kHolderPollMs;
+  int64_t ftp_polled_at = -60000;
+  Transport ftp_polled_link = Transport::None;
   const int self_pid = static_cast<int>(getpid());
   while (running) {
     int64_t poll_now = monotonic_ms();
@@ -542,6 +544,14 @@ int cmd_auto(JsonLog& log, const Args& a) {
       tm.on_usb_holder(usb_held_by_other(usb_exclusive_owners(UsbMonitor::kSonyVendorId, base.usb_product_ids), self_pid));
     }
     running = tm.step();
+    Transport current_link = tm.transport();
+    if (current_link != Transport::None && (current_link != ftp_polled_link || monotonic_ms() - ftp_polled_at >= 60000)) {
+      Fields ftp;
+      adapter.session().read_ftp_status(ftp);
+      log.emit("camera.ftp_state", ftp);
+      ftp_polled_at = monotonic_ms();
+    }
+    ftp_polled_link = current_link;
     while (running && in.pop(line)) {
       Cmd c = parse_cmd(line);
       if (c.name.empty()) continue;

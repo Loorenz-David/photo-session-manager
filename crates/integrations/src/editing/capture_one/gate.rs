@@ -74,7 +74,12 @@ impl GatedScripting {
                 return Err(Error::EditorLaunchDeferred);
             }
         }
-        self.call(f)
+        self.call(|inner| {
+            if self.launch_gate.refuses_here() {
+                return Err(Error::EditorLaunchDeferred);
+            }
+            f(inner)
+        })
     }
     fn call<T>(&self, f: impl FnOnce(&dyn CaptureOneScripting) -> Result<T>) -> Result<T> {
         let (lock, cv) = &*self.gate;
@@ -131,7 +136,12 @@ impl CaptureOneScripting for GatedScripting {
         if self.launch_gate.refuses_here() {
             return Err(Error::EditorLaunchDeferred);
         }
-        self.call(|i| i.launch())
+        self.call(|i| {
+            if self.launch_gate.refuses_here() {
+                return Err(Error::EditorLaunchDeferred);
+            }
+            i.launch()
+        })
     }
     fn make_document(&self, parent: &str, name: &str) -> Result<String> {
         self.launching(|i| i.make_document(parent, name))

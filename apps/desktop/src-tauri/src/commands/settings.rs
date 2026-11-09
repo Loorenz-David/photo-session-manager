@@ -27,6 +27,8 @@ pub struct CameraSettingsDto {
     pub receiver_port: u16,
     pub passive_port_start: u16,
     pub passive_port_end: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_take_back: Option<bool>,
 }
 
 /// `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the

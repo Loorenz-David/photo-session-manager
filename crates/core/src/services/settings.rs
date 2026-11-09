@@ -124,6 +124,9 @@ impl SettingsService {
     }
 }
 fn valid_camera(value: &Value) -> bool {
+    if !value.get("auto_take_back").is_none_or(Value::is_boolean) {
+        return false;
+    }
     let port = |key: &str| {
         value
             .get(key)
