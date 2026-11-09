@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-09 10:45: P57 APPROVED_WITH_NOTES (re-review r2 after fix 1, tests only).** Narrative relayed. P58 launched (Codex). After P58: build the SDK app for the work Mac, install steps for the owner.
+
 **2026-11-09 09:20: owner: implement the fast preview before the work-Mac install.** P58_fast_compose_on_camera_preview written (Opus; changelog 39): compose on the A7R V's full-size embedded JPEG at once, swap to Capture One's preview in place, render queue focused → newest → rest. Runs after P57 (Codex). Work-Mac install waits for P58.
 
 **2026-11-09 08:30: P52 run 2 done with the owner (evidence §Acceptance run 2).** Most rows pass after P53–P56. Hard facts: ptpcamerad (started with Capture One) claims the cable at enumeration, so the SDK cannot win; the camera has no Wi-Fi remote while the cable is in. Owner decisions (changelog 38): automatic take-back on plug-in (setting, default on); direct grab / own PTP deferred (backlog). P57 (automatic take-back + F15–F21) written on Opus and launched on Codex. Then the first install on the work Mac for real sessions; storage + faster previews by 2026-11-12. The scratchpad was cleared between sessions; results now live only in the evidence file. Output JPEG quality was left at 91 (was 90) → reset after P57.
