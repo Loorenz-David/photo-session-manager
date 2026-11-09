@@ -1,7 +1,7 @@
 # 10F — Storage and retention
 
-**Status: DRAFT (owner decisions 2026-11-09; not planned, not implemented).** The owner: "we can leave the intention ready but we will not implement
-it; after the current implementation we move to the installation on the work PC." The open questions at the end must be answered before planning.
+**Status: RATIFIED, not planned (owner decisions 2026-11-09; Q1–Q5 answered "the suggestions you make are correct").** The owner: "we can leave the
+intention ready but we will not implement it; after the current implementation we move to the installation on the work PC." Plan it when the owner asks.
 Changelog entry 40. Evidence: P52 runs 1–2 (`evidence/sony_camera_lab.md`) and the orchestrator's measurements of 2026-11-09 (below).
 
 ## Why
@@ -30,7 +30,7 @@ A 200-photo day ≈ 10 GB on Wi-Fi, ≈ 20 GB on the cable, almost all RAWs and 
    *Amends H2 ("RAW files are never … deleted by Session Manager") for published items past retention.* With no commerce integration (H6) nothing is
    cleared by this rule.
 4. **A storage budget with a removal order.** Settings → Storage shows free space and space used by each kind, and a **minimum free space** the
-   photographer can raise or lower (default proposed **20 GB**). When free space falls below it, the app removes, in this order, until it is above the
+   photographer can raise or lower (default **20 GB**). When free space falls below it, the app removes, in this order, until it is above the
    limit again: (1) duplicates already verified (even before 24 h), (2) preview exports already copied, (3) masters not needed by a running
    publish/export, (4) local files of published items past retention, then of published items not yet past retention, **oldest publish first**.
    It never removes anything of an item that is not published (or is dirty, publishing, or failed); if that is not enough, it warns in the header and
@@ -47,18 +47,18 @@ A 200-photo day ≈ 10 GB on Wi-Fi, ≈ 20 GB on the cable, almost all RAWs and 
 - Before clearing an item (rule 3/4), the app verifies that Shopify still holds every published image of that item (read back media ids and URLs);
   if not, it clears nothing for that item and reports it.
 - After clearing, the item is **read-only** in the app (no reorder, retouch, recomposition or republish of its photos); its attributes stay editable
-  only where they do not need images (open question Q3).
-- Capture One keeps its catalogue entries for cleared files; they show as missing there (open question Q4).
+  only where they do not need images (Q3).
+- Capture One keeps its catalogue entries for cleared files; they show as missing there (Q4).
 
-## Open questions (answer before planning)
+## Answered questions (owner 2026-11-09: all as proposed)
 - **Q1** Which photos of a published item are cleared: all (main, condition, hidden/"deleted", never reviewed), or only those that were published?
-  Proposed: all — after publish, unpublished photos of that item have no use.
-- **Q2** Should the app keep a per-item "keep files" pin that exempts it from rules 3–4? Proposed: yes.
-- **Q3** After clearing, is anything editable that would need a re-upload (e.g. reorder on Shopify)? Proposed: no; reorder/retouch would need a new
+  **Answer: all** — after publish, unpublished photos of that item have no use.
+- **Q2** Should the app keep a per-item "keep files" pin that exempts it from rules 3–4? **Answer: yes.**
+- **Q3** After clearing, is anything editable that would need a re-upload (e.g. reorder on Shopify)? **Answer: no;** reorder/retouch would need a new
   photo session.
-- **Q4** Remove the cleared images from the Capture One session too (via its dictionary, H5), or leave them as missing entries? Proposed: leave them.
-- **Q5** Default minimum free space: 20 GB?
+- **Q4** Remove the cleared images from the Capture One session too (via its dictionary, H5), or leave them as missing entries? **Answer: leave them.**
+- **Q5** Default minimum free space: **20 GB** (answer: yes).
 
-## Invariant (proposed M41)
+## Invariant (M41)
 No file of an item that is not published-and-clean is ever deleted by storage rules, and no RAW is deleted before Shopify has been verified to hold every
 published image of its item.
