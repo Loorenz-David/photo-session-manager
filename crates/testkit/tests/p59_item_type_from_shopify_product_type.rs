@@ -124,6 +124,21 @@ fn c1b_refresh_fills_linked_empty_type() {
 }
 
 #[test]
+fn c2a_shopify_adapter_returns_sorted_distinct_nonblank_product_types() {
+    let (adapter, fake) = shop_adapter();
+    fake.on_graphql_always(
+        "ProductTypes",
+        None,
+        HttpReply::new(
+            200,
+            json!({"data":{"productTypes":{"nodes":["Lamps", "Chairs", "", "Lamps"],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}),
+        ),
+    );
+
+    assert_eq!(adapter.item_types().unwrap(), vec!["Chairs", "Lamps"]);
+}
+
+#[test]
 fn c4a_empty_type_preset_is_default_and_own_save_is_independent() {
     let a = app();
     let attrs = AttributesService::new(a.store(), a.clock.as_ref(), Some(INTEGRATION));

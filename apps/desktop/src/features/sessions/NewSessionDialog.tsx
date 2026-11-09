@@ -154,7 +154,16 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   const canCreate = creating && typedSku !== '' && checked && !skuCheck.conflict && (!types?.length || types.includes(itemType));
 
   const openAction = useAction(async (item: Item) => {
-    const local = item.id === 0 && item.external_id ? await adoptItem(item.external_id) : item.origin === 'linked' ? await refreshItem(item.id) : item;
+    let local = item;
+    if (item.id === 0 && item.external_id) {
+      local = await adoptItem(item.external_id);
+    } else if (item.origin === 'linked') {
+      try {
+        local = await refreshItem(item.id);
+      } catch {
+        // A shop refresh is best effort; a saved local item can still start a session.
+      }
+    }
     onOpened((await createSession(local.id)).id);
   }, failure => setError(errorText(failure)));
 

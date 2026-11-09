@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { NewSessionDialog } from '../NewSessionDialog';
-import { createItem, listItemTypes, nextSku, searchItems, searchItemsShop } from '@/services/items';
+import { createItem, listItemTypes, nextSku, refreshItem, searchItems, searchItemsShop } from '@/services/items';
 import { createSession } from '@/services/sessions';
 
 vi.mock('@/services/items', () => ({ nextSku: vi.fn(), searchItems: vi.fn(), searchItemsShop: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn(), refreshItem: vi.fn(), listItemTypes: vi.fn() }));
@@ -11,6 +11,22 @@ globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {
 Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
+
+it('opens a linked item with its local data when shop refresh fails', async () => {
+  const item = { id: 7, sku: 'LAMP-1', title: 'Floor lamp', item_type: 'Lamps', folder_key: 'LAMP-1', barcode: null, origin: 'linked' as const, external_id: 'gid://shopify/Product/1', created_at: 0, updated_at: 0 };
+  const onOpened = vi.fn();
+  vi.mocked(nextSku).mockResolvedValue('LAMP-2');
+  vi.mocked(searchItems).mockResolvedValue([item]);
+  vi.mocked(searchItemsShop).mockResolvedValue([]);
+  vi.mocked(listItemTypes).mockResolvedValue(['Lamps']);
+  vi.mocked(refreshItem).mockRejectedValue(new Error('shop unavailable'));
+  vi.mocked(createSession).mockResolvedValue({ id: 3 } as Awaited<ReturnType<typeof createSession>>);
+  render(<NewSessionDialog open onOpenChange={() => undefined} onOpened={onOpened} />);
+  fireEvent.change(screen.getByLabelText('Search items by title or SKU'), { target: { value: 'Floor lamp' } });
+  fireEvent.click(await screen.findByText('Floor lamp'));
+  await waitFor(() => expect(createSession).toHaveBeenCalledWith(item.id));
+  expect(onOpened).toHaveBeenCalledWith(3);
+});
 
 async function openCreate() {
   vi.mocked(nextSku).mockResolvedValue('LAMP-2');
