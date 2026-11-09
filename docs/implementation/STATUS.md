@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-09 19:30: owner: run overnight, storage tonight, work-Mac install tomorrow.** Driver `overnight.sh` (session scratchpad) runs P60 → P61 → P62: each phase starts on Codex; a phase stopped by a Codex limit/outage is resumed once with `PSM_IMPLEMENTER=claude`; any other stop waits for the orchestrator. Owner standing permission: Codex first, Claude when Codex is exhausted, Codex again for the next phase.
+
 **2026-11-09 19:15: evening hands-on check of P57–P59 done (evidence §Hands-on check).** Automatic take-back works after a Mac restart (12.5 s, no click); fast compose works. Owner: fix the take-back issues and self-healing for files deleted by hand, then storage, before the work Mac. P60 (take-back + self-healing + recipe self-repair, changelog 43) running on Codex; P61 (storage clean-up + budget) and P62 (retention after publish) written, to run after P60. Then the work-Mac install.
 
 **2026-11-09 17:50: P59 APPROVED_WITH_NOTES (re-review after fix 1).** Narrative relayed. SDK app built from HEAD (P53–P59) at `apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app`; the install-and-zip command was declined, so it is NOT installed in /Applications yet. Next: owner tries it here, then installs on the work Mac (steps given in chat: support from Sony's zip, new FTP password + camera Server host = work Mac address, fingerprint, Capture One document, shop credentials). Storage (10F) ratified, not planned; item type later moves to `beyo.item_type`.
