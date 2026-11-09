@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-09 15:20: P58 APPROVED_WITH_NOTES (re-review after fix 1; Opus implement, Sonnet fix).** Narrative relayed. P59 (item type from Shopify product Type, changelog 42) launched on Codex. Then: build the SDK app, owner tries it, work-Mac install. Storage chapter 10F ratified, not planned.
+
 **2026-11-09 11:05: P58 implement stopped: Codex Sol worked ~15 min (30 files changed, uncommitted, backup patch in the session scratchpad) then hit its limit; Terra also limited until 13:09.** A background wait reruns P58 at 13:11 on Codex, continuing on the partial tree. Owner's Claude allowance is nearly used up, so no Claude implementer fallback unless the owner says so.
 
 **2026-11-09 10:45: P57 APPROVED_WITH_NOTES (re-review r2 after fix 1, tests only).** Narrative relayed. P58 launched (Codex). After P58: build the SDK app for the work Mac, install steps for the owner.
