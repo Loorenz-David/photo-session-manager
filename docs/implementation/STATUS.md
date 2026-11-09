@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-09 17:50: P59 APPROVED_WITH_NOTES (re-review after fix 1).** Narrative relayed. SDK app built from HEAD (P53–P59), installed in /Applications on the dev Mac (previous copy in the session scratchpad), and zipped to `~/Desktop/Session-Manager-2026-11-09.zip` for the work Mac. Next: owner tries it here, then installs on the work Mac (steps given in chat: support from Sony's zip, new FTP password + camera Server host = work Mac address, fingerprint, Capture One document, shop credentials). Storage (10F) ratified, not planned; item type later moves to `beyo.item_type`.
+
 **2026-11-09 15:20: P58 APPROVED_WITH_NOTES (re-review after fix 1; Opus implement, Sonnet fix).** Narrative relayed. P59 (item type from Shopify product Type, changelog 42) launched on Codex. Then: build the SDK app, owner tries it, work-Mac install. Storage chapter 10F ratified, not planned.
 
 **2026-11-09 11:05: P58 implement stopped: Codex Sol worked ~15 min (30 files changed, uncommitted, backup patch in the session scratchpad) then hit its limit; Terra also limited until 13:09.** A background wait reruns P58 at 13:11 on Codex, continuing on the partial tree. Owner's Claude allowance is nearly used up, so no Claude implementer fallback unless the owner says so.
