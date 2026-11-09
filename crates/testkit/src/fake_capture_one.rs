@@ -502,6 +502,11 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
     }
     fn document_info(&self, id: &str) -> Result<DocumentInfo> {
         let delay = self.state.lock().unwrap().delay_document_info_ms;
+        self.state
+            .lock()
+            .unwrap()
+            .ops
+            .push("document_info_started".into());
         if delay > 0 {
             std::thread::sleep(std::time::Duration::from_millis(delay));
         }
@@ -732,6 +737,11 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         variant: &str,
         recipe: &str,
     ) -> Result<psm_integrations::editing::capture_one::scripting::ProcessStarted> {
+        self.state
+            .lock()
+            .unwrap()
+            .ops
+            .push(format!("process_started:{variant}:{recipe}"));
         self.check_id(id)?;
         let mut s = self.state.lock().unwrap();
         s.ops.push(format!("process:{variant}:{recipe}"));

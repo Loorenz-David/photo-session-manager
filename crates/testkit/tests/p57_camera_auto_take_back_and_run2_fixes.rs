@@ -61,6 +61,45 @@ fn launch_count(a: &TestApp) -> usize {
         .filter(|x| *x == "launch")
         .count()
 }
+fn wait_for_fake_op(a: &TestApp, op: &str) {
+    let end = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < end {
+        if a.fake
+            .state
+            .lock()
+            .unwrap()
+            .ops
+            .iter()
+            .any(|seen| seen == op || seen.starts_with(op))
+        {
+            return;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    panic!(
+        "fake Capture One did not start {op}; ops={:?}",
+        a.fake.state.lock().unwrap().ops
+    );
+}
+fn wait_for_process_count(a: &TestApp, count: usize) {
+    let end = Instant::now() + Duration::from_secs(4);
+    while Instant::now() < end {
+        let seen = a
+            .fake
+            .state
+            .lock()
+            .unwrap()
+            .ops
+            .iter()
+            .filter(|op| op.starts_with("process:"))
+            .count();
+        if seen >= count {
+            return;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    panic!("fake Capture One did not finish {count} process calls");
+}
 fn claimed(a: &TestApp) {
     a.fake_processes.set(vec!["Capture One"]);
     {
@@ -132,7 +171,8 @@ fn c1c_setting_off_keeps_manual_take_back() {
 
 #[test]
 fn c2a_one_helper_line_reaches_status_without_a_later_line() {
-    let a = TestApp::with_camera_script_running("").unwrap();
+    let a = TestApp::with_camera_script_running_and_delays("", 1500, 3000).unwrap();
+    wait_for_fake_op(&a, "document_info_started");
     let ready = Instant::now() + Duration::from_secs(3);
     while a.fake_sidecar_recording().pids.is_empty() && Instant::now() < ready {
         thread::sleep(Duration::from_millis(5));
@@ -208,7 +248,8 @@ fn c3a_late_exposure_finds_filed_photo() {
 
 #[test]
 fn c4a_output_quality_save_is_fast_and_does_not_render_previews() {
-    let mut a = TestApp::with_fake_document().unwrap();
+    let mut a = TestApp::with_camera_script_running_and_delays("", 1500, 3000).unwrap();
+    wait_for_fake_op(&a, "document_info_started");
     let (item, session) = a
         .items()
         .create_local("P57-SET", "Settings", "object", None)
@@ -228,20 +269,15 @@ fn c4a_output_quality_save_is_fast_and_does_not_render_previews() {
         )
         .unwrap();
     assert_eq!(a.app.editing.renders_in_flight(), 1);
-    let before = a
-        .fake
-        .state
-        .lock()
-        .unwrap()
-        .ops
-        .iter()
-        .filter(|op| op.starts_with("process:"))
-        .count();
     let started = Instant::now();
     a.app
         .settings_set(&json!({"output_format":{"long_edge":2048,"quality":85}}))
         .unwrap();
-    assert!(started.elapsed() < Duration::from_secs(1));
+    let save_elapsed = started.elapsed();
+    assert!(save_elapsed < Duration::from_secs(1));
+    wait_for_fake_op(&a, "process_started:v57");
+    wait_for_process_count(&a, 1);
+    thread::sleep(Duration::from_millis(200));
     assert_eq!(a.app.export.format().quality, 85);
     assert_eq!(
         a.fake
@@ -252,7 +288,7 @@ fn c4a_output_quality_save_is_fast_and_does_not_render_previews() {
             .iter()
             .filter(|op| op.starts_with("process:"))
             .count(),
-        before
+        1
     );
 }
 

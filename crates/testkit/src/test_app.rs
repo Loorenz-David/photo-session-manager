@@ -274,12 +274,22 @@ impl TestApp {
         Self::with_camera_script_cache_mode(script, true)
     }
     pub fn with_camera_script_running(script: &str) -> Result<Self> {
+        Self::with_camera_script_running_and_delays(script, 0, 0)
+    }
+    pub fn with_camera_script_running_and_delays(
+        script: &str,
+        call_delay_ms: u64,
+        document_info_delay_ms: u64,
+    ) -> Result<Self> {
         Self::create(
             true,
             false,
             "custom.damage_report",
             Some(serde_json::json!({
-                "script_text": script, "run_startup": true
+                "script_text": script,
+                "run_startup": true,
+                "fake_call_delay_ms": call_delay_ms,
+                "fake_document_info_delay_ms": document_info_delay_ms
             })),
             SCRIPT_EPOCH_MS,
         )
@@ -312,6 +322,8 @@ impl TestApp {
         let with_camera = sidecar.is_some();
         let mut secret_cache_enabled = true;
         let mut run_startup = false;
+        let mut fake_call_delay_ms = 0;
+        let mut fake_document_info_delay_ms = 0;
         if let Some(mut behaviour) = sidecar {
             psm_integrations::camera::support::with_test_manifest(
                 &paths,
@@ -346,6 +358,20 @@ impl TestApp {
                 .and_then(|v| v.as_bool())
             {
                 run_startup = enabled;
+            }
+            if let Some(delay) = behaviour
+                .as_object_mut()
+                .and_then(|o| o.remove("fake_call_delay_ms"))
+                .and_then(|value| value.as_u64())
+            {
+                fake_call_delay_ms = delay;
+            }
+            if let Some(delay) = behaviour
+                .as_object_mut()
+                .and_then(|o| o.remove("fake_document_info_delay_ms"))
+                .and_then(|value| value.as_u64())
+            {
+                fake_document_info_delay_ms = delay;
             }
             std::fs::write(
                 rec.join("behaviour.json"),
@@ -398,6 +424,11 @@ impl TestApp {
             )?;
         }
         let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
+        {
+            let mut state = fake.state.lock().unwrap();
+            state.call_delay_ms = fake_call_delay_ms;
+            state.delay_document_info_ms = fake_document_info_delay_ms;
+        }
         let clock = Arc::new(ManualClock::new(clock_start));
         let secrets = Arc::new(FakeSecrets::default());
         if !secret_cache_enabled {
