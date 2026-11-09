@@ -167,3 +167,34 @@ about every 0.7 s continuously; `Output/_session_manager/` is rewritten with the
 `session test 1NNNN.jpg/.tif` names and `.jpg.tmp` leftovers (93 files). (F12; likely behind F7 and F11.)
 The loop also rendered **masters**: `PSM Master` (TIFF, ~78 MB) of the same photos into `Output/`, with Capture One's counter suffix (`DSC04979 14.tif`):
 860 TIFFs, 64.3 GB written on 2026-11-08, until the disk had 167 MB free. The orchestrator quit Session Manager at ~16:35 to stop it.
+
+## Acceptance run 2 (P52, 2026-11-09, dev Mac, after P53–P56; owner-attended)
+Packaged build of `6a8400d` with the SDK helper. Timings from the app log (P53's `camera.event` / `ftp.upload` lines) and the orchestrator stopwatch.
+The camera's ID, the Mac's address and fingerprints are left out.
+
+| Row | Measured | Result |
+|---|---|---|
+| setup | The Mac's DHCP address changed overnight; the camera's FTP server still pointed at the old one: camera FTP warning, `ftp_connection_error=16` read by the app, nothing shown. The owner fixed the host by hand; fixed addresses (DHCP reservations) planned for real use. | **F15** |
+| export loop | Capture One no longer exports every few seconds (owner) | pass (P56) |
+| A1 Wi-Fi start | discovery 3.85 s, connect 1.34 s; owner ~10 s from camera power-on incl. camera boot | pass |
+| A10 (new behaviour) | two shots cancelled on the camera, the next arrived → after ~1 min "2 photos were taken but not received … switch FTP Function off and on" (owner) | pass (P53) |
+| A3 Take photo | acknowledged 37 ms; exposed 646 ms after the click; file 3.7 s after exposure | pass |
+| A5 / A15 | 1 app shot + 10 shutter shots ~1.5 s apart: all arrived once; `reply_ms=0` on every upload; nothing new in `.duplicates/`; exposure → file 3.7–11.6 s (queue drains at ~2 s per 48 MB RAW) | pass (P53 fixed F9) |
+| A6 / F13 plug-in, Capture One running | `ptpcamerad` (already running, started with Capture One) held the interface in the first 0.2 s sample in which the camera existed on USB. The helper's first USB connect came ~4.4 s after the plug-in (≈1 s closing Wi-Fi + 3.7 s SDK USB discovery) → `0x8208` held. **The claim happens at enumeration; it cannot be beaten through the SDK.** SDK USB discovery **does** find the camera while `ptpcamerad` holds it. | F13 by timing: not winnable |
+| F6 | while the cable is in, the camera is not discoverable over Wi-Fi remote (`discovery count=0 transport=wifi`, repeatedly); FTP uploads still work | hardware behaviour |
+| A17 take-back | Capture One quit → `ptpcamerad` released → helper owned USB ~4 s after the click, store `pc+camera` verified. Capture One was relaunched 1 s after the quit (before our USB session) and the owner saw a "stopped after step 4" warning although the outcome was right. | pass ~4 s; **F17** |
+| A4 / A18 | cable photo arrived; menu "Dest + camera"; after quitting the app on USB "camera only" | pass |
+| A16 | JPEG quality saved three times on USB: USB session unbroken, same helper. Each save re-opened the app runtime and the quality change re-rendered every photo of the document (~140, incl. old test items); the 2nd and 3rd saves hung at "Saving…" while persisting | pass (camera); **F18** |
+| A2 cold start, cable in | app → helper owns USB in 8 s (credentials restart ~3 s); Capture One launched by the app after our USB session | pass |
+| F16 / F19 | on USB, DSC05001's helper events reached the app 12 s late, together with the next shot's; the photo appeared in Session Manager only then (its FTP copy had been filed 12 s earlier). The helper flushes stdout per line, so the delay is on the reading side or in the helper's event delivery. | **F16** (+F19) |
+| F20 | header "1 photos were taken but not received" although every photo 4988–5002 is filed: a late exposure event (F16) waited for a file filed before it | **F20** |
+| A7 cable out | Wi-Fi ready 6.1 s after the unplug | pass |
+| A12 helper killed | new helper < 0.3 s; Wi-Fi ready 5.0 s (SDK Wi-Fi discovery 3.8 s dominates) | restart pass; reconnect **F21** |
+
+- **Capture One reinstalled by the owner (07:20–07:56)** with camera providers off and no network access: Capture One still detects the camera on the
+  cable ("Camera Error: Tether support for the connected camera is not enabled in Capture One", at every plug-in), `ptpcamerad` starts with it and holds
+  the cable. **No Capture One setting stops the claim.** After the reinstall, edits and new photos took 1–2 min to appear for ~4 min (fresh cache for
+  ~140 photos plus F18's re-render), then normal.
+- **Owner decisions (2026-11-09):** (1) "Take the camera back" becomes **automatic on a plug-in** while Capture One holds the cable (P57). (2) Grabbing
+  the cable directly at plug-in (our own IOKit open before `ptpcamerad`, handed to the SDK; or an own PTP connection via gphoto2) is **deferred**: backlog.
+- Not run: A8, A11, A13, the 1 h never-idle check.
