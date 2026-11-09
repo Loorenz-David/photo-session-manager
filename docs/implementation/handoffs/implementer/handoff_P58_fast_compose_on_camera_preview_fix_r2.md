@@ -41,7 +41,7 @@ None. No backend test was added for F1: the finding allowed one only "if a backe
 - No mutation probes touched any file. No production file besides the two above.
 
 ## Checkpoint SHA
-See the commit `CHECKPOINT (not approved): P58 fix 1` (`git log -1 --format=%h` on the branch; recorded in the final message).
+`7549fc8` (CHECKPOINT (not approved): P58 fix 1). The handoff itself is part of that commit.
 
 ## Stamp
 Tree: working tree at the checkpoint.
