@@ -204,7 +204,10 @@ impl<'a> SessionsService<'a> {
             .store
             .photos_in_session(id)?
             .into_iter()
-            .filter(|photo| photo.classification != crate::domain::photo::Classification::Deleted)
+            .filter(|photo| {
+                photo.classification != crate::domain::photo::Classification::Deleted
+                    && photo.integrity != crate::domain::photo::Integrity::RawMissing
+            })
             .collect();
         let publish = self.store.latest_publish(id)?;
         let upload_states = photos

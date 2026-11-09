@@ -1,6 +1,7 @@
 use super::{
     direct::{
-        DirectCameraAdapter, SLEEP_REASON, StartOrder, StartReason, TakeBackService,
+        CAPTURE_ONE_WINDOW_OPEN, DirectCameraAdapter, SLEEP_REASON, StartOrder, StartReason,
+        TakeBackService,
         adapter::{HelperEvent, StepOutcome},
     },
     sidecar::{
@@ -53,6 +54,8 @@ use uuid::Uuid;
 pub const SIDECAR_EVENTS_KEPT: usize = 1_000;
 /// Stderr lines (redacted) and unparsable stdout lines `helper_log()` keeps.
 const HELPER_LOG_KEPT: usize = 50;
+/// P60 #23: the automatic take-back asks Capture One to quit again this long after it did not.
+const AUTO_RETRY_AFTER_DIALOG: Duration = Duration::from_secs(2);
 /// The camera's USB product ids for the sidecar's IOKit match (R-I23): the A7R V.
 const USB_PRODUCT_IDS: &str = "0x0E0C";
 
@@ -177,6 +180,8 @@ pub struct CameraRuntime {
     auto_take_back_enabled: AtomicBool,
     auto_plugged: AtomicBool,
     auto_taken_this_plug: AtomicBool,
+    auto_retry_after: Mutex<Option<Instant>>,
+    auto_failure_message: Mutex<Option<String>>,
     ftp_error_delivery_id: Mutex<Option<i64>>,
     bundled_sidecar: RwLock<Option<PathBuf>>,
     staging_dir: Mutex<Option<PathBuf>>,
@@ -233,6 +238,8 @@ impl CameraRuntime {
             auto_take_back_enabled: AtomicBool::new(true),
             auto_plugged: AtomicBool::new(false),
             auto_taken_this_plug: AtomicBool::new(false),
+            auto_retry_after: Mutex::new(None),
+            auto_failure_message: Mutex::new(None),
             ftp_error_delivery_id: Mutex::new(None),
             bundled_sidecar: RwLock::new(None),
             staging_dir: Mutex::new(None),
@@ -885,6 +892,7 @@ impl CameraRuntime {
                     self.auto_plugged.store(false, Ordering::SeqCst);
                     self.auto_taken_this_plug.store(false, Ordering::SeqCst);
                     adapter.set_auto_waiting(None);
+                    *self.auto_failure_message.lock().unwrap() = None;
                 }
                 SidecarEvent::UsbArrived { .. } => {
                     self.auto_plugged.store(true, Ordering::SeqCst);
@@ -894,6 +902,7 @@ impl CameraRuntime {
                     self.auto_plugged.store(false, Ordering::SeqCst);
                     self.auto_taken_this_plug.store(false, Ordering::SeqCst);
                     adapter.set_auto_waiting(None);
+                    *self.auto_failure_message.lock().unwrap() = None;
                 }
                 _ => {}
             }
@@ -905,6 +914,16 @@ impl CameraRuntime {
         {
             return;
         }
+        // P60 #23: after Capture One did not quit (a window open), the same plug-in is tried again
+        // shortly, the header keeping the reason until it works.
+        if self
+            .auto_retry_after
+            .lock()
+            .unwrap()
+            .is_some_and(|at| self.clock.mono() < at)
+        {
+            return;
+        }
         let Ok(service) = self.take_back() else {
             return;
         };
@@ -913,13 +932,24 @@ impl CameraRuntime {
                 adapter.set_auto_waiting(Some(format!("Waiting to take the cable: {reason}")))
             }
             Ok(None) => {
-                adapter.set_auto_waiting(None);
+                adapter.set_auto_waiting(self.auto_failure_message.lock().unwrap().clone());
                 if !self.auto_taken_this_plug.swap(true, Ordering::SeqCst) {
                     let runtime = self.clone();
-                    std::thread::spawn(move || {
-                        if let Err(error) = service.run() {
-                            if matches!(error, psm_core::Error::TakeBackBlocked { .. }) {
-                                runtime.auto_taken_this_plug.store(false, Ordering::SeqCst);
+                    std::thread::spawn(move || match service.run() {
+                        Ok(_) => *runtime.auto_failure_message.lock().unwrap() = None,
+                        Err(error) => {
+                            match error {
+                                psm_core::Error::TakeBackBlocked { .. } => {
+                                    runtime.auto_taken_this_plug.store(false, Ordering::SeqCst);
+                                }
+                                psm_core::Error::TakeBackFailed { step: 3, .. } => {
+                                    *runtime.auto_failure_message.lock().unwrap() =
+                                        Some(CAPTURE_ONE_WINDOW_OPEN.into());
+                                    *runtime.auto_retry_after.lock().unwrap() =
+                                        Some(runtime.clock.mono() + AUTO_RETRY_AFTER_DIALOG);
+                                    runtime.auto_taken_this_plug.store(false, Ordering::SeqCst);
+                                }
+                                _ => {}
                             }
                             tracing::warn!(%error, "automatic take-back failed");
                         }

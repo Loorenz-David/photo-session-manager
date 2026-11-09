@@ -33,6 +33,8 @@ pub struct CaptureOneFollow {
     current: Mutex<Option<PathBuf>>,
     waiting: Mutex<HashMap<String, WaitState>>,
     style_lock: Mutex<()>,
+    /// Whether Capture One ran at the last tick (P60: its (re)opening is noticed here).
+    was_running: Mutex<Option<bool>>,
 }
 impl CaptureOneFollow {
     #[allow(clippy::too_many_arguments)]
@@ -56,6 +58,7 @@ impl CaptureOneFollow {
             current: Mutex::new(None),
             waiting: Mutex::new(HashMap::new()),
             style_lock: Mutex::new(()),
+            was_running: Mutex::new(None),
         }
     }
     fn running(&self) -> bool {
@@ -120,7 +123,18 @@ impl CaptureOneFollow {
         self.apply_style_once(raw)
     }
     pub fn tick(&self) -> Result<()> {
-        if !self.running() {
+        let running = self.running();
+        let reopened = self
+            .was_running
+            .lock()
+            .map(|mut was| was.replace(running) == Some(false) && running)
+            .unwrap_or(false);
+        if reopened {
+            // Changelog 43, P60 #26: files deleted meanwhile are found before Capture One is asked
+            // for anything; photos with a current preview are not asked for again.
+            self.previews.on_editor_opened()?;
+        }
+        if !running {
             return Ok(());
         }
         let now = self.clock.mono();
@@ -175,6 +189,7 @@ impl CaptureOneFollow {
 }
 impl ArrivalFollow for CaptureOneFollow {
     fn collection_switched(&self) -> Result<()> {
+        self.previews.check_missing_files()?;
         for state in self.store.preview_states()? {
             self.previews.retry_now(&state.raw_path)?;
         }

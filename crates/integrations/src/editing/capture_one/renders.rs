@@ -11,6 +11,8 @@ pub struct RenderEntry {
     pub completion: RenderCompletion,
     pub issued_mono: Instant,
     pub attempts: u8,
+    /// Re-sent once after its export came out in the wrong format (10F §5).
+    pub recipe_retried: bool,
 }
 
 pub struct PendingRender {
@@ -30,6 +32,8 @@ pub struct RenderRegistry {
     pub focused_raw: Option<String>,
     /// Queued requests Capture One refused when their turn came: (tracking job, error).
     pub refused: Vec<(i64, String)>,
+    /// The recipes read back and repaired in the current render batch (10F §5).
+    pub recipes_checked: HashSet<RenderPurpose>,
 }
 
 /// The `busy` entry while a preview is with Capture One: previews go one at a time (P58).

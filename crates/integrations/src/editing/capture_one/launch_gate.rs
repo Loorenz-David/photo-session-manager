@@ -2,12 +2,15 @@
 //! script that would launch Capture One runs only on the thread the take-back permitted (its
 //! step 5). One gate per app process (P48 L14): created beside the scripting lanes and never
 //! rebuilt by a settings save.
+use psm_core::ports::clock::Clock;
 use std::{
     cell::RefCell,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
+    thread,
+    time::Duration,
 };
 
 thread_local! {
@@ -18,6 +21,18 @@ thread_local! {
 #[derive(Default)]
 pub struct LaunchGate {
     held: AtomicBool,
+    /// A take-back holds it (P60 #22): every lane script is refused, not only launch-capable ones.
+    quiet: AtomicBool,
+    /// Scripts the scripting lanes are running against Capture One right now (P60 #22).
+    in_flight: AtomicUsize,
+}
+
+/// One lane script in flight; dropping it ends it.
+pub struct InFlight<'a>(&'a AtomicUsize);
+impl Drop for InFlight<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 impl LaunchGate {
@@ -28,6 +43,17 @@ impl LaunchGate {
     pub fn hold(self: &Arc<Self>) -> GateGuard {
         self.held.store(true, Ordering::SeqCst);
         GateGuard { gate: self.clone() }
+    }
+    /// Holds the gate for "Take the camera back": also refuses every other lane script off the
+    /// permitted thread until the guard drops (P60 #22).
+    pub fn hold_quiet(self: &Arc<Self>) -> GateGuard {
+        let guard = self.hold();
+        self.quiet.store(true, Ordering::SeqCst);
+        guard
+    }
+    /// Any lane script must be refused now: a take-back holds the gate on another thread.
+    pub fn quiet_here(&self) -> bool {
+        self.quiet.load(Ordering::SeqCst) && !self.permitted_here()
     }
     pub fn is_held(&self) -> bool {
         self.held.load(Ordering::SeqCst)
@@ -40,6 +66,24 @@ impl LaunchGate {
     /// A launch-capable script must be refused now: held, and not on the permitted thread.
     pub fn refuses_here(&self) -> bool {
         self.is_held() && !self.permitted_here()
+    }
+    /// Marks a lane script as running until the guard drops.
+    pub fn enter(&self) -> InFlight<'_> {
+        self.in_flight.fetch_add(1, Ordering::SeqCst);
+        InFlight(&self.in_flight)
+    }
+    /// P60 #22: a script that was already talking to Capture One when the gate was taken would wake
+    /// it again with its next Apple event after the quit. Waits until none is running (new ones are
+    /// refused while the gate is held), at most `bound` on `clock`; `false` at the bound.
+    pub fn wait_idle(&self, clock: &dyn Clock, bound: Duration) -> bool {
+        let start = clock.mono();
+        while self.in_flight.load(Ordering::SeqCst) > 0 {
+            if clock.mono().saturating_duration_since(start) >= bound {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        true
     }
     fn id(&self) -> usize {
         self as *const Self as usize
@@ -74,6 +118,7 @@ impl GateGuard {
 
 impl Drop for GateGuard {
     fn drop(&mut self) {
+        self.gate.quiet.store(false, Ordering::SeqCst);
         self.gate.held.store(false, Ordering::SeqCst);
     }
 }

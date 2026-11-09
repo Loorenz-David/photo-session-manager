@@ -3,8 +3,9 @@
 //! USB session, relaunch Capture One and reopen the document — each step bounded, any failure
 //! stops the sequence and releases the editor-launch gate.
 use super::{
-    DirectCameraAdapter, TAKE_BACK_EXPOSURE_GRACE_MS, TAKE_BACK_FREE_WAIT_MS,
-    TAKE_BACK_QUIT_WAIT_MS, TAKE_BACK_READY_WAIT_MS,
+    CAMERA_SERVICE_STUCK, CAPTURE_ONE_WINDOW_OPEN, DirectCameraAdapter, TAKE_BACK_DRAIN_WAIT_MS,
+    TAKE_BACK_EXPOSURE_GRACE_MS, TAKE_BACK_FREE_WAIT_MS, TAKE_BACK_QUIT_WAIT_MS,
+    TAKE_BACK_READY_WAIT_MS, TAKE_BACK_STUCK_SERVICE_MS,
     ownership::{HolderReport, known_running, name_programs},
 };
 use crate::{
@@ -181,18 +182,34 @@ impl TakeBackService {
         }
         let _done = Done(&self.running);
         preconditions(&self.inputs()?)?;
-        // 1. Hold the gate (released when `gate` drops, on every path: step 6).
-        let gate = self.gate.hold();
+        // 1. Hold the gate (released when `gate` drops, on every path: step 6). From here no script
+        //    of the app's lanes reaches Capture One; the ones already running finish first, or
+        //    their next Apple event would relaunch Capture One after the quit (P60 #22).
+        let gate = self.gate.hold_quiet();
+        if !self.gate.wait_idle(
+            self.clock.as_ref(),
+            Duration::from_millis(TAKE_BACK_DRAIN_WAIT_MS),
+        ) {
+            tracing::warn!("take back: a Capture One script is still running; quitting anyway");
+        }
         // 2. Save; on failure Capture One is left untouched.
         self.scripting
             .save(&self.document_id)
             .map_err(|e| failed(2, e.to_string()))?;
-        // 3. Ask Capture One to quit and wait until it is not running; never kill it (M39).
-        self.scripting
+        // 3. Ask Capture One to quit and wait until it is not running; never kill it (M39). No
+        //    answer or still running: a window is open, and the header says so (P60 #23).
+        let quit = self
+            .scripting
             .quit()
-            .map_err(|e| failed(3, e.to_string()))?;
-        self.wait_quit()?;
-        // 4. Retry the USB session.
+            .map_err(|e| failed(3, e.to_string()))
+            .and_then(|_| self.wait_quit());
+        if let Err(error) = quit {
+            self.adapter
+                .set_auto_waiting(Some(CAPTURE_ONE_WINDOW_OPEN.into()));
+            return Err(error);
+        }
+        self.adapter.set_auto_waiting(None);
+        // 4. Retry the USB session (naming a stuck camera service, P60 #25).
         let camera_held = self.retry_usb()?;
         // 5. Whatever step 4 gave: launch Capture One (permitted: no start-order wait), ensure,
         //    front, capture folder — under the still-held gate.
@@ -262,10 +279,12 @@ impl TakeBackService {
             }
         };
         let mut claims = self.adapter.claims_seen();
+        let claims_at_quit = claims;
         send();
         let start = self.clock.mono();
         let mut last_send = start;
         let mut last_check = start;
+        let mut stuck_named = false;
         loop {
             if self.adapter.usb_session() {
                 return Ok(true);
@@ -279,6 +298,16 @@ impl TakeBackService {
             if now.saturating_duration_since(last_check) >= Duration::from_millis(STARTED_POLL_MS) {
                 last_check = now;
                 started_meanwhile()?;
+                if !stuck_named
+                    && now.saturating_duration_since(start)
+                        >= Duration::from_millis(TAKE_BACK_STUCK_SERVICE_MS)
+                    && self.adapter.claims_seen() > claims_at_quit
+                    && self.stuck_service()
+                {
+                    stuck_named = true;
+                    self.adapter
+                        .set_auto_waiting(Some(CAMERA_SERVICE_STUCK.into()));
+                }
             }
             let seen = self.adapter.claims_seen();
             if seen > claims
@@ -293,6 +322,17 @@ impl TakeBackService {
             }
             thread::sleep(REAL_POLL);
         }
+    }
+
+    /// P60 #25: after Capture One quit, the cable is still held (claimed again since the quit,
+    /// checked by the caller) and no other program that uses cameras runs — macOS's camera
+    /// service holds it on nobody's behalf.
+    fn stuck_service(&self) -> bool {
+        if !self.adapter.cable_held() {
+            return false;
+        }
+        let running = self.runtime.process_list().running().unwrap_or_default();
+        known_running(&running).is_empty()
     }
 
     /// "Test camera connection" (MC-34 §Setup check): the known programs running now, in every

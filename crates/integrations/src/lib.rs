@@ -583,6 +583,9 @@ impl App {
         previews.export_staging = Some(export.clone());
         previews.health = Some(health.clone());
         let previews = Arc::new(previews);
+        // P60 #22: while "Take the camera back" holds Capture One no render request leaves.
+        let render_gate = lanes.gate.clone();
+        previews.set_render_hold(Arc::new(move || render_gate.is_held()));
         let follow = Arc::new(CaptureOneFollow::new(
             user_scripting.clone(),
             editing.clone(),

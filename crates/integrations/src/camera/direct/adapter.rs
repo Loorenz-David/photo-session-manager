@@ -253,6 +253,11 @@ impl DirectCameraAdapter {
             .flatten()
     }
 
+    /// Another process holds the USB interface (`usb.claimed_by` is the latest word on it).
+    pub fn cable_held(&self) -> bool {
+        self.held().is_some()
+    }
+
     /// R-I32: the USB interface is held on Capture One's behalf (the take-back's last check).
     pub fn holder_is_capture_one(&self) -> bool {
         self.held()

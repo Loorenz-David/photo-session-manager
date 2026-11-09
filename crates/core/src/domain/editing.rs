@@ -42,7 +42,7 @@ pub struct DocumentState {
     pub capture_folder: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RenderPurpose {
     Preview,
     /// The full-size, uncropped 16-bit master (10D MC-28) that every output is rendered from.

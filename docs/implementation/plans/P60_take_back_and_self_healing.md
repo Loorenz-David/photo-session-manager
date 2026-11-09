@@ -89,3 +89,23 @@ the header asks you to close it, and the take-back runs once you do.
   If the SDK is present locally, prove the SDK build compiles, then restore the stub; never commit build output.
 
 ## Review log
+
+- **2026-11-09, claude-opus (PSM_IMPLEMENTER=claude), implement r1 — IMPLEMENTED.** Continued the uncommitted partial tree Codex left
+  (implementer state MISSING); kept its direction, rewrote what broke P04 C3(b)/P17 C5(a) (both recipes checked before every render),
+  dropped arrivals during the hold, blocked render scripts on the P54 wait, a 5 s scan and deferrals counted as refusals.
+  Built: (#22) the launch gate refuses every lane script but `editor_info`/`quit` while the take-back holds it, and the take-back waits
+  (≤ 30 s) for scripts already talking to Capture One before save/quit — an in-flight script's next Apple event after the quit is the
+  likely 0.34 s relaunch and the false "did not quit"; previews wait in place during the hold; render scripts defer (never wait, never
+  launch) while Capture One is closed and a relaunch waits for the helper. (#23) a failed quit sets the header to the window-open
+  sentence; the automatic take-back retries the same plug-in every 2 s. (#25) ≥ 10 s after the quit, a re-claim and no camera app →
+  the stuck-service sentence. (#24/#26) missing = `photos.integrity = raw_missing` (no migration); out of the session view and the list's
+  missing-preview count; never requested; dropped from the render queue; Health `file_missing`; returns when the file returns; checked at
+  startup, focus, Capture One (re)open, refused renders and any preview pass that sees a RAW deleted/returned since the last check.
+  (10F §5) the render's own recipe is read back and repaired once per batch; a refusal with the recipe gone → one repair + retry; a
+  non-JPEG preview export → repair + one re-render (`EditingProvider::recipe_fault`).
+  Assumptions and deviations: handoff `handoff_P60_take_back_and_self_healing_implement_r1.md` (12 assumptions; small additions in
+  core ports/domain, infra store SQL, HealthPage label; export/publish unchanged for missing photos). Tests: 8 behaviour tests
+  (`p60_take_back_and_self_healing.rs`), 2 header UI tests, 3 core-mechanism unit tests (`mechanisms::missing`).
+  The take-back holds the gate in a "quiet" mode (every lane script refused); a plain hold keeps P48's meaning (P48 C3(e) still reads
+  the open document while held). Stamp: Rust 873/1 — the one is `p53` C3(a), an intermittent 3 s wait that depends on the main build
+  dir's slow app shutdown (HEAD code 4.5 s there, 0.5 s in a fresh build dir); UI 424/424; clippy/fmt/typecheck clean; helper stub 1/1.

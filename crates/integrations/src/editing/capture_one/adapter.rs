@@ -1,4 +1,5 @@
 use super::{
+    recipes::RecipeSpec,
     renders::{PendingRender, RenderEntry, RenderRegistry, resolve_output},
     scripting::{CaptureOneScripting, ProcessStarted},
 };
@@ -17,6 +18,7 @@ use psm_core::{
         store::Store,
     },
     services::health::HealthService,
+    services::previews::FILE_MISSING,
 };
 use psm_infra::{
     disk::{FreeSpace, free_space},
@@ -158,8 +160,48 @@ impl CaptureOneAdapter {
     /// is free; one preview at a time, the focused photo's, then the newest arrivals, then the
     /// rest oldest-first). A request Capture One refuses is handed back through `refused_renders`.
     fn pump(&self, now: Instant, now_ms: i64) -> Result<()> {
+        self.discard_missing();
         while self.send_next(now, now_ms)? {}
+        let mut state = self
+            .renders
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        if state.jobs.is_empty() && state.pending.is_empty() && state.busy.is_empty() {
+            // The batch is over: the next render checks its recipe again (10F §5).
+            state.recipes_checked.clear();
+        }
         Ok(())
+    }
+    /// Changelog 43: a render whose RAW was deleted outside the app is dropped from the queue and
+    /// from the renders out (it would never finish and would hold the take-back), handed back as
+    /// refused with `file_missing`.
+    fn discard_missing(&self) {
+        let Ok(mut state) = self.renders.lock() else {
+            return;
+        };
+        let gone: Vec<_> = state
+            .jobs
+            .iter()
+            .filter(|(_, entry)| raw_missing(&entry.completion.raw))
+            .map(|(id, entry)| (id.clone(), entry.completion.clone()))
+            .collect();
+        for (id, completion) in gone {
+            state.jobs.remove(&id);
+            state.release(&completion.raw, completion.purpose);
+            state
+                .refused
+                .push((completion.tracking_job_id, FILE_MISSING.into()));
+        }
+        let pending = std::mem::take(&mut state.pending);
+        for entry in pending {
+            if raw_missing(&entry.raw) {
+                state
+                    .refused
+                    .push((entry.tracking_job_id, FILE_MISSING.into()));
+            } else {
+                state.pending.push_back(entry);
+            }
+        }
     }
     /// Sends the next queued render that can go; `false` when there is none.
     fn send_next(&self, now: Instant, now_ms: i64) -> Result<bool> {
@@ -196,9 +238,17 @@ impl CaptureOneAdapter {
                         },
                         issued_mono: now,
                         attempts: 0,
+                        recipe_retried: false,
                     },
                 );
                 Ok(true)
+            }
+            // P60 #22: Capture One is held by the take-back (or waits for the camera helper): the
+            // render keeps its place at the head of the queue and nothing more is sent for now.
+            Err(Error::EditorLaunchDeferred) => {
+                state.release(&next.raw, next.purpose);
+                state.pending.push_front(next);
+                Ok(false)
             }
             Err(error) => {
                 tracing::warn!(%error, raw = next.raw, "queued render refused");
@@ -210,22 +260,83 @@ impl CaptureOneAdapter {
             }
         }
     }
-    fn render_started(&self, raw: &str, purpose: RenderPurpose) -> Result<ProcessStarted> {
-        let recipe = match purpose {
-            RenderPurpose::Preview => &self.preview_recipe,
-            RenderPurpose::Master => &self.master_recipe,
+    fn recipe_for(&self, purpose: RenderPurpose) -> (&String, RecipeSpec) {
+        match purpose {
+            RenderPurpose::Preview => (&self.preview_recipe, RecipeSpec::PREVIEW),
+            RenderPurpose::Master => (&self.master_recipe, RecipeSpec::MASTER),
+        }
+    }
+    /// 10F §5: reads the render's recipe back and repairs it (as at startup). `RecipeMissing`
+    /// when it cannot be created or repaired.
+    fn repair_recipe(&self, purpose: RenderPurpose) -> Result<()> {
+        let (name, spec) = self.recipe_for(purpose);
+        let want = spec.props();
+        let checked = match self
+            .background
+            .ensure_recipe(&self.document_id, name, &want)
+        {
+            Err(Error::EditorLaunchDeferred) => return Err(Error::EditorLaunchDeferred),
+            Err(error) => {
+                tracing::warn!(%error, recipe = name, "recipe not repaired");
+                return Err(Error::RecipeMissing { name: name.clone() });
+            }
+            Ok(checked) => checked,
         };
+        if !checked.changed.is_empty() || checked.created {
+            tracing::info!(recipe = name, created = checked.created, changed = ?checked.changed, "recipe repaired before rendering");
+        }
+        let mut got = checked.props;
+        got.root_folder_type = None;
+        if got != want {
+            return Err(Error::RecipeMissing { name: name.clone() });
+        }
+        Ok(())
+    }
+    fn render_started(&self, raw: &str, purpose: RenderPurpose) -> Result<ProcessStarted> {
+        let recipe = self.recipe_for(purpose).0;
         if purpose == RenderPurpose::Master {
             self.check_master_space()?;
         }
-        if !self.background.recipe_exists(&self.document_id, recipe)? {
-            return Err(Error::RecipeMissing {
-                name: recipe.clone(),
-            });
-        }
+        // The variant first: its lookup never launches Capture One (P60 #22).
         let variant = self.variant_background(raw)?;
-        self.background.process(&self.document_id, &variant, recipe)
+        // 10F §5: the recipe is checked and repaired once per render batch; a recipe changed or
+        // removed by hand meanwhile is repaired before the next batch reaches Capture One.
+        let checked = self
+            .renders
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .recipes_checked
+            .contains(&purpose);
+        if !checked {
+            self.repair_recipe(purpose)?;
+            self.renders
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?
+                .recipes_checked
+                .insert(purpose);
+        }
+        match self.background.process(&self.document_id, &variant, recipe) {
+            Err(error)
+                if !matches!(
+                    error,
+                    Error::EditorLaunchDeferred | Error::VariantNotFound | Error::Timeout
+                ) && matches!(
+                    self.background.recipe_exists(&self.document_id, recipe),
+                    Ok(false)
+                ) =>
+            {
+                // Refused because the recipe went missing mid-batch: one repair, one retry.
+                tracing::warn!(%error, recipe, "render refused: recipe missing; repairing once");
+                self.repair_recipe(purpose)?;
+                self.background.process(&self.document_id, &variant, recipe)
+            }
+            result => result,
+        }
     }
+}
+/// Whether a RAW is gone (changelog 43); an unreadable path counts as present.
+fn raw_missing(raw: &str) -> bool {
+    psm_core::mechanisms::missing::file_missing(Path::new(raw)).unwrap_or(false)
 }
 pub fn capture_root(document_id: &str) -> Result<PathBuf> {
     let root = Path::new(document_id).join("Capture");
@@ -451,6 +562,10 @@ impl EditingProvider for CaptureOneAdapter {
                 });
                 return Ok(());
             }
+            if state.jobs.is_empty() && state.pending.is_empty() && state.busy.is_empty() {
+                // A new render batch: its recipe is checked again (10F §5).
+                state.recipes_checked.clear();
+            }
             state.claim(raw, purpose);
         }
         let result = self.render_started(raw, purpose);
@@ -475,8 +590,22 @@ impl EditingProvider for CaptureOneAdapter {
                         },
                         issued_mono: now,
                         attempts: 0,
+                        recipe_retried: false,
                     },
                 );
+                Ok(())
+            }
+            // P60 #22: held by the take-back (or waiting for the camera helper): queued, sent when
+            // Capture One is back; not a refusal.
+            Err(Error::EditorLaunchDeferred) => {
+                state.release(raw, purpose);
+                state.pending.push_back(PendingRender {
+                    raw: raw.into(),
+                    purpose,
+                    generation,
+                    tracking_job_id,
+                    new_arrival,
+                });
                 Ok(())
             }
             Err(error) => {
@@ -516,6 +645,51 @@ impl EditingProvider for CaptureOneAdapter {
             state.release(&entry.completion.raw, entry.completion.purpose);
         }
         self.pump(now, now_ms)
+    }
+    fn recipe_fault(&self, job: &str, now: Instant, now_ms: i64) -> Result<bool> {
+        let entry = {
+            let mut state = self
+                .renders
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            match state.jobs.get(job) {
+                None => return Ok(false),
+                Some(entry) if entry.recipe_retried => return Ok(false),
+                Some(_) => {}
+            }
+            let entry = state.jobs.remove(job).expect("render entry");
+            state.recipes_checked.remove(&entry.completion.purpose);
+            entry
+        };
+        tracing::warn!(
+            job,
+            raw = entry.completion.raw,
+            "render came out in the wrong format; repairing its recipe and rendering once more"
+        );
+        // The render keeps its lane; `render_started` repairs the recipe first (not checked now).
+        let result = self.render_started(&entry.completion.raw, entry.completion.purpose);
+        let mut state = self
+            .renders
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        match result {
+            Ok(started) => {
+                let mut entry = entry;
+                entry.completion.job_id = started.job_id.clone();
+                entry.completion.geometry = started.geometry;
+                entry.completion.issued_at_ms = now_ms;
+                entry.issued_mono = now;
+                entry.recipe_retried = true;
+                state.jobs.insert(started.job_id, entry);
+                Ok(true)
+            }
+            Err(error) => {
+                state.release(&entry.completion.raw, entry.completion.purpose);
+                drop(state);
+                self.pump(now, now_ms)?;
+                Err(error)
+            }
+        }
     }
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>> {
         let expired: Vec<String> = {
@@ -599,6 +773,7 @@ impl EditingProvider for CaptureOneAdapter {
         })
     }
     fn renders_in_flight(&self) -> usize {
+        self.discard_missing();
         self.renders
             .lock()
             // Pending work has not been handed to Capture One yet. It survives a quit and is

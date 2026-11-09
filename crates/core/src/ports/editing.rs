@@ -67,6 +67,12 @@ pub trait EditingProvider: Send + Sync {
     /// §Completion): `None` when no file written after the request can be found for it.
     fn resolve_render_output(&self, output: &Path, issued_at_ms: i64) -> Option<PathBuf>;
     fn finish_render(&self, job: &str, now: Instant, now_ms: i64) -> Result<()>;
+    /// 10F §5: render `job` finished in the wrong format (its recipe was changed outside the app).
+    /// The provider repairs the recipe and sends the render again once (`true`, the job keeps its
+    /// completion under a new id); `false` when it was already re-sent: the render has failed.
+    fn recipe_fault(&self, _job: &str, _now: Instant, _now_ms: i64) -> Result<bool> {
+        Ok(false)
+    }
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>>;
     fn render_in_flight(&self, raw: &str) -> bool;
     /// How many renders the provider has issued and not finished (including a start in progress):

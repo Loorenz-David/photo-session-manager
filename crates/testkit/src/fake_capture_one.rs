@@ -76,6 +76,10 @@ pub struct FakeState {
     pub settings: HashMap<String, i64>,
     /// Capture One's processing bookkeeping (`LowResProcessCounter`).
     pub process_counter: u64,
+    /// P60 #22: an Apple event reaching a Capture One that is not running relaunches it (a script
+    /// already under way when it quit): any document script, after its `call_delay_ms`, records
+    /// op `launch` and sets `running`.
+    pub apple_events_launch: bool,
 }
 pub struct FakeCaptureOneScripting {
     pub state: Mutex<FakeState>,
@@ -164,6 +168,7 @@ impl FakeCaptureOneScripting {
                 touch_settings_on_process: false,
                 settings: HashMap::new(),
                 process_counter: 0,
+                apple_events_launch: false,
             }),
         }
     }
@@ -179,6 +184,13 @@ impl FakeCaptureOneScripting {
         };
         if delay > 0 {
             std::thread::sleep(std::time::Duration::from_millis(delay));
+        }
+        {
+            let mut s = self.state.lock().unwrap();
+            if s.apple_events_launch && !s.running {
+                s.ops.push("launch".into());
+                s.running = true;
+            }
         }
         if !expected {
             Err(Error::DocumentNotOpen)
@@ -511,6 +523,10 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
             std::thread::sleep(std::time::Duration::from_millis(delay));
         }
         let mut s = self.state.lock().unwrap();
+        if s.apple_events_launch && !s.running {
+            s.ops.push("launch".into());
+            s.running = true;
+        }
         s.ops.push("document_info".into());
         if !s.open_documents.iter().any(|d| d == id) {
             return Err(Error::DocumentNotOpen);
@@ -747,6 +763,9 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         s.ops.push(format!("process:{variant}:{recipe}"));
         if s.fail_process {
             return Err(Error::Provider("process failed".into()));
+        }
+        if !s.recipes.contains_key(recipe) {
+            return Err(Error::Provider(format!("recipe {recipe} not found")));
         }
         let id = format!("job-{}", s.next_job);
         s.next_job += 1;

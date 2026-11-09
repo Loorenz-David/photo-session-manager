@@ -1507,7 +1507,7 @@ impl Store for SqliteStore {
             .map_err(db)?;
         base.into_iter().map(|(id,sku,item_type,title)| {
             let session = session(&conn, id)?;
-            let non_deleted_missing_preview_count = conn.query_row("SELECT COUNT(*) FROM photos WHERE session_id=?1 AND classification<>'deleted' AND adjusted_preview_path IS NULL", [id], |r| r.get(0)).map_err(db)?;
+            let non_deleted_missing_preview_count = conn.query_row("SELECT COUNT(*) FROM photos WHERE session_id=?1 AND classification<>'deleted' AND integrity<>'raw_missing' AND adjusted_preview_path IS NULL", [id], |r| r.get(0)).map_err(db)?;
             let cover_preview_path = conn.query_row("SELECT COALESCE(adjusted_preview_path,original_preview_path) FROM photos WHERE session_id=?1 AND classification='main' AND position=1", [id], |r| r.get(0)).optional().map_err(db)?.flatten();
             let publish = latest_publish(&conn, id)?;
             let (latest_step,failed_step,uploaded,total) = match &publish {

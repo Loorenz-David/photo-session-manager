@@ -2,10 +2,14 @@ use crate::{
     Result,
     domain::composition::{Fingerprint, FrameSource},
     domain::editing::RenderPurpose,
+    domain::photo::{Classification, Integrity},
     events::AppEvent,
     mechanisms::{
         backoff::render_backoff,
         canon::canon,
+        missing::{
+            MissingDecision, RenderEligibility, file_missing, missing_decision, render_eligibility,
+        },
         staleness::{clamp_delay, due_at, is_stale},
     },
     ports::{
@@ -15,7 +19,7 @@ use crate::{
         images::Imaging,
         store::Store,
     },
-    services::health::HealthService,
+    services::{health::HealthService, integrity::IntegrityCheck},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -43,6 +47,23 @@ type BeforeRender = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
 pub const NO_SIDECAR: &str = "none";
 /// Health code of the photos whose preview render failed for good (P56 C3(b)).
 pub const PREVIEW_NOT_RENDERED: &str = "preview_not_rendered";
+/// Health code (and the photos' reason) for RAWs deleted outside the app (changelog 43, P60).
+pub const FILE_MISSING: &str = "file_missing";
+
+/// Whether an export is named as a JPEG (the preview recipe's format).
+fn is_jpeg_name(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("jpg") || e.eq_ignore_ascii_case("jpeg"))
+}
+
+/// Whether a RAW is gone; an unreadable path counts as present (the render then says why).
+fn raw_missing(raw: &str) -> bool {
+    file_missing(Path::new(raw)).unwrap_or_else(|error| {
+        tracing::warn!(%error, raw, "RAW not checked");
+        false
+    })
+}
 
 pub struct PreviewService {
     pub store: Arc<dyn Store>,
@@ -64,7 +85,13 @@ pub struct PreviewService {
     /// keep their place before the backlog through deferrals and the wait for the variant.
     arrivals: Mutex<HashSet<String>>,
     before_render: Mutex<Option<BeforeRender>>,
+    /// "Take the camera back" holds Capture One (P60 #22): no render request leaves meanwhile.
+    render_hold: Mutex<Option<RenderHold>>,
+    /// The RAWs the last missing-file check found gone (changelog 43).
+    known_missing: Mutex<HashSet<String>>,
 }
+
+type RenderHold = Arc<dyn Fn() -> bool + Send + Sync>;
 
 impl PreviewService {
     pub fn new(
@@ -92,9 +119,118 @@ impl PreviewService {
             variant_waiting: Mutex::new(HashSet::new()),
             arrivals: Mutex::new(HashSet::new()),
             before_render: Mutex::new(None),
+            render_hold: Mutex::new(None),
+            known_missing: Mutex::new(HashSet::new()),
         }
     }
+    /// Installs the take-back's hold (`true` while it holds Capture One).
+    pub fn set_render_hold(&self, held: RenderHold) {
+        if let Ok(mut slot) = self.render_hold.lock() {
+            *slot = Some(held);
+        }
+    }
+    fn held(&self) -> bool {
+        self.render_hold
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone())
+            .is_some_and(|held| held())
+    }
+    /// Changelog 43: a photo whose RAW is gone is missing (`Integrity::RawMissing`; classification
+    /// and history unchanged) and leaves the session views; a RAW back at the same path brings its
+    /// photos back as they were. Health counts the missing photos that were not deleted. Runs at
+    /// startup, on window focus, when Capture One (re)opens and when a request finds a RAW gone.
+    pub fn check_missing_files(&self) -> Result<()> {
+        let mut missing = 0usize;
+        let mut gone_raws = HashSet::new();
+        for state in self.store.preview_states()? {
+            let gone = match file_missing(Path::new(&state.raw_path)) {
+                Ok(gone) => gone,
+                Err(error) => {
+                    tracing::warn!(%error, raw = state.raw_path, "RAW not checked");
+                    continue;
+                }
+            };
+            for photo in self.store.photos_for_raw(&state.raw_path)? {
+                let now = match missing_decision(gone, photo.integrity) {
+                    MissingDecision::Keep => photo.integrity,
+                    MissingDecision::Missing => {
+                        self.store
+                            .set_photo_integrity(photo.id, Integrity::RawMissing)?;
+                        tracing::info!(raw = state.raw_path, photo = photo.id, "RAW missing");
+                        Integrity::RawMissing
+                    }
+                    MissingDecision::Returned => {
+                        let back = IntegrityCheck::new(self.store.as_ref()).verify(photo.id)?;
+                        tracing::info!(raw = state.raw_path, photo = photo.id, "RAW back");
+                        back
+                    }
+                };
+                if now != photo.integrity {
+                    self.events.emit(AppEvent::PhotoChanged {
+                        photo_id: photo.id,
+                        session_id: photo.session_id,
+                    });
+                    self.events.emit(AppEvent::SessionChanged {
+                        session_id: photo.session_id,
+                    });
+                }
+                if now == Integrity::RawMissing && photo.classification != Classification::Deleted {
+                    missing += 1;
+                }
+            }
+            if gone {
+                self.forget(&state.raw_path);
+                gone_raws.insert(state.raw_path);
+            }
+        }
+        if let Ok(mut known) = self.known_missing.lock() {
+            *known = gone_raws;
+        }
+        if let Some(health) = &self.health {
+            if missing == 0 {
+                health.clear(FILE_MISSING);
+            } else {
+                health.set(
+                    FILE_MISSING,
+                    format!("{missing} photos' files were deleted outside Session Manager"),
+                );
+            }
+        }
+        Ok(())
+    }
+    /// Drops every waiting, backoff and failure mark of a RAW that is gone.
+    fn forget(&self, raw: &str) {
+        if let Ok(mut map) = self.retry_after.lock() {
+            map.remove(raw);
+        }
+        if let Ok(mut set) = self.arrivals.lock() {
+            set.remove(raw);
+        }
+        if let Ok(mut set) = self.variant_waiting.lock() {
+            set.remove(raw);
+        }
+        if let Ok(mut map) = self.variant_first_request.lock() {
+            map.remove(raw);
+        }
+        let failed = self
+            .failed_generation
+            .lock()
+            .is_ok_and(|mut map| map.remove(raw).is_some());
+        if failed {
+            self.report_failures();
+        }
+    }
+    /// Capture One (re)opened: missing files are found before anything is asked of it, and only
+    /// photos that need a preview are requested (P60 #26).
+    pub fn on_editor_opened(&self) -> Result<()> {
+        self.check_missing_files()?;
+        self.schedule_due(false)
+    }
     pub fn request_initial(&self, raw: &str) -> Result<()> {
+        if raw_missing(raw) {
+            return self.check_missing_files();
+        }
         let Some(generation) = self.store.ensure_initial_generation(raw)? else {
             return Ok(());
         };
@@ -113,6 +249,9 @@ impl PreviewService {
         self.request(raw, generation, true)
     }
     fn request(&self, raw: &str, generation: i64, new_arrival: bool) -> Result<()> {
+        if raw_missing(raw) {
+            return self.check_missing_files();
+        }
         let new_arrival = {
             let mut arrivals = self
                 .arrivals
@@ -131,7 +270,9 @@ impl PreviewService {
         {
             return Ok(());
         }
-        if self.editing.render_in_flight(raw) {
+        // The take-back holds Capture One: the request waits, keeping its place (an arrival stays
+        // an arrival); the stale state is asked for again once the hold ends.
+        if self.held() || self.editing.render_in_flight(raw) {
             return Ok(());
         }
         let now_ms = self.clock.now_ms();
@@ -175,6 +316,24 @@ impl PreviewService {
     }
     /// The render backoff after Capture One refused a preview request (MC-16).
     fn defer(&self, raw: &str, error: &crate::Error) -> Result<()> {
+        // Capture One answering `variant_not_found` (or any refusal) for a RAW that is gone: the
+        // photo is missing, never asked for again (changelog 43).
+        if raw_missing(raw) {
+            return self.check_missing_files();
+        }
+        // Capture One is held or waiting to be relaunched: asked again shortly, not counted.
+        if matches!(error, crate::Error::EditorLaunchDeferred) {
+            let mut retry = self
+                .retry_after
+                .lock()
+                .map_err(|e| crate::Error::InvalidData(e.to_string()))?;
+            let attempts = retry.get(raw).map_or(0, |(attempts, _)| *attempts);
+            retry.insert(
+                raw.into(),
+                (attempts, self.clock.mono() + Duration::from_secs(1)),
+            );
+            return Ok(());
+        }
         {
             let mut retry = self
                 .retry_after
@@ -226,6 +385,28 @@ impl PreviewService {
             return Ok(());
         };
         let output = output.as_path();
+        // 10F §5: a preview export that is not a JPEG came from a recipe changed outside the app.
+        // It is never taken as a preview: the recipe is repaired and the render sent once more.
+        if entry.purpose == RenderPurpose::Preview && !is_jpeg_name(output) {
+            let now_ms = self.clock.now_ms();
+            match self.editing.recipe_fault(job, self.clock.mono(), now_ms) {
+                Ok(true) => return Ok(()),
+                outcome => {
+                    if let Err(error) = outcome {
+                        tracing::warn!(%error, job, "recipe not repaired");
+                    }
+                    self.failed_generation
+                        .lock()
+                        .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+                        .insert(entry.raw.clone(), entry.generation);
+                    self.report_failures();
+                    self.store
+                        .finish_render_job(entry.tracking_job_id, Some("recipe"), now_ms)?;
+                    self.editing.finish_render(job, self.clock.mono(), now_ms)?;
+                    return Ok(());
+                }
+            }
+        }
         match entry.purpose {
             RenderPurpose::Preview => {
                 let dest = self
@@ -322,6 +503,9 @@ impl PreviewService {
         Ok(())
     }
     pub fn tick(&self) -> Result<()> {
+        if self.held() {
+            return Ok(());
+        }
         for (id, generation) in self
             .editing
             .expire_renders(self.clock.mono(), self.clock.now_ms())?
@@ -453,6 +637,7 @@ impl PreviewService {
         self.schedule_due(false)
     }
     fn schedule_due(&self, force: bool) -> Result<()> {
+        let held = self.held();
         let now = self.clock.mono();
         let last = self
             .last_adjusted
@@ -466,12 +651,28 @@ impl PreviewService {
             .retry_after
             .lock()
             .map_err(|e| crate::Error::InvalidData(e.to_string()))?;
+        let known_missing = self
+            .known_missing
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .clone();
+        let mut disk_changed = false;
         let due: Vec<_> = self
             .store
             .preview_states()?
             .into_iter()
             .filter(|state| {
-                is_stale(state.adjusted_gen, state.rendered_gen)
+                // Only a stale RAW is looked at on disk. One deleted (or back) since the last check
+                // is found here, before Capture One is ever asked for it (changelog 43).
+                if !is_stale(state.adjusted_gen, state.rendered_gen) {
+                    return false;
+                }
+                let gone = raw_missing(&state.raw_path);
+                if gone != known_missing.contains(&state.raw_path) {
+                    disk_changed = true;
+                }
+                render_eligibility(gone, state.adjusted_gen, state.rendered_gen, held)
+                    == RenderEligibility::Request
                     && failed.get(&state.raw_path) != Some(&state.adjusted_gen)
                     && retry.get(&state.raw_path).is_none_or(|(_, at)| now >= *at)
                     && !self
@@ -489,6 +690,9 @@ impl PreviewService {
         drop(retry);
         drop(failed);
         drop(last);
+        if disk_changed {
+            self.check_missing_files()?;
+        }
         for (raw, generation) in due {
             if let Err(error) = self.request(&raw, generation, false) {
                 tracing::warn!(%error, raw, "preview render deferred");
@@ -497,11 +701,13 @@ impl PreviewService {
         Ok(())
     }
     pub fn on_focus(&self) -> Result<()> {
+        self.check_missing_files()?;
         self.schedule_due(true)?;
         self.check_sidecars()?;
         self.schedule_due(true)
     }
     pub fn on_startup(&self) -> Result<()> {
+        self.check_missing_files()?;
         self.check_sidecars()
     }
     /// MC-17 §Fallback, P56: a RAW whose sidecar holds other adjustments than at its last render
@@ -511,6 +717,9 @@ impl PreviewService {
     /// P56) adopts the current one.
     fn check_sidecars(&self) -> Result<()> {
         for state in self.store.preview_states()? {
+            if raw_missing(&state.raw_path) {
+                continue;
+            }
             let Some(sidecar) = self.editing.settings_sidecar(&state.raw_path)? else {
                 continue;
             };

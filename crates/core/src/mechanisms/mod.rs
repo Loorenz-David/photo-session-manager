@@ -7,6 +7,7 @@ pub mod capture_ledger;
 pub mod composition;
 pub mod hash;
 pub mod hook_payload;
+pub mod missing;
 pub mod naming;
 pub mod position;
 pub mod publish;
