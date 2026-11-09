@@ -198,3 +198,15 @@ The camera's ID, the Mac's address and fingerprints are left out.
 - **Owner decisions (2026-11-09):** (1) "Take the camera back" becomes **automatic on a plug-in** while Capture One holds the cable (P57). (2) Grabbing
   the cable directly at plug-in (our own IOKit open before `ptpcamerad`, handed to the SDK; or an own PTP connection via gphoto2) is **deferred**: backlog.
 - Not run: A8, A11, A13, the 1 h never-idle check.
+
+## Hands-on check (2026-11-09 evening, dev Mac, build of P53–P59)
+- Settings save instant; the automatic take-back setting present and on.
+- First attempts failed: Capture One's settings had been erased that morning (`defaults delete com.captureone.captureone16`, owner's exploration) and
+  it showed a sign-in window that blocked AppleScript (take-back step 3: quit timed out / "did not quit"); `ptpcamerad`, killed by hand that morning and
+  respawned at 07:53, held the cable even with no app running (18:04:14–26). A Mac restart cleared it.
+- After the restart: plug-in → cable session in **12.5 s, no click** (claim +0 s, helper +4.7 s, Capture One quit +6.5 s, released at once, USB +12.5 s).
+  Capture One was relaunched 0.34 s after the quit (#22) and the take-back logged a false "did not quit".
+- Cable photo delivered to the Mac 1.4 s after exposure (F16 fixed); shown in Session Manager after ~20 s behind a re-render storm (529 render lines,
+  `variant_not_found` for ~120 photos whose RAWs the owner had deleted by hand) (#24/#26).
+- Fast preview: the new photo could be reframed as soon as it appeared (owner). Pass.
+→ P60.
