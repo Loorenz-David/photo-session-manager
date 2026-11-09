@@ -140,6 +140,8 @@ restated so no session has to infer them:
 | P58_fast_compose_on_camera_preview | APPROVED | 2026-11-09 | opus | re-review r2 APPROVED_WITH_NOTES: F1/F2 resolved (fix `7549fc8`, perimeter within r1's allowed files). Rust 858/0, UI 418/419 with the plan's known-intermittent `p33_split_grid` C4(d) (7/7 alone), clippy/fmt/typecheck green; 1 new item triaged DROP → backlog (camera → master frame turns Compose off until the preview lands); narrative written. Hardware try-out on the next camera run |
 | P59_item_type_from_shopify_product_type | APPROVED | 2026-11-09 | opus | re-review r2 APPROVED_WITH_NOTES: F1/F2 resolved (fix `a5ce4ab`, 7 paths, all within r1's allowed files). Rust 863/0, UI 422/422, clippy/fmt/typecheck green; no new blocking item, nothing to triage; r1's 5 notes stay in backlog; narrative written. Live-store try-out on the next hands-on run |
 | P60_take_back_and_self_healing | NOT_STARTED | 2026-11-09 | orchestrator | evening check: no Capture One launch during take-back (#22), dialog and stuck camera service named (#23, #25), deleted files heal (#24, #26, changelog 43), recipe self-repair (10F §5) |
+| P61_storage_cleanup_and_budget | NOT_STARTED | 2026-11-09 | orchestrator | 10F part 1: duplicates after 24 h, preview exports once copied, masters after publish, Settings → Storage with a minimum free space (levels 1–3) |
+| P62_retention_after_publish | NOT_STARTED | 2026-11-09 | orchestrator | 10F part 2: published + clean items cleared after N days (RAWs incl.) after Shopify verification, shown from Shopify read-only, keep-files pin, budget levels 4–5 |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
@@ -164,7 +166,7 @@ P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[
 P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23] · P25[P24] · P26[P25] ·
 P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35] · P37[P36] · P38[P37] ·
 P39[P37] · P40[P39] · P41[P40,P38] · P42[P41] · P43[P42] · P44[P43] · P45[P44] · P46[P45] · P47[P46] · P48[P46] · P49[P48] · P50[P47,P49] ·
-P51[P50] · P52[P51] · P51b[P51] · P53[P51b] · P54[P53] · P55[P54] · P56[P55] · P57[P56] · P58[P57] · P59[P58] · P60[P59] (P53–P60: fixes from P52 run 1, orchestrator 2026-11-08; P52 run 2 after P55).
+P51[P50] · P52[P51] · P51b[P51] · P53[P51b] · P54[P53] · P55[P54] · P56[P55] · P57[P56] · P58[P57] · P59[P58] · P60[P59] · P61[P60] · P62[P61] (P53–P62: fixes from P52 run 1, orchestrator 2026-11-08; P52 run 2 after P55).
 - **Direct camera adapter (planner 2026-11-06; book 10E).** Order: the risky, hardware-free core first. P42 (the one-camera-layer-per-process
   rule, R-I18, which every later camera phase builds on; the sidecar supervisor over a fake sidecar binary; the new `CameraStatus`), P43 (the
   FTP receiver, MC-32), P44 (the capture ledger, MC-33, the single worker and the no-replace rename), P45 (the lab sidecar imported without any
