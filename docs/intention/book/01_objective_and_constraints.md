@@ -12,7 +12,7 @@ condition metafield.
 | # | Constraint | Why |
 |---|---|---|
 | H1 | Nothing is written to an external platform without an explicit, recorded confirmation by the photographer. | A wrong image on a live listing is a customer-facing defect. |
-| H2 | RAW files are never modified, moved or deleted by Session Manager. "Delete" in the UI hides a photo; bytes stay on disk. | Non-destructive; the capture folder belongs to the editing provider. |
+| H2 | RAW files are never modified, moved or deleted by Session Manager. **Exception (owner 2026-11-09, 10F):** published, clean items are cleared N days after publish, Shopify being the archive. "Delete" in the UI hides a photo; bytes stay on disk. | Non-destructive; the capture folder belongs to the editing provider. |
 | H3 | No pixel processing in this repo **except the composition renderer of 10D MC-28** (owner 2026-11-04): decode the editing provider's master, turn, flip, straighten, crop, resize, encode once, and make thumbnails. Styling, colour and light adjustments, masks and RAW development stay the editing provider's job (Capture One in the MVP) until a later owner decision. Copying an embedded JPEG out of a RAW is allowed; decoding a RAW is not. | Reuse; keeps the codebase small. Framing moved to the app so the final file is exactly the developed image, framed, compressed once. |
 | H4 | Every step is idempotent. After a crash at any point, resuming yields the same end state: no lost associations, no duplicate uploads. | Single operator, no engineer on site. |
 | H5 | No UI automation of other apps. External applications are driven only through interfaces they publish (Capture One: its AppleScript dictionary). | Breaks on every update otherwise. |

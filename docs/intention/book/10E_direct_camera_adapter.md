@@ -221,7 +221,7 @@ Port of the lab ledger's semantics (its 15 tests become unit tests of this mecha
   numbering are reported.
 - **First complete copy wins.** The key is the camera filename without server or retry suffixes (`__dupN`, `_N`) plus SHA-256. The first
   complete copy of a camera file, by either path, is moved into the target folder; a later identical copy is moved to
-  `<capture root>/.duplicates/` (ignored by MC-2), never counted, never a photo, never deleted. A same-name file with a different hash
+  `<capture root>/.duplicates/` (ignored by MC-2), never counted, never a photo; deleted 24 h after verification (10F, owner 2026-11-09). A same-name file with a different hash
   (camera counter reused) is a new photo, renamed with a `__dupN` suffix.
 - **Target folder.** `<capture root>/<folder key>/` (MC-2's per-session folders, MC-8 key, `_Unassigned` when no session) of the session
   **active at the matched exposure**, or, if no exposure matches, of the session active when the file completed. From there MC-2 applies
