@@ -89,6 +89,8 @@ pub struct PreviewService {
     render_hold: Mutex<Option<RenderHold>>,
     /// The RAWs the last missing-file check found gone (changelog 43).
     known_missing: Mutex<HashSet<String>>,
+    /// 10F §2: where a copied preview export is noted for the storage clean-up.
+    pub copied_exports: Option<Arc<crate::services::storage::CopiedExports>>,
 }
 
 type RenderHold = Arc<dyn Fn() -> bool + Send + Sync>;
@@ -121,6 +123,7 @@ impl PreviewService {
             before_render: Mutex::new(None),
             render_hold: Mutex::new(None),
             known_missing: Mutex::new(HashSet::new()),
+            copied_exports: None,
         }
     }
     /// Installs the take-back's hold (`true` while it holds Capture One).
@@ -412,6 +415,9 @@ impl PreviewService {
                 let dest = self
                     .files
                     .copy_adjusted(&entry.raw, entry.generation, output)?;
+                if let Some(copied) = &self.copied_exports {
+                    copied.note(output, &dest);
+                }
                 let dest_str = dest.to_string_lossy().into_owned();
                 let frame = self.imaging.dimensions(&dest)?;
                 let thumb = self.files.thumbnail_path(&entry.raw, entry.generation);

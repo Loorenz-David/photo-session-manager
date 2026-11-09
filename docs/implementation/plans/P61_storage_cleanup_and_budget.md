@@ -69,3 +69,15 @@ then shrinks a day later. Set the minimum free space above your current free spa
   for the three kinds above; tests use temp folders and a fake disk-free source. Default implementer (Codex).
 
 ## Review log
+
+- **2026-11-09 implement r1 (claude-opus for codex, PSM_IMPLEMENTER=claude).** Built a core `StorageService` (`crates/core/src/services/storage.rs`)
+  over a new `StorageFs` port (infra `storage_fs.rs`) and the clean-up decision `mechanisms::cleanup::plan_cleanup` (the plan's core mechanism, 4 unit
+  tests). Its own background thread ticks every 250 ms; it pauses while a capture download is expected, an FTP upload runs, a render is in flight,
+  the take-back holds Capture One, an export run is in flight or a publish item is active; batches of ≤ 20 files, 2 s pause. Duplicates: verified when a
+  filed delivery with the same SHA-256 is on disk (ledger hash, else hashed once, ≤ 4 per scan); age from the ledger's `completed_at`, file time for
+  files the ledger does not know. Preview exports: noted by the preview service after its copy (JPEG in a `_session_manager` folder only), deleted when
+  byte-identical to the cache copy; at start-up existing exports are matched against the cache by size + hash. Masters (MC-28) were already released
+  after publish/export (verified, C3 test); level 3 clears masters whose RAW no export run or active publish needs. Settings key `storage.min_free_gb`
+  (default 20, 0–100000; saved without a runtime rebuild); commands `storage_get`, `storage_min_free_set`; `StorageSection` in Settings and a
+  `DiskWarning` in the header; health code `disk_almost_full`. Deviations: `Header.tsx`, `globals.css`, `services/storage.ts`, `camera/runtime.rs`
+  (`capture_in_progress`), testkit `complete_preview_export`. Handoff: `handoffs/implementer/handoff_P61_storage_cleanup_and_budget_implement_r1.md`.

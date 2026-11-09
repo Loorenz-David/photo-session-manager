@@ -16,3 +16,4 @@ pub mod publish;
 pub mod review;
 pub mod sessions;
 pub mod settings;
+pub mod storage;

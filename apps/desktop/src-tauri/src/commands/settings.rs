@@ -112,3 +112,65 @@ pub async fn settings_set(
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
+
+/// Settings → Storage (10F §4): free space on the disk holding the capture root, the space each
+/// kind of file uses (computed in the background; `computed` false until the first pass), the
+/// minimum free space and, when levels 1–3 cannot reach it, the warning shown in the header.
+#[derive(Serialize, Deserialize, Type)]
+pub struct StorageDto {
+    pub computed: bool,
+    pub disk: String,
+    pub free_bytes: Option<f64>,
+    pub raws_bytes: f64,
+    pub duplicates_bytes: f64,
+    pub preview_exports_bytes: f64,
+    pub preview_cache_bytes: f64,
+    pub masters_bytes: f64,
+    pub min_free_gb: u32,
+    pub warning: Option<String>,
+}
+
+fn storage_dto(app: &psm_integrations::AppHandles) -> StorageDto {
+    let report = app.storage.report();
+    StorageDto {
+        computed: report.is_some(),
+        disk: report.as_ref().map(|r| r.disk.clone()).unwrap_or_default(),
+        free_bytes: report.as_ref().and_then(|r| r.free_bytes).map(|b| b as f64),
+        raws_bytes: report.as_ref().map_or(0.0, |r| r.raws_bytes as f64),
+        duplicates_bytes: report.as_ref().map_or(0.0, |r| r.duplicates_bytes as f64),
+        preview_exports_bytes: report
+            .as_ref()
+            .map_or(0.0, |r| r.preview_exports_bytes as f64),
+        preview_cache_bytes: report
+            .as_ref()
+            .map_or(0.0, |r| r.preview_cache_bytes as f64),
+        masters_bytes: report.as_ref().map_or(0.0, |r| r.masters_bytes as f64),
+        min_free_gb: app.settings.storage.min_free_gb,
+        warning: app.storage.warning(),
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn storage_get(state: State<'_, AppState>) -> Result<StorageDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    Ok(storage_dto(&app))
+}
+
+/// Saves the minimum free space (GB); the background job applies it at its next tick.
+#[tauri::command]
+#[specta::specta]
+pub async fn storage_min_free_set(
+    _state: State<'_, AppState>,
+    app_handle: AppHandle,
+    min_free_gb: u32,
+) -> Result<StorageDto, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        state.settings_set(&serde_json::json!({"storage": {"min_free_gb": min_free_gb}}))?;
+        let app = state.handles()?;
+        Ok(storage_dto(&app))
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}

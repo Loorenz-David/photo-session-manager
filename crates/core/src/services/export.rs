@@ -555,13 +555,7 @@ impl ExportService {
     /// needs keeps its master.
     pub fn release_masters(&self, session_id: i64) -> Result<()> {
         let state = self.state()?;
-        let in_use: HashSet<&str> = state
-            .runs
-            .values()
-            .flat_map(|run| run.targets.iter())
-            .filter(|t| t.progress != Progress::Copied)
-            .map(|t| t.raw.as_str())
-            .collect();
+        let in_use = Self::in_use(&state);
         let raws: BTreeSet<String> = self
             .store
             .photos_in_session(session_id)?
@@ -570,12 +564,38 @@ impl ExportService {
             .map(|p| p.raw_path)
             .collect();
         for raw in raws {
-            if in_use.contains(raw.as_str()) || state.masters.contains_key(&raw) {
+            if in_use.contains(raw.as_str()) {
                 continue;
             }
             self.render.masters.remove_all(&raw)?;
         }
         Ok(())
+    }
+
+    /// The RAWs whose master a run in flight still needs (a target not yet copied, or a master
+    /// render in flight); 10F §4 level 3 never clears those.
+    pub fn masters_in_use(&self) -> Result<HashSet<String>> {
+        let state = self.state()?;
+        Ok(Self::in_use(&state)
+            .into_iter()
+            .map(str::to_owned)
+            .collect())
+    }
+
+    /// Whether any export run (a local export or a publish's staging) is in flight.
+    pub fn running(&self) -> bool {
+        self.state().is_ok_and(|state| !state.runs.is_empty())
+    }
+
+    fn in_use(state: &State) -> HashSet<&str> {
+        state
+            .runs
+            .values()
+            .flat_map(|run| run.targets.iter())
+            .filter(|t| t.progress != Progress::Copied)
+            .map(|t| t.raw.as_str())
+            .chain(state.masters.keys().map(String::as_str))
+            .collect()
     }
 
     /// MC-28 §Master: masters are a cache, deleted once the export completes and the session is

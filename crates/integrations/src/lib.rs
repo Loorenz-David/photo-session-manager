@@ -46,6 +46,7 @@ use psm_core::{
         previews::PreviewService,
         publish::PublishService,
         settings::SettingsService,
+        storage::{CopiedExports, PREVIEW_EXPORT_FOLDER, StorageLocations, StorageService},
     },
 };
 use psm_infra::{
@@ -62,6 +63,7 @@ use psm_infra::{
     settings_file::Settings,
     spool::Spool,
     sqlite::store::SqliteStore,
+    storage_fs::LocalStorageFs,
     watcher::FsWatcher,
 };
 use std::{
@@ -101,6 +103,8 @@ pub struct App {
     pub events: Arc<EventHub>,
     pub history: Arc<History>,
     pub clock: Arc<dyn Clock>,
+    /// 10F part 1: duplicates, preview exports and masters cleared in the background (P61).
+    pub storage: Arc<StorageService>,
     scripting: Arc<dyn CaptureOneScripting>,
     lanes: Lanes,
     run_startup: bool,
@@ -110,6 +114,7 @@ pub struct App {
     camera_background: Option<thread::JoinHandle<()>>,
     publish_background: Option<thread::JoinHandle<()>>,
     render_background: Option<thread::JoinHandle<()>>,
+    storage_background: Option<thread::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
@@ -132,6 +137,7 @@ pub struct AppHandles {
     pub publish: Option<Arc<PublishService>>,
     pub events: Arc<EventHub>,
     pub history: Arc<History>,
+    pub storage: Arc<StorageService>,
     pub hooks_compiled: bool,
     pub nudge_running: bool,
 }
@@ -179,7 +185,7 @@ impl SettingsSetContext {
         Settings::set(&self.paths, &settings)?;
         let mut a = previous;
         let mut b = next;
-        for key in ["theme", "output_format"] {
+        for key in ["theme", "output_format", "storage"] {
             a[key] = serde_json::Value::Null;
             b[key] = serde_json::Value::Null;
         }
@@ -306,6 +312,10 @@ impl App {
     ) -> Result<(serde_json::Value, Option<App>)> {
         let old = match prepared {
             PreparedSettings::Simple(settings) => {
+                let min_free = settings.storage.min_free_bytes();
+                if min_free != self.storage.min_free_bytes() {
+                    self.storage.set_min_free_bytes(min_free);
+                }
                 self.settings = *settings;
                 self.export.set_format(self.settings.output_format);
                 self.camera_runtime
@@ -342,6 +352,7 @@ impl App {
             publish: self.publish.clone(),
             events: self.events.clone(),
             history: self.history.clone(),
+            storage: self.storage.clone(),
             hooks_compiled: self.hooks_compiled,
             nudge_running: self.nudge_port() != 0,
         }
@@ -582,6 +593,8 @@ impl App {
         previews.imaging = imaging.clone();
         previews.export_staging = Some(export.clone());
         previews.health = Some(health.clone());
+        let copied_exports = Arc::new(CopiedExports::default());
+        previews.copied_exports = Some(copied_exports.clone());
         let previews = Arc::new(previews);
         // P60 #22: while "Take the camera back" holds Capture One no render request leaves.
         let render_gate = lanes.gate.clone();
@@ -818,6 +831,70 @@ impl App {
         } else {
             None
         };
+        let storage = {
+            let document = settings.effective_document_id(&paths);
+            let disk = lanes.disk.clone();
+            let editing = editing.clone();
+            let gate = lanes.gate.clone();
+            let runtime = camera_runtime.clone();
+            let running_export = export.clone();
+            let publish_store = store.clone();
+            Arc::new(StorageService::new(
+                store.clone(),
+                Arc::new(LocalStorageFs::new(Arc::new(
+                    move |path: &std::path::Path| disk.query(path),
+                ))),
+                clock.clone(),
+                health.clone(),
+                events.clone(),
+                export.clone(),
+                StorageLocations {
+                    capture_root: document.join("Capture"),
+                    preview_exports: document.join("Output").join(PREVIEW_EXPORT_FOLDER),
+                    preview_cache: paths.root.join("previews"),
+                    masters: paths.root.join("masters"),
+                },
+                // 10F §6: never while a capture, an upload, a render, a take-back, an export
+                // or a publish is running.
+                Arc::new(move || {
+                    let reason = if runtime.capture_in_progress() {
+                        "capture"
+                    } else if runtime.uploads_in_progress() > 0 {
+                        "upload"
+                    } else if editing.renders_in_flight() > 0 {
+                        "render"
+                    } else if gate.is_held() {
+                        "take-back"
+                    } else if running_export.running() {
+                        "export"
+                    } else if publish_store
+                        .active_publish_items()
+                        .map_or(true, |items| !items.is_empty())
+                    {
+                        "publish"
+                    } else {
+                        return None;
+                    };
+                    Some(reason.to_owned())
+                }),
+                copied_exports,
+                settings.storage.min_free_bytes(),
+            ))
+        };
+        let storage_background = if run_startup {
+            let worker_stop = stop.clone();
+            let worker = storage.clone();
+            Some(thread::spawn(move || {
+                while !worker_stop.load(Ordering::Relaxed) {
+                    if let Err(error) = worker.tick() {
+                        tracing::warn!(%error, "storage clean-up deferred");
+                    }
+                    thread::sleep(Duration::from_millis(250));
+                }
+            }))
+        } else {
+            None
+        };
         camera_runtime.bind(AppBinding {
             store: store.clone(),
             events: events.clone(),
@@ -861,6 +938,7 @@ impl App {
             events,
             history,
             clock,
+            storage,
             scripting,
             lanes,
             run_startup,
@@ -870,6 +948,7 @@ impl App {
             camera_background,
             publish_background,
             render_background,
+            storage_background,
         })
     }
     pub fn nudge_port(&self) -> u16 {
@@ -943,6 +1022,9 @@ impl App {
             let _ = bg.join();
         }
         if let Some(bg) = self.render_background.take() {
+            let _ = bg.join();
+        }
+        if let Some(bg) = self.storage_background.take() {
             let _ = bg.join();
         }
     }

@@ -101,6 +101,9 @@ export const commands = {
 	notificationsList: (sessionId: CommandId | null) => typedError<NotificationDto[], CommandError>(__TAURI_INVOKE("notifications_list", { sessionId })),
 	settingsGet: () => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_get")),
 	settingsSet: (patch: SettingsPatchDto_Deserialize) => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_set", { patch })),
+	storageGet: () => typedError<StorageDto_Serialize, CommandError>(__TAURI_INVOKE("storage_get")),
+	/**  Saves the minimum free space (GB); the background job applies it at its next tick. */
+	storageMinFreeSet: (minFreeGb: number) => typedError<StorageDto_Serialize, CommandError>(__TAURI_INVOKE("storage_min_free_set", { minFreeGb })),
 };
 
 /* Types */
@@ -788,6 +791,49 @@ export type SettingsPatchDto_Serialize = {
 	theme?: string,
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
+};
+
+/**
+ *  Settings → Storage (10F §4): free space on the disk holding the capture root, the space each
+ *  kind of file uses (computed in the background; `computed` false until the first pass), the
+ *  minimum free space and, when levels 1–3 cannot reach it, the warning shown in the header.
+ */
+export type StorageDto = StorageDto_Serialize | StorageDto_Deserialize;
+
+/**
+ *  Settings → Storage (10F §4): free space on the disk holding the capture root, the space each
+ *  kind of file uses (computed in the background; `computed` false until the first pass), the
+ *  minimum free space and, when levels 1–3 cannot reach it, the warning shown in the header.
+ */
+export type StorageDto_Deserialize = {
+	computed: boolean,
+	disk: string,
+	free_bytes?: number | null,
+	raws_bytes: number | null,
+	duplicates_bytes: number | null,
+	preview_exports_bytes: number | null,
+	preview_cache_bytes: number | null,
+	masters_bytes: number | null,
+	min_free_gb: number,
+	warning?: string | null,
+};
+
+/**
+ *  Settings → Storage (10F §4): free space on the disk holding the capture root, the space each
+ *  kind of file uses (computed in the background; `computed` false until the first pass), the
+ *  minimum free space and, when levels 1–3 cannot reach it, the warning shown in the header.
+ */
+export type StorageDto_Serialize = {
+	computed: boolean,
+	disk: string,
+	free_bytes: number | null,
+	raws_bytes: number | null,
+	duplicates_bytes: number | null,
+	preview_exports_bytes: number | null,
+	preview_cache_bytes: number | null,
+	masters_bytes: number | null,
+	min_free_gb: number,
+	warning: string | null,
 };
 
 export type TakeBackAvailability = TakeBackAvailability_Serialize | TakeBackAvailability_Deserialize;

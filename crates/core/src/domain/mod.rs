@@ -10,6 +10,7 @@ pub mod output;
 pub mod photo;
 pub mod publish;
 pub mod session;
+pub mod storage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthItem {

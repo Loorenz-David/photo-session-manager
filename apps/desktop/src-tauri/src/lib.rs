@@ -650,6 +650,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::publish::notifications_list,
         commands::settings::settings_get,
         commands::settings::settings_set,
+        commands::settings::storage_get,
+        commands::settings::storage_min_free_set,
     ])
 }
 

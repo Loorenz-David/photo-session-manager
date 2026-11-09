@@ -1,7 +1,7 @@
 use crate::paths::AppPaths;
 use psm_core::{
     Error, Result,
-    domain::{camera::CameraSettings, output::OutputFormat},
+    domain::{camera::CameraSettings, output::OutputFormat, storage::StorageSettings},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -30,6 +30,8 @@ pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sku_prefix: Option<String>,
     pub integration: Option<serde_json::Value>,
+    /// 10F §4: the minimum free space (Settings → Storage; default 20 GB).
+    pub storage: StorageSettings,
 }
 
 fn deserialize_preview_delay<'de, D: serde::Deserializer<'de>>(
@@ -63,6 +65,7 @@ impl Default for Settings {
             theme: "light".into(),
             sku_prefix: None,
             integration: None,
+            storage: StorageSettings::default(),
         }
     }
 }

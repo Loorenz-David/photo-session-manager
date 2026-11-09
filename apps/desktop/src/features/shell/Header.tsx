@@ -14,6 +14,7 @@ import { NotificationsDrawer } from '@/features/publish/NotificationsDrawer';
 import { usePublish } from '@/features/publish/usePublish';
 import { PageHeader } from './PageHeader';
 import { HistoryButtons } from '@/features/history/HistoryButtons';
+import { DiskWarning } from '@/features/settings/StorageSection';
 
 type HeaderProps = {
   sessionId?: number;
@@ -139,6 +140,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
   if (sessionId === undefined) {
     return (
       <PageHeader title={<h1 className="app-title">Session Manager</h1>}>
+          <DiskWarning />
           <CameraDot />
           {bell}{drawer}
           <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => { window.location.hash = '#/settings'; }}><Settings /></Button>
@@ -165,6 +167,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
           </>
         )}
       </>}>
+        <DiskWarning />
         <CameraDot />
         <span className="header-divider" aria-hidden />
         <HistoryButtons sessionId={sessionId} />

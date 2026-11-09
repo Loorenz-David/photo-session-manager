@@ -377,6 +377,12 @@ impl CameraRuntime {
             .map(ReceiverHandle::uploads_in_progress)
             .unwrap_or(0)
     }
+    /// Whether a capture's Save-to-PC download is expected (10F §6: storage clean-up waits).
+    pub fn capture_in_progress(&self) -> bool {
+        self.direct
+            .get()
+            .is_some_and(|adapter| adapter.transfer_expected())
+    }
     pub fn receiver_generation(&self) -> u64 {
         self.receiver_generation.load(Ordering::SeqCst)
     }

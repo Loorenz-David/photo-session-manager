@@ -764,7 +764,31 @@ impl TestApp {
             .iter()
             .any(|(job, _, recipe)| job == job_id && *recipe == self.app.settings.master_recipe)
     }
+    /// Completes preview render `job_id` as Capture One does with the app's `PSM Preview` recipe:
+    /// the JPEG in `<document>/Output/_session_manager/` (10C; P61).
+    pub fn complete_preview_export(&self, job_id: &str) -> Result<PathBuf> {
+        let dir = self
+            .app
+            .settings
+            .effective_document_id(&self.app.paths)
+            .join("Output/_session_manager");
+        self.complete_render_in(
+            job_id,
+            &FakeCaptureOneScripting::output_bytes(job_id),
+            "jpg",
+            &dir,
+        )
+    }
     fn complete_render_as(&self, job_id: &str, bytes: &[u8], extension: &str) -> Result<PathBuf> {
+        self.complete_render_in(job_id, bytes, extension, &self.dir.path().join("Output"))
+    }
+    fn complete_render_in(
+        &self,
+        job_id: &str,
+        bytes: &[u8],
+        extension: &str,
+        dir: &Path,
+    ) -> Result<PathBuf> {
         let entry = self
             .app
             .editing
@@ -774,7 +798,7 @@ impl TestApp {
         // reports what Capture One reports.
         let (output, reported) = self.fake.write_output(
             &entry.raw,
-            &self.dir.path().join("Output"),
+            dir,
             extension,
             bytes,
             std::time::UNIX_EPOCH

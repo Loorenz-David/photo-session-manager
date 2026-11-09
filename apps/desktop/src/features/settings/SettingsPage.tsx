@@ -7,6 +7,7 @@ import { useAction, usePageData } from '@/lib/pending';
 import { getSettings, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
 import { CameraSection } from './CameraSection';
+import { StorageSection } from './StorageSection';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
@@ -138,5 +139,6 @@ export function SettingsPage() {
       {error && <p role="alert">{error}</p>}
       <div><Button type="submit" disabled={save.busy} aria-busy={save.busy ? 'true' : undefined}>Save settings{save.busy ? '…' : ''}</Button></div>
     </form>
+    <StorageSection />
   </main></>;
 }

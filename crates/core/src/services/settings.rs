@@ -48,6 +48,7 @@ impl SettingsService {
                 "integration",
                 "default_shape",
                 "camera",
+                "storage",
             ]
             .contains(&key.as_str())
             {
@@ -59,6 +60,9 @@ impl SettingsService {
                     .is_some_and(|s| std::path::Path::new(s).is_absolute())
             {
                 return Err(Error::RelativePath);
+            }
+            if key == "storage" && !valid_storage(value) {
+                return Err(Error::InvalidValue("storage".into()));
             }
             if key == "camera" && !valid_camera(value) {
                 return Err(Error::InvalidValue("camera".into()));
@@ -141,6 +145,15 @@ fn valid_camera(value: &Value) -> bool {
         return false;
     };
     start <= end && end - start + 1 >= 2 && !(start..=end).contains(&control)
+}
+
+/// `{"min_free_gb": 0..=100000}` (10F §4; 0 = no minimum).
+fn valid_storage(value: &Value) -> bool {
+    value.is_object()
+        && value
+            .get("min_free_gb")
+            .and_then(Value::as_u64)
+            .is_some_and(|gb| gb <= 100_000)
 }
 
 /// `{"long_edge": 512..=8192, "quality": 60..=100}`, both integers.

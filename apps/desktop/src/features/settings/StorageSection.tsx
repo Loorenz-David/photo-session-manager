@@ -1,0 +1,71 @@
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { getStorage, setMinFreeGb, type Storage } from '@/services/storage';
+
+/** Bytes as the photographer reads them: GB with one decimal from 1 GB, else whole MB. */
+export function formatBytes(bytes: number | null | undefined): string {
+  const value = bytes ?? 0;
+  return value >= 1e9 ? `${(value / 1e9).toFixed(1)} GB` : `${Math.round(value / 1e6)} MB`;
+}
+
+/** Re-reads the storage report every `everyMs` while mounted (the sizes are computed in the background). */
+function useStorage(everyMs: number): [Storage | null, (value: Storage) => void] {
+  const [storage, setStorage] = useState<Storage | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => { Promise.resolve().then(getStorage).then(value => { if (alive) setStorage(value); }).catch(() => undefined); };
+    load();
+    const timer = setInterval(load, everyMs);
+    return () => { alive = false; clearInterval(timer); };
+  }, [everyMs]);
+  return [storage, setStorage];
+}
+
+/** Settings → Storage (10F §4): one line per kind of file, and the minimum free space in GB. */
+export function StorageSection() {
+  const [storage, setStorage] = useStorage(5000);
+  const [minFree, setMinFree] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const shown = minFree ?? (storage ? String(storage.min_free_gb) : '');
+  const save = async () => {
+    const gb = Math.round(Number(shown));
+    if (!Number.isFinite(gb) || gb < 0) { toast.error('Enter the minimum free space in GB'); return; }
+    setBusy(true);
+    try {
+      setStorage(await setMinFreeGb(gb));
+      setMinFree(null);
+      toast.success(`Minimum free space set to ${gb} GB`);
+    } catch (error) {
+      toast.error(`Not saved: ${(error as Error).message ?? String(error)}`);
+    } finally { setBusy(false); }
+  };
+  return <section className="health-section flex max-w-xl flex-col gap-4" aria-label="Storage">
+    <h2>Storage</h2>
+    {!storage || !storage.computed ? <p>Calculating…</p> : <dl className="health-list">
+      <div className="health-row"><dt className="health-label">Free space{storage.disk ? ` on ${storage.disk}` : ''}</dt><dd className="health-detail">{storage.free_bytes == null ? 'Unknown' : formatBytes(storage.free_bytes)}</dd></div>
+      <div className="health-row"><dt className="health-label">RAW files</dt><dd className="health-detail">{formatBytes(storage.raws_bytes)}</dd></div>
+      <div className="health-row"><dt className="health-label">Duplicates</dt><dd className="health-detail">{formatBytes(storage.duplicates_bytes)}</dd></div>
+      <div className="health-row"><dt className="health-label">Capture One preview exports</dt><dd className="health-detail">{formatBytes(storage.preview_exports_bytes)}</dd></div>
+      <div className="health-row"><dt className="health-label">Previews</dt><dd className="health-detail">{formatBytes(storage.preview_cache_bytes)}</dd></div>
+      <div className="health-row"><dt className="health-label">Masters</dt><dd className="health-detail">{formatBytes(storage.masters_bytes)}</dd></div>
+    </dl>}
+    {storage?.warning && <p role="status">{storage.warning}</p>}
+    <div className="flex flex-col gap-1">
+      <label htmlFor="settings-min_free_gb">Minimum free space (GB)</label>
+      <div className="flex gap-2">
+        <Input id="settings-min_free_gb" type="number" min={0} value={shown} onChange={e => setMinFree(e.target.value)} />
+        <Button type="button" variant="outline" disabled={busy || !storage} onClick={() => void save()}>Save minimum</Button>
+      </div>
+      <p className="health-detail">Below it, duplicates, Capture One&apos;s preview exports and masters are cleared, in that order, until there is enough space again. RAW files are never cleared.</p>
+    </div>
+  </section>;
+}
+
+/** The header's warning while nothing more can be cleared safely (10F §4). */
+export function DiskWarning() {
+  const [storage] = useStorage(30000);
+  if (!storage?.warning) return null;
+  return <span className="disk-warning" role="status">{storage.warning}</span>;
+}
