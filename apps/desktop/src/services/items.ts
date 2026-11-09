@@ -17,9 +17,20 @@ export async function nextSku(): Promise<string | null> {
   return unwrap(await commands.itemsNextSku());
 }
 
-/** Creates a local item (its type is filled in later, in the form). */
-export async function createItem(args: { sku: string; title: string }): Promise<Item> {
-  return unwrap(await commands.itemCreate(args.sku, args.title, '', null));
+export async function createItem(args: { sku: string; title: string; itemType: string }): Promise<Item> {
+  return unwrap(await commands.itemCreate(args.sku, args.title, args.itemType, null));
+}
+
+export async function listItemTypes(): Promise<string[]> {
+  return unwrap(await commands.itemTypesList());
+}
+
+export async function setItemType(itemId: number, itemType: string): Promise<Item> {
+  return unwrap(await commands.itemTypeSet(itemId, itemType));
+}
+
+export async function refreshItem(itemId: number): Promise<Item> {
+  return unwrap(await commands.itemRefresh(itemId));
 }
 
 export async function adoptItem(externalId: string): Promise<Item> {

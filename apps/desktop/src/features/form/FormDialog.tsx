@@ -17,11 +17,12 @@ import {
   type FormField,
   type Group,
 } from '@/services/attributes';
-import type { Item } from '@/services/items';
+import { refreshItem, setItemType, type Item } from '@/services/items';
 import type { Photo } from '@/services/photos';
 import { displayOrder } from '@/features/workspace/order';
 import { CustomizeMode } from './CustomizeMode';
 import { IdentityEditor } from './IdentityEditor';
+import { ItemTypePicker, useItemTypes } from './ItemTypePicker';
 import { MediaColumn } from './MediaColumn';
 import { MetafieldInput } from './MetafieldInput';
 import { ResearchPanel } from './ResearchPanel';
@@ -78,11 +79,39 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const state = useFormState(item.id);
   const { form } = state;
   const [step, setStep] = useState<Group>('details');
+  const [itemType, setLocalItemType] = useState(item.item_type);
+  const [savedType, setSavedType] = useState(item.item_type);
+  const { types, failed: typesFailed } = useItemTypes(true);
   const [customizing, setCustomizing] = useState(false);
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [research, setResearch] = useState<{ open: boolean; focus: string | null }>({ open: false, focus: null });
   const actionQueue = useRef<Promise<unknown>>(Promise.resolve());
   const closing = useRef(false);
+
+  useEffect(() => {
+    if (item.origin !== 'linked') return;
+    let alive = true;
+    refreshItem(item.id).then(refreshed => {
+      if (alive && refreshed.item_type !== item.item_type) {
+        setLocalItemType(refreshed.item_type);
+        setSavedType(refreshed.item_type);
+        void state.reload();
+        onItemChanged();
+      }
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [item.id]);
+
+  async function commitType(value: string) {
+    if (types?.length && !types.includes(value)) return;
+    try {
+      await state.flush();
+      await setItemType(item.id, value);
+      setSavedType(value);
+      await state.reload();
+      onItemChanged();
+    } catch (error) { toast.error(`Could not save item type: ${(error as Error).message}`); }
+  }
 
   useEffect(() => {
     if (!customizing) return;
@@ -140,7 +169,15 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
         <span className="grid size-8 place-content-center rounded-lg border" aria-hidden>
           <ClipboardList className="size-4" />
         </span>
-        <DialogTitle className="text-lg font-bold">{item.item_type || item.title || 'Product details'}</DialogTitle>
+        <DialogTitle className="text-lg font-bold">{itemType || item.title || 'Product details'}</DialogTitle>
+        <ItemTypePicker id="form-item-type" value={itemType} types={types} failed={typesFailed}
+          onChange={value => {
+            setLocalItemType(value);
+            if (types?.includes(value)) void commitType(value);
+          }} onBlur={() => {
+            if (!types?.length) void commitType(itemType);
+            else if (!types.includes(itemType)) setLocalItemType(savedType);
+          }} />
         <IdentityEditor item={item} onSaved={onItemChanged} />
         <DialogDescription className="sr-only">Product details of {item.sku}</DialogDescription>
         <span className="text-xs text-muted-foreground" role="status">
@@ -165,7 +202,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
       {form && <StepTabs groups={form.groups} step={step} onStep={setStep} />}
 
       {customizing ? (
-        <CustomizeMode key={step} itemType={item.item_type} group={step} definitions={definitions} onDone={finishCustomizing} />
+        <CustomizeMode key={step} itemType={itemType} group={step} definitions={definitions} onDone={finishCustomizing} />
       ) : (
         <>
           <div className="flex min-h-0 flex-1">

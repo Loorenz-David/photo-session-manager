@@ -62,6 +62,7 @@ pub struct RemoteMedia {
 pub struct RemoteItem {
     pub external_id: String,
     pub title: String,
+    pub item_type: Option<String>,
     pub sku: Option<String>,
     pub barcode: Option<String>,
     pub thumbnail_url: Option<String>,
@@ -128,6 +129,7 @@ pub struct PublishItem {
     pub session_id: i64,
     pub create_item: bool,
     pub title: String,
+    pub frozen_item_type: String,
     pub frozen_main: Vec<i64>,
     pub frozen_condition: Vec<i64>,
     pub frozen_attributes: std::collections::BTreeMap<String, Json>,

@@ -76,6 +76,7 @@ fn c1a_open_creates_all_domain_columns() {
                 "last_synced_at",
                 "create_pending",
                 "tags_base",
+                "item_type_base",
             ],
         ),
         (
@@ -233,6 +234,7 @@ fn c1a_open_creates_all_domain_columns() {
                 "total",
                 "error",
                 "finished_at",
+                "frozen_item_type",
             ],
         ),
         (

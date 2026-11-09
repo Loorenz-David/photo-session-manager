@@ -589,6 +589,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::health::health_get,
         commands::health::app_paths_get,
         commands::items::item_create,
+        commands::items::item_types_list,
+        commands::items::item_type_set,
+        commands::items::item_refresh,
         commands::items::item_adopt,
         commands::items::item_update_identity,
         commands::items::items_search,
@@ -1669,5 +1672,65 @@ mod p29_tests {
         assert_eq!(error["code"], "needs_review");
         assert_eq!(error["data"]["photos"], "Main 02");
         assert_eq!(error["message"], "Re-frame first: Main 02");
+    }
+}
+
+#[cfg(test)]
+mod p59_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+
+    #[test]
+    fn c2a_item_types_list_returns_sorted_distinct_shop_types() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        for (sku, kind) in [
+            ("L1", "Lamps"),
+            ("C1", "Chairs"),
+            ("E1", ""),
+            ("L2", "Lamps"),
+        ] {
+            let id = a.fake_shop().add_product(sku, sku, None);
+            a.fake_shop()
+                .state
+                .lock()
+                .unwrap()
+                .products
+                .iter_mut()
+                .find(|p| p.external_id == id)
+                .unwrap()
+                .item_type = Some(kind.into());
+        }
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![commands::items::item_types_list])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let response = get_ipc_response(
+            &window,
+            InvokeRequest {
+                cmd: "item_types_list".into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(json!({})),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .unwrap();
+        let value: Value = match response {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw reply"),
+        };
+        assert_eq!(value, json!(["Chairs", "Lamps"]));
     }
 }

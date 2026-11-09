@@ -337,6 +337,7 @@ fn shopify_mutation_log(run_id_app: &TestApp) -> (String, i64) {
                 "PSM-PROBE-SKU-1",
                 Some("4006381333931"),
                 "PSM-PROBE product (Session Manager grounding probe)",
+                "",
             )
             .unwrap();
     });

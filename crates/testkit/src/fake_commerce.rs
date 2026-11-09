@@ -106,6 +106,7 @@ impl FakeCommerce {
         s.products.push(RemoteItem {
             external_id: id.clone(),
             title: title.into(),
+            item_type: None,
             sku: Some(sku.into()),
             barcode: barcode.map(Into::into),
             thumbnail_url: None,
@@ -237,6 +238,21 @@ impl CommerceAdapter for FakeCommerce {
             .cloned()
             .ok_or_else(|| Error::NotFound(id.into()))
     }
+    fn item_types(&self) -> Result<Vec<String>> {
+        self.read("item_types")?;
+        let mut types: Vec<_> = self
+            .state
+            .lock()
+            .unwrap()
+            .products
+            .iter()
+            .filter_map(|p| p.item_type.clone())
+            .filter(|t| !t.is_empty())
+            .collect();
+        types.sort();
+        types.dedup();
+        Ok(types)
+    }
     fn product_fields(&self, id: &str) -> Result<(Vec<String>, Option<String>)> {
         self.read("product_fields")?;
         let s = self.state.lock().unwrap();
@@ -251,8 +267,19 @@ impl CommerceAdapter for FakeCommerce {
         sku: &str,
         barcode: Option<&str>,
         title: &str,
+        item_type: &str,
     ) -> Result<String> {
         let id = self.add_product(sku, title, barcode);
+        if !item_type.is_empty() {
+            self.state
+                .lock()
+                .unwrap()
+                .products
+                .iter_mut()
+                .find(|p| p.external_id == id)
+                .unwrap()
+                .item_type = Some(item_type.into());
+        }
         self.effect(run, "item_create")?;
         Ok(id)
     }
@@ -516,6 +543,14 @@ impl CommerceAdapter for FakeCommerce {
         }
         drop(s);
         self.effect(run, "update_title")
+    }
+    fn update_item_type(&self, run: &ConfirmedRun, id: &str, item_type: &str) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        if let Some(p) = s.products.iter_mut().find(|p| p.external_id == id) {
+            p.item_type = Some(item_type.into());
+        }
+        drop(s);
+        self.effect(run, "update_item_type")
     }
     fn update_description(&self, run: &ConfirmedRun, id: &str, paragraphs: &str) -> Result<()> {
         self.state.lock().unwrap().descriptions.insert(

@@ -13,7 +13,7 @@ vi.mock('@/services/sessions', async importOriginal => ({
   deactivateSession: vi.fn(),
   previewUrl: (path: string) => `asset://${path}`,
 }));
-vi.mock('@/services/items', () => ({ searchItems: vi.fn(), searchItemsShop: vi.fn(), nextSku: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn() }));
+vi.mock('@/services/items', () => ({ searchItems: vi.fn(), searchItemsShop: vi.fn(), nextSku: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn(), listItemTypes: vi.fn(async () => { throw { code: 'no_integration' }; }), refreshItem: vi.fn() }));
 vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(), cameraRetry: vi.fn() }));
 vi.mock('@/services/events', () => ({
   onSessionsChanged: vi.fn(async () => () => undefined),
@@ -236,7 +236,7 @@ describe('C5 new session', () => {
 
     await waitFor(() => expect(window.location.hash).toBe('#/session/42'));
     expect(createItem).toHaveBeenCalledTimes(1);
-    expect(createItem).toHaveBeenCalledWith({ sku: 'BFL-1', title: 'Brass floor lamp' });
+    expect(createItem).toHaveBeenCalledWith({ sku: 'BFL-1', title: 'Brass floor lamp', itemType: '' });
     expect(createSession).toHaveBeenCalledWith(17);
     expect(vi.mocked(createItem).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(createSession).mock.invocationCallOrder[0]);
     expect(await screen.findByText('Ready for the first photo')).toBeInTheDocument();

@@ -456,6 +456,7 @@ impl CommerceAdapter for ShopifyAdapter {
             items.push(RemoteItem {
                 external_id: product.id,
                 title: product.title,
+                item_type: product.product_type,
                 sku: Some(variant_sku),
                 barcode: variant.barcode(),
                 thumbnail_url: product
@@ -503,6 +504,7 @@ impl CommerceAdapter for ShopifyAdapter {
             found.push(RemoteItem {
                 external_id: id.into(),
                 title: product["title"].as_str().unwrap_or_default().into(),
+                item_type: product["productType"].as_str().map(str::to_owned),
                 sku: Some(sku.into()),
                 barcode: variant["barcodes"]["nodes"][0]["value"]
                     .as_str()
@@ -522,6 +524,7 @@ impl CommerceAdapter for ShopifyAdapter {
         Ok(RemoteItem {
             external_id: product.id.clone(),
             title: product.title.clone(),
+            item_type: product.product_type.clone(),
             sku: variant.and_then(VariantNode::sku),
             barcode: variant.and_then(VariantNode::barcode),
             thumbnail_url: product
@@ -539,12 +542,32 @@ impl CommerceAdapter for ShopifyAdapter {
         Ok((product.tags, product.description_html))
     }
 
+    fn item_types(&self) -> Result<Vec<String>> {
+        let mut after: Option<String> = None;
+        let mut types = std::collections::BTreeSet::new();
+        loop {
+            let data = self.call(graphql::PRODUCT_TYPES, json!({"after": after}))?;
+            let page = &data["productTypes"];
+            let nodes: Vec<String> = parse(&page["nodes"], "product types")?;
+            types.extend(nodes.into_iter().filter(|name| !name.trim().is_empty()));
+            if page["pageInfo"]["hasNextPage"] != true {
+                break;
+            }
+            after = page["pageInfo"]["endCursor"].as_str().map(str::to_owned);
+            if after.is_none() {
+                return Err(errors::provider("product types", "missing page cursor"));
+            }
+        }
+        Ok(types.into_iter().collect())
+    }
+
     fn item_create(
         &self,
         run: &ConfirmedRun,
         sku: &str,
         barcode: Option<&str>,
         title: &str,
+        item_type: &str,
     ) -> Result<String> {
         let mut variant = json!({
             "optionValues": [{ "optionName": "Title", "name": "Default Title" }],
@@ -553,12 +576,15 @@ impl CommerceAdapter for ShopifyAdapter {
         if let Some(barcode) = barcode {
             variant["barcodes"] = json!([{ "value": barcode }]);
         }
-        let input = json!({
+        let mut input = json!({
             "title": title,
             "status": "DRAFT",
             "productOptions": [{ "name": "Title", "values": [{ "name": "Default Title" }] }],
             "variants": [variant],
         });
+        if !item_type.is_empty() {
+            input["productType"] = json!(item_type);
+        }
         let data = self.mutate(
             run,
             "item_create",
@@ -1052,6 +1078,19 @@ impl CommerceAdapter for ShopifyAdapter {
             run,
             "update_title",
             json!({ "id": external_id, "title": title }),
+        )
+    }
+
+    fn update_item_type(
+        &self,
+        run: &ConfirmedRun,
+        external_id: &str,
+        item_type: &str,
+    ) -> Result<()> {
+        self.update_product(
+            run,
+            "update_item_type",
+            json!({ "id": external_id, "productType": item_type }),
         )
     }
 

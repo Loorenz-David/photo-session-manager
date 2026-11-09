@@ -68,6 +68,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/006_camera_ledger.sql")),
             M::up(include_str!("migrations/007_style_applied.sql")),
             M::up(include_str!("migrations/008_settings_fingerprint.sql")),
+            M::up(include_str!("migrations/009_publish_item_type.sql")),
         ]
     }
 
@@ -445,11 +446,12 @@ type PublishItemRow = (
     i64,
     Option<String>,
     Option<i64>,
+    String,
 );
 fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
     let row: PublishItemRow = conn.query_row(
-        "SELECT id,run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,failed_step,uploaded,total,error,(SELECT CAST(value AS INTEGER) FROM settings WHERE key='publish_export:'||publish_items.id) FROM publish_items WHERE id=?1", [id],
-        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?,r.get(8)?,r.get(9)?,r.get(10)?,r.get(11)?,r.get(12)?,r.get(13)?,r.get(14)?,r.get(15)?))
+        "SELECT id,run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,failed_step,uploaded,total,error,(SELECT CAST(value AS INTEGER) FROM settings WHERE key='publish_export:'||publish_items.id),frozen_item_type FROM publish_items WHERE id=?1", [id],
+        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?,r.get(8)?,r.get(9)?,r.get(10)?,r.get(11)?,r.get(12)?,r.get(13)?,r.get(14)?,r.get(15)?,r.get(16)?))
     ).optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("publish item {id}")))?;
     Ok(PublishItem {
         id: row.0,
@@ -457,6 +459,7 @@ fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
         session_id: row.2,
         create_item: row.3,
         title: row.4.unwrap_or_default(),
+        frozen_item_type: row.16,
         frozen_main: from_json(row.5.as_deref().unwrap_or("[]"))?,
         frozen_condition: from_json(row.6.as_deref().unwrap_or("[]"))?,
         frozen_attributes: from_json(row.7.as_deref().unwrap_or("{}"))?,
@@ -638,6 +641,15 @@ impl StoreTx for SqliteTx<'_> {
             .map_err(db)?;
         Ok(())
     }
+    fn update_item_type(&mut self, id: i64, item_type: &str, at: i64) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE items SET item_type=?1,updated_at=?2 WHERE id=?3",
+                params![item_type, at, id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
     fn item_has_photos(&self, item_id: i64) -> Result<bool> {
         self.tx.query_row("SELECT EXISTS(SELECT 1 FROM photos JOIN sessions ON sessions.id=photos.session_id WHERE sessions.item_id=?1)", [item_id], |r| r.get(0)).map_err(db)
     }
@@ -681,8 +693,8 @@ impl StoreTx for SqliteTx<'_> {
         Ok(self.tx.last_insert_rowid())
     }
     fn insert_publish_item(&mut self, item: &PublishItem) -> Result<i64> {
-        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11)",
-            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total]).map_err(db)?;
+        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total,frozen_item_type) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11,?12)",
+            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total,item.frozen_item_type]).map_err(db)?;
         Ok(self.tx.last_insert_rowid())
     }
     fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>> {
@@ -1802,14 +1814,14 @@ impl Store for SqliteStore {
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        conn.query_row("SELECT item_id,integration,external_id,external_url,last_synced_at,create_pending,tags_base FROM item_links WHERE item_id=?1 AND integration=?2",params![item_id,integration],|r| Ok(psm_core::domain::item::ItemLink{item_id:r.get(0)?,integration:r.get(1)?,external_id:r.get(2)?,external_url:r.get(3)?,last_synced_at:r.get(4)?,create_pending:r.get(5)?,tags_base:r.get(6)?})).optional().map_err(db)
+        conn.query_row("SELECT item_id,integration,external_id,external_url,last_synced_at,create_pending,tags_base,item_type_base FROM item_links WHERE item_id=?1 AND integration=?2",params![item_id,integration],|r| Ok(psm_core::domain::item::ItemLink{item_id:r.get(0)?,integration:r.get(1)?,external_id:r.get(2)?,external_url:r.get(3)?,last_synced_at:r.get(4)?,create_pending:r.get(5)?,tags_base:r.get(6)?,item_type_base:r.get(7)?})).optional().map_err(db)
     }
     fn all_item_links(&self, integration: &str) -> Result<Vec<psm_core::domain::item::ItemLink>> {
         let conn = self
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let mut stmt=conn.prepare("SELECT item_id,integration,external_id,external_url,last_synced_at,create_pending,tags_base FROM item_links WHERE integration=?1 ORDER BY item_id").map_err(db)?;
+        let mut stmt=conn.prepare("SELECT item_id,integration,external_id,external_url,last_synced_at,create_pending,tags_base,item_type_base FROM item_links WHERE integration=?1 ORDER BY item_id").map_err(db)?;
         stmt.query_map([integration], |r| {
             Ok(psm_core::domain::item::ItemLink {
                 item_id: r.get(0)?,
@@ -1819,6 +1831,7 @@ impl Store for SqliteStore {
                 last_synced_at: r.get(4)?,
                 create_pending: r.get(5)?,
                 tags_base: r.get(6)?,
+                item_type_base: r.get(7)?,
             })
         })
         .map_err(db)?
@@ -1832,6 +1845,17 @@ impl Store for SqliteStore {
             .execute(
                 "UPDATE item_links SET tags_base=?3 WHERE item_id=?1 AND integration=?2",
                 params![item_id, integration, to_json(tags)?],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn set_item_type_base(&self, item_id: i64, integration: &str, item_type: &str) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE item_links SET item_type_base=?3 WHERE item_id=?1 AND integration=?2",
+                params![item_id, integration, item_type],
             )
             .map_err(db)?;
         Ok(())

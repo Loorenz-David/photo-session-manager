@@ -1406,7 +1406,13 @@ mod steps {
             format!("{:?}", adapter.item_search(sku).map(|v| v.len())),
         );
         let id = adapter
-            .item_create(&run, sku, Some(PROBE_BARCODE), "PSM-PROBE smoke product")
+            .item_create(
+                &run,
+                sku,
+                Some(PROBE_BARCODE),
+                "PSM-PROBE smoke product",
+                "",
+            )
             .expect("create");
         probe.ledger_add("products", &id);
         let found = adapter.item_search(sku).unwrap();

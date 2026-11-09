@@ -31,6 +31,7 @@ pub struct ItemLink {
     pub last_synced_at: Option<i64>,
     pub create_pending: bool,
     pub tags_base: Option<String>,
+    pub item_type_base: Option<String>,
 }
 
 pub struct NewItem<'a> {

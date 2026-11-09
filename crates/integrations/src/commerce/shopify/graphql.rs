@@ -6,10 +6,10 @@
 
 pub const DEFINITIONS: &str = "query Definitions($after: String) { metafieldDefinitions(ownerType: PRODUCT, first: 50, after: $after) { pageInfo { hasNextPage endCursor } nodes { id namespace key name description type { name } validations { name value } access { admin } } } }";
 
-pub const PRODUCT_READ: &str = "query ProductRead($id: ID!) { product(id: $id) { id title status tags descriptionHtml variants(first: 5) { nodes { id sku barcodes(first: 5) { nodes { value type } } inventoryItem { sku } } } media(first: 50) { nodes { id status alt mediaContentType ... on MediaImage { image { url } originalSource { url } } } } } }";
+pub const PRODUCT_READ: &str = "query ProductRead($id: ID!) { product(id: $id) { id title productType status tags descriptionHtml variants(first: 5) { nodes { id sku barcodes(first: 5) { nodes { value type } } inventoryItem { sku } } } media(first: 50) { nodes { id status alt mediaContentType ... on MediaImage { image { url } originalSource { url } } } } } }";
 
-pub const VARIANT_SEARCH: &str = "query VariantSearch($query: String!) { productVariants(first: 10, query: $query) { nodes { id sku barcodes(first: 5) { nodes { value } } product { id title status featuredMedia { preview { image { url } } } } } } }";
-pub const TITLE_SEARCH: &str = "query TitleSearch($query: String!) { products(first: 20, query: $query) { nodes { id title featuredMedia { preview { image { url } } } variants(first: 1) { nodes { sku barcodes(first: 5) { nodes { value } } inventoryItem { sku } } } } } }";
+pub const VARIANT_SEARCH: &str = "query VariantSearch($query: String!) { productVariants(first: 10, query: $query) { nodes { id sku barcodes(first: 5) { nodes { value } } product { id title productType status featuredMedia { preview { image { url } } } } } } }";
+pub const TITLE_SEARCH: &str = "query TitleSearch($query: String!) { products(first: 20, query: $query) { nodes { id title productType featuredMedia { preview { image { url } } } variants(first: 1) { nodes { sku barcodes(first: 5) { nodes { value } } inventoryItem { sku } } } } } }";
 
 pub const METAFIELDS_READ: &str = "query MetafieldsRead($id: ID!, $after: String) { product(id: $id) { metafields(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { namespace key type value } } } }";
 pub const CONDITION_METAFIELD_READ: &str = "query ConditionMetafieldRead($id: ID!, $namespace: String!, $key: String!) { product(id: $id) { metafield(namespace: $namespace, key: $key) { value } } }";
@@ -48,3 +48,5 @@ pub const ITEM_SET_IDENTITY: &str = "mutation ItemSetIdentity($productId: ID!, $
 pub const PRODUCT_DELETE: &str = "mutation ProductDelete($id: ID!) { productDelete(input: {id: $id}, synchronous: true) { deletedProductId userErrors { field message } } }";
 
 pub const PRODUCT_UPDATE: &str = "mutation ProductUpdateTags($product: ProductUpdateInput!) { productUpdate(product: $product) { product { id tags title descriptionHtml } userErrors { field message } } }";
+
+pub const PRODUCT_TYPES: &str = "query ProductTypes($after: String) { productTypes(first: 250, after: $after) { pageInfo { hasNextPage endCursor } nodes } }";

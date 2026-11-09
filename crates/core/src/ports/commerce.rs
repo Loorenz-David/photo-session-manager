@@ -33,6 +33,7 @@ pub trait CommerceAdapter: Send + Sync {
     fn item_find(&self, query: &str) -> Result<Vec<RemoteItem>>;
     /// The item's identity and its gallery media in order.
     fn item_get(&self, external_id: &str) -> Result<RemoteItem>;
+    fn item_types(&self) -> Result<Vec<String>>;
     /// Current product fields used for the confirmed description and three-way tag merge.
     fn product_fields(&self, external_id: &str) -> Result<(Vec<String>, Option<String>)>;
     /// The exact description representation stored by this platform.
@@ -44,6 +45,7 @@ pub trait CommerceAdapter: Send + Sync {
         sku: &str,
         barcode: Option<&str>,
         title: &str,
+        item_type: &str,
     ) -> Result<String>;
     /// Writes only the identity fields that differ (a `None` barcode is never sent) and returns
     /// the read-back (05B MC-22).
@@ -113,6 +115,12 @@ pub trait CommerceAdapter: Send + Sync {
     fn poll_file(&self, file_id: &str) -> Result<()>;
 
     fn update_title(&self, run: &ConfirmedRun, external_id: &str, title: &str) -> Result<()>;
+    fn update_item_type(
+        &self,
+        run: &ConfirmedRun,
+        external_id: &str,
+        item_type: &str,
+    ) -> Result<()>;
     /// Sends the description (blank-line-separated paragraphs) as HTML (07A MC-13).
     fn update_description(
         &self,

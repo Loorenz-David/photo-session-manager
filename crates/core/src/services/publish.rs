@@ -401,6 +401,7 @@ impl PublishService {
                     session_id: p.session_id,
                     create_item: p.create_item,
                     title: item.title,
+                    frozen_item_type: item.item_type,
                     frozen_main: p.main.clone(),
                     frozen_condition: p.condition.clone(),
                     frozen_attributes: attrs,
@@ -589,6 +590,7 @@ impl PublishService {
                     &local.sku,
                     local.barcode.as_deref(),
                     &item.title,
+                    &item.frozen_item_type,
                 )?,
                 1 => matches[0].external_id.clone(),
                 _ => return Err(Error::SeveralProductsCarrySku { sku: local.sku }),
@@ -1030,8 +1032,43 @@ impl PublishService {
             }
         }
         let remote = self.commerce.item_get(&external)?;
+        let type_base = self
+            .store
+            .item_link(local.id, "shopify")?
+            .and_then(|link| link.item_type_base);
+        let type_untouched = type_base
+            .as_deref()
+            .map_or(local.item_type.is_empty(), |base| base == local.item_type);
+        let sync_remote_type = type_untouched
+            && remote
+                .item_type
+                .as_deref()
+                .is_some_and(|kind| kind != local.item_type);
+        if sync_remote_type {
+            let remote_type = remote.item_type.as_deref().unwrap();
+            crate::services::items::ItemsService::new(self.store.as_ref(), self.clock.as_ref())
+                .set_type(local.id, remote_type)?;
+            self.store
+                .set_item_type_base(local.id, "shopify", remote_type)?;
+        }
         if remote.title != item.title {
             self.commerce.update_title(run, &external, &item.title)?;
+        }
+        if !sync_remote_type
+            && !item.frozen_item_type.is_empty()
+            && remote.item_type.as_deref() != Some(item.frozen_item_type.as_str())
+        {
+            self.commerce
+                .update_item_type(run, &external, &item.frozen_item_type)?;
+            if self.commerce.item_get(&external)?.item_type.as_deref()
+                != Some(item.frozen_item_type.as_str())
+            {
+                return Err(Error::InvalidData("item type read-back mismatch".into()));
+            }
+        }
+        if !sync_remote_type && !item.frozen_item_type.is_empty() {
+            self.store
+                .set_item_type_base(local.id, "shopify", &item.frozen_item_type)?;
         }
         if remote.sku.as_deref() != Some(&local.sku)
             || local

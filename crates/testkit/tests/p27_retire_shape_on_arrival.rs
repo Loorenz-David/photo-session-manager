@@ -357,6 +357,10 @@ fn c4a_migration_removes_old_jobs_and_health_codes() {
             .unwrap();
         conn.execute("ALTER TABLE raw_state DROP COLUMN settings_fingerprint", [])
             .unwrap();
+        conn.execute("ALTER TABLE publish_items DROP COLUMN frozen_item_type", [])
+            .unwrap();
+        conn.execute("ALTER TABLE item_links DROP COLUMN item_type_base", [])
+            .unwrap();
         conn.pragma_update(None, "user_version", 2).unwrap();
     }
     a.kill_and_restart().unwrap();

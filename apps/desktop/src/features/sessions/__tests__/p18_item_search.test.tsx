@@ -5,7 +5,7 @@ import { NewSessionDialog, ITEM_SEARCH_DEBOUNCE_MS, SHOP_SEARCH_DEBOUNCE_MS } fr
 import { ItemPickerDialog } from '@/features/workspace/PickerDialogs';
 import { nextSku, searchItems, searchItemsShop, type Item } from '@/services/items';
 
-vi.mock('@/services/items', () => ({ nextSku: vi.fn(), searchItems: vi.fn(), searchItemsShop: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn() }));
+vi.mock('@/services/items', () => ({ nextSku: vi.fn(), searchItems: vi.fn(), searchItemsShop: vi.fn(), createItem: vi.fn(), adoptItem: vi.fn(), listItemTypes: vi.fn(async () => { throw { code: 'no_integration' }; }), refreshItem: vi.fn() }));
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
 Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 

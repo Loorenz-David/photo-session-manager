@@ -237,7 +237,7 @@ fn c3a_create_draft_with_sku_and_barcode() {
     let title = "PSM-PROBE product (Session Manager grounding probe)";
     let id = shop
         .adapter
-        .item_create(&run, PROBE_SKU, Some(PROBE_BARCODE), title)
+        .item_create(&run, PROBE_SKU, Some(PROBE_BARCODE), title, "")
         .unwrap();
     assert_eq!(id, PRODUCT);
     // The recorded request is the SV-7 shape: exactly the variables the probe sent.

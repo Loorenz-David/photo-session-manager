@@ -72,6 +72,7 @@ pub trait StoreTx {
     ) -> Result<()>;
     /// Sets the item's title (its one home, ch05) and its `updated_at`.
     fn update_item_title(&mut self, id: i64, title: &str, at: i64) -> Result<()>;
+    fn update_item_type(&mut self, id: i64, item_type: &str, at: i64) -> Result<()>;
     fn item_has_photos(&self, item_id: i64) -> Result<bool>;
     fn insert_session(&mut self, item_id: i64, at: i64) -> Result<i64>;
     fn insert_item_link(
@@ -237,6 +238,7 @@ pub trait Store: Send + Sync {
     ) -> Result<Option<crate::domain::item::ItemLink>>;
     fn all_item_links(&self, integration: &str) -> Result<Vec<crate::domain::item::ItemLink>>;
     fn set_item_tags_base(&self, item_id: i64, integration: &str, tags: &[String]) -> Result<()>;
+    fn set_item_type_base(&self, item_id: i64, integration: &str, item_type: &str) -> Result<()>;
     fn definition_links(&self, integration: &str) -> Result<Vec<(String, DefinitionLink)>>;
     fn publish_item(&self, item_id: i64) -> Result<PublishItem>;
     fn active_publish_items(&self) -> Result<Vec<i64>>;

@@ -1,6 +1,7 @@
 use crate::{
     Error, Result,
     domain::{
+        attribute::Provenance,
         item::{Item, ItemOrigin, NewItem},
         session::SessionDto,
     },
@@ -87,7 +88,7 @@ impl<'a> ItemsService<'a> {
                     folder_key: folder_key(&sku)?,
                     sku,
                     barcode: hit.barcode,
-                    item_type: String::new(),
+                    item_type: hit.item_type.unwrap_or_default(),
                     title: hit.title,
                     origin: ItemOrigin::Linked,
                     external_id: Some(hit.external_id),
@@ -181,13 +182,16 @@ impl<'a> ItemsService<'a> {
                 sku: &sku,
                 folder_key: &key,
                 barcode: hit.barcode.as_deref(),
-                item_type: "",
+                item_type: hit.item_type.as_deref().unwrap_or(""),
                 title: &hit.title,
                 origin: "linked",
                 at,
             })?;
             tx.insert_item_link(id, "shopify", external_id, None)
         })?;
+        if let Some(item_type) = hit.item_type.as_deref() {
+            self.store.set_item_type_base(id, "shopify", item_type)?;
+        }
         self.store.item(id)
     }
 
@@ -236,6 +240,50 @@ impl<'a> ItemsService<'a> {
             Ok(())
         })?;
         Ok((self.store.item(item_id)?, self.store.session(session_id)?))
+    }
+
+    pub fn item_types(&self) -> Result<Vec<String>> {
+        self.commerce.ok_or(Error::NoIntegration)?.item_types()
+    }
+
+    pub fn set_type(&self, item_id: i64, item_type: &str) -> Result<Item> {
+        let at = now_ms(self.clock);
+        self.store.transaction(&mut |tx| {
+            let item = tx.item(item_id)?;
+            if item.item_type != item_type {
+                for value in tx.attribute_values(item_id)? {
+                    if value.provenance == Provenance::Default {
+                        tx.delete_attribute_value(item_id, &value.key)?;
+                    }
+                }
+                tx.update_item_type(item_id, item_type, at)?;
+                crate::services::attributes::prefill_defaults(tx, item_id, item_type, at)?;
+            }
+            Ok(())
+        })?;
+        self.store.item(item_id)
+    }
+
+    pub fn refresh(&self, item_id: i64) -> Result<Item> {
+        if let Some(link) = self.store.item_link(item_id, "shopify")? {
+            let remote = self
+                .commerce
+                .ok_or(Error::NoIntegration)?
+                .item_get(&link.external_id)?;
+            if let Some(item_type) = remote.item_type {
+                let local = self.store.item(item_id)?;
+                if link
+                    .item_type_base
+                    .as_deref()
+                    .is_none_or(|base| base == local.item_type)
+                {
+                    self.set_type(item_id, &item_type)?;
+                }
+                self.store
+                    .set_item_type_base(item_id, "shopify", &item_type)?;
+            }
+        }
+        self.store.item(item_id)
     }
 
     pub fn link(

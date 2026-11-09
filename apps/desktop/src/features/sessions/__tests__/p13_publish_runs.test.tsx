@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,expect,it,vi} from 'vitest';
 
-vi.mock('@/services/items',()=>({searchItems:vi.fn(),searchItemsShop:vi.fn(async()=>[]),nextSku:vi.fn(),createItem:vi.fn(),adoptItem:vi.fn()}));
+vi.mock('@/services/items',()=>({searchItems:vi.fn(),searchItemsShop:vi.fn(async()=>[]),nextSku:vi.fn(),createItem:vi.fn(),adoptItem:vi.fn(),listItemTypes:vi.fn(async()=>{throw {code:'no_integration'}}),refreshItem:vi.fn()}));
 vi.mock('@/services/sessions',async importOriginal=>({...(await importOriginal<typeof import('@/services/sessions')>()),createSession:vi.fn()}));
 
 import {NewSessionDialog} from '@/features/sessions/NewSessionDialog';

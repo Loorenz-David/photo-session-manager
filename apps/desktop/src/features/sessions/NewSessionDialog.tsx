@@ -5,7 +5,8 @@ import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useDebounced } from '@/lib/keyboard';
 import { useAction } from '@/lib/pending';
-import { adoptItem, createItem, nextSku, searchItems, searchItemsShop, type Item } from '@/services/items';
+import { adoptItem, createItem, refreshItem, nextSku, searchItems, searchItemsShop, type Item } from '@/services/items';
+import { ItemTypePicker, useItemTypes } from '@/features/form/ItemTypePicker';
 import { createSession, ServiceError } from '@/services/sessions';
 
 export const ITEM_SEARCH_DEBOUNCE_MS = 75;
@@ -50,6 +51,8 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   const [searchedFor, setSearchedFor] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [sku, setSku] = useState('');
+  const [itemType, setItemType] = useState('');
+  const { types, failed: typesFailed } = useItemTypes(open);
   const [skuCheck, setSkuCheck] = useState<SkuCheck | null>(null);
   const [error, setError] = useState<string | null>(null);
   const skuInput = useRef<HTMLInputElement>(null);
@@ -73,6 +76,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
     setSearchedFor(null);
     setCreating(false);
     setSku('');
+    setItemType('');
     setSkuCheck(null);
     setError(null);
     let alive = true;
@@ -147,10 +151,10 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   const showCreate = searchDone && !exactTitle;
   const checked = skuCheck !== null && skuCheck.sku === typedSku;
   const conflict = checked ? conflictText(skuCheck) : null;
-  const canCreate = creating && typedSku !== '' && checked && !skuCheck.conflict;
+  const canCreate = creating && typedSku !== '' && checked && !skuCheck.conflict && (!types?.length || types.includes(itemType));
 
   const openAction = useAction(async (item: Item) => {
-    const local = item.id === 0 && item.external_id ? await adoptItem(item.external_id) : item;
+    const local = item.id === 0 && item.external_id ? await adoptItem(item.external_id) : item.origin === 'linked' ? await refreshItem(item.id) : item;
     onOpened((await createSession(local.id)).id);
   }, failure => setError(errorText(failure)));
 
@@ -159,7 +163,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
   }
 
   const createAction = useAction(async () => {
-    const item = await createItem({ sku: typedSku, title });
+    const item = await createItem({ sku: typedSku, title, itemType });
     onOpened((await createSession(item.id)).id);
   }, failure => setError(errorText(failure)));
 
@@ -241,6 +245,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
               />
               <Button type="submit" disabled={!canCreate || createAction.busy} aria-busy={createAction.busy ? 'true' : undefined}>Create session{createAction.busy ? '…' : ''}</Button>
             </div>
+            <ItemTypePicker id="new-item-type" value={itemType} onChange={setItemType} types={types} failed={typesFailed} />
             {conflict && <p className="sku-message">{conflict}</p>}
           </form>
         )}

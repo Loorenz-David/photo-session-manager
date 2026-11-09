@@ -101,7 +101,7 @@ pub fn prefill_defaults(
         .map(|v| v.key)
         .collect();
     for group in AttributeGroup::ALL {
-        let Some(preset) = tx.attribute_preset(item_type, group)? else {
+        let Some(preset) = resolve_preset(tx, item_type, group)? else {
             continue;
         };
         for field in preset.layout {
@@ -129,6 +129,21 @@ pub fn prefill_defaults(
         }
     }
     Ok(())
+}
+
+fn resolve_preset(
+    tx: &dyn StoreTx,
+    item_type: &str,
+    group: AttributeGroup,
+) -> Result<Option<Preset>> {
+    let own = tx.attribute_preset(item_type, group)?;
+    if own.is_some() || item_type.is_empty() {
+        return Ok(own);
+    }
+    Ok(tx.attribute_preset("", group)?.map(|mut preset| {
+        preset.item_type = item_type.to_owned();
+        preset
+    }))
 }
 
 /// The item's title presented as the value of `product.title`: the title has one home, `items.title`
@@ -508,7 +523,7 @@ impl<'a> AttributesService<'a> {
     pub fn presets_get(&self, item_type: &str, group: AttributeGroup) -> Result<Preset> {
         let mut out = None;
         self.store.transaction(&mut |tx| {
-            out = Some(match tx.attribute_preset(item_type, group)? {
+            out = Some(match resolve_preset(tx, item_type, group)? {
                 Some(preset) => preset,
                 None => Preset {
                     item_type: item_type.to_owned(),
@@ -608,7 +623,7 @@ impl<'a> AttributesService<'a> {
                 .collect();
             groups.clear();
             for group in AttributeGroup::ALL {
-                let ordered: Vec<&Definition> = match tx.attribute_preset(&item.item_type, group)? {
+                let ordered: Vec<&Definition> = match resolve_preset(tx, &item.item_type, group)? {
                     Some(preset) => preset
                         .layout
                         .iter()

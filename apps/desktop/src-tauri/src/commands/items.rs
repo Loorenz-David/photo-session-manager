@@ -189,6 +189,56 @@ pub async fn item_create(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn item_types_list(state: State<'_, AppState>) -> Result<Vec<String>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        ItemsService::new(app.store.as_ref(), &SystemClock)
+            .with_commerce(app.commerce.as_deref())
+            .item_types()
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn item_type_set(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+    item_type: String,
+) -> Result<ItemDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        ItemsService::new(app.store.as_ref(), &SystemClock)
+            .set_type(item_id.0, &item_type)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn item_refresh(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+) -> Result<ItemDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        ItemsService::new(app.store.as_ref(), &SystemClock)
+            .with_commerce(app.commerce.as_deref())
+            .refresh(item_id.0)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
+}
+
+#[tauri::command]
+#[specta::specta]
 /// `barcode: null` keeps the current barcode; `barcode: ""` clears it.
 pub async fn item_update_identity(
     state: State<'_, AppState>,

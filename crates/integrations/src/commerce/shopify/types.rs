@@ -94,6 +94,8 @@ pub struct PreviewImage {
 pub struct ProductRef {
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub product_type: Option<String>,
     pub featured_media: Option<FeaturedMedia>,
 }
 
@@ -133,6 +135,8 @@ pub fn filename_of_url(url: &str) -> Option<String> {
 pub struct ProductNode {
     pub id: String,
     pub title: String,
+    #[serde(default, rename = "productType")]
+    pub product_type: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default, rename = "descriptionHtml")]

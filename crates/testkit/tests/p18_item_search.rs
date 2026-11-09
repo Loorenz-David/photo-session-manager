@@ -18,6 +18,7 @@ fn c3a_local_search_never_queries_shop_and_shop_search_returns_only_remote_hit()
         .push(RemoteItem {
             external_id: "shop-9".into(),
             title: "Shop chair".into(),
+            item_type: None,
             sku: Some("SKU-9".into()),
             barcode: None,
             thumbnail_url: None,
