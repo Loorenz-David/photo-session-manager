@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { CompositionValues, Frame } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
-import { previewUrl } from '@/services/sessions';
+import { editorPicture } from './editorPicture';
 import { turnedFrame } from './geometry';
 
 type OutputPreviewProps = { photo: Photo; values: CompositionValues; frame: Frame };
@@ -15,6 +15,7 @@ const pct = (v: number) => `${v * 100}%`;
  * second network resource.
  */
 export function OutputPreview({ photo, values, frame }: OutputPreviewProps) {
+  const picture = editorPicture(photo, values);
   const turned = turnedFrame(frame, values.quarter_turns);
   const { rect } = values;
   const box: CSSProperties = { aspectRatio: `${px(rect.w * turned.w)} / ${px(rect.h * turned.h)}` };
@@ -29,8 +30,8 @@ export function OutputPreview({ photo, values, frame }: OutputPreviewProps) {
   return (
     <div className="output-preview" style={box} aria-label="Output preview">
       <div className="output-preview-frame" data-turned={values.quarter_turns % 2 === 1 || undefined} style={frameStyle}>
-        {photo.adjusted_preview_path && (
-          <img src={previewUrl(photo.adjusted_preview_path)} alt="" draggable={false} style={{ transform: `rotate(${values.quarter_turns * 90}deg) scaleX(${values.flip === 'horizontal' ? -1 : 1})` }} />
+        {picture && (
+          <img src={picture.src} alt="" draggable={false} data-swapped={picture.swapped || undefined} style={{ transform: picture.transform }} />
         )}
       </div>
     </div>

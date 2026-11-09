@@ -17,13 +17,26 @@ impl SyntheticRaw {
         orientation: u8,
         exif_datetime: Option<&str>,
     ) -> (Vec<u8>, Vec<Vec<u8>>) {
+        Self::build_with_frame(streams, orientation, exif_datetime, None)
+    }
+
+    /// As `build`, plus the RAW sensor frame written the way Sony does it: a DNG
+    /// `DefaultCropSize` (0xC620) LONG pair in IFD0 (P58).
+    pub fn build_with_frame(
+        streams: &[(u16, u16, bool)],
+        orientation: u8,
+        exif_datetime: Option<&str>,
+        sensor_frame: Option<(u32, u32)>,
+    ) -> (Vec<u8>, Vec<Vec<u8>>) {
         let jpegs: Vec<_> = streams
             .iter()
             .map(|(w, h, valid)| Self::jpeg(*w, *h, *valid))
             .collect();
         let count = streams.len().max(1);
-        let first_tags =
-            1 + usize::from(!streams.is_empty()) * 2 + usize::from(exif_datetime.is_some());
+        let first_tags = 1
+            + usize::from(!streams.is_empty()) * 2
+            + usize::from(exif_datetime.is_some())
+            + usize::from(sensor_frame.is_some());
         let size = |tags: usize| 2 + tags * 12 + 4;
         let mut offsets = Vec::new();
         let mut cursor = 8;
@@ -41,6 +54,11 @@ impl SyntheticRaw {
             cursor += date.len() + 1;
             offset
         });
+        let crop_offset = sensor_frame.map(|_| {
+            let offset = cursor;
+            cursor += 8;
+            offset
+        });
         let mut bytes = vec![0u8; cursor];
         bytes[..8].copy_from_slice(&[b'I', b'I', 42, 0, 8, 0, 0, 0]);
         for (i, offset) in offsets.iter().enumerate() {
@@ -50,6 +68,12 @@ impl SyntheticRaw {
             if i == 0 {
                 write_tag(&mut bytes, *offset, slot, 0x0112, 3, 1, orientation as u32);
                 slot += 1;
+                if let (Some((w, h)), Some(at)) = (sensor_frame, crop_offset) {
+                    write_tag(&mut bytes, *offset, slot, 0xc620, 4, 2, at as u32);
+                    bytes[at..at + 4].copy_from_slice(&w.to_le_bytes());
+                    bytes[at + 4..at + 8].copy_from_slice(&h.to_le_bytes());
+                    slot += 1;
+                }
                 if let Some(exif) = exif_offset {
                     write_tag(&mut bytes, *offset, slot, 0x8769, 4, 1, exif as u32);
                     slot += 1;

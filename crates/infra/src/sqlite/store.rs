@@ -23,7 +23,10 @@ use psm_core::{
     },
     mechanisms::{
         canon::canon,
-        composition::{default_rect, fingerprint_compatible, review_reason, turned_frame},
+        composition::{
+            default_rect, fingerprint_compatible, orientation_of, refit_rect, review_reason,
+            turned_frame,
+        },
     },
     ports::store::{FrameCommit, PreviewCommit, RawPreviewState, Store, StoreTx},
 };
@@ -216,7 +219,39 @@ fn adopt_frame_tx(conn: &Connection, raw: &str, observed: &Fingerprint) -> Resul
             });
             conn.execute("UPDATE compositions SET x=?1,y=?2,w=?3,h=?4,frame_w=?5,frame_h=?6,frame_source=?7,geometry=?8 WHERE photo_id=?9", params![rect.x,rect.y,rect.w,rect.h,observed.frame.w,observed.frame.h,observed.source.as_str(),geometry,id]).map_err(db)?;
         } else if let Some(stored) = &current.fingerprint {
-            if !fingerprint_compatible(stored, observed) {
+            if observed.source == FrameSource::Camera {
+                // P58: the camera preview only stands in until Capture One has measured the frame.
+                continue;
+            }
+            let provisional = stored.source == FrameSource::Camera;
+            if provisional && orientation_of(stored.frame) == orientation_of(observed.frame) {
+                // P58: Capture One's frame replaces the camera preview's. The composition is
+                // fractions (MC-27), so it stays; it is re-fitted only if it would now leave the
+                // image. Later Capture One geometry changes are compared against this render.
+                let rect = current
+                    .values()
+                    .map(|values| refit_rect(&values, observed.frame))
+                    .or(current.rect)
+                    .unwrap_or_else(|| {
+                        default_rect(
+                            current.kind,
+                            current.shape,
+                            current.orientation,
+                            turned_frame(observed.frame, current.quarter_turns),
+                        )
+                    });
+                conn.execute("UPDATE compositions SET x=?1,y=?2,w=?3,h=?4,frame_w=?5,frame_h=?6,frame_source=?7,geometry=?8 WHERE photo_id=?9", params![rect.x,rect.y,rect.w,rect.h,observed.frame.w,observed.frame.h,observed.source.as_str(),geometry,id]).map_err(db)?;
+            } else if provisional && current.origin == Origin::Default {
+                // Capture One shows the photo the other way up from the camera preview and nobody
+                // framed it yet: the default composition is made again on Capture One's frame.
+                let rect = default_rect(
+                    current.kind,
+                    current.shape,
+                    current.orientation,
+                    turned_frame(observed.frame, current.quarter_turns),
+                );
+                conn.execute("UPDATE compositions SET x=?1,y=?2,w=?3,h=?4,frame_w=?5,frame_h=?6,frame_source=?7,geometry=?8 WHERE photo_id=?9", params![rect.x,rect.y,rect.w,rect.h,observed.frame.w,observed.frame.h,observed.source.as_str(),geometry,id]).map_err(db)?;
+            } else if !fingerprint_compatible(stored, observed) {
                 let reason = review_reason(stored, observed);
                 conn.execute("UPDATE compositions SET frame_w=?1,frame_h=?2,frame_source=?3,geometry=?4,state='needs_review',review_reason=?5 WHERE photo_id=?6", params![observed.frame.w,observed.frame.h,observed.source.as_str(),geometry,reason.as_str(),id]).map_err(db)?;
                 needs_review.push((id, session_id));
@@ -1658,6 +1693,18 @@ impl Store for SqliteStore {
             )
             .map_err(db)?;
         Ok(())
+    }
+
+    fn photos_for_raw(&self, raw_path: &str) -> Result<Vec<Photo>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let mut stmt = conn.prepare("SELECT id,uid,session_id,raw_path,raw_hash,integrity,provider_ref,original_preview_path,adjusted_preview_path,orientation,classification,position,captured_at,source,created_at,thumbnail_path FROM photos WHERE raw_path=?1 ORDER BY id").map_err(db)?;
+        stmt.query_map([raw_path], photo_row)
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)
     }
 
     fn photo(&self, id: i64) -> Result<Photo> {

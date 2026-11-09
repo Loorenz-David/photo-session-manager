@@ -194,3 +194,18 @@ pub async fn photos_assign_unassigned(
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
+
+/// The photo on the stage or in the editor (`None`: none); its pending preview is the next one the
+/// editing provider renders (P58, book changelog 39).
+#[tauri::command]
+#[specta::specta]
+pub async fn photos_preview_focus(
+    state: State<'_, AppState>,
+    photo_id: Option<CommandId>,
+) -> Result<(), CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || app.previews.set_focus(photo_id.map(|id| id.0)))
+        .await
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+        .map_err(CommandError::from)
+}

@@ -60,6 +60,9 @@ pub struct PreviewService {
     retry_after: Mutex<HashMap<String, (u32, Instant)>>,
     variant_first_request: Mutex<HashMap<String, Instant>>,
     variant_waiting: Mutex<HashSet<String>>,
+    /// New captures whose first preview request has not reached the provider yet (P58): they
+    /// keep their place before the backlog through deferrals and the wait for the variant.
+    arrivals: Mutex<HashSet<String>>,
     before_render: Mutex<Option<BeforeRender>>,
 }
 
@@ -87,6 +90,7 @@ impl PreviewService {
             retry_after: Mutex::new(HashMap::new()),
             variant_first_request: Mutex::new(HashMap::new()),
             variant_waiting: Mutex::new(HashSet::new()),
+            arrivals: Mutex::new(HashSet::new()),
             before_render: Mutex::new(None),
         }
     }
@@ -106,9 +110,19 @@ impl PreviewService {
             }
             return Ok(());
         }
-        self.request(raw, generation)
+        self.request(raw, generation, true)
     }
-    fn request(&self, raw: &str, generation: i64) -> Result<()> {
+    fn request(&self, raw: &str, generation: i64, new_arrival: bool) -> Result<()> {
+        let new_arrival = {
+            let mut arrivals = self
+                .arrivals
+                .lock()
+                .map_err(|e| crate::Error::InvalidData(e.to_string()))?;
+            if new_arrival {
+                arrivals.insert(raw.into());
+            }
+            arrivals.contains(raw)
+        };
         if self
             .variant_waiting
             .lock()
@@ -137,11 +151,31 @@ impl PreviewService {
                     tracking,
                     self.clock.mono(),
                     now_ms,
+                    new_arrival,
                 )
             });
         if let Err(error) = result {
             self.store
                 .finish_render_job(tracking, Some("provider"), now_ms)?;
+            return self.defer(raw, &error);
+        }
+        self.arrivals
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .remove(raw);
+        self.retry_after
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .remove(raw);
+        self.variant_first_request
+            .lock()
+            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
+            .remove(raw);
+        Ok(())
+    }
+    /// The render backoff after Capture One refused a preview request (MC-16).
+    fn defer(&self, raw: &str, error: &crate::Error) -> Result<()> {
+        {
             let mut retry = self
                 .retry_after
                 .lock()
@@ -165,16 +199,7 @@ impl PreviewService {
                 (attempts, self.clock.mono() + render_backoff(attempts)),
             );
             tracing::warn!(%error, raw, attempts, "preview render deferred");
-            return Ok(());
         }
-        self.retry_after
-            .lock()
-            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
-            .remove(raw);
-        self.variant_first_request
-            .lock()
-            .map_err(|e| crate::Error::InvalidData(e.to_string()))?
-            .remove(raw);
         Ok(())
     }
     pub fn on_processing_done(&self, job: &str, raw: &str, outputs: &[String]) -> Result<()> {
@@ -319,6 +344,20 @@ impl PreviewService {
             self.store
                 .finish_render_job(id, Some("timeout"), self.clock.now_ms())?;
         }
+        // P58: a queued request Capture One refused when its turn came ends like a request
+        // refused at once: a master fails its export, a preview is asked for again after backoff.
+        for (id, error) in self.editing.refused_renders() {
+            let job = self.store.job(id)?;
+            self.store
+                .finish_render_job(id, Some("provider"), self.clock.now_ms())?;
+            if job.kind == "render_master" {
+                if let Some(callback) = &self.export_staging {
+                    callback.failed(id, &error)?;
+                }
+            } else {
+                self.defer(&job.target, &crate::Error::Provider(error))?;
+            }
+        }
         self.schedule_due(false)
     }
     /// Health item naming the photos whose last preview render failed (cleared when none is left).
@@ -379,6 +418,9 @@ impl PreviewService {
         self.schedule_due(false)
     }
     pub fn wait_for_variant(&self, raw: &str) {
+        if let Ok(mut arrivals) = self.arrivals.lock() {
+            arrivals.insert(raw.into());
+        }
         if let Ok(mut first) = self.variant_first_request.lock() {
             first.entry(raw.into()).or_insert_with(|| self.clock.mono());
         }
@@ -400,6 +442,15 @@ impl PreviewService {
     }
     pub fn failed_generation_for(&self, raw: &str) -> Option<i64> {
         self.failed_generation.lock().ok()?.get(raw).copied()
+    }
+    /// The photo on the stage or in the editor (P58, changelog 39): its pending preview is the
+    /// next one sent to the editing provider. `None` when no photo is shown.
+    pub fn set_focus(&self, photo_id: Option<i64>) -> Result<()> {
+        let raw = photo_id
+            .map(|id| self.store.photo(id).map(|photo| photo.raw_path))
+            .transpose()?;
+        self.editing.set_render_focus(raw.as_deref());
+        self.schedule_due(false)
     }
     fn schedule_due(&self, force: bool) -> Result<()> {
         let now = self.clock.mono();
@@ -439,7 +490,7 @@ impl PreviewService {
         drop(failed);
         drop(last);
         for (raw, generation) in due {
-            if let Err(error) = self.request(&raw, generation) {
+            if let Err(error) = self.request(&raw, generation, false) {
                 tracing::warn!(%error, raw, "preview render deferred");
             }
         }

@@ -9,7 +9,6 @@ import { PhotoPanel } from '@/features/workspace/PhotoPanel';
 import { pickAndImport } from '@/features/workspace/ImportDropZone';
 import type { ViewMode } from '@/features/workspace/useWorkspaceState';
 import { canCompose, resetComposition, type Composition } from '@/services/compositions';
-import { previewUrl } from '@/services/sessions';
 import type { Photo } from '@/services/photos';
 import { EditorToolbar } from './EditorToolbar';
 import { ComposeStage } from './ComposeStage';
@@ -26,6 +25,7 @@ import { clipboardComposition, copyComposition, refitClipboard, useClipboardComp
 import { useComposePrefs } from './useComposePrefs';
 import { FrameMeter } from './FrameMeter';
 import { Loupe } from './Loupe';
+import { editorPicture } from './editorPicture';
 import './compose.css';
 
 /** `localStorage` key of the first-time line. */
@@ -111,6 +111,7 @@ export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, o
   const controller = useComposeGesture({ stageRef, imageRef, photo: active, stageBox, onSave: save, onExit, onSwitch, snapEnabled: prefs.snap });
   dispatchRef.current = controller.dispatch;
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
+  const loupePicture = state ? editorPicture(active, state.values) : null;
   const pending = usePendingCompositions();
   const seenRevision = useRef(new Map<number, number>([[active.id, active.composition.revision]]));
   useEffect(() => {
@@ -230,7 +231,7 @@ export function ComposeMode({ photos, active, mode, onMenu, onItemCard, tiles, o
             toolbar: <EditorToolbar onRevert={() => controller.dispatch({ type: 'KeyEsc' })} loupe={loupePinned} onLoupe={() => setLoupePinned(value => !value)} snap={prefs.snap} onSnap={() => prefs.setSnap(!prefs.snap)} onCopy={copy} onPaste={paste} canPaste={clipboard !== null} />,
             children: <>
               <ComposeStage photo={active} stageBox={stageBox} state={state} stageRef={stageRef} imageRef={imageRef} hint={hint} onPointer={setPointer} overlay={prefs.overlay} straightenGrid={prefs.straightenGrid && straightening} />
-              {(loupeHeld || loupePinned) && state && active.adjusted_preview_path && <Loupe src={previewUrl(active.adjusted_preview_path)} pointer={pointer} state={state} />}
+              {(loupeHeld || loupePinned) && state && loupePicture && <Loupe picture={loupePicture} pointer={pointer} state={state} />}
               {meter && <FrameMeter controller={controller} />}
             </>,
           }}

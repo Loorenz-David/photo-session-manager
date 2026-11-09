@@ -618,6 +618,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::photos::photos_classify,
         commands::photos::photos_reorder,
         commands::photos::photos_delete,
+        commands::photos::photos_preview_focus,
         commands::photos::photos_move,
         commands::photos::photos_copy,
         commands::photos::photos_import,

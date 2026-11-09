@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkeletonTiles } from '@/components/pending/SkeletonTiles';
 import { assignUnassigned, type Photo } from '@/services/photos';
+import { setPreviewFocus } from '@/services/previews';
 import { createSession } from '@/services/sessions';
 import { adoptItem, type Item } from '@/services/items';
 import { useKeyboard } from '@/lib/keyboard';
@@ -144,6 +145,11 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   const drop = useDrop(state);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const { active } = state;
+  // P58: the photo on the stage or in the editor is the next preview Capture One renders. One message per change
+  // (a "nothing" in between could arrive after the new photo); "nothing" only when the workspace closes.
+  const focusId = active?.id ?? null;
+  useEffect(() => setPreviewFocus(focusId), [focusId]);
+  useEffect(() => () => setPreviewFocus(null), []);
   const dragging = state.photos.find(photo => photo.id === draggingId) ?? null;
   const ordered = displayOrder(state.photos);
   const draggedGroup = dragging?.classification === 'condition' ? ordered.condition : [...ordered.main, ...ordered.unreviewed];

@@ -109,6 +109,7 @@ fn c1b_issued_render_still_blocks_take_back() {
             1,
             a.clock.mono(),
             a.clock.now_ms(),
+            false,
         )
         .unwrap();
     assert_eq!(

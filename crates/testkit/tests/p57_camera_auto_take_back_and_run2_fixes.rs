@@ -266,6 +266,7 @@ fn c4a_output_quality_save_is_fast_and_does_not_render_previews() {
             1,
             a.clock.mono(),
             a.clock.now_ms(),
+            false,
         )
         .unwrap();
     assert_eq!(a.app.editing.renders_in_flight(), 1);

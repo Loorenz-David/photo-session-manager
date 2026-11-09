@@ -1,5 +1,5 @@
 use super::{
-    renders::{PendingRender, RenderEntry, RenderRegistry, base_name, resolve_output},
+    renders::{PendingRender, RenderEntry, RenderRegistry, resolve_output},
     scripting::{CaptureOneScripting, ProcessStarted},
 };
 use psm_core::{
@@ -153,6 +153,62 @@ impl CaptureOneAdapter {
             return Err(Error::CaptureFolderNotSet);
         }
         Ok(())
+    }
+    /// Sends every queued render that can go now (P58, changelog 39: masters as soon as their RAW
+    /// is free; one preview at a time, the focused photo's, then the newest arrivals, then the
+    /// rest oldest-first). A request Capture One refuses is handed back through `refused_renders`.
+    fn pump(&self, now: Instant, now_ms: i64) -> Result<()> {
+        while self.send_next(now, now_ms)? {}
+        Ok(())
+    }
+    /// Sends the next queued render that can go; `false` when there is none.
+    fn send_next(&self, now: Instant, now_ms: i64) -> Result<bool> {
+        let next = {
+            let mut state = self
+                .renders
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?;
+            let Some(next) = state.pop_next() else {
+                return Ok(false);
+            };
+            state.claim(&next.raw, next.purpose);
+            next
+        };
+        let result = self.render_started(&next.raw, next.purpose);
+        let mut state = self
+            .renders
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        match result {
+            Ok(started) => {
+                let job_id = started.job_id;
+                state.jobs.insert(
+                    job_id.clone(),
+                    RenderEntry {
+                        completion: RenderCompletion {
+                            job_id,
+                            raw: next.raw,
+                            purpose: next.purpose,
+                            generation: next.generation,
+                            issued_at_ms: now_ms,
+                            tracking_job_id: next.tracking_job_id,
+                            geometry: started.geometry,
+                        },
+                        issued_mono: now,
+                        attempts: 0,
+                    },
+                );
+                Ok(true)
+            }
+            Err(error) => {
+                tracing::warn!(%error, raw = next.raw, "queued render refused");
+                state.release(&next.raw, next.purpose);
+                state
+                    .refused
+                    .push((next.tracking_job_id, error.to_string()));
+                Ok(true)
+            }
+        }
     }
     fn render_started(&self, raw: &str, purpose: RenderPurpose) -> Result<ProcessStarted> {
         let recipe = match purpose {
@@ -350,6 +406,7 @@ impl EditingProvider for CaptureOneAdapter {
         self.render_started(raw, purpose)
             .map(|started| started.job_id)
     }
+    #[allow(clippy::too_many_arguments)]
     fn request_render(
         &self,
         raw: &str,
@@ -358,6 +415,7 @@ impl EditingProvider for CaptureOneAdapter {
         tracking_job_id: i64,
         now: Instant,
         now_ms: i64,
+        new_arrival: bool,
     ) -> Result<()> {
         {
             let mut state = self
@@ -374,15 +432,26 @@ impl EditingProvider for CaptureOneAdapter {
             {
                 return Ok(());
             }
-            if !state.busy.insert(base_name(raw)) {
+            if !state.can_start(raw, purpose) {
+                if purpose == RenderPurpose::Master {
+                    // Refused now, as when it would have been sent at once (P56 disk guard).
+                    drop(state);
+                    self.check_master_space()?;
+                    state = self
+                        .renders
+                        .lock()
+                        .map_err(|e| Error::InvalidData(e.to_string()))?;
+                }
                 state.pending.push_back(PendingRender {
                     raw: raw.into(),
                     purpose,
                     generation,
                     tracking_job_id,
+                    new_arrival,
                 });
                 return Ok(());
             }
+            state.claim(raw, purpose);
         }
         let result = self.render_started(raw, purpose);
         let mut state = self
@@ -411,9 +480,14 @@ impl EditingProvider for CaptureOneAdapter {
                 Ok(())
             }
             Err(error) => {
-                state.busy.remove(&base_name(raw));
+                state.release(raw, purpose);
                 Err(error)
             }
+        }
+    }
+    fn set_render_focus(&self, raw: Option<&str>) {
+        if let Ok(mut state) = self.renders.lock() {
+            state.focused_raw = raw.map(str::to_owned);
         }
     }
     fn render_completion(&self, job: &str) -> Option<RenderCompletion> {
@@ -431,7 +505,7 @@ impl EditingProvider for CaptureOneAdapter {
         )
     }
     fn finish_render(&self, job: &str, now: Instant, now_ms: i64) -> Result<()> {
-        let next = {
+        {
             let mut state = self
                 .renders
                 .lock()
@@ -439,49 +513,9 @@ impl EditingProvider for CaptureOneAdapter {
             let Some(entry) = state.jobs.remove(job) else {
                 return Ok(());
             };
-            let key = base_name(&entry.completion.raw);
-            state.busy.remove(&key);
-            if let Some(index) = state.pending.iter().position(|p| base_name(&p.raw) == key) {
-                let next = state.pending.remove(index).expect("pending index");
-                state.busy.insert(key);
-                Some(next)
-            } else {
-                None
-            }
-        };
-        if let Some(next) = next {
-            let result = self.render_started(&next.raw, next.purpose);
-            let mut state = self
-                .renders
-                .lock()
-                .map_err(|e| Error::InvalidData(e.to_string()))?;
-            match result {
-                Ok(started) => {
-                    let job_id = started.job_id;
-                    state.jobs.insert(
-                        job_id.clone(),
-                        RenderEntry {
-                            completion: RenderCompletion {
-                                job_id,
-                                raw: next.raw,
-                                purpose: next.purpose,
-                                generation: next.generation,
-                                issued_at_ms: now_ms,
-                                tracking_job_id: next.tracking_job_id,
-                                geometry: started.geometry,
-                            },
-                            issued_mono: now,
-                            attempts: 0,
-                        },
-                    );
-                }
-                Err(error) => {
-                    state.busy.remove(&base_name(&next.raw));
-                    return Err(error);
-                }
-            }
+            state.release(&entry.completion.raw, entry.completion.purpose);
         }
-        Ok(())
+        self.pump(now, now_ms)
     }
     fn expire_renders(&self, now: Instant, now_ms: i64) -> Result<Vec<(i64, i64)>> {
         let expired: Vec<String> = {
@@ -504,7 +538,7 @@ impl EditingProvider for CaptureOneAdapter {
         };
         let mut failed = Vec::new();
         for old_id in expired {
-            let (entry, next) = {
+            let entry = {
                 let mut state = self
                     .renders
                     .lock()
@@ -512,24 +546,13 @@ impl EditingProvider for CaptureOneAdapter {
                 let Some(entry) = state.jobs.remove(&old_id) else {
                     continue;
                 };
-                let next = if entry.attempts > 0 {
-                    let key = base_name(&entry.completion.raw);
-                    state.busy.remove(&key);
-                    let next = state
-                        .pending
-                        .iter()
-                        .position(|p| base_name(&p.raw) == key)
-                        .and_then(|index| state.pending.remove(index));
-                    if next.is_some() {
-                        state.busy.insert(key);
-                    }
-                    next
-                } else {
-                    None
-                };
-                (entry, next)
+                if entry.attempts > 0 {
+                    state.release(&entry.completion.raw, entry.completion.purpose);
+                }
+                entry
             };
             if entry.attempts == 0 {
+                // MC-16: re-issued once; it keeps the render lane.
                 let result = self.render_started(&entry.completion.raw, entry.completion.purpose);
                 let mut state = self
                     .renders
@@ -556,41 +579,18 @@ impl EditingProvider for CaptureOneAdapter {
                     entry.completion.tracking_job_id,
                     entry.completion.generation,
                 ));
-                if let Some(next) = next {
-                    let result = self.render_started(&next.raw, next.purpose);
-                    let mut state = self
-                        .renders
-                        .lock()
-                        .map_err(|e| Error::InvalidData(e.to_string()))?;
-                    match result {
-                        Ok(started) => {
-                            let job_id = started.job_id;
-                            state.jobs.insert(
-                                job_id.clone(),
-                                RenderEntry {
-                                    completion: RenderCompletion {
-                                        job_id,
-                                        raw: next.raw,
-                                        purpose: next.purpose,
-                                        generation: next.generation,
-                                        issued_at_ms: now_ms,
-                                        tracking_job_id: next.tracking_job_id,
-                                        geometry: started.geometry,
-                                    },
-                                    issued_mono: now,
-                                    attempts: 0,
-                                },
-                            );
-                        }
-                        Err(error) => {
-                            state.busy.remove(&base_name(&next.raw));
-                            return Err(error);
-                        }
-                    }
-                }
             }
         }
+        // A RAW or the preview lane may also be free after a refused request: nothing waits for a
+        // new request to be sent.
+        self.pump(now, now_ms)?;
         Ok(failed)
+    }
+    fn refused_renders(&self) -> Vec<(i64, String)> {
+        self.renders
+            .lock()
+            .map(|mut state| std::mem::take(&mut state.refused))
+            .unwrap_or_default()
     }
     fn render_in_flight(&self, raw: &str) -> bool {
         self.renders.lock().is_ok_and(|s| {
@@ -603,7 +603,7 @@ impl EditingProvider for CaptureOneAdapter {
             .lock()
             // Pending work has not been handed to Capture One yet. It survives a quit and is
             // retried when the editor is available again; only issued jobs can be lost.
-            .map(|s| s.jobs.len().max(s.busy.len()))
+            .map(|s| s.out())
             .unwrap_or(0)
     }
     fn mirror_tag(&self, raw: &str, classification: Classification, now_ms: i64) -> Result<()> {

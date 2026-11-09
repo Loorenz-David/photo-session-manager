@@ -452,6 +452,7 @@ impl ExportService {
                 tracking,
                 self.clock.mono(),
                 now_ms,
+                false,
             ) {
                 self.store
                     .finish_render_job(tracking, Some("provider"), now_ms)?;

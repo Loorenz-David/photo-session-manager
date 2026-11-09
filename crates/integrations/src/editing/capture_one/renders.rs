@@ -1,4 +1,4 @@
-use psm_core::ports::editing::RenderCompletion;
+use psm_core::{domain::editing::RenderPurpose, ports::editing::RenderCompletion};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fs,
@@ -15,9 +15,10 @@ pub struct RenderEntry {
 
 pub struct PendingRender {
     pub raw: String,
-    pub purpose: psm_core::domain::editing::RenderPurpose,
+    pub purpose: RenderPurpose,
     pub generation: i64,
     pub tracking_job_id: i64,
+    pub new_arrival: bool,
 }
 
 #[derive(Default)]
@@ -25,6 +26,63 @@ pub struct RenderRegistry {
     pub jobs: HashMap<String, RenderEntry>,
     pub busy: HashSet<String>,
     pub pending: VecDeque<PendingRender>,
+    /// The photo open on the stage or in the editor (P58).
+    pub focused_raw: Option<String>,
+    /// Queued requests Capture One refused when their turn came: (tracking job, error).
+    pub refused: Vec<(i64, String)>,
+}
+
+/// The `busy` entry while a preview is with Capture One: previews go one at a time (P58).
+pub const PREVIEW_LANE: &str = "\0preview-lane";
+
+impl RenderRegistry {
+    /// Whether a render can be sent now: no render of the same RAW is out (outputs are found by
+    /// the RAW's base name, MC-16) and, for a preview, no other preview is out.
+    pub fn can_start(&self, raw: &str, purpose: RenderPurpose) -> bool {
+        !self.busy.contains(&base_name(raw))
+            && (purpose == RenderPurpose::Master || !self.busy.contains(PREVIEW_LANE))
+    }
+    pub fn claim(&mut self, raw: &str, purpose: RenderPurpose) {
+        self.busy.insert(base_name(raw));
+        if purpose == RenderPurpose::Preview {
+            self.busy.insert(PREVIEW_LANE.into());
+        }
+    }
+    pub fn release(&mut self, raw: &str, purpose: RenderPurpose) {
+        self.busy.remove(&base_name(raw));
+        if purpose == RenderPurpose::Preview {
+            self.busy.remove(PREVIEW_LANE);
+        }
+    }
+    /// Renders that are out, or being sent.
+    pub fn out(&self) -> usize {
+        self.jobs
+            .len()
+            .max(self.busy.iter().filter(|key| *key != PREVIEW_LANE).count())
+    }
+    /// The next queued render that can be sent (P58, book changelog 39). A master goes as soon as
+    /// its RAW is free, as before. Previews go one at a time: the focused photo's, then the newest
+    /// arrival's (the most recently queued first), then the rest in the order they were queued.
+    pub fn pop_next(&mut self) -> Option<PendingRender> {
+        let ready = |p: &PendingRender| self.can_start(&p.raw, p.purpose);
+        let preview = |p: &PendingRender| p.purpose == RenderPurpose::Preview && ready(p);
+        let index = self
+            .pending
+            .iter()
+            .position(|p| p.purpose == RenderPurpose::Master && ready(p))
+            .or_else(|| {
+                self.pending
+                    .iter()
+                    .position(|p| preview(p) && self.focused_raw.as_deref() == Some(p.raw.as_str()))
+            })
+            .or_else(|| {
+                self.pending
+                    .iter()
+                    .rposition(|p| preview(p) && p.new_arrival)
+            })
+            .or_else(|| self.pending.iter().position(preview))?;
+        self.pending.remove(index)
+    }
 }
 
 pub fn base_name(raw: &str) -> String {
@@ -99,6 +157,41 @@ pub fn resolve_output(reported: &Path, issued_at: SystemTime) -> Option<PathBuf>
 mod tests {
     use super::*;
     use std::fs;
+    #[test]
+    fn focused_then_newest_arrivals_then_oldest_backlog() {
+        let mut queue = RenderRegistry::default();
+        let add = |queue: &mut RenderRegistry, id: &str, purpose, fresh| {
+            queue.pending.push_back(PendingRender {
+                raw: format!("/c/{id}.ARW"),
+                purpose,
+                generation: 1,
+                tracking_job_id: 1,
+                new_arrival: fresh,
+            })
+        };
+        let next = |queue: &mut RenderRegistry| queue.pop_next().map(|p| p.raw);
+        let raw = |id: &str| Some(format!("/c/{id}.ARW"));
+        add(&mut queue, "old-1", RenderPurpose::Preview, false);
+        add(&mut queue, "old-2", RenderPurpose::Preview, false);
+        add(&mut queue, "new-1", RenderPurpose::Preview, true);
+        add(&mut queue, "new-2", RenderPurpose::Preview, true);
+        add(&mut queue, "old-1", RenderPurpose::Master, false);
+        queue.focused_raw = raw("old-2");
+        // A master goes as soon as its RAW is free; a preview only while no preview is out.
+        assert_eq!(next(&mut queue), raw("old-1"));
+        queue.claim("/c/old-1.ARW", RenderPurpose::Master);
+        assert_eq!(next(&mut queue), raw("old-2"));
+        queue.claim("/c/old-2.ARW", RenderPurpose::Preview);
+        assert_eq!(next(&mut queue), None);
+        queue.release("/c/old-2.ARW", RenderPurpose::Preview);
+        queue.focused_raw = None;
+        assert_eq!(next(&mut queue), raw("new-2"));
+        assert_eq!(next(&mut queue), raw("new-1"));
+        // old-1's preview waits for its master: same RAW.
+        assert_eq!(next(&mut queue), None);
+        queue.release("/c/old-1.ARW", RenderPurpose::Master);
+        assert_eq!(next(&mut queue), raw("old-1"));
+    }
     #[test]
     fn mc16_output_is_fresh() {
         let dir = tempfile::tempdir().unwrap();

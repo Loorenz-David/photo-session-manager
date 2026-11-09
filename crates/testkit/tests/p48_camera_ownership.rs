@@ -570,6 +570,7 @@ fn c4e_blocked_while_a_preview_renders() {
             1,
             a.clock.mono(),
             a.clock.now_ms(),
+            false,
         )
         .unwrap();
     assert_eq!(a.app.editing.renders_in_flight(), 1);

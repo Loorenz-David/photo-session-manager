@@ -3,7 +3,7 @@
 .compose-stage:active { cursor: grabbing; }
 .compose-image { position: absolute; left: 0; top: 0; transform-origin: center; will-change: transform; container-type: size; }
 .compose-image img { position: absolute; left: 50%; top: 50%; width: 100%; height: 100%; max-width: none; translate: -50% -50%; pointer-events: none; user-select: none; -webkit-user-drag: none; }
-.compose-image[data-turned] img { width: 100cqh; height: 100cqw; }
+.compose-image img[data-swapped] { width: 100cqh; height: 100cqw; }
 .compose-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .compose-dim { fill: color-mix(in srgb, var(--color-bg) 72%, transparent); }
 .compose-frame { fill: none; stroke: var(--color-text); stroke-width: 1.5; }
@@ -19,6 +19,7 @@
 .compose-done { height: 26px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: var(--color-accent); color: var(--color-bg); font-size: var(--text-sm); font-weight: var(--weight-bold); cursor: pointer; }
 .compose-done:hover { background: var(--color-accent-600); }
 .compose-hint { position: absolute; top: var(--space-2); left: 50%; margin: 0; padding: 4px 10px; translate: -50% 0; border-radius: var(--r-pill); background: var(--color-bg); box-shadow: var(--shadow-sm); color: var(--muted); font-size: var(--text-sm); white-space: nowrap; pointer-events: none; }
+.compose-camera-note { position: absolute; left: 50%; bottom: var(--space-3); margin: 0; padding: 4px 10px; translate: -50% 0; border-radius: var(--r-pill); background: var(--color-bg); color: var(--muted); font-size: var(--text-sm); white-space: nowrap; pointer-events: none; }
 
 /* Trim handles (P32): corner and edge handles on the frame; a locked shape keeps its ratio. */
 .compose-handle { fill: var(--color-bg); stroke: var(--color-text); stroke-width: 1.5; pointer-events: all; }
@@ -85,7 +86,7 @@
 .output-preview { position: relative; width: 100%; max-width: 220px; overflow: hidden; border-radius: var(--r-sm); background: var(--stage); align-self: center; }
 .output-preview-frame { position: absolute; transform-origin: center; container-type: size; }
 .output-preview-frame img { position: absolute; left: 50%; top: 50%; width: 100%; height: 100%; max-width: none; translate: -50% -50%; pointer-events: none; }
-.output-preview-frame[data-turned] img { width: 100cqh; height: 100cqw; }
+.output-preview-frame img[data-swapped] { width: 100cqh; height: 100cqw; }
 
 /* Split previews (P33): the two square outputs, Left and Right, side by side at their real proportions (max 110 px each). */
 .split-previews { display: flex; justify-content: center; gap: var(--space-3); }

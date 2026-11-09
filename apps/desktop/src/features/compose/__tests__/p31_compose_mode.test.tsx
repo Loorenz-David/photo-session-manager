@@ -90,7 +90,9 @@ describe('C2 entering and leaving Compose', () => {
 
   it('C2(d) a photo without an adjusted preview or without a rect cannot be composed: R does nothing, Compose… is disabled', async () => {
     layoutStage();
-    await openWorkspace([view([photo(1, 'main', { position: 1, adjusted_preview_path: null })])]);
+    const waiting = photo(1, 'main', { position: 1, adjusted_preview_path: null });
+    waiting.composition = { ...waiting.composition, rect: null, frame: null };
+    await openWorkspace([view([waiting])]);
     fireEvent.keyDown(window, { key: 'r' });
     expect(stage()).toBeNull();
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Photo actions' }), { button: 0, ctrlKey: false });

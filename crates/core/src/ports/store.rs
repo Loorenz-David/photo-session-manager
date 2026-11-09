@@ -219,6 +219,7 @@ pub trait Store: Send + Sync {
         path: Option<&str>,
         orientation: Option<i64>,
     ) -> Result<()>;
+    fn photos_for_raw(&self, raw_path: &str) -> Result<Vec<Photo>>;
     fn photo(&self, id: i64) -> Result<Photo>;
     fn set_photo_integrity(&self, id: i64, integrity: Integrity) -> Result<()>;
     fn upsert_raw_state(&self, raw_path: &str, path_key: Option<&str>) -> Result<()>;

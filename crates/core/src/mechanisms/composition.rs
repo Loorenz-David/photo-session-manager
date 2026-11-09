@@ -159,6 +159,41 @@ pub fn validate(values: &CompositionValues, frame: Frame) -> std::result::Result
     }
     Ok(())
 }
+/// The rect carried onto a new source frame (P58: the camera preview's frame replaced by Capture
+/// One's). Unchanged when it is still valid there; otherwise its locked ratio is re-applied in the
+/// new frame and it shrinks about its centre until it lies inside the image again.
+pub fn refit_rect(values: &CompositionValues, frame: Frame) -> Rect {
+    if validate(values, frame).is_ok() {
+        return values.rect;
+    }
+    let turned = turned_frame(frame, values.quarter_turns);
+    let r = values.rect;
+    let (cx, cy) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
+    let (mut w, mut h) = (r.w, r.h);
+    if let Some(ratio) = shape_ratio(values.kind, values.shape, values.orientation, turned) {
+        w = ratio * h * turned.h as f64 / turned.w as f64;
+        if w > 1.0 {
+            h /= w;
+            w = 1.0;
+        }
+    }
+    let place = |w: f64, h: f64| Rect {
+        x: (cx - w / 2.0).clamp(0.0, 1.0 - w),
+        y: (cy - h / 2.0).clamp(0.0, 1.0 - h),
+        w,
+        h,
+    };
+    let mut candidate = values.clone();
+    for _ in 0..400 {
+        candidate.rect = place(w, h);
+        if validate(&candidate, frame).is_ok() {
+            return candidate.rect;
+        }
+        w *= 0.995;
+        h *= 0.995;
+    }
+    default_rect(values.kind, values.shape, values.orientation, turned)
+}
 pub fn pixel_rect(rect: Rect, turned: Frame) -> PixelRect {
     PixelRect {
         left: (rect.x * turned.w as f64).round() as i64,

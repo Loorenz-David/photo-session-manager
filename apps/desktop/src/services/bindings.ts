@@ -44,6 +44,11 @@ export const commands = {
 	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
 	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
+	/**
+	 *  The photo on the stage or in the editor (`None`: none); its pending preview is the next one the
+	 *  editing provider renders (P58, book changelog 39).
+	 */
+	photosPreviewFocus: (photoId: CommandId | null) => typedError<null, CommandError>(__TAURI_INVOKE("photos_preview_focus", { photoId })),
 	photosMove: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_move", { photoIds, targetSessionId })),
 	photosCopy: (photoIds: CommandId[], targetSessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_copy", { photoIds, targetSessionId })),
 	photosImport: (paths: string[]) => typedError<null, CommandError>(__TAURI_INVOKE("photos_import", { paths })),

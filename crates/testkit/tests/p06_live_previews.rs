@@ -309,6 +309,21 @@ fn c3a_focus_renders_stale_active_rows_first() {
     }
     let before = process_ops(&a).len();
     a.focus().unwrap();
+    // Capture One now receives one preview at a time; the remaining work is sent as each
+    // completion frees the lane, preserving the focus scan's active-session order.
+    for _ in 0..2 {
+        let job = a
+            .fake
+            .state
+            .lock()
+            .unwrap()
+            .issued
+            .last()
+            .unwrap()
+            .0
+            .clone();
+        finish(&a, &job);
+    }
     let ops = process_ops(&a);
     assert_eq!(
         &ops[before..],

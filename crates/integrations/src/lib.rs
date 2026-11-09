@@ -17,6 +17,7 @@ use editing::capture_one::{
 use psm_core::{
     Result,
     domain::{
+        composition::{EditorGeometry, Fingerprint, FrameSource},
         editing::{Job, ProvisionInputs},
         session::PublishStep,
     },
@@ -662,6 +663,7 @@ impl App {
             Arc::new(OriginalPreviewJob {
                 store: store.clone(),
                 paths: paths.clone(),
+                events: events.clone(),
             }),
         );
         runner.register(
@@ -1042,6 +1044,7 @@ impl JobHandler for HashJob {
 struct OriginalPreviewJob {
     store: Arc<dyn Store>,
     paths: AppPaths,
+    events: Arc<dyn EventSink>,
 }
 impl JobHandler for OriginalPreviewJob {
     fn run(&self, job: &Job, _: i64) -> Result<()> {
@@ -1060,7 +1063,24 @@ impl JobHandler for OriginalPreviewJob {
                 .map(|_| dest.to_string_lossy().into_owned())
                 .as_deref(),
             extracted.and_then(|e| e.orientation).map(i64::from),
-        )
+        )?;
+        if let Some(frame) = extracted.and_then(|e| e.compose_frame) {
+            self.store.adopt_frame(
+                &job.target,
+                Fingerprint {
+                    frame,
+                    source: FrameSource::Camera,
+                    geometry: EditorGeometry::default(),
+                },
+            )?;
+        }
+        for photo in self.store.photos_for_raw(&job.target)? {
+            self.events.emit(AppEvent::PhotoChanged {
+                photo_id: photo.id,
+                session_id: photo.session_id,
+            });
+        }
+        Ok(())
     }
 }
 struct RenderPreviewJob {

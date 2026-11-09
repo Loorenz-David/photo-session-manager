@@ -1,8 +1,9 @@
 import type { RefObject } from 'react';
 import { valuesOf } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
-import { previewUrl } from '@/services/sessions';
 import { ComposeFrame } from './ComposeFrame';
+import { editorPicture } from './editorPicture';
+import { CAMERA_PREVIEW_NOTE } from '@/services/compositions';
 import type { Box } from './geometry';
 import { Handles } from './Handles';
 import type { ComposeState } from './machine';
@@ -52,16 +53,18 @@ export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint,
   const turns = values?.quarter_turns ?? 0;
   const flipped = values?.flip === 'horizontal';
   const review = photo.composition.state === 'needs_review';
+  const picture = editorPicture(photo, { quarter_turns: turns, flip: flipped ? 'horizontal' : 'none' });
   return (
     <div ref={stageRef} className="compose-stage" aria-label="Compose" onPointerMove={event => { const box = event.currentTarget.getBoundingClientRect(); onPointer?.({ x: event.clientX - box.left, y: event.clientY - box.top }); }}>
       <div ref={imageRef} className="compose-image" data-turned={turns % 2 === 1 || undefined}>
-        {photo.adjusted_preview_path && (
+        {picture && (
           <img
-            key={photo.id}
-            src={previewUrl(photo.adjusted_preview_path)}
+            key={picture.src}
+            src={picture.src}
             alt=""
             draggable={false}
-            style={{ transform: `rotate(${turns * 90}deg) scaleX(${flipped ? -1 : 1})` }}
+            data-swapped={picture.swapped || undefined}
+            style={{ transform: picture.transform }}
           />
         )}
       </div>
@@ -75,6 +78,7 @@ export function ComposeStage({ photo, stageBox, state, stageRef, imageRef, hint,
           {reviewText(photo.composition.review_reason)}
         </p>
       )}
+      {picture?.camera && <p className="compose-camera-note" role="status">{CAMERA_PREVIEW_NOTE}</p>}
       {hint && (
         <p className="compose-hint" role="status">
           Crops made in Capture One are not used.

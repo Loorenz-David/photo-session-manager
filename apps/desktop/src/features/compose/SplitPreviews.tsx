@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { CompositionValues, Frame, Rect } from '@/services/compositions';
 import type { Photo } from '@/services/photos';
-import { previewUrl } from '@/services/sessions';
+import { editorPicture } from './editorPicture';
 import { turnedFrame } from './geometry';
 
 type SplitPreviewsProps = { photo: Photo; values: CompositionValues; frame: Frame };
@@ -19,6 +19,7 @@ const SIDES = [
  * its side (`data-half`) sit on the clipped frame element.
  */
 export function SplitPreviews({ photo, values, frame }: SplitPreviewsProps) {
+  const picture = editorPicture(photo, values);
   const turned = turnedFrame(frame, values.quarter_turns);
   const { rect } = values;
   return (
@@ -37,8 +38,8 @@ export function SplitPreviews({ photo, values, frame }: SplitPreviewsProps) {
           <div key={side} className="split-preview-column">
             <div className="split-preview" data-side={side} style={{ aspectRatio: '1 / 1' }} aria-label={label} title={`${label}: ${Math.round(half.w * turned.w)} px`}>
               <div className="output-preview-frame" data-half={side} data-x0={half.x} data-x1={half.x + half.w} data-turned={values.quarter_turns % 2 === 1 || undefined} style={frameStyle}>
-                {photo.adjusted_preview_path && (
-                  <img src={previewUrl(photo.adjusted_preview_path)} alt="" draggable={false} style={{ transform: `rotate(${values.quarter_turns * 90}deg) scaleX(${values.flip === 'horizontal' ? -1 : 1})` }} />
+                {picture && (
+                  <img src={picture.src} alt="" draggable={false} data-swapped={picture.swapped || undefined} style={{ transform: picture.transform }} />
                 )}
               </div>
             </div>

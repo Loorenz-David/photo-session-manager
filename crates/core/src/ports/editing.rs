@@ -44,6 +44,7 @@ pub trait EditingProvider: Send + Sync {
     fn find_variant(&self, raw: &str) -> Result<bool>;
     fn install_hooks(&self) -> Result<()>;
     fn render(&self, raw: &str, purpose: RenderPurpose) -> Result<String>;
+    #[allow(clippy::too_many_arguments)]
     fn request_render(
         &self,
         raw: &str,
@@ -52,7 +53,15 @@ pub trait EditingProvider: Send + Sync {
         tracking_job_id: i64,
         now: Instant,
         now_ms: i64,
+        // A photo without any adjusted preview yet: it goes before the backlog (P58).
+        new_arrival: bool,
     ) -> Result<()>;
+    /// The photo open on the stage or in the editor; its preview is rendered next (P58).
+    fn set_render_focus(&self, _raw: Option<&str>) {}
+    /// Queued renders the provider refused when their turn came: (tracking job, error). Drained.
+    fn refused_renders(&self) -> Vec<(i64, String)> {
+        Vec::new()
+    }
     fn render_completion(&self, job: &str) -> Option<RenderCompletion>;
     /// The file a finished render produced, from the path the editor reported (10A MC-16
     /// §Completion): `None` when no file written after the request can be found for it.

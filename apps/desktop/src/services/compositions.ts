@@ -40,9 +40,24 @@ export function valuesOf(composition: Composition): CompositionValues | null {
   };
 }
 
-/** The editor opens only on a photo with an adjusted preview and a materialised frame (plan P31 Goal). */
+/**
+ * The editor opens on a photo with a materialised frame and a picture to show (plan P31 Goal). Before Capture One's
+ * adjusted preview, the backend materialises the frame from the camera's own preview only when that preview matches the
+ * camera frame (P58, book changelog 39), so a frame with no adjusted preview means the camera preview can be composed.
+ */
 export function canCompose(photo: Photo): boolean {
-  return photo.adjusted_preview_path !== null && photo.composition.rect !== null && photo.composition.frame !== null;
+  return (photo.adjusted_preview_path !== null || photo.original_preview_path !== null)
+    && photo.composition.rect !== null && photo.composition.frame !== null;
 }
+
+/** The preview the editor composes on: Capture One's adjusted one, else the camera's (P58). */
+export function composePreview(photo: Photo): { path: string; camera: boolean } | null {
+  if (photo.adjusted_preview_path) return { path: photo.adjusted_preview_path, camera: false };
+  if (canCompose(photo) && photo.original_preview_path) return { path: photo.original_preview_path, camera: true };
+  return null;
+}
+
+/** The editor's line while it shows the camera preview (P58). */
+export const CAMERA_PREVIEW_NOTE = "Camera preview — Capture One's version is on its way";
 
 export const COMPOSE_WAITING = "Waiting for Capture One's full-frame preview";
