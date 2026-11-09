@@ -14,7 +14,7 @@ describe('P58 compose on the camera preview', () => {
   it('C1(a) opens on the camera original turned by its orientation and shows the line', async () => {
     layoutStage();
     const p = photo(1, 'main', { position: 1, adjusted_preview_path: null, thumbnail_path: null, orientation: 6,
-      composition: composition(1, { frame: { w: 4160, h: 6240 } }) });
+      composition: composition(1, { frame: { w: 4160, h: 6240 }, frame_source: 'camera' }) });
     await openWorkspace([view([p])]);
     await compose();
     expect(editorImage()).toHaveAttribute('src', 'asset:///previews/1/original.jpg');
@@ -26,19 +26,31 @@ describe('P58 compose on the camera preview', () => {
 
   it('C1(b) a camera original that does not match keeps the waiting reason', async () => {
     layoutStage();
-    const p = photo(1, 'main', { position: 1, adjusted_preview_path: null, composition: composition(1, { frame: null, rect: null }) });
+    const p = photo(1, 'main', { position: 1, adjusted_preview_path: null, composition: composition(1, { frame: null, frame_source: null, rect: null }) });
     await openWorkspace([view([p])]);
     fireEvent.keyDown(window, { key: 'r' });
     expect(stage()).toBeNull();
     expect(screen.getByRole('button', { name: 'Compose' })).toHaveAttribute('aria-disabled', 'true');
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Photo actions' }), { button: 0 });
-    expect(await screen.findByText("Waiting for Capture One's full-frame preview")).toBeVisible();
+    await waitFor(() => expect(document.querySelector('.photo-menu-why')).toHaveTextContent("Waiting for Capture One's full-frame preview"));
+  });
+
+  it('C1(b) a frame that came from an export master does not make the non-matching camera original composable', async () => {
+    layoutStage();
+    const p = photo(1, 'main', { position: 1, adjusted_preview_path: null,
+      composition: composition(1, { frame: { w: 600, h: 400 }, frame_source: 'master' }) });
+    await openWorkspace([view([p])]);
+    fireEvent.keyDown(window, { key: 'r' });
+    expect(stage()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Compose' })).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Photo actions' }), { button: 0 });
+    await waitFor(() => expect(document.querySelector('.photo-menu-why')).toHaveTextContent("Waiting for Capture One's full-frame preview"));
   });
 
   it('C1(c) swaps to the adjusted picture in place, keeps the framing and drops the line', async () => {
     layoutStage();
     const camera = photo(1, 'main', { position: 1, adjusted_preview_path: null, thumbnail_path: null,
-      composition: composition(1, { shape: '4:5', rect: FOUR_FIVE, frame: { w: 6240, h: 4160 }, origin: 'user', revision: 1 }) });
+      composition: composition(1, { shape: '4:5', rect: FOUR_FIVE, frame: { w: 6240, h: 4160 }, frame_source: 'camera', origin: 'user', revision: 1 }) });
     const adjusted = { ...camera, adjusted_preview_path: '/previews/1/adjusted-1.jpg',
       composition: composition(1, { shape: '4:5', rect: FOUR_FIVE, frame: { w: 300, h: 200 }, origin: 'user', revision: 1 }) };
     await openWorkspace([view([camera]), view([adjusted])]);
@@ -55,7 +67,7 @@ describe('P58 compose on the camera preview', () => {
   it('C1(d) stage and tile show the composed camera original before Capture One renders', async () => {
     layoutStage();
     const p = photo(1, 'main', { position: 1, adjusted_preview_path: null, thumbnail_path: null,
-      composition: composition(1, { frame: { w: 6240, h: 4160 }, rect: FOUR_FIVE, shape: '4:5' }) });
+      composition: composition(1, { frame: { w: 6240, h: 4160 }, frame_source: 'camera', rect: FOUR_FIVE, shape: '4:5' }) });
     await openWorkspace([view([p])]);
     expect(document.querySelector('.stage-composed')).toHaveStyle({ aspectRatio: '1996.8 / 2496' });
     expect(document.querySelector('.stage-composed .stage-original')).toHaveAttribute('src', 'asset:///previews/1/original.jpg');

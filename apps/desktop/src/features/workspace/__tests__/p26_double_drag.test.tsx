@@ -102,7 +102,7 @@ function photo(id: number, classification: Photo['classification'], extra: Parti
     original_preview_path: `/previews/${id}/original.jpg`,
     adjusted_preview_path: `/previews/${id}/adjusted-1.jpg`,
     thumbnail_path: null,
-    composition: { photo_id: id, kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: null, frame: null, origin: 'default', revision: 0, state: 'ok', review_reason: null, updated_at: 0 },
+    composition: { photo_id: id, kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: null, frame: null, frame_source: null, origin: 'default', revision: 0, state: 'ok', review_reason: null, updated_at: 0 },
     orientation: 1,
     source: 'capture',
     integrity: 'ok',

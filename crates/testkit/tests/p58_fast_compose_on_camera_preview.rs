@@ -237,14 +237,39 @@ fn c3a_focused_photo_is_next_after_current_render() {
     assert_eq!(finish(&a), photos[1].1);
 }
 
+/// A capture delivered through the hook (as `camera_photo` does); once Capture One's variant is
+/// there, a tick lets the preview service ask for its first render.
+fn captured(a: &TestApp, name: &str) -> (i64, String) {
+    let raw = a
+        .dir
+        .path()
+        .join(format!("Capture One Session/Capture/{name}"));
+    fs::create_dir_all(raw.parent().unwrap()).unwrap();
+    let (bytes, _) =
+        SyntheticRaw::build_with_frame(&[(6240, 4160, true)], 1, None, Some((6240, 4160)));
+    fs::write(&raw, bytes).unwrap();
+    a.deliver_hook(&serde_json::json!({"hook":"capture_done","argv":[raw]}).to_string())
+        .unwrap();
+    let photo = a
+        .store()
+        .photos_in_session(1)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.raw_path.ends_with(name))
+        .unwrap();
+    a.fake.add_image(&photo.raw_path, &[name], false);
+    a.tick(0).unwrap();
+    (photo.id, name.to_owned())
+}
+
 #[test]
 fn c3b_newest_arrivals_precede_oldest_backlog() {
     let a = TestApp::with_fake_document().unwrap();
     let old: Vec<_> = (1..=10)
         .map(|n| queued(&a, &format!("old-{n}.ARW"), false))
         .collect();
-    let new1 = queued(&a, "new-1.ARW", true);
-    let new2 = queued(&a, "new-2.ARW", true);
+    let new1 = captured(&a, "new-1.ARW");
+    let new2 = captured(&a, "new-2.ARW");
     assert_eq!(finish(&a), new2.1);
     assert_eq!(finish(&a), new1.1);
     // old-1 was already with Capture One; the backlog continues oldest-first.

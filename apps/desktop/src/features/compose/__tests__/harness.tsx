@@ -102,7 +102,7 @@ export const DEFAULT_RECT = { x: 0.16660156250000002, y: 0, w: 0.666796875, h: 1
 export const DEFAULT_VALUES: CompositionValues = { kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: DEFAULT_RECT };
 
 export function composition(photoId: number, over: Partial<Composition> = {}): Composition {
-  return { photo_id: photoId, kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: DEFAULT_RECT, frame: FRAME, origin: 'default', revision: 0, state: 'ok', review_reason: null, updated_at: 0, ...over };
+  return { photo_id: photoId, kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: DEFAULT_RECT, frame: FRAME, frame_source: 'preview', origin: 'default', revision: 0, state: 'ok', review_reason: null, updated_at: 0, ...over };
 }
 
 /** What the backend answers to a save: the sent values stored under `revision`. */

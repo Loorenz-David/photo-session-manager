@@ -220,6 +220,11 @@ export type CompositionDto_Deserialize = {
 	straighten: number | null,
 	rect?: RectDto | null,
 	frame?: FrameDto | null,
+	/**
+	 *  Where the frame came from: `camera`, `preview` or `master`. Null until a frame exists (P58: the camera preview
+	 *  is composable only while the frame came from it).
+	 */
+	frame_source?: string | null,
 	origin: string,
 	revision: number,
 	state: string,
@@ -237,6 +242,11 @@ export type CompositionDto_Serialize = {
 	straighten: number | null,
 	rect: RectDto | null,
 	frame: FrameDto | null,
+	/**
+	 *  Where the frame came from: `camera`, `preview` or `master`. Null until a frame exists (P58: the camera preview
+	 *  is composable only while the frame came from it).
+	 */
+	frame_source: string | null,
 	origin: string,
 	revision: number,
 	state: string,

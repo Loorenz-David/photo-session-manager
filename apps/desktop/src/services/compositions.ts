@@ -41,13 +41,15 @@ export function valuesOf(composition: Composition): CompositionValues | null {
 }
 
 /**
- * The editor opens on a photo with a materialised frame and a picture to show (plan P31 Goal). Before Capture One's
- * adjusted preview, the backend materialises the frame from the camera's own preview only when that preview matches the
- * camera frame (P58, book changelog 39), so a frame with no adjusted preview means the camera preview can be composed.
+ * The editor opens on a photo with a materialised frame and a picture to show (plan P31 Goal). Capture One's adjusted
+ * preview always qualifies. The camera's own preview qualifies only while the composition's frame came from it
+ * (`frame_source === 'camera'`, P58, book changelog 39): a frame from an export's master with no adjusted preview yet
+ * says nothing about the camera preview matching, so Compose waits.
  */
 export function canCompose(photo: Photo): boolean {
-  return (photo.adjusted_preview_path !== null || photo.original_preview_path !== null)
-    && photo.composition.rect !== null && photo.composition.frame !== null;
+  if (photo.composition.rect === null || photo.composition.frame === null) return false;
+  return photo.adjusted_preview_path !== null
+    || (photo.original_preview_path !== null && photo.composition.frame_source === 'camera');
 }
 
 /** The preview the editor composes on: Capture One's adjusted one, else the camera's (P58). */

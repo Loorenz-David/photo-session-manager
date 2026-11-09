@@ -121,6 +121,9 @@ pub struct CompositionDto {
     pub straighten: f64,
     pub rect: Option<RectDto>,
     pub frame: Option<FrameDto>,
+    /// Where the frame came from: `camera`, `preview` or `master`. Null until a frame exists (P58: the camera preview
+    /// is composable only while the frame came from it).
+    pub frame_source: Option<String>,
     pub origin: String,
     #[specta(type = specta_typescript::Number)]
     pub revision: i64,
@@ -146,6 +149,7 @@ impl From<Composition> for CompositionDto {
                 h: r.h,
             }),
             frame: c.frame().map(|f| FrameDto { w: f.w, h: f.h }),
+            frame_source: c.fingerprint.as_ref().map(|f| f.source.as_str().into()),
             origin: c.origin.as_str().into(),
             revision: c.revision,
             state: c.state.as_str().into(),

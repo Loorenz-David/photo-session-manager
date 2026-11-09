@@ -9,7 +9,7 @@ const PANNED_X = 0.11546683; // the default square moved by 50 px: x − 50 / 97
 const ZOOMED: Rect = { x: 0.297783626, y: 0.19673467, w: 0.404432748, h: 0.60653066 }; // exp(0.5) about the frame centre
 
 function composition(photoId: number, over: Partial<Composition> = {}): Composition {
-  return { photo_id: photoId, kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: DEFAULT, frame: FRAME, origin: 'default', revision: 0, state: 'ok', review_reason: null, updated_at: 0, ...over };
+  return { photo_id: photoId, kind: 'normal', shape: '1:1', orientation: 'named', quarter_turns: 0, flip: 'none', straighten: 0, rect: DEFAULT, frame: FRAME, frame_source: 'preview', origin: 'default', revision: 0, state: 'ok', review_reason: null, updated_at: 0, ...over };
 }
 const idle = () => initialState(1, composition(1), STAGE)!;
 
