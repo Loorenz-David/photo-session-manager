@@ -55,6 +55,9 @@ pub fn status_message(reason: &NeedsActionReason, holder: Option<&str>) -> Strin
         NeedsActionReason::FtpUnreachable => "The camera can't reach this Mac for uploads".into(),
         NeedsActionReason::FilesNotReceived { count } => format!("{count} photos were taken but not received. The camera may have stopped sending: on the camera, switch FTP Function off and on."),
         NeedsActionReason::SupportNotInstalled => "Add camera support in Settings → Camera".into(),
+        NeedsActionReason::DocumentMissing => {
+            crate::services::editing_startup::DOCUMENT_MISSING.into()
+        }
     }
 }
 

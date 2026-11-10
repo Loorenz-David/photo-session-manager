@@ -354,12 +354,19 @@ impl DirectCameraAdapter {
         }
     }
 
-    /// The first spawn's `--save-dir` (kept for the life of the process, R-I20).
-    pub(crate) fn set_staging_dir(&self, dir: &Path) {
+    /// P63 #27: the Capture One session in Settings is missing (the header names it).
+    pub(crate) fn set_document_missing(&self, missing: bool) {
         let mut state = locked(&self.state);
-        if state.staging_dir.is_none() {
-            state.staging_dir = Some(canonical_lenient(dir));
+        state.remove(&NeedsActionReason::DocumentMissing);
+        if missing {
+            state.add_with_message(NeedsActionReason::DocumentMissing, None, None);
         }
+    }
+
+    /// The current helper's `--save-dir` (R-I20; P63 #28: it follows the document when the helper
+    /// is restarted for a document change).
+    pub(crate) fn set_staging_dir(&self, dir: &Path) {
+        locked(&self.state).staging_dir = Some(canonical_lenient(dir));
     }
 
     /// Whether a Save-to-PC download is expected (the watchdog's `transfer_active`).

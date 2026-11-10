@@ -393,10 +393,13 @@ fn c3b_front_document_deferred() {
 
 #[test]
 fn c3c_make_document_deferred() {
-    let a = gate_fixture();
+    let mut a = gate_fixture();
+    // P63 #27: only the app's own session is created when missing (a session chosen in Settings
+    // is reported instead), so this row runs on the app's own, not yet created, session.
+    a.settings_set(&serde_json::json!({ "document_id": "" }))
+        .unwrap();
     let _g = a.launch_gate().hold();
     a.fake.state.lock().unwrap().open_documents.clear();
-    std::fs::remove_dir_all(document_id(&a)).unwrap();
     let report = a.app.editing.ensure(&a.app.provision).unwrap();
     assert!(report.deferred);
     assert!(

@@ -61,8 +61,10 @@ impl CaptureOneFollow {
             was_running: Mutex::new(None),
         }
     }
+    /// From the process list, never a script (P63 #22: the follower asks on every tick, also while
+    /// the take-back has quit Capture One).
     fn running(&self) -> bool {
-        self.scripting.editor_info().is_ok_and(|info| info.running)
+        self.scripting.is_running().unwrap_or(false)
     }
     fn switch(&self, folder: &Path) -> Result<()> {
         // The script compares against Capture One's live current collection, because the

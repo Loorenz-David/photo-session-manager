@@ -237,8 +237,10 @@ impl TakeBackService {
         self.clock.mono().saturating_duration_since(since)
     }
 
+    /// From the process list, never a script: an Apple event reaching a Capture One that is
+    /// quitting relaunches it (P63 #22).
     fn running_now(&self) -> Option<bool> {
-        self.scripting.editor_info().ok().map(|info| info.running)
+        self.scripting.is_running().ok()
     }
 
     fn wait_quit(&self) -> Result<()> {

@@ -62,7 +62,20 @@ pub struct ProcessStarted {
     pub geometry: EditorGeometry,
 }
 
+/// The styles Capture One lists (P63, owner 2026-11-10): the photographer's own (user/custom)
+/// styles first, then the built-in ones, each in Capture One's order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StyleList {
+    pub user: Vec<String>,
+    pub built_in: Vec<String>,
+}
+
 pub trait CaptureOneScripting: Send + Sync {
+    /// Whether Capture One runs, read from the system's process list: never an Apple event, so it
+    /// can never launch Capture One (P63 #22).
+    fn is_running(&self) -> Result<bool>;
+    /// The styles Capture One lists (P63). Only ever asked while Capture One runs.
+    fn list_styles(&self) -> Result<StyleList>;
     fn editor_info(&self) -> Result<EditorInfo>;
     fn launch(&self) -> Result<()>;
     fn make_document(&self, parent: &str, name: &str) -> Result<String>;

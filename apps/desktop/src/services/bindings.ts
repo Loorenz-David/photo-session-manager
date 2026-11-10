@@ -104,6 +104,11 @@ export const commands = {
 	notificationsList: (sessionId: CommandId | null) => typedError<NotificationDto[], CommandError>(__TAURI_INVOKE("notifications_list", { sessionId })),
 	settingsGet: () => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_get")),
 	settingsSet: (patch: SettingsPatchDto_Deserialize) => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_set", { patch })),
+	/**
+	 *  The styles Capture One lists, or `null` when they cannot be read (Capture One not running, or
+	 *  the list unreadable); asking never launches Capture One (P63).
+	 */
+	editorStyles: () => typedError<EditorStylesDto | null, CommandError>(__TAURI_INVOKE("editor_styles")),
 	storageGet: () => typedError<StorageDto_Serialize, CommandError>(__TAURI_INVOKE("storage_get")),
 	/**  Saves the minimum free space (GB); the background job applies it at its next tick. */
 	storageMinFreeSet: (minFreeGb: number) => typedError<StorageDto_Serialize, CommandError>(__TAURI_INVOKE("storage_min_free_set", { minFreeGb })),
@@ -342,6 +347,15 @@ export type DefinitionDto_Serialize = {
 	group: AttributeGroupDto,
 	description: string | null,
 	writable: boolean,
+};
+
+/**
+ *  The styles Capture One lists for Settings → Style (P63): the photographer's own first, then the
+ *  built-in ones.
+ */
+export type EditorStylesDto = {
+	user: string[],
+	built_in: string[],
 };
 
 export type ExportRunResponse = {

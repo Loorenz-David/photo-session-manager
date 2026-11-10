@@ -96,6 +96,36 @@ pub async fn settings_get(state: State<'_, AppState>) -> Result<SettingsDto, Com
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
+/// The styles Capture One lists for Settings → Style (P63): the photographer's own first, then the
+/// built-in ones.
+#[derive(Serialize, Deserialize, Type)]
+pub struct EditorStylesDto {
+    pub user: Vec<String>,
+    pub built_in: Vec<String>,
+}
+
+/// The styles Capture One lists, or `null` when they cannot be read (Capture One not running, or
+/// the list unreadable); asking never launches Capture One (P63).
+#[tauri::command]
+#[specta::specta]
+pub async fn editor_styles(
+    state: State<'_, AppState>,
+) -> Result<Option<EditorStylesDto>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || match app.editing.styles() {
+        Ok(styles) => Ok(Some(EditorStylesDto {
+            user: styles.user,
+            built_in: styles.built_in,
+        })),
+        Err(error) => {
+            tracing::info!(%error, "Capture One's styles not read");
+            Ok(None)
+        }
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn settings_set(

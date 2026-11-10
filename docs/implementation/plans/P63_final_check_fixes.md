@@ -68,3 +68,38 @@ same assertions); C++ tests if the unplug fix is in the helper. ≈ 16 paths, �
 - **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log
+
+### 2026-11-10 — implement r1 (Claude Opus, `pipeline-implementer`)
+**Built.** (#22) `CaptureOneScripting::is_running` (the process list, never an Apple event; JXA side: `ps` with a 200 ms cache) and one gate
+check in `GatedScripting`: off the take-back's permitted thread, while the take-back holds the gate or a relaunch waits for the camera
+helper with Capture One not running (P54), every script but `launch`/`is_running` answers `EditorLaunchDeferred` without running
+(`editor_info` and `quit` included while the take-back holds it; `launch` keeps its start-order wait). The follower's and the take-back's
+"is it running?" polls use `is_running` (the follower polled `editor_info.js` on every 50 ms tick, and the take-back's step 3/4 polls did
+too — `running()` true, then `captureDoneScript()`/`version()` reaching a Capture One that finished quitting relaunches it: the 0.35 s
+relaunch and the false "did not quit"). The ensure treats a refused `editor_info` as deferred. (#27) `document_present` (folder + a
+`.cosessiondb`) and `DOCUMENT_MISSING`; a session chosen in Settings that is missing is reported by the ensure (health `document_missing`,
+never `make_document`), the receiver's capture root is none (uploads → 451), the helper is not spawned (no staging folder) until the
+session is there, and the runtime tick names it in Health and in the header (`NeedsActionReason::DocumentMissing`). (#28) the runtime tick
+restarts the helper with the current session's staging (`--save-dir <new>/Capture/.incoming/sdk-<run>`, cached `--ip/--mac` kept) when the
+session changed, never during a take-back, an upload or a Save-to-PC transfer. (#4) sticky Save footer; leaving Settings with unsaved changes
+(Back, Escape/⌘[, Health) asks `Save your changes?` Save/Discard/Cancel through a leave guard in `lib/routes.ts`. (#5) helper: the SDK adapter
+caches the endpoint of its own Wi-Fi connect; after a lost session a failed cached connect is retried at once for 5 s, then discovery starts
+at once; an empty Wi-Fi discovery while recovering is retried at once (no backoff). (#6) `EditingProvider::styles` + Tauri `editor_styles`
+(null when unreadable) + Settings → Style drop-down (No style, your styles, built-in; a stored name not listed stays selectable). (#7) see
+Deviations: the p48 time was App shutdown joining the spool thread stuck in a 11–22 s FSEvents watcher start; shutdown now waits ≤ 1 s for it.
+**Cause of the 11.8 s unplug recovery** (app log 2026-11-10 13:40:12–24Z): lost +0; Wi-Fi discovery +1.06 s → empty after 3.68 s; backoff
+1.0 s; discovery +5.8 s → found after 3.84 s; connect 2.2 s → 11.84 s. No cached endpoint existed; the camera's Wi-Fi was already up (FTP
+uploads arrived at +3.7 s). With the fix (fake at those timings): cached endpoint ≤ 6.1 s; stale endpoint ≤ 5 + 3.8 + 2.2 s; none ≤ 10.8 s.
+**Assumptions.** The "missing" rule applies to a session chosen in Settings (`document_id` set); the app's own session is still created
+when absent (10C step 2). The header sentence shows on the direct camera's status (the header's camera line); with the Capture One
+camera adapter only Health shows it. Protected operations for the helper restart = take-back running, an FTP upload open, a Save-to-PC
+transfer expected. `editor_info` is refused only while the take-back holds the gate; in the P54 window it still runs (the ensure needs it to
+reach `launch`, whose wait is the explicit launch step). The style drop-down lists only names, split by the `.costyle` files under
+`~/Library/Application Support/Capture One/Styles`.
+**Deviations.** Files outside the listed perimeter: `crates/core/src/{domain/camera.rs, domain/editing.rs, mechanisms/camera_status.rs,
+ports/editing.rs, services/editing_startup.rs}`, `crates/integrations/src/lib.rs`, `crates/integrations/src/editing/capture_one/{jxa.rs,
+scripting.rs, provision.rs, jxa/list_styles.js (new)}`, `crates/testkit/src/fake_capture_one.rs`, `apps/desktop/src-tauri/src/{lib.rs,
+commands/settings.rs, commands/camera.rs}`, `apps/desktop/src/{services/bindings.ts (generated), services/styles.ts (new), lib/routes.ts,
+lib/keyboard.ts, features/shell/PageHeader.tsx}`. `p48_camera_ownership.rs`: besides no timing edit being needed, `c3c` now runs on the
+app's own (not yet created) session — a deleted *configured* session is no longer recreated (#27), so the make-document path it guards only
+exists for the app's own session; its assertions are unchanged. R-I20 "staging never moved for this process" is superseded by #28.

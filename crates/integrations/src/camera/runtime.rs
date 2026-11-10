@@ -12,6 +12,7 @@ use super::{
     support::installed_sidecar,
 };
 use crate::editing::capture_one::{launch_gate::LaunchGate, scripting::CaptureOneScripting};
+use psm_core::services::editing_startup::{DOCUMENT_MISSING, document_present};
 use psm_core::{
     domain::camera::{CameraSettings, Delivery, DeliveryOutcome, ExposureObserved, Link, secrets},
     domain::editing::ProvisionInputs,
@@ -89,6 +90,8 @@ pub struct AppBinding {
     pub provision: ProvisionInputs,
     pub document_id: String,
     pub gate: Arc<LaunchGate>,
+    /// The document was chosen in Settings (P63 #27: missing → reported, never recreated).
+    pub document_configured: bool,
 }
 struct RoutingSink(RwLock<Arc<dyn CaptureSink>>);
 impl CaptureSink for RoutingSink {
@@ -185,7 +188,15 @@ pub struct CameraRuntime {
     ftp_error_delivery_id: Mutex<Option<i64>>,
     bundled_sidecar: RwLock<Option<PathBuf>>,
     staging_dir: Mutex<Option<PathBuf>>,
+    /// P63 #27: the helper was not started because the document is missing; started once it is
+    /// there.
+    spawn_deferred: AtomicBool,
+    /// P63 #27: when the document was last looked at (real time; a filesystem poll).
+    document_checked: Mutex<Option<std::time::Instant>>,
 }
+
+/// How often the tick looks whether the document is there (P63 #27).
+const DOCUMENT_CHECK_EVERY: Duration = Duration::from_millis(250);
 impl CameraRuntime {
     pub fn new(secrets: Arc<dyn SecretStore>, clock: Arc<dyn Clock>, paths: AppPaths) -> Arc<Self> {
         let start_order = StartOrder::new(super::support::installed(&paths).is_some());
@@ -243,6 +254,8 @@ impl CameraRuntime {
             ftp_error_delivery_id: Mutex::new(None),
             bundled_sidecar: RwLock::new(None),
             staging_dir: Mutex::new(None),
+            spawn_deferred: AtomicBool::new(false),
+            document_checked: Mutex::new(None),
         });
         let weak = Arc::downgrade(&runtime);
         runtime.start_order.set_relaunch_retry(Arc::new(move || {
@@ -357,10 +370,115 @@ impl CameraRuntime {
         self.set_capture_sink(ledger.clone(), ledger.clone());
         ledger
     }
-    /// The capture root formula the receiver uses: `canon(<document>/Capture)`.
+    /// The capture root formula the receiver uses: `canon(<document>/Capture)`, and none while the
+    /// document is missing (P63 #27: uploads are answered 451 and nothing is filed or created).
     fn capture_root_fn(&self) -> Arc<dyn Fn() -> Option<PathBuf> + Send + Sync> {
         let document = self.capture_root.clone();
-        Arc::new(move || std::fs::canonicalize(document.read().unwrap().join("Capture")).ok())
+        Arc::new(move || {
+            let document = document.read().unwrap().clone();
+            if !document_present(&document) {
+                return None;
+            }
+            std::fs::canonicalize(document.join("Capture")).ok()
+        })
+    }
+    /// The helper's Save-to-PC staging folder for the current document (R-I20).
+    fn staging_for_document(&self) -> PathBuf {
+        self.capture_root
+            .read()
+            .unwrap()
+            .join("Capture/.incoming")
+            .join(format!("sdk-{}", self.run_id))
+    }
+    /// P63 #27/#28, once per `DOCUMENT_CHECK_EVERY`: the header and Health name a missing session
+    /// chosen in Settings; a helper deferred for a missing document starts once it is there; a
+    /// helper whose staging is under another document is restarted with the current one, never
+    /// while a take-back, an upload or a Save-to-PC transfer is in progress.
+    fn check_document(&self) {
+        {
+            let mut checked = self.document_checked.lock().unwrap();
+            if checked.is_some_and(|at| at.elapsed() < DOCUMENT_CHECK_EVERY) {
+                return;
+            }
+            *checked = Some(std::time::Instant::now());
+        }
+        let document = self.capture_root.read().unwrap().clone();
+        let present = document_present(&document);
+        let configured = self
+            .binding
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|b| (b.document_configured, b.health.clone()));
+        if let Some((true, health)) = &configured {
+            if present {
+                health.clear("document_missing");
+            } else {
+                health.set("document_missing", DOCUMENT_MISSING);
+            }
+            if let Some(adapter) = self.bound_direct() {
+                adapter.set_document_missing(!present);
+            }
+        }
+        if !present {
+            return;
+        }
+        if self.spawn_deferred.load(Ordering::SeqCst) {
+            let mut guard = self.supervisor.lock().expect("camera supervisor");
+            if guard.is_none() {
+                self.spawn_deferred.store(false, Ordering::SeqCst);
+                self.spawn_helper(&mut guard);
+            }
+            return;
+        }
+        let staging = self.staging_for_document();
+        let moved = self
+            .staging_dir
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|current| *current != staging);
+        let protected = self.take_back_running.load(Ordering::SeqCst)
+            || self.uploads_in_progress() > 0
+            || self.capture_in_progress();
+        if moved && !protected {
+            self.restart_for_document();
+        }
+    }
+    /// P63 #28: quits the helper and starts it again with the current document's staging folder,
+    /// keeping the camera's cached endpoint (`--ip`/`--mac`).
+    fn restart_for_document(&self) {
+        let mut guard = self.supervisor.lock().expect("camera supervisor");
+        let endpoint: Vec<String> = guard
+            .as_ref()
+            .map(|client| {
+                let args = &client.supervisor().spec.args;
+                let mut kept = Vec::new();
+                for flag in ["--ip", "--mac"] {
+                    if let Some(at) = args.iter().position(|arg| arg == flag)
+                        && let Some(value) = args.get(at + 1)
+                    {
+                        kept.extend([flag.to_owned(), value.clone()]);
+                    }
+                }
+                kept
+            })
+            .unwrap_or_default();
+        if let Some(client) = guard.as_mut() {
+            client.supervisor_mut().quit_and_wait();
+        }
+        *guard = None;
+        self.helper_running.store(false, Ordering::SeqCst);
+        if let Some(old) = self.staging_dir.lock().unwrap().take() {
+            // Only an empty folder is removed. A camera transfer is never touched (H2).
+            let _ = fs::remove_dir(old);
+        }
+        tracing::info!("camera helper restarted for the new Capture One session");
+        if self.spawn_helper(&mut guard)
+            && let Some(client) = guard.as_mut()
+        {
+            client.supervisor_mut().spec.args.extend(endpoint);
+        }
     }
     pub fn receiver_port(&self) -> Option<u16> {
         self.receiver
@@ -419,6 +537,7 @@ impl CameraRuntime {
         let capture_root = binding.capture_root.clone();
         let health = binding.health.clone();
         *self.capture_root.write().unwrap() = capture_root;
+        *self.document_checked.lock().unwrap() = None;
         // §6.11 Runtime (b): the ledger over the new store, sharing the process-wide worker lock;
         // pending rows are recovered under that lock before anything new arrives.
         let ledger = self.install_ledger(LedgerService {
@@ -478,8 +597,41 @@ impl CameraRuntime {
         {
             tracing::warn!(%error, "camera sidecar refresh failed");
         }
-        let Some(program) = installed_sidecar(&self.paths) else {
+        if !self.spawn_helper(&mut guard) {
             return;
+        }
+        drop(guard);
+        if self.credentials.lock().unwrap().is_none() {
+            let runtime = self.clone();
+            std::thread::spawn(move || {
+                let user = runtime
+                    .secrets
+                    .get(secrets::ACCESS_AUTH_USER)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                let password = runtime
+                    .secrets
+                    .get(secrets::ACCESS_AUTH_PASSWORD)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                logging::add_secret(&user);
+                logging::add_secret(&password);
+                let has_credentials = !user.is_empty() || !password.is_empty();
+                *runtime.credentials.lock().unwrap() = Some((user, password));
+                runtime.update_spawn_credentials();
+                if has_credentials {
+                    runtime.restart_if_not_usb();
+                }
+            });
+        }
+    }
+    /// Spawns the helper into `guard` (R-I20 staging, credentials as the first line); `false` when
+    /// nothing was spawned.
+    fn spawn_helper(&self, guard: &mut Option<SidecarClient>) -> bool {
+        let Some(program) = installed_sidecar(&self.paths) else {
+            return false;
         };
         if self.credentials.lock().unwrap().is_none()
             && let (Some(user), Some(password)) = (
@@ -501,17 +653,18 @@ impl CameraRuntime {
         });
         logging::add_secret(&user);
         logging::add_secret(&password);
-        // §Staging (R-I20): `<binding document>/Capture/.incoming/sdk-<run_id>`, computed at the
-        // first spawn and never moved for this process (restarts reuse it).
-        let staging = self
-            .capture_root
-            .read()
-            .unwrap()
-            .join("Capture/.incoming")
-            .join(format!("sdk-{}", self.run_id));
+        // §Staging (R-I20): `<binding document>/Capture/.incoming/sdk-<run_id>`; crash restarts
+        // reuse it, a document change moves it (P63 #28). A missing document gets no folder: the
+        // helper starts once the document is there (P63 #27).
+        let staging = self.staging_for_document();
+        if !document_present(&self.capture_root.read().unwrap()) {
+            tracing::warn!("camera helper waits: the Capture One session is missing");
+            self.spawn_deferred.store(true, Ordering::SeqCst);
+            return false;
+        }
         if let Err(error) = fs::create_dir_all(&staging) {
             tracing::warn!(%error, "camera staging unavailable");
-            return;
+            return false;
         }
         *self.staging_dir.lock().unwrap() = Some(staging.clone());
         let spec = SidecarSpec {
@@ -549,32 +702,7 @@ impl CameraRuntime {
             }
         }
         *guard = Some(SidecarClient::new(supervisor));
-        drop(guard);
-        if self.credentials.lock().unwrap().is_none() {
-            let runtime = self.clone();
-            std::thread::spawn(move || {
-                let user = runtime
-                    .secrets
-                    .get(secrets::ACCESS_AUTH_USER)
-                    .ok()
-                    .flatten()
-                    .unwrap_or_default();
-                let password = runtime
-                    .secrets
-                    .get(secrets::ACCESS_AUTH_PASSWORD)
-                    .ok()
-                    .flatten()
-                    .unwrap_or_default();
-                logging::add_secret(&user);
-                logging::add_secret(&password);
-                let has_credentials = !user.is_empty() || !password.is_empty();
-                *runtime.credentials.lock().unwrap() = Some((user, password));
-                runtime.update_spawn_credentials();
-                if has_credentials {
-                    runtime.restart_if_not_usb();
-                }
-            });
-        }
+        true
     }
     /// Writes `command` to the sidecar; the returned id is the one on the wire.
     pub fn send_command(&self, command: Command) -> psm_core::Result<CmdId> {
@@ -737,6 +865,7 @@ impl CameraRuntime {
             .tick_serial
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.check_document();
         // One `client.poll` per tick (P46 L19); the supervisor lock is released before the
         // adapter step so `capture()` never waits on a download's hash.
         let (events, side, exits) = {

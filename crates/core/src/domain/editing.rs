@@ -7,6 +7,14 @@ pub struct ProvisionInputs {
     pub wait: Duration,
 }
 
+/// The styles the editor lists for Settings → Style (P63, owner 2026-11-10): the photographer's own
+/// styles first, then the built-in ones.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EditorStyles {
+    pub user: Vec<String>,
+    pub built_in: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StyleOutcome {
     Applied,

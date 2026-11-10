@@ -1,18 +1,26 @@
 use super::scripting::{
     CaptureOneScripting, DocumentInfo, EditorInfo, RecipeEnsure, RecipeProps, StyleEnsure,
+    StyleList,
 };
+use psm_core::ports::system::ProcessList;
 use psm_core::{Error, Result};
-use psm_infra::{osascript::OsaRunner, paths::AppPaths};
+use psm_infra::{osascript::OsaRunner, paths::AppPaths, processes::PsProcessList};
 use serde::de::DeserializeOwned;
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-const SCRIPTS: [(&str, &str); 22] = [
+/// Capture One's process name (its bundle's executable).
+const PROCESS_NAME: &str = "Capture One";
+/// `is_running` answers from one process listing this long (the follower asks on every tick).
+const RUNNING_CACHE: Duration = Duration::from_millis(200);
+
+const SCRIPTS: [(&str, &str); 23] = [
+    ("list_styles", include_str!("jxa/list_styles.js")),
     ("editor_info", include_str!("jxa/editor_info.js")),
     ("make_document", include_str!("jxa/make_document.js")),
     ("open_document", include_str!("jxa/open_document.js")),
@@ -50,6 +58,36 @@ pub struct JxaScripting {
     runner: OsaRunner,
     dir: PathBuf,
     variant_raws: Mutex<HashMap<String, String>>,
+    running: Mutex<Option<(Instant, bool)>>,
+    /// Capture One's folder of the photographer's own styles.
+    user_styles: PathBuf,
+}
+
+/// The style names (file stems of `.costyle` files) under `dir`, recursively.
+fn user_style_names(dir: &Path) -> Vec<String> {
+    let mut names = Vec::new();
+    let Ok(entries) = fs::read_dir(dir) else {
+        return names;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            names.extend(user_style_names(&path));
+        } else if path.extension().is_some_and(|e| e == "costyle")
+            && let Some(stem) = path.file_stem()
+        {
+            names.push(stem.to_string_lossy().into_owned());
+        }
+    }
+    names
+}
+
+/// Capture One's list split into the photographer's own styles and the built-in ones (P63).
+pub fn split_styles(available: Vec<String>, user_names: &[String]) -> StyleList {
+    let (user, built_in) = available
+        .into_iter()
+        .partition(|name| user_names.iter().any(|u| u == name));
+    StyleList { user, built_in }
 }
 impl JxaScripting {
     pub fn new(paths: &AppPaths) -> Result<Self> {
@@ -65,6 +103,10 @@ impl JxaScripting {
             runner: OsaRunner::new(&paths.root),
             dir,
             variant_raws: Mutex::new(HashMap::new()),
+            running: Mutex::new(None),
+            user_styles: paths
+                .home
+                .join("Library/Application Support/Capture One/Styles"),
         })
     }
     fn call<T: DeserializeOwned>(&self, op: &str, args: &[&str]) -> Result<T> {
@@ -123,10 +165,38 @@ pub fn parse_process_result(value: &str) -> Result<super::scripting::ProcessStar
     }
 }
 impl CaptureOneScripting for JxaScripting {
+    fn is_running(&self) -> Result<bool> {
+        let mut cached = self
+            .running
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        if let Some((at, running)) = *cached
+            && at.elapsed() < RUNNING_CACHE
+        {
+            return Ok(running);
+        }
+        let running = PsProcessList
+            .running()?
+            .iter()
+            .any(|name| name == PROCESS_NAME);
+        *cached = Some((Instant::now(), running));
+        Ok(running)
+    }
+    fn list_styles(&self) -> Result<StyleList> {
+        let available: Vec<String> = self.call("list_styles", &[])?;
+        Ok(split_styles(
+            available,
+            &user_style_names(&self.user_styles),
+        ))
+    }
     fn editor_info(&self) -> Result<EditorInfo> {
         self.call("editor_info", &[])
     }
     fn launch(&self) -> Result<()> {
+        *self
+            .running
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))? = None;
         let output = std::process::Command::new("open")
             .args(["-g", "-a", "Capture One"])
             .output()?;

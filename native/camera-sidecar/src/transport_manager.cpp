@@ -369,6 +369,18 @@ bool TransportManager::try_connect(Transport t) {
     return false;
   }
   if (eps.empty()) {
+    if (t == Transport::Wifi && recovering && lost_at_ >= 0 &&
+        clock_() - lost_at_ < cfg_.recovery_fast_window_ms) {
+      // P63: the camera's Wi-Fi remote is coming back after a lost session; a discovery already
+      // takes seconds, so the next one starts at once instead of after a growing backoff.
+      next_attempt_ms_ = clock_() + cfg_.recovery_discovery_retry_ms;
+      log_.emit("connect.retry_scheduled", Fields()
+                                               .str("transport", "wifi")
+                                               .str("reason", "recovering")
+                                               .num("delay_ms", cfg_.recovery_discovery_retry_ms));
+      set_state(State::Recovering, "camera not found");
+      return false;
+    }
     // A claimed USB interface can make enumeration return no endpoint at all. Count that
     // attempt toward the same bounded Wi-Fi fallback as a failed USB connect.
     schedule_retry(t, t == Transport::Usb && usb_held_);
@@ -397,7 +409,26 @@ bool TransportManager::try_connect(Transport t) {
 
   if (!r.ok) {
     bool cached_direct = ep.address.rfind("direct-ip:", 0) == 0;
+    if (cached_direct && recovering && lost_at_ >= 0 &&
+        clock_() - lost_at_ < cfg_.cached_endpoint_window_ms) {
+      // P63: right after a lost session the camera's remote is not up yet; the cached endpoint
+      // stays and is tried again at once (no backoff, no failure counted).
+      next_attempt_ms_ = clock_();
+      log_.emit("connect.retry_scheduled", Fields()
+                                               .str("transport", "wifi")
+                                               .str("reason", "cached endpoint, recovering")
+                                               .num("delay_ms", 0));
+      set_state(State::Recovering, "connect failed");
+      return false;
+    }
     if (cached_direct) adapter_.forget_cached_endpoint();
+    if (cached_direct && recovering && lost_at_ >= 0 &&
+        clock_() - lost_at_ < cfg_.recovery_fast_window_ms) {
+      // P63: the cached endpoint is gone; discovery starts at once.
+      next_attempt_ms_ = clock_() + cfg_.recovery_discovery_retry_ms;
+      set_state(State::Recovering, "connect failed");
+      return false;
+    }
     if (r.fatal && !cached_direct) {
       set_state(State::Error, "fatal connection error: " + r.message);
       return false;

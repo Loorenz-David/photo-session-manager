@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useBackKeys } from '@/lib/keyboard';
-import { parentRoute, routeLabel } from '@/lib/routes';
+import { goTo, parentRoute, routeLabel } from '@/lib/routes';
 
 type PageHeaderProps = {
   title: ReactNode;
@@ -15,7 +15,7 @@ export function PageHeader({ title, escapeGoesBack = false, children }: PageHead
   const label = parent === null ? null : routeLabel(parent);
   useBackKeys(parent, escapeGoesBack);
   return <header className="app-header">
-    {parent && <Button variant="ghost" className="back-button" aria-label={`Back to ${label}`} onClick={() => { window.location.hash = parent; }}><ArrowLeft /> {label}</Button>}
+    {parent && <Button variant="ghost" className="back-button" aria-label={`Back to ${label}`} onClick={() => goTo(parent)}><ArrowLeft /> {label}</Button>}
     {parent ? <div className="header-identity">{title}</div> : title}
     <div className="header-actions">{children}</div>
   </header>;

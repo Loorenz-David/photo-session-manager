@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { goTo } from './routes';
 
 /** True when the key press belongs to a text field, so single-letter shortcuts must not fire. */
 export function isTyping(target: EventTarget | null): boolean {
@@ -39,7 +40,7 @@ export function useBackKeys(parent: string | null, escape: boolean): void {
       const escapeBack = escape && event.key === 'Escape' && !isTyping(event.target);
       if (!commandBack && !escapeBack) return;
       event.preventDefault();
-      window.location.hash = parent!;
+      goTo(parent!);
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

@@ -20,13 +20,15 @@ struct GateState {
     user_waiting: usize,
 }
 
-/// The user and background lanes over one scripting implementation. Both lanes also enforce the
-/// editor-launch gate (10E MC-34 R-I32; P60 #22): while the gate is held on another thread the
-/// launch-capable and render scripts answer `EditorLaunchDeferred` without running; while "Take
-/// the camera back" runs, so does every other script except `editor_info` and `quit` (both check
-/// `running()` first), and the take-back waits for the scripts already running to finish before it
-/// quits Capture One. `launch` and the five scripts that do not check
-/// `running()` first also wait for the start order (R-I31); render-path scripts never wait.
+/// The user and background lanes over one scripting implementation, and the one gate every
+/// script to Capture One passes (10E MC-34 R-I32; P60, P63 #22). Off the thread the take-back
+/// permits, while Capture One must stay closed — "Take the camera back" holds the gate (from its
+/// first step to its end), or a relaunch waits for the camera helper's USB session (P54) and
+/// Capture One is not running — no script runs: the caller gets `EditorLaunchDeferred` ("not
+/// now", neither a failure nor an attempt). `is_running` is no script (the process list) and is
+/// always answered; `launch` keeps its start-order wait (the one explicit launch step); while the
+/// gate is merely held, the launch-capable and render scripts are refused too. The take-back
+/// waits for the scripts already running to finish before it quits Capture One.
 pub struct GatedScripting {
     inner: Arc<dyn CaptureOneScripting>,
     lane: Lane,
@@ -62,19 +64,21 @@ impl GatedScripting {
             }),
         )
     }
-    /// A script that would launch Capture One: refused while the gate is held elsewhere.
+    /// Capture One must stay closed for this thread (P63 #22): the take-back holds the gate on
+    /// another thread, or a relaunch waits for the camera helper and Capture One is not running
+    /// (asked of the process list, never of Capture One).
+    fn closed_here(&self) -> bool {
+        if self.launch_gate.permitted_here() {
+            return false;
+        }
+        self.launch_gate.quiet_here()
+            || (self.start_order.needs_relaunch_wait() && !self.inner.is_running().unwrap_or(false))
+    }
+    /// A script that would launch Capture One or render: also refused while the gate is held
+    /// elsewhere (R-I32).
     fn launching<T>(&self, f: impl FnOnce(&dyn CaptureOneScripting) -> Result<T>) -> Result<T> {
         if self.launch_gate.refuses_here() {
             return Err(Error::EditorLaunchDeferred);
-        }
-        if !self.launch_gate.permitted_here()
-            && self.start_order.needs_relaunch_wait()
-            && !self.lane(|i| i.editor_info())?.running
-        {
-            self.start_order.wait_for_relaunch(self.clock.as_ref());
-            if self.launch_gate.refuses_here() {
-                return Err(Error::EditorLaunchDeferred);
-            }
         }
         self.call(|inner| {
             if self.launch_gate.refuses_here() {
@@ -83,32 +87,15 @@ impl GatedScripting {
             f(inner)
         })
     }
-    /// A render-path script (`process`, `find_image`, `find_image_in_folder`, `recipe_exists`;
-    /// P60 #22): refused while the gate is held elsewhere and, while a relaunch must wait for the
-    /// camera helper (P54) and Capture One is not running, refused at once instead of waiting — a
-    /// render never launches Capture One early and never blocks the app's background work.
-    fn rendering<T>(&self, f: impl FnOnce(&dyn CaptureOneScripting) -> Result<T>) -> Result<T> {
-        if self.launch_gate.refuses_here() {
-            return Err(Error::EditorLaunchDeferred);
-        }
-        if !self.launch_gate.permitted_here()
-            && self.start_order.needs_relaunch_wait()
-            && !self.lane(|i| i.editor_info())?.running
-        {
-            return Err(Error::EditorLaunchDeferred);
-        }
-        self.call(f)
-    }
-    /// Every script but `editor_info` and `quit` (which check `running()` and never wake Capture
-    /// One): refused while "Take the camera back" runs on another thread (P60 #22: an Apple event
-    /// addressed to a quit Capture One relaunches it). A plain hold of the gate refuses only the
-    /// launch-capable and render scripts (R-I32).
+    /// Every script but `launch` and `is_running`: refused while Capture One must stay closed,
+    /// checked before the lane is taken and again once it is (P60, P63 #22: an Apple event
+    /// addressed to a quit Capture One relaunches it).
     fn call<T>(&self, f: impl FnOnce(&dyn CaptureOneScripting) -> Result<T>) -> Result<T> {
-        if self.launch_gate.quiet_here() {
+        if self.closed_here() {
             return Err(Error::EditorLaunchDeferred);
         }
         self.lane(|inner| {
-            if self.launch_gate.quiet_here() {
+            if self.closed_here() {
                 return Err(Error::EditorLaunchDeferred);
             }
             f(inner)
@@ -147,9 +134,24 @@ impl GatedScripting {
     }
 }
 impl CaptureOneScripting for GatedScripting {
+    /// No script: always answered, never waits for a lane.
+    fn is_running(&self) -> Result<bool> {
+        self.inner.is_running()
+    }
+    /// Only while Capture One runs (asking would launch it).
+    fn list_styles(&self) -> Result<super::scripting::StyleList> {
+        if !self.inner.is_running()? {
+            return Err(Error::EditorLaunchDeferred);
+        }
+        self.call(|i| i.list_styles())
+    }
     /// Only the ensure asks this on the gated lanes: Capture One found running satisfies the start
-    /// order for the rest of the process (R-I31 "already running at app start", P48 L4b).
+    /// order for the rest of the process (R-I31 "already running at app start", P48 L4b). Refused
+    /// while the take-back holds the gate (P63 #22).
     fn editor_info(&self) -> Result<EditorInfo> {
+        if self.launch_gate.quiet_here() {
+            return Err(Error::EditorLaunchDeferred);
+        }
         let info = self.lane(|i| i.editor_info())?;
         if info.running {
             self.start_order.satisfy(StartReason::AlreadyRunning);
@@ -172,7 +174,10 @@ impl CaptureOneScripting for GatedScripting {
         if self.launch_gate.refuses_here() {
             return Err(Error::EditorLaunchDeferred);
         }
-        self.call(|i| {
+        if self.launch_gate.quiet_here() {
+            return Err(Error::EditorLaunchDeferred);
+        }
+        self.lane(|i| {
             if self.launch_gate.refuses_here() {
                 return Err(Error::EditorLaunchDeferred);
             }
@@ -213,13 +218,13 @@ impl CaptureOneScripting for GatedScripting {
         self.call(|i| i.get_hook(name))
     }
     fn recipe_exists(&self, id: &str, name: &str) -> Result<bool> {
-        self.rendering(|i| i.recipe_exists(id, name))
+        self.launching(|i| i.recipe_exists(id, name))
     }
     fn find_image(&self, id: &str, raw: &str) -> Result<Option<String>> {
-        self.rendering(|i| i.find_image(id, raw))
+        self.launching(|i| i.find_image(id, raw))
     }
     fn find_image_in_folder(&self, id: &str, folder: &str, raw: &str) -> Result<Option<String>> {
-        self.rendering(|i| i.find_image_in_folder(id, folder, raw))
+        self.launching(|i| i.find_image_in_folder(id, folder, raw))
     }
     fn get_color_tag(&self, id: &str, variant: &str) -> Result<i32> {
         self.call(|i| i.get_color_tag(id, variant))
@@ -233,7 +238,7 @@ impl CaptureOneScripting for GatedScripting {
         variant: &str,
         recipe: &str,
     ) -> Result<super::scripting::ProcessStarted> {
-        self.rendering(|i| i.process(id, variant, recipe))
+        self.launching(|i| i.process(id, variant, recipe))
     }
     fn capture(&self) -> Result<()> {
         self.call(|i| i.capture())
@@ -244,8 +249,12 @@ impl CaptureOneScripting for GatedScripting {
     fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool> {
         self.call(|i| i.apply_style(id, variant, name))
     }
-    /// Not gated: `quit.js` checks `running()` first (L13).
+    /// `quit.js` checks `running()` first (L13); refused while the take-back holds the gate (it
+    /// quits through its own ungated scripting).
     fn quit(&self) -> Result<()> {
+        if self.launch_gate.quiet_here() {
+            return Err(Error::EditorLaunchDeferred);
+        }
         self.lane(|i| i.quit())
     }
 }

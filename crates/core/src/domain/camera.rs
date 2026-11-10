@@ -55,8 +55,12 @@ pub enum NeedsActionReason {
     HeldByOtherProgram,
     StoreDestinationUnverified,
     FtpUnreachable,
-    FilesNotReceived { count: u32 },
+    FilesNotReceived {
+        count: u32,
+    },
     SupportNotInstalled,
+    /// P63 #27: the Capture One session in Settings is missing; uploads are refused (MC-32).
+    DocumentMissing,
 }
 impl NeedsActionReason {
     pub fn rank(&self) -> u8 {
@@ -70,6 +74,7 @@ impl NeedsActionReason {
             Self::FtpUnreachable => 4,
             Self::FilesNotReceived { .. } => 6,
             Self::SupportNotInstalled => 7,
+            Self::DocumentMissing => 0,
         }
     }
     pub fn code(&self) -> &'static str {
@@ -83,6 +88,7 @@ impl NeedsActionReason {
             Self::FtpUnreachable => "camera_ftp_unreachable",
             Self::FilesNotReceived { .. } => "camera_files_not_received",
             Self::SupportNotInstalled => "camera_support_not_installed",
+            Self::DocumentMissing => "document_missing",
         }
     }
 }

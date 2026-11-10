@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { SkeletonFields } from '@/components/pending/SkeletonFields';
@@ -6,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { useAction, usePageData } from '@/lib/pending';
 import { getSettings, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
+import { goTo, setLeaveGuard } from '@/lib/routes';
+import { listStyles, type EditorStyles } from '@/services/styles';
 import { CameraSection } from './CameraSection';
 import { StorageSection } from './StorageSection';
 
@@ -14,6 +17,30 @@ const emptyIntegration: IntegrationSettings = {
 };
 
 type TextKey = 'preview_recipe' | 'master_recipe' | 'style_name' | 'export_folder';
+
+/** Shown under the style field when Capture One's style list cannot be read (P63). */
+export const STYLES_UNREADABLE = "Couldn't read Capture One's styles";
+
+/** Settings → Style (P63, owner 2026-11-10): Capture One's styles in a drop-down (the photographer's own first, then built-in) plus
+ *  "No style"; the stored value is the style's exact name. Without the list (Capture One not running, unreadable): the text field. */
+function StyleField({ value, styles, onChange }: { value: string; styles: EditorStyles | null | undefined; onChange: (value: string) => void }) {
+  if (styles === undefined) return <div className="flex flex-col gap-1"><label htmlFor="settings-style_name">Style</label><Input id="settings-style_name" value={value} onChange={e => onChange(e.target.value)} /></div>;
+  if (styles === null) return <div className="flex flex-col gap-1">
+    <label htmlFor="settings-style_name">Style</label>
+    <Input id="settings-style_name" value={value} onChange={e => onChange(e.target.value)} />
+    <p className="health-detail">{STYLES_UNREADABLE}</p>
+  </div>;
+  const listed = [...styles.user, ...styles.built_in];
+  return <div className="flex flex-col gap-1">
+    <label htmlFor="settings-style_name">Style</label>
+    <select id="settings-style_name" value={value} onChange={e => onChange(e.target.value)}>
+      <option value="">No style</option>
+      {value !== '' && !listed.includes(value) && <option value={value}>{value} (not in Capture One)</option>}
+      {styles.user.length > 0 && <optgroup label="Your styles">{styles.user.map(name => <option key={`u-${name}`} value={name}>{name}</option>)}</optgroup>}
+      {styles.built_in.length > 0 && <optgroup label="Built-in styles">{styles.built_in.map(name => <option key={`b-${name}`} value={name}>{name}</option>)}</optgroup>}
+    </select>
+  </div>;
+}
 type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition_photos_key';
 
 /** ch12 §Settings: a plain form over `settings.json` (undesigned in the handoff). The theme stays on the header toggle. */
@@ -22,7 +49,25 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const page = usePageData(getSettings);
   const loadedSecret = useRef('');
-  useEffect(() => { if (page.data) setSettings(page.data); }, [page.data]);
+  // The settings as last loaded or saved: anything else in the form is an unsaved change (P63).
+  const [saved, setSaved] = useState<Settings | null>(null);
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const [styles, setStyles] = useState<EditorStyles | null | undefined>(undefined);
+  useEffect(() => { if (page.data) { setSettings(page.data); setSaved(page.data); } }, [page.data]);
+  useEffect(() => {
+    let live = true;
+    void listStyles().then(list => { if (live) setStyles(list); });
+    return () => { live = false; };
+  }, []);
+  const dirty = settings !== null && saved !== null && JSON.stringify(settings) !== JSON.stringify(saved);
+  useEffect(() => {
+    setLeaveGuard(target => {
+      if (!dirty) return true;
+      setLeaving(target);
+      return false;
+    });
+    return () => setLeaveGuard(null);
+  }, [dirty]);
   useEffect(() => { if (page.data) loadedSecret.current = page.data.integration?.client_secret ?? ''; }, [page.data]);
 
   const edit = (patch: Partial<Settings>) => setSettings(current => current ? { ...current, ...patch } : current);
@@ -56,13 +101,15 @@ export function SettingsPage() {
       integration,
     });
     setSettings(saved);
+    setSaved(saved);
     loadedSecret.current = saved.integration?.client_secret ?? '';
     setError(null);
     toast.success('Settings saved');
+    return true;
   }, e => setError((e as {code?: string}).code === 'invalid_value' ? 'Ports must be 1024–65535, the passive range at least 2 ports and not containing the receiver port' : e instanceof Error ? e.message : String(e)));
 
   const header = <PageHeader title={<h1 className="health-title">Settings</h1>} escapeGoesBack>
-    <Button variant="outline" onClick={() => { window.location.hash = '#/health'; }}>Health</Button>
+    <Button variant="outline" onClick={() => goTo('#/health')}>Health</Button>
   </PageHeader>;
   if (!settings) return <>{header}<main className="health-shell">{error || page.error ? <p role="alert">{error ?? String(page.error)}</p> : <SkeletonFields n={6} />}</main></>;
 
@@ -99,7 +146,7 @@ export function SettingsPage() {
       </div>
       {text('Preview recipe', 'preview_recipe')}
       {text('Master recipe', 'master_recipe')}
-      {text('Style', 'style_name')}
+      <StyleField value={settings.style_name} styles={styles} onChange={style_name => edit({ style_name })} />
       <CameraSection ports={settings.camera} onPortsChange={camera => edit({camera: {...camera, auto_take_back: camera.auto_take_back ?? true}})} />
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-default_shape">Default shape</label>
@@ -137,8 +184,34 @@ export function SettingsPage() {
       {shop('Client secret', 'client_secret', 'password')}
       {shop('Condition photos key', 'condition_photos_key')}
       {error && <p role="alert">{error}</p>}
-      <div><Button type="submit" disabled={save.busy} aria-busy={save.busy ? 'true' : undefined}>Save settings{save.busy ? '…' : ''}</Button></div>
+      {/* P63: always in view (sticky footer), whatever the scroll position. */}
+      <div data-testid="settings-footer" style={{ position: 'sticky', bottom: 0, background: 'var(--color-bg)', padding: '12px 0', borderTop: '1px solid var(--hair)' }}>
+        <Button type="submit" disabled={save.busy} aria-busy={save.busy ? 'true' : undefined}>Save settings{save.busy ? '…' : ''}</Button>
+      </div>
     </form>
+    <Dialog open={leaving !== null} onOpenChange={open => { if (!open) setLeaving(null); }}>
+      <DialogContent>
+        <DialogTitle>Save your changes?</DialogTitle>
+        <DialogDescription>Your changes to Settings are not saved yet.</DialogDescription>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setLeaving(null)}>Cancel</Button>
+          <Button variant="outline" onClick={() => {
+            const target = leaving;
+            setLeaving(null);
+            setSettings(saved);
+            setLeaveGuard(null);
+            if (target) window.location.hash = target;
+          }}>Discard</Button>
+          <Button disabled={save.busy} onClick={() => {
+            const target = leaving;
+            void save.run().then(done => {
+              setLeaving(null);
+              if (done && target) { setLeaveGuard(null); window.location.hash = target; }
+            });
+          }}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <StorageSection />
   </main></>;
 }

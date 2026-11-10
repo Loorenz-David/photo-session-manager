@@ -108,6 +108,15 @@ struct TransportConfig {
   int64_t busy_log_interval_ms = 5000;
   int64_t after_disconnect_delay_ms = 1000;  // let the camera release the old session
   int64_t stop_wait_ms = 10000;  // a voluntary stop waits this long for a safe point (R-I20/R-I22)
+  // P63 (unplug -> Wi-Fi in ~6 s): after a session is lost, a failed connect to the cached Wi-Fi
+  // endpoint is retried at once (the camera's remote comes back a few seconds after the cable
+  // goes) until this long after the loss; then the endpoint is forgotten and discovery runs.
+  int64_t cached_endpoint_window_ms = 5000;
+  // P63: while recovering from a lost session, an empty Wi-Fi discovery is retried after this
+  // long instead of the exponential backoff (each SDK discovery already takes ~3.8 s).
+  int64_t recovery_discovery_retry_ms = 0;
+  // P63: recovery attempts without backoff stop this long after the loss (the backoff applies).
+  int64_t recovery_fast_window_ms = 30000;
 };
 
 class TransportManager {

@@ -9,6 +9,22 @@ use crate::{
     services::health::HealthService,
 };
 
+/// The `document_missing` detail and header sentence (P63 #27): the Capture One session chosen in
+/// Settings is gone.
+pub const DOCUMENT_MISSING: &str =
+    "The Capture One session in Settings is missing — choose one in Settings";
+
+/// A Capture One session document is at `folder`: the folder and a `.cosessiondb` in it (P63
+/// #27). Read-only.
+pub fn document_present(folder: &std::path::Path) -> bool {
+    std::fs::read_dir(folder).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            let path = entry.path();
+            path.extension().is_some_and(|ext| ext == "cosessiondb") && path.is_file()
+        })
+    })
+}
+
 /// The `editor_not_following` detail (10E MC-34 R-I33, master plan §6.6).
 pub const EDITOR_NOT_FOLLOWING: &str =
     "Capture One will not show this session's new photos until it is reachable";

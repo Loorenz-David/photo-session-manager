@@ -70,6 +70,18 @@ ConnectResult SdkCameraAdapter::connect(const CameraEndpoint& ep) {
     r.message += " (USB interface claimed by another process; see usb.claimed_by)";
   }
   if (r.ok) after_connect(r, ep.transport);
+  if (r.ok && ep.transport == Transport::Wifi && ep.address.rfind("direct-ip:", 0) != 0) {
+    // P63: remember the endpoint of this Wi-Fi session, so the reconnect after a lost session
+    // (the cable unplugged) connects directly instead of waiting for a ~3.8 s discovery.
+    int idx = std::atoi(ep.address.c_str());
+    for (const auto& c : last_found_) {
+      if (c.index == idx && c.transport == Transport::Wifi && !c.ip_address.empty()) {
+        base_.ip = c.ip_address;
+        base_.mac = !c.mac_address.empty() ? c.mac_address : c.id;
+        log_.emit("endpoint.cached", Fields().str("transport", "wifi"));
+      }
+    }
+  }
   return r;
 }
 

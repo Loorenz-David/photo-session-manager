@@ -73,7 +73,12 @@ impl CaptureOneAdapter {
             .provision_lock
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let mut editor = self.user.editor_info().inspect_err(|e| {
+        let editor = self.user.editor_info();
+        // P63 #22: Capture One must stay closed now (the take-back holds it).
+        if let Err(Error::EditorLaunchDeferred) = editor {
+            return Ok(ProvisionReport::deferred());
+        }
+        let mut editor = editor.inspect_err(|e| {
             self.clear_after(1);
             if classify_editor_error(&e.to_string()) == Some(EditorFailure::AutomationDenied) {
                 self.health.set("editor_automation_denied", "macOS has not allowed Session Manager to control Capture One. Allow it under System Settings › Privacy & Security › Automation");
@@ -139,6 +144,19 @@ impl CaptureOneAdapter {
             .ok_or(Error::DocumentNotSession)?
             .to_string_lossy();
         let expected = folder.join(format!("{base}.cosessiondb"));
+        // P63 #27: a session chosen in Settings that is gone is reported, never recreated, and
+        // nothing is created under its path.
+        if self.document_configured
+            && !psm_core::services::editing_startup::document_present(folder)
+        {
+            self.clear_after(2);
+            self.health.set(
+                "document_missing",
+                psm_core::services::editing_startup::DOCUMENT_MISSING,
+            );
+            return Err(Error::DocumentNotOpen);
+        }
+        self.health.clear("document_missing");
         let mut created = false;
         let file = if !folder.exists() {
             let parent = folder.parent().ok_or(Error::DocumentNotSession)?;

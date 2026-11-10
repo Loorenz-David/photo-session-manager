@@ -3,8 +3,8 @@ use crate::{
     domain::{
         composition::EditorGeometry,
         editing::{
-            DocumentState, EditingCapabilities, ProvisionInputs, ProvisionReport, RenderPurpose,
-            StyleOutcome,
+            DocumentState, EditingCapabilities, EditorStyles, ProvisionInputs, ProvisionReport,
+            RenderPurpose, StyleOutcome,
         },
         photo::Classification,
     },
@@ -41,6 +41,9 @@ pub trait EditingProvider: Send + Sync {
     fn set_capture_folder(&self, target: &str) -> Result<()>;
     fn set_current_collection(&self, folder: &str) -> Result<()>;
     fn apply_style(&self, raw: &str, name: &str) -> Result<StyleOutcome>;
+    /// The styles the editor lists (P63). Never launches the editor: `EditorLaunchDeferred` when it
+    /// is not running.
+    fn styles(&self) -> Result<EditorStyles>;
     fn find_variant(&self, raw: &str) -> Result<bool>;
     fn install_hooks(&self) -> Result<()>;
     fn render(&self, raw: &str, purpose: RenderPurpose) -> Result<String>;

@@ -50,6 +50,12 @@ struct MockCamera : CameraAdapter {
   bool wifi_visible = true;
   bool cached_wifi = false;
   bool cached_wifi_fails = false;
+  // P63: the camera's Wi-Fi remote answers only from this clock time (after an unplug it comes
+  // back a few seconds later); a direct connect before it fails after direct_fail_cost_ms.
+  int64_t wifi_ready_at = 0;
+  int64_t direct_fail_cost_ms = 300;
+  bool learn_endpoint = false;  // a Wi-Fi connect through discovery caches the endpoint (as the SDK adapter)
+  bool cached_wifi_stale = false;  // the cached address is no longer the camera's
   int fail_usb_connects = 0;   // next N USB connects fail
   bool usb_held = false;       // failing USB connects report the interface held by another process
   int64_t usb_fail_cost_ms = -1;  // cost of a failing USB connect (-1: connect_cost_ms)
@@ -77,7 +83,8 @@ struct MockCamera : CameraAdapter {
     clock.advance(discover_cost_ms);
     last_saw_usb = usb_visible;
     if (t == Transport::Usb && usb_visible && usb_endpoint_available) return {{"SN123", "ILCE-7RM5", Transport::Usb, "usb:1"}};
-    if (t == Transport::Wifi && wifi_visible) return {{"SN123", "ILCE-7RM5", Transport::Wifi, "192.168.1.50"}};
+    if (t == Transport::Wifi && wifi_visible && clock.now - discover_cost_ms >= wifi_ready_at)
+      return {{"SN123", "ILCE-7RM5", Transport::Wifi, "192.168.1.50"}};
     return {};
   }
   ConnectResult connect(const CameraEndpoint& ep) override {
@@ -87,6 +94,11 @@ struct MockCamera : CameraAdapter {
     if (ep.address.rfind("direct-ip:", 0) == 0 && cached_wifi_fails) {
       r.fatal = true;
       r.message = "cached endpoint failed";
+      return r;
+    }
+    if (ep.address.rfind("direct-ip:", 0) == 0 && (cached_wifi_stale || clock.now < wifi_ready_at)) {
+      clock.advance(direct_fail_cost_ms);
+      r.message = "camera not answering at the cached address";
       return r;
     }
     if (ep.transport == Transport::Usb && fail_usb_connects > 0) {
@@ -104,6 +116,7 @@ struct MockCamera : CameraAdapter {
       r.message = fatal_wifi ? "mock auth rejected" : "mock wifi failure";
       return r;
     }
+    if (learn_endpoint && ep.transport == Transport::Wifi) cached_wifi = true;
     ++active_sessions;
     max_sessions = std::max(max_sessions, active_sessions);
     current_session = next_session++;
@@ -776,6 +789,76 @@ TEST_CASE("P57 C7(a) cached Wi-Fi endpoint connects before discovery and failure
   for (const auto& call : r.cam.calls) if (call == "discover:wifi") discovered = true;
   CHECK(discovered);
   CHECK(r.tm->state() == State::ConnectedWifi);
+}
+
+namespace {
+// The `recovery_ms` of the last connection.ready, or -1.
+int64_t last_recovery_ms(const CaptureSink& log) {
+  int64_t found = -1;
+  for (const auto& e : log.events) {
+    if (e.name != "connection.ready") continue;
+    auto at = e.json.find("\"recovery_ms\":");
+    if (at != std::string::npos) found = std::stoll(e.json.substr(at + 14));
+  }
+  return found;
+}
+// P63 C5(a) rig: production timings, the dev Mac's measured SDK costs (Wi-Fi discovery 3.8 s,
+// connect 2.2 s), on Wi-Fi first (the endpoint learned), then on the cable.
+void on_cable_after_wifi(Rig& r) {
+  r.cam.discover_cost_ms = 3800;
+  r.cam.connect_cost_ms = 2200;
+  r.cam.learn_endpoint = true;
+  r.run(10000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  r.plug_usb();
+  r.run(10000);
+  CHECK(r.tm->state() == State::ConnectedUsb);
+}
+}  // namespace
+
+TEST_CASE("P63 C5(a) unplug: Wi-Fi ready within ~6 s with the cached endpoint valid") {
+  Rig r(true);
+  on_cable_after_wifi(r);
+  // The camera's Wi-Fi remote answers again 3.7 s after the unplug (FTP uploads arrived at
+  // +3.7 s in the final hands-on check).
+  r.cam.wifi_ready_at = r.clock.now + 3700;
+  r.unplug_usb();
+  r.run(15000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  const int64_t recovery = last_recovery_ms(r.log);
+  CHECK(recovery > 0);
+  CHECK(recovery <= 6100);
+  CHECK_EQ(r.cam.active_sessions, 1);
+}
+
+TEST_CASE("P63 C5(a) unplug: a stale cached endpoint falls back to discovery within its bound") {
+  Rig r(true);
+  on_cable_after_wifi(r);
+  r.cam.wifi_ready_at = r.clock.now + 3700;
+  r.cam.cached_wifi_stale = true;
+  r.unplug_usb();
+  r.run(20000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  const int64_t recovery = last_recovery_ms(r.log);
+  // The policy's bound: the cached-endpoint window, then one discovery and one connect.
+  CHECK(recovery > 0);
+  CHECK(recovery <= r.cfg.cached_endpoint_window_ms + 3800 + 2200 + 500);
+  bool forgot = false;
+  for (const auto& c : r.cam.calls) forgot = forgot || c == "forget:cached";
+  CHECK(forgot);
+}
+
+TEST_CASE("P63 C5(a) unplug without a cached endpoint: an empty discovery is retried at once") {
+  Rig r(true);
+  on_cable_after_wifi(r);
+  r.cam.learn_endpoint = false;
+  r.cam.cached_wifi = false;
+  r.cam.wifi_ready_at = r.clock.now + 3700;
+  r.unplug_usb();
+  r.run(20000);
+  CHECK(r.tm->state() == State::ConnectedWifi);
+  // Before P63: 1 s + 3.8 s (empty) + 1 s backoff + 3.8 s + 2.2 s = 11.8 s (the dev Mac's log).
+  CHECK(last_recovery_ms(r.log) <= 1000 + 3800 + 3800 + 2200 + 300);
 }
 
 int main() { return mt_run_all(); }

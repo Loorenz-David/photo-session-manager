@@ -2,7 +2,7 @@ use psm_core::{Error, Result};
 use psm_integrations::editing::capture_one::recipes::RecipeSpec;
 use psm_integrations::editing::capture_one::scripting::{
     CaptureOneScripting, CollectionInfo, DocumentInfo, EditorInfo, RecipeEnsure, RecipeProps,
-    StyleEnsure,
+    StyleEnsure, StyleList,
 };
 use std::{collections::HashMap, fs, path::Path, sync::Mutex};
 
@@ -80,6 +80,36 @@ pub struct FakeState {
     /// already under way when it quit): any document script, after its `call_delay_ms`, records
     /// op `launch` and sets `running`.
     pub apple_events_launch: bool,
+    /// P63: the names of `styles` that are the photographer's own (listed first by `list_styles`).
+    pub user_styles: Vec<String>,
+    /// P63: `list_styles` fails (the list cannot be read).
+    pub fail_list_styles: bool,
+}
+/// One look at whether Capture One runs (`editor_info` or `is_running`): advances a quit or a
+/// launch in progress, as the dev Mac's Capture One does between two looks.
+fn poll_running(s: &mut FakeState) {
+    if std::mem::take(&mut s.quit_seen) && std::mem::take(&mut s.restart_after_quit) {
+        s.running = true;
+    }
+    if let Some(polls) = s.quitting.as_mut() {
+        if *polls != u32::MAX {
+            *polls = polls.saturating_sub(1);
+        }
+        if *polls == 0 {
+            s.quitting = None;
+            s.running = false;
+            s.quit_seen = true;
+        }
+    }
+    if s.launched
+        && let Some(polls) = s.running_after_polls.as_mut()
+        && *polls > 0
+    {
+        *polls -= 1;
+        if *polls == 0 {
+            s.running = true;
+        }
+    }
 }
 pub struct FakeCaptureOneScripting {
     pub state: Mutex<FakeState>,
@@ -169,6 +199,8 @@ impl FakeCaptureOneScripting {
                 settings: HashMap::new(),
                 process_counter: 0,
                 apple_events_launch: false,
+                user_styles: Vec::new(),
+                fail_list_styles: false,
             }),
         }
     }
@@ -342,6 +374,25 @@ fn write_with_mtime(path: &Path, bytes: &[u8], mtime: std::time::SystemTime) -> 
     Ok(())
 }
 impl CaptureOneScripting for FakeCaptureOneScripting {
+    /// The process list, not a script: recorded as no op (P63 #22).
+    fn is_running(&self) -> Result<bool> {
+        let mut s = self.state.lock().unwrap();
+        poll_running(&mut s);
+        Ok(s.running)
+    }
+    fn list_styles(&self) -> Result<StyleList> {
+        let mut s = self.state.lock().unwrap();
+        s.ops.push("list_styles".into());
+        if s.fail_list_styles || !s.running {
+            return Err(Error::Provider("styles unreadable".into()));
+        }
+        let (user, built_in) = s
+            .styles
+            .iter()
+            .cloned()
+            .partition(|name| s.user_styles.contains(name));
+        Ok(StyleList { user, built_in })
+    }
     fn editor_info(&self) -> Result<EditorInfo> {
         let mut s = self.state.lock().unwrap();
         s.ops.push("editor_info".into());
@@ -351,28 +402,7 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
                     .into(),
             ));
         }
-        if std::mem::take(&mut s.quit_seen) && std::mem::take(&mut s.restart_after_quit) {
-            s.running = true;
-        }
-        if let Some(polls) = s.quitting.as_mut() {
-            if *polls != u32::MAX {
-                *polls = polls.saturating_sub(1);
-            }
-            if *polls == 0 {
-                s.quitting = None;
-                s.running = false;
-                s.quit_seen = true;
-            }
-        }
-        if s.launched
-            && let Some(polls) = s.running_after_polls.as_mut()
-            && *polls > 0
-        {
-            *polls -= 1;
-            if *polls == 0 {
-                s.running = true;
-            }
-        }
+        poll_running(&mut s);
         Ok(EditorInfo {
             running: s.running,
             version: Some("16.8.6".into()),

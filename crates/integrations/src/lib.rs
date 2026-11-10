@@ -78,6 +78,8 @@ use std::{
 };
 
 pub const EDITOR_WAIT: Duration = Duration::from_secs(45);
+/// How long shutdown waits for the spool/arrival thread (P63).
+const BACKGROUND_JOIN_BOUND: Duration = Duration::from_secs(1);
 
 pub struct App {
     pub paths: AppPaths,
@@ -535,7 +537,13 @@ impl App {
                 settings.master_recipe.clone(),
                 paths.clone(),
             )
-            .with_disk(lanes.disk.clone()),
+            .with_disk(lanes.disk.clone())
+            .with_configured_document(
+                settings
+                    .document_id
+                    .as_deref()
+                    .is_some_and(|id| !id.is_empty()),
+            ),
         );
         // 10E §Camera support packages (P46 L18): the direct adapter whenever a camera support
         // package is installed, the Capture One camera adapter otherwise; decided up front.
@@ -928,6 +936,10 @@ impl App {
                 .to_string_lossy()
                 .into_owned(),
             gate: lanes.gate.clone(),
+            document_configured: settings
+                .document_id
+                .as_deref()
+                .is_some_and(|id| !id.is_empty()),
         });
         Ok(Self {
             paths,
@@ -1029,7 +1041,20 @@ impl App {
     pub fn shutdown(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(bg) = self.background.take() {
-            let _ = bg.join();
+            // P63 (backlog P62 r3): starting a macOS folder watcher can take tens of seconds; a
+            // thread still inside it leaves on its own (it checks `stop` first), so shutdown does
+            // not wait for it longer than `BACKGROUND_JOIN_BOUND`.
+            let end = std::time::Instant::now() + BACKGROUND_JOIN_BOUND;
+            while !bg.is_finished() && std::time::Instant::now() < end {
+                thread::sleep(Duration::from_millis(5));
+            }
+            if bg.is_finished() {
+                let _ = bg.join();
+            } else {
+                tracing::info!(
+                    "background thread still starting its folder watcher; not waited for"
+                );
+            }
         }
         if let Some(bg) = self.camera_background.take() {
             let _ = bg.join();

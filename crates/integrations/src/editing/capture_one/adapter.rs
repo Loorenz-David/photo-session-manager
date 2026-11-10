@@ -76,6 +76,9 @@ pub struct CaptureOneAdapter {
     renders: Mutex<RenderRegistry>,
     pub(crate) provision_lock: Mutex<()>,
     disk: Arc<DiskSpace>,
+    /// The document was chosen in Settings (not the app's own): when it is missing it is reported,
+    /// never recreated (P63 #27).
+    pub(crate) document_configured: bool,
 }
 impl CaptureOneAdapter {
     #[allow(clippy::too_many_arguments)]
@@ -100,10 +103,16 @@ impl CaptureOneAdapter {
             renders: Mutex::new(RenderRegistry::default()),
             provision_lock: Mutex::new(()),
             disk: Arc::new(DiskSpace::default()),
+            document_configured: false,
         }
     }
     pub fn with_disk(mut self, disk: Arc<DiskSpace>) -> Self {
         self.disk = disk;
+        self
+    }
+    /// The document was chosen in Settings (P63 #27).
+    pub fn with_configured_document(mut self, configured: bool) -> Self {
+        self.document_configured = configured;
         self
     }
     /// P56 C3(d): a master render needs 5 GB free on the disk holding the session (Capture One's
@@ -485,6 +494,13 @@ impl EditingProvider for CaptureOneAdapter {
         } else {
             Ok(StyleOutcome::NotListed)
         }
+    }
+    fn styles(&self) -> Result<psm_core::domain::editing::EditorStyles> {
+        let listed = self.user.list_styles()?;
+        Ok(psm_core::domain::editing::EditorStyles {
+            user: listed.user,
+            built_in: listed.built_in,
+        })
     }
     fn find_variant(&self, raw: &str) -> Result<bool> {
         Ok(self

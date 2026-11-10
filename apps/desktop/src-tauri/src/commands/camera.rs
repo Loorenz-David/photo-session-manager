@@ -221,6 +221,7 @@ fn reason_name(reason: &NeedsActionReason) -> &'static str {
         NeedsActionReason::FtpUnreachable => "ftp_unreachable",
         NeedsActionReason::FilesNotReceived { .. } => "files_not_received",
         NeedsActionReason::SupportNotInstalled => "support_not_installed",
+        NeedsActionReason::DocumentMissing => "document_missing",
     }
 }
 fn providers(
