@@ -25,6 +25,7 @@ const names: Record<string, string> = {
   editor_not_following: 'Capture One follows',
   integration_token_invalid: 'Shopify token', condition_field_missing: 'Condition photos field',
   preview_not_rendered: 'Previews', disk_space_low: 'Disk space', file_missing: 'Deleted files',
+  retention_not_cleared: 'Storage clean-up',
 };
 
 export function HealthPage() {

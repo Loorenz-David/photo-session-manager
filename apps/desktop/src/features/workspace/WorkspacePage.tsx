@@ -28,6 +28,8 @@ import { refit } from '@/features/compose/refit';
 import { FormDialog } from '@/features/form/FormDialog';
 import { FailurePopover } from '@/features/publish/FailurePopover';
 import { publishRetry } from '@/services/publish';
+import { getItemArchive, setKeepFiles, type ItemArchive } from '@/services/retention';
+import { ArchivedView } from './ArchivedView';
 import { FoldedStrip } from './FoldedStrip';
 import { ImportDropZone, pickAndImport } from './ImportDropZone';
 import { ItemDetailsCard } from './ItemDetailsCard';
@@ -143,6 +145,19 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   const shownFailure = useRef<number | null>(null);
   const shownFailureSession = useRef(sessionId);
   const drop = useDrop(state);
+  // P62: the item's retention state, re-read with every session view (a clean-up may have cleared it meanwhile).
+  const [archive, setArchive] = useState<ItemArchive | null>(null);
+  const loadedView = state.view;
+  useEffect(() => {
+    let alive = true;
+    if (unassigned || !loadedView) { setArchive(null); return; }
+    Promise.resolve().then(() => getItemArchive(sessionId)).then(value => { if (alive) setArchive(value); }).catch(() => { if (alive) setArchive(null); });
+    return () => { alive = false; };
+  }, [sessionId, unassigned, loadedView]);
+  const archived = archive?.cleared === true;
+  const toggleKeepFiles = useCallback((keep: boolean) => {
+    setKeepFiles(sessionId, keep).then(setArchive).catch(error => toast.error(`Not saved: ${(error as Error).message}`));
+  }, [sessionId]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const { active } = state;
   // P58: the photo on the stage or in the editor is the next preview Capture One renders. One message per change
@@ -325,7 +340,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   // D opens the product details form (design handoff §Keyboard); Esc closes it (the dialog's own Esc).
   useKeyboard({ d: () => onDetailsOpenChange(true) }, !dialogOpen && item !== null && !composing);
   // R opens Compose on the stage photo (10D); while composing the workspace keys are off and the editor owns the keyboard.
-  useKeyboard({ r: () => { if (active) enterCompose(active); } }, !dialogOpen && !composing && active !== null);
+  useKeyboard({ r: () => { if (active) enterCompose(active); } }, !dialogOpen && !composing && active !== null && !archived);
   useWorkspaceKeyboard(
     {
       approve: () => review('approve'),
@@ -341,7 +356,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         else state.clearSelection();
       },
     },
-    !dialogOpen && !composing,
+    !dialogOpen && !composing && !archived,
   );
 
   function onDragStart(event: DragStartEvent) {
@@ -383,10 +398,16 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
     <aside className="photo-panel" aria-label="Photos"><div className="panel-scroll"><SkeletonTiles n={8} /></div></aside>
   </main>;
 
+  // 10F §3, Q3: a cleared item is shown from Shopify, read-only; its details form stays available.
+  if (archived && archive) return <>
+    <ArchivedView pictures={archive.pictures} onEdit={item ? () => onDetailsOpenChange(true) : undefined} />
+    {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} onItemChanged={() => void state.reload()} />}
+  </>;
+
   // The stage column's other occupants, in both the normal stage and the editor.
   const stageExtras = (
     <>
-      {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} onEdit={() => onDetailsOpenChange(true)} />}
+      {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} onEdit={() => onDetailsOpenChange(true)} keepFiles={archive?.keep_files ?? false} onKeepFilesChange={archive ? toggleKeepFiles : undefined} />}
     </>
   );
 

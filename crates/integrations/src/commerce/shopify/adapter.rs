@@ -16,8 +16,8 @@ use psm_core::{
     Error, Result,
     domain::attribute::{AttributeGroup, CoreType, Definition},
     domain::publish::{
-        ConfirmedRun, DefinitionLink, RemoteIdentity, RemoteItem, RemoteMedia, RemoteMediaStatus,
-        StagedTarget, WriteValue,
+        ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
+        RemoteMedia, RemoteMediaStatus, StagedTarget, WriteValue,
     },
     mechanisms::{upload_name, values::canonical_decimal},
     ports::{
@@ -954,6 +954,40 @@ impl CommerceAdapter for ShopifyAdapter {
         Ok(remote_media(&self.product(external_id)?.media.nodes))
     }
 
+    fn media_readback(&self, external_id: &str) -> Result<MediaReadback> {
+        let (namespace, key) = split_key(&self.config.condition_photos_key)?;
+        let data = self.call(
+            graphql::MEDIA_READBACK,
+            json!({ "id": external_id, "namespace": namespace, "key": key }),
+        )?;
+        let product = match data.get("product") {
+            Some(Json::Null) | None => {
+                return Err(Error::NotFound(format!("product {external_id}")));
+            }
+            Some(product) => product,
+        };
+        media_readback_of(product)
+    }
+
+    fn fetch_image(&self, url: &str, max_edge: u32) -> Result<Vec<u8>> {
+        if !url.starts_with("https://") {
+            return Err(Error::InvalidData("image URL is not https".into()));
+        }
+        let separator = if url.contains('?') { '&' } else { '?' };
+        let started = std::time::Instant::now();
+        let result = self
+            .transport
+            .get_bytes(&format!("{url}{separator}width={max_edge}"));
+        tracing::info!(
+            provider = "shopify",
+            op = "fetch_image",
+            duration_ms = started.elapsed().as_millis(),
+            ok = result.is_ok(),
+            "provider call"
+        );
+        result
+    }
+
     fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>> {
         let mut found = Vec::new();
         let mut after: Option<String> = None;
@@ -1114,6 +1148,51 @@ impl CommerceAdapter for ShopifyAdapter {
             json!({ "id": external_id, "tags": tags }),
         )
     }
+}
+
+/// The read-back of `MEDIA_READBACK`'s `product`: gallery media in order (image URL, else the
+/// original source), and the condition field's file ids in the field's order with the URLs of
+/// their references.
+fn media_readback_of(product: &Json) -> Result<MediaReadback> {
+    let nodes: Vec<MediaNode> = parse(&product["media"]["nodes"], "media")?;
+    let gallery = nodes
+        .iter()
+        .map(|node| MediaImage {
+            id: node.id.clone(),
+            url: [node.image.as_ref(), node.original_source.as_ref()]
+                .into_iter()
+                .flatten()
+                .find_map(|u| u.url.clone()),
+        })
+        .collect();
+    let mut condition = Vec::new();
+    let metafield = &product["metafield"];
+    if let Some(value) = metafield["value"].as_str() {
+        let ids: Vec<String> = match condition_metafield_value(value)? {
+            Json::Array(ids) => ids
+                .into_iter()
+                .filter_map(|id| id.as_str().map(str::to_owned))
+                .collect(),
+            _ => Vec::new(),
+        };
+        let references = metafield["references"]["nodes"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        for id in ids {
+            let url = references
+                .iter()
+                .find(|node| node["id"].as_str() == Some(id.as_str()))
+                .and_then(|node| {
+                    node["image"]["url"]
+                        .as_str()
+                        .or_else(|| node["url"].as_str())
+                        .map(str::to_owned)
+                });
+            condition.push(MediaImage { id, url });
+        }
+    }
+    Ok(MediaReadback { gallery, condition })
 }
 
 fn condition_metafield_value(value: &str) -> Result<Json> {

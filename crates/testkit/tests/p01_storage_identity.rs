@@ -289,6 +289,12 @@ fn c1a_open_creates_all_domain_columns() {
                 "created_at",
             ],
         ),
+        // P62 (010_retention.sql): the keep-files pin, the clearing time, the archived images.
+        ("item_retention", &["item_id", "keep_files", "cleared_at"]),
+        (
+            "archived_images",
+            &["item_id", "role", "position", "media_id", "url"],
+        ),
     ];
     let actual_tables: BTreeSet<String> = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__rusqlite_%'").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
     let expected_tables: BTreeSet<String> = expected

@@ -146,6 +146,8 @@ impl PreviewService {
     pub fn check_missing_files(&self) -> Result<()> {
         let mut missing = 0usize;
         let mut gone_raws = HashSet::new();
+        // P62: a RAW the app cleared after publishing is not missing (10F §3).
+        let cleared = crate::services::retention::cleared_sessions(self.store.as_ref())?;
         for state in self.store.preview_states()? {
             let gone = match file_missing(Path::new(&state.raw_path)) {
                 Ok(gone) => gone,
@@ -155,6 +157,9 @@ impl PreviewService {
                 }
             };
             for photo in self.store.photos_for_raw(&state.raw_path)? {
+                if cleared.contains(&photo.session_id) {
+                    continue;
+                }
                 let now = match missing_decision(gone, photo.integrity) {
                     MissingDecision::Keep => photo.integrity,
                     MissingDecision::Missing => {

@@ -267,6 +267,7 @@ impl SessionsService<'_> {
             time::group_by_activity,
         };
         let records = self.store.session_list_records()?;
+        let cleared = crate::services::retention::cleared_sessions(self.store)?;
         let unassigned_count = self.store.session(1)?.photo_count;
         let query = query.unwrap_or_default().to_lowercase();
         let mut counts = ListCounts {
@@ -303,7 +304,11 @@ impl SessionsService<'_> {
             {
                 continue;
             }
-            let label = row_label(input);
+            let label = if cleared.contains(&dto.session.id) {
+                crate::domain::session::RowLabel::Archived
+            } else {
+                row_label(input)
+            };
             let progress = if let crate::domain::session::RowLabel::Publishing(pct) = label {
                 Some(pct)
             } else {

@@ -130,3 +130,15 @@
 .import-overlay { position: absolute; inset: 12px; z-index: 40; display: grid; place-items: center; border: 2px dashed var(--color-text); border-radius: var(--r-lg); background: color-mix(in srgb, var(--color-bg) 80%, transparent); font-size: var(--text-lg); font-weight: var(--weight-heavy); pointer-events: none; }
 
 @media (max-width: 1000px) { .workspace { --photo-panel-width: 280px; } .sessions-panel { width: 200px; } }
+
+/* P62: a cleared item, shown from Shopify (read-only). */
+.archived-workspace { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4); overflow: auto; }
+.archived-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); color: var(--muted); }
+.archived-head .pill svg { width: 14px; height: 14px; }
+.archived-group h3 { margin-bottom: var(--space-2); font-size: var(--text-sm); color: var(--muted); }
+.archived-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-3); }
+.archived-tile { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.archived-tile img, .archived-missing { width: 100%; aspect-ratio: 1; object-fit: contain; border: 1px solid var(--hair); border-radius: var(--r-md); background: var(--color-surface, transparent); }
+.archived-missing { display: grid; place-items: center; color: var(--muted); }
+.archived-tile figcaption { font-size: var(--text-xs); color: var(--muted); }
+.keep-files { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }

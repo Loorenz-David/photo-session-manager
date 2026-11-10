@@ -20,6 +20,10 @@ pub const STAGED_UPLOADS_CREATE: &str = "mutation StagedUploadsCreate($input: [S
 
 pub const PRODUCT_CREATE_MEDIA: &str = "mutation ProductCreateMedia($product: ProductUpdateInput!, $media: [CreateMediaInput!]) { productUpdate(product: $product, media: $media) { product { id newest: media(first: 1, reverse: true) { nodes { id status alt mediaContentType } } all: media(first: 50) { nodes { id status alt } } } userErrors { field message } } }";
 
+/// P62 (10F Rules, M41): the product's gallery media and its condition-photos field's files,
+/// each with id and image URL, in one read.
+pub const MEDIA_READBACK: &str = "query MediaReadback($id: ID!, $namespace: String!, $key: String!) { product(id: $id) { id media(first: 250) { nodes { id status ... on MediaImage { image { url } originalSource { url } } } } metafield(namespace: $namespace, key: $key) { value references(first: 100) { nodes { ... on MediaImage { id image { url } } ... on GenericFile { id url } } } } } }";
+
 pub const MEDIA_POLL: &str = "query MediaPoll($id: ID!) { node(id: $id) { id ... on MediaImage { status fileStatus alt image { url } originalSource { url } mediaErrors { code message details } } } }";
 
 pub const FILE_CREATE: &str = "mutation FileCreate($files: [FileCreateInput!]!) { fileCreate(files: $files) { files { id fileStatus alt } userErrors { field message code } } }";

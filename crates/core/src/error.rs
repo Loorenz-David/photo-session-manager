@@ -112,6 +112,9 @@ pub enum Error {
     AppNotInstalled,
     #[error("Shopify credentials rejected")]
     CredentialsRejected,
+    /// Anything that needs a cleared item's images was refused (10F Q3, P62).
+    #[error("This item's files were cleared after publishing")]
+    FilesCleared,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

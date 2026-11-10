@@ -257,6 +257,8 @@ pub enum RowLabelResponse {
     Published,
     Ready,
     InProgress(#[specta(type = specta_typescript::Number)] i64),
+    /// P62: published, local files cleared, photos shown from Shopify.
+    Archived,
 }
 
 #[derive(Serialize, Type)]
@@ -337,6 +339,7 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
                                 RowLabel::Published => RowLabelResponse::Published,
                                 RowLabel::Ready => RowLabelResponse::Ready,
                                 RowLabel::InProgress(n) => RowLabelResponse::InProgress(n),
+                                RowLabel::Archived => RowLabelResponse::Archived,
                             },
                             progress: row.progress,
                             last_activity_at: row.last_activity_at,

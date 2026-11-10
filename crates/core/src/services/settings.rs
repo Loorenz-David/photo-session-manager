@@ -61,8 +61,22 @@ impl SettingsService {
             {
                 return Err(Error::RelativePath);
             }
-            if key == "storage" && !valid_storage(value) {
-                return Err(Error::InvalidValue("storage".into()));
+            if key == "storage" {
+                if !valid_storage(value) {
+                    return Err(Error::InvalidValue("storage".into()));
+                }
+                // P62: the fields given replace those stored; the others are kept.
+                let mut storage = match current.get("storage") {
+                    Some(Value::Object(stored)) => stored.clone(),
+                    _ => serde_json::Map::new(),
+                };
+                if let Some(fields) = value.as_object() {
+                    for (field, v) in fields {
+                        storage.insert(field.clone(), v.clone());
+                    }
+                }
+                next[key] = Value::Object(storage);
+                continue;
             }
             if key == "camera" && !valid_camera(value) {
                 return Err(Error::InvalidValue("camera".into()));
@@ -147,13 +161,18 @@ fn valid_camera(value: &Value) -> bool {
     start <= end && end - start + 1 >= 2 && !(start..=end).contains(&control)
 }
 
-/// `{"min_free_gb": 0..=100000}` (10F §4; 0 = no minimum).
+/// `{"min_free_gb": 0..=100000, "retention_days_after_publish": 0..=3650}`, one or both
+/// (10F §3, §4; 0 GB = no minimum; 0 days = cleared at the first clean-up after publish).
 fn valid_storage(value: &Value) -> bool {
-    value.is_object()
-        && value
-            .get("min_free_gb")
-            .and_then(Value::as_u64)
-            .is_some_and(|gb| gb <= 100_000)
+    let Some(fields) = value.as_object() else {
+        return false;
+    };
+    !fields.is_empty()
+        && fields.iter().all(|(field, v)| match field.as_str() {
+            "min_free_gb" => v.as_u64().is_some_and(|gb| gb <= 100_000),
+            "retention_days_after_publish" => v.as_u64().is_some_and(|days| days <= 3_650),
+            _ => false,
+        })
 }
 
 /// `{"long_edge": 512..=8192, "quality": 60..=100}`, both integers.

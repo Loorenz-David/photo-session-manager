@@ -5,7 +5,8 @@
 use crate::Result;
 use crate::domain::attribute::Definition;
 use crate::domain::publish::{
-    ConfirmedRun, DefinitionLink, RemoteIdentity, RemoteItem, RemoteMedia, StagedTarget, WriteValue,
+    ConfirmedRun, DefinitionLink, MediaReadback, RemoteIdentity, RemoteItem, RemoteMedia,
+    StagedTarget, WriteValue,
 };
 use serde_json::Value as Json;
 
@@ -101,6 +102,12 @@ pub trait CommerceAdapter: Send + Sync {
     ) -> Result<String>;
     fn poll_job(&self, job_id: &str) -> Result<()>;
     fn list_media(&self, external_id: &str) -> Result<Vec<RemoteMedia>>;
+    /// Read-only: the item's gallery media and the files of its condition-photos field, with
+    /// ids and image URLs (10F Rules / M41: verified before an item's local files are cleared).
+    fn media_readback(&self, external_id: &str) -> Result<MediaReadback>;
+    /// Read-only: downloads one published image at most `max_edge` px on its long edge (10F §3:
+    /// a cleared item's photos are shown from the platform).
+    fn fetch_image(&self, url: &str, max_edge: u32) -> Result<Vec<u8>>;
     fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>>;
     /// Removes the media from the item; a not-found reply counts as removed (MC-12 step 3).
     fn product_delete_media(

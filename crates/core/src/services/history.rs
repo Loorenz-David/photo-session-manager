@@ -224,6 +224,7 @@ impl<'a> HistoryService<'a> {
         self.reverse(session_id, Direction::Redone)
     }
     fn reverse(&self, session_id: i64, direction: Direction) -> Result<HistoryOutcome> {
+        crate::services::retention::ensure_session_not_cleared(self.store, session_id)?;
         let op = self.history.operation.lock().unwrap();
         let mut step = {
             let all = self.history.store.lock().unwrap();

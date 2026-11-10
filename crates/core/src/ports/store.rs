@@ -8,6 +8,7 @@ use crate::domain::{
     photo::{Classification, Integrity, NewPhoto, Photo},
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{LatestPublish, Session, SessionDto, SessionListRecord},
+    storage::{ArchivedImage, ItemRetention},
 };
 
 #[derive(Debug, Clone)]
@@ -316,4 +317,14 @@ pub trait Store: Send + Sync {
     fn item_folder_key_frozen(&self, item_id: i64) -> Result<bool>;
     /// Every delivery row in id order (tests).
     fn deliveries(&self) -> Result<Vec<DeliveryRow>>;
+    // Retention after publish (10F §3, Q2, Q3; P62).
+    /// The item's pin and clearing time (both unset for an item never pinned or cleared).
+    fn item_retention(&self, item_id: i64) -> Result<ItemRetention>;
+    fn set_item_keep_files(&self, item_id: i64, keep: bool) -> Result<()>;
+    /// Marks the item cleared at `at` and stores the published images it is shown from.
+    fn mark_item_cleared(&self, item_id: i64, at: i64, images: &[ArchivedImage]) -> Result<()>;
+    /// The cleared item's images, gallery first, each role in order.
+    fn archived_images(&self, item_id: i64) -> Result<Vec<ArchivedImage>>;
+    /// The sessions whose item's local files were cleared.
+    fn cleared_sessions(&self) -> Result<Vec<i64>>;
 }

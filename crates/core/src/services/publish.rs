@@ -321,6 +321,13 @@ impl PublishService {
         Ok(preview)
     }
     pub fn confirm(&self, session_ids: &[i64], summary_text: &str) -> Result<i64> {
+        // 10F Q3: a cleared item is never republished (its photos would need a new session).
+        for session_id in session_ids {
+            crate::services::retention::ensure_session_not_cleared(
+                self.store.as_ref(),
+                *session_id,
+            )?;
+        }
         let preview = self.preview(session_ids)?;
         // 10D MC-27 §Revisions: refused, naming the photos, while any of them needs re-framing.
         let mut flagged = Vec::new();

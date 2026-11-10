@@ -191,6 +191,8 @@ impl ExportService {
     /// missing (MC-3 check a) or a main or condition photo needs re-framing (MC-27 §Revisions); a
     /// second call while a run of the session is in flight returns that run.
     pub fn run(&self, session_id: i64) -> Result<ExportRunId> {
+        // 10F Q3: a cleared item's photos have no local files to export.
+        crate::services::retention::ensure_session_not_cleared(self.store.as_ref(), session_id)?;
         let mut state = self.state()?;
         if let Some(run) = state.runs.values().find(|r| r.session_id == session_id) {
             return Ok(ExportRunId(run.id));

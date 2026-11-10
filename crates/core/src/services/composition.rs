@@ -78,6 +78,7 @@ impl CompositionService {
         Ok(saved.composition)
     }
     fn set_unrecorded(&self, photo_id: i64, values: CompositionValues) -> Result<SavedChange> {
+        crate::services::retention::ensure_photo_not_cleared(self.store.as_ref(), photo_id)?;
         let current = self.store.composition(photo_id)?;
         let frame = current.frame().ok_or(Error::FrameUnknown)?;
         validate(&values, frame).map_err(|reason| Error::CompositionInvalid {
@@ -93,6 +94,7 @@ impl CompositionService {
         })
     }
     pub fn reset(&self, photo_id: i64) -> Result<Composition> {
+        crate::services::retention::ensure_photo_not_cleared(self.store.as_ref(), photo_id)?;
         let current = self.store.composition(photo_id)?;
         let frame = current.frame().ok_or(Error::FrameUnknown)?;
         let values = CompositionValues {

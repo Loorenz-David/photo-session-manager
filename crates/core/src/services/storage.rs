@@ -10,8 +10,17 @@
 //!   (byte-identical copy present);
 //! - masters no running export or publish needs.
 //!
-//! Nothing else is ever deleted here: no RAW, no file of an item, nothing in Capture One's own
-//! folders. Every deletion is permanent and logged (`storage.cleared rule=… path=… bytes=…`).
+//! P62 adds retention after publish (10F §3, §4 levels 4–5, M41): an item that is published and
+//! clean, not pinned, with a commerce integration configured, is cleared `retention_days` after
+//! its publish (and, under pressure, earlier, oldest publish first) — but only after
+//! [`retention::verify`] read Shopify back and found every published image there. Clearing marks
+//! the item cleared (read-only from then on) and queues its files: its RAWs, the Capture One
+//! files named after them, its duplicates, previews, masters and outputs. A RAW another
+//! session that is not cleared still uses is kept.
+//!
+//! Nothing else is ever deleted here: no RAW outside that path, nothing in Capture One's own
+//! folders not named after a cleared RAW. Every deletion is permanent and logged
+//! (`storage.cleared rule=… path=… bytes=…`).
 
 use crate::{
     Result,
@@ -22,22 +31,31 @@ use crate::{
     events::AppEvent,
     mechanisms::{
         arrival::path_key,
-        cleanup::{Candidate, CleanupKind, Deletion, plan_cleanup},
+        cleanup::{Candidate, CleanupKind, plan_cleanup},
+        retention::{
+            Eligibility, RetentionCandidate, RetentionInput, RetentionRule, eligibility,
+            plan_retention,
+        },
     },
     ports::{
         clock::Clock,
+        commerce::CommerceAdapter,
         events::EventSink,
         storage::{FileEntry, StorageFs},
         store::Store,
     },
-    services::{export::ExportService, health::HealthService},
+    services::{
+        export::ExportService,
+        health::HealthService,
+        retention::{self, Verification},
+    },
 };
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -55,6 +73,15 @@ pub const DISK_ALMOST_FULL: &str = "disk_almost_full";
 /// The sub folder of Capture One's output location the app's recipes export into (10C).
 pub const PREVIEW_EXPORT_FOLDER: &str = "_session_manager";
 const DUPLICATES_FOLDER: &str = ".duplicates";
+/// Health code for items not cleared because Shopify does not hold every published image (P62).
+pub const RETENTION_NOT_CLEARED: &str = "retention_not_cleared";
+/// Items verified against Shopify and cleared per scan (10F §6: small batches); the rest follow
+/// at the next scans.
+pub const ITEMS_PER_SCAN: usize = 5;
+/// An item Shopify did not verify is read again at most this often.
+pub const VERIFY_RETRY: Duration = Duration::from_secs(900);
+/// Capture One's folder beside the RAWs (settings sidecars, cache).
+const CAPTURE_ONE_FOLDER: &str = "CaptureOne";
 
 /// Where each kind of file lives.
 #[derive(Debug, Clone)]
@@ -67,6 +94,8 @@ pub struct StorageLocations {
     pub preview_cache: PathBuf,
     /// `<data>/masters` (10D MC-28).
     pub masters: PathBuf,
+    /// `<data>/outputs` (10D MC-28; P62 clears a cleared item's outputs).
+    pub outputs: PathBuf,
 }
 
 /// Why clean-up waits now (`None` = it may run): a capture, an upload, a render, a take-back,
@@ -127,6 +156,29 @@ fn is_preview_export(path: &Path) -> bool {
             .is_some_and(|name| name == PREVIEW_EXPORT_FOLDER)
 }
 
+/// 10F §3 / Q4: a file of Capture One's folder `capture_one` (`<RAW folder>/CaptureOne`) named
+/// after the RAW `name`: `Settings*/<name>.cos`, or `Cache/**/<name>.*`. Nothing else there
+/// (another RAW's files, the catalogue) ever matches.
+fn capture_one_file_of(capture_one: &Path, path: &Path, name: &str) -> bool {
+    let Ok(relative) = path.strip_prefix(capture_one) else {
+        return false;
+    };
+    let parts: Vec<String> = relative
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let Some(file) = parts.last() else {
+        return false;
+    };
+    match parts.first().map(String::as_str) {
+        Some(first) if first.starts_with("Settings") => {
+            parts.len() == 2 && *file == format!("{name}.cos")
+        }
+        Some("Cache") => parts.len() >= 2 && file.starts_with(&format!("{name}.")),
+        _ => false,
+    }
+}
+
 fn is_master_file(path: &Path) -> bool {
     path.file_name()
         .and_then(|n| n.to_str())
@@ -150,8 +202,18 @@ pub struct TickOutcome {
     pub paused: Option<String>,
 }
 
+/// What a queued file is: one of part 1's kinds, or a file of an item being cleared (P62).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QueuedKind {
+    Cleanup(CleanupKind),
+    Item(i64),
+}
+
 struct Queued {
-    deletion: Deletion,
+    kind: QueuedKind,
+    path: PathBuf,
+    bytes: u64,
+    rule: &'static str,
     modified_ms: i64,
 }
 
@@ -165,6 +227,26 @@ struct Work {
     hashes: HashMap<(PathBuf, u64, i64), String>,
     sizes_at: Option<Instant>,
     sizes_stale: bool,
+    /// Items not cleared because the verification failed: item id → health line (P62).
+    not_cleared: BTreeMap<i64, String>,
+    /// Items whose verification failed are not read again before this instant.
+    verify_after: HashMap<i64, Instant>,
+}
+
+/// What happened to one item chosen for clearing.
+enum ItemClearing {
+    /// Verified, marked cleared, its files queued.
+    Cleared,
+    /// The verification failed: the health line.
+    NotCleared(String),
+    /// It no longer qualifies, or work started meanwhile: looked at again by the next scan.
+    Skipped,
+}
+
+/// Retention after publish (P62): the commerce adapter the verification reads from. Without
+/// one (H6) nothing is cleared by retention or by budget levels 4–5.
+pub struct RetentionConfig {
+    pub commerce: Arc<dyn CommerceAdapter>,
 }
 
 pub struct StorageService {
@@ -178,6 +260,10 @@ pub struct StorageService {
     pause: PauseCheck,
     copied: Arc<CopiedExports>,
     min_free_bytes: AtomicU64,
+    retention_days: AtomicU32,
+    retention: Option<RetentionConfig>,
+    /// Set by [`StorageService::request_scan`] without waiting for a running scan.
+    requested: AtomicBool,
     work: Mutex<Work>,
     report: Mutex<Option<StorageReport>>,
     warning: Mutex<Option<String>>,
@@ -208,12 +294,30 @@ impl StorageService {
             pause,
             copied,
             min_free_bytes: AtomicU64::new(min_free_bytes),
+            retention_days: AtomicU32::new(4),
+            retention: None,
+            requested: AtomicBool::new(false),
             work: Mutex::new(Work::default()),
             report: Mutex::new(None),
             warning: Mutex::new(None),
         }
     }
 
+    /// P62: retention after publish, reading Shopify through `config` (H6: without it nothing
+    /// is cleared by retention), kept `retention_days` after publish.
+    pub fn with_retention(mut self, config: Option<RetentionConfig>, retention_days: u32) -> Self {
+        self.retention = config;
+        self.retention_days = AtomicU32::new(retention_days);
+        self
+    }
+    pub fn retention_days(&self) -> u32 {
+        self.retention_days.load(Ordering::Relaxed)
+    }
+    /// A new retention period (Settings → Storage) is applied by the next tick.
+    pub fn set_retention_days(&self, days: u32) {
+        self.retention_days.store(days, Ordering::Relaxed);
+        self.request_scan();
+    }
     pub fn min_free_bytes(&self) -> u64 {
         self.min_free_bytes.load(Ordering::Relaxed)
     }
@@ -224,10 +328,7 @@ impl StorageService {
     }
     /// Has the next tick decide again (and refresh the sizes) instead of waiting 5 minutes.
     pub fn request_scan(&self) {
-        if let Ok(mut work) = self.work.lock() {
-            work.scan_requested = true;
-            work.sizes_stale = true;
-        }
+        self.requested.store(true, Ordering::Relaxed);
     }
     /// The sizes last computed in the background (`None` until the first computation).
     pub fn report(&self) -> Option<StorageReport> {
@@ -253,6 +354,10 @@ impl StorageService {
             .map_err(|e| crate::Error::InvalidData(e.to_string()))?;
         if work.next_batch_at.is_some_and(|at| now < at) {
             return Ok(TickOutcome::default());
+        }
+        if self.requested.swap(false, Ordering::Relaxed) {
+            work.scan_requested = true;
+            work.sizes_stale = true;
         }
         work.next_batch_at = None;
         if work.queue.is_empty() {
@@ -331,18 +436,334 @@ impl StorageService {
             .deletions
             .into_iter()
             .map(|deletion| Queued {
+                kind: QueuedKind::Cleanup(deletion.kind),
                 modified_ms: modified.get(&deletion.path).copied().unwrap_or_default(),
-                deletion,
+                path: deletion.path,
+                bytes: deletion.bytes,
+                rule: deletion.rule.as_str(),
             })
             .collect();
-        let warning = plan.short.then(|| {
+        // Levels 4–5 (P62) start from what levels 1–3 leave.
+        let free_after = self.retention_scan(work, plan.free_after, now)?;
+        let short = free_after < self.min_free_bytes();
+        let warning = short.then(|| {
             format!(
                 "Disk almost full: {:.1} GB free; nothing more can be cleared safely",
-                plan.free_after as f64 / 1e9
+                free_after as f64 / 1e9
             )
         });
         self.set_warning(warning);
         Ok(())
+    }
+
+    /// 10F §3 and §4 levels 4–5 (P62): decides which published items to clear, verifies each
+    /// against Shopify (M41), marks the verified ones cleared and queues their files. Returns the
+    /// free space expected once everything queued is deleted.
+    fn retention_scan(
+        &self,
+        work: &mut Work,
+        free_after_levels: u64,
+        mono: Instant,
+    ) -> Result<u64> {
+        let Some(config) = &self.retention else {
+            self.set_not_cleared(work, BTreeMap::new());
+            return Ok(free_after_levels);
+        };
+        let min_free = self.min_free_bytes();
+        let now = self.clock.now_ms();
+        let days = self.retention_days();
+        let cleared = retention::cleared_sessions(self.store.as_ref())?;
+        let mut eligible: Vec<(i64, i64, String, RetentionCandidate)> = Vec::new();
+        for record in self.store.session_list_records()? {
+            let Some(item_id) = record.session.session.item_id else {
+                continue;
+            };
+            let state = self.store.item_retention(item_id)?;
+            let input = RetentionInput {
+                integration: true,
+                published_at: record.session.session.published_at,
+                dirty: record.session.dirty,
+                latest_step: record.latest_step,
+                keep_files: state.keep_files,
+                cleared: state.cleared_at.is_some(),
+            };
+            let due = match eligibility(input, now, days) {
+                Eligibility::Never => continue,
+                Eligibility::Due => true,
+                Eligibility::NotYetDue { .. } => false,
+            };
+            eligible.push((
+                item_id,
+                record.session.session.id,
+                record.sku,
+                RetentionCandidate {
+                    item_id,
+                    published_at: record.session.session.published_at.unwrap_or_default(),
+                    bytes: 0,
+                    due,
+                },
+            ));
+        }
+        let needs_budget = free_after_levels < min_free;
+        let mut remaining: Vec<RetentionCandidate> = Vec::new();
+        work.verify_after.retain(|_, at| *at > mono);
+        for (item_id, session_id, _, candidate) in eligible.iter_mut() {
+            if work.verify_after.contains_key(item_id) {
+                continue;
+            }
+            if candidate.due || needs_budget {
+                candidate.bytes = self
+                    .item_files(*item_id, *session_id, &cleared)?
+                    .iter()
+                    .map(|f| f.bytes)
+                    .sum();
+                remaining.push(*candidate);
+            }
+        }
+        let mut free = free_after_levels;
+        let mut not_cleared = BTreeMap::new();
+        let mut processed = 0;
+        loop {
+            let plan = plan_retention(&remaining, free, min_free);
+            let Some(&(item_id, rule)) = plan.first() else {
+                break;
+            };
+            if processed == ITEMS_PER_SCAN {
+                // The rest follow at the next scans; count them as freed for the warning.
+                work.scan_requested = true;
+                free = plan.iter().fold(free, |free, (id, _)| {
+                    free.saturating_add(
+                        remaining
+                            .iter()
+                            .find(|c| c.item_id == *id)
+                            .map_or(0, |c| c.bytes),
+                    )
+                });
+                break;
+            }
+            processed += 1;
+            let index = remaining
+                .iter()
+                .position(|c| c.item_id == item_id)
+                .expect("planned item is a candidate");
+            let candidate = remaining.remove(index);
+            let (_, session_id, sku, _) = eligible
+                .iter()
+                .find(|(id, ..)| *id == item_id)
+                .expect("planned item is eligible")
+                .clone();
+            match self.clear_item(work, config, item_id, session_id, &sku, rule)? {
+                ItemClearing::Cleared => free = free.saturating_add(candidate.bytes),
+                ItemClearing::NotCleared(line) => {
+                    work.verify_after.insert(item_id, mono + VERIFY_RETRY);
+                    not_cleared.insert(item_id, line);
+                }
+                ItemClearing::Skipped => {}
+            }
+        }
+        // Items checked earlier and not read again this time (retry delay) stay reported while
+        // they would still be cleared.
+        for (item_id, line) in &work.not_cleared {
+            let still = eligible
+                .iter()
+                .any(|(id, _, _, c)| id == item_id && (c.due || needs_budget));
+            if still && !not_cleared.contains_key(item_id) {
+                not_cleared.insert(*item_id, line.clone());
+            }
+        }
+        for (item_id, ..) in &eligible {
+            if let Some(state) = self.store.item_retention(*item_id).ok()
+                && state.cleared_at.is_some()
+            {
+                not_cleared.remove(item_id);
+            }
+        }
+        self.set_not_cleared(work, not_cleared);
+        Ok(free)
+    }
+
+    /// One item: verify against Shopify, re-check it is still published and clean, mark it
+    /// cleared and queue its files.
+    fn clear_item(
+        &self,
+        work: &mut Work,
+        config: &RetentionConfig,
+        item_id: i64,
+        session_id: i64,
+        sku: &str,
+        rule: RetentionRule,
+    ) -> Result<ItemClearing> {
+        let images = match retention::verify(
+            self.store.as_ref(),
+            config.commerce.as_ref(),
+            item_id,
+            session_id,
+        ) {
+            Ok(Verification::Holds(images)) => images,
+            Ok(Verification::Missing(n)) => {
+                let line = format!("Not cleared: {sku} — Shopify is missing {n} images");
+                tracing::warn!("storage.not_cleared item={sku} missing={n}");
+                return Ok(ItemClearing::NotCleared(line));
+            }
+            Err(error) => {
+                tracing::warn!(%error, "storage.not_cleared item={sku} read failed");
+                return Ok(ItemClearing::NotCleared(format!(
+                    "Not cleared: {sku} — Shopify could not be read"
+                )));
+            }
+        };
+        // The verification took a while: the item must still qualify (M41).
+        let session = self.store.session(session_id)?;
+        let state = self.store.item_retention(item_id)?;
+        let latest = self.store.latest_publish(session_id)?;
+        let still = !matches!(
+            eligibility(
+                RetentionInput {
+                    integration: true,
+                    published_at: session.session.published_at,
+                    dirty: session.dirty,
+                    latest_step: latest.map(|l| l.step),
+                    keep_files: state.keep_files,
+                    cleared: state.cleared_at.is_some(),
+                },
+                self.clock.now_ms(),
+                0,
+            ),
+            Eligibility::Never
+        );
+        if !still || (self.pause)().is_some() {
+            work.scan_requested = true;
+            return Ok(ItemClearing::Skipped);
+        }
+        self.store
+            .mark_item_cleared(item_id, self.clock.now_ms(), &images)?;
+        tracing::info!(
+            "storage.item_cleared item={sku} rule={} images={}",
+            rule.as_str(),
+            images.len()
+        );
+        self.events.emit(AppEvent::SessionChanged { session_id });
+        let cleared = retention::cleared_sessions(self.store.as_ref())?;
+        for file in self.item_files(item_id, session_id, &cleared)? {
+            work.queue.push_back(Queued {
+                kind: QueuedKind::Item(item_id),
+                path: file.path,
+                bytes: file.bytes,
+                rule: rule.as_str(),
+                modified_ms: file.modified_ms,
+            });
+        }
+        Ok(ItemClearing::Cleared)
+    }
+
+    fn set_not_cleared(&self, work: &mut Work, not_cleared: BTreeMap<i64, String>) {
+        if work.not_cleared == not_cleared {
+            return;
+        }
+        if not_cleared.is_empty() {
+            self.health.clear(RETENTION_NOT_CLEARED);
+        } else {
+            let text: Vec<&str> = not_cleared.values().map(String::as_str).collect();
+            self.health.set(RETENTION_NOT_CLEARED, text.join("; "));
+        }
+        work.not_cleared = not_cleared;
+        self.events.emit(AppEvent::HealthChanged);
+    }
+
+    /// The local files of an item (10F §3, Q1, Q4): for every RAW of its session (every
+    /// classification) that no other, not cleared, session uses — the RAW, the files in its
+    /// folder's `CaptureOne/Settings*/` named `<RAW name>.cos` and in `CaptureOne/Cache/` named
+    /// `<RAW name>.*`, its previews, masters and outputs — and the files in `.duplicates/`
+    /// whose SHA-256 is one of those RAWs'.
+    fn item_files(
+        &self,
+        item_id: i64,
+        session_id: i64,
+        cleared: &HashSet<i64>,
+    ) -> Result<Vec<FileEntry>> {
+        let mut out: Vec<FileEntry> = Vec::new();
+        let mut raws: Vec<String> = Vec::new();
+        let mut hashes: HashSet<String> = HashSet::new();
+        for photo in self.store.photos_in_session(session_id)? {
+            if raws.contains(&photo.raw_path) {
+                continue;
+            }
+            let shared = self
+                .store
+                .photos_for_raw(&photo.raw_path)?
+                .iter()
+                .any(|p| p.session_id != session_id && !cleared.contains(&p.session_id));
+            if shared {
+                tracing::info!(
+                    item = item_id,
+                    raw = photo.raw_path,
+                    "storage: RAW kept, another session uses it"
+                );
+                raws.push(photo.raw_path.clone());
+                continue;
+            }
+            if let Some(hash) = &photo.raw_hash {
+                hashes.insert(hash.clone());
+            }
+            raws.push(photo.raw_path.clone());
+            let raw = Path::new(&photo.raw_path);
+            if let Some(file) = self.fs.entry(raw)? {
+                out.push(file);
+            }
+            if let (Some(folder), Some(name)) = (raw.parent(), raw.file_name()) {
+                let name = name.to_string_lossy();
+                let capture_one = folder.join(CAPTURE_ONE_FOLDER);
+                for file in self.fs.files_deep(&capture_one, &[])? {
+                    if capture_one_file_of(&capture_one, &file.path, &name) {
+                        out.push(file);
+                    }
+                }
+            }
+            let key = path_key(&photo.raw_path);
+            for root in [
+                &self.locations.preview_cache,
+                &self.locations.masters,
+                &self.locations.outputs,
+            ] {
+                out.extend(self.fs.files_deep(&root.join(&key[..2]).join(&key), &[])?);
+            }
+        }
+        if !hashes.is_empty() {
+            let names: HashSet<String> = raws
+                .iter()
+                .filter_map(|r| Path::new(r).file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .collect();
+            let known: HashMap<String, String> = self
+                .store
+                .deliveries()?
+                .into_iter()
+                .filter(|r| r.outcome == DeliveryOutcome::Duplicate)
+                .map(|r| (r.final_path, r.sha256))
+                .collect();
+            for file in self.fs.files(&self.duplicates_dir())? {
+                let key = file.path.to_string_lossy().into_owned();
+                let sha = match known.get(&key) {
+                    Some(sha) => sha.clone(),
+                    None => {
+                        let named = file
+                            .path
+                            .file_name()
+                            .is_some_and(|n| names.contains(n.to_string_lossy().as_ref()));
+                        if !named {
+                            continue;
+                        }
+                        self.fs.sha256(&file.path)?
+                    }
+                };
+                if hashes.contains(&sha) {
+                    out.push(file);
+                }
+            }
+        }
+        out.sort_by(|a, b| a.path.cmp(&b.path));
+        out.dedup_by(|a, b| a.path == b.path);
+        Ok(out)
     }
 
     fn set_warning(&self, warning: Option<String>) {
@@ -550,9 +971,13 @@ impl StorageService {
     }
 
     /// Whether `path` is in the one folder its kind may be cleared from (a guard: nothing
-    /// outside these three places is ever deleted).
-    fn allowed(&self, kind: CleanupKind, path: &Path) -> bool {
-        match kind {
+    /// outside these places is ever deleted).
+    fn allowed(&self, kind: QueuedKind, path: &Path) -> Result<bool> {
+        let kind = match kind {
+            QueuedKind::Cleanup(kind) => kind,
+            QueuedKind::Item(item_id) => return self.allowed_item_file(item_id, path),
+        };
+        Ok(match kind {
             CleanupKind::Duplicate => path.parent() == Some(self.duplicates_dir().as_path()),
             CleanupKind::PreviewExport => is_preview_export(path),
             CleanupKind::Master => {
@@ -561,51 +986,98 @@ impl StorageService {
                         || std::fs::canonicalize(&self.locations.masters)
                             .is_ok_and(|root| path.starts_with(root)))
             }
+        })
+    }
+
+    /// M41 at the moment of deletion: the item is marked cleared (it passed the verification),
+    /// and the file is one of its RAWs, a Capture One file named after one of them, a file of
+    /// one of their cache folders, or a duplicate in `.duplicates/`.
+    fn allowed_item_file(&self, item_id: i64, path: &Path) -> Result<bool> {
+        if self.store.item_retention(item_id)?.cleared_at.is_none() {
+            return Ok(false);
         }
+        if path.parent() == Some(self.duplicates_dir().as_path()) {
+            return Ok(true);
+        }
+        let Some(session_id) = self.store.session_for_item(item_id)? else {
+            return Ok(false);
+        };
+        let under = |root: &Path| {
+            path.starts_with(root)
+                || std::fs::canonicalize(root).is_ok_and(|root| path.starts_with(root))
+        };
+        for photo in self.store.photos_in_session(session_id)? {
+            let raw = Path::new(&photo.raw_path);
+            if raw == path {
+                return Ok(true);
+            }
+            if let (Some(folder), Some(name)) = (raw.parent(), raw.file_name())
+                && capture_one_file_of(
+                    &folder.join(CAPTURE_ONE_FOLDER),
+                    path,
+                    &name.to_string_lossy(),
+                )
+            {
+                return Ok(true);
+            }
+            let key = path_key(&photo.raw_path);
+            for root in [
+                &self.locations.preview_cache,
+                &self.locations.masters,
+                &self.locations.outputs,
+            ] {
+                if under(&root.join(&key[..2]).join(&key)) {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     fn delete(&self, batch: Vec<Queued>) -> Result<Vec<Cleared>> {
-        let needed = if batch.iter().any(|q| q.deletion.kind == CleanupKind::Master) {
+        let needed = if batch
+            .iter()
+            .any(|q| q.kind == QueuedKind::Cleanup(CleanupKind::Master))
+        {
             self.masters_needed()?
         } else {
             HashSet::new()
         };
         let mut cleared = Vec::new();
         for queued in batch {
-            let deletion = queued.deletion;
             // The file must still be the one decided on (same size and time).
-            let Some(current) = self.fs.entry(&deletion.path)? else {
+            let Some(current) = self.fs.entry(&queued.path)? else {
                 continue;
             };
-            if current.bytes != deletion.bytes || current.modified_ms != queued.modified_ms {
+            if current.bytes != queued.bytes || current.modified_ms != queued.modified_ms {
                 continue;
             }
-            if deletion.kind == CleanupKind::Master
-                && Self::master_key(&deletion.path).is_some_and(|key| needed.contains(&key))
+            if queued.kind == QueuedKind::Cleanup(CleanupKind::Master)
+                && Self::master_key(&queued.path).is_some_and(|key| needed.contains(&key))
             {
                 continue;
             }
-            if !self.allowed(deletion.kind, &deletion.path) {
-                tracing::warn!(path = %deletion.path.display(), "storage: refused a path outside its folder");
+            if !self.allowed(queued.kind, &queued.path)? {
+                tracing::warn!(path = %queued.path.display(), "storage: refused a path outside its folder");
                 continue;
             }
-            if let Err(error) = self.fs.remove(&deletion.path) {
-                tracing::warn!(%error, path = %deletion.path.display(), "storage: not cleared");
+            if let Err(error) = self.fs.remove(&queued.path) {
+                tracing::warn!(%error, path = %queued.path.display(), "storage: not cleared");
                 continue;
             }
             tracing::info!(
                 "storage.cleared rule={} path={} bytes={}",
-                deletion.rule.as_str(),
-                deletion.path.display(),
-                deletion.bytes
+                queued.rule,
+                queued.path.display(),
+                queued.bytes
             );
-            if deletion.kind == CleanupKind::PreviewExport {
-                self.copied.forget(&deletion.path);
+            if queued.kind == QueuedKind::Cleanup(CleanupKind::PreviewExport) {
+                self.copied.forget(&queued.path);
             }
             cleared.push(Cleared {
-                rule: deletion.rule.as_str().into(),
-                path: deletion.path,
-                bytes: deletion.bytes,
+                rule: queued.rule.into(),
+                path: queued.path,
+                bytes: queued.bytes,
             });
         }
         Ok(cleared)

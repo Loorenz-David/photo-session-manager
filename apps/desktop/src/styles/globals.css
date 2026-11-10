@@ -188,6 +188,7 @@ button.pill:disabled { cursor: default; }
 .pill-failed { background: transparent; border-color: var(--danger); color: var(--danger-700); }
 .pill-action { background: transparent; border-color: var(--hair-strong); }
 .pill-published { background: transparent; border-color: var(--hair-strong); color: var(--muted); }
+.pill-archived { border-style: dashed; }
 .pill-progress { background: transparent; padding-left: 0; }
 .pill-bar { width: 120px; }
 .to-review { color: var(--muted); font-size: var(--text-xs); }

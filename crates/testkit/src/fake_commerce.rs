@@ -3,8 +3,8 @@ use psm_core::{
     domain::{
         attribute::Definition,
         publish::{
-            ConfirmedRun, DefinitionLink, RemoteIdentity, RemoteItem, RemoteMedia,
-            RemoteMediaStatus, StagedTarget, WriteValue,
+            ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
+            RemoteMedia, RemoteMediaStatus, StagedTarget, WriteValue,
         },
     },
     ports::{
@@ -53,6 +53,18 @@ pub struct FakeShop {
     pub descriptions: HashMap<String, String>,
     pub readback_override: Option<(String, Json)>,
     pub identity_override: Option<RemoteIdentity>,
+    /// Every `fetch_image` call: (URL, long edge asked for) (P62).
+    pub image_fetches: Vec<(String, u32)>,
+}
+
+/// The made-up CDN URL the fake shop gives a media or file id (P62; never a real host).
+pub fn fake_image_url(id: &str) -> String {
+    format!("https://cdn.fake-shop.test/files/{id}.jpg")
+}
+
+/// The bytes the fake shop serves for a fake CDN URL.
+pub fn fake_image_bytes(url: &str) -> Vec<u8> {
+    format!("JPEG bytes of {url}").into_bytes()
 }
 pub struct FakeCommerce {
     pub state: Mutex<FakeShop>,
@@ -479,6 +491,49 @@ impl CommerceAdapter for FakeCommerce {
     fn list_media(&self, id: &str) -> Result<Vec<RemoteMedia>> {
         self.read("list_media")?;
         Ok(self.item_get(id)?.media)
+    }
+    fn media_readback(&self, id: &str) -> Result<MediaReadback> {
+        self.read("media_readback")?;
+        let gallery = self
+            .item_get(id)?
+            .media
+            .into_iter()
+            .map(|m| MediaImage {
+                url: Some(fake_image_url(&m.id)),
+                id: m.id,
+            })
+            .collect();
+        let state = self.state.lock().unwrap();
+        let ids: Vec<String> = state
+            .values
+            .get(id)
+            .and_then(|values| values.iter().find(|(key, _)| key == &self.condition_key))
+            .and_then(|(_, value)| value.as_array().cloned())
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|v| v.as_str().map(str::to_owned))
+            .collect();
+        let condition = ids
+            .into_iter()
+            .map(|id| MediaImage {
+                url: state
+                    .files
+                    .iter()
+                    .any(|f| f.id == id)
+                    .then(|| fake_image_url(&id)),
+                id,
+            })
+            .collect();
+        Ok(MediaReadback { gallery, condition })
+    }
+    fn fetch_image(&self, url: &str, max_edge: u32) -> Result<Vec<u8>> {
+        self.read("fetch_image")?;
+        self.state
+            .lock()
+            .unwrap()
+            .image_fetches
+            .push((url.to_owned(), max_edge));
+        Ok(fake_image_bytes(url))
     }
     fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>> {
         self.read("list_files_by_name")?;

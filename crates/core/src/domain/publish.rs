@@ -56,6 +56,21 @@ pub struct RemoteMedia {
     pub position: i64,
 }
 
+/// One image read back from the platform: its id and where it can be downloaded (P62).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaImage {
+    pub id: String,
+    pub url: Option<String>,
+}
+
+/// What the platform holds for an item (10F Rules, M41): its gallery media and the files of its
+/// condition-photos field, each with id and URL.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaReadback {
+    pub gallery: Vec<MediaImage>,
+    pub condition: Vec<MediaImage>,
+}
+
 /// A remote item (Shopify: a product with its default variant). `item_search` may leave `media`
 /// empty; `item_get` fills it in gallery order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

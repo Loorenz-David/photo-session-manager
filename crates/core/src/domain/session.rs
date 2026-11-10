@@ -74,6 +74,8 @@ pub enum RowLabel {
     Published,
     Ready,
     InProgress(i64),
+    /// P62 (10F §3): published, local files cleared, photos shown from Shopify.
+    Archived,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

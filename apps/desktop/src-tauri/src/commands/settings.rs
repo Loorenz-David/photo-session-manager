@@ -174,3 +174,34 @@ pub async fn storage_min_free_set(
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
+
+/// Settings → Storage (10F §3): the days a published, clean item's local files are kept.
+#[tauri::command]
+#[specta::specta]
+pub async fn storage_retention_get(state: State<'_, AppState>) -> Result<u32, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    Ok(app.settings.storage.retention_days_after_publish)
+}
+
+/// Saves the retention period in days; the background clean-up applies it at its next tick.
+#[tauri::command]
+#[specta::specta]
+pub async fn storage_retention_set(
+    _state: State<'_, AppState>,
+    app_handle: AppHandle,
+    days: u32,
+) -> Result<u32, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        state.settings_set(
+            &serde_json::json!({"storage": {"retention_days_after_publish": days}}),
+        )?;
+        Ok(state
+            .handles()?
+            .settings
+            .storage
+            .retention_days_after_publish)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}

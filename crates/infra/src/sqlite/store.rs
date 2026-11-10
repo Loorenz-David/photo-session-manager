@@ -20,6 +20,7 @@ use psm_core::{
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource},
         publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
         session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
+        storage::{ArchivedImage, ItemRetention},
     },
     mechanisms::{
         canon::canon,
@@ -69,6 +70,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/007_style_applied.sql")),
             M::up(include_str!("migrations/008_settings_fingerprint.sql")),
             M::up(include_str!("migrations/009_publish_item_type.sql")),
+            M::up(include_str!("migrations/010_retention.sql")),
         ]
     }
 
@@ -2224,6 +2226,79 @@ impl Store for SqliteStore {
     }
     fn deliveries(&self) -> Result<Vec<DeliveryRow>> {
         deliveries_where(&*self.locked()?, "1=1", [])
+    }
+
+    fn item_retention(&self, item_id: i64) -> Result<ItemRetention> {
+        let conn = self.locked()?;
+        Ok(conn
+            .query_row(
+                "SELECT keep_files,cleared_at FROM item_retention WHERE item_id=?1",
+                [item_id],
+                |r| {
+                    Ok(ItemRetention {
+                        keep_files: r.get::<_, i64>(0)? != 0,
+                        cleared_at: r.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(db)?
+            .unwrap_or_default())
+    }
+    fn set_item_keep_files(&self, item_id: i64, keep: bool) -> Result<()> {
+        let conn = self.locked()?;
+        conn.execute(
+            "INSERT INTO item_retention(item_id,keep_files) VALUES (?1,?2) ON CONFLICT(item_id) DO UPDATE SET keep_files=excluded.keep_files",
+            params![item_id, keep as i64],
+        )
+        .map_err(db)?;
+        Ok(())
+    }
+    fn mark_item_cleared(&self, item_id: i64, at: i64, images: &[ArchivedImage]) -> Result<()> {
+        let mut conn = self.locked()?;
+        let tx = conn.transaction().map_err(db)?;
+        tx.execute(
+            "INSERT INTO item_retention(item_id,cleared_at) VALUES (?1,?2) ON CONFLICT(item_id) DO UPDATE SET cleared_at=excluded.cleared_at",
+            params![item_id, at],
+        )
+        .map_err(db)?;
+        tx.execute("DELETE FROM archived_images WHERE item_id=?1", [item_id])
+            .map_err(db)?;
+        for image in images {
+            tx.execute(
+                "INSERT INTO archived_images(item_id,role,position,media_id,url) VALUES (?1,?2,?3,?4,?5)",
+                params![item_id, image.role, image.position, image.media_id, image.url],
+            )
+            .map_err(db)?;
+        }
+        tx.commit().map_err(db)
+    }
+    fn archived_images(&self, item_id: i64) -> Result<Vec<ArchivedImage>> {
+        let conn = self.locked()?;
+        let mut stmt = conn
+            .prepare("SELECT role,position,media_id,url FROM archived_images WHERE item_id=?1 ORDER BY role<>'gallery',position")
+            .map_err(db)?;
+        stmt.query_map([item_id], |r| {
+            Ok(ArchivedImage {
+                role: r.get(0)?,
+                position: r.get(1)?,
+                media_id: r.get(2)?,
+                url: r.get(3)?,
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)
+    }
+    fn cleared_sessions(&self) -> Result<Vec<i64>> {
+        let conn = self.locked()?;
+        let mut stmt = conn
+            .prepare("SELECT s.id FROM sessions s JOIN item_retention r ON r.item_id=s.item_id WHERE r.cleared_at IS NOT NULL ORDER BY s.id")
+            .map_err(db)?;
+        stmt.query_map([], |r| r.get(0))
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)
     }
 }
 

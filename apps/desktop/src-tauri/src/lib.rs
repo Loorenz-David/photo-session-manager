@@ -652,6 +652,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::settings::settings_set,
         commands::settings::storage_get,
         commands::settings::storage_min_free_set,
+        commands::settings::storage_retention_get,
+        commands::settings::storage_retention_set,
+        commands::items::item_archive_get,
+        commands::items::item_keep_files_set,
     ])
 }
 

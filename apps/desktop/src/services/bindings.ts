@@ -104,6 +104,20 @@ export const commands = {
 	storageGet: () => typedError<StorageDto_Serialize, CommandError>(__TAURI_INVOKE("storage_get")),
 	/**  Saves the minimum free space (GB); the background job applies it at its next tick. */
 	storageMinFreeSet: (minFreeGb: number) => typedError<StorageDto_Serialize, CommandError>(__TAURI_INVOKE("storage_min_free_set", { minFreeGb })),
+	/**  Settings → Storage (10F §3): the days a published, clean item's local files are kept. */
+	storageRetentionGet: () => typedError<number, CommandError>(__TAURI_INVOKE("storage_retention_get")),
+	/**  Saves the retention period in days; the background clean-up applies it at its next tick. */
+	storageRetentionSet: (days: number) => typedError<number, CommandError>(__TAURI_INVOKE("storage_retention_set", { days })),
+	/**
+	 *  The session's item retention state; a cleared item's photos are downloaded from Shopify on
+	 *  demand (preview size) and cached. `null` for the Unassigned session.
+	 */
+	itemArchiveGet: (sessionId: CommandId) => typedError<ItemArchiveDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_archive_get", { sessionId })),
+	/**
+	 *  "Keep files on this Mac" (10F Q2): the pinned item is never cleared by retention or by the
+	 *  storage budget.
+	 */
+	itemKeepFilesSet: (sessionId: CommandId, keep: boolean) => typedError<ItemArchiveDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_keep_files_set", { sessionId, keep })),
 };
 
 /* Types */
@@ -121,6 +135,34 @@ export type ApplyRefusalDto = {
 export type ApplyResultDto = {
 	applied: number[],
 	refused: ApplyRefusalDto[],
+};
+
+/**
+ *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
+ *  small cached copy the workspace shows.
+ */
+export type ArchivedPictureDto = ArchivedPictureDto_Serialize | ArchivedPictureDto_Deserialize;
+
+/**
+ *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
+ *  small cached copy the workspace shows.
+ */
+export type ArchivedPictureDto_Deserialize = {
+	role: string,
+	position: number,
+	url: string,
+	path?: string | null,
+};
+
+/**
+ *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
+ *  small cached copy the workspace shows.
+ */
+export type ArchivedPictureDto_Serialize = {
+	role: string,
+	position: number,
+	url: string,
+	path: string | null,
 };
 
 export type AttributeGroupDto = "details" | "condition" | "product";
@@ -413,6 +455,34 @@ export type IntegrationSettingsDto = {
 	condition_photos_key: string,
 };
 
+/**
+ *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
+ *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
+ */
+export type ItemArchiveDto = ItemArchiveDto_Serialize | ItemArchiveDto_Deserialize;
+
+/**
+ *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
+ *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
+ */
+export type ItemArchiveDto_Deserialize = {
+	item_id: number,
+	keep_files: boolean,
+	cleared: boolean,
+	pictures: ArchivedPictureDto_Deserialize[],
+};
+
+/**
+ *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
+ *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
+ */
+export type ItemArchiveDto_Serialize = {
+	item_id: number,
+	keep_files: boolean,
+	cleared: boolean,
+	pictures: ArchivedPictureDto_Serialize[],
+};
+
 export type ItemDto = ItemDto_Serialize | ItemDto_Deserialize;
 
 export type ItemDto_Deserialize = {
@@ -585,7 +655,9 @@ export type ReviewResponse_Serialize = {
 	active_photo_id: number | null,
 };
 
-export type RowLabelResponse = { kind: "publishing"; value: number } | { kind: "publish_failed" } | { kind: "description_failed" } | { kind: "published" } | { kind: "ready" } | { kind: "in_progress"; value: number };
+export type RowLabelResponse = { kind: "publishing"; value: number } | { kind: "publish_failed" } | { kind: "description_failed" } | { kind: "published" } | { kind: "ready" } | { kind: "in_progress"; value: number } | 
+/**  P62: published, local files cleared, photos shown from Shopify. */
+{ kind: "archived" };
 
 export type SessionFilter = "open" | "published" | "all";
 

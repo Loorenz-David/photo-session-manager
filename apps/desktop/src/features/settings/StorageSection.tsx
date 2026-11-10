@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getStorage, setMinFreeGb, type Storage } from '@/services/storage';
+import { getRetentionDays, setRetentionDays } from '@/services/retention';
 
 /** Bytes as the photographer reads them: GB with one decimal from 1 GB, else whole MB. */
 export function formatBytes(bytes: number | null | undefined): string {
@@ -58,9 +59,46 @@ export function StorageSection() {
         <Input id="settings-min_free_gb" type="number" min={0} value={shown} onChange={e => setMinFree(e.target.value)} />
         <Button type="button" variant="outline" disabled={busy || !storage} onClick={() => void save()}>Save minimum</Button>
       </div>
-      <p className="health-detail">Below it, duplicates, Capture One&apos;s preview exports and masters are cleared, in that order, until there is enough space again. RAW files are never cleared.</p>
+      <p className="health-detail">Below it, duplicates, Capture One&apos;s preview exports and masters are cleared, in that order, then the files of published items (oldest publish first), until there is enough space again. Unpublished photos are never cleared.</p>
     </div>
+    <RetentionSetting />
   </section>;
+}
+
+/**
+ * 10F §3 (P62): days a published, unchanged item keeps its local files (RAWs included) before they are cleared, once
+ * Shopify is verified to hold every published image. Items marked "Keep files on this Mac" are never cleared.
+ */
+export function RetentionSetting() {
+  const [days, setDays] = useState<number | null>(null);
+  const [edited, setEdited] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve().then(getRetentionDays).then(value => { if (alive) setDays(value); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  const shown = edited ?? (days === null ? '' : String(days));
+  const save = async () => {
+    const value = Math.round(Number(shown));
+    if (shown.trim() === '' || !Number.isFinite(value) || value < 0) { toast.error('Enter the number of days'); return; }
+    setBusy(true);
+    try {
+      setDays(await setRetentionDays(value));
+      setEdited(null);
+      toast.success(`Published items keep their files for ${value} ${value === 1 ? 'day' : 'days'}`);
+    } catch (error) {
+      toast.error(`Not saved: ${(error as Error).message ?? String(error)}`);
+    } finally { setBusy(false); }
+  };
+  return <div className="flex flex-col gap-1">
+    <label htmlFor="settings-retention_days">Keep files of published items (days)</label>
+    <div className="flex gap-2">
+      <Input id="settings-retention_days" type="number" min={0} value={shown} onChange={e => setEdited(e.target.value)} />
+      <Button type="button" variant="outline" disabled={busy || days === null} onClick={() => void save()}>Save days</Button>
+    </div>
+    <p className="health-detail">After that many days, a published item that has not changed since is cleared from this Mac (RAW files included) once Shopify is checked to hold every published photo; its photos are then shown from Shopify. Items marked &quot;Keep files on this Mac&quot; are kept.</p>
+  </div>;
 }
 
 /** The header's warning while nothing more can be cleared safely (10F §4). */

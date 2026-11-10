@@ -50,6 +50,7 @@ impl<'a> ReviewService<'a> {
         if target == Classification::Deleted {
             return self.delete(photo_id);
         }
+        crate::services::retention::ensure_photo_not_cleared(self.store, photo_id)?;
         let mut session_id = 0;
         let mut step = None;
         let at = self.clock.now_ms();
@@ -97,6 +98,7 @@ impl<'a> ReviewService<'a> {
     }
 
     pub fn reorder(&self, photo_id: i64, position: i64) -> Result<ReviewResult> {
+        crate::services::retention::ensure_photo_not_cleared(self.store, photo_id)?;
         let mut session_id = 0;
         let mut step = None;
         let at = self.clock.now_ms();
@@ -133,6 +135,7 @@ impl<'a> ReviewService<'a> {
     }
 
     pub fn delete(&self, photo_id: i64) -> Result<ReviewResult> {
+        crate::services::retention::ensure_photo_not_cleared(self.store, photo_id)?;
         let mut session_id = 0;
         let mut step = None;
         let at = self.clock.now_ms();
@@ -182,6 +185,11 @@ impl<'a> ReviewService<'a> {
     }
 
     fn transfer(&self, ids: &[i64], target: i64, copy: bool) -> Result<ReviewResult> {
+        // 10F Q3: nothing leaves or enters a cleared item.
+        crate::services::retention::ensure_session_not_cleared(self.store, target)?;
+        for id in ids {
+            crate::services::retention::ensure_photo_not_cleared(self.store, *id)?;
+        }
         let mut touched = BTreeSet::new();
         let mut steps: BTreeMap<i64, Vec<PhotoPlace>> = BTreeMap::new();
         let mut copies: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();

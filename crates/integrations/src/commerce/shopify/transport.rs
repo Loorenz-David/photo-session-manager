@@ -48,7 +48,15 @@ pub trait HttpTransport: Send + Sync {
     /// PUT raw bytes to a staged-upload target; `headers` are the target's `parameters`.
     fn put_bytes(&self, url: &str, headers: &[(String, String)], bytes: &[u8])
     -> Result<HttpReply>;
+    /// GET a file's bytes (a published image on the platform's CDN, P62). A transport that
+    /// cannot download refuses.
+    fn get_bytes(&self, _url: &str) -> Result<Vec<u8>> {
+        Err(Error::Provider("download not supported".into()))
+    }
 }
+
+/// The largest image `get_bytes` accepts (a preview-size JPEG is far smaller).
+pub const MAX_DOWNLOAD_BYTES: usize = 64 * 1024 * 1024;
 
 /// `application/x-www-form-urlencoded` encoding of `fields`.
 pub fn form_encode(fields: &[(&str, &str)]) -> String {
@@ -175,7 +183,40 @@ fn map_error(error: reqwest::Error) -> Error {
     }
 }
 
+impl ReqwestTransport {
+    fn download(&self, url: String) -> Result<Vec<u8>> {
+        let (reply_tx, reply_rx) = mpsc::channel::<Result<Vec<u8>>>();
+        let task: Task = Box::new(move |runtime, client| {
+            let result = runtime.block_on(async move {
+                let response = client.get(url).send().await.map_err(map_error)?;
+                let status = response.status().as_u16();
+                if status != 200 {
+                    return Err(Error::Provider(format!("download: HTTP {status}")));
+                }
+                let bytes = response.bytes().await.map_err(map_error)?;
+                if bytes.len() > MAX_DOWNLOAD_BYTES {
+                    return Err(Error::Provider("download: too large".into()));
+                }
+                Ok(bytes.to_vec())
+            });
+            let _ = reply_tx.send(result);
+        });
+        self.tasks
+            .lock()
+            .map_err(|_| Error::Provider("http worker poisoned".into()))?
+            .send(task)
+            .map_err(|_| Error::Provider("http worker stopped".into()))?;
+        reply_rx
+            .recv()
+            .map_err(|_| Error::Provider("http worker stopped".into()))?
+    }
+}
+
 impl HttpTransport for ReqwestTransport {
+    fn get_bytes(&self, url: &str) -> Result<Vec<u8>> {
+        self.download(url.to_owned())
+    }
+
     fn post_graphql(
         &self,
         url: &str,

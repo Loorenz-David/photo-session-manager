@@ -13,6 +13,7 @@ pub mod naming;
 pub mod position;
 pub mod publish;
 pub mod reconcile;
+pub mod retention;
 pub mod secrets;
 pub mod staleness;
 pub mod status;

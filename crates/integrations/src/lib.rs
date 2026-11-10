@@ -46,7 +46,9 @@ use psm_core::{
         previews::PreviewService,
         publish::PublishService,
         settings::SettingsService,
-        storage::{CopiedExports, PREVIEW_EXPORT_FOLDER, StorageLocations, StorageService},
+        storage::{
+            CopiedExports, PREVIEW_EXPORT_FOLDER, RetentionConfig, StorageLocations, StorageService,
+        },
     },
 };
 use psm_infra::{
@@ -315,6 +317,10 @@ impl App {
                 let min_free = settings.storage.min_free_bytes();
                 if min_free != self.storage.min_free_bytes() {
                     self.storage.set_min_free_bytes(min_free);
+                }
+                let days = settings.storage.retention_days_after_publish;
+                if days != self.storage.retention_days() {
+                    self.storage.set_retention_days(days);
                 }
                 self.settings = *settings;
                 self.export.set_format(self.settings.output_format);
@@ -839,47 +845,57 @@ impl App {
             let runtime = camera_runtime.clone();
             let running_export = export.clone();
             let publish_store = store.clone();
-            Arc::new(StorageService::new(
-                store.clone(),
-                Arc::new(LocalStorageFs::new(Arc::new(
-                    move |path: &std::path::Path| disk.query(path),
-                ))),
-                clock.clone(),
-                health.clone(),
-                events.clone(),
-                export.clone(),
-                StorageLocations {
-                    capture_root: document.join("Capture"),
-                    preview_exports: document.join("Output").join(PREVIEW_EXPORT_FOLDER),
-                    preview_cache: paths.root.join("previews"),
-                    masters: paths.root.join("masters"),
-                },
-                // 10F §6: never while a capture, an upload, a render, a take-back, an export
-                // or a publish is running.
-                Arc::new(move || {
-                    let reason = if runtime.capture_in_progress() {
-                        "capture"
-                    } else if runtime.uploads_in_progress() > 0 {
-                        "upload"
-                    } else if editing.renders_in_flight() > 0 {
-                        "render"
-                    } else if gate.is_held() {
-                        "take-back"
-                    } else if running_export.running() {
-                        "export"
-                    } else if publish_store
-                        .active_publish_items()
-                        .map_or(true, |items| !items.is_empty())
-                    {
-                        "publish"
-                    } else {
-                        return None;
-                    };
-                    Some(reason.to_owned())
-                }),
-                copied_exports,
-                settings.storage.min_free_bytes(),
-            ))
+            Arc::new(
+                StorageService::new(
+                    store.clone(),
+                    Arc::new(LocalStorageFs::new(Arc::new(
+                        move |path: &std::path::Path| disk.query(path),
+                    ))),
+                    clock.clone(),
+                    health.clone(),
+                    events.clone(),
+                    export.clone(),
+                    StorageLocations {
+                        capture_root: document.join("Capture"),
+                        preview_exports: document.join("Output").join(PREVIEW_EXPORT_FOLDER),
+                        preview_cache: paths.root.join("previews"),
+                        masters: paths.root.join("masters"),
+                        outputs: paths.root.join("outputs"),
+                    },
+                    // 10F §6: never while a capture, an upload, a render, a take-back, an export
+                    // or a publish is running.
+                    Arc::new(move || {
+                        let reason = if runtime.capture_in_progress() {
+                            "capture"
+                        } else if runtime.uploads_in_progress() > 0 {
+                            "upload"
+                        } else if editing.renders_in_flight() > 0 {
+                            "render"
+                        } else if gate.is_held() {
+                            "take-back"
+                        } else if running_export.running() {
+                            "export"
+                        } else if publish_store
+                            .active_publish_items()
+                            .map_or(true, |items| !items.is_empty())
+                        {
+                            "publish"
+                        } else {
+                            return None;
+                        };
+                        Some(reason.to_owned())
+                    }),
+                    copied_exports,
+                    settings.storage.min_free_bytes(),
+                )
+                // P62 (H6): retention only with a commerce integration to verify against.
+                .with_retention(
+                    commerce
+                        .clone()
+                        .map(|commerce| RetentionConfig { commerce }),
+                    settings.storage.retention_days_after_publish,
+                ),
+            )
         };
         let storage_background = if run_startup {
             let worker_stop = stop.clone();

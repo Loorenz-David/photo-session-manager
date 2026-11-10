@@ -12,7 +12,7 @@ type StatusPillProps = {
 
 const LATER = 'Arrives with publishing';
 
-/** Row status in the order of ch07: Publishing n%, Publish failed, Description failed, Published, Ready · Publish, In progress. */
+/** Row status in the order of ch07: Publishing n%, Publish failed, Description failed, Published, Ready · Publish, In progress; Archived in Shopify (P62). */
 export function StatusPill({ label, onRetry, onPublish }: StatusPillProps) {
   const retry = useAction(async () => { await onRetry?.(); });
   switch (label.kind) {
@@ -43,6 +43,13 @@ export function StatusPill({ label, onRetry, onPublish }: StatusPillProps) {
       return (
         <div className="status-cell">
           <span className="pill pill-published">Published</span>
+        </div>
+      );
+    case 'archived':
+      // 10F §3: published, its local files cleared; its photos come from Shopify.
+      return (
+        <div className="status-cell">
+          <span className="pill pill-published pill-archived" title="Local files cleared after publishing; photos are shown from Shopify">Archived in Shopify</span>
         </div>
       );
     case 'ready':

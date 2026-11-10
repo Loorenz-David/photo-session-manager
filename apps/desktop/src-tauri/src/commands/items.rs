@@ -135,6 +135,7 @@ impl From<Error> for CommandError {
             Error::ShopNotPermitted => "shop_not_permitted",
             Error::AppNotInstalled => "app_not_installed",
             Error::CredentialsRejected => "credentials_rejected",
+            Error::FilesCleared => "files_cleared",
         };
         Self {
             code: code.into(),
@@ -323,4 +324,107 @@ pub async fn item_adopt(
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
+/// small cached copy the workspace shows.
+#[derive(Serialize, Type)]
+pub struct ArchivedPictureDto {
+    pub role: String,
+    #[specta(type = specta_typescript::Number)]
+    pub position: i64,
+    pub url: String,
+    pub path: Option<String>,
+}
+
+/// An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
+/// were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
+#[derive(Serialize, Type)]
+pub struct ItemArchiveDto {
+    #[specta(type = specta_typescript::Number)]
+    pub item_id: i64,
+    pub keep_files: bool,
+    pub cleared: bool,
+    pub pictures: Vec<ArchivedPictureDto>,
+}
+
+fn archive_dto(view: psm_core::services::retention::ArchiveView) -> ItemArchiveDto {
+    ItemArchiveDto {
+        item_id: view.item_id,
+        keep_files: view.retention.keep_files,
+        cleared: view.retention.cleared_at.is_some(),
+        pictures: view
+            .pictures
+            .into_iter()
+            .map(|p| ArchivedPictureDto {
+                role: p.role,
+                position: p.position,
+                url: p.url,
+                path: p.path.map(|path| path.to_string_lossy().into_owned()),
+            })
+            .collect(),
+    }
+}
+
+fn archive_cache(app: &psm_integrations::AppHandles) -> std::path::PathBuf {
+    app.paths.root.join("previews").join("archived")
+}
+
+/// The session's item retention state; a cleared item's photos are downloaded from Shopify on
+/// demand (preview size) and cached. `null` for the Unassigned session.
+#[tauri::command]
+#[specta::specta]
+pub async fn item_archive_get(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<Option<ItemArchiveDto>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<ItemArchiveDto>, CommandError> {
+        let cache = archive_cache(&app);
+        psm_core::services::retention::ArchiveService::new(
+            app.store.as_ref(),
+            app.commerce.as_deref(),
+            &cache,
+        )
+        .view(session_id.0)
+        .map(|view| view.map(archive_dto))
+        .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
+}
+
+/// "Keep files on this Mac" (10F Q2): the pinned item is never cleared by retention or by the
+/// storage budget.
+#[tauri::command]
+#[specta::specta]
+pub async fn item_keep_files_set(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+    keep: bool,
+) -> Result<Option<ItemArchiveDto>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<ItemArchiveDto>, CommandError> {
+        let cache = archive_cache(&app);
+        let service = psm_core::services::retention::ArchiveService::new(
+            app.store.as_ref(),
+            app.commerce.as_deref(),
+            &cache,
+        );
+        let Some(item_id) =
+            psm_core::ports::store::Store::session(app.store.as_ref(), session_id.0)?
+                .session
+                .item_id
+        else {
+            return Ok(None);
+        };
+        service.set_keep_files(item_id, keep)?;
+        app.storage.request_scan();
+        service
+            .view(session_id.0)
+            .map(|view| view.map(archive_dto))
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
 }

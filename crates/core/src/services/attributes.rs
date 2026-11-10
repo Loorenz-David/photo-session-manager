@@ -386,11 +386,17 @@ impl<'a> AttributesService<'a> {
             return self.write_title(item_id, Some(title), "Edit");
         }
         let mut raw = Some(raw);
+        // 10F Q3: a cleared item keeps only the attributes that need no images (read before the
+        // write's transaction holds the store).
+        let cleared = self.store.item_retention(item_id)?.cleared_at.is_some();
         self.write(
             item_id,
             key,
             Some("Edit"),
             &mut |definition, stored, now| {
+                if cleared && definition.core_type == CoreType::MediaList {
+                    return Err(Error::FilesCleared);
+                }
                 if provenance != Provenance::Human
                     && stored.is_some_and(|s| s.is_live() && s.provenance == Provenance::Human)
                 {

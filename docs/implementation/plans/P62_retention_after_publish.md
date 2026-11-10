@@ -67,3 +67,25 @@ folder, the item shows "Archived in Shopify" and its photos come from Shopify; r
 - **Hazard:** a bug here destroys photos. Every deletion path must go through the eligibility + verification gate; the reviewer reads every call site.
 
 ## Review log
+
+- **2026-11-10 implement r1 (claude-opus for codex; Codex exited at launch).** Retention lives in P61's `StorageService` (`services/storage.rs`):
+  each scan lists items through `session_list_records`, decides with the core mechanism `mechanisms::retention::{eligibility, plan_retention}`
+  (published = latest run `done` and `published_at` set, not dirty, not pinned, not cleared, integration configured; due at `published_at + N days`;
+  budget: due items oldest publish first, then not-yet-due ones oldest first while free space is short; 3 unit tests), and for each chosen item
+  (≤ 5 per scan) calls `services::retention::verify`: the last done publish's frozen main/condition photos × output slots → their `ready` links →
+  must all be in Shopify's read-back (new port method `CommerceAdapter::media_readback`: gallery media + condition-field files, ids and URLs, one
+  GraphQL query `MEDIA_READBACK`). Verified → eligibility re-checked → `mark_item_cleared` (stores the images to show) → the item's files queued
+  (RAWs of every photo unless another not-cleared session uses the RAW; `CaptureOne/Settings*/<RAW name>.cos` and `CaptureOne/Cache/**/<RAW name>.*`;
+  previews/masters/outputs folders of each RAW; `.duplicates/` files with a RAW's hash) and deleted in batches of 20 behind a second guard
+  (`allowed_item_file`: item cleared and path belongs to it). Not verified → health `retention_not_cleared` (`Not cleared: <SKU> — Shopify is
+  missing N images` / `… — Shopify could not be read`), retried after 15 min. Logged `storage.cleared rule=retention|budget_published path=… bytes=…`.
+  Read-only guard `Error::FilesCleared` ("This item's files were cleared after publishing") in classify/reorder/delete/move/copy, composition
+  set/apply/reset, undo/redo, publish confirm, export run, and media-list attribute writes; other attributes save. The preview service no longer
+  marks a cleared item's photos missing. Archived view: `ArchiveService::view` downloads each image once (`fetch_image`, 1600 px) into
+  `<data>/previews/archived/<item>/`; list label `RowLabel::Archived`. Pin: `ArchiveService::set_keep_files`. Settings `storage.retention_days_after_publish`
+  (0–3650, default 4; storage patches now merge). Migration `010_retention.sql` (tables `item_retention`, `archived_images`). Commands
+  `item_archive_get`, `item_keep_files_set`, `storage_retention_get`, `storage_retention_set`. UI: `ArchivedView` replaces stage and panel for a
+  cleared item (details form still available), `Archived in Shopify` pill, pin checkbox in the item card, retention days in Settings → Storage.
+  Deviations: testkit `fake_commerce.rs` (read-back, fake CDN URLs, downloads), `p01_storage_identity.rs` (two new tables in its schema list),
+  `shopify/transport.rs` (`get_bytes`), `HealthPage.tsx` (label). Handoff: `handoffs/implementer/handoff_P62_retention_after_publish_implement_r1.md`.
+
