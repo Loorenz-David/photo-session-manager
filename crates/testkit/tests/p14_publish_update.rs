@@ -879,11 +879,12 @@ fn c6a_summary_counts_exclusions_removal_and_create() {
     photo(&a, s, "u1", C::Unreviewed);
     photo(&a, s, "u2", C::Unreviewed);
     let preview = a.app.publish.as_ref().unwrap().preview(&[s]).unwrap();
-    assert!(preview.summary.contains("Publish 4 images"));
+    // P64 (changelog 44): the two unreviewed photos are published after the main photos.
+    assert!(preview.summary.contains("Publish 6 images"));
     assert!(
         preview
             .summary
-            .contains("2 unreviewed photos will not be published")
+            .contains("2 unreviewed photos will be published after the main photos")
     );
     assert!(
         preview

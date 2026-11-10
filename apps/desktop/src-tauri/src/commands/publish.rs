@@ -4,7 +4,7 @@ use crate::{
 };
 use psm_core::{
     Error,
-    domain::publish::{Notification, PublishPreview},
+    domain::publish::{Notification, PublishActivity, PublishPreview},
     ports::store::Store,
 };
 use serde::Serialize;
@@ -143,6 +143,76 @@ pub async fn publish_retry(
             .as_ref()
             .ok_or(CommandError::from(Error::NoIntegration))?
             .retry(item_id.0)
+            .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+/// P64: what the publish progress popover shows (step in words, elapsed time, last error).
+#[derive(Serialize, Type)]
+pub struct PublishActivityDto {
+    #[specta(type = specta_typescript::Number)]
+    pub item_id: i64,
+    pub step: String,
+    pub text: String,
+    pub percent: u8,
+    #[specta(type = specta_typescript::Number)]
+    pub elapsed_ms: i64,
+    pub error: Option<String>,
+    /// `retrying` or `retry_available`.
+    pub retry: Option<String>,
+    pub can_cancel: bool,
+}
+impl From<PublishActivity> for PublishActivityDto {
+    fn from(a: PublishActivity) -> Self {
+        Self {
+            item_id: a.item_id,
+            step: serde_json::to_value(a.step)
+                .ok()
+                .and_then(|v| v.as_str().map(str::to_owned))
+                .unwrap_or_default(),
+            text: a.text,
+            percent: a.percent,
+            elapsed_ms: a.elapsed_ms,
+            error: a.error,
+            retry: a.retry,
+            can_cancel: a.can_cancel,
+        }
+    }
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn publish_activity(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<Option<PublishActivityDto>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(
+        move || -> Result<Option<PublishActivityDto>, CommandError> {
+            Ok(app
+                .publish
+                .as_ref()
+                .ok_or(CommandError::from(Error::NoIntegration))?
+                .activity(session_id.0)?
+                .map(Into::into))
+        },
+    )
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+/// Changelog 44 (P64): Cancel publish, after the photographer confirmed it in the popover.
+#[tauri::command]
+#[specta::specta]
+pub async fn publish_cancel(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+) -> Result<(), CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), CommandError> {
+        app.publish
+            .as_ref()
+            .ok_or(CommandError::from(Error::NoIntegration))?
+            .cancel(item_id.0)
             .map_err(Into::into)
     })
     .await

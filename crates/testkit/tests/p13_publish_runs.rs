@@ -161,7 +161,8 @@ fn c1a_confirm_freezes_lists_and_excludes_unreviewed() {
     let third = photo(&a, s, "c", C::Main);
     let chosen = photo(&a, s, "d", C::Condition);
     let excluded = photo(&a, s, "e", C::Condition);
-    let _unreviewed = photo(&a, s, "u", C::Unreviewed);
+    // P64 (changelog 44): an unreviewed photo is published after the main photos.
+    let unreviewed = photo(&a, s, "u", C::Unreviewed);
     let item_id = a.store().session(s).unwrap().session.item_id.unwrap();
     AttributesService::new(a.store(), a.clock.as_ref(), Some("shopify"))
         .set_value(
@@ -172,12 +173,12 @@ fn c1a_confirm_freezes_lists_and_excludes_unreviewed() {
         )
         .unwrap();
     let preview = a.app.publish.as_ref().unwrap().preview(&[s]).unwrap();
-    assert_eq!(preview.items[0].main, vec![main, second, third]);
+    assert_eq!(preview.items[0].main, vec![main, second, third, unreviewed]);
     assert_eq!(preview.items[0].condition, vec![chosen]);
     assert!(
         preview
             .summary
-            .contains("1 unreviewed photos will not be published")
+            .contains("1 unreviewed photos will be published after the main photos")
     );
     assert!(
         preview
@@ -194,7 +195,7 @@ fn c1a_confirm_freezes_lists_and_excludes_unreviewed() {
     let id = a.store().active_publish_items().unwrap()[0];
     let item = a.store().publish_item(id).unwrap();
     assert_eq!(item.run_id, run);
-    assert_eq!(item.frozen_main, vec![main, second, third]);
+    assert_eq!(item.frozen_main, vec![main, second, third, unreviewed]);
     assert_eq!(item.frozen_condition, vec![chosen]);
 }
 #[test]
@@ -644,12 +645,13 @@ fn c4b_resume_adopts_media_created_before_local_record() {
     let (a, _, _) = interrupted_publish("product_create_media");
     let s = a.fake_shop().state.lock().unwrap();
     assert_eq!(s.products[0].media.len(), 2);
+    // P64: both photos are registered in one request; the resume adopts them, creating none.
     assert_eq!(
         s.mutations
             .iter()
             .filter(|m| m.op == "product_create_media")
             .count(),
-        2
+        1
     );
 }
 #[test]
@@ -657,12 +659,13 @@ fn c4c_resume_polls_attached_media_without_creating_again() {
     let (a, _, _) = interrupted_publish("poll_media_ready");
     let s = a.fake_shop().state.lock().unwrap();
     assert_eq!(s.products[0].media.len(), 2);
+    // P64: both photos are registered in one request before the polls; none is created again.
     assert_eq!(
         s.mutations
             .iter()
             .filter(|m| m.op == "product_create_media")
             .count(),
-        2
+        1
     );
 }
 #[test]

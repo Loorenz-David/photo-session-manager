@@ -2,7 +2,8 @@
 //! `ReqwestTransport` here, testkit `FakeTransport`).
 //!
 //! `ReqwestTransport` runs an async `reqwest` client on a private worker thread that owns its own
-//! current-thread Tokio runtime. Callers block on a plain channel, so creating, using or dropping
+//! Tokio runtime; each request is spawned on that runtime, so requests from several caller threads
+//! run concurrently (P64: parallel uploads). Callers block on a plain channel, so creating, using or dropping
 //! the transport from inside a Tauri async command never panics (no runtime is entered, started or
 //! dropped on the caller's thread). The access token goes in the `X-Shopify-Access-Token` header
 //! and is never logged; error messages never carry a URL (signed upload URLs stay out of logs).
@@ -94,7 +95,9 @@ impl ReqwestTransport {
         std::thread::Builder::new()
             .name("psm-shopify-http".into())
             .spawn(move || {
-                let runtime = match tokio::runtime::Builder::new_current_thread()
+                let runtime = match tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(4)
+                    .thread_name("psm-shopify-io")
                     .enable_all()
                     .build()
                 {
@@ -139,30 +142,33 @@ impl ReqwestTransport {
         let (reply_tx, reply_rx) = mpsc::channel::<Result<HttpReply>>();
         let task: Task = Box::new(move |runtime, client| {
             let request = build(client);
-            let result = runtime.block_on(async move {
-                let response = request.send().await.map_err(map_error)?;
-                let status = response.status().as_u16();
-                let retry_after_s = response
-                    .headers()
-                    .get("retry-after")
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(|v| v.trim().parse::<f64>().ok())
-                    .map(|v| v.ceil().max(0.0) as u64);
-                let bytes = response.bytes().await.map_err(map_error)?;
-                let body = if bytes.is_empty() {
-                    Json::Null
-                } else {
-                    serde_json::from_slice(&bytes).unwrap_or_else(|_| {
-                        Json::String(String::from_utf8_lossy(&bytes).into_owned())
+            runtime.spawn(async move {
+                let result = async move {
+                    let response = request.send().await.map_err(map_error)?;
+                    let status = response.status().as_u16();
+                    let retry_after_s = response
+                        .headers()
+                        .get("retry-after")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| v.trim().parse::<f64>().ok())
+                        .map(|v| v.ceil().max(0.0) as u64);
+                    let bytes = response.bytes().await.map_err(map_error)?;
+                    let body = if bytes.is_empty() {
+                        Json::Null
+                    } else {
+                        serde_json::from_slice(&bytes).unwrap_or_else(|_| {
+                            Json::String(String::from_utf8_lossy(&bytes).into_owned())
+                        })
+                    };
+                    Ok(HttpReply {
+                        status,
+                        body,
+                        retry_after_s,
                     })
-                };
-                Ok(HttpReply {
-                    status,
-                    body,
-                    retry_after_s,
-                })
+                }
+                .await;
+                let _ = reply_tx.send(result);
             });
-            let _ = reply_tx.send(result);
         });
         self.tasks
             .lock()
@@ -187,19 +193,23 @@ impl ReqwestTransport {
     fn download(&self, url: String) -> Result<Vec<u8>> {
         let (reply_tx, reply_rx) = mpsc::channel::<Result<Vec<u8>>>();
         let task: Task = Box::new(move |runtime, client| {
-            let result = runtime.block_on(async move {
-                let response = client.get(url).send().await.map_err(map_error)?;
-                let status = response.status().as_u16();
-                if status != 200 {
-                    return Err(Error::Provider(format!("download: HTTP {status}")));
+            let request = client.get(url);
+            runtime.spawn(async move {
+                let result = async move {
+                    let response = request.send().await.map_err(map_error)?;
+                    let status = response.status().as_u16();
+                    if status != 200 {
+                        return Err(Error::Provider(format!("download: HTTP {status}")));
+                    }
+                    let bytes = response.bytes().await.map_err(map_error)?;
+                    if bytes.len() > MAX_DOWNLOAD_BYTES {
+                        return Err(Error::Provider("download: too large".into()));
+                    }
+                    Ok(bytes.to_vec())
                 }
-                let bytes = response.bytes().await.map_err(map_error)?;
-                if bytes.len() > MAX_DOWNLOAD_BYTES {
-                    return Err(Error::Provider("download: too large".into()));
-                }
-                Ok(bytes.to_vec())
+                .await;
+                let _ = reply_tx.send(result);
             });
-            let _ = reply_tx.send(result);
         });
         self.tasks
             .lock()

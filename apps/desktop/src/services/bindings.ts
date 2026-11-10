@@ -98,6 +98,9 @@ export const commands = {
 	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
 	publishConfirm: (sessionIds: CommandId[], summaryText: string) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText })),
 	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
+	publishActivity: (sessionId: CommandId) => typedError<PublishActivityDto_Serialize | null, CommandError>(__TAURI_INVOKE("publish_activity", { sessionId })),
+	/**  Changelog 44 (P64): Cancel publish, after the photographer confirmed it in the popover. */
+	publishCancel: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_cancel", { itemId })),
 	notificationsList: (sessionId: CommandId | null) => typedError<NotificationDto[], CommandError>(__TAURI_INVOKE("notifications_list", { sessionId })),
 	settingsGet: () => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_get")),
 	settingsSet: (patch: SettingsPatchDto_Deserialize) => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_set", { patch })),
@@ -636,6 +639,35 @@ export type PreviewItemDto = {
 	create_item: boolean,
 };
 
+/**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */
+export type PublishActivityDto = PublishActivityDto_Serialize | PublishActivityDto_Deserialize;
+
+/**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */
+export type PublishActivityDto_Deserialize = {
+	item_id: number,
+	step: string,
+	text: string,
+	percent: number,
+	elapsed_ms: number,
+	error?: string | null,
+	/**  `retrying` or `retry_available`. */
+	retry?: string | null,
+	can_cancel: boolean,
+};
+
+/**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */
+export type PublishActivityDto_Serialize = {
+	item_id: number,
+	step: string,
+	text: string,
+	percent: number,
+	elapsed_ms: number,
+	error: string | null,
+	/**  `retrying` or `retry_available`. */
+	retry: string | null,
+	can_cancel: boolean,
+};
+
 export type RectDto = {
 	x: number | null,
 	y: number | null,
@@ -655,7 +687,9 @@ export type ReviewResponse_Serialize = {
 	active_photo_id: number | null,
 };
 
-export type RowLabelResponse = { kind: "publishing"; value: number } | { kind: "publish_failed" } | { kind: "description_failed" } | { kind: "published" } | { kind: "ready" } | { kind: "in_progress"; value: number } | 
+export type RowLabelResponse = { kind: "publishing"; value: number } | { kind: "publish_failed" } | 
+/**  Changelog 44: `Publish cancelled · Publish`. */
+{ kind: "publish_cancelled" } | { kind: "description_failed" } | { kind: "published" } | { kind: "ready" } | { kind: "in_progress"; value: number } | 
 /**  P62: published, local files cleared, photos shown from Shopify. */
 { kind: "archived" };
 

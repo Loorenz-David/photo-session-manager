@@ -253,6 +253,8 @@ pub struct SessionListCountsResponse {
 pub enum RowLabelResponse {
     Publishing(u8),
     PublishFailed,
+    /// Changelog 44: `Publish cancelled · Publish`.
+    PublishCancelled,
     DescriptionFailed,
     Published,
     Ready,
@@ -335,6 +337,7 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
                             label: match row.label {
                                 RowLabel::Publishing(p) => RowLabelResponse::Publishing(p),
                                 RowLabel::PublishFailed => RowLabelResponse::PublishFailed,
+                                RowLabel::PublishCancelled => RowLabelResponse::PublishCancelled,
                                 RowLabel::DescriptionFailed => RowLabelResponse::DescriptionFailed,
                                 RowLabel::Published => RowLabelResponse::Published,
                                 RowLabel::Ready => RowLabelResponse::Ready,

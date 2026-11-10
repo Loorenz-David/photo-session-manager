@@ -32,7 +32,7 @@ export function PublishPopover({ sessionIds, onClose, onConfirmed, modal = false
         <p>Main images</p><div className="flex gap-1">{item.main_thumbnails.map((path, index) => path ? <img key={item.main[index]} src={previewUrl(path)} alt={`Main ${index + 1}`} className="size-12 object-cover" /> : <span key={item.main[index]}>Main {index + 1}</span>)}</div>
         <p>Condition images</p><div className="flex gap-1">{item.condition_thumbnails.map((path, index) => path ? <img key={item.condition[index]} src={previewUrl(path)} alt={`Condition ${index + 1}`} className="size-12 object-cover" /> : <span key={item.condition[index]}>Condition {index + 1}</span>)}</div>
         <p>Product details {item.details_filled}/{item.details_total}</p>
-        {item.unreviewed > 0 && <p>{item.unreviewed} unreviewed photos will not be published</p>}
+        {item.unreviewed > 0 && <p>{item.unreviewed} unreviewed photos will be published after the main photos</p>}
         {item.announced_removals.length > 0 && <p>{item.announced_removals.length} gallery removals</p>}
         {item.create_item && <p>A new product will be created</p>}
       </div>)}

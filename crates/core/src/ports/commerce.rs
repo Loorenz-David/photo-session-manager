@@ -82,7 +82,47 @@ pub trait CommerceAdapter: Send + Sync {
         stem: &str,
         byte_size: u64,
     ) -> Result<StagedTarget>;
+    /// P64: one target per `(stem, byte_size)`, in order, reserved in as few platform requests
+    /// as the platform allows (the adapter chunks at its limit).
+    fn staged_uploads_create_many(
+        &self,
+        run: &ConfirmedRun,
+        files: &[(String, u64)],
+    ) -> Result<Vec<StagedTarget>> {
+        files
+            .iter()
+            .map(|(stem, size)| self.staged_uploads_create(run, stem, *size))
+            .collect()
+    }
+    /// Uploads the bytes to a reserved target. Called from several threads at once (P64: up to
+    /// `mechanisms::publish::PARALLEL_UPLOADS` in flight).
     fn upload(&self, run: &ConfirmedRun, target: &StagedTarget, bytes: &[u8]) -> Result<()>;
+    /// P64: attaches several uploaded images to the item's gallery in one request; returns their
+    /// media ids in the order of `resource_urls`.
+    fn product_create_media_many(
+        &self,
+        run: &ConfirmedRun,
+        external_id: &str,
+        resource_urls: &[String],
+        alt: &str,
+    ) -> Result<Vec<String>> {
+        resource_urls
+            .iter()
+            .map(|url| self.product_create_media(run, external_id, url, alt))
+            .collect()
+    }
+    /// P64: creates several shop files in one request; `files` = (resource URL, filename);
+    /// returns the file ids in order.
+    fn file_create_many(
+        &self,
+        run: &ConfirmedRun,
+        files: &[(String, String)],
+    ) -> Result<Vec<String>> {
+        files
+            .iter()
+            .map(|(url, name)| self.file_create(run, url, name))
+            .collect()
+    }
     /// Attaches the uploaded image to the item's gallery; returns the new media id.
     fn product_create_media(
         &self,

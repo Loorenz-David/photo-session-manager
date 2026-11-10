@@ -53,6 +53,8 @@ pub enum PublishStep {
     Describe,
     Done,
     Failed,
+    /// Changelog 44: the photographer cancelled the publish; nothing on the platform was undone.
+    Cancelled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,6 +72,8 @@ pub enum SessionStatus {
 pub enum RowLabel {
     Publishing(u8),
     PublishFailed,
+    /// Changelog 44: `Publish cancelled · Publish`.
+    PublishCancelled,
     DescriptionFailed,
     Published,
     Ready,

@@ -36,7 +36,7 @@ it('C1(a) renders ordered thumbnails, counts, notes and exact summary', async ()
   expect((await screen.findAllByAltText(/^Main /)).map(img => img.getAttribute('src'))).toEqual(['/4.jpg', '/2.jpg', '/3.jpg']);
   expect(screen.getByAltText('Condition 1')).toHaveAttribute('src', '/9.jpg');
   expect(screen.getByText('Product details 3/8')).toBeInTheDocument();
-  expect(screen.getByText('2 unreviewed photos will not be published')).toBeInTheDocument();
+  expect(screen.getByText('2 unreviewed photos will be published after the main photos')).toBeInTheDocument();
   expect(screen.getByText('1 gallery removals')).toBeInTheDocument();
   expect(screen.getByText('A new product will be created')).toBeInTheDocument();
   expect(screen.getByTestId('publish-summary')).toHaveTextContent(preview.summary);

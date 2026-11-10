@@ -185,3 +185,23 @@ pub struct Notification {
     pub text: String,
     pub created_at: i64,
 }
+
+/// P64: what the publish progress popover shows for a session's latest publish item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublishActivity {
+    pub item_id: i64,
+    pub step: crate::domain::session::PublishStep,
+    /// The current step in words: `Preparing outputs`, `Checking Shopify`, `Uploading main
+    /// photos 3 of 8`, `Uploading condition photos 1 of 3`, `Updating the product`, `Writing the
+    /// description`, `Cancelling…`, `Publish failed`, `Publish cancelled`, `Published`.
+    pub text: String,
+    pub percent: u8,
+    /// Milliseconds since this attempt started (since the confirmation when unknown).
+    pub elapsed_ms: i64,
+    /// The last error of this publish item, if any.
+    pub error: Option<String>,
+    /// `retrying` while a retried step runs again, `retry_available` while it waits for Retry.
+    pub retry: Option<String>,
+    /// Whether Cancel publish is offered (an active step, no cancel requested yet).
+    pub can_cancel: bool,
+}

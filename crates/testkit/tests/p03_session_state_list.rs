@@ -114,7 +114,8 @@ fn c1e_published_dirty_unreviewed() {
     i.dirty = true;
     i.main_count = 1;
     i.unreviewed_count = 1;
-    assert_eq!(derive_status(i), S::InProgress);
+    // P64 (changelog 44): unreviewed photos no longer keep a session from `ready`.
+    assert_eq!(derive_status(i), S::Ready);
 }
 #[test]
 fn c1f_unpublished_ready() {
@@ -223,6 +224,9 @@ fn c2e_ready_label() {
 fn c2f_in_progress_count() {
     let mut i = input();
     i.unreviewed_count = 3;
+    // P64 (changelog 44): with every preview present this session is `ready`; one missing
+    // preview keeps it in progress, still counting the photos to review.
+    i.non_deleted_missing_preview_count = 1;
     assert_eq!(row_label(i), L::InProgress(3));
 }
 

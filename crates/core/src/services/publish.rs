@@ -7,7 +7,8 @@ use crate::{
         output::slot_name,
         photo::{Classification, Integrity},
         publish::{
-            ConfirmedRun, Notification, PhotoLink, PublishItem, PublishPreview, PublishPreviewItem,
+            ConfirmedRun, Notification, PhotoLink, PublishActivity, PublishItem, PublishPreview,
+            PublishPreviewItem,
         },
         session::PublishStep,
     },
@@ -16,8 +17,10 @@ use crate::{
         attribute_write::{merge_tags, write_set},
         hash::sha256_file,
         naming::{ExportGroup, folder_key, output_names, review_label},
-        publish::{publish_summary, replacement_candidates},
-        reconcile, upload_name,
+        publish::{frozen_main, publish_summary, replacement_candidates, upload_waves},
+        reconcile,
+        status::progress_percent,
+        upload_name,
         values::canonicalize,
     },
     ports::{clock::Clock, commerce::CommerceAdapter, events::EventSink, store::Store},
@@ -72,6 +75,26 @@ pub struct PublishService {
     clock: Arc<dyn Clock>,
     events: Arc<dyn EventSink>,
     exports: Mutex<HashMap<i64, i64>>,
+    /// P64: what each running publish item is doing, its last error and a requested cancel
+    /// (in memory: after a restart the persisted step and counts are shown).
+    live: Mutex<HashMap<i64, Live>>,
+}
+
+/// P64: the in-memory activity of one publish item.
+#[derive(Debug, Clone, Default)]
+struct Live {
+    started_at: i64,
+    text: String,
+    error: Option<String>,
+    retried: bool,
+    cancel: bool,
+}
+
+fn active(step: PublishStep) -> bool {
+    matches!(
+        step,
+        PublishStep::Prepare | PublishStep::Upload | PublishStep::Update | PublishStep::Describe
+    )
 }
 
 impl PublishService {
@@ -89,7 +112,108 @@ impl PublishService {
             clock,
             events,
             exports: Mutex::new(HashMap::new()),
+            live: Mutex::new(HashMap::new()),
         }
+    }
+
+    fn with_live<T>(&self, item_id: i64, f: impl FnOnce(&mut Live) -> T) -> T {
+        let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
+        let now = self.clock.now_ms();
+        f(live.entry(item_id).or_insert_with(|| Live {
+            started_at: now,
+            ..Live::default()
+        }))
+    }
+    fn set_text(&self, item_id: i64, text: impl Into<String>) {
+        let text = text.into();
+        self.with_live(item_id, |live| live.text = text);
+    }
+    fn cancel_requested(&self, item_id: i64) -> bool {
+        self.live
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&item_id)
+            .is_some_and(|live| live.cancel)
+    }
+    /// Changelog 44 (P64): asks a running publish item to stop at its next safe point: after
+    /// the request in flight, never between a mutation and recording its result (H4). Nothing
+    /// already on the platform is deleted; the next publish reuses it.
+    pub fn cancel(&self, item_id: i64) -> Result<()> {
+        let item = self.store.publish_item(item_id)?;
+        if !active(item.step) {
+            return Err(Error::InvalidValue("publish item is not running".into()));
+        }
+        self.with_live(item_id, |live| live.cancel = true);
+        self.emit(&item, item.step);
+        Ok(())
+    }
+    /// P64: what the progress popover shows for the session's latest publish item.
+    pub fn activity(&self, session_id: i64) -> Result<Option<PublishActivity>> {
+        let Some(latest) = self.store.latest_publish(session_id)? else {
+            return Ok(None);
+        };
+        let item = self.store.publish_item(latest.item_id)?;
+        let live = self
+            .live
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&item.id)
+            .cloned();
+        let running = active(item.step);
+        let text = match item.step {
+            _ if running && live.as_ref().is_some_and(|l| l.cancel) => "Cancelling…".to_string(),
+            _ if running && live.as_ref().is_some_and(|l| !l.text.is_empty()) => {
+                live.as_ref().map(|l| l.text.clone()).unwrap_or_default()
+            }
+            PublishStep::Prepare => "Preparing outputs".into(),
+            PublishStep::Upload => format!("Uploading photos {} of {}", item.uploaded, item.total),
+            PublishStep::Update => "Updating the product".into(),
+            PublishStep::Describe => "Writing the description".into(),
+            PublishStep::Done => "Published".into(),
+            PublishStep::Failed => "Publish failed".into(),
+            PublishStep::Cancelled => "Publish cancelled".into(),
+        };
+        let started_at = match &live {
+            Some(live) => live.started_at,
+            None => self.store.confirmed_run(item.run_id)?.unwrap_or(0),
+        };
+        let error = item
+            .error
+            .clone()
+            .or_else(|| live.as_ref().and_then(|l| l.error.clone()));
+        let retry = if item.step == PublishStep::Failed {
+            Some("retry_available".to_string())
+        } else if running && error.is_some() && live.as_ref().is_some_and(|l| l.retried) {
+            Some("retrying".to_string())
+        } else {
+            None
+        };
+        Ok(Some(PublishActivity {
+            item_id: item.id,
+            step: item.step,
+            text,
+            percent: progress_percent(item.step, item.uploaded, item.total),
+            elapsed_ms: (self.clock.now_ms() - started_at).max(0),
+            error,
+            retry,
+            can_cancel: running && !live.as_ref().is_some_and(|l| l.cancel),
+        }))
+    }
+    /// Ends a cancelled item: step `cancelled` (not an error, not published, 07 / changelog 44).
+    fn finish_cancel(&self, item: &PublishItem) -> Result<()> {
+        self.store.set_publish_step(
+            item.id,
+            PublishStep::Cancelled,
+            None,
+            None,
+            self.clock.now_ms(),
+        )?;
+        self.with_live(item.id, |live| {
+            live.cancel = false;
+            live.text = "Publish cancelled".into();
+        });
+        self.emit(item, PublishStep::Cancelled);
+        Ok(())
     }
 
     fn selected(&self, session_id: i64, ids: &[i64]) -> Result<Vec<i64>> {
@@ -180,22 +304,26 @@ impl PublishService {
         }
         Ok(true)
     }
+    /// The session's frozen-main candidates (changelog 44: main then unreviewed, each in the order
+    /// the workspace shows them), its condition photos in position order, and how many unreviewed photos are included.
     fn split(&self, session_id: i64) -> Result<(Vec<i64>, Vec<i64>, usize)> {
-        let mut main = Vec::new();
-        let mut condition = Vec::new();
-        let mut unreviewed = 0;
-        for p in self.store.photos_in_session(session_id)? {
-            match p.classification {
-                Classification::Main => main.push((p.position.unwrap_or(0), p.id)),
-                Classification::Condition => condition.push((p.position.unwrap_or(0), p.id)),
-                Classification::Unreviewed => unreviewed += 1,
-                Classification::Deleted => {}
-            }
-        }
-        main.sort();
+        let photos = self.store.photos_in_session(session_id)?;
+        let classes: Vec<_> = photos
+            .iter()
+            .map(|p| (p.classification, p.position, p.captured_at, p.id))
+            .collect();
+        let mut condition: Vec<(i64, i64)> = photos
+            .iter()
+            .filter(|p| p.classification == Classification::Condition)
+            .map(|p| (p.position.unwrap_or(0), p.id))
+            .collect();
         condition.sort();
+        let unreviewed = photos
+            .iter()
+            .filter(|p| p.classification == Classification::Unreviewed)
+            .count();
         Ok((
-            main.into_iter().map(|(_, id)| id).collect(),
+            frozen_main(&classes),
             condition.into_iter().map(|(_, id)| id).collect(),
             unreviewed,
         ))
@@ -367,20 +495,25 @@ impl PublishService {
                         attrs.insert(v.key, json);
                     }
                 }
-                let mut current_main = Vec::new();
-                let mut current_condition = Vec::new();
-                for photo in tx.photos(p.session_id)? {
-                    match photo.classification {
-                        Classification::Main => current_main.push((photo.position, photo.id)),
-                        Classification::Condition => {
-                            current_condition.push((photo.position, photo.id))
-                        }
-                        _ => {}
-                    }
-                }
-                current_main.sort();
+                let photos = tx.photos(p.session_id)?;
+                let classes: Vec<_> = photos
+                    .iter()
+                    .map(|photo| {
+                        (
+                            photo.classification,
+                            photo.position,
+                            photo.captured_at,
+                            photo.id,
+                        )
+                    })
+                    .collect();
+                let current_main = frozen_main(&classes);
+                let mut current_condition: Vec<(i64, i64)> = photos
+                    .iter()
+                    .filter(|photo| photo.classification == Classification::Condition)
+                    .map(|photo| (photo.position.unwrap_or(0), photo.id))
+                    .collect();
                 current_condition.sort();
-                let current_main: Vec<i64> = current_main.into_iter().map(|(_, id)| id).collect();
                 let excluded: HashSet<i64> = condition_key
                     .as_ref()
                     .and_then(|key| {
@@ -438,6 +571,14 @@ impl PublishService {
         let step = item
             .failed_step
             .ok_or_else(|| Error::InvalidData("missing failed step".into()))?;
+        let now = self.clock.now_ms();
+        self.with_live(item_id, |live| {
+            live.started_at = now;
+            live.text.clear();
+            live.error = item.error.clone();
+            live.retried = true;
+            live.cancel = false;
+        });
         self.store
             .set_publish_step(item_id, step, None, None, self.clock.now_ms())?;
         self.store
@@ -458,8 +599,17 @@ impl PublishService {
     }
     pub fn run_item(&self, item_id: i64) -> Result<()> {
         let item = self.store.publish_item(item_id)?;
-        if matches!(item.step, PublishStep::Done | PublishStep::Failed) {
+        if !active(item.step) {
             return Ok(());
+        }
+        if self.cancel_requested(item.id) {
+            return self.finish_cancel(&item);
+        }
+        match item.step {
+            PublishStep::Prepare => self.set_text(item.id, "Preparing outputs"),
+            PublishStep::Update => self.set_text(item.id, "Updating the product"),
+            PublishStep::Describe => self.set_text(item.id, "Writing the description"),
+            _ => self.with_live(item.id, |_| ()),
         }
         if item.step == PublishStep::Prepare {
             self.emit(&item, PublishStep::Prepare);
@@ -481,6 +631,11 @@ impl PublishService {
             PublishStep::Describe => Ok(true),
             _ => Ok(true),
         };
+        let next_is_done = matches!(item.step, PublishStep::Update | PublishStep::Describe);
+        if self.cancel_requested(item.id) && !(next_is_done && matches!(outcome, Ok(true))) {
+            // The step stopped at a safe point (or finished one); a cancel ends the item here.
+            return self.finish_cancel(&item);
+        }
         match outcome {
             Ok(false) => Err(Error::Timeout),
             Ok(true) => {
@@ -525,6 +680,11 @@ impl PublishService {
                     }
                     self.store
                         .complete_publish_item(item.id, self.clock.now_ms(), &text)?;
+                    self.with_live(item.id, |live| {
+                        live.error = None;
+                        live.retried = false;
+                        live.text.clear();
+                    });
                     // MC-28 §Master: the session's masters are released once its publish
                     // completes and the session is not dirty.
                     if !self.store.session(item.session_id)?.dirty
@@ -542,11 +702,13 @@ impl PublishService {
                 Ok(())
             }
             Err(error) => {
+                let text = error.to_string();
+                self.with_live(item.id, |live| live.error = Some(text.clone()));
                 self.store.set_publish_step(
                     item.id,
                     PublishStep::Failed,
                     Some(item.step),
-                    Some(&error.to_string()),
+                    Some(&text),
                     self.clock.now_ms(),
                 )?;
                 self.emit(&item, PublishStep::Failed);
@@ -739,6 +901,11 @@ impl PublishService {
         }
         Ok(true)
     }
+    /// 07A MC-11 upload (P64): per group (main, then condition), the links not yet `ready` are
+    /// adopted when the platform already holds their file (by name), polled when attached, and
+    /// otherwise reserved together, uploaded in waves of `PARALLEL_UPLOADS` in parallel, each
+    /// wave registered in one request and polled to ready. Every remote effect is recorded before
+    /// the next request; a cancel stops before the next upload or mutation (changelog 44).
     fn upload(&self, item: &PublishItem, run: &ConfirmedRun) -> Result<bool> {
         let local = self.store.item(
             self.store
@@ -764,106 +931,254 @@ impl PublishService {
         let mut uploaded = 0;
         // 10D MC-29: one upload per output, main then condition, a split's Left then Right;
         // retired links are not outputs, so they are never uploaded or counted.
-        for output in outputs {
-            let group = output.group;
-            let id = &output.photo_id;
-            let role = match group {
-                ExportGroup::Main => "gallery",
-                ExportGroup::Condition => condition_role.as_str(),
+        for group in [ExportGroup::Main, ExportGroup::Condition] {
+            if group == ExportGroup::Condition && condition_key.is_none() {
+                continue;
+            }
+            let (role, words) = match group {
+                ExportGroup::Main => ("gallery", "main"),
+                ExportGroup::Condition => (condition_role.as_str(), "condition"),
             };
-            {
-                if group == ExportGroup::Condition && condition_key.is_none() {
-                    continue;
-                }
+            let group_outputs: Vec<&Output> = outputs.iter().filter(|o| o.group == group).collect();
+            let group_total = group_outputs.len();
+            let mut done = 0;
+            let mut work: Vec<(&Output, PhotoLink, String)> = Vec::new();
+            for output in group_outputs {
                 // Safety recheck immediately before any remote write.
-                let photo = self.store.photo(*id)?;
+                let photo = self.store.photo(output.photo_id)?;
                 if photo.session_id != item.session_id
                     || photo.classification == Classification::Deleted
                 {
                     continue;
                 }
-                let mut link = self
+                let link = self
                     .store
-                    .photo_link(*id, local.id, role, output.slot)?
+                    .photo_link(output.photo_id, local.id, role, output.slot)?
                     .ok_or(Error::UploadIncomplete)?;
                 if link.upload_state == "ready" {
                     uploaded += 1;
+                    done += 1;
                     continue;
                 }
                 let stem =
                     upload_name::stem(&local.folder_key, &photo.uid, output.slot, link.revision);
-                let existing = if group == ExportGroup::Main {
-                    self.commerce.list_media(&remote)?
-                } else {
-                    self.commerce.list_files_by_name(&stem)?
-                };
-                if existing.iter().any(|m| {
-                    m.filename.is_none()
-                        && matches!(
-                            m.status,
-                            crate::domain::publish::RemoteMediaStatus::Processing
-                                | crate::domain::publish::RemoteMediaStatus::Uploaded
-                        )
-                }) {
+                work.push((output, link, stem));
+            }
+            if work.is_empty() {
+                continue;
+            }
+            if self.cancel_requested(item.id) {
+                return Ok(false);
+            }
+            // MC-11 adoption: a file the platform already holds under the link's upload name
+            // (created before a crash recorded it) is adopted, never uploaded again.
+            self.set_text(item.id, "Checking Shopify");
+            let gallery = if group == ExportGroup::Main {
+                let media = self.commerce.list_media(&remote)?;
+                if media.iter().any(Self::unnamed_processing) {
                     return Ok(false);
                 }
-                if link.external_id.is_none()
-                    && let Some(found) = existing.iter().find(|m| {
-                        !link.superseded_ids.contains(&m.id)
-                            && m.filename
-                                .as_deref()
-                                .is_some_and(|name| upload_name::matches(&stem, name))
-                    })
-                {
+                media
+            } else {
+                Vec::new()
+            };
+            for (_, link, stem) in work.iter_mut() {
+                if link.external_id.is_some() {
+                    continue;
+                }
+                let files;
+                let candidates = if group == ExportGroup::Main {
+                    &gallery
+                } else if matches!(link.upload_state.as_str(), "staged" | "uploaded") {
+                    // P64: only a link whose upload reached the platform can have a file there;
+                    // it is looked up by name (never by listing the shop's files).
+                    files = self.commerce.list_files_by_name(stem)?;
+                    if files.iter().any(Self::unnamed_processing) {
+                        return Ok(false);
+                    }
+                    &files
+                } else {
+                    continue;
+                };
+                if let Some(found) = candidates.iter().find(|m| {
+                    !link.superseded_ids.contains(&m.id)
+                        && m.filename
+                            .as_deref()
+                            .is_some_and(|name| upload_name::matches(stem, name))
+                }) {
                     link.external_id = Some(found.id.clone());
                     link.upload_state = "attached".into();
-                    self.store.upsert_photo_link(&link, self.clock.now_ms())?;
+                    self.store.upsert_photo_link(link, self.clock.now_ms())?;
                 }
+            }
+            let progress_text =
+                |done: usize| format!("Uploading {words} photos {done} of {group_total}");
+            // Attached before this attempt (or adopted above): poll to ready.
+            for (_, link, _) in work.iter_mut() {
                 if link.external_id.is_none() {
-                    let bytes = std::fs::read(staging.join(&output.name))?;
-                    let target =
-                        self.commerce
-                            .staged_uploads_create(run, &stem, bytes.len() as u64)?;
-                    link.upload_state = "staged".into();
-                    self.store.upsert_photo_link(&link, self.clock.now_ms())?;
-                    self.commerce.upload(run, &target, &bytes)?;
-                    link.upload_state = "uploaded".into();
-                    self.store.upsert_photo_link(&link, self.clock.now_ms())?;
-                    let external = if group == ExportGroup::Main {
-                        self.commerce.product_create_media(
+                    continue;
+                }
+                if self.cancel_requested(item.id) {
+                    return Ok(false);
+                }
+                self.set_text(item.id, progress_text(done));
+                self.mark_ready(item, link, group, &mut uploaded, total)?;
+                done += 1;
+            }
+            let pending: Vec<usize> = (0..work.len())
+                .filter(|&i| work[i].1.external_id.is_none())
+                .collect();
+            if pending.is_empty() {
+                continue;
+            }
+            if self.cancel_requested(item.id) {
+                return Ok(false);
+            }
+            self.set_text(item.id, progress_text(done));
+            let mut files = Vec::with_capacity(pending.len());
+            for &i in &pending {
+                let size = std::fs::metadata(staging.join(&work[i].0.name))?.len();
+                files.push((work[i].2.clone(), size));
+            }
+            let targets = self.commerce.staged_uploads_create_many(run, &files)?;
+            if targets.len() != pending.len() {
+                return Err(Error::Provider(format!(
+                    "{} upload targets reserved for {} files",
+                    targets.len(),
+                    pending.len()
+                )));
+            }
+            for &i in &pending {
+                work[i].1.upload_state = "staged".into();
+                self.store
+                    .upsert_photo_link(&work[i].1, self.clock.now_ms())?;
+            }
+            for wave in upload_waves(pending.len()) {
+                if self.cancel_requested(item.id) {
+                    return Ok(false);
+                }
+                let results: Vec<Result<()>> = std::thread::scope(|scope| {
+                    let handles: Vec<_> = wave
+                        .clone()
+                        .map(|k| {
+                            let path = staging.join(&work[pending[k]].0.name);
+                            let target = &targets[k];
+                            let commerce = &self.commerce;
+                            scope.spawn(move || -> Result<()> {
+                                let bytes = std::fs::read(path)?;
+                                commerce.upload(run, target, &bytes)
+                            })
+                        })
+                        .collect();
+                    handles
+                        .into_iter()
+                        .map(|h| h.join().unwrap_or_else(|p| std::panic::resume_unwind(p)))
+                        .collect()
+                });
+                let mut sent = Vec::new();
+                let mut failure = None;
+                for (k, result) in wave.clone().zip(results) {
+                    match result {
+                        Ok(()) => {
+                            let link = &mut work[pending[k]].1;
+                            link.upload_state = "uploaded".into();
+                            self.store.upsert_photo_link(link, self.clock.now_ms())?;
+                            sent.push(k);
+                        }
+                        Err(error) => {
+                            failure.get_or_insert(error);
+                        }
+                    }
+                }
+                // One registration request for the wave's uploaded files; none after a cancel
+                // (the next publish uploads them again; nothing exists on the platform yet).
+                if !sent.is_empty() && !self.cancel_requested(item.id) {
+                    let ids = if group == ExportGroup::Main {
+                        let urls: Vec<String> = sent
+                            .iter()
+                            .map(|&k| targets[k].resource_url.clone())
+                            .collect();
+                        self.commerce.product_create_media_many(
                             run,
                             &remote,
-                            &target.resource_url,
+                            &urls,
                             &local.title,
                         )?
                     } else {
-                        self.commerce
-                            .file_create(run, &target.resource_url, &target.filename)?
+                        let files: Vec<(String, String)> = sent
+                            .iter()
+                            .map(|&k| {
+                                (targets[k].resource_url.clone(), targets[k].filename.clone())
+                            })
+                            .collect();
+                        self.commerce.file_create_many(run, &files)?
                     };
-                    link.external_id = Some(external);
-                    link.upload_state = "attached".into();
-                    self.store.upsert_photo_link(&link, self.clock.now_ms())?;
+                    if ids.len() != sent.len() {
+                        return Err(Error::Provider(format!(
+                            "{} files registered for {} uploads",
+                            ids.len(),
+                            sent.len()
+                        )));
+                    }
+                    for (&k, id) in sent.iter().zip(ids) {
+                        let link = &mut work[pending[k]].1;
+                        link.external_id = Some(id);
+                        link.upload_state = "attached".into();
+                        self.store.upsert_photo_link(link, self.clock.now_ms())?;
+                    }
                 }
-                let external = link.external_id.as_deref().ok_or(Error::UploadIncomplete)?;
-                if group == ExportGroup::Main {
-                    self.commerce.poll_media_ready(external)?;
-                } else {
-                    self.commerce.poll_file(external)?;
+                if let Some(error) = failure {
+                    return Err(error);
                 }
-                link.upload_state = "ready".into();
-                self.store.upsert_photo_link(&link, self.clock.now_ms())?;
-                uploaded += 1;
-                self.store.set_publish_progress(item.id, uploaded, total)?;
-                self.events.emit(AppEvent::PublishProgress {
-                    session_id: item.session_id,
-                    item_id: item.id,
-                    step: PublishStep::Upload,
-                    uploaded,
-                    total,
-                });
+                for &k in &sent {
+                    if self.cancel_requested(item.id) {
+                        return Ok(false);
+                    }
+                    let link = &mut work[pending[k]].1;
+                    self.mark_ready(item, link, group, &mut uploaded, total)?;
+                    done += 1;
+                    self.set_text(item.id, progress_text(done));
+                }
             }
         }
         Ok(true)
+    }
+    /// A platform file still processing whose name is not readable yet (SV-2): wait for it.
+    fn unnamed_processing(m: &crate::domain::publish::RemoteMedia) -> bool {
+        m.filename.is_none()
+            && matches!(
+                m.status,
+                crate::domain::publish::RemoteMediaStatus::Processing
+                    | crate::domain::publish::RemoteMediaStatus::Uploaded
+            )
+    }
+    /// Polls an attached link's media or file to ready, records it and the item's progress.
+    fn mark_ready(
+        &self,
+        item: &PublishItem,
+        link: &mut PhotoLink,
+        group: ExportGroup,
+        uploaded: &mut i64,
+        total: i64,
+    ) -> Result<()> {
+        let external = link.external_id.as_deref().ok_or(Error::UploadIncomplete)?;
+        if group == ExportGroup::Main {
+            self.commerce.poll_media_ready(external)?;
+        } else {
+            self.commerce.poll_file(external)?;
+        }
+        link.upload_state = "ready".into();
+        self.store.upsert_photo_link(link, self.clock.now_ms())?;
+        *uploaded += 1;
+        self.store.set_publish_progress(item.id, *uploaded, total)?;
+        self.events.emit(AppEvent::PublishProgress {
+            session_id: item.session_id,
+            item_id: item.id,
+            step: PublishStep::Upload,
+            uploaded: *uploaded,
+            total,
+        });
+        Ok(())
     }
     fn update(&self, item: &PublishItem, run: &ConfirmedRun) -> Result<bool> {
         let local = self.store.item(
@@ -924,12 +1239,18 @@ impl PublishService {
         let announced: HashSet<String> = item.announced_removals.iter().cloned().collect();
         let plan = reconcile::plan(&desired, &current, &own, &announced)
             .map_err(|reconcile::ReconcileError::Foreign(n)| Error::ForeignMediaAdded { n })?;
+        if self.cancel_requested(item.id) {
+            return Ok(false);
+        }
         if !plan.deletes.is_empty() {
             self.commerce.product_delete_media(
                 run,
                 &external,
                 &plan.deletes.into_iter().collect::<Vec<_>>(),
             )?;
+        }
+        if self.cancel_requested(item.id) {
+            return Ok(false);
         }
         let job = self
             .commerce
@@ -992,6 +1313,9 @@ impl PublishService {
                     })
             })
             .collect();
+        if self.cancel_requested(item.id) {
+            return Ok(false);
+        }
         for batch in writes.chunks(25) {
             self.commerce.attributes_write(run, &external, batch)?;
         }
@@ -1058,6 +1382,9 @@ impl PublishService {
             self.store
                 .set_item_type_base(local.id, "shopify", remote_type)?;
         }
+        if self.cancel_requested(item.id) {
+            return Ok(false);
+        }
         if remote.title != item.title {
             self.commerce.update_title(run, &external, &item.title)?;
         }
@@ -1106,6 +1433,7 @@ impl PublishService {
             && remote_description.as_deref()
                 != Some(self.commerce.render_description(description).as_str())
         {
+            self.set_text(item.id, "Writing the description");
             self.commerce
                 .update_description(run, &external, description)?;
         }

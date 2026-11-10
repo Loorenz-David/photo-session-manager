@@ -28,10 +28,11 @@ pub fn derive_status(input: StatusInput) -> SessionStatus {
         SessionStatus::Failed
     } else if input.published_at.is_some() && !input.dirty {
         SessionStatus::Published
-    } else if input.main_count > 0
-        && input.unreviewed_count == 0
+    } else if input.main_count + input.unreviewed_count > 0
         && input.non_deleted_missing_preview_count == 0
     {
+        // Changelog 44: unreviewed photos are published after the main photos, so `ready` needs
+        // at least one main or unreviewed photo and every non-deleted photo's adjusted preview.
         SessionStatus::Ready
     } else {
         SessionStatus::InProgress
@@ -52,7 +53,7 @@ pub fn progress_percent(step: PublishStep, uploaded: i64, total: i64) -> u8 {
         PublishStep::Update => 75,
         PublishStep::Describe => 85,
         PublishStep::Done => 100,
-        PublishStep::Failed => 0,
+        PublishStep::Failed | PublishStep::Cancelled => 0,
     }
 }
 
@@ -64,6 +65,9 @@ pub fn row_label(input: StatusInput) -> RowLabel {
             input.uploaded,
             input.total,
         ))
+    } else if input.latest_step == Some(PublishStep::Cancelled) {
+        // Changelog 44: like `failed` but not an error; the row offers Publish again.
+        RowLabel::PublishCancelled
     } else if input.latest_step == Some(PublishStep::Failed) {
         if input.failed_step == Some(PublishStep::Describe) {
             RowLabel::DescriptionFailed

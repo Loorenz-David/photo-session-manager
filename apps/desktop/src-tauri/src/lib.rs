@@ -647,6 +647,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::publish::publish_preview,
         commands::publish::publish_confirm,
         commands::publish::publish_retry,
+        commands::publish::publish_activity,
+        commands::publish::publish_cancel,
         commands::publish::notifications_list,
         commands::settings::settings_get,
         commands::settings::settings_set,

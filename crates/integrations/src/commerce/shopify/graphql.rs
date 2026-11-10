@@ -20,6 +20,9 @@ pub const STAGED_UPLOADS_CREATE: &str = "mutation StagedUploadsCreate($input: [S
 
 pub const PRODUCT_CREATE_MEDIA: &str = "mutation ProductCreateMedia($product: ProductUpdateInput!, $media: [CreateMediaInput!]) { productUpdate(product: $product, media: $media) { product { id newest: media(first: 1, reverse: true) { nodes { id status alt mediaContentType } } all: media(first: 50) { nodes { id status alt } } } userErrors { field message } } }";
 
+/// P64: several media in one `productUpdate`; the `$count` newest media are the created ones.
+pub const PRODUCT_CREATE_MEDIA_MANY: &str = "mutation ProductCreateMediaMany($product: ProductUpdateInput!, $media: [CreateMediaInput!], $count: Int!) { productUpdate(product: $product, media: $media) { product { id newest: media(first: $count, reverse: true) { nodes { id status alt mediaContentType } } } userErrors { field message } } }";
+
 /// P62 (10F Rules, M41): the product's gallery media and its condition-photos field's files,
 /// each with id and image URL, in one read.
 pub const MEDIA_READBACK: &str = "query MediaReadback($id: ID!, $namespace: String!, $key: String!) { product(id: $id) { id media(first: 250) { nodes { id status ... on MediaImage { image { url } originalSource { url } } } } metafield(namespace: $namespace, key: $key) { value references(first: 100) { nodes { ... on MediaImage { id image { url } } ... on GenericFile { id url } } } } } }";
@@ -30,8 +33,9 @@ pub const FILE_CREATE: &str = "mutation FileCreate($files: [FileCreateInput!]!) 
 
 pub const FILE_POLL: &str = "query FilePoll($id: ID!) { node(id: $id) { id ... on File { fileStatus alt fileErrors { code message details } } ... on MediaImage { image { url } originalSource { url } } ... on GenericFile { url } } }";
 
+/// SV-2 (`sv2_files_by_name`): `filename:<stem>` finds the file and its uniquified copies. P64: the
+/// only file lookup (the shop holds tens of thousands of files; it is never listed).
 pub const FILES_BY_NAME: &str = "query FilesByName($query: String!) { files(first: 20, query: $query) { nodes { id fileStatus alt ... on MediaImage { image { url } } } } }";
-pub const FILES_ALL: &str = "query FilesAll($after: String) { files(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { id fileStatus alt ... on MediaImage { image { url } } } } }";
 
 pub const PRODUCT_REORDER_MEDIA: &str = "mutation ProductReorderMedia($id: ID!, $moves: [MoveInput!]!) { productReorderMedia(id: $id, moves: $moves) { job { id done } mediaUserErrors { field message code } } }";
 

@@ -396,6 +396,7 @@ fn parse_step(step: &str) -> Result<PublishStep> {
         "describe" => Ok(PublishStep::Describe),
         "done" => Ok(PublishStep::Done),
         "failed" => Ok(PublishStep::Failed),
+        "cancelled" => Ok(PublishStep::Cancelled),
         _ => Err(Error::InvalidData(format!("invalid publish step: {step}"))),
     }
 }
@@ -428,6 +429,7 @@ fn step_name(step: PublishStep) -> &'static str {
         PublishStep::Describe => "describe",
         PublishStep::Done => "done",
         PublishStep::Failed => "failed",
+        PublishStep::Cancelled => "cancelled",
     }
 }
 

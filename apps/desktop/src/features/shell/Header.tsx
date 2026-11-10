@@ -185,7 +185,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
                 <FolderDown /> Export
               </ActionButton>
             )}
-            {publish.label?.kind === 'publishing' && <PublishProgress value={publish.label.value} />}
+            {publish.label?.kind === 'publishing' && <PublishProgress value={publish.label.value} sessionId={sessionId} />}
             {typeof integration === 'string' && <div className="relative"><ActionButton action={async () => { setPublishOpen(true); }}><CloudUpload /> Publish</ActionButton>{publishOpen && <PublishPopover sessionIds={[sessionId]} onClose={() => { setPublishOpen(false); void publish.refresh(); }} />}</div>}
           </>
         )}

@@ -89,3 +89,22 @@ report field.
 - **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log
+
+### 2026-11-10 — implement r1 (Claude Opus, `pipeline-implementer`)
+**Built.** `frozen_main` = main (by position) then unreviewed (no position in the model: workspace display order, capture time then id) (core mechanism `mechanisms::publish::frozen_main`, used by
+preview and confirm); `ready` = ≥ 1 main or unreviewed photo and every non-deleted photo's adjusted preview. Condition-file recovery
+lookup = one `files(query: "filename:<stem>")` request, only for links in `staged`/`uploaded`; `FILES_ALL` removed. Upload step per
+group: one `stagedUploadsCreate` (chunks of 50), waves of 4 parallel uploads (`PARALLEL_UPLOADS`, `upload_waves`), each wave registered
+in one `productUpdate(media: [...])` / `fileCreate(files: [...])`, recorded, polled to ready; the reqwest transport now spawns requests on
+a multi-thread runtime so uploads overlap. `PublishStep::Cancelled` + `RowLabel::PublishCancelled`; `PublishService::{cancel, activity}`
+with Tauri `publish_cancel` / `publish_activity`; progress popover on the row and header bars (step in words, `n% · Elapsed m:ss`, last
+error + retry state, Cancel publish with a confirmation).
+**Assumptions** (handoff §Assumptions): a cancel at "3 of 8" leaves the 4th photo's media on Shopify (registered with its wave), so the
+next publish uploads 4 and completes 5; wave uploads finished but not registered when a cancel lands are not registered; ready keeps the
+preview requirement for condition photos; no new `SessionStatus` for a cancel; cancel/activity state in memory; batch request shapes are
+the list forms of the grounded single requests (not live-probed); the files search lag (SV-3) leaves a crash-window risk of an orphan file.
+**Deviations:** call-count assertions in `p13::c4b/c4c` (2 → 1 `product_create_media`), frozen-set/summary assertions in `p13::c1a`,
+`p14::c6a`, ready assertions in `p03::c1e/c2f`, the P15 UI note text; port gained three `*_many` methods with default implementations.
+**Stamp (partial, environment):** fmt, clippy, typecheck clean; P64 8/8; P03, P12–P18, P21, P25, P30, P39, P59, P62 green; `npm test`
+green apart from the named intermittent `p33_split_grid`. `cargo test --workspace` was stopped after `p05`: Gatekeeper/fseventsd on the dev
+Mac made each test file take 10–22 min; the untouched camera/composition/capture/storage suites were not re-run (handoff §Stamp).

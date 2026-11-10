@@ -33,6 +33,8 @@ use unicode_normalization::UnicodeNormalization;
 pub const INTEGRATION: &str = "shopify";
 /// SV-5: `metafieldsSet` accepts at most 25 entries per call.
 pub const METAFIELDS_SET_LIMIT: usize = 25;
+/// P64 (delegated choice): staged-upload inputs per `stagedUploadsCreate` request.
+pub const STAGED_UPLOADS_LIMIT: usize = 50;
 
 /// Settings of the adapter (09A MC-23/MC-24). `Debug` never shows the client secret.
 #[derive(Clone, PartialEq, Eq)]
@@ -410,6 +412,30 @@ fn operation_name(document: &str) -> String {
         }
         _ => kind.to_owned(),
     }
+}
+
+/// P64: the files search for an upload stem (SV-2 form `filename:<stem>`); a stem with characters
+/// outside the upload-name alphabet is quoted.
+fn files_query(stem: &str) -> String {
+    if stem
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        format!("filename:{stem}")
+    } else {
+        let escaped = stem.replace('\\', "\\\\").replace('"', "\\\"");
+        format!("filename:\"{escaped}\"")
+    }
+}
+
+/// The upload stem of a staged resource URL (`…/<stem>.jpg?…`).
+fn resource_stem(resource_url: &str) -> Result<&str> {
+    resource_url
+        .split('?')
+        .next()
+        .and_then(|url| url.rsplit('/').next())
+        .and_then(|name| name.strip_suffix(".jpg"))
+        .ok_or_else(|| errors::provider("product_create_media", "resource filename is not a jpg"))
 }
 
 fn search_query(sku: &str) -> String {
@@ -804,6 +830,64 @@ impl CommerceAdapter for ShopifyAdapter {
         })
     }
 
+    fn staged_uploads_create_many(
+        &self,
+        run: &ConfirmedRun,
+        files: &[(String, u64)],
+    ) -> Result<Vec<StagedTarget>> {
+        let mut out = Vec::with_capacity(files.len());
+        for chunk in files.chunks(STAGED_UPLOADS_LIMIT) {
+            let filenames: Vec<String> = chunk
+                .iter()
+                .map(|(stem, _)| format!("{stem}.jpg"))
+                .collect();
+            let input: Vec<Json> = chunk
+                .iter()
+                .zip(&filenames)
+                .map(|((_, size), filename)| {
+                    json!({
+                        "resource": "IMAGE",
+                        "filename": filename,
+                        "mimeType": "image/jpeg",
+                        "httpMethod": "PUT",
+                        "fileSize": size.to_string(),
+                    })
+                })
+                .collect();
+            let data = self.mutate(
+                run,
+                "staged_uploads_create",
+                graphql::STAGED_UPLOADS_CREATE,
+                json!({ "input": input }),
+            )?;
+            let payload = &data["stagedUploadsCreate"];
+            if let Some(message) = errors::user_errors(payload) {
+                return Err(errors::provider("staged_uploads_create", message));
+            }
+            let targets: Vec<super::types::StagedTargetNode> =
+                parse(&payload["stagedTargets"], "staged_uploads_create")?;
+            if targets.len() != chunk.len() {
+                return Err(errors::provider(
+                    "staged_uploads_create",
+                    format!("{} targets for {} files", targets.len(), chunk.len()),
+                ));
+            }
+            for (target, filename) in targets.into_iter().zip(filenames) {
+                out.push(StagedTarget {
+                    filename,
+                    url: target.url,
+                    resource_url: target.resource_url,
+                    parameters: target
+                        .parameters
+                        .into_iter()
+                        .map(|p| (p.name, p.value))
+                        .collect(),
+                });
+            }
+        }
+        Ok(out)
+    }
+
     fn upload(&self, run: &ConfirmedRun, target: &StagedTarget, bytes: &[u8]) -> Result<()> {
         tracing::info!(
             run_id = run.run_id(),
@@ -843,14 +927,7 @@ impl CommerceAdapter for ShopifyAdapter {
             .as_str()
             .map(str::to_owned)
             .ok_or_else(|| errors::provider("product_create_media", "no media id in the reply"))?;
-        let stem = resource_url
-            .split('?')
-            .next()
-            .and_then(|url| url.rsplit('/').next())
-            .and_then(|name| name.strip_suffix(".jpg"))
-            .ok_or_else(|| {
-                errors::provider("product_create_media", "resource filename is not a jpg")
-            })?;
+        let stem = resource_stem(resource_url)?;
         for attempt in 0..self.poll.attempts {
             if attempt > 0 {
                 Self::sleep(self.poll.interval_ms);
@@ -896,6 +973,120 @@ impl CommerceAdapter for ShopifyAdapter {
             }
         }
         Err(Error::Timeout)
+    }
+
+    fn product_create_media_many(
+        &self,
+        run: &ConfirmedRun,
+        external_id: &str,
+        resource_urls: &[String],
+        alt: &str,
+    ) -> Result<Vec<String>> {
+        if resource_urls.len() <= 1 {
+            return resource_urls
+                .iter()
+                .map(|url| self.product_create_media(run, external_id, url, alt))
+                .collect();
+        }
+        let stems = resource_urls
+            .iter()
+            .map(|url| resource_stem(url))
+            .collect::<Result<Vec<_>>>()?;
+        let media: Vec<Json> = resource_urls
+            .iter()
+            .map(|url| json!({ "originalSource": url, "alt": alt, "mediaContentType": "IMAGE" }))
+            .collect();
+        let data = self.mutate(
+            run,
+            "product_create_media",
+            graphql::PRODUCT_CREATE_MEDIA_MANY,
+            json!({
+                "product": { "id": external_id },
+                "media": media,
+                "count": resource_urls.len(),
+            }),
+        )?;
+        let payload = &data["productUpdate"];
+        if let Some(message) = errors::user_errors(payload) {
+            return Err(errors::provider("product_create_media", message));
+        }
+        let mut open: Vec<String> = payload["product"]["newest"]["nodes"]
+            .as_array()
+            .map(|nodes| {
+                nodes
+                    .iter()
+                    .filter_map(|n| n["id"].as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        // The created media show their file name once READY (SV-2): poll them together, then
+        // map each name to its upload stem; a stem not among them is looked up in the gallery.
+        let mut ids: Vec<Option<String>> = vec![None; stems.len()];
+        let mut attempt = 0;
+        while !open.is_empty() {
+            if attempt >= self.poll.attempts {
+                return Err(Error::Timeout);
+            }
+            if attempt > 0 {
+                Self::sleep(self.poll.interval_ms);
+            }
+            attempt += 1;
+            let mut still = Vec::new();
+            for candidate in open {
+                let data = self.call(graphql::MEDIA_POLL, json!({ "id": candidate }))?;
+                let node = &data["node"];
+                match node["status"].as_str() {
+                    Some("READY") => {
+                        let media: MediaNode = parse(node, "product_create_media")?;
+                        let name = media.filename();
+                        if let Some(i) = (0..stems.len()).find(|&i| {
+                            ids[i].is_none()
+                                && name
+                                    .as_deref()
+                                    .is_some_and(|name| upload_name::matches(stems[i], name))
+                        }) {
+                            ids[i] = Some(candidate);
+                        }
+                    }
+                    Some("FAILED") => {
+                        let message = node["mediaErrors"]
+                            .as_array()
+                            .and_then(|errors| errors.first())
+                            .and_then(|error| error["message"].as_str())
+                            .unwrap_or("media processing failed");
+                        return Err(Error::Provider(message.to_owned()));
+                    }
+                    _ => still.push(candidate),
+                }
+            }
+            open = still;
+        }
+        if ids.iter().any(Option::is_none) {
+            let gallery = self.list_media(external_id)?;
+            for (i, stem) in stems.iter().enumerate() {
+                if ids[i].is_none() {
+                    ids[i] = gallery
+                        .iter()
+                        .find(|m| {
+                            m.filename
+                                .as_deref()
+                                .is_some_and(|name| upload_name::matches(stem, name))
+                        })
+                        .map(|m| m.id.clone());
+                }
+            }
+        }
+        ids.into_iter()
+            .zip(&stems)
+            .map(|(id, stem)| {
+                id.ok_or_else(|| {
+                    errors::provider(
+                        "product_create_media",
+                        format!("created media {stem}.jpg not found in the gallery"),
+                    )
+                })
+            })
+            .collect()
     }
 
     fn poll_media_ready(&self, media_id: &str) -> Result<()> {
@@ -989,49 +1180,42 @@ impl CommerceAdapter for ShopifyAdapter {
     }
 
     fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>> {
+        // P64: one search request by name (SV-2 `filename:<stem>` also finds uniquified copies);
+        // the match rules are unchanged: the CDN name starts with the stem, or alt = `<stem>.jpg`.
+        let data = self.call(
+            graphql::FILES_BY_NAME,
+            json!({ "query": files_query(stem) }),
+        )?;
         let mut found = Vec::new();
-        let mut after: Option<String> = None;
-        loop {
-            let data = self.call(graphql::FILES_ALL, json!({"after":after}))?;
-            if let Some(nodes) = data["files"]["nodes"].as_array() {
-                for (position, node) in nodes.iter().enumerate() {
-                    let filename = node["image"]["url"]
-                        .as_str()
-                        .and_then(|url| url.split('?').next())
-                        .and_then(|path| path.rsplit('/').next())
-                        .map(str::to_owned);
-                    let alt = node["alt"].as_str();
-                    if !filename
-                        .as_deref()
-                        .is_some_and(|name| name.starts_with(stem))
-                        && alt != Some(format!("{stem}.jpg").as_str())
-                    {
-                        continue;
-                    }
-                    let Some(id) = node["id"].as_str() else {
-                        continue;
-                    };
-                    let status = if node["fileStatus"] == "READY" {
-                        RemoteMediaStatus::Ready
-                    } else {
-                        RemoteMediaStatus::Processing
-                    };
-                    found.push(RemoteMedia {
-                        id: id.into(),
-                        filename,
-                        status,
-                        position: position as i64 + 1,
-                    });
+        if let Some(nodes) = data["files"]["nodes"].as_array() {
+            for (position, node) in nodes.iter().enumerate() {
+                let filename = node["image"]["url"]
+                    .as_str()
+                    .and_then(|url| url.split('?').next())
+                    .and_then(|path| path.rsplit('/').next())
+                    .map(str::to_owned);
+                let alt = node["alt"].as_str();
+                if !filename
+                    .as_deref()
+                    .is_some_and(|name| name.starts_with(stem))
+                    && alt != Some(format!("{stem}.jpg").as_str())
+                {
+                    continue;
                 }
-            }
-            if data["files"]["pageInfo"]["hasNextPage"] != true {
-                break;
-            }
-            after = data["files"]["pageInfo"]["endCursor"]
-                .as_str()
-                .map(Into::into);
-            if after.is_none() {
-                return Err(Error::InvalidData("file pagination lacks cursor".into()));
+                let Some(id) = node["id"].as_str() else {
+                    continue;
+                };
+                let status = if node["fileStatus"] == "READY" {
+                    RemoteMediaStatus::Ready
+                } else {
+                    RemoteMediaStatus::Processing
+                };
+                found.push(RemoteMedia {
+                    id: id.into(),
+                    filename,
+                    status,
+                    position: position as i64 + 1,
+                });
             }
         }
         Ok(found)
@@ -1067,26 +1251,54 @@ impl CommerceAdapter for ShopifyAdapter {
         resource_url: &str,
         filename: &str,
     ) -> Result<String> {
+        self.file_create_many(run, &[(resource_url.to_owned(), filename.to_owned())])?
+            .pop()
+            .ok_or_else(|| errors::provider("file_create", "no file id in the reply"))
+    }
+
+    fn file_create_many(
+        &self,
+        run: &ConfirmedRun,
+        files: &[(String, String)],
+    ) -> Result<Vec<String>> {
+        let input: Vec<Json> = files
+            .iter()
+            .map(|(resource_url, filename)| {
+                json!({
+                    "originalSource": resource_url,
+                    "filename": filename,
+                    "alt": filename,
+                    "contentType": "IMAGE",
+                    "duplicateResolutionMode": "APPEND_UUID",
+                })
+            })
+            .collect();
         let data = self.mutate(
             run,
             "file_create",
             graphql::FILE_CREATE,
-            json!({ "files": [{
-                "originalSource": resource_url,
-                "filename": filename,
-                "alt": filename,
-                "contentType": "IMAGE",
-                "duplicateResolutionMode": "APPEND_UUID",
-            }] }),
+            json!({ "files": input }),
         )?;
         let payload = &data["fileCreate"];
         if let Some(message) = errors::user_errors(payload) {
             return Err(errors::provider("file_create", message));
         }
-        payload["files"][0]["id"]
-            .as_str()
-            .map(str::to_owned)
-            .ok_or_else(|| errors::provider("file_create", "no file id in the reply"))
+        let ids: Vec<String> = payload["files"]
+            .as_array()
+            .map(|nodes| {
+                nodes
+                    .iter()
+                    .filter_map(|n| n["id"].as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if ids.len() != files.len() {
+            return Err(errors::provider(
+                "file_create",
+                format!("{} file ids for {} files", ids.len(), files.len()),
+            ));
+        }
+        Ok(ids)
     }
 
     fn poll_file(&self, file_id: &str) -> Result<()> {

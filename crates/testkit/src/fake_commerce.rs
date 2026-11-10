@@ -16,9 +16,16 @@ use serde_json::Value as Json;
 use sha2::Digest;
 use std::{
     collections::HashMap,
-    sync::{Arc, Condvar, Mutex},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+    },
     time::Duration,
 };
+
+/// P64: a callback run at the start of every fake call with the call's op name (reads and
+/// mutations), on the caller's thread; tests use it to act at a precise point of a publish.
+pub type CallHook = Box<dyn Fn(&str) + Send + Sync>;
 
 #[derive(Debug, Clone)]
 pub struct Mutation {
@@ -71,6 +78,10 @@ pub struct FakeCommerce {
     pub condition_key: String,
     clock: Arc<dyn Clock>,
     media_poll: (Mutex<MediaPollGate>, Condvar),
+    hook: Mutex<Option<Arc<CallHook>>>,
+    uploads_in_flight: AtomicUsize,
+    max_uploads_in_flight: AtomicUsize,
+    upload_delay_ms: AtomicU64,
 }
 #[derive(Default)]
 struct MediaPollGate {
@@ -87,7 +98,39 @@ impl FakeCommerce {
             condition_key: key.into(),
             clock,
             media_poll: (Mutex::new(MediaPollGate::default()), Condvar::new()),
+            hook: Mutex::new(None),
+            uploads_in_flight: AtomicUsize::new(0),
+            max_uploads_in_flight: AtomicUsize::new(0),
+            upload_delay_ms: AtomicU64::new(0),
         }
+    }
+    /// P64: runs `hook(op)` at the start of every call (`None` removes it).
+    pub fn set_hook(&self, hook: Option<CallHook>) {
+        *self.hook.lock().unwrap() = hook.map(Arc::new);
+    }
+    fn call(&self, op: &str) {
+        let hook = self.hook.lock().unwrap().clone();
+        if let Some(hook) = hook {
+            hook(op);
+        }
+    }
+    /// P64: every upload takes `ms` (so parallel uploads overlap measurably).
+    pub fn set_upload_delay(&self, ms: u64) {
+        self.upload_delay_ms.store(ms, Ordering::SeqCst);
+    }
+    /// P64: the most uploads that were in flight at the same time.
+    pub fn max_uploads_in_flight(&self) -> usize {
+        self.max_uploads_in_flight.load(Ordering::SeqCst)
+    }
+    /// The mutation op names, in order.
+    pub fn mutation_ops(&self) -> Vec<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .mutations
+            .iter()
+            .map(|m| m.op.clone())
+            .collect()
     }
     pub fn hold_media_poll(&self) {
         let mut gate = self.media_poll.0.lock().unwrap();
@@ -133,6 +176,7 @@ impl FakeCommerce {
         self.state.lock().unwrap().fail_before = Some(op.into());
     }
     fn read(&self, op: &str) -> Result<()> {
+        self.call(op);
         let mut s = self.state.lock().unwrap();
         s.reads.push(op.into());
         let interrupted = s.fail_after.as_deref() == Some(op);
@@ -165,6 +209,7 @@ impl FakeCommerce {
     }
     /// A `fail_before_effect` on a creating call fails before anything is created.
     fn before(&self, op: &str) -> Result<()> {
+        self.call(op);
         let mut s = self.state.lock().unwrap();
         if s.fail_before.as_deref() == Some(op) {
             s.fail_before = None;
@@ -379,25 +424,47 @@ impl CommerceAdapter for FakeCommerce {
         &self,
         run: &ConfirmedRun,
         stem: &str,
-        _size: u64,
+        size: u64,
     ) -> Result<StagedTarget> {
+        Ok(self
+            .staged_uploads_create_many(run, &[(stem.to_owned(), size)])?
+            .remove(0))
+    }
+    /// One `staged_uploads_create` mutation for all the files (P64).
+    fn staged_uploads_create_many(
+        &self,
+        run: &ConfirmedRun,
+        files: &[(String, u64)],
+    ) -> Result<Vec<StagedTarget>> {
         self.before("staged_uploads_create")?;
-        let filename = format!("{stem}.jpg");
         let mut s = self.state.lock().unwrap();
-        s.next_id += 1;
-        let resource_url = format!("staged-{}", s.next_id);
-        s.staged.insert(resource_url.clone(), filename.clone());
-        s.staged_filenames.push(filename.clone());
+        let mut targets = Vec::new();
+        for (stem, _) in files {
+            let filename = format!("{stem}.jpg");
+            s.next_id += 1;
+            let resource_url = format!("staged-{}", s.next_id);
+            s.staged.insert(resource_url.clone(), filename.clone());
+            s.staged_filenames.push(filename.clone());
+            targets.push(StagedTarget {
+                filename,
+                url: resource_url.clone(),
+                resource_url,
+                parameters: Vec::new(),
+            });
+        }
         drop(s);
         self.effect(run, "staged_uploads_create")?;
-        Ok(StagedTarget {
-            filename,
-            url: resource_url.clone(),
-            resource_url,
-            parameters: Vec::new(),
-        })
+        Ok(targets)
     }
     fn upload(&self, run: &ConfirmedRun, target: &StagedTarget, bytes: &[u8]) -> Result<()> {
+        self.call("upload");
+        let now = self.uploads_in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+        self.max_uploads_in_flight.fetch_max(now, Ordering::SeqCst);
+        let delay = self.upload_delay_ms.load(Ordering::SeqCst);
+        if delay > 0 {
+            std::thread::sleep(Duration::from_millis(delay));
+        }
+        self.uploads_in_flight.fetch_sub(1, Ordering::SeqCst);
         self.effect(run, "upload")?;
         let hash: String = sha2::Sha256::digest(bytes)
             .iter()
@@ -415,31 +482,47 @@ impl CommerceAdapter for FakeCommerce {
         run: &ConfirmedRun,
         id: &str,
         resource_url: &str,
-        _alt: &str,
+        alt: &str,
     ) -> Result<String> {
+        Ok(self
+            .product_create_media_many(run, id, &[resource_url.to_owned()], alt)?
+            .remove(0))
+    }
+    /// One `product_create_media` mutation for all the media (P64).
+    fn product_create_media_many(
+        &self,
+        run: &ConfirmedRun,
+        id: &str,
+        resource_urls: &[String],
+        _alt: &str,
+    ) -> Result<Vec<String>> {
         self.before("product_create_media")?;
         let mut s = self.state.lock().unwrap();
-        let filename = s
-            .staged
-            .get(resource_url)
-            .cloned()
-            .ok_or_else(|| Error::NotFound(resource_url.into()))?;
-        s.next_id += 1;
-        let media_id = format!("media-{}", s.next_id);
-        let p = s
-            .products
-            .iter_mut()
-            .find(|p| p.external_id == id)
-            .ok_or_else(|| Error::NotFound(id.into()))?;
-        p.media.push(RemoteMedia {
-            id: media_id.clone(),
-            filename: Some(filename),
-            status: RemoteMediaStatus::Ready,
-            position: p.media.len() as i64 + 1,
-        });
+        let mut ids = Vec::new();
+        for resource_url in resource_urls {
+            let filename = s
+                .staged
+                .get(resource_url)
+                .cloned()
+                .ok_or_else(|| Error::NotFound(resource_url.into()))?;
+            s.next_id += 1;
+            let media_id = format!("media-{}", s.next_id);
+            let p = s
+                .products
+                .iter_mut()
+                .find(|p| p.external_id == id)
+                .ok_or_else(|| Error::NotFound(id.into()))?;
+            p.media.push(RemoteMedia {
+                id: media_id.clone(),
+                filename: Some(filename),
+                status: RemoteMediaStatus::Ready,
+                position: p.media.len() as i64 + 1,
+            });
+            ids.push(media_id);
+        }
         drop(s);
         self.effect(run, "product_create_media")?;
-        Ok(media_id)
+        Ok(ids)
     }
     fn poll_media_ready(&self, _id: &str) -> Result<()> {
         self.read("poll_media_ready")?;
@@ -566,27 +649,41 @@ impl CommerceAdapter for FakeCommerce {
         &self,
         run: &ConfirmedRun,
         resource_url: &str,
-        _filename: &str,
+        filename: &str,
     ) -> Result<String> {
+        Ok(self
+            .file_create_many(run, &[(resource_url.to_owned(), filename.to_owned())])?
+            .remove(0))
+    }
+    /// One `file_create` mutation for all the files (P64).
+    fn file_create_many(
+        &self,
+        run: &ConfirmedRun,
+        files: &[(String, String)],
+    ) -> Result<Vec<String>> {
         self.before("file_create")?;
         let mut s = self.state.lock().unwrap();
-        let name = s
-            .staged
-            .get(resource_url)
-            .cloned()
-            .ok_or_else(|| Error::NotFound(resource_url.into()))?;
-        s.next_id += 1;
-        let id = format!("file-{}", s.next_id);
-        let position = s.files.len() as i64 + 1;
-        s.files.push(RemoteMedia {
-            id: id.clone(),
-            filename: Some(name),
-            status: RemoteMediaStatus::Ready,
-            position,
-        });
+        let mut ids = Vec::new();
+        for (resource_url, _) in files {
+            let name = s
+                .staged
+                .get(resource_url)
+                .cloned()
+                .ok_or_else(|| Error::NotFound(resource_url.into()))?;
+            s.next_id += 1;
+            let id = format!("file-{}", s.next_id);
+            let position = s.files.len() as i64 + 1;
+            s.files.push(RemoteMedia {
+                id: id.clone(),
+                filename: Some(name),
+                status: RemoteMediaStatus::Ready,
+                position,
+            });
+            ids.push(id);
+        }
         drop(s);
         self.effect(run, "file_create")?;
-        Ok(id)
+        Ok(ids)
     }
     fn poll_file(&self, _file_id: &str) -> Result<()> {
         self.read("poll_file")
