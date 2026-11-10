@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-10 15:35: owner: go, fast (within an hour).** Order changed: P64 (publish) first, then P63 (camera/settings). Both `difficulty: high`; plans carry a time-boxed review mode (implementer runs the full gate once; reviewer runs touched tests only). Codex first, Claude when out.
+
 **2026-11-10 15:20: owner: fix before the work-Mac install.** First real publish: unreviewed photos skipped; republish slow (615+ `FilesAll` pages per condition-photo lookup; one-at-a-time uploads); no progress detail; no cancel. Style typed by hand (case mismatch). P63 += style drop-down; new P64 (publish speed/visibility, cancel, unreviewed published; changelog 44). Waiting for the owner's go to start P63 → P64 (owner asked not to start until their corrections are in).
 
 **2026-11-10 14:50: P63 paused by the owner before any code** ("do not start that fix yet, as I might correct some things also before this"). Codex was out; the Claude implementer was stopped within seconds; tree clean. Restart P63 (fresh) only after the owner adds their corrections to the plan.

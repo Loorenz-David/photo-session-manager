@@ -1,9 +1,9 @@
 ---
 phase: P63_final_check_fixes
 title: Fixes from the final hands-on check — Capture One is never launched by a background script during a take-back, a missing Capture One session is reported instead of silently recreated, changing the session moves the camera helper's staging too, Save settings cannot be missed, the style is picked from a drop-down, and the unplug-to-Wi-Fi time is back to ~6 s
-difficulty: normal
+difficulty: high
 projection: no
-depends_on: [P62_retention_after_publish]
+depends_on: [P64_publish_speed_and_visibility]
 ---
 # P63 — Final-check fixes (#22 remainder, #27, #28, Save settings, unplug recovery)
 
@@ -62,5 +62,9 @@ same assertions); C++ tests if the unplug fix is in the helper. ≈ 16 paths, �
 ## Notes
 - **Hard rules:** never kill or quit any process except Capture One through the take-back; never delete photos; the suite never needs the camera or
   Capture One. Default implementer (Codex; Claude when Codex is exhausted). If the SDK is present locally, prove the SDK build compiles, then restore the stub.
+
+## Review mode (owner 2026-11-10: "I need this within an hour")
+- **Implementer:** high effort; run the full closing gate once (`cargo test --workspace`, clippy, fmt, typecheck, `npm test`) and put the stamp in the handoff.
+- **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log

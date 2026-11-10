@@ -3,7 +3,7 @@ phase: P64_publish_speed_and_visibility
 title: Publishing fixes from the first real publish — files are found by name instead of listing the whole shop, images upload in batches and in parallel, the progress bar explains its current step and errors and can cancel the publish, and photos not yet reviewed are published after the approved main photos
 difficulty: high
 projection: no
-depends_on: [P63_final_check_fixes]
+depends_on: [P62_retention_after_publish]
 ---
 # P64 — Publish speed and visibility; unreviewed photos are published (owner 2026-11-10, changelog 44)
 
@@ -83,5 +83,9 @@ report field.
 ## Notes
 - **Hard rules:** H1 (only the photographer's confirmed publish writes to Shopify), H4 (idempotent, no duplicate uploads), H6; tests never touch the live
   store. Default implementer (Codex; Claude when Codex is exhausted).
+
+## Review mode (owner 2026-11-10: "I need this within an hour")
+- **Implementer:** high effort; run the full closing gate once (`cargo test --workspace`, clippy, fmt, typecheck, `npm test`) and put the stamp in the handoff.
+- **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log
