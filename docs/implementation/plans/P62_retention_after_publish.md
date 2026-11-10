@@ -150,3 +150,14 @@ folder, the item shows "Archived in Shopify" and its photos come from Shopify; r
   active: the item gains no photo, both are in Unassigned). Both were seen failing with the corresponding change reverted, then restored. N1 (backlog)
   untouched. Perimeter: storage.rs, arrival.rs, photos.rs, the P62 test file, this log, the tracker row. Handoff:
   `handoffs/implementer/handoff_P62_retention_after_publish_fix_r3.md`.
+
+- **2026-11-10 re-review r3 (opus, pipeline-reviewer): APPROVED_WITH_NOTES.** Perimeter: `6f0a234` = storage.rs, arrival.rs, photos.rs, the P62 test file,
+  the tracker row, this log (all on `FIX2_AUTHORISED`'s list). Reviewer stamp on code tree `6f0a234`: Rust 900 passed / 0 failed (workspace run cut at
+  90 min inside p27 after 29 binaries, 529/0; the other 27 binaries run once each via `-p psm-testkit --test …`: 312/0 + P62 12/0 + 47/0); clippy, fmt,
+  typecheck clean; no frontend change since r2 (431/431). **F2 resolved:** `cleared_item_photos` filters the session's photos to `created_at <= cleared_at`
+  (same injected clock on both sides) for `item_files` (clearing + leftover pass) and `allowed_item_file`; `ArrivalService::accept` redirects any session in
+  `cleared_sessions()` to Unassigned; `PhotosService::import` copies into `_Unassigned` when a cleared item is active. Judgment call 3 holds: transfer refuses
+  a cleared target, undo/redo refuses a published-clean destination, and a cleared item stays published-clean (attributes never touch `change_seq`; arrivals
+  redirected). `c1d` and `c1e` fail on the wrong outcome. No MUST item. Notes → backlog: a ledger capture while an archived item is active is filed in its
+  folder; `c1e` does not assert the import's on-disk folder; a RAW restored at a cleared path is re-deleted; undo in X of an earlier X→C move takes a photo
+  out of cleared C (pre-existing). Narrative: `narratives/P62_retention_after_publish.md`. Handoff: `handoffs/reviewer/handoff_P62_retention_after_publish_review_r3.md`.
