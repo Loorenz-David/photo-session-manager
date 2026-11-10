@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-10 21:55: P64 APPROVED_WITH_NOTES, then P63 APPROVED_WITH_NOTES (both on Claude Opus high effort after Codex limits; time-boxed reviews).** Narratives relayed. Owed: one full `cargo test --workspace` run on a quiet Mac (both stamps partial); P64 batched Shopify calls not yet run against a real store; P63 unplug ~6 s only with a valid cached endpoint (stale ≈ 11.5 s). Next: build the SDK app from HEAD, install on the dev Mac, try publish on the test store + the P63 checks, then the work-Mac install (retention days high until P62 is verified on the test store).
+
 **2026-11-10 15:35: owner: go, fast (within an hour).** Order changed: P64 (publish) first, then P63 (camera/settings). Both `difficulty: high`; plans carry a time-boxed review mode (implementer runs the full gate once; reviewer runs touched tests only). Codex first, Claude when out.
 
 **2026-11-10 15:20: owner: fix before the work-Mac install.** First real publish: unreviewed photos skipped; republish slow (615+ `FilesAll` pages per condition-photo lookup; one-at-a-time uploads); no progress detail; no cancel. Style typed by hand (case mismatch). P63 += style drop-down; new P64 (publish speed/visibility, cancel, unreviewed published; changelog 44). Waiting for the owner's go to start P63 → P64 (owner asked not to start until their corrections are in).
