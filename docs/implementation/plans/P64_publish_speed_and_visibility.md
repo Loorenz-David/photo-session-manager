@@ -108,3 +108,20 @@ the list forms of the grounded single requests (not live-probed); the files sear
 **Stamp (partial, environment):** fmt, clippy, typecheck clean; P64 8/8; P03, P12–P18, P21, P25, P30, P39, P59, P62 green; `npm test`
 green apart from the named intermittent `p33_split_grid`. `cargo test --workspace` was stopped after `p05`: Gatekeeper/fseventsd on the dev
 Mac made each test file take 10–22 min; the untouched camera/composition/capture/storage suites were not re-run (handoff §Stamp).
+
+### 2026-11-10 — review r1 (Opus, `pipeline-reviewer`): APPROVED_WITH_NOTES
+**Gate/perimeter.** Tracker `IMPLEMENTED`, checkpoint `d11a2d4` = the 29 declared paths, nothing extra or missing.
+**Evidence (tree `d11a2d4`; workspace not re-run per Review mode).** fmt clean; clippy `--all-targets -D warnings` exit 0; P64 8/8;
+`psm-core mechanisms::` 64; `psm-integrations` 36; typecheck exit 0; vitest publish/sessions/shell 73/73. Implementer's stamp
+consumed for p03, p12–p18, p21, p25, p30, p39, p59, p62 and `npm test`; it is partial (workspace stopped after p05, environment).
+**Verified correct.** C1(a/b) one `filename:<stem>` search, `FILES_ALL` deleted, match rules unchanged (real adapter over
+FakeTransport, 500 pages registered); C2(a) one reservation per group, waves of 4 on scoped threads, one registration per wave,
+2–4 in flight measured; C2(b) panic in the 6th upload + restart: frozen gallery, no duplicate, pre-crash photos staged once;
+C3(a) `activity()` text/elapsed/error/retry state + popover render; C3(b) cancel flag checked before every upload wave,
+registration, poll and update mutation, `Cancelled` step excluded from resume and retention, next publish uploads only the 4
+photos without media (row's "5" is sequential arithmetic; 4 is the H4-correct count, assumption 1); C4(a) `frozen_main` = main by
+position then unreviewed by display order; C4(b) ready without full review, in_progress on a missing preview. Assumptions 0–10
+consistent with the intention. H1/H4/H6/H7, secrets and no-live-services hold. Existing-assertion changes all follow from the frozen
+set, the ready rule or one registration per wave.
+**Notes (backlog).** Failed-state popover unreachable; hover does not close; batch shapes and concurrent transport not live-probed;
+SV-3 search-lag orphan-file window; partial stamp; C3(b) plan arithmetic; registry/book drift; no cancelled session status.
