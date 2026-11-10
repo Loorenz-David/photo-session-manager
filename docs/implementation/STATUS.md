@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-10 08:50: overnight run: P60 APPROVED, P61 APPROVED (both on Claude after Codex limits); P62 re-review r2 CHANGES_REQUESTED with one MUST (F2: a RAW captured/imported into a cleared item after clearing would be deleted).** Orchestrator wrote FIX2_AUTHORISED (created_at <= cleared_at guard + post-clear arrivals go to Unassigned) and relaunched (Codex, Claude if out). Then: build the app for the work-Mac install (owner, today).
+
 **2026-11-09 19:30: owner: run overnight, storage tonight, work-Mac install tomorrow.** Driver `overnight.sh` (session scratchpad) runs P60 → P61 → P62: each phase starts on Codex; a phase stopped by a Codex limit/outage is resumed once with `PSM_IMPLEMENTER=claude`; any other stop waits for the orchestrator. Owner standing permission: Codex first, Claude when Codex is exhausted, Codex again for the next phase.
 
 **2026-11-09 19:15: evening hands-on check of P57–P59 done (evidence §Hands-on check).** Automatic take-back works after a Mac restart (12.5 s, no click); fast compose works. Owner: fix the take-back issues and self-healing for files deleted by hand, then storage, before the work Mac. P60 (take-back + self-healing + recipe self-repair, changelog 43) running on Codex; P61 (storage clean-up + budget) and P62 (retention after publish) written, to run after P60. Then the work-Mac install.
