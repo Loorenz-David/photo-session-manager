@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-10 14:50: final hands-on check on the dev Mac passed (evidence §Final hands-on check).** Owner chose option A: installs the current build on the work Mac now; P63 (small fixes) runs in the background (Codex, Claude if out). App in /Applications on the dev Mac = build of P53–P62.
+
 **2026-11-10 14:00: dev Mac cleaned by the owner (fresh start).** Deleted: Session Manager DB, previews, backups, logs; Capture One session `~/Pictures/session test 1` and other test folders/catalogues; the Capture One settings backup. Kept: `settings.json` (still points at the deleted document — owner creates a new Capture One session and picks it), camera support + Keychain + fingerprint. Free space 64 → 96 GB. The evidence above refers to files that no longer exist.
 
 **2026-11-10 13:30: P62 APPROVED_WITH_NOTES (re-review r3 after the authorised fix 2). P60–P62 done; storage (10F) implemented.** SDK app built from HEAD at `apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app` (not yet installed). Next: owner installs on the work Mac today; first run P62 steps 3–8 on the test store before relying on retention. Backlog: p48 tests take ~12 min since P60's real-time take-back waits.

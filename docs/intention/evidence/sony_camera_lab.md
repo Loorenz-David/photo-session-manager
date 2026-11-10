@@ -210,3 +210,12 @@ The camera's ID, the Mac's address and fingerprints are left out.
   `variant_not_found` for ~120 photos whose RAWs the owner had deleted by hand) (#24/#26).
 - Fast preview: the new photo could be reframed as soon as it appeared (owner). Pass.
 → P60.
+
+## Final hands-on check (2026-11-10, dev Mac, build of P53–P62, fresh Capture One session "Beyo Studio")
+All steps passed: item type picker from the shop; Wi-Fi photo in Session Manager and Capture One together (~8 s); compose at once on the camera
+preview; Take photo; "camera can't reach this Mac" header with the new address (the Mac's DHCP address changed again: fixed addresses planned);
+automatic take-back with no click (plug-in 14:35:55.3 → Capture One quit +6.1 s → **relaunched +6.4 s (#22 remainder)** → our USB session +12.2 s; false
+"stopped at step 3" logged again); cable photos ~2 s; a RAW deleted in Finder hides its photo and ⌘Z brings it back; Settings → Storage numbers
+(duplicates 93 MB from two cable shots, preview exports 0 MB); unplug → Wi-Fi ready 11.8 s (run 2: 6.1 s), photos kept arriving.
+Defects: #22 remainder, #27 (deleted document silently recreated; one photo filed outside Capture One), #28 (helper staging stays under the old
+document until restart), "Save settings" missed at the bottom of Settings, unplug recovery 11.8 s → P63.
