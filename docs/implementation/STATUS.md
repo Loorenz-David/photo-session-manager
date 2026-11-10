@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-10 14:50: P63 paused by the owner before any code** ("do not start that fix yet, as I might correct some things also before this"). Codex was out; the Claude implementer was stopped within seconds; tree clean. Restart P63 (fresh) only after the owner adds their corrections to the plan.
+
 **2026-11-10 14:50: final hands-on check on the dev Mac passed (evidence §Final hands-on check).** Owner chose option A: installs the current build on the work Mac now; P63 (small fixes) runs in the background (Codex, Claude if out). App in /Applications on the dev Mac = build of P53–P62.
 
 **2026-11-10 14:00: dev Mac cleaned by the owner (fresh start).** Deleted: Session Manager DB, previews, backups, logs; Capture One session `~/Pictures/session test 1` and other test folders/catalogues; the Capture One settings backup. Kept: `settings.json` (still points at the deleted document — owner creates a new Capture One session and picks it), camera support + Keychain + fingerprint. Free space 64 → 96 GB. The evidence above refers to files that no longer exist.
