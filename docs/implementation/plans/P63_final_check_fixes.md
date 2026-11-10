@@ -103,3 +103,28 @@ commands/settings.rs, commands/camera.rs}`, `apps/desktop/src/{services/bindings
 lib/keyboard.ts, features/shell/PageHeader.tsx}`. `p48_camera_ownership.rs`: besides no timing edit being needed, `c3c` now runs on the
 app's own (not yet created) session — a deleted *configured* session is no longer recreated (#27), so the make-document path it guards only
 exists for the app's own session; its assertions are unchanged. R-I20 "staging never moved for this process" is superseded by #28.
+
+### 2026-11-10 — review r1 (Opus, `pipeline-reviewer`): APPROVED_WITH_NOTES
+**Gate.** Tracker `IMPLEMENTED`; checkpoint `0247c78` in `git log`. **Perimeter:** `git show --stat 0247c78` = 35 paths = the handoff's
+declared list (27 production, 5 tests/harness, tracker, plan log); 23 sit outside the plan's named files, all disclosed and needed by the rows.
+**Evidence run by the reviewer** (time-boxed per Review mode; tree = `0247c78`): `p63_final_check_fixes` 4/4, `p48_camera_ownership` 32/32 in
+10.3 s (C6(a)), `p54` 6/6, `p57` 8/8, `p60` 8/8, `p62_retention_after_publish` 12/12 (the implementer's full-run failure does not reproduce),
+`cargo test -p psm-core -p psm-integrations -p psm-desktop` green, clippy `-D warnings` clean, fmt clean, typecheck clean, `npm test` 64 files
+442/442, `tools/sidecar/build.sh --stub --test` 31/0. The full workspace run is trusted from the implementer's stamp (partial, see notes).
+**Verified correct.** C1(a): `GatedScripting::call` refuses every script off the permitted thread while the take-back holds the gate or the P54
+wait applies with Capture One not running; `launch` keeps its start-order wait; follower and take-back polls use `is_running` (`ps -axo comm=`,
+the same process name the ownership check already uses); `quit`/`editor_info` refused while the take-back holds the gate; the test's fake
+relaunches on any Apple event and the ops between `quit` and `launch` must be exactly step 5's `editor_info`, so a follower or render script
+fails it. C2(a): `document_present` (folder + `.cosessiondb`) gates the receiver root (451), the helper spawn (no staging folder) and the
+ensure (`document_missing`, no `make_document`) for a session chosen in Settings; the test asserts sentence, header reason, 451 and the path's
+absence after an activation. C3(a): `check_document` restarts the helper when the staging differs, never during a take-back, an open upload or
+an expected transfer; old staging removed only if empty (H2); test holds an upload open, sees no restart, then the new `--save-dir`.
+C4(a): sticky footer; `goTo` leave guard with Save/Discard/Cancel; tests cover Cancel stays, Discard leaves unsaved, Save saves then leaves,
+no change no prompt. C5(a): cached-endpoint retry window and no-backoff recovery in `transport_manager.cpp`; the valid-endpoint case asserts
+`recovery_ms ≤ 6100` at the log's SDK costs; cause recorded in the handoff. C6(b): options `No style`, user, built-in in order; exact name saved;
+unreadable → text + sentence; backend split and no op on a closed Capture One. C7(a): green as above. Assumptions (chosen-session-only rule,
+header on the direct camera only, protected-operation set, `editor_info` in the P54 wait, recovery windows, user styles by `.costyle` files,
+unlisted stored name kept) are consistent with 10C/10E and the plan. H1–H8 hold; H7 placement of `document_present` in core is a note.
+**Notes (backlog):** H7 placement of the `.cosessiondb` check; only the valid cached endpoint meets ~6 s (stale ≈ 11.5 s, none ≈ 10.8 s, real
+SDK failure time unmeasured); the restarted helper spawns without `--ip/--mac`; leave guard covers Back/Escape/⌘[/Health only; `availableStyles`
+includes presets; shutdown leaves a stuck spool thread behind; partial closing stamp; book/registry drift (R-I20, new names, p48 c3c fixture).
