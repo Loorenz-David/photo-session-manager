@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-10 13:30: P62 APPROVED_WITH_NOTES (re-review r3 after the authorised fix 2). P60–P62 done; storage (10F) implemented.** SDK app built from HEAD at `apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app` (not yet installed). Next: owner installs on the work Mac today; first run P62 steps 3–8 on the test store before relying on retention. Backlog: p48 tests take ~12 min since P60's real-time take-back waits.
+
 **2026-11-10 08:50: overnight run: P60 APPROVED, P61 APPROVED (both on Claude after Codex limits); P62 re-review r2 CHANGES_REQUESTED with one MUST (F2: a RAW captured/imported into a cleared item after clearing would be deleted).** Orchestrator wrote FIX2_AUTHORISED (created_at <= cleared_at guard + post-clear arrivals go to Unassigned) and relaunched (Codex, Claude if out). Then: build the app for the work-Mac install (owner, today).
 
 **2026-11-09 19:30: owner: run overnight, storage tonight, work-Mac install tomorrow.** Driver `overnight.sh` (session scratchpad) runs P60 → P61 → P62: each phase starts on Codex; a phase stopped by a Codex limit/outage is resumed once with `PSM_IMPLEMENTER=claude`; any other stop waits for the orchestrator. Owner standing permission: Codex first, Claude when Codex is exhausted, Codex again for the next phase.
