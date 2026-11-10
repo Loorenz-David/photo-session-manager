@@ -118,3 +118,17 @@ folder, the item shows "Archived in Shopify" and its photos come from Shopify; r
   `c1c_clearing_interrupted_by_a_restart_finishes_after_it_and_touches_nothing_else` (first batch deleted, `kill_and_restart`, ticks → every file of the
   item gone, the other item's files intact). Perimeter: storage.rs, the P62 test file, this log, the tracker row. Handoff:
   `handoffs/implementer/handoff_P62_retention_after_publish_fix_r2.md`.
+
+- **2026-11-10 re-review r2 (opus, pipeline-reviewer): CHANGES_REQUESTED (one MUST).** Perimeter: `2aab879` = storage.rs, the P62 test file, the
+  tracker row, this log (all allowed; no migration 011). Reviewer stamp on code tree `2aab879`: Rust 898 passed / 0 failed (workspace run cut at 30 min inside p50 after 808/0; p50 + remaining files rerun: 90/0); clippy, fmt, typecheck clean; UI 431/431.
+  **F1 resolved:** `scan` → `queue_cleared_leftovers` (first scan after start, then ≤ every 5 min via `Work.leftovers_at`) re-queues `item_files` of
+  cleared sessions as `QueuedKind::Item` (same `allowed_item_file` + size/mtime guard; queue replaced, never doubled; pause in `tick` precedes it;
+  no scan-request loop); `c1c` bites on the r1 scenario. **F2 (blocking, B3: H2; B1 vs M41 / 10F §4; route production; triage MUST):** the pass
+  and `allowed_item_file` use `photos_in_session` as it is *now*, so a RAW that arrives in a cleared item's session after clearing (UI activates
+  an archived item on open; arrival/import do not check `cleared_at`; `arrival_insert` makes the item dirty) is deleted within 5 min, never
+  published or verified. Reviewer probe (test file created, run, deleted; tree clean): cleared PROBE, import `outside_new.ARW` into it →
+  dirty = true → +6 min → deleted by rule `retention`. Correction: leftovers and `allowed_item_file` consider only photos with
+  `created_at <= cleared_at` (or: refuse/route arrivals into a cleared session to Unassigned); one test: a RAW imported after clearing survives the
+  leftover interval. Fix may touch `crates/core/src/services/storage.rs`, `crates/testkit/tests/p62_retention_after_publish.rs` (alternative:
+  `arrival.rs` / `photos.rs`). N1 (leftover bytes counted as freed each pass) → backlog. Handoff:
+  `handoffs/reviewer/handoff_P62_retention_after_publish_review_r2.md`.
