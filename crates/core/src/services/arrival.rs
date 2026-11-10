@@ -296,6 +296,15 @@ impl ArrivalService {
                 self.store.active_session_id()?,
             )
         };
+        // A cleared item is read-only (10F Q3): what arrives while it is active, or in its folder,
+        // is not added to it. It goes to Unassigned, so retention never takes a file nobody
+        // published (H2, M41).
+        let session_id = if session_id != 1 && self.store.cleared_sessions()?.contains(&session_id)
+        {
+            1
+        } else {
+            session_id
+        };
         let captured_at = match delivered {
             Some((_, at)) => at,
             None => fs::metadata(&canonical)?

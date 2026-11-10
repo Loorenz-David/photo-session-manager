@@ -26,6 +26,7 @@ use crate::{
     Result,
     domain::{
         camera::{DeliveryOutcome, DeliveryState},
+        photo::Photo,
         storage::StorageReport,
     },
     events::AppEvent,
@@ -715,6 +716,19 @@ impl StorageService {
         self.events.emit(AppEvent::HealthChanged);
     }
 
+    /// The photos whose files an item's clearing may touch. Once the item is marked cleared that
+    /// is the photos it had at that moment: a photo that arrived afterwards (the photographer
+    /// opened the archived item and shot or imported) was never published nor verified against
+    /// Shopify, so its files are never queued or deleted (H2, M41).
+    fn cleared_item_photos(&self, item_id: i64, session_id: i64) -> Result<Vec<Photo>> {
+        let cleared_at = self.store.item_retention(item_id)?.cleared_at;
+        let mut photos = self.store.photos_in_session(session_id)?;
+        if let Some(at) = cleared_at {
+            photos.retain(|p| p.created_at <= at);
+        }
+        Ok(photos)
+    }
+
     /// The local files of an item (10F §3, Q1, Q4): for every RAW of its session (every
     /// classification) that no other, not cleared, session uses — the RAW, the files in its
     /// folder's `CaptureOne/Settings*/` named `<RAW name>.cos` and in `CaptureOne/Cache/` named
@@ -729,7 +743,7 @@ impl StorageService {
         let mut out: Vec<FileEntry> = Vec::new();
         let mut raws: Vec<String> = Vec::new();
         let mut hashes: HashSet<String> = HashSet::new();
-        for photo in self.store.photos_in_session(session_id)? {
+        for photo in self.cleared_item_photos(item_id, session_id)? {
             if raws.contains(&photo.raw_path) {
                 continue;
             }
@@ -1051,7 +1065,7 @@ impl StorageService {
             path.starts_with(root)
                 || std::fs::canonicalize(root).is_ok_and(|root| path.starts_with(root))
         };
-        for photo in self.store.photos_in_session(session_id)? {
+        for photo in self.cleared_item_photos(item_id, session_id)? {
             let raw = Path::new(&photo.raw_path);
             if raw == path {
                 return Ok(true);

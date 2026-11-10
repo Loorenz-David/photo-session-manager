@@ -133,3 +133,20 @@ folder, the item shows "Archived in Shopify" and its photos come from Shopify; r
   `arrival.rs` / `photos.rs`). N1 (leftover bytes counted as freed each pass) → backlog. Handoff:
   `handoffs/reviewer/handoff_P62_retention_after_publish_review_r2.md`.
 - 2026-11-10 orchestrator: FIX2_AUTHORISED: re-review r2 F2 is a MUST data-loss defect (a RAW captured or imported into a cleared item after clearing is deleted by the leftover pass; H2, M41, 10F §4). Fix 2 does both parts of the reviewer's correction: (a) in `storage.rs`, the leftover pass and `allowed_item_file` for `QueuedKind::Item` consider only photos with `created_at <= cleared_at` (and their Capture One files, caches and hash-matched duplicates); (b) a cleared item is never a capture/import target: arrivals and imports while a cleared session is active go to Unassigned (10F Q3, read-only), touching `crates/core/src/services/arrival.rs` and/or `photos.rs` only as needed. Tests: the reviewer's probe scenario at the storage boundary (the new RAW survives the leftover interval; the item's original files are gone) and one arrival test (a capture while the cleared item is active lands in Unassigned). Nothing else changes.
+
+- **2026-11-10 fix 2 (claude sonnet, pipeline-implementer, fix r3).** F2 resolved, both parts of the orchestrator's `FIX2_AUTHORISED`.
+  (a) `crates/core/src/services/storage.rs`: new `cleared_item_photos(item_id, session_id)` returns the session's photos with `created_at <= cleared_at`
+  once the item is marked cleared (all photos before). `item_files` (so the leftover pass and the clearing itself) and `allowed_item_file` (the per-file
+  guard at delete time) both use it, so a RAW that joined the session after the clearing — and its Capture One files, caches and hash-matched
+  duplicates — is never queued and never allowed. (b) `crates/core/src/services/arrival.rs` (`accept`): a photo whose session is cleared is
+  inserted into Unassigned (session 1) instead, whichever way the session was picked (ledger delivery, import into the active session, folder
+  attribution); `crates/core/src/services/photos.rs` (`import`): with a cleared item active, the file is copied to `_Unassigned`, not the item's
+  folder. Judgment calls: (1) the redirect sits in `accept`, after the session is chosen, so one rule covers captures and imports; (2) the boundary
+  is `<=` (a photo created in the same millisecond as the clearing counts as part of the cleared set); (3) a photo moved into a cleared session by
+  hand keeps its older `created_at` and is therefore still treated as part of it — moving into a cleared item is not a path the app offers
+  (read-only, 10F Q3). Tests (P62 test file): `c1d_a_photo_that_joins_a_cleared_item_afterwards_is_never_deleted` (a RAW inserted into the cleared
+  session after clearing, with Capture One files: still on disk after the leftover interval with the disk full, and not in the cleared list) and
+  `c1e_what_arrives_while_a_cleared_item_is_active_goes_to_unassigned` (a capture through the ledger and an import while the archived item is
+  active: the item gains no photo, both are in Unassigned). Both were seen failing with the corresponding change reverted, then restored. N1 (backlog)
+  untouched. Perimeter: storage.rs, arrival.rs, photos.rs, the P62 test file, this log, the tracker row. Handoff:
+  `handoffs/implementer/handoff_P62_retention_after_publish_fix_r3.md`.

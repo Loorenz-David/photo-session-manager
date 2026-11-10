@@ -25,6 +25,8 @@ impl PhotosService<'_> {
     pub fn import(&self, paths: &[String]) -> Result<()> {
         let root = self.arrival.capture_root()?;
         let folder = match self.store.active_session_id()? {
+            // A cleared item is read-only (10F Q3): an import goes to Unassigned instead.
+            Some(id) if self.store.cleared_sessions()?.contains(&id) => "_Unassigned".into(),
             Some(id) => {
                 let session = self.store.session(id)?;
                 let item = self.store.item(

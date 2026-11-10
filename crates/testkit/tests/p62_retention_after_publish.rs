@@ -20,6 +20,7 @@ use psm_core::{
     ports::{clock::Clock, commerce::CommerceAdapter},
     services::{
         attributes::AttributesService,
+        photos::PhotosService,
         retention::{ARCHIVED_IMAGE_EDGE, ArchiveService},
         storage::{Cleared, RETENTION_NOT_CLEARED},
     },
@@ -411,6 +412,87 @@ fn c1c_clearing_interrupted_by_a_restart_finishes_after_it_and_touches_nothing_e
         other_files.iter().all(|f| f.is_file()),
         "the other item's files are untouched"
     );
+}
+
+#[test]
+fn c1d_a_photo_that_joins_a_cleared_item_afterwards_is_never_deleted() {
+    let a = shop_app();
+    let it = published(&a, "LATE", 2, 1);
+    for p in &it.photos {
+        capture_one_files(&p.raw_path);
+    }
+    let files = files_of(&a, &it);
+    a.clock.advance(4 * DAY + 60_000);
+    clear_all(&a);
+    assert!(cleared_at(&a, &it).is_some());
+    assert!(files.iter().all(|f| !f.exists()), "the item is cleared");
+
+    // A RAW that joined the cleared item's session after the clearing (never published).
+    a.clock.advance(60_000);
+    let late = photo(&a, it.session, "LATE", "LATE_new", C::Unreviewed);
+    let late_files: Vec<PathBuf> = std::iter::once(PathBuf::from(&late.raw_path))
+        .chain(capture_one_files(&late.raw_path))
+        .collect();
+
+    // Past the leftover interval, with the disk full so every level is open: it stays.
+    a.clock.advance(10 * 60_000);
+    disk_free(&a, 0);
+    let cleared = clear_all(&a);
+    for f in &late_files {
+        assert!(f.is_file(), "deleted: {f:?}");
+    }
+    assert!(
+        !cleared.iter().any(|c| late_files.contains(&c.path)),
+        "{cleared:?}"
+    );
+}
+
+#[test]
+fn c1e_what_arrives_while_a_cleared_item_is_active_goes_to_unassigned() {
+    let a = shop_app();
+    let it = published(&a, "ARCH", 1, 0);
+    a.clock.advance(4 * DAY + 60_000);
+    clear_all(&a);
+    assert!(cleared_at(&a, &it).is_some());
+    a.store().set_active_session_id(Some(it.session)).unwrap();
+    let before = a.store().photos_in_session(it.session).unwrap().len();
+
+    // A capture arriving while the archived item is active.
+    let captured = a.arrival_photo(it.session, "ARCH_shot.ARW").unwrap();
+    // An import while the archived item is active.
+    let outside = a.dir.path().join("outside_new.ARW");
+    fs::write(&outside, b"a raw nobody published").unwrap();
+    PhotosService {
+        arrival: a.app.arrival.as_ref(),
+        editing: a.app.editing.as_ref(),
+        store: a.store(),
+        clock: a.clock.as_ref(),
+        history: a.app.history.as_ref(),
+    }
+    .import(&[outside.to_string_lossy().into_owned()])
+    .unwrap();
+
+    assert_eq!(
+        a.store().photos_in_session(it.session).unwrap().len(),
+        before,
+        "the cleared item gained nothing"
+    );
+    let unassigned: Vec<String> = a
+        .store()
+        .photos_in_session(1)
+        .unwrap()
+        .into_iter()
+        .map(|p| p.raw_path)
+        .collect();
+    assert!(
+        unassigned.iter().any(|p| p.ends_with("ARCH_shot.ARW")),
+        "{unassigned:?}"
+    );
+    assert!(
+        unassigned.iter().any(|p| p.ends_with("outside_new.ARW")),
+        "{unassigned:?}"
+    );
+    assert!(Path::new(&captured).is_file());
 }
 
 #[test]
