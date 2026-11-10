@@ -41,7 +41,7 @@ This session (cycle-scoped):
 No migration, port or infra file changed. No mutation probe left a file behind; the temporary reverts were restored and `git status` shows only the paths above. No architecture-graph tool is in this project's flow, so there is no graph delta.
 
 ## Checkpoint SHA
-See the commit with subject `CHECKPOINT (not approved): P62 fix 2 …` (the SHA is the one printed by `git log -1` after this handoff is committed; the runner records it).
+`6f0a234964f67f3a0cebf5ade95011d5c1e3577e` (subject `CHECKPOINT (not approved): P62 fix 2 …`). The SHA was added to this file after the commit; the runner commits that edit.
 
 ## Stamp (code tree = this checkpoint)
 | Command | Result |
