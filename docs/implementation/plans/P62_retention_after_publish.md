@@ -107,3 +107,14 @@ folder, the item shows "Archived in Shopify" and its photos come from Shopify; r
   untouched. Fix may touch `crates/core/src/services/storage.rs`, `crates/testkit/tests/p62_retention_after_publish.rs` (and, only if the rule must persist,
   a new migration 011 + `store.rs` + `ports/store.rs`; 010 is checkpointed). 7 notes → backlog. Handoff:
   `handoffs/reviewer/handoff_P62_retention_after_publish_review_r1.md`.
+
+- **2026-11-10 fix 1 (claude sonnet, pipeline-implementer, fix r2).** F1 resolved in `crates/core/src/services/storage.rs`: `scan` now calls the new
+  `queue_cleared_leftovers` before `retention_scan`. It lists the files still on disk (`item_files`, same shared-RAW rule) of every session whose item is
+  already marked cleared and queues them as `QueuedKind::Item`, so the existing per-file `allowed_item_file` guard and P61's size/mtime check apply
+  unchanged; rule logged `retention`. Judgment calls: (1) the rule is not persisted (the reviewer allowed `retention`), so no migration 011; (2) the
+  pass runs at the first scan after start and then at most every `REFRESH_EVERY` (5 min), tracked by `Work.leftovers_at` — a file that cannot be
+  deleted is retried every 5 min, never in a scan-request loop; (3) it does not depend on a commerce adapter being configured (the item was already
+  verified and cleared); (4) its bytes are added to the free space expected for the "Disk almost full" warning. Test added:
+  `c1c_clearing_interrupted_by_a_restart_finishes_after_it_and_touches_nothing_else` (first batch deleted, `kill_and_restart`, ticks → every file of the
+  item gone, the other item's files intact). Perimeter: storage.rs, the P62 test file, this log, the tracker row. Handoff:
+  `handoffs/implementer/handoff_P62_retention_after_publish_fix_r2.md`.

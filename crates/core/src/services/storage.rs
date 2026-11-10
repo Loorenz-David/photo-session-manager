@@ -231,6 +231,8 @@ struct Work {
     not_cleared: BTreeMap<i64, String>,
     /// Items whose verification failed are not read again before this instant.
     verify_after: HashMap<i64, Instant>,
+    /// When the files still on disk of already cleared items were last looked for (H4).
+    leftovers_at: Option<Instant>,
 }
 
 /// What happened to one item chosen for clearing.
@@ -443,8 +445,11 @@ impl StorageService {
                 rule: deletion.rule.as_str(),
             })
             .collect();
-        // Levels 4–5 (P62) start from what levels 1–3 leave.
-        let free_after = self.retention_scan(work, plan.free_after, now)?;
+        // A cleared item's queue lives in memory only: finish what a quit, a crash or a file that
+        // changed meanwhile left behind (H4), then levels 4–5 (P62) start from what is left.
+        let leftover = self.queue_cleared_leftovers(work, now)?;
+        let free_after =
+            self.retention_scan(work, plan.free_after.saturating_add(leftover), now)?;
         let short = free_after < self.min_free_bytes();
         let warning = short.then(|| {
             format!(
@@ -454,6 +459,46 @@ impl StorageService {
         });
         self.set_warning(warning);
         Ok(())
+    }
+
+    /// H4: clearing is resumable. An item already marked cleared whose files are still on disk
+    /// (the app quit or crashed before its queue drained, or a file changed between queueing and
+    /// deletion) has them queued again, through the same per-file guard. Looked for at the first
+    /// scan after start and then at most every [`REFRESH_EVERY`], so a file that cannot be deleted
+    /// is retried, not hammered. Returns the bytes queued.
+    fn queue_cleared_leftovers(&self, work: &mut Work, now: Instant) -> Result<u64> {
+        if work
+            .leftovers_at
+            .is_some_and(|at| now.saturating_duration_since(at) < REFRESH_EVERY)
+        {
+            return Ok(0);
+        }
+        work.leftovers_at = Some(now);
+        let cleared = retention::cleared_sessions(self.store.as_ref())?;
+        if cleared.is_empty() {
+            return Ok(0);
+        }
+        let mut bytes = 0;
+        for record in self.store.session_list_records()? {
+            let session_id = record.session.session.id;
+            let Some(item_id) = record.session.session.item_id else {
+                continue;
+            };
+            if !cleared.contains(&session_id) {
+                continue;
+            }
+            for file in self.item_files(item_id, session_id, &cleared)? {
+                bytes += file.bytes;
+                work.queue.push_back(Queued {
+                    kind: QueuedKind::Item(item_id),
+                    path: file.path,
+                    bytes: file.bytes,
+                    rule: RetentionRule::Retention.as_str(),
+                    modified_ms: file.modified_ms,
+                });
+            }
+        }
+        Ok(bytes)
     }
 
     /// 10F §3 and §4 levels 4–5 (P62): decides which published items to clear, verifies each

@@ -374,6 +374,46 @@ fn c1a_a_published_clean_item_is_cleared_four_days_after_publish_and_nothing_els
 }
 
 #[test]
+fn c1c_clearing_interrupted_by_a_restart_finishes_after_it_and_touches_nothing_else() {
+    let mut a = shop_app();
+    let pub_item = published(&a, "RESUME", 2, 1);
+    for p in &pub_item.photos {
+        capture_one_files(&p.raw_path);
+    }
+    let other = item(&a, "KEEP", 1, 0);
+    for p in &other.photos {
+        capture_one_files(&p.raw_path);
+    }
+    let files = files_of(&a, &pub_item);
+    let other_files = files_of(&a, &other);
+    assert!(files.len() > 20, "more files than one batch");
+
+    // Clearing starts: the item is marked cleared and the first batch is deleted.
+    a.clock.advance(4 * DAY + 60_000);
+    let mut deleted = 0;
+    while deleted == 0 {
+        a.clock.advance(3_000);
+        deleted = a.app.storage.tick().unwrap().cleared.len();
+    }
+    assert!(cleared_at(&a, &pub_item).is_some());
+    let left = files.iter().filter(|f| f.exists()).count();
+    assert!(left > 0 && left < files.len(), "interrupted midway: {left}");
+
+    // The app quits before the rest is deleted; after the restart the clean-up finishes it.
+    a.kill_and_restart().unwrap();
+    clear_all(&a);
+    assert!(
+        files.iter().all(|f| !f.exists()),
+        "left: {:?}",
+        files.iter().filter(|f| f.exists()).collect::<Vec<_>>()
+    );
+    assert!(
+        other_files.iter().all(|f| f.is_file()),
+        "the other item's files are untouched"
+    );
+}
+
+#[test]
 fn c1b_dirty_unpublished_pinned_or_without_integration_nothing_is_deleted() {
     let a = shop_app();
     // Dirty: a photo reclassified after the publish.
