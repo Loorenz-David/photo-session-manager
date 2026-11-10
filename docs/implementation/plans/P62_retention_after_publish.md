@@ -89,3 +89,21 @@ folder, the item shows "Archived in Shopify" and its photos come from Shopify; r
   Deviations: testkit `fake_commerce.rs` (read-back, fake CDN URLs, downloads), `p01_storage_identity.rs` (two new tables in its schema list),
   `shopify/transport.rs` (`get_bytes`), `HealthPage.tsx` (label). Handoff: `handoffs/implementer/handoff_P62_retention_after_publish_implement_r1.md`.
 
+
+- **2026-11-10 review r1 (opus, pipeline-reviewer): CHANGES_REQUESTED.** Perimeter = the 46 declared paths (`5b82ffe`). Reviewer stamp on code tree
+  `5b82ffe`: Rust 896 passed / 1 failed (`p42_camera_runtime::c1c_restart_reaps_old_child`, the known 3 s settle flake under load; that file alone 12/12),
+  clippy, fmt, typecheck clean, `npm test` 431/431. Verified correct: the deletion gate on every call site (eligibility → `verify` Holds → fresh
+  re-check + pause → `mark_item_cleared` → `item_files` → per-file `allowed_item_file` + P61's size/mtime check; no adapter → no retention);
+  C1(a)–C7(a) each have a boundary test that fails on a wrong outcome (C1(a) set equality both ways; C1(b) each exclusion its own cause; C2(a)
+  exact Health text; C3(a) URLs, cache bytes, 1600 px, no second fetch, `Archived`; C3(b) exact error text; C5(a) level-5 stop and order;
+  C6(a) neighbour + catalogue untouched; C7(a) paused then cleared); 3 mechanism unit tests; assumptions 1–13 consistent with 10F.
+  **F1 (blocking, B3: H4; B1 vs 10F §3/§4; route production):** clearing is not resumable. `clear_item` sets `cleared_at`, then queues the
+  item's files in the in-memory `Work.queue` (20 files / 2 s); a cleared item is `Eligibility::Never`, and nothing re-lists its files. A quit,
+  crash or `App` rebuild mid-queue, or a file whose size/mtime changed before its turn, leaves those files (RAWs included) on disk permanently
+  while the item reads "Archived in Shopify". Reviewer probe (test file created, run, deleted; tree clean): 47-file item, first batch of 20
+  deleted, `kill_and_restart`, 40 ticks → 27 files left (e.g. `HALF_C0.ARW`, `HALF_D.ARW`, `.cos`). Correction: every scan also queues the
+  remaining on-disk files of items already marked cleared (same `item_files` + `allowed_item_file`; no scan-request loop on an undeletable
+  file); one behaviour test: interrupted by `kill_and_restart` after the first batch → after restart every file of the item gone, other items
+  untouched. Fix may touch `crates/core/src/services/storage.rs`, `crates/testkit/tests/p62_retention_after_publish.rs` (and, only if the rule must persist,
+  a new migration 011 + `store.rs` + `ports/store.rs`; 010 is checkpointed). 7 notes → backlog. Handoff:
+  `handoffs/reviewer/handoff_P62_retention_after_publish_review_r1.md`.
