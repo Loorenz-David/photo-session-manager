@@ -34,6 +34,15 @@ mkdir -p "$RUNS" "$IMPL/prompts/implementer" "$IMPL/prompts/reviewer" \
 log()  { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" | tee -a "$RUNS/runner.log" >&2; }
 die()  { log "ERROR: $*"; exit 20; }
 
+# stamp TIMELINE → passes stdin through unchanged and appends "<epoch> <line>" to TIMELINE
+# (owner 2026-11-11: per-command timings; read with tools/pipeline/timeline.sh <log>)
+stamp() {
+  local tl="$1" line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    printf '%s\n' "$line"; printf '%s %s\n' "$(date +%s)" "$line" >> "$tl"
+  done
+}
+
 # render TEMPLATE OUT KEY=VALUE...  → fills {{KEY}} placeholders
 render() {
   local tpl="$1" out="$2"; shift 2
@@ -100,9 +109,11 @@ run_codex() {  # run_codex MODEL EFFORT PROMPT LAST LOG
     printf 'HANDOFF: %s | STATE: DONE | OWNER_CARDS: 0\n' "$DRY_HANDOFF" > "$last"; return 0
   fi
   set +e
+  : > "${logf%.log}.timeline"
   cat "$WRAP" "$prompt" | codex exec -C "$ROOT" -s workspace-write --add-dir "$ROOT/.git" \
       --add-dir "$HOME/.cargo" --add-dir "$HOME/.npm" \
-      -m "$model" -c model_reasoning_effort="\"$effort\"" -o "$last" --json - > "$logf" 2>&1
+      -m "$model" -c model_reasoning_effort="\"$effort\"" -o "$last" --json - 2>&1 \
+      | stamp "${logf%.log}.timeline" > "$logf"
   local rc=$?; set -e
   log "codex exited $rc"
   # owner 2026-10-26: when gpt-6-sol is at capacity, use gpt-5.6-terra on high
@@ -118,22 +129,29 @@ run_claude() {  # run_claude AGENT MODEL PROMPT LAST LOG [EFFORT]
   local eff=(); [[ -n "$effort" ]] && eff=(--effort "$effort")
   log "claude --agent $agent --model $model${effort:+ --effort $effort} ← $(basename "$prompt")"
   if [[ "$DRY_RUN" == 1 ]]; then
-    echo "DRY: claude -p --agent $agent --model $model ${eff[@]+"${eff[@]}"} --allowedTools \"$CLAUDE_TOOLS\" --permission-mode acceptEdits --no-session-persistence --output-format json < $prompt"
+    echo "DRY: claude -p --agent $agent --model $model ${eff[@]+"${eff[@]}"} --allowedTools \"$CLAUDE_TOOLS\" --permission-mode acceptEdits --no-session-persistence --output-format stream-json --verbose < $prompt"
     printf 'HANDOFF: %s | STATE: DONE | VERDICT: %s | OWNER_CARDS: 0\n' "$DRY_HANDOFF" "${DRY_VERDICT:-APPROVED}" > "$last"; return 0
   fi
   set +e
+  : > "${logf%.log}.timeline"
   ( cd "$ROOT" && claude -p --agent "$agent" --model "$model" ${eff[@]+"${eff[@]}"} --allowedTools $CLAUDE_TOOLS \
-      --permission-mode acceptEdits --no-session-persistence --output-format json < "$prompt" > "$logf" 2>&1 )
+      --permission-mode acceptEdits --no-session-persistence --output-format stream-json --verbose \
+      < "$prompt" 2>&1 | stamp "${logf%.log}.timeline" > "$logf" )
   local rc=$?; set -e
   python3 - "$logf" "$last" <<'PY'
 import sys, json
 logf, last = sys.argv[1:]
 text = open(logf).read().strip()
-result = ''
-try:
-    data = json.loads(text.splitlines()[-1]) if text else {}
-    result = data.get('result') or ''
-except Exception:
+result = None
+for line in reversed(text.splitlines()):  # stream-json: the last "result" event
+    try:
+        data = json.loads(line)
+    except Exception:
+        continue
+    if isinstance(data, dict) and data.get('type') == 'result':
+        result = data.get('result') or ''
+        break
+if result is None:
     result = text
 open(last, 'w').write(result)
 PY

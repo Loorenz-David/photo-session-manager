@@ -13,7 +13,8 @@ and the intention chapters the findings cite.
 **Gate.** Tracker shows {{PHASE}} `IMPLEMENTED` with a fix note; the fix checkpoint SHA exists.
 
 **Delta-scoped.** 1. `git show --stat <fix checkpoint>`: only files the findings allowed changed;
-anything else is a finding. 2. Run suite, lint, typecheck once. 3. For each previous blocking
+anything else is a finding. 2. Run the test files the findings name, the tests of the crates the
+fix touched, clippy, fmt and typecheck once, one cargo command at a time (flow.md §4A). 3. For each previous blocking
 finding: resolved as its correction said, or a declared divergence that is sound? 4. Read the
 changed seam adversarially; settled areas are not re-verified, but anything seen wrong in passing
 is reported. Same rules as the first review: no mutation probes, no production edits, B1–B4 only.

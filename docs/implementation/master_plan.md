@@ -149,6 +149,7 @@ restated so no session has to infer them:
 | P67_form_values_defaults_and_batch_step | NOT_STARTED | 2026-11-11 | orchestrator | form shows Shopify values, defaults + saved values per item type, no auto product type, batch step memory (changelog 46) |
 | P68_setup_polish_address_password_shop | NOT_STARTED | 2026-11-11 | orchestrator | FTP address shown + changed warning, easy FTP password, shop domain normalised, camera login with Save settings (backlog 2026-11-11) |
 | P69_faster_export_and_publish | NOT_STARTED | 2026-11-11 | orchestrator | 8-bit masters, masters prepared when Ready, batch overlaps renders with uploads, per-step publish timing (changelog 47) |
+| P70_fast_test_suite | NOT_STARTED | 2026-11-11 | orchestrator | test suite in minutes: one integration test program, injectable timings in tests (production values unchanged), optimised deps in test builds; owner 2026-11-11 (flow v1.4) |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
@@ -173,7 +174,7 @@ P07[P03,P04] · P08[P06,P07] · P09[P06,P02] · P10[P09] · P11[P10,P08] · P12[
 P15[P14,P11] · P16[P15] · P17[P16] · P18[P17] · P19[P18] · P20[P19] · P21[P20] · P22[P21] · P23[P22] · P24[P23] · P25[P24] · P26[P25] ·
 P27[P26] · P28[P27] · P29[P28] · P30[P29] · P31[P28] · P32[P31] · P33[P32,P30] · P34[P33] · P35[P34] · P36[P35] · P37[P36] · P38[P37] ·
 P39[P37] · P40[P39] · P41[P40,P38] · P42[P41] · P43[P42] · P44[P43] · P45[P44] · P46[P45] · P47[P46] · P48[P46] · P49[P48] · P50[P47,P49] ·
-P51[P50] · P52[P51] · P51b[P51] · P53[P51b] · P54[P53] · P55[P54] · P56[P55] · P57[P56] · P58[P57] · P59[P58] · P60[P59] · P61[P60] · P62[P61] · P63[P62] · P64[P63] · P65[P63] · P66[P65] · P67[P66] · P68[P67] · P69[P68] (P53–P69: fixes from P52 run 1, orchestrator 2026-11-08; P52 run 2 after P55).
+P51[P50] · P52[P51] · P51b[P51] · P53[P51b] · P54[P53] · P55[P54] · P56[P55] · P57[P56] · P58[P57] · P59[P58] · P60[P59] · P61[P60] · P62[P61] · P63[P62] · P64[P63] · P65[P63] · P66[P65] · P67[P66] · P68[P67] · P69[P68] · P70[P69] (P53–P70: fixes from P52 run 1, orchestrator 2026-11-08; P52 run 2 after P55).
 - **Direct camera adapter (planner 2026-11-06; book 10E).** Order: the risky, hardware-free core first. P42 (the one-camera-layer-per-process
   rule, R-I18, which every later camera phase builds on; the sidecar supervisor over a fake sidecar binary; the new `CameraStatus`), P43 (the
   FTP receiver, MC-32), P44 (the capture ledger, MC-33, the single worker and the no-replace rename), P45 (the lab sidecar imported without any

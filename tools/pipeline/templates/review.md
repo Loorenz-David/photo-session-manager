@@ -17,7 +17,11 @@ Otherwise `STATE: BLOCKED`.
 **Do this, in order.**
 1. `git show --stat <checkpoint>`: the committed paths equal the declared files changed. Extra or
    missing paths are a finding.
-2. Run the suite, lint and typecheck once, with the master plan's commands. Red → B4.
+2. Run the checks once, with the master plan's commands, as the plan's **Review mode** says (if
+   it says nothing: this phase's test files, the test files of the crates and UI features the
+   diff touches, clippy, fmt, typecheck; the implementer's full-suite stamp stands unless missing
+   or contradicted). Red → B4. One cargo command at a time, never in the background, never piped
+   into `head` (flow.md §4A).
 3. For every criterion row: read the production code that makes it true, then its test. Decide
    two things: does the test observe the row's outcome at the row's boundary, and would it fail
    if the outcome were wrong? Judge by reading, and when in doubt by running that test with a

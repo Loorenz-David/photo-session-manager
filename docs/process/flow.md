@@ -120,7 +120,25 @@ usable before Shopify; each plan file carries frontmatter `phase`, `title`, `dif
 **Delegated choices** section, and a **Manual try-out** section the narrative is built from.
 Criteria rows name boundary, input, exact outcome and trace (M1–M7 or a mechanism contract).
 
+## 4A. Test runs (owner 2026-11-11: changes can't take this long)
+The full Rust suite takes over an hour on the dev Mac and the model's own time is under a tenth
+of a phase, so test runs are budgeted:
+- **Implementer:** while working, only the phase's test file, the changed module's unit tests and
+  the touched UI test files (`cargo check -p <crate>` for compile errors). The full closing gate
+  runs **once**, at the end; a failure there is fixed and only the failing files re-run.
+- **Fix:** the named test files and the touched crates/features; the full suite only when shared
+  code changed.
+- **Reviewer:** the plan's Review mode; by default no full suite (the implementer's stamp stands).
+- **Always:** one cargo command at a time, never in the background, never piped into `head`
+  (two cargo processes, or a cut pipe, leave one waiting on the build lock; the P66 review lost
+  most of an hour to this).
+- **Timings are logged.** The runner writes `<session>.timeline` next to each session log;
+  `tools/pipeline/timeline.sh <log>` prints wall-clock vs. command time and the slowest commands.
+
 ## Log
+- **2026-11-11 v1.4 (owner).** §4A test-run budget; the runner logs stream-json with timestamps
+  (`.timeline`) and `tools/pipeline/timeline.sh` reads them. P66 measured: implementer 4 h 20 min
+  wall-clock, 17 min model time; review 58 min, 5 min model time.
 - **2026-11-08 v1.3 (owner).** No Fable for now (the owner's Fable allowance is running out): the planner runs on Opus 5.5 (`run_phase.sh` planner session `--model opus`); plans and fix plans written by the orchestrator are written on Opus; no new plan may carry `implementer: fable` (owner standing rule: never Fable for implementation). The table in §2 still names Fable for the orchestrator and planner roles; read it as Opus until the owner says otherwise.
 - **2026-10-24 v1.2.** Orchestrator entry point (§2A), `archive` command, second fix by explicit authorisation.
 - **2026-10-24 v1.1.** §6A: sessions may trigger captures through Capture One; suite stays hardware-free.

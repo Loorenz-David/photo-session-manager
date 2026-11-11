@@ -22,8 +22,16 @@ exact names in the registry. Mechanism contracts from the intention are implemen
 
 **Tests (flow.md §4).** One behavioural test per criterion row at the boundary the row names,
 asserting the exact outcome. Unit tests only for the plan's **Core mechanisms** list. Nothing
-that asserts internals. Run the smallest relevant tests while working; the whole suite, lint and
-typecheck once at the end.
+that asserts internals.
+
+**Test runs (flow.md §4A; the full Rust suite takes over an hour on this Mac).** While working, run
+only this phase's test file (`cargo test -p psm-testkit --test <stem>`), the unit tests of the
+module you changed, and the UI test files you touched (`npx vitest run <files>`); use
+`cargo check -p <crate>` to see compile errors. Run the whole closing gate (suite, clippy, fmt,
+typecheck, `npm test`) **exactly once**, at the very end, one command after the other. If it shows
+a failure, fix it and re-run **only the failing test files**, not the whole suite. Never run two
+cargo commands at the same time, never in the background, never piped into `head` (a cut pipe
+can leave cargo holding the build lock).
 
 **Hardware (flow.md §6A).** You may trigger real captures through Capture One's `capture`
 command to check behaviour by hand; the test suite itself never requires the camera or Capture One.

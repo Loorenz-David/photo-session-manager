@@ -18,6 +18,12 @@ the test file a finding names. Notes in the backlog are not your task. If a corr
 implemented as written, implement the sound alternative and explain which finding and why under
 **Divergences**. Keep flow.md §4 for any test you add or change.
 
+**Test runs (flow.md §4A).** While fixing, run only the test files the findings name and the
+tests of the modules you changed. At the end run the test files of the crates and UI features
+your fix touched, clippy, fmt and typecheck once, one command after the other; the full suite
+only if the fix changed shared code (store, migrations, services used by every phase). Never two
+cargo commands at the same time, never in the background, never piped into `head`.
+
 **Close.** Suite, lint and typecheck green; tracker row → `IMPLEMENTED` (note: fix {{FIXN}});
 Review log entry; checkpoint commit of your perimeter only; handoff at `{{HANDOFF}}` with
 frontmatter `plan`, `role: fix`, `round: {{ROUND}}`, `state`, `date`, `actor` and sections:
