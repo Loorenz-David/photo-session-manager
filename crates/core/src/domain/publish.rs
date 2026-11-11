@@ -205,3 +205,36 @@ pub struct PublishActivity {
     /// Whether Cancel publish is offered (an active step, no cancel requested yet).
     pub can_cancel: bool,
 }
+
+/// Changelog 45 (P65): the stock a newly created item starts with: the platform location (its id
+/// and name as the platform lists them) and the quantity available there.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StockChoice {
+    pub location_id: String,
+    pub location_name: String,
+    pub quantity: i64,
+}
+
+/// One stock location of the platform (active locations only).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StockLocation {
+    pub id: String,
+    pub name: String,
+}
+
+/// The platform's stock locations, or the sentence saying why they cannot be read (the platform
+/// app lacks the permission); never an error the photographer has to act on to publish.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StockLocations {
+    pub locations: Vec<StockLocation>,
+    pub missing_access: Option<String>,
+}
+
+/// What an item created with a stock choice ended up with on the platform.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StockOutcome {
+    /// Tracked with the quantity at the location; `verified` when the read-back matched.
+    Tracked { verified: bool },
+    /// Created without tracking (the platform refused the stock fields); `reason` says why.
+    Untracked { reason: String },
+}

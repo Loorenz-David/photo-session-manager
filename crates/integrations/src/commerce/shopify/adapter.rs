@@ -17,7 +17,8 @@ use psm_core::{
     domain::attribute::{AttributeGroup, CoreType, Definition},
     domain::publish::{
         ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
-        RemoteMedia, RemoteMediaStatus, StagedTarget, WriteValue,
+        RemoteMedia, RemoteMediaStatus, StagedTarget, StockChoice, StockLocation, StockLocations,
+        StockOutcome, WriteValue,
     },
     mechanisms::{upload_name, values::canonical_decimal},
     ports::{
@@ -68,6 +69,58 @@ impl From<&psm_infra::settings_file::IntegrationSettings> for ShopifyConfig {
             condition_photos_key: s.condition_photos_key.clone(),
         }
     }
+}
+
+/// P65 (changelog 45): shown in the item form and Settings when the shop's app cannot read
+/// locations or write inventory.
+pub const STOCK_ACCESS_MISSING: &str =
+    "Your Shopify app needs the read_locations and write_inventory permissions";
+
+/// Whether a Shopify error says the app lacks an access scope (GraphQL `ACCESS_DENIED`).
+fn access_denied(error: &Error) -> bool {
+    let text = error.to_string().to_ascii_lowercase();
+    text.contains("access denied")
+        || text.contains("access_denied")
+        || text.contains("read_locations")
+        || text.contains("write_inventory")
+        || text.contains("read_inventory")
+}
+
+/// A `ProductSetInput` for a new draft product with one default variant.
+fn product_set_input(
+    sku: &str,
+    barcode: Option<&str>,
+    title: &str,
+    item_type: &str,
+    stock: Option<&StockChoice>,
+) -> Json {
+    let mut variant = json!({
+        "optionValues": [{ "optionName": "Title", "name": "Default Title" }],
+        "sku": sku,
+    });
+    if let Some(barcode) = barcode {
+        variant["barcodes"] = json!([{ "value": barcode }]);
+    }
+    if let Some(stock) = stock {
+        // P65: tracked, with the chosen quantity available at the chosen location, in the same
+        // `productSet` (ProductVariantSetInput.inventoryItem / .inventoryQuantities).
+        variant["inventoryItem"] = json!({ "tracked": true });
+        variant["inventoryQuantities"] = json!([{
+            "locationId": stock.location_id,
+            "name": "available",
+            "quantity": stock.quantity,
+        }]);
+    }
+    let mut input = json!({
+        "title": title,
+        "status": "DRAFT",
+        "productOptions": [{ "name": "Title", "values": [{ "name": "Default Title" }] }],
+        "variants": [variant],
+    });
+    if !item_type.is_empty() {
+        input["productType"] = json!(item_type);
+    }
+    input
 }
 
 /// Polling and retry pacing (L19). Tests use 0 ms.
@@ -595,22 +648,7 @@ impl CommerceAdapter for ShopifyAdapter {
         title: &str,
         item_type: &str,
     ) -> Result<String> {
-        let mut variant = json!({
-            "optionValues": [{ "optionName": "Title", "name": "Default Title" }],
-            "sku": sku,
-        });
-        if let Some(barcode) = barcode {
-            variant["barcodes"] = json!([{ "value": barcode }]);
-        }
-        let mut input = json!({
-            "title": title,
-            "status": "DRAFT",
-            "productOptions": [{ "name": "Title", "values": [{ "name": "Default Title" }] }],
-            "variants": [variant],
-        });
-        if !item_type.is_empty() {
-            input["productType"] = json!(item_type);
-        }
+        let input = product_set_input(sku, barcode, title, item_type, None);
         let data = self.mutate(
             run,
             "item_create",
@@ -625,6 +663,107 @@ impl CommerceAdapter for ShopifyAdapter {
             .as_str()
             .map(str::to_owned)
             .ok_or_else(|| errors::provider("item_create", "no product id in the reply"))
+    }
+
+    fn stock_locations(&self) -> Result<StockLocations> {
+        let data = match self.call(graphql::LOCATIONS, json!({})) {
+            Ok(data) => data,
+            Err(error) if access_denied(&error) => {
+                tracing::warn!(%error, "shop locations not readable");
+                return Ok(StockLocations {
+                    locations: Vec::new(),
+                    missing_access: Some(STOCK_ACCESS_MISSING.into()),
+                });
+            }
+            Err(error) => return Err(error),
+        };
+        let nodes = data["locations"]["nodes"]
+            .as_array()
+            .ok_or_else(|| errors::provider("locations", "no locations in the reply"))?;
+        Ok(StockLocations {
+            locations: nodes
+                .iter()
+                .filter(|node| node["isActive"].as_bool() != Some(false))
+                .filter_map(|node| {
+                    Some(StockLocation {
+                        id: node["id"].as_str()?.to_owned(),
+                        name: node["name"].as_str()?.to_owned(),
+                    })
+                })
+                .collect(),
+            missing_access: None,
+        })
+    }
+
+    fn item_create_stocked(
+        &self,
+        run: &ConfirmedRun,
+        sku: &str,
+        barcode: Option<&str>,
+        title: &str,
+        item_type: &str,
+        stock: &StockChoice,
+    ) -> Result<(String, StockOutcome)> {
+        let input = product_set_input(sku, barcode, title, item_type, Some(stock));
+        let refused = match self.mutate(
+            run,
+            "item_create",
+            graphql::PRODUCT_SET,
+            json!({ "input": input }),
+        ) {
+            Ok(data) => {
+                let payload = &data["productSet"];
+                if let Some(id) = payload["product"]["id"].as_str() {
+                    let id = id.to_owned();
+                    if let Some(message) = errors::user_errors(payload) {
+                        return Ok((id, StockOutcome::Untracked { reason: message }));
+                    }
+                    let verified = match self.call(
+                        graphql::INVENTORY_READBACK,
+                        json!({ "id": id, "locationId": stock.location_id }),
+                    ) {
+                        Ok(read) => {
+                            let item = &read["product"]["variants"]["nodes"][0]["inventoryItem"];
+                            let available = item["inventoryLevel"]["quantities"]
+                                .as_array()
+                                .and_then(|q| {
+                                    q.iter()
+                                        .find(|q| q["name"].as_str() == Some("available"))
+                                        .and_then(|q| q["quantity"].as_i64())
+                                });
+                            item["tracked"].as_bool() == Some(true)
+                                && available == Some(stock.quantity)
+                        }
+                        Err(error) => {
+                            tracing::warn!(%error, "stock read-back failed");
+                            false
+                        }
+                    };
+                    if !verified {
+                        tracing::warn!(product = id, "stock read-back does not match the create");
+                    }
+                    return Ok((id, StockOutcome::Tracked { verified }));
+                }
+                // Not created (user errors): the stock fields are dropped and it is sent again.
+                errors::user_errors(payload).unwrap_or_else(|| "no product in the reply".into())
+            }
+            // A GraphQL error (an access scope missing): nothing was executed.
+            Err(error) if access_denied(&error) || error.to_string().contains("shopify graphql:") => {
+                error.to_string()
+            }
+            Err(error) => return Err(error),
+        };
+        tracing::warn!(
+            reason = refused,
+            "product create with stock refused; creating it without stock tracking"
+        );
+        let id = self.item_create(run, sku, barcode, title, item_type)?;
+        let reason = if access_denied(&Error::Provider(refused.clone())) {
+            STOCK_ACCESS_MISSING.to_string()
+        } else {
+            refused
+        };
+        Ok((id, StockOutcome::Untracked { reason }))
     }
 
     fn item_set_identity(

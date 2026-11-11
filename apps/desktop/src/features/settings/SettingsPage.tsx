@@ -11,6 +11,7 @@ import { goTo, setLeaveGuard } from '@/lib/routes';
 import { listStyles, type EditorStyles } from '@/services/styles';
 import { CameraSection } from './CameraSection';
 import { StorageSection } from './StorageSection';
+import { StockSection } from './StockSection';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
@@ -212,6 +213,7 @@ export function SettingsPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {saved?.integration && <StockSection />}
     <StorageSection />
   </main></>;
 }

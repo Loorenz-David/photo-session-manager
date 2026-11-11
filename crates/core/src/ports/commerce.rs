@@ -6,7 +6,7 @@ use crate::Result;
 use crate::domain::attribute::Definition;
 use crate::domain::publish::{
     ConfirmedRun, DefinitionLink, MediaReadback, RemoteIdentity, RemoteItem, RemoteMedia,
-    StagedTarget, WriteValue,
+    StagedTarget, StockChoice, StockLocations, StockOutcome, WriteValue,
 };
 use serde_json::Value as Json;
 
@@ -48,6 +48,36 @@ pub trait CommerceAdapter: Send + Sync {
         title: &str,
         item_type: &str,
     ) -> Result<String>;
+    /// Changelog 45 (P65): the platform's active stock locations, read-only. A platform app
+    /// without the permission answers `missing_access` (never an error).
+    fn stock_locations(&self) -> Result<StockLocations> {
+        Ok(StockLocations::default())
+    }
+    /// Changelog 45 (P65): creates the draft item like `item_create`, with stock tracking on and
+    /// `stock.quantity` available at `stock.location_id`, in the same request, then reads it back.
+    /// A platform that refuses the stock fields gets the item created untracked (never a failed
+    /// create because of stock).
+    #[allow(clippy::too_many_arguments)]
+    fn item_create_stocked(
+        &self,
+        run: &ConfirmedRun,
+        sku: &str,
+        barcode: Option<&str>,
+        title: &str,
+        item_type: &str,
+        stock: &StockChoice,
+    ) -> Result<(String, StockOutcome)> {
+        let _ = stock;
+        self.item_create(run, sku, barcode, title, item_type)
+            .map(|id| {
+                (
+                    id,
+                    StockOutcome::Untracked {
+                        reason: "stock is not supported by this platform".into(),
+                    },
+                )
+            })
+    }
     /// Writes only the identity fields that differ (a `None` barcode is never sent) and returns
     /// the read-back (05B MC-22).
     fn item_set_identity(
@@ -177,4 +207,11 @@ pub trait CommerceAdapter: Send + Sync {
     ) -> Result<()>;
     /// Sends exactly `tags` (the three-way merge is the caller's, P14).
     fn update_tags(&self, run: &ConfirmedRun, external_id: &str, tags: &[String]) -> Result<()>;
+}
+
+/// Changelog 45 (P65): the remembered stock default for new items (Settings → Shopify): the
+/// location and quantity of the last successful create.
+pub trait StockDefaults: Send + Sync {
+    fn get(&self) -> Result<Option<StockChoice>>;
+    fn remember(&self, choice: &StockChoice) -> Result<()>;
 }

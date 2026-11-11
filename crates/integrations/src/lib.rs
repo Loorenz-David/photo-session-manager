@@ -179,7 +179,13 @@ pub enum PreparedSettings {
 
 impl SettingsSetContext {
     pub fn prepare(self, patch: &serde_json::Value) -> Result<PreparedSettings> {
-        let previous = settings_value(&self.settings)?;
+        // P65: the stock default is written by the publish (after a create) and by its own
+        // command; the file holds its current value.
+        let mut current = self.settings.clone();
+        if let Ok(on_disk) = Settings::open(&self.paths) {
+            current.commerce = on_disk.commerce;
+        }
+        let previous = settings_value(&current)?;
         let next = SettingsService::set(&previous, patch)?;
         let settings: Settings = serde_json::from_value(next.clone())
             .map_err(|e| psm_core::Error::InvalidValue(e.to_string()))?;
@@ -588,13 +594,16 @@ impl App {
             },
         ));
         let publish = commerce.as_ref().map(|adapter| {
-            Arc::new(PublishService::new(
+            let service = Arc::new(PublishService::new(
                 store.clone(),
                 adapter.clone(),
                 export.clone(),
                 clock.clone(),
                 events.clone(),
-            ))
+            ));
+            // Changelog 45 (P65): `commerce.inventory_default` in settings.json.
+            service.set_stock_defaults(Arc::new(SettingsStockDefaults::new(paths.clone())));
+            service
         });
         let mut previews = PreviewService::new(
             store.clone(),
@@ -1234,7 +1243,52 @@ struct PublishJob {
     paths: AppPaths,
     health: Arc<HealthService>,
 }
+
+/// Changelog 45 (P65): the stock default for new items, `commerce.inventory_default` in
+/// settings.json (read from the file each time; written in place, other keys unchanged).
+pub struct SettingsStockDefaults {
+    paths: AppPaths,
+    write: std::sync::Mutex<()>,
+}
+impl SettingsStockDefaults {
+    pub fn new(paths: AppPaths) -> Self {
+        Self {
+            paths,
+            write: std::sync::Mutex::new(()),
+        }
+    }
+}
+impl psm_core::ports::commerce::StockDefaults for SettingsStockDefaults {
+    fn get(&self) -> Result<Option<psm_core::domain::publish::StockChoice>> {
+        Ok(Settings::open(&self.paths)?
+            .commerce
+            .inventory_default
+            .map(|d| psm_core::domain::publish::StockChoice {
+                location_id: d.location_id,
+                location_name: d.location_name,
+                quantity: d.quantity,
+            }))
+    }
+    fn remember(&self, choice: &psm_core::domain::publish::StockChoice) -> Result<()> {
+        let _write = self
+            .write
+            .lock()
+            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+        let mut settings = Settings::open(&self.paths)?;
+        settings.commerce.inventory_default = Some(psm_infra::settings_file::InventoryDefault {
+            location_id: choice.location_id.clone(),
+            location_name: choice.location_name.clone(),
+            quantity: choice.quantity,
+        });
+        Settings::set(&self.paths, &settings)
+    }
+}
 impl JobHandler for PublishJob {
+    /// Changelog 45 (P65): a publish waiting for its export (or for Capture One) is looked at
+    /// again at least every 15 s.
+    fn max_backoff_ms(&self) -> Option<i64> {
+        Some(15_000)
+    }
     fn run(&self, job: &Job, _: i64) -> Result<()> {
         let id = job
             .target

@@ -40,6 +40,10 @@ pub trait EditingProvider: Send + Sync {
     fn inspect_document(&self) -> Result<DocumentState>;
     fn set_capture_folder(&self, target: &str) -> Result<()>;
     fn set_current_collection(&self, folder: &str) -> Result<()>;
+    /// Changelog 45 (P65): asks the editor to look at `folder` for new files now.
+    fn sync_folder(&self, _folder: &str) -> Result<()> {
+        Ok(())
+    }
     fn apply_style(&self, raw: &str, name: &str) -> Result<StyleOutcome>;
     /// The styles the editor lists (P63). Never launches the editor: `EditorLaunchDeferred` when it
     /// is not running.

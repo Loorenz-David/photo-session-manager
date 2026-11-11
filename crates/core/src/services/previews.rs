@@ -39,6 +39,10 @@ pub trait ExportStaging: Send + Sync {
     fn master_ready(&self, render: &RenderCompletion, output: &Path) -> Result<()>;
     /// A master render that will not complete (final timeout, MC-16).
     fn failed(&self, tracking_job_id: i64, reason: &str) -> Result<()>;
+    /// Changelog 45 (P65): retries the master renders waiting for the editor.
+    fn tick(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 type BeforeRender = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
@@ -516,6 +520,9 @@ impl PreviewService {
     pub fn tick(&self) -> Result<()> {
         if self.held() {
             return Ok(());
+        }
+        if let Some(callback) = &self.export_staging {
+            callback.tick()?;
         }
         for (id, generation) in self
             .editing

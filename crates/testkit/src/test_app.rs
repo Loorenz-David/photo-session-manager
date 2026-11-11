@@ -430,6 +430,7 @@ impl TestApp {
             state.delay_document_info_ms = fake_document_info_delay_ms;
         }
         let clock = Arc::new(ManualClock::new(clock_start));
+        fake.set_clock(clock.clone());
         let secrets = Arc::new(FakeSecrets::default());
         if !secret_cache_enabled {
             secrets.disable_cache();

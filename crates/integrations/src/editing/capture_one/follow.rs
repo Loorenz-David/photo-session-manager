@@ -16,6 +16,15 @@ use std::{
 
 pub const VARIANT_WAIT_POLL_MS: u64 = 1_000;
 pub const VARIANT_WAIT_MAX_MS: u64 = 15_000;
+/// Changelog 45 (P65): at most one sync of a folder per this interval; arrivals meanwhile are
+/// served by one more sync after it.
+pub const SYNC_MIN_INTERVAL_MS: u64 = 1_000;
+
+#[derive(Default)]
+struct SyncState {
+    last: Option<Instant>,
+    pending: bool,
+}
 
 struct WaitState {
     since: Instant,
@@ -35,6 +44,8 @@ pub struct CaptureOneFollow {
     style_lock: Mutex<()>,
     /// Whether Capture One ran at the last tick (P60: its (re)opening is noticed here).
     was_running: Mutex<Option<bool>>,
+    /// Changelog 45 (P65): the folders whose collection Capture One is asked to synchronise.
+    syncs: Mutex<HashMap<PathBuf, SyncState>>,
 }
 impl CaptureOneFollow {
     #[allow(clippy::too_many_arguments)]
@@ -59,6 +70,58 @@ impl CaptureOneFollow {
             waiting: Mutex::new(HashMap::new()),
             style_lock: Mutex::new(()),
             was_running: Mutex::new(None),
+            syncs: Mutex::new(HashMap::new()),
+        }
+    }
+    /// Changelog 45 (P65): a photo was filed into `folder`; its collection is synchronised.
+    fn request_sync(&self, folder: &Path) {
+        if let Ok(mut syncs) = self.syncs.lock() {
+            syncs.entry(folder.to_path_buf()).or_default().pending = true;
+        }
+    }
+    /// Sends the syncs that are due: at most one per folder per `SYNC_MIN_INTERVAL_MS`. A sync
+    /// refused because "Take the camera back" holds Capture One stays pending and is sent at the
+    /// first tick after it.
+    fn run_syncs(&self) {
+        let now = self.clock.mono();
+        let due: Vec<PathBuf> = match self.syncs.lock() {
+            Ok(syncs) => syncs
+                .iter()
+                .filter(|(_, state)| {
+                    state.pending
+                        && state.last.is_none_or(|last| {
+                            now.saturating_duration_since(last)
+                                >= Duration::from_millis(SYNC_MIN_INTERVAL_MS)
+                        })
+                })
+                .map(|(folder, _)| folder.clone())
+                .collect(),
+            Err(_) => return,
+        };
+        for folder in due {
+            let started = Instant::now();
+            let result = self.editing.sync_folder(&folder.to_string_lossy());
+            let Ok(mut syncs) = self.syncs.lock() else {
+                return;
+            };
+            let state = syncs.entry(folder.clone()).or_default();
+            match result {
+                Ok(()) => {
+                    state.pending = false;
+                    state.last = Some(now);
+                    tracing::info!(
+                        folder = %folder.display(),
+                        ms = started.elapsed().as_millis() as u64,
+                        "capture_one.sync"
+                    );
+                }
+                Err(psm_core::Error::EditorLaunchDeferred) => {}
+                Err(error) => {
+                    state.pending = false;
+                    state.last = Some(now);
+                    tracing::warn!(%error, folder = %folder.display(), "capture_one.sync failed");
+                }
+            }
         }
     }
     /// From the process list, never a script (P63 #22: the follower asks on every tick, also while
@@ -139,6 +202,7 @@ impl CaptureOneFollow {
         if !running {
             return Ok(());
         }
+        self.run_syncs();
         let now = self.clock.mono();
         let due: Vec<_> = self
             .waiting
@@ -161,6 +225,14 @@ impl CaptureOneFollow {
                 continue;
             };
             state.last_poll = now;
+            if matches!(found, Ok(true)) {
+                // Changelog 45 (P65): arrival → Capture One lists the photo.
+                tracing::info!(
+                    raw,
+                    after_ms = now.saturating_duration_since(state.since).as_millis() as u64,
+                    "capture_one.variant_seen"
+                );
+            }
             let expired = now.saturating_duration_since(state.since)
                 >= Duration::from_millis(VARIANT_WAIT_MAX_MS);
             if expired {
@@ -212,6 +284,7 @@ impl ArrivalFollow for CaptureOneFollow {
                 },
             );
         }
+        self.request_sync(folder);
         if !self.running() {
             return;
         }
@@ -220,5 +293,6 @@ impl ArrivalFollow for CaptureOneFollow {
             self.health
                 .set("editor_not_following", EDITOR_NOT_FOLLOWING);
         }
+        self.run_syncs();
     }
 }

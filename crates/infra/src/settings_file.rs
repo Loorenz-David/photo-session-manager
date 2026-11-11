@@ -32,6 +32,22 @@ pub struct Settings {
     pub integration: Option<serde_json::Value>,
     /// 10F §4: the minimum free space (Settings → Storage; default 20 GB).
     pub storage: StorageSettings,
+    /// Changelog 45 (P65): `commerce.inventory_default` — the stock a new item starts with.
+    pub commerce: CommerceSettings,
+}
+
+/// Changelog 45 (P65): `{"inventory_default": null | {"location_id", "location_name", "quantity"}}`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CommerceSettings {
+    pub inventory_default: Option<InventoryDefault>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InventoryDefault {
+    pub location_id: String,
+    pub location_name: String,
+    pub quantity: i64,
 }
 
 fn deserialize_preview_delay<'de, D: serde::Deserializer<'de>>(
@@ -66,6 +82,7 @@ impl Default for Settings {
             sku_prefix: None,
             integration: None,
             storage: StorageSettings::default(),
+            commerce: CommerceSettings::default(),
         }
     }
 }

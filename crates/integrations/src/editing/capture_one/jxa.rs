@@ -19,7 +19,7 @@ const PROCESS_NAME: &str = "Capture One";
 /// `is_running` answers from one process listing this long (the follower asks on every tick).
 const RUNNING_CACHE: Duration = Duration::from_millis(200);
 
-const SCRIPTS: [(&str, &str); 23] = [
+const SCRIPTS: [(&str, &str); 24] = [
     ("list_styles", include_str!("jxa/list_styles.js")),
     ("editor_info", include_str!("jxa/editor_info.js")),
     ("make_document", include_str!("jxa/make_document.js")),
@@ -38,6 +38,7 @@ const SCRIPTS: [(&str, &str); 23] = [
         include_str!("jxa/set_current_collection.js"),
     ),
     ("apply_style", include_str!("jxa/apply_style.js")),
+    ("sync_folder", include_str!("jxa/sync_folder.js")),
     ("get_captures", include_str!("jxa/get_captures.js")),
     ("set_hook", include_str!("jxa/set_hook.js")),
     ("get_hook", include_str!("jxa/get_hook.js")),
@@ -247,6 +248,9 @@ impl CaptureOneScripting for JxaScripting {
     }
     fn set_current_collection(&self, id: &str, folder: &str) -> Result<()> {
         self.call("set_current_collection", &[id, folder])
+    }
+    fn sync_folder(&self, id: &str, folder: &str) -> Result<()> {
+        self.call("sync_folder", &[id, folder])
     }
     fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool> {
         let (raw, folder) = self.variant_location(variant)?;

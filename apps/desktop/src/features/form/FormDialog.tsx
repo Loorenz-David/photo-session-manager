@@ -27,6 +27,7 @@ import { MediaColumn } from './MediaColumn';
 import { MetafieldInput } from './MetafieldInput';
 import { ResearchPanel } from './ResearchPanel';
 import { STEP_LABEL, StepTabs } from './StepTabs';
+import { StockFields } from './StockFields';
 import { useFormState, type SaveState } from './useFormState';
 
 const STEPS: Group[] = ['details', 'condition', 'product'];
@@ -226,6 +227,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   onSeeResearch={key => setResearch({ open: true, focus: key })}
                 />
               ))}
+              {form && step === 'product' && <StockFields itemId={item.id} />}
             </section>
             {research.open && (
               <ResearchPanel

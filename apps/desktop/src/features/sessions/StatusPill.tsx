@@ -28,6 +28,15 @@ export function StatusPill({ label, onRetry, onPublish, sessionId }: StatusPillP
           </div>
         </PublishActivityPopover>
       );
+    case 'waiting_for_editor':
+      // Changelog 45: the publish is queued until Capture One has loaded its photos (not a failure).
+      return (
+        <PublishActivityPopover sessionId={sessionId}>
+          <div className="status-cell">
+            <span className="pill pill-progress">Waiting for Capture One…</span>
+          </div>
+        </PublishActivityPopover>
+      );
     case 'publish_cancelled':
       // Changelog 44: like a failure but not an error; publishing again continues from what was uploaded.
       return (

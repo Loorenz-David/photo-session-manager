@@ -4,7 +4,23 @@ use psm_integrations::editing::capture_one::scripting::{
     CaptureOneScripting, CollectionInfo, DocumentInfo, EditorInfo, RecipeEnsure, RecipeProps,
     StyleEnsure, StyleList,
 };
-use std::{collections::HashMap, fs, path::Path, sync::Mutex};
+use std::{
+    collections::HashMap,
+    fs,
+    path::Path,
+    sync::{Arc, Mutex},
+};
+
+/// P65: a photo the app will file that Capture One lists only after `synchronizing = true` was set
+/// on its folder (then after `sync_delay_ms`), or after `unsynced_listing_ms` on its own.
+#[derive(Debug, Clone)]
+pub struct PendingImage {
+    pub variant: String,
+    /// The RAW's path once the fake has seen it (a sync of its folder or a lookup).
+    pub raw: Option<String>,
+    pub first_seen_ms: Option<i64>,
+    pub synced_ms: Option<i64>,
+}
 
 #[derive(Clone)]
 pub struct FakeVariant {
@@ -84,6 +100,13 @@ pub struct FakeState {
     pub user_styles: Vec<String>,
     /// P63: `list_styles` fails (the list cannot be read).
     pub fail_list_styles: bool,
+    /// P65: file name → a photo Capture One has not listed yet (see `PendingImage`).
+    pub pending_images: HashMap<String, PendingImage>,
+    /// P65: after a sync, a pending photo is listed this much later (default 3 s).
+    pub sync_delay_ms: i64,
+    /// P65: without a sync, a pending photo is listed this long after it was first seen (60 s,
+    /// the dev Mac's folder check on 2026-11-11 took 17–80 s).
+    pub unsynced_listing_ms: i64,
 }
 /// One look at whether Capture One runs (`editor_info` or `is_running`): advances a quit or a
 /// launch in progress, as the dev Mac's Capture One does between two looks.
@@ -113,6 +136,8 @@ fn poll_running(s: &mut FakeState) {
 }
 pub struct FakeCaptureOneScripting {
     pub state: Mutex<FakeState>,
+    /// P65: the test's clock (pending photos are listed by its time); unset = time 0.
+    clock: Mutex<Option<Arc<dyn psm_core::ports::clock::Clock>>>,
 }
 impl FakeCaptureOneScripting {
     pub fn get_color_tag(&self, variant: &str) -> Result<i32> {
@@ -201,7 +226,76 @@ impl FakeCaptureOneScripting {
                 apple_events_launch: false,
                 user_styles: Vec::new(),
                 fail_list_styles: false,
+                pending_images: HashMap::new(),
+                sync_delay_ms: 3_000,
+                unsynced_listing_ms: 60_000,
             }),
+            clock: Mutex::new(None),
+        }
+    }
+    /// P65: the clock pending photos are listed by.
+    pub fn set_clock(&self, clock: Arc<dyn psm_core::ports::clock::Clock>) {
+        *self.clock.lock().unwrap() = Some(clock);
+    }
+    fn now_ms(&self) -> i64 {
+        self.clock
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map_or(0, |clock| clock.now_ms())
+    }
+    /// P65: the photo named `file_name` (once filed) is listed as variant `variant` only after a
+    /// sync of its folder plus `sync_delay_ms`, else `unsynced_listing_ms` after it is first seen.
+    pub fn list_after_sync(&self, file_name: &str, variant: &str) {
+        self.state.lock().unwrap().pending_images.insert(
+            file_name.into(),
+            PendingImage {
+                variant: variant.into(),
+                raw: None,
+                first_seen_ms: None,
+                synced_ms: None,
+            },
+        );
+    }
+    /// Lists the pending photos whose time has come (as Capture One's folder check would).
+    fn list_pending(&self, s: &mut FakeState, seen_raw: Option<&str>) {
+        let now = self.now_ms();
+        if let Some(raw) = seen_raw
+            && let Some(name) = Path::new(raw).file_name().map(|n| n.to_string_lossy().into_owned())
+            && let Some(pending) = s.pending_images.get_mut(&name)
+        {
+            pending.raw.get_or_insert_with(|| raw.to_string());
+            pending.first_seen_ms.get_or_insert(now);
+        }
+        let (delay, unsynced) = (s.sync_delay_ms, s.unsynced_listing_ms);
+        let ready: Vec<String> = s
+            .pending_images
+            .iter()
+            .filter(|(_, p)| {
+                p.raw.is_some()
+                    && (p.synced_ms.is_some_and(|at| now >= at + delay)
+                        || p.first_seen_ms.is_some_and(|at| now >= at + unsynced))
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        for name in ready {
+            let pending = s.pending_images.remove(&name).unwrap();
+            let raw = pending.raw.unwrap();
+            let folder = Path::new(&raw)
+                .parent()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            s.ops.push(format!("listed:{raw}"));
+            s.image_collections.insert(raw.clone(), folder);
+            s.images.insert(
+                raw,
+                vec![FakeVariant {
+                    id: pending.variant,
+                    tag: 3,
+                    geometry: Default::default(),
+                    styles: Vec::new(),
+                }],
+            );
         }
     }
     /// The output file Capture One writes for render job `job`: a JPEG (SOI … EOI) whose bytes
@@ -639,6 +733,28 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         }
         Ok(())
     }
+    /// P65: `synchronizing = true` on the folder's collection: pending photos filed in it are
+    /// listed `sync_delay_ms` later. Op `sync_folder:<folder>`.
+    fn sync_folder(&self, id: &str, folder: &str) -> Result<()> {
+        self.check_id(id)?;
+        let now = self.now_ms();
+        let mut s = self.state.lock().unwrap();
+        if !s.running {
+            return Err(Error::Provider("Capture One is not running".into()));
+        }
+        s.ops.push(format!("sync_folder:{folder}"));
+        for (name, pending) in s.pending_images.iter_mut() {
+            let raw = Path::new(folder).join(name);
+            if raw.is_file() {
+                pending
+                    .raw
+                    .get_or_insert_with(|| raw.to_string_lossy().into_owned());
+                pending.first_seen_ms.get_or_insert(now);
+                pending.synced_ms = Some(now);
+            }
+        }
+        Ok(())
+    }
     fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool> {
         self.check_id(id)?;
         let mut s = self.state.lock().unwrap();
@@ -722,6 +838,7 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         self.check_id(id)?;
         let mut s = self.state.lock().unwrap();
         s.ops.push(format!("find_image:{raw}"));
+        self.list_pending(&mut s, Some(raw));
         if s.image_collections.get(raw) != Some(&s.current_collection) {
             return Ok(None);
         }
@@ -734,6 +851,7 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         self.check_id(id)?;
         let mut s = self.state.lock().unwrap();
         s.ops.push(format!("find_image_in_folder:{raw}"));
+        self.list_pending(&mut s, Some(raw));
         let images = if Path::new(raw)
             .parent()
             .is_some_and(|parent| parent == Path::new(folder))

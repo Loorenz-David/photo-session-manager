@@ -80,6 +80,8 @@ pub enum RowLabel {
     InProgress(i64),
     /// P62 (10F §3): published, local files cleared, photos shown from Shopify.
     Archived,
+    /// Changelog 45 (P65): a publish waits for Capture One to load its photos.
+    WaitingForEditor,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -140,4 +142,6 @@ pub struct SessionListRecord {
     pub uploaded: i64,
     pub total: i64,
     pub publish: Option<LatestPublish>,
+    /// Changelog 45 (P65): the session's export run waits for the editor.
+    pub waiting_for_editor: bool,
 }

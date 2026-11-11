@@ -17,8 +17,14 @@ use crate::{
         photo::{Classification, Integrity},
     },
     events::{AppEvent, ExportState},
-    mechanisms::naming::{
-        ExportGroup, export_file_name, folder_key, item_json, output_names, review_label,
+    mechanisms::{
+        backoff::{
+            EDITOR_WAIT_EXPIRED, EDITOR_WAIT_MAX_MS, EditorWait, editor_wait,
+            editor_wait_backoff_ms, editor_wait_expired,
+        },
+        naming::{
+            ExportGroup, export_file_name, folder_key, item_json, output_names, review_label,
+        },
     },
     ports::{
         clock::Clock,
@@ -106,6 +112,8 @@ struct Run {
     attributes: BTreeMap<String, serde_json::Value>,
     targets: Vec<Target>,
     defer_swap: bool,
+    /// Changelog 45 (P65): last reported "waiting for Capture One" state of the run.
+    waiting: bool,
 }
 
 impl Run {
@@ -117,12 +125,28 @@ impl Run {
     }
 }
 
+/// Changelog 45 (P65): a master render the editor could not take yet (it has not loaded the photo,
+/// is busy, or is closed). Retried with back-off; the runs needing it fail only after
+/// `EDITOR_WAIT_MAX_MS`.
+#[derive(Debug, Clone)]
+struct Wait {
+    since_ms: i64,
+    next_ms: i64,
+    attempts: u32,
+    reason: EditorWait,
+    run_id: i64,
+    photo_id: i64,
+    generation: i64,
+}
+
 #[derive(Default)]
 struct State {
     runs: HashMap<i64, Run>,
     /// RAW → tracking job id of the master render in flight (one `process` per RAW; every run
     /// that needs it waits for it).
     masters: HashMap<String, i64>,
+    /// RAW → its master render waiting for the editor (changelog 45).
+    waits: HashMap<String, Wait>,
 }
 
 pub struct ExportService {
@@ -206,6 +230,7 @@ impl ExportService {
                     self.finalize(&state, run);
                 } else {
                     state.runs.insert(id, run);
+                    self.refresh_waiting(&mut state);
                 }
                 Ok(ExportRunId(id))
             }
@@ -250,8 +275,157 @@ impl ExportService {
             self.finalize(&state, run);
         } else {
             state.runs.insert(id, run);
+            self.refresh_waiting(&mut state);
         }
         Ok(ExportRunId(id))
+    }
+
+    /// Changelog 45 (P65): whether the run waits for Capture One (a master render it needs could
+    /// not be taken yet and is retried).
+    pub fn waiting(&self, run_id: i64) -> bool {
+        self.state()
+            .is_ok_and(|state| state.runs.get(&run_id).is_some_and(|run| run.waiting))
+    }
+
+    /// Ends a run in flight without a result (a cancelled publish, changelog 44/45): its staging
+    /// folder is deleted and the run recorded as `cancelled`; nothing else changes.
+    pub fn cancel_run(&self, run_id: i64) -> Result<()> {
+        let mut state = self.state()?;
+        if let Some(run) = state.runs.remove(&run_id) {
+            self.abandon(&run, "cancelled");
+        }
+        Ok(())
+    }
+
+    /// Reports each run whose waiting state changed: the run row's mark (the session row reads
+    /// it) and an `export_progress` event.
+    fn refresh_waiting(&self, state: &mut State) {
+        let waits: HashSet<String> = state.waits.keys().cloned().collect();
+        for run in state.runs.values_mut() {
+            let waiting = run
+                .targets
+                .iter()
+                .any(|t| t.progress == Progress::WaitingMaster && waits.contains(&t.raw));
+            if waiting == run.waiting {
+                continue;
+            }
+            run.waiting = waiting;
+            if let Err(error) = self.store.set_export_waiting(run.id, waiting) {
+                tracing::warn!(%error, run = run.id, "export waiting state not recorded");
+            }
+            let done = run.done();
+            let total = run.targets.len();
+            self.events.emit(AppEvent::ExportProgress {
+                session_id: run.session_id,
+                done,
+                total,
+                state: if waiting {
+                    ExportState::Waiting
+                } else {
+                    ExportState::Running
+                },
+            });
+        }
+    }
+
+    /// Records that the master render of `raw` waits for the editor (`reason`), keeping the
+    /// start of a wait already under way.
+    fn begin_wait(&self, state: &mut State, raw: &str, wait: Wait) {
+        tracing::info!(
+            raw,
+            run = wait.run_id,
+            reason = ?wait.reason,
+            "export waits for Capture One"
+        );
+        match state.waits.get_mut(raw) {
+            Some(existing) => {
+                existing.reason = wait.reason;
+                existing.next_ms = existing.next_ms.min(wait.next_ms);
+            }
+            None => {
+                state.waits.insert(raw.to_string(), wait);
+            }
+        }
+    }
+
+    /// Changelog 45 (P65): retries the master renders that wait for the editor when due (1, 2,
+    /// 4, 8, then every 15 s) and fails the runs that need one after 10 minutes of waiting.
+    pub fn tick(&self) -> Result<()> {
+        let mut state = self.state()?;
+        let now = self.clock.now_ms();
+        let raws: Vec<String> = state.waits.keys().cloned().collect();
+        for raw in raws {
+            let Some(wait) = state.waits.get(&raw).cloned() else {
+                continue;
+            };
+            let needed = |t: &Target| t.raw == raw && t.progress == Progress::WaitingMaster;
+            if !state
+                .runs
+                .values()
+                .any(|run| run.targets.iter().any(needed))
+            {
+                state.waits.remove(&raw);
+                continue;
+            }
+            if now - wait.since_ms >= EDITOR_WAIT_MAX_MS {
+                state.waits.remove(&raw);
+                let name = Path::new(&raw)
+                    .file_name()
+                    .map_or_else(|| raw.clone(), |n| n.to_string_lossy().into_owned());
+                let sentence = editor_wait_expired(wait.reason, &name);
+                tracing::warn!(raw, reason = ?wait.reason, "export stopped waiting for Capture One");
+                self.fail_runs(&mut state, needed, &format!("{EDITOR_WAIT_EXPIRED}{sentence}"));
+                continue;
+            }
+            if now < wait.next_ms {
+                continue;
+            }
+            let tracking = self.store.new_master_render_job(
+                &raw,
+                wait.run_id,
+                wait.photo_id,
+                wait.generation,
+                now,
+            )?;
+            match self.editing.request_render(
+                &raw,
+                RenderPurpose::Master,
+                wait.generation,
+                tracking,
+                self.clock.mono(),
+                now,
+                false,
+            ) {
+                Ok(()) => {
+                    tracing::info!(
+                        raw,
+                        waited_ms = now - wait.since_ms,
+                        "export render no longer waits for Capture One"
+                    );
+                    state.waits.remove(&raw);
+                    state.masters.insert(raw.clone(), tracking);
+                }
+                Err(error) => {
+                    let text = error.to_string();
+                    self.store.finish_render_job(tracking, Some(&text), now)?;
+                    match editor_wait(&text) {
+                        Some(reason) => {
+                            if let Some(wait) = state.waits.get_mut(&raw) {
+                                wait.attempts += 1;
+                                wait.reason = reason;
+                                wait.next_ms = now + editor_wait_backoff_ms(wait.attempts);
+                            }
+                        }
+                        None => {
+                            state.waits.remove(&raw);
+                            self.fail_runs(&mut state, needed, &text);
+                        }
+                    }
+                }
+            }
+        }
+        self.refresh_waiting(&mut state);
+        Ok(())
     }
 
     pub fn staging_folder(&self, key: &str, run_id: i64) -> PathBuf {
@@ -380,6 +554,7 @@ impl ExportService {
             attributes,
             targets: Vec::new(),
             defer_swap,
+            waiting: false,
         };
         for (group, ids) in groups {
             let slots: Vec<(i64, &[OutputSlot])> = ids
@@ -438,7 +613,7 @@ impl ExportService {
             run.targets[index].progress = Progress::Rendering;
             return Ok(());
         }
-        if !state.masters.contains_key(&target.raw) {
+        if !state.masters.contains_key(&target.raw) && !state.waits.contains_key(&target.raw) {
             let now_ms = self.clock.now_ms();
             let tracking = self.store.new_master_render_job(
                 &target.raw,
@@ -458,7 +633,22 @@ impl ExportService {
             ) {
                 self.store
                     .finish_render_job(tracking, Some("provider"), now_ms)?;
-                return Err(error);
+                // Changelog 45 (P65): Capture One not ready is not a failure: the run waits.
+                let Some(reason) = editor_wait(&error.to_string()) else {
+                    return Err(error);
+                };
+                let raw = target.raw.clone();
+                let wait = Wait {
+                    since_ms: now_ms,
+                    next_ms: now_ms + editor_wait_backoff_ms(1),
+                    attempts: 1,
+                    reason,
+                    run_id: run.id,
+                    photo_id: target.photo_id,
+                    generation: target.adjusted_gen,
+                };
+                self.begin_wait(state, &raw, wait);
+                return Ok(());
             }
             state.masters.insert(target.raw.clone(), tracking);
         }
@@ -597,6 +787,7 @@ impl ExportService {
             .filter(|t| t.progress != Progress::Copied)
             .map(|t| t.raw.as_str())
             .chain(state.masters.keys().map(String::as_str))
+            .chain(state.waits.keys().map(String::as_str))
             .collect()
     }
 
@@ -825,11 +1016,40 @@ impl ExportStaging for ExportService {
             return Ok(());
         };
         state.masters.remove(&raw);
+        // Changelog 45 (P65): refused or timed out because Capture One was not ready: the runs
+        // wait and the master is asked for again.
+        if let Some(wait_reason) = editor_wait(reason) {
+            let holder = state.runs.values().find_map(|run| {
+                run.targets
+                    .iter()
+                    .find(|t| t.raw == raw && t.progress == Progress::WaitingMaster)
+                    .map(|t| (run.id, t.photo_id, t.adjusted_gen))
+            });
+            if let Some((run_id, photo_id, generation)) = holder {
+                let now = self.clock.now_ms();
+                let wait = Wait {
+                    since_ms: now,
+                    next_ms: now + editor_wait_backoff_ms(1),
+                    attempts: 1,
+                    reason: wait_reason,
+                    run_id,
+                    photo_id,
+                    generation,
+                };
+                self.begin_wait(&mut state, &raw, wait);
+                self.refresh_waiting(&mut state);
+            }
+            return Ok(());
+        }
         self.fail_runs(
             &mut state,
             |t| t.raw == raw && t.progress == Progress::WaitingMaster,
             reason,
         );
         Ok(())
+    }
+
+    fn tick(&self) -> Result<()> {
+        ExportService::tick(self)
     }
 }

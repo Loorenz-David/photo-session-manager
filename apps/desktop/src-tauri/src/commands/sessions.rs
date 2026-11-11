@@ -261,6 +261,8 @@ pub enum RowLabelResponse {
     InProgress(#[specta(type = specta_typescript::Number)] i64),
     /// P62: published, local files cleared, photos shown from Shopify.
     Archived,
+    /// Changelog 45 (P65): the publish waits for Capture One (`Waiting for Capture One…`).
+    WaitingForEditor,
 }
 
 #[derive(Serialize, Type)]
@@ -343,6 +345,7 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
                                 RowLabel::Ready => RowLabelResponse::Ready,
                                 RowLabel::InProgress(n) => RowLabelResponse::InProgress(n),
                                 RowLabel::Archived => RowLabelResponse::Archived,
+                                RowLabel::WaitingForEditor => RowLabelResponse::WaitingForEditor,
                             },
                             progress: row.progress,
                             last_activity_at: row.last_activity_at,

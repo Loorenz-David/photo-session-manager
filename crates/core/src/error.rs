@@ -115,6 +115,10 @@ pub enum Error {
     /// Anything that needs a cleared item's images was refused (10F Q3, P62).
     #[error("This item's files were cleared after publishing")]
     FilesCleared,
+    /// Changelog 45 (P65): an export or publish waited 10 minutes for the editor; the sentence
+    /// names the photo (`Capture One has not loaded DSC05162.ARW after 10 minutes`).
+    #[error("{0}")]
+    EditorWaitExpired(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

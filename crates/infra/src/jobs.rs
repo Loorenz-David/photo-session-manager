@@ -6,6 +6,11 @@ pub trait JobHandler: Send + Sync {
     fn max_attempts(&self) -> Option<i64> {
         None
     }
+    /// The longest wait between two attempts (changelog 45: a publish waiting for its export is
+    /// looked at again at least every 15 s); `None` = the standard back-off.
+    fn max_backoff_ms(&self) -> Option<i64> {
+        None
+    }
 }
 pub struct JobRunner {
     store: Arc<dyn Store>,
@@ -67,12 +72,12 @@ impl JobRunner {
                     {
                         self.store.job_fail(job.id, code, now_ms)?;
                     } else {
-                        self.store.job_retry(
-                            job.id,
-                            code,
-                            now_ms + backoff(attempts).as_millis() as i64,
-                            now_ms,
-                        )?;
+                        let mut wait = backoff(attempts).as_millis() as i64;
+                        if let Some(cap) = handler.max_backoff_ms() {
+                            wait = wait.min(cap);
+                        }
+                        self.store
+                            .job_retry(job.id, code, now_ms + wait, now_ms)?;
                     }
                 }
             }

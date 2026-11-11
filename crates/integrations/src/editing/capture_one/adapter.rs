@@ -484,6 +484,9 @@ impl EditingProvider for CaptureOneAdapter {
     fn set_current_collection(&self, folder: &str) -> Result<()> {
         self.user.set_current_collection(&self.document_id, folder)
     }
+    fn sync_folder(&self, folder: &str) -> Result<()> {
+        self.user.sync_folder(&self.document_id, folder)
+    }
     fn apply_style(&self, raw: &str, name: &str) -> Result<StyleOutcome> {
         let variant = self.variant_background(raw)?;
         if self

@@ -8,13 +8,14 @@ use crate::{
         photo::{Classification, Integrity},
         publish::{
             ConfirmedRun, Notification, PhotoLink, PublishActivity, PublishItem, PublishPreview,
-            PublishPreviewItem,
+            PublishPreviewItem, StockChoice, StockLocations, StockOutcome,
         },
         session::PublishStep,
     },
     events::AppEvent,
     mechanisms::{
         attribute_write::{merge_tags, write_set},
+        backoff::{EDITOR_WAIT_EXPIRED, WAITING_FOR_EDITOR},
         hash::sha256_file,
         naming::{ExportGroup, folder_key, output_names, review_label},
         publish::{frozen_main, publish_summary, replacement_candidates, upload_waves},
@@ -23,7 +24,12 @@ use crate::{
         upload_name,
         values::canonicalize,
     },
-    ports::{clock::Clock, commerce::CommerceAdapter, events::EventSink, store::Store},
+    ports::{
+        clock::Clock,
+        commerce::{CommerceAdapter, StockDefaults},
+        events::EventSink,
+        store::Store,
+    },
     services::{export::ExportService, integrity::IntegrityCheck},
 };
 use std::{
@@ -78,7 +84,15 @@ pub struct PublishService {
     /// P64: what each running publish item is doing, its last error and a requested cancel
     /// (in memory: after a restart the persisted step and counts are shown).
     live: Mutex<HashMap<i64, Live>>,
+    /// Changelog 45 (P65): the remembered stock default (Settings → Shopify); `None` in bare
+    /// services.
+    stock_defaults: Mutex<Option<Arc<dyn StockDefaults>>>,
+    /// The platform's stock locations, read once per app run.
+    stock_locations: Mutex<Option<StockLocations>>,
 }
+
+/// The integration whose links and stock this service writes.
+const INTEGRATION: &str = "shopify";
 
 /// P64: the in-memory activity of one publish item.
 #[derive(Debug, Clone, Default)]
@@ -113,7 +127,88 @@ impl PublishService {
             events,
             exports: Mutex::new(HashMap::new()),
             live: Mutex::new(HashMap::new()),
+            stock_defaults: Mutex::new(None),
+            stock_locations: Mutex::new(None),
         }
+    }
+
+    /// Changelog 45 (P65): where the stock default is read and remembered.
+    pub fn set_stock_defaults(&self, defaults: Arc<dyn StockDefaults>) {
+        *self
+            .stock_defaults
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(defaults);
+    }
+    fn defaults(&self) -> Option<Arc<dyn StockDefaults>> {
+        self.stock_defaults
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    /// The remembered stock default, `None` without one (or when it cannot be read).
+    pub fn stock_default(&self) -> Option<StockChoice> {
+        self.defaults().and_then(|d| match d.get() {
+            Ok(choice) => choice,
+            Err(error) => {
+                tracing::warn!(%error, "stock default not read");
+                None
+            }
+        })
+    }
+    /// Settings → Shopify: sets the remembered stock default.
+    pub fn set_stock_default(&self, choice: &StockChoice) -> Result<()> {
+        validate_stock(choice)?;
+        self.defaults()
+            .ok_or_else(|| Error::InvalidValue("stock default".into()))?
+            .remember(choice)
+    }
+    /// The platform's active stock locations, read once per app run (a read that fails is asked
+    /// again next time).
+    pub fn stock_locations(&self) -> Result<StockLocations> {
+        let mut cached = self
+            .stock_locations
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(locations) = cached.as_ref() {
+            return Ok(locations.clone());
+        }
+        let locations = self.commerce.stock_locations()?;
+        *cached = Some(locations.clone());
+        Ok(locations)
+    }
+    /// Whether the item is not on the platform yet (a publish will create it).
+    pub fn is_new_item(&self, item_id: i64) -> Result<bool> {
+        Ok(self.store.item_link(item_id, INTEGRATION)?.is_none())
+    }
+    /// The item form's stock for a new item: its own choice, else the remembered default.
+    /// `None` for an item already on the platform (its stock is the platform's).
+    pub fn item_stock(&self, item_id: i64) -> Result<Option<StockChoice>> {
+        if self.store.item_link(item_id, INTEGRATION)?.is_some() {
+            return Ok(None);
+        }
+        Ok(match self.store.item_stock(item_id, INTEGRATION)? {
+            // "No location" chosen in the form: created untracked, whatever the default.
+            Some(choice) if choice.location_id.is_empty() => None,
+            Some(choice) => Some(choice),
+            None => self.stock_default(),
+        })
+    }
+    /// The item form sets the stock a new item will be created with; `None` = no location (the
+    /// item is created without stock tracking).
+    pub fn set_item_stock(&self, item_id: i64, choice: Option<&StockChoice>) -> Result<()> {
+        let none = StockChoice {
+            location_id: String::new(),
+            location_name: String::new(),
+            quantity: 0,
+        };
+        let stored = match choice {
+            Some(choice) => {
+                validate_stock(choice)?;
+                choice
+            }
+            None => &none,
+        };
+        self.store.set_item_stock(item_id, INTEGRATION, Some(stored))
     }
 
     fn with_live<T>(&self, item_id: i64, f: impl FnOnce(&mut Live) -> T) -> T {
@@ -160,8 +255,15 @@ impl PublishService {
             .get(&item.id)
             .cloned();
         let running = active(item.step);
+        let waiting = running
+            && item.step == PublishStep::Prepare
+            && item
+                .export_run_id
+                .is_some_and(|export| self.export.waiting(export));
         let text = match item.step {
             _ if running && live.as_ref().is_some_and(|l| l.cancel) => "Cancelling…".to_string(),
+            // Changelog 45 (P65): a render waits for Capture One; the publish is queued, not failed.
+            _ if waiting => WAITING_FOR_EDITOR.to_string(),
             _ if running && live.as_ref().is_some_and(|l| !l.text.is_empty()) => {
                 live.as_ref().map(|l| l.text.clone()).unwrap_or_default()
             }
@@ -201,6 +303,20 @@ impl PublishService {
     }
     /// Ends a cancelled item: step `cancelled` (not an error, not published, 07 / changelog 44).
     fn finish_cancel(&self, item: &PublishItem) -> Result<()> {
+        if item.step == PublishStep::Prepare {
+            // Changelog 45 (P65): an export still rendering (or waiting for Capture One) for this
+            // publish is ended with it.
+            let known = self
+                .exports
+                .lock()
+                .map_err(|e| Error::InvalidData(e.to_string()))?
+                .remove(&item.id);
+            for export in known.into_iter().chain(item.export_run_id) {
+                if self.export.has_run(export) {
+                    self.export.cancel_run(export)?;
+                }
+            }
+        }
         self.store.set_publish_step(
             item.id,
             PublishStep::Cancelled,
@@ -474,6 +590,18 @@ impl PublishService {
             totals.insert(p.session_id, total);
         }
         let condition_key = self.condition_key()?;
+        // Changelog 45 (P65): the stock a new item is created with, frozen with the confirmation.
+        let mut stocks = HashMap::new();
+        for p in &preview.items {
+            if !p.create_item {
+                continue;
+            }
+            if let Some(item_id) = self.store.session(p.session_id)?.session.item_id
+                && let Some(choice) = self.item_stock(item_id)?
+            {
+                stocks.insert(p.session_id, choice);
+            }
+        }
         let at = self.clock.now_ms();
         let mut run_id = 0;
         let mut item_ids = Vec::new();
@@ -554,11 +682,14 @@ impl PublishService {
                     error: None,
                     export_run_id: None,
                 };
-                item_ids.push(tx.insert_publish_item(&row)?);
+                item_ids.push((tx.insert_publish_item(&row)?, p.session_id));
             }
             Ok(())
         })?;
-        for id in item_ids {
+        for (id, session_id) in item_ids {
+            if let Some(choice) = stocks.get(&session_id) {
+                self.store.set_publish_item_stock(id, choice)?;
+            }
             self.store.enqueue_publish_item(id, at)?;
         }
         Ok(run_id)
@@ -716,6 +847,49 @@ impl PublishService {
             }
         }
     }
+    /// Creates the platform item: with the frozen stock when the confirmation carried one
+    /// (changelog 45), whose values then become the remembered default.
+    fn create_item(
+        &self,
+        run: &ConfirmedRun,
+        item: &PublishItem,
+        local: &crate::domain::item::Item,
+    ) -> Result<String> {
+        let Some(stock) = self.store.publish_item_stock(item.id)? else {
+            return self.commerce.item_create(
+                run,
+                &local.sku,
+                local.barcode.as_deref(),
+                &item.title,
+                &item.frozen_item_type,
+            );
+        };
+        let (remote, outcome) = self.commerce.item_create_stocked(
+            run,
+            &local.sku,
+            local.barcode.as_deref(),
+            &item.title,
+            &item.frozen_item_type,
+            &stock,
+        )?;
+        match &outcome {
+            StockOutcome::Tracked { verified } => tracing::info!(
+                location = stock.location_name,
+                quantity = stock.quantity,
+                verified,
+                "item created with stock"
+            ),
+            StockOutcome::Untracked { reason } => {
+                tracing::warn!(reason, "item created without stock tracking")
+            }
+        }
+        if let Some(defaults) = self.defaults()
+            && let Err(error) = defaults.remember(&stock)
+        {
+            tracing::warn!(%error, "stock default not remembered");
+        }
+        Ok(remote)
+    }
     /// Whether the staging folder the upload step would read still holds the current outputs.
     fn upload_staging_current(&self, item: &PublishItem) -> Result<bool> {
         let Some(export_id) = item.export_run_id else {
@@ -754,13 +928,7 @@ impl PublishService {
         if self.store.item_link(local.id, "shopify")?.is_none() {
             let matches = self.commerce.item_search(&local.sku)?;
             let remote = match matches.len() {
-                0 => self.commerce.item_create(
-                    run,
-                    &local.sku,
-                    local.barcode.as_deref(),
-                    &item.title,
-                    &item.frozen_item_type,
-                )?,
+                0 => self.create_item(run, item, &local)?,
                 1 => matches[0].external_id.clone(),
                 _ => return Err(Error::SeveralProductsCarrySku { sku: local.sku }),
             };
@@ -789,6 +957,10 @@ impl PublishService {
             {
                 exports.remove(&item.id);
                 let reason = self.store.job(id)?.error.unwrap_or_default();
+                // Changelog 45 (P65): waited 10 minutes for Capture One: the sentence as is.
+                if let Some(sentence) = reason.strip_prefix(EDITOR_WAIT_EXPIRED) {
+                    return Err(Error::EditorWaitExpired(sentence.to_string()));
+                }
                 return Err(Error::Provider(format!("export failed: {reason}")));
             } else if let Some(id) = known.or(item.export_run_id).filter(|id| {
                 self.staging_current(
@@ -1478,4 +1650,12 @@ impl PublishService {
         }
         Ok(true)
     }
+}
+
+/// A stock choice names a location and a quantity of 0 or more.
+fn validate_stock(choice: &StockChoice) -> Result<()> {
+    if choice.location_id.trim().is_empty() || choice.quantity < 0 {
+        return Err(Error::InvalidValue("stock".into()));
+    }
+    Ok(())
 }

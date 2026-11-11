@@ -249,6 +249,10 @@ impl CaptureOneScripting for GatedScripting {
     fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool> {
         self.call(|i| i.apply_style(id, variant, name))
     }
+    /// Refused like a launch-capable script while the take-back holds the gate (P65).
+    fn sync_folder(&self, id: &str, folder: &str) -> Result<()> {
+        self.launching(|i| i.sync_folder(id, folder))
+    }
     /// `quit.js` checks `running()` first (L13); refused while the take-back holds the gate (it
     /// quits through its own ungated scripting).
     fn quit(&self) -> Result<()> {

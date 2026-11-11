@@ -253,6 +253,30 @@ pub trait Store: Send + Sync {
     ) -> Result<()>;
     fn set_publish_progress(&self, item_id: i64, uploaded: i64, total: i64) -> Result<()>;
     fn enqueue_publish_item(&self, item_id: i64, at: i64) -> Result<()>;
+    /// Changelog 45 (P65): marks a running export run as waiting for the editor (or not).
+    fn set_export_waiting(&self, export_run_id: i64, waiting: bool) -> Result<()>;
+    /// Changelog 45 (P65): the stock chosen in the item form for a new item on `integration`.
+    fn item_stock(
+        &self,
+        item_id: i64,
+        integration: &str,
+    ) -> Result<Option<crate::domain::publish::StockChoice>>;
+    fn set_item_stock(
+        &self,
+        item_id: i64,
+        integration: &str,
+        choice: Option<&crate::domain::publish::StockChoice>,
+    ) -> Result<()>;
+    /// The stock frozen with a confirmed publish item (the create uses it).
+    fn publish_item_stock(
+        &self,
+        publish_item_id: i64,
+    ) -> Result<Option<crate::domain::publish::StockChoice>>;
+    fn set_publish_item_stock(
+        &self,
+        publish_item_id: i64,
+        choice: &crate::domain::publish::StockChoice,
+    ) -> Result<()>;
     fn set_publish_export(&self, item_id: i64, export_run_id: i64) -> Result<()>;
     /// RAW retouch generation captured when this export run started (the run row records it).
     fn export_retouch_gen(&self, export_run_id: i64, photo_id: i64) -> Result<Option<i64>>;

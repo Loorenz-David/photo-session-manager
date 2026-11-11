@@ -87,6 +87,9 @@ pub trait CaptureOneScripting: Send + Sync {
     fn save(&self, id: &str) -> Result<()>;
     fn set_captures(&self, id: &str, path: &str) -> Result<()>;
     fn set_current_collection(&self, id: &str, folder: &str) -> Result<()>;
+    /// Changelog 45 (P65): sets `synchronizing = true` on the folder's collection, so Capture One
+    /// lists a file the app filed there without waiting for its own folder check.
+    fn sync_folder(&self, id: &str, folder: &str) -> Result<()>;
     fn apply_style(&self, id: &str, variant: &str, name: &str) -> Result<bool>;
     fn get_captures(&self, id: &str) -> Result<String>;
     fn set_hook(&self, name: &str, path: &str) -> Result<()>;

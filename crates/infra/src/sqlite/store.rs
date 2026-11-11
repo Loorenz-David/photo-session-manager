@@ -71,6 +71,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/008_settings_fingerprint.sql")),
             M::up(include_str!("migrations/009_publish_item_type.sql")),
             M::up(include_str!("migrations/010_retention.sql")),
+            M::up(include_str!("migrations/011_item_stock.sql")),
         ]
     }
 
@@ -1518,7 +1519,8 @@ impl Store for SqliteStore {
                 Some(latest) => (Some(latest.step),latest.failed_step,latest.uploaded,latest.total),
                 None => (None,None,0,0),
             };
-            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total,publish })
+            let waiting_for_editor: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE kind='render_export' AND target=?1 AND status='running' AND error='waiting_for_editor')", [format!("session:{id}")], |r| r.get(0)).map_err(db)?;
+            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total,publish,waiting_for_editor })
         }).collect()
     }
 
@@ -1955,6 +1957,100 @@ impl Store for SqliteStore {
         if !queued {
             conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('publish_step',?1,'{}','queued',0,?2,?2,?2)",params![item_id.to_string(),at]).map_err(db)?;
         }
+        Ok(())
+    }
+    fn set_export_waiting(&self, export_run_id: i64, waiting: bool) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "UPDATE jobs SET error=?2 WHERE id=?1 AND kind='render_export' AND status='running'",
+                params![export_run_id, waiting.then_some("waiting_for_editor")],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn item_stock(
+        &self,
+        item_id: i64,
+        integration: &str,
+    ) -> Result<Option<psm_core::domain::publish::StockChoice>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.query_row(
+            "SELECT location_id,location_name,quantity FROM item_stock WHERE item_id=?1 AND integration=?2",
+            params![item_id, integration],
+            |r| {
+                Ok(psm_core::domain::publish::StockChoice {
+                    location_id: r.get(0)?,
+                    location_name: r.get(1)?,
+                    quantity: r.get(2)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(db)
+    }
+    fn set_item_stock(
+        &self,
+        item_id: i64,
+        integration: &str,
+        choice: Option<&psm_core::domain::publish::StockChoice>,
+    ) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        match choice {
+            Some(c) => conn.execute(
+                "INSERT INTO item_stock(item_id,integration,location_id,location_name,quantity) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(item_id,integration) DO UPDATE SET location_id=excluded.location_id,location_name=excluded.location_name,quantity=excluded.quantity",
+                params![item_id, integration, c.location_id, c.location_name, c.quantity],
+            ),
+            None => conn.execute(
+                "DELETE FROM item_stock WHERE item_id=?1 AND integration=?2",
+                params![item_id, integration],
+            ),
+        }
+        .map_err(db)?;
+        Ok(())
+    }
+    fn publish_item_stock(
+        &self,
+        publish_item_id: i64,
+    ) -> Result<Option<psm_core::domain::publish::StockChoice>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        conn.query_row(
+            "SELECT location_id,location_name,quantity FROM publish_item_stock WHERE publish_item_id=?1",
+            [publish_item_id],
+            |r| {
+                Ok(psm_core::domain::publish::StockChoice {
+                    location_id: r.get(0)?,
+                    location_name: r.get(1)?,
+                    quantity: r.get(2)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(db)
+    }
+    fn set_publish_item_stock(
+        &self,
+        publish_item_id: i64,
+        c: &psm_core::domain::publish::StockChoice,
+    ) -> Result<()> {
+        self.conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .execute(
+                "INSERT OR REPLACE INTO publish_item_stock(publish_item_id,location_id,location_name,quantity) VALUES (?1,?2,?3,?4)",
+                params![publish_item_id, c.location_id, c.location_name, c.quantity],
+            )
+            .map_err(db)?;
         Ok(())
     }
     fn set_publish_export(&self, item_id: i64, export_run_id: i64) -> Result<()> {

@@ -4,7 +4,8 @@ use psm_core::{
         attribute::Definition,
         publish::{
             ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
-            RemoteMedia, RemoteMediaStatus, StagedTarget, WriteValue,
+            RemoteMedia, RemoteMediaStatus, StagedTarget, StockChoice, StockLocation,
+            StockLocations, StockOutcome, WriteValue,
         },
     },
     ports::{
@@ -62,6 +63,17 @@ pub struct FakeShop {
     pub identity_override: Option<RemoteIdentity>,
     /// Every `fetch_image` call: (URL, long edge asked for) (P62).
     pub image_fetches: Vec<(String, u32)>,
+    /// P65: the shop's active stock locations.
+    pub locations: Vec<StockLocation>,
+    /// P65: the app lacks `read_locations` / `write_inventory`: locations unreadable and a create
+    /// with stock fields refused (then created untracked).
+    pub stock_access_denied: bool,
+    /// P65: every request that carried stock fields (tracking, quantities): (op, stock).
+    pub stock_requests: Vec<(String, StockChoice)>,
+    /// P65: product id → its tracked stock (only products created tracked).
+    pub stock: HashMap<String, StockChoice>,
+    /// P65: how many times the locations were read.
+    pub location_reads: usize,
 }
 
 /// The made-up CDN URL the fake shop gives a media or file id (P62; never a real host).
@@ -339,6 +351,56 @@ impl CommerceAdapter for FakeCommerce {
         }
         self.effect(run, "item_create")?;
         Ok(id)
+    }
+    fn stock_locations(&self) -> Result<StockLocations> {
+        self.read("stock_locations")?;
+        let mut s = self.state.lock().unwrap();
+        s.location_reads += 1;
+        if s.stock_access_denied {
+            return Ok(StockLocations {
+                locations: Vec::new(),
+                missing_access: Some(
+                    "Your Shopify app needs the read_locations and write_inventory permissions"
+                        .into(),
+                ),
+            });
+        }
+        Ok(StockLocations {
+            locations: s.locations.clone(),
+            missing_access: None,
+        })
+    }
+    fn item_create_stocked(
+        &self,
+        run: &ConfirmedRun,
+        sku: &str,
+        barcode: Option<&str>,
+        title: &str,
+        item_type: &str,
+        stock: &StockChoice,
+    ) -> Result<(String, StockOutcome)> {
+        let denied = {
+            let mut s = self.state.lock().unwrap();
+            s.stock_requests
+                .push(("item_create_stocked".into(), stock.clone()));
+            s.stock_access_denied
+        };
+        let id = self.item_create(run, sku, barcode, title, item_type)?;
+        if denied {
+            return Ok((
+                id,
+                StockOutcome::Untracked {
+                    reason: "Your Shopify app needs the read_locations and write_inventory permissions"
+                        .into(),
+                },
+            ));
+        }
+        self.state
+            .lock()
+            .unwrap()
+            .stock
+            .insert(id.clone(), stock.clone());
+        Ok((id, StockOutcome::Tracked { verified: true }))
     }
     fn item_set_identity(
         &self,

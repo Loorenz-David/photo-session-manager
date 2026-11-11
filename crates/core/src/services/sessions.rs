@@ -306,6 +306,9 @@ impl SessionsService<'_> {
             }
             let label = if cleared.contains(&dto.session.id) {
                 crate::domain::session::RowLabel::Archived
+            } else if status == SessionStatus::Publishing && record.waiting_for_editor {
+                // Changelog 45 (P65): the publish waits for Capture One to load its photos.
+                crate::domain::session::RowLabel::WaitingForEditor
             } else {
                 row_label(input)
             };

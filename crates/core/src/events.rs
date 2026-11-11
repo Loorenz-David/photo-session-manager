@@ -47,6 +47,8 @@ pub enum AppEvent {
 #[serde(rename_all = "snake_case")]
 pub enum ExportState {
     Running,
+    /// Changelog 45 (P65): a render waits for Capture One (`Waiting for Capture One…`).
+    Waiting,
     Done,
     Failed,
 }
