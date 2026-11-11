@@ -59,3 +59,38 @@ The files above as needed; `crates/testkit/tests/p67_form_values_defaults_and_ba
 - **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log
+
+### 2026-11-11 — implement r1 (Claude Opus, `codex` actor slot)
+**Built.** (1) Shopify values in the form: new port method `CommerceAdapter::product_values` (Shopify: one GraphQL query
+`ProductValues` — title, productType, tags, descriptionHtml, metafields first 250; only a product with more than 250 metafields pages on
+with `MetafieldsRead`); `AttributesService::read_integration_values` stores them as values with the new provenance `integration`; the
+command `form_read_integration(item_ids)` reads a batch (one request per product). The form of a linked item shows a skeleton until the
+read answers, then the fields labelled "from Shopify" (title, description, tags, metafields incl. condition fields, item type next to the
+picker); a failed read shows `Couldn't read this product from Shopify` and the local values stay editable. The batch reads every linked
+item of the queue once, together, and each form waits for its own result (the form's own `refreshItem` call is gone: one request per
+product). Nothing is written to Shopify. (2) Defaults and saved values per item type: "Save as default" (stored in the item type's step
+layout, so Customize fields shows and edits the same default), "Save value" (new table `attribute_saved_values`, migration 013), saved values
+as one-click picks under the field (most recent first, × removes), "Fill defaults" in the footer (one undoable step). (3) No automatic
+type: see Assumptions A5. (4) Batch step memory: `FormDialog` takes `position`/`onPosition`; `BatchQueue` keeps the last step and scroll and
+opens the next form there; a single form opens on Details.
+
+**Assumptions.** A1 (H7) the stored provenance is `integration`, not `shopify`: core tables never name a platform (H7); the UI label says
+"from Shopify". A2 precedence: human and AI values, and fields the photographer cleared, are never replaced by a read; a `default` or an
+earlier read is replaced by a non-empty product value (C2(a) "linked set: Shopify value kept" wins over Goal 1's "(human/ai/default) wins");
+a field the product leaves empty gets the type's default; an earlier read whose product value is now empty is removed. A3 the title has one
+home (`items.title`): the read sets it only while the local title is empty or still the last-read title (new table `item_remote_titles`);
+the title shows "from Shopify" while it equals the last-read title. The type follows the changelog-42 rule already used by refresh. A4 no
+"Save as default"/"Save value" on Title (a per-item value), on the damage report (per session) and on `reference` fields (metaobject
+references are read-only "Edited in Shopify admin", never written, MC-13); every other kind the form renders has them. A5 the cause of
+the automatic type: on open the dialog put focus in its first focusable control, the Item type picker (an `<input list>`); with focus there
+WebKit's suggestion list takes arrow/Return keys and each suggestion it shows in the field is an `input` event, and the form saved any
+listed type on every `input` event (`onChange` → `commitType`). Removed both: the form no longer focuses the picker on open
+(`onOpenAutoFocus` prevented) and a type is saved only on leaving the picker or Return (or Save & close). A6 a linked item with no stored
+link (`not_linked`) reads nothing; a linked item with no integration configured shows the failure sentence. A7 scroll memory is the
+fields column's `scrollTop`.
+
+**Deviations.** Test files changed because a DTO gained fields (no behaviour change): UI `p11_form_ui`, `p22_form_tidy`, `p41_undo_ui`
+fixtures (`default`, `saved`, `item_type_from_integration`); `p01_storage_identity` table list (+2 tables). Production files outside the
+listed ones: `crates/core/src/domain/{attribute,publish}.rs`, `crates/core/src/ports/{commerce,store}.rs`,
+`crates/infra/src/sqlite/{store.rs, migrations/013_form_values.sql}`, `apps/desktop/src-tauri/src/{commands/attributes.rs, lib.rs}`,
+`apps/desktop/src/services/bindings.ts` (regenerated), `crates/testkit/src/fake_commerce.rs`.

@@ -37,10 +37,13 @@ export function useFormState(itemId: number) {
   const inFlight = useRef(new Set<Promise<unknown>>());
   const alive = useRef(true);
 
+  // Only the latest re-fetch is shown (P67: the read of the linked product reloads while the first fetch may still run).
+  const latestReload = useRef(0);
   const reload = useCallback(async () => {
+    const mine = ++latestReload.current;
     try {
       const next = await getForm(itemId);
-      if (!alive.current) return;
+      if (!alive.current || mine !== latestReload.current) return;
       setForm(next);
       // Drafts already written are now in the form; only edits still waiting keep their draft.
       setDrafts(current => Object.fromEntries(Object.entries(current).filter(([key]) => pending.current.has(key))));

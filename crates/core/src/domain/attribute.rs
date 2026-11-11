@@ -108,6 +108,9 @@ pub enum Provenance {
     Human,
     Ai,
     Default,
+    /// P67 (changelog 46 (3)): read from the item's linked integration product and not edited
+    /// here since (the form labels it "from Shopify"; a local edit replaces it).
+    Integration,
 }
 
 impl Provenance {
@@ -116,11 +119,12 @@ impl Provenance {
             Self::Human => "human",
             Self::Ai => "ai",
             Self::Default => "default",
+            Self::Integration => "integration",
         }
     }
 
     pub fn parse(text: &str) -> Option<Self> {
-        [Self::Human, Self::Ai, Self::Default]
+        [Self::Human, Self::Ai, Self::Default, Self::Integration]
             .into_iter()
             .find(|p| p.as_str() == text)
     }
@@ -254,6 +258,10 @@ pub struct FormField {
     /// The definition is a `choice` over the severity set (05A MC-9 field kind).
     pub is_severity: bool,
     pub selected: Option<Vec<i64>>,
+    /// P67 (changelog 46 (4)): the field's default for the item's type (canonical JSON), if any.
+    pub default: Option<serde_json::Value>,
+    /// P67: the field's saved values for the item's type, most recently saved first.
+    pub saved: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,4 +277,7 @@ pub struct FormGroup {
 pub struct Form {
     pub item_id: i64,
     pub groups: Vec<FormGroup>,
+    /// P67 (changelog 46 (3)): the item's type equals the type last read from its linked
+    /// integration product (the picker shows it "from Shopify").
+    pub item_type_from_integration: bool,
 }

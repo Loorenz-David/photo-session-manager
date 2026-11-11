@@ -84,6 +84,18 @@ pub struct RemoteItem {
     pub media: Vec<RemoteMedia>,
 }
 
+/// P67 (changelog 46 (3)): the values the item form shows, read from the linked product in one
+/// request: title, type, tags, description (blank-line-separated paragraphs, the form's own
+/// shape) and every attribute as raw core-shaped JSON (as `attributes_read`).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RemoteValues {
+    pub title: String,
+    pub item_type: Option<String>,
+    pub tags: Vec<String>,
+    pub description: Option<String>,
+    pub attributes: Vec<(String, serde_json::Value)>,
+}
+
 /// Identity of a remote item's default variant, as read back after a write (05B MC-22).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteIdentity {

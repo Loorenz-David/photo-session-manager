@@ -4,7 +4,7 @@ use psm_core::{
         attribute::Definition,
         publish::{
             ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
-            RemoteMedia, RemoteMediaStatus, StagedTarget, StockChoice, StockLocation,
+            RemoteMedia, RemoteMediaStatus, RemoteValues, StagedTarget, StockChoice, StockLocation,
             StockLocations, StockOutcome, WriteValue,
         },
     },
@@ -321,6 +321,32 @@ impl CommerceAdapter for FakeCommerce {
         types.sort();
         types.dedup();
         Ok(types)
+    }
+    /// One read op `product_values` (P67): the product's title, type, tags, description (stored
+    /// as HTML, returned as paragraphs) and metafield values.
+    fn product_values(&self, id: &str) -> Result<RemoteValues> {
+        self.read("product_values")?;
+        let s = self.state.lock().unwrap();
+        let product = s
+            .products
+            .iter()
+            .find(|p| p.external_id == id)
+            .ok_or_else(|| Error::NotFound(id.into()))?;
+        let mut attributes = s.values.get(id).cloned().unwrap_or_default();
+        attributes.retain(|(key, _)| key != &self.condition_key);
+        Ok(RemoteValues {
+            title: product.title.clone(),
+            item_type: product.item_type.clone(),
+            tags: s.tags.get(id).cloned().unwrap_or_default(),
+            description: s
+                .descriptions
+                .get(id)
+                .map(|html| {
+                    psm_integrations::commerce::shopify::adapter::description_paragraphs(html)
+                })
+                .filter(|text| !text.is_empty()),
+            attributes,
+        })
     }
     fn product_fields(&self, id: &str) -> Result<(Vec<String>, Option<String>)> {
         self.read("product_fields")?;

@@ -6,6 +6,7 @@ import {
   type FormDto_Serialize,
   type FormFieldDto_Serialize,
   type FormGroupDto_Serialize,
+  type FormReadDto,
   type ItemDto_Serialize,
 } from './bindings';
 import { unwrap } from './sessions';
@@ -16,6 +17,8 @@ export type Form = FormDto_Serialize;
 export type FormGroup = FormGroupDto_Serialize;
 export type FormField = FormFieldDto_Serialize;
 export type Group = AttributeGroupDto;
+/** P67: how reading one item's linked product went (`read`, `not_linked`, `failed`). */
+export type FormRead = FormReadDto;
 /** One field of a step layout (Customize fields); `default` is the value itself, absent when the field has none. */
 export type PresetEntry = { key: string; default?: unknown };
 
@@ -73,4 +76,33 @@ export async function setPreset(itemType: string, group: Group, layout: PresetEn
 /** SKU / barcode edit from the form header (05B MC-22); `null` leaves that part unchanged. */
 export async function updateIdentity(itemId: number, sku: string | null, barcode: string | null): Promise<ItemDto_Serialize> {
   return unwrap(await commands.itemUpdateIdentity(itemId, sku, barcode));
+}
+
+/**
+ * P67 (changelog 46 (3)): reads the linked product of each item once (one request per product) so its form
+ * shows the product's values. Read-only; an item without a linked product answers `not_linked`.
+ */
+export async function readShopValues(itemIds: number[]): Promise<FormRead[]> {
+  return unwrap(await commands.formReadIntegration(itemIds));
+}
+
+/** P67 (changelog 46 (4)): "Save as default" for a field and item type; `null` removes it. Returns the stored default. */
+export async function setFieldDefault(itemType: string, key: string, value: unknown): Promise<unknown> {
+  const stored = unwrap(await commands.attributeDefaultSet(itemType, key, value === null || value === undefined ? null : JSON.stringify(value)));
+  return stored == null ? null : JSON.parse(stored);
+}
+
+/** P67: "Save value": adds the value to the field's saved values for the item type; returns them, most recent first. */
+export async function addSavedValue(itemType: string, key: string, value: unknown): Promise<unknown[]> {
+  return unwrap(await commands.attributeSavedValueAdd(itemType, key, JSON.stringify(value))).map(text => JSON.parse(text));
+}
+
+/** P67: removes one saved value; returns the values left. */
+export async function removeSavedValue(itemType: string, key: string, value: unknown): Promise<unknown[]> {
+  return unwrap(await commands.attributeSavedValueRemove(itemType, key, JSON.stringify(value))).map(text => JSON.parse(text));
+}
+
+/** P67: "Fill defaults": every empty field with a default gets it. Returns how many were filled. */
+export async function fillDefaults(itemId: number): Promise<number> {
+  return unwrap(await commands.attributeFillDefaults(itemId));
 }

@@ -12,6 +12,7 @@ use crate::{
         },
         item::Item,
         photo::Classification,
+        publish::RemoteValues,
     },
     mechanisms::values::{
         PhotoId, canonical_json, canonicalize, is_severity_set, selected_condition_photos,
@@ -161,6 +162,54 @@ fn title_value(item: &Item) -> Option<Value> {
         ai_sources: None,
         updated_at: item.updated_at,
     })
+}
+
+/// The link integration of the linked product the form reads (the store keys links by it).
+const LINK_INTEGRATION: &str = "shopify";
+
+/// No value: null, a blank string, an empty list or object.
+fn is_empty_json(value: &Json) -> bool {
+    match value {
+        Json::Null => true,
+        Json::String(text) => text.trim().is_empty(),
+        Json::Array(items) => items.is_empty(),
+        Json::Object(map) => map.is_empty(),
+        _ => false,
+    }
+}
+
+/// Kinds that never take a default or a saved value: the damage report is per session, a
+/// reference is never written (MC-9).
+fn takes_no_default(definition: &Definition) -> bool {
+    matches!(
+        definition.core_type,
+        CoreType::MediaList | CoreType::Reference
+    ) || definition.key == PRODUCT_TITLE
+}
+
+/// The default of every field of `item_type`'s form (the resolved preset of each step).
+fn defaults_for(tx: &dyn StoreTx, item_type: &str) -> Result<BTreeMap<String, Json>> {
+    let mut out = BTreeMap::new();
+    for group in AttributeGroup::ALL {
+        if let Some(preset) = resolve_preset(tx, item_type, group)? {
+            for field in preset.layout {
+                if let Some(default) = field.default {
+                    out.insert(field.key, default);
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// P67: the outcome of reading one item's linked product into its form (changelog 46 (3)).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteRead {
+    /// The item has no linked product: nothing was read.
+    NotLinked,
+    Read,
+    /// The read failed; the item keeps its local values.
+    Failed(String),
 }
 
 /// Computes the row to store from the definition, the stored row and the current time.
@@ -600,6 +649,276 @@ impl<'a> AttributesService<'a> {
         })
     }
 
+    /// P67 (changelog 46 (3)): reads the item's linked product once (one adapter request) and
+    /// shows its values in the form. A field the photographer owns locally (a human or AI value,
+    /// or one they cleared) is never replaced; a default or an earlier read is replaced by a
+    /// non-empty product value; a field the product leaves empty gets the item type's default
+    /// (changelog 46 (4)). The type follows the product while the local type is the one last read
+    /// (changelog 42); so does the title. Nothing is written to the platform.
+    pub fn read_integration_values(
+        &self,
+        adapter: Option<&dyn CommerceAdapter>,
+        item_id: i64,
+    ) -> Result<RemoteRead> {
+        let Some(link) = self.store.item_link(item_id, LINK_INTEGRATION)? else {
+            return Ok(RemoteRead::NotLinked);
+        };
+        let Some(adapter) = adapter else {
+            return Ok(RemoteRead::Failed(Error::NoIntegration.to_string()));
+        };
+        let remote = match adapter.product_values(&link.external_id) {
+            Ok(remote) => remote,
+            Err(error) => return Ok(RemoteRead::Failed(error.to_string())),
+        };
+        if let Some(item_type) = remote.item_type.as_deref() {
+            let local = self.store.item(item_id)?;
+            if link
+                .item_type_base
+                .as_deref()
+                .is_none_or(|base| base == local.item_type)
+            {
+                crate::services::items::ItemsService::new(self.store, self.clock)
+                    .set_type(item_id, item_type)?;
+            }
+            self.store
+                .set_item_type_base(item_id, LINK_INTEGRATION, item_type)?;
+        }
+        self.apply_remote(item_id, &remote)?;
+        Ok(RemoteRead::Read)
+    }
+
+    fn apply_remote(&self, item_id: i64, remote: &RemoteValues) -> Result<()> {
+        let now = self.clock.now_ms();
+        let mut incoming: BTreeMap<String, Json> = remote.attributes.iter().cloned().collect();
+        incoming.insert(PRODUCT_TAGS.into(), Json::from(remote.tags.clone()));
+        incoming.insert(
+            PRODUCT_DESCRIPTION.into(),
+            remote.description.clone().map_or(Json::Null, Json::String),
+        );
+        self.store.transaction(&mut |tx| {
+            let item = tx.item(item_id)?;
+            let title = remote.title.trim();
+            if !title.is_empty() {
+                let base = tx.item_title_base(item_id, LINK_INTEGRATION)?;
+                let untouched =
+                    item.title.trim().is_empty() || base.as_deref() == Some(item.title.as_str());
+                if untouched && item.title != remote.title {
+                    tx.update_item_title(item_id, &remote.title, now)?;
+                }
+                tx.set_item_title_base(item_id, LINK_INTEGRATION, &remote.title)?;
+            }
+            let stored: BTreeMap<String, Value> = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .map(|v| (v.key.clone(), v))
+                .collect();
+            let defaults = defaults_for(tx, &item.item_type)?;
+            for definition in active_definitions(tx, self.integration)? {
+                if takes_no_default(&definition) {
+                    continue;
+                }
+                let current = stored.get(&definition.key);
+                if current.is_some_and(|v| {
+                    !v.is_live() || matches!(v.provenance, Provenance::Human | Provenance::Ai)
+                }) {
+                    continue;
+                }
+                let row = |value: String, valid: bool, provenance: Provenance| Value {
+                    item_id,
+                    key: definition.key.clone(),
+                    value,
+                    valid,
+                    provenance,
+                    ai_confidence: None,
+                    ai_status: None,
+                    ai_reason: None,
+                    ai_sources: None,
+                    updated_at: now,
+                };
+                let next = match incoming.get(&definition.key).filter(|v| !is_empty_json(v)) {
+                    Some(raw) => {
+                        let (value, valid) = stored_form(&definition, raw.clone());
+                        Some(row(value, valid, Provenance::Integration))
+                    }
+                    None => defaults
+                        .get(&definition.key)
+                        .map(|default| row(canonical_json(default), true, Provenance::Default)),
+                };
+                match (current, next) {
+                    (Some(current), Some(next)) if same_content(current, &next) => {}
+                    (_, Some(next)) => tx.put_attribute_value(&next)?,
+                    (Some(current), None) if current.provenance == Provenance::Integration => {
+                        tx.delete_attribute_value(item_id, &definition.key)?
+                    }
+                    _ => {}
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// P67 (changelog 46 (4)): "Save as default" — the field's default for every item of
+    /// `item_type`, stored in the step layout of that type (the default Customize fields shows).
+    /// `None` or an empty value removes it. Returns the stored default (canonical).
+    pub fn default_set(
+        &self,
+        item_type: &str,
+        key: &str,
+        value: Option<Json>,
+    ) -> Result<Option<Json>> {
+        let definition = self
+            .definitions(self.integration)?
+            .into_iter()
+            .find(|d| d.key == key)
+            .ok_or_else(|| unknown(key))?;
+        if takes_no_default(&definition) {
+            return Err(Error::InvalidValue(format!("{key} takes no default")));
+        }
+        let mut target = None;
+        for group in AttributeGroup::ALL {
+            let preset = self.presets_get(item_type, group)?;
+            if preset.layout.iter().any(|f| f.key == key) {
+                target = Some(preset);
+                break;
+            }
+        }
+        let mut preset = match target {
+            Some(preset) => preset,
+            None => {
+                let mut preset = self.presets_get(item_type, definition.group)?;
+                preset.layout.push(PresetField {
+                    key: key.to_owned(),
+                    default: None,
+                });
+                preset
+            }
+        };
+        preset.item_type = item_type.to_owned();
+        let group = preset.group;
+        let value = value.filter(|v| !is_empty_json(v));
+        for field in &mut preset.layout {
+            if field.key == key {
+                field.default = value.clone();
+            }
+        }
+        self.presets_set(preset)?;
+        Ok(self
+            .presets_get(item_type, group)?
+            .layout
+            .into_iter()
+            .find(|f| f.key == key)
+            .and_then(|f| f.default))
+    }
+
+    fn saved_definition(&self, key: &str) -> Result<Definition> {
+        let definition = self
+            .definitions(self.integration)?
+            .into_iter()
+            .find(|d| d.key == key)
+            .ok_or_else(|| unknown(key))?;
+        if takes_no_default(&definition) {
+            return Err(Error::InvalidValue(format!("{key} takes no saved values")));
+        }
+        Ok(definition)
+    }
+
+    /// P67 (changelog 46 (4)): the saved values of one field for one item type, most recently
+    /// saved first.
+    pub fn saved_values(&self, item_type: &str, key: &str) -> Result<Vec<Json>> {
+        let mut out = Vec::new();
+        self.store.transaction(&mut |tx| {
+            out = tx
+                .saved_attribute_values(item_type, key)?
+                .iter()
+                .filter_map(|text| serde_json::from_str(text).ok())
+                .collect();
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// "Save value": adds the value (canonical; refused when it does not fit the field) to the
+    /// field's saved values for `item_type`, or moves it to the top. Returns the saved values.
+    pub fn saved_value_add(&self, item_type: &str, key: &str, raw: Json) -> Result<Vec<Json>> {
+        let definition = self.saved_definition(key)?;
+        if is_empty_json(&raw) {
+            return Err(Error::InvalidValue(format!("{key}: nothing to save")));
+        }
+        let canonical = canonicalize(definition.core_type, &definition, raw)
+            .map_err(|e| Error::InvalidValue(format!("{key}: {}", e.0)))?;
+        let now = self.clock.now_ms();
+        self.store.transaction(&mut |tx| {
+            tx.put_saved_attribute_value(item_type, key, &canonical.0, now)
+        })?;
+        self.saved_values(item_type, key)
+    }
+
+    /// Removes one saved value of the field for `item_type`. Returns the saved values left.
+    pub fn saved_value_remove(&self, item_type: &str, key: &str, raw: Json) -> Result<Vec<Json>> {
+        let definition = self.saved_definition(key)?;
+        let text = canonicalize(definition.core_type, &definition, raw.clone())
+            .map(|c| c.0)
+            .unwrap_or_else(|_| canonical_json(&raw));
+        self.store
+            .transaction(&mut |tx| tx.delete_saved_attribute_value(item_type, key, &text))?;
+        self.saved_values(item_type, key)
+    }
+
+    /// P67 (changelog 46 (4)): "Fill defaults" — every field of the item's form that has no value
+    /// and has a default for the item's type gets it (provenance `default`); filled fields are
+    /// left alone. One undoable step. Returns how many were filled.
+    pub fn fill_defaults(&self, item_id: i64) -> Result<usize> {
+        let now = self.clock.now_ms();
+        let mut changes = Vec::new();
+        self.store.transaction(&mut |tx| {
+            changes.clear();
+            let item = tx.item(item_id)?;
+            let stored: BTreeMap<String, Value> = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .map(|v| (v.key.clone(), v))
+                .collect();
+            let definitions = active_definitions(tx, self.integration)?;
+            for (key, default) in defaults_for(tx, &item.item_type)? {
+                let Some(_definition) = definitions
+                    .iter()
+                    .find(|d| d.key == key && !takes_no_default(d))
+                else {
+                    continue;
+                };
+                let before = stored.get(&key);
+                if before.is_some_and(Value::is_live) {
+                    continue;
+                }
+                let row = Value {
+                    item_id,
+                    key: key.clone(),
+                    value: canonical_json(&default),
+                    valid: true,
+                    provenance: Provenance::Default,
+                    ai_confidence: None,
+                    ai_status: None,
+                    ai_reason: None,
+                    ai_sources: None,
+                    updated_at: now,
+                };
+                tx.put_attribute_value(&row)?;
+                changes.push(FieldChange {
+                    key,
+                    before: FieldState::Row(before.cloned()),
+                    after: FieldState::Row(Some(row)),
+                });
+            }
+            if !changes.is_empty() {
+                tx.set_item_activity(item_id, now)?;
+            }
+            Ok(())
+        })?;
+        let count = changes.len();
+        self.record(item_id, "Fill defaults".into(), changes)?;
+        Ok(count)
+    }
+
     /// The form of an item: Details, Condition, Product, each with its ordered fields (preset
     /// layout, else every definition of the group), their values, and `filled/total`. A
     /// `media_list` field carries the selected condition photos of the item's session (MC-14).
@@ -617,9 +936,19 @@ impl<'a> AttributesService<'a> {
             }
             None => Vec::new(),
         };
+        let link = self.store.item_link(item_id, LINK_INTEGRATION)?;
         let mut groups = Vec::new();
+        let mut item_type_from_integration = false;
         self.store.transaction(&mut |tx| {
             let item = tx.item(item_id)?;
+            item_type_from_integration = link.as_ref().is_some_and(|link| {
+                !item.item_type.is_empty()
+                    && link.item_type_base.as_deref() == Some(item.item_type.as_str())
+            });
+            let title_from_integration = link.is_some()
+                && !item.title.trim().is_empty()
+                && tx.item_title_base(item_id, LINK_INTEGRATION)?.as_deref()
+                    == Some(item.title.as_str());
             let definitions = active_definitions(tx, self.integration)?;
             let values: BTreeMap<String, Value> = tx
                 .attribute_values(item_id)?
@@ -629,19 +958,46 @@ impl<'a> AttributesService<'a> {
                 .collect();
             groups.clear();
             for group in AttributeGroup::ALL {
-                let ordered: Vec<&Definition> = match resolve_preset(tx, &item.item_type, group)? {
+                let preset = resolve_preset(tx, &item.item_type, group)?;
+                let ordered: Vec<(&Definition, Option<Json>)> = match preset {
                     Some(preset) => preset
                         .layout
-                        .iter()
-                        .filter_map(|f| definitions.iter().find(|d| d.key == f.key))
+                        .into_iter()
+                        .filter_map(|f| {
+                            definitions
+                                .iter()
+                                .find(|d| d.key == f.key)
+                                .map(|d| (d, f.default))
+                        })
                         .collect(),
-                    None => definitions.iter().filter(|d| d.group == group).collect(),
+                    None => definitions
+                        .iter()
+                        .filter(|d| d.group == group)
+                        .map(|d| (d, None))
+                        .collect(),
                 };
-                let fields: Vec<FormField> = ordered
+                let mut fields = Vec::with_capacity(ordered.len());
+                for (definition, default) in ordered {
+                    let saved: Vec<Json> = if takes_no_default(definition) {
+                        Vec::new()
+                    } else {
+                        tx.saved_attribute_values(&item.item_type, &definition.key)?
+                            .iter()
+                            .filter_map(|text| serde_json::from_str(text).ok())
+                            .collect()
+                    };
+                    fields.push((definition, default, saved));
+                }
+                let fields: Vec<FormField> = fields
                     .into_iter()
-                    .map(|definition| {
+                    .map(|(definition, default, saved)| {
                         let value = if definition.key == PRODUCT_TITLE {
-                            title_value(&item)
+                            title_value(&item).map(|mut value| {
+                                if title_from_integration {
+                                    value.provenance = Provenance::Integration;
+                                }
+                                value
+                            })
                         } else {
                             values.get(&definition.key).cloned()
                         };
@@ -664,6 +1020,8 @@ impl<'a> AttributesService<'a> {
                             definition: definition.clone(),
                             value,
                             selected,
+                            default: default.filter(|_| !takes_no_default(definition)),
+                            saved,
                         }
                     })
                     .collect();
@@ -679,6 +1037,10 @@ impl<'a> AttributesService<'a> {
             }
             Ok(())
         })?;
-        Ok(Form { item_id, groups })
+        Ok(Form {
+            item_id,
+            groups,
+            item_type_from_integration,
+        })
     }
 }

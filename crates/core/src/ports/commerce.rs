@@ -6,7 +6,7 @@ use crate::Result;
 use crate::domain::attribute::Definition;
 use crate::domain::publish::{
     ConfirmedRun, DefinitionLink, MediaReadback, RemoteIdentity, RemoteItem, RemoteMedia,
-    StagedTarget, StockChoice, StockLocations, StockOutcome, WriteValue,
+    RemoteValues, StagedTarget, StockChoice, StockLocations, StockOutcome, WriteValue,
 };
 use serde_json::Value as Json;
 
@@ -37,6 +37,9 @@ pub trait CommerceAdapter: Send + Sync {
     fn item_types(&self) -> Result<Vec<String>>;
     /// Current product fields used for the confirmed description and three-way tag merge.
     fn product_fields(&self, external_id: &str) -> Result<(Vec<String>, Option<String>)>;
+    /// P67 (changelog 46 (3)): read-only, one request: the values the item form shows (title,
+    /// type, tags, description as paragraphs, every attribute except the condition photos).
+    fn product_values(&self, external_id: &str) -> Result<RemoteValues>;
     /// The exact description representation stored by this platform.
     fn render_description(&self, paragraphs: &str) -> String;
     /// Creates a draft item whose default variant carries `sku` and `barcode`; returns its id.

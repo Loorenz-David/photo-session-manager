@@ -25,8 +25,8 @@ const ITEM_ID = 7;
 const item: Item = { id: ITEM_ID, sku: 'VF-0042', folder_key: 'VF-0042', barcode: '4006381333931', item_type: 'Chair', title: 'Oak chair', origin: 'local', external_id: null, created_at: 0, updated_at: 0 };
 const def = (key: string, core_type: string, label: string, group: Group = 'details'): Definition => ({ integration: 'shopify', key, label, core_type, choices: [], validations: '{}', group, description: null, writable: true });
 const stored = (key: string, value: unknown, extra: Partial<AttributeValue> = {}): AttributeValue => ({ item_id: ITEM_ID, key, value: JSON.stringify(value), valid: true, provenance: 'human', ai_confidence: null, ai_status: null, ai_reason: null, ai_sources: null, updated_at: 1, ...extra });
-const field = (definition: Definition, value: AttributeValue | null): FormField => ({ definition, value, is_default: false, is_severity: false, selected: null });
-const form = (groups: Partial<Record<Group, FormField[]>>): Form => ({ item_id: ITEM_ID, groups: (['details', 'condition', 'product'] as Group[]).map(group => ({ group, fields: groups[group] ?? [], filled: 0, total: groups[group]?.length ?? 0 })) });
+const field = (definition: Definition, value: AttributeValue | null): FormField => ({ definition, value, is_default: false, is_severity: false, selected: null, default: null, saved: [] });
+const form = (groups: Partial<Record<Group, FormField[]>>): Form => ({ item_id: ITEM_ID, item_type_from_integration: false, groups: (['details', 'condition', 'product'] as Group[]).map(group => ({ group, fields: groups[group] ?? [], filled: 0, total: groups[group]?.length ?? 0 })) });
 const renderForm = (onOpenChange = vi.fn(), onItemChanged = vi.fn()) => render(<FormDialog open onOpenChange={onOpenChange} item={item} photos={[]} onItemChanged={onItemChanged} />);
 
 beforeEach(() => { vi.mocked(setAttributeValue).mockImplementation(async (_id, key, value) => stored(key, value)); });

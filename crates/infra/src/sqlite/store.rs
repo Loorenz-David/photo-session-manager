@@ -73,6 +73,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/010_retention.sql")),
             M::up(include_str!("migrations/011_item_stock.sql")),
             M::up(include_str!("migrations/012_photo_denials.sql")),
+            M::up(include_str!("migrations/013_form_values.sql")),
         ]
     }
 
@@ -917,6 +918,54 @@ impl StoreTx for SqliteTx<'_> {
     }
     fn put_attribute_preset(&mut self, preset: &Preset) -> Result<()> {
         self.tx.execute("INSERT INTO attribute_presets(item_type,grp,layout) VALUES (?1,?2,?3) ON CONFLICT(item_type,grp) DO UPDATE SET layout=excluded.layout", params![preset.item_type,preset.group.as_str(),to_json(&preset.layout)?]).map_err(db)?;
+        Ok(())
+    }
+    fn saved_attribute_values(&self, item_type: &str, key: &str) -> Result<Vec<String>> {
+        let mut stmt = self
+            .tx
+            .prepare("SELECT value FROM attribute_saved_values WHERE item_type=?1 AND key=?2 ORDER BY saved_at DESC, rowid DESC")
+            .map_err(db)?;
+        let rows = stmt
+            .query_map(params![item_type, key], |r| r.get(0))
+            .map_err(db)?;
+        rows.collect::<rusqlite::Result<Vec<String>>>().map_err(db)
+    }
+    fn put_saved_attribute_value(
+        &mut self,
+        item_type: &str,
+        key: &str,
+        value: &str,
+        at: i64,
+    ) -> Result<()> {
+        self.tx.execute("INSERT INTO attribute_saved_values(item_type,key,value,saved_at) VALUES (?1,?2,?3,?4) ON CONFLICT(item_type,key,value) DO UPDATE SET saved_at=excluded.saved_at", params![item_type,key,value,at]).map_err(db)?;
+        Ok(())
+    }
+    fn delete_saved_attribute_value(
+        &mut self,
+        item_type: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<()> {
+        self.tx
+            .execute(
+                "DELETE FROM attribute_saved_values WHERE item_type=?1 AND key=?2 AND value=?3",
+                params![item_type, key, value],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn item_title_base(&self, item_id: i64, integration: &str) -> Result<Option<String>> {
+        self.tx
+            .query_row(
+                "SELECT title FROM item_remote_titles WHERE item_id=?1 AND integration=?2",
+                params![item_id, integration],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)
+    }
+    fn set_item_title_base(&mut self, item_id: i64, integration: &str, title: &str) -> Result<()> {
+        self.tx.execute("INSERT INTO item_remote_titles(item_id,integration,title) VALUES (?1,?2,?3) ON CONFLICT(item_id,integration) DO UPDATE SET title=excluded.title", params![item_id,integration,title]).map_err(db)?;
         Ok(())
     }
     fn item_folder_key_frozen(&self, item_id: i64) -> Result<bool> {

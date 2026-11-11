@@ -90,13 +90,14 @@ function stored(key: string, value: unknown, extra: Partial<AttributeValue> = {}
 }
 
 function field(definition: Definition, value: AttributeValue | null = null, selected: number[] | null = null): FormField {
-  return { definition, value, is_default: false, is_severity: false, selected };
+  return { definition, value, is_default: false, is_severity: false, selected, default: null, saved: [] };
 }
 
 /** A form whose Details step holds `details` (counts as given, else derived). */
 function form(groups: Partial<Record<Group, FormField[]>>, counts: Partial<Record<Group, [number, number]>> = {}): Form {
   return {
     item_id: ITEM_ID,
+    item_type_from_integration: false,
     groups: (['details', 'condition', 'product'] as Group[]).map(group => {
       const fields = groups[group] ?? [];
       const [filled, total] = counts[group] ?? [fields.filter(f => f.value?.valid).length, fields.length];

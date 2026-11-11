@@ -95,6 +95,28 @@ export const commands = {
 	presetsSet: (preset: PresetDto_Deserialize) => typedError<null, CommandError>(__TAURI_INVOKE("presets_set", { preset })),
 	/**  The item's form: Details, Condition, Product with ordered fields, values and fill counts. */
 	formGet: (itemId: CommandId) => typedError<FormDto_Serialize, CommandError>(__TAURI_INVOKE("form_get", { itemId })),
+	/**
+	 *  P67 (changelog 46 (3)): reads the linked product of each item once (one request per product)
+	 *  and shows its values in the item's form. Never writes to the platform.
+	 */
+	formReadIntegration: (itemIds: CommandId[]) => typedError<FormReadDto_Serialize[], CommandError>(__TAURI_INVOKE("form_read_integration", { itemIds })),
+	/**
+	 *  P67 (changelog 46 (4)): "Save as default" for one field and item type; `value` is JSON text,
+	 *  `null` removes the default. Returns the stored default.
+	 */
+	attributeDefaultSet: (itemType: string, key: string, value: string | null) => typedError<string | null, CommandError>(__TAURI_INVOKE("attribute_default_set", { itemType, key, value })),
+	/**
+	 *  P67: "Save value" — adds the value (JSON text) to the field's saved values for the item type.
+	 *  Returns the saved values, most recent first.
+	 */
+	attributeSavedValueAdd: (itemType: string, key: string, value: string) => typedError<string[], CommandError>(__TAURI_INVOKE("attribute_saved_value_add", { itemType, key, value })),
+	/**  P67: removes one saved value of the field for the item type. Returns the values left. */
+	attributeSavedValueRemove: (itemType: string, key: string, value: string) => typedError<string[], CommandError>(__TAURI_INVOKE("attribute_saved_value_remove", { itemType, key, value })),
+	/**
+	 *  P67: "Fill defaults" — every empty field of the item's form that has a default gets it.
+	 *  Returns how many were filled.
+	 */
+	attributeFillDefaults: (itemId: CommandId) => typedError<number, CommandError>(__TAURI_INVOKE("attribute_fill_defaults", { itemId })),
 	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
 	publishConfirm: (sessionIds: CommandId[], summaryText: string) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText })),
 	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
@@ -184,15 +206,17 @@ export type AttributeGroupDto = "details" | "condition" | "product";
 
 /**
  *  One stored value: `value` is canonical JSON text when `valid`, else the value as received.
- *  `provenance` is `human` / `ai` / `default`; `ai_confidence` `high` / `medium` / `low`;
- *  `ai_status` `suggested` / `accepted`.
+ *  `provenance` is `human` / `ai` / `default` / `integration` (P67: read from the linked product,
+ *  shown "from Shopify"); `ai_confidence` `high` / `medium` / `low`; `ai_status` `suggested` /
+ *  `accepted`.
  */
 export type AttributeValueDto = AttributeValueDto_Serialize | AttributeValueDto_Deserialize;
 
 /**
  *  One stored value: `value` is canonical JSON text when `valid`, else the value as received.
- *  `provenance` is `human` / `ai` / `default`; `ai_confidence` `high` / `medium` / `low`;
- *  `ai_status` `suggested` / `accepted`.
+ *  `provenance` is `human` / `ai` / `default` / `integration` (P67: read from the linked product,
+ *  shown "from Shopify"); `ai_confidence` `high` / `medium` / `low`; `ai_status` `suggested` /
+ *  `accepted`.
  */
 export type AttributeValueDto_Deserialize = {
 	item_id: number,
@@ -209,8 +233,9 @@ export type AttributeValueDto_Deserialize = {
 
 /**
  *  One stored value: `value` is canonical JSON text when `valid`, else the value as received.
- *  `provenance` is `human` / `ai` / `default`; `ai_confidence` `high` / `medium` / `low`;
- *  `ai_status` `suggested` / `accepted`.
+ *  `provenance` is `human` / `ai` / `default` / `integration` (P67: read from the linked product,
+ *  shown "from Shopify"); `ai_confidence` `high` / `medium` / `low`; `ai_status` `suggested` /
+ *  `accepted`.
  */
 export type AttributeValueDto_Serialize = {
 	item_id: number,
@@ -374,11 +399,15 @@ export type FormDto = FormDto_Serialize | FormDto_Deserialize;
 export type FormDto_Deserialize = {
 	item_id: number,
 	groups: FormGroupDto_Deserialize[],
+	/**  P67: the item's type is the one read from its linked product. */
+	item_type_from_integration: boolean,
 };
 
 export type FormDto_Serialize = {
 	item_id: number,
 	groups: FormGroupDto_Serialize[],
+	/**  P67: the item's type is the one read from its linked product. */
+	item_type_from_integration: boolean,
 };
 
 export type FormFieldDto = FormFieldDto_Serialize | FormFieldDto_Deserialize;
@@ -390,6 +419,10 @@ export type FormFieldDto_Deserialize = {
 	is_severity: boolean,
 	/**  For a `media_list` field: the selected condition photo ids in condition order (MC-14). */
 	selected?: number[] | null,
+	/**  P67: the field's default for the item's type (JSON text), if any. */
+	default?: string | null,
+	/**  P67: the field's saved values for the item's type (JSON text), most recent first. */
+	saved: string[],
 };
 
 export type FormFieldDto_Serialize = {
@@ -399,6 +432,10 @@ export type FormFieldDto_Serialize = {
 	is_severity: boolean,
 	/**  For a `media_list` field: the selected condition photo ids in condition order (MC-14). */
 	selected: number[] | null,
+	/**  P67: the field's default for the item's type (JSON text), if any. */
+	default: string | null,
+	/**  P67: the field's saved values for the item's type (JSON text), most recent first. */
+	saved: string[],
 };
 
 export type FormGroupDto = FormGroupDto_Serialize | FormGroupDto_Deserialize;
@@ -415,6 +452,39 @@ export type FormGroupDto_Serialize = {
 	fields: FormFieldDto_Serialize[],
 	filled: number,
 	total: number,
+};
+
+/**
+ *  P67: the outcome of reading one item's linked product for its form: `state` is `read`,
+ *  `not_linked` or `failed` (then `error` says why); `item_type` and `title` are the item's own
+ *  after the read (the product's when the photographer had not changed them here).
+ */
+export type FormReadDto = FormReadDto_Serialize | FormReadDto_Deserialize;
+
+/**
+ *  P67: the outcome of reading one item's linked product for its form: `state` is `read`,
+ *  `not_linked` or `failed` (then `error` says why); `item_type` and `title` are the item's own
+ *  after the read (the product's when the photographer had not changed them here).
+ */
+export type FormReadDto_Deserialize = {
+	item_id: number,
+	state: string,
+	error?: string | null,
+	item_type: string,
+	title: string,
+};
+
+/**
+ *  P67: the outcome of reading one item's linked product for its form: `state` is `read`,
+ *  `not_linked` or `failed` (then `error` says why); `item_type` and `title` are the item's own
+ *  after the read (the product's when the photographer had not changed them here).
+ */
+export type FormReadDto_Serialize = {
+	item_id: number,
+	state: string,
+	error: string | null,
+	item_type: string,
+	title: string,
 };
 
 export type FrameDto = {

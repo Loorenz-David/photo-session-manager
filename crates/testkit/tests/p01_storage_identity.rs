@@ -320,6 +320,13 @@ fn c1a_open_creates_all_domain_columns() {
             "photo_denials",
             &["photo_id", "denied_at", "files_deleted_at"],
         ),
+        // P67 (changelog 46 (3), (4)): saved values per item type and field, and the title last
+        // read from the linked product.
+        (
+            "attribute_saved_values",
+            &["item_type", "key", "value", "saved_at"],
+        ),
+        ("item_remote_titles", &["item_id", "integration", "title"]),
     ];
     let actual_tables: BTreeSet<String> = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__rusqlite_%'").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
     let expected_tables: BTreeSet<String> = expected

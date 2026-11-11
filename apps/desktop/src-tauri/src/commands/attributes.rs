@@ -9,8 +9,8 @@ use psm_core::{
     Error,
     domain::attribute::{AttributeGroup, Definition, Form, Preset, PresetField, Provenance, Value},
     mechanisms::values::canonical_json,
-    ports::clock::SystemClock,
-    services::attributes::AttributesService,
+    ports::{clock::SystemClock, store::Store},
+    services::attributes::{AttributesService, RemoteRead},
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -75,8 +75,9 @@ impl From<Definition> for DefinitionDto {
 }
 
 /// One stored value: `value` is canonical JSON text when `valid`, else the value as received.
-/// `provenance` is `human` / `ai` / `default`; `ai_confidence` `high` / `medium` / `low`;
-/// `ai_status` `suggested` / `accepted`.
+/// `provenance` is `human` / `ai` / `default` / `integration` (P67: read from the linked product,
+/// shown "from Shopify"); `ai_confidence` `high` / `medium` / `low`; `ai_status` `suggested` /
+/// `accepted`.
 #[derive(Serialize, Type)]
 pub struct AttributeValueDto {
     #[specta(type = specta_typescript::Number)]
@@ -150,6 +151,10 @@ pub struct FormFieldDto {
     /// For a `media_list` field: the selected condition photo ids in condition order (MC-14).
     #[specta(type = Option<Vec<specta_typescript::Number>>)]
     pub selected: Option<Vec<i64>>,
+    /// P67: the field's default for the item's type (JSON text), if any.
+    pub default: Option<String>,
+    /// P67: the field's saved values for the item's type (JSON text), most recent first.
+    pub saved: Vec<String>,
 }
 
 #[derive(Serialize, Type)]
@@ -165,6 +170,8 @@ pub struct FormDto {
     #[specta(type = specta_typescript::Number)]
     pub item_id: i64,
     pub groups: Vec<FormGroupDto>,
+    /// P67: the item's type is the one read from its linked product.
+    pub item_type_from_integration: bool,
 }
 
 impl From<Form> for FormDto {
@@ -187,10 +194,13 @@ impl From<Form> for FormDto {
                             is_default: f.is_default,
                             is_severity: f.is_severity,
                             selected: f.selected,
+                            default: f.default.as_ref().map(canonical_json),
+                            saved: f.saved.iter().map(canonical_json).collect(),
                         })
                         .collect(),
                 })
                 .collect(),
+            item_type_from_integration: form.item_type_from_integration,
         }
     }
 }
@@ -361,6 +371,130 @@ pub async fn form_get(
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<FormDto, CommandError> {
         with_service(&app, |s| s.form_get(item_id.0)).map(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// P67: the outcome of reading one item's linked product for its form: `state` is `read`,
+/// `not_linked` or `failed` (then `error` says why); `item_type` and `title` are the item's own
+/// after the read (the product's when the photographer had not changed them here).
+#[derive(Serialize, Type)]
+pub struct FormReadDto {
+    #[specta(type = specta_typescript::Number)]
+    pub item_id: i64,
+    pub state: String,
+    pub error: Option<String>,
+    pub item_type: String,
+    pub title: String,
+}
+
+/// P67 (changelog 46 (3)): reads the linked product of each item once (one request per product)
+/// and shows its values in the item's form. Never writes to the platform.
+#[tauri::command]
+#[specta::specta]
+pub async fn form_read_integration(
+    state: State<'_, AppState>,
+    item_ids: Vec<CommandId>,
+) -> Result<Vec<FormReadDto>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<FormReadDto>, CommandError> {
+        let mut out = Vec::with_capacity(item_ids.len());
+        for item_id in item_ids {
+            let read = with_service(&app, |s| {
+                s.read_integration_values(app.commerce.as_deref(), item_id.0)
+            })?;
+            let (state, error) = match read {
+                RemoteRead::Read => ("read", None),
+                RemoteRead::NotLinked => ("not_linked", None),
+                RemoteRead::Failed(error) => ("failed", Some(error)),
+            };
+            let item = app.store.item(item_id.0).map_err(CommandError::from)?;
+            out.push(FormReadDto {
+                item_id: item_id.0,
+                state: state.into(),
+                error,
+                item_type: item.item_type,
+                title: item.title,
+            });
+        }
+        Ok(out)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// P67 (changelog 46 (4)): "Save as default" for one field and item type; `value` is JSON text,
+/// `null` removes the default. Returns the stored default.
+#[tauri::command]
+#[specta::specta]
+pub async fn attribute_default_set(
+    state: State<'_, AppState>,
+    item_type: String,
+    key: String,
+    value: Option<String>,
+) -> Result<Option<String>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<String>, CommandError> {
+        let raw = value.as_deref().map(parse).transpose()?;
+        with_service(&app, |s| s.default_set(&item_type, &key, raw))
+            .map(|stored| stored.as_ref().map(canonical_json))
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// P67: "Save value" — adds the value (JSON text) to the field's saved values for the item type.
+/// Returns the saved values, most recent first.
+#[tauri::command]
+#[specta::specta]
+pub async fn attribute_saved_value_add(
+    state: State<'_, AppState>,
+    item_type: String,
+    key: String,
+    value: String,
+) -> Result<Vec<String>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, CommandError> {
+        let raw = parse(&value)?;
+        with_service(&app, |s| s.saved_value_add(&item_type, &key, raw))
+            .map(|values| values.iter().map(canonical_json).collect())
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// P67: removes one saved value of the field for the item type. Returns the values left.
+#[tauri::command]
+#[specta::specta]
+pub async fn attribute_saved_value_remove(
+    state: State<'_, AppState>,
+    item_type: String,
+    key: String,
+    value: String,
+) -> Result<Vec<String>, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, CommandError> {
+        let raw = parse(&value)?;
+        with_service(&app, |s| s.saved_value_remove(&item_type, &key, raw))
+            .map(|values| values.iter().map(canonical_json).collect())
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// P67: "Fill defaults" — every empty field of the item's form that has a default gets it.
+/// Returns how many were filled.
+#[tauri::command]
+#[specta::specta]
+pub async fn attribute_fill_defaults(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+) -> Result<u32, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<u32, CommandError> {
+        with_service(&app, |s| s.fill_defaults(item_id.0))
+            .map(|n| u32::try_from(n).unwrap_or(u32::MAX))
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?

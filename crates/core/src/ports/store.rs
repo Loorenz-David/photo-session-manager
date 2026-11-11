@@ -118,6 +118,26 @@ pub trait StoreTx {
     fn set_item_activity(&mut self, item_id: i64, at: i64) -> Result<()>;
     fn attribute_preset(&self, item_type: &str, group: AttributeGroup) -> Result<Option<Preset>>;
     fn put_attribute_preset(&mut self, preset: &Preset) -> Result<()>;
+    /// P67 (changelog 46 (4)): the saved values (canonical JSON text) of one field for one item
+    /// type, most recently saved first.
+    fn saved_attribute_values(&self, item_type: &str, key: &str) -> Result<Vec<String>>;
+    /// Adds the value, or moves it to the top when it is already saved.
+    fn put_saved_attribute_value(
+        &mut self,
+        item_type: &str,
+        key: &str,
+        value: &str,
+        at: i64,
+    ) -> Result<()>;
+    fn delete_saved_attribute_value(
+        &mut self,
+        item_type: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<()>;
+    /// P67 (changelog 46 (3)): the item's title as last read from `integration`.
+    fn item_title_base(&self, item_id: i64, integration: &str) -> Result<Option<String>>;
+    fn set_item_title_base(&mut self, item_id: i64, integration: &str, title: &str) -> Result<()>;
     /// 05B MC-22 amended (10E R-I28): the item has a photo row in one of its sessions, or a
     /// `photo`/`renamed_photo` delivery in state `pending` or `done` for one of its sessions.
     fn item_folder_key_frozen(&self, item_id: i64) -> Result<bool>;

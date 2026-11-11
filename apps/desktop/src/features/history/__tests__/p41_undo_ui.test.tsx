@@ -38,10 +38,10 @@ beforeEach(() => {
   vi.mocked(historyUndo).mockResolvedValue(undone);
   vi.mocked(historyRedo).mockResolvedValue(redone);
   vi.mocked(applyComposition).mockResolvedValue({ applied: [], refused: [] });
-  const title: Form = { item_id: 50, groups: [
+  const title: Form = { item_id: 50, item_type_from_integration: false, groups: [
     { group: 'details', fields: [], filled: 0, total: 0 },
     { group: 'condition', fields: [], filled: 0, total: 0 },
-    { group: 'product', fields: [{ definition: { integration: 'shopify', key: 'product.title', label: 'Title', core_type: 'text', choices: [], validations: '{}', group: 'product', description: null, writable: true }, value: null, is_default: false, is_severity: false, selected: null }], filled: 0, total: 1 },
+    { group: 'product', fields: [{ definition: { integration: 'shopify', key: 'product.title', label: 'Title', core_type: 'text', choices: [], validations: '{}', group: 'product', description: null, writable: true }, value: null, is_default: false, is_severity: false, selected: null, default: null, saved: [] }], filled: 0, total: 1 },
   ] };
   vi.mocked(getForm).mockResolvedValue(title);
 });

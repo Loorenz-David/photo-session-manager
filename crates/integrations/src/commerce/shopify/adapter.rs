@@ -17,8 +17,8 @@ use psm_core::{
     domain::attribute::{AttributeGroup, CoreType, Definition},
     domain::publish::{
         ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
-        RemoteMedia, RemoteMediaStatus, StagedTarget, StockChoice, StockLocation, StockLocations,
-        StockOutcome, WriteValue,
+        RemoteMedia, RemoteMediaStatus, RemoteValues, StagedTarget, StockChoice, StockLocation,
+        StockLocations, StockOutcome, WriteValue,
     },
     mechanisms::{upload_name, values::canonical_decimal},
     ports::{
@@ -182,6 +182,53 @@ pub fn description_html(paragraphs: &str) -> String {
     }
     flush(&mut current, &mut out);
     out
+}
+
+/// P67: the form's description (blank-line-separated paragraphs) from a product's
+/// `descriptionHtml`, the inverse of [`description_html`] for the paragraphs it writes. Block tags
+/// (`p`, `div`, `li`, headings, lists, quotes) end a paragraph, `<br>` is a line break, other tags
+/// are dropped and entities decoded.
+pub fn description_paragraphs(html: &str) -> String {
+    const BREAK: char = '\u{1}';
+    let mut text = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(start) = rest.find('<') {
+        text.push_str(&rest[..start]);
+        let Some(end) = rest[start..].find('>') else {
+            text.push_str(&rest[start..]);
+            rest = "";
+            break;
+        };
+        let tag = rest[start + 1..start + end]
+            .trim_start_matches('/')
+            .split(|c: char| c.is_whitespace() || c == '/')
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match tag.as_str() {
+            "br" => text.push('\n'),
+            "p" | "div" | "li" | "ul" | "ol" | "blockquote" | "h1" | "h2" | "h3" | "h4" | "h5"
+            | "h6" => text.push(BREAK),
+            _ => {}
+        }
+        rest = &rest[start + end + 1..];
+    }
+    text.push_str(rest);
+    let decoded = text
+        .replace("&nbsp;", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+        .replace("&amp;", "&");
+    decoded
+        .split(BREAK)
+        .flat_map(|block| block.split("\n\n"))
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 fn nfc(text: &str) -> String {
@@ -613,6 +660,55 @@ impl CommerceAdapter for ShopifyAdapter {
                 .and_then(|m| m.image.as_ref())
                 .and_then(|i| i.url.clone()),
             media: remote_media(&product.media.nodes),
+        })
+    }
+
+    fn product_values(&self, external_id: &str) -> Result<RemoteValues> {
+        let data = self.call(graphql::PRODUCT_VALUES, json!({ "id": external_id }))?;
+        let product = match data.get("product") {
+            Some(Json::Null) | None => {
+                return Err(Error::NotFound(format!("product {external_id}")));
+            }
+            Some(product) => product,
+        };
+        let mut page: MetafieldsPage = parse(&product["metafields"], "metafields")?;
+        let mut attributes = Vec::new();
+        loop {
+            for m in &page.nodes {
+                let key = format!("{}.{}", m.namespace, m.key);
+                // The condition-photos value is local (07A MC-14), as in `attributes_read`.
+                if key == self.config.condition_photos_key {
+                    continue;
+                }
+                let core_type = type_map::value_core_type(&m.type_);
+                attributes.push((
+                    key,
+                    type_map::from_platform_string(core_type, &m.type_, &m.value),
+                ));
+            }
+            match (
+                page.page_info.has_next_page,
+                page.page_info.end_cursor.clone(),
+            ) {
+                (true, Some(cursor)) => {
+                    let next = self.call(
+                        graphql::METAFIELDS_READ,
+                        json!({ "id": external_id, "after": cursor }),
+                    )?;
+                    page = parse(&next["product"]["metafields"], "metafields")?;
+                }
+                _ => break,
+            }
+        }
+        Ok(RemoteValues {
+            title: product["title"].as_str().unwrap_or_default().to_owned(),
+            item_type: product["productType"].as_str().map(str::to_owned),
+            tags: parse(&product["tags"], "tags").unwrap_or_default(),
+            description: product["descriptionHtml"]
+                .as_str()
+                .map(description_paragraphs)
+                .filter(|text| !text.is_empty()),
+            attributes,
         })
     }
 

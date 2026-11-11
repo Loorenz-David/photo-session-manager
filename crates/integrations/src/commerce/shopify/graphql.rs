@@ -11,6 +11,10 @@ pub const PRODUCT_READ: &str = "query ProductRead($id: ID!) { product(id: $id) {
 pub const VARIANT_SEARCH: &str = "query VariantSearch($query: String!) { productVariants(first: 10, query: $query) { nodes { id sku barcodes(first: 5) { nodes { value } } product { id title productType status featuredMedia { preview { image { url } } } } } } }";
 pub const TITLE_SEARCH: &str = "query TitleSearch($query: String!) { products(first: 20, query: $query) { nodes { id title productType featuredMedia { preview { image { url } } } variants(first: 1) { nodes { sku barcodes(first: 5) { nodes { value } } inventoryItem { sku } } } } } }";
 
+/// P67 (changelog 46 (3)): everything the item form shows, in one read: title, type, tags,
+/// description and the product's metafields (more than 250 page on with `METAFIELDS_READ`).
+pub const PRODUCT_VALUES: &str = "query ProductValues($id: ID!) { product(id: $id) { id title productType tags descriptionHtml metafields(first: 250) { pageInfo { hasNextPage endCursor } nodes { namespace key type value } } } }";
+
 pub const METAFIELDS_READ: &str = "query MetafieldsRead($id: ID!, $after: String) { product(id: $id) { metafields(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { namespace key type value } } } }";
 pub const CONDITION_METAFIELD_READ: &str = "query ConditionMetafieldRead($id: ID!, $namespace: String!, $key: String!) { product(id: $id) { metafield(namespace: $namespace, key: $key) { value } } }";
 
