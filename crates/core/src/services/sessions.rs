@@ -329,14 +329,17 @@ impl SessionsService<'_> {
                 label,
                 progress,
                 last_activity_at: dto.session.last_activity_at,
+                created_at: dto.session.created_at,
                 cover_preview_path: record.cover_preview_path,
                 publish: record.publish,
             });
         }
+        // Changelog 46 (1): creation order, newest created on top, grouped by creation time;
+        // opening, editing, capturing into or publishing a session never moves it.
         let group_ids = group_by_activity(
             &rows
                 .iter()
-                .map(|r| (r.id, r.last_activity_at))
+                .map(|r| (r.id, r.created_at))
                 .collect::<Vec<_>>(),
             self.clock.now_ms(),
             &chrono::Local,

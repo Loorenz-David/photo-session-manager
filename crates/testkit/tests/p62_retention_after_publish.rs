@@ -178,7 +178,7 @@ fn item(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
         photos.push(photo(a, session, sku, &format!("{sku}_C{i}"), C::Condition));
     }
     let hidden = photo(a, session, sku, &format!("{sku}_D"), C::Main);
-    a.review().delete(hidden.id).unwrap();
+    hidden_before_p66(a, hidden.id);
     photos.push(a.store().photo(hidden.id).unwrap());
     photos.push(photo(a, session, sku, &format!("{sku}_U"), C::Unreviewed));
     Item {
@@ -188,12 +188,22 @@ fn item(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
     }
 }
 
+/// A photo hidden before P66 (no deny mark): its RAW stays until retention clears the item (Q1).
+/// Since P66 a fresh deny is deleted once its undo window closes (changelog 46 (2); p66 tests).
+fn hidden_before_p66(a: &TestApp, photo_id: i64) {
+    a.review().delete(photo_id).unwrap();
+    rusqlite::Connection::open(a.app.paths.db())
+        .unwrap()
+        .execute("DELETE FROM photo_denials WHERE photo_id=?1", [photo_id])
+        .unwrap();
+}
+
 /// `item` published to the fake shop now (the publish flow runs to done).
 fn published(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
     let it = item(a, sku, main, condition);
     // A never-reviewed photo blocks the ready rule: review it as deleted before publishing.
     let unreviewed = it.photos.last().unwrap().id;
-    a.review().delete(unreviewed).unwrap();
+    hidden_before_p66(a, unreviewed);
     a.app
         .publish
         .as_ref()

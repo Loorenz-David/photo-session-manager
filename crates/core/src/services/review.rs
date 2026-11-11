@@ -51,6 +51,16 @@ impl<'a> ReviewService<'a> {
             return self.delete(photo_id);
         }
         crate::services::retention::ensure_photo_not_cleared(self.store, photo_id)?;
+        // P66: a denied photo whose files were deleted cannot come back.
+        if self
+            .store
+            .photo_denial(photo_id)?
+            .is_some_and(|denial| denial.files_deleted_at.is_some())
+        {
+            return Err(Error::InvalidValue(
+                "the denied photo's file was deleted".into(),
+            ));
+        }
         let mut session_id = 0;
         let mut step = None;
         let at = self.clock.now_ms();
@@ -150,6 +160,8 @@ impl<'a> ReviewService<'a> {
                 tx.set_positions(&position::remove_at(&old, photo_id))?;
             }
             tx.set_photo_review(photo_id, session_id, Classification::Deleted, None)?;
+            // Changelog 46 (2): Deny starts the undo window; the RAW goes when it closes.
+            tx.set_photo_denied(photo_id, at)?;
             tx.enqueue_mirror_tag(&photo.raw_path, photo_id, at)?;
             tx.touch_session(session_id, at)?;
             let before = photo_place(&photo);

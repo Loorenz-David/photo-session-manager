@@ -112,6 +112,8 @@ pub struct SessionRow {
     pub label: RowLabel,
     pub progress: Option<u8>,
     pub last_activity_at: i64,
+    /// When the session was created: the list's order and time groups (changelog 46 (1)).
+    pub created_at: i64,
     pub cover_preview_path: Option<String>,
     pub publish: Option<LatestPublish>,
 }

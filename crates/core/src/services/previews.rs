@@ -143,6 +143,21 @@ impl PreviewService {
             .and_then(|slot| slot.clone())
             .is_some_and(|held| held())
     }
+    /// Changelog 46 (2): a photo arrives approved (`main`); its colour tag is mirrored to the
+    /// editing provider (D2: green) once the provider has delivered the RAW's first adjusted
+    /// preview — it lists the photo then, so the tag write is not refused or retried meanwhile.
+    fn mirror_arrived(&self, photos: &[(i64, i64)]) -> Result<()> {
+        let at = self.clock.now_ms();
+        for (photo_id, _) in photos {
+            let photo = self.store.photo(*photo_id)?;
+            if photo.classification == Classification::Unreviewed {
+                continue;
+            }
+            self.store
+                .transaction(&mut |tx| tx.enqueue_mirror_tag(&photo.raw_path, photo.id, at))?;
+        }
+        Ok(())
+    }
     /// Changelog 43: a photo whose RAW is gone is missing (`Integrity::RawMissing`; classification
     /// and history unchanged) and leaves the session views; a RAW back at the same path brings its
     /// photos back as they were. Health counts the missing photos that were not deleted. Runs at
@@ -444,6 +459,7 @@ impl PreviewService {
                     made.then_some(thumb_str.as_str()),
                     observed,
                 )?;
+                let first = commit.previous_path.is_none();
                 if let Some(prior) = commit.previous_path
                     && prior != dest_str
                 {
@@ -453,6 +469,9 @@ impl PreviewService {
                     && (!made || prior != thumb_str)
                 {
                     self.files.remove(Path::new(&prior))?;
+                }
+                if first {
+                    self.mirror_arrived(&commit.photos)?;
                 }
                 for (photo_id, session_id) in commit.photos {
                     self.events.emit(AppEvent::PhotoChanged {

@@ -87,7 +87,7 @@ it('C5(b) marks a confirmed queue item and shows its form fill count', async () 
   expect(await screen.findByText(/✓ Item 1 · 1\/3 filled/)).toBeInTheDocument();
 });
 
-const listRow = (label: { kind: 'description_failed' } | { kind: 'publishing'; value: number }, publish: unknown = null) => ({ id: 4, sku: 'P15', item_type: 'Chair', title: 'Oak chair', main_count: 1, condition_count: 0, unreviewed_count: 0, status: label.kind === 'publishing' ? 'publishing' : 'failed', label, progress: label.kind === 'publishing' ? label.value : null, last_activity_at: Date.now(), cover_preview_path: null, publish });
+const listRow = (label: { kind: 'description_failed' } | { kind: 'publishing'; value: number }, publish: unknown = null) => ({ id: 4, sku: 'P15', item_type: 'Chair', title: 'Oak chair', main_count: 1, condition_count: 0, unreviewed_count: 0, status: label.kind === 'publishing' ? 'publishing' : 'failed', label, progress: label.kind === 'publishing' ? label.value : null, last_activity_at: Date.now(), created_at: Date.now(), cover_preview_path: null, publish });
 const list = (row: ReturnType<typeof listRow>) => ({ groups: [{ label: 'Today', rows: [row] }], counts: { open: 1, published: 0, all: 1 }, unassigned_count: 0 });
 
 it('C2(a) refreshes the row from publish progress alone to Publishing 42%', async () => {

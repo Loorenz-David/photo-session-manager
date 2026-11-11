@@ -911,7 +911,9 @@ impl App {
                         .clone()
                         .map(|commerce| RetentionConfig { commerce }),
                     settings.storage.retention_days_after_publish,
-                ),
+                )
+                // P66: a denied photo's undo steps are dropped when its files go.
+                .with_history(history.clone()),
             )
         };
         let storage_background = if run_startup {

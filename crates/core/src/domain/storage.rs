@@ -57,3 +57,12 @@ pub struct StorageReport {
     pub masters_bytes: u64,
     pub computed_at_ms: i64,
 }
+
+/// A photo denied since P66 (changelog 46 (2)): when it was denied and, once the undo window
+/// closed, when its RAW and the app's files of it were deleted (it cannot be restored after that).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PhotoDenial {
+    pub photo_id: i64,
+    pub denied_at: i64,
+    pub files_deleted_at: Option<i64>,
+}

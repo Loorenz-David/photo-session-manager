@@ -28,7 +28,10 @@ export async function reorderPhoto(photoId: number, position: number): Promise<R
   return unwrap(await commands.photosReorder(photoId, position));
 }
 
-/** Deletes (hides) the photo; the delete is one undo step (MC-30). The RAW is never touched. */
+/**
+ * Denies the photo (changelog 46 (2)): it is hidden and never published; the deny is one undo step (MC-30). Its RAW is
+ * deleted by the app once the undo window closes (the session's next publish, or 24 h).
+ */
 export async function deletePhoto(photoId: number): Promise<ReviewResult> {
   return unwrap(await commands.photosDelete(photoId));
 }

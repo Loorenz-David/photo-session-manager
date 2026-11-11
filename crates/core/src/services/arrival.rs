@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    domain::photo::{NewPhoto, PhotoSource},
+    domain::photo::{Classification, NewPhoto, PhotoSource},
     events::AppEvent,
     mechanisms::{
         arrival::{attribute, is_candidate, path_key},
@@ -314,6 +314,8 @@ impl ArrivalService {
                 .as_millis() as i64,
         };
         let key = path_key(&canonical);
+        // Changelog 46 (2): a new photo is approved on arrival — `main`, at the end of Main in
+        // arrival order, mirrored green; the photographer marks Condition or Deny instead.
         let (photo, inserted) = self.store.arrival_insert(
             NewPhoto {
                 session_id,
@@ -324,6 +326,7 @@ impl ArrivalService {
                 created_at: self.clock.now_ms(),
             },
             &key,
+            Classification::Main,
         )?;
         if inserted {
             if let Some(follow) = &self.follow

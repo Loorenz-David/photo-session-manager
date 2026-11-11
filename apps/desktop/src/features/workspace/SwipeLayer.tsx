@@ -7,7 +7,7 @@ export const SWIPE_Y_PX = 110;
 
 export type SwipeAction = 'approve' | 'condition' | 'delete';
 
-/** Right = approve, up = condition, left = delete; anything shorter snaps back. */
+/** Right = approve (an unreviewed photo) or next, up = condition, left = deny (changelog 46 (2)); shorter snaps back. */
 export function swipeAction(offset: { x: number; y: number }): SwipeAction | null {
   if (-offset.y >= SWIPE_Y_PX && -offset.y >= Math.abs(offset.x)) return 'condition';
   if (offset.x >= SWIPE_X_PX) return 'approve';
@@ -37,7 +37,7 @@ export function SwipeLayer({ children, onSwipe }: SwipeLayerProps) {
         Main
       </motion.span>
       <motion.span className="swipe-stamp stamp-delete" style={{ opacity: deleteOpacity }} aria-hidden>
-        Delete
+        Deny
       </motion.span>
       <motion.span className="swipe-stamp stamp-condition" style={{ opacity: conditionOpacity }} aria-hidden>
         Condition

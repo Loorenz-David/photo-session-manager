@@ -28,7 +28,7 @@ function entries(photo: Photo, canApply: boolean): Entry[] {
     { action: 'assign', label: 'Assign to product…' },
     { action: 'move', label: 'Move to session…' },
     { action: 'copy', label: 'Copy to session…' },
-    { action: 'delete', label: 'Delete', hint: '⌫', danger: true },
+    { action: 'delete', label: 'Deny', hint: '⌫', danger: true },
   ];
 }
 

@@ -91,7 +91,7 @@ it('C2(b) sessions list shows rows only after the first list result', async () =
   expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThanOrEqual(3);
   expect(screen.queryByText('No sessions yet')).not.toBeInTheDocument();
   expect(document.querySelectorAll('[data-testid^="session-row-"]')).toHaveLength(0);
-  const row = (id: number, title: string) => ({ id, sku: `SKU-${id}`, item_type: '', title, main_count: 0, condition_count: 0, unreviewed_count: 0, status: 'in_progress', label: { kind: 'in_progress', value: 0 }, progress: null, last_activity_at: Date.now(), cover_preview_path: null, publish: null });
+  const row = (id: number, title: string) => ({ id, sku: `SKU-${id}`, item_type: '', title, main_count: 0, condition_count: 0, unreviewed_count: 0, status: 'in_progress', label: { kind: 'in_progress', value: 0 }, progress: null, last_activity_at: Date.now(), created_at: Date.now(), cover_preview_path: null, publish: null });
   await act(async () => pending.resolve({ groups: [{ label: 'Today', rows: [row(2, 'Oak chair'), row(3, 'Walnut desk')] }], counts: { open: 2, published: 0, all: 2 }, unassigned_count: 0 } as SessionList));
   expect(document.querySelectorAll('[data-testid^="session-row-"]')).toHaveLength(2);
   expect(screen.getByText('Oak chair')).toBeInTheDocument();

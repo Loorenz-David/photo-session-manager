@@ -291,7 +291,8 @@ fn c5a_row_defaults_uid_and_raw_state() {
     let r = row(&a);
     assert_eq!(
         (r.1.as_str(), r.2, r.3.as_str()),
-        ("unreviewed", None, "capture")
+        // P66 (changelog 46 (2)): approved on arrival, at the end of Main.
+        ("main", Some(1), "capture")
     );
     let c = db(&a);
     let (uid, key): (String, String) = c
@@ -508,7 +509,8 @@ fn c8a_import_active_copy_in_capture_folder() {
     service(&a)
         .import(&[p.to_string_lossy().into_owned()])
         .unwrap();
-    assert_eq!(row(&a), (s, "unreviewed".into(), None, "import".into()));
+    // P66 (changelog 46 (2)): an import is approved on arrival too.
+    assert_eq!(row(&a), (s, "main".into(), Some(1), "import".into()));
     assert_eq!(fs::read(root(&a).join("K2/outside.ARW")).unwrap(), b"raw");
     assert_eq!(fs::read(&p).unwrap(), b"raw");
     assert!(

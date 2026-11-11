@@ -72,6 +72,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/009_publish_item_type.sql")),
             M::up(include_str!("migrations/010_retention.sql")),
             M::up(include_str!("migrations/011_item_stock.sql")),
+            M::up(include_str!("migrations/012_photo_denials.sql")),
         ]
     }
 
@@ -529,19 +530,36 @@ fn parse_slot(text: &str) -> Result<OutputSlot> {
         .map_err(|_| Error::InvalidData(format!("unknown output slot {text}")))
 }
 
+fn enqueue_mirror_tag(conn: &Connection, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()> {
+    let payload = serde_json::json!({"photo_id": photo_id}).to_string();
+    let queued: Option<i64> = conn.query_row("SELECT id FROM jobs WHERE kind='mirror_tag' AND target=?1 AND status='queued' ORDER BY id DESC LIMIT 1", [raw_path], |r| r.get(0)).optional().map_err(db)?;
+    if let Some(id) = queued {
+        conn.execute(
+            "UPDATE jobs SET payload=?1,next_attempt_at=?2,error=NULL,updated_at=?2 WHERE id=?3",
+            params![payload, now_ms, id],
+        )
+        .map_err(db)?;
+    } else {
+        conn.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('mirror_tag',?1,?2,'queued',0,?3,?3,?3)",params![raw_path,payload,now_ms]).map_err(db)?;
+    }
+    Ok(())
+}
+
 struct SqliteTx<'a> {
     tx: Transaction<'a>,
 }
 
 impl StoreTx for SqliteTx<'_> {
     fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()> {
-        let payload = serde_json::json!({"photo_id": photo_id}).to_string();
-        let queued: Option<i64> = self.tx.query_row("SELECT id FROM jobs WHERE kind='mirror_tag' AND target=?1 AND status='queued' ORDER BY id DESC LIMIT 1", [raw_path], |r| r.get(0)).optional().map_err(db)?;
-        if let Some(id) = queued {
-            self.tx.execute("UPDATE jobs SET payload=?1,next_attempt_at=?2,error=NULL,updated_at=?2 WHERE id=?3", params![payload,now_ms,id]).map_err(db)?;
-        } else {
-            self.tx.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('mirror_tag',?1,?2,'queued',0,?3,?3,?3)",params![raw_path,payload,now_ms]).map_err(db)?;
-        }
+        enqueue_mirror_tag(&self.tx, raw_path, photo_id, now_ms)
+    }
+    fn set_photo_denied(&mut self, id: i64, at: i64) -> Result<()> {
+        self.tx
+            .execute(
+                "INSERT INTO photo_denials(photo_id,denied_at,files_deleted_at) VALUES (?1,?2,NULL) ON CONFLICT(photo_id) DO UPDATE SET denied_at=excluded.denied_at WHERE files_deleted_at IS NULL",
+                params![id, at],
+            )
+            .map_err(db)?;
         Ok(())
     }
     fn session(&self, id: i64) -> Result<Session> {
@@ -568,6 +586,15 @@ impl StoreTx for SqliteTx<'_> {
                 params![session_id, classification.as_str(), position, id],
             )
             .map_err(db)?;
+        if classification != Classification::Deleted {
+            // P66: a restored photo is no longer denied (unless its files are already gone).
+            self.tx
+                .execute(
+                    "DELETE FROM photo_denials WHERE photo_id=?1 AND files_deleted_at IS NULL",
+                    [id],
+                )
+                .map_err(db)?;
+        }
         Ok(())
     }
     fn set_positions(&mut self, positions: &[(i64, i64)]) -> Result<()> {
@@ -596,6 +623,9 @@ impl StoreTx for SqliteTx<'_> {
     fn delete_photo_row(&mut self, id: i64) -> Result<()> {
         self.tx
             .execute("DELETE FROM compositions WHERE photo_id=?1", [id])
+            .map_err(db)?;
+        self.tx
+            .execute("DELETE FROM photo_denials WHERE photo_id=?1", [id])
             .map_err(db)?;
         self.tx
             .execute("DELETE FROM photos WHERE id=?1", [id])
@@ -1567,7 +1597,12 @@ impl Store for SqliteStore {
         photo(&conn, id)
     }
 
-    fn arrival_insert(&self, mut new: NewPhoto, path_key: &str) -> Result<(Photo, bool)> {
+    fn arrival_insert(
+        &self,
+        mut new: NewPhoto,
+        path_key: &str,
+        classification: Classification,
+    ) -> Result<(Photo, bool)> {
         new.raw_path = canon(std::path::Path::new(&new.raw_path))?;
         let mut conn = self
             .conn
@@ -1603,7 +1638,19 @@ impl Store for SqliteStore {
             )
             .map_err(db)?;
         let uid = uuid::Uuid::new_v4().to_string();
-        tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,source,captured_at,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![uid,new.session_id,new.raw_path,shared_hash.clone().or(new.raw_hash),new.source.as_str(),new.captured_at,new.created_at]).map_err(db)?;
+        let position: Option<i64> = if classification.is_ordered() {
+            Some(
+                tx.query_row(
+                    "SELECT COUNT(*)+1 FROM photos WHERE session_id=?1 AND classification=?2",
+                    params![new.session_id, classification.as_str()],
+                    |r| r.get(0),
+                )
+                .map_err(db)?,
+            )
+        } else {
+            None
+        };
+        tx.execute("INSERT INTO photos(uid,session_id,raw_path,raw_hash,source,captured_at,created_at,classification,position) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![uid,new.session_id,new.raw_path,shared_hash.clone().or(new.raw_hash),new.source.as_str(),new.captured_at,new.created_at,classification.as_str(),position]).map_err(db)?;
         let id = tx.last_insert_rowid();
         insert_default_composition(&tx, id, &self.default_shape, new.created_at)?;
         tx.execute("INSERT INTO raw_state(raw_path,path_key) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET path_key=excluded.path_key", params![new.raw_path,path_key]).map_err(db)?;
@@ -2398,6 +2445,46 @@ impl Store for SqliteStore {
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(db)
     }
+    fn pending_denials(&self) -> Result<Vec<psm_core::domain::storage::PhotoDenial>> {
+        let conn = self.locked()?;
+        let mut stmt = conn
+            .prepare("SELECT photo_id,denied_at,files_deleted_at FROM photo_denials WHERE files_deleted_at IS NULL ORDER BY denied_at,photo_id")
+            .map_err(db)?;
+        stmt.query_map([], denial_row)
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)
+    }
+    fn photo_denial(
+        &self,
+        photo_id: i64,
+    ) -> Result<Option<psm_core::domain::storage::PhotoDenial>> {
+        let conn = self.locked()?;
+        conn.query_row(
+            "SELECT photo_id,denied_at,files_deleted_at FROM photo_denials WHERE photo_id=?1",
+            [photo_id],
+            denial_row,
+        )
+        .optional()
+        .map_err(db)
+    }
+    fn mark_denial_files_deleted(&self, photo_id: i64, at: i64) -> Result<()> {
+        let conn = self.locked()?;
+        conn.execute(
+            "UPDATE photo_denials SET files_deleted_at=?1 WHERE photo_id=?2",
+            params![at, photo_id],
+        )
+        .map_err(db)?;
+        Ok(())
+    }
+}
+
+fn denial_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<psm_core::domain::storage::PhotoDenial> {
+    Ok(psm_core::domain::storage::PhotoDenial {
+        photo_id: r.get(0)?,
+        denied_at: r.get(1)?,
+        files_deleted_at: r.get(2)?,
+    })
 }
 
 impl SqliteStore {

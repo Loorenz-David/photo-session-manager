@@ -56,3 +56,34 @@ The files above as needed; `crates/testkit/tests/p66_approve_on_arrival_and_sess
 - **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log
+
+### 2026-11-11 — implement r1 (Claude Opus, `codex` actor slot)
+**Built.** (1) Arrival (`ArrivalService::accept` → `Store::arrival_insert(…, Classification::Main)`) stores every new photo
+(capture, FTP, import, Unassigned too) as `main` at the end of Main; the green tag is queued when Capture One delivers the RAW's
+first adjusted preview (`PreviewsService::mirror_arrived`). Photos already `unreviewed` are untouched; A still approves them.
+(2) Deny = the existing delete path plus a deny mark (`photo_denials`, migration 012; set by `ReviewService::delete` and by a redone
+deny, removed by any restore through `set_photo_review`). The storage job (P61) looks at pending denials every batch pause and, when the
+window has closed (session `published_at` > deny time, or 24 h — `DENY_UNDO_WINDOW_MS`), re-reads the photo under the undo-history lock
+(`History::retire_photo`), checks every other photo on that RAW is denied with its window closed too, deletes the RAW and the RAW's
+`previews/`, `masters/`, `outputs/` folders' files (rule `denied`, logged `storage.cleared rule=denied path=… bytes=…`), marks the
+denial `files_deleted_at`, and drops every undo/redo step naming the photo. A file-gone denied photo cannot be re-classified.
+(3) Sessions list: `group_by_activity` is fed `created_at` (order newest-created first, groups by creation time); `SessionRow` /
+`SessionRowResponse` gain `created_at`; the UI time filter, the column header ("Created ↓") and the row time use it. UI: Deny (⌫, swipe
+left, ⋯ menu "Deny"), toast "Photo denied · Undo ⌘Z", Approve button only on an unreviewed photo, after an action the next photo in the
+display order opens.
+
+**Assumptions.** A1 Unassigned arrivals are `main` too ("every new photo"). A2 the green tag is mirrored after the first adjusted preview,
+not at the instant of arrival (a tag job at arrival polled Capture One on its own and scripted a stopped Capture One — p49 C2(d)). A3
+photos deleted before P66 (no deny mark) keep their RAW (H2 as it was); only denies made from P66 on are deleted. A4 Capture One's own
+files of a denied RAW (`CaptureOne/Settings*/…cos`, cache) and `.duplicates/` copies are not deleted (the row names RAW + app-owned
+derivatives; Capture One shows the variant as missing). A5 a RAW shared with another photo row (Copy to session) is deleted only once
+every row on it is denied with its window closed. A6 the history labels keep the registry's wording (`Delete 03`), the buttons say Deny.
+A7 the session row's time shows the creation time, matching the order and the groups. A8 the window closes on a publish completing
+*after* the deny (strictly later `published_at`); a publish already running when the photo was denied also closes it when it completes.
+A9 pinned items ("keep files") are not exempt: Deny is the photographer's explicit choice.
+
+**Deviations.** Test files outside the new ones, changed because the behaviour they asserted changed: p01 (table list +`photo_denials`),
+p05 c5a/c8a (arrival is `main`), p62 (its hidden-photo fixtures now represent photos hidden before P66, by removing the deny mark), UI p07,
+p08 (toast text, `created_at`), p15, p18 (fixture `created_at`). Production files outside the listed ones: `crates/core/src/domain/`
+`{session,storage}.rs`, `crates/core/src/ports/store.rs`, `crates/core/src/services/{history,previews}.rs`, `crates/integrations/src/lib.rs`,
+`apps/desktop/src-tauri/src/commands/sessions.rs`, `apps/desktop/src/services/{bindings,photos}.ts`, migration 012.

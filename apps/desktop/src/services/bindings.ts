@@ -822,6 +822,8 @@ export type SessionRowResponse_Deserialize = {
 	label: RowLabelResponse,
 	progress?: number | null,
 	last_activity_at: number,
+	/**  Changelog 46 (1): the list's order, time groups and time filter. */
+	created_at: number,
 	cover_preview_path?: string | null,
 	publish?: LatestPublishResponse_Deserialize | null,
 };
@@ -838,6 +840,8 @@ export type SessionRowResponse_Serialize = {
 	label: RowLabelResponse,
 	progress: number | null,
 	last_activity_at: number,
+	/**  Changelog 46 (1): the list's order, time groups and time filter. */
+	created_at: number,
 	cover_preview_path: string | null,
 	publish: LatestPublishResponse_Serialize | null,
 };

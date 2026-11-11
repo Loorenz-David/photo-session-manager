@@ -8,12 +8,15 @@ type ReviewButtonsProps = {
   onDelete: () => void;
 };
 
-/** Round Delete / Condition (or "Move to Main" on a condition photo) / Approve buttons (ch06 §Classification). */
+/**
+ * Round Deny / Condition (or "Move to Main" on a condition photo) buttons (ch06 §Classification, changelog 46 (2)):
+ * photos arrive approved, so Approve is offered only for a photo still unreviewed from before.
+ */
 export function ReviewButtons({ photo, onApprove, onMiddle, onDelete }: ReviewButtonsProps) {
   const isCondition = photo.classification === 'condition';
   return (
     <div className="review-buttons">
-      <button type="button" className="review-button review-delete" onClick={onDelete} aria-label="Delete" title="Delete (⌫)">
+      <button type="button" className="review-button review-delete" onClick={onDelete} aria-label="Deny" title="Deny (⌫)">
         <X />
       </button>
       <button
@@ -25,9 +28,11 @@ export function ReviewButtons({ photo, onApprove, onMiddle, onDelete }: ReviewBu
       >
         {isCondition ? <Undo2 /> : <ScanSearch />}
       </button>
-      <button type="button" className="review-button review-approve" onClick={onApprove} aria-label="Approve" title="Approve as main image (A)">
-        <Check />
-      </button>
+      {photo.classification === 'unreviewed' && (
+        <button type="button" className="review-button review-approve" onClick={onApprove} aria-label="Approve" title="Approve as main image (A)">
+          <Check />
+        </button>
+      )}
     </div>
   );
 }

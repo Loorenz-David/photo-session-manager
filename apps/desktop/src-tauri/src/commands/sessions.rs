@@ -293,6 +293,9 @@ pub struct SessionRowResponse {
     pub progress: Option<u8>,
     #[specta(type = specta_typescript::Number)]
     pub last_activity_at: i64,
+    /// Changelog 46 (1): the list's order, time groups and time filter.
+    #[specta(type = specta_typescript::Number)]
+    pub created_at: i64,
     pub cover_preview_path: Option<String>,
     pub publish: Option<LatestPublishResponse>,
 }
@@ -349,6 +352,7 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
                             },
                             progress: row.progress,
                             last_activity_at: row.last_activity_at,
+                            created_at: row.created_at,
                             cover_preview_path: row.cover_preview_path,
                             publish: row.publish.map(Into::into),
                         })
@@ -481,6 +485,7 @@ mod list_tests {
                     label: RowLabel::Publishing(42),
                     progress: Some(42),
                     last_activity_at: 123,
+                    created_at: 100,
                     cover_preview_path: Some("/cover.jpg".into()),
                     publish: None,
                 }],

@@ -158,6 +158,7 @@ function sessionRow(id: number, title: string, status: SessionStatusResponse = '
     label: status === 'published' ? { kind: 'published' } : { kind: 'in_progress', value: 0 },
     progress: null,
     last_activity_at: 0,
+    created_at: 0,
     cover_preview_path: null,
     publish: null,
   };
@@ -311,7 +312,7 @@ describe('C2 undo', () => {
   const p = photo(1, 'main', { position: 1 });
   const q = photo(2, 'main', { position: 2 });
 
-  it('C2(a) delete shows "Photo deleted · Undo ⌘Z", which closes at 4 500 ms', async () => {
+  it('C2(a) delete shows "Photo denied · Undo ⌘Z", which closes at 4 500 ms', async () => {
     await openWorkspace([view([p, q]), view([q])]);
     vi.useFakeTimers();
     press('Backspace');
@@ -321,7 +322,7 @@ describe('C2 undo', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    const toast = screen.getByText('Photo deleted · Undo ⌘Z').closest('[data-sonner-toast]')!;
+    const toast = screen.getByText('Photo denied · Undo ⌘Z').closest('[data-sonner-toast]')!;
     expect(toast).toHaveAttribute('data-removed', 'false');
 
     await act(async () => {
@@ -337,7 +338,7 @@ describe('C2 undo', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);
     });
-    expect(screen.queryByText('Photo deleted · Undo ⌘Z')).toBeNull();
+    expect(screen.queryByText('Photo denied · Undo ⌘Z')).toBeNull();
   });
 
   it('C2(b) ⌘Z at 6 000 ms, after the toast has gone, undoes and makes the restored photo active', async () => {
@@ -351,7 +352,7 @@ describe('C2 undo', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(6000);
     });
-    expect(screen.queryByText('Photo deleted · Undo ⌘Z')).toBeNull();
+    expect(screen.queryByText('Photo denied · Undo ⌘Z')).toBeNull();
     expect(activeTile()).toBe(2);
 
     press('z', { metaKey: true });
@@ -370,7 +371,7 @@ describe('C2 undo', () => {
     vi.mocked(historyUndo).mockResolvedValue({ label: 'Delete 01', direction: 'undone', sessions: [], active_photo_id: 1 });
     await openWorkspace([view([p, q]), view([q]), view([p, q])]);
     press('Backspace');
-    const deleted = await screen.findByText('Photo deleted · Undo ⌘Z');
+    const deleted = await screen.findByText('Photo denied · Undo ⌘Z');
     fireEvent.click(within(deleted.closest('[data-sonner-toast]')!).getByRole('button', { name: 'Undo' }));
     await waitFor(() => expect(historyUndo).toHaveBeenCalledTimes(1));
     expect(historyUndo).toHaveBeenCalledWith(SESSION);

@@ -18,7 +18,15 @@
 //! files named after them, its duplicates, previews, masters and outputs. A RAW another
 //! session that is not cleared still uses is kept.
 //!
-//! Nothing else is ever deleted here: no RAW outside that path, nothing in Capture One's own
+//! P66 (changelog 46 (2), H2 amended) adds the `denied` rule: a photo the photographer denied
+//! keeps its RAW while the deny can be undone. The window closes when the session's next publish
+//! completes after the deny, or [`DENY_UNDO_WINDOW_MS`] after it, whichever is first; then the
+//! RAW and the app's own files of it (previews, thumbnail, masters, outputs) are deleted, the
+//! photo stays a denied, file-gone row and its undo steps are dropped. At delete time the photo
+//! is read again (still denied, window closed) and every other photo on the same RAW must be
+//! denied with its window closed too, so a RAW a photo still uses is never touched.
+//!
+//! Nothing else is ever deleted here: no RAW outside those paths, nothing in Capture One's own
 //! folders not named after a cleared RAW. Every deletion is permanent and logged
 //! (`storage.cleared rule=… path=… bytes=…`).
 
@@ -26,8 +34,8 @@ use crate::{
     Result,
     domain::{
         camera::{DeliveryOutcome, DeliveryState},
-        photo::Photo,
-        storage::StorageReport,
+        photo::{Classification, Photo},
+        storage::{PhotoDenial, StorageReport},
     },
     events::AppEvent,
     mechanisms::{
@@ -48,6 +56,7 @@ use crate::{
     services::{
         export::ExportService,
         health::HealthService,
+        history::History,
         retention::{self, Verification},
     },
 };
@@ -81,6 +90,13 @@ pub const RETENTION_NOT_CLEARED: &str = "retention_not_cleared";
 pub const ITEMS_PER_SCAN: usize = 5;
 /// An item Shopify did not verify is read again at most this often.
 pub const VERIFY_RETRY: Duration = Duration::from_secs(900);
+/// A denied photo can be restored this long after the deny, unless the session is published
+/// first (changelog 46 (2)).
+pub const DENY_UNDO_WINDOW_MS: i64 = 24 * 60 * 60 * 1000;
+/// The rule a denied photo's files are deleted under (`storage.cleared rule=denied …`).
+pub const DENIED_RULE: &str = "denied";
+/// Denied photos whose files are deleted per batch (each a RAW and a few cache files).
+pub const DENIED_PER_BATCH: usize = 5;
 /// Capture One's folder beside the RAWs (settings sidecars, cache).
 const CAPTURE_ONE_FOLDER: &str = "CaptureOne";
 
@@ -234,6 +250,11 @@ struct Work {
     verify_after: HashMap<i64, Instant>,
     /// When the files still on disk of already cleared items were last looked for (H4).
     leftovers_at: Option<Instant>,
+    /// Denied photos whose undo window closed, their files not deleted yet (P66).
+    denied: VecDeque<i64>,
+    /// When denied photos were last looked at (every [`BATCH_PAUSE`], not only at the scan, so a
+    /// publish closes the window within seconds).
+    denied_checked_at: Option<Instant>,
 }
 
 /// What happened to one item chosen for clearing.
@@ -265,6 +286,8 @@ pub struct StorageService {
     min_free_bytes: AtomicU64,
     retention_days: AtomicU32,
     retention: Option<RetentionConfig>,
+    /// The undo history a denied photo's steps are dropped from when its files go (P66).
+    history: Option<Arc<History>>,
     /// Set by [`StorageService::request_scan`] without waiting for a running scan.
     requested: AtomicBool,
     work: Mutex<Work>,
@@ -299,6 +322,7 @@ impl StorageService {
             min_free_bytes: AtomicU64::new(min_free_bytes),
             retention_days: AtomicU32::new(4),
             retention: None,
+            history: None,
             requested: AtomicBool::new(false),
             work: Mutex::new(Work::default()),
             report: Mutex::new(None),
@@ -311,6 +335,12 @@ impl StorageService {
     pub fn with_retention(mut self, config: Option<RetentionConfig>, retention_days: u32) -> Self {
         self.retention = config;
         self.retention_days = AtomicU32::new(retention_days);
+        self
+    }
+    /// P66: the undo history; a denied photo's steps are dropped from it, under its lock, when
+    /// the photo's files are deleted.
+    pub fn with_history(mut self, history: Arc<History>) -> Self {
+        self.history = Some(history);
         self
     }
     pub fn retention_days(&self) -> u32 {
@@ -363,7 +393,16 @@ impl StorageService {
             work.sizes_stale = true;
         }
         work.next_batch_at = None;
-        if work.queue.is_empty() {
+        if work.queue.is_empty()
+            && work.denied.is_empty()
+            && work
+                .denied_checked_at
+                .is_none_or(|at| now.saturating_duration_since(at) >= BATCH_PAUSE)
+        {
+            work.denied_checked_at = Some(now);
+            work.denied = self.denied_due()?.into();
+        }
+        if work.queue.is_empty() && work.denied.is_empty() {
             let due = work.scan_requested
                 || !self.copied.is_empty()
                 || work
@@ -378,7 +417,17 @@ impl StorageService {
             }
         }
         let mut cleared = Vec::new();
-        if !work.queue.is_empty() {
+        if !work.denied.is_empty() {
+            let count = work.denied.len().min(DENIED_PER_BATCH);
+            let photos: Vec<i64> = work.denied.drain(..count).collect();
+            for photo_id in photos {
+                cleared.extend(self.delete_denied(photo_id)?);
+            }
+            work.next_batch_at = Some(now + BATCH_PAUSE);
+            if !cleared.is_empty() {
+                work.sizes_stale = true;
+            }
+        } else if !work.queue.is_empty() {
             let count = work.queue.len().min(BATCH_FILES);
             let batch: Vec<Queued> = work.queue.drain(..count).collect();
             cleared = self.delete(batch)?;
@@ -460,6 +509,137 @@ impl StorageService {
         });
         self.set_warning(warning);
         Ok(())
+    }
+
+    /// Whether the undo window of `denial` (a photo of `session_id`) has closed: the session's
+    /// publish completed after the deny, or the window's time has passed.
+    fn deny_window_closed(&self, denial: &PhotoDenial, session_id: i64) -> Result<bool> {
+        if self.clock.now_ms() >= denial.denied_at.saturating_add(DENY_UNDO_WINDOW_MS) {
+            return Ok(true);
+        }
+        let session = self.store.session(session_id)?;
+        Ok(session
+            .session
+            .published_at
+            .is_some_and(|at| at > denial.denied_at))
+    }
+
+    /// The photo is denied (and was not restored), its files are not deleted yet, and its undo
+    /// window has closed.
+    fn denial_due(&self, photo: &Photo) -> Result<bool> {
+        if photo.classification != Classification::Deleted {
+            return Ok(false);
+        }
+        let Some(denial) = self.store.photo_denial(photo.id)? else {
+            return Ok(false);
+        };
+        if denial.files_deleted_at.is_some() {
+            return Ok(false);
+        }
+        self.deny_window_closed(&denial, photo.session_id)
+    }
+
+    /// Denied photos whose undo window has closed (P66), oldest deny first.
+    fn denied_due(&self) -> Result<Vec<i64>> {
+        let mut due = Vec::new();
+        for denial in self.store.pending_denials()? {
+            let photo = match self.store.photo(denial.photo_id) {
+                Ok(photo) => photo,
+                Err(crate::Error::NotFound(_)) => continue,
+                Err(error) => return Err(error),
+            };
+            if self.denial_due(&photo)? {
+                due.push(photo.id);
+            }
+        }
+        Ok(due)
+    }
+
+    /// Deletes a denied photo's RAW and the app's files of it, after reading the photo again:
+    /// still denied, window closed, and every other photo on that RAW denied with its window
+    /// closed. Runs under the undo history's lock, so no undo can restore the photo meanwhile;
+    /// once the RAW is gone the photo is marked file-gone and its undo steps are dropped.
+    fn delete_denied(&self, photo_id: i64) -> Result<Vec<Cleared>> {
+        let mut cleared = Vec::new();
+        let mut act = || -> Result<bool> {
+            let photo = match self.store.photo(photo_id) {
+                Ok(photo) => photo,
+                Err(crate::Error::NotFound(_)) => return Ok(false),
+                Err(error) => return Err(error),
+            };
+            if !self.denial_due(&photo)? {
+                return Ok(false);
+            }
+            let rows = self.store.photos_for_raw(&photo.raw_path)?;
+            for other in rows.iter().filter(|p| p.id != photo.id) {
+                let gone = self
+                    .store
+                    .photo_denial(other.id)?
+                    .is_some_and(|d| d.files_deleted_at.is_some());
+                if !gone && !self.denial_due(other)? {
+                    tracing::info!(
+                        photo = photo.id,
+                        raw = photo.raw_path,
+                        "storage: denied RAW kept, another photo uses it"
+                    );
+                    return Ok(false);
+                }
+            }
+            let raw = Path::new(&photo.raw_path);
+            if let Some(file) = self.fs.entry(raw)? {
+                if let Err(error) = self.fs.remove(&file.path) {
+                    tracing::warn!(%error, path = %file.path.display(), "storage: not cleared");
+                    return Ok(false);
+                }
+                cleared.push(self.logged(DENIED_RULE, file));
+            }
+            let at = self.clock.now_ms();
+            for row in &rows {
+                if row.id == photo.id || self.store.photo_denial(row.id)?.is_some() {
+                    self.store.mark_denial_files_deleted(row.id, at)?;
+                }
+            }
+            let key = path_key(&photo.raw_path);
+            for root in [
+                &self.locations.preview_cache,
+                &self.locations.masters,
+                &self.locations.outputs,
+            ] {
+                for file in self.fs.files_deep(&root.join(&key[..2]).join(&key), &[])? {
+                    match self.fs.remove(&file.path) {
+                        Ok(()) => cleared.push(self.logged(DENIED_RULE, file)),
+                        Err(error) => {
+                            tracing::warn!(%error, path = %file.path.display(), "storage: not cleared")
+                        }
+                    }
+                }
+            }
+            Ok(true)
+        };
+        let retired = match &self.history {
+            Some(history) => history.retire_photo(photo_id, act)?,
+            None => act()?,
+        };
+        if retired && let Ok(photo) = self.store.photo(photo_id) {
+            self.events.emit(AppEvent::SessionChanged {
+                session_id: photo.session_id,
+            });
+        }
+        Ok(cleared)
+    }
+
+    fn logged(&self, rule: &str, file: FileEntry) -> Cleared {
+        tracing::info!(
+            "storage.cleared rule={} path={} bytes={}",
+            rule,
+            file.path.display(),
+            file.bytes
+        );
+        Cleared {
+            rule: rule.into(),
+            path: file.path,
+            bytes: file.bytes,
+        }
     }
 
     /// H4: clearing is resumable. An item already marked cleared whose files are still on disk

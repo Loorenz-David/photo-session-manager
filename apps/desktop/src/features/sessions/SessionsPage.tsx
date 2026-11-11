@@ -21,7 +21,10 @@ import { UnassignedCard } from './UnassignedCard';
 
 export const SEARCH_DEBOUNCE_MS = 250;
 
-/** Sessions list (ch04 S-A, ch07): grouped rows as delivered by `sessions_list`, filters, search, time filter. */
+/**
+ * Sessions list (ch04 S-A, ch07): grouped rows as delivered by `sessions_list` (creation order, newest created on top,
+ * grouped by creation time: changelog 46 (1)), filters, search, time filter.
+ */
 export function SessionsPage({ navigate }: { navigate: (sessionId: number) => void }) {
   const [filter, setFilter] = useState<SessionFilter>('open');
   const [query, setQuery] = useState('');
@@ -51,7 +54,8 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   const groups = useMemo(() => {
     const at = Date.now();
     return (list?.groups ?? [])
-      .map(group => ({ ...group, rows: group.rows.filter(row => withinRange(row.last_activity_at, range, at)) }))
+      // Changelog 46 (1): the time filter, like the order and the groups, uses the creation time.
+      .map(group => ({ ...group, rows: group.rows.filter(row => withinRange(row.created_at, range, at)) }))
       .filter(group => group.rows.length > 0);
   }, [list, range]);
   const selectable = useMemo(() => groups.flatMap(group => group.rows).filter(isSelectable).map(row => row.id), [groups]);
@@ -134,7 +138,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
             <span>Photos</span>
             <span>Status</span>
             <span className="label-activity">
-              Last activity <ArrowDown aria-hidden />
+              Created <ArrowDown aria-hidden />
             </span>
           </div>
           {groups.map(group => (

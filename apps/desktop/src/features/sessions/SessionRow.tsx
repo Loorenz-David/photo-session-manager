@@ -39,8 +39,9 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
       </HoverPreview>
       <span className="row-photos">{photoSummary(row.main_count, row.condition_count)}</span>
       <StatusPill label={row.label} onPublish={onPublish} onRetry={onRetry} sessionId={row.id} />
-      <time className="row-time" dateTime={new Date(row.last_activity_at).toISOString()}>
-        {activityLabel(row.last_activity_at, now)}
+      {/* Changelog 46 (1): the list is in creation order, so the row shows when the session was created. */}
+      <time className="row-time" dateTime={new Date(row.created_at).toISOString()}>
+        {activityLabel(row.created_at, now)}
       </time>
     </div>
   );

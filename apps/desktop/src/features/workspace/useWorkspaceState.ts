@@ -39,18 +39,17 @@ function defaultActive(photos: readonly Photo[]): number | null {
 }
 
 /**
- * Which photo opens after an action on `actedId` (ch06: "after an action the next unreviewed photo opens"):
- * the first remaining unreviewed photo in display order; with none left, the acted photo when it stays in the
- * session, otherwise its neighbour in the display sequence.
+ * Which photo opens after an action on `actedId` (changelog 46 (2): photos arrive approved, so after an action the next
+ * photo in order opens): the photo after it in the display sequence as it was before the action; on the last photo, the
+ * one before it when the acted photo leaves the view, otherwise the acted photo itself.
  */
 function nextAfterAction(photos: readonly Photo[], actedId: number, actedLeaves: boolean): number | null {
-  const next = displayOrder(photos).unreviewed.find(photo => photo.id !== actedId);
-  if (next) return next.id;
-  if (!actedLeaves) return actedId;
   const sequence = displaySequence(photos);
   const index = sequence.findIndex(photo => photo.id === actedId);
-  const neighbour = sequence[index + 1] ?? sequence[index - 1];
-  return neighbour && neighbour.id !== actedId ? neighbour.id : null;
+  const after = index < 0 ? undefined : sequence[index + 1];
+  if (after) return after.id;
+  if (!actedLeaves) return actedId;
+  return (index > 0 ? sequence[index - 1]?.id : undefined) ?? null;
 }
 
 export type WorkspaceState = ReturnType<typeof useWorkspaceState>;
@@ -157,7 +156,7 @@ export function useWorkspaceState(sessionId: number) {
     [reload, setActiveId],
   );
 
-  /** Classify into a group; a review action (`advance`) then opens the next unreviewed photo, a drag does not. */
+  /** Classify into a group; a review action (`advance`) then opens the next photo in order, a drag does not. */
   const classify = useCallback(
     (photoId: number, classification: Exclude<Classification, 'deleted' | 'unreviewed'>, advance = true) => {
       const next = advance ? nextAfterAction(photosRef.current, photoId, false) : undefined;
@@ -176,7 +175,7 @@ export function useWorkspaceState(sessionId: number) {
     [run],
   );
 
-  /** Opens the next unreviewed photo without changing anything (A on a photo already in Main). */
+  /** Opens the next photo in order without changing anything (A on a photo already in Main). */
   const advanceFrom = useCallback(
     (photoId: number) => setActiveId(nextAfterAction(photosRef.current, photoId, false)),
     [setActiveId],
@@ -201,7 +200,7 @@ export function useWorkspaceState(sessionId: number) {
       const next = nextAfterAction(photosRef.current, photoId, true);
       const result = await run(() => deletePhoto(photoId), next);
       if (result) {
-        toast('Photo deleted · Undo ⌘Z', {
+        toast('Photo denied · Undo ⌘Z', {
           id: UNDO_TOAST_ID,
           duration: UNDO_TOAST_MS,
           action: { label: 'Undo', onClick: () => void undo() },

@@ -71,6 +71,23 @@ pub enum StepKind {
     },
 }
 
+impl Step {
+    /// Whether undoing or redoing this step would change the photo `photo_id`.
+    fn names_photo(&self, photo_id: i64) -> bool {
+        match &self.kind {
+            StepKind::Classify { photos, .. } | StepKind::Move { photos, .. } => {
+                photos.iter().any(|p| p.photo_id == photo_id)
+            }
+            StepKind::Reorder { photo_id: id, .. } => *id == photo_id,
+            StepKind::Copy { copies, .. } => copies
+                .iter()
+                .any(|(source, copy)| *source == photo_id || *copy == photo_id),
+            StepKind::Composition { photos, .. } => photos.iter().any(|p| p.photo_id == photo_id),
+            StepKind::Attribute { .. } => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Place {
     pub classification: Classification,
@@ -155,6 +172,30 @@ impl History {
         }
         drop(op);
         self.emit(session_id);
+    }
+    /// P66 (changelog 46 (2)): runs `act` while no undo or redo can run; when it returns `true`
+    /// (the denied photo's files were deleted), every undo and redo step that names the photo is
+    /// dropped — it can no longer be restored.
+    pub fn retire_photo(&self, photo_id: i64, act: impl FnOnce() -> Result<bool>) -> Result<bool> {
+        let op = self.operation.lock().unwrap();
+        let retired = act()?;
+        let mut changed = Vec::new();
+        if retired {
+            let mut all = self.store.lock().unwrap();
+            for (session_id, list) in all.iter_mut() {
+                let before = list.undo.len() + list.redo.len();
+                list.undo.retain(|step| !step.names_photo(photo_id));
+                list.redo.retain(|step| !step.names_photo(photo_id));
+                if list.undo.len() + list.redo.len() != before {
+                    changed.push(*session_id);
+                }
+            }
+        }
+        drop(op);
+        for session_id in changed {
+            self.emit(session_id);
+        }
+        Ok(retired)
     }
     pub fn state(&self, session_id: i64) -> HistoryState {
         let all = self.store.lock().unwrap();
@@ -420,6 +461,10 @@ fn apply(
                 }
                 let n = inserted(tx, session_id, change.photo_id, wanted)?;
                 tx.set_photo_review(change.photo_id, session_id, wanted.classification, n)?;
+                if wanted.classification == Classification::Deleted {
+                    // P66: a redone Deny starts a new undo window.
+                    tx.set_photo_denied(change.photo_id, at)?;
+                }
                 let raw = tx.photo(change.photo_id)?.raw_path;
                 tx.enqueue_mirror_tag(&raw, change.photo_id, at)?;
             }

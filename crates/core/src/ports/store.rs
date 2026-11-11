@@ -8,7 +8,7 @@ use crate::domain::{
     photo::{Classification, Integrity, NewPhoto, Photo},
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{LatestPublish, Session, SessionDto, SessionListRecord},
-    storage::{ArchivedImage, ItemRetention},
+    storage::{ArchivedImage, ItemRetention, PhotoDenial},
 };
 
 #[derive(Debug, Clone)]
@@ -58,6 +58,9 @@ pub trait StoreTx {
         position: Option<i64>,
     ) -> Result<i64>;
     fn delete_photo_row(&mut self, id: i64) -> Result<()>;
+    /// P66: the photo was denied at `at` (its undo window starts). A later classification other
+    /// than `deleted` (undo) removes the mark unless its files are already deleted.
+    fn set_photo_denied(&mut self, id: i64, at: i64) -> Result<()>;
     fn publish_confirmed_since(&self, session_id: i64, seq: i64) -> Result<bool>;
     fn touch_session(&mut self, session_id: i64, at: i64) -> Result<()>;
     fn items(&self) -> Result<Vec<Item>>;
@@ -202,7 +205,15 @@ pub trait Store: Send + Sync {
     fn session_list_records(&self) -> Result<Vec<SessionListRecord>>;
     fn latest_publish(&self, session_id: i64) -> Result<Option<LatestPublish>>;
     fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;
-    fn arrival_insert(&self, photo: NewPhoto, path_key: &str) -> Result<(Photo, bool)>;
+    /// MC-1 arrival: the photo row once per (session, RAW), as `classification` — at the end of
+    /// its group when the group is ordered (changelog 46 (2): `main`). Its colour tag is mirrored
+    /// once the editing provider has delivered its first adjusted preview.
+    fn arrival_insert(
+        &self,
+        photo: NewPhoto,
+        path_key: &str,
+        classification: Classification,
+    ) -> Result<(Photo, bool)>;
     fn session_folders(&self) -> Result<Vec<(String, i64)>>;
     fn session_for_item(&self, item_id: i64) -> Result<Option<i64>>;
     fn photos_in_session(&self, session_id: i64) -> Result<Vec<Photo>>;
@@ -351,4 +362,11 @@ pub trait Store: Send + Sync {
     fn archived_images(&self, item_id: i64) -> Result<Vec<ArchivedImage>>;
     /// The sessions whose item's local files were cleared.
     fn cleared_sessions(&self) -> Result<Vec<i64>>;
+    // Denied photos (changelog 46 (2); P66).
+    /// Every photo denied since P66 whose files are not deleted yet, oldest deny first.
+    fn pending_denials(&self) -> Result<Vec<PhotoDenial>>;
+    /// The photo's deny mark, if it has one.
+    fn photo_denial(&self, photo_id: i64) -> Result<Option<PhotoDenial>>;
+    /// The denied photo's files were deleted at `at`.
+    fn mark_denial_files_deleted(&self, photo_id: i64, at: i64) -> Result<()>;
 }

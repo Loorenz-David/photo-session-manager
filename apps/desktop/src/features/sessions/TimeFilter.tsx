@@ -3,7 +3,7 @@ import { Check, SlidersHorizontal } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { TIME_RANGES, type TimeRange } from '@/lib/format';
 
-/** Time filter popover inside the search field; a red dot marks an active filter. */
+/** Time filter popover inside the search field (by creation time, changelog 46 (1)); a red dot marks an active filter. */
 export function TimeFilter({ value, onChange }: { value: TimeRange; onChange: (range: TimeRange) => void }) {
   const [open, setOpen] = useState(false);
   function pick(range: TimeRange) {
@@ -13,13 +13,13 @@ export function TimeFilter({ value, onChange }: { value: TimeRange; onChange: (r
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="time-trigger" aria-label="Filter by last activity" title="Filter by last activity">
+        <button type="button" className="time-trigger" aria-label="Filter by creation time" title="Filter by creation time">
           <SlidersHorizontal aria-hidden />
           {value !== 'any' && <span className="time-active" aria-hidden />}
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="time-menu">
-        <p className="menu-caption">Last activity</p>
+        <p className="menu-caption">Created</p>
         {TIME_RANGES.map(range => (
           <button key={range.value} type="button" className="menu-option" aria-pressed={value === range.value} onClick={() => pick(range.value)}>
             {range.label}
