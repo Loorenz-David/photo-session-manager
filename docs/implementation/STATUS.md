@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-11 22:15: P67 APPROVED_WITH_NOTES (20:31; Claude Opus after Codex limit). P68 implementing under flow v1.4.** P67 narrative relayed. P68 timeline: code written and targeted checks done in ~32 min (26 min of it in commands); the single closing `cargo test --workspace` then ran > 1 h on its own — the P70 target. Backlog from P67: batch scroll position sometimes lost; Save as default on an untyped item; first default forks the type layout.
+
 **2026-11-11 20:05: flow v1.4 — test-run budget (owner: changes take too long).** Measured P66: implementer 4 h 20 min wall-clock vs 17 min model time; review 58 min vs 5 min; one `cargo test --workspace` > 1 h 15 min (54 testkit programs run one by one, real-time waits). Runner now logs stream-json with timestamps (`.pipeline/runs/*.timeline`, read with `tools/pipeline/timeline.sh`); templates carry §4A (targeted tests while working, full gate once, one cargo command at a time). Runner replaced by a new file (mv) so the running P67 is untouched; P68 is the first phase under the new rules. P70 fast test suite planned after P69.
 
 **2026-11-11 19:15: P66 APPROVED_WITH_NOTES (Claude Opus after Codex limit; time-boxed review); P67 implementing (Claude), then P68, then P69.** Narrative relayed. Orchestrator owes: design book update for approve-on-arrival / Deny deletes the RAW (narrative "Not yet"); backlog: purging a denied photo drops group undo entries that included it. Review clippy stalled twice; the next full run confirms it.
