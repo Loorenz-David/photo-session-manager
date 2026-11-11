@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-11 09:15: work Mac installed and in use.** P53–P64 SDK build (zip from the dev Mac), Sony support from a 7-file zip of the lab copy (hashes = manifest), camera on Server 2 with the work Mac address, fingerprint confirmed, Wi-Fi connected; owner created a session, shot, reframed, edited and published. Issues on the way → backlog (Gatekeeper "Open Anyway"; FTP host/password typing; shop domain builder error; separate "Save camera login"). P65 still running on the dev Mac.
+
 **2026-11-11 08:40: P65 launched (Codex first, Claude if out; time-boxed review).** First work-site publish (owner at work, SDK build on the dev Mac): failed `variant_not_found` because Capture One took 17–80 s to list new photos; retry succeeded in 13 s (P64 grouped calls verified on the real store). Owner: style slow, jobs should queue, inventory tracking + location + quantity with a remembered default (changelog 45). P65 plan written and pushed.
 
 **2026-11-10 22:00: SDK app built from HEAD (P53–P64) and installed in /Applications on the dev Mac** (old P62 build moved to the session scratchpad; repo back on the stub). Waiting for the owner: publish on the test store, style drop-down, cable plug/unplug; then the work-Mac install.

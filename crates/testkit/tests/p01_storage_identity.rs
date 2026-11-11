@@ -295,6 +295,21 @@ fn c1a_open_creates_all_domain_columns() {
             "archived_images",
             &["item_id", "role", "position", "media_id", "url"],
         ),
+        // P65 (011_item_stock.sql): the stock a new item is created with, and the frozen copy.
+        (
+            "item_stock",
+            &[
+                "item_id",
+                "integration",
+                "location_id",
+                "location_name",
+                "quantity",
+            ],
+        ),
+        (
+            "publish_item_stock",
+            &["publish_item_id", "location_id", "location_name", "quantity"],
+        ),
     ];
     let actual_tables: BTreeSet<String> = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__rusqlite_%'").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
     let expected_tables: BTreeSet<String> = expected

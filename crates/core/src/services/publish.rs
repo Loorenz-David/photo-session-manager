@@ -873,20 +873,23 @@ impl PublishService {
             &stock,
         )?;
         match &outcome {
-            StockOutcome::Tracked { verified } => tracing::info!(
-                location = stock.location_name,
-                quantity = stock.quantity,
-                verified,
-                "item created with stock"
-            ),
+            StockOutcome::Tracked { verified } => {
+                tracing::info!(
+                    location = stock.location_name,
+                    quantity = stock.quantity,
+                    verified,
+                    "item created with stock"
+                );
+                // The values used become the default for the next new item.
+                if let Some(defaults) = self.defaults()
+                    && let Err(error) = defaults.remember(&stock)
+                {
+                    tracing::warn!(%error, "stock default not remembered");
+                }
+            }
             StockOutcome::Untracked { reason } => {
                 tracing::warn!(reason, "item created without stock tracking")
             }
-        }
-        if let Some(defaults) = self.defaults()
-            && let Err(error) = defaults.remember(&stock)
-        {
-            tracing::warn!(%error, "stock default not remembered");
         }
         Ok(remote)
     }

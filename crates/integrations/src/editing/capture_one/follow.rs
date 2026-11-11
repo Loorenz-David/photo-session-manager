@@ -228,7 +228,7 @@ impl CaptureOneFollow {
             if matches!(found, Ok(true)) {
                 // Changelog 45 (P65): arrival → Capture One lists the photo.
                 tracing::info!(
-                    raw,
+                    raw = %raw,
                     after_ms = now.saturating_duration_since(state.since).as_millis() as u64,
                     "capture_one.variant_seen"
                 );
