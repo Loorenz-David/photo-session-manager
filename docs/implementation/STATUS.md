@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-11 19:15: P66 APPROVED_WITH_NOTES (Claude Opus after Codex limit; time-boxed review); P67 implementing (Claude), then P68, then P69.** Narrative relayed. Orchestrator owes: design book update for approve-on-arrival / Deny deletes the RAW (narrative "Not yet"); backlog: purging a denied photo drops group undo entries that included it. Review clippy stalled twice; the next full run confirms it.
+
 **2026-11-11 11:40: P66 → P67 → P68 launched (driver; Codex first, Claude when out; time-boxed reviews).** Owner's first-day-at-work fixes (changelog 46): approve on arrival + Condition/Deny (Deny deletes the RAW after the undo window), session list by creation newest first; form shows Shopify values, defaults + saved values per item type, no auto product type, batch step memory; setup polish (address, easy password, shop domain, camera login). Commit only named paths while phases run.
 
 **2026-11-11 11:00: P53–P65 SDK app built; installed in /Applications on the dev Mac (P64 build moved to the session scratchpad); `Session Manager.zip` on the dev Mac Desktop for the work-Mac update.** Next fix round (backlog 2026-11-11): FTP address shown + easy password, shop-domain normalisation, camera login in Save settings, publish-waiting follow-ups.
