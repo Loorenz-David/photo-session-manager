@@ -1222,7 +1222,10 @@ fn c9e_app_not_installed() {
 fn c9f_wrong_secret_is_credentials_rejected() {
     let (error, graphql) = first_call_refused("sv0_token_wrong_secret");
     assert!(matches!(error, Error::CredentialsRejected));
-    assert_eq!(error.to_string(), "Shopify credentials rejected");
+    assert_eq!(
+        error.to_string(),
+        "The Shopify client ID or secret is wrong"
+    );
     assert_eq!(graphql, 0);
 }
 

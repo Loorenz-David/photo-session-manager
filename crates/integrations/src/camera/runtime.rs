@@ -26,6 +26,7 @@ use psm_core::{
         system::{ProcessList, SleepInhibitor},
     },
     services::{
+        camera::{ADDRESS_CHANGED, FtpAddress},
         camera_ledger::{LedgerService, LedgerShared},
         health::HealthService,
     },
@@ -93,8 +94,41 @@ pub struct AppBinding {
     /// The document was chosen in Settings (P63 #27: missing → reported, never recreated).
     pub document_configured: bool,
 }
-struct RoutingSink(RwLock<Arc<dyn CaptureSink>>);
+struct RoutingSink(RwLock<Arc<dyn CaptureSink>>, Arc<UploadAddress>);
+/// The address of this Mac the camera last uploaded to (P68): the local address of the FTP
+/// receiver's last accepted connection, kept in `<data>/camera/last_upload_address` so a restart
+/// on another network still notices the change. Never logged (the address is shown in the UI only).
+struct UploadAddress {
+    file: PathBuf,
+    value: Mutex<Option<Option<IpAddr>>>,
+}
+impl UploadAddress {
+    fn get(&self) -> Option<IpAddr> {
+        *self.value.lock().unwrap().get_or_insert_with(|| {
+            fs::read_to_string(&self.file)
+                .ok()
+                .and_then(|text| text.trim().parse().ok())
+        })
+    }
+    fn set(&self, address: IpAddr) {
+        if self.get() == Some(address) {
+            return;
+        }
+        *self.value.lock().unwrap() = Some(Some(address));
+        if let Some(dir) = self.file.parent() {
+            let _ = fs::create_dir_all(dir);
+        }
+        if let Err(error) = fs::write(&self.file, address.to_string()) {
+            tracing::warn!(%error, "camera upload address not kept");
+        }
+    }
+}
+/// This Mac's addresses (P68); `set_network_addresses` is the test seam.
+type NetworkAddresses = Arc<dyn Fn() -> Vec<IpAddr> + Send + Sync>;
 impl CaptureSink for RoutingSink {
+    fn connection_accepted(&self, local: IpAddr) {
+        self.1.set(local);
+    }
     fn exposure_observed(&self, e: ExposureObserved) -> psm_core::Result<i64> {
         self.0.read().unwrap().exposure_observed(e)
     }
@@ -193,8 +227,14 @@ pub struct CameraRuntime {
     spawn_deferred: AtomicBool,
     /// P63 #27: when the document was last looked at (real time; a filesystem poll).
     document_checked: Mutex<Option<std::time::Instant>>,
+    /// This Mac's addresses (P68); the test seam is `set_network_addresses`.
+    network: RwLock<NetworkAddresses>,
+    /// When the address was last compared with the camera's upload address (real time).
+    address_checked: Mutex<Option<std::time::Instant>>,
 }
 
+/// How often the tick compares this Mac's address with the camera's upload address (P68).
+const ADDRESS_CHECK_EVERY: Duration = Duration::from_millis(1000);
 /// How often the tick looks whether the document is there (P63 #27).
 const DOCUMENT_CHECK_EVERY: Duration = Duration::from_millis(250);
 impl CameraRuntime {
@@ -224,7 +264,15 @@ impl CameraRuntime {
             receiver_generation: std::sync::atomic::AtomicU64::new(0),
             receiver_bind,
             capture_root: Arc::new(RwLock::new(paths.root.clone())),
-            sink: Arc::new(RoutingSink(RwLock::new(Arc::new(Unbound)))),
+            sink: Arc::new(RoutingSink(
+                RwLock::new(Arc::new(Unbound)),
+                Arc::new(UploadAddress {
+                    file: paths.root.join("camera/last_upload_address"),
+                    value: Mutex::new(None),
+                }),
+            )),
+            network: RwLock::new(Arc::new(psm_infra::net::local_addresses)),
+            address_checked: Mutex::new(None),
             names: Arc::new(RoutingNames(RwLock::new(Arc::new(Unbound)))),
             ledger_shared: Arc::new(LedgerShared::default()),
             ledger: RwLock::new(None),
@@ -280,6 +328,41 @@ impl CameraRuntime {
     /// Test seam (set before the first tick, like `set_delivery_fs`).
     pub fn set_process_list(&self, list: Arc<dyn ProcessList>) {
         *self.process_list.write().unwrap() = list;
+    }
+    /// Test seam: this Mac's addresses as the network reports them (P68).
+    pub fn set_network_addresses(&self, addresses: NetworkAddresses) {
+        *self.network.write().unwrap() = addresses;
+        *self.address_checked.lock().unwrap() = None;
+    }
+    /// This Mac's address for the camera's Host Name, and whether it changed since the camera
+    /// last uploaded (P68).
+    pub fn ftp_address(&self) -> FtpAddress {
+        let current = (self.network.read().unwrap().clone())();
+        FtpAddress::of(&current, self.sink.1.get())
+    }
+    /// P68: Health (and with it the header) says when this Mac's address is no longer the one
+    /// the camera uploads to.
+    fn check_address(&self) {
+        {
+            let mut checked = self.address_checked.lock().unwrap();
+            if checked.is_some_and(|at| at.elapsed() < ADDRESS_CHECK_EVERY) {
+                return;
+            }
+            *checked = Some(std::time::Instant::now());
+        }
+        let Some(health) = self
+            .binding
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|b| b.health.clone())
+        else {
+            return;
+        };
+        match self.ftp_address().warning() {
+            Some(sentence) => health.set(ADDRESS_CHANGED, sentence),
+            None => health.clear(ADDRESS_CHANGED),
+        }
     }
     /// Test seam (set before the first tick).
     pub fn set_sleep_inhibitor(&self, sleep: Arc<dyn SleepInhibitor>) {
@@ -866,6 +949,7 @@ impl CameraRuntime {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         self.check_document();
+        self.check_address();
         // One `client.poll` per tick (P46 L19); the supervisor lock is released before the
         // adapter step so `capture()` never waits on a download's hash.
         let (events, side, exits) = {

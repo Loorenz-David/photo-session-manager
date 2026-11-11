@@ -110,8 +110,12 @@ pub enum Error {
     ShopNotPermitted,
     #[error("The Session Manager app is not installed on this store")]
     AppNotInstalled,
-    #[error("Shopify credentials rejected")]
+    /// P68 (owner 2026-11-11): the sentence names the fields to check.
+    #[error("The Shopify client ID or secret is wrong")]
     CredentialsRejected,
+    /// P68: the stored shop domain cannot be a host name (no request was sent).
+    #[error("The shop domain looks wrong: {domain}")]
+    ShopDomainInvalid { domain: String },
     /// Anything that needs a cleared item's images was refused (10F Q3, P62).
     #[error("This item's files were cleared after publishing")]
     FilesCleared,

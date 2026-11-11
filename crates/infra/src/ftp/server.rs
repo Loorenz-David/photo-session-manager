@@ -76,6 +76,9 @@ impl FtpReceiver {
                                 let _ = stream.write_all(b"421 Connections from this network are not allowed.\r\n").await;
                                 continue;
                             }
+                            if let Ok(local) = stream.local_addr() {
+                                worker.config.sink.connection_accepted(local.ip());
+                            }
                             let state = worker.clone();
                             let stop = stop_rx.clone();
                             tokio::spawn(async move { let _ = session::serve(stream, peer, state, stop).await; });

@@ -27,6 +27,9 @@ pub trait CaptureSink: Send + Sync {
     fn delivery(&self, d: Delivery) -> Result<DeliveryOutcome>;
     fn session_uncertain(&self) -> Result<()>;
     fn transfer_in_progress(&self, source: Link, active: bool);
+    /// The FTP receiver accepted a connection on this Mac's address `local` (P68: the address the
+    /// camera uploads to).
+    fn connection_accepted(&self, _local: std::net::IpAddr) {}
 }
 pub trait ArrivalSource: Send + Sync {
     fn via(&self) -> Link;

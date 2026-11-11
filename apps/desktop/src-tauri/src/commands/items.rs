@@ -136,6 +136,10 @@ impl From<Error> for CommandError {
             Error::ShopNotPermitted => "shop_not_permitted",
             Error::AppNotInstalled => "app_not_installed",
             Error::CredentialsRejected => "credentials_rejected",
+            Error::ShopDomainInvalid { domain } => {
+                data.insert("domain".into(), domain.clone());
+                "shop_domain_invalid"
+            }
             Error::FilesCleared => "files_cleared",
         };
         Self {

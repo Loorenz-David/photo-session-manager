@@ -49,3 +49,15 @@ The files above as needed; `crates/testkit/tests/p68_setup_polish_address_passwo
 - **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log
+- **2026-11-11 implement r1 (Claude Opus in the `codex` slot).** Built: Settings → Camera always lists the FTP steps; step 3 carries this
+  Mac's address (re-read every 5 s) with **Copy address**. The receiver remembers the local address of its last accepted connection
+  (`<data>/camera/last_upload_address`, never logged); when this Mac no longer has it, Health item `camera_address_changed` and the header
+  camera line say `This Mac's address changed to <new> — set Host Name on the camera`. FTP password: 16 characters from
+  `abcdefghjkmnpqrstuvwxyz23456789`, shown in groups of 4; **Show password** reads it back from the Keychain; stored passwords keep working.
+  Shop domain normalised and client ID/secret trimmed on save (`SettingsSetContext::prepare`); the adapter refuses a domain that cannot be a
+  host name with `The shop domain looks wrong: <value>` before any request; a refused grant reads `The Shopify client ID or secret is wrong`.
+  The camera login is saved by **Save settings** (Keychain) and counts as an unsaved change; the separate button is gone. The fingerprint box
+  is one component, shown in Settings → Camera and from the header's **Confirm the camera's fingerprint**; it also reads a fingerprint that
+  arrived before it opened (`camera_fingerprint_pending`). Tests: `p68_setup_polish_address_password_shop.rs` (C1a, C2a, C3a) and
+  `p68_setup_polish.test.tsx` (C1a, C2a, C4a, C4b). Assumptions and deviations: see the handoff (book 10E R-I21 and 09A wording now differ
+  from the owner's rule; orchestrator to fold).

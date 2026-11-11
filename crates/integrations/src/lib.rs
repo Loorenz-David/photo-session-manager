@@ -186,7 +186,22 @@ impl SettingsSetContext {
             current.commerce = on_disk.commerce;
         }
         let previous = settings_value(&current)?;
-        let next = SettingsService::set(&previous, patch)?;
+        let mut next = SettingsService::set(&previous, patch)?;
+        // P68: the shop domain and keys as the photographer meant them.
+        if patch.get("integration").is_some_and(|v| v.is_object())
+            && let Some(integration) = next.get_mut("integration").and_then(|v| v.as_object_mut())
+        {
+            if let Some(domain) = integration.get("shop_domain").and_then(|v| v.as_str()) {
+                let domain = commerce::shopify::adapter::normalise_shop_domain(domain);
+                integration.insert("shop_domain".into(), domain.into());
+            }
+            for key in ["client_id", "client_secret"] {
+                if let Some(value) = integration.get(key).and_then(|v| v.as_str()) {
+                    let value = value.trim().to_owned();
+                    integration.insert(key.into(), value.into());
+                }
+            }
+        }
         let settings: Settings = serde_json::from_value(next.clone())
             .map_err(|e| psm_core::Error::InvalidValue(e.to_string()))?;
         if let Some(integration) = settings.integration_settings()? {

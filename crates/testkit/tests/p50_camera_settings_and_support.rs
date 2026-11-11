@@ -520,7 +520,7 @@ fn c6b_generated_password_reopens_listener_and_is_stored_only_in_keychain() {
     let generation = a.camera_runtime().receiver_generation();
     let pids = a.fake_sidecar_recording().pids;
     let pw = generate(&a);
-    assert_eq!(pw.len(), 32);
+    assert_eq!(pw.len(), 16);
     assert_eq!(
         a.secrets.get(secrets::FTP_PASSWORD).unwrap().as_deref(),
         Some(pw.as_str())

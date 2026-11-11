@@ -44,6 +44,13 @@ export const commands = {
 	cameraFtpPasswordGenerate: () => typedError<FtpPasswordDto, CommandError>(__TAURI_INVOKE("camera_ftp_password_generate")),
 	cameraFingerprintConfirm: (fingerprint: string) => typedError<null, CommandError>(__TAURI_INVOKE("camera_fingerprint_confirm", { fingerprint })),
 	cameraFingerprintReject: () => typedError<null, CommandError>(__TAURI_INVOKE("camera_fingerprint_reject")),
+	cameraFingerprintPending: () => typedError<FingerprintDto | null, CommandError>(__TAURI_INVOKE("camera_fingerprint_pending")),
+	/**
+	 *  "Show password" (P68): the FTP password from the Keychain (macOS may ask to allow it);
+	 *  `null` when none was generated yet.
+	 */
+	cameraFtpPasswordGet: () => typedError<FtpPasswordDto | null, CommandError>(__TAURI_INVOKE("camera_ftp_password_get")),
+	cameraFtpAddress: () => typedError<FtpAddressDto_Serialize, CommandError>(__TAURI_INVOKE("camera_ftp_address")),
 	photosClassify: (photoId: CommandId, classification: PhotoClassification) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_classify", { photoId, classification })),
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
 	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
@@ -394,6 +401,12 @@ export type ExportRunResponse = {
 	run_id: number,
 };
 
+/**  The fingerprint waiting for confirmation (P68: the box shows it when opened after the event). */
+export type FingerprintDto = {
+	fingerprint: string,
+	replace: boolean,
+};
+
 export type FormDto = FormDto_Serialize | FormDto_Deserialize;
 
 export type FormDto_Deserialize = {
@@ -490,6 +503,30 @@ export type FormReadDto_Serialize = {
 export type FrameDto = {
 	w: number,
 	h: number,
+};
+
+/**
+ *  This Mac's address for the camera's Host Name (P68), and the sentence shown when it is no
+ *  longer the address the camera last uploaded to.
+ */
+export type FtpAddressDto = FtpAddressDto_Serialize | FtpAddressDto_Deserialize;
+
+/**
+ *  This Mac's address for the camera's Host Name (P68), and the sentence shown when it is no
+ *  longer the address the camera last uploaded to.
+ */
+export type FtpAddressDto_Deserialize = {
+	address?: string | null,
+	warning?: string | null,
+};
+
+/**
+ *  This Mac's address for the camera's Host Name (P68), and the sentence shown when it is no
+ *  longer the address the camera last uploaded to.
+ */
+export type FtpAddressDto_Serialize = {
+	address: string | null,
+	warning: string | null,
 };
 
 export type FtpPasswordDto = {

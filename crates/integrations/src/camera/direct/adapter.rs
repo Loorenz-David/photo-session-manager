@@ -302,6 +302,11 @@ impl DirectCameraAdapter {
         state.inputs.busy = None;
         Ok(derive_status(&state.inputs))
     }
+    /// The fingerprint waiting for the photographer's confirmation, and whether it replaces a
+    /// pinned one (P68: the box can show it when opened after the event).
+    pub fn pending_fingerprint(&self) -> Option<(String, bool)> {
+        locked(&self.state).pending_fingerprint.clone()
+    }
     pub fn confirm_fingerprint(&self, shown: &str) -> Result<()> {
         let (fingerprint, replace) = locked(&self.state)
             .pending_fingerprint

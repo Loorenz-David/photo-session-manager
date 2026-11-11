@@ -124,7 +124,7 @@ mod p50_tests {
             .as_str()
             .unwrap()
             .to_owned();
-        assert_eq!(pw.len(), 32);
+        assert_eq!(pw.len(), 16);
         assert_eq!(
             call(
                 &w,
@@ -618,6 +618,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::camera::camera_ftp_password_generate,
         commands::camera::camera_fingerprint_confirm,
         commands::camera::camera_fingerprint_reject,
+        commands::camera::camera_fingerprint_pending,
+        commands::camera::camera_ftp_password_get,
+        commands::camera::camera_ftp_address,
         commands::photos::photos_classify,
         commands::photos::photos_reorder,
         commands::photos::photos_delete,

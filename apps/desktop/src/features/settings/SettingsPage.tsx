@@ -9,13 +9,16 @@ import { getSettings, pickFolder, pickSessionFile, saveSettings, type Integratio
 import { PageHeader } from '@/features/shell/PageHeader';
 import { goTo, setLeaveGuard } from '@/lib/routes';
 import { listStyles, type EditorStyles } from '@/services/styles';
-import { CameraSection } from './CameraSection';
+import { CameraSection, type CameraLogin } from './CameraSection';
+import { cameraSecretsSet } from '@/services/camera';
 import { StorageSection } from './StorageSection';
 import { StockSection } from './StockSection';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
 };
+
+const EMPTY_LOGIN: CameraLogin = { user: '', password: '' };
 
 type TextKey = 'preview_recipe' | 'master_recipe' | 'style_name' | 'export_folder';
 
@@ -54,13 +57,16 @@ export function SettingsPage() {
   const [saved, setSaved] = useState<Settings | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
   const [styles, setStyles] = useState<EditorStyles | null | undefined>(undefined);
+  // P68: the camera login typed here is saved by Save settings (to the Keychain, never settings.json).
+  const [login, setLogin] = useState<CameraLogin>(EMPTY_LOGIN);
   useEffect(() => { if (page.data) { setSettings(page.data); setSaved(page.data); } }, [page.data]);
   useEffect(() => {
     let live = true;
     void listStyles().then(list => { if (live) setStyles(list); });
     return () => { live = false; };
   }, []);
-  const dirty = settings !== null && saved !== null && JSON.stringify(settings) !== JSON.stringify(saved);
+  const loginTyped = login.user !== '' || login.password !== '';
+  const dirty = loginTyped || (settings !== null && saved !== null && JSON.stringify(settings) !== JSON.stringify(saved));
   useEffect(() => {
     setLeaveGuard(target => {
       if (!dirty) return true;
@@ -89,6 +95,10 @@ export function SettingsPage() {
     const shopify = settings.integration;
     // An untouched, empty Shopify block is not saved (no integration stays no integration).
     const integration = shopify && [shopify.shop_domain, shopify.client_id, shopify.client_secret].some(v => v.trim() !== '') ? shopify : undefined;
+    if (loginTyped) {
+      await cameraSecretsSet({ access_auth_user: login.user, access_auth_password: login.password });
+      setLogin(EMPTY_LOGIN);
+    }
     const saved = await saveSettings({
       document_id: settings.document_id ?? '',
       preview_recipe: settings.preview_recipe,
@@ -107,7 +117,7 @@ export function SettingsPage() {
     setError(null);
     toast.success('Settings saved');
     return true;
-  }, e => setError((e as {code?: string}).code === 'invalid_value' ? 'Ports must be 1024–65535, the passive range at least 2 ports and not containing the receiver port' : e instanceof Error ? e.message : String(e)));
+  }, e => setError((e as {code?: string}).code === 'invalid_value' ? 'Ports must be 1024–65535, the passive range at least 2 ports and not containing the receiver port' : e instanceof Error ? e.message : (e as {message?: string}).message ?? String(e)));
 
   const header = <PageHeader title={<h1 className="health-title">Settings</h1>} escapeGoesBack>
     <Button variant="outline" onClick={() => goTo('#/health')}>Health</Button>
@@ -148,7 +158,7 @@ export function SettingsPage() {
       {text('Preview recipe', 'preview_recipe')}
       {text('Master recipe', 'master_recipe')}
       <StyleField value={settings.style_name} styles={styles} onChange={style_name => edit({ style_name })} />
-      <CameraSection ports={settings.camera} onPortsChange={camera => edit({camera: {...camera, auto_take_back: camera.auto_take_back ?? true}})} />
+      <CameraSection ports={settings.camera} onPortsChange={camera => edit({camera: {...camera, auto_take_back: camera.auto_take_back ?? true}})} login={login} onLoginChange={setLogin} />
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-default_shape">Default shape</label>
         <select id="settings-default_shape" value={settings.default_shape} onChange={e => edit({ default_shape: e.target.value })}>
@@ -200,6 +210,7 @@ export function SettingsPage() {
             const target = leaving;
             setLeaving(null);
             setSettings(saved);
+            setLogin(EMPTY_LOGIN);
             setLeaveGuard(null);
             if (target) window.location.hash = target;
           }}>Discard</Button>

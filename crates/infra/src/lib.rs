@@ -8,6 +8,7 @@ pub mod jobs;
 pub mod keychain;
 pub mod logging;
 pub mod media_store;
+pub mod net;
 pub mod nudge;
 pub mod osascript;
 pub mod paths;

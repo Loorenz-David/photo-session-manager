@@ -176,6 +176,62 @@ pub async fn camera_ftp_password_generate(
     psm_infra::logging::add_secret(&password);
     Ok(FtpPasswordDto { password })
 }
+/// "Show password" (P68): the FTP password from the Keychain (macOS may ask to allow it);
+/// `null` when none was generated yet.
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_ftp_password_get(
+    state: State<'_, AppState>,
+) -> Result<Option<FtpPasswordDto>, CommandError> {
+    let handles = state.handles()?;
+    let password = tauri::async_runtime::spawn_blocking(move || {
+        CameraService::ftp_password(handles.camera_runtime.secret_store().as_ref())
+    })
+    .await
+    .map_err(|e| psm_core::Error::InvalidData(e.to_string()))??;
+    if let Some(password) = &password {
+        psm_infra::logging::add_secret(password);
+    }
+    Ok(password.map(|password| FtpPasswordDto { password }))
+}
+/// This Mac's address for the camera's Host Name (P68), and the sentence shown when it is no
+/// longer the address the camera last uploaded to.
+#[derive(Clone, Serialize, Type)]
+pub struct FtpAddressDto {
+    pub address: Option<String>,
+    pub warning: Option<String>,
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_ftp_address(state: State<'_, AppState>) -> Result<FtpAddressDto, CommandError> {
+    let handles = state.handles()?;
+    let address = handles.camera_runtime.ftp_address();
+    Ok(FtpAddressDto {
+        address: address.address.map(|ip| ip.to_string()),
+        warning: address.warning(),
+    })
+}
+/// The fingerprint waiting for confirmation (P68: the box shows it when opened after the event).
+#[derive(Clone, Serialize, Type)]
+pub struct FingerprintDto {
+    pub fingerprint: String,
+    pub replace: bool,
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn camera_fingerprint_pending(
+    state: State<'_, AppState>,
+) -> Result<Option<FingerprintDto>, CommandError> {
+    let handles = state.handles()?;
+    Ok(handles
+        .camera_runtime
+        .direct_adapter()
+        .pending_fingerprint()
+        .map(|(fingerprint, replace)| FingerprintDto {
+            fingerprint,
+            replace,
+        }))
+}
 #[tauri::command]
 #[specta::specta]
 pub async fn camera_fingerprint_confirm(

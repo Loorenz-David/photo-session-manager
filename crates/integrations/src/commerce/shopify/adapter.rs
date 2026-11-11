@@ -71,6 +71,36 @@ impl From<&psm_infra::settings_file::IntegrationSettings> for ShopifyConfig {
     }
 }
 
+/// P68 (owner 2026-11-11): the shop domain as saved. Whitespace and the scheme go, the text is
+/// lowercased, anything after the host (`/admin…`, a trailing `/`) is dropped, and the admin
+/// address `admin.shopify.com/store/<x>` becomes `<x>.myshopify.com`.
+pub fn normalise_shop_domain(raw: &str) -> String {
+    let mut text = raw
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_lowercase();
+    for scheme in ["https://", "http://"] {
+        if let Some(rest) = text.strip_prefix(scheme) {
+            text = rest.to_owned();
+        }
+    }
+    if let Some(rest) = text.strip_prefix("admin.shopify.com/store/")
+        && let Some(store) = rest.split('/').next().filter(|s| !s.is_empty())
+    {
+        return format!("{store}.myshopify.com");
+    }
+    text.split('/').next().unwrap_or_default().to_owned()
+}
+
+/// A host name the adapter can send requests to: dot-separated labels of letters, digits and `-`.
+fn shop_domain_valid(domain: &str) -> bool {
+    domain.contains('.')
+        && domain.split('.').all(|label| {
+            !label.is_empty() && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        })
+}
+
 /// P65 (changelog 45): shown in the item form and Settings when the shop's app cannot read
 /// locations or write inventory.
 pub const STOCK_ACCESS_MISSING: &str =
@@ -340,6 +370,13 @@ impl ShopifyAdapter {
         document: &str,
         variables: &Json,
     ) -> Result<Json> {
+        // P68: a domain that cannot be a host name is named to the photographer; no request
+        // is built from it (it was `http: builder error`).
+        if !shop_domain_valid(&self.config.shop_domain) {
+            return Err(Error::ShopDomainInvalid {
+                domain: self.config.shop_domain.clone(),
+            });
+        }
         let mut attempt = 0;
         loop {
             let reply: HttpReply = self.auth.with_token(&|token| {

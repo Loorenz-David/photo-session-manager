@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { FingerprintBox } from '@/features/settings/FingerprintBox';
 import { cameraCapture, cameraFilesNotReceivedDismiss, cameraReconnect, cameraRetry, cameraTakeBack, cameraTakeBackAvailability, type CameraStatus } from '@/services/camera';
 
 export function takeBackError(error: unknown): string {
@@ -10,8 +12,9 @@ export function takeBackError(error: unknown): string {
   return e.message ?? String(error);
 }
 
-export function CameraCard({ status, onStatus }: { status: CameraStatus; onStatus: (status: CameraStatus) => void }) {
+export function CameraCard({ status, onStatus, notice }: { status: CameraStatus; onStatus: (status: CameraStatus) => void; notice?: string | null }) {
   const [busy, setBusy] = useState(false);
+  const [fingerprintOpen, setFingerprintOpen] = useState(false);
   const [blocked, setBlocked] = useState<string | null>('Checking…');
   const action = async (run: () => Promise<unknown>, success?: string) => {
     setBusy(true);
@@ -30,7 +33,10 @@ export function CameraCard({ status, onStatus }: { status: CameraStatus; onStatu
     return () => { active = false; clearInterval(interval); };
   }, [takeBack]);
   const missing = needs?.reason === 'files_not_received';
+  // P68: the fingerprint box is reachable from the header when the camera waits for it.
+  const fingerprint = needs?.reason === 'fingerprint_unconfirmed' || needs?.reason === 'fingerprint_mismatch';
   return <div className="flex flex-col gap-3">
+    {notice && <p role="status">{notice}</p>}
     <p>{needs?.message ?? (status.kind === 'connected' ? `Camera connected by ${status.link === 'wireless' ? 'Wi-Fi' : 'cable'}` : status.kind === 'disconnected' ? 'Camera disconnected' : status.kind === 'connecting' ? 'Connecting…' : 'Camera busy')}</p>
     {busy && takeBack && <p>Taking the camera back… (about 20 s)</p>}
     <div className="flex flex-wrap gap-2">
@@ -42,6 +48,14 @@ export function CameraCard({ status, onStatus }: { status: CameraStatus; onStatu
         {needs.link === 'wireless' && <Button disabled={busy} onClick={() => void action(cameraReconnect)}>Reconnect</Button>}
         <Button disabled={busy} variant="outline" onClick={() => void action(cameraFilesNotReceivedDismiss)}>Dismiss</Button>
       </> : <Button disabled={busy} onClick={() => void action(async () => onStatus(await cameraRetry()))}>Retry</Button>}
+      {fingerprint && <Button variant="outline" onClick={() => setFingerprintOpen(true)}>Confirm the camera&apos;s fingerprint</Button>}
     </div>
+    <Dialog open={fingerprintOpen} onOpenChange={setFingerprintOpen}>
+      <DialogContent>
+        <DialogTitle>Camera fingerprint</DialogTitle>
+        <DialogDescription>Check that this is your camera before Session Manager connects to it.</DialogDescription>
+        {fingerprintOpen && <FingerprintBox needed changed={needs?.reason === 'fingerprint_mismatch'} onDone={() => setFingerprintOpen(false)} />}
+      </DialogContent>
+    </Dialog>
   </div>;
 }

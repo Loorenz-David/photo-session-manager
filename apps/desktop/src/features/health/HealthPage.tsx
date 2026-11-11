@@ -18,7 +18,7 @@ const names: Record<string, string> = {
   hooks: 'Installed hooks', hooks_not_installed: 'Installed hooks', recipes: 'Recipes', recipe_missing: 'Recipe missing',
   capture_folder_not_set: 'Capture folder', camera: 'Camera', camera_disconnected: 'Camera',
   camera_connecting: 'Camera', camera_busy: 'Camera', camera_auth_refused: 'Camera',
-  camera_fingerprint_mismatch: 'Camera', camera_fingerprint_unconfirmed: 'Camera',
+  camera_fingerprint_mismatch: 'Camera', camera_fingerprint_unconfirmed: 'Camera', camera_address_changed: 'Camera',
   camera_phone_connected: 'Camera', camera_held: 'Camera', camera_store_destination_unverified: 'Camera',
   camera_files_not_received: 'Camera', camera_ftp_unreachable: 'Camera', camera_photo_session_uncertain: 'Camera',
   camera_support_not_installed: 'Camera support', camera_sidecar_unavailable: 'Camera helper',

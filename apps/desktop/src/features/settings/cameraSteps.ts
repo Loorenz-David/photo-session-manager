@@ -3,7 +3,7 @@ export const ftp = (host: string, port: number, user: string) => [
   'MENU › Network › [FTP Transfer] › [FTP Transfer Func.] › [Server Setting] › [Server 1].',
   `[Destination Settings] › [Host Name] = ${host}; [Port] = ${port}; [Secure Protocol] = Off.`,
   '[Directory Settings] › [Directory Hierarchy] = [Standard]; [Same File Name] = [Does Not Overwrite].',
-  `[User Info Settings] › [User] = ${user}; [Password] = the password shown above.`,
+  `[User Info Settings] › [User] = ${user}; [Password] = the password above (Generate password or Show password), without the spaces.`,
   '[FTP Transfer Func.] › [Server Setting] › select Server 1 as the active server.',
   '[FTP Transfer Func.] › [FTP Function] = [On].',
   'MENU › Network › [FTP Transfer] › [FTP Transfer Func.] › [Auto FTP Trnsfr] = [On]; [Auto FTP Target] Still Image = [All].',

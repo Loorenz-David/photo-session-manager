@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use crate::{
     Error, Result,
     domain::camera::secrets,
@@ -8,6 +10,48 @@ use crate::{
     ports::{camera::CameraProvider, events::EventSink},
     services::{camera_ledger::LedgerService, health::HealthService},
 };
+
+/// Health code and header sentence when this Mac's address is not the one the camera last
+/// uploaded to (P68). The address is shown in the UI only, never logged.
+pub const ADDRESS_CHANGED: &str = "camera_address_changed";
+pub fn address_changed_sentence(address: &str) -> String {
+    format!("This Mac's address changed to {address} — set Host Name on the camera")
+}
+
+/// This Mac's address for the camera's Host Name (P68): the address the camera last uploaded to
+/// while this Mac still has it, else the first private IPv4 address, else the first address.
+/// `changed` when the camera uploaded before and that address is no longer this Mac's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FtpAddress {
+    pub address: Option<IpAddr>,
+    pub changed: bool,
+}
+impl FtpAddress {
+    pub fn of(current: &[IpAddr], last_upload: Option<IpAddr>) -> Self {
+        if let Some(last) = last_upload.filter(|last| current.contains(last)) {
+            return Self {
+                address: Some(last),
+                changed: false,
+            };
+        }
+        let rank = |ip: &IpAddr| match ip {
+            IpAddr::V4(v4) if v4.is_private() => 0,
+            IpAddr::V4(_) => 1,
+            IpAddr::V6(_) => 2,
+        };
+        let address = current.iter().copied().min_by_key(rank);
+        Self {
+            address,
+            changed: last_upload.is_some() && address.is_some(),
+        }
+    }
+    /// The sentence for the header and Health, when the address changed.
+    pub fn warning(&self) -> Option<String> {
+        self.address
+            .filter(|_| self.changed)
+            .map(|address| address_changed_sentence(&address.to_string()))
+    }
+}
 
 pub struct CameraService<'a> {
     provider: &'a dyn CameraProvider,
@@ -36,6 +80,10 @@ impl<'a> CameraService<'a> {
         secrets_store.set(secrets::FTP_PASSWORD, &password)?;
         changed(&password);
         Ok(password)
+    }
+    /// "Show password" (P68): the FTP password stored in the Keychain, if any.
+    pub fn ftp_password(secrets_store: &dyn SecretStore) -> Result<Option<String>> {
+        secrets_store.get(secrets::FTP_PASSWORD)
     }
     pub fn confirm_fingerprint(confirm: impl FnOnce() -> Result<()>) -> Result<()> {
         confirm()
