@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-11 08:40: P65 launched (Codex first, Claude if out; time-boxed review).** First work-site publish (owner at work, SDK build on the dev Mac): failed `variant_not_found` because Capture One took 17–80 s to list new photos; retry succeeded in 13 s (P64 grouped calls verified on the real store). Owner: style slow, jobs should queue, inventory tracking + location + quantity with a remembered default (changelog 45). P65 plan written and pushed.
+
 **2026-11-10 22:00: SDK app built from HEAD (P53–P64) and installed in /Applications on the dev Mac** (old P62 build moved to the session scratchpad; repo back on the stub). Waiting for the owner: publish on the test store, style drop-down, cable plug/unplug; then the work-Mac install.
 
 **2026-11-10 21:55: P64 APPROVED_WITH_NOTES, then P63 APPROVED_WITH_NOTES (both on Claude Opus high effort after Codex limits; time-boxed reviews).** Narratives relayed. Owed: one full `cargo test --workspace` run on a quiet Mac (both stamps partial); P64 batched Shopify calls not yet run against a real store; P63 unplug ~6 s only with a valid cached endpoint (stale ≈ 11.5 s). Next: build the SDK app from HEAD, install on the dev Mac, try publish on the test store + the P63 checks, then the work-Mac install (retention days high until P62 is verified on the test store).
