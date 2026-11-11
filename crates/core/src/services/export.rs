@@ -147,6 +147,9 @@ struct State {
     masters: HashMap<String, i64>,
     /// RAW → its master render waiting for the editor (changelog 45).
     waits: HashMap<String, Wait>,
+    /// RAW → when its master first had to wait; kept through retries until the master arrives,
+    /// so a render that keeps timing out still ends after `EDITOR_WAIT_MAX_MS`.
+    waited_since: HashMap<String, i64>,
 }
 
 pub struct ExportService {
@@ -337,13 +340,23 @@ impl ExportService {
             reason = ?wait.reason,
             "export waits for Capture One"
         );
+        let since = *state
+            .waited_since
+            .entry(raw.to_string())
+            .or_insert(wait.since_ms);
         match state.waits.get_mut(raw) {
             Some(existing) => {
                 existing.reason = wait.reason;
                 existing.next_ms = existing.next_ms.min(wait.next_ms);
             }
             None => {
-                state.waits.insert(raw.to_string(), wait);
+                state.waits.insert(
+                    raw.to_string(),
+                    Wait {
+                        since_ms: since,
+                        ..wait
+                    },
+                );
             }
         }
     }
@@ -365,16 +378,22 @@ impl ExportService {
                 .any(|run| run.targets.iter().any(needed))
             {
                 state.waits.remove(&raw);
+                state.waited_since.remove(&raw);
                 continue;
             }
             if now - wait.since_ms >= EDITOR_WAIT_MAX_MS {
                 state.waits.remove(&raw);
+                state.waited_since.remove(&raw);
                 let name = Path::new(&raw)
                     .file_name()
                     .map_or_else(|| raw.clone(), |n| n.to_string_lossy().into_owned());
                 let sentence = editor_wait_expired(wait.reason, &name);
                 tracing::warn!(raw, reason = ?wait.reason, "export stopped waiting for Capture One");
-                self.fail_runs(&mut state, needed, &format!("{EDITOR_WAIT_EXPIRED}{sentence}"));
+                self.fail_runs(
+                    &mut state,
+                    needed,
+                    &format!("{EDITOR_WAIT_EXPIRED}{sentence}"),
+                );
                 continue;
             }
             if now < wait.next_ms {
@@ -418,6 +437,7 @@ impl ExportService {
                         }
                         None => {
                             state.waits.remove(&raw);
+                            state.waited_since.remove(&raw);
                             self.fail_runs(&mut state, needed, &text);
                         }
                     }
@@ -937,6 +957,7 @@ impl ExportStaging for ExportService {
         if state.masters.get(&render.raw) == Some(&render.tracking_job_id) {
             state.masters.remove(&render.raw);
         }
+        state.waited_since.remove(&render.raw);
         let raw = render.raw.as_str();
         let waiting = |t: &Target| t.raw == raw && t.progress == Progress::WaitingMaster;
         if !state

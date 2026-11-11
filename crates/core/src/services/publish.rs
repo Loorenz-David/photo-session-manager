@@ -208,7 +208,8 @@ impl PublishService {
             }
             None => &none,
         };
-        self.store.set_item_stock(item_id, INTEGRATION, Some(stored))
+        self.store
+            .set_item_stock(item_id, INTEGRATION, Some(stored))
     }
 
     fn with_live<T>(&self, item_id: i64, f: impl FnOnce(&mut Live) -> T) -> T {

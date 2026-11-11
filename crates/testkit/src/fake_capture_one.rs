@@ -261,7 +261,9 @@ impl FakeCaptureOneScripting {
     fn list_pending(&self, s: &mut FakeState, seen_raw: Option<&str>) {
         let now = self.now_ms();
         if let Some(raw) = seen_raw
-            && let Some(name) = Path::new(raw).file_name().map(|n| n.to_string_lossy().into_owned())
+            && let Some(name) = Path::new(raw)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
             && let Some(pending) = s.pending_images.get_mut(&name)
         {
             pending.raw.get_or_insert_with(|| raw.to_string());

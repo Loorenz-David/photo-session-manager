@@ -76,8 +76,7 @@ impl JobRunner {
                         if let Some(cap) = handler.max_backoff_ms() {
                             wait = wait.min(cap);
                         }
-                        self.store
-                            .job_retry(job.id, code, now_ms + wait, now_ms)?;
+                        self.store.job_retry(job.id, code, now_ms + wait, now_ms)?;
                     }
                 }
             }

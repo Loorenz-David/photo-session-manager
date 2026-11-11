@@ -748,7 +748,9 @@ impl CommerceAdapter for ShopifyAdapter {
                 errors::user_errors(payload).unwrap_or_else(|| "no product in the reply".into())
             }
             // A GraphQL error (an access scope missing): nothing was executed.
-            Err(error) if access_denied(&error) || error.to_string().contains("shopify graphql:") => {
+            Err(error)
+                if access_denied(&error) || error.to_string().contains("shopify graphql:") =>
+            {
                 error.to_string()
             }
             Err(error) => return Err(error),

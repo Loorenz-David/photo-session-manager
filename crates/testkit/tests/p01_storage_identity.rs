@@ -308,7 +308,12 @@ fn c1a_open_creates_all_domain_columns() {
         ),
         (
             "publish_item_stock",
-            &["publish_item_id", "location_id", "location_name", "quantity"],
+            &[
+                "publish_item_id",
+                "location_id",
+                "location_name",
+                "quantity",
+            ],
         ),
     ];
     let actual_tables: BTreeSet<String> = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__rusqlite_%'").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();

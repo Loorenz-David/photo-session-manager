@@ -390,8 +390,9 @@ impl CommerceAdapter for FakeCommerce {
             return Ok((
                 id,
                 StockOutcome::Untracked {
-                    reason: "Your Shopify app needs the read_locations and write_inventory permissions"
-                        .into(),
+                    reason:
+                        "Your Shopify app needs the read_locations and write_inventory permissions"
+                            .into(),
                 },
             ));
         }

@@ -80,3 +80,43 @@ the Shopify step, the read-back shape. Record each in the handoff.
 - **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log
+
+### 2026-11-11 — implement r1 (actor `codex` slot; run by Claude Opus, pipeline-implementer)
+**Built.**
+- *Sync on arrival (10A).* New `CaptureOneScripting::sync_folder` (`jxa/sync_folder.js`: `collection.synchronizing = true` on the folder's
+  collection), `EditingProvider::sync_folder` (default no-op), gated as a launch-capable script (`GatedScripting::launching`: refused during a
+  take-back). `CaptureOneFollow::photo_arrived` marks the folder pending, switches the collection, then `run_syncs`; `tick` runs pending syncs.
+  At most one sync per folder per `SYNC_MIN_INTERVAL_MS` (1 s); arrivals meanwhile → one more sync after it; a refused (`EditorLaunchDeferred`)
+  sync stays pending and goes at the first tick after the take-back. Logs `capture_one.sync folder=… ms=…` and
+  `capture_one.variant_seen raw=… after_ms=…` (arrival → first poll that finds the variant). The variant follower is unchanged otherwise.
+- *Jobs wait (07/07A).* `ExportService` keeps `waits` (RAW → wait) for master renders refused or timed out because Capture One is not
+  ready (`mechanisms::backoff::editor_wait`: `variant_not_found`, `editor_launch_deferred`, `document_not_open`, "not running", -600 →
+  unavailable; `timeout`/"timed out"/-1712/"busy" → busy). Retried by `ExportService::tick` (called from `PreviewService::tick` through
+  `ExportStaging::tick`) after 1, 2, 4, 8, then every 15 s; after `EDITOR_WAIT_MAX_MS` (10 min, measured from the first wait of that RAW and
+  kept across retries until its master arrives) the runs fail with `editor_wait: <sentence>`; publish turns that into
+  `Error::EditorWaitExpired(sentence)` (`Capture One has not loaded DSC05164.ARW after 10 minutes`; busy/closed have their own sentence). Other
+  errors fail as before. Waiting is a **flag** on the run (delegated choice): `ExportState::Waiting` event, the run row's `jobs.error =
+  'waiting_for_editor'` while running (`Store::set_export_waiting`), `SessionListRecord.waiting_for_editor` → `RowLabel::WaitingForEditor`
+  while publishing, and `PublishActivity.text = "Waiting for Capture One…"` in the prepare step. The publish job's retry back-off is capped
+  at 15 s (`JobHandler::max_backoff_ms`). Cancel in prepare ends the export run (`ExportService::cancel_run`) and finishes `Publish cancelled`.
+- *Inventory on create (07A/09).* `CommerceAdapter::stock_locations` and `item_create_stocked` (defaults keep other adapters working);
+  `StockDefaults` port, implemented by `SettingsStockDefaults` over settings.json `commerce.inventory_default {location_id, location_name,
+  quantity}`. Migration `011_item_stock.sql`: `item_stock` (the form's per-item choice; an empty location = "No location" chosen) and
+  `publish_item_stock` (frozen at confirm for items the publish will create). Prepare creates with stock when frozen; a `Tracked` create
+  remembers the values as the default. Shopify: `productSet` variant gets `inventoryItem: {tracked: true}` and `inventoryQuantities:
+  [{locationId, name: "available", quantity}]`; read-back `InventoryReadback` (`inventoryItem { tracked inventoryLevel(locationId:) {
+  quantities(names: ["available"]) } }`); a GraphQL error / userErrors with no product → sent again without stock fields (untracked, never a
+  failed publish); `locations(first: 50) { nodes { id name isActive } }`, ACCESS_DENIED → `missing_access = "Your Shopify app needs the
+  read_locations and write_inventory permissions"`. Desktop commands `stock_locations`, `stock_default_get/set`, `item_stock_get/set`; UI:
+  `StockFields` on the form's Product step (new items only), `StockSection` in Settings (shown with a saved integration), waiting pill.
+**Judgment calls.** Waiting = flag, not a new run state; back-off 1/2/4/8/15 s; Location/Quantity at the end of the Product step; read-back =
+separate query; locations cached in `PublishService` (once per app run = per built App); default remembered only after a tracked create;
+stock frozen at confirm (H1). User-facing "Capture One" sentences in core follow the precedent in previews/editing_startup.
+**Deviations.** New files beyond the plan's list: `crates/infra/src/sqlite/migrations/011_item_stock.sql`, `apps/desktop/src/services/stock.ts`,
+`apps/desktop/src/features/form/StockFields.tsx`, `apps/desktop/src/features/settings/StockSection.tsx`, the UI test
+`apps/desktop/src/features/form/__tests__/p65_stock_and_waiting.test.tsx`. Inherited tests updated to changelog 45: p09 `c6b` (timeout now waits,
+fails after 10 min), p29 `failed_run` helper (same), p01 schema list (+2 tables). Shopify docs tool was not permitted in this session; the
+Admin API fields above are from the API as known (2025-07+) and are unverified against a live shop — the owner's store is the first real test.
+**Observation.** Most of this phase's code was committed by another session's commits `b468cad` ("backlog: …") and `8b26018` ("STATUS: …")
+while this session was working; `b468cad` references the then-uncommitted `sync_folder.js` and `011_item_stock.sql` (HEAD did not build until
+this checkpoint). No live Capture One probe: Capture One was not running.

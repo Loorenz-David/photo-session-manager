@@ -101,6 +101,13 @@ export const commands = {
 	publishActivity: (sessionId: CommandId) => typedError<PublishActivityDto_Serialize | null, CommandError>(__TAURI_INVOKE("publish_activity", { sessionId })),
 	/**  Changelog 44 (P64): Cancel publish, after the photographer confirmed it in the popover. */
 	publishCancel: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_cancel", { itemId })),
+	/**  P65: the shop's locations (read once per app run). */
+	stockLocations: () => typedError<StockLocationsDto_Serialize, CommandError>(__TAURI_INVOKE("stock_locations")),
+	/**  P65: Settings → Shopify: the remembered location and quantity for new products. */
+	stockDefaultGet: () => typedError<StockChoiceDto | null, CommandError>(__TAURI_INVOKE("stock_default_get")),
+	stockDefaultSet: (choice: StockChoiceDto) => typedError<StockChoiceDto | null, CommandError>(__TAURI_INVOKE("stock_default_set", { choice })),
+	itemStockGet: (itemId: CommandId) => typedError<ItemStockDto_Serialize, CommandError>(__TAURI_INVOKE("item_stock_get", { itemId })),
+	itemStockSet: (itemId: CommandId, choice: StockChoiceDto | null) => typedError<null, CommandError>(__TAURI_INVOKE("item_stock_set", { itemId, choice })),
 	notificationsList: (sessionId: CommandId | null) => typedError<NotificationDto[], CommandError>(__TAURI_INVOKE("notifications_list", { sessionId })),
 	settingsGet: () => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_get")),
 	settingsSet: (patch: SettingsPatchDto_Deserialize) => typedError<SettingsDto_Serialize, CommandError>(__TAURI_INVOKE("settings_set", { patch })),
@@ -528,6 +535,30 @@ export type ItemDto_Serialize = {
 	updated_at: number,
 };
 
+/**
+ *  P65: whether the item will be created by a publish, and its stock (its own choice, else the
+ *  default; `null` when none).
+ */
+export type ItemStockDto = ItemStockDto_Serialize | ItemStockDto_Deserialize;
+
+/**
+ *  P65: whether the item will be created by a publish, and its stock (its own choice, else the
+ *  default; `null` when none).
+ */
+export type ItemStockDto_Deserialize = {
+	new_item: boolean,
+	choice?: StockChoiceDto | null,
+};
+
+/**
+ *  P65: whether the item will be created by a publish, and its stock (its own choice, else the
+ *  default; `null` when none).
+ */
+export type ItemStockDto_Serialize = {
+	new_item: boolean,
+	choice: StockChoiceDto | null,
+};
+
 export type LatestPublishResponse = LatestPublishResponse_Serialize | LatestPublishResponse_Deserialize;
 
 export type LatestPublishResponse_Deserialize = {
@@ -705,7 +736,9 @@ export type RowLabelResponse = { kind: "publishing"; value: number } | { kind: "
 /**  Changelog 44: `Publish cancelled · Publish`. */
 { kind: "publish_cancelled" } | { kind: "description_failed" } | { kind: "published" } | { kind: "ready" } | { kind: "in_progress"; value: number } | 
 /**  P62: published, local files cleared, photos shown from Shopify. */
-{ kind: "archived" };
+{ kind: "archived" } | 
+/**  Changelog 45 (P65): the publish waits for Capture One (`Waiting for Capture One…`). */
+{ kind: "waiting_for_editor" };
 
 export type SessionFilter = "open" | "published" | "all";
 
@@ -911,6 +944,33 @@ export type SettingsPatchDto_Serialize = {
 	theme?: string,
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
+};
+
+/**  Changelog 45 (P65): a stock location and quantity for a new product. */
+export type StockChoiceDto = {
+	location_id: string,
+	location_name: string,
+	quantity: number,
+};
+
+export type StockLocationDto = {
+	id: string,
+	name: string,
+};
+
+/**  The shop's active locations, or the sentence saying the app lacks the permissions. */
+export type StockLocationsDto = StockLocationsDto_Serialize | StockLocationsDto_Deserialize;
+
+/**  The shop's active locations, or the sentence saying the app lacks the permissions. */
+export type StockLocationsDto_Deserialize = {
+	locations: StockLocationDto[],
+	missing_access?: string | null,
+};
+
+/**  The shop's active locations, or the sentence saying the app lacks the permissions. */
+export type StockLocationsDto_Serialize = {
+	locations: StockLocationDto[],
+	missing_access: string | null,
 };
 
 /**

@@ -318,7 +318,8 @@ fn c1b_export_with_every_output_cached_renders_nothing() {
     assert_eq!(fs::read(exported(&a, "K_01_main.jpg")).unwrap(), first);
 }
 
-/// C1(c)'s first half: `a`'s master completes, `b`'s times out twice, the run fails.
+/// C1(c)'s first half: `a`'s master completes, `b`'s times out twice, the run waits for Capture
+/// One (P65, changelog 45) and fails once it has waited 10 minutes.
 fn failed_run() -> (TestApp, i64, Photo, Photo) {
     let a = app();
     let s = session(&a, "K");
@@ -330,6 +331,13 @@ fn failed_run() -> (TestApp, i64, Photo, Photo) {
         .unwrap();
     a.tick(121_000).unwrap();
     a.tick(121_000).unwrap();
+    assert_eq!(export_states(&a).last(), Some(&ExportState::Waiting));
+    for _ in 0..20 {
+        a.tick(60_000).unwrap();
+        if export_states(&a).last() == Some(&ExportState::Failed) {
+            break;
+        }
+    }
     assert_eq!(export_states(&a).last(), Some(&ExportState::Failed));
     (a, s, pa, pb)
 }

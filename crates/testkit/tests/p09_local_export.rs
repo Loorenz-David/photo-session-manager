@@ -340,9 +340,28 @@ fn c6b_export_render_timeout_reissues_once_then_fails() {
     for photo in &mains {
         assert_eq!(a.fake.jobs_for(&variant(photo)).len(), 2);
     }
+    // P65 (changelog 45): a render that times out is not a failure: the export waits for Capture
+    // One, asks again, and fails only after 10 minutes of waiting.
     assert_eq!(
         export_states(&a).last().map(|s| s.2),
-        Some(ExportState::Failed)
+        Some(ExportState::Waiting)
     );
+    let waiting_since = psm_core::ports::clock::Clock::now_ms(a.clock.as_ref());
+    let mut failed_at = None;
+    for _ in 0..120 {
+        a.tick(10_000).unwrap();
+        if export_states(&a).last().map(|s| s.2) == Some(ExportState::Failed) {
+            failed_at = Some(psm_core::ports::clock::Clock::now_ms(a.clock.as_ref()));
+            break;
+        }
+    }
+    let waited = failed_at.expect("the export failed in the end") - waiting_since;
+    assert!(
+        (600_000..=900_000).contains(&waited),
+        "failed {waited} ms after it began waiting"
+    );
+    for photo in &mains {
+        assert!(a.fake.jobs_for(&variant(photo)).len() > 2, "asked again");
+    }
     assert!(names(&a.export_root()).is_empty());
 }

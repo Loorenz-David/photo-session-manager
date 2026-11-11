@@ -61,7 +61,8 @@ pub const PRODUCT_TYPES: &str = "query ProductTypes($after: String) { productTyp
 
 /// P65 (changelog 45): the shop's active stock locations (`includeInactive` defaults to false;
 /// needs `read_locations`).
-pub const LOCATIONS: &str = "query Locations { locations(first: 50) { nodes { id name isActive } } }";
+pub const LOCATIONS: &str =
+    "query Locations { locations(first: 50) { nodes { id name isActive } } }";
 
 /// P65: read-back of a created product's stock at one location (tracking and the `available`
 /// quantity of its first variant's inventory item).
