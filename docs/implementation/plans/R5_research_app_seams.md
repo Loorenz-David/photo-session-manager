@@ -7,7 +7,7 @@ depends_on: [R3_research_rules]
 ---
 # R5 — App seams: the photographer's actions on suggestions, and publishing with unchecked suggestions
 
-**Tracker:** NOT_STARTED · 2026-11-12 · planner · —
+**Tracker:** IMPLEMENTED · 2026-11-12 · opus · 2 units, 42/42 rows each with a named test at its boundary (r5 suite 14 + 26, desktop `r5_` 2, form UI 1; partition unit tests 3); full gate green but the known `p33_split_grid` C4(d) UI flake (file rerun green).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -324,3 +324,17 @@ The reviewer runs: `cargo test -p psm-testkit --test suite research::r5_feedback
 On scratch data with the test shop connected: Undo and Redo of form edits behave as before; publishing an item without suggestions works exactly as before. The new rules are visible in `cargo test -p psm-testkit --test suite research::r5_publish_hold::` until the buttons arrive in R6.
 
 ## Review log
+
+### 2026-11-12 · implement r1 · opus
+**Built.** U1 (`c8b22ae`): `AttributesService::{accept, keep_previous}`; every photographer action runs through one `act` helper that takes `History`'s operation lock before its store transaction and records its step under that held guard (`History::{lock, last_step, record_held}`; operation → store); each action on an `ai` + `suggested`/`accepted` row writes one `research_feedback` row with the step's token (a UUID v4 made per action); `clear` and a human edit drop `ai_prior`; `accept_all` skips `low` and every conflict (`mechanisms::publish_partition::is_conflict`); attribute undo/redo apply only when every row field still equals the expected row (except `updated_at`), else `StepCannotApply` "that field was changed by research" and the step is dropped; undo reads and deletes its feedback rows and keeps them on the step, redo re-inserts them with fresh ids; a coalesced edit updates its step's `edited` row's `final_value`; store `feedback_by_step`, `update_feedback_final_value`; commands `attribute_ai_accept`, `attribute_conflict_resolve` (`keep_previous | use_suggestion | edit`); Looks right calls the accept command and shows only on `suggested`. U2 (`1e56542`): `publish_partition::partition` (frozen / withheld / pending / left out; origin per key) and `services::attributes::layout_keys`; `preview` returns `n_withheld` and `conflicts`; `confirm(ids, summary, shown)` recomputes inside its transaction and refuses with `Error::SuggestionsChanged` (code `suggestions_changed`); pending items start `held`, stock frozen, no job; `services::publish::{resolve_pending_in, unresolve_in}` called by every action (via `note_action`) and by undo/redo (redo of a key pending without an entry is its resolution); release in the same transaction (`StoreTx::release_publish_item` queues the job); cancel of a held item is immediate; `activity` offers Cancel on `held`; the run reads `PublishItem::run_attributes()` (frozen + resolved, "no value" left out) in `ensure_export` and `update`; one count helper `PublishItem::unresolved_conflicts` for the row label and the progress text; research's `is_conflict` delegates to core; the 42 testkit `confirm` calls go through `ConfirmAsShown::confirm_as_shown`.
+
+**Judgment calls** (full list with reasons in `handoffs/implementer/handoff_R5_research_app_seams_implement_r1.md` §Assumptions). First to look at:
+- JSON layouts: `pending_conflicts[key]` = the conflict exactly as the preview shows it (`key, label, prior_value, prior_valid, prior_provenance, suggestion, confidence`); `frozen_attribute_origin[key]` = `{class: frozen|withheld|pending, provenance, status, confidence, prior}`; `resolved_attributes[key]` = `{value (null = no value), action, at, step_token}`.
+- Redo resolution takes the value from the entry the step recorded, else from the step's after-row (live and valid → its value, else no value), and the action from that entry, else the step's kept feedback row.
+- An edit that writes a feedback row, or records a resolution, never merges into the previous step.
+- `accept_all` treats a suggestion with a prior whose key has no definition as a conflict (skipped, fail closed).
+
+**Deviations.** `ConfirmAsShown` is a testkit trait on `PublishService` (plus `TestApp::confirm_as_shown`), so each call site keeps its own service expression (several hold the service or a second app); one rename and one `use` line per file. Files beyond the lists: `Cargo.lock` and `crates/testkit/src/lib.rs` (re-exports). The closing gate's `cargo test --workspace` ran as the same tests in sequence: `--workspace --exclude psm-testkit`, testkit `--lib --bins`, and the suite in two filters (455 + 407 = 862 of 862) to stay inside the session's 10-minute command limit. Tracker actor is `opus` (this session ran on Claude Opus), not `codex`.
+
+**Observations.** The release writes no event; a held session's label changes on the next list read (R6·U3 may want an event). `npm test`: `p33_split_grid.test.tsx` C4(d) failed once under full load and passed alone (backlog rows P35/P37/P41 → P33). No hardware or live service used.
+
