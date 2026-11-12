@@ -616,7 +616,9 @@ action had provenance `ai`:
 
 Resolving a conflict in the popover is the same owner action as in the form: one undo step each (05A MC-30) and one
 feedback row. If the key is pending on a `held` publish item, the same transaction records its resolution there and
-releases the item when it was the last (MC-A10). Undoing it while the item is still held removes that record; redoing it records it again (MC-A10). Each row also stores the suggested value and confidence from before the action, the time, and
+releases the item when it was the last (MC-A10). Undoing it while the item is still held removes that record; redoing it records it again (MC-A10). A redo that
+changes a key pending without an entry on a `held` item is that key's resolution, recorded as the action it
+replays, and releases the item when it was the last (changelog 10). Each row also stores the suggested value and confidence from before the action, the time, and
 `step_token`, the history step's id. Research writes are never feedback and never undo steps (08A §7).
 
 **Undo and redo** (amends 05A MC-30 for attribute steps) (R-IA21). Each field of an attribute step
@@ -787,3 +789,9 @@ to 07A MC-10 and 05A MC-30.
    `cleared` row writes none (the clear already recorded that suggestion's verdict; the enumerated rows win, as in
    changelog 4). (b) MC-A10: pending is decided at confirmation; a later layout or definition change does not
    re-evaluate it. Cancel and publish again is the way out of that rare case.
+10. **2026-11-12 — A redo that becomes a resolution (orchestrator, from the R5 projection).** A step made before
+    Publish (e.g. Clear of a conflict, then undone) can be redone after the item is `held` on that key. The redo
+    is that key's resolution, recorded as the action it replays (Clear → no value; Edit → the value, no value when
+    it does not fit; Keep previous → the prior's value; Use suggestion / Accept all → the suggestion), and releases
+    the item at the last pending key. Otherwise the item would wait on a field that no longer shows a conflict.
+    Completes the owner's card 1, as changelogs 6 and 8 did.

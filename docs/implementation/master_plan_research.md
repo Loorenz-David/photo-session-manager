@@ -377,6 +377,8 @@ present (never printing a value) before launching R1.
 - The intention map still says 08A/08B are "not planned yet".
 
 ## 9. Amendment log
+- 2026-11-12 v4 (orchestrator) — R5 projection turned off after seven rounds (0 owner cards, each round smaller;
+  every ledger applied to the plan and 08B changelogs 6, 8, 9, 10); the review is R5's gate. R8 keeps `projection: yes`.
 - 2026-11-12 v3 (orchestrator) — R2–R4 review notes folded into R5–R10 as "Carried from earlier reviews" sections
   (implementers do not read `backlog_research/`); §6.6 default `attribution_keys`; schedule: R5 and R6 run on
   track A after R4 (track A was idle until R6, track B busy with R1), then R7 on A; track B does R1, then R8.
