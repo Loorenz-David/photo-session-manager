@@ -263,7 +263,7 @@ impl SessionsService<'_> {
             ListCounts, ListFilter, ListGroup, SessionList, SessionRow, SessionStatus,
         };
         use crate::mechanisms::{
-            status::{StatusInput, derive_status, row_label},
+            status::{derive_status, row_label},
             time::group_by_activity,
         };
         let records = self.store.session_list_records()?;
@@ -278,17 +278,7 @@ impl SessionsService<'_> {
         let mut rows = Vec::new();
         for record in records {
             let dto = &record.session;
-            let input = StatusInput {
-                latest_step: record.latest_step,
-                failed_step: record.failed_step,
-                published_at: dto.session.published_at,
-                dirty: dto.dirty,
-                main_count: dto.main_count,
-                unreviewed_count: dto.unreviewed_count,
-                non_deleted_missing_preview_count: record.non_deleted_missing_preview_count,
-                uploaded: record.uploaded,
-                total: record.total,
-            };
+            let input = status_input(&record);
             let status = derive_status(input);
             counts.all += 1;
             if status == SessionStatus::Published {
@@ -361,4 +351,42 @@ impl SessionsService<'_> {
             unassigned_count,
         })
     }
+}
+
+/// The status inputs of one session-list record (07).
+fn status_input(
+    record: &crate::domain::session::SessionListRecord,
+) -> crate::mechanisms::status::StatusInput {
+    let dto = &record.session;
+    crate::mechanisms::status::StatusInput {
+        latest_step: record.latest_step,
+        failed_step: record.failed_step,
+        published_at: dto.session.published_at,
+        dirty: dto.dirty,
+        main_count: dto.main_count,
+        unreviewed_count: dto.unreviewed_count,
+        non_deleted_missing_preview_count: record.non_deleted_missing_preview_count,
+        uploaded: record.uploaded,
+        total: record.total,
+    }
+}
+
+/// P69 (changelog 47 (2)): the item sessions whose status is Ready (07) and whose files were not
+/// cleared after publishing, newest created first (the list's order, changelog 46 (1)).
+pub fn ready_session_ids(store: &dyn Store) -> Result<Vec<i64>> {
+    use crate::domain::session::SessionStatus;
+    let cleared = crate::services::retention::cleared_sessions(store)?;
+    let mut ready: Vec<(i64, i64)> = store
+        .session_list_records()?
+        .iter()
+        .filter(|record| {
+            record.session.session.item_id.is_some()
+                && !cleared.contains(&record.session.session.id)
+                && crate::mechanisms::status::derive_status(status_input(record))
+                    == SessionStatus::Ready
+        })
+        .map(|record| (record.session.session.created_at, record.session.session.id))
+        .collect();
+    ready.sort_by(|a, b| b.cmp(a));
+    Ok(ready.into_iter().map(|(_, id)| id).collect())
 }

@@ -31,6 +31,12 @@ pub struct CameraSettingsDto {
     pub auto_take_back: Option<bool>,
 }
 
+/// Changelog 47 (P69): `export.prepare_masters` (Settings → Storage; default on).
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct ExportSettingsDto {
+    pub prepare_masters: bool,
+}
+
 /// `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the
 /// stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
 #[derive(Serialize, Deserialize, Type)]
@@ -50,6 +56,8 @@ pub struct SettingsDto {
     pub theme: String,
     pub sku_prefix: Option<String>,
     pub integration: Option<IntegrationSettingsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub export: Option<ExportSettingsDto>,
 }
 
 /// A partial update: absent fields stay as stored.
@@ -79,6 +87,8 @@ pub struct SettingsPatchDto {
     pub sku_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub integration: Option<IntegrationSettingsDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub export: Option<ExportSettingsDto>,
 }
 
 fn to_dto(value: serde_json::Value) -> Result<SettingsDto, CommandError> {

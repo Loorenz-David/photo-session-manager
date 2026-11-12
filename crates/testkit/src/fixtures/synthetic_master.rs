@@ -163,13 +163,21 @@ impl SyntheticMaster {
             }
         }
     }
-    /// The TIFF file's bytes.
+    /// The TIFF file's bytes (16 bits per sample).
     pub fn bytes(&self) -> Vec<u8> {
-        let strip_len = self.w as usize * self.h as usize * 6;
+        self.encode(16)
+    }
+    /// The TIFF file's bytes at 8 bits per sample, as the `PSM Master` recipe writes it since
+    /// changelog 47 (P69): each 16-bit sample's high byte.
+    pub fn bytes_8bit(&self) -> Vec<u8> {
+        self.encode(8)
+    }
+    fn encode(&self, bits: u16) -> Vec<u8> {
+        let strip_len = self.w as usize * self.h as usize * 3 * usize::from(bits / 8);
         let mut ifd0 = vec![
             long(0x0100, self.w),
             long(0x0101, self.h),
-            short(0x0102, &[16, 16, 16]),
+            short(0x0102, &[bits, bits, bits]),
             short(0x0103, &[1]),
             short(0x0106, &[2]),
             long(0x0111, 0),
@@ -241,7 +249,11 @@ impl SyntheticMaster {
         for y in 0..self.h {
             for x in 0..self.w {
                 for v in self.pixel(x, y) {
-                    out.extend_from_slice(&v.to_le_bytes());
+                    if bits == 8 {
+                        out.push((v >> 8) as u8);
+                    } else {
+                        out.extend_from_slice(&v.to_le_bytes());
+                    }
                 }
             }
         }

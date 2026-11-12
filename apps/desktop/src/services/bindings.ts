@@ -401,6 +401,11 @@ export type ExportRunResponse = {
 	run_id: number,
 };
 
+/**  Changelog 47 (P69): `export.prepare_masters` (Settings → Storage; default on). */
+export type ExportSettingsDto = {
+	prepare_masters: boolean,
+};
+
 /**  The fingerprint waiting for confirmation (P68: the box shows it when opened after the event). */
 export type FingerprintDto = {
 	fingerprint: string,
@@ -805,6 +810,8 @@ export type PublishActivityDto_Deserialize = {
 	/**  `retrying` or `retry_available`. */
 	retry?: string | null,
 	can_cancel: boolean,
+	/**  P69: `Masters ready in advance: n of m` while publishing. */
+	masters_ready?: string | null,
 };
 
 /**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */
@@ -818,6 +825,8 @@ export type PublishActivityDto_Serialize = {
 	/**  `retrying` or `retry_available`. */
 	retry: string | null,
 	can_cancel: boolean,
+	/**  P69: `Masters ready in advance: n of m` while publishing. */
+	masters_ready?: string,
 };
 
 export type RectDto = {
@@ -998,6 +1007,7 @@ export type SettingsDto_Deserialize = {
 	theme: string,
 	sku_prefix?: string | null,
 	integration?: IntegrationSettingsDto | null,
+	export?: ExportSettingsDto | null,
 };
 
 /**
@@ -1020,6 +1030,7 @@ export type SettingsDto_Serialize = {
 	theme: string,
 	sku_prefix: string | null,
 	integration: IntegrationSettingsDto | null,
+	export?: ExportSettingsDto,
 };
 
 /**  A partial update: absent fields stay as stored. */
@@ -1039,6 +1050,7 @@ export type SettingsPatchDto_Deserialize = {
 	theme?: string | null,
 	sku_prefix?: string | null,
 	integration?: IntegrationSettingsDto | null,
+	export?: ExportSettingsDto | null,
 };
 
 /**  A partial update: absent fields stay as stored. */
@@ -1055,6 +1067,7 @@ export type SettingsPatchDto_Serialize = {
 	theme?: string,
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
+	export?: ExportSettingsDto,
 };
 
 /**  Changelog 45 (P65): a stock location and quantity for a new product. */

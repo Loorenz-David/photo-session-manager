@@ -222,7 +222,19 @@ fn c3c_restart_with_every_preview_current_orders_nothing() {
         a.app.previews.request_initial(&p.raw_path).unwrap();
         a.complete_render(&last_job(&a)).unwrap();
     }
-    let before = a.fake.state.lock().unwrap().issued.len();
+    // Preview renders only: since P69 the restarted app may prepare the Ready session's masters
+    // in the background (changelog 47 (2)); this test is about previews.
+    let previews = |a: &TestApp| {
+        a.fake
+            .state
+            .lock()
+            .unwrap()
+            .issued
+            .iter()
+            .filter(|(_, _, recipe)| recipe == "PSM Preview")
+            .count()
+    };
+    let before = previews(&a);
     // A render row the previous process left `running` (the owner's database had 274), and
     // Capture One saving the document while Session Manager was closed.
     a.store()
@@ -239,7 +251,7 @@ fn c3c_restart_with_every_preview_current_orders_nothing() {
     a.focus().unwrap();
     std::thread::sleep(Duration::from_millis(500));
     a.tick(1_000).unwrap();
-    assert_eq!(a.fake.state.lock().unwrap().issued.len(), before);
+    assert_eq!(previews(&a), before);
     assert_eq!(render_rows(&a, "render_preview", "running"), 0);
     for p in &photos {
         let state = a.store().preview_state(&p.raw_path).unwrap().unwrap();

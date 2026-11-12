@@ -39,6 +39,7 @@ export function PublishActivityPanel({ sessionId }: { sessionId: number }) {
     <div className="publish-activity" data-testid="publish-activity">
       <p className="font-medium">{activity.text}</p>
       <p className="text-muted-foreground">{activity.percent}% · Elapsed {formatElapsed(activity.elapsed_ms)}</p>
+      {activity.masters_ready && <p className="text-muted-foreground">{activity.masters_ready}</p>}
       {activity.error && (
         <div role="alert">
           <p>Last error: {activity.error}</p>

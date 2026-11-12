@@ -216,6 +216,9 @@ pub struct PublishActivity {
     pub retry: Option<String>,
     /// Whether Cancel publish is offered (an active step, no cancel requested yet).
     pub can_cancel: bool,
+    /// P69 (changelog 47): `Masters ready in advance: n of m` while the item publishes and its
+    /// export is known in this process.
+    pub masters_ready: Option<String>,
 }
 
 /// Changelog 45 (P65): the stock a newly created item starts with: the platform location (its id

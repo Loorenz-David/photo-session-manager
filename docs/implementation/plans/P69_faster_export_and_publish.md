@@ -58,3 +58,24 @@ The files above as needed; `crates/testkit/tests/p69_faster_export_and_publish.r
 - **Reviewer (time-boxed, still correct):** do not re-run `cargo test --workspace`. Run this phase's new test file(s), the test files of the crates and features the diff touches, clippy, fmt, typecheck and the touched UI test files; trust the implementer's full-suite stamp unless it is missing or contradicts what you see. Read every changed production path against the rows; only B1–B4 findings block. Aim to finish in about 15 minutes.
 
 ## Review log
+
+### 2026-11-12 — implement r1 (Claude, pipeline-implementer)
+**Built.** (1) `RecipeSpec::MASTER` is an 8-bit TIFF (compression kept `Uncompressed`, VERIFY-15); the per-batch recipe self-repair
+updates an existing 16-bit `PSM Master`. (2) `services/prepare_masters.rs` (`PrepareMastersService`, own thread, 1 s tick): the first photo
+of the newest Ready session without a master for its current `adjusted_gen` is asked for through `ExportService::prepare_master`, one at
+a time, only while no capture is on its way, no take-back, no render out, no preview waiting, no export or publish running and free space ≥
+the storage minimum; prepared masters are committed by `master_ready` like an export's (frame adopted), held in `State::masters` so a run
+that starts meanwhile waits for them, and are released/cleared by the existing rules. Setting `export.prepare_masters` (default on;
+Settings → Storage checkbox; applied without reopen). (3) Batch gate in `PublishService::prepare` (an item waits while an earlier item of
+its run is in prepare) and `start_next_in_batch` (the next item's export starts when an item leaves prepare); the export block of
+`prepare` became `ensure_export`. (4) `ExportService` records per-run timing and masters ready/total (`ExportTiming`); `PublishService`
+logs `publish.timing item=… masters_ms=… outputs_ms=… upload_ms=… shopify_ms=… total_ms=… masters_reused=n/m` at done, and
+`PublishActivity.masters_ready` carries `Masters ready in advance: n of m` (popover line).
+**Assumptions.** A1–A10 in the handoff (idle definition, which photos, one at a time, batch = one confirmation, timing field
+definitions, popover only while running, setting name as the plan writes it).
+**Deviations.** p27 `c3b` expects `bits = 8` and p56 `c3c` counts preview renders only (the restarted app now prepares the Ready
+session's masters, changelog 47 (2)); the p69 tests run serialised (thread-scoped log capture); book 10D MC-28 still says 16 bits (book fold).
+**Observations.** Before P69 every item of a batch asked Capture One for all its masters at once (all prepare jobs are due together),
+which is the likely cause of the 9-item `export failed: timeout`. The closing `cargo test --workspace` stopped at p56 `c3c`; after the fix
+p56–p69 were re-run (93/93) — files p00–p55 and every crate's unit tests had passed in the gate (852).
+

@@ -1,6 +1,8 @@
 use super::scripting::RecipeProps;
 
 pub const SRGB_PROFILE: &str = "sRGB Color Space Profile";
+/// VERIFY-15: uncompressed is the fastest lossless choice Capture One offers (ZIP took 3–4× as
+/// long for a 15 % smaller file); kept for the 8-bit master (P69).
 pub const MASTER_TIFF_COMPRESSION: &str = "Uncompressed";
 
 #[derive(Clone, Copy)]
@@ -23,9 +25,11 @@ impl RecipeSpec {
         jpeg_quality: 85,
         export_crop_method: "ignore",
     };
+    /// 10D MC-28, changelog 47 (1): an 8-bit TIFF (half of what Capture One wrote at 16 bits);
+    /// the recipe self-repair (10F §5) updates a 16-bit `PSM Master` before the next render batch.
     pub const MASTER: Self = Self {
         output_format: "TIFF",
-        bits: 16,
+        bits: 8,
         scaling_method: "Fixed",
         scaling_unit: "percent",
         long_edge: 100,

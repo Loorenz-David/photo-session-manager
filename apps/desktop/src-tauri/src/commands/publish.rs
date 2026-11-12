@@ -162,6 +162,9 @@ pub struct PublishActivityDto {
     /// `retrying` or `retry_available`.
     pub retry: Option<String>,
     pub can_cancel: bool,
+    /// P69: `Masters ready in advance: n of m` while publishing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub masters_ready: Option<String>,
 }
 impl From<PublishActivity> for PublishActivityDto {
     fn from(a: PublishActivity) -> Self {
@@ -177,6 +180,7 @@ impl From<PublishActivity> for PublishActivityDto {
             error: a.error,
             retry: a.retry,
             can_cancel: a.can_cancel,
+            masters_ready: a.masters_ready,
         }
     }
 }

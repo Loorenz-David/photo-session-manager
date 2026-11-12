@@ -114,6 +114,12 @@ struct Run {
     defer_swap: bool,
     /// Changelog 45 (P65): last reported "waiting for Capture One" state of the run.
     waiting: bool,
+    /// P69 (changelog 47): when the run started, when its last master arrived, and how many of
+    /// its photos needed no master render (ready in advance) out of all its photos.
+    started_ms: i64,
+    masters_done_ms: Option<i64>,
+    masters_ready: usize,
+    masters_total: usize,
 }
 
 impl Run {
@@ -123,6 +129,40 @@ impl Run {
             .filter(|t| t.progress == Progress::Copied)
             .count()
     }
+    /// P69: the run's master and output times so far (`now_ms` ends the running part).
+    fn timing(&self, now_ms: i64) -> ExportTiming {
+        let masters_end = self.masters_done_ms.unwrap_or(now_ms);
+        ExportTiming {
+            masters_ms: (masters_end - self.started_ms).max(0),
+            outputs_ms: self
+                .masters_done_ms
+                .map_or(0, |done| (now_ms - done).max(0)),
+            masters_ready: self.masters_ready,
+            masters_total: self.masters_total,
+        }
+    }
+    /// Notes the moment no target waits for a master any more.
+    fn note_masters_done(&mut self, now_ms: i64) {
+        if self.masters_done_ms.is_none()
+            && !self
+                .targets
+                .iter()
+                .any(|t| t.progress == Progress::WaitingMaster)
+        {
+            self.masters_done_ms = Some(now_ms);
+        }
+    }
+}
+
+/// P69 (changelog 47 §per-step times): what an export run spent waiting for Capture One's
+/// masters and then rendering and copying its outputs, and how many of its photos' masters (or
+/// outputs) were ready when it started.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ExportTiming {
+    pub masters_ms: i64,
+    pub outputs_ms: i64,
+    pub masters_ready: usize,
+    pub masters_total: usize,
 }
 
 /// Changelog 45 (P65): a master render the editor could not take yet (it has not loaded the photo,
@@ -150,6 +190,11 @@ struct State {
     /// RAW → when its master first had to wait; kept through retries until the master arrives,
     /// so a render that keeps timing out still ends after `EDITOR_WAIT_MAX_MS`.
     waited_since: HashMap<String, i64>,
+    /// P69 (changelog 47 (2)): master renders asked for ahead of a publish, by tracking job id
+    /// (RAW, adjusted_gen). Also held in `masters`, so a run that starts meanwhile waits for them.
+    prepared: HashMap<i64, (String, i64)>,
+    /// RAW → the generation whose prepared master could not be made (not asked for again).
+    prepare_failed: HashMap<String, i64>,
 }
 
 pub struct ExportService {
@@ -161,6 +206,8 @@ pub struct ExportService {
     render: ExportRender,
     format_override: std::sync::RwLock<Option<OutputFormat>>,
     state: Mutex<State>,
+    /// P69: the timing of runs that completed in this process, by run id.
+    timings: Mutex<HashMap<i64, ExportTiming>>,
 }
 
 impl ExportService {
@@ -181,6 +228,7 @@ impl ExportService {
             render,
             format_override: std::sync::RwLock::new(None),
             state: Mutex::new(State::default()),
+            timings: Mutex::new(HashMap::new()),
         }
     }
 
@@ -575,6 +623,10 @@ impl ExportService {
             targets: Vec::new(),
             defer_swap,
             waiting: false,
+            started_ms: now_ms,
+            masters_done_ms: None,
+            masters_ready: 0,
+            masters_total: 0,
         };
         for (group, ids) in groups {
             let slots: Vec<(i64, &[OutputSlot])> = ids
@@ -602,6 +654,23 @@ impl ExportService {
                 return Err(error);
             }
         }
+        // P69: a photo is ready in advance when none of its outputs waits for a master.
+        let photos: BTreeSet<i64> = run.targets.iter().map(|t| t.photo_id).collect();
+        let waiting: BTreeSet<i64> = run
+            .targets
+            .iter()
+            .filter(|t| t.progress == Progress::WaitingMaster)
+            .map(|t| t.photo_id)
+            .collect();
+        run.masters_total = photos.len();
+        run.masters_ready = photos.len() - waiting.len();
+        run.note_masters_done(now_ms);
+        tracing::info!(
+            run = run.id,
+            masters_ready = run.masters_ready,
+            masters_total = run.masters_total,
+            "export started"
+        );
         Ok(run)
     }
 
@@ -744,6 +813,9 @@ impl ExportService {
     fn finalize(&self, state: &State, run: Run) {
         match self.write_and_swap(&run) {
             Ok(count) => {
+                if let Ok(mut timings) = self.timings.lock() {
+                    timings.insert(run.id, run.timing(self.clock.now_ms()));
+                }
                 if let Err(error) = self
                     .store
                     .finish_render_job(run.id, None, self.clock.now_ms())
@@ -944,6 +1016,117 @@ impl ExportService {
         }
         Ok(())
     }
+
+    /// P69: the run's timing — so far while it runs, final once it completed in this process.
+    pub fn timing(&self, run_id: i64) -> Option<ExportTiming> {
+        if let Ok(state) = self.state()
+            && let Some(run) = state.runs.get(&run_id)
+        {
+            return Some(run.timing(self.clock.now_ms()));
+        }
+        self.timings.lock().ok()?.get(&run_id).copied()
+    }
+
+    /// P69 (changelog 47 (2)): whether the RAW's master for `generation` is in the cache.
+    pub fn master_on_disk(&self, raw: &str, generation: i64) -> bool {
+        self.render.masters.path(raw, generation).is_file()
+    }
+
+    /// Whether a master asked for ahead of a publish is still with the editor.
+    pub fn preparing(&self) -> bool {
+        self.state().is_ok_and(|state| !state.prepared.is_empty())
+    }
+
+    /// Whether the prepared master of this RAW and generation could not be made (it is then
+    /// rendered on demand by the publish or export that needs it).
+    pub fn prepare_failed(&self, raw: &str, generation: i64) -> bool {
+        self.state()
+            .is_ok_and(|state| state.prepare_failed.get(raw) == Some(&generation))
+    }
+
+    /// P69 (changelog 47 (2)): asks the editing provider for the master of one photo ahead of a
+    /// publish. Committed to the master cache when it arrives (like an export's master), so a
+    /// later run finds it on disk; a run that starts meanwhile waits for it. Nothing is asked
+    /// when a master render of the RAW is already out or waiting.
+    pub fn prepare_master(&self, raw: &str, photo_id: i64, generation: i64) -> Result<bool> {
+        let mut state = self.state()?;
+        if state.masters.contains_key(raw) || state.waits.contains_key(raw) {
+            return Ok(false);
+        }
+        let now_ms = self.clock.now_ms();
+        let tracking = self
+            .store
+            .new_master_render_job(raw, 0, photo_id, generation, now_ms)?;
+        if let Err(error) = self.editing.request_render(
+            raw,
+            RenderPurpose::Master,
+            generation,
+            tracking,
+            self.clock.mono(),
+            now_ms,
+            false,
+        ) {
+            self.store
+                .finish_render_job(tracking, Some("provider"), now_ms)?;
+            return Err(error);
+        }
+        state.masters.insert(raw.to_string(), tracking);
+        state
+            .prepared
+            .insert(tracking, (raw.to_string(), generation));
+        Ok(true)
+    }
+
+    /// A prepared master arrived and no run waits for it: committed to the cache and its frame
+    /// adopted (a photo whose frame no longer fits is flagged for review, as for any master).
+    fn commit_prepared(&self, state: &mut State, render: &RenderCompletion, output: &Path) {
+        let raw = render.raw.as_str();
+        let committed = match self.render.masters.commit(raw, render.generation, output) {
+            Ok(path) => path,
+            Err(error) => {
+                tracing::warn!(%error, raw, "prepared master not committed");
+                state
+                    .prepare_failed
+                    .insert(raw.to_string(), render.generation);
+                return;
+            }
+        };
+        let frame = match self.render.imaging.dimensions(&committed) {
+            Ok(Some(frame)) => frame,
+            other => {
+                tracing::warn!(master = %committed.display(), ok = other.is_ok(), "prepared master not readable");
+                let _ = self.render.masters.remove_all(raw);
+                state
+                    .prepare_failed
+                    .insert(raw.to_string(), render.generation);
+                return;
+            }
+        };
+        match self.store.adopt_frame(
+            raw,
+            Fingerprint {
+                frame,
+                source: FrameSource::Master,
+                geometry: render.geometry.clone(),
+            },
+        ) {
+            Ok(commit) => {
+                for &(photo_id, session_id) in &commit.needs_review {
+                    self.events.emit(AppEvent::PhotoChanged {
+                        photo_id,
+                        session_id,
+                    });
+                }
+            }
+            Err(error) => tracing::warn!(%error, raw, "prepared master's frame not adopted"),
+        }
+        tracing::info!(
+            raw,
+            adjusted_gen = render.generation,
+            ms = (self.clock.now_ms() - render.issued_at_ms).max(0),
+            "master prepared in advance"
+        );
+    }
 }
 
 impl ExportStaging for ExportService {
@@ -958,6 +1141,7 @@ impl ExportStaging for ExportService {
             state.masters.remove(&render.raw);
         }
         state.waited_since.remove(&render.raw);
+        let prepared = state.prepared.remove(&render.tracking_job_id).is_some();
         let raw = render.raw.as_str();
         let waiting = |t: &Target| t.raw == raw && t.progress == Progress::WaitingMaster;
         if !state
@@ -965,6 +1149,10 @@ impl ExportStaging for ExportService {
             .values()
             .any(|run| run.targets.iter().any(waiting))
         {
+            if prepared {
+                self.commit_prepared(&mut state, render, output);
+                return Ok(());
+            }
             tracing::info!(job = render.job_id, "master for no running export ignored");
             return Ok(());
         }
@@ -1005,6 +1193,7 @@ impl ExportStaging for ExportService {
             );
         }
         let mut broken = Vec::new();
+        let now_ms = self.clock.now_ms();
         for run in state.runs.values_mut() {
             for index in 0..run.targets.len() {
                 if !waiting(&run.targets[index]) {
@@ -1017,6 +1206,7 @@ impl ExportStaging for ExportService {
                 }
                 run.targets[index].progress = Progress::Rendering;
             }
+            run.note_masters_done(now_ms);
         }
         for id in broken {
             if let Some(run) = state.runs.remove(&id) {
@@ -1028,6 +1218,14 @@ impl ExportStaging for ExportService {
 
     fn failed(&self, tracking_job_id: i64, reason: &str) -> Result<()> {
         let mut state = self.state()?;
+        // P69: a prepared master that will not come is not asked for again at this generation
+        // (unless the editor was only not ready); a run that needs it renders it on demand.
+        if let Some((raw, generation)) = state.prepared.remove(&tracking_job_id) {
+            tracing::info!(raw, reason, "prepared master not made");
+            if editor_wait(reason).is_none() {
+                state.prepare_failed.insert(raw, generation);
+            }
+        }
         let Some(raw) = state
             .masters
             .iter()

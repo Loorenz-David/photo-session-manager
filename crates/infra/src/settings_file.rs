@@ -1,7 +1,11 @@
 use crate::paths::AppPaths;
 use psm_core::{
     Error, Result,
-    domain::{camera::CameraSettings, output::OutputFormat, storage::StorageSettings},
+    domain::{
+        camera::CameraSettings,
+        output::OutputFormat,
+        storage::{ExportSettings, StorageSettings},
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -32,6 +36,8 @@ pub struct Settings {
     pub integration: Option<serde_json::Value>,
     /// 10F §4: the minimum free space (Settings → Storage; default 20 GB).
     pub storage: StorageSettings,
+    /// Changelog 47 (P69): `export.prepare_masters` — masters prepared once a session is Ready.
+    pub export: ExportSettings,
     /// Changelog 45 (P65): `commerce.inventory_default` — the stock a new item starts with.
     pub commerce: CommerceSettings,
 }
@@ -82,6 +88,7 @@ impl Default for Settings {
             sku_prefix: None,
             integration: None,
             storage: StorageSettings::default(),
+            export: ExportSettings::default(),
             commerce: CommerceSettings::default(),
         }
     }

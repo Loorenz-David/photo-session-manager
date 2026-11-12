@@ -49,6 +49,7 @@ impl SettingsService {
                 "default_shape",
                 "camera",
                 "storage",
+                "export",
             ]
             .contains(&key.as_str())
             {
@@ -76,6 +77,24 @@ impl SettingsService {
                     }
                 }
                 next[key] = Value::Object(storage);
+                continue;
+            }
+            if key == "export" {
+                // Changelog 47 (P69): `{"prepare_masters": bool}`; other stored fields kept.
+                let Some(prepare) = value
+                    .as_object()
+                    .filter(|fields| fields.keys().all(|f| f == "prepare_masters"))
+                    .and_then(|fields| fields.get("prepare_masters"))
+                    .and_then(Value::as_bool)
+                else {
+                    return Err(Error::InvalidValue("export".into()));
+                };
+                let mut export = match current.get("export") {
+                    Some(Value::Object(stored)) => stored.clone(),
+                    _ => serde_json::Map::new(),
+                };
+                export.insert("prepare_masters".into(), Value::Bool(prepare));
+                next[key] = Value::Object(export);
                 continue;
             }
             if key == "camera" && !valid_camera(value) {

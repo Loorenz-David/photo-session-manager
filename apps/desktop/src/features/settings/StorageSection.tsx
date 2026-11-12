@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { getSettings, saveSettings } from '@/services/settings';
 import { getStorage, setMinFreeGb, type Storage } from '@/services/storage';
 import { getRetentionDays, setRetentionDays } from '@/services/retention';
 
@@ -62,7 +64,42 @@ export function StorageSection() {
       <p className="health-detail">Below it, duplicates, Capture One&apos;s preview exports and masters are cleared, in that order, then the files of published items (oldest publish first), until there is enough space again. Unpublished photos are never cleared.</p>
     </div>
     <RetentionSetting />
+    <PrepareMastersSetting />
   </section>;
+}
+
+/**
+ * Changelog 47 (P69): `export.prepare_masters` — once a session is Ready, Capture One prepares its full-size masters in the
+ * background while it is idle, so publishing starts with them ready. On by default.
+ */
+export function PrepareMastersSetting() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve().then(getSettings)
+      .then(settings => { if (alive) setOn(settings.export?.prepare_masters ?? true); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  const change = async (next: boolean) => {
+    setBusy(true);
+    try {
+      const saved = await saveSettings({ export: { prepare_masters: next } });
+      setOn(saved.export?.prepare_masters ?? next);
+      toast.success(next ? 'Masters are prepared in advance' : 'Masters are made when publishing');
+    } catch (error) {
+      toast.error(`Not saved: ${(error as Error).message ?? String(error)}`);
+    } finally { setBusy(false); }
+  };
+  return <div className="flex flex-col gap-1">
+    <div className="flex items-center gap-2">
+      <Checkbox id="settings-prepare_masters" checked={on ?? false} disabled={busy || on === null}
+        onCheckedChange={checked => void change(checked === true)} aria-label="Prepare masters in advance" />
+      <label htmlFor="settings-prepare_masters">Prepare masters in advance</label>
+    </div>
+    <p className="health-detail">When a session is Ready, Capture One makes its full-size masters in the background while it has nothing else to do (never during a capture, a preview or another publish), so publishing starts sooner. They are deleted after publishing, like any master.</p>
+  </div>;
 }
 
 /**

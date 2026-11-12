@@ -102,6 +102,10 @@ struct Live {
     error: Option<String>,
     retried: bool,
     cancel: bool,
+    /// P69 (changelog 47): time spent in the upload step, and in Shopify requests outside it
+    /// (finding or creating the product, the update step), this attempt.
+    upload_ms: i64,
+    shopify_ms: i64,
 }
 
 fn active(step: PublishStep) -> bool {
@@ -291,6 +295,25 @@ impl PublishService {
         } else {
             None
         };
+        // P69: how many of the item's masters were ready when its export started.
+        let masters_ready = if running {
+            let known = self
+                .exports
+                .lock()
+                .ok()
+                .and_then(|exports| exports.get(&item.id).copied());
+            known
+                .or(item.export_run_id)
+                .and_then(|export| self.export.timing(export))
+                .map(|t| {
+                    format!(
+                        "Masters ready in advance: {} of {}",
+                        t.masters_ready, t.masters_total
+                    )
+                })
+        } else {
+            None
+        };
         Ok(Some(PublishActivity {
             item_id: item.id,
             step: item.step,
@@ -300,6 +323,7 @@ impl PublishService {
             error,
             retry,
             can_cancel: running && !live.as_ref().is_some_and(|l| l.cancel),
+            masters_ready,
         }))
     }
     /// Ends a cancelled item: step `cancelled` (not an error, not published, 07 / changelog 44).
@@ -710,6 +734,8 @@ impl PublishService {
             live.error = item.error.clone();
             live.retried = true;
             live.cancel = false;
+            live.upload_ms = 0;
+            live.shopify_ms = 0;
         });
         self.store
             .set_publish_step(item_id, step, None, None, self.clock.now_ms())?;
@@ -756,6 +782,7 @@ impl PublishService {
             return Ok(());
         }
         let token = ConfirmedRun::from_persisted(self.store.as_ref(), item.run_id)?;
+        let step_started = self.clock.now_ms();
         let outcome = match item.step {
             PublishStep::Prepare => self.prepare(&item, &token),
             PublishStep::Upload => self.upload(&item, &token),
@@ -763,6 +790,14 @@ impl PublishService {
             PublishStep::Describe => Ok(true),
             _ => Ok(true),
         };
+        let step_ms = (self.clock.now_ms() - step_started).max(0);
+        match item.step {
+            PublishStep::Upload => self.with_live(item.id, |live| live.upload_ms += step_ms),
+            PublishStep::Update | PublishStep::Describe => {
+                self.with_live(item.id, |live| live.shopify_ms += step_ms)
+            }
+            _ => {}
+        }
         let next_is_done = matches!(item.step, PublishStep::Update | PublishStep::Describe);
         if self.cancel_requested(item.id) && !(next_is_done && matches!(outcome, Ok(true))) {
             // The step stopped at a safe point (or finished one); a cancel ends the item here.
@@ -812,6 +847,7 @@ impl PublishService {
                     }
                     self.store
                         .complete_publish_item(item.id, self.clock.now_ms(), &text)?;
+                    self.log_timing(&item);
                     self.with_live(item.id, |live| {
                         live.error = None;
                         live.retried = false;
@@ -831,6 +867,11 @@ impl PublishService {
                         .enqueue_publish_item(item.id, self.clock.now_ms())?;
                 }
                 self.emit(&item, next);
+                if item.step == PublishStep::Prepare {
+                    // P69 (changelog 47): while this item uploads, Capture One renders the next
+                    // item's masters (at most one item ahead).
+                    self.start_next_in_batch(&item);
+                }
                 Ok(())
             }
             Err(error) => {
@@ -929,6 +970,17 @@ impl PublishService {
         if !flagged.is_empty() {
             return Err(Error::NeedsReview { photos: flagged });
         }
+        // P69 (changelog 47): in a batch an item starts once the item before it has left its
+        // prepare step (or started this one's export ahead): at most one item ahead.
+        let started_ahead = self
+            .exports
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?
+            .contains_key(&item.id);
+        if !started_ahead && self.earlier_in_prepare(item)? {
+            return Ok(false);
+        }
+        let shopify_started = self.clock.now_ms();
         if self.store.item_link(local.id, "shopify")?.is_none() {
             let matches = self.commerce.item_search(&local.sku)?;
             let remote = match matches.len() {
@@ -938,6 +990,8 @@ impl PublishService {
             };
             self.store
                 .transaction(&mut |tx| tx.insert_item_link(local.id, "shopify", &remote, None))?;
+            let shopify_ms = (self.clock.now_ms() - shopify_started).max(0);
+            self.with_live(item.id, |live| live.shopify_ms += shopify_ms);
         }
         for id in main.iter().chain(&condition) {
             match IntegrityCheck::new(self.store.as_ref()).verify(*id)? {
@@ -947,51 +1001,7 @@ impl PublishService {
             }
         }
         let key = folder_key(&local.sku)?;
-        let export_id = {
-            let mut exports = self
-                .exports
-                .lock()
-                .map_err(|e| Error::InvalidData(e.to_string()))?;
-            let known = exports.get(&item.id).copied();
-            if let Some(id) = known.filter(|id| self.export.has_run(*id)) {
-                // The export of this attempt is still rendering.
-                id
-            } else if let Some(id) =
-                known.filter(|id| self.store.job(*id).is_ok_and(|job| job.status == "failed"))
-            {
-                exports.remove(&item.id);
-                let reason = self.store.job(id)?.error.unwrap_or_default();
-                // Changelog 45 (P65): waited 10 minutes for Capture One: the sentence as is.
-                if let Some(sentence) = reason.strip_prefix(EDITOR_WAIT_EXPIRED) {
-                    return Err(Error::EditorWaitExpired(sentence.to_string()));
-                }
-                return Err(Error::Provider(format!("export failed: {reason}")));
-            } else if let Some(id) = known.or(item.export_run_id).filter(|id| {
-                self.staging_current(
-                    &self.export.staging_folder(&key, *id),
-                    &key,
-                    &main,
-                    &condition,
-                )
-                .unwrap_or(false)
-            }) {
-                exports.insert(item.id, id);
-                id
-            } else {
-                for old in known.into_iter().chain(item.export_run_id) {
-                    let _ = self
-                        .export
-                        .discard_staging(&self.export.staging_folder(&key, old));
-                }
-                let id = self
-                    .export
-                    .run_staged(item.session_id, &main, &condition, &item.frozen_attributes)?
-                    .0;
-                self.store.set_publish_export(item.id, id)?;
-                exports.insert(item.id, id);
-                id
-            }
-        };
+        let export_id = self.ensure_export(item, &key, &main, &condition)?;
         if self.store.job(export_id)?.status != "done" {
             return Ok(false);
         }
@@ -1076,6 +1086,168 @@ impl PublishService {
             self.store.upsert_photo_link(&link, now)?;
         }
         Ok(true)
+    }
+    /// The export of this attempt: the one still rendering, a staging folder that still holds
+    /// the current outputs, or a new staged export (any earlier staging folder discarded).
+    fn ensure_export(
+        &self,
+        item: &PublishItem,
+        key: &str,
+        main: &[i64],
+        condition: &[i64],
+    ) -> Result<i64> {
+        let mut exports = self
+            .exports
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let known = exports.get(&item.id).copied();
+        if let Some(id) = known.filter(|id| self.export.has_run(*id)) {
+            // The export of this attempt is still rendering.
+            return Ok(id);
+        }
+        if let Some(id) =
+            known.filter(|id| self.store.job(*id).is_ok_and(|job| job.status == "failed"))
+        {
+            exports.remove(&item.id);
+            let reason = self.store.job(id)?.error.unwrap_or_default();
+            // Changelog 45 (P65): waited 10 minutes for Capture One: the sentence as is.
+            if let Some(sentence) = reason.strip_prefix(EDITOR_WAIT_EXPIRED) {
+                return Err(Error::EditorWaitExpired(sentence.to_string()));
+            }
+            return Err(Error::Provider(format!("export failed: {reason}")));
+        }
+        if let Some(id) = known.or(item.export_run_id).filter(|id| {
+            self.staging_current(&self.export.staging_folder(key, *id), key, main, condition)
+                .unwrap_or(false)
+        }) {
+            exports.insert(item.id, id);
+            return Ok(id);
+        }
+        for old in known.into_iter().chain(item.export_run_id) {
+            let _ = self
+                .export
+                .discard_staging(&self.export.staging_folder(key, old));
+        }
+        let id = self
+            .export
+            .run_staged(item.session_id, main, condition, &item.frozen_attributes)?
+            .0;
+        self.store.set_publish_export(item.id, id)?;
+        exports.insert(item.id, id);
+        Ok(id)
+    }
+    /// P69: whether an earlier item of the same confirmed run is still in its prepare step.
+    fn earlier_in_prepare(&self, item: &PublishItem) -> Result<bool> {
+        for id in self.store.active_publish_items()? {
+            if id >= item.id {
+                continue;
+            }
+            let other = self.store.publish_item(id)?;
+            if other.run_id == item.run_id && other.step == PublishStep::Prepare {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    /// P69 (changelog 47): the item after `item` in its batch, still in its prepare step, starts
+    /// its export now, so Capture One renders its missing masters while `item` uploads. Nothing
+    /// is started for a photo that needs re-framing or whose RAW changed; that item's own
+    /// prepare step reports it.
+    fn start_next_in_batch(&self, item: &PublishItem) {
+        let next = match self.store.active_publish_items() {
+            Ok(ids) => ids
+                .into_iter()
+                .filter(|id| *id > item.id)
+                .filter_map(|id| self.store.publish_item(id).ok())
+                .filter(|other| other.run_id == item.run_id && other.step == PublishStep::Prepare)
+                .min_by_key(|other| other.id),
+            Err(error) => {
+                tracing::warn!(%error, "next batch item not read");
+                return;
+            }
+        };
+        let Some(next) = next else {
+            return;
+        };
+        if self.cancel_requested(next.id) {
+            return;
+        }
+        if let Err(error) = self.start_export_ahead(&next) {
+            tracing::info!(%error, item = next.id, "next batch item's export not started ahead");
+        }
+    }
+    fn start_export_ahead(&self, item: &PublishItem) -> Result<()> {
+        let Some(item_id) = self.store.session(item.session_id)?.session.item_id else {
+            return Ok(());
+        };
+        let local = self.store.item(item_id)?;
+        let main = self.selected(item.session_id, &item.frozen_main)?;
+        let condition = self.selected(item.session_id, &item.frozen_condition)?;
+        if !self.needs_review(&main, &condition)?.is_empty() {
+            return Ok(());
+        }
+        for id in main.iter().chain(&condition) {
+            if IntegrityCheck::new(self.store.as_ref()).verify(*id)? != Integrity::Ok {
+                return Ok(());
+            }
+        }
+        let id = self.ensure_export(item, &folder_key(&local.sku)?, &main, &condition)?;
+        tracing::info!(
+            item = item.id,
+            export = id,
+            "next batch item's export started ahead"
+        );
+        Ok(())
+    }
+    /// P69 (changelog 47): one INFO line per published item with the time of each step.
+    fn log_timing(&self, item: &PublishItem) {
+        let live = self
+            .live
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&item.id)
+            .cloned()
+            .unwrap_or_default();
+        let sku = self
+            .store
+            .session(item.session_id)
+            .ok()
+            .and_then(|s| s.session.item_id)
+            .and_then(|id| self.store.item(id).ok())
+            .map(|local| local.sku)
+            .unwrap_or_default();
+        let photos = self
+            .selected(item.session_id, &item.frozen_main)
+            .map(|m| m.len())
+            .unwrap_or(0)
+            + self
+                .selected(item.session_id, &item.frozen_condition)
+                .map(|c| c.len())
+                .unwrap_or(0);
+        // A staging folder reused from an earlier attempt needed no master at all.
+        let export = item
+            .export_run_id
+            .and_then(|id| self.export.timing(id))
+            .unwrap_or(crate::services::export::ExportTiming {
+                masters_ms: 0,
+                outputs_ms: 0,
+                masters_ready: photos,
+                masters_total: photos,
+            });
+        let total_ms = if live.started_at > 0 {
+            (self.clock.now_ms() - live.started_at).max(0)
+        } else {
+            0
+        };
+        tracing::info!(
+            "publish.timing item={sku} masters_ms={} outputs_ms={} upload_ms={} shopify_ms={} total_ms={total_ms} masters_reused={}/{}",
+            export.masters_ms,
+            export.outputs_ms,
+            live.upload_ms,
+            live.shopify_ms,
+            export.masters_ready,
+            export.masters_total,
+        );
     }
     /// 07A MC-11 upload (P64): per group (main, then condition), the links not yet `ready` are
     /// adopted when the platform already holds their file (by name), polled when attached, and

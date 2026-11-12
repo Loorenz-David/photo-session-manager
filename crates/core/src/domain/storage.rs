@@ -24,6 +24,21 @@ impl StorageSettings {
     }
 }
 
+/// `settings.json` key `export` (changelog 47 (2), P69): whether masters are prepared in the
+/// background once a session is Ready (Settings → Storage; default on).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExportSettings {
+    pub prepare_masters: bool,
+}
+impl Default for ExportSettings {
+    fn default() -> Self {
+        Self {
+            prepare_masters: true,
+        }
+    }
+}
+
 /// An item's retention state (10F §3, Q2; P62): the "keep files on this Mac" pin, and when its
 /// local files were cleared after publishing (then the item is read-only, Q3).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

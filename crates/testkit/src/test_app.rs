@@ -755,6 +755,11 @@ impl TestApp {
     ) -> Result<PathBuf> {
         self.complete_render_as(job_id, &master.bytes(), "tif")
     }
+    /// Completes master render `job_id` with `bytes` as Capture One's TIFF output (P69: the
+    /// 8-bit master, `SyntheticMaster::bytes_8bit`).
+    pub fn complete_master_render_bytes(&self, job_id: &str, bytes: &[u8]) -> Result<PathBuf> {
+        self.complete_render_as(job_id, bytes, "tif")
+    }
     /// Whether `job_id` was issued with the master recipe of this app's settings.
     pub fn is_master_job(&self, job_id: &str) -> bool {
         self.fake

@@ -245,7 +245,7 @@ fn c3b_ensure_creates_uncompressed_master() {
         ),
         (
             "TIFF",
-            16,
+            8,
             MASTER_TIFF_COMPRESSION,
             "Fixed",
             "percent",

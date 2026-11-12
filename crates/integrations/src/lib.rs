@@ -43,6 +43,7 @@ use psm_core::{
         export::{ExportRender, ExportService},
         health::HealthService,
         history::{History, HistoryStore},
+        prepare_masters::PrepareMastersService,
         previews::PreviewService,
         publish::PublishService,
         settings::SettingsService,
@@ -109,6 +110,8 @@ pub struct App {
     pub clock: Arc<dyn Clock>,
     /// 10F part 1: duplicates, preview exports and masters cleared in the background (P61).
     pub storage: Arc<StorageService>,
+    /// Changelog 47 (2), P69: masters of Ready sessions prepared in the background.
+    pub prepare_masters: Arc<PrepareMastersService>,
     scripting: Arc<dyn CaptureOneScripting>,
     lanes: Lanes,
     run_startup: bool,
@@ -119,6 +122,7 @@ pub struct App {
     publish_background: Option<thread::JoinHandle<()>>,
     render_background: Option<thread::JoinHandle<()>>,
     storage_background: Option<thread::JoinHandle<()>>,
+    prepare_background: Option<thread::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
@@ -210,7 +214,7 @@ impl SettingsSetContext {
         Settings::set(&self.paths, &settings)?;
         let mut a = previous;
         let mut b = next;
-        for key in ["theme", "output_format", "storage"] {
+        for key in ["theme", "output_format", "storage", "export"] {
             a[key] = serde_json::Value::Null;
             b[key] = serde_json::Value::Null;
         }
@@ -345,6 +349,8 @@ impl App {
                 if days != self.storage.retention_days() {
                     self.storage.set_retention_days(days);
                 }
+                self.prepare_masters
+                    .set_enabled(settings.export.prepare_masters);
                 self.settings = *settings;
                 self.export.set_format(self.settings.output_format);
                 self.camera_runtime
@@ -931,6 +937,58 @@ impl App {
                 .with_history(history.clone()),
             )
         };
+        // Changelog 47 (2), P69: masters prepared once a session is Ready, one at a time, only
+        // while Capture One is idle; never during a capture, a take-back, or below the minimum
+        // free space (the budget would clear them again).
+        let prepare_masters = {
+            let runtime = camera_runtime.clone();
+            let gate = lanes.gate.clone();
+            let disk = lanes.disk.clone();
+            let budget = storage.clone();
+            let document = settings.effective_document_id(&paths);
+            Arc::new(PrepareMastersService::new(
+                store.clone(),
+                editing.clone(),
+                export.clone(),
+                previews.clone(),
+                clock.clone(),
+                Arc::new(move || {
+                    let reason =
+                        if runtime.capture_in_progress() || runtime.uploads_in_progress() > 0 {
+                            "capture"
+                        } else if gate.is_held() {
+                            "take-back"
+                        } else if disk
+                            .query(&document)
+                            .is_ok_and(|space| space.available_bytes < budget.min_free_bytes())
+                        {
+                            "disk"
+                        } else {
+                            return None;
+                        };
+                    Some(reason.to_owned())
+                }),
+                settings.export.prepare_masters,
+            ))
+        };
+        let prepare_background = if run_startup {
+            let worker_stop = stop.clone();
+            let worker = prepare_masters.clone();
+            Some(thread::spawn(move || {
+                let mut last = std::time::Instant::now() - Duration::from_secs(2);
+                while !worker_stop.load(Ordering::Relaxed) {
+                    if last.elapsed() >= Duration::from_secs(1) {
+                        last = std::time::Instant::now();
+                        if let Err(error) = worker.tick() {
+                            tracing::warn!(%error, "master preparation deferred");
+                        }
+                    }
+                    thread::sleep(Duration::from_millis(250));
+                }
+            }))
+        } else {
+            None
+        };
         let storage_background = if run_startup {
             let worker_stop = stop.clone();
             let worker = storage.clone();
@@ -993,6 +1051,7 @@ impl App {
             history,
             clock,
             storage,
+            prepare_masters,
             scripting,
             lanes,
             run_startup,
@@ -1003,6 +1062,7 @@ impl App {
             publish_background,
             render_background,
             storage_background,
+            prepare_background,
         })
     }
     pub fn nudge_port(&self) -> u16 {
@@ -1092,6 +1152,9 @@ impl App {
             let _ = bg.join();
         }
         if let Some(bg) = self.storage_background.take() {
+            let _ = bg.join();
+        }
+        if let Some(bg) = self.prepare_background.take() {
             let _ = bg.join();
         }
     }

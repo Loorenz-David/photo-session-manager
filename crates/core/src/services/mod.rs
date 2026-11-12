@@ -11,6 +11,7 @@ pub mod history;
 pub mod integrity;
 pub mod items;
 pub mod photos;
+pub mod prepare_masters;
 pub mod previews;
 pub mod publish;
 pub mod retention;
