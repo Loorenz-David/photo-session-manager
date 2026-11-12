@@ -7,7 +7,7 @@ depends_on: [R3_research_rules]
 ---
 # R4 — Engine on fakes: ports, gateway, stages, run lifecycle, resume
 
-**Tracker:** NOT_STARTED · 2026-11-12 · planner · —
+**Tracker:** IMPLEMENTED · 2026-11-12 · opus · 6 units, 99/99 rows each with one named test at its boundary; research tests lib 120 + engine 122 + doc 1, clippy, fmt, workspace check green; no app file changed.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -522,3 +522,18 @@ The reviewer reads the units in order and runs, once: the milestone's research-c
 Nothing visible in the app yet (the engine is wired in R7). A run can be read as a story: `cargo test -p psm-research --test engine stages::` and `… resume::`.
 
 ## Review log
+
+### 2026-11-12 · implement r1 · opus
+**Built.** U1 `ports` (three provider ports, `Exchange`, `Providers`), `images` (`ResearchImage` with private fields and no public constructor, guarded by a `compile_fail` doc test; `ResearchImages::render` with MC-A5 eligibility, adjusted preview of the current `adjusted_gen` only, one stored copy per run and identity), `files` (`research/images/<sha[0..2]>/<sha>.jpg`), `schema::ensure` + `store` (the five tables and two partial unique indexes, SQL run through `research_transaction`), `fakes` (`FakeModel`, `FakeVisualSearch`, `FakePageReader`: scripts, request log, fault queue, `before_call` hook). U2 `gateway::CallGateway::call` (step 1 transaction: eligibility re-read, stop rule, `sent` record and outbound rows; send with no transaction held; step 3: answer, usage, cost and run cost in one commit, or failure, class and action; retries on an injected waiter; redaction layer 2; listing images stored, never outbound) and `config::ResearchConfig` (the run's settings snapshot). U3 `service::ResearchService` (+ `form_snapshot`), `stages` (units 1–6, MC-A7 commit rule), `decide` (MC-A4 per field class, one reasons call, writes + steps + stage 7 output in one transaction; endings), `shop::CommerceShopFacts`; `writes::{suggest_in, lower_in}`. U4 `config::ResearchSettings` (+ tolerant `from_slot`, `ResearchConfig::from_settings`), `rules::run_rules::{first_failing, may_start, start_order, InputSnapshot}` (unit tests), `runs` (`session_changed`, `settings_changed`, `run_again`, `tick` with the start transaction and its `jobs` row, `status`), `job::ResearchJob` (offline → retry, back-off capped at 60 s), `adapters::build` (knows no adapter yet). U5 resume (`CallGateway::close_open_calls`: `sent` → `unknown`, fallback charged; committed units never re-run), reuse (auto/follow-up, by fingerprint, files present; Decide always runs), `run_rules::follow_up_needed` (unit tests) and the follow-up row of MC-A6. U6 `api_impl` (`impl ResearchApi for ResearchService`), `config::validate`, the derived counts. Checkpoints: U1 `d536832`, U2 `28411b2`, U3 `cb16665`, U4 `d891bf8`, U5 `e4f24c9`, U6 `620b2ac`. No file outside `crates/research` changed except `Cargo.lock`.
+
+**Judgment calls** (all with reasons in `handoffs/implementer/handoff_R4_research_engine_implement_r1.md` §Assumptions). The ones a reviewer should look at first:
+- Default `attribution_keys` = `["beyo.designer"]`: row A13·C1(d) needs each default key to be a definition of the shop fixture, which has `beyo.designer` and no manufacturer field (08A §6: "the shop's designer and manufacturer keys"). §6.6's `custom.designer` / `custom.manufacturer` are not in the fixture.
+- A page the reader cannot obtain is a reply (`PageReply.obtained = false`), not a failure, so a dead link is "could not be read" (MC-A3) and never fails the run; R8's reader must answer that way.
+- Decide is never reused (its writes are applied to the rows of now); every other unit is.
+- `settings_changed` creates no run (it only cancels on `auto` off): entering keys does not start research on every old session at once; the next photo change or Run again does.
+- Stage 3 identity has no cover (MC-A7), so a new cover reuses the read units of pages it finds again; A14·C3(c)/(d) script the new cover's search to find other pages.
+
+**Deviations.** `writes.rs` (not in U3's list) gained `suggest_in` / `lower_in` so stage 7's writes commit with its steps (MC-A7 commit rule); `suggest` / `lower` keep their behaviour. `config.rs` was created in U2 (plan: U4) for the snapshot the gateway reads. `domain.rs` gained the run, step, call and prerequisite enums in U1. `CallGateway::call` returns `Called {outcome, dropped}` (the plan: "the caller gets the dropped ids"). `CallFailure` keeps R3's shape (no `exchange`). Dependencies: `rusqlite` (workspace version), `tracing`, dev `tracing-subscriber`. Tracker actor is `opus` (this session ran on Claude Opus), not `codex`.
+
+**Observations.** A kill "between units" is made by the service's event sink (emitted after each commit); a kill "in flight" by a fake's hook; both unwind with `resume_unwind`, then `Harness::restart()` reopens the store. Rows A12·C7(b) and A14·C1(a) hold by construction (the run reads only its snapshot; a call reaches a fake only after its record is committed). No hardware, no live service, no app suite (flow §10).
+
