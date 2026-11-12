@@ -8,6 +8,11 @@ export async function onSessionsChanged(refresh: () => void): Promise<UnlistenFn
   return () => unlisteners.forEach(unlisten => unlisten());
 }
 
+/** `research_changed {session_id}`: a research run of that session changed (a step, its state, its writes). */
+export async function onResearchChanged(handler: (sessionId: number) => void): Promise<UnlistenFn> {
+  return listen<{ session_id: number }>('research_changed', event => handler(event.payload.session_id));
+}
+
 /** Delivers every `camera_status_changed` payload (the new status). */
 export async function onCameraStatus(handler: (status: CameraStatus) => void): Promise<UnlistenFn> {
   return listen<CameraStatus>('camera_status_changed', event => handler(event.payload));

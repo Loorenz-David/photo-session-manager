@@ -25,6 +25,8 @@ import {
 } from '@/services/attributes';
 import { setItemType, type Item } from '@/services/items';
 import type { Photo } from '@/services/photos';
+import { onResearchChanged } from '@/services/events';
+import { researchStatus, runResearch, type ResearchStatus } from '@/services/research';
 import { displayOrder } from '@/features/workspace/order';
 import { CustomizeMode } from './CustomizeMode';
 import { IdentityEditor } from './IdentityEditor';
@@ -73,7 +75,53 @@ type FormDialogProps = {
   position?: FormPosition | null;
   /** P67: the step and scroll as the photographer moves (a batch remembers it). */
   onPosition?: (position: FormPosition) => void;
+  /** The item's session: its research status and runs (08A §1). Absent → no research state is read. */
+  sessionId?: number;
 };
+
+/** MC-A6 `research.source_wait_seconds` default: how long a run waits for Capture One's previews. */
+const SOURCE_WAIT_MS = 120_000;
+
+/** "n to review" (08B MC-A10, derived): the form's fields holding a live `ai` + `suggested` value, at every confidence. */
+export function toReview(fields: FormField[]): number {
+  return fields.filter(field => field.value?.provenance === 'ai' && field.value.ai_status === 'suggested').length;
+}
+
+/**
+ * The session's research status, re-read on `research_changed` for the session. Null while research is not available
+ * (before the engine is wired every `research_*` command answers `research_unavailable`): the form works as before.
+ */
+function useResearchStatus(sessionId: number | undefined, onChanged: () => void) {
+  const [status, setStatus] = useState<ResearchStatus | null>(null);
+  const changed = useRef(onChanged);
+  changed.current = onChanged;
+  const latest = useRef(0);
+  const reload = useMemo(() => async () => {
+    if (sessionId === undefined) return;
+    const mine = ++latest.current;
+    try {
+      const next = await researchStatus(sessionId);
+      if (mine === latest.current) setStatus(next);
+    } catch {
+      if (mine === latest.current) setStatus(null);
+    }
+  }, [sessionId]);
+  useEffect(() => {
+    if (sessionId === undefined) return;
+    let alive = true;
+    let off: (() => void) | undefined;
+    void reload();
+    onResearchChanged(changedId => {
+      if (changedId !== sessionId) return;
+      void reload();
+      changed.current();
+    })
+      .then(unlisten => { if (alive) off = unlisten; else unlisten(); })
+      .catch(() => undefined);
+    return () => { alive = false; off?.(); };
+  }, [sessionId, reload]);
+  return { status, reload };
+}
 
 /** The product details form (NOTES §Screens 6–7): a dialog over the workspace. */
 export function FormDialog({ open, onOpenChange, ...rest }: FormDialogProps) {
@@ -95,7 +143,7 @@ export function FormDialog({ open, onOpenChange, ...rest }: FormDialogProps) {
 
 type FormBodyProps = Omit<FormDialogProps, 'open' | 'onOpenChange'> & { close: () => void; registerClose: (close: () => void) => void };
 
-function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition }: FormBodyProps) {
+function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition, sessionId }: FormBodyProps) {
   const state = useFormState(item.id);
   const { form } = state;
   const [step, setStep] = useState<Group>(position?.step ?? 'details');
@@ -110,6 +158,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const [customizing, setCustomizing] = useState(false);
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [research, setResearch] = useState<{ open: boolean; focus: string | null }>({ open: false, focus: null });
+  const researchState = useResearchStatus(sessionId, () => void state.reload());
   const actionQueue = useRef<Promise<unknown>>(Promise.resolve());
   const closing = useRef(false);
 
@@ -174,6 +223,13 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
 
   const conditionPhotos = useMemo(() => displayOrder(photos).condition, [photos]);
   const aiFields = state.fields.filter(field => field.value?.provenance === 'ai');
+  const reviewCount = toReview(state.fields);
+  const latestCapture = photos.reduce((latest, photo) => Math.max(latest, photo.captured_at ?? 0), 0);
+  /** Opens the research panel; it re-reads the status on open in case an event was missed. */
+  const openResearch = (focus: string | null) => {
+    setResearch({ open: true, focus });
+    void researchState.reload();
+  };
   const group = form?.groups.find(g => g.group === step);
   const filled = form?.groups.reduce((sum, g) => sum + g.filled, 0) ?? 0;
   const total = form?.groups.reduce((sum, g) => sum + g.total, 0) ?? 0;
@@ -260,8 +316,13 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
           {SAVE_LABEL[state.saveState]}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          {aiFields.length > 0 && (
-            <Button variant="secondary" size="sm" className="text-(--ai-foreground)" onClick={() => setResearch(current => ({ open: !current.open, focus: null }))}>
+          {reviewCount > 0 && (
+            <button type="button" data-to-review className="rounded-full bg-(--ai-muted) px-2.5 py-0.5 text-xs font-semibold text-(--ai-foreground)" onClick={() => openResearch(null)}>
+              {reviewCount} to review
+            </button>
+          )}
+          {(aiFields.length > 0 || researchState.status !== null) && (
+            <Button variant="secondary" size="sm" className="text-(--ai-foreground)" onClick={() => (research.open ? setResearch({ open: false, focus: null }) : openResearch(null))}>
               <Sparkles /> Research
             </Button>
           )}
@@ -304,7 +365,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   conditionPhotos={conditionPhotos}
                   onLooksRight={f => act(() => acceptSuggestion(item.id, f.definition.key), 'Could not accept')}
                   onClearAi={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
-                  onSeeResearch={key => setResearch({ open: true, focus: key })}
+                  onSeeResearch={key => openResearch(key)}
                   presets={presetsOf(field)}
                 />
               ))}
@@ -312,7 +373,18 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
             </section>
             {research.open && (
               <ResearchPanel
-                fields={aiFields}
+                status={researchState.status}
+                fields={state.fields}
+                waitEndsAt={latestCapture ? latestCapture + SOURCE_WAIT_MS : null}
+                onRun={async () => {
+                  if (sessionId === undefined) return;
+                  try {
+                    await runResearch(sessionId);
+                  } catch (error) {
+                    toast.error(`Could not start research: ${(error as Error).message}`);
+                  }
+                  await researchState.reload();
+                }}
                 focusKey={research.focus}
                 onFocus={focus => setResearch(current => ({ ...current, focus }))}
                 onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}

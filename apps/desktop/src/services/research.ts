@@ -1,8 +1,12 @@
-import { commands, type ExportSelectionDto, type ResearchStatusDto, type SecretsInputDto, type SecretsStateDto } from './bindings';
+import { commands, type ExportSelectionDto, type ResearchStatusDto_Serialize, type SecretsInputDto, type SecretsStateDto, type StepViewDto_Serialize } from './bindings';
 import { unwrap } from './sessions';
 
-export type ResearchStatus = ResearchStatusDto;
+export type ResearchStatus = ResearchStatusDto_Serialize;
+export type ResearchStep = StepViewDto_Serialize;
 export type ResearchSecretsState = SecretsStateDto;
+
+/** The code `research_*` commands answer while the engine is not wired (before R7). */
+export const RESEARCH_UNAVAILABLE = 'research_unavailable';
 
 export async function researchStatus(sessionId: number): Promise<ResearchStatus> {
   return unwrap(await commands.researchStatus(sessionId));
