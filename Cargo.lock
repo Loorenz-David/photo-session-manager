@@ -3394,7 +3394,10 @@ dependencies = [
 name = "psm-research"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "chrono-tz",
  "psm-core",
+ "psm-infra",
  "serde",
  "serde_json",
  "sha2 0.11.1",
