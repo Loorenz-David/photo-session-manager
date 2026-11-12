@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-12 11:50: P70 APPROVED_WITH_NOTES (11:37; Claude Opus; implement 7 h 36 min, review 37 min). Full suite 65 min → 8 min (reviewer 7 min 59 s, 946 green).** Narrative relayed. Cause of the old hour: macOS first-start check of each newly built test program (2857 s of 3924 s), p00 file-event waits, p43 per-test helper copies. Per-phase command now `cargo test -p psm-testkit --test suite <stem>::`. Backlog: guard that every test file is in the suite list; cross-command rebuilds. Orchestrator cleaning the build folder (≈ 92 GB, owner OK); clean it at each stop from now on. No phase running.
+
 **2026-11-12 07:35: owner may reboot the dev Mac during P70.** P70 implementer (Claude Opus, started 03:24) had merged testkit into one `suite` program (after-change full run ≈ 8.5–10 min vs > 75 min; measurements in `.pipeline/p70/`), was on the second full run / fixes; its work is uncommitted in the working tree (≈ 71 paths). If the run was killed: do NOT reset the tree; relaunch P70 with a continue-from-the-working-tree note in the plan's Review log (implement r1 handoff missing → driver re-runs implement), then review.
 
 **2026-11-12 05:20: P53–P69 SDK app built (worktree `32d166a`, sidecar 352928 bytes = SDK), installed in /Applications on the dev Mac (P65 build moved to the session scratchpad); `Session Manager.zip` on the dev Mac Desktop replaced for the work-Mac update.** P70 still implementing.
