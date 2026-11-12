@@ -20,8 +20,8 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
 | Unit | What it builds | Criteria | Rows | Changes app files |
 |---|---|---|---|---|
 | U1 | Feedback rows, conflict actions, guarded undo and redo | 5 | 16 | yes |
-| U2 | Withheld values, conflicts and the held item in a publish | 7 | 20 | yes |
-| **Total** | | **12** | **36** | |
+| U2 | Withheld values, conflicts and the held item in a publish | 7 | 23 | yes |
+| **Total** | | **12** | **39** | |
 
 ## Read first (whole milestone)
 `docs/process/flow.md` (**§10 is the authority for this track**) · `docs/implementation/master_plan.md` §3, §6, §7 · `docs/implementation/master_plan_research.md` (all: layout §0, standing rules §3, sequencing and tracks §5, registry §6, commands §7.2, the storage decision §6.4) · book `01`, `14` §Research agent, `08A`, `08B` · then each unit's own Read first. Name key and sameness are `psm_core::mechanisms::{name_key, sameness}` (R2·U1); every other research rule is `psm_research::rules`.
@@ -36,6 +36,9 @@ drifted by about 5 lines (projection, reality checks); find the functions by nam
   08B MC-A10/MC-A12 (changelog 6). L5 → U1 Files, A08·C5(a), Unit test commands, Review mode. L6 → U1 Files and task 0.
   L7 → U2 Files and task 4. L8 → A09·C1(d). L9 → the carried note above. L10 → A09·C3(a). L11 → A09·C3(b).
   L12 → A09·C7(a). L13, L14, L15 → U1 Delegated choices (decided, not free).
+- Projection attempt 2 (N1–N9, same handoff path, archived attempt 1 under `docs/implementation/archive/`): N1, N3, N4,
+  N7 → U2 task 5 and rows A09·C4(g)–(i). N2 → U2 task 6 and A09·C4(b). N5 → A09·C3(a). N6 → U1 Files (helper note).
+  N8, N9 → U2 Decided by the orchestrator. N1 and N8 are also folded into R6·U3.
 
 ## Unit 1 — Feedback rows, conflict actions, guarded undo and redo
 
@@ -64,7 +67,7 @@ for conflicts (R6·U3), the panel (R6·U1).
 `apps/desktop/src/features/form/__tests__/{p11_form_ui.test.tsx, p22_form_tidy.test.tsx}`.
 
 ### Files
-Edited: `crates/core/src/services/{attributes.rs, history.rs}`, `apps/desktop/src-tauri/src/{commands/attributes.rs, lib.rs}` (commands `attribute_ai_accept`, `attribute_conflict_resolve`), `apps/desktop/src/services/{bindings.ts (regenerated), attributes.ts}`, `apps/desktop/src/features/form/FormDialog.tsx` (Looks right calls the accept command), `apps/desktop/src/features/form/__tests__/{p11_form_ui.test.tsx, p22_form_tidy.test.tsx}`, `crates/testkit/Cargo.toml`, `crates/testkit/src/test_app.rs` (a helper that makes a conflict through `psm_research::writes::suggest`, used by U1, U2 and the desktop command test), `crates/core/src/mechanisms/mod.rs`. New: `crates/core/src/mechanisms/publish_partition.rs` with **`is_conflict` only** (U2 adds `partition`; projection L6), `crates/testkit/tests/suite/research/r5_feedback_and_undo.rs` (+ its `mod` line). A08·C5(a)'s test is a `#[cfg(test)]` module in `apps/desktop/src-tauri/src/lib.rs` through the Tauri mock runtime (precedent: the R2 research command tests in that file); the testkit cannot call desktop commands (projection L5).
+Edited: `crates/core/src/services/{attributes.rs, history.rs}`, `apps/desktop/src-tauri/src/{commands/attributes.rs, lib.rs}` (commands `attribute_ai_accept`, `attribute_conflict_resolve`), `apps/desktop/src/services/{bindings.ts (regenerated), attributes.ts}`, `apps/desktop/src/features/form/FormDialog.tsx` (Looks right calls the accept command), `apps/desktop/src/features/form/__tests__/{p11_form_ui.test.tsx, p22_form_tidy.test.tsx}`, `crates/testkit/Cargo.toml`, `crates/testkit/src/test_app.rs` (a helper that makes a conflict through `psm_research::writes::suggest`, used by U1, U2 and the desktop command test; the helper imports the definition, and the C5(a) test configures settings so `integration.kind` is that integration before `AppState::new`, else the command path sees only the built-in Product fields and answers "unknown attribute" (projection N6)), `crates/core/src/mechanisms/mod.rs`. New: `crates/core/src/mechanisms/publish_partition.rs` with **`is_conflict` only** (U2 adds `partition`; projection L6), `crates/testkit/tests/suite/research/r5_feedback_and_undo.rs` (+ its `mod` line). A08·C5(a)'s test is a `#[cfg(test)]` module in `apps/desktop/src-tauri/src/lib.rs` through the Tauri mock runtime (precedent: the R2 research command tests in that file); the testkit cannot call desktop commands (projection L5).
 
 ### Core mechanisms (the only functions with unit tests)
 None new (the comparison "current row equals the expected row on every column except `updated_at`" is a private
@@ -193,11 +196,23 @@ New: `crates/core/src/mechanisms/publish_partition.rs`, `crates/testkit/tests/su
    in `resolved_attributes` (MC-A10: later writes are not in this run). Undo removes only the entries carrying the
    undone step's token, while the item is still held (projection L3). Redoing a resolution while the item is still
    `held` records it again with the step's token, and releases the item when it was the last pending key (08B
-   MC-A10/MC-A12, changelog 6; projection L4).
-6. `run_item` sends, for a released item, the frozen values plus each resolved key's value (a "no value" key is not
-   sent). `cancel` on a held item sets `Cancelled` at once. The startup re-queue leaves held items held.
+   MC-A10/MC-A12, changelog 6; projection L4). The attribute step keeps what it needs to re-record its resolutions
+   (the entries it wrote: value and action), as it keeps its feedback rows for re-insert (N7).
+   **Callers include `accept_all`** for each key it accepts, in its transaction: a pending key that research turned
+   into a non-conflict is accepted by Accept all and must resolve (N3).
+   **A step that recorded a resolution is never coalesced into** (`history.rs` `coalesce_attribute`): a later edit of
+   the key is a new step and changes nothing in the entry (MC-A10). This keeps the history, the feedback row and the
+   entry in agreement; the L15 coalescing rule applies only to steps that resolved nothing (N1). The form side
+   (Edit on a conflict saves once, on explicit commit, never on the 300 ms debounce) is R6·U3's.
+   **A resolution whose row after the action is not live and valid records "no value"** (never sent, like Clear):
+   Keep previous of an invalid `integration` prior, or an Edit that does not fit its definition (N4; the frozen rule
+   of MC-A10 and 07A MC-13).
+6. The values a released item uses are `frozen_attributes` plus each resolved key's value, "no value" keys left out,
+   in **every** run-path read of the frozen list: `ensure_export`'s `run_staged` (the staged `item.json` that becomes
+   the local export at `publish_swap`) and `update`'s `write_set` (N2). Merging at release or at read time is the
+   implementer's choice. `cancel` on a held item sets `Cancelled` at once. The startup re-queue leaves held items held.
 
-### Criteria (7 criteria, 20 rows)
+### Criteria (7 criteria, 23 rows)
 Boundary: `PublishService::{preview, confirm, cancel}`, the attribute actions, `TestApp::tick`, and the mutations
 `FakeCommerce` recorded. "Sends" means a recorded `attributes_write`.
 | Row | Boundary | Input | Exact outcome | Trace |
@@ -209,14 +224,17 @@ Boundary: `PublishService::{preview, confirm, cancel}`, the attribute actions, `
 | A09·C1(e) | same | a cleared row and an invalid row | neither frozen (as before this phase) | M17 |
 | A09·C2(a) | `confirm` re-check | preview shows `n_withheld` 1; a second low suggestion is written; confirm with the shown set | refused with `AI suggestions changed while you were confirming`; no `publish_runs` row | MA17 (R-IA22) |
 | A09·C2(b) | same | preview shows conflict keys `{k1}`; `k1` is resolved before confirm | refused the same way; no run row | MA17 |
-| A09·C3(a) | held item | two sessions confirmed together, the first with one conflict | first item step `held`, no job row for it; after `tick` until idle its item is still a new product: no product with its SKU in `FakeShop.products`, no `values` entry for it, and every recorded mutation belongs to the second item's product; the second item reaches `done` with its gallery and values written | MA17 |
+| A09·C3(a) | held item | two sessions confirmed together, the first with one conflict | first item step `held`, no job row for it; after `tick` until idle `FakeShop.products` holds exactly one product, with the second item's SKU, and `FakeShop.values` has entries only under that product's id; the second item reaches `done` with its gallery and values written | MA17 |
 | A09·C3(b) | H1/M5 | C3(a) | the run's `confirmed_at` ≤ every recorded mutation's `at` (the `p13` form) | M17 |
 | A09·C4(a) | resolution, two pending keys | resolve `k1` with Keep previous | `resolved_attributes` holds `k1` = the prior's value with action and time; step still `held`; no mutation | MA17 |
-| A09·C4(b) | same | then research writes a new suggestion on `k1`; then resolve `k2` with Use suggestion | step `prepare`, `released_at` set, one job queued; after `tick` the shop holds `k1` = the prior's value and `k2` = the suggestion; the later suggestion on `k1` was not sent | MA17 |
+| A09·C4(b) | same | then research writes a new suggestion on `k1`; then resolve `k2` with Use suggestion | step `prepare`, `released_at` set, one job queued; after `tick` the shop holds `k1` = the prior's value and `k2` = the suggestion; the later suggestion on `k1` was not sent; the item's local export `item.json` holds `k1` = the prior's value and `k2` = the suggestion | MA17 |
 | A09·C4(c) | same | a held item whose only pending key is resolved by Edit to H; by Clear | Edit: released, H sent; Clear: released, the key is not in any write | MA17, M20 |
 | A09·C4(d) | undo | a held item with two pending keys: resolve `k1`, then undo | `k1` has no entry in `resolved_attributes`; the item is still `held` with two pending keys | MC-A10 |
 | A09·C4(e) | later action, undo | a held item with two pending keys: resolve `k1` with Keep previous; edit `k1` again (human); undo once | `k1`'s entry is unchanged by the edit and by the undo (same value, action and token); the item still waits for `k2` only | MC-A10 |
 | A09·C4(f) | redo | a held item with two pending keys: resolve `k1`, undo, redo; then resolve `k2` | after the redo `k1`'s entry is present with the step's token and the item is still `held`; after resolving `k2` the step is `prepare` with one job | MC-A10 (changelog 6) |
+| A09·C4(g) | typing on a held item | a held item with one pending key `k`; `set_value` "Wa", then `set_value` "Walnut" (as the form's debounce would) | two undo steps; the entry for `k` is "Wa" with the first step's token; the item was released by the first call (pins N1; R6·U3's commit rule keeps a prefix from being the real value) | MC-A10 |
+| A09·C4(h) | Accept all | a held item with two pending keys; research turns `k1` into a non-conflict at medium (the C1(d) path); `accept_all` | `k1` has an entry with action `accepted`; the item still waits for `k2` only | MC-A10, MC-A12 |
+| A09·C4(i) | invalid prior | a linked item whose shop value for `k` does not fit its definition (`read_integration_values`), then `writes::suggest` over it; confirm (held); Keep previous | entry "no value"; the item is released; `k` is in no write | MC-A10, 07A MC-13 |
 | A09·C6(a) | `cancel` | a held item | step `cancelled` immediately; no mutation ever recorded; the conflicts are still conflicts in the form | MC-A10 |
 | A09·C6(b) | restart | `kill_and_restart` with a held item | still `held`, no job row | MA17, H4 |
 | A09·C6(c) | restart | resolve the last key, then `kill_and_restart` before any tick | step `prepare` with its job; the item then reaches `done` once (no duplicate product or media) | H4, M18 |
@@ -226,6 +244,11 @@ Boundary: `PublishService::{preview, confirm, cancel}`, the attribute actions, `
 ### Delegated choices
 JSON layouts of the three new columns (key → object) · how `shown` is passed (`[{session_id, n_withheld,
 conflict_keys}]`) · the progress percentage of `held` (0) · the name of the core hold function (it is a function over the transaction, called unconditionally; task 5).
+
+### Decided by the orchestrator (projection N8, N9)
+- In R5 the `pending_conflicts` column is the record of what waited; `publish_summary` (the confirmed text) is
+  unchanged. R6·U3 adds the withheld and waiting lines to the text when the popover shows them.
+- `preview`'s `details_filled` is unchanged in R5 (withheld and pending rows still count as filled).
 
 ### Notes
 - Hazard: adding `Held` reaches every exhaustive `match` on `PublishStep` (`publish.rs` lines 114, 264–281,

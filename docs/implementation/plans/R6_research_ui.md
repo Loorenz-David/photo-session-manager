@@ -31,6 +31,12 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
 - **U3, the "Waiting for you · n conflicts" pill (R2 review).** `StatusPill.tsx` has no `waiting_for_you` branch today, so a held session row shows an empty status cell. Add it (08B MC-A10) with its activity popover.
 - **U1, "n fields filled" (R4 review).** `derived_counts` counts only stage 7 writes with outcome `written`; a follow-up that confirms the same values shows "0 fields filled · 3 to review". The panel must not read as if research did nothing on a fully suggested form: show the fields the latest run supports (written or unchanged), or word the line so 0 is not misleading.
 - **U1, "Waiting for Capture One" timing (R4 review).** `run_rules::may_start` returns `WaitingForEditor` as soon as no eligible photo has a source, before the 120 s source wait ends; MC-A6 says the panel says it "when the wait ends". Show the sentence only once the wait has ended (the start behaviour itself is correct).
+- **U3, Edit on a conflict commits once (R5 projection N1).** On a held item, the first save of a pending key resolves it, and a
+  step that resolved is never coalesced into. So a conflict field's **Edit** saves once, on explicit commit (Enter,
+  blur or Save), never on the form's 300 ms typing debounce; otherwise the shop gets the first typed prefix. Add a
+  UI row: typing "Walnut" into a conflict's Edit calls the resolve command once, with "Walnut".
+- **U3, the confirmed text (R5 projection N8).** If the popover shows the withheld and "waiting for you" lines, the
+  `summary` text passed to confirm carries them (07A MC-10: the exact text shown).
 
 ## Unit 1 — The live research panel and "n to review"
 
