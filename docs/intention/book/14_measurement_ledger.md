@@ -53,3 +53,20 @@ cite either the `M` id or the `MC` id.
 
 Operational measurements (recorded in S0 and S8, not tests): shot-to-original-preview and
 shot-to-adjusted-preview times; cold start of the packaged app on a fresh Mac.
+
+## Research agent (chapter 08A, ratified 2026-11-12)
+
+Ids stay `MA…` (the `M` numbers continue on `main`). Criteria of research phases cite these or a
+mechanism contract of 08A.
+
+| ID | Observable outcome, measured true ⇒ shipped | Defect family it guards |
+|---|---|---|
+| **MA1** | After any run, every field that was `human` or `ai`+`accepted` before it holds the same value and provenance; no cleared value came back. | checked values overwritten |
+| **MA2** | Every attribution value written by a run has the confidence the §6 table gives for the evidence recorded in its steps; none is above `low` without a read label or the required matching listings. | false designer or maker claims |
+| **MA3** | Every image sent to a provider has a `research_outbound` row; none belongs to a `deleted` photo; no RAW or master bytes are sent. | photos leaking |
+| **MA4** | Kill-and-resume at any point of a run ends with the same values, confidences and steps as an uninterrupted run with the same provider answers; nothing is duplicated. | half-finished or doubled research |
+| **MA5** | No run's recorded cost exceeds its cap by more than the one call in flight; no run starts after the day cap is reached. | runaway spend |
+| **MA6** | Every value a run writes is in the item's layout and valid for its definition (a listed choice for choice fields); every `ai` value has at least one step naming its key. | invalid values, unexplained suggestions |
+| **MA7** | With no key, no network or no integration, sessions, review, export and publish behave as on `main`; the panel states why research is not running. | core workflow coupled to AI |
+| **MA8** | After a publish, the shop holds no value that was `ai`+`suggested` at `low` confidence at confirmation; every `ai`+`suggested` value it holds was `medium` or `high` then. | unchecked weak guesses on a live listing |
+| **MA9** | An export contains, for every run in its range, every step, every provider call with its exact request and response, every image sent, the values written and the photographer's action on each; replaying a stage from it sends the same inputs the original call sent. It contains no secret, no RAW and no `deleted` photo. | a wrong suggestion that cannot be explained or reproduced; secrets or deleted photos leaving in an export |

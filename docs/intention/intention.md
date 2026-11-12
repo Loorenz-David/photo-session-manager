@@ -30,6 +30,7 @@ the meaning, the contract gives the exact rule.
 | [07A Mechanism contracts: publish](book/07A_publish_contracts.md) | frozen confirmation, mutation token, resume and idempotency keys, gallery reconciliation, attribute writes and the Shopify type map, damage report (MC-10…MC-14) |
 | [07B Retouch after publishing](book/07B_retouch_after_publish.md) | a Capture One edit to a published photo: dirty, revision upload, in-place replacement (MC-21, owner decision I1) |
 | [08 Attributes and AI](book/08_attributes_and_ai.md) | attribute schema, field kinds, customize fields, AI suggestions and provenance |
+| [08A Research agent](book/08A_research_agent.md) | **Ratified 2026-11-12 on branch `feature/agentic`, not inventoried or planned yet:** the AI agent that researches a piece and suggests form values: stages, evidence rule for attribution, what may leave the Mac, publish of unchecked suggestions, cost caps, trusted sites, the research record, export and replay (MA1–MA9) |
 | [09 Integrations](book/09_integrations.md) | commerce integration interface, capabilities, the Shopify adapter |
 | [09A Shopify credentials and condition field](book/09A_shopify_credentials_and_condition_field.md) | client-credentials token, store switch by settings, the configured condition-photos metafield (MC-23, MC-24, owner answers 2026-10-26) |
 | [10 Camera and editing providers](book/10_imaging_providers.md) | camera adapter, Capture One events and commands, live previews, rendering |
@@ -50,6 +51,7 @@ Evidence (source-contract facts, beside the book):
 - `evidence/capture_one_16.8.6.md` — AppleScript dictionary findings and runtime VERIFY items.
 - `evidence/design_handoff.md` — rules extracted from the Claude Design handoff in `claude_design/`.
 - `evidence/sony_camera_lab.md` — Sony Camera Lab findings (A7R V, SDK 2.02) and the Capture One / camera-ownership checks V1–V6.
+- `evidence/research_providers.md` — reverse image search routes, OpenAI web search and image input, probes owed (2026-11-12).
 - `evidence/shopify_admin.md` — written when the dev store is provided (not yet).
 
 Stages of the brief are referred to as **S0–S8** (`M` is reserved for measurements).
