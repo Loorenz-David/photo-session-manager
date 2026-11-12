@@ -83,3 +83,52 @@ behaviour change); the vitest config; `docs/implementation/master_plan.md` (test
   programs and why in the handoff (that is DONE with a deviation, not BLOCKED).
 
 ## Review log
+
+### 2026-11-12 — implement r1 (claude opus; the runner's Codex launch exited at once)
+**Built.** The 56 behaviour-test files are modules of one test program `suite` (`crates/testkit/tests/suite/main.rs`,
+`autotests = false`); per-phase command `cargo test -p psm-testkit --test suite <stem>::` (master plan §6.9/§7.2, flow.md §4A,
+templates). Clashes made per-test: the fake camera helper is a link to one shared copy (no copy per test), the two tests
+that install a process-wide subscriber and p00 C6(a) run in their own child process (`psm_testkit::isolation`), the
+thread-scoped log captures pin `tracing`'s site interest (`psm_testkit::logs`). The one real-time wait on a production timing
+(p42 C2(b), the helper's 3 s quit grace) reads `SidecarTimings` (Default 3 s, core-mechanism test
+`production_timings_unchanged`; test seam `CameraRuntime::set_sidecar_timings`). `[profile.dev.package."*"] opt-level = 2` kept.
+
+**Measured before** (each of the 63 programs once from the built binaries, 2026-11-12 03:40–04:50; "first start" = `--list`,
+which carries macOS's check of a newly built program). Totals: **run 1066.8 s + first start 2856.8 s = 3923.6 s (65.4 min)**,
+945 tests; one failure (p43 C7(b): the fake helper's fresh copy waited > 15 s for macOS's check). Top 15 by run + first start:
+
+| Program | Tests | Run s | First start s | Total s | Result |
+|---|---|---|---|---|---|
+| p00_spike | 16 | 445.2 | 52.8 | 498.0 | pass (C6(a) waited minutes for the file-event service) |
+| p43_ftp_receiver | 26 | 230.5 | 0.0 | 230.5 | FAIL (C7(b), see above) |
+| p65_capture_sync_waiting_jobs_and_inventory | 8 | 4.1 | 170.3 | 174.4 | pass |
+| p61_storage_cleanup_and_budget | 7 | 11.7 | 145.8 | 157.6 | pass |
+| p58_fast_compose_on_camera_preview | 6 | 3.0 | 152.2 | 155.3 | pass |
+| p62_retention_after_publish | 12 | 8.8 | 136.7 | 145.5 | pass |
+| p69_faster_export_and_publish | 7 | 62.5 | 73.9 | 136.4 | pass |
+| p63_final_check_fixes | 4 | 3.7 | 127.7 | 131.4 | pass |
+| p64_publish_speed_and_visibility | 8 | 32.5 | 83.2 | 115.8 | pass |
+| p66_approve_on_arrival_and_session_order | 6 | 2.8 | 112.4 | 115.2 | pass |
+| p57_camera_auto_take_back_and_run2_fixes | 8 | 13.7 | 97.0 | 110.8 | pass |
+| p56_camera_claim_and_render_loop | 4 | 3.1 | 106.2 | 109.3 | pass |
+| p29_master_and_output_render | 26 | 24.9 | 71.5 | 96.4 | pass |
+| p30_outputs_in_export_and_publish | 21 | 15.5 | 79.9 | 95.4 | pass |
+| p60_take_back_and_self_healing | 8 | 5.6 | 77.3 | 82.9 | pass |
+
+**Measured after** (`cargo test --workspace`, back to back, nothing else running):
+
+| Run | Dependencies | Wall clock | Suite program (812 tests) | Result |
+|---|---|---|---|---|
+| A1 (first after rebuild) | unoptimised | 3050 s (25 min of it compiling while macOS re-checked the compiler's macro libraries after an XProtect update) | 186.6 s | 946/946 green |
+| A2 (warm) | unoptimised | **596.1 s** | 188.8 s | 946/946 green |
+| B1 (first after rebuild) | opt-level 2 | 1029.9 s | 113.7 s | 946/946 green |
+| B2 (warm) | opt-level 2 | **523.5 s (8 min 43 s)** | 116.4 s | 946/946 green |
+
+opt-level 2 for dependencies: suite program 188 → 115 s (−39 %), warm run 596 → 524 s; kept. The remaining warm time is
+mostly macOS's first-start check of the two desktop test programs, relinked on every run because p45 re-runs
+`tools/sidecar/build.sh --stub` and tauri-build watches the binary it rewrites (outside this perimeter; noted in the handoff).
+Slowest modules inside the suite (summed test time, unoptimised run): p69 229.9 s (its 7 tests serialised by its own lock),
+p29 196.6, p30 157.3, p64 131.6, p28 101.8, p48 67.4, p40 57.4, p13 55.6, p46 54.0, p50 51.2.
+C2(a): 812 integration test names before = 812 after (`.pipeline/p70/before_names.txt` vs `after_names.txt`, module prefix
+aside), none ignored or deleted. Assumptions A1–A5 and deviations (p50 C6(b), p63 C1(a), p00 C6(a) start/stop races) in the
+handoff.

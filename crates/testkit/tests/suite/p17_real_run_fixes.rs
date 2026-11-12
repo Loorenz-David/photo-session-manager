@@ -172,7 +172,7 @@ fn c2a_written_jxa_scripts_share_one_folder_scan() {
         assert!(code.contains("imageByPath(") || code.contains("collectionForFolder("));
     }
     assert_eq!(
-        include_str!("../../integrations/src/editing/capture_one/jxa/lib.js")
+        include_str!("../../../integrations/src/editing/capture_one/jxa/lib.js")
             .matches("function collectionForFolder")
             .count(),
         1

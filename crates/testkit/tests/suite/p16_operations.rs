@@ -261,6 +261,8 @@ impl std::io::Write for LogBytes {
 fn capture_log(f: impl FnOnce()) -> String {
     let buffer = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let output = LogBytes(buffer.clone());
+    // P70: keeps every log site wanted while this thread-scoped capture runs (one shared process).
+    psm_testkit::logs::keep_log_sites_interested();
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .with_writer(psm_infra::logging::redacting(move || output.clone()))

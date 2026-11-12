@@ -377,18 +377,12 @@ impl TestApp {
                 rec.join("behaviour.json"),
                 serde_json::to_vec(&behaviour).unwrap(),
             )?;
-            let source = std::env::var_os("CARGO_BIN_EXE_fake_sidecar")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| {
-                    let exe = std::env::current_exe().expect("test exe");
-                    exe.parent().unwrap().parent().unwrap().join("fake_sidecar")
-                });
-            std::fs::copy(source, support.join("camera-sidecar"))?;
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(
-                support.join("camera-sidecar"),
-                std::fs::Permissions::from_mode(0o755),
-            )?;
+            // P70: a link to one shared copy, not a copy per test. macOS checks every newly
+            // written program at its first start; with every phase's tests in one process, dozens
+            // of fresh copies starting at once queued behind that check for minutes. The fake
+            // reads its recording folder from the path it was started by (the link), so each
+            // test keeps its own `rec/`.
+            std::os::unix::fs::symlink(shared_fake_sidecar()?, support.join("camera-sidecar"))?;
         }
         let document_id = dir
             .path()
@@ -903,6 +897,48 @@ fn roomy_disk(app: &App) {
             disk: "the test disk".into(),
         })
     }));
+}
+
+/// The fake sidecar program every camera test links to (P70): one executable copy of the built
+/// `fake_sidecar`, beside it in the target folder and named by its content hash, so it is written
+/// (and checked by macOS at its first start) once per build of the fake, not once per test. The
+/// copy is written under a temporary name and renamed into place, so concurrent test processes
+/// never see a half-written file.
+fn shared_fake_sidecar() -> std::io::Result<PathBuf> {
+    use sha2::{Digest, Sha256};
+    use std::os::unix::fs::PermissionsExt;
+    static SHARED: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    if let Some(path) = SHARED.get() {
+        return Ok(path.clone());
+    }
+    let source = std::env::var_os("CARGO_BIN_EXE_fake_sidecar")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let exe = std::env::current_exe().expect("test exe");
+            exe.parent().unwrap().parent().unwrap().join("fake_sidecar")
+        });
+    let bytes = std::fs::read(&source)?;
+    let digest: String = Sha256::digest(&bytes)[..8]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let folder = source
+        .parent()
+        .expect("fake_sidecar folder")
+        .join("psm-testkit");
+    std::fs::create_dir_all(&folder)?;
+    let shared = folder.join(format!("camera-sidecar-{digest}"));
+    if !shared.is_file() {
+        let temp = folder.join(format!(
+            ".camera-sidecar-{digest}.{}.{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::write(&temp, &bytes)?;
+        std::fs::set_permissions(&temp, std::fs::Permissions::from_mode(0o755))?;
+        std::fs::rename(&temp, &shared)?;
+    }
+    Ok(SHARED.get_or_init(|| shared).clone())
 }
 
 /// `CameraFiles` whose first `rename_exclusive` fails like a non-APFS volume would (`ENOTSUP`).

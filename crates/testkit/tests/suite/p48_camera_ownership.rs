@@ -23,11 +23,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-const READY_USB: &str = include_str!("../src/fixtures/sidecar_scripts/ready_usb.txt");
-const READY_WIFI: &str = include_str!("../src/fixtures/sidecar_scripts/ready_wifi.txt");
-const CLAIMED: &str = include_str!("../src/fixtures/sidecar_scripts/claimed.txt");
-const CLAIMED_WIFI: &str = include_str!("../src/fixtures/sidecar_scripts/claimed_wifi.txt");
-const TAKE_BACK: &str = include_str!("../src/fixtures/sidecar_scripts/take_back.txt");
+const READY_USB: &str = include_str!("../../src/fixtures/sidecar_scripts/ready_usb.txt");
+const READY_WIFI: &str = include_str!("../../src/fixtures/sidecar_scripts/ready_wifi.txt");
+const CLAIMED: &str = include_str!("../../src/fixtures/sidecar_scripts/claimed.txt");
+const CLAIMED_WIFI: &str = include_str!("../../src/fixtures/sidecar_scripts/claimed_wifi.txt");
+const TAKE_BACK: &str = include_str!("../../src/fixtures/sidecar_scripts/take_back.txt");
 
 const MODEL: &str = "ILCE-7RM5";
 const CO_SENTENCE: &str =

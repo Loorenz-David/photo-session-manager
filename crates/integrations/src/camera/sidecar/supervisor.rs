@@ -1,4 +1,4 @@
-use super::{QUIT_GRACE_MS, RESTART_BACKOFF_S, RESTART_STEADY_S};
+use super::{RESTART_BACKOFF_S, RESTART_STEADY_S};
 use std::{
     io::{BufRead, BufReader, Write},
     path::PathBuf,
@@ -152,7 +152,9 @@ impl Supervisor {
     pub fn consecutive_exits(&self) -> usize {
         self.attempts
     }
-    pub fn quit_and_wait(&mut self) {
+    /// Sends `quit` and waits up to `grace` (production: `SidecarTimings::default().quit_grace`)
+    /// for the sidecar to exit, then kills it.
+    pub fn quit_and_wait(&mut self, grace: Duration) {
         if self.stopped {
             return;
         }
@@ -164,7 +166,7 @@ impl Supervisor {
             let _ = input.write_all(b"quit\n");
             let _ = input.flush();
         }
-        let end = Instant::now() + Duration::from_millis(QUIT_GRACE_MS);
+        let end = Instant::now() + grace;
         loop {
             match child.try_wait() {
                 Ok(Some(_)) => return,

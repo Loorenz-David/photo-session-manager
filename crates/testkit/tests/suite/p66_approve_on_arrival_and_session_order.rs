@@ -48,6 +48,8 @@ impl Write for LogBytes {
 fn logged<T>(f: impl FnOnce() -> T) -> (T, String) {
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let output = LogBytes(buffer.clone());
+    // P70: keeps every log site wanted while this thread-scoped capture runs (one shared process).
+    psm_testkit::logs::keep_log_sites_interested();
     let subscriber = tracing_subscriber::fmt()
         .with_writer(move || output.clone())
         .without_time()

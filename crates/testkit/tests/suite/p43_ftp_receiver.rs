@@ -423,28 +423,31 @@ fn c5b_public_policy_refuses_loopback() {
 }
 #[test]
 fn c5c_auth_and_secret_redaction() {
-    let captured = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let writer = captured.clone();
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(move || LogWriter(writer.clone()))
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).unwrap();
-    let a = app();
-    let mut c = FtpClient::connect(a.receiver_port()).unwrap();
-    assert_eq!(code(&c.login("sessionmanager", "wrong").unwrap()), "530");
-    assert_eq!(
-        code(&c.login("sessionmanager", "ftp-pw-unique-1").unwrap()),
-        "230"
-    );
-    let mut other = FtpClient::connect(a.receiver_port()).unwrap();
-    assert_eq!(
-        code(&other.login("other", "ftp-pw-unique-1").unwrap()),
-        "530"
-    );
-    let logs = a.camera_runtime().helper_log().join("\n");
-    assert!(!logs.contains("wrong") && !logs.contains("ftp-pw-unique-1"));
-    let trace = String::from_utf8(captured.lock().unwrap().clone()).unwrap();
-    assert!(!trace.contains("wrong") && !trace.contains("ftp-pw-unique-1"));
+    // P70: installs a process-wide log subscriber, so it runs in its own process.
+    psm_testkit::isolation::in_own_process(module_path!(), "c5c_auth_and_secret_redaction", || {
+        let captured = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let writer = captured.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || LogWriter(writer.clone()))
+            .finish();
+        tracing::subscriber::set_global_default(subscriber).unwrap();
+        let a = app();
+        let mut c = FtpClient::connect(a.receiver_port()).unwrap();
+        assert_eq!(code(&c.login("sessionmanager", "wrong").unwrap()), "530");
+        assert_eq!(
+            code(&c.login("sessionmanager", "ftp-pw-unique-1").unwrap()),
+            "230"
+        );
+        let mut other = FtpClient::connect(a.receiver_port()).unwrap();
+        assert_eq!(
+            code(&other.login("other", "ftp-pw-unique-1").unwrap()),
+            "530"
+        );
+        let logs = a.camera_runtime().helper_log().join("\n");
+        assert!(!logs.contains("wrong") && !logs.contains("ftp-pw-unique-1"));
+        let trace = String::from_utf8(captured.lock().unwrap().clone()).unwrap();
+        assert!(!trace.contains("wrong") && !trace.contains("ftp-pw-unique-1"));
+    });
 }
 #[test]
 fn c5d_passive_only_and_range() {

@@ -149,7 +149,7 @@ restated so no session has to infer them:
 | P67_form_values_defaults_and_batch_step | APPROVED | 2026-11-11 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 27 declared paths (`a4ee3ae`); p67 7/7 + touched testkit files (p01/p11/p59/p64/p65) 42/42, touched UI tests (form, publish, history) 77/77, fmt, clippy -D warnings, typecheck green (reviewer run, code tree = `a4ee3ae`); implementer full-suite stamp consumed (p61 c1a load flake, green alone); all 7 automated rows have a boundary test that fails on the wrong outcome; assumptions A1–A8 consistent with the book; H1–H8 hold; 5 backlog notes |
 | P68_setup_polish_address_password_shop | APPROVED | 2026-11-11 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 30 declared paths (`e39c105`); p68 3/3, p12 69/69, p50 22/22, core `secrets` unit, desktop `p50_tests` 2/2, touched UI tests (settings, shell, health, p07, p18) 102/102, fmt, clippy -D warnings, typecheck green (reviewer run, code tree = `e39c105`); implementer full-suite stamp consumed; all 5 automated rows have a boundary test that fails on the wrong outcome; assumptions A1–A8 consistent with the book (R-I21/09A wording superseded by the owner's rule: book fold); H1–H8 hold; 7 backlog notes |
 | P69_faster_export_and_publish | APPROVED | 2026-11-12 | opus | review r1 APPROVED_WITH_NOTES: perimeter = the 25 declared paths (`b1129e1`); p69 7/7, p09 8, p27 11, p44 25, p56 4, p61 7, p62 12, p64 8, p65 8 (90/90), core/infra/integrations/desktop unit tests 133/133, fmt, clippy -D warnings, typecheck, vitest `features/publish` + `features/settings` 63/63 green (reviewer run, code tree = `b1129e1`); implementer full-suite stamp consumed; all 6 automated rows have a boundary test that fails on the wrong outcome; assumptions A1–A10 within changelog 47; H1–H8 hold; 3 backlog notes (10D book fold, take-back waits one background master, `shopify_ms` in core) |
-| P70_fast_test_suite | NOT_STARTED | 2026-11-11 | orchestrator | test suite in minutes: one integration test program, injectable timings in tests (production values unchanged), optimised deps in test builds; owner 2026-11-11 (flow v1.4) |
+| P70_fast_test_suite | IMPLEMENTED | 2026-11-12 | claude | implement r1: behaviour tests = one test program `suite` (`--test suite <stem>::`), fake helper linked not copied, process-wide-state tests in own child process, quit grace via `SidecarTimings` (Default 3 s), deps opt-level 2; `cargo test --workspace` 65 min → 8 min 43 s warm, 946/946 twice |
 
 Phase state machine (charter): `NOT_STARTED → [PROJECTED] → IMPLEMENTING → IMPLEMENTED → REVIEWING →
 CHANGES_REQUESTED (→ IMPLEMENTING) → APPROVED`. The runner (`tools/pipeline/run_phase.sh`) drives it.
@@ -578,7 +578,11 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
 `api_version` and `condition_photos_key` (defaults filled).
 
 ### 6.9 Test layout
-- Behaviour tests: `crates/testkit/tests/<phase_lower>_<slug>.rs` (e.g. `p02_review_order.rs`); one `#[test]` per
+- Behaviour tests: `crates/testkit/tests/suite/<phase_lower>_<slug>.rs` (e.g. `p02_review_order.rs`), each a module of the one
+  integration test program `suite` (P70: `tests/suite/main.rs` lists every file as `mod <stem>;` — a new phase file adds its line there;
+  `autotests = false` and one `[[test]] suite` in `crates/testkit/Cargo.toml`). Tests of all phases run as threads of one process, so a
+  test never relies on process-wide state (environment variables, the current directory, a global log subscriber, fixed ports, fixed temp
+  paths); a test that must install a process-wide subscriber wraps its body in `psm_testkit::isolation::in_own_process`. One `#[test]` per
   criterion row named `c<criterion><row>_<slug>` (e.g. `c3b_undo_restores_position`). They use `TestApp` (§7.5).
 - Core-mechanism unit tests: inline `#[cfg(test)] mod tests` in `crates/core/src/mechanisms/<mechanism>.rs`,
   functions named `mc<n>_<slug>`; only for functions a plan lists under **Core mechanisms**.
@@ -592,7 +596,7 @@ left untouched, health shows `settings_invalid`; the next save writes a complete
   table once. Compose tests live in `apps/desktop/src/features/compose/__tests__/`; pure-TS mechanisms (`geometry.ts`, `machine.ts`, `refit.ts`,
   `snapping.ts`, `workspace/outputs.ts`) are the only frontend units with unit tests (flow §4 Core mechanisms).
 - **10E (P42–P50):** the sidecar is never real in the suite: `crates/testkit/src/bin/fake_sidecar.rs` (`[[bin]] fake_sidecar` of psm-testkit,
-  reached from `crates/testkit/tests/*` as `env!("CARGO_BIN_EXE_fake_sidecar")`) speaks the stdio protocol from a script file (P45 §The fake
+  reached from `crates/testkit/tests/suite/*` as `env!("CARGO_BIN_EXE_fake_sidecar")`) speaks the stdio protocol from a script file (P45 §The fake
   sidecar), records every stdin line and its own argv/env into files under the test's temp dir, and can exit on command. The FTP receiver is
   tested at its socket boundary on `127.0.0.1:0` through `psm_testkit::ftp_client` (a minimal hand-written client, so a reset mid-transfer is
   a real `RST`). The C++ transport-manager tests run through `ctest` from `tools/sidecar/build.sh --stub` (one Rust test in
@@ -891,7 +895,7 @@ P00 records command outcomes and timings)
 | Purpose | Command (from repo root unless noted) |
 |---|---|
 | Rust suite (L4 stamp) | `cargo test --workspace` |
-| One phase's behaviour tests (L1) | `cargo test -p psm-testkit --test <file_stem>` |
+| One phase's behaviour tests (L1) | `cargo test -p psm-testkit --test suite <file_stem>::` (P70: one module of the single `suite` test program; one test: `cargo test -p psm-testkit --test suite <file_stem>::<test_name>`) |
 | One core-mechanism module | `cargo test -p psm-core <module>::tests` |
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check` |
 | Bindings regeneration | `cargo test -p psm-desktop export_bindings` (writes `apps/desktop/src/services/bindings.ts`) |
