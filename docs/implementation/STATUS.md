@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-12 05:20: P53–P69 SDK app built (worktree `32d166a`, sidecar 352928 bytes = SDK), installed in /Applications on the dev Mac (P65 build moved to the session scratchpad); `Session Manager.zip` on the dev Mac Desktop replaced for the work-Mac update.** P70 still implementing.
+
 **2026-11-12 05:15: P69 APPROVED_WITH_NOTES (03:24; Claude Opus, implement 3 h 50 min, review 19 min). P70 implementing since 03:24.** Narrative relayed. Work-Mac app (P53–P69) building from a detached worktree at `32d166a` in the session scratchpad with its own target dir, so P70's working tree is untouched. Orchestrator owes book updates for P66, P68, P69 (8-bit masters, prepared when Ready).
 
 **2026-11-11 23:17: P68 APPROVED_WITH_NOTES (23:16; Claude Opus). P69 → P70 launched (driver).** Narrative relayed. P68 timings: implementer 2 h 29 min wall-clock, of which ~35 min coding + targeted checks and ~1 h 50 min the single closing full suite (run in the background with Monitor, so not counted as a command in the timeline); review 15 min (11 min commands, 4 min model). Orchestrator owes the book updates for P66 (approve on arrival, Deny deletes the RAW) and P68 (16-char password shown again, wrong-keys sentence).
