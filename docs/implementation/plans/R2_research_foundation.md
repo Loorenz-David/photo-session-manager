@@ -7,7 +7,7 @@ depends_on: []
 ---
 # R2 — Foundation: the shapes both tracks build on, frozen first
 
-**Tracker:** NOT_STARTED · 2026-11-12 · planner · —
+**Tracker:** IMPLEMENTED · 2026-11-12 · codex · 23/23 criterion rows tested; full Rust/UI suite, clippy, formatting and typecheck green.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -169,3 +169,5 @@ The reviewer runs: `cargo test -p psm-core mechanisms::name_key::tests`, `cargo 
 Nothing new is visible. On scratch data (`cd apps/desktop && PSM_DATA_DIR=$HOME/psm-research-dev npm run tauri -- dev`) open a form and a publish review: existing values, defaults and "from Shopify" values show as before, and publishing an item works as before.
 
 ## Review log
+
+- **2026-11-12, implement r1 (codex).** U1 added versioned Unicode name keys and exact integer sameness; pinned `unicode-casefold 0.2.0` and `unicode-general-category 1.1.0`. U2 installed the idempotent post-migration schema step, a same-transaction raw SQL/store seam, frozen values/feedback/publish/status/event/shop/settings/API/command shapes, generated bindings and wrappers. U3 added the adjusted-preview research renderer and five file-boundary tests. Assumptions: JSON maps for the three publish fields use `BTreeMap<String, Json>` with empty `{}`; `StatusInput.unresolved_conflicts` is derived from pending keys minus resolved keys; the `ResearchApi` stage/state/trigger display fields are strings until the engine defines its enums; the research copy reuses the established output renderer and removes every JPEG APP and COM metadata segment without re-encoding. For the quarter-turn test, the source's right half maps to the turned frame's bottom half under MC-27. Deviations: existing Rust/TypeScript test fixtures that enumerate values or schema were updated to include the new fields/table; the desktop crate gained a test-only `rusqlite` dependency for its command-boundary no-write assertion. No numbered migration was changed. Full gate: 822 suite tests, workspace clippy/fmt, desktop typecheck and 466 UI tests passed. Unit checkpoints: `290fcf3`, `879b2f0`, `184e61c`.
