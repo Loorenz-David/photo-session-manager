@@ -13,10 +13,13 @@ unicode-normalization = "0.1"
 url = "2.5.8"
 psm-infra = { path = "../infra" }
 chrono = "0.4"
+rusqlite = { version = "0.40", features = ["bundled"] }
+tracing.workspace = true
 
 [dev-dependencies]
 chrono-tz = "0.10"
 psm-testkit = { path = "../testkit" }
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
 
 [[test]]
 name = "engine"

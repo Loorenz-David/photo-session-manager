@@ -134,3 +134,193 @@ pub struct CallFailure {
     pub text: String,
     pub usage: Option<Vec<(String, i64)>>,
 }
+
+impl Stage {
+    /// The settings and storage name (`observe` … `decide`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Observe => "observe",
+            Self::Find => "find",
+            Self::Read => "read",
+            Self::Compare => "compare",
+            Self::Labels => "labels",
+            Self::Condition => "condition",
+            Self::Decide => "decide",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|s| s.as_str() == text)
+    }
+}
+
+/// Generates `as_str` / `parse` for a snake_case storage enum.
+macro_rules! stored_names {
+    ($name:ident { $($variant:ident => $text:literal),+ $(,)? }) => {
+        impl $name {
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $text),+
+                }
+            }
+
+            pub fn parse(text: &str) -> Option<Self> {
+                match text {
+                    $($text => Some(Self::$variant),)+
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
+/// The life of a run (MC-A6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunState {
+    Queued,
+    Running,
+    Finished,
+    Failed,
+    StoppedAtCap,
+    Cancelled,
+}
+
+stored_names!(RunState {
+    Queued => "queued",
+    Running => "running",
+    Finished => "finished",
+    Failed => "failed",
+    StoppedAtCap => "stopped_at_cap",
+    Cancelled => "cancelled",
+});
+
+/// Why a run exists (MC-A6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunTrigger {
+    Auto,
+    Manual,
+    FollowUp,
+}
+
+stored_names!(RunTrigger {
+    Auto => "auto",
+    Manual => "manual",
+    FollowUp => "follow_up",
+});
+
+/// The kind of a trace step (08A §8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepKind {
+    Looked,
+    Searched,
+    Read,
+    Compared,
+    Concluded,
+    NotDetermined,
+}
+
+stored_names!(StepKind {
+    Looked => "looked",
+    Searched => "searched",
+    Read => "read",
+    Compared => "compared",
+    Concluded => "concluded",
+    NotDetermined => "not_determined",
+});
+
+/// The state of one provider call record (MC-A9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CallState {
+    Sent,
+    Answered,
+    Failed,
+    Unknown,
+    NotSent,
+}
+
+stored_names!(CallState {
+    Sent => "sent",
+    Answered => "answered",
+    Failed => "failed",
+    Unknown => "unknown",
+    NotSent => "not_sent",
+});
+
+stored_names!(ErrorClass {
+    Offline => "offline",
+    Transient => "transient",
+    Key => "key",
+    Quota => "quota",
+    Request => "request",
+    Schema => "schema",
+    Refusal => "refusal",
+});
+
+/// Why research does not run (MC-A6 order), plus the waiting reason.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Prerequisite {
+    NoIntegration,
+    NoModelKey,
+    NoSearchKey,
+    /// The `(provider, model)` pair with no `fallback_call_usd`.
+    PriceMissing {
+        provider: String,
+        model: String,
+    },
+    NothingToResearch,
+    DayLimit,
+    Offline,
+    AutoOff,
+    WaitingForEditor,
+}
+
+impl Prerequisite {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::NoIntegration => "NoIntegration",
+            Self::NoModelKey => "NoModelKey",
+            Self::NoSearchKey => "NoSearchKey",
+            Self::PriceMissing { .. } => "PriceMissing",
+            Self::NothingToResearch => "NothingToResearch",
+            Self::DayLimit => "DayLimit",
+            Self::Offline => "Offline",
+            Self::AutoOff => "AutoOff",
+            Self::WaitingForEditor => "WaitingForEditor",
+        }
+    }
+
+    /// The panel sentence (`master_plan_research.md` §6.6); `AutoOff` has none.
+    pub fn sentence(&self) -> String {
+        match self {
+            Self::NoIntegration => "Connect a shop to use research".to_owned(),
+            Self::NoModelKey => "Add the model key in Settings → Research".to_owned(),
+            Self::NoSearchKey => "Add the visual search key in Settings → Research".to_owned(),
+            Self::PriceMissing { provider, model } => {
+                format!("No price is set for {provider} {model}")
+                    .trim_end()
+                    .to_owned()
+            }
+            Self::NothingToResearch => "This item type has no fields research can fill".to_owned(),
+            Self::DayLimit => "Day limit reached".to_owned(),
+            Self::Offline => "Offline".to_owned(),
+            Self::AutoOff => String::new(),
+            Self::WaitingForEditor => "Waiting for Capture One".to_owned(),
+        }
+    }
+
+    /// The first five stop a run row from being created at all.
+    pub fn blocks_creation(&self) -> bool {
+        matches!(
+            self,
+            Self::NoIntegration
+                | Self::NoModelKey
+                | Self::NoSearchKey
+                | Self::PriceMissing { .. }
+                | Self::NothingToResearch
+        )
+    }
+}

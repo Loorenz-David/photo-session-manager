@@ -3399,9 +3399,12 @@ dependencies = [
  "psm-core",
  "psm-infra",
  "psm-testkit",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "tracing",
+ "tracing-subscriber",
  "unicode-normalization",
  "url",
 ]
