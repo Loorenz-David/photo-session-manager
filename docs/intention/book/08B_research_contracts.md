@@ -511,7 +511,9 @@ that key's resolved canonical value into the item's `resolved_attributes`, with 
 that leaves no live value (Clear) records "no value", and the key is never written (07A MC-13). From then on,
 later writes to that field are not in this run: the principle of 08A §7, applied at the key's resolution. If the
 photographer undoes the resolution while the item is still `held`, the undo removes that key's entry, and the key
-is pending again.
+is pending again. Redoing it while the item is still `held` records the entry again and releases the item when it
+was the last pending key. The entry belongs to the resolving step: a later action on the same key changes nothing
+in `resolved_attributes`, and only undoing the resolving step removes it.
 
 **The stalled step.** An item confirmed with ≥ 1 pending key starts at step **`held`**, which is ordered before
 `prepare`. No job is queued for it, no step runs, and no integration mutation is issued (no `ConfirmedRun` value is
@@ -605,7 +607,7 @@ action had provenance `ai`:
 
 Resolving a conflict in the popover is the same owner action as in the form: one undo step each (05A MC-30) and one
 feedback row. If the key is pending on a `held` publish item, the same transaction records its resolution there and
-releases the item when it was the last (MC-A10). Undoing it while the item is still held removes that record. Each row also stores the suggested value and confidence from before the action, the time, and
+releases the item when it was the last (MC-A10). Undoing it while the item is still held removes that record; redoing it records it again (MC-A10). Each row also stores the suggested value and confidence from before the action, the time, and
 `step_token`, the history step's id. Research writes are never feedback and never undo steps (08A §7).
 
 **Undo and redo** (amends 05A MC-30 for attribute steps) (R-IA21). Each field of an attribute step
@@ -756,3 +758,9 @@ to 07A MC-10 and 05A MC-30.
 5. **2026-11-12 — MA12 scoped to sent requests (orchestrator, from the R4 review).** A call that never left the Mac
    (`not_sent`, offline) keeps its recorded request but its outbound rows are removed, which is MA3's intent
    (nothing left). MA12 in chapter 14 now says "every recorded provider request that was sent". Wording only.
+6. **2026-11-12 — Redo of a resolution, and which undo removes it (orchestrator, from the R5 projection).** MC-A10
+   and MC-A12 said what undoing a resolution does, not what redoing it does, nor which undo removes it when the key
+   was acted on again. Added: redo records the resolution again and releases the item at the last pending key (the
+   same rule as feedback rows, and the owner's "the job is stalled until resolved"); the entry belongs to the
+   resolving step, so a later action on the key changes nothing and only undoing that step removes it. Without
+   this, an item could wait with nothing left to resolve. Completes the owner's card 1 answer; no new choice.
