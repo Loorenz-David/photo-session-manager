@@ -253,6 +253,8 @@ struct Act {
     merge: bool,
     /// The publish resolutions this action recorded (MC-A10), kept on its step for the redo.
     resolutions: Vec<(String, Json)>,
+    /// The held publish item this action released (MC-A10), if any.
+    released: Option<crate::services::publish::Released>,
 }
 
 /// What an action's transaction knows before it starts.
@@ -320,10 +322,11 @@ fn note_action(
     let resolved = (after.is_live() && after.valid)
         .then(|| after.json())
         .flatten();
-    if let Some(entry) = crate::services::publish::resolve_pending_in(
+    if let Some((entry, released)) = crate::services::publish::resolve_pending_in(
         tx, item_id, key, resolved, action, &ctx.token, ctx.now,
     )? {
         act.resolutions.push((key.to_owned(), entry));
+        act.released = act.released.or(released);
     }
     let Some(before) = before.filter(|b| {
         b.provenance == Provenance::Ai
@@ -412,6 +415,7 @@ impl<'a> AttributesService<'a> {
             act = Act::default();
             body(tx, &ctx, &mut act)
         })?;
+        let released = act.released;
         if let (Some(history), Some(op), Some(session_id)) = (self.history, op, session_id)
             && !act.fields.is_empty()
         {
@@ -431,6 +435,9 @@ impl<'a> AttributesService<'a> {
                 },
                 act.merge,
             );
+        }
+        if let (Some(history), Some(released)) = (self.history, released) {
+            history.emit_released(released);
         }
         Ok(())
     }

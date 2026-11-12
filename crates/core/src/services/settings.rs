@@ -50,6 +50,7 @@ impl SettingsService {
                 "camera",
                 "storage",
                 "export",
+                "research",
             ]
             .contains(&key.as_str())
             {
@@ -77,6 +78,22 @@ impl SettingsService {
                     }
                 }
                 next[key] = Value::Object(storage);
+                continue;
+            }
+            if key == "research" {
+                // R7·U1: the top-level fields given replace those stored; the others are kept.
+                // The research engine validates the patch before this runs.
+                let Some(fields) = value.as_object() else {
+                    return Err(Error::InvalidValue("research".into()));
+                };
+                let mut research = match current.get("research") {
+                    Some(Value::Object(stored)) => stored.clone(),
+                    _ => serde_json::Map::new(),
+                };
+                for (field, v) in fields {
+                    research.insert(field.clone(), v.clone());
+                }
+                next[key] = Value::Object(research);
                 continue;
             }
             if key == "export" {

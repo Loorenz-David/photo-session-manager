@@ -397,16 +397,16 @@ impl ResearchService {
                 continue;
             };
             if self.may_start_run(run, &settings)? == MayStart::Yes {
-                self.start(run, &settings)?;
-                return Ok(Some(run.id));
+                return Ok(self.start(run, &settings)?.then_some(run.id));
             }
         }
         Ok(None)
     }
 
     /// The start transaction: `running`, `started_at`, the settings, form and input snapshots,
-    /// and one `jobs` row of kind `research` whose target is the run.
-    fn start(&self, run: &RunRow, settings: &ResearchSettings) -> Result<()> {
+    /// and one `jobs` row of kind `research` whose target is the run. Nothing is written when
+    /// another run started first (returns `false`).
+    fn start(&self, run: &RunRow, settings: &ResearchSettings) -> Result<bool> {
         let facts = match &self.shop {
             Some(shop) => shop.facts(self.external_id(run.item_id)?.as_deref())?,
             None => ShopFacts::default(),
@@ -428,8 +428,10 @@ impl ResearchService {
             text(serde_json::to_string(&input))?,
         );
         let now = self.clock.now_ms();
-        self.store.research_transaction(|tx| {
-            store::start_run(tx.conn(), run.id, now, &config, &form, &input)?;
+        let started = self.store.research_transaction(|tx| {
+            if !store::start_run(tx.conn(), run.id, now, &config, &form, &input)? {
+                return Ok(false);
+            }
             tx.conn()
                 .execute(
                     "INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,\
@@ -437,10 +439,12 @@ impl ResearchService {
                     params![KIND, run.id.to_string(), now],
                 )
                 .map_err(store::db)?;
-            Ok(())
+            Ok(true)
         })?;
-        self.changed(run.session_id);
-        Ok(())
+        if started {
+            self.changed(run.session_id);
+        }
+        Ok(started)
     }
 
     /// What the panel shows for a session: the first failing prerequisite or the waiting reason,
@@ -454,6 +458,7 @@ impl ResearchService {
                 fields_filled: 0,
                 to_review: 0,
                 can_run: false,
+                wait_ends_at: None,
             });
         };
         let settings = self.settings();
@@ -463,11 +468,24 @@ impl ResearchService {
             .store
             .research_transaction(|tx| Ok(store::runs(tx.conn(), Some(session_id))?.pop()))?;
         let mut reason = failing.clone();
+        let mut wait_ends_at = None;
         if reason.is_none()
             && let Some(run) = latest.as_ref().filter(|r| r.state == RunState::Queued)
             && self.may_start_run(run, &settings)? == MayStart::WaitingForEditor
         {
             reason = Some(Prerequisite::WaitingForEditor);
+            // MC-A6 readiness: an automatic run waits `source_wait_seconds` from the session's
+            // last change; the panel says "Waiting for Capture One" once that wait has ended.
+            let remaining = if run.trigger == RunTrigger::Manual {
+                0
+            } else {
+                settings
+                    .source_wait_seconds
+                    .saturating_mul(1_000)
+                    .saturating_sub(self.since_change_ms(session_id)?)
+                    .max(0)
+            };
+            wait_ends_at = Some(self.clock.now_ms().saturating_add(remaining));
         }
         let steps = match &latest {
             Some(run) => self
@@ -505,6 +523,7 @@ impl ResearchService {
             fields_filled,
             to_review,
             can_run: !failing.as_ref().is_some_and(Prerequisite::blocks_creation),
+            wait_ends_at,
         })
     }
 

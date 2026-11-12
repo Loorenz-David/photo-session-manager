@@ -62,13 +62,16 @@ fn definitions(tx: &dyn StoreTx, integration: Option<&str>) -> Result<Vec<Defini
 }
 
 /// The step of the item's current layout that holds `key` (the presets of its item type, all
-/// three steps; a step with no stored preset lists every definition of that step).
+/// three steps; a step with no stored preset lists every definition of that step). Fail closed
+/// (MC-A1, R3 review): a key listed by the Product step as well as another is the Product step's,
+/// so it is never written.
 fn layout_step(
     tx: &dyn StoreTx,
     item_type: &str,
     key: &str,
     all: &[Definition],
 ) -> Result<Option<AttributeGroup>> {
+    let mut first = None;
     for group in AttributeGroup::ALL {
         let own = tx.attribute_preset(item_type, group)?;
         let preset = match own {
@@ -88,10 +91,13 @@ fn layout_step(
                 .collect(),
         };
         if layout.iter().any(|f| f.key == key) {
-            return Ok(Some(group));
+            if group == AttributeGroup::Product {
+                return Ok(Some(group));
+            }
+            first = first.or(Some(group));
         }
     }
-    Ok(None)
+    Ok(first)
 }
 
 fn parsed(text: &str) -> Option<Json> {

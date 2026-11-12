@@ -37,7 +37,7 @@ function def(key: string, label: string): Definition {
   return { integration: 'shopify', key, label, core_type: 'text', choices: [], validations: '{}', group: 'details', description: null, writable: true };
 }
 function ai(key: string, value: string, extra: Partial<AttributeValue> = {}): AttributeValue {
-  return { item_id: ITEM.id, key, value: JSON.stringify(value), valid: true, provenance: 'ai', ai_confidence: 'medium', ai_status: 'suggested', ai_reason: null, ai_sources: null, ai_prior: null, updated_at: 1, ...extra };
+  return { item_id: ITEM.id, key, value: JSON.stringify(value), valid: true, provenance: 'ai', ai_confidence: 'medium', ai_status: 'suggested', ai_reason: null, ai_sources: null, ai_prior: null, updated_at: 1, conflict: false, ...extra };
 }
 function field(definition: Definition, value: AttributeValue | null): FormField {
   return { definition, value, is_default: false, is_severity: false, selected: null, default: null, saved: [] };
@@ -45,7 +45,7 @@ function field(definition: Definition, value: AttributeValue | null): FormField 
 function form(fields: FormField[]): Form {
   return { item_id: ITEM.id, item_type_from_integration: false, groups: [{ group: 'details', fields, filled: fields.length, total: fields.length }, { group: 'condition', fields: [], filled: 0, total: 0 }, { group: 'product', fields: [], filled: 0, total: 0 }] };
 }
-const designerConflict = () => field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_prior: { value: '"Unknown"', valid: true, provenance: 'default' } }));
+const designerConflict = () => field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_prior: { value: '"Unknown"', valid: true, provenance: 'default' }, conflict: true }));
 
 function renderForm() {
   return render(<FormDialog open onOpenChange={() => undefined} item={ITEM} photos={[]} sessionId={4} onItemChanged={() => undefined} />);

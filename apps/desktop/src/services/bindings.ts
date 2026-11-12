@@ -258,6 +258,11 @@ export type AttributeValueDto_Deserialize = {
 	ai_sources?: string[] | null,
 	ai_prior?: AiPriorDto | null,
 	updated_at: number,
+	/**
+	 *  MC-A1 conflict (`publish_partition::is_conflict`; R7·U1): the form offers Keep previous /
+	 *  Use suggestion / Edit exactly when this is true.
+	 */
+	conflict: boolean,
 };
 
 /**
@@ -278,6 +283,11 @@ export type AttributeValueDto_Serialize = {
 	ai_sources: string[] | null,
 	ai_prior: AiPriorDto | null,
 	updated_at: number,
+	/**
+	 *  MC-A1 conflict (`publish_partition::is_conflict`; R7·U1): the form offers Keep previous /
+	 *  Use suggestion / Edit exactly when this is true.
+	 */
+	conflict: boolean,
 };
 
 export type CameraSettingsDto = CameraSettingsDto_Serialize | CameraSettingsDto_Deserialize;
@@ -1027,6 +1037,11 @@ export type ResearchStatusDto_Deserialize = {
 	fields_filled: number,
 	to_review: number,
 	can_run: boolean,
+	/**
+	 *  With the `WaitingForEditor` reason: when the wait for Capture One's previews ends (ms
+	 *  since the epoch); the panel says "Waiting for Capture One" from then on.
+	 */
+	wait_ends_at?: number | null,
 };
 
 export type ResearchStatusDto_Serialize = {
@@ -1036,6 +1051,11 @@ export type ResearchStatusDto_Serialize = {
 	fields_filled: number,
 	to_review: number,
 	can_run: boolean,
+	/**
+	 *  With the `WaitingForEditor` reason: when the wait for Capture One's previews ends (ms
+	 *  since the epoch); the panel says "Waiting for Capture One" from then on.
+	 */
+	wait_ends_at: number | null,
 };
 
 export type ResearchTimeoutsDto = {

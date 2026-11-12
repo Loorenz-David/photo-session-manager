@@ -42,6 +42,9 @@ pub struct ResearchStatus {
     pub fields_filled: usize,
     pub to_review: usize,
     pub can_run: bool,
+    /// With the `WaitingForEditor` reason: when the run's wait for Capture One's previews ends
+    /// (UTC ms; R7·U1). The panel says "Waiting for Capture One" from then on.
+    pub wait_ends_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

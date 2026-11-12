@@ -46,7 +46,7 @@ function def(key: string, label = key): Definition {
   return { integration: 'shopify', key, label, core_type: 'text', choices: [], validations: '{}', group: 'details', description: null, writable: true };
 }
 function ai(key: string, value: string, extra: Partial<AttributeValue> = {}): AttributeValue {
-  return { item_id: ITEM.id, key, value: JSON.stringify(value), valid: true, provenance: 'ai', ai_confidence: 'high', ai_status: 'suggested', ai_reason: null, ai_sources: null, ai_prior: null, updated_at: 1, ...extra };
+  return { item_id: ITEM.id, key, value: JSON.stringify(value), valid: true, provenance: 'ai', ai_confidence: 'high', ai_status: 'suggested', ai_reason: null, ai_sources: null, ai_prior: null, updated_at: 1, conflict: false, ...extra };
 }
 function field(definition: Definition, value: AttributeValue | null = null): FormField {
   return { definition, value, is_default: false, is_severity: false, selected: null, default: null, saved: [] };
@@ -58,7 +58,7 @@ function step(seq: number, kind: string, extra: Partial<ResearchStep> = {}): Res
   return { seq, stage: 'observe', kind, summary: `summary ${seq}`, detail: `detail ${seq}`, source_url: null, source_title: null, photo_ids: [], field_keys: [], ...extra };
 }
 function status(extra: Partial<ResearchStatus> = {}): ResearchStatus {
-  return { reason: null, run: null, steps: [], fields_filled: 0, to_review: 0, can_run: false, ...extra };
+  return { reason: null, run: null, steps: [], fields_filled: 0, to_review: 0, can_run: false, wait_ends_at: null, ...extra };
 }
 const run = (state: string, extra: Partial<NonNullable<ResearchStatus['run']>> = {}) => ({ id: 1, state, trigger: 'auto', stage_reached: null, error: null, ...extra });
 
@@ -157,7 +157,7 @@ it('a18_c3b_reason_sentences_and_no_button_at_the_day_limit', () => {
   cleanup();
   // MC-A6: the sentence is said when the wait for Capture One's previews ends, not before (R4 review).
   vi.useFakeTimers();
-  panel(status({ reason: { code: 'WaitingForEditor', sentence: 'Waiting for Capture One' }, run: run('queued') }), { waitEndsAt: Date.now() + 60_000 });
+  panel(status({ reason: { code: 'WaitingForEditor', sentence: 'Waiting for Capture One' }, run: run('queued'), wait_ends_at: Date.now() + 60_000 }));
   expect(screen.queryByText('Waiting for Capture One')).not.toBeInTheDocument();
   act(() => { vi.advanceTimersByTime(60_000); });
   expect(screen.getByText('Waiting for Capture One')).toBeInTheDocument();

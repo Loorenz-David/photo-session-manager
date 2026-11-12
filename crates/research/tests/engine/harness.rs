@@ -541,13 +541,13 @@ impl Harness {
         })
     }
 
-    /// Links the item to a shop product.
+    /// Links the item to a product of the configured integration.
     pub fn link_item(&self, external_id: &str) {
         let item = self.item_id;
         self.query(|c| {
             c.execute(
-                "INSERT INTO item_links(item_id,integration,external_id) VALUES (?1,'shopify',?2)",
-                rusqlite::params![item, external_id],
+                "INSERT INTO item_links(item_id,integration,external_id) VALUES (?1,?2,?3)",
+                rusqlite::params![item, INTEGRATION, external_id],
             )
             .unwrap()
         });

@@ -354,7 +354,9 @@ pub(crate) fn decide(ctx: &Ctx<'_>, used: &[Committed], stopped: bool) -> Result
         let mut nd_lines: Vec<String> = Vec::new();
         let mut nd_keys: Vec<String> = Vec::new();
         for (definition, reason) in not_determined.iter().chain(not_written.iter()) {
-            let lowered = if reason != "not researched" {
+            // 08B changelog 7 (owner 2026-11-12): a run that stopped at its cap read less than
+            // a complete run, so its silence is no evidence against an earlier suggestion.
+            let lowered = if reason != "not researched" && ending != RunState::StoppedAtCap {
                 writes::lower_in(tx, now, item_id, &definition.key, reason)?
             } else {
                 WriteOutcome::Unchanged

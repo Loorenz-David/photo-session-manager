@@ -1,4 +1,4 @@
-//! Thin research commands. The service is deliberately absent until R7 wires it.
+//! Thin research commands over the engine the app builds (R7·U1).
 
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
@@ -36,6 +36,10 @@ pub struct ResearchStatusDto {
     pub fields_filled: u32,
     pub to_review: u32,
     pub can_run: bool,
+    /// With the `WaitingForEditor` reason: when the wait for Capture One's previews ends (ms
+    /// since the epoch); the panel says "Waiting for Capture One" from then on.
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub wait_ends_at: Option<i64>,
 }
 #[derive(Serialize, Type)]
 pub struct ReasonDto {
@@ -97,6 +101,7 @@ impl From<ResearchStatus> for ResearchStatusDto {
             fields_filled: s.fields_filled.try_into().unwrap_or(u32::MAX),
             to_review: s.to_review.try_into().unwrap_or(u32::MAX),
             can_run: s.can_run,
+            wait_ends_at: s.wait_ends_at,
         }
     }
 }
@@ -174,16 +179,23 @@ pub async fn research_secrets_state(
         })
         .map_err(Into::into)
 }
+/// Saves the `research` value a site command returned (R7·U1 task 4) and returns it as text.
+fn save_research(
+    state: &State<'_, AppState>,
+    value: serde_json::Value,
+) -> Result<String, CommandError> {
+    state.settings_set(&serde_json::json!({ "research": value.clone() }))?;
+    Ok(value.to_string())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn research_site_add(
     state: State<'_, AppState>,
     site: String,
 ) -> Result<String, CommandError> {
-    engine(&state)?
-        .site_add(&site)
-        .map(|v| v.to_string())
-        .map_err(Into::into)
+    let value = engine(&state)?.site_add(&site)?;
+    save_research(&state, value)
 }
 #[tauri::command]
 #[specta::specta]
@@ -191,10 +203,8 @@ pub async fn research_site_remove(
     state: State<'_, AppState>,
     site: String,
 ) -> Result<String, CommandError> {
-    engine(&state)?
-        .site_remove(&site)
-        .map(|v| v.to_string())
-        .map_err(Into::into)
+    let value = engine(&state)?.site_remove(&site)?;
+    save_research(&state, value)
 }
 #[tauri::command]
 #[specta::specta]
@@ -202,10 +212,8 @@ pub async fn research_sites_reorder(
     state: State<'_, AppState>,
     sites: Vec<String>,
 ) -> Result<String, CommandError> {
-    engine(&state)?
-        .sites_reorder(&sites)
-        .map(|v| v.to_string())
-        .map_err(Into::into)
+    let value = engine(&state)?.sites_reorder(&sites)?;
+    save_research(&state, value)
 }
 #[tauri::command]
 #[specta::specta]

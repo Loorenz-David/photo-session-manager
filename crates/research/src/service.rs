@@ -163,14 +163,18 @@ impl ResearchService {
         self.events.emit(AppEvent::ResearchChanged { session_id });
     }
 
-    /// The external id of the item's shop listing, if it is linked.
+    /// The external id of the item's listing in the configured integration, if it is linked
+    /// there (R4 review: never another integration's link).
     pub(crate) fn external_id(&self, item_id: i64) -> Result<Option<String>> {
+        let Some(integration) = self.integration.clone() else {
+            return Ok(None);
+        };
         self.store.research_transaction(|tx| {
             use rusqlite::OptionalExtension;
             tx.conn()
                 .query_row(
-                    "SELECT external_id FROM item_links WHERE item_id=?1 ORDER BY integration LIMIT 1",
-                    [item_id],
+                    "SELECT external_id FROM item_links WHERE item_id=?1 AND integration=?2",
+                    rusqlite::params![item_id, integration],
                     |r| r.get(0),
                 )
                 .optional()

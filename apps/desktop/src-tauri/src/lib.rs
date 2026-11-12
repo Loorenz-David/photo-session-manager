@@ -218,8 +218,10 @@ mod r2_research_command_tests {
             InvokeResponseBody::Raw(_) => panic!("raw"),
         })
     }
+    /// R2 F·C1(a), superseded by R7·U1: the commands reach the engine the app now builds (none
+    /// answers `research_unavailable`), and none writes a form value.
     #[test]
-    fn f_c1a_unwired_commands_return_research_unavailable() {
+    fn f_c1a_research_commands_reach_the_wired_engine() {
         let a = psm_testkit::TestApp::new().unwrap();
         let db_path = a.app.paths.db();
         let psm_testkit::TestApp { dir: _dir, app, .. } = a;
@@ -230,7 +232,6 @@ mod r2_research_command_tests {
                 commands::research::research_run,
                 commands::research::research_secrets_state,
                 commands::research::research_site_add,
-                commands::research::research_export,
                 commands::sessions::session_active,
             ])
             .build(mock_context(noop_assets()))
@@ -247,14 +248,15 @@ mod r2_research_command_tests {
             ("research_run", json!({"sessionId":1})),
             ("research_secrets_state", json!({})),
             ("research_site_add", json!({"site":"example.com"})),
-            (
-                "research_export",
-                json!({"selection":{"kind":"items","ids":[1]},"dest":"/tmp/research.zip"}),
-            ),
         ] {
-            let error = call(&w, cmd, args).unwrap_err();
-            assert_eq!(error["code"], "research_unavailable", "{cmd}: {error}");
+            if let Err(error) = call(&w, cmd, args) {
+                assert_ne!(error["code"], "research_unavailable", "{cmd}: {error}");
+            }
         }
+        assert_eq!(
+            call(&w, "research_secrets_state", json!({})).unwrap(),
+            json!({"model": false, "search": false, "reader": false})
+        );
         assert!(call(&w, "session_active", json!({})).is_ok());
         let after: i64 = rusqlite::Connection::open(&db_path)
             .unwrap()

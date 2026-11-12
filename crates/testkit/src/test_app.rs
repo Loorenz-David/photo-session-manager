@@ -41,7 +41,63 @@ pub struct TestApp {
     pub fake_processes: Arc<FakeProcessList>,
     /// The idle-sleep assertion (P48).
     pub fake_sleep: Arc<FakeSleepInhibitor>,
+    /// R7·U1: the research fakes the app's engine calls (`with_research…` only).
+    pub research: Option<ResearchFakes>,
     next_hook: AtomicU64,
+}
+
+/// The research crate's fakes, registered as the app's research providers (R7·U1).
+#[derive(Clone, Default)]
+pub struct ResearchFakes {
+    pub model: Arc<psm_research::fakes::FakeModel>,
+    pub search: Arc<psm_research::fakes::FakeVisualSearch>,
+    pub reader: Arc<psm_research::fakes::FakePageReader>,
+}
+
+/// Distinctive research key values (they appear in no expected text).
+pub const RESEARCH_MODEL_KEY: &str = "sk-psm-APP-model+key/31c7";
+pub const RESEARCH_SEARCH_KEY: &str = "srch-psm-APP-key-8d02";
+
+/// Research settings under which every prerequisite passes with the fakes: their ids, model
+/// `m1` for every stage, a price of 0.001 USD per call for each, auto on, a 1 s quiet period.
+pub fn research_test_settings() -> serde_json::Value {
+    use psm_research::{
+        domain::Stage,
+        fakes::{FakeModel, FakePageReader, FakeVisualSearch},
+    };
+    let stages: serde_json::Map<String, serde_json::Value> = Stage::ALL
+        .into_iter()
+        .map(|stage| {
+            let edge = match stage {
+                Stage::Labels | Stage::Condition => 2048,
+                _ => 1024,
+            };
+            (
+                stage.as_str().to_owned(),
+                serde_json::json!({"model": "m1", "effort": "low", "image_long_edge": edge}),
+            )
+        })
+        .collect();
+    serde_json::json!({
+        "auto": true,
+        "quiet_seconds": 1,
+        "source_wait_seconds": 120,
+        "trusted_sites": [],
+        "max_pages": 10,
+        "stages": stages,
+        "max_cost_per_run": "0.50",
+        "max_cost_per_day": "15",
+        "prices": [
+            {"provider": FakeModel::ID, "model": "m1", "unit": "input_token",
+             "usd_per_million": "1", "fallback_call_usd": "0.001"},
+            {"provider": FakeVisualSearch::ID, "model": "", "fallback_call_usd": "0.001"},
+            {"provider": FakePageReader::ID, "model": "", "fallback_call_usd": "0.001"},
+        ],
+        "language": "English",
+        "record_days": 30,
+        "providers": {"model": FakeModel::ID, "visual_search": FakeVisualSearch::ID,
+                      "page_reader": FakePageReader::ID},
+    })
 }
 
 #[derive(Default)]
@@ -251,6 +307,38 @@ impl TestApp {
     pub fn new() -> Result<Self> {
         Self::create(false, false, "custom.damage_report", None, 0)
     }
+    /// R7·U1: the wired app with research ready to run: a fake shop, the research fakes as its
+    /// providers, both keys in `FakeSecrets`, [`research_test_settings`] saved, and a Details
+    /// text field `custom.designer` research may write.
+    pub fn with_research() -> Result<Self> {
+        let app = Self::create_with_research(true, ResearchFakes::default())?;
+        use psm_core::ports::secrets::SecretStore;
+        app.secrets
+            .set(psm_research::service::MODEL_ACCOUNT, RESEARCH_MODEL_KEY)?;
+        app.secrets
+            .set(psm_research::service::SEARCH_ACCOUNT, RESEARCH_SEARCH_KEY)?;
+        app.set_research_settings(research_test_settings())?;
+        app.research_fields(&["custom.designer"])?;
+        Ok(app)
+    }
+    /// R7·U1: the wired app with the research fakes registered but nothing else: no shop
+    /// integration, no key, no research settings (the core workflow without research).
+    pub fn with_research_fakes_only() -> Result<Self> {
+        Self::create_with_research(false, ResearchFakes::default())
+    }
+    fn create_with_research(shop: bool, fakes: ResearchFakes) -> Result<Self> {
+        Self::create_full(true, shop, "custom.damage_report", None, 0, Some(fakes))
+    }
+    /// Writes the `research` slot of the settings file (read live by the engine).
+    pub fn set_research_settings(&self, value: serde_json::Value) -> Result<()> {
+        let mut settings = psm_infra::settings_file::Settings::open(&self.app.paths)?;
+        settings.research = Some(value);
+        psm_infra::settings_file::Settings::set(&self.app.paths, &settings)
+    }
+    /// The research fakes (`with_research…` apps only).
+    pub fn research_fakes(&self) -> &ResearchFakes {
+        self.research.as_ref().expect("research fakes registered")
+    }
     pub fn with_fake_document() -> Result<Self> {
         Self::create(true, false, "custom.damage_report", None, 0)
     }
@@ -314,6 +402,23 @@ impl TestApp {
         condition_key: &str,
         sidecar: Option<serde_json::Value>,
         clock_start: i64,
+    ) -> Result<Self> {
+        Self::create_full(
+            configure_document,
+            configure_shop,
+            condition_key,
+            sidecar,
+            clock_start,
+            None,
+        )
+    }
+    fn create_full(
+        configure_document: bool,
+        configure_shop: bool,
+        condition_key: &str,
+        sidecar: Option<serde_json::Value>,
+        clock_start: i64,
+        research: Option<ResearchFakes>,
     ) -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let mut paths = AppPaths::for_dir(dir.path());
@@ -425,6 +530,23 @@ impl TestApp {
         }
         let clock = Arc::new(ManualClock::new(clock_start));
         fake.set_clock(clock.clone());
+        if let Some(fakes) = &research {
+            // P70 hazard: the wait between attempts moves the manual clock, never real time.
+            let wait_clock = clock.clone();
+            psm_integrations::with_test_research(
+                &paths,
+                psm_integrations::ResearchTestSeams {
+                    providers: psm_research::ports::Providers {
+                        model: Some(fakes.model.clone()),
+                        search: Some(fakes.search.clone()),
+                        reader: Some(fakes.reader.clone()),
+                    },
+                    wait: Arc::new(move |ms| {
+                        wait_clock.advance(i64::try_from(ms).unwrap_or(i64::MAX))
+                    }),
+                },
+            );
+        }
         let secrets = Arc::new(FakeSecrets::default());
         if !secret_cache_enabled {
             secrets.disable_cache();
@@ -466,6 +588,7 @@ impl TestApp {
             secrets,
             fake_processes,
             fake_sleep,
+            research,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -524,6 +647,8 @@ impl TestApp {
         let count = count + self.app.render_jobs.tick(self.clock.now_ms())?;
         let count = count + self.app.publish_jobs.tick(self.clock.now_ms())?;
         self.app.previews.tick()?;
+        // R7·U1: one turn of the research runner (skipped while another thread is in one).
+        self.app.research_tick(self.clock.now_ms())?;
         self.app.camera_runtime.tick(self.clock.mono());
         Ok(count)
     }

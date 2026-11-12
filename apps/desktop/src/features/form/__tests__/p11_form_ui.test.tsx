@@ -87,6 +87,7 @@ function stored(key: string, value: unknown, extra: Partial<AttributeValue> = {}
     ai_sources: null,
     ai_prior: null,
     updated_at: 1,
+    conflict: false,
     ...extra,
   };
 }

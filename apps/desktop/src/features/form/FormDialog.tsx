@@ -34,7 +34,7 @@ import { IdentityEditor } from './IdentityEditor';
 import { ItemTypePicker, useItemTypes } from './ItemTypePicker';
 import { MediaColumn } from './MediaColumn';
 import { MetafieldInput, type FieldPresets } from './MetafieldInput';
-import { isConflict, type ConflictActions } from './AiPopover';
+import type { ConflictActions } from './AiPopover';
 import { ResearchPanel } from './ResearchPanel';
 import { STEP_LABEL, StepTabs } from './StepTabs';
 import { StockFields } from './StockFields';
@@ -80,9 +80,6 @@ type FormDialogProps = {
   /** The item's session: its research status and runs (08A §1). Absent → no research state is read. */
   sessionId?: number;
 };
-
-/** MC-A6 `research.source_wait_seconds` default: how long a run waits for Capture One's previews. */
-const SOURCE_WAIT_MS = 120_000;
 
 /** "n to review" (08B MC-A10, derived): the form's fields holding a live `ai` + `suggested` value, at every confidence. */
 export function toReview(fields: FormField[]): number {
@@ -236,7 +233,6 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const conditionPhotos = useMemo(() => displayOrder(photos).condition, [photos]);
   const aiFields = state.fields.filter(field => field.value?.provenance === 'ai');
   const reviewCount = toReview(state.fields);
-  const latestCapture = photos.reduce((latest, photo) => Math.max(latest, photo.captured_at ?? 0), 0);
   /** Opens the research panel; it re-reads the status on open in case an event was missed. */
   const openResearch = (focus: string | null) => {
     setResearch({ open: true, focus });
@@ -315,7 +311,8 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   }
 
   function conflictActions(field: FormField): ConflictActions | undefined {
-    if (!isConflict(field.value, field.definition.core_type)) return undefined;
+    // MC-A1 conflict, decided by the backend (`AttributeValueDto.conflict`; R7·U1).
+    if (!field.value?.conflict) return undefined;
     const key = field.definition.key;
     return {
       onKeepPrevious: () => act(() => resolveConflict(item.id, key, 'keep_previous'), 'Could not keep the previous value'),
@@ -427,7 +424,6 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
               <ResearchPanel
                 status={researchState.status}
                 fields={state.fields}
-                waitEndsAt={latestCapture ? latestCapture + SOURCE_WAIT_MS : null}
                 onRun={async () => {
                   if (sessionId === undefined) return;
                   try {

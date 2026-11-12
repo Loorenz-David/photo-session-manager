@@ -28,35 +28,6 @@ export function priorOrigin(provenance: string): string {
   return provenance === 'integration' ? 'from Shopify' : 'preset default';
 }
 
-/** MC-A1's name key, as the UI approximates it: case and width folded, punctuation, symbols and spaces collapsed. */
-function nameKey(text: string): string {
-  return text.normalize('NFKC').toLowerCase().replace(/[\p{P}\p{S}\s]+/gu, ' ').trim();
-}
-
-/**
- * A conflict (08B MC-A1): an unchecked `ai` + `suggested` value, at any confidence, that replaced a value (`ai_prior`)
- * and is not the same as it. Text values compare by name key, lists as sets, anything else by its canonical JSON.
- */
-export function isConflict(value: AttributeValue | null, coreType: string): boolean {
-  if (!value || value.provenance !== 'ai' || value.ai_status !== 'suggested' || !value.ai_prior) return false;
-  let a: unknown;
-  let b: unknown;
-  try {
-    a = JSON.parse(value.value);
-    b = JSON.parse(value.ai_prior.value);
-  } catch {
-    return value.value !== value.ai_prior.value;
-  }
-  if (['text', 'textarea', 'url'].includes(coreType) && typeof a === 'string' && typeof b === 'string') return nameKey(a) !== nameKey(b);
-  if (['tags', 'multi_choice'].includes(coreType) && Array.isArray(a) && Array.isArray(b)) {
-    const key = (s: unknown) => (coreType === 'tags' && typeof s === 'string' ? nameKey(s) : JSON.stringify(s));
-    const left = new Set(a.map(key));
-    const right = new Set(b.map(key));
-    return left.size !== right.size || [...left].some(k => !right.has(k));
-  }
-  return value.value !== value.ai_prior.value;
-}
-
 const CONFIDENCE_LABEL: Record<string, string> = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence · check' };
 
 /** The three actions of a conflict (08B MC-A12): offered in place of Looks right / Clear. */

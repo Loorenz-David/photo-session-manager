@@ -243,6 +243,10 @@ impl History {
             })
             .unwrap_or_default()
     }
+    /// MC-A10: a held publish item was released by a committed action, undo or redo.
+    pub(crate) fn emit_released(&self, released: crate::services::publish::Released) {
+        crate::services::publish::emit_released(self.events.as_ref(), released);
+    }
     fn emit(&self, session_id: i64) {
         let state = self.state(session_id);
         self.events.emit(AppEvent::HistoryChanged {
@@ -335,8 +339,10 @@ impl<'a> HistoryService<'a> {
         let mut touched = Vec::new();
         let mut active = None;
         let mut changed_photos = Vec::new();
+        let mut released = None;
         let at = self.clock.now_ms();
         let result = self.store.transaction(&mut |tx| {
+            released = None;
             apply(
                 tx,
                 &mut step,
@@ -345,6 +351,7 @@ impl<'a> HistoryService<'a> {
                 &mut touched,
                 &mut active,
                 &mut changed_photos,
+                &mut released,
             )
         });
         match &result {
@@ -373,6 +380,9 @@ impl<'a> HistoryService<'a> {
             self.history.emit(session_id);
         }
         result?;
+        if let Some(released) = released {
+            self.history.emit_released(released);
+        }
         if !changed_photos.is_empty() {
             for photo_id in changed_photos {
                 self.history.events.emit(AppEvent::PhotoChanged {
@@ -461,6 +471,7 @@ fn published_clean(tx: &dyn StoreTx, session_id: i64) -> Result<bool> {
     let s = tx.session(session_id)?;
     Ok(s.published_at.is_some() && s.change_seq <= s.published_seq)
 }
+#[allow(clippy::too_many_arguments)]
 fn apply(
     tx: &mut dyn StoreTx,
     step: &mut Step,
@@ -469,6 +480,7 @@ fn apply(
     touched: &mut Vec<i64>,
     active: &mut Option<i64>,
     changed_photos: &mut Vec<i64>,
+    released: &mut Option<crate::services::publish::Released>,
 ) -> Result<()> {
     match step.kind.clone() {
         StepKind::Classify { session_id, photos } => {
@@ -875,11 +887,12 @@ fn apply(
                         } else {
                             FeedbackAction::Cleared
                         });
-                    if let Some(entry) = crate::services::publish::resolve_pending_in(
+                    if let Some((entry, release)) = crate::services::publish::resolve_pending_in(
                         tx, item_id, &field.key, value, action, &token, at,
                     )? {
                         resolutions.retain(|(k, _)| *k != field.key);
                         resolutions.push((field.key.clone(), entry));
+                        *released = released.or(release);
                     }
                 }
                 Vec::new()

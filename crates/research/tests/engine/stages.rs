@@ -637,6 +637,54 @@ fn a12_c4d_unsupported_suggestion_is_lowered() {
     assert_eq!(designer_row.ai_sources, Some(vec![u(P_E1)]));
 }
 
+/// R7·U1, carried (owner 2026-11-12; 08B changelog 7): a run that ends `stopped_at_cap` lowers
+/// nothing. The first run suggests the designer at medium confidence from two trusted pages; a
+/// follow-up (the cover re-framed) with a smaller cap reaches its reserve at the new photo's
+/// observe call, so it reads no page and decides from the photos alone.
+#[test]
+fn r7_u1_a_capped_run_lowers_nothing() {
+    let f = full();
+    assert_eq!(f.h.execute(f.run), ExecuteOutcome::Finished);
+    let h = &f.h;
+    let before = row(h, DESIGNER).unwrap();
+    assert_eq!(before.ai_confidence, Some(AiConfidence::Medium));
+    h.recompose(f.mains[0]);
+    h.model.script(
+        Stage::Observe,
+        &format!("photo:{}", f.mains[0]),
+        ModelScript {
+            output: json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "shows_marking": false}),
+            usage: Some(vec![("input_token".into(), 199_500)]),
+            response: None,
+        },
+    );
+    let mut config = h.stage_config();
+    config.max_cost_per_run = 200_000;
+    let follow_up = h.start_run(&config);
+    h.query(|c| {
+        psm_research::store::set_trigger(c, follow_up, psm_research::domain::RunTrigger::FollowUp)
+            .unwrap()
+    });
+    h.reader.clear_requests();
+    assert_eq!(h.execute(follow_up), ExecuteOutcome::StoppedAtCap);
+    assert!(h.reader.requests().is_empty(), "the follow-up read a page");
+    let after = row(h, DESIGNER).unwrap();
+    assert_eq!(
+        (
+            &after.value,
+            after.ai_confidence,
+            &after.ai_reason,
+            &after.ai_sources
+        ),
+        (
+            &before.value,
+            before.ai_confidence,
+            &before.ai_reason,
+            &before.ai_sources
+        )
+    );
+}
+
 #[test]
 fn a12_c4e_product_step_is_never_written() {
     let f = full();

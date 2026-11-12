@@ -93,6 +93,21 @@ pub struct AttributeValueDto {
     pub ai_prior: Option<AiPriorDto>,
     #[specta(type = specta_typescript::Number)]
     pub updated_at: i64,
+    /// MC-A1 conflict (`publish_partition::is_conflict`; R7·U1): the form offers Keep previous /
+    /// Use suggestion / Edit exactly when this is true.
+    pub conflict: bool,
+}
+
+impl AttributeValueDto {
+    /// The value with its MC-A1 conflict flag, decided by core against its definition.
+    fn of(v: Value, definition: Option<&Definition>) -> Self {
+        let conflict =
+            definition.is_some_and(|d| psm_core::mechanisms::publish_partition::is_conflict(d, &v));
+        Self {
+            conflict,
+            ..v.into()
+        }
+    }
 }
 
 #[derive(Serialize, Type)]
@@ -120,6 +135,9 @@ impl From<Value> for AttributeValueDto {
                 provenance: p.provenance.as_str().into(),
             }),
             updated_at: v.updated_at,
+            // Without its definition a value is never shown as a conflict; the form and the
+            // values list use `AttributeValueDto::of`.
+            conflict: false,
         }
     }
 }
@@ -202,8 +220,10 @@ impl From<Form> for FormDto {
                         .fields
                         .into_iter()
                         .map(|f| FormFieldDto {
+                            value: f
+                                .value
+                                .map(|v| AttributeValueDto::of(v, Some(&f.definition))),
                             definition: f.definition.into(),
-                            value: f.value.map(Into::into),
                             is_default: f.is_default,
                             is_severity: f.is_severity,
                             selected: f.selected,
@@ -231,43 +251,6 @@ fn integration(app: &psm_integrations::AppHandles) -> Option<String> {
         .and_then(|value| value.get("kind"))
         .and_then(|kind| kind.as_str())
         .map(str::to_owned)
-}
-
-/// MC-A10: the session and id of the item's `held` publish item, if any.
-fn held_publish(app: &psm_integrations::AppHandles, item_id: i64) -> Option<(i64, i64)> {
-    let mut held = None;
-    let read = app.store.transaction(&mut |tx| {
-        held = tx
-            .held_publish_item_for_item(item_id)?
-            .map(|item| (item.session_id, item.id));
-        Ok(())
-    });
-    read.ok().and(held)
-}
-
-/// R5 review: a resolution that released a held publish item (MC-A10) changes the session's row
-/// label from "Waiting for you · n conflicts" to "Publishing", so once the action returned the
-/// session list and the workspace are told (`session_changed`, `publish_progress`).
-fn emit_if_released(
-    app: &psm_integrations::AppHandles,
-    item_id: i64,
-    held_before: Option<(i64, i64)>,
-) {
-    use psm_core::{domain::session::PublishStep, events::AppEvent, ports::events::EventSink};
-    let Some((session_id, publish_item_id)) = held_before else {
-        return;
-    };
-    if held_publish(app, item_id).is_some() {
-        return;
-    }
-    app.events.emit(AppEvent::SessionChanged { session_id });
-    app.events.emit(AppEvent::PublishProgress {
-        session_id,
-        item_id: publish_item_id,
-        step: PublishStep::Prepare,
-        uploaded: 0,
-        total: 0,
-    });
 }
 
 fn with_service<T>(
@@ -307,8 +290,16 @@ pub async fn attribute_values_get(
 ) -> Result<Vec<AttributeValueDto>, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<AttributeValueDto>, CommandError> {
-        with_service(&app, |s| s.values(item_id.0))
-            .map(|values| values.into_iter().map(Into::into).collect())
+        with_service(&app, |s| {
+            let definitions = s.definitions(integration(&app).as_deref())?;
+            Ok(s.values(item_id.0)?
+                .into_iter()
+                .map(|v| {
+                    let definition = definitions.iter().find(|d| d.key == v.key);
+                    AttributeValueDto::of(v, definition)
+                })
+                .collect())
+        })
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -327,13 +318,10 @@ pub async fn attribute_values_set(
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<AttributeValueDto, CommandError> {
         let raw = parse(&value)?;
-        let held = held_publish(&app, item_id.0);
-        let out = with_service(&app, |s| {
+        with_service(&app, |s| {
             s.set_value(item_id.0, &key, raw, Provenance::Human)
         })
-        .map(Into::into);
-        emit_if_released(&app, item_id.0, held);
-        out
+        .map(Into::into)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -364,10 +352,7 @@ pub async fn attribute_ai_clear(
 ) -> Result<(), CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<(), CommandError> {
-        let held = held_publish(&app, item_id.0);
-        let out = with_service(&app, |s| s.clear(item_id.0, &key));
-        emit_if_released(&app, item_id.0, held);
-        out
+        with_service(&app, |s| s.clear(item_id.0, &key))
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -383,10 +368,7 @@ pub async fn attribute_ai_accept(
 ) -> Result<AttributeValueDto, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<AttributeValueDto, CommandError> {
-        let held = held_publish(&app, item_id.0);
-        let out = with_service(&app, |s| s.accept(item_id.0, &key)).map(Into::into);
-        emit_if_released(&app, item_id.0, held);
-        out
+        with_service(&app, |s| s.accept(item_id.0, &key)).map(Into::into)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -414,8 +396,7 @@ pub async fn attribute_conflict_resolve(
 ) -> Result<AttributeValueDto, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<AttributeValueDto, CommandError> {
-        let held = held_publish(&app, item_id.0);
-        let out = match (action, value) {
+        match (action, value) {
             (ConflictActionDto::KeepPrevious, None) => {
                 with_service(&app, |s| s.keep_previous(item_id.0, &key))
             }
@@ -435,9 +416,7 @@ pub async fn attribute_conflict_resolve(
                 "only Edit takes a value".into(),
             ))),
         }
-        .map(Into::into);
-        emit_if_released(&app, item_id.0, held);
-        out
+        .map(Into::into)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?

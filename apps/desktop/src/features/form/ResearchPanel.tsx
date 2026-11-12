@@ -45,11 +45,6 @@ type ResearchPanelProps = {
   onRun: () => Promise<unknown>;
   onAcceptAll: () => Promise<unknown>;
   onClose: () => void;
-  /**
-   * When the wait for Capture One's previews ends (ms since the epoch): until then "Waiting for Capture One" is not said
-   * (MC-A6 says it when the wait ends).
-   */
-  waitEndsAt?: number | null;
 };
 
 /** Re-renders at `at` (ms since the epoch) so a time-dependent line appears on its own. */
@@ -89,9 +84,11 @@ function Step({ step, dimmed }: { step: ResearchStep; dimmed: boolean }) {
  * The research panel (08A §1, §8; NOTES §Screens 7): the steps of the session's latest run in order, live while it
  * runs; its outcome when it ended; why research is not running when it cannot; Research / Run again; Accept all.
  */
-export function ResearchPanel({ status, fields, focusKey, onFocus, onRun, onAcceptAll, onClose, waitEndsAt }: ResearchPanelProps) {
-  const suggested = fields.filter(field => field.value?.provenance === 'ai' && field.value.ai_status === 'suggested' && field.value.ai_confidence !== 'low').length;
-  const waitOver = useNowPast(waitEndsAt);
+export function ResearchPanel({ status, fields, focusKey, onFocus, onRun, onAcceptAll, onClose }: ResearchPanelProps) {
+  // What Accept all accepts (MC-A12, R-IA1): suggestions that are neither low nor a conflict.
+  const suggested = fields.filter(field => field.value?.provenance === 'ai' && field.value.ai_status === 'suggested' && field.value.ai_confidence !== 'low' && !field.value.conflict).length;
+  // MC-A6: "Waiting for Capture One" is said once the run's wait for the previews has ended (the backend's end time).
+  const waitOver = useNowPast(status?.wait_ends_at);
   const run = status?.run ?? null;
   const steps = [...(status?.steps ?? [])].sort((a, b) => a.seq - b.seq);
   const reason = status?.reason ?? null;

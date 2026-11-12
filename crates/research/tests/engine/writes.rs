@@ -425,3 +425,29 @@ fn a07_c6b_research_write_records_no_undo_step() {
     assert_eq!(state.undo, None);
     assert_eq!(state.redo, None);
 }
+
+/// R7·U1, carried (R3 review; MC-A1 fail closed): a key the item type's layout lists in the
+/// Details step and in the Product step is the Product step's, so research never writes it.
+#[test]
+fn r7_u1_a_key_in_details_and_product_is_never_written() {
+    use psm_core::domain::attribute::{AttributeGroup, Preset, PresetField};
+    let h = Harness::new();
+    use psm_core::services::attributes::{PRODUCT_DESCRIPTION, PRODUCT_TAGS, PRODUCT_TITLE};
+    let layout: Vec<PresetField> = [PRODUCT_TITLE, PRODUCT_DESCRIPTION, PRODUCT_TAGS, MAKER]
+        .iter()
+        .map(|key| PresetField {
+            key: (*key).into(),
+            default: None,
+        })
+        .collect();
+    h.app
+        .attributes(Some(INTEGRATION))
+        .presets_set(Preset {
+            item_type: "Sideboard".into(),
+            group: AttributeGroup::Product,
+            layout,
+        })
+        .unwrap();
+    assert_eq!(h.suggest(MAKER, json!("A")), WriteOutcome::NotResearched);
+    assert_eq!(h.row(MAKER), None);
+}

@@ -165,7 +165,7 @@ pub fn resolve_pending_in(
     action: FeedbackAction,
     step_token: &str,
     now: i64,
-) -> Result<Option<Json>> {
+) -> Result<Option<(Json, Option<Released>)>> {
     let Some(mut held) = tx.held_publish_item_for_item(item_id)? else {
         return Ok(None);
     };
@@ -181,10 +181,38 @@ pub fn resolve_pending_in(
     held.resolved_attributes
         .insert(key.to_owned(), entry.clone());
     tx.set_publish_resolved(held.id, &held.resolved_attributes)?;
+    let mut released = None;
     if held.unresolved_conflicts() == 0 {
         tx.release_publish_item(held.id, now)?;
+        released = Some(Released {
+            session_id: held.session_id,
+            publish_item_id: held.id,
+        });
     }
-    Ok(Some(entry))
+    Ok(Some((entry, released)))
+}
+
+/// A held publish item that a resolution released (MC-A10): its session and id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Released {
+    pub session_id: i64,
+    pub publish_item_id: i64,
+}
+
+/// R7·U1 (R6 review): the one release signal, for every path that can release a held item (an
+/// attribute action, an undo or a redo), emitted once the releasing transaction committed. The
+/// session's row label leaves "Waiting for you · n conflicts" and its publish starts.
+pub fn emit_released(events: &dyn EventSink, released: Released) {
+    events.emit(AppEvent::SessionChanged {
+        session_id: released.session_id,
+    });
+    events.emit(AppEvent::PublishProgress {
+        session_id: released.session_id,
+        item_id: released.publish_item_id,
+        step: crate::domain::session::PublishStep::Prepare,
+        uploaded: 0,
+        total: 0,
+    });
 }
 
 /// MC-A10 undo of a resolution: while the item is still `held`, the entries the undone step

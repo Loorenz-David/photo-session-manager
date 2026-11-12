@@ -13,4 +13,7 @@ pub mod isolation;
 pub mod logs;
 pub mod test_app;
 
-pub use test_app::{ConfirmAsShown, RESEARCH_INTEGRATION, TestApp};
+pub use test_app::{
+    ConfirmAsShown, RESEARCH_INTEGRATION, RESEARCH_MODEL_KEY, RESEARCH_SEARCH_KEY, ResearchFakes,
+    TestApp, research_test_settings,
+};

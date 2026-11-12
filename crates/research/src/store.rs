@@ -253,20 +253,24 @@ pub fn start_run(
     settings_snapshot: &str,
     form_snapshot: &str,
     input_snapshot: &str,
-) -> Result<()> {
-    conn.execute(
-        "UPDATE research_runs SET state='running',started_at=?1,settings_snapshot=?2,\
-         form_snapshot=?3,input_snapshot=?4 WHERE id=?5",
-        params![
-            started_at,
-            settings_snapshot,
-            form_snapshot,
-            input_snapshot,
-            id
-        ],
-    )
-    .map_err(db)?;
-    Ok(())
+) -> Result<bool> {
+    // MC-A6 (MA13): one running run app-wide, re-checked inside the start transaction, so two
+    // starts that both read "nothing running" cannot both commit.
+    let changed = conn
+        .execute(
+            "UPDATE research_runs SET state='running',started_at=?1,settings_snapshot=?2,\
+             form_snapshot=?3,input_snapshot=?4 WHERE id=?5 AND state='queued' \
+             AND NOT EXISTS (SELECT 1 FROM research_runs WHERE state='running')",
+            params![
+                started_at,
+                settings_snapshot,
+                form_snapshot,
+                input_snapshot,
+                id
+            ],
+        )
+        .map_err(db)?;
+    Ok(changed == 1)
 }
 
 pub fn add_run_cost(conn: &Connection, id: i64, micro_usd: i64) -> Result<()> {
