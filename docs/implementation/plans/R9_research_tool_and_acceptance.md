@@ -27,6 +27,9 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
 ## Read first (whole milestone)
 `docs/process/flow.md` (**§10 is the authority for this track**) · `docs/implementation/master_plan.md` §3, §6, §7 · `docs/implementation/master_plan_research.md` (all: layout §0, standing rules §3, sequencing and tracks §5, registry §6, commands §7.2, the storage decision §6.4) · book `01`, `14` §Research agent, `08A`, `08B` · then each unit's own Read first. Name key and sameness are `psm_core::mechanisms::{name_key, sameness}` (R2·U1); every other research rule is `psm_research::rules`.
 
+## Carried from earlier reviews (orchestrator, 2026-11-12; wins over older wording below)
+- **U2, offline calls in the MA12 check (R4 review).** A `not_sent` call keeps its recorded request but has no outbound rows (nothing left the Mac). The acceptance check of MA12 applies to sent requests only (ledger wording amended, 08B changelog 5).
+
 ## Unit 1 — `psm-research report` and `replay`
 
 **Unit id:** `R9·U1` · **Replaces:** A22 (all rows) · **Changes app files:** no

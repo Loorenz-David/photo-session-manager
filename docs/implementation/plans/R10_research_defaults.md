@@ -26,6 +26,9 @@ This milestone is one runner phase made of 1 unit. Work the units in order. Afte
 ## Read first (whole milestone)
 `docs/process/flow.md` (**§10 is the authority for this track**) · `docs/implementation/master_plan.md` §3, §6, §7 · `docs/implementation/master_plan_research.md` (all: layout §0, standing rules §3, sequencing and tracks §5, registry §6, commands §7.2, the storage decision §6.4) · book `01`, `14` §Research agent, `08A`, `08B` · then each unit's own Read first. Name key and sameness are `psm_core::mechanisms::{name_key, sameness}` (R2·U1); every other research rule is `psm_research::rules`.
 
+## Carried from earlier reviews (orchestrator, 2026-11-12; wins over older wording below)
+- **U1, default attribution keys (R4 review).** The shipped default `attribution_keys` is `["beyo.designer"]` (the shop's Designer field; the shop has no manufacturer field), not the registry's older `["custom.designer", "custom.manufacturer"]`; `master_plan_research.md` §6.6 is updated. Keep it unless the owner's pick says otherwise.
+
 ## Unit 1 — Shipped defaults and the reachability check
 
 **Unit id:** `R10·U1` · **Replaces:** A24 (all rows) · **Changes app files:** no

@@ -753,3 +753,6 @@ to 07A MC-10 and 05A MC-30.
    `medium`) and condition paragraph (a sure read → `medium`). The enumerated rows win, as the invariant's first
    sentence already says; the second sentence now names the fields it covers (attribution and measured). Wording
    only: no outcome changes.
+5. **2026-11-12 — MA12 scoped to sent requests (orchestrator, from the R4 review).** A call that never left the Mac
+   (`not_sent`, offline) keeps its recorded request but its outbound rows are removed, which is MA3's intent
+   (nothing left). MA12 in chapter 14 now says "every recorded provider request that was sent". Wording only.

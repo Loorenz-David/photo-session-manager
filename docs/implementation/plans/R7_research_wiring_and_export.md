@@ -26,6 +26,12 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
 ## Read first (whole milestone)
 `docs/process/flow.md` (**§10 is the authority for this track**) · `docs/implementation/master_plan.md` §3, §6, §7 · `docs/implementation/master_plan_research.md` (all: layout §0, standing rules §3, sequencing and tracks §5, registry §6, commands §7.2, the storage decision §6.4) · book `01`, `14` §Research agent, `08A`, `08B` · then each unit's own Read first. Name key and sameness are `psm_core::mechanisms::{name_key, sameness}` (R2·U1); every other research rule is `psm_research::rules`.
 
+## Carried from earlier reviews (orchestrator, 2026-11-12; wins over older wording below)
+- **U1, one running run app-wide (R4 review).** `ResearchService::tick` reads "nothing running" and starts a run in two separate transactions; the database enforces one running run per session only. The wiring must call `tick` from exactly one place (the job runner thread); commands only enqueue or wake it. Add a row: two concurrent wake-ups never leave two runs `running` (MA13).
+- **U1, the item's own listing (R4 review).** `ResearchService::external_id` reads `item_links … ORDER BY integration LIMIT 1`; read the configured integration's link instead.
+- **U1, a field in both Details and Product (R3 review).** `writes::layout_step` returns the first step (Details, Condition, Product) that lists the key, so a key placed in both the Details and the Product layout is written. MC-A1 says a `product`-step field is never written: fail closed, a key is not writable when **any** step that lists it is Product. Add a row with such a layout.
+- **U2, the redaction test (R4 review).** `gateway::a11_c4a_secrets_are_redacted_in_the_record` hard-codes `research_calls`' 19 columns in a `UNION ALL`. When retention adds a column, change that test to a per-table text scan rather than adding the column to the list.
+
 ## Unit 1 — Wiring the engine into the app
 
 **Unit id:** `R7·U1` · **Replaces:** A13 rows C1(c), C2(a), C8(c), C8(d) · **Changes app files:** yes

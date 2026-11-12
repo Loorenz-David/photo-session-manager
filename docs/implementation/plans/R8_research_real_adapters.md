@@ -30,6 +30,10 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
 ## Read first (whole milestone)
 `docs/process/flow.md` (**§10 is the authority for this track**) · `docs/implementation/master_plan.md` §3, §6, §7 · `docs/implementation/master_plan_research.md` (all: layout §0, standing rules §3, sequencing and tracks §5, registry §6, commands §7.2, the storage decision §6.4) · book `01`, `14` §Research agent, `08A`, `08B` · then each unit's own Read first. Name key and sameness are `psm_core::mechanisms::{name_key, sameness}` (R2·U1); every other research rule is `psm_research::rules`. Also the fixtures README (`crates/research/fixtures/README.md`) and R1's Review log.
 
+## Carried from earlier reviews (orchestrator, 2026-11-12; wins over older wording below)
+- **U1–U3, "no credit" vs "bad key" (R3 review).** `rules::calls::classify` checks 401/403 before the quota flag. Each adapter sets the quota flag from the provider's real quota reply (RESEARCH-VERIFY-2, -3, -11) only where status is not 401/403, so an out-of-credit account never reads "key rejected".
+- **Knowing for failed runs (R4 review).** `store::next_attempt` counts the `unknown` call a kill left, so a unit re-issued after a kill gets two transient tries instead of three. No change required; do not "fix" retry counts in the adapters around it.
+
 ## Unit 1 — OpenAI model adapter
 
 **Unit id:** `R8·U1` · **Replaces:** A15 (all rows) · **Changes app files:** no

@@ -123,7 +123,7 @@ Everything else is in `crates/research` or `crates/research-tool`.
 |---|---|---|
 | 0 | **R2** foundation | — (R1 here if the keys exist) |
 | 1 | **R3** rules | **R1** benchmark, if the keys exist; otherwise idle |
-| 2 | **R4** engine | **R5** app seams, then **R6** UI |
+| 2 | **R4** engine, then **R5** app seams and **R6** UI (v3: moved here, track B busy with R1) | **R1** benchmark |
 | 3 | **R7** wiring and export | **R8** real adapters (needs R1 approved and the owner's two picks; otherwise R1, or idle) |
 | 4 | **R9** tool and acceptance, then **R10** defaults | — |
 
@@ -276,7 +276,7 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
   `publish_preview` (`n_withheld`, `conflicts`) and `publish_confirm` (the shown set).
 - **Settings** (`settings.json` key `research`, a JSON slot in `psm_infra`; the shape is `psm_research::config::
   ResearchSettings`, R4·U4). `auto` (true) · `quiet_seconds` (1) · `source_wait_seconds` (120) · `attribution_keys`
-  (`["custom.designer", "custom.manufacturer"]`, 08A §6) · `trusted_sites` ([]) · `max_pages` (10) ·
+  (`["beyo.designer"]`: the shop fixture's Designer field, no manufacturer field; R4 review, orchestrator 2026-11-12) · `trusted_sites` ([]) · `max_pages` (10) ·
   `stages.<stage>.{model, effort, image_long_edge}` (models and efforts empty until R10; long edge 1024 for observe,
   find, compare and 2048 for labels, condition) · `max_cost_per_run` ("0.50") · `max_cost_per_day` ("15") · `prices`
   ([] until R10) · `language` ("English") · `record_days` (30, minimum 2) · `call_timeout_seconds` ({model: 180,
@@ -377,6 +377,9 @@ present (never printing a value) before launching R1.
 - The intention map still says 08A/08B are "not planned yet".
 
 ## 9. Amendment log
+- 2026-11-12 v3 (orchestrator) — R2–R4 review notes folded into R5–R10 as "Carried from earlier reviews" sections
+  (implementers do not read `backlog_research/`); §6.6 default `attribution_keys`; schedule: R5 and R6 run on
+  track A after R4 (track A was idle until R6, track B busy with R1), then R7 on A; track B does R1, then R8.
 - 2026-11-12 v2 — restructured into 10 milestones on `crates/research` (flow §10); storage decision §6.4; tracks §5;
   tracker moved into the plan files; superseded plans `A01`–`A24` deleted (they are in `d116654`).
 - 2026-11-12 v1 — created by the planner (24 phase plans).

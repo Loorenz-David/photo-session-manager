@@ -27,6 +27,11 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
 ## Read first (whole milestone)
 `docs/process/flow.md` (**§10 is the authority for this track**) · `docs/implementation/master_plan.md` §3, §6, §7 · `docs/implementation/master_plan_research.md` (all: layout §0, standing rules §3, sequencing and tracks §5, registry §6, commands §7.2, the storage decision §6.4) · book `01`, `14` §Research agent, `08A`, `08B` · then each unit's own Read first. Name key and sameness are `psm_core::mechanisms::{name_key, sameness}` (R2·U1); every other research rule is `psm_research::rules`. Also `docs/intention/evidence/design_handoff.md` and `claude_design/NOTES.md` §Screens 7, §AI agent rules.
 
+## Carried from earlier reviews (orchestrator, 2026-11-12; wins over older wording below)
+- **U3, the "Waiting for you · n conflicts" pill (R2 review).** `StatusPill.tsx` has no `waiting_for_you` branch today, so a held session row shows an empty status cell. Add it (08B MC-A10) with its activity popover.
+- **U1, "n fields filled" (R4 review).** `derived_counts` counts only stage 7 writes with outcome `written`; a follow-up that confirms the same values shows "0 fields filled · 3 to review". The panel must not read as if research did nothing on a fully suggested form: show the fields the latest run supports (written or unchanged), or word the line so 0 is not misleading.
+- **U1, "Waiting for Capture One" timing (R4 review).** `run_rules::may_start` returns `WaitingForEditor` as soon as no eligible photo has a source, before the 120 s source wait ends; MC-A6 says the panel says it "when the wait ends". Show the sentence only once the wait has ended (the start behaviour itself is correct).
+
 ## Unit 1 — The live research panel and "n to review"
 
 **Unit id:** `R6·U1` · **Replaces:** A18 criteria C2–C5 · **Changes app files:** yes
