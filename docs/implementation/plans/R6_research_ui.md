@@ -41,6 +41,9 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
   `suggested`; keep that when U3 edits `AiPopover.tsx` for conflicts.
 - **U3, the confirm refusal (R5 projection P5).** A changed-suggestions refusal arrives as command code
   `suggestions_changed` (`Error::SuggestionsChanged`); rebuild the preview on that code only, never by matching text.
+- **U3, held item whose field left the form (R5 projection S4).** Pending is decided at confirmation; if the
+  photographer later removes a pending field from the form, the held label's activity popover keeps Cancel (R5
+  gives `can_cancel` for held items), which is the way out.
 
 ## Unit 1 — The live research panel and "n to review"
 

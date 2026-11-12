@@ -520,7 +520,9 @@ in `resolved_attributes`, and only undoing the resolving step removes it.
 
 **Only resolvable keys wait** (changelog 8). A conflict whose key is not in the item's current layout, or has no
 active definition, is not pending: it is left out of the run (not frozen, not held, not counted as withheld). The
-shop keeps its value (07A MC-13); a new product gets none for that key.
+shop keeps its value (07A MC-13); a new product gets none for that key. Pending is decided at confirmation: a
+later layout or definition change neither releases a held item nor drops a pending key; Cancel and publish again
+is the way out (changelog 9).
 
 **The stalled step.** An item confirmed with ≥ 1 pending key starts at step **`held`**, which is ordered before
 `prepare`. No job is queued for it, no step runs, and no integration mutation is issued (no `ConfirmedRun` value is
@@ -780,3 +782,8 @@ to 07A MC-10 and 05A MC-30.
    item's form no longer shows (layout changed after research wrote it, or the definition was dropped by a schema
    refresh) would hold the item with nothing to resolve. Such a key is left out of the run instead. Completes the
    owner's card 1 ("stalled until resolved" assumes resolution is possible), as changelog 6 did.
+9. **2026-11-12 — Two wordings from the R5 projection (orchestrator).** (a) MC-A12: a feedback row is written
+   for the actions on `ai` rows whose status is `suggested` or `accepted`, as its table enumerates; editing an `ai` +
+   `cleared` row writes none (the clear already recorded that suggestion's verdict; the enumerated rows win, as in
+   changelog 4). (b) MC-A10: pending is decided at confirmation; a later layout or definition change does not
+   re-evaluate it. Cancel and publish again is the way out of that rare case.
