@@ -67,6 +67,14 @@ impl ResearchFiles {
         Ok((sha, path, bytes.len() as u64))
     }
 
+    /// Deletes the stored copy named `sha256` (MC-A11 retention); a missing file is no error.
+    pub fn remove(&self, sha256: &str) -> Result<()> {
+        match fs::remove_file(self.path(sha256)) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
+            _ => Ok(()),
+        }
+    }
+
     /// Stores bytes (a listing's image) under their SHA-256 and returns it.
     pub fn put(&self, bytes: &[u8]) -> Result<String> {
         let temp = self.temp_path()?;

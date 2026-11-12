@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { listDefinitions } from '@/services/attributes';
-import { addResearchSite, removeResearchSite, reorderResearchSites, researchSecretsState, setResearchSecrets, type ResearchSecretsState } from '@/services/research';
-import { saveResearchSettings, type ResearchSettings } from '@/services/settings';
+import { searchItems, type Item } from '@/services/items';
+import { addResearchSite, exportResearch, removeResearchSite, reorderResearchSites, researchSecretsState, setResearchSecrets, type ResearchSecretsState } from '@/services/research';
+import { pickFolder, saveResearchSettings, type ResearchSettings } from '@/services/settings';
 
 /** The three research keys, by the account each is stored under (master_plan_research §3, §6.6). */
 const KEYS = [
@@ -22,6 +23,105 @@ export const NOT_A_SHOP_FIELD = 'Not one of your shop’s fields';
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : (error as { message?: string }).message ?? String(error);
+}
+
+/** Today's local date as an `<input type="date">` value (`YYYY-MM-DD`). */
+function today(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** A local date `YYYY-MM-DD` as the `YYYYMMDD` number `research_export` takes. */
+export function dateNumber(value: string): number {
+  return Number(value.replaceAll('-', ''));
+}
+
+/**
+ * Settings → Research → Export research (08A §10A; 08B MC-A11): the runs started in a range of local dates, or every
+ * run of chosen items, written to a chosen folder as one zipped folder. The returned path is shown.
+ */
+function ExportResearch() {
+  const [mode, setMode] = useState<'range' | 'items'>('range');
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const [query, setQuery] = useState('');
+  const [found, setFound] = useState<Item[]>([]);
+  const [chosen, setChosen] = useState<Item[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [path, setPath] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const find = async () => {
+    try {
+      setFound(await searchItems(query.trim()));
+    } catch (error) {
+      setFailure(message(error));
+    }
+  };
+  const toggle = (item: Item, on: boolean) =>
+    setChosen(current => (on ? [...current.filter(i => i.id !== item.id), item] : current.filter(i => i.id !== item.id)));
+  const ready = mode === 'range' ? from !== '' && to !== '' && from <= to : chosen.length > 0;
+
+  const run = async () => {
+    const folder = await pickFolder('Export research to');
+    if (!folder) return;
+    setBusy(true);
+    try {
+      const selection = mode === 'range' ? { kind: 'range' as const, from: dateNumber(from), to: dateNumber(to) } : { kind: 'items' as const, ids: chosen.map(item => item.id) };
+      setPath(await exportResearch(selection, folder));
+      setFailure(null);
+    } catch (error) {
+      setPath(null);
+      setFailure(message(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2" data-research-export>
+      <h3>Export research</h3>
+      <p className="health-detail">The research record of the chosen runs as one zipped folder: never a key, a RAW or a deleted photo.</p>
+      <div role="radiogroup" aria-label="Export which runs" className="flex gap-4">
+        <label className="flex items-center gap-2">
+          <input type="radio" name="research-export-mode" checked={mode === 'range'} onChange={() => setMode('range')} /> Runs started between
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="radio" name="research-export-mode" checked={mode === 'items'} onChange={() => setMode('items')} /> Runs of chosen items
+        </label>
+      </div>
+      {mode === 'range' ? (
+        <div className="flex items-center gap-2">
+          <Input aria-label="From" type="date" value={from} onChange={e => setFrom(e.target.value)} />
+          <span>and</span>
+          <Input aria-label="To" type="date" value={to} onChange={e => setTo(e.target.value)} />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <form className="flex gap-2" onSubmit={event => { event.preventDefault(); void find(); }}>
+            <Input aria-label="Find items" placeholder="SKU or title" value={query} onChange={e => setQuery(e.target.value)} />
+            <Button type="submit" variant="outline">Find</Button>
+          </form>
+          <ul aria-label="Items to export" className="flex flex-col gap-1">
+            {[...chosen, ...found.filter(item => !chosen.some(c => c.id === item.id))].map(item => (
+              <li key={item.id}>
+                <label className="flex items-center gap-2">
+                  <Checkbox aria-label={`Export ${item.sku}`} checked={chosen.some(c => c.id === item.id)} onCheckedChange={value => toggle(item, value === true)} />
+                  {item.sku} · {item.title}
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <Button type="button" variant="outline" className="self-start" disabled={busy || !ready} onClick={() => void run()}>
+        Export research
+      </Button>
+      {path && <p data-export-path>Exported to {path}</p>}
+      {failure && <p role="alert" data-export-error>{failure}</p>}
+    </div>
+  );
 }
 
 type ResearchSectionProps = {
@@ -246,6 +346,8 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
       <Button type="button" className="self-start" disabled={busy} onClick={() => void save()}>
         Save research settings
       </Button>
+
+      <ExportResearch />
     </section>
   );
 }

@@ -1522,9 +1522,28 @@ pub struct ResearchWiring {
     /// The last `change_seq` seen per session.
     seen: std::sync::Mutex<std::collections::HashMap<i64, i64>>,
     busy: std::sync::Mutex<()>,
+    /// When call records were last purged (MC-A11: at launch, then hourly; UTC ms).
+    last_purge: std::sync::Mutex<i64>,
 }
 
+/// MC-A11: call records are purged at launch and then every hour.
+const RESEARCH_PURGE_EVERY_MS: i64 = 3_600_000;
+
 impl ResearchWiring {
+    /// MC-A11 retention, at launch and when an hour has passed since the last purge.
+    fn purge_if_due(&self, now_ms: i64, at_launch: bool) {
+        let Ok(mut last) = self.last_purge.lock() else {
+            return;
+        };
+        if !at_launch && now_ms.saturating_sub(*last) < RESEARCH_PURGE_EVERY_MS {
+            return;
+        }
+        *last = now_ms;
+        if let Err(error) = self.service.purge_expired(now_ms) {
+            tracing::warn!(%error, "research call records not purged");
+        }
+    }
+
     /// One turn of the research runner: the engine hears of the sessions that changed (outside
     /// every other service's transaction), starts what may start, then runs the due research
     /// jobs. `Ok(false)` when another turn is in progress (a wake-up never runs a second one).
@@ -1560,6 +1579,7 @@ impl ResearchWiring {
                 self.service.session_changed(session_id);
             }
         }
+        self.purge_if_due(now_ms, false);
         self.service.tick()?;
         self.jobs.tick(now_ms)?;
         Ok(true)
@@ -1714,7 +1734,9 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
         changed: Default::default(),
         seen: Default::default(),
         busy: std::sync::Mutex::new(()),
+        last_purge: std::sync::Mutex::new(parts.clock.now_ms()),
     });
+    wiring.purge_if_due(parts.clock.now_ms(), true);
     parts
         .events
         .observe(Arc::new(ResearchObserver(Arc::downgrade(&wiring))));

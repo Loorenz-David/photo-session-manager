@@ -287,6 +287,22 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
   limit reached" · `Offline` "Offline" · `AutoOff` (no sentence; the **Research** button) · `WaitingForEditor` "Waiting
   for Capture One".
 
+### 6.7 Export research files (R7·U2; read by R9·U1's report and replay)
+`ExportSelection::Range {from, to}` takes local dates as `YYYYMMDD` numbers (inclusive). `export` returns the zip's
+path; the folder `research-export-<local YYYYMMDD-HHMMSS>/` stays beside it, and the zip's entries are prefixed
+with that folder's name. Per run, `<item id>-<folder key>/run-<id>/`:
+- `run.json`: `{run: {id, item_id, session_id, trigger, state, stage_reached, queued_at, started_at, finished_at,
+  cost_micro_usd, error}, settings_snapshot, form_snapshot, input_snapshot, call_record}` (the three snapshots
+  parsed JSON or `null`; `call_record` is `"kept"` or `"call record expired"`).
+- `steps.json`: `[{seq, stage, kind, summary, detail, source_url, source_title, photo_ids, field_keys, created_at}]`.
+- `writes.json`: the stage 7 output as committed (`{writes, not_determined, ending}`), or `null`.
+- `feedback.json`: `[{id, key, action, suggested_value, confidence, final_value, at}]` (values parsed JSON).
+- `calls/<id>.json`: `{id, run_id, stage, unit_key, attempt, provider, model, effort, state, request, response,
+  usage, cost_micro_usd, started_at, finished_at, duration_ms, error_class, error_text, redaction_hit}`; `request`
+  and `response` are the recorded texts as JSON strings, byte for byte except that an image of a photo deleted at
+  export time reads `{"withheld":"photo deleted"}` in place of `{"image_sha256": …}`.
+- `images/<sha256>.jpg`: every stored image the run's exported call records reference.
+
 ## 7. Environment (additions to `master_plan.md` §7)
 
 ### 7.2 Commands (flow §10: which tests a unit runs)
@@ -377,6 +393,7 @@ present (never printing a value) before launching R1.
 - The intention map still says 08A/08B are "not planned yet".
 
 ## 9. Amendment log
+- 2026-11-12 (R7·U2 implementer) — §6.7 Export research files: the field names the plan delegated.
 - 2026-11-12 v4 (orchestrator) — R5 projection turned off after seven rounds (0 owner cards, each round smaller;
   every ledger applied to the plan and 08B changelogs 6, 8, 9, 10); the review is R5's gate. R8 keeps `projection: yes`.
 - 2026-11-12 v3 (orchestrator) — R2–R4 review notes folded into R5–R10 as "Carried from earlier reviews" sections

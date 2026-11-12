@@ -15,6 +15,7 @@ psm-infra = { path = "../infra" }
 chrono = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 tracing.workspace = true
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 chrono-tz = "0.10"

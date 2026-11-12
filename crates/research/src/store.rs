@@ -693,3 +693,81 @@ pub fn outputs(conn: &Connection, run_id: i64) -> Result<Vec<OutputRow>> {
         .map_err(db)?;
     Ok(rows)
 }
+
+/// MC-A11 retention: the call rows started at or before `cutoff` (`started_at + record_days ×
+/// 86 400 000 ≤ now` ⇔ `started_at ≤ now − record_days × 86 400 000`).
+pub fn calls_started_by(conn: &Connection, cutoff: i64) -> Result<Vec<CallRow>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {CALL_COLUMNS} FROM research_calls WHERE started_at<=?1 ORDER BY id"
+        ))
+        .map_err(db)?;
+    stmt.query_map([cutoff], call_row)
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)
+}
+
+pub fn delete_call(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM research_calls WHERE id=?1", [id])
+        .map_err(db)?;
+    Ok(())
+}
+
+/// One `research_feedback` row as the export writes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeedbackRow {
+    pub id: i64,
+    pub key: String,
+    pub suggested_value: String,
+    pub confidence: String,
+    pub final_value: Option<String>,
+    pub action: String,
+    pub at: i64,
+}
+
+/// The item's feedback rows at or after `since` (UTC ms), oldest first.
+pub fn feedback_since(conn: &Connection, item_id: i64, since: i64) -> Result<Vec<FeedbackRow>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id,key,suggested_value,confidence,final_value,action,at FROM research_feedback \
+             WHERE item_id=?1 AND at>=?2 ORDER BY at,id",
+        )
+        .map_err(db)?;
+    stmt.query_map(params![item_id, since], |r| {
+        Ok(FeedbackRow {
+            id: r.get(0)?,
+            key: r.get(1)?,
+            suggested_value: r.get(2)?,
+            confidence: r.get(3)?,
+            final_value: r.get(4)?,
+            action: r.get(5)?,
+            at: r.get(6)?,
+        })
+    })
+    .map_err(db)?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .map_err(db)
+}
+
+/// Whether the photo row is gone or `deleted` (MC-A11 exclusions at export time).
+pub fn photo_deleted(conn: &Connection, photo_id: i64) -> Result<bool> {
+    use rusqlite::OptionalExtension;
+    let class: Option<String> = conn
+        .query_row(
+            "SELECT classification FROM photos WHERE id=?1",
+            [photo_id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(db)?;
+    Ok(class.is_none_or(|c| c == "deleted"))
+}
+
+/// The item's folder key (`items.folder_key`).
+pub fn folder_key(conn: &Connection, item_id: i64) -> Result<String> {
+    conn.query_row("SELECT folder_key FROM items WHERE id=?1", [item_id], |r| {
+        r.get(0)
+    })
+    .map_err(db)
+}

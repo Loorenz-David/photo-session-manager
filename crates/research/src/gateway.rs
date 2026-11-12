@@ -550,6 +550,12 @@ impl CallGateway {
         })
     }
 
+    /// Every value the secrets port holds, as the redaction scan sees them (MC-A9); the export
+    /// check reads the same list (MC-A11).
+    pub fn secret_values(&self) -> Vec<String> {
+        (self.secrets)()
+    }
+
     /// The SHA-256s of the listing images a page call stored (from its record).
     pub fn page_images(response: &str) -> Vec<String> {
         serde_json::from_str::<Json>(response)

@@ -5,7 +5,7 @@ export type ResearchStatus = ResearchStatusDto_Serialize;
 export type ResearchStep = StepViewDto_Serialize;
 export type ResearchSecretsState = SecretsStateDto;
 
-/** The code `research_*` commands answer while the engine is not wired (before R7). */
+/** The code `research_*` commands answer when the app could not build the research engine. */
 export const RESEARCH_UNAVAILABLE = 'research_unavailable';
 
 export async function researchStatus(sessionId: number): Promise<ResearchStatus> {
@@ -35,6 +35,7 @@ export async function removeResearchSite(site: string): Promise<string[]> {
 export async function reorderResearchSites(sites: string[]): Promise<string[]> {
   return sitesOf(unwrap(await commands.researchSitesReorder(sites)));
 }
+/** Export research (MC-A11): writes the selected runs to `dest` as one zipped folder; resolves to the zip's path. */
 export async function exportResearch(selection: ExportSelectionDto, dest: string): Promise<string> {
   return unwrap(await commands.researchExport(selection, dest));
 }

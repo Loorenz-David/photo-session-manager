@@ -110,15 +110,13 @@ impl ResearchApi for ResearchService {
         Ok(self.with_sites(&current))
     }
 
-    /// Export arrives with retention (R7·U2).
-    fn export(&self, _selection: ExportSelection, _dest: &Path) -> Result<PathBuf> {
-        Err(Error::InvalidData(
-            "research export is not available in this version".into(),
-        ))
+    /// MC-A11 Export research (R7·U2): the selected runs as one folder and one zip; the zip's path.
+    fn export(&self, selection: ExportSelection, dest: &Path) -> Result<PathBuf> {
+        ResearchService::export(self, selection, dest)
     }
 
-    /// Retention arrives in R7·U2; nothing is purged yet.
-    fn purge_expired(&self, _now_ms: i64) -> Result<()> {
-        Ok(())
+    /// MC-A11 retention (R7·U2): call records older than `record_days` and their only images.
+    fn purge_expired(&self, now_ms: i64) -> Result<()> {
+        ResearchService::purge_expired(self, now_ms)
     }
 }
