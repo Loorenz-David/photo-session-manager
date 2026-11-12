@@ -44,6 +44,16 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
 - **U3, held item whose field left the form (R5 projection S4).** Pending is decided at confirmation; if the
   photographer later removes a pending field from the form, the held label's activity popover keeps Cancel (R5
   gives `can_cancel` for held items), which is the way out.
+- **U3, release emits events (R5 review).** `resolve_pending_in` → `StoreTx::release_publish_item` emits nothing, so the
+  session row keeps "Waiting for you · n conflicts" until the next list read. After an attribute action that released
+  a held item, the command layer emits `session_changed` and `publish_progress` (after the action returns). Add a row:
+  resolving the last conflict flips the row to "Publishing" without a manual refresh.
+- **U3, undo after release (R5 review; contract-conformant).** Undoing the resolution after the item was released
+  restores the conflict in the form while the run already sent the resolved value (MC-A10 removes the entry only while
+  held). In the form, such a field's conflict actions stay available, and the activity popover or field hint says the
+  publish already used the value you chose; a next publish holds on it again. Keep it to wording; no new backend rule.
+- **Tests (R5 review).** `p15_publish_ui.test.tsx` C5(a): give the preview mock sessions 1 and 2 so the shown-set
+  assertion reflects the queue, not the session-7 fixture, when U3 touches that file.
 
 ## Unit 1 — The live research panel and "n to review"
 

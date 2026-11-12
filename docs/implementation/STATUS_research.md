@@ -4,7 +4,7 @@ Branch `feature/agentic`, worktree `~/Desktop/Developer/Photo-Session-Manager-ag
 against the sibling checkout `~/Desktop/Developer/Photo-Session-Manager` (`main`, the owner's other work).
 `docs/implementation/STATUS.md` belongs to `main`'s orchestrator; do not edit it from this track.
 
-**2026-11-12: R2, R3, R4 APPROVED (with notes in `backlog_research/`); R5 running here, R1 on track B.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
+**2026-11-12: R2, R3, R4, R5 APPROVED (with notes in `backlog_research/`); R6 running here; R1 on track B waits on an owner card.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
 Ten milestones R1–R10 in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
 tracks and driver loop in `docs/implementation/master_plan_research.md`. `main` (with P70, the fast suite) was merged
 into this branch at `2026-11-12`; the branch is local, not pushed.
@@ -17,9 +17,10 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **Done:** `R4_research_engine` APPROVED_WITH_NOTES 2026-11-12. All routed notes of R2–R4 folded into R5–R10 plan files
   ("Carried from earlier reviews" sections; implementers never read `backlog_research/`), master plan v3, 08B
   changelog 5 (MA12 sent requests). Two notes are the owner's (below, "Needs the owner").
-- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R5_research_app_seams`, attempt 8 (projection off, review is the gate; master plan v4), started 2026-11-12 18:12 (track A). Attempt 7 stopped at projection (T1–T5, F1; amended, 08B changelog 10, archived); attempt 6 was cut off by the usage limit (no handoff) and archived. Earlier: attempt 6, started 2026-11-12 17:13 (track A). Orchestrator rule: if attempt 6's projection again finds only small plan gaps, apply them and run attempt 7 with the review as the gate (projection off for that attempt, recorded in the plan). Attempt 5 stopped at projection (S1–S4; amended, 08B changelog 9, archived). Attempt 4 stopped at projection (Q1–Q4, small; amended, 08B changelog 8, archived). Attempt 3 stopped at projection (P1–P6, small; amended, archived). Attempt 2 stopped at projection again (N1–N9, publish-side gaps, 0 owner cards; amended, archived). Attempt 1 stopped at projection r0 (AMENDMENTS_REQUIRED, 0 owner cards); plan amended L1–L15, 08B changelog 6, attempt archived.
-  Implementer on Opus via `PSM_IMPLEMENTER=claude` (the runner defaults to Codex; set the variable for every research run).
-- **Next on track A:** R6 → R7 (needs R4, R6) → R9 (needs R1, R8 merged from B) → R10. Schedule changed
+- **Done:** `R5_research_app_seams` APPROVED_WITH_NOTES 2026-11-12 18:44 (attempt 8; seven projection rounds before it,
+  all archived; 08B changelogs 6, 8, 9, 10). Notes folded into R6·U3 (release events, undo after release, p15 fixture).
+- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R6_research_ui`, started 2026-11-12 18:44 (track A).
+- **Next on track A:** R7 (needs R4, R6) → R9 (needs R1, R8 merged from B) → R10. Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
   merge `feature/agentic` into `research/track-b` first (R4 and plan edits), then R8 once the owner's picks arrive.
 - **Track B (owner said yes 2026-11-12):** worktree `~/Desktop/Developer/Photo-Session-Manager-agentic-b`, branch
