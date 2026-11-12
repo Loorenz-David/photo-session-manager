@@ -7,7 +7,7 @@ depends_on: [R2_research_foundation]
 ---
 # R3 — Rules: the pure rules of research, and what research may write
 
-**Tracker:** NOT_STARTED · 2026-11-12 · planner · —
+**Tracker:** IMPLEMENTED · 2026-11-12 · opus · 5 units checkpointed; 132/132 rows tested (110 rule unit tests incl. 3 write-table core tests, 25 engine write tests); research lint and workspace check green.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -431,3 +431,19 @@ The reviewer reads the units in order and runs, once: the milestone's research-c
 Nothing to see in the app yet. `cargo test -p psm-research --lib rules` prints the rules by name, row by row ("a05_c1d_two_trusted_sites_medium", …).
 
 ## Review log
+
+### 2026-11-12 · implement r1 · opus
+**Built.** U1 `rules::value_map` (`map_output`, `statement`, `page_statement`, `same_statement`); U2 `rules::sites` (`host`, `TrustedSites`, `site_of`, `page_identity`, `is_own_listing`, `reading_order`) and `rules::fingerprint` (`canonical`, `fingerprint`, `RESEARCH_FINGERPRINT_VERSION`); U3 `rules::confidence` (`field_class`, `decide_attribution`, `decide_measured`, `decide_visible`, `decide_condition`, `Decision`) with evidence types in `domain`; U4 `rules::cost` (`parse_micro_usd`, `PriceTable`, `call_cost`, `next_call`, `day_spend`) and `rules::calls` (`classify`, `action`, `redact`, `RESEARCH_CALL_ATTEMPTS`); U5 `rules::write_table` (`never_written`, `decide_write`, `is_conflict`) and `writes::{suggest, lower}` with the `engine` test program and its harness. Checkpoints: U1 `11da4e1`, U2 `946d55f`, U3 `123a357`, U4 `667755f`, U5 `80c0c64`. No file outside `crates/research` changed except `Cargo.lock` (the research crate's own dependency list).
+
+**Judgment calls** (all listed with reasons in `handoffs/implementer/handoff_R3_research_rules_implement_r1.md` §Assumptions). The ones a reviewer should look at first:
+- Text mapping trims leading and trailing white space before `canonicalize` (row A03·C4(a) expects `Oak table`; MC-9 alone trims only the end).
+- The cleared-set check runs in every writable state, also with no stored row (MA10: no value in `C` is ever written); the MC-A1 table names it only for cleared rows.
+- A product-step field is a key in the resolved Product layout **or** a definition of group Product (fail closed). A step without a stored preset lists every definition of that step, as `presets_get` does.
+- `field_class` takes a `never_written: bool` flag (the plan's note) in place of `in_layout`.
+- `CallFailure`, `FailureKind`, `ErrorClass`, `Stage` live in `domain` now (R4·U1's ports can re-export; `exchange` is not yet a field). `classify` checks 401/403 before the quota flag; an unnamed status (505) is `request`; `redact` also matches lowercase hex escapes.
+- `call_cost` charges 0 when the table has no fallback for the pair (MC-A6's `PriceMissing` prerequisite keeps such a run from starting).
+
+**Deviations.** `domain.rs` was created in U2 (for `SiteClass`), not U3. U1 needed no `Cargo.toml` edit; U4 added `psm-infra`, `chrono` and dev `chrono-tz` (not in U4's file list); U5 added dev `psm-testkit`, `autotests = false` and `[[test]] engine`. Three extra unit tests in `rules::write_table` (a listed core mechanism) back rows A07·C1, C2, C5. The Tracker actor is `opus` (this session ran on Claude Opus), not `codex`.
+
+**Observations.** Cargo accepted the dev-dependency cycle `psm-research` → (dev) `psm-testkit` → `psm-integrations` → `psm-research` (§7.4's open point): the engine program links one copy of the crate. `url 2.5.8` gave the standard results for every A04 row (IDNA `bücher`, default ports, trailing-dot host). No hardware, no live service, no app suite (flow §10).
+
