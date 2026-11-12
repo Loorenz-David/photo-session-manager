@@ -7,7 +7,7 @@ depends_on: [R4_research_engine, R6_research_ui]
 ---
 # R7 — Wiring and export: the engine joins the app; the research record is kept and exported
 
-**Tracker:** IMPLEMENTED · 2026-11-12 · opus · U1 `4a1de73`, U2 `b4a0464`: 17/17 plan rows + 6 carried rows tested at their boundaries; full gate green (workspace 870 suite + 135 engine + rest, clippy, fmt, typecheck, vitest 488).
+**Tracker:** APPROVED · 2026-11-12 · opus · review r1 APPROVED_WITH_NOTES: perimeter = the declared paths of `4a1de73`, `b4a0464`, `ceb956f`; 17/17 plan rows + the carried rows hold at their boundaries, no B1–B4; review-mode checks green (app suite r7 8/8 + p01/p09/p16/p21/p61 59/59, engine 135/135, vitest settings+form 108/108, typecheck, clippy, fmt; reviewer run on clean `937b541`); implementer's full-suite stamp stands; 5 notes in `backlog_research/R7_research_wiring_and_export.md`.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -238,3 +238,54 @@ form test fixtures (`conflict` / `wait_ends_at` fields). The R2 desktop test `f_
 asserted the unwired state R7 ends; it now asserts the commands reach the engine (renamed `…_reach_the_wired_engine`).
 `gateway::a11_c4a` unchanged: retention added no column. Engine test names for the carried rows use `r7_u1_…` (no row id).
 
+
+### 2026-11-12 · review r1 · opus (Claude Opus 5.5, `pipeline-reviewer`) — APPROVED_WITH_NOTES
+**Gate.** Tracker IMPLEMENTED; `4a1de73`, `b4a0464`, `ceb956f` in `git log`. **Perimeter.** `git show --stat` per
+checkpoint = the handoff's per-unit lists exactly (U1 31 paths, U2 18, closing 2); the out-of-list files are the
+declared Deviations, each forced by a carried item.
+**Checks (Review mode, clean tree `937b541`, one cargo command at a time).** `--test suite research::r7_` 8/8;
+`p16_operations:: p21_backend_robustness:: p09_local_export:: p01_storage_identity:: p61_storage_cleanup_and_budget::`
+59/59; `-p psm-research --test engine` 135/135 (whole binary, so the carried `stages::`/`writes::` rows ran too);
+`npx vitest run src/features/settings src/features/form` 20 files 108/108; `npm run typecheck`, `cargo clippy
+--workspace --all-targets -D warnings`, `cargo fmt --check` clean. Variation: `export::a21_c2a` under
+`TZ=America/Los_Angeles` and `TZ=Pacific/Kiritimati` green. Full-suite stamp: implementer's (tree `b4a0464`;
+`ceb956f` is docs only) stands.
+**Verified correct.**
+- A13·C1(c): `with_research_fakes_only` (no shop, no key) → export names exact, last progress (3,3,Done), 0 runs,
+  0 calls, 0 requests at each fake. H6 holds with research built.
+- A13·C2(a): classify Main through `ReviewService` → `HistoryChanged` → `ResearchObserver::note` → next research
+  turn → `session_changed` → exactly one (session, item, queued, auto) run. Fails if the observer or wiring is absent.
+- A13·C8(c): `requeue_running_jobs` (launch only, line 567) runs before the research thread spawns; test proves one
+  due `research` job after restart and the run `finished`.
+- A13·C8(d): research job blocked inside the fake call on another thread; publish reaches `Done` through the main
+  and publish runners while the run stays `running`. Main runner excludes `research::job::KIND`.
+- Carried MA13: turn lock (`try_lock`) + `store::start_run` `WHERE state='queued' AND NOT EXISTS running`; the
+  guard also covers the settings-reopen window where an old detached research thread and the new one coexist.
+  Test asserts every provider call sees exactly 1 running run and both runs finish.
+- Carried settings: `prepare` validates the `research` patch with `validate_settings` before
+  `SettingsService::set` (top-level merge); `apply_settings` calls `settings_changed`; refusal text and unchanged
+  file asserted. Site commands save the engine's returned value.
+- Carried release: `resolve_pending_in` returns `Released`; `AttributesService` and `HistoryService::reverse` emit
+  `SessionChanged` + `PublishProgress{Prepare}` after commit; redo row asserts both for the right session/item.
+- Carried capped run (`decide.rs` `ending != StoppedAtCap`), Product step fail-closed (`layout_step`),
+  `external_id` filtered by the configured integration, `wait_ends_at`, `AttributeValueDto.conflict` via
+  `publish_partition::is_conflict` (TS copy deleted), Accept all count excludes conflicts: code read, correct.
+- A21·C1(a)–(c): `calls_started_by(cutoff)` with `started_at ≤ now − days×86 400 000` ⇔ the plan's `≤`; candidate
+  SHAs from expired calls minus every SHA a remaining call references (request and response); only `research_calls`
+  rows deleted. Tests pin the 1 ms boundary, the shared file, and five kept tables (all > 0).
+- A21·C1(d): purge at `build_research` (launch) and in the turn when ≥ 1 h passed; test shows the second call kept
+  past its own expiry until the hour, then gone.
+- A21·C2–C6: local-date selection (`chrono::Local`), item selection, exact tree + zip entries byte-equal, image bytes
+  equal stored copies, call request/response strings equal the record, feedback actions with suggested/final,
+  `call record expired`, withheld `{"withheld":"photo deleted"}` and image absent, secret hit → error names the file
+  not the value and the destination is empty (partial is a hidden folder inside `dest`, removed), entries only
+  `.json`/`.jpg`, none equal to a RAW.
+- A21·C7(a): UI test drives From/To and the button; `exportResearch({kind:'range',from:20261110,to:20261111},
+  folder)` and "Exported to <path>" shown.
+- H1–H8: no external write (H1); only research copies under the research files folder are removed or copied (H2);
+  no pixel work (H3); purge/export idempotent (H4); H5 n/a; H6 by C1(c); research names stay out of core except the
+  generic `research` settings key and `Released` (H7); `lib.rs` constructs and connects, commands thin (H8).
+  No secrets committed or logged; no live services in tests.
+- Orphan tests: none; every new test maps to a plan row or a carried row; the R2 desktop test rename is declared.
+**Assumptions** (handoff) checked against 08B MC-A6/MC-A9/MC-A11: none contradicts the intention.
+**Notes** (5) → `docs/implementation/backlog_research/R7_research_wiring_and_export.md`.
