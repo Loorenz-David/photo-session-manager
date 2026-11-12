@@ -7,7 +7,7 @@ depends_on: [R5_research_app_seams]
 ---
 # R6 — UI: the live research panel, Settings → Research, the publish review
 
-**Tracker:** NOT_STARTED · 2026-11-12 · planner · —
+**Tracker:** IMPLEMENTED · 2026-11-12 · codex · 3 units (U1 f6ad84b, U2 d0a56e2, U3 f365188); 21 UI rows + 1 Rust row; full gate: suite 861+1 flake re-run green, clippy, fmt, typecheck, vitest 487 green; Rust deviations in settings/attribute commands.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -247,3 +247,50 @@ The reviewer runs `npx vitest run src/features/form src/features/settings src/fe
 (Research itself is wired in R7; until then the panel says nothing is available.) On scratch data: 1. Settings → Research: the section shows keys as "not set", an empty trusted-sites list with your shop's domain first. 2. Open a form: the research panel opens from the header. After R7 and R8 the steps of the superseded panel, settings and publish plans apply: watch steps appear, add your nine sites, see a conflict in the publish review and resolve it.
 
 ## Review log
+
+### 2026-11-12 · implement r1 · claude (pipeline-implementer, Opus 5.5)
+**Built.** U1: the research panel rebuilt from the session's stored steps (verbs per kind, read steps link their source,
+`seq` order; live indicator while `running` and re-read on `research_changed`; `Finished · n fields filled · n to
+review` with the cost-limit note for `stopped_at_cap`; failed stage + error + Run again; the reason sentence; Research /
+Run again when `can_run`; focus dims steps whose `field_keys` lack the field; Accept all unchanged). The form header
+shows `n to review` (hidden at 0) and opens the panel. Before R7 every `research_*` command fails, so the panel shows
+no state line and no button (as planned). U2: Settings → Research (`ResearchSection.tsx`): keys (password inputs,
+never read back, "set"/"not set"), trusted sites (shop domain first, "always trusted", no remove; up/down and remove;
+add with the refusal shown as is), one row per stage, caps, prices table, language, Automatic research, quiet period,
+record days, attribution keys with a warning under keys the shop lacks. U3: popover withheld line; per-item conflict
+block (`ConflictList.tsx`) with Keep previous / Use suggestion / Edit and "This item waits until you resolve n
+conflict(s)"; confirm passes the shown set and a text carrying the shown lines (N8); `suggestions_changed` (by code)
+shows the sentence and rebuilds; StatusPill `Waiting for you · n conflicts` inside the activity popover (Cancel stays
+there, S4); the form marks conflicts and offers the three actions in place of Looks right / Clear (P1 kept for
+plain suggestions); Edit commits once on Enter / blur / Save & close, never on the debounce (N1).
+
+**Deviations (Rust; the closing gate was the full one).**
+1. `commands/settings.rs`: `SettingsDto` and `SettingsPatchDto` gain `research: ResearchSettingsDto` (read with every
+   field filled by `ResearchSettings::from_slot`; a patch replaces the block). Without it the section had no data
+   source and no save path. Bindings regenerated (additions only). **Saving still refuses until R7·U1**: core
+   `SettingsService::set` does not accept the `research` key yet; R7·U1 owns accepting it behind
+   `ResearchApi::validate_settings` + `settings_changed` (its task 4). Fold into R7·U1: add `"research"` to that list.
+2. `commands/attributes.rs`: `attribute_values_set`, `attribute_ai_clear`, `attribute_ai_accept`,
+   `attribute_conflict_resolve` read the item's held publish item before the action and, if it is gone after,
+   emit `SessionChanged` and `PublishProgress {step: prepare}` through the app's event hub (R5 review carried
+   note). Test `r6_command_tests::r6_a20_release_emits_session_changed_and_publish_progress` in `lib.rs`. Undo/redo
+   (history commands) can also release and still emit nothing; left for a note.
+3. Perimeter additions in TS: `WorkspacePage.tsx`, `BatchQueue.tsx` pass `sessionId` to the form (the item carries no
+   session id); `MetafieldInput.tsx` forwards the conflict actions; `p15_publish_ui.test.tsx` and
+   `p32_reframe.test.tsx` mocks gained the new publish-service text helpers (p15 C5(a) now previews sessions 1 and 2,
+   as carried).
+
+**Judgment calls.** "n to review" in the header is computed from the form's fields (live `ai` + `suggested` in the
+layout, every confidence: the MC-A10 definition), so it works before R7 and updates at once after Looks right;
+the panel's finished line uses the status counts. A finished run with 0 written fields reads "no fields changed".
+"Waiting for Capture One" is held back until the latest photo's capture time + 120 s (the default source wait; the
+UI cannot see other session changes). The form tells a conflict by the MC-A1 rule with a TS approximation of the
+name key (NFKC, lower case, punctuation/symbols/spaces collapsed). The popover's Edit is an inline text field; the
+form's Edit focuses the field itself. The "undo after release" case is wording only: the form's conflict popover
+says a publish that already went ahead keeps the value chosen for it. Item id for a popover resolution comes from
+`getSessionView(session).session.item_id` (the preview carries only session ids).
+
+**Gate.** `cargo test --workspace`: 861/862, the one failure `p68…c2a_easy_password_generated_and_shown_again`
+("receiver running", camera receiver start under load) passed on re-run; clippy and fmt clean; typecheck clean;
+`npm test` 486/487, the failure was the p32 publish-service mock (fixed; file re-run green).
+

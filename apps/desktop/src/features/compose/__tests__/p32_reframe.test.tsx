@@ -9,7 +9,7 @@ import { publishConfirm, publishPreview } from '@/services/publish';
 import { ServiceError } from '@/services/sessions';
 
 vi.mock('@/services/export', () => ({ integrationKind: vi.fn(async () => null), runExport: vi.fn(), openExportFolder: vi.fn(), onExportProgress: vi.fn(async () => () => undefined) }));
-vi.mock('@/services/publish', async importOriginal => ({ shownOf: (await importOriginal<typeof import('@/services/publish')>()).shownOf, publishPreview: vi.fn(), publishConfirm: vi.fn(), publishRetry: vi.fn(), notificationsList: vi.fn(async () => []), onPublishProgress: vi.fn(async () => () => undefined) }));
+vi.mock('@/services/publish', async importOriginal => ({ ...(({ shownOf, confirmedText, withheldLine, waitsLine, SUGGESTIONS_CHANGED }) => ({ shownOf, confirmedText, withheldLine, waitsLine, SUGGESTIONS_CHANGED }))(await importOriginal<typeof import('@/services/publish')>()), publishPreview: vi.fn(), publishConfirm: vi.fn(), publishRetry: vi.fn(), notificationsList: vi.fn(async () => []), onPublishProgress: vi.fn(async () => () => undefined) }));
 
 const near = (actual: number, expected: number, tolerance = 1e-6) => expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
 const rectNear = (actual: Rect, expected: Rect, tolerance = 1e-6) => {
