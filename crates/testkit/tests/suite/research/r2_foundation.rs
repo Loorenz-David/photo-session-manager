@@ -1,5 +1,10 @@
+use image::GenericImageView;
 use std::sync::Arc;
 
+use psm_core::domain::composition::{
+    CompositionKind, CompositionValues, Flip, Orientation, Rect, Shape,
+};
+use psm_core::ports::images::Imaging;
 use psm_core::{
     Error,
     domain::{
@@ -9,6 +14,7 @@ use psm_core::{
     mechanisms::status::{StatusInput, derive_status, row_label},
     ports::{commerce::CommerceAdapter, store::StoreTx},
 };
+use psm_infra::imaging::ImageOpsImpl;
 use psm_infra::{paths::AppPaths, sqlite::store::SqliteStore};
 use psm_integrations::commerce::shopify::adapter::{PollConfig, ShopifyAdapter, ShopifyConfig};
 use psm_testkit::{TestApp, fake_transport::FakeTransport};
@@ -204,4 +210,217 @@ fn f_c3a_public_listing_default_and_fake_values() {
         Some("https://shop.example/item/1")
     );
     assert_eq!(listed.item_path_tail, "/item/1");
+}
+
+fn original() -> CompositionValues {
+    CompositionValues {
+        kind: CompositionKind::Normal,
+        shape: Shape::Original,
+        orientation: Orientation::Named,
+        quarter_turns: 0,
+        flip: Flip::None,
+        straighten: 0.0,
+        rect: Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 1.0,
+            h: 1.0,
+        },
+    }
+}
+
+fn marked_preview(w: u32, h: u32) -> Vec<u8> {
+    let mut img = image::RgbImage::from_pixel(w, h, image::Rgb([220, 220, 220]));
+    let size = w.min(h) / 10;
+    for y in 0..size {
+        for x in 0..size {
+            img.put_pixel(x, y, image::Rgb([240, 20, 20]));
+            img.put_pixel(w - 1 - x, y, image::Rgb([20, 240, 20]));
+            img.put_pixel(x, h - 1 - y, image::Rgb([20, 20, 240]));
+            img.put_pixel(w - 1 - x, h - 1 - y, image::Rgb([240, 200, 20]));
+        }
+    }
+    let mut bytes = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 90)
+        .encode_image(&img)
+        .unwrap();
+    bytes
+}
+
+fn has_colour(img: &image::RgbImage, test: impl Fn([u8; 3]) -> bool) -> bool {
+    img.pixels().any(|p| test(p.0))
+}
+
+#[test]
+fn a10_c1a_full_frame_reduced_with_corners() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("adjusted.jpg");
+    let dest = dir.path().join("research.jpg");
+    std::fs::write(&source, marked_preview(3000, 2000)).unwrap();
+    let info = ImageOpsImpl
+        .render_research(&source, &original(), 1024, &dest)
+        .unwrap();
+    assert_eq!((info.width, info.height), (1024, 683));
+    let img = image::open(&dest).unwrap().into_rgb8();
+    assert_eq!(img.dimensions(), (1024, 683));
+    let near = |x, y| img.get_pixel(x, y).0;
+    let red = near(20, 20);
+    let green = near(1000, 20);
+    let blue = near(20, 660);
+    let yellow = near(1000, 660);
+    assert!(red[0] > 180 && red[1] < 70 && red[2] < 70);
+    assert!(green[1] > 180 && green[0] < 70 && green[2] < 70);
+    assert!(blue[2] > 180 && blue[0] < 70 && blue[1] < 70);
+    assert!(yellow[0] > 180 && yellow[1] > 130 && yellow[2] < 70);
+}
+
+#[test]
+fn a10_c1b_turn_and_cut_right_half_of_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("adjusted.jpg");
+    let dest = dir.path().join("research.jpg");
+    std::fs::write(&source, marked_preview(3000, 2000)).unwrap();
+    let mut values = original();
+    values.quarter_turns = 1;
+    // MC-27 stores the rect in the turned frame; its bottom half is the source's right half.
+    values.rect = Rect {
+        x: 0.0,
+        y: 0.5,
+        w: 1.0,
+        h: 0.5,
+    };
+    ImageOpsImpl
+        .render_research(&source, &values, 1024, &dest)
+        .unwrap();
+    let img = image::open(&dest).unwrap().into_rgb8();
+    assert_eq!(img.dimensions(), (1024, 768));
+    assert!(has_colour(&img, |p| p[1] > 160 && p[0] < 80 && p[2] < 80));
+    assert!(has_colour(&img, |p| p[0] > 160 && p[1] > 120 && p[2] < 80));
+    assert!(!has_colour(&img, |p| p[0] > 160 && p[1] < 80 && p[2] < 80));
+    assert!(!has_colour(&img, |p| p[2] > 160 && p[0] < 80 && p[1] < 80));
+}
+
+#[test]
+fn a10_c1c_small_preview_never_upscaled() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("adjusted.jpg");
+    std::fs::write(
+        &source,
+        psm_testkit::fixtures::synthetic_jpeg::SyntheticJpeg::rgb(800, 600, [20, 30, 40]),
+    )
+    .unwrap();
+    for edge in [1024, 2048] {
+        let dest = dir.path().join(format!("research-{edge}.jpg"));
+        let info = ImageOpsImpl
+            .render_research(&source, &original(), edge, &dest)
+            .unwrap();
+        assert_eq!((info.width, info.height), (800, 600));
+        assert_eq!(image::open(&dest).unwrap().width(), 800);
+        assert_eq!(image::open(&dest).unwrap().height(), 600);
+    }
+}
+
+#[test]
+fn a10_c1d_large_preview_resized_to_2048() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("adjusted.jpg");
+    let dest = dir.path().join("research.jpg");
+    std::fs::write(
+        &source,
+        psm_testkit::fixtures::synthetic_jpeg::SyntheticJpeg::rgb(6000, 4000, [20, 30, 40]),
+    )
+    .unwrap();
+    let info = ImageOpsImpl
+        .render_research(&source, &original(), 2048, &dest)
+        .unwrap();
+    assert_eq!((info.width, info.height), (2048, 1365));
+    assert_eq!(image::open(&dest).unwrap().dimensions(), (2048, 1365));
+}
+
+fn preview_with_sensitive_exif(jpeg: &[u8]) -> Vec<u8> {
+    use exif::{Field, In, Rational, Tag, Value, experimental::Writer};
+    let fields = [
+        Field {
+            tag: Tag::Model,
+            ifd_num: In::PRIMARY,
+            value: Value::Ascii(vec![b"Camera Model".to_vec()]),
+        },
+        Field {
+            tag: Tag::BodySerialNumber,
+            ifd_num: In::PRIMARY,
+            value: Value::Ascii(vec![b"SERIAL-123".to_vec()]),
+        },
+        Field {
+            tag: Tag::MakerNote,
+            ifd_num: In::PRIMARY,
+            value: Value::Undefined(b"MAKER-PRIVATE".to_vec(), 0),
+        },
+        Field {
+            tag: Tag::GPSLatitude,
+            ifd_num: In::PRIMARY,
+            value: Value::Rational(vec![
+                Rational { num: 59, denom: 1 },
+                Rational { num: 20, denom: 1 },
+                Rational { num: 0, denom: 1 },
+            ]),
+        },
+    ];
+    let mut writer = Writer::new();
+    for field in &fields {
+        writer.push_field(field);
+    }
+    let mut tiff = std::io::Cursor::new(Vec::new());
+    writer.write(&mut tiff, false).unwrap();
+    let mut payload = b"Exif\0\0".to_vec();
+    payload.extend(tiff.into_inner());
+    let len = u16::try_from(payload.len() + 2).unwrap();
+    let mut out = jpeg[..2].to_vec();
+    out.extend([0xff, 0xe1]);
+    out.extend(len.to_be_bytes());
+    out.extend(payload);
+    out.extend_from_slice(&jpeg[2..]);
+    out
+}
+
+#[test]
+fn a10_c2a_exif_and_gps_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("adjusted.jpg");
+    let dest = dir.path().join("research.jpg");
+    std::fs::write(
+        &source,
+        preview_with_sensitive_exif(&marked_preview(800, 600)),
+    )
+    .unwrap();
+    let file = std::fs::File::open(&source).unwrap();
+    let original_exif = exif::Reader::new()
+        .read_from_container(&mut std::io::BufReader::new(file))
+        .unwrap();
+    for tag in [
+        exif::Tag::Model,
+        exif::Tag::BodySerialNumber,
+        exif::Tag::MakerNote,
+        exif::Tag::GPSLatitude,
+    ] {
+        assert!(
+            original_exif.get_field(tag, exif::In::PRIMARY).is_some(),
+            "source {tag:?}"
+        );
+    }
+    ImageOpsImpl
+        .render_research(&source, &original(), 1024, &dest)
+        .unwrap();
+    let file = std::fs::File::open(&dest).unwrap();
+    assert!(matches!(
+        exif::Reader::new().read_from_container(&mut std::io::BufReader::new(file)),
+        Err(exif::Error::NotFound(_))
+    ));
+    let bytes = std::fs::read(&dest).unwrap();
+    for secret in [
+        b"SERIAL-123".as_slice(),
+        b"MAKER-PRIVATE".as_slice(),
+        b"Camera Model".as_slice(),
+    ] {
+        assert!(!bytes.windows(secret.len()).any(|window| window == secret));
+    }
 }

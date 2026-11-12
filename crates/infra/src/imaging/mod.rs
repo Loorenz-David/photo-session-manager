@@ -3,6 +3,7 @@
 pub mod linear;
 pub mod metadata;
 pub mod render;
+pub mod research;
 
 use psm_core::{
     Result,
@@ -51,5 +52,14 @@ impl Imaging for ImageOpsImpl {
         dest: &Path,
     ) -> Result<OutputInfo> {
         render::render_output(master, values, slot, format, dest)
+    }
+    fn render_research(
+        &self,
+        preview: &Path,
+        values: &CompositionValues,
+        long_edge: u32,
+        dest: &Path,
+    ) -> Result<OutputInfo> {
+        research::render_research(preview, values, long_edge, dest)
     }
 }
