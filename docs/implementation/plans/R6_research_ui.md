@@ -37,6 +37,10 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
   UI row: typing "Walnut" into a conflict's Edit calls the resolve command once, with "Walnut".
 - **U3, the confirmed text (R5 projection N8).** If the popover shows the withheld and "waiting for you" lines, the
   `summary` text passed to confirm carries them (07A MC-10: the exact text shown).
+- **U3, Looks right only on suggestions (R5 projection P1).** R5 made the popover offer Looks right only on `ai` +
+  `suggested`; keep that when U3 edits `AiPopover.tsx` for conflicts.
+- **U3, the confirm refusal (R5 projection P5).** A changed-suggestions refusal arrives as command code
+  `suggestions_changed` (`Error::SuggestionsChanged`); rebuild the preview on that code only, never by matching text.
 
 ## Unit 1 — The live research panel and "n to review"
 
