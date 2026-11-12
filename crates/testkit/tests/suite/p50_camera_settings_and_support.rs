@@ -350,7 +350,7 @@ fn setting_secrets(a: &TestApp, user: &str, password: &str) {
 #[test]
 fn c5d_startup_keychain_read_restarts_after_usb_session_lost() {
     let a = TestApp::with_camera_script_no_cache(include_str!(
-        "../src/fixtures/sidecar_scripts/ready_usb.txt"
+        "../../src/fixtures/sidecar_scripts/ready_usb.txt"
     ))
     .unwrap();
     settle(&a, || {
@@ -417,7 +417,7 @@ fn c5a_camera_credentials_are_keychain_only_and_redacted() {
 #[test]
 fn c5b_wifi_credentials_change_restarts_with_new_first_line() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/ready_wifi.txt"
+        "../../src/fixtures/sidecar_scripts/ready_wifi.txt"
     ))
     .unwrap();
     settle(&a, || {
@@ -449,7 +449,7 @@ fn c5b_wifi_credentials_change_restarts_with_new_first_line() {
 #[test]
 fn c5c_usb_change_waits_for_next_spawn() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/ready_usb.txt"
+        "../../src/fixtures/sidecar_scripts/ready_usb.txt"
     ))
     .unwrap();
     settle(&a, || {
@@ -512,10 +512,14 @@ fn generate(a: &TestApp) -> String {
 #[test]
 fn c6b_generated_password_reopens_listener_and_is_stored_only_in_keychain() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/ready_wifi.txt"
+        "../../src/fixtures/sidecar_scripts/ready_wifi.txt"
     ))
     .unwrap();
-    settle(&a, || a.camera_runtime().receiver_port().is_some());
+    // P70: also wait for the sidecar's first start, so `pids` is read after it (under the
+    // suite's parallel load the start can come after the receiver is up).
+    settle(&a, || {
+        a.camera_runtime().receiver_port().is_some() && !a.fake_sidecar_recording().pids.is_empty()
+    });
     let port = a.receiver_port();
     let generation = a.camera_runtime().receiver_generation();
     let pids = a.fake_sidecar_recording().pids;
@@ -558,7 +562,7 @@ fn c6c_regeneration_invalidates_old_password() {
 #[test]
 fn c7a_unknown_fingerprint_raises_event_status_and_health() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/fingerprint_unknown.txt"
+        "../../src/fixtures/sidecar_scripts/fingerprint_unknown.txt"
     ))
     .unwrap();
     settle(&a, || {
@@ -592,7 +596,7 @@ fn c7a_unknown_fingerprint_raises_event_status_and_health() {
 #[test]
 fn c7b_confirmation_sends_accept_and_pin_clears_notice() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/fingerprint_unknown.txt"
+        "../../src/fixtures/sidecar_scripts/fingerprint_unknown.txt"
     ))
     .unwrap();
     settle(&a, || a.app.health.has("camera_fingerprint_unconfirmed"));
@@ -616,7 +620,7 @@ fn c7b_confirmation_sends_accept_and_pin_clears_notice() {
 #[test]
 fn c7c_rejection_keeps_pending_and_sends_nothing() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/fingerprint_unknown.txt"
+        "../../src/fixtures/sidecar_scripts/fingerprint_unknown.txt"
     ))
     .unwrap();
     settle(&a, || a.app.health.has("camera_fingerprint_unconfirmed"));
@@ -677,7 +681,7 @@ fn c7d_mismatch_confirmation_replaces() {
 #[test]
 fn c7e_auth_refusal_never_sends_a_retry() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/auth_refused.txt"
+        "../../src/fixtures/sidecar_scripts/auth_refused.txt"
     ))
     .unwrap();
     settle(&a, || {

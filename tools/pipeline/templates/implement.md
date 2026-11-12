@@ -24,8 +24,8 @@ exact names in the registry. Mechanism contracts from the intention are implemen
 asserting the exact outcome. Unit tests only for the plan's **Core mechanisms** list. Nothing
 that asserts internals.
 
-**Test runs (flow.md §4A; the full Rust suite takes over an hour on this Mac).** While working, run
-only this phase's test file (`cargo test -p psm-testkit --test <stem>`), the unit tests of the
+**Test runs (flow.md §4A; the full Rust suite takes about 9 minutes warm on this Mac, more right after a rebuild).** While working, run
+only this phase's test module (`cargo test -p psm-testkit --test suite <stem>::`), the unit tests of the
 module you changed, and the UI test files you touched (`npx vitest run <files>`); use
 `cargo check -p <crate>` to see compile errors. Run the whole closing gate (suite, clippy, fmt,
 typecheck, `npm test`) **exactly once**, at the very end, one command after the other. If it shows

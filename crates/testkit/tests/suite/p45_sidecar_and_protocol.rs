@@ -16,8 +16,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-const LAB_LINES: &str = include_str!("../src/fixtures/sidecar_scripts/lab_lines.txt");
-const CAPTURE: &str = include_str!("../src/fixtures/sidecar_scripts/capture.txt");
+const LAB_LINES: &str = include_str!("../../src/fixtures/sidecar_scripts/lab_lines.txt");
+const CAPTURE: &str = include_str!("../../src/fixtures/sidecar_scripts/capture.txt");
 const CAPTURE_ID: &str = "11111111-2222-4333-8444-555555555555";
 
 fn repo() -> PathBuf {

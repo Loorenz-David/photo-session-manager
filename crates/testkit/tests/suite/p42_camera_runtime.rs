@@ -2,6 +2,7 @@ use psm_core::{
     domain::camera::{CameraStatus, Link},
     services::{camera::CameraService, health::HealthService},
 };
+use psm_integrations::camera::sidecar::SidecarTimings;
 use psm_testkit::TestApp;
 use psm_testkit::fake_direct_camera::FakeDirectProvider;
 use serde_json::json;
@@ -97,13 +98,17 @@ fn c2a_shutdown_is_graceful_and_terminal() {
 #[test]
 fn c2b_shutdown_kills_ignoring_child_after_grace() {
     let a = TestApp::with_camera_behaviour(json!({"ignore_quit":true})).unwrap();
+    // P70: the grace is the test setting (production keeps 3 s, `SidecarTimings::default()`).
+    let grace = Duration::from_millis(500);
+    a.camera_runtime()
+        .set_sidecar_timings(SidecarTimings { quit_grace: grace });
     let p = one(&a);
     let t = Instant::now();
     a.camera_runtime().shutdown();
     assert!(!alive(p));
     assert!(a.fake_sidecar_recording().exits.is_empty());
-    assert!(t.elapsed() >= Duration::from_millis(3000));
-    assert!(t.elapsed() < Duration::from_secs(4));
+    assert!(t.elapsed() >= grace);
+    assert!(t.elapsed() < grace + Duration::from_secs(1));
 }
 #[test]
 fn c3a_restarts_at_bounded_offsets() {

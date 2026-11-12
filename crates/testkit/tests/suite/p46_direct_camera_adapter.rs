@@ -25,18 +25,18 @@ use std::{
     time::{Duration, Instant},
 };
 
-const DISCOVERING: &str = include_str!("../src/fixtures/sidecar_scripts/discovering.txt");
-const READY_USB: &str = include_str!("../src/fixtures/sidecar_scripts/ready_usb.txt");
-const READY_WIFI: &str = include_str!("../src/fixtures/sidecar_scripts/ready_wifi.txt");
+const DISCOVERING: &str = include_str!("../../src/fixtures/sidecar_scripts/discovering.txt");
+const READY_USB: &str = include_str!("../../src/fixtures/sidecar_scripts/ready_usb.txt");
+const READY_WIFI: &str = include_str!("../../src/fixtures/sidecar_scripts/ready_wifi.txt");
 const READY_USB_STORE_FAILED: &str =
-    include_str!("../src/fixtures/sidecar_scripts/ready_usb_store_failed.txt");
-const CAPTURE_USB: &str = include_str!("../src/fixtures/sidecar_scripts/capture_usb.txt");
-const CAPTURE: &str = include_str!("../src/fixtures/sidecar_scripts/capture.txt");
-const CAMERA_SHUTTER: &str = include_str!("../src/fixtures/sidecar_scripts/camera_shutter.txt");
-const CLAIMED: &str = include_str!("../src/fixtures/sidecar_scripts/claimed.txt");
+    include_str!("../../src/fixtures/sidecar_scripts/ready_usb_store_failed.txt");
+const CAPTURE_USB: &str = include_str!("../../src/fixtures/sidecar_scripts/capture_usb.txt");
+const CAPTURE: &str = include_str!("../../src/fixtures/sidecar_scripts/capture.txt");
+const CAMERA_SHUTTER: &str = include_str!("../../src/fixtures/sidecar_scripts/camera_shutter.txt");
+const CLAIMED: &str = include_str!("../../src/fixtures/sidecar_scripts/claimed.txt");
 const FINGERPRINT_UNKNOWN: &str =
-    include_str!("../src/fixtures/sidecar_scripts/fingerprint_unknown.txt");
-const AUTH_REFUSED: &str = include_str!("../src/fixtures/sidecar_scripts/auth_refused.txt");
+    include_str!("../../src/fixtures/sidecar_scripts/fingerprint_unknown.txt");
+const AUTH_REFUSED: &str = include_str!("../../src/fixtures/sidecar_scripts/auth_refused.txt");
 
 /// The exposure stamp of `capture_usb.txt` and of `capture.txt` / `camera_shutter.txt`.
 const T_E_USB: i64 = SCRIPT_EPOCH_MS + 2_550;

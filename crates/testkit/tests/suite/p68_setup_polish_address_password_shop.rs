@@ -56,7 +56,7 @@ fn network(a: &TestApp, addresses: &[&str]) {
 #[test]
 fn c1a_address_shown_and_change_named() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/ready_wifi.txt"
+        "../../src/fixtures/sidecar_scripts/ready_wifi.txt"
     ))
     .unwrap();
     settle(&a, "the receiver", || {
@@ -99,7 +99,7 @@ fn c1a_address_shown_and_change_named() {
 #[test]
 fn c2a_easy_password_generated_and_shown_again() {
     let a = TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/ready_wifi.txt"
+        "../../src/fixtures/sidecar_scripts/ready_wifi.txt"
     ))
     .unwrap();
     settle(&a, "the receiver", || {

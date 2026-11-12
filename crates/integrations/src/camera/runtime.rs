@@ -5,6 +5,7 @@ use super::{
         adapter::{HelperEvent, StepOutcome},
     },
     sidecar::{
+        SidecarTimings,
         client::{CmdId, CommandOutcome, SidecarClient},
         protocol::{Command, SidecarEvent, Stamped, Transport},
         supervisor::{SidecarSpec, Supervisor, SupervisorEvent},
@@ -193,6 +194,8 @@ pub struct CameraRuntime {
     clock: Arc<dyn Clock>,
     paths: AppPaths,
     helper_log: Mutex<VecDeque<String>>,
+    /// Sidecar timings (production: `SidecarTimings::default()`; `set_sidecar_timings` is the test seam, P70).
+    sidecar_timings: RwLock<SidecarTimings>,
     stopped: AtomicBool,
     /// The direct camera adapter, created once per runtime (P46 L18) so its status inputs
     /// survive a settings save.
@@ -284,6 +287,7 @@ impl CameraRuntime {
             clock,
             paths,
             helper_log: Mutex::new(VecDeque::with_capacity(HELPER_LOG_KEPT)),
+            sidecar_timings: RwLock::new(SidecarTimings::default()),
             stopped: AtomicBool::new(false),
             direct: OnceLock::new(),
             tick_serial: Mutex::new(()),
@@ -324,6 +328,13 @@ impl CameraRuntime {
     /// The process list the adapter reads at each `usb.claimed_by` (R-I30).
     pub fn process_list(&self) -> Arc<dyn ProcessList> {
         self.process_list.read().unwrap().clone()
+    }
+    pub fn sidecar_timings(&self) -> SidecarTimings {
+        *self.sidecar_timings.read().unwrap()
+    }
+    /// Test seam (P70): shorter sidecar timings for a test; production never calls it.
+    pub fn set_sidecar_timings(&self, timings: SidecarTimings) {
+        *self.sidecar_timings.write().unwrap() = timings;
     }
     /// Test seam (set before the first tick, like `set_delivery_fs`).
     pub fn set_process_list(&self, list: Arc<dyn ProcessList>) {
@@ -548,7 +559,9 @@ impl CameraRuntime {
             })
             .unwrap_or_default();
         if let Some(client) = guard.as_mut() {
-            client.supervisor_mut().quit_and_wait();
+            client
+                .supervisor_mut()
+                .quit_and_wait(self.sidecar_timings().quit_grace);
         }
         *guard = None;
         self.helper_running.store(false, Ordering::SeqCst);
@@ -883,7 +896,9 @@ impl CameraRuntime {
                 password: credentials.1,
             }
             .encode();
-            client.supervisor_mut().quit_and_wait();
+            client
+                .supervisor_mut()
+                .quit_and_wait(self.sidecar_timings().quit_grace);
             let mut supervisor = Supervisor::new(spec);
             if supervisor.spawn(self.clock.mono()).is_ok() {
                 self.helper_running.store(true, Ordering::SeqCst);
@@ -935,7 +950,9 @@ impl CameraRuntime {
     }
     pub fn support_changed(self: &Arc<Self>) {
         if let Some(client) = self.supervisor.lock().unwrap().as_mut() {
-            client.supervisor_mut().quit_and_wait();
+            client
+                .supervisor_mut()
+                .quit_and_wait(self.sidecar_timings().quit_grace);
         }
         *self.supervisor.lock().unwrap() = None;
         self.helper_running.store(false, Ordering::SeqCst);
@@ -1290,7 +1307,9 @@ impl CameraRuntime {
             receiver.stop();
         }
         if let Some(supervisor) = self.supervisor.lock().expect("camera supervisor").as_mut() {
-            supervisor.supervisor_mut().quit_and_wait();
+            supervisor
+                .supervisor_mut()
+                .quit_and_wait(self.sidecar_timings().quit_grace);
         }
         self.sleep.read().unwrap().release();
         if let Some(staging) = self.staging_dir.lock().unwrap().take() {

@@ -139,6 +139,8 @@ fn c7b_master_and_output_log_photo_timings() {
     a.review().classify(photo.id, Classification::Main).unwrap();
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let output = LogBytes(buffer.clone());
+    // P70: keeps every log site wanted while this thread-scoped capture runs (one shared process).
+    psm_testkit::logs::keep_log_sites_interested();
     let subscriber = tracing_subscriber::fmt()
         .with_writer(move || output.clone())
         .without_time()

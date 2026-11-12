@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const TAKE_BACK: &str = include_str!("../src/fixtures/sidecar_scripts/take_back.txt");
+const TAKE_BACK: &str = include_str!("../../src/fixtures/sidecar_scripts/take_back.txt");
 
 fn app() -> TestApp {
     TestApp::with_camera().unwrap()

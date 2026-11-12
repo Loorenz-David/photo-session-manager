@@ -234,30 +234,40 @@ fn c2c_counter_reset_has_no_gap() {
 
 #[test]
 fn c3a_camera_events_and_uploads_are_logged_without_secrets() {
-    let log = Arc::new(Mutex::new(Vec::new()));
-    let target = log.clone();
-    tracing_subscriber::fmt()
-        .with_writer(move || LogWriter(target.clone()))
-        .with_max_level(tracing::Level::INFO)
-        .try_init()
-        .unwrap();
-    let script = concat!(
-        "{\"timestamp\":\"2026-11-06T10:00:00.000Z\",\"event\":\"connection.ready\",\"transport\":\"wifi\",\"password\":\"secret\"}\n",
-        "{\"timestamp\":\"2026-11-06T10:00:00.001Z\",\"event\":\"camera.busy\",\"reason\":\"idle\",\"safe_point\":true}\n"
+    // P70: installs a process-wide log subscriber, so it runs in its own process.
+    psm_testkit::isolation::in_own_process(
+        module_path!(),
+        "c3a_camera_events_and_uploads_are_logged_without_secrets",
+        || {
+            let log = Arc::new(Mutex::new(Vec::new()));
+            let target = log.clone();
+            tracing_subscriber::fmt()
+                .with_writer(move || LogWriter(target.clone()))
+                .with_max_level(tracing::Level::INFO)
+                .try_init()
+                .unwrap();
+            let script = concat!(
+                "{\"timestamp\":\"2026-11-06T10:00:00.000Z\",\"event\":\"connection.ready\",\"transport\":\"wifi\",\"password\":\"secret\"}\n",
+                "{\"timestamp\":\"2026-11-06T10:00:00.001Z\",\"event\":\"camera.busy\",\"reason\":\"idle\",\"safe_point\":true}\n"
+            );
+            let a = TestApp::with_camera_script(script).unwrap();
+            wait(|| {
+                a.tick(0).unwrap();
+                String::from_utf8_lossy(&log.lock().unwrap())
+                    .contains("camera.event connection.ready")
+            });
+            let mut c = a.ftp();
+            assert!(c.stor("DSC00001.ARW", b"II*\0").unwrap().starts_with("226"));
+            wait(|| {
+                String::from_utf8_lossy(&log.lock().unwrap())
+                    .contains("ftp.upload filed name=DSC00001.ARW outcome=photo")
+            });
+            let lines = String::from_utf8(log.lock().unwrap().clone()).unwrap();
+            assert!(
+                lines.contains("camera.event connection.ready") && lines.contains("transport=wifi")
+            );
+            assert!(lines.contains("ftp.upload completed name=DSC00001.ARW"));
+            assert!(!lines.contains("secret"));
+        },
     );
-    let a = TestApp::with_camera_script(script).unwrap();
-    wait(|| {
-        a.tick(0).unwrap();
-        String::from_utf8_lossy(&log.lock().unwrap()).contains("camera.event connection.ready")
-    });
-    let mut c = a.ftp();
-    assert!(c.stor("DSC00001.ARW", b"II*\0").unwrap().starts_with("226"));
-    wait(|| {
-        String::from_utf8_lossy(&log.lock().unwrap())
-            .contains("ftp.upload filed name=DSC00001.ARW outcome=photo")
-    });
-    let lines = String::from_utf8(log.lock().unwrap().clone()).unwrap();
-    assert!(lines.contains("camera.event connection.ready") && lines.contains("transport=wifi"));
-    assert!(lines.contains("ftp.upload completed name=DSC00001.ARW"));
-    assert!(!lines.contains("secret"));
 }

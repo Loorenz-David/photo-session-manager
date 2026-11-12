@@ -19,7 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const CLAIMED_WIFI: &str = include_str!("../src/fixtures/sidecar_scripts/claimed_wifi.txt");
+const CLAIMED_WIFI: &str = include_str!("../../src/fixtures/sidecar_scripts/claimed_wifi.txt");
 const USB_READY: &str = "{\"timestamp\":\"2026-11-06T10:00:02.000Z\",\"event\":\"connection.ready\",\"transport\":\"usb\",\"model\":\"ILCE-7RM5\",\"store_destination\":\"verified\"}\n";
 const ARRIVED: &str = "{\"timestamp\":\"2026-11-06T10:00:00.000Z\",\"event\":\"usb.arrived\",\"detail\":\"camera\"}\n";
 const CLAIMED: &str = "{\"timestamp\":\"2026-11-06T10:00:00.100Z\",\"event\":\"usb.claimed_by\",\"owners\":\"pid 512, ptpcamerad\"}\n";

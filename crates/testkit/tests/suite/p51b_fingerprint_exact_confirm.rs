@@ -18,7 +18,7 @@ fn settle(a: &TestApp, pred: impl Fn() -> bool) {
 }
 fn unknown() -> TestApp {
     TestApp::with_camera_script(include_str!(
-        "../src/fixtures/sidecar_scripts/fingerprint_unknown.txt"
+        "../../src/fixtures/sidecar_scripts/fingerprint_unknown.txt"
     ))
     .unwrap()
 }

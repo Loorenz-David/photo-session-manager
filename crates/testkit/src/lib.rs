@@ -9,6 +9,8 @@ pub mod fake_sleep;
 pub mod fake_transport;
 pub mod fixtures;
 pub mod ftp_client;
+pub mod isolation;
+pub mod logs;
 pub mod test_app;
 
 pub use test_app::TestApp;

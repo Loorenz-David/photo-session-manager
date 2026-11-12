@@ -121,10 +121,14 @@ usable before Shopify; each plan file carries frontmatter `phase`, `title`, `dif
 Criteria rows name boundary, input, exact outcome and trace (M1–M7 or a mechanism contract).
 
 ## 4A. Test runs (owner 2026-11-11: changes can't take this long)
-The full Rust suite takes over an hour on the dev Mac and the model's own time is under a tenth
-of a phase, so test runs are budgeted:
-- **Implementer:** while working, only the phase's test file, the changed module's unit tests and
-  the touched UI test files (`cargo check -p <crate>` for compile errors). The full closing gate
+The full Rust suite took over an hour on the dev Mac (P70 measured why: macOS checks every newly
+built program at its first start, 45–170 s each, and there were 63 test programs); since P70 it is
+one test program and takes about 9 minutes warm (`cargo test --workspace`, second run; the first
+run after a rebuild adds a few minutes of that check). The model's own time is under a tenth of a
+phase, so test runs are still budgeted:
+- **Implementer:** while working, only the phase's test module (`cargo test -p psm-testkit --test suite
+  <stem>::`; P70 made the behaviour tests one test program, `crates/testkit/tests/suite/`), the changed
+  module's unit tests and the touched UI test files (`cargo check -p <crate>` for compile errors). The full closing gate
   runs **once**, at the end; a failure there is fixed and only the failing files re-run.
 - **Fix:** the named test files and the touched crates/features; the full suite only when shared
   code changed.
@@ -136,6 +140,8 @@ of a phase, so test runs are budgeted:
   `tools/pipeline/timeline.sh <log>` prints wall-clock vs. command time and the slowest commands.
 
 ## Log
+- **2026-11-12 v1.5 (P70).** §4A: the behaviour tests are one test program (`--test suite <stem>::`);
+  measured suite time before/after (65 min → 8 min 43 s warm).
 - **2026-11-11 v1.4 (owner).** §4A test-run budget; the runner logs stream-json with timestamps
   (`.timeline`) and `tools/pipeline/timeline.sh` reads them. P66 measured: implementer 4 h 20 min
   wall-clock, 17 min model time; review 58 min, 5 min model time.

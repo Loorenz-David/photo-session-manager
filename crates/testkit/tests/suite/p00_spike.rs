@@ -391,18 +391,29 @@ fn c5b_nudge_body_cannot_inject_event() {
 
 #[test]
 fn c6a_watcher_emits_absolute_path() {
-    let dir = tempfile::tempdir().unwrap();
-    let (_watcher, mut rx) = FsWatcher::watch(dir.path()).unwrap();
-    let path = dir.path().join("x.ARW");
-    fs::write(&path, b"raw").unwrap();
-    assert!(wait_for(|| {
-        while let Ok(event) = rx.try_recv() {
-            if event.path == path {
-                return true;
-            }
-        }
-        false
-    }));
+    // P70: the one test that waits for a real file-system event. It runs in its own process, as
+    // it did when this file was its own program, and that process ends right after the assertion
+    // without stopping the watch: on the dev Mac the system's file-event service can take many
+    // minutes to stop a stream while the rest of the suite's apps start theirs.
+    psm_testkit::isolation::in_own_process(
+        module_path!(),
+        "c6a_watcher_emits_absolute_path",
+        || {
+            let dir = tempfile::tempdir().unwrap();
+            let (watcher, mut rx) = FsWatcher::watch(dir.path()).unwrap();
+            let path = dir.path().join("x.ARW");
+            fs::write(&path, b"raw").unwrap();
+            assert!(wait_for(|| {
+                while let Ok(event) = rx.try_recv() {
+                    if event.path == path {
+                        return true;
+                    }
+                }
+                false
+            }));
+            std::mem::forget(watcher);
+        },
+    );
 }
 
 #[test]

@@ -251,6 +251,8 @@ fn c1a_a_verified_duplicate_goes_24_hours_after_it_was_diverted() {
     a.clock.advance(2 * H);
     let buffer = Arc::new(Mutex::new(Vec::new()));
     let output = LogBytes(buffer.clone());
+    // P70: keeps every log site wanted while this thread-scoped capture runs (one shared process).
+    psm_testkit::logs::keep_log_sites_interested();
     let subscriber = tracing_subscriber::fmt()
         .with_writer(move || output.clone())
         .without_time()

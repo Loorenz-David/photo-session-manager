@@ -2,10 +2,17 @@
 name = "psm-testkit"
 version.workspace = true
 edition.workspace = true
+# P70: the behaviour tests are one test program (`tests/suite/main.rs`, one module per phase file), not one
+# program per file, so the workspace links and starts a single test binary.
+autotests = false
 
 [[bin]]
 name = "fake_sidecar"
 path = "src/bin/fake_sidecar.rs"
+
+[[test]]
+name = "suite"
+path = "tests/suite/main.rs"
 
 [dependencies]
 psm-core = { path = "../core" }

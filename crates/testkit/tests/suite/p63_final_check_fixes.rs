@@ -18,7 +18,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const CLAIMED_WIFI: &str = include_str!("../src/fixtures/sidecar_scripts/claimed_wifi.txt");
+const CLAIMED_WIFI: &str = include_str!("../../src/fixtures/sidecar_scripts/claimed_wifi.txt");
 const USB_READY: &str = "{\"timestamp\":\"2026-11-06T10:00:02.000Z\",\"event\":\"connection.ready\",\"transport\":\"usb\",\"model\":\"ILCE-7RM5\",\"store_destination\":\"verified\"}\n";
 
 fn settle(a: &TestApp, what: &str, until: impl Fn() -> bool) {
@@ -128,6 +128,13 @@ fn c1a_no_script_reaches_capture_one_while_the_take_back_keeps_it_closed() {
     let result = thread::scope(|scope| {
         let handle = scope.spawn(|| take_back.run());
         let end = Instant::now() + Duration::from_secs(30);
+        // P70: no tick before the take-back has passed its preconditions (its `save` reached the
+        // fake): a tick first would start the pending preview render and the take-back would refuse
+        // ("a preview is rendering"); under the suite's parallel load the spawned thread can start late.
+        while !handle.is_finished() && !ops(&a).iter().any(|o| o == "save") {
+            assert!(Instant::now() < end, "take-back did not start");
+            thread::sleep(Duration::from_millis(1));
+        }
         while !handle.is_finished() {
             assert!(Instant::now() < end, "take-back did not finish");
             let now = ops(&a);
