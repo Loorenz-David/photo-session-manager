@@ -189,21 +189,6 @@ fn measurement(definition: &Definition, raw: &Json) -> Mapped {
     )
 }
 
-/// An absolute `http`/`https` address with a host.
-fn is_web_address(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    let rest = lower
-        .strip_prefix("https://")
-        .or_else(|| lower.strip_prefix("http://"));
-    match rest {
-        Some(rest) => {
-            let host = rest.split(['/', '?', '#']).next().unwrap_or("");
-            !host.is_empty() && !text.chars().any(char::is_whitespace)
-        }
-        None => false,
-    }
-}
-
 /// MC-A2's mapping table: the model's output for one definition → its stored value, or a fail.
 pub fn map_output(definition: &Definition, output: &Json) -> Mapped {
     use CoreType as T;
@@ -243,7 +228,9 @@ pub fn map_output(definition: &Definition, output: &Json) -> Mapped {
             _ => fail("the answer is empty"),
         },
         T::Url => match output.as_str().map(str::trim) {
-            Some(text) if is_web_address(text) => stored(definition, Json::from(text), Vec::new()),
+            Some(text) if super::sites::host(text).is_some() => {
+                stored(definition, Json::from(text), Vec::new())
+            }
             _ => fail("the answer is not an http or https address"),
         },
         T::Integer => {
