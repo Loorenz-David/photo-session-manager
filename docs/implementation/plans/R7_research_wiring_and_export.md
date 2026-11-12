@@ -7,7 +7,7 @@ depends_on: [R4_research_engine, R6_research_ui]
 ---
 # R7 — Wiring and export: the engine joins the app; the research record is kept and exported
 
-**Tracker:** NOT_STARTED · 2026-11-12 · planner · —
+**Tracker:** IMPLEMENTED · 2026-11-12 · opus · U1 `4a1de73`, U2 `b4a0464`: 17/17 plan rows + 6 carried rows tested at their boundaries; full gate green (workspace 870 suite + 135 engine + rest, clippy, fmt, typecheck, vitest 488).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -192,3 +192,49 @@ On scratch data (`PSM_DATA_DIR=$HOME/psm-research-dev`), shop connected:
 Everything else in the app behaves as before.
 
 ## Review log
+
+### 2026-11-12 · implement r1 · opus (Claude Opus 5.5, `pipeline-implementer`)
+**Built.** U1 (`4a1de73`): `App::build` runs `psm_research::schema::ensure`, builds `ResearchService` (settings read live
+from `settings.json`, the app's store, clock, imaging, the camera runtime's secrets port, `CommerceShopFacts` over
+`App.commerce`, the app's event hub, `adapters::build`) and a `ResearchWiring` in `crates/integrations/src/lib.rs`:
+its own `JobRunner::only_kind("research")`, its own thread (250 ms), one turn at a time (`try_lock`), and an observer
+on the `EventHub`. The main runner excludes `research`. `App.research`, `App.research_runner`, `App::research_tick`.
+Settings: core `SettingsService::set` accepts `research` (fields merged); `SettingsSetContext::prepare` validates the
+patch with `ResearchApi::validate_settings` first; `apply_settings` calls `settings_changed`; a research change
+rebuilds the runtime only when `research.providers` changed. The three site commands save the value the engine
+returns. `TestApp::with_research()` / `with_research_fakes_only()` register the crate's fakes through
+`psm_integrations::with_test_research` (keyed by data folder, like `with_test_manifest`); `TestApp::tick` runs one
+research turn. U2 (`b4a0464`): `retention.rs` (`purge_expired`), `export.rs` (`export`), store queries, `files.remove`,
+`CallGateway::secret_values`; the app purges at launch (when the engine is built) and hourly in the runner's turn;
+Settings → Research → **Export research** (range of local dates or chosen items, folder picker, the returned path).
+
+**Carried items.** One start app-wide: the turn lock, plus `store::start_run` re-checks "nothing running" inside the
+start transaction (returns whether it started). `external_id` reads the configured integration's link (harness
+`link_item` now links under the harness integration). `writes::layout_step` fails closed on a Product step. Decide
+lowers nothing when the run ends `stopped_at_cap`. Release signal: `resolve_pending_in` returns the `Released` item;
+`AttributesService` and `HistoryService::reverse` emit `session_changed` + `publish_progress` (`publish::emit_released`)
+after the commit; `held_publish` / `emit_if_released` removed from `commands/attributes.rs`. `ResearchStatus.wait_ends_at`
+(the panel uses it; the UI clock is gone). `AttributeValueDto.conflict` from `publish_partition::is_conflict` (the TS
+copy is deleted); Accept all counts non-low, non-conflict suggestions. Bindings regenerated (two fields).
+
+**`session_changed` sites (delegated: an observer).** One registration (`build_research`); it hears `PhotoAdded`
+(arrival), `PhotoChanged` (previews: a source became available; composition; history restore; export renders; the
+original-preview job), `SessionChanged`, and `HistoryChanged` (classify, reorder, delete, move, copy, composition and
+attribute steps), the last counted only when the session's `change_seq` moved (MC-6), so attribute edits do not
+restart the quiet period. The engine hears them at the runner's next turn, outside every service's transaction.
+
+**Assumptions.** Export date range = local dates as `YYYYMMDD` numbers; the zip's path is returned and the folder
+stays beside it; field names in `master_plan_research.md` §6.7. "At launch" purge = when the engine is built at app
+open (also on a runtime rebuild after a settings save; harmless). Secret values = the three research accounts, the
+camera's three accounts and the integration's client secret. A run selected by items includes never-started runs.
+The release events are emitted by the core services after commit (not by the commands) so every path, including
+undo/redo, shares one signal and the row is testable in the app suite.
+
+**Deviations.** Files outside the U1/U2 lists, each forced by a carried item or a changed shape:
+`crates/core/src/services/{settings.rs, attributes.rs, history.rs, publish.rs}`, `crates/research/src/{api.rs,
+decide.rs, runs.rs, service.rs, writes.rs, gateway.rs}`, `apps/desktop/src-tauri/src/{commands/attributes.rs,
+commands/research.rs, lib.rs}`, `apps/desktop/src/features/form/{AiPopover, FormDialog, ResearchPanel}.tsx` and five
+form test fixtures (`conflict` / `wait_ends_at` fields). The R2 desktop test `f_c1a_unwired_commands_return_research_unavailable`
+asserted the unwired state R7 ends; it now asserts the commands reach the engine (renamed `…_reach_the_wired_engine`).
+`gateway::a11_c4a` unchanged: retention added no column. Engine test names for the carried rows use `r7_u1_…` (no row id).
+
