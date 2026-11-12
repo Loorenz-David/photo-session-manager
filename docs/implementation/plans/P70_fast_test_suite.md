@@ -132,3 +132,30 @@ p29 196.6, p30 157.3, p64 131.6, p28 101.8, p48 67.4, p40 57.4, p13 55.6, p46 54
 C2(a): 812 integration test names before = 812 after (`.pipeline/p70/before_names.txt` vs `after_names.txt`, module prefix
 aside), none ignored or deleted. Assumptions A1–A5 and deviations (p50 C6(b), p63 C1(a), p00 C6(a) start/stop races) in the
 handoff.
+
+### 2026-11-12 — review r1 (opus): APPROVED_WITH_NOTES
+**Gate/perimeter.** Tracker IMPLEMENTED; `41e01c7` = 73 paths (56 renames `tests/*.rs → tests/suite/*.rs` + 17 edits) = the handoff's
+declared list exactly. Tree for every run below: clean `e6ad922` (code tree = `41e01c7`).
+**Runs (review mode).** `cargo test --workspace --no-run` 51 s; `time cargo test --workspace` ×2 — run 1 (first after relink, nothing
+compiled) 16 min 50 s, 946/946; run 2 (warm) **7 min 59 s**, 946/946 (812 suite in 114 s + 134 unit). The second run was authorised
+before it: run 1 is not C1(a)'s condition (warm second run) and only a whole-suite run measures it. C4(a)
+`cargo test -p psm-testkit --test suite p66_approve_on_arrival_and_session_order::` → 6 passed, 806 filtered out (2 min 35 s, of which
+recompiling integrations/testkit under package features). `cargo fmt --all -- --check` 0; `cargo clippy --workspace --all-targets -- -D warnings` 0;
+`npm run typecheck` 0. Logs: `.pipeline/p70/review/`.
+**Verified correct.**
+- C1(a): warm 7 min 59 s ≤ 10 min (implementer 8 min 43 s); before/after tables above.
+- C2(a): `.pipeline/p70/before_names.txt` = `after_names.txt` (812, byte-identical after prefixing); independently `git grep '#[test]'`
+  over `crates/testkit/tests` = 812 at `a00b7ee` and at `41e01c7`, `#[ignore]` 0 and 0; every changed `assert` line in the diff is a
+  re-indent inside `in_own_process` except p42 C2(b) (3 s → the test's 500 ms grace, same shape: ≥ grace, < grace + 1 s).
+  The p50 C6(b) and p63 C1(a) start-order waits only delay the first read/tick; the assertions and the window they guard are unchanged.
+- C3(a): `SidecarTimings::default()` = `{ quit_grace: QUIT_GRACE_MS = 3000 ms }`; `production_timings_unchanged` asserts the literal 3000 ms,
+  so a changed default fails it; all four `quit_and_wait` call sites pass `self.sidecar_timings().quit_grace`, the field starts at
+  `Default`, and the only `set_sidecar_timings` caller in the repo is p42 C2(b). No other production change.
+- C4(a)/(b): command runs exactly p66's 6 tests; master plan §6.9/§7.2, flow.md §4A, the four templates name `--test suite <stem>::`;
+  no per-file `--test <stem>` form left.
+- C5(a): green as above; implementer's npm stamp (466/466, known p33 C4(d) flake on a second run) stands.
+- Isolation helper cannot pass vacuously: the parent requires child exit 0 **and** `1 passed` for the exact name. A3 (symlinked fake
+  helper) holds: production writes only to temp copies (`sony::install`, `refresh_sidecar_copy`) and renames over the path, never
+  through it. H1–H8 hold (only adapter-side code changed; no core, no pixel, no RAW, no Tauri change). No live services.
+**Notes → backlog** (4): unlisted `tests/suite` file never runs; `-p` vs `--workspace` feature rebuilds + first-start check cost;
+first workspace run after a relink > the tool's 10-min limit; shared helper copies accumulate.
