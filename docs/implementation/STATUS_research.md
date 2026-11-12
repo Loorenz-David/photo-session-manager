@@ -9,7 +9,8 @@ Ten milestones R1–R10 in `docs/implementation/phases_research.txt`; rules in `
 tracks and driver loop in `docs/implementation/master_plan_research.md`. `main` (with P70, the fast suite) was merged
 into this branch at `2026-11-12`; the branch is local, not pushed.
 
-- **Ready to start:** `R2_research_foundation` (alone, first). Then Track A here: R3 → R4 → R7 → R9 → R10.
+- **Run in flight:** `tools/pipeline/run_phase.sh phase R2_research_foundation`, started 2026-11-12 14:34 (track A, this worktree).
+- **Next after R2:**  Then Track A here: R3 → R4 → R7 → R9 → R10.
 - **Ready, needs a second worktree (Track B, branch `research/track-b`):** `R1_research_benchmark`. The keys file
   `~/.psm_research.env` exists with the three names set (checked for presence only; the keys have not been used).
   Then R5 → R6 → R8.
