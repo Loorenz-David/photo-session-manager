@@ -518,6 +518,10 @@ is pending again. Redoing it while the item is still `held` records the entry ag
 was the last pending key. The entry belongs to the resolving step: a later action on the same key changes nothing
 in `resolved_attributes`, and only undoing the resolving step removes it.
 
+**Only resolvable keys wait** (changelog 8). A conflict whose key is not in the item's current layout, or has no
+active definition, is not pending: it is left out of the run (not frozen, not held, not counted as withheld). The
+shop keeps its value (07A MC-13); a new product gets none for that key.
+
 **The stalled step.** An item confirmed with ≥ 1 pending key starts at step **`held`**, which is ordered before
 `prepare`. No job is queued for it, no step runs, and no integration mutation is issued (no `ConfirmedRun` value is
 handed to the adapter). The transaction that resolves its last pending key sets the step to `prepare`, records
@@ -772,3 +776,7 @@ to 07A MC-10 and 05A MC-30.
    nothing. (b) Entering keys or switching Automatic on starts nothing (the owner first said start the open session, then
    withdrew it the same day: "I can do it by doing a new session"). MC-A7's "never starts one" holds; MC-A6's
    "eligibility is evaluated on every save" means the status is re-evaluated, not that a run is queued.
+8. **2026-11-12 — Only resolvable keys wait (orchestrator, from the R5 projection).** A conflict on a field the
+   item's form no longer shows (layout changed after research wrote it, or the definition was dropped by a schema
+   refresh) would hold the item with nothing to resolve. Such a key is left out of the run instead. Completes the
+   owner's card 1 ("stalled until resolved" assumes resolution is possible), as changelog 6 did.

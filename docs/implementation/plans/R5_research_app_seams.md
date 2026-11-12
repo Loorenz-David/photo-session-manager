@@ -20,8 +20,8 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
 | Unit | What it builds | Criteria | Rows | Changes app files |
 |---|---|---|---|---|
 | U1 | Feedback rows, conflict actions, guarded undo and redo | 5 | 16 | yes |
-| U2 | Withheld values, conflicts and the held item in a publish | 7 | 23 | yes |
-| **Total** | | **12** | **39** | |
+| U2 | Withheld values, conflicts and the held item in a publish | 7 | 24 | yes |
+| **Total** | | **12** | **40** | |
 
 ## Read first (whole milestone)
 `docs/process/flow.md` (**§10 is the authority for this track**) · `docs/implementation/master_plan.md` §3, §6, §7 · `docs/implementation/master_plan_research.md` (all: layout §0, standing rules §3, sequencing and tracks §5, registry §6, commands §7.2, the storage decision §6.4) · book `01`, `14` §Research agent, `08A`, `08B` · then each unit's own Read first. Name key and sameness are `psm_core::mechanisms::{name_key, sameness}` (R2·U1); every other research rule is `psm_research::rules`.
@@ -41,6 +41,8 @@ drifted by about 5 lines (projection, reality checks); find the functions by nam
   N8, N9 → U2 Decided by the orchestrator. N1 and N8 are also folded into R6·U3.
 - Projection attempt 3 (P1–P6): P1 → U1 Files, task 6, A08·C5(b), R6·U3 note. P2 → U2 task 6, A09·C6(a). P3 → U2 task 4,
   A09·C4(b). P4 → U2 Files. P5 → U2 task 4, A09·C2(a), R6·U3 note. P6 → U1 Decided by the orchestrator.
+- Projection attempt 4 (Q1–Q4): Q1 → U2 Files, A09·C2(a). Q2 → U1 Decided by the orchestrator. Q3, Q4 → U2 task 3,
+  row A09·C1(f); book 08B MC-A10 (changelog 8).
 
 ## Unit 1 — Feedback rows, conflict actions, guarded undo and redo
 
@@ -134,6 +136,10 @@ existing "Clear <label>" style).
   prefix. No row.
 - **What redo re-inserts (P6):** undo reads the feedback rows carrying the step's token before deleting them and
   keeps them on the step; redo re-inserts exactly those (so a coalesced `final_value` is not lost).
+- **Where coalescing is decided (Q2):** once, inside the action's transaction: the service reads the session's last
+  undo step through `History` (the predicate of `coalesce_attribute` plus U2 task 5's "never coalesce into a step
+  that recorded a resolution"), updates the feedback row when it merges, and hands that same decision to
+  `History::record`, which does not re-decide. The mechanism (a lock or a returned flag) is the implementer's.
 
 ### Notes
 - **Behaviour change, by contract:** "Looks right" used to make the value human-owned
@@ -172,7 +178,7 @@ M14, M17, MA8, MA17), `07` (publish steps), `07A` **MC-10** (frozen confirmation
 `apps/desktop/src-tauri/src/commands/publish.rs`, `crates/testkit/src/fake_commerce.rs`.
 
 ### Files
-New: `crates/core/src/mechanisms/publish_partition.rs`, `crates/testkit/tests/suite/research/r5_publish_hold.rs` (+ `mod` line). Edited: `crates/core/src/mechanisms/mod.rs`, `crates/core/src/services/{publish.rs, attributes.rs, history.rs}`, `crates/core/src/ports/store.rs`, `crates/core/src/domain/publish.rs` (`PublishPreviewItem` gains `n_withheld`, `conflicts`; `PublishItem` is the home of the one "pending keys without a resolution" helper; P4), `crates/core/src/error.rs` (P5), `crates/testkit/src/test_app.rs` (`confirm_as_shown`; P4), `crates/infra/src/sqlite/store.rs`, `apps/desktop/src-tauri/src/commands/publish.rs`, `apps/desktop/src/services/{bindings.ts, publish.ts}`, `apps/desktop/src/features/publish/PublishPopover.tsx` (pass what the preview returned; no new UI), `crates/research/src/rules/write_table.rs` (one line: delegate `is_conflict`). **Mechanical, pass the shown set** (projection L7): the 42 `confirm` call sites in the testkit files `p13`, `p14`, `p15`, `p16`, `p17`, `p21`, `p25`, `p30`, `p59`, `p61`, `p62`, `p64`, `p65`, `p66`, `p69` (`crates/testkit/tests/suite/`), through one helper `TestApp::confirm_as_shown(ids, summary)` that takes the shown set from a fresh `preview`; `apps/desktop/src/features/publish/__tests__/p15_publish_ui.test.tsx` (the `publishConfirm` call assertion gains the shown set; its preview literal gains `n_withheld`, `conflicts`) and `apps/desktop/src/features/compose/__tests__/p32_reframe.test.tsx` (preview literal).
+New: `crates/core/src/mechanisms/publish_partition.rs`, `crates/testkit/tests/suite/research/r5_publish_hold.rs` (+ `mod` line). Edited: `crates/core/src/mechanisms/mod.rs`, `crates/core/src/services/{publish.rs, attributes.rs, history.rs}`, `crates/core/src/ports/store.rs`, `crates/core/src/domain/publish.rs` (`PublishPreviewItem` gains `n_withheld`, `conflicts`; `PublishItem` is the home of the one "pending keys without a resolution" helper; P4), `crates/core/src/error.rs` (P5), `apps/desktop/src-tauri/src/commands/items.rs` (one match arm: `Error::SuggestionsChanged` → code `suggestions_changed`; Q1), `crates/testkit/src/test_app.rs` (`confirm_as_shown`; P4), `crates/infra/src/sqlite/store.rs`, `apps/desktop/src-tauri/src/commands/publish.rs`, `apps/desktop/src/services/{bindings.ts, publish.ts}`, `apps/desktop/src/features/publish/PublishPopover.tsx` (pass what the preview returned; no new UI), `crates/research/src/rules/write_table.rs` (one line: delegate `is_conflict`). **Mechanical, pass the shown set** (projection L7): the 42 `confirm` call sites in the testkit files `p13`, `p14`, `p15`, `p16`, `p17`, `p21`, `p25`, `p30`, `p59`, `p61`, `p62`, `p64`, `p65`, `p66`, `p69` (`crates/testkit/tests/suite/`), through one helper `TestApp::confirm_as_shown(ids, summary)` that takes the shown set from a fresh `preview`; `apps/desktop/src/features/publish/__tests__/p15_publish_ui.test.tsx` (the `publishConfirm` call assertion gains the shown set; its preview literal gains `n_withheld`, `conflicts`) and `apps/desktop/src/features/compose/__tests__/p32_reframe.test.tsx` (preview literal).
 
 ### Core mechanisms (the only functions with unit tests)
 `psm_core::mechanisms::publish_partition::{partition, is_conflict}`.
@@ -183,6 +189,11 @@ New: `crates/core/src/mechanisms/publish_partition.rs`, `crates/testkit/tests/su
 3. `partition(values, definitions)`: frozen = live, valid rows, except withheld (`ai` + `suggested` + `low` with no
    prior) and pending (`is_conflict`); a row with a prior that is not a conflict is frozen at any confidence.
    `origin` holds provenance, status, confidence and prior for every frozen, withheld or pending key.
+   `partition` also takes the item's current layout. A row whose key has **no active definition** is never pending;
+   it is frozen or withheld by the other rules, as today, and `write_set` never sends it (Q3). A conflict whose key
+   is **not in the item's current layout** is not pending either: it is left out of the run (not frozen, not held,
+   not counted as withheld); the shop keeps its value (07A MC-13), a new product gets none for that key (Q4; 08B
+   MC-A10, changelog 8). Otherwise an item could wait on a field the form cannot show.
 4. `preview` returns, per item, `n_withheld` and the conflicts (key, label, prior value and origin, suggestion,
    confidence). `confirm(session_ids, summary, shown)` recomputes both from the rows it reads **inside the
    confirming transaction**; `shown` is required, never an `Option` that skips the re-check (fail-open on H1, R-IA22); a difference for any item refuses the whole confirmation with `AI suggestions changed
@@ -223,7 +234,7 @@ New: `crates/core/src/mechanisms/publish_partition.rs`, `crates/testkit/tests/su
    implementer's choice. `cancel` on a held item sets `Cancelled` at once, and `activity` of a `held` item reports `can_cancel: true` (no
    retry), so the progress view offers Cancel for it (P2: today `active()` excludes `Held`, so `can_cancel` is false). The startup re-queue leaves held items held.
 
-### Criteria (7 criteria, 23 rows)
+### Criteria (7 criteria, 24 rows)
 Boundary: `PublishService::{preview, confirm, cancel}`, the attribute actions, `TestApp::tick`, and the mutations
 `FakeCommerce` recorded. "Sends" means a recorded `attributes_write`.
 | Row | Boundary | Input | Exact outcome | Trace |
@@ -233,7 +244,8 @@ Boundary: `PublishService::{preview, confirm, cancel}`, the attribute actions, `
 | A09·C1(c) | same | plus a conflict at `low` and a conflict at high | both absent from `frozen_attributes`, both in `pending_conflicts` with prior value, origin, suggestion and confidence; neither counted as withheld | MA17 |
 | A09·C1(d) | same | plus `ai` + `suggested` `low` whose prior is the same value under `S`, made by research replacing its own suggestion: `writes::suggest` B over default D (prior D), then `writes::suggest` d (S-equal to D) at `low` (the prior is kept; not a conflict). A direct write S-equal to a live default returns `AlreadyHolds` and cannot make it | frozen | MC-A10 |
 | A09·C1(e) | same | a cleared row and an invalid row | neither frozen (as before this phase) | M17 |
-| A09·C2(a) | `confirm` re-check | preview shows `n_withheld` 1; a second low suggestion is written; confirm with the shown set | refused with `Error::SuggestionsChanged` (`AI suggestions changed while you were confirming`); no `publish_runs` row | MA17 (R-IA22) |
+| A09·C1(f) | same | a conflict on a key that research wrote while it was in the layout, then the layout changed (Customize fields) so the key is no longer in it | absent from `frozen_attributes` and `pending_conflicts`, not counted in `n_withheld`; step `prepare` | MC-A10 (changelog 8) |
+| A09·C2(a) | `confirm` re-check | preview shows `n_withheld` 1; a second low suggestion is written; confirm with the shown set | refused with `Error::SuggestionsChanged` (`AI suggestions changed while you were confirming`); no `publish_runs` row; and, in the desktop `r5_` test module, `CommandError::from(Error::SuggestionsChanged).code == "suggestions_changed"` (the string R6·U3 keys on) | MA17 (R-IA22) |
 | A09·C2(b) | same | preview shows conflict keys `{k1}`; `k1` is resolved before confirm | refused the same way; no run row | MA17 |
 | A09·C3(a) | held item | two sessions confirmed together, the first with one conflict | first item step `held`, no job row for it; after `tick` until idle `FakeShop.products` holds exactly one product, with the second item's SKU, and `FakeShop.values` has entries only under that product's id; the second item reaches `done` with its gallery and values written | MA17 |
 | A09·C3(b) | H1/M5 | C3(a) | the run's `confirmed_at` ≤ every recorded mutation's `at` (the `p13` form) | M17 |
