@@ -14,8 +14,15 @@ Repository root: `{{ROOT}}` (your working directory). Read first, in this order:
    `docs/intention/book/14_measurement_ledger.md`, then every chapter the plan file names.
 4. `{{PLAN_FILE}}` — your task list and acceptance criteria. **The plan file wins over this prompt.**
 
-**Gate.** The intention header reads RATIFIED; the master plan tracker shows every phase in
-`depends_on` APPROVED and {{PHASE}} not yet APPROVED. Otherwise stop with `STATE: BLOCKED`.
+**Gate.** The intention header reads RATIFIED; the master plan tracker (or the tracker the plan
+file names) shows every phase in `depends_on` APPROVED and {{PHASE}} not yet APPROVED. Otherwise
+stop with `STATE: BLOCKED`.
+
+**A plan made of units (flow.md §10).** If the plan file has `## Unit` sections, work the units in
+their order. After each unit: run that unit's **Unit test commands**, then make a
+`CHECKPOINT (not approved):` commit of that unit's paths before starting the next. The plan's
+**Closing gate** section replaces the closing gate described below, and its per-unit commands
+replace the per-phase test command. The handoff lists every unit's checkpoint SHA in order.
 
 **Build the phase.** Stay inside the plan's file perimeter; nothing from other phases. Use the
 exact names in the registry. Mechanism contracts from the intention are implemented verbatim.

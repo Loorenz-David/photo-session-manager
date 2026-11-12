@@ -1,29 +1,15 @@
-# Research agent phases (branch feature/agentic), in execution order.
-# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `tools/pipeline/run_phase.sh phase <id>`;
-# the driver loop is in docs/implementation/master_plan_research.md §0.
-# A01 and A02 need the owner's keys (master_plan_research.md §7.6). Without the keys, start at A03 and take A01 and A02 when they arrive.
-# A16, A17 and A24 are blocked on an owner pick; A23 is owner-attended (see §5 of the same file).
-A01_research_probes_and_search_benchmark
-A02_research_stage_model_benchmark
-A03_research_values_and_sameness
-A04_research_sites_and_fingerprints
-A05_research_confidence
-A06_research_cost_and_call_rules
-A07_research_storage_and_write_permission
-A08_research_feedback_and_undo
-A09_research_publish_hold
-A10_research_ports_images_and_fakes
-A11_research_call_gateway
-A12_research_stages_and_decide
-A13_research_run_lifecycle
-A14_research_resume_reuse_follow_ups
-A15_research_model_adapter
-A16_research_visual_search_adapter
-A17_research_page_reader_and_shop_hosts
-A18_research_panel_ui
-A19_research_settings_ui
-A20_research_publish_ui
-A21_research_retention_and_export
-A22_research_report_and_replay_tool
-A23_research_acceptance_benchmark
-A24_research_defaults
+# Research agent milestones (branch feature/agentic), single-track order. One runner phase each (flow.md §10).
+# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `tools/pipeline/run_phase.sh phase <id>`.
+# Two-track schedule, worktrees and merge order: docs/implementation/master_plan_research.md §5.
+# R1 needs the owner's keys (§7.6); without them start at R2 and take R1 when they arrive.
+# R8 waits for R1's evidence and the owner's two picks; R9's measurement is owner-attended; R10 waits for the model pick.
+R1_research_benchmark
+R2_research_foundation
+R3_research_rules
+R4_research_engine
+R5_research_app_seams
+R6_research_ui
+R7_research_wiring_and_export
+R8_research_real_adapters
+R9_research_tool_and_acceptance
+R10_research_defaults

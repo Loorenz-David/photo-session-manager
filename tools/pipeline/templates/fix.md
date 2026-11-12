@@ -21,7 +21,8 @@ implemented as written, implement the sound alternative and explain which findin
 **Test runs (flow.md §4A).** While fixing, run only the test files the findings name (a phase's behaviour tests:
 `cargo test -p psm-testkit --test suite <stem>::`) and the tests of the modules you changed. At the end run the test files of the crates and UI features
 your fix touched, clippy, fmt and typecheck once, one command after the other; the full suite
-only if the fix changed shared code (store, migrations, services used by every phase). Never two
+only if the fix changed shared code (store, migrations, services used by every phase); a plan with
+a **Closing gate** section names the commands for its units instead (flow.md §10). Never two
 cargo commands at the same time, never in the background, never piped into `head`.
 
 **Close.** Suite, lint and typecheck green; tracker row → `IMPLEMENTED` (note: fix {{FIXN}});

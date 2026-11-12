@@ -16,9 +16,10 @@ Otherwise `STATE: BLOCKED`.
 
 **Do this, in order.**
 1. `git show --stat <checkpoint>`: the committed paths equal the declared files changed. Extra or
-   missing paths are a finding.
-2. Run the checks once, with the master plan's commands, as the plan's **Review mode** says (if
-   it says nothing: this phase's test files (`cargo test -p psm-testkit --test suite <stem>::`), the test files of the crates and UI features the
+   missing paths are a finding. (A plan made of units has one checkpoint per unit: check the range
+   `git diff --stat <first checkpoint>^ <last checkpoint>`, and read the units in order.)
+2. Run the checks once, with the master plan's commands, as the plan's **Review mode** says (a
+   plan with a **Closing gate** section names the exact commands; if the plan says nothing: this phase's test files (`cargo test -p psm-testkit --test suite <stem>::`), the test files of the crates and UI features the
    diff touches, clippy, fmt, typecheck; the implementer's full-suite stamp stands unless missing
    or contradicted). Red → B4. One cargo command at a time, never in the background, never piped
    into `head` (flow.md §4A).
