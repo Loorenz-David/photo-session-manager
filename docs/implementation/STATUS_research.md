@@ -17,9 +17,13 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R4_research_engine`, started 2026-11-12 15:25 (track A).
   Implementer on Opus via `PSM_IMPLEMENTER=claude` (the runner defaults to Codex; set the variable for every research run).
 - **Next on track A:** R7 (needs R6 from track B) → R9 → R10.
-- **Ready, needs a second worktree and the owner's yes (asked 2026-11-12, no answer yet) (Track B, branch `research/track-b`):** `R1_research_benchmark`. The keys file
-  `~/.psm_research.env` exists with the three names set (checked for presence only; the keys have not been used).
-  Then R5 → R6 → R8.
+- **Track B (owner said yes 2026-11-12):** worktree `~/Desktop/Developer/Photo-Session-Manager-agentic-b`, branch
+  `research/track-b`, created at `2cb6454` (R3 approved; before any R4 commit), `npm ci` done.
+  **Run in flight there:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R1_research_benchmark`, started
+  2026-11-12 15:27. Real paid calls, ceiling USD 50 (plan). Keys `~/.psm_research.env` (0600) and `~/.psm_shopify.env`
+  present (presence only). Then R5 → R6 → R8 on track B. Merge rule (master plan §5): after each approved B milestone
+  merge `research/track-b` into `feature/agentic` here; after each approved A milestone merge `feature/agentic` into
+  track B before B's next milestone. Track B's copy of this file is not maintained; this one is.
 - **Blocked on the owner:** R8 (search route and page-reading route, picked from R1's report); R10 (models per stage,
   picked from R9's report). Picks arrive as decision cards in the R1 and R9 narratives.
 - **Unverified, watch for it:** this worktree has never been built (first cargo run is a full compile); the three
