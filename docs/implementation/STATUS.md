@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-12 05:15: P69 APPROVED_WITH_NOTES (03:24; Claude Opus, implement 3 h 50 min, review 19 min). P70 implementing since 03:24.** Narrative relayed. Work-Mac app (P53–P69) building from a detached worktree at `32d166a` in the session scratchpad with its own target dir, so P70's working tree is untouched. Orchestrator owes book updates for P66, P68, P69 (8-bit masters, prepared when Ready).
+
 **2026-11-11 23:17: P68 APPROVED_WITH_NOTES (23:16; Claude Opus). P69 → P70 launched (driver).** Narrative relayed. P68 timings: implementer 2 h 29 min wall-clock, of which ~35 min coding + targeted checks and ~1 h 50 min the single closing full suite (run in the background with Monitor, so not counted as a command in the timeline); review 15 min (11 min commands, 4 min model). Orchestrator owes the book updates for P66 (approve on arrival, Deny deletes the RAW) and P68 (16-char password shown again, wrong-keys sentence).
 
 **2026-11-11 22:15: P67 APPROVED_WITH_NOTES (20:31; Claude Opus after Codex limit). P68 implementing under flow v1.4.** P67 narrative relayed. P68 timeline: code written and targeted checks done in ~32 min (26 min of it in commands); the single closing `cargo test --workspace` then ran > 1 h on its own — the P70 target. Backlog from P67: batch scroll position sometimes lost; Save as default on an untyped item; first default forks the type layout.
