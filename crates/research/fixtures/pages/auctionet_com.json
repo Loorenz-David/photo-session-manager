@@ -1,0 +1,65 @@
+{
+  "cap": "page_fetch",
+  "cost_micro_usd": 0,
+  "duration_ms": 357,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T15:17:16.788Z",
+  "fixture": {
+    "captured": "2026-11-12T15:17:16.430Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "pages/auctionet_com.json"
+  },
+  "id": "v8-http-auctionet_com-5fa9a9ee5dd3",
+  "meta": null,
+  "model": "",
+  "provider": "page_http",
+  "request": {
+    "body": null,
+    "headers": {
+      "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en"
+    },
+    "method": "GET",
+    "url": "https://auctionet.com/en/2375758-johannes-andersen-dining-table-for-uldum-mobelfabrik-denmark-1960s"
+  },
+  "request_hash": "5fa9a9ee5dd3297eecb472480de39046a81a8875eb7609594b7fd243b2ceb26c",
+  "response": {
+    "body": null,
+    "body_bytes": 151604,
+    "body_omitted": "third-party page body not committed",
+    "final_url": "https://auctionet.com/en/2375758-johannes-andersen-dining-table-for-uldum-mobelfabrik-denmark-1960s",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "no-cache",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Thu, 12 Nov 2026 15:17:16 GMT",
+      "link": "<https://assets.auctionet.com/assets/suisse-7d01ad28.css>; rel=preload; as=style; nopush,<https://assets.auctionet.com/assets/riccione-2d61a3ba.css>; rel=preload; as=style; nopush,<https://assets.auctionet.com/assets/public_theme_auctionet-c11efb76.css>; rel=preload; as=style; nopush,<https://assets.auctionet.com/assets/public-bb8f10c4.js>; rel=preload; as=script; nopush",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "cloudflare",
+      "server-timing": "cfCacheStatus;desc=\"DYNAMIC\", cfEdge;dur=9,cfOrigin;dur=182",
+      "set-cookie": "<redacted>, <redacted>, <redacted>",
+      "transfer-encoding": "chunked",
+      "vary": "Accept, X-Requested-With",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "d6ced956-a044-4920-9b6f-c191a5aa90db",
+      "x-runtime": "0.169796",
+      "x-xss-protection": "0"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T15:17:16.430Z",
+  "usage": {
+    "page_fetch": 1
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 0
+}

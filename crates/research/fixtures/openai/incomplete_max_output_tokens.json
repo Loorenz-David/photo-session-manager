@@ -1,0 +1,237 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 22,
+  "duration_ms": 2443,
+  "effort": "default",
+  "error": null,
+  "finished": "2026-11-12T14:43:39.344Z",
+  "fixture": {
+    "captured": "2026-11-12T14:43:36.901Z",
+    "probe": "RESEARCH-VERIFY-1, -3",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/incomplete_max_output_tokens.json"
+  },
+  "id": "v1-incomplete-gpt-6-luna-91e24938d6fc",
+  "model": "gpt-6-luna",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Look at the photo of a vintage furniture piece. Name the piece type, the visible materials, and whether a maker's label, stamp or marking is visible. Answer in English.",
+              "type": "input_text"
+            },
+            {
+              "image_url": {
+                "image_sha256": "f39fd87ef4af58a1a51787dcccb14fc62b1714c65763670697125433a2b8e440"
+              },
+              "type": "input_image"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "max_output_tokens": 16,
+      "model": "gpt-6-luna",
+      "store": false,
+      "text": {
+        "format": {
+          "name": "observe",
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "materials": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "piece_type": {
+                "type": "string"
+              },
+              "visible_marking": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "piece_type",
+              "materials",
+              "visible_marking"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "json_schema"
+        }
+      }
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "91e24938d6fc9b9e35c4496d43dc6a98185a3e0fbf8dce41a311630fc9c13240",
+  "response": {
+    "body": {
+      "access_programs": null,
+      "background": false,
+      "billing": {
+        "payer": "developer"
+      },
+      "completed_at": null,
+      "created_at": 1794494617,
+      "error": null,
+      "frequency_penalty": 0.0,
+      "id": "resp_0de4df899267927a016af5d099a25c87d28d1d5c9899d265ea",
+      "image": {
+        "context_compression": "disabled"
+      },
+      "incomplete_details": {
+        "reason": "max_output_tokens"
+      },
+      "instructions": null,
+      "max_output_tokens": 16,
+      "max_tool_calls": null,
+      "metadata": {},
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "object": "response",
+      "output": [
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9dCbUKQkA5CPX2XlSORiH-tVXieaa4gP7zawlONctbhmrhNySgufYmPirLkjn5xfjGd-Hr0AAue5Mx19OOVhQaYcGRZQCuf_sz13tDCYlBhToaDn7ZcNA427H_T1UgAYyxly7ZhKEKJZKTTzf4aHav0gme8mYKurEi-xOJcjDge6LlsT8eBR4A2Kf98qnRHd0yN-n7l363Rh5OS2poxQu25dWdDUbXhwSla0BCg6VkwF_EUz--4WL8qecfnZa-eju8i3C05SEvTxZEyCET5yWFVzjqyFZn86MhXi8pG1HyGlST7JWXu_LlRVEKzABbQoOft3NB8hvvk34rLTgx_yV-235o_DCbNAAhEUQYBDpyW83-9lE0zeq6eu8KwZim93t6epHTFsHt1SbKto0tDWxbM-5xdkNOl6IgqD2AxB2I7NEhhPLKmm9yr-wrptjjfKvdpWYqq3vr8ephuuvoT5xED9tOgMlAZuSsnm3ZQIZXyFGagx9mTC1uSrcFivoTAbHn2ENzTVF7nHi7I-Eh7uq8MQQm2PIydw7rZ5wpUCwf3kj-hnghT3-xHlbhz6ZFVj118VYuayy4fzHHpI6sogn_F8cGJ9oxL7z2u0NGGDnxEEYN1Lv-QvAiZYf7JiD6a09EzoAlIXL8BkRMJIllFKt-z_rHu0hxnnAGRK6WijTLot-QKphjVudOaSbpP8QQJyrNB9Kqmv6VYABJztTAO1m7sSCoViQbCbloQgN_B1Vg1dUeOfc5cm1mbyMqqOOSkZTM8c_8Ikb0iehk-SrtcM71lr3W5IcJ8LmxWQ0097X9bjv4mcF0HVwyXjUrVPNEdOanJ1Px3CoDZySngEjfrQ1An_tfDrSst-9YDr3SQ7KKI8zZAhANzd2W-qpsFNhdsLYvzqbgSaHiCVqeTdycUvtlx6W4U10-8iPIcmB2SfQrB5XGbxNHa-iEmm0Vi9k_6dDiX_b-JS9nv-bJiXsZPPWiA-CFguN4F0oaVg501GZ2vSqrvRCAD1iMRh5_Bwxugmfus7humzkJFb8ffqD73PyfA6lkc6xoDzqCZ3RE53Q7LiaG_fTSu8DvuF5VkyAin2IOVFiyjmkvYeYKBFxAyqpHxuOiCOQSp0qJ87YFp1dYu9al76WJv6zmTu_saoW4uFNRvoDYpZaEkXeuobBAmScZcmYsD6dt2q-m-o6ExFjRH6uxLzFAtrOHrmbKbo82oHIYv2-ml1b22YS33aazpKaL9GAqPsuXet6IAmSQWT6GSaUKtJaLzEFQPeva4MIxQABbKoxIWYOC5me23pqeqi56BmQaZxxnTt3j3tulA_GmXJCzEgiMpzdP6QlQ-nedpgybyewJ5sosen8tIpnqPMBgBxhlplXT6vcuFUuByIUeIZZL24UpvK2J4uq1ZMO7C0FYCB7vPXvX2KiYOyXddOgKkkTsqfNhuYH4Eop0aSD3FXQAJZsXlOmwPCw5QoheShEN4i7hB3xJybPYoxS15TDsY47w==",
+          "id": "rs_0de4df899267927a016af5d09b1f2887d299fa460c05cfd724",
+          "summary": [],
+          "type": "reasoning"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0.0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "status": "incomplete",
+      "store": false,
+      "temperature": 1.0,
+      "text": {
+        "format": {
+          "description": null,
+          "name": "observe",
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "materials": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "piece_type": {
+                "type": "string"
+              },
+              "visible_marking": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "piece_type",
+              "materials",
+              "visible_marking"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "json_schema"
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 1316,
+        "input_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 1313
+        },
+        "output_tokens": 16,
+        "output_tokens_details": {
+          "reasoning_tokens": 16
+        },
+        "total_tokens": 1332
+      },
+      "user": null
+    },
+    "body_bytes": 4068,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "4068",
+      "content-type": "application/json",
+      "date": "Thu, 12 Nov 2026 14:43:39 GMT",
+      "openai-organization": "<openai-organization>",
+      "openai-processing-ms": "2303",
+      "openai-project": "<openai-project>",
+      "openai-version": "2020-10-01",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-request-id": "req_efbec73668394c0e8fb3670c30339b6f"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T14:43:36.901Z",
+  "usage": {
+    "input_tokens": 1316,
+    "input_tokens_details": {
+      "cache_write_tokens": 0,
+      "cached_tokens": 1313
+    },
+    "output_tokens": 16,
+    "output_tokens_details": {
+      "reasoning_tokens": 16
+    },
+    "total_tokens": 1332,
+    "web_search_call": 0
+  },
+  "worst_case_micro_usd": 669
+}

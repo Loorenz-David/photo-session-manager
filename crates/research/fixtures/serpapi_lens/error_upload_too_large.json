@@ -1,0 +1,68 @@
+{
+  "cap": "serpapi_upload",
+  "cost_micro_usd": 0,
+  "duration_ms": 831,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T14:46:05.151Z",
+  "fixture": {
+    "captured": "2026-11-12T14:46:04.319Z",
+    "probe": "RESEARCH-VERIFY-7",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "serpapi_lens/error_upload_too_large.json"
+  },
+  "id": "v7-upload-oversized-b173fe4c1d7d",
+  "model": "",
+  "provider": "serpapi_lens",
+  "request": {
+    "body": {
+      "multipart": {
+        "api_key": "<redacted>",
+        "image": {
+          "image_sha256": "a292fceef45a3943bb49cd6c09f7c412411ecf5645cb22d83649ad33d8162ea8"
+        }
+      }
+    },
+    "headers": {
+      "content-type": "multipart/form-data; boundary=----research-bench-boundary-7f3a9c"
+    },
+    "method": "POST",
+    "url": "https://serpapi.com/image"
+  },
+  "request_hash": "b173fe4c1d7d0b8e39b5fb42039047a520117e5d512f75c2c72205de5121ac34",
+  "response": {
+    "body": {
+      "error": "Image file size too large. Maximum size is 500KB"
+    },
+    "body_bytes": 65,
+    "final_url": "https://serpapi.com/image",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "no-cache",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Thu, 12 Nov 2026 14:46:05 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "cloudflare",
+      "transfer-encoding": "chunked",
+      "vary": "Accept",
+      "x-content-type-options": "nosniff",
+      "x-download-options": "noopen",
+      "x-frame-options": "SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "a7294f75-889c-4573-b782-5bfdbb697025",
+      "x-runtime": "0.011013",
+      "x-xss-protection": "1; mode=block"
+    },
+    "redirects": [],
+    "status": 400
+  },
+  "sent": true,
+  "started": "2026-11-12T14:46:04.319Z",
+  "usage": {
+    "upload": 1
+  },
+  "worst_case_micro_usd": 0
+}

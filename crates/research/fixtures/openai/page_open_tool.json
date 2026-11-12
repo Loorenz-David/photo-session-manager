@@ -1,0 +1,253 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 8684,
+  "duration_ms": 5481,
+  "effort": "low",
+  "error": null,
+  "finished": "2026-11-12T15:17:22.319Z",
+  "fixture": {
+    "captured": "2026-11-12T15:17:16.837Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/page_open_tool.json"
+  },
+  "id": "v8-model-auctionet_com-6c1b9d0fcc77",
+  "meta": null,
+  "model": "gpt-6.1-terra",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "include": [
+        "web_search_call.action.sources"
+      ],
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Open this exact page with the web tool and report: (1) the final URL you read, (2) the page title, (3) the designer and maker the page states, word for word, (4) how many product images the page shows. If you cannot open it, say so. Page: https://auctionet.com/en/2375758-johannes-andersen-dining-table-for-uldum-mobelfabrik-denmark-1960s",
+              "type": "input_text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "max_output_tokens": 2000,
+      "max_tool_calls": 2,
+      "model": "gpt-6.1-terra",
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "tools": [
+        {
+          "filters": {
+            "allowed_domains": [
+              "auctionet.com"
+            ]
+          },
+          "type": "web_search"
+        }
+      ]
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "6c1b9d0fcc77c1e5b3124439656e61b91907ae06230bb512f0808422f8dc7c4c",
+  "response": {
+    "body": {
+      "access_programs": {
+        "cyber": "standard"
+      },
+      "background": false,
+      "billing": {
+        "payer": "developer"
+      },
+      "completed_at": 1794496642,
+      "created_at": 1794496637,
+      "error": null,
+      "frequency_penalty": 0.0,
+      "id": "resp_0caa31d072cbd9d8016af5d87cf9d487d2bde646ab15d1254c",
+      "image": {
+        "context_compression": "disabled"
+      },
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": 2000,
+      "max_tool_calls": 2,
+      "metadata": {},
+      "model": "gpt-6.1-terra",
+      "moderation": null,
+      "object": "response",
+      "output": [
+        {
+          "action": {
+            "type": "open_page",
+            "url": "https://auctionet.com/en/2375758-johannes-andersen-dining-table-for-uldum-mobelfabrik-denmark-1960s"
+          },
+          "id": "ws_0caa31d072cbd9d8016af5d87e0d0c87d2ade0488d6764b470",
+          "status": "completed",
+          "type": "web_search_call"
+        },
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9diCsISYLyGeEIyLOif7D7pqFJqzVK-urXUHx9Qd6ia7WMPcINGGLZbaPi2OwRmq97zA0W30mlSNOn26pkhVWwQSf_Bg_2OWIch96c00-R0pNNynFt8HkYgA2BogDwBeg_aQFblB2jtpKriSVK05ZoQM_pV6dZ9OZv6sjjLQ9JtfnrkjCKROHCM2DRmgeo4oVVS-QOcjxbgjsihjqVx1nSpbxaXger8z0iDXgmEKfzfqxKnBmXBV2o-MIz2jMGO6kaElNlgP2aRcs9h9YsIUFZsxczwGkQQ51M81q_lFZ_P1ILw5kI6DUl4ikd4oqlVIQskCm-lDg18IKoe6XKAqfQXMqImlz-cUF6436_MOBxvG_HVjJeJXjp4Z1eolS2dLustlpamIIUOeTb6TR8t3JaZd5bAo9e17dT-pvRvVpVqRFH92FytpvW1iH0Vw-sjF4JPdchPqAZ9GZQ2vQsGpyTueCXh5JlMMiLHXPKZvTiOAiYEeLcdeGCq6mxkrVARX4DQWzcOU2TUpSsmNIp9Ujw5Gazf_GkCoWpSZ-Ayjcz_lLBUj4Z0NtiPUTo0678SZj5VtECtgRhC5w4-Z0LvLV5u0mpYsF7NSerZVLepttG5M5I-igE6e_Jtmitwgrb7ebDu8zcJYyYhl-yax_eSD6TXTTpIwcBfIX5abMlhW7KntV1rvc_a0gSDOCXIVXK9YPlGJoc2WJRLLwkYJB3Sm_9idV7-2gfqeRXM2gByfooEfsQeguFGCHRMJNa-2Szqi7Q2d-j3fOWnv1J0GqBY_HNL0jC8nXF_-EH9EeVYbMow9zXO1nwMyX-kclW7peqMVqvdYWeKFIza_dwWTfwLISUf52mg7TbQwVJPeTG7_gFkK13brh-rr8PlyDYUjqhayQ_W-aYg6nllEqrByHIPrqUSytIr3qP7RSBUJMzyj0yQ-7DCKXN1hJmR8T9FHZXgQWQ8P3beSpYAORA_W7tka0M1OoRfvXF4fN3Iq2ofvJUyccQmxp1DlW9--7MBrmsf4CbFnEsewNFkmZeQtADvAZCaeKx_F-oNaY3F1LoJOwldqo8HmSJvFy_PM9GA0pMwOo4tykdBBH_JGKUCWA9OrWAZzhNeBbxWxM5YYdCkN74vJCQxD20KyUTG4f4JXEzaKjWnA3Au-mKXy0etxKvW2tfTvkhEeuuxasM3XJTu3ruWdW6ZNTc4eociurTQhpy_L3bo7fGqXwHTbcALxdPBEXdtudlodvAFZ86Vw1OZuGQqq7gdF49Yv3ZntQa7PAX8ueMwdlCrxSDtUvmcpWoKsq8J1YQ7PGboHX_2KpF8sYvT8lDEuJ4v2D6bcAgHcRWBvcqnQgiZcXuH1Ze_gFo8h457z6mSIGC1shztkJbTWDHVpnzxbHeGxv_c0T-4lGOn5pkP-VpgQEgO6O412QnGTcQtPyF3c2AyQL_vUX1zm_ebA3MWM_-gDE4qSb_kAvGI8Mpz7p9nPvX8koiZwrDxAzT0giUG8V26k0oZkj8W3XkcIYtCLWNQq2NG-rLgwceqfKe4yo3XSXmhwI6gLG9srh-1YPVSNN0HTmBXCZBGO4mp14yAgI6Z6bfVRX9cAltdgQY_yhaCKA5eXA1W5F4RNwTbP4P-hXyStc-eIScdJ0oDWUM9-2CsASm5G0H1nmMDyuZrE8N9H_J_3NUP8Zepi0f-Gkegx1vdusDFiBZ0d3RjXlVIk_ZX_ICW8sCv-b1beZtC5gNeQQHQRGCr5QCVLxTtQVFdnWCXNeQztF5kStLWJUaVDhsfwZJUHVmNIvxCGUi3aOyOP6JKLmOmK31TzARTEC4h3kYOpKLohxeLtXPWwa6LvLRsuAwUfwwd0QcsQ9cjLKdaYkPbG0vCVYB2w3j4s2acfNBhdqu03tnWT6fKORtfmAcdJ7lhZINdlXXqWmaV2s3wznq6auMHU2FLJ-kkl6rHSXpIW4RdqIUIbebq2OH5O4UWyEjHKrW5v8JgYWPfh",
+          "id": "rs_0caa31d072cbd9d8016af5d880131487d2a3828f0f60c23fd1",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "content": [
+            {
+              "annotations": [
+                {
+                  "end_index": 539,
+                  "start_index": 421,
+                  "title": "JOHANNES ANDERSEN, dining table, for Uldum Møbelfabrik, Denmark 1960s. Furniture - Tables - Auctionet",
+                  "type": "url_citation",
+                  "url": "https://auctionet.com/en/2375758-johannes-andersen-dining-table-for-uldum-mobelfabrik-denmark-1960s"
+                }
+              ],
+              "logprobs": [],
+              "text": "1. **Final URL:** https://auctionet.com/en/2375758-johannes-andersen-dining-table-for-uldum-mobelfabrik-denmark-1960s\n2. **Page title:** “JOHANNES ANDERSEN, dining table, for Uldum Møbelfabrik, Denmark 1960s.”\n3. **Designer and maker, as stated:** “JOHANNES ANDERSEN” and “Uldum Møbelfabrik.”\n4. **Product images:** I couldn’t determine the count. The page opened, but the web tool’s page text did not expose the images. ([auctionet.com](https://auctionet.com/en/2375758-johannes-andersen-dining-table-for-uldum-mobelfabrik-denmark-1960s))",
+              "type": "output_text"
+            }
+          ],
+          "id": "msg_0caa31d072cbd9d8016af5d880713487d2a5e423ddbcbf98d4",
+          "phase": "final_answer",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0.0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "low",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "status": "completed",
+      "store": false,
+      "temperature": 1.0,
+      "text": {
+        "format": {
+          "type": "text"
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [
+        {
+          "filters": {
+            "allowed_domains": [
+              "auctionet.com"
+            ]
+          },
+          "return_token_budget": "default",
+          "search_content_types": [
+            "text"
+          ],
+          "search_context_size": "medium",
+          "type": "web_search",
+          "user_location": {
+            "city": null,
+            "country": "US",
+            "region": null,
+            "timezone": null,
+            "type": "approximate"
+          }
+        }
+      ],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 6389,
+        "input_tokens_details": {
+          "cache_write_tokens": 4538,
+          "cached_tokens": 0
+        },
+        "output_tokens": 232,
+        "output_tokens_details": {
+          "reasoning_tokens": 80
+        },
+        "total_tokens": 6621
+      },
+      "user": null
+    },
+    "body_bytes": 6049,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "6049",
+      "content-type": "application/json",
+      "date": "Thu, 12 Nov 2026 15:17:22 GMT",
+      "openai-organization": "<openai-organization>",
+      "openai-processing-ms": "5349",
+      "openai-project": "<openai-project>",
+      "openai-version": "2020-10-01",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit-requests": "5000",
+      "x-ratelimit-limit-tokens": "1000000",
+      "x-ratelimit-remaining-requests": "4999",
+      "x-ratelimit-remaining-tokens": "998332",
+      "x-ratelimit-reset-requests": "12ms",
+      "x-ratelimit-reset-tokens": "100ms",
+      "x-request-id": "req_8939163485214519b8dc9348288aa896"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T15:17:16.837Z",
+  "usage": {
+    "input_tokens": 6389,
+    "input_tokens_details": {
+      "cache_write_tokens": 4538,
+      "cached_tokens": 0
+    },
+    "output_tokens": 232,
+    "output_tokens_details": {
+      "reasoning_tokens": 80
+    },
+    "total_tokens": 6621,
+    "web_search_call": 0
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 130673
+}

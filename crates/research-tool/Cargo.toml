@@ -1,0 +1,29 @@
+[package]
+name = "psm-research-tool"
+version.workspace = true
+edition.workspace = true
+autotests = false
+
+# R1: the dev-Mac benchmark tool (probes, visual-search and model benchmarks). Real provider calls
+# happen only when a person runs the binary with keys in the environment; the tests use a stub seam.
+
+[[bin]]
+name = "psm-research"
+path = "src/main.rs"
+
+[dependencies]
+psm-core = { path = "../core" }
+psm-infra = { path = "../infra" }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.11"
+url = "2.5.8"
+chrono = "0.4"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[test]]
+name = "tool"
+path = "tests/tool/main.rs"

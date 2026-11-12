@@ -1,0 +1,66 @@
+{
+  "cap": "page_fetch",
+  "cost_micro_usd": 0,
+  "duration_ms": 275,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T15:16:00.771Z",
+  "fixture": {
+    "captured": "2026-11-12T15:16:00.495Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "pages/www_maleforsimports_com.json"
+  },
+  "id": "v8-http-maleforsimports_com-b1c5551633e7",
+  "meta": null,
+  "model": "",
+  "provider": "page_http",
+  "request": {
+    "body": null,
+    "headers": {
+      "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en"
+    },
+    "method": "GET",
+    "url": "https://www.maleforsimports.com/product-page/1"
+  },
+  "request_hash": "b1c5551633e773f7352d2c6f664fbcdaf602315e7a174caa2d0ebb67a6a2306f",
+  "response": {
+    "body": null,
+    "body_bytes": 1125943,
+    "body_omitted": "third-party page body not committed",
+    "final_url": "https://www.maleforsimports.com/product-page/1",
+    "headers": {
+      "age": "125674",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "public,max-age=0,must-revalidate",
+      "cf-cache-status": "HIT",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-language": "en",
+      "content-type": "text/html; charset=UTF-8",
+      "date": "Thu, 12 Nov 2026 15:16:00 GMT",
+      "etag": "W/\"180dbf5e5ef1a2273cef11a6ba6c739e\"",
+      "link": "<https://static.parastorage.com/>; rel=preconnect; crossorigin, <https://static.parastorage.com/>; rel=preconnect, <https://static.wixstatic.com/>; rel=preconnect; crossorigin, <https://static.wixstatic.com/>; rel=preconnect, <https://siteassets.parastorage.com>; rel=preconnect; crossorigin",
+      "server": "cloudflare",
+      "server-timing": "cache;desc=miss, varnish;desc=miss_hit, dc;desc=cloudflare",
+      "set-cookie": "<redacted>, <redacted>, <redacted>",
+      "strict-transport-security": "max-age=31556952",
+      "transfer-encoding": "chunked",
+      "vary": "Accept-Encoding",
+      "x-content-type-options": "nosniff",
+      "x-seen-by": "bQAXdg/f3pWGCb3VI6q72A==,",
+      "x-served-by": "ARN",
+      "x-wix-request-id": "1794496560.641487198400055531"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T15:16:00.495Z",
+  "usage": {
+    "page_fetch": 1
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 0
+}

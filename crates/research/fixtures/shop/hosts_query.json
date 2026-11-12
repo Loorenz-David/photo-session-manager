@@ -1,0 +1,119 @@
+{
+  "cap": "shop",
+  "cost_micro_usd": 0,
+  "duration_ms": 287,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T14:46:26.341Z",
+  "fixture": {
+    "captured": "2026-11-12T14:46:26.054Z",
+    "probe": "RESEARCH-VERIFY-9",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "shop/hosts_query.json"
+  },
+  "id": "v9-hosts-408e0324b62f",
+  "model": "",
+  "provider": "shop",
+  "request": {
+    "body": {
+      "query": "query($id: ID!) { shop { name myshopifyDomain primaryDomain { host url sslEnabled } } webPresences(first: 10) { nodes { domain { host url } rootUrls { locale url } } } product(id: $id) { handle status onlineStoreUrl onlineStorePreviewUrl } }",
+      "variables": {
+        "id": "gid://shopify/Product/16185797640522"
+      }
+    },
+    "headers": {
+      "content-type": "application/json",
+      "x-shopify-access-token": "<redacted>"
+    },
+    "method": "POST",
+    "url": "https://example.myshopify.com/admin/api/2026-10/graphql.json"
+  },
+  "request_hash": "408e0324b62f636f3b3700ce1dd23bd87cf9626d678f1c1e281eb46070e5b3e0",
+  "response": {
+    "body": {
+      "data": {
+        "product": null,
+        "shop": {
+          "myshopifyDomain": "example.myshopify.com",
+          "name": "example",
+          "primaryDomain": {
+            "host": "example.myshopify.com",
+            "sslEnabled": true,
+            "url": "https://example.myshopify.com"
+          }
+        },
+        "webPresences": null
+      },
+      "errors": [
+        {
+          "extensions": {
+            "code": "ACCESS_DENIED",
+            "documentation": "https://shopify.dev/api/usage/access-scopes",
+            "requiredAccess": "`read_markets` for queries and both `read_markets` as well as `write_markets` for mutations."
+          },
+          "locations": [
+            {
+              "column": 87,
+              "line": 1
+            }
+          ],
+          "message": "Access denied for webPresences field. Required access: `read_markets` for queries and both `read_markets` as well as `write_markets` for mutations.",
+          "path": [
+            "webPresences"
+          ]
+        }
+      ],
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 5,
+          "requestedQueryCost": 17,
+          "throttleStatus": {
+            "currentlyAvailable": 1995,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "body_bytes": 899,
+    "final_url": "https://example.myshopify.com/admin/api/2026-10/graphql.json",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-language": "en",
+      "content-security-policy": "default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval' https://* shopify-pos://*; child-src 'self' https://* shopify-pos://*; connect-src 'self' wss://* https://*; frame-ancestors 'none'; img-src 'self' data: blob: https:; script-src https://cdn.shopify.com https://cdn.shopifycdn.net https://checkout.pci.shopifyinc.com https://checkout.pci.shopifyinc.com/build/27bcf73/card_fields.js https://api.stripe.com https://mpsnare.iesnare.com https://appcenter.intuit.com https://www.paypal.com https://js.braintreegateway.com https://c.paypal.com https://maps.googleapis.com https://www.google-analytics.com https://v.shopify.com 'self' 'unsafe-inline' 'unsafe-eval'; upgrade-insecure-requests; report-uri /csp-report?source%5Baction%5D=query&source%5Bapp%5D=Shopify&source%5Bcontroller%5D=admin%2Fgraphql&source%5Bsection%5D=admin_api&source%5Buuid%5D=fb39867a-df17-4354-a654-fea8bb5ffd24-1794494786; report-to shopify-csp",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Thu, 12 Nov 2026 14:46:26 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.01,\"max_age\":604800}",
+      "referrer-policy": "origin-when-cross-origin",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=6ZuynX7kAFP8evwKs0Pvf%2BIFQon%2BLeluG0oViNbYpeBw1HmexZx%2BOPMNyEUMtSNPkeVDQRtH9EotbxsQ%2B3PQs%2B05Uw4cfhun0CLIXg9PNqZxrg%2F9kUJu1C%2Fx7QOvPeFNATs0HXUlc69edmy3iV%2BI1etTzBLmYdg%2Bb6y%2FqM%2F7XwCL4rRzRsE%3D\"}]}",
+      "reporting-endpoints": "shopify-csp=\"/csp-report?source%5Baction%5D=query&source%5Bapp%5D=Shopify&source%5Bcontroller%5D=admin%2Fgraphql&source%5Bsection%5D=admin_api&source%5Buuid%5D=fb39867a-df17-4354-a654-fea8bb5ffd24-1794494786\"",
+      "server": "cloudflare",
+      "server-timing": "processing;dur=80, verdict_flag_enabled;desc=\"count=12\";dur=0.722, graphql;desc=\"admin/query/other\", _y;desc=\"b901e95e-d2d6-4f5b-aedf-d88c061b6fec\", _s;desc=\"24d6bd2d-c08b-4298-a5ca-70dd5a04619c\", _ye;desc=\"1826052386\", _se;desc=\"1794496586\", ipv6",
+      "strict-transport-security": "max-age=7889238",
+      "transfer-encoding": "chunked",
+      "vary": "Accept-Encoding,Sec-Fetch-Site",
+      "x-content-type-options": "nosniff",
+      "x-dc": "gcp-europe-west4,gcp-us-central1,gcp-us-central1",
+      "x-download-options": "noopen",
+      "x-frame-options": "DENY",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "fb39867a-df17-4354-a654-fea8bb5ffd24-1794494786",
+      "x-shopify-api-gql-engine": "cardinal",
+      "x-shopify-api-gql-operation-signature": "3a5061761e9539c4116f059e301c5d6dbdb03327760d24bfd1780981df0e2847",
+      "x-shopify-api-version": "2026-10",
+      "x-stats-apiclientid": "433693360129",
+      "x-stats-apipermissionid": "1066771644569",
+      "x-stats-userid": "",
+      "x-xss-protection": "1; mode=block"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T14:46:26.054Z",
+  "usage": {},
+  "worst_case_micro_usd": 0
+}

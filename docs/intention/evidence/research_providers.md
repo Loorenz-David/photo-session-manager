@@ -67,4 +67,133 @@ setting `research.trusted_sites` (08A §6); the app itself ships with an empty l
 
 Probe 1 (can a listing page be read, and by which route) runs against each of these.
 
-**Test pieces:** owed (owner collecting).
+**Test pieces:** `docs/test-items/beyo_test_samples_1.json` (42 pieces) and `docs/test-items/answer_key_corrections.json`.
+
+---
+
+# R1 results (2026-11-12, `psm-research`, recordings in `~/psm-research-bench/a01/` on the dev Mac)
+
+Everything below was called from this repo's tool (`crates/research-tool`, bin `psm-research`) with the
+owner's keys from `~/.psm_research.env`. Every exchange is a call file under the out folder
+(`<out>/<piece n>-<handle>/run-bench/calls/…`, `<out>/probes/<id>/calls/…`, `<out>/pages/calls/…`);
+sanitized copies are in `crates/research/fixtures/` (README there). "Capture" names below are call ids
+in the out folder. *Observed* = seen in a recorded reply; *documented only* = read on the cited page
+(downloaded the same day to `<out>/docs/`), with the reason it was not provoked.
+
+## Candidate models (R1·U1 task 0)
+
+Prices: `<out>/prices.json`, filled from `developers.openai.com/api/docs/pricing` (Standard tier, short
+context, read 2026-11-12). Model list: `developers.openai.com/api/docs/models` and `GET /v1/models` with the key.
+
+| Role | Model id | Input / cached / 30-min cache write / output, USD per 1M tokens | Why |
+|---|---|---|---|
+| flagship | `gpt-6.1-sol` | 2.00 / 0.10 / 2.50 / 10.00 | "near-Astra performance at a lower cost"; image input |
+| mid | `gpt-6.1-terra` | 1.00 / 0.05 / 1.25 / 5.00 | "fast, efficient model for visual reasoning"; image input |
+| small | `gpt-6-luna` | 0.10 / 0.01 / 0.125 / 0.50 | "most efficient model"; image input |
+
+Excluded: `gpt-6-astra` (10 / 50; one 2048 image call alone is a large part of the USD 0.50 run cap).
+Web search tool: USD 10 per 1,000 calls plus search content tokens at model rates. All three take
+`reasoning.effort`; default `medium` (Sol: `low…`; Terra and Luna also `none`).
+
+## Probe answers (RESEARCH-VERIFY-1…10, evidence probe 4)
+
+| Probe | Question | Method | Answer | Kind |
+|---|---|---|---|---|
+| V1 (VERIFY-1) | Usage fields; tool calls; does an incomplete reply report usage | one image + strict-schema call per candidate; one `web_search` call (Luna); one call with `max_output_tokens: 16` | `usage` = `input_tokens`, `input_tokens_details.{cached_tokens, cache_write_tokens}`, `output_tokens`, `output_tokens_details.reasoning_tokens`, `total_tokens`. **`cache_write_tokens` is new** and billed at the cache-write rate (1.25× input, 30-min default) *instead of* the input rate (prompt-caching guide). Web searches are counted in the reply's **`tool_usage.web_search.num_requests`** (V5: 3 billed requests for 4 `web_search_call` items); search content tokens are inside `input_tokens` (Luna web search: 8,746 input tokens for a one-line question). The incomplete reply reports full usage (16 output tokens, all reasoning) and `incomplete_details.reason: max_output_tokens`. Default effort echoed in `reasoning.effort: medium`. | observed: `v1-image-schema-gpt-6.1-sol-607a3ff41c52`, `…-terra-b05c0dee34c2`, `…-luna-02c7aad23123`, `v1-web-search-gpt-6-luna-7203b3f79e57`, `v1-incomplete-gpt-6-luna-91e24938d6fc` |
+| V2 (VERIFY-2) | Error replies | a made-up key string; ~1.2 M tokens of text | Bad key: HTTP 401, `error.type: invalid_request_error`, `code: invalid_api_key`; the message echoes the key **masked** (`sk-proj-***…0000`, last 4 characters). Oversized: HTTP 400, `invalid_request_error`, `code: context_length_exceeded`, `param: input`, after 3.6 s; neither carried usage or `Retry-After`. Rate limit: 429 (`rate_limit_error` / `slow_down`), no credit: 429 `credit_balance_exhausted` (type may be `insufficient_quota`), spend limits: 429 `organization_spend_limit_exceeded` / `project_spend_limit_exceeded`, server: 500, overloaded: 503 `server_is_overloaded`; `Retry-After` (seconds) "when present" on 429/503. Normal replies carry `x-ratelimit-{limit,remaining,reset}-{requests,tokens,input-images}`. | 401/400 observed: `v2-invalid-key-…`, `v2-oversized-input-…`; 429/500/503 documented only (`developers.openai.com/api/docs/guides/error-codes`, `…/rate-limits`): provoking them needs a burst or an empty account |
+| V3 (VERIFY-3) | Strict-schema refusal shape; `incomplete` | from V1 and the structured-outputs guide | Incomplete: `status: "incomplete"`, `incomplete_details: {"reason": "max_output_tokens"}`, output holds only a `reasoning` item (no message). Refusal: a `message` item whose `content` has `{"type": "refusal", "refusal": "<text>"}` instead of `output_text`. No refusal occurred in 38 calls. | incomplete observed (`v1-incomplete-…`); refusal documented only (`…/guides/structured-outputs`): no benign request provokes one |
+| V4 (VERIFY-4) | Image limits; `detail`; tokens for a 1024 and a 2048 copy | piece 2's cover at 1024 (101,790 bytes) and 2048 (409,909 bytes), detail auto/high/low/original, each model, effort low, vs a text-only baseline (13 tokens) | Image tokens, the same on all three models: 1024 auto = high = **1,229**; 1024 low = **308**; 2048 high = **3,001**; 2048 original = **4,916**. Default `detail` is `auto` (= high here). Limits: PNG, JPEG, WEBP, non-animated GIF; up to 512 MB per request, up to 1,500 images per request, up to 30,000 patches per image. | tokens observed (`v4-…`, 18 captures); limits documented only (`…/guides/images-vision`) |
+| V5 (VERIFY-5) | Image + `web_search` in one request; `allowed_domains` with a subdomain | Terra: photo + web search restricted to the nine trusted sites; a text search restricted to `auktion.sweakronan.se` | **Works in one request** (HTTP 200, completed; the model searched with text it wrote from the photo; it named Poul Hundevad — wrong for piece 2, see Benchmark 1). Results came from `www.pamono.com`, `www.vntg.com`, `www.etsy.com`, `vgliving.co`, `auctionet.com`: an entry covers its `www.` and other subdomains. A subdomain itself as the entry works and keeps results on that host. `max_tool_calls: 3` held for billing (`num_requests: 3`) though 4 `web_search_call` items were returned. | observed: `v5-image-and-web-search-242b0e3eb330`, `v5-allowed-subdomain-811eb70b241d` |
+| V6 (VERIFY-6) | Result shape and rank, usage units | the benchmark's searches | Lens (SerpApi, `type=all`): `visual_matches[]` with `position` (1…~60), `title`, `link`, `source`, `source_icon`, `thumbnail`, `image`, sizes, sometimes `price`, `rating`, `in_stock`; also `organic_results`, `ai_overview`, `search_metadata`. **No `exact_matches` flag on any of 2,515 items** with `type=all`. Usage unit: one search credit per search, nothing in the reply itself (`search_metadata.total_time_taken` only). Cloud Vision: **not observed** — every call returned HTTP 403 `BILLING_DISABLED` (the key's Google project has no billing account); shape from the docs: `responses[0].webDetection.{webEntities, bestGuessLabels, fullMatchingImages, partialMatchingImages, pagesWithMatchingImages[{url, pageTitle, fullMatchingImages, partialMatchingImages}], visuallySimilarImages}`, one unit per image. | Lens observed (`2-square-teak-dining-table/run-bench/calls/serpapi-search-…`, 42 more); Vision documented only (`docs.cloud.google.com/vision/docs/detecting-web`) — blocked by billing |
+| V7 (VERIFY-7) | SerpApi upload | account before/after; upload; search; oversized upload; same `image_id` later | The key goes in the multipart form field `api_key` (upload) and the query parameter `api_key` (search, account). Upload reply: `{"image_id", "message": "Image uploaded successfully."}` in ~0.4 s. **Uploads cost no credit**; each search costs one (account: 23 used after 23 searches and 25 uploads; the account figures lag a few minutes). Over 500 KB: HTTP 400 `"Image file size too large. Maximum size is 500KB"` (586,494 bytes). The `image_id` still worked **5.6 min** after upload and was gone at **11.9 min** (HTTP 400 `"Image not found."`). Formats: JPEG observed; the docs name no other limit. A 1024 JPEG of the test pieces is 67–220 KB, so no piece needed a smaller copy. | observed: `v7-upload-d6421c3f6ff8`, `v7-search-0595c4df04d9`, `v7-upload-oversized-b173fe4c1d7d`, `v7-search-late-45806bb0118e`, `v7-search-late2-4437b92c3f39`, `v7-account-…` |
+| V8 (VERIFY-8) | Page reading by both routes | see "Page reading" below | see below | observed |
+| V9 (VERIFY-9) | Shop hosts; a product's storefront URL and handle | client-credentials token, one read-only Admin query on the **test store** (the store in `~/.psm_shopify.env`) | `shop.primaryDomain {host, url, sslEnabled}` and `shop.myshopifyDomain` are readable with the app's scopes (test store: both are its `.myshopify.com` host). **Other domains need the `read_markets` scope** (`webPresences` → `ACCESS_DENIED`). `product(id)` with the live shop's product id returned `null` (the product is not in the test store), so `onlineStoreUrl` / `handle` were not observed. The live shop's storefront URL form is in the test file: `https://beyovintage.se/en/products/<handle>` (also `/products/<handle>` and `/sv/…` in search results). | observed (`v9-hosts-…`, `v9-token-…`); product fields not observed: wrong store |
+| V10 (VERIFY-10) | Is a call cut by a 1 s client timeout billed | Terra, image + schema, 1 s timeout | The request left (`is_connect` false), `timed_out: true`, after 1,003 ms. Billing **not observable**: with `store: false` no response id comes back and per-request usage is not queryable with a project key. **`fallback_call_usd` stands.** The tool charged its worst case (USD 0.018) to its own ledger. | observed: `v10-timeout-1s-51680b6243ed`; billing not observable |
+| Evidence probe 4 | Cloud Vision price; TinEye | the pricing page read by the tool | Web Detection: **first 1,000 units / month free, then USD 3.50 per 1,000** (USD 3.15 / 2.80 with savings plans); priced per image per feature. TinEye: not pursued (built for exact copies; the plan did not ask for it). | observed: `ep4-vision-pricing-720902b04795`; also `ep4-vision-error-empty-image-…` (403 BILLING_DISABLED) |
+
+RESEARCH-VERIFY-11 is grounded in `master_plan_research.md` §7.4 (not redone).
+
+## Benchmark 1 — visual search (R1·U1)
+
+42 pieces, the reduced copy (long edge 1024, `psm_infra` thumbnail function) of each piece's first
+image. Full report with the check sheet: `~/psm-research-bench/a01/report.md`; numbers:
+`search_scores.json`. Definitions as in the R1 plan (own listing removed before ranking; a naming
+result has the key designer or manufacturer in its title or fetched page text; groups computed from
+the file's `published_online` and `attribution` fields).
+
+**Cloud Vision Web Detection could not be measured:** every call returned HTTP 403
+`BILLING_DISABLED`. Once billing is attached to the key's Google Cloud project,
+`psm-research bench-search --routes cloud_vision --out ~/psm-research-bench/a01 --ceiling-usd 15`
+runs only that route (42 units, inside the free 1,000) and `score-search` rewrites the tables.
+
+| Route | Group | Pieces | Naming result in first 10 | … only shop or trusted results | Median rank of first naming | Own listing returned |
+|---|---|---|---|---|---|---|
+| Lens via SerpApi | published, with attribution | 25 | **24** | 23 | 1 | 13 |
+| Lens via SerpApi | unpublished, with attribution | 7 | **6** | 6 | 1 | 0 |
+| Lens via SerpApi | published / unpublished, without attribution | 5 / 5 | (no key: first 10 listed in the report) | — | — | 0 / 0 |
+| Cloud Vision | all groups | 42 | not run (billing disabled) | — | — | — |
+
+- **Exact copies:** with `type=all` Lens marked no result as an exact copy of the photo, so the
+  with/without-exact counts are equal. The unpublished group (photos not online) is the clean
+  measure: 6 of 7, every first naming result at rank 1.
+- Keys outside the owner-verified bucket: piece 26 (hedged, from text: "Holger Christensens
+  Møbelmagasiner") — Lens returned "Holger Christiansen cabinet" (vntg.com, rank 5), which the
+  naming rule does not count (spelling); piece 30 (corrected: "Tidaholms Möbelfabrik") — no naming result.
+- Misses: piece 2 (hedged key Magnus Olesen / Durup; Lens and the V5 model both point to Poul
+  Hundevad listings), piece 34 (Glas Mäster mirror). Piece 11's first naming result is on blocket.se.
+- **Where the first naming result was:** the owner's own shop 12 (another listing of the same
+  designer or model), auctionet.com 9, pamono.se / .eu / .co.uk 4, bukowskis.com 2, others 3.
+  **pamono's country sites are not covered by the trusted entry `pamono.com`** (a different host,
+  MC-A3); they would need their own entries.
+- Calls: 42 searches + 42 uploads (+3 searches and 2 uploads in V6/V7); mean 3.1 s per search
+  (1.6–11.0 s), upload 0.4 s. 45 of the free plan's 250 monthly searches used.
+- A naming result is not proof of the right listing: the report's **check sheet** (pieces 1–4,
+  21–24, 31–34; first 10 of each route with links and an empty "right listing" column) is for the
+  owner. The report also lists 100 results on the shop or a trusted site that do not name the key
+  (review candidates, `scoring_rules.disagreements`).
+
+## Page reading (RESEARCH-VERIFY-8, probe V8)
+
+One listing page per trusted site and the owner's shop, by (a) a plain HTTP GET from the tool
+(generic client name, ≥ 2 s between requests to a host) and (b) OpenAI `web_search` restricted to
+the site's domain and asked to open the exact URL (Terra, effort low). Captures `v8-http-<site>-…`,
+`v8-model-<site>-…`; the benchmark's 375 plain page fetches are in `<out>/pages/`.
+
+| Site | (a) HTTP status | (a) final URL / redirects | (a) title and attribution in the HTML | (a) images found | (b) model page tool |
+|---|---|---|---|---|---|
+| beyovintage.se (shop) | **429** "Too many requests", `Retry-After: 60` (benchmark: 7 × 200 first, then 62 × 429; waiting 60 s did not lift it) | same URL, none | not in this reply; in the 200 replies: title, description with designer and maker, product JSON | og:image and gallery in the 200 replies | **read**: final URL, title, attribution verbatim, 5 + 6 images |
+| etsy.com | **403** (bot block) | same, none | no | no | opened; the listing had become "This item is unavailable" |
+| pamono.com | **200** | same, none | yes / yes (designer and maker in the HTML) | og:image, 172 `<img>` | **403** to the model's fetcher: not read |
+| bukowskis.com | **200** | same, none | yes / yes | og:image, 48 `<img>` | read: final URL, title, attribution |
+| midcenturymobler.com | **429** (a Shopify store, after the shop burst) | same, none | no | no | read: title; "Designer: Unknown, Manufacturer: Slagelse Møbelfabrik" |
+| vntg.com | **403** ("Just a moment…", a script challenge) | same, none | no | no | **403**: not read |
+| maleforsimports.com | **200** | same, none | yes / (no attribution on the page) | og:image, 39 `<img>`, product JSON-LD | read; says neither designer nor maker is stated |
+| auktion.sweakronan.se | **200** | same, none | yes / yes ("Bodafors, Bertil Frighagen") | 8 `<img>`, no og:image | read: attribution verbatim |
+| vgliving.co | **429** (a Shopify store) | same, none | no | no | read: "Design Svend Aage Madsen"; maker not stated |
+| auctionet.com | **200** | same, none | yes / yes | og:image, 15 `<img>` | read: attribution verbatim |
+
+- **Plain HTTP reads 5 of 10** (pamono, bukowskis, maleforsimports, sweakronan, auctionet) with the
+  title and attribution in the HTML, no script needed. Blocked: etsy and vntg (403, bot protection).
+  Throttled: the three Shopify storefronts (the shop, midcenturymobler, vgliving) answered 429 after
+  a burst from this Mac; the shop answered 200 to its first fetches. In the benchmark plain HTTP got
+  HTTP 200 from auctionet 84/84, bukowskis 35/35, pamono.se 22/22, and 403 from vntg 19/19, etsy 16/16.
+- **The model page tool reads 8 of 10** (not pamono, not vntg) and returns the final URL in its
+  action (`open_page.url`) and in its answer, **but never the page text**: only the model's own
+  summary. A stage-3 reply from this route cannot be replayed with the same page content (MC-A11),
+  and its "stated" text is the model's quotation. Cost ≈ USD 0.005–0.011 per page (Terra, low).
+- No redirect was seen on any of the ten listing URLs.
+
+## Findings against 08B (reported, not adapted — R1 plan Notes)
+
+1. **MC-A8 unit names lack the cache-write unit.** OpenAI GPT-6 models report
+   `input_tokens_details.cache_write_tokens`, billed at 1.25× the input rate *instead of* the input
+   rate; MC-A8's units (`input_token`, `cached_input_token`, `output_token`, …) would charge these
+   tokens as plain input (a small under-count, ≤ 25 % of input cost). A `cache_write_token` unit is needed.
+2. **Web searches are counted by `tool_usage.web_search.num_requests`**, not by the number of
+   `web_search_call` items (V5: 3 vs 4). MC-A8's `web_search_call` unit should read that field.
+3. **Shop hosts (VERIFY-9):** other domains need the `read_markets` scope; MC-A3's "other domains"
+   cannot be read with the app's current scopes.
+4. **The model page tool returns no page text (VERIFY-8)**, so MC-A11 replay identity cannot hold
+   for stage 3 on that route (08B already says so; confirmed).
+5. An incomplete reply reports usage (VERIFY-1): no contract change; a timed-out call's billing is
+   not observable (VERIFY-10): `fallback_call_usd` stands.

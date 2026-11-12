@@ -1,0 +1,79 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 0,
+  "duration_ms": 3618,
+  "effort": "default",
+  "error": null,
+  "finished": "2026-11-12T14:44:36.945Z",
+  "fixture": {
+    "captured": "2026-11-12T14:44:33.327Z",
+    "probe": "RESEARCH-VERIFY-2",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/error_context_length.json"
+  },
+  "id": "v2-oversized-input-666e9da314db",
+  "model": "gpt-6-luna",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": " word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word…<cut: 5998000 more characters>",
+              "type": "input_text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "max_output_tokens": 16,
+      "model": "gpt-6-luna",
+      "store": false
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "666e9da314db16659060beb09d3fa9da56a51fd5a91ed7f48fa708068b14aafb",
+  "response": {
+    "body": {
+      "error": {
+        "code": "context_length_exceeded",
+        "message": "Your input exceeds the context window of this model. Please adjust your input and try again.",
+        "param": "input",
+        "type": "invalid_request_error"
+      }
+    },
+    "body_bytes": 228,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "228",
+      "content-type": "application/json",
+      "date": "Thu, 12 Nov 2026 14:44:36 GMT",
+      "openai-organization": "<openai-organization>",
+      "openai-processing-ms": "2476",
+      "openai-project": "<openai-project>",
+      "openai-version": "2020-10-01",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-request-id": "req_5fed66513710419db0df482736f3b6d2"
+    },
+    "redirects": [],
+    "status": 400
+  },
+  "sent": true,
+  "started": "2026-11-12T14:44:33.327Z",
+  "usage": null,
+  "worst_case_micro_usd": 750033
+}

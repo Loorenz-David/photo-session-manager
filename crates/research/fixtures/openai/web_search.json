@@ -1,0 +1,346 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 11026,
+  "duration_ms": 4432,
+  "effort": "default",
+  "error": null,
+  "finished": "2026-11-12T14:43:36.892Z",
+  "fixture": {
+    "captured": "2026-11-12T14:43:32.460Z",
+    "probe": "RESEARCH-VERIFY-1",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/web_search.json"
+  },
+  "id": "v1-web-search-gpt-6-luna-7203b3f79e57",
+  "model": "gpt-6-luna",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "include": [
+        "web_search_call.action.sources"
+      ],
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Who designed the 'CH24 Wishbone' chair and which company makes it? Answer in one sentence with a source.",
+              "type": "input_text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "max_output_tokens": 2000,
+      "max_tool_calls": 2,
+      "model": "gpt-6-luna",
+      "store": false,
+      "tools": [
+        {
+          "type": "web_search"
+        }
+      ]
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "7203b3f79e57da653f721c34dd1e6a2b3a017c07417cfb4baf07c8b8f1f9f046",
+  "response": {
+    "body": {
+      "access_programs": null,
+      "background": false,
+      "billing": {
+        "payer": "developer"
+      },
+      "completed_at": 1794494616,
+      "created_at": 1794494612,
+      "error": null,
+      "frequency_penalty": 0.0,
+      "id": "resp_07017664bab12e48016af5d09493d887d2ad081af23fb395f3",
+      "image": {
+        "context_compression": "disabled"
+      },
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": 2000,
+      "max_tool_calls": 2,
+      "metadata": {},
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "object": "response",
+      "output": [
+        {
+          "action": {
+            "queries": [
+              "CH24 Wishbone chair designed by made by Carl Hansen official"
+            ],
+            "query": "CH24 Wishbone chair designed by made by Carl Hansen official",
+            "sources": [
+              {
+                "type": "url",
+                "url": "https://www.carlhansen.com/en/en/collection/chairs/dining-chairs/ch24"
+              },
+              {
+                "type": "url",
+                "url": "https://olsonbaker.com/wp-content/uploads/2023/06/Carl-Hansen-CH24-Wishbone-Chair-with-Seat-Cushion-Product-Information-Sheet.pdf"
+              },
+              {
+                "type": "url",
+                "url": "https://www.carlhansen.com/en/en/collection/chairs/dining-chairs/ch24/ch24-oak-oil-fsc70-black-cord/variant/9323"
+              },
+              {
+                "type": "url",
+                "url": "https://www.smow.de/pdf/Carl%20Hansen_ch24_english.pdf?srsltid=AfmBOoqUYQhetHqUEaEawsvZpUuRIrEfDk6fAHA7zG-PPzkIZrRyYVs-"
+              },
+              {
+                "type": "url",
+                "url": "https://bushellinteriors.com/wp-content/uploads/2025/02/Product-sheet_CH24.pdf"
+              },
+              {
+                "type": "url",
+                "url": "https://www.smow.de/pdf/carlhansen-ch24-kinder-factsheet-en.pdf?srsltid=AfmBOoqr6GoVUJEhZm8liEI0NhWQLo4ZqAdKXW8gvdQ5_JkRDIhHvQ1s"
+              },
+              {
+                "type": "url",
+                "url": "https://www.carlhansen.com/en/dede/collection/chairs/dining-chairs/ch24/ch24-ash-s9000-n-black-fsc70-natural-cord/variant/9818"
+              },
+              {
+                "type": "url",
+                "url": "https://verketinterior.no/wp-content/uploads/2021/09/ch24_carlhansen_verketinterior.pdf"
+              },
+              {
+                "type": "url",
+                "url": "https://elgrecogallery.com/wp-content/uploads/2026/03/CH24C-product-sheet.pdf"
+              },
+              {
+                "type": "url",
+                "url": "https://www.carlhansen.com/en/dede/collection/chairs/dining-chairs/ch24/ch24-ash-soap-fsc70-natural-cord/variant/9819"
+              },
+              {
+                "type": "url",
+                "url": "https://www.carlhansen.com/en/dede/collection/chairs/dining-chairs/ch24/ch24-beech-soap-fsc70-natural-cord/variant/8182"
+              },
+              {
+                "type": "url",
+                "url": "https://www.carlhansen.com/en/dede/collection/chairs/dining-chairs/ch24/ch24-oak-oil-fsc70-black-cord/variant/9323"
+              },
+              {
+                "type": "url",
+                "url": "https://www.dwr.com/kitchen-dining-chairs-benches/ch24-wishbone-chair-leather-seat-/100169277.html?lang=en_US"
+              },
+              {
+                "type": "url",
+                "url": "https://www.dwr.com/kitchen-dining-chairs-benches/ch24-wishbone-chair-leather-seat-/100169280.html?lang=en_US"
+              },
+              {
+                "type": "url",
+                "url": "https://chs-fresh-dev.vercel.app/nl-nl/nlnl/inspiration/stories/behind-an-icon-ch24"
+              },
+              {
+                "type": "url",
+                "url": "https://www.dwr.com/kitchen-dining-chairs-benches/ch24-wishbone-chair-leather-seat-/2517957.html?lang=en_US"
+              },
+              {
+                "type": "url",
+                "url": "https://www.lumens.com/ch24-wishbone-chair-soft-colors-by-carl-hansen-CLHP311205.html?cgid=15863"
+              },
+              {
+                "type": "url",
+                "url": "https://www.dwr.com/kitchen-dining-chairs-benches/ch24-wishbone-chair-leather-seat-/100169280.html?lang=en_CA"
+              },
+              {
+                "type": "url",
+                "url": "https://www.youtube.com/watch?v=t-NAksFVHbg"
+              },
+              {
+                "type": "url",
+                "url": "https://www.youtube.com/watch?v=3y4-IDNAwWg"
+              },
+              {
+                "type": "url",
+                "url": "https://en.wikipedia.org/wiki/Wishbone_chair"
+              },
+              {
+                "type": "url",
+                "url": "https://en.wikipedia.org/wiki/Hans_Wegner"
+              },
+              {
+                "type": "url",
+                "url": "https://fr.wikipedia.org/wiki/Wishbone_chair"
+              },
+              {
+                "type": "url",
+                "url": "https://en.wikipedia.org/wiki/Danish_modern"
+              },
+              {
+                "type": "url",
+                "url": "https://www.reddit.com/r/interiordecorating/comments/16oa293"
+              },
+              {
+                "type": "url",
+                "url": "https://en.wikipedia.org/wiki/List_of_chairs"
+              },
+              {
+                "type": "url",
+                "url": "https://www.reddit.com/r/HelpMeFind/comments/clpr1u"
+              },
+              {
+                "type": "url",
+                "url": "https://www.carlhansen.com/en/en/collection/chairs/dining-chairs/ch24?utm_source=openai"
+              }
+            ],
+            "type": "search"
+          },
+          "id": "ws_07017664bab12e48016af5d095a69887d2a38007e101548f09",
+          "status": "completed",
+          "type": "web_search_call"
+        },
+        {
+          "content": [
+            {
+              "annotations": [
+                {
+                  "end_index": 196,
+                  "start_index": 89,
+                  "title": "Buy CH24 | Wishbone Chair designed by Hans J. Wegner | Carl Hansen & Søn",
+                  "type": "url_citation",
+                  "url": "https://www.carlhansen.com/en/en/collection/chairs/dining-chairs/ch24?utm_source=openai"
+                }
+              ],
+              "logprobs": [],
+              "text": "The CH24 Wishbone Chair was designed by Hans J. Wegner and is made by Carl Hansen & Søn. ([carlhansen.com](https://www.carlhansen.com/en/en/collection/chairs/dining-chairs/ch24?utm_source=openai))",
+              "type": "output_text"
+            }
+          ],
+          "id": "msg_07017664bab12e48016af5d09858ac87d283783fc3456b7b52",
+          "phase": "final_answer",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0.0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "status": "completed",
+      "store": false,
+      "temperature": 1.0,
+      "text": {
+        "format": {
+          "type": "text"
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 1
+        }
+      },
+      "tools": [
+        {
+          "return_token_budget": "default",
+          "search_content_types": [
+            "text"
+          ],
+          "search_context_size": "medium",
+          "type": "web_search",
+          "user_location": {
+            "city": null,
+            "country": "US",
+            "region": null,
+            "timezone": null,
+            "type": "approximate"
+          }
+        }
+      ],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 8746,
+        "input_tokens_details": {
+          "cache_write_tokens": 4463,
+          "cached_tokens": 0
+        },
+        "output_tokens": 78,
+        "output_tokens_details": {
+          "reasoning_tokens": 35
+        },
+        "total_tokens": 8824
+      },
+      "user": null
+    },
+    "body_bytes": 7876,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "7876",
+      "content-type": "application/json",
+      "date": "Thu, 12 Nov 2026 14:43:36 GMT",
+      "openai-organization": "<openai-organization>",
+      "openai-processing-ms": "4317",
+      "openai-project": "<openai-project>",
+      "openai-version": "2020-10-01",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit-requests": "5000",
+      "x-ratelimit-limit-tokens": "2000000",
+      "x-ratelimit-remaining-requests": "4999",
+      "x-ratelimit-remaining-tokens": "1996010",
+      "x-ratelimit-reset-requests": "12ms",
+      "x-ratelimit-reset-tokens": "119ms",
+      "x-request-id": "req_758a393743fd4d35aed5548e97241c69"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T14:43:32.460Z",
+  "usage": {
+    "input_tokens": 8746,
+    "input_tokens_details": {
+      "cache_write_tokens": 4463,
+      "cached_tokens": 0
+    },
+    "output_tokens": 78,
+    "output_tokens_details": {
+      "reasoning_tokens": 35
+    },
+    "total_tokens": 8824,
+    "web_search_call": 1
+  },
+  "worst_case_micro_usd": 29031
+}
