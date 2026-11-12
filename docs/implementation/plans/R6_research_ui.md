@@ -7,7 +7,7 @@ depends_on: [R5_research_app_seams]
 ---
 # R6 — UI: the live research panel, Settings → Research, the publish review
 
-**Tracker:** IMPLEMENTED · 2026-11-12 · codex · 3 units (U1 f6ad84b, U2 d0a56e2, U3 f365188); 21 UI rows + 1 Rust row; full gate: suite 861+1 flake re-run green, clippy, fmt, typecheck, vitest 487 green; Rust deviations in settings/attribute commands.
+**Tracker:** APPROVED · 2026-11-12 · opus · review r1 APPROVED_WITH_NOTES: perimeter = the declared paths of `f6ad84b`…`4b3e09e`; 21/21 UI rows + the carried release-event row hold at their boundaries, no B1–B4; vitest form/settings/publish/sessions 159/159 and typecheck green (reviewer run, clean `115812c`); the two Rust deviations are necessary and covered by the implementer's full-gate stamp; 9 notes in `backlog_research/R6_research_ui.md`.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -294,3 +294,37 @@ says a publish that already went ahead keeps the value chosen for it. Item id fo
 ("receiver running", camera receiver start under load) passed on re-run; clippy and fmt clean; typecheck clean;
 `npm test` 486/487, the failure was the p32 publish-service mock (fixed; file re-run green).
 
+### 2026-11-12 · review r1 · opus (pipeline-reviewer) · APPROVED_WITH_NOTES
+**Gate.** Tracker IMPLEMENTED; checkpoints `f6ad84b`, `d0a56e2`, `f365188`, `4b3e09e` in `git log`. **Perimeter.** Each
+checkpoint's `git show --stat` equals the handoff's per-unit list (U1 7, U2 7, U3 12, closing 3 paths). Rust changed in
+3 files (`commands/settings.rs`, `commands/attributes.rs`, `lib.rs`), all declared Deviations; both are necessary
+(settings: no other data source for the section; attributes: the carried R5 note itself asks the command layer to
+emit at release). **Checks** (clean `115812c`): `npx vitest run src/features/form src/features/settings
+src/features/publish src/features/sessions` 159/159, `npm run typecheck` clean. Rust: the implementer's full gate on the
+same Rust tree (861/862 + p68 flake green on re-run, clippy, fmt) is consumed, not re-run.
+
+**Verified correct.** U1: steps sorted by `seq`, verb per kind, link only on `read`; live indicator only while
+`running`; `research_changed` forwarded by `lib.rs` and re-read per session (C2(b) drives the real handler through
+FormDialog); finished line exact incl. the 0-filled wording and the cap note; failed stage + error + Run again;
+Research calls `runResearch(session)` once; reason sentences come from the backend (`WaitingForEditor` code string
+matches `psm_research::domain`), held back until `waitEndsAt` (capture times are ms, `arrival.rs`); dimming from
+`field_keys`; header `n to review` = live `ai`+`suggested` at every confidence, hidden at 0. U2: shop domain first,
+no remove; refusal shown as is, list unchanged; keys are password inputs never filled, one `setResearchSecrets` call
+with the typed key only; warning under `custom.maker` only. The main settings save never sends `research`, so the
+new read-only block cannot break existing saves. U3: withheld line once under its item; conflict block with label,
+prior + origin, suggestion + confidence, three buttons, waits line; Confirm enabled; Keep previous resolves with the
+item id from the session view and re-reads the preview; confirm sends exactly `shownOf(preview)` and a text that
+carries the shown lines (`summary_text` is stored only, never compared, `services/publish.rs` confirm);
+`suggestions_changed` handled by code (`ServiceError.code`, `items.rs`), sentence shown, preview rebuilt, popover
+open; `waiting_for_you` pill (serde `kind`/`value` matches) inside the activity popover (Cancel kept, S4); form marks
+conflicts, offers the three actions instead of Looks right / Clear (P1 kept), and every typed value of a conflict
+field bypasses the 300 ms debounce and commits once (N1 row: "Walnut" once). Carried release row: the Rust test
+asserts no event after 1 of 2 resolutions and `session_changed` + `publish_progress(prepare)` after the last; the
+list already listens to both. H1–H8 and the secrets / no-live-services rules hold. No assumption contradicts 08A/08B.
+
+**Findings.** None blocking.
+
+**Notes** (9, in `docs/implementation/backlog_research/R6_research_ui.md`): research save refuses until R7·U1 · undo/redo
+release emits nothing · "Waiting for Capture One" clock differs from the engine's · TS conflict test approximates
+MC-A1 · popover Edit sends text for any field type · Accept all (n) counts conflicts · "your shop" shows the
+myshopify host · plan said "no Rust" while carrying a Rust task · release detection reads the store in the command.
