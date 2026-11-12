@@ -933,6 +933,91 @@ export type RectDto = {
 	h: number | null,
 };
 
+/**  One price row of `research.prices`: decimal strings (MC-A8). */
+export type ResearchPriceDto = ResearchPriceDto_Serialize | ResearchPriceDto_Deserialize;
+
+/**  One price row of `research.prices`: decimal strings (MC-A8). */
+export type ResearchPriceDto_Deserialize = {
+	provider: string,
+	model: string,
+	unit?: string | null,
+	usd_per_million?: string | null,
+	fallback_call_usd?: string | null,
+};
+
+/**  One price row of `research.prices`: decimal strings (MC-A8). */
+export type ResearchPriceDto_Serialize = {
+	provider: string,
+	model: string,
+	unit: string | null,
+	usd_per_million: string | null,
+	fallback_call_usd: string | null,
+};
+
+export type ResearchProvidersDto = {
+	model: string,
+	visual_search: string,
+	page_reader: string,
+};
+
+/**
+ *  The `research` block (`psm_research::config::ResearchSettings`, §6.6). On read every field is
+ *  present (a missing slot or field shows its default); a patch replaces the whole block, and the
+ *  research engine validates it before it is saved (R7·U1).
+ */
+export type ResearchSettingsDto = ResearchSettingsDto_Serialize | ResearchSettingsDto_Deserialize;
+
+/**
+ *  The `research` block (`psm_research::config::ResearchSettings`, §6.6). On read every field is
+ *  present (a missing slot or field shows its default); a patch replaces the whole block, and the
+ *  research engine validates it before it is saved (R7·U1).
+ */
+export type ResearchSettingsDto_Deserialize = {
+	auto: boolean,
+	quiet_seconds: number,
+	source_wait_seconds: number,
+	attribution_keys: string[],
+	trusted_sites: string[],
+	max_pages: number,
+	stages: { [key in string]: ResearchStageDto },
+	max_cost_per_run: string,
+	max_cost_per_day: string,
+	prices: ResearchPriceDto_Deserialize[],
+	language: string,
+	record_days: number,
+	call_timeout_seconds: ResearchTimeoutsDto,
+	providers: ResearchProvidersDto,
+};
+
+/**
+ *  The `research` block (`psm_research::config::ResearchSettings`, §6.6). On read every field is
+ *  present (a missing slot or field shows its default); a patch replaces the whole block, and the
+ *  research engine validates it before it is saved (R7·U1).
+ */
+export type ResearchSettingsDto_Serialize = {
+	auto: boolean,
+	quiet_seconds: number,
+	source_wait_seconds: number,
+	attribution_keys: string[],
+	trusted_sites: string[],
+	max_pages: number,
+	stages: { [key in string]: ResearchStageDto },
+	max_cost_per_run: string,
+	max_cost_per_day: string,
+	prices: ResearchPriceDto_Serialize[],
+	language: string,
+	record_days: number,
+	call_timeout_seconds: ResearchTimeoutsDto,
+	providers: ResearchProvidersDto,
+};
+
+/**  One research stage's model, effort and image long edge (`master_plan_research.md` §6.6). */
+export type ResearchStageDto = {
+	model: string,
+	effort: string,
+	image_long_edge: number,
+};
+
 export type ResearchStatusDto = ResearchStatusDto_Serialize | ResearchStatusDto_Deserialize;
 
 export type ResearchStatusDto_Deserialize = {
@@ -951,6 +1036,11 @@ export type ResearchStatusDto_Serialize = {
 	fields_filled: number,
 	to_review: number,
 	can_run: boolean,
+};
+
+export type ResearchTimeoutsDto = {
+	model: number,
+	other: number,
 };
 
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;
@@ -1163,6 +1253,8 @@ export type SettingsDto_Deserialize = {
 	sku_prefix?: string | null,
 	integration?: IntegrationSettingsDto | null,
 	export?: ExportSettingsDto | null,
+	/**  Settings → Research (R6·U2). */
+	research?: ResearchSettingsDto_Deserialize | null,
 };
 
 /**
@@ -1186,6 +1278,8 @@ export type SettingsDto_Serialize = {
 	sku_prefix: string | null,
 	integration: IntegrationSettingsDto | null,
 	export?: ExportSettingsDto,
+	/**  Settings → Research (R6·U2). */
+	research?: ResearchSettingsDto_Serialize,
 };
 
 /**  A partial update: absent fields stay as stored. */
@@ -1206,6 +1300,7 @@ export type SettingsPatchDto_Deserialize = {
 	sku_prefix?: string | null,
 	integration?: IntegrationSettingsDto | null,
 	export?: ExportSettingsDto | null,
+	research?: ResearchSettingsDto_Deserialize | null,
 };
 
 /**  A partial update: absent fields stay as stored. */
@@ -1223,6 +1318,7 @@ export type SettingsPatchDto_Serialize = {
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
 	export?: ExportSettingsDto,
+	research?: ResearchSettingsDto_Serialize,
 };
 
 /**

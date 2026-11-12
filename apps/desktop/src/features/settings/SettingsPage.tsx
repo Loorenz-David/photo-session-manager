@@ -13,6 +13,7 @@ import { CameraSection, type CameraLogin } from './CameraSection';
 import { cameraSecretsSet } from '@/services/camera';
 import { StorageSection } from './StorageSection';
 import { StockSection } from './StockSection';
+import { ResearchSection } from './ResearchSection';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
@@ -226,5 +227,6 @@ export function SettingsPage() {
     </Dialog>
     {saved?.integration && <StockSection />}
     <StorageSection />
+    {saved?.research && <ResearchSection research={saved.research} shopDomain={saved.integration?.shop_domain || null} />}
   </main></>;
 }

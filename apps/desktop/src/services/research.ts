@@ -20,14 +20,20 @@ export async function setResearchSecrets(input: SecretsInputDto): Promise<void> 
 export async function researchSecretsState(): Promise<ResearchSecretsState> {
   return unwrap(await commands.researchSecretsState());
 }
-export async function addResearchSite(site: string): Promise<unknown> {
-  return JSON.parse(unwrap(await commands.researchSiteAdd(site)));
+/** The trusted sites of a `research` value the site commands return (the new value, saved by the command). */
+function sitesOf(text: string): string[] {
+  const value = JSON.parse(text) as { trusted_sites?: unknown };
+  return Array.isArray(value.trusted_sites) ? value.trusted_sites.filter((s): s is string => typeof s === 'string') : [];
 }
-export async function removeResearchSite(site: string): Promise<unknown> {
-  return JSON.parse(unwrap(await commands.researchSiteRemove(site)));
+/** Adds a trusted site (MC-A3 Trusted entry); resolves to the new list, or rejects with the refusal's text. */
+export async function addResearchSite(site: string): Promise<string[]> {
+  return sitesOf(unwrap(await commands.researchSiteAdd(site)));
 }
-export async function reorderResearchSites(sites: string[]): Promise<unknown> {
-  return JSON.parse(unwrap(await commands.researchSitesReorder(sites)));
+export async function removeResearchSite(site: string): Promise<string[]> {
+  return sitesOf(unwrap(await commands.researchSiteRemove(site)));
+}
+export async function reorderResearchSites(sites: string[]): Promise<string[]> {
+  return sitesOf(unwrap(await commands.researchSitesReorder(sites)));
 }
 export async function exportResearch(selection: ExportSelectionDto, dest: string): Promise<string> {
   return unwrap(await commands.researchExport(selection, dest));
