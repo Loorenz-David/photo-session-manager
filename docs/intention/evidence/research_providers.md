@@ -49,3 +49,22 @@ not a clean first-party route; Google contends it breaks its terms. Using it is 
 3. SerpApi upload: credit cost, accepted formats, `image_id` lifetime.
 4. Cloud Vision price (page not opened), TinEye capabilities.
 5. Image input combined with `web_search` in a single OpenAI request.
+
+## Owner inputs for the benchmark
+
+**Trusted sites, in priority order (owner 2026-11-12).** These are the owner's entries for the
+setting `research.trusted_sites` (08A §6); the app itself ships with an empty list.
+
+1. `etsy.com`
+2. `pamono.com`
+3. `bukowskis.com`
+4. `midcenturymobler.com`
+5. `vntg.com`
+6. `maleforsimports.com`
+7. `auktion.sweakronan.se`
+8. `vgliving.co`
+9. `auctionet.com`
+
+Probe 1 (can a listing page be read, and by which route) runs against each of these.
+
+**Test pieces:** owed (owner collecting).
