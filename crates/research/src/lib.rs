@@ -1,3 +1,4 @@
+pub mod adapters;
 pub mod api;
 pub mod config;
 pub mod decide;
@@ -6,8 +7,10 @@ pub mod fakes;
 pub mod files;
 pub mod gateway;
 pub mod images;
+pub mod job;
 pub mod ports;
 pub mod rules;
+pub mod runs;
 pub mod schema;
 pub mod service;
 pub mod shop;

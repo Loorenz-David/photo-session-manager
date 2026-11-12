@@ -19,9 +19,11 @@ use psm_core::{
         photo::Classification,
         research::{Feedback, FeedbackAction},
     },
-    ports::secrets::SecretStore,
+    ports::{secrets::SecretStore, store::Store},
 };
-use psm_infra::{imaging::ImageOpsImpl, settings_file::Settings, sqlite::store::SqliteStore};
+use psm_infra::{
+    imaging::ImageOpsImpl, jobs::JobRunner, settings_file::Settings, sqlite::store::SqliteStore,
+};
 use psm_research::{
     config::{FallbackSnapshot, PriceSnapshot, ResearchConfig},
     domain::{RunState, RunTrigger},
@@ -29,6 +31,7 @@ use psm_research::{
     files::ResearchFiles,
     gateway::{CallGateway, SecretValues, Waiter},
     images::ResearchImages,
+    job::ResearchJob,
     ports::Providers,
     service::{ResearchDeps, ResearchService, form_snapshot},
     shop::CommerceShopFacts,
@@ -75,11 +78,12 @@ fn build_service(
     model: &Arc<FakeModel>,
     search: &Arc<FakeVisualSearch>,
     reader: &Arc<FakePageReader>,
+    edit: impl FnOnce(&mut ResearchDeps),
 ) -> ResearchService {
     let secrets = app.secrets.clone();
     let paths = app.app.paths.clone();
     let clock = app.clock.clone();
-    ResearchService::new(ResearchDeps {
+    let mut deps = ResearchDeps {
         store: app.app.store.clone(),
         clock: app.clock.clone(),
         imaging: Arc::new(ImageOpsImpl),
@@ -103,7 +107,9 @@ fn build_service(
         settings: Arc::new(move || Settings::open(&paths).ok().and_then(|s| s.research)),
         events: app.events.clone(),
         wait: Arc::new(move |ms| clock.advance(i64::try_from(ms).unwrap())),
-    })
+    };
+    edit(&mut deps);
+    ResearchService::new(deps)
 }
 
 /// The stage rows' layout (item type Chair): an attribution text field, a multi-choice visible
@@ -175,7 +181,61 @@ pub struct Harness {
     pub reader: Arc<FakePageReader>,
     pub images: ResearchImages,
     pub service: Arc<ResearchService>,
+    pub runner: JobRunner,
     next_colour: AtomicU8,
+}
+
+/// Research settings under which every prerequisite passes: the fakes' ids, model `m1` for every
+/// stage, the test prices (with a 0.001 USD fallback per provider), trusted `[e1, e2]`, the
+/// designer as the attribution key.
+pub fn test_settings() -> Json {
+    let stages: serde_json::Map<String, Json> = psm_research::domain::Stage::ALL
+        .into_iter()
+        .map(|s| {
+            let edge = match s {
+                psm_research::domain::Stage::Labels | psm_research::domain::Stage::Condition => {
+                    2048
+                }
+                _ => 1024,
+            };
+            (
+                s.as_str().to_owned(),
+                json!({"model": "m1", "effort": "low", "image_long_edge": edge}),
+            )
+        })
+        .collect();
+    json!({
+        "auto": true,
+        "quiet_seconds": 1,
+        "source_wait_seconds": 120,
+        "attribution_keys": [DESIGNER],
+        "trusted_sites": [E1, E2],
+        "max_pages": 10,
+        "stages": stages,
+        "max_cost_per_run": "0.50",
+        "max_cost_per_day": "15",
+        "prices": [
+            {"provider": FakeModel::ID, "model": "m1", "unit": "input_token",
+             "usd_per_million": "1", "fallback_call_usd": "0.001"},
+            {"provider": FakeModel::ID, "model": "m1", "unit": "output_token",
+             "usd_per_million": "2"},
+            {"provider": FakeVisualSearch::ID, "model": "", "fallback_call_usd": "0.001"},
+            {"provider": FakePageReader::ID, "model": "", "fallback_call_usd": "0.001"},
+        ],
+        "language": "English",
+        "providers": {"model": FakeModel::ID, "visual_search": FakeVisualSearch::ID,
+                      "page_reader": FakePageReader::ID},
+    })
+}
+
+fn runner_for(app: &TestApp, service: &Arc<ResearchService>) -> JobRunner {
+    let mut runner =
+        JobRunner::new(app.app.store.clone() as Arc<dyn Store>).only_kind(psm_research::job::KIND);
+    runner.register(
+        psm_research::job::KIND,
+        Arc::new(ResearchJob::new(service.clone())),
+    );
+    runner
 }
 
 impl Harness {
@@ -240,7 +300,9 @@ impl Harness {
         let model = Arc::new(FakeModel::default());
         let search = Arc::new(FakeVisualSearch::default());
         let reader = Arc::new(FakePageReader::default());
-        let service = Arc::new(build_service(&app, &model, &search, &reader));
+        save_research(&app.app.paths, test_settings());
+        let service = Arc::new(build_service(&app, &model, &search, &reader, |_| {}));
+        let runner = runner_for(&app, &service);
         Harness {
             item_id: item.id,
             session_id: session.session.id,
@@ -250,8 +312,61 @@ impl Harness {
             reader,
             images,
             service,
+            runner,
             next_colour: AtomicU8::new(0),
         }
+    }
+
+    /// Moves the manual clock, starts what may start, then runs the research jobs that are due.
+    pub fn tick(&self, ms: i64) {
+        self.app.clock.advance(ms);
+        self.service.tick().unwrap();
+        self.run_jobs();
+    }
+
+    pub fn run_jobs(&self) {
+        self.runner.tick(self.now()).unwrap();
+    }
+
+    /// The app's launch over the same store: running jobs re-queued, a new service and runner
+    /// (the launch instant is now).
+    pub fn relaunch(&mut self) {
+        self.app.store().requeue_running_jobs().unwrap();
+        self.service = Arc::new(build_service(
+            &self.app,
+            &self.model,
+            &self.search,
+            &self.reader,
+            |_| {},
+        ));
+        self.runner = runner_for(&self.app, &self.service);
+    }
+
+    /// Another service over the same app with some deps changed.
+    pub fn service_with(&self, edit: impl FnOnce(&mut ResearchDeps)) -> ResearchService {
+        build_service(&self.app, &self.model, &self.search, &self.reader, edit)
+    }
+
+    /// The call the app makes after a photo change in the session.
+    pub fn changed(&self) {
+        self.service.session_changed(self.session_id);
+    }
+
+    /// Updates the live research settings with `patch` (top-level keys), as a settings save does.
+    pub fn patch_settings(&self, patch: Json) {
+        let mut settings = self.research_settings().unwrap_or_else(test_settings);
+        for (k, v) in patch.as_object().unwrap() {
+            settings[k] = v.clone();
+        }
+        self.set_research_settings(settings);
+    }
+
+    pub fn runs(&self, session_id: i64) -> Vec<rstore::RunRow> {
+        self.query(|c| rstore::runs(c, Some(session_id)).unwrap())
+    }
+
+    pub fn all_runs(&self) -> Vec<rstore::RunRow> {
+        self.query(|c| rstore::runs(c, None).unwrap())
     }
 
     /// A harness whose item is a Chair (the stage rows' layout) with its own session.

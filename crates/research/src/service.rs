@@ -22,6 +22,11 @@ use crate::{
     shop::CommerceShopFacts,
 };
 
+/// Keychain accounts of the research keys (`master_plan_research.md` §6.6).
+pub const MODEL_ACCOUNT: &str = "research-model-key";
+pub const SEARCH_ACCOUNT: &str = "research-search-key";
+pub const READER_ACCOUNT: &str = "research-reader-key";
+
 /// Reads the live `research` settings slot (the app's settings file; the harness's in tests).
 pub type SettingsSource = Arc<dyn Fn() -> Option<Json> + Send + Sync>;
 
@@ -99,7 +104,6 @@ pub fn form_snapshot(
     Ok(FormSnapshot { item_type, fields })
 }
 
-#[allow(dead_code)] // TEMP(R4·U3): the run lifecycle (U4) reads the remaining fields.
 pub struct ResearchService {
     pub(crate) store: Arc<SqliteStore>,
     pub(crate) clock: Arc<dyn Clock>,
@@ -114,6 +118,7 @@ pub struct ResearchService {
     pub(crate) events: Arc<dyn EventSink>,
     /// The launch instant: the last change of every session until one is seen (MC-A6).
     pub(crate) launched: Instant,
+    pub(crate) state: std::sync::Mutex<crate::runs::LiveState>,
 }
 
 impl ResearchService {
@@ -141,6 +146,7 @@ impl ResearchService {
             integration: deps.integration,
             settings: deps.settings,
             events: deps.events,
+            state: std::sync::Mutex::new(crate::runs::LiveState::default()),
         }
     }
 
@@ -148,12 +154,16 @@ impl ResearchService {
         &self.gateway
     }
 
+    /// The research file store (research copies and listing images).
+    pub fn files(&self) -> &ResearchFiles {
+        &self.files
+    }
+
     pub(crate) fn changed(&self, session_id: i64) {
         self.events.emit(AppEvent::ResearchChanged { session_id });
     }
 
     /// The external id of the item's shop listing, if it is linked.
-    #[allow(dead_code)] // TEMP(R4·U3): used by the start transaction (U4).
     pub(crate) fn external_id(&self, item_id: i64) -> Result<Option<String>> {
         self.store.research_transaction(|tx| {
             use rusqlite::OptionalExtension;
@@ -166,6 +176,15 @@ impl ResearchService {
                 .optional()
                 .map_err(crate::store::db)
         })
+    }
+
+    /// `fields_filled` and `to_review` of the status (R4·U6).
+    pub(crate) fn derived_counts(
+        &self,
+        _item_id: i64,
+        _latest: Option<&crate::store::RunRow>,
+    ) -> Result<(usize, usize)> {
+        Ok((0, 0))
     }
 
     /// Runs the stages of a `running` run (08A §5) and ends it (MC-A7 commit rule; MC-A8 endings).

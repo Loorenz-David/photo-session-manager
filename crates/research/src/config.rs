@@ -158,3 +158,165 @@ impl ResearchConfig {
         }
     }
 }
+
+/// One price row of `research.prices` (decimal strings, MC-8): a per-unit price, a fallback per
+/// call, or both, for one `(provider, model)` (`model` is `""` for non-model providers).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PriceRow {
+    pub provider: String,
+    pub model: String,
+    pub unit: Option<String>,
+    pub usd_per_million: Option<String>,
+    pub fallback_call_usd: Option<String>,
+}
+
+/// Call timeouts in seconds (MC-A9).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CallTimeouts {
+    pub model: u32,
+    pub other: u32,
+}
+
+impl Default for CallTimeouts {
+    fn default() -> Self {
+        Self {
+            model: 180,
+            other: 60,
+        }
+    }
+}
+
+/// The `research` slot of the settings file (`master_plan_research.md` §6.6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ResearchSettings {
+    pub auto: bool,
+    pub quiet_seconds: i64,
+    pub source_wait_seconds: i64,
+    /// The shop's designer field (08A §6: the shop's designer and manufacturer keys; the
+    /// connected shop has no manufacturer field).
+    pub attribution_keys: Vec<String>,
+    pub trusted_sites: Vec<String>,
+    pub max_pages: u32,
+    pub stages: BTreeMap<String, StageConfig>,
+    pub max_cost_per_run: String,
+    pub max_cost_per_day: String,
+    pub prices: Vec<PriceRow>,
+    pub language: String,
+    pub record_days: i64,
+    pub call_timeout_seconds: CallTimeouts,
+    pub providers: ProviderIds,
+}
+
+impl Default for ResearchSettings {
+    fn default() -> Self {
+        Self {
+            auto: true,
+            quiet_seconds: 1,
+            source_wait_seconds: 120,
+            attribution_keys: vec!["beyo.designer".to_owned()],
+            trusted_sites: Vec::new(),
+            max_pages: 10,
+            stages: ResearchConfig::default().stages,
+            max_cost_per_run: "0.50".to_owned(),
+            max_cost_per_day: "15".to_owned(),
+            prices: Vec::new(),
+            language: "English".to_owned(),
+            record_days: 30,
+            call_timeout_seconds: CallTimeouts::default(),
+            providers: ProviderIds::default(),
+        }
+    }
+}
+
+impl ResearchSettings {
+    /// Reads the slot tolerantly: a missing slot or field takes its default, and a field an older
+    /// (or damaged) file holds in another shape is ignored with a warning.
+    pub fn from_slot(slot: Option<&serde_json::Value>) -> Self {
+        let Some(serde_json::Value::Object(given)) = slot else {
+            return Self::default();
+        };
+        if let Ok(settings) =
+            serde_json::from_value::<Self>(serde_json::Value::Object(given.clone()))
+        {
+            return settings;
+        }
+        let mut merged = serde_json::to_value(Self::default()).unwrap_or_default();
+        for (key, value) in given {
+            let mut trial = merged.clone();
+            trial[key] = value.clone();
+            if serde_json::from_value::<Self>(trial.clone()).is_ok() {
+                merged = trial;
+            } else {
+                tracing::warn!(key = %key, "research setting has an unexpected shape; default used");
+            }
+        }
+        serde_json::from_value(merged).unwrap_or_default()
+    }
+
+    pub fn stage(&self, stage: Stage) -> StageConfig {
+        self.stages.get(stage.as_str()).cloned().unwrap_or_default()
+    }
+
+    /// Fallback per `(provider, model)` as micro-USD, for the pairs whose text parses.
+    pub fn fallbacks(&self) -> Vec<FallbackSnapshot> {
+        self.prices
+            .iter()
+            .filter_map(|row| {
+                Some(FallbackSnapshot {
+                    provider: row.provider.clone(),
+                    model: row.model.clone(),
+                    micro_usd: crate::rules::cost::parse_micro_usd(
+                        row.fallback_call_usd.as_deref()?,
+                    )?,
+                })
+            })
+            .collect()
+    }
+
+    pub fn unit_prices(&self) -> Vec<PriceSnapshot> {
+        self.prices
+            .iter()
+            .filter_map(|row| {
+                Some(PriceSnapshot {
+                    provider: row.provider.clone(),
+                    model: row.model.clone(),
+                    unit: row.unit.clone()?,
+                    micro_usd_per_million: crate::rules::cost::parse_micro_usd(
+                        row.usd_per_million.as_deref()?,
+                    )?,
+                })
+            })
+            .collect()
+    }
+}
+
+impl ResearchConfig {
+    /// The snapshot a run starts with: the live settings plus the shop facts of the item.
+    pub fn from_settings(settings: &ResearchSettings, shop: &crate::shop::ShopFacts) -> Self {
+        let defaults = ResearchSettings::default();
+        let money = |text: &str, default: &str| {
+            crate::rules::cost::parse_micro_usd(text)
+                .or_else(|| crate::rules::cost::parse_micro_usd(default))
+                .unwrap_or(0)
+        };
+        Self {
+            stages: settings.stages.clone(),
+            max_pages: settings.max_pages,
+            max_cost_per_run: money(&settings.max_cost_per_run, &defaults.max_cost_per_run),
+            max_cost_per_day: money(&settings.max_cost_per_day, &defaults.max_cost_per_day),
+            prices: settings.unit_prices(),
+            fallbacks: settings.fallbacks(),
+            trusted_sites: settings.trusted_sites.clone(),
+            shop_hosts: shop.hosts.clone(),
+            own_listing_url: shop.own_listing.url.clone(),
+            own_listing_path_tail: shop.own_listing.path_tail.clone(),
+            attribution_keys: settings.attribution_keys.clone(),
+            language: settings.language.clone(),
+            providers: settings.providers.clone(),
+            ..Self::default()
+        }
+    }
+}
