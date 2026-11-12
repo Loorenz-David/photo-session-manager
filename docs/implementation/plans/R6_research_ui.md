@@ -37,12 +37,6 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
   UI row: typing "Walnut" into a conflict's Edit calls the resolve command once, with "Walnut".
 - **U3, the confirmed text (R5 projection N8).** If the popover shows the withheld and "waiting for you" lines, the
   `summary` text passed to confirm carries them (07A MC-10: the exact text shown).
-- **U2, keys start the open session (owner, 2026-11-12; 08B changelog 7).** After a successful save of a research key in
-  Settings → Research, or switching Automatic on, the frontend calls `research_status` for the session open in the
-  app and, when it has a Main photo, no run ever, and no failing prerequisite, calls `research_run` for it (no
-  binding changes; the commands are frozen since R2). No other session. Add a UI row: keys saved with a
-  never-researched session open → `research_run` called once with that session; with no session open, or one that
-  already has a run → not called.
 
 ## Unit 1 — The live research panel and "n to review"
 

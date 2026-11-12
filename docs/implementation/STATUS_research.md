@@ -30,7 +30,7 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   merge `research/track-b` into `feature/agentic` here; after each approved A milestone merge `feature/agentic` into
   track B before B's next milestone. Track B's copy of this file is not maintained; this one is.
 - **Owner answered 2026-11-12 (both "yes"):** a capped run lowers nothing (→ R7·U1 carried note); saving keys or
-  Automatic on starts the open never-researched session (→ R6·U2 carried note). 08B changelog 7.
+  Automatic on starts nothing (owner withdrew the "start the open session" pick: no extra work). 08B changelog 7.
 - **Blocked on the owner:** R8 (search route and page-reading route, picked from R1's report); R10 (models per stage,
   picked from R9's report). Picks arrive as decision cards in the R1 and R9 narratives.
 - **Unverified, watch for it:** this worktree has never been built (first cargo run is a full compile); the three

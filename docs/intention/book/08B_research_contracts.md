@@ -401,9 +401,8 @@ snapshot, any of these changed: the set of stage 1 unit identities, the cover id
 identity. This includes 08A's list: added photos, photos
 reclassified to or from `deleted`, recomposed photos. It also includes main↔condition reclassification and a new
 cover by reorder. It excludes Capture One retouches and settings changes: a setting applies to the next run that
-happens, and never starts one, with one exception (owner, 2026-11-12, changelog 7): when a save of a research
-key, or switching `research.auto` on, leaves the prerequisites met, the session open in the app is queued if it
-has at least one Main photo and research has never run for it (08A §5). No other session is queued by it.
+happens, and never starts one (owner, 2026-11-12, changelog 7: entering keys starts nothing; the next photo
+change or Run again does).
 
 **Invariant (MA14).** Killing and resuming at any instant ends with the same stage outputs, steps and attribute
 writes as an uninterrupted run given the same provider answers. No committed unit is re-called, and no step
@@ -770,6 +769,6 @@ to 07A MC-10 and 05A MC-30.
    this, an item could wait with nothing left to resolve. Completes the owner's card 1 answer; no new choice.
 7. **2026-11-12 — Owner answers on two review notes (relayed by the orchestrator).** (a) "A run stopped at the
    cost limit should leave earlier suggestions alone": yes. MC-A1 Lowering: a run ending `stopped_at_cap` lowers
-   nothing. (b) "Entering keys should start research on the session you have open": yes. MC-A7: saving a key or
-   switching Automatic on queues the open session if it has a Main photo and was never researched; no other
-   session. MC-A6's "eligibility is evaluated on every save" stands.
+   nothing. (b) Entering keys or switching Automatic on starts nothing (the owner first said start the open session, then
+   withdrew it the same day: "I can do it by doing a new session"). MC-A7's "never starts one" holds; MC-A6's
+   "eligibility is evaluated on every save" means the status is re-evaluated, not that a run is queued.
