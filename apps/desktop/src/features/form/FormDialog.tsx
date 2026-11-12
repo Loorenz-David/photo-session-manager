@@ -17,6 +17,7 @@ import {
   listDefinitions,
   readShopValues,
   removeSavedValue,
+  resolveConflict,
   setFieldDefault,
   type Definition,
   type FormField,
@@ -33,10 +34,11 @@ import { IdentityEditor } from './IdentityEditor';
 import { ItemTypePicker, useItemTypes } from './ItemTypePicker';
 import { MediaColumn } from './MediaColumn';
 import { MetafieldInput, type FieldPresets } from './MetafieldInput';
+import { isConflict, type ConflictActions } from './AiPopover';
 import { ResearchPanel } from './ResearchPanel';
 import { STEP_LABEL, StepTabs } from './StepTabs';
 import { StockFields } from './StockFields';
-import { useFormState, type SaveState } from './useFormState';
+import { isEmptyValue, storedValue, useFormState, type SaveState } from './useFormState';
 
 const STEPS: Group[] = ['details', 'condition', 'product'];
 
@@ -111,11 +113,13 @@ function useResearchStatus(sessionId: number | undefined, onChanged: () => void)
     let alive = true;
     let off: (() => void) | undefined;
     void reload();
-    onResearchChanged(changedId => {
-      if (changedId !== sessionId) return;
-      void reload();
-      changed.current();
-    })
+    // Without the event (no Tauri runtime) the panel still re-reads the status when it opens.
+    Promise.resolve()
+      .then(() => onResearchChanged(changedId => {
+        if (changedId !== sessionId) return;
+        void reload();
+        changed.current();
+      }))
       .then(unlisten => { if (alive) off = unlisten; else unlisten(); })
       .catch(() => undefined);
     return () => { alive = false; off?.(); };
@@ -160,6 +164,14 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const [research, setResearch] = useState<{ open: boolean; focus: string | null }>({ open: false, focus: null });
   const researchState = useResearchStatus(sessionId, () => void state.reload());
   const actionQueue = useRef<Promise<unknown>>(Promise.resolve());
+  /**
+   * Edits of fields in conflict (08B MC-A10, R5 projection N1). On a held publish item the first save of a pending key
+   * resolves it, so these are never written on the typing debounce: only once, on Enter, leaving the field, or Save &
+   * close, through the conflict's Edit.
+   */
+  const [conflictDrafts, setConflictDrafts] = useState<Record<string, unknown>>({});
+  const conflictDraftsRef = useRef(conflictDrafts);
+  conflictDraftsRef.current = conflictDrafts;
   const closing = useRef(false);
 
   // P67 (changelog 46 (3)): a linked item's form shows the product's values. The product is read once (a batch
@@ -274,6 +286,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
     if (closing.current) return;
     closing.current = true;
     const titleEdited = state.isEdited(PRODUCT_TITLE);
+    await Promise.all(state.fields.filter(field => field.definition.key in conflictDraftsRef.current).map(commitConflict));
     await state.flush();
     if (itemType !== savedType && (!types?.length || types.includes(itemType))) await commitType(itemType);
     if (titleEdited) onItemChanged();
@@ -286,6 +299,32 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
     const titleEdited = key === PRODUCT_TITLE && state.isEdited(PRODUCT_TITLE);
     await state.blur();
     if (titleEdited) onItemChanged();
+  }
+
+  /** Writes a conflict field's edit once (Edit with the typed value; emptied → Clear); an unchanged edit is dropped. */
+  function commitConflict(field: FormField): Promise<unknown> {
+    const key = field.definition.key;
+    if (!(key in conflictDraftsRef.current)) return Promise.resolve();
+    const value = conflictDraftsRef.current[key];
+    const rest = { ...conflictDraftsRef.current };
+    delete rest[key];
+    conflictDraftsRef.current = rest;
+    setConflictDrafts(rest);
+    if (JSON.stringify(value) === JSON.stringify(storedValue(field))) return Promise.resolve();
+    return act(() => (isEmptyValue(value) ? clearAttribute(item.id, key) : resolveConflict(item.id, key, 'edit', value)), 'Could not save');
+  }
+
+  function conflictActions(field: FormField): ConflictActions | undefined {
+    if (!isConflict(field.value, field.definition.core_type)) return undefined;
+    const key = field.definition.key;
+    return {
+      onKeepPrevious: () => act(() => resolveConflict(item.id, key, 'keep_previous'), 'Could not keep the previous value'),
+      onUseSuggestion: () => act(() => resolveConflict(item.id, key, 'use_suggestion'), 'Could not use the suggestion'),
+      onEdit: () => {
+        setConflictDrafts(current => ({ ...current, [key]: state.valueOf(field) }));
+        window.setTimeout(() => document.getElementById(`field-${key}`)?.focus(), 0);
+      },
+    };
   }
 
   function finishCustomizing() {
@@ -354,21 +393,34 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
               {!reading && group && group.fields.length === 0 && (
                 <p className="text-sm text-muted-foreground">No fields in this step. Use Customize fields to add some.</p>
               )}
-              {!reading && group?.fields.map(field => (
+              {!reading && group?.fields.map(field => {
+                const key = field.definition.key;
+                const conflict = conflictActions(field);
+                const editingConflict = key in conflictDrafts;
+                const routed = conflict !== undefined || editingConflict;
+                return (
+                <div key={key} className="contents" onKeyDown={routed ? event => {
+                  if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+                    event.preventDefault();
+                    void commitConflict(field);
+                  }
+                } : undefined}>
                 <MetafieldInput
-                  key={field.definition.key}
                   field={field}
-                  value={state.valueOf(field)}
-                  edited={state.isEdited(field.definition.key)}
-                  onChange={value => state.edit(field.definition.key, value)}
-                  onBlur={() => void blurField(field.definition.key)}
+                  value={editingConflict ? conflictDrafts[key] : state.valueOf(field)}
+                  edited={editingConflict || state.isEdited(key)}
+                  onChange={routed ? value => setConflictDrafts(current => ({ ...current, [key]: value })) : value => state.edit(key, value)}
+                  onBlur={routed ? () => void commitConflict(field) : () => void blurField(key)}
+                  conflict={conflict}
                   conditionPhotos={conditionPhotos}
                   onLooksRight={f => act(() => acceptSuggestion(item.id, f.definition.key), 'Could not accept')}
                   onClearAi={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
                   onSeeResearch={key => openResearch(key)}
                   presets={presetsOf(field)}
                 />
-              ))}
+                </div>
+                );
+              })}
               {form && !reading && step === 'product' && <StockFields itemId={item.id} />}
             </section>
             {research.open && (

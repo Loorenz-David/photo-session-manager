@@ -1,10 +1,40 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { commands, type NotificationDto, type PreviewDto, type PublishActivityDto, type ShownSuggestionsDto } from './bindings';
+import { commands, type NotificationDto, type PreviewConflictDto, type PreviewDto, type PublishActivityDto, type ShownSuggestionsDto } from './bindings';
 import { unwrap } from './sessions';
 
 export type { NotificationDto, PreviewDto, PublishActivityDto };
 /** What the confirmation showed for one session (08B MC-A10): its withheld count and conflict keys. */
 export type ShownSuggestions = ShownSuggestionsDto;
+/** One conflict as the confirmation shows it (08B MC-A10). */
+export type PreviewConflict = PreviewConflictDto;
+
+/** The code of the refusal "AI suggestions changed while you were confirming" (MC-A10): the popover rebuilds on it. */
+export const SUGGESTIONS_CHANGED = 'suggestions_changed';
+
+/** "n low-confidence AI suggestions will not be published" (08B MC-A10). */
+export function withheldLine(n: number): string {
+  return `${n} low-confidence AI ${n === 1 ? 'suggestion' : 'suggestions'} will not be published`;
+}
+
+/** "This item waits until you resolve n conflicts" (08B MC-A10). */
+export function waitsLine(n: number): string {
+  return `This item waits until you resolve ${n} ${n === 1 ? 'conflict' : 'conflicts'}`;
+}
+
+/**
+ * The text the photographer confirms (07A MC-10: the exact text shown): the preview's summary, then the withheld and
+ * waiting lines the popover showed for each item (R5 projection N8).
+ */
+export function confirmedText(preview: PreviewDto): string {
+  const many = preview.items.length > 1;
+  const lines = preview.items.flatMap(item => {
+    const shown: string[] = [];
+    if (item.n_withheld > 0) shown.push(withheldLine(item.n_withheld));
+    if (item.conflicts.length > 0) shown.push(waitsLine(item.conflicts.length));
+    return many ? shown.map(line => `Session ${item.session_id}: ${line}`) : shown;
+  });
+  return [preview.summary, ...lines].join('\n');
+}
 export type PublishProgressEvent = { session_id: number; item_id: number; step: string; uploaded: number; total: number };
 
 export async function publishPreview(sessionIds: number[]): Promise<PreviewDto> {

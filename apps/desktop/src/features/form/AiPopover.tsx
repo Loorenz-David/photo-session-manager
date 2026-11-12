@@ -5,20 +5,67 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { AttributeValue } from '@/services/attributes';
 import { AiPill } from './AiPill';
 
-/** Shown value of a stored row: a JSON string without quotes, a list joined, anything else as JSON. */
-export function displayValue(value: AttributeValue): string {
+/** Shown text of a value held as JSON text: a string without quotes, a list joined, a measurement with its unit. */
+export function jsonText(text: string): string {
   try {
-    const parsed = JSON.parse(value.value);
+    const parsed = JSON.parse(text);
     if (typeof parsed === 'string') return parsed;
     if (Array.isArray(parsed)) return parsed.join(', ');
     if (parsed && typeof parsed === 'object' && 'value' in parsed) return `${parsed.value}${parsed.unit ? ` ${parsed.unit}` : ''}`;
-    return value.value;
+    return text;
   } catch {
-    return value.value;
+    return text;
   }
 }
 
+/** Shown value of a stored row: a JSON string without quotes, a list joined, anything else as JSON. */
+export function displayValue(value: AttributeValue): string {
+  return jsonText(value.value);
+}
+
+/** Where a conflict's previous value came from (08B MC-A10). */
+export function priorOrigin(provenance: string): string {
+  return provenance === 'integration' ? 'from Shopify' : 'preset default';
+}
+
+/** MC-A1's name key, as the UI approximates it: case and width folded, punctuation, symbols and spaces collapsed. */
+function nameKey(text: string): string {
+  return text.normalize('NFKC').toLowerCase().replace(/[\p{P}\p{S}\s]+/gu, ' ').trim();
+}
+
+/**
+ * A conflict (08B MC-A1): an unchecked `ai` + `suggested` value, at any confidence, that replaced a value (`ai_prior`)
+ * and is not the same as it. Text values compare by name key, lists as sets, anything else by its canonical JSON.
+ */
+export function isConflict(value: AttributeValue | null, coreType: string): boolean {
+  if (!value || value.provenance !== 'ai' || value.ai_status !== 'suggested' || !value.ai_prior) return false;
+  let a: unknown;
+  let b: unknown;
+  try {
+    a = JSON.parse(value.value);
+    b = JSON.parse(value.ai_prior.value);
+  } catch {
+    return value.value !== value.ai_prior.value;
+  }
+  if (['text', 'textarea', 'url'].includes(coreType) && typeof a === 'string' && typeof b === 'string') return nameKey(a) !== nameKey(b);
+  if (['tags', 'multi_choice'].includes(coreType) && Array.isArray(a) && Array.isArray(b)) {
+    const key = (s: unknown) => (coreType === 'tags' && typeof s === 'string' ? nameKey(s) : JSON.stringify(s));
+    const left = new Set(a.map(key));
+    const right = new Set(b.map(key));
+    return left.size !== right.size || [...left].some(k => !right.has(k));
+  }
+  return value.value !== value.ai_prior.value;
+}
+
 const CONFIDENCE_LABEL: Record<string, string> = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence · check' };
+
+/** The three actions of a conflict (08B MC-A12): offered in place of Looks right / Clear. */
+export type ConflictActions = {
+  onKeepPrevious: () => Promise<unknown>;
+  onUseSuggestion: () => Promise<unknown>;
+  /** Puts the field in edit mode; the typed value is saved once, on Enter, leaving the field, or Save & close. */
+  onEdit: () => void;
+};
 
 type AiPopoverProps = {
   value: AttributeValue;
@@ -26,18 +73,22 @@ type AiPopoverProps = {
   onLooksRight: () => Promise<unknown>;
   onClear: () => Promise<unknown>;
   onSeeResearch: () => void;
+  /** Set when the field is in conflict: the popover shows the previous value and the conflict's actions. */
+  conflict?: ConflictActions;
 };
 
 /**
  * The AI pill's popover (ch08, NOTES §AI agent rules): confidence, value, reason, sources, Looks right / Clear /
- * See research. Looks right accepts a suggestion, so it is offered only on a suggested row (08B MC-A12).
+ * See research. Looks right accepts a suggestion, so it is offered only on a suggested row (08B MC-A12). A conflict
+ * shows the previous value and where it came from, and Keep previous / Use suggestion / Edit instead (MC-A10).
  */
-export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch }: AiPopoverProps) {
+export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch, conflict }: AiPopoverProps) {
   const [open, setOpen] = useState(false);
   const act = (action: () => void) => () => {
     setOpen(false);
     action();
   };
+  const prior = conflict ? value.ai_prior : null;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -46,6 +97,11 @@ export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch }
       <PopoverContent align="start" className="w-80" aria-label={`AI suggestion for ${label}`}>
         <p className="text-xs font-semibold text-(--ai-foreground)">{CONFIDENCE_LABEL[value.ai_confidence ?? ''] ?? 'AI suggestion'}</p>
         <p className="text-sm font-semibold">{displayValue(value)}</p>
+        {prior && (
+          <p className="text-xs" data-conflict-prior>
+            Replaces <span className="font-semibold">{jsonText(prior.value)}</span> · {priorOrigin(prior.provenance)}
+          </p>
+        )}
         {value.ai_reason && <p className="text-xs text-muted-foreground">{value.ai_reason}</p>}
         {(value.ai_sources ?? []).length > 0 && (
           <ul className="flex flex-col gap-0.5 text-xs">
@@ -58,19 +114,41 @@ export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch }
             ))}
           </ul>
         )}
-        <div className="flex gap-1.5">
-          {value.ai_status === 'suggested' && (
-            <ActionButton size="sm" action={async () => { setOpen(false); await onLooksRight(); }}>
-              Looks right
+        {conflict ? (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              <ActionButton size="sm" variant="outline" action={async () => { setOpen(false); await conflict.onKeepPrevious(); }}>
+                Keep previous
+              </ActionButton>
+              <ActionButton size="sm" action={async () => { setOpen(false); await conflict.onUseSuggestion(); }}>
+                Use suggestion
+              </ActionButton>
+              <Button size="sm" variant="outline" onClick={act(conflict.onEdit)}>
+                Edit
+              </Button>
+              <Button size="sm" variant="ghost" onClick={act(onSeeResearch)}>
+                See research
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              A publish that already went ahead keeps the value you chose for it; the next publish waits for this choice again.
+            </p>
+          </>
+        ) : (
+          <div className="flex gap-1.5">
+            {value.ai_status === 'suggested' && (
+              <ActionButton size="sm" action={async () => { setOpen(false); await onLooksRight(); }}>
+                Looks right
+              </ActionButton>
+            )}
+            <ActionButton size="sm" variant="outline" action={async () => { setOpen(false); await onClear(); }}>
+              Clear
             </ActionButton>
-          )}
-          <ActionButton size="sm" variant="outline" action={async () => { setOpen(false); await onClear(); }}>
-            Clear
-          </ActionButton>
-          <Button size="sm" variant="ghost" onClick={act(onSeeResearch)}>
-            See research
-          </Button>
-        </div>
+            <Button size="sm" variant="ghost" onClick={act(onSeeResearch)}>
+              See research
+            </Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

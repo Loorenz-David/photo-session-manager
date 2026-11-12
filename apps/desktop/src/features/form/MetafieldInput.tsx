@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { BookmarkPlus, Pin, X } from 'lucide-react';
 import { PRODUCT_DESCRIPTION, PRODUCT_TITLE, type AttributeValue, type Definition, type FormField } from '@/services/attributes';
 import type { Photo } from '@/services/photos';
-import { AiPopover } from './AiPopover';
+import { AiPopover, type ConflictActions } from './AiPopover';
 import { BooleanInput } from './inputs/BooleanInput';
 import { ChoicePills } from './inputs/ChoicePills';
 import { ColorInput } from './inputs/ColorInput';
@@ -134,13 +134,15 @@ type MetafieldInputProps = {
   onClearAi: (field: FormField) => Promise<unknown>;
   onSeeResearch: (key: string) => void;
   presets?: FieldPresets;
+  /** The field is in conflict (08B MC-A10): marked, and its popover offers the conflict's actions. */
+  conflict?: ConflictActions;
 };
 
 /**
  * One generated field (ch08 §Field kinds): label, the AI pill for a value with provenance `ai`, the Default
  * marker, the invalid marker with the verbatim value (MC-9), and the input of the definition's kind.
  */
-export function MetafieldInput({ field, value, edited, onChange, onBlur, placeholder, conditionPhotos, onLooksRight, onClearAi, onSeeResearch, presets }: MetafieldInputProps) {
+export function MetafieldInput({ field, value, edited, onChange, onBlur, placeholder, conditionPhotos, onLooksRight, onClearAi, onSeeResearch, presets, conflict }: MetafieldInputProps) {
   const { definition } = field;
   const stored = field.value;
   const kind = definition.writable ? kindOf(definition) : 'unsupported';
@@ -150,14 +152,15 @@ export function MetafieldInput({ field, value, edited, onChange, onBlur, placeho
   const invalid = !edited && stored !== null && !stored.valid;
 
   return (
-    <div className="flex flex-col gap-2" data-field={definition.key} data-kind={kind}>
+    <div className="flex flex-col gap-2" data-field={definition.key} data-kind={kind} data-conflict={conflict && !edited ? '' : undefined}>
       <div className="flex items-center gap-2">
         <label htmlFor={id} className="text-sm font-semibold">
           {definition.label}
         </label>
         {showAi && stored && (
-          <AiPopover value={stored} label={definition.label} onLooksRight={() => onLooksRight(field)} onClear={() => onClearAi(field)} onSeeResearch={() => onSeeResearch(definition.key)} />
+          <AiPopover value={stored} label={definition.label} onLooksRight={() => onLooksRight(field)} onClear={() => onClearAi(field)} onSeeResearch={() => onSeeResearch(definition.key)} conflict={conflict} />
         )}
+        {showAi && conflict && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900" data-conflict-mark>Conflict</span>}
         {!edited && field.is_default && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Default</span>}
         {!edited && stored?.provenance === 'integration' && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground" data-from-integration>from Shopify</span>}
         {presets && takesPresets(field) && (

@@ -407,6 +407,135 @@ mod r5_command_tests {
 }
 
 #[cfg(test)]
+mod r6_command_tests {
+    use super::*;
+    use psm_core::domain::attribute::AiConfidence;
+    use psm_core::domain::photo::{Classification, NewPhoto, PhotoSource};
+    use psm_core::domain::session::PublishStep;
+    use psm_core::events::AppEvent;
+    use psm_core::mechanisms::hash::sha256_file;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    const NOW_MS: i64 = 1_762_840_000_000;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    /// R6·U3 (R5 review): resolving the last conflict of a held publish item tells the UI
+    /// (`session_changed`, `publish_progress`), so the row flips from "Waiting for you" to
+    /// "Publishing" without a manual refresh; resolving one of two tells it nothing.
+    #[test]
+    fn r6_a20_release_emits_session_changed_and_publish_progress() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        a.clock.advance(NOW_MS);
+        a.research_fields(&["k1", "k2"]).unwrap();
+        let (item, created) = a
+            .items()
+            .create_local("R6-REL", "Oak", "Sideboard", None)
+            .unwrap();
+        let session = created.session.id;
+        let dir = a.dir.path().join("Capture/raws");
+        std::fs::create_dir_all(&dir).unwrap();
+        let raw = dir.join("R6-REL.ARW");
+        std::fs::write(&raw, "raw bytes").unwrap();
+        let photo = a
+            .store()
+            .photo_insert_or_get(NewPhoto {
+                session_id: session,
+                raw_path: raw.to_string_lossy().into_owned(),
+                raw_hash: Some(sha256_file(&raw).unwrap()),
+                captured_at: Some(NOW_MS),
+                source: PhotoSource::Capture,
+                created_at: NOW_MS,
+            })
+            .unwrap();
+        a.store().upsert_raw_state(&photo.raw_path, None).unwrap();
+        a.review().classify(photo.id, Classification::Main).unwrap();
+        a.fake.add_image(&photo.raw_path, &["v1"], false);
+        a.research_conflict(item.id, "k1", "Oak", "Walnut", AiConfidence::High)
+            .unwrap();
+        a.research_conflict(item.id, "k2", "Pine", "Teak", AiConfidence::High)
+            .unwrap();
+        a.confirm_as_shown(&[session], "Publish").unwrap();
+        let events = a.events.clone();
+        let psm_testkit::TestApp {
+            dir: _dir, mut app, ..
+        } = a;
+        // The commands read the active definitions of the configured integration's kind.
+        app.settings.integration = Some(json!({"kind": psm_testkit::RESEARCH_INTEGRATION}));
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::attributes::attribute_conflict_resolve,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let told = || {
+            let mut out = Vec::new();
+            for event in events.0.lock().unwrap().drain(..) {
+                match event {
+                    AppEvent::SessionChanged { session_id } => {
+                        out.push(format!("session_changed {session_id}"))
+                    }
+                    AppEvent::PublishProgress {
+                        session_id, step, ..
+                    } => out.push(format!("publish_progress {session_id} {step:?}")),
+                    _ => {}
+                }
+            }
+            out
+        };
+        told();
+        call(
+            &w,
+            "attribute_conflict_resolve",
+            json!({"itemId": item.id, "key": "k1", "action": "keep_previous", "value": null}),
+        )
+        .unwrap();
+        assert_eq!(told(), Vec::<String>::new(), "one conflict still waits");
+        call(
+            &w,
+            "attribute_conflict_resolve",
+            json!({"itemId": item.id, "key": "k2", "action": "use_suggestion", "value": null}),
+        )
+        .unwrap();
+        assert_eq!(
+            told(),
+            vec![
+                format!("session_changed {session}"),
+                format!("publish_progress {session} {:?}", PublishStep::Prepare),
+            ]
+        );
+    }
+}
+
+#[cfg(test)]
 mod p39_tests {
     use super::*;
     use psm_core::domain::photo::Classification;
