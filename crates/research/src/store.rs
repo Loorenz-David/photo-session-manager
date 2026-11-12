@@ -277,3 +277,241 @@ pub fn add_run_cost(conn: &Connection, id: i64, micro_usd: i64) -> Result<()> {
     .map_err(db)?;
     Ok(())
 }
+
+/// One `research_calls` row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallRow {
+    pub id: i64,
+    pub run_id: i64,
+    pub stage: String,
+    pub unit_key: String,
+    pub attempt: i64,
+    pub provider: String,
+    pub model: String,
+    pub effort: String,
+    pub state: String,
+    pub request: String,
+    pub response: Option<String>,
+    pub usage: Option<String>,
+    pub cost_micro_usd: i64,
+    pub started_at: i64,
+    pub finished_at: Option<i64>,
+    pub duration_ms: Option<i64>,
+    pub error_class: Option<String>,
+    pub error_text: Option<String>,
+    pub redaction_hit: bool,
+}
+
+const CALL_COLUMNS: &str = "id,run_id,stage,unit_key,attempt,provider,model,effort,state,request,\
+    response,usage,cost_micro_usd,started_at,finished_at,duration_ms,error_class,error_text,\
+    redaction_hit";
+
+fn call_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<CallRow> {
+    Ok(CallRow {
+        id: r.get(0)?,
+        run_id: r.get(1)?,
+        stage: r.get(2)?,
+        unit_key: r.get(3)?,
+        attempt: r.get(4)?,
+        provider: r.get(5)?,
+        model: r.get(6)?,
+        effort: r.get(7)?,
+        state: r.get(8)?,
+        request: r.get(9)?,
+        response: r.get(10)?,
+        usage: r.get(11)?,
+        cost_micro_usd: r.get(12)?,
+        started_at: r.get(13)?,
+        finished_at: r.get(14)?,
+        duration_ms: r.get(15)?,
+        error_class: r.get(16)?,
+        error_text: r.get(17)?,
+        redaction_hit: r.get::<_, i64>(18)? != 0,
+    })
+}
+
+/// The calls of a run (every run when `None`), in insert order.
+pub fn calls(conn: &Connection, run_id: Option<i64>) -> Result<Vec<CallRow>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {CALL_COLUMNS} FROM research_calls WHERE (?1 IS NULL OR run_id=?1) ORDER BY id"
+        ))
+        .map_err(db)?;
+    let rows = stmt
+        .query_map([run_id], call_row)
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    Ok(rows)
+}
+
+/// A call record in state `sent`.
+pub struct NewCall<'a> {
+    pub run_id: i64,
+    pub stage: &'a str,
+    pub unit_key: &'a str,
+    pub attempt: i64,
+    pub provider: &'a str,
+    pub model: &'a str,
+    pub effort: &'a str,
+    pub request: &'a str,
+    pub started_at: i64,
+    pub redaction_hit: bool,
+}
+
+pub fn insert_call(conn: &Connection, call: &NewCall<'_>) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO research_calls(run_id,stage,unit_key,attempt,provider,model,effort,state,\
+         request,started_at,redaction_hit) VALUES (?1,?2,?3,?4,?5,?6,?7,'sent',?8,?9,?10)",
+        params![
+            call.run_id,
+            call.stage,
+            call.unit_key,
+            call.attempt,
+            call.provider,
+            call.model,
+            call.effort,
+            call.request,
+            call.started_at,
+            i64::from(call.redaction_hit),
+        ],
+    )
+    .map_err(db)?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// How a call record ends.
+pub struct CallEnd<'a> {
+    pub state: &'a str,
+    pub response: Option<&'a str>,
+    pub usage: Option<&'a str>,
+    pub cost_micro_usd: i64,
+    pub finished_at: i64,
+    pub duration_ms: i64,
+    pub error_class: Option<&'a str>,
+    pub error_text: Option<&'a str>,
+    pub redaction_hit: bool,
+}
+
+pub fn end_call(conn: &Connection, id: i64, end: &CallEnd<'_>) -> Result<()> {
+    conn.execute(
+        "UPDATE research_calls SET state=?1,response=?2,usage=?3,cost_micro_usd=?4,finished_at=?5,\
+         duration_ms=?6,error_class=?7,error_text=?8,redaction_hit=MAX(redaction_hit,?9) WHERE id=?10",
+        params![
+            end.state,
+            end.response,
+            end.usage,
+            end.cost_micro_usd,
+            end.finished_at,
+            end.duration_ms,
+            end.error_class,
+            end.error_text,
+            i64::from(end.redaction_hit),
+            id,
+        ],
+    )
+    .map_err(db)?;
+    Ok(())
+}
+
+/// The attempt number the next call of a unit gets on one provider: calls never sent do not count.
+pub fn next_attempt(
+    conn: &Connection,
+    run_id: i64,
+    stage: &str,
+    unit_key: &str,
+    provider: &str,
+) -> Result<i64> {
+    let used: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM research_calls WHERE run_id=?1 AND stage=?2 AND unit_key=?3 \
+             AND provider=?4 AND state!='not_sent'",
+            params![run_id, stage, unit_key, provider],
+            |r| r.get(0),
+        )
+        .map_err(db)?;
+    Ok(used + 1)
+}
+
+/// The calls of a run still `sent` with no response (left by a kill).
+pub fn open_calls(conn: &Connection, run_id: i64) -> Result<Vec<CallRow>> {
+    Ok(calls(conn, Some(run_id))?
+        .into_iter()
+        .filter(|c| c.state == "sent")
+        .collect())
+}
+
+/// `(started_at, cost)` of every call, for today's spend (MC-A8).
+pub fn call_costs(conn: &Connection) -> Result<Vec<(i64, i64)>> {
+    let mut stmt = conn
+        .prepare("SELECT started_at,cost_micro_usd FROM research_calls")
+        .map_err(db)?;
+    let rows = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    Ok(rows)
+}
+
+/// One `research_outbound` row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutboundRow {
+    pub id: i64,
+    pub run_id: i64,
+    pub call_id: i64,
+    pub photo_id: i64,
+    pub provider: String,
+    pub sent_at: i64,
+    pub sha256: String,
+}
+
+pub fn insert_outbound(
+    conn: &Connection,
+    run_id: i64,
+    call_id: i64,
+    photo_id: i64,
+    provider: &str,
+    sent_at: i64,
+    sha256: &str,
+) -> Result<()> {
+    conn.execute(
+        "INSERT INTO research_outbound(run_id,call_id,photo_id,provider,sent_at,sha256) \
+         VALUES (?1,?2,?3,?4,?5,?6)",
+        params![run_id, call_id, photo_id, provider, sent_at, sha256],
+    )
+    .map_err(db)?;
+    Ok(())
+}
+
+/// A call that never left: its outbound rows are not proof of anything sent.
+pub fn delete_outbound(conn: &Connection, call_id: i64) -> Result<()> {
+    conn.execute("DELETE FROM research_outbound WHERE call_id=?1", [call_id])
+        .map_err(db)?;
+    Ok(())
+}
+
+pub fn outbound(conn: &Connection, run_id: Option<i64>) -> Result<Vec<OutboundRow>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id,run_id,call_id,photo_id,provider,sent_at,sha256 FROM research_outbound \
+             WHERE (?1 IS NULL OR run_id=?1) ORDER BY id",
+        )
+        .map_err(db)?;
+    let rows = stmt
+        .query_map([run_id], |r| {
+            Ok(OutboundRow {
+                id: r.get(0)?,
+                run_id: r.get(1)?,
+                call_id: r.get(2)?,
+                photo_id: r.get(3)?,
+                provider: r.get(4)?,
+                sent_at: r.get(5)?,
+                sha256: r.get(6)?,
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    Ok(rows)
+}

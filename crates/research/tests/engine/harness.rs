@@ -22,10 +22,13 @@ use psm_core::{
 };
 use psm_infra::{imaging::ImageOpsImpl, sqlite::store::SqliteStore};
 use psm_research::{
+    config::{FallbackSnapshot, PriceSnapshot, ResearchConfig},
     domain::{RunState, RunTrigger},
     fakes::{FakeModel, FakePageReader, FakeVisualSearch},
     files::ResearchFiles,
+    gateway::{CallGateway, SecretValues, Waiter},
     images::ResearchImages,
+    ports::Providers,
     store::{self as rstore, NewRun},
     writes::{self, WriteOutcome},
 };
@@ -326,6 +329,115 @@ impl Harness {
                 )
             })
             .unwrap()
+    }
+
+    /// The providers: the crate's three fakes.
+    pub fn providers(&self) -> Providers {
+        Providers {
+            model: Some(self.model.clone()),
+            search: Some(self.search.clone()),
+            reader: Some(self.reader.clone()),
+        }
+    }
+
+    /// Every value the secrets port holds, plus the shop's secret.
+    pub fn secret_values(&self) -> SecretValues {
+        let secrets = self.app.secrets.clone();
+        Arc::new(move || {
+            let mut out: Vec<String> = secrets.values.lock().unwrap().values().cloned().collect();
+            out.push(SHOP_SECRET.to_owned());
+            out
+        })
+    }
+
+    /// Waits between attempts by moving the manual clock.
+    pub fn waiter(&self) -> Waiter {
+        let clock = self.app.clock.clone();
+        Arc::new(move |ms| clock.advance(i64::try_from(ms).unwrap()))
+    }
+
+    pub fn gateway(&self) -> CallGateway {
+        CallGateway::new(
+            self.store().clone(),
+            self.app.clock.clone(),
+            self.providers(),
+            self.secret_values(),
+            self.files(),
+            self.waiter(),
+        )
+    }
+
+    /// The test price table: `m1` at 1 micro-USD per input token and 2 per output token, every
+    /// provider with a fallback of 1 000 micro-USD per call; cap 0.50 USD.
+    pub fn config(&self) -> ResearchConfig {
+        let mut config = ResearchConfig::default();
+        for stage in psm_research::domain::Stage::ALL {
+            let entry = config.stages.get_mut(stage.as_str()).unwrap();
+            entry.model = "m1".into();
+            entry.effort = "low".into();
+        }
+        config.prices = vec![
+            PriceSnapshot {
+                provider: FakeModel::ID.into(),
+                model: "m1".into(),
+                unit: "input_token".into(),
+                micro_usd_per_million: 1_000_000,
+            },
+            PriceSnapshot {
+                provider: FakeModel::ID.into(),
+                model: "m1".into(),
+                unit: "output_token".into(),
+                micro_usd_per_million: 2_000_000,
+            },
+        ];
+        config.fallbacks = [
+            (FakeModel::ID, "m1"),
+            (FakeVisualSearch::ID, ""),
+            (FakePageReader::ID, ""),
+        ]
+        .into_iter()
+        .map(|(provider, model)| FallbackSnapshot {
+            provider: provider.into(),
+            model: model.into(),
+            micro_usd: 1_000,
+        })
+        .collect();
+        config.providers.model = FakeModel::ID.into();
+        config.providers.visual_search = FakeVisualSearch::ID.into();
+        config.providers.page_reader = FakePageReader::ID.into();
+        config
+    }
+
+    /// A `running` run of the harness's session with `config` as its settings snapshot.
+    pub fn running_run(&self, config: &ResearchConfig) -> i64 {
+        self.insert_run(
+            RunState::Running,
+            Some(serde_json::to_value(config).unwrap()),
+            None,
+        )
+    }
+
+    pub fn run_row(&self, run_id: i64) -> rstore::RunRow {
+        self.query(|c| rstore::run(c, run_id).unwrap().unwrap())
+    }
+
+    pub fn calls(&self, run_id: i64) -> Vec<rstore::CallRow> {
+        self.query(|c| rstore::calls(c, Some(run_id)).unwrap())
+    }
+
+    pub fn outbound(&self, run_id: i64) -> Vec<rstore::OutboundRow> {
+        self.query(|c| rstore::outbound(c, Some(run_id)).unwrap())
+    }
+
+    /// Sets a run's recorded cost directly.
+    pub fn set_run_cost(&self, run_id: i64, micro_usd: i64) {
+        self.query(|c| {
+            c.execute(
+                "UPDATE research_runs SET cost_micro_usd=?1 WHERE id=?2",
+                rusqlite::params![micro_usd, run_id],
+            )
+            .unwrap()
+        });
     }
 
     /// Runs a read-only query on the research connection.

@@ -1,7 +1,9 @@
 pub mod api;
+pub mod config;
 pub mod domain;
 pub mod fakes;
 pub mod files;
+pub mod gateway;
 pub mod images;
 pub mod ports;
 pub mod rules;
