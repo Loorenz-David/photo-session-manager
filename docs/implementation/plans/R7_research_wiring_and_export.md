@@ -36,6 +36,26 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
   Change it: a run whose ending is `stopped_at_cap` lowers nothing. Add a row in `crates/research/tests/engine/`: a
   first run writes a medium suggestion; a follow-up with a smaller cap stops before reading its pages → the row is
   unchanged (same value, confidence, reason, sources). The existing lowering row for a completed run still holds.
+- **U1 task 4, research settings can be saved (R6 review).** Core `SettingsService::set` does not list the `research`
+  key, so `settings_set` with a `research` patch is refused ("invalid value: research"). Add `"research"` to the
+  accepted keys, behind `ResearchApi::validate_settings` then `settings_changed`. Row: a valid research patch saves and
+  reads back; an invalid one is refused with the validation message.
+- **U1, one release signal for every path (R6 review).** Undo/redo can release a held publish item (R5, 08B changelog
+  10) but `emit_if_released` covers only the four attribute commands, and it detects release by reading the store in
+  the command layer. Make the services return the release (e.g. `released: Option<session_id>` from the attribute
+  actions and from `HistoryService::reverse`), and emit `session_changed` / `publish_progress` from that in the
+  commands, including undo and redo; drop the store reads in `commands/attributes.rs` (`held_publish`). Row: a redo
+  that releases the last conflict emits the event.
+- **U1, the "Waiting for Capture One" clock (R6 review).** The UI uses the latest photo's `captured_at` + a fixed
+  120 s; the engine waits `source_wait_seconds` from the session's last change. Give `research_status` the wait's end
+  time (or a boolean "wait ended") and have the panel use it; remove the UI's own clock.
+- **U1, one conflict rule (R6 review).** `AiPopover.isConflict` is a TypeScript copy of MC-A1 that lower-cases instead
+  of case folding and compares sizes as text, so the form can offer Keep previous / Use suggestion on a field the
+  backend refuses. Add `conflict: bool` to the attribute value DTO, computed by `publish_partition::is_conflict`, and
+  use it in the form; delete the TS copy. **Bindings:** R7 may regenerate `bindings.ts` for this field and for the
+  status field above (orchestrator 2026-11-12: no other milestone touches bindings while R7 runs; track B runs R1/R8).
+- **U1, "Accept all (n)" (R6 review).** The panel's count includes conflicts, which Accept all skips; count what it
+  will accept (use the new `conflict` field).
 
 ## Unit 1 — Wiring the engine into the app
 

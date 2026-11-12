@@ -4,7 +4,7 @@ Branch `feature/agentic`, worktree `~/Desktop/Developer/Photo-Session-Manager-ag
 against the sibling checkout `~/Desktop/Developer/Photo-Session-Manager` (`main`, the owner's other work).
 `docs/implementation/STATUS.md` belongs to `main`'s orchestrator; do not edit it from this track.
 
-**2026-11-12: R2, R3, R4, R5 APPROVED (with notes in `backlog_research/`); R6 running here; R1 on track B waits on an owner card.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
+**2026-11-12: R2–R6 APPROVED (with notes in `backlog_research/`); R7 running here; R1 on track B waits on an owner card.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
 Ten milestones R1–R10 in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
 tracks and driver loop in `docs/implementation/master_plan_research.md`. `main` (with P70, the fast suite) was merged
 into this branch at `2026-11-12`; the branch is local, not pushed.
@@ -19,8 +19,11 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   changelog 5 (MA12 sent requests). Two notes are the owner's (below, "Needs the owner").
 - **Done:** `R5_research_app_seams` APPROVED_WITH_NOTES 2026-11-12 18:44 (attempt 8; seven projection rounds before it,
   all archived; 08B changelogs 6, 8, 9, 10). Notes folded into R6·U3 (release events, undo after release, p15 fixture).
-- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R6_research_ui`, started 2026-11-12 18:44 (track A).
-- **Next on track A:** R7 (needs R4, R6) → R9 (needs R1, R8 merged from B) → R10. Schedule changed
+- **Done:** `R6_research_ui` APPROVED_WITH_NOTES 2026-11-12 19:12. Notes folded into R7·U1 (settings save, release signal
+  incl. undo/redo, wait clock, `conflict` field + bindings allowance, Accept all count); the rest stays in
+  `backlog_research/R6_research_ui.md` (popover Edit for non-text fields, shop public domain shown).
+- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R7_research_wiring_and_export`, started 2026-11-12 19:12 (track A).
+- **Next on track A:** R9 (needs R1, R8 merged from B) → R10. Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
   merge `feature/agentic` into `research/track-b` first (R4 and plan edits), then R8 once the owner's picks arrive.
 - **Track B (owner said yes 2026-11-12):** worktree `~/Desktop/Developer/Photo-Session-Manager-agentic-b`, branch
