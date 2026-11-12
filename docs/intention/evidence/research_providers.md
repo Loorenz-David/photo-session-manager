@@ -197,3 +197,71 @@ the site's domain and asked to open the exact URL (Terra, effort low). Captures 
    for stage 3 on that route (08B already says so; confirmed).
 5. An incomplete reply reports usage (VERIFY-1): no contract change; a timed-out call's billing is
    not observable (VERIFY-10): `fallback_call_usd` stands.
+
+## Benchmark 2 — first per-stage model comparison (R1·U2)
+
+645 OpenAI calls, USD 5.58 (ceiling 35, cap 700), recordings in `~/psm-research-bench/a02/`, full
+table and every wrong answer in `~/psm-research-bench/a02/report_models.md`. Version-0 instructions
+and strict schemas: `crates/research-tool/src/instructions/`; the choice strings given to the model
+are the live shop's (`claude_design/reference/SHOPIFY_PRODUCT_METAFIELDS.md`). Answers are scored
+by name key (MC-A2, no aliases); an answer that maps to no choice is "not determined". `ov` =
+owner-verified key, `ck` = corrected key (`answer_key_corrections.json`). No schema failure and no
+refusal in any cell.
+
+**Observe** (stage 1, cover photo at 1024; scored field `wood_type`, 36 ov + 2 ck pieces):
+
+| Model | Effort | Correct (ov) | Wrong (ov) | Not determined (ov) | ck correct / wrong / n.d. | USD per piece | s per piece |
+|---|---|---|---|---|---|---|---|
+| gpt-6.1-sol | default (medium) | 20 | 7 | 9 | 0 / 1 / 1 | 0.0049 | 4.3 |
+| gpt-6.1-sol | low | 21 | 9 | 6 | 0 / 1 / 1 | 0.0044 | 4.2 |
+| gpt-6.1-sol | high | 21 | 9 | 6 | 0 / 1 / 1 | 0.0058 | 7.9 |
+| gpt-6.1-terra | default | 2 | 3 | 31 | 0 / 0 / 2 | 0.0024 | 3.1 |
+| gpt-6-luna | default | 3 | 2 | 31 | 0 / 0 / 2 | 0.0003 | 3.4 |
+
+Terra and Luna mostly answered "not determined" (an empty list, `sure: false`), which the
+version-0 instruction allows ("If the photo does not let you tell, give an empty list"). Sol
+commits. Most wrong answers are the "Teak" / "Dark Teak" pair, or one wood of a two-wood key. The
+one corrected-key "wrong" is piece 30: the corrections file says "Rosewood", which is not one of the
+shop's choices ("Santos Rosewood" is), and Sol answered "Santos Rosewood". The correction itself
+needs the shop's choice string.
+
+**Read** (stage 3, R1·U1's fetched pages, tag-stripped text ≤ 12,000 characters; 59 pages of 31
+pieces; scored keys `designer`, `manufacturer`):
+
+| Model | Effort | Correct | Wrong | Not determined | On pages naming the key: correct / wrong / n.d. | On pages not naming it: correct / wrong | USD per piece | s per piece |
+|---|---|---|---|---|---|---|---|---|
+| gpt-6.1-terra | default | 59 | 37 | 7 | 29 / 5 / 7 | 30 / 32 | 0.0047 | 4.5 |
+| gpt-6.1-terra | low | 60 | 37 | 6 | 30 / 5 / 6 | 30 / 32 | 0.0045 | 4.2 |
+| gpt-6.1-terra | high | 59 | 37 | 7 | 29 / 5 / 7 | 30 / 32 | 0.0051 | 5.9 |
+| gpt-6.1-sol | default | 58 | 39 | 6 | 31 / 4 / 6 | 27 / 35 | 0.0089 | 7.7 |
+| gpt-6-luna | default | 56 | 40 | 7 | 28 / 6 / 7 | 28 / 34 | 0.0006 | 6.3 |
+
+Read the two right-hand columns separately. **On a page that does not name the key, the plan's rule
+(row A02·C1(e)) counts any name as wrong**, but nearly all of those "wrong" answers are the model
+correctly reporting the designer the page gives for *another* piece. That is the job of stage 3; its
+evidence weight is decided in stage 4 (compare) and stage 7. On pages that name the key all three
+models are right 28–31 times out of 41. Most of their 4–6 "wrong" answers are name forms the
+no-alias rule treats as different ("Thorsø" for "Thorsø Møbelfabrik", "Ulferts Möbler" for "Ulferts",
+"Carl Malmsten (1888–1972)", "Henry Kjærnulf" for "Henning Kjaernulf").
+
+**Condition** (stage 6, ≤ 6 condition photos at 2048; 28 pieces; scored keys the piece's
+`condition_*` metafields, 203 field values):
+
+| Model | Effort | Correct | Wrong | Not determined | HTTP errors | USD per piece | s per piece |
+|---|---|---|---|---|---|---|---|
+| gpt-6.1-terra | high | **150** | 53 | 0 | 0 | 0.0285 | 21.0 |
+| gpt-6.1-terra | default | 145 | 53 | 0 | 1 (timeout at 180 s) | 0.0290 | 11.7 |
+| gpt-6.1-terra | low | 128 | 51 | 0 | 2 (connection failed after send) | 0.0304 | 13.3 |
+| gpt-6.1-sol | default | 146 | 57 | 0 | 0 | 0.0557 | 11.3 |
+| gpt-6-luna | default | 124 | 63 | 16 | 0 | 0.0029 | 9.4 |
+
+The wrong answers are mostly one step apart (None ↔ Minor, Minor ↔ Moderate), and "N/A" where
+the key says "None" for veneer or upholstery. The USD per piece for a cell with failed calls
+includes the tool's worst-case charge for each (no usage came back).
+
+**Best per stage by (correct − wrong), as measured here:**
+- observe: `gpt-6.1-sol`, effort low or default;
+- read: `gpt-6.1-terra`, effort low;
+- condition: `gpt-6.1-terra`, effort high.
+
+The owner's first pick goes under **Owner picks**; R9·U2 confirms it on the finished engine.

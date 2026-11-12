@@ -1,6 +1,7 @@
 //! The tool crate's one test program. No test reaches the network: every request goes to `Stub`.
 
 mod u1_probes_and_search;
+mod u2_stage_models;
 
 use psm_research_tool::http::{HttpSeam, Wire, WireError, WireReply};
 use std::{cell::RefCell, collections::VecDeque, path::Path};

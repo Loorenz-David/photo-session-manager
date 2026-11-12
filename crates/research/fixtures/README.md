@@ -13,6 +13,9 @@ Written by `psm-research fixtures` (R1, 2026-11-12) from the recordings in `~/ps
 | `openai/error_invalid_key.json` | RESEARCH-VERIFY-2 | HTTP 401 invalid_api_key (a made-up key string) | 2026-11-12T14:44:32.581Z |
 | `openai/error_context_length.json` | RESEARCH-VERIFY-2 | HTTP 400 context_length_exceeded (request text cut) | 2026-11-12T14:44:33.327Z |
 | `openai/page_open_tool.json` | RESEARCH-VERIFY-8 | web_search open_page restricted to one domain | 2026-11-12T15:17:16.837Z |
+| `openai/stage_observe_gpt-6-luna.json` | RESEARCH-VERIFY-3 (R1·U2) | stage observe, version-0 instructions, strict schema reply | 2026-11-12T15:23:07.370Z |
+| `openai/stage_read_gpt-6-luna.json` | RESEARCH-VERIFY-3 (R1·U2) | stage read, version-0 instructions, strict schema reply | 2026-11-12T15:57:33.551Z |
+| `openai/stage_condition_gpt-6-luna.json` | RESEARCH-VERIFY-3 (R1·U2) | stage condition, version-0 instructions, strict schema reply | 2026-11-12T15:37:25.974Z |
 | `serpapi_lens/search_cut_to_3.json` | RESEARCH-VERIFY-6 | Google Lens search by image_id, type=all; lists cut to 3 | 2026-11-12T14:47:38.880Z |
 | `serpapi_lens/upload.json` | RESEARCH-VERIFY-7 | image upload reply (`image_id`) | 2026-11-12T14:45:56.298Z |
 | `serpapi_lens/error_upload_too_large.json` | RESEARCH-VERIFY-7 | HTTP 400, file over 500 KB | 2026-11-12T14:46:04.319Z |

@@ -4,6 +4,7 @@
 //! spending ceiling and the call caps.
 
 pub mod answer_key;
+pub mod bench_models;
 pub mod bench_search;
 pub mod budget;
 pub mod cloud_vision;
@@ -14,6 +15,7 @@ pub mod pages;
 pub mod probes;
 pub mod recording;
 pub mod report;
+pub mod score;
 pub mod serpapi;
 pub mod shop;
 
@@ -149,6 +151,8 @@ fn run_inner(raw: &[String], seam: &dyn HttpSeam) -> Result<(), String> {
         "probe" => probes::run(&ctx),
         "bench-search" => bench_search::run(&ctx).and_then(|()| report::write_search(&ctx)),
         "score-search" => report::write_search(&ctx),
+        "bench-models" => bench_models::run(&ctx).and_then(|()| bench_models::write_report(&ctx)),
+        "score-models" => bench_models::write_report(&ctx),
         "fixtures" => fixtures::run(&ctx),
         "recost" => ctx.prices().and_then(|p| {
             let total = openai::recost(&ctx.out, &p, &ctx.caller.secrets.borrow())?;

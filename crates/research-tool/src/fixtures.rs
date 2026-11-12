@@ -186,16 +186,35 @@ pub fn run(ctx: &Ctx) -> Result<(), String> {
     );
     // U2 replies (one per stage) when present.
     for stage in ["observe", "read", "condition"] {
-        if let Some(rec) = call_files(Path::new(&ctx.args.bench1.clone().unwrap_or_default()))
-            .into_iter()
-            .filter_map(|f| fs::read_to_string(f).ok())
-            .filter_map(|t| serde_json::from_str::<Json>(&t).ok())
+        let completed: Vec<Json> =
+            call_files(Path::new(&ctx.args.bench1.clone().unwrap_or_default()))
+                .into_iter()
+                .filter_map(|f| fs::read_to_string(f).ok())
+                .filter_map(|t| serde_json::from_str::<Json>(&t).ok())
+                .filter(|r| {
+                    r["meta"]["stage"] == stage
+                        && r["response"]["status"] == 200
+                        && r["response"]["body"]["status"] == "completed"
+                })
+                .collect();
+        // A read reply about the owner's own shop when there is one (no third-party page text).
+        let pick = completed
+            .iter()
             .find(|r| {
-                r["meta"]["stage"] == stage
-                    && r["response"]["status"] == 200
-                    && r["response"]["body"]["status"] == "completed"
+                r["meta"]["url"]
+                    .as_str()
+                    .is_some_and(|u| u.contains("beyovintage.se"))
             })
-        {
+            .or_else(|| completed.first())
+            .cloned();
+        if let Some(mut rec) = pick {
+            if stage == "read"
+                && !rec["meta"]["url"]
+                    .as_str()
+                    .is_some_and(|u| u.contains("beyovintage.se"))
+            {
+                omit_page_text(&mut rec["request"]["body"]);
+            }
             let model = rec["model"].as_str().unwrap_or("").to_owned();
             add(
                 &format!("openai/stage_{stage}_{model}.json"),
@@ -327,4 +346,19 @@ pub fn run(ctx: &Ctx) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     eprintln!("wrote fixtures to {}", dest.display());
     Ok(())
+}
+
+/// Replaces everything after "Page text:" in every input text with an omission note.
+fn omit_page_text(v: &mut Json) {
+    match v {
+        Json::String(t) => {
+            if let Some(i) = t.find("Page text:") {
+                t.truncate(i + "Page text:".len());
+                t.push_str(" <third-party page text omitted>");
+            }
+        }
+        Json::Array(a) => a.iter_mut().for_each(omit_page_text),
+        Json::Object(m) => m.values_mut().for_each(omit_page_text),
+        _ => {}
+    }
 }
