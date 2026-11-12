@@ -184,8 +184,8 @@ R6·U2, R7·U2, R8, R9·U1 · MA17 R5·U2, R6·U3 · MA18 R5·U1. The operationa
 
 ### 6.2 Dependencies
 Already in the lock file through `reqwest 0.13.5`: `url 2.5.8`, `idna 1.1.0`. `unicode-normalization 0.1` is a
-dependency of `psm-core`. **Not verified by the planner** (no network call was made): a full Unicode case fold and a
-character's general category (R2·U1 pins them in `psm-core`), an HTML parser (R8·U3, HTTP route only). Each is a task
+dependency of `psm-core`. R2·U1 pins `unicode-casefold = 0.2.0` for full Unicode case folding and
+`unicode-general-category = 1.1.0` for a character's general category. Not verified by the planner: an HTML parser (R8·U3, HTTP route only). Each is a task
 with the pin recorded here. `psm-research` uses `rusqlite` and `reqwest` at the workspace's existing versions.
 
 ### 6.3 Enums (`psm_research::domain` unless noted; serialized snake_case)
