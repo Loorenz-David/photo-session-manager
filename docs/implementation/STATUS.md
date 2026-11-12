@@ -1,5 +1,7 @@
 # STATUS — read first (updated by the orchestrator at every stop)
 
+**2026-11-12 07:35: owner may reboot the dev Mac during P70.** P70 implementer (Claude Opus, started 03:24) had merged testkit into one `suite` program (after-change full run ≈ 8.5–10 min vs > 75 min; measurements in `.pipeline/p70/`), was on the second full run / fixes; its work is uncommitted in the working tree (≈ 71 paths). If the run was killed: do NOT reset the tree; relaunch P70 with a continue-from-the-working-tree note in the plan's Review log (implement r1 handoff missing → driver re-runs implement), then review.
+
 **2026-11-12 05:20: P53–P69 SDK app built (worktree `32d166a`, sidecar 352928 bytes = SDK), installed in /Applications on the dev Mac (P65 build moved to the session scratchpad); `Session Manager.zip` on the dev Mac Desktop replaced for the work-Mac update.** P70 still implementing.
 
 **2026-11-12 05:15: P69 APPROVED_WITH_NOTES (03:24; Claude Opus, implement 3 h 50 min, review 19 min). P70 implementing since 03:24.** Narrative relayed. Work-Mac app (P53–P69) building from a detached worktree at `32d166a` in the session scratchpad with its own target dir, so P70's working tree is untouched. Orchestrator owes book updates for P66, P68, P69 (8-bit masters, prepared when Ready).
