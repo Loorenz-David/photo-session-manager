@@ -327,6 +327,10 @@ New: `crates/research/src/{runs.rs, config.rs, job.rs, rules/run_rules.rs, adapt
 2. `first_failing(&PrerequisiteInput)`: MC-A6's order — no integration; no model key; no visual-search key; a
    configured provider or model missing from the price table; no layout field research may write; day limit
    reached; offline; `auto` off. While any of the first five fails, no run row is created.
+   (R3 review note, orchestrator 2026-11-12) "Missing from the price table" means: **every** `(provider, model)` the run
+   can call, including the non-model providers with model `""` (visual search, page reader), has a
+   `fallback_call_usd`. R3's `call_cost` charges 0 when usage is unreported and the pair has no fallback, so this
+   check is the only thing that keeps MA15 and the caps honest.
    `ResearchService::status(session_id)` returns the first failing prerequisite (or the waiting reason), the latest
    run and its steps (R6·U1 turns it into a command).
 3. `session_changed(session_id)` (called on a photo row created, a classification, position or composition change,

@@ -260,8 +260,9 @@ least one Condition photo, stage 6 may return `None` for a part no Condition pho
 written (08A §6).
 
 **Invariant (MA11).** For every enumerated evidence row above, the written value and confidence are that row's
-single outcome. No research value is above `low` without a label item, a shop `match`, or `match` items on two
-distinct trusted identities stating it.
+single outcome. For attribution and measured fields, no research value is above `low` without a label item, a
+shop `match`, or `match` items on two distinct trusted identities stating it; visible and condition fields follow
+their own rows above (a sure photo read is `medium`).
 
 ---
 
@@ -747,3 +748,8 @@ to 07A MC-10 and 05A MC-30.
    - the confirmation re-check compares the conflict set as well as the withheld count.
 
    Status: CONTRACTS RATIFIED.
+4. **2026-11-12 — MC-A4 invariant scoped (orchestrator, from the R3 review).** The MA11 sentence "no research value
+   is above `low` without …" contradicted MC-A4's own visible-field row (a sure photo read with no listing →
+   `medium`) and condition paragraph (a sure read → `medium`). The enumerated rows win, as the invariant's first
+   sentence already says; the second sentence now names the fields it covers (attribution and measured). Wording
+   only: no outcome changes.
