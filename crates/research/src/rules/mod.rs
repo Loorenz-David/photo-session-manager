@@ -6,3 +6,4 @@ pub mod cost;
 pub mod fingerprint;
 pub mod sites;
 pub mod value_map;
+pub mod write_table;

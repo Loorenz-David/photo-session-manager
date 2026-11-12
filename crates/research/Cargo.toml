@@ -2,6 +2,7 @@
 name = "psm-research"
 version.workspace = true
 edition.workspace = true
+autotests = false
 
 [dependencies]
 psm-core = { path = "../core" }
@@ -15,3 +16,8 @@ chrono = "0.4"
 
 [dev-dependencies]
 chrono-tz = "0.10"
+psm-testkit = { path = "../testkit" }
+
+[[test]]
+name = "engine"
+path = "tests/engine/main.rs"
