@@ -116,6 +116,20 @@ pub fn start_order(queued: &[(RunTrigger, i64, i64)]) -> Vec<i64> {
     ordered.into_iter().map(|(_, _, id)| id).collect()
 }
 
+/// MC-A7 trigger set: a follow-up is needed iff the set of stage 1 unit identities, the cover
+/// identity or the Condition identity differs between the latest run's snapshot and now. Order
+/// within the sets does not count.
+pub fn follow_up_needed(latest: &InputSnapshot, now: &InputSnapshot) -> bool {
+    let set = |ids: &[(i64, i64)]| {
+        ids.iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    set(&latest.observe) != set(&now.observe)
+        || latest.cover != now.cover
+        || set(&latest.condition) != set(&now.condition)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,5 +272,38 @@ mod tests {
             (RunTrigger::Manual, 200, 5),
         ];
         assert_eq!(start_order(&queued), vec![3, 5, 2, 4, 1]);
+    }
+
+    fn snapshot() -> InputSnapshot {
+        InputSnapshot {
+            observe: vec![(1, 1), (2, 1), (3, 2)],
+            cover: Some((1, 1)),
+            condition: vec![(7, 1), (8, 1)],
+        }
+    }
+
+    #[test]
+    fn a14_c6b_order_of_identities_does_not_count() {
+        let mut now = snapshot();
+        now.observe.reverse();
+        now.condition.reverse();
+        assert!(!follow_up_needed(&snapshot(), &now));
+    }
+
+    #[test]
+    fn follow_up_needed_by_each_identity() {
+        let mut added = snapshot();
+        added.observe.push((4, 1));
+        assert!(follow_up_needed(&snapshot(), &added));
+        let mut recomposed = snapshot();
+        recomposed.observe[2] = (3, 3);
+        assert!(follow_up_needed(&snapshot(), &recomposed));
+        let mut cover = snapshot();
+        cover.cover = Some((2, 1));
+        assert!(follow_up_needed(&snapshot(), &cover));
+        let mut condition = snapshot();
+        condition.condition.pop();
+        assert!(follow_up_needed(&snapshot(), &condition));
+        assert!(!follow_up_needed(&snapshot(), &snapshot()));
     }
 }

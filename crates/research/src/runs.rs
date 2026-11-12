@@ -19,8 +19,8 @@ use crate::{
     rules::{
         cost::{day_spend, parse_micro_usd},
         run_rules::{
-            InputSnapshot, MayStart, PrerequisiteInput, StartInput, first_failing, may_start,
-            start_order,
+            InputSnapshot, MayStart, PrerequisiteInput, StartInput, first_failing,
+            follow_up_needed, may_start, start_order,
         },
         write_table::never_written,
     },
@@ -508,8 +508,24 @@ impl ResearchService {
         })
     }
 
-    /// MC-A6's follow-up row for a session that has runs (R4·U5).
-    fn follow_up(&self, _session_id: i64, _item_id: i64, _runs: &[RunRow]) -> Result<()> {
+    /// MC-A6's follow-up row for a session that has runs: when the photo-derived inputs differ
+    /// from the latest started run's snapshot (MC-A7 trigger set), a queued run is kept (its
+    /// start moves with the quiet period); otherwise one `follow_up` run is queued, also beside
+    /// a running run.
+    fn follow_up(&self, session_id: i64, item_id: i64, runs: &[RunRow]) -> Result<()> {
+        if runs.iter().any(|r| r.state == RunState::Queued) {
+            return Ok(());
+        }
+        let latest: InputSnapshot = runs
+            .iter()
+            .rev()
+            .find_map(|r| r.input_snapshot.as_deref())
+            .and_then(|text| serde_json::from_str(text).ok())
+            .unwrap_or_default();
+        let now = self.input_now(session_id, item_id)?;
+        if follow_up_needed(&latest, &now) {
+            self.insert_queued(item_id, session_id, RunTrigger::FollowUp)?;
+        }
         Ok(())
     }
 

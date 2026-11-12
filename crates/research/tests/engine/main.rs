@@ -4,5 +4,6 @@ mod gateway;
 mod harness;
 mod images_and_storage;
 mod lifecycle;
+mod resume;
 mod stages;
 mod writes;

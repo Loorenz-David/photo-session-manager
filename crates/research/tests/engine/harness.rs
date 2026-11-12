@@ -182,7 +182,44 @@ pub struct Harness {
     pub images: ResearchImages,
     pub service: Arc<ResearchService>,
     pub runner: JobRunner,
+    pub kill: Arc<KillSwitch>,
     next_colour: AtomicU8,
+}
+
+/// The parts of a run "equals the uninterrupted run" compares.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EndState {
+    pub outputs: Vec<(String, String, String, String)>,
+    pub steps: Vec<(i64, String, String, Vec<String>)>,
+    pub values: Vec<Value>,
+}
+
+/// What a test "kill" unwinds with.
+pub struct Killed;
+
+/// Stops the run here, as if the process died: unwinds without running the panic hook.
+pub fn kill() -> ! {
+    std::panic::resume_unwind(Box::new(Killed))
+}
+
+/// The service's event sink: forwards to the app's sink, and kills once at the first event
+/// after which `when` holds (a point between two commits).
+pub struct KillSwitch {
+    inner: Arc<dyn psm_core::ports::events::EventSink>,
+    when: std::sync::Mutex<Option<Box<dyn FnMut() -> bool + Send>>>,
+}
+
+impl psm_core::ports::events::EventSink for KillSwitch {
+    fn emit(&self, event: psm_core::events::AppEvent) {
+        self.inner.emit(event);
+        let when = self.when.lock().unwrap().take();
+        if let Some(mut when) = when {
+            if when() {
+                kill();
+            }
+            *self.when.lock().unwrap() = Some(when);
+        }
+    }
 }
 
 /// Research settings under which every prerequisite passes: the fakes' ids, model `m1` for every
@@ -301,7 +338,14 @@ impl Harness {
         let search = Arc::new(FakeVisualSearch::default());
         let reader = Arc::new(FakePageReader::default());
         save_research(&app.app.paths, test_settings());
-        let service = Arc::new(build_service(&app, &model, &search, &reader, |_| {}));
+        let kill = Arc::new(KillSwitch {
+            inner: app.events.clone(),
+            when: std::sync::Mutex::new(None),
+        });
+        let switch = kill.clone();
+        let service = Arc::new(build_service(&app, &model, &search, &reader, |deps| {
+            deps.events = switch
+        }));
         let runner = runner_for(&app, &service);
         Harness {
             item_id: item.id,
@@ -313,6 +357,7 @@ impl Harness {
             images,
             service,
             runner,
+            kill,
             next_colour: AtomicU8::new(0),
         }
     }
@@ -332,14 +377,81 @@ impl Harness {
     /// (the launch instant is now).
     pub fn relaunch(&mut self) {
         self.app.store().requeue_running_jobs().unwrap();
+        let switch = self.kill.clone();
         self.service = Arc::new(build_service(
             &self.app,
             &self.model,
             &self.search,
             &self.reader,
-            |_| {},
+            |deps| deps.events = switch,
         ));
         self.runner = runner_for(&self.app, &self.service);
+    }
+
+    /// A kill and a launch: the service, runner and store are dropped, the same data folder is
+    /// reopened, `schema::ensure` runs and running jobs are re-queued, as the app's launch does.
+    pub fn restart(&mut self) {
+        self.app.kill_and_restart().unwrap();
+        psm_research::schema::ensure(&self.app.app.store).unwrap();
+        self.images = ResearchImages::new(
+            self.app.app.store.clone(),
+            Arc::new(ImageOpsImpl),
+            ResearchFiles::new(&self.app.app.paths.root),
+        );
+        self.relaunch();
+    }
+
+    /// Kills the run at the first service event after which `when` holds.
+    pub fn kill_when(&self, when: impl FnMut() -> bool + Send + 'static) {
+        *self.kill.when.lock().unwrap() = Some(Box::new(when));
+    }
+
+    /// Ticks, expecting a kill inside; then restarts.
+    pub fn tick_killed(&mut self, ms: i64) {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.tick(ms)));
+        let payload = outcome.expect_err("the run was not killed");
+        assert!(
+            payload.is::<Killed>(),
+            "the run panicked instead of being killed"
+        );
+        self.model.clear_before_call();
+        self.search.clear_before_call();
+        self.reader.clear_before_call();
+        *self.kill.when.lock().unwrap() = None;
+        self.restart();
+    }
+
+    /// What "equals the uninterrupted run" compares: stage outputs (stage, unit key, fingerprint,
+    /// output), steps (seq, kind, summary, field keys) and the item's attribute rows (every
+    /// column but `updated_at`).
+    pub fn end_state(&self, run_id: i64) -> EndState {
+        let outputs = self
+            .outputs(run_id)
+            .into_iter()
+            .map(|o| (o.stage, o.unit_key, o.fingerprint, o.output))
+            .collect();
+        let steps = self
+            .steps(run_id)
+            .into_iter()
+            .map(|s| (s.seq, s.kind, s.summary, s.field_keys))
+            .collect();
+        let mut values: Vec<Value> = Vec::new();
+        self.app
+            .store()
+            .transaction(&mut |tx| {
+                values = tx.attribute_values(self.item_id)?;
+                Ok(())
+            })
+            .unwrap();
+        let values = values
+            .into_iter()
+            .map(|v| Value { updated_at: 0, ..v })
+            .collect();
+        EndState {
+            outputs,
+            steps,
+            values,
+        }
     }
 
     /// Another service over the same app with some deps changed.

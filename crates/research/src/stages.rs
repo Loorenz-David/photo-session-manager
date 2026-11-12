@@ -92,6 +92,8 @@ pub(crate) enum Asked {
 /// One run being executed.
 pub(crate) struct Ctx<'a> {
     pub svc: &'a ResearchService,
+    /// The latest earlier run of the session (the source of reuse, MC-A7).
+    pub earlier_run: Option<i64>,
     pub run: store::RunRow,
     pub config: ResearchConfig,
     pub form: FormSnapshot,
@@ -306,6 +308,9 @@ impl Ctx<'_> {
                 fingerprint: row.fingerprint,
             }));
         }
+        if let Some(copied) = self.reuse(stage, unit_key, &fingerprint)? {
+            return Ok(Flow::Done(copied));
+        }
         match work(self)? {
             Work::Commit { output, steps } => {
                 self.commit(stage, unit_key, &fingerprint, &output, &steps, None)?;
@@ -318,6 +323,45 @@ impl Ctx<'_> {
             Work::Skip => Ok(Flow::Skip),
             Work::Halt(outcome) => Ok(Flow::Halt(outcome)),
         }
+    }
+
+    /// MC-A7 reuse: in an `auto` or `follow_up` run, a unit whose fingerprint equals a committed
+    /// unit's in the latest earlier run of the session is copied (no call, no step), provided
+    /// every file its output references is still present. A `manual` run reuses nothing; Decide
+    /// always runs, so its writes are applied against the rows of now.
+    fn reuse(&self, stage: Stage, unit_key: &str, fingerprint: &str) -> Result<Option<Committed>> {
+        if self.run.trigger == crate::domain::RunTrigger::Manual || stage == Stage::Decide {
+            return Ok(None);
+        }
+        let Some(earlier) = self.earlier_run else {
+            return Ok(None);
+        };
+        let found = self.svc.store.research_transaction(|tx| {
+            Ok(store::outputs(tx.conn(), earlier)?
+                .into_iter()
+                .find(|o| o.stage == stage.as_str() && o.fingerprint == fingerprint))
+        })?;
+        let Some(found) = found else {
+            return Ok(None);
+        };
+        let output: Json = serde_json::from_str(&found.output).unwrap_or(Json::Null);
+        let complete = output["files"]
+            .as_array()
+            .map(|files| {
+                files
+                    .iter()
+                    .all(|f| f.as_str().is_some_and(|sha| self.svc.files.exists(sha)))
+            })
+            .unwrap_or(true);
+        if !complete {
+            return Ok(None);
+        }
+        self.commit(stage, unit_key, fingerprint, &output, &[], Some(earlier))?;
+        Ok(Some(Committed {
+            stage,
+            output,
+            fingerprint: fingerprint.to_owned(),
+        }))
     }
 
     /// One transaction: the unit's output, its steps and the stage reached.
@@ -418,7 +462,16 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
     if run.state != RunState::Running {
         return Ok(ExecuteOutcome::NotRunning);
     }
+    svc.gateway.close_open_calls(run.id)?;
+    let earlier_run = svc.store.research_transaction(|tx| {
+        Ok(store::runs(tx.conn(), Some(run.session_id))?
+            .into_iter()
+            .filter(|r| r.id < run.id)
+            .map(|r| r.id)
+            .max())
+    })?;
     let ctx = Ctx {
+        earlier_run,
         config: ResearchConfig::from_snapshot(run.settings_snapshot.as_deref())?,
         form: FormSnapshot::from_text(run.form_snapshot.as_deref())?,
         svc,

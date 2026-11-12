@@ -514,6 +514,42 @@ impl CallGateway {
         })
     }
 
+    /// Resume (MC-A7): every call of the run still `sent` with no response (left by a kill) is
+    /// closed as `unknown` and charged its fallback (MC-A8); the unit re-issues it as the next
+    /// attempt.
+    pub fn close_open_calls(&self, run_id: i64) -> Result<usize> {
+        let now = self.clock.now_ms();
+        self.store.research_transaction(|tx| {
+            let conn = tx.conn();
+            let Some(run) = store::run(conn, run_id)? else {
+                return Ok(0);
+            };
+            let prices =
+                ResearchConfig::from_snapshot(run.settings_snapshot.as_deref())?.price_table();
+            let open = store::open_calls(conn, run_id)?;
+            for call in &open {
+                let cost = call_cost(None, true, &call.provider, &call.model, &prices);
+                store::end_call(
+                    conn,
+                    call.id,
+                    &CallEnd {
+                        state: CallState::Unknown.as_str(),
+                        response: None,
+                        usage: None,
+                        cost_micro_usd: cost,
+                        finished_at: now,
+                        duration_ms: 0,
+                        error_class: None,
+                        error_text: Some("no response was recorded before the app stopped"),
+                        redaction_hit: false,
+                    },
+                )?;
+                store::add_run_cost(conn, run_id, cost)?;
+            }
+            Ok(open.len())
+        })
+    }
+
     /// The SHA-256s of the listing images a page call stored (from its record).
     pub fn page_images(response: &str) -> Vec<String> {
         serde_json::from_str::<Json>(response)
