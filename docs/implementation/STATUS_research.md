@@ -17,18 +17,23 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **Done:** `R4_research_engine` APPROVED_WITH_NOTES 2026-11-12. All routed notes of R2–R4 folded into R5–R10 plan files
   ("Carried from earlier reviews" sections; implementers never read `backlog_research/`), master plan v3, 08B
   changelog 5 (MA12 sent requests). Two notes are the owner's (below, "Needs the owner").
-- **R5 stopped (not in flight):** attempt 6's projection ended at 17:14 after ~1 min with no handoff (usage limit reached 2026-11-12). Next: `tools/pipeline/run_phase.sh archive R5_research_app_seams`, then relaunch with `PSM_IMPLEMENTER=claude` once usage is back. Earlier: attempt 6, started 2026-11-12 17:13 (track A). Orchestrator rule: if attempt 6's projection again finds only small plan gaps, apply them and run attempt 7 with the review as the gate (projection off for that attempt, recorded in the plan). Attempt 5 stopped at projection (S1–S4; amended, 08B changelog 9, archived). Attempt 4 stopped at projection (Q1–Q4, small; amended, 08B changelog 8, archived). Attempt 3 stopped at projection (P1–P6, small; amended, archived). Attempt 2 stopped at projection again (N1–N9, publish-side gaps, 0 owner cards; amended, archived). Attempt 1 stopped at projection r0 (AMENDMENTS_REQUIRED, 0 owner cards); plan amended L1–L15, 08B changelog 6, attempt archived.
+- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R5_research_app_seams`, attempt 7, started 2026-11-12 18:02 (track A); attempt 6 was cut off by the usage limit (no handoff) and archived. Earlier: attempt 6, started 2026-11-12 17:13 (track A). Orchestrator rule: if attempt 6's projection again finds only small plan gaps, apply them and run attempt 7 with the review as the gate (projection off for that attempt, recorded in the plan). Attempt 5 stopped at projection (S1–S4; amended, 08B changelog 9, archived). Attempt 4 stopped at projection (Q1–Q4, small; amended, 08B changelog 8, archived). Attempt 3 stopped at projection (P1–P6, small; amended, archived). Attempt 2 stopped at projection again (N1–N9, publish-side gaps, 0 owner cards; amended, archived). Attempt 1 stopped at projection r0 (AMENDMENTS_REQUIRED, 0 owner cards); plan amended L1–L15, 08B changelog 6, attempt archived.
   Implementer on Opus via `PSM_IMPLEMENTER=claude` (the runner defaults to Codex; set the variable for every research run).
 - **Next on track A:** R6 → R7 (needs R4, R6) → R9 (needs R1, R8 merged from B) → R10. Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
   merge `feature/agentic` into `research/track-b` first (R4 and plan edits), then R8 once the owner's picks arrive.
 - **Track B (owner said yes 2026-11-12):** worktree `~/Desktop/Developer/Photo-Session-Manager-agentic-b`, branch
   `research/track-b`, created at `2cb6454` (R3 approved; before any R4 commit), `npm ci` done.
-  **Run in flight there:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R1_research_benchmark`, started
+  **R1 stopped there (exit 10, 18:02): implementer OWNER_DECISIONS_PENDING, 1 card (Google Cloud Vision billing).**
+  Both units done and checkpointed (U1 `60f6d6c`, U2 `7b3a2f8`, closing `0446282`); USD 5.82 spent of 50. Not reviewed yet.
+  Handoff `docs/implementation/handoffs/implementer/handoff_R1_research_benchmark_implement_r1.md` on track B. Was started
   2026-11-12 15:27. Real paid calls, ceiling USD 50 (plan). Keys `~/.psm_research.env` (0600) and `~/.psm_shopify.env`
   present (presence only). Then R8 on track B (R5, R6 moved to track A). Merge rule (master plan §5): after each approved B milestone
   merge `research/track-b` into `feature/agentic` here; after each approved A milestone merge `feature/agentic` into
   track B before B's next milestone. Track B's copy of this file is not maintained; this one is.
+- **Needs the owner (R1 card 1, asked 2026-11-12 18:0x):** attach billing to the Google Cloud project of the Vision key (A,
+  recommended; then re-run R1 Manual try-out step 5, ~3 min, USD 0), or pick Lens without comparison (B), or drop
+  Cloud Vision (C). Blocks only the R8·U2 visual-search pick. After the answer: finish R1 (review) on track B.
 - **Owner answered 2026-11-12 (both "yes"):** a capped run lowers nothing (→ R7·U1 carried note); saving keys or
   Automatic on starts nothing (owner withdrew the "start the open session" pick: no extra work). 08B changelog 7.
 - **Blocked on the owner:** R8 (search route and page-reading route, picked from R1's report); R10 (models per stage,
