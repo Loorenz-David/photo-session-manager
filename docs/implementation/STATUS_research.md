@@ -17,7 +17,7 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **Done:** `R4_research_engine` APPROVED_WITH_NOTES 2026-11-12. All routed notes of R2–R4 folded into R5–R10 plan files
   ("Carried from earlier reviews" sections; implementers never read `backlog_research/`), master plan v3, 08B
   changelog 5 (MA12 sent requests). Two notes are the owner's (below, "Needs the owner").
-- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R5_research_app_seams`, attempt 3, started 2026-11-12 16:40 (track A). Attempt 2 stopped at projection again (N1–N9, publish-side gaps, 0 owner cards; amended, archived). Attempt 1 stopped at projection r0 (AMENDMENTS_REQUIRED, 0 owner cards); plan amended L1–L15, 08B changelog 6, attempt archived.
+- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R5_research_app_seams`, attempt 4, started 2026-11-12 16:58 (track A). Attempt 3 stopped at projection (P1–P6, small; amended, archived). Attempt 2 stopped at projection again (N1–N9, publish-side gaps, 0 owner cards; amended, archived). Attempt 1 stopped at projection r0 (AMENDMENTS_REQUIRED, 0 owner cards); plan amended L1–L15, 08B changelog 6, attempt archived.
   Implementer on Opus via `PSM_IMPLEMENTER=claude` (the runner defaults to Codex; set the variable for every research run).
 - **Next on track A:** R6 → R7 (needs R4, R6) → R9 (needs R1, R8 merged from B) → R10. Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
