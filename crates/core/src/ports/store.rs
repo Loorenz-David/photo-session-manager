@@ -108,6 +108,10 @@ pub trait StoreTx {
         item_id: i64,
         key: &str,
     ) -> Result<Vec<crate::domain::research::Feedback>>;
+    /// The feedback rows written by the undo step `step_token` (MC-A12), oldest first.
+    fn feedback_by_step(&self, step_token: &str) -> Result<Vec<crate::domain::research::Feedback>>;
+    /// Sets the `final_value` of one feedback row (a coalesced edit, R5·U1).
+    fn update_feedback_final_value(&mut self, id: i64, final_value: Option<&str>) -> Result<()>;
     fn insert_feedback(&mut self, feedback: &crate::domain::research::Feedback) -> Result<i64>;
     fn delete_feedback_by_step(&mut self, step_token: &str) -> Result<()>;
     fn reinsert_feedback(&mut self, feedback: &crate::domain::research::Feedback) -> Result<()>;

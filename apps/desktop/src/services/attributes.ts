@@ -2,6 +2,7 @@ import {
   commands,
   type AttributeGroupDto,
   type AttributeValueDto_Serialize,
+  type ConflictActionDto,
   type DefinitionDto_Serialize,
   type FormDto_Serialize,
   type FormFieldDto_Serialize,
@@ -51,7 +52,20 @@ export async function clearAttribute(itemId: number, key: string): Promise<void>
   unwrap(await commands.attributeAiClear(itemId, key));
 }
 
-/** "Accept all": suggested AI values except low-confidence ones become accepted. Returns how many. */
+/** "Looks right" on a suggestion (08B MC-A12): the suggestion is accepted and stays AI-owned. */
+export async function acceptSuggestion(itemId: number, key: string): Promise<AttributeValue> {
+  return unwrap(await commands.attributeAiAccept(itemId, key));
+}
+
+/** One of a conflict's actions (08B MC-A10, MC-A12). */
+export type ConflictAction = ConflictActionDto;
+
+/** Resolves a conflict: Keep previous, Use suggestion, or Edit with `value` (the value in its core form). */
+export async function resolveConflict(itemId: number, key: string, action: ConflictAction, value?: unknown): Promise<AttributeValue> {
+  return unwrap(await commands.attributeConflictResolve(itemId, key, action, action === 'edit' ? JSON.stringify(value) : null));
+}
+
+/** "Accept all": suggested AI values except low-confidence ones and conflicts become accepted. Returns how many. */
 export async function acceptAllSuggestions(itemId: number): Promise<number> {
   return unwrap(await commands.attributeAiAcceptAll(itemId));
 }

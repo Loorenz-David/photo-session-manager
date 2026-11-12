@@ -2,6 +2,7 @@ use crate::domain::{
     attribute::Value as AttributeValue,
     composition::{CompositionState, CompositionValues, Origin},
     photo::Classification,
+    research::Feedback,
     session::SessionDto,
 };
 use crate::events::AppEvent;
@@ -14,7 +15,7 @@ use crate::ports::{
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 pub const HISTORY_LIMIT: usize = 25;
 pub type HistoryStore = Arc<Mutex<HashMap<i64, SessionHistory>>>;
@@ -68,6 +69,10 @@ pub enum StepKind {
         session_id: i64,
         item_id: i64,
         fields: Vec<FieldChange>,
+        /// The step's id: the `step_token` of the feedback rows it wrote (MC-A12).
+        token: String,
+        /// The feedback rows an undo deleted, re-inserted by the redo (R5·U1 P6).
+        feedback: Vec<Feedback>,
     },
 }
 
@@ -152,16 +157,45 @@ impl History {
     }
     pub fn record(&self, session_id: i64, step: Step) {
         let op = self.operation.lock().unwrap();
+        let merge = self
+            .last_step(session_id)
+            .is_some_and(|last| coalesces(&last, &step));
+        self.record_held(op, session_id, step, merge);
+    }
+    /// Takes the history's operation lock: no undo, redo or record runs until the guard is
+    /// dropped. An attribute action takes it **before** its store transaction (order: operation →
+    /// store; R5·U1 T1) and hands it to [`History::record_held`].
+    pub(crate) fn lock(&self) -> MutexGuard<'_, ()> {
+        self.operation.lock().unwrap()
+    }
+    /// The session's last undo step, when a new step could merge into it (the redo list is
+    /// empty). Read under the operation lock, it stays the last step until the lock is dropped.
+    pub(crate) fn last_step(&self, session_id: i64) -> Option<Step> {
+        let all = self.store.lock().unwrap();
+        let list = all.get(&session_id)?;
+        if !list.redo.is_empty() {
+            return None;
+        }
+        list.undo.back().cloned()
+    }
+    /// Records `step` under the held operation lock. `merge` is the caller's coalescing decision,
+    /// taken once in the action's transaction (R5·U1 Q2); it is not re-decided here.
+    pub(crate) fn record_held(
+        &self,
+        op: MutexGuard<'_, ()>,
+        session_id: i64,
+        step: Step,
+        merge: bool,
+    ) {
         {
             let mut all = self.store.lock().unwrap();
             let list = all.entry(session_id).or_default();
-            let merged = if list.redo.is_empty() {
-                list.undo
+            let merged = merge
+                && list.redo.is_empty()
+                && list
+                    .undo
                     .back_mut()
-                    .is_some_and(|last| coalesce_attribute(last, &step))
-            } else {
-                false
-            };
+                    .is_some_and(|last| coalesce_attribute(last, &step));
             if !merged {
                 list.undo.push_back(step);
             }
@@ -216,28 +250,41 @@ impl History {
     }
 }
 
-fn coalesce_attribute(last: &mut Step, next: &Step) -> bool {
-    if !last.label.starts_with("Edit ") || !next.label.starts_with("Edit ") {
-        return false;
-    }
-    let (
-        StepKind::Attribute {
-            item_id: old_item,
-            fields: old,
-            ..
-        },
-        StepKind::Attribute {
-            item_id: new_item,
-            fields: new,
-            ..
-        },
-    ) = (&mut last.kind, &next.kind)
+/// Whether an "Edit" of `key` on `item_id` merges into `last` (typing in one field is one step).
+pub(crate) fn coalesces_into(last: &Step, item_id: i64, key: &str) -> bool {
+    let StepKind::Attribute {
+        item_id: old_item,
+        fields,
+        ..
+    } = &last.kind
     else {
         return false;
     };
-    if old_item != new_item || old.len() != 1 || new.len() != 1 || old[0].key != new[0].key {
+    last.label.starts_with("Edit ")
+        && *old_item == item_id
+        && fields.len() == 1
+        && fields[0].key == key
+}
+fn coalesces(last: &Step, next: &Step) -> bool {
+    let StepKind::Attribute {
+        item_id, fields, ..
+    } = &next.kind
+    else {
+        return false;
+    };
+    next.label.starts_with("Edit ")
+        && fields.len() == 1
+        && coalesces_into(last, *item_id, &fields[0].key)
+}
+fn coalesce_attribute(last: &mut Step, next: &Step) -> bool {
+    if !coalesces(last, next) {
         return false;
     }
+    let (StepKind::Attribute { fields: old, .. }, StepKind::Attribute { fields: new, .. }) =
+        (&mut last.kind, &next.kind)
+    else {
+        return false;
+    };
     old[0].after = new[0].after.clone();
     true
 }
@@ -715,6 +762,8 @@ fn apply(
             session_id,
             item_id,
             fields,
+            token,
+            feedback,
         } => {
             tx.item(item_id).map_err(|e| {
                 if matches!(e, Error::NotFound(_)) {
@@ -723,13 +772,26 @@ fn apply(
                     e
                 }
             })?;
+            let undo = direction == Direction::Undone;
+            // MC-A12 (R-IA21): every field must still hold the row the step left (undo) or found
+            // (redo); otherwise the whole step cannot apply. Title fields restore as before.
+            let stored = tx.attribute_values(item_id)?;
+            for field in &fields {
+                let expected = if undo { &field.after } else { &field.before };
+                if let FieldState::Row(expected) = expected {
+                    let current = stored.iter().find(|v| v.key == field.key);
+                    if !same_row(current, expected.as_ref()) {
+                        return Err(cannot(
+                            step,
+                            direction,
+                            "that field was changed by research",
+                        ));
+                    }
+                }
+            }
             let mut changed = false;
             for field in fields {
-                let target = if direction == Direction::Undone {
-                    &field.before
-                } else {
-                    &field.after
-                };
+                let target = if undo { &field.before } else { &field.after };
                 match target {
                     FieldState::Row(row) => {
                         let current = tx
@@ -755,10 +817,48 @@ fn apply(
             if changed {
                 tx.set_item_activity(item_id, at)?;
             }
+            // MC-A12: the step's feedback rows exist exactly while the step is applied.
+            let kept = if undo {
+                let rows = tx.feedback_by_step(&token)?;
+                tx.delete_feedback_by_step(&token)?;
+                rows
+            } else {
+                for row in &feedback {
+                    tx.insert_feedback(row)?;
+                }
+                Vec::new()
+            };
+            step.kind = StepKind::Attribute {
+                session_id,
+                item_id,
+                fields: match &step.kind {
+                    StepKind::Attribute { fields, .. } => fields.clone(),
+                    _ => unreachable!(),
+                },
+                token,
+                feedback: kept,
+            };
             touched.push(session_id);
         }
     }
     Ok(())
+}
+
+/// The same stored row, `updated_at` aside (MC-A12's comparison).
+fn same_row(a: Option<&AttributeValue>, b: Option<&AttributeValue>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            AttributeValue {
+                updated_at: 0,
+                ..a.clone()
+            } == AttributeValue {
+                updated_at: 0,
+                ..b.clone()
+            }
+        }
+        _ => false,
+    }
 }
 
 pub fn label_classify(before: Place, after: Place, count: usize) -> String {
@@ -861,6 +961,8 @@ mod tests {
                         before: FieldState::Title(before.into()),
                         after: FieldState::Title(after.into()),
                     }],
+                    token: String::new(),
+                    feedback: Vec::new(),
                 },
             }
         }

@@ -18,6 +18,7 @@ path = "tests/suite/main.rs"
 psm-core = { path = "../core" }
 psm-infra = { path = "../infra" }
 psm-integrations = { path = "../integrations" }
+psm-research = { path = "../research" }
 tempfile = "3"
 tokio.workspace = true
 serde_json.workspace = true

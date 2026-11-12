@@ -10,13 +10,13 @@ import { cn } from '@/lib/utils';
 import {
   PRODUCT_TITLE,
   acceptAllSuggestions,
+  acceptSuggestion,
   addSavedValue,
   clearAttribute,
   fillDefaults,
   listDefinitions,
   readShopValues,
   removeSavedValue,
-  setAttributeValue,
   setFieldDefault,
   type Definition,
   type FormField,
@@ -52,15 +52,6 @@ function parseJson(text: string | null): unknown {
     return JSON.parse(text);
   } catch {
     return null;
-  }
-}
-
-/** The stored row's value in its core form, for "Looks right" (the same value, now human-owned). */
-function rawValue(field: FormField): unknown {
-  try {
-    return JSON.parse(field.value!.value);
-  } catch {
-    return field.value!.value;
   }
 }
 
@@ -311,7 +302,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   onChange={value => state.edit(field.definition.key, value)}
                   onBlur={() => void blurField(field.definition.key)}
                   conditionPhotos={conditionPhotos}
-                  onLooksRight={f => act(() => setAttributeValue(item.id, f.definition.key, rawValue(f)), 'Could not accept')}
+                  onLooksRight={f => act(() => acceptSuggestion(item.id, f.definition.key), 'Could not accept')}
                   onClearAi={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
                   onSeeResearch={key => setResearch({ open: true, focus: key })}
                   presets={presetsOf(field)}

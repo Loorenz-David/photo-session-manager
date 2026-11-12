@@ -13,6 +13,7 @@ pub mod name_key;
 pub mod naming;
 pub mod position;
 pub mod publish;
+pub mod publish_partition;
 pub mod reconcile;
 pub mod retention;
 pub mod sameness;

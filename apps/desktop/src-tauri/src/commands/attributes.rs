@@ -330,6 +330,70 @@ pub async fn attribute_ai_clear(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
+/// "Looks right" on a suggestion (MC-A12): `ai` + `suggested` becomes `ai` + `accepted`.
+#[tauri::command]
+#[specta::specta]
+pub async fn attribute_ai_accept(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+    key: String,
+) -> Result<AttributeValueDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<AttributeValueDto, CommandError> {
+        with_service(&app, |s| s.accept(item_id.0, &key)).map(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// The three actions on a conflict (MC-A10, MC-A12).
+#[derive(Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictActionDto {
+    KeepPrevious,
+    UseSuggestion,
+    Edit,
+}
+
+/// Resolves a conflict: Keep previous, Use suggestion, or Edit with `value` (JSON text, as in
+/// `attribute_values_set`). `value` is required for Edit and refused with any other action.
+#[tauri::command]
+#[specta::specta]
+pub async fn attribute_conflict_resolve(
+    state: State<'_, AppState>,
+    item_id: CommandId,
+    key: String,
+    action: ConflictActionDto,
+    value: Option<String>,
+) -> Result<AttributeValueDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<AttributeValueDto, CommandError> {
+        match (action, value) {
+            (ConflictActionDto::KeepPrevious, None) => {
+                with_service(&app, |s| s.keep_previous(item_id.0, &key))
+            }
+            (ConflictActionDto::UseSuggestion, None) => {
+                with_service(&app, |s| s.accept(item_id.0, &key))
+            }
+            (ConflictActionDto::Edit, Some(value)) => {
+                let raw = parse(&value)?;
+                with_service(&app, |s| {
+                    s.set_value(item_id.0, &key, raw, Provenance::Human)
+                })
+            }
+            (ConflictActionDto::Edit, None) => Err(CommandError::from(Error::InvalidValue(
+                "Edit needs a value".into(),
+            ))),
+            (_, Some(_)) => Err(CommandError::from(Error::InvalidValue(
+                "only Edit takes a value".into(),
+            ))),
+        }
+        .map(Into::into)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn presets_get(

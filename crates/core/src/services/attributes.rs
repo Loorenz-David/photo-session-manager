@@ -13,16 +13,20 @@ use crate::{
         item::Item,
         photo::Classification,
         publish::RemoteValues,
+        research::{Feedback, FeedbackAction},
     },
-    mechanisms::values::{
-        PhotoId, canonical_json, canonicalize, is_severity_set, selected_condition_photos,
+    mechanisms::{
+        publish_partition::is_conflict,
+        values::{
+            PhotoId, canonical_json, canonicalize, is_severity_set, selected_condition_photos,
+        },
     },
     ports::{
         clock::Clock,
         commerce::CommerceAdapter,
         store::{Store, StoreTx},
     },
-    services::history::{FieldChange, FieldState, History, Step, StepKind},
+    services::history::{FieldChange, FieldState, History, Step, StepKind, coalesces_into},
 };
 use serde_json::Value as Json;
 use std::collections::{BTreeMap, HashSet};
@@ -217,6 +221,95 @@ pub enum RemoteRead {
 /// Computes the row to store from the definition, the stored row and the current time.
 type NextRow<'n> = dyn FnMut(&Definition, Option<&Value>, i64) -> Result<Option<Value>> + 'n;
 
+/// What an action's transaction hands to its undo step.
+#[derive(Default)]
+struct Act {
+    label: String,
+    fields: Vec<FieldChange>,
+    /// The step merges into the session's last step (coalesced typing).
+    merge: bool,
+}
+
+/// What an action's transaction knows before it starts.
+struct ActCtx {
+    now: i64,
+    /// The id of the step this action records: the `step_token` of its feedback rows.
+    token: String,
+    /// The session's last undo step, when a new step could merge into it.
+    last: Option<Step>,
+}
+
+impl ActCtx {
+    /// An "Edit" of `key` merges into the last step (typing in one field is one step).
+    fn merges(&self, item_id: i64, key: &str) -> bool {
+        self.last
+            .as_ref()
+            .is_some_and(|last| coalesces_into(last, item_id, key))
+    }
+    /// The `edited` feedback row of the step this edit merges into gets the new final value, so
+    /// the feedback never holds a typing prefix (R5·U1, decided by the orchestrator).
+    fn update_edited_feedback(&self, tx: &mut dyn StoreTx, key: &str, row: &Value) -> Result<()> {
+        let Some(Step {
+            kind: StepKind::Attribute { token, .. },
+            ..
+        }) = &self.last
+        else {
+            return Ok(());
+        };
+        for feedback in tx.feedback_by_step(token)? {
+            if feedback.key == key && feedback.action == FeedbackAction::Edited {
+                tx.update_feedback_final_value(feedback.id, Some(&row.value))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `before` accepted: `ai` + `accepted`, `ai_prior` dropped (MC-A12).
+fn accepted(before: &Value, now: i64) -> Value {
+    Value {
+        ai_status: Some(AiStatus::Accepted),
+        ai_prior: None,
+        updated_at: now,
+        ..before.clone()
+    }
+}
+
+/// MC-A12: a photographer action on `key` in its own transaction. When the row before it was
+/// `ai` + `suggested` or `accepted`, one feedback row is written with the action's step token
+/// (an `ai` + `cleared` row's verdict was recorded by its clear). Returns whether it wrote one.
+fn note_action(
+    tx: &mut dyn StoreTx,
+    ctx: &ActCtx,
+    item_id: i64,
+    key: &str,
+    before: Option<&Value>,
+    after: &Value,
+    action: FeedbackAction,
+) -> Result<bool> {
+    let Some(before) = before.filter(|b| {
+        b.provenance == Provenance::Ai
+            && matches!(b.ai_status, Some(AiStatus::Suggested | AiStatus::Accepted))
+    }) else {
+        return Ok(false);
+    };
+    tx.insert_feedback(&Feedback {
+        id: 0,
+        item_id,
+        key: key.to_owned(),
+        suggested_value: before.value.clone(),
+        confidence: before.ai_confidence.unwrap_or(AiConfidence::Low),
+        final_value: match action {
+            FeedbackAction::Cleared => None,
+            _ => Some(after.value.clone()),
+        },
+        action,
+        at: ctx.now,
+        step_token: Some(ctx.token.clone()),
+    })?;
+    Ok(true)
+}
+
 pub struct AttributesService<'a> {
     store: &'a dyn Store,
     clock: &'a dyn Clock,
@@ -254,23 +347,50 @@ impl<'a> AttributesService<'a> {
         self.history = Some(history);
         self
     }
-    fn record(&self, item_id: i64, label: String, fields: Vec<FieldChange>) -> Result<()> {
-        if fields.is_empty() {
-            return Ok(());
-        }
-        if let (Some(history), Some(session_id)) =
-            (self.history, self.store.session_for_item(item_id)?)
+    /// One photographer action on the item's fields: its transaction and its undo step. The
+    /// history's operation lock is taken before the store transaction and held until the step is
+    /// recorded (order: operation → store; R5·U1 T1), so the coalescing decision `body` takes
+    /// from the session's last step stays true until the step is recorded (Q2).
+    fn act(
+        &self,
+        item_id: i64,
+        body: &mut dyn FnMut(&mut dyn StoreTx, &ActCtx, &mut Act) -> Result<()>,
+    ) -> Result<()> {
+        let op = self.history.map(History::lock);
+        let session_id = match self.history {
+            Some(_) => self.store.session_for_item(item_id)?,
+            None => None,
+        };
+        let ctx = ActCtx {
+            now: self.clock.now_ms(),
+            token: uuid::Uuid::new_v4().to_string(),
+            last: match (self.history, session_id) {
+                (Some(history), Some(session_id)) => history.last_step(session_id),
+                _ => None,
+            },
+        };
+        let mut act = Act::default();
+        self.store.transaction(&mut |tx| {
+            act = Act::default();
+            body(tx, &ctx, &mut act)
+        })?;
+        if let (Some(history), Some(op), Some(session_id)) = (self.history, op, session_id)
+            && !act.fields.is_empty()
         {
-            history.record(
+            history.record_held(
+                op,
                 session_id,
                 Step {
-                    label,
+                    label: act.label,
                     kind: StepKind::Attribute {
                         session_id,
                         item_id,
-                        fields,
+                        fields: act.fields,
+                        token: ctx.token.clone(),
+                        feedback: Vec::new(),
                     },
                 },
+                act.merge,
             );
         }
         Ok(())
@@ -320,48 +440,56 @@ impl<'a> AttributesService<'a> {
     /// One read-modify-write of the value (`item_id`, `key`) in a transaction. `next` gets the
     /// definition and the stored row and returns the row to store; a row with the same content as
     /// the stored one is not written and leaves `updated_at` and `last_activity_at` alone (M16).
+    /// `action` names the undo step ("Edit", "Clear"); `None` is a write that is no photographer
+    /// action (no step, no feedback). `feedback` is the MC-A12 action the write is, if any.
     fn write(
         &self,
         item_id: i64,
         key: &str,
         action: Option<&str>,
+        feedback: Option<FeedbackAction>,
         next: &mut NextRow<'_>,
     ) -> Result<Option<Value>> {
-        let now = self.clock.now_ms();
         let mut result = None;
-        let mut change = None;
-        let mut label = String::new();
-        self.store.transaction(&mut |tx| {
+        self.act(item_id, &mut |tx, ctx, act| {
             tx.item(item_id)?;
             let definition = active_definitions(tx, self.integration)?
                 .into_iter()
                 .find(|d| d.key == key)
                 .ok_or_else(|| unknown(key))?;
-            label = definition.label.clone();
             let stored = tx
                 .attribute_values(item_id)?
                 .into_iter()
                 .find(|v| v.key == key);
             result = stored.clone().filter(Value::is_live);
-            let Some(row) = next(&definition, stored.as_ref(), now)? else {
+            let Some(row) = next(&definition, stored.as_ref(), ctx.now)? else {
                 return Ok(());
             };
             if stored.as_ref().is_some_and(|s| same_content(s, &row)) {
                 return Ok(());
             }
             tx.put_attribute_value(&row)?;
-            tx.set_item_activity(item_id, now)?;
-            change = Some(FieldChange {
+            tx.set_item_activity(item_id, ctx.now)?;
+            result = Some(row.clone()).filter(Value::is_live);
+            let Some(action) = action else {
+                return Ok(());
+            };
+            let wrote_feedback = match feedback {
+                Some(kind) => note_action(tx, ctx, item_id, key, stored.as_ref(), &row, kind)?,
+                None => false,
+            };
+            act.label = format!("{action} {}", definition.label);
+            act.merge = action == "Edit" && !wrote_feedback && ctx.merges(item_id, key);
+            if act.merge {
+                ctx.update_edited_feedback(tx, key, &row)?;
+            }
+            act.fields.push(FieldChange {
                 key: key.into(),
                 before: FieldState::Row(stored),
-                after: FieldState::Row(Some(row.clone())),
+                after: FieldState::Row(Some(row)),
             });
-            result = Some(row).filter(Value::is_live);
             Ok(())
         })?;
-        if let (Some(action), Some(change)) = (action, change) {
-            self.record(item_id, format!("{action} {label}"), vec![change])?;
-        }
         Ok(result)
     }
 
@@ -369,16 +497,21 @@ impl<'a> AttributesService<'a> {
     /// row. `None` empties it. A title equal to the stored one is not written (H4); a write sets the
     /// item's sessions' activity and leaves `change_seq` alone (MC-4, MC-6).
     fn write_title(&self, item_id: i64, title: Option<String>, action: &str) -> Result<Value> {
-        let now = self.clock.now_ms();
         let title = title.unwrap_or_default();
         let mut result = None;
-        let mut before = None;
-        self.store.transaction(&mut |tx| {
+        self.act(item_id, &mut |tx, ctx, act| {
+            let now = ctx.now;
             let item = tx.item(item_id)?;
             if item.title != title {
-                before = Some(item.title.clone());
                 tx.update_item_title(item_id, &title, now)?;
                 tx.set_item_activity(item_id, now)?;
+                act.label = format!("{action} Title");
+                act.merge = action == "Edit" && ctx.merges(item_id, PRODUCT_TITLE);
+                act.fields.push(FieldChange {
+                    key: PRODUCT_TITLE.into(),
+                    before: FieldState::Title(item.title.clone()),
+                    after: FieldState::Title(title.clone()),
+                });
             }
             let stored = tx.item(item_id)?;
             result = Some(Value {
@@ -396,17 +529,6 @@ impl<'a> AttributesService<'a> {
             });
             Ok(())
         })?;
-        if let Some(old) = before {
-            self.record(
-                item_id,
-                format!("{action} Title"),
-                vec![FieldChange {
-                    key: PRODUCT_TITLE.into(),
-                    before: FieldState::Title(old),
-                    after: FieldState::Title(title),
-                }],
-            )?;
-        }
         result.ok_or_else(|| Error::InvalidData("title not stored".into()))
     }
 
@@ -441,10 +563,12 @@ impl<'a> AttributesService<'a> {
         // 10F Q3: a cleared item keeps only the attributes that need no images (read before the
         // write's transaction holds the store).
         let cleared = self.store.item_retention(item_id)?.cleared_at.is_some();
+        let feedback = (provenance == Provenance::Human).then_some(FeedbackAction::Edited);
         self.write(
             item_id,
             key,
             Some("Edit"),
+            feedback,
             &mut |definition, stored, now| {
                 if cleared && definition.core_type == CoreType::MediaList {
                     return Err(Error::FilesCleared);
@@ -487,7 +611,7 @@ impl<'a> AttributesService<'a> {
         sources: Vec<String>,
     ) -> Result<Value> {
         let mut raw = Some(raw);
-        self.write(item_id, key, None, &mut |definition, stored, now| {
+        self.write(item_id, key, None, None, &mut |definition, stored, now| {
             if stored.is_some_and(|s| s.provenance == Provenance::Human) {
                 return Err(Error::InvalidValue(format!(
                     "{key} holds a human value; AI never overwrites it"
@@ -511,55 +635,181 @@ impl<'a> AttributesService<'a> {
         .ok_or_else(|| Error::InvalidData(format!("value {key} not stored")))
     }
 
-    /// "Accept all": every suggested AI value except low-confidence ones becomes `accepted`.
+    /// "Accept all": every suggested AI value except low-confidence ones and conflicts (R-IA1)
+    /// becomes `accepted`, its `ai_prior` dropped, each with an `accepted` feedback row (MC-A12).
     /// Returns how many were accepted.
     pub fn accept_all(&self, item_id: i64) -> Result<usize> {
-        let now = self.clock.now_ms();
         let mut count = 0;
-        let mut changes = Vec::new();
-        self.store.transaction(&mut |tx| {
+        self.act(item_id, &mut |tx, ctx, act| {
             tx.item(item_id)?;
-            count = 0;
-            for mut value in tx.attribute_values(item_id)? {
-                if value.provenance == Provenance::Ai
-                    && value.ai_status == Some(AiStatus::Suggested)
-                    && value.ai_confidence != Some(AiConfidence::Low)
+            let definitions = active_definitions(tx, self.integration)?;
+            for before in tx.attribute_values(item_id)? {
+                if before.provenance != Provenance::Ai
+                    || before.ai_status != Some(AiStatus::Suggested)
+                    || before.ai_confidence == Some(AiConfidence::Low)
                 {
-                    let before = value.clone();
-                    value.ai_status = Some(AiStatus::Accepted);
-                    value.updated_at = now;
-                    tx.put_attribute_value(&value)?;
-                    changes.push(FieldChange {
-                        key: value.key.clone(),
-                        before: FieldState::Row(Some(before)),
-                        after: FieldState::Row(Some(value)),
-                    });
-                    count += 1;
+                    continue;
                 }
+                let conflict = match definitions.iter().find(|d| d.key == before.key) {
+                    Some(definition) => is_conflict(definition, &before),
+                    // No definition, no type to compare with: a suggestion with a prior is
+                    // treated as a conflict (fail closed).
+                    None => before.ai_prior.is_some(),
+                };
+                if conflict {
+                    continue;
+                }
+                let after = accepted(&before, ctx.now);
+                tx.put_attribute_value(&after)?;
+                note_action(
+                    tx,
+                    ctx,
+                    item_id,
+                    &before.key,
+                    Some(&before),
+                    &after,
+                    FeedbackAction::Accepted,
+                )?;
+                act.fields.push(FieldChange {
+                    key: before.key.clone(),
+                    before: FieldState::Row(Some(before)),
+                    after: FieldState::Row(Some(after)),
+                });
             }
-            if count > 0 {
-                tx.set_item_activity(item_id, now)?;
+            if !act.fields.is_empty() {
+                tx.set_item_activity(item_id, ctx.now)?;
+                act.label = "Accept all suggestions".into();
             }
+            count = act.fields.len();
             Ok(())
         })?;
-        self.record(item_id, "Accept all suggestions".into(), changes)?;
         Ok(count)
     }
 
-    /// Clears the field: the row is kept with `ai_status = cleared` and is no longer one of the
-    /// item's values. Clearing an empty or already cleared field changes nothing.
+    /// "Looks right", and **Use suggestion** on a conflict (MC-A12): `ai` + `suggested` →
+    /// `ai` + `accepted`, `ai_prior` dropped, one `accepted` feedback row, one undo step. Any
+    /// other row is refused with `invalid_value` and nothing is written.
+    pub fn accept(&self, item_id: i64, key: &str) -> Result<Value> {
+        let mut result = None;
+        self.act(item_id, &mut |tx, ctx, act| {
+            tx.item(item_id)?;
+            let definition = active_definitions(tx, self.integration)?
+                .into_iter()
+                .find(|d| d.key == key)
+                .ok_or_else(|| unknown(key))?;
+            let before = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .find(|v| v.key == key)
+                .filter(|v| {
+                    v.provenance == Provenance::Ai && v.ai_status == Some(AiStatus::Suggested)
+                })
+                .ok_or_else(|| {
+                    Error::InvalidValue(format!("{key} holds no suggestion to accept"))
+                })?;
+            let after = accepted(&before, ctx.now);
+            tx.put_attribute_value(&after)?;
+            tx.set_item_activity(item_id, ctx.now)?;
+            note_action(
+                tx,
+                ctx,
+                item_id,
+                key,
+                Some(&before),
+                &after,
+                FeedbackAction::Accepted,
+            )?;
+            act.label = format!("Accept {}", definition.label);
+            act.fields.push(FieldChange {
+                key: key.into(),
+                before: FieldState::Row(Some(before)),
+                after: FieldState::Row(Some(after.clone())),
+            });
+            result = Some(after);
+            Ok(())
+        })?;
+        result.ok_or_else(|| Error::InvalidData(format!("value {key} not stored")))
+    }
+
+    /// **Keep previous** on a conflict (MC-A12): the row becomes the prior's value, validity and
+    /// provenance, the AI columns and `ai_prior` null; one `kept_previous` feedback row (its
+    /// suggestion joins the cleared set, MC-A1), one undo step. A row that is not a conflict is
+    /// refused with `invalid_value` and nothing is written.
+    pub fn keep_previous(&self, item_id: i64, key: &str) -> Result<Value> {
+        let mut result = None;
+        self.act(item_id, &mut |tx, ctx, act| {
+            tx.item(item_id)?;
+            let definition = active_definitions(tx, self.integration)?
+                .into_iter()
+                .find(|d| d.key == key)
+                .ok_or_else(|| unknown(key))?;
+            let before = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .find(|v| v.key == key)
+                .filter(|v| is_conflict(&definition, v))
+                .ok_or_else(|| Error::InvalidValue(format!("{key} holds no conflict")))?;
+            let Some(prior) = before.ai_prior.clone() else {
+                return Err(Error::InvalidValue(format!("{key} holds no conflict")));
+            };
+            let after = Value {
+                item_id,
+                key: key.to_owned(),
+                value: prior.value,
+                valid: prior.valid,
+                provenance: prior.provenance,
+                ai_confidence: None,
+                ai_status: None,
+                ai_reason: None,
+                ai_sources: None,
+                ai_prior: None,
+                updated_at: ctx.now,
+            };
+            tx.put_attribute_value(&after)?;
+            tx.set_item_activity(item_id, ctx.now)?;
+            note_action(
+                tx,
+                ctx,
+                item_id,
+                key,
+                Some(&before),
+                &after,
+                FeedbackAction::KeptPrevious,
+            )?;
+            act.label = format!("Keep previous {}", definition.label);
+            act.fields.push(FieldChange {
+                key: key.into(),
+                before: FieldState::Row(Some(before)),
+                after: FieldState::Row(Some(after.clone())),
+            });
+            result = Some(after);
+            Ok(())
+        })?;
+        result.ok_or_else(|| Error::InvalidData(format!("value {key} not stored")))
+    }
+
+    /// Clears the field: the row is kept with `ai_status = cleared`, its `ai_prior` dropped, and
+    /// is no longer one of the item's values. Clearing an empty or already cleared field changes
+    /// nothing.
     pub fn clear(&self, item_id: i64, key: &str) -> Result<()> {
         if key == PRODUCT_TITLE {
             self.write_title(item_id, None, "Clear")?;
             return Ok(());
         }
-        self.write(item_id, key, Some("Clear"), &mut |_, stored, now| {
-            Ok(stored.filter(|s| s.is_live()).map(|s| Value {
-                ai_status: Some(AiStatus::Cleared),
-                updated_at: now,
-                ..s.clone()
-            }))
-        })?;
+        self.write(
+            item_id,
+            key,
+            Some("Clear"),
+            Some(FeedbackAction::Cleared),
+            &mut |_, stored, now| {
+                Ok(stored.filter(|s| s.is_live()).map(|s| Value {
+                    ai_status: Some(AiStatus::Cleared),
+                    ai_prior: None,
+                    updated_at: now,
+                    ..s.clone()
+                }))
+            },
+        )?;
         Ok(())
     }
 
@@ -874,10 +1124,10 @@ impl<'a> AttributesService<'a> {
     /// and has a default for the item's type gets it (provenance `default`); filled fields are
     /// left alone. One undoable step. Returns how many were filled.
     pub fn fill_defaults(&self, item_id: i64) -> Result<usize> {
-        let now = self.clock.now_ms();
-        let mut changes = Vec::new();
-        self.store.transaction(&mut |tx| {
-            changes.clear();
+        let mut count = 0;
+        self.act(item_id, &mut |tx, ctx, act| {
+            let now = ctx.now;
+            let changes = &mut act.fields;
             let item = tx.item(item_id)?;
             let stored: BTreeMap<String, Value> = tx
                 .attribute_values(item_id)?
@@ -918,11 +1168,11 @@ impl<'a> AttributesService<'a> {
             }
             if !changes.is_empty() {
                 tx.set_item_activity(item_id, now)?;
+                act.label = "Fill defaults".into();
             }
+            count = act.fields.len();
             Ok(())
         })?;
-        let count = changes.len();
-        self.record(item_id, "Fill defaults".into(), changes)?;
         Ok(count)
     }
 

@@ -13,4 +13,4 @@ pub mod isolation;
 pub mod logs;
 pub mod test_app;
 
-pub use test_app::TestApp;
+pub use test_app::{RESEARCH_INTEGRATION, TestApp};

@@ -12,6 +12,7 @@ vi.mock('@/services/attributes', async importOriginal => ({
   setAttributeValue: vi.fn(),
   clearAttribute: vi.fn(),
   acceptAllSuggestions: vi.fn(),
+  acceptSuggestion: vi.fn(),
   getPreset: vi.fn(),
   setPreset: vi.fn(),
   updateIdentity: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock('@/services/attributes', async importOriginal => ({
 import { AiPill } from '@/features/form/AiPill';
 import { FormDialog } from '@/features/form/FormDialog';
 import { kindOf } from '@/features/form/kinds';
-import { clearAttribute, getForm, getPreset, listDefinitions, setAttributeValue, setPreset } from '@/services/attributes';
+import { acceptSuggestion, clearAttribute, getForm, getPreset, listDefinitions, setAttributeValue, setPreset } from '@/services/attributes';
 
 // jsdom lacks these browser APIs, which cmdk, Radix and dnd-kit use.
 globalThis.ResizeObserver ??= class {
@@ -297,24 +298,30 @@ describe('P11 product details form', () => {
     }
   });
 
-  it('C5(b) popover: "Looks right" writes the same value as a human edit; "Clear" calls attribute_ai_clear', async () => {
+  it('C5(b), A08·C5(b) popover: "Looks right" calls the accept command (no human edit); an accepted row offers no "Looks right"; "Clear" calls attribute_ai_clear', async () => {
     const scratch = def('custom.condition_scratch', 'choice', ['N/A', 'None', 'Minor', 'Moderate', 'Major'], 'details', 'Scratch');
     const era = def('custom.era', 'text', [], 'details', 'Era');
     const ai = { provenance: 'ai', ai_confidence: 'high', ai_status: 'suggested', ai_reason: 'Visible on photo 2', ai_sources: ['https://example.test/a'] };
-    vi.mocked(getForm).mockResolvedValue(form({ details: [field(scratch, stored(scratch.key, 'Minor', ai)), field(era, stored(era.key, '1960s', ai))] }));
+    const accepted = { ...ai, ai_status: 'accepted' };
+    vi.mocked(acceptSuggestion).mockImplementation(async (_item, key) => stored(key, 'Minor', accepted));
+    vi.mocked(getForm).mockResolvedValue(form({ details: [field(scratch, stored(scratch.key, 'Minor', ai)), field(era, stored(era.key, '1960s', accepted))] }));
     renderForm();
 
     const scratchField = await fieldElement('custom.condition_scratch');
     fireEvent.click(within(scratchField).getByRole('button', { name: /AI suggestion/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Looks right' }));
-    await waitFor(() => expect(setAttributeValue).toHaveBeenCalledWith(ITEM_ID, 'custom.condition_scratch', 'Minor'));
+    await waitFor(() => expect(acceptSuggestion).toHaveBeenCalledWith(ITEM_ID, 'custom.condition_scratch'));
+    expect(acceptSuggestion).toHaveBeenCalledTimes(1);
+    expect(setAttributeValue).not.toHaveBeenCalled();
     expect(clearAttribute).not.toHaveBeenCalled();
 
     const eraField = await fieldElement('custom.era');
     fireEvent.click(within(eraField).getByRole('button', { name: /AI suggestion/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
+    const clear = await screen.findByRole('button', { name: 'Clear' });
+    expect(screen.queryByRole('button', { name: 'Looks right' })).not.toBeInTheDocument();
+    fireEvent.click(clear);
     await waitFor(() => expect(clearAttribute).toHaveBeenCalledWith(ITEM_ID, 'custom.era'));
-    expect(setAttributeValue).toHaveBeenCalledTimes(1);
+    expect(setAttributeValue).not.toHaveBeenCalled();
   });
 
   it('C5(c) a field with provenance human renders no AI pill', async () => {

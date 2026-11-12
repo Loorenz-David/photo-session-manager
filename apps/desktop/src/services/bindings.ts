@@ -93,6 +93,13 @@ export const commands = {
 	/**  "Accept all": suggested AI values except low-confidence ones become accepted. Returns the count. */
 	attributeAiAcceptAll: (itemId: CommandId) => typedError<number, CommandError>(__TAURI_INVOKE("attribute_ai_accept_all", { itemId })),
 	attributeAiClear: (itemId: CommandId, key: string) => typedError<null, CommandError>(__TAURI_INVOKE("attribute_ai_clear", { itemId, key })),
+	/**  "Looks right" on a suggestion (MC-A12): `ai` + `suggested` becomes `ai` + `accepted`. */
+	attributeAiAccept: (itemId: CommandId, key: string) => typedError<AttributeValueDto_Serialize, CommandError>(__TAURI_INVOKE("attribute_ai_accept", { itemId, key })),
+	/**
+	 *  Resolves a conflict: Keep previous, Use suggestion, or Edit with `value` (JSON text, as in
+	 *  `attribute_values_set`). `value` is required for Edit and refused with any other action.
+	 */
+	attributeConflictResolve: (itemId: CommandId, key: string, action: ConflictActionDto, value: string | null) => typedError<AttributeValueDto_Serialize, CommandError>(__TAURI_INVOKE("attribute_conflict_resolve", { itemId, key, action, value })),
 	presetsGet: (itemType: string, group: AttributeGroupDto) => typedError<PresetDto_Serialize, CommandError>(__TAURI_INVOKE("presets_get", { itemType, group })),
 	/**
 	 *  Customize fields: stores the layout of one step for one item type (refused with
@@ -374,6 +381,9 @@ export type CompositionValuesDto = {
 	straighten: number | null,
 	rect: RectDto,
 };
+
+/**  The three actions on a conflict (MC-A10, MC-A12). */
+export type ConflictActionDto = "keep_previous" | "use_suggestion" | "edit";
 
 /**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */
 export type DefinitionDto = DefinitionDto_Serialize | DefinitionDto_Deserialize;

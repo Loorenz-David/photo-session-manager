@@ -265,6 +265,137 @@ mod r2_research_command_tests {
 }
 
 #[cfg(test)]
+mod r5_command_tests {
+    use super::*;
+    use psm_core::domain::attribute::{AiConfidence, AiStatus, Provenance};
+    use psm_core::ports::store::Store;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    /// A08·C5(a): each conflict command is one undo step and leaves the row of C1(a), C1(c),
+    /// C1(a), C1(e).
+    #[test]
+    fn r5_a08_c5a_attribute_commands_are_one_step_each() {
+        let mut a = psm_testkit::TestApp::new().unwrap();
+        a.settings_set(
+            &json!({"integration":{"kind":"shopify","shop_domain":"x.myshopify.com",
+            "api_version":"2026-10","client_id":"c","client_secret":"s"}}),
+        )
+        .unwrap();
+        let keys = ["k1", "k2", "k3", "k4"];
+        a.research_fields(&keys).unwrap();
+        let (item, created) = a
+            .items()
+            .create_local("R5-CMD", "Oak chair", "object", None)
+            .unwrap();
+        for key in keys {
+            a.research_conflict(item.id, key, "D", "A", AiConfidence::Medium)
+                .unwrap();
+        }
+        let session = created.session.id;
+        let history = a.app.history.store();
+        let store = a.app.store.clone();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::attributes::attribute_ai_accept,
+                commands::attributes::attribute_conflict_resolve,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let depth = || {
+            history
+                .lock()
+                .unwrap()
+                .get(&session)
+                .map_or(0, |l| l.undo.len())
+        };
+        let row = |key: &str| {
+            let mut out = None;
+            store
+                .transaction(&mut |tx| {
+                    out = tx
+                        .attribute_values(item.id)?
+                        .into_iter()
+                        .find(|v| v.key == key);
+                    Ok(())
+                })
+                .unwrap();
+            out.unwrap()
+        };
+        let calls = [
+            (
+                "attribute_ai_accept",
+                json!({"itemId": item.id, "key": "k1"}),
+            ),
+            (
+                "attribute_conflict_resolve",
+                json!({"itemId": item.id, "key": "k2", "action": "keep_previous", "value": null}),
+            ),
+            (
+                "attribute_conflict_resolve",
+                json!({"itemId": item.id, "key": "k3", "action": "use_suggestion", "value": null}),
+            ),
+            (
+                "attribute_conflict_resolve",
+                json!({"itemId": item.id, "key": "k4", "action": "edit", "value": "\"Walnut\""}),
+            ),
+        ];
+        for (n, (cmd, args)) in calls.into_iter().enumerate() {
+            call(&w, cmd, args.clone()).unwrap_or_else(|e| panic!("{cmd} {args}: {e}"));
+            assert_eq!(depth(), n + 1, "{cmd} {args}");
+        }
+        for key in ["k1", "k3"] {
+            let r = row(key);
+            assert_eq!(
+                (r.provenance, r.ai_status, r.value.as_str(), r.ai_prior),
+                (Provenance::Ai, Some(AiStatus::Accepted), "\"A\"", None),
+                "{key}"
+            );
+        }
+        let r = row("k2");
+        assert_eq!(
+            (r.provenance, r.ai_status, r.value.as_str(), r.ai_prior),
+            (Provenance::Default, None, "\"D\"", None)
+        );
+        let r = row("k4");
+        assert_eq!(
+            (r.provenance, r.ai_status, r.value.as_str(), r.ai_prior),
+            (Provenance::Human, None, "\"Walnut\"", None)
+        );
+    }
+}
+
+#[cfg(test)]
 mod p39_tests {
     use super::*;
     use psm_core::domain::photo::Classification;
@@ -725,6 +856,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::attributes::attribute_values_set,
         commands::attributes::attribute_ai_accept_all,
         commands::attributes::attribute_ai_clear,
+        commands::attributes::attribute_ai_accept,
+        commands::attributes::attribute_conflict_resolve,
         commands::attributes::presets_get,
         commands::attributes::presets_set,
         commands::attributes::form_get,

@@ -28,7 +28,10 @@ type AiPopoverProps = {
   onSeeResearch: () => void;
 };
 
-/** The AI pill's popover (ch08, NOTES §AI agent rules): confidence, value, reason, sources, Looks right / Clear / See research. */
+/**
+ * The AI pill's popover (ch08, NOTES §AI agent rules): confidence, value, reason, sources, Looks right / Clear /
+ * See research. Looks right accepts a suggestion, so it is offered only on a suggested row (08B MC-A12).
+ */
 export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch }: AiPopoverProps) {
   const [open, setOpen] = useState(false);
   const act = (action: () => void) => () => {
@@ -56,9 +59,11 @@ export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch }
           </ul>
         )}
         <div className="flex gap-1.5">
-          <ActionButton size="sm" action={async () => { setOpen(false); await onLooksRight(); }}>
-            Looks right
-          </ActionButton>
+          {value.ai_status === 'suggested' && (
+            <ActionButton size="sm" action={async () => { setOpen(false); await onLooksRight(); }}>
+              Looks right
+            </ActionButton>
+          )}
           <ActionButton size="sm" variant="outline" action={async () => { setOpen(false); await onClear(); }}>
             Clear
           </ActionButton>

@@ -3423,6 +3423,7 @@ dependencies = [
  "psm-core",
  "psm-infra",
  "psm-integrations",
+ "psm-research",
  "rusqlite",
  "rusqlite_migration",
  "serde_json",

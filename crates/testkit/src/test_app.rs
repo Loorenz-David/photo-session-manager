@@ -1009,3 +1009,121 @@ impl TestApp {
         )
     }
 }
+
+/// The integration name research fixtures use: the definitions `publish` reads (R5).
+pub const RESEARCH_INTEGRATION: &str = "shopify";
+
+impl TestApp {
+    /// R5: text fields `keys` (Details step) of the integration [`RESEARCH_INTEGRATION`], added
+    /// to its definitions. With a fake shop they are the shop's definitions, read by a schema
+    /// refresh (so a publish writes them); without one they are imported directly.
+    pub fn research_fields(&self, keys: &[&str]) -> Result<()> {
+        use psm_core::domain::{
+            attribute::{AttributeGroup, CoreType, Definition},
+            publish::DefinitionLink,
+        };
+        let definition = |key: &str| Definition {
+            integration: RESEARCH_INTEGRATION.into(),
+            key: key.into(),
+            label: key.into(),
+            core_type: CoreType::Text,
+            choices: Vec::new(),
+            validations: serde_json::json!({}),
+            group: AttributeGroup::Details,
+            description: None,
+            writable: true,
+        };
+        let service = AttributesService::new(
+            self.app.store.as_ref(),
+            self.clock.as_ref(),
+            Some(RESEARCH_INTEGRATION),
+        );
+        if let Some(shop) = &self.commerce {
+            {
+                let mut state = shop.state.lock().unwrap();
+                for key in keys {
+                    if !state.definitions.iter().any(|(d, _)| d.key == *key) {
+                        state.definitions.push((
+                            definition(key),
+                            DefinitionLink {
+                                platform_type: "single_line_text_field".into(),
+                                platform_meta: serde_json::json!({}),
+                            },
+                        ));
+                    }
+                }
+            }
+            return service.refresh_schema(shop.as_ref());
+        }
+        let mut all = Vec::new();
+        self.app.store.transaction(&mut |tx| {
+            all = tx.attribute_definitions(RESEARCH_INTEGRATION)?;
+            Ok(())
+        })?;
+        for key in keys {
+            if !all.iter().any(|d| d.key == *key) {
+                all.push(definition(key));
+            }
+        }
+        service.import_definitions(RESEARCH_INTEGRATION, all)
+    }
+
+    /// R5: one research suggestion through the research write path
+    /// (`psm_research::writes::suggest`, MC-A1), with a fixed reason and source.
+    pub fn research_suggest(
+        &self,
+        item_id: i64,
+        key: &str,
+        value: &str,
+        confidence: psm_core::domain::attribute::AiConfidence,
+    ) -> Result<psm_research::writes::WriteOutcome> {
+        psm_research::writes::suggest(
+            self.app.store.as_ref(),
+            self.clock.as_ref(),
+            Some(RESEARCH_INTEGRATION),
+            item_id,
+            key,
+            &serde_json::Value::String(value.into()),
+            confidence,
+            Some("fixture reason"),
+            &["https://example.com/listing".to_owned()],
+        )
+    }
+
+    /// R5: a conflict on `key` (MC-A1): a `default` row holding `prior` (written directly, no
+    /// undo step), then research's suggestion `suggestion` over it, which keeps the default as
+    /// the row's `ai_prior`.
+    pub fn research_conflict(
+        &self,
+        item_id: i64,
+        key: &str,
+        prior: &str,
+        suggestion: &str,
+        confidence: psm_core::domain::attribute::AiConfidence,
+    ) -> Result<()> {
+        use psm_core::domain::attribute::{Provenance, Value};
+        let now = self.clock.now_ms();
+        self.app.store.transaction(&mut |tx| {
+            tx.put_attribute_value(&Value {
+                item_id,
+                key: key.into(),
+                value: serde_json::Value::String(prior.into()).to_string(),
+                valid: true,
+                provenance: Provenance::Default,
+                ai_confidence: None,
+                ai_status: None,
+                ai_reason: None,
+                ai_sources: None,
+                ai_prior: None,
+                updated_at: now,
+            })
+        })?;
+        match self.research_suggest(item_id, key, suggestion, confidence)? {
+            psm_research::writes::WriteOutcome::Written(_) => Ok(()),
+            other => Err(psm_core::Error::InvalidData(format!(
+                "conflict fixture not written: {}",
+                other.text()
+            ))),
+        }
+    }
+}

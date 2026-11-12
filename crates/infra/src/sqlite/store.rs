@@ -584,6 +584,65 @@ impl SqliteTx<'_> {
     }
 }
 
+/// The `research_feedback` rows matching `filter` (a `WHERE` clause over `params`), oldest first.
+fn feedback_rows(
+    conn: &rusqlite::Connection,
+    filter: &str,
+    params: impl rusqlite::Params,
+) -> Result<Vec<Feedback>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT id,item_id,key,suggested_value,confidence,final_value,action,at,step_token FROM research_feedback {filter} ORDER BY id"
+        ))
+        .map_err(db)?;
+    let rows = stmt
+        .query_map(params, |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, String>(6)?,
+                r.get::<_, i64>(7)?,
+                r.get::<_, Option<String>>(8)?,
+            ))
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    rows.into_iter()
+        .map(
+            |(
+                id,
+                item_id,
+                key,
+                suggested_value,
+                confidence,
+                final_value,
+                action,
+                at,
+                step_token,
+            )| {
+                Ok(Feedback {
+                    id,
+                    item_id,
+                    key,
+                    suggested_value,
+                    confidence: AiConfidence::parse(&confidence)
+                        .ok_or_else(|| Error::InvalidData("feedback confidence".into()))?,
+                    final_value,
+                    action: FeedbackAction::parse(&action)
+                        .ok_or_else(|| Error::InvalidData("feedback action".into()))?,
+                    at,
+                    step_token,
+                })
+            },
+        )
+        .collect()
+}
+
 impl StoreTx for SqliteTx<'_> {
     fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()> {
         enqueue_mirror_tag(&self.tx, raw_path, photo_id, now_ms)
@@ -899,53 +958,23 @@ impl StoreTx for SqliteTx<'_> {
             .collect()
     }
     fn feedback_by_key(&self, item_id: i64, key: &str) -> Result<Vec<Feedback>> {
-        let mut stmt = self.tx.prepare("SELECT id,item_id,key,suggested_value,confidence,final_value,action,at,step_token FROM research_feedback WHERE item_id=?1 AND key=?2 ORDER BY id").map_err(db)?;
-        let rows = stmt
-            .query_map(params![item_id, key], |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, i64>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, String>(3)?,
-                    r.get::<_, String>(4)?,
-                    r.get::<_, Option<String>>(5)?,
-                    r.get::<_, String>(6)?,
-                    r.get::<_, i64>(7)?,
-                    r.get::<_, Option<String>>(8)?,
-                ))
-            })
-            .map_err(db)?
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(db)?;
-        rows.into_iter()
-            .map(
-                |(
-                    id,
-                    item_id,
-                    key,
-                    suggested_value,
-                    confidence,
-                    final_value,
-                    action,
-                    at,
-                    step_token,
-                )| {
-                    Ok(Feedback {
-                        id,
-                        item_id,
-                        key,
-                        suggested_value,
-                        confidence: AiConfidence::parse(&confidence)
-                            .ok_or_else(|| Error::InvalidData("feedback confidence".into()))?,
-                        final_value,
-                        action: FeedbackAction::parse(&action)
-                            .ok_or_else(|| Error::InvalidData("feedback action".into()))?,
-                        at,
-                        step_token,
-                    })
-                },
+        feedback_rows(
+            &self.tx,
+            "WHERE item_id=?1 AND key=?2",
+            params![item_id, key],
+        )
+    }
+    fn feedback_by_step(&self, step_token: &str) -> Result<Vec<Feedback>> {
+        feedback_rows(&self.tx, "WHERE step_token=?1", params![step_token])
+    }
+    fn update_feedback_final_value(&mut self, id: i64, final_value: Option<&str>) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE research_feedback SET final_value=?1 WHERE id=?2",
+                params![final_value, id],
             )
-            .collect()
+            .map_err(db)?;
+        Ok(())
     }
     fn insert_feedback(&mut self, feedback: &Feedback) -> Result<i64> {
         self.tx.execute("INSERT INTO research_feedback(item_id,key,suggested_value,confidence,final_value,action,at,step_token) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", params![feedback.item_id,feedback.key,feedback.suggested_value,feedback.confidence.as_str(),feedback.final_value,feedback.action.as_str(),feedback.at,feedback.step_token]).map_err(db)?;

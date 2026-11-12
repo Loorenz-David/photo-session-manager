@@ -7,13 +7,13 @@ import type { Item } from '@/services/items';
 vi.mock('@/services/attributes', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/attributes')>()),
   getForm: vi.fn(), listDefinitions: vi.fn(), setAttributeValue: vi.fn(), clearAttribute: vi.fn(),
-  acceptAllSuggestions: vi.fn(), updateIdentity: vi.fn(),
+  acceptAllSuggestions: vi.fn(), acceptSuggestion: vi.fn(), updateIdentity: vi.fn(),
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { FormDialog } from '@/features/form/FormDialog';
 import { IdentityEditor } from '@/features/form/IdentityEditor';
-import { getForm, setAttributeValue, updateIdentity } from '@/services/attributes';
+import { acceptSuggestion, getForm, setAttributeValue, updateIdentity } from '@/services/attributes';
 import { toast } from 'sonner';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
@@ -40,7 +40,7 @@ it('C4(a) queues two AI accept clicks and reloads even when the second action fa
   ] }));
   let resolveA!: (value: AttributeValue) => void;
   let rejectB!: (reason: Error) => void;
-  vi.mocked(setAttributeValue)
+  vi.mocked(acceptSuggestion)
     .mockReturnValueOnce(new Promise(resolve => { resolveA = resolve; }))
     .mockReturnValueOnce(new Promise((_resolve, reject) => { rejectB = reject; }));
   renderForm();
@@ -50,11 +50,11 @@ it('C4(a) queues two AI accept clicks and reloads even when the second action fa
   const maker = screen.getByLabelText('Maker');
   fireEvent.click(within(maker.closest('[data-field]') as HTMLElement).getByRole('button', { name: /AI suggestion/ }));
   fireEvent.click(await screen.findByRole('button', { name: 'Looks right' }));
-  expect(setAttributeValue).toHaveBeenCalledTimes(1);
-  expect(setAttributeValue).toHaveBeenNthCalledWith(1, ITEM_ID, 'custom.era', '1960s');
+  expect(acceptSuggestion).toHaveBeenCalledTimes(1);
+  expect(acceptSuggestion).toHaveBeenNthCalledWith(1, ITEM_ID, 'custom.era');
   await act(async () => { resolveA(stored('custom.era', '1960s')); });
-  await waitFor(() => expect(setAttributeValue).toHaveBeenCalledTimes(2));
-  expect(setAttributeValue).toHaveBeenNthCalledWith(2, ITEM_ID, 'custom.maker', 'Oak & Co');
+  await waitFor(() => expect(acceptSuggestion).toHaveBeenCalledTimes(2));
+  expect(acceptSuggestion).toHaveBeenNthCalledWith(2, ITEM_ID, 'custom.maker');
   const beforeFailure = vi.mocked(getForm).mock.calls.length;
   await act(async () => { rejectB(new Error('nope')); });
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('nope')));
