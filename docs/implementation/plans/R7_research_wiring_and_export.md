@@ -31,6 +31,11 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
 - **U1, the item's own listing (R4 review).** `ResearchService::external_id` reads `item_links … ORDER BY integration LIMIT 1`; read the configured integration's link instead.
 - **U1, a field in both Details and Product (R3 review).** `writes::layout_step` returns the first step (Details, Condition, Product) that lists the key, so a key placed in both the Details and the Product layout is written. MC-A1 says a `product`-step field is never written: fail closed, a key is not writable when **any** step that lists it is Product. Add a row with such a layout.
 - **U2, the redaction test (R4 review).** `gateway::a11_c4a_secrets_are_redacted_in_the_record` hard-codes `research_calls`' 19 columns in a `UNION ALL`. When retention adds a column, change that test to a per-table text scan rather than adding the column to the list.
+- **U1, a capped run lowers nothing (owner, 2026-11-12; 08B changelog 7).** `decide.rs` (the `not_determined` loop)
+  lowers an earlier `ai` + `suggested` row to `low` "No longer supported" even when the run ends `stopped_at_cap`.
+  Change it: a run whose ending is `stopped_at_cap` lowers nothing. Add a row in `crates/research/tests/engine/`: a
+  first run writes a medium suggestion; a follow-up with a smaller cap stops before reading its pages → the row is
+  unchanged (same value, confidence, reason, sources). The existing lowering row for a completed run still holds.
 
 ## Unit 1 — Wiring the engine into the app
 

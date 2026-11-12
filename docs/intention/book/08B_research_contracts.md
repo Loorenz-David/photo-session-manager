@@ -98,6 +98,8 @@ holds it.
 **Lowering.** If a run decides *not determined* for a key whose row is `ai` + `suggested`, it writes the same
 value with `ai_confidence = low`, keeps `ai_sources`, and sets `ai_reason` to "No longer supported: <reason>".
 It never deletes a row, and it never writes a status other than `suggested` or a provenance other than `ai`.
+A run that ends `stopped_at_cap` lowers nothing: running out of money is not evidence against a suggestion
+(owner, 2026-11-12, changelog 7).
 
 **Code path.** `AttributesService::ai_suggest` applies this table inside its transaction. Today it refuses only
 `human` (live or cleared) and **does not refuse `ai` + `accepted`**. The contract requires that refusal and
@@ -399,7 +401,9 @@ snapshot, any of these changed: the set of stage 1 unit identities, the cover id
 identity. This includes 08A's list: added photos, photos
 reclassified to or from `deleted`, recomposed photos. It also includes main↔condition reclassification and a new
 cover by reorder. It excludes Capture One retouches and settings changes: a setting applies to the next run that
-happens, and never starts one.
+happens, and never starts one, with one exception (owner, 2026-11-12, changelog 7): when a save of a research
+key, or switching `research.auto` on, leaves the prerequisites met, the session open in the app is queued if it
+has at least one Main photo and research has never run for it (08A §5). No other session is queued by it.
 
 **Invariant (MA14).** Killing and resuming at any instant ends with the same stage outputs, steps and attribute
 writes as an uninterrupted run given the same provider answers. No committed unit is re-called, and no step
@@ -764,3 +768,8 @@ to 07A MC-10 and 05A MC-30.
    same rule as feedback rows, and the owner's "the job is stalled until resolved"); the entry belongs to the
    resolving step, so a later action on the key changes nothing and only undoing that step removes it. Without
    this, an item could wait with nothing left to resolve. Completes the owner's card 1 answer; no new choice.
+7. **2026-11-12 — Owner answers on two review notes (relayed by the orchestrator).** (a) "A run stopped at the
+   cost limit should leave earlier suggestions alone": yes. MC-A1 Lowering: a run ending `stopped_at_cap` lowers
+   nothing. (b) "Entering keys should start research on the session you have open": yes. MC-A7: saving a key or
+   switching Automatic on queues the open session if it has a Main photo and was never researched; no other
+   session. MC-A6's "eligibility is evaluated on every save" stands.
