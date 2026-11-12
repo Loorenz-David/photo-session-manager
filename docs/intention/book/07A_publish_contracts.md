@@ -19,6 +19,9 @@ Confirming (popover, or "Publish N confirmed") writes, in **one** SQLite transac
 - `frozen_condition`: photo ids of the `condition` photos in position order, minus the
   damage-report exclusions (MC-14);
 - `frozen_attributes`: the canonical local value (05A MC-9) of every attribute that has one;
+  **research values: 08B MC-A10** (low suggestions withheld; a research conflict is a warning, and an item
+  confirmed with conflicts starts at step `held`, freezing each conflicted key at its resolution;
+  `frozen_attribute_origin`; branch `feature/agentic`, 2026-11-12);
 - `announced_removals`: the external media ids of gallery media the session does not own, as
   read by `item.get` when the confirmation surface was built; their count is the
   gallery-removal number shown (N1);

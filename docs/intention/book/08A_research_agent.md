@@ -31,8 +31,9 @@ A suggestion the photographer has not checked reaches the shop only at medium or
   / `integration`, `ai_confidence` (high / medium / low), `ai_status` (suggested / accepted /
   cleared), `ai_reason`, `ai_sources` (`crates/core/src/domain/attribute.rs`).
 - **Write path:** `AttributesService::ai_suggest`, `accept_all`, clear and "Looks right" exist
-  (`crates/core/src/services/attributes.rs`); `ai_suggest` already refuses a human-owned field.
-  Nothing calls `ai_suggest` in production.
+  (`crates/core/src/services/attributes.rs`); `ai_suggest` already refuses a human-owned field (live or
+  cleared) but does **not** refuse an `ai`+`accepted` one; 08B MC-A1 requires that refusal (inventory
+  2026-11-12). Nothing calls `ai_suggest` in production.
 - **UI:** AI pill, popover (`AiPopover.tsx`) and research panel (`ResearchPanel.tsx`) exist. The
   panel is a static list built from stored provenance (one block per AI field). The design mock-up
   shows more: a live timeline of steps (looked, searched, read a listing, compared, concluded) with
@@ -89,31 +90,37 @@ still learning raises it so test frames are not researched. While a run is `runn
 changes queue at most one follow-up, which starts when the run ends and the quiet period has passed.
 
 **Photos used.** Main and Condition photos, and unreviewed ones; never `deleted` (HA3). What is
-sent is a reduced copy of the photo as composed in the app (10D output, longest side 1024 px unless
-the stage needs detail), never the RAW or the master.
+sent is a reduced copy of the photo as composed in the app, cut from its **adjusted preview** by the
+composition rule (10D MC-27; H3 as amended, owner card 3, 2026-11-12), longest side 1024 px, 2048 for
+reading labels and condition (R-IA13), metadata removed; never the RAW or the master, and no
+master is rendered for research (08B MC-A5).
 
 **Stages of one run.** Each is a bounded step with a typed input and output, its own model and
 effort setting (§9), and one or more trace steps (§8). No stage is a free-running agent.
 
 | # | Stage | Input | Output |
 |---|---|---|---|
-| 1 | Observe | cover photo + other Main photos | what is visible: piece type, materials, construction, markings |
+| 1 | Observe | each Main photo, looked at once and remembered (owner card 2, 2026-11-12) | what is visible: piece type, materials, construction, markings; whether the photo shows a marking |
 | 2 | Find matches | cover photo | candidate pages from the visual search provider |
 | 3 | Read candidates | top candidate pages (trusted sites first, §6) | per page: title, attributed designer / maker / period, its images |
-| 4 | Compare | our photos vs each candidate's images | match / similar / different, with the features compared |
-| 5 | Read labels | photos showing a label, stamp or marking | transcribed text |
+| 4 | Compare | the cover photo vs each candidate's images (owner card 2) | match / similar / different, with the features compared |
+| 5 | Read labels | photos stage 1 found showing a label, stamp or marking | transcribed text |
 | 6 | Read condition | Condition photos | values for the layout's condition fields |
 | 7 | Decide | all of the above + the form snapshot | per field: value or not determined, confidence, reason, sources |
 
 **New photos after a run (progressive).** A photo added, reclassified to or from `deleted`, or
 recomposed after the last run queues a **follow-up run**, which redoes only the stages whose input
-changed (a new Condition photo → stage 6 and 7; a new label photo → 5 and 7; a new cover → all).
+changed (a new Main photo → stage 1 for that photo only, 5 if it shows a marking, and 7; a new Condition
+photo → 6 and 7; a new cover → all). The exact trigger set and unit identities are 08B MC-A7.
 Follow-ups obey the quiet period above; the day cap (§9) bounds what a long session can spend.
 
 **What a run may write (HA1).** For each field in the layout: empty, `default`, `integration` or
 `ai`+`suggested` → may be written or replaced. `human`, `ai`+`accepted` → never. `ai`+`cleared` →
 may be written only with a value different from the cleared one. A field not in the layout is
-never written. A run never deletes a value; when a follow-up no longer supports an earlier
+never written. **Replacing a `default` or `integration` value (owner card 1, 2026-11-12; R-IA1):**
+the replaced value is kept with the suggestion (`ai_prior`); while that suggestion is unchecked and differs
+from it, the field is a **conflict** the photographer resolves; a confirmed item waits for it (§7). The full write table is 08B
+MC-A1. A run never deletes a value; when a follow-up no longer supports an earlier
 suggestion it lowers that suggestion to `low` and says why.
 
 **Field rules.** `choice` / `multi_choice`: only values from the definition's choices; no match →
@@ -149,15 +156,18 @@ run's page limit or cost cap. Priority does not change the evidence table: every
 counts the same toward `medium`. Sites outside the list may be read after them and count only
 toward `low`. A change to the list applies to runs started after it.
 
-Other (visible) fields — wood, colour, upholstery, condition severities (owner 2026-11-12):
-`medium` when the model reads it from the photos; `high` only when a `match` listing at medium or
-better states the same; `low` when the model marks itself unsure.
+Other (visible) fields — wood, colour, upholstery (owner 2026-11-12):
+`medium` when the model reads it from the photos; `high` only when listing evidence that reaches
+medium under the table above states the same (R-IA11); `low` when the model marks itself
+unsure. Condition severities follow the same photo rule but are never raised by a listing: another
+piece's listing says nothing about this one's wear (R-IA12). Full table: 08B MC-A4.
 
 **Condition fields** (the layout's Condition step) are read from the photos the photographer
 classified Condition. Main photos, detail shots included, are not used to set a condition field
 (owner 2026-11-12: a detail shot is Main for its beauty even when it shows wear; Condition is the
-photographer's manual choice). With no Condition photo, condition fields are not determined; the agent never writes
-"None" for damage it had no Condition photo to judge.
+photographer's manual choice). With no Condition photo at all, condition fields are not determined and the
+agent never writes "None". With at least one Condition photo, the agent may write "None" for a part no
+Condition photo shows (owner card 4, 2026-11-12: every flaw is photographed).
 
 ## 7. Publishing and the form
 
@@ -169,6 +179,15 @@ photographer's manual choice). With no Condition photo, condition fields are not
   popover says "n low-confidence AI suggestions will not be published". The values sent are frozen
   at confirmation like every other (07A MC-10); a suggestion written after confirmation is not in
   that run.
+- **Conflicts (owner card 1, 2026-11-12: "it should be a warning, and the job is stalled until resolved, but it
+  doesn't block the others").** A conflict is a suggestion that replaced a preset default or a value from Shopify
+  and is still unchecked. The confirmation popover shows each item's conflicts as a warning: the field, the
+  previous value and its origin, the suggestion and its confidence, with Keep previous / Use suggestion / Edit.
+  Confirm stays possible. A confirmed item that still has conflicts waits ("Waiting for you · n conflicts"),
+  sending nothing to the shop, until every one is resolved; then it continues on its own. Other items of the same
+  publish run normally. Each resolved field is sent as resolved, and everything else as frozen at confirmation. A
+  conflict that appears after confirmation does not stall the item. Resolving is an owner action (undo step,
+  feedback row). Chapter 08's "the form never blocks publishing" still holds. Exact rule: 08B MC-A10, MC-A12.
 - Suggestions written by a run are not undo steps (they are the system's, like arrival); Looks
   right, Clear, Accept all and edits are, as today (MC-30).
 - The form header shows "n to review" and opens the research panel (design mock-up).
@@ -183,12 +202,18 @@ photographer's manual choice). With no Condition photo, condition fields are not
   `concluded` / `not_determined`), summary (one line, shown), detail (shown under it), source url
   and title (for `read`), photo ids used, field keys it led to. This is what the research panel
   shows, in order, live while the run is `running`.
-- `research_outbound`: run_id, photo_id, provider, sent_at, bytes hash. The proof for HA3.
+- `research_outbound`: run_id, call_id, photo_id, provider, sent_at, bytes hash. The proof for HA3.
 - `research_feedback`: item_id, key, suggested value, confidence, final value, action (`accepted`
-  / `cleared` / `edited`), at. Written when the photographer acts on a suggestion; kept as
-  evaluation examples. It trains nothing by itself (raw idea §7).
-- `jobs.type` gains `research`.
-- `attribute_values` unchanged; `ai_sources` stays the list of URLs the Decide stage relied on.
+  / `cleared` / `edited` / `kept_previous`), at, step_token. Written when the photographer acts on a
+  suggestion; kept as evaluation examples. It trains nothing by itself (raw idea §7).
+- `research_calls` (§10A) carries a state (`sent` / `answered` / `failed` / `unknown` / `not_sent`);
+  `research_stage_outputs` holds each committed stage unit's output and input fingerprint (08B MC-A7).
+- `jobs.kind` (the column's real name) gains `research`.
+- `attribute_values` gains `ai_prior` (the replaced `default`/`integration` value, owner card 1);
+  `ai_sources` stays the list of URLs the Decide stage relied on.
+- `publish_items` gains `frozen_attribute_origin` (provenance, status, confidence and prior per key at
+  confirmation; the evidence for MA8), `pending_conflicts`, `resolved_attributes` and `released_at`; its step
+  gains `held`, before `prepare` (08B MC-A10).
 
 Facts: steps, outbound records, feedback, run states, costs. Derived, never stored: "n to
 review", "n fields filled", the panel's Finished label.
@@ -200,8 +225,10 @@ review", "n fields filled", the panel's Finished label.
   are chosen by the first benchmark, not by this chapter.
 - **Cost cap:** `research.max_cost_per_run`, default USD 0.50, and `research.max_cost_per_day`,
   default USD 15. Cost is computed from the usage each provider reports and a price table in
-  settings. A run that reaches its cap stops before the next provider call, keeps the suggestions
-  it has, and ends `stopped_at_cap`; the day cap stops new runs from starting (HA6).
+  settings. A run keeps back the price of its Decide stage (owner card 5, 2026-11-12): when only that
+  reserve is left it stops reading, decides from what it has, and ends `stopped_at_cap` with those
+  suggestions; it never starts a call once its cap is reached. The day cap stops new runs from
+  starting (HA6). Exact rule: 08B MC-A8.
 - **Language:** setting `research.language`, default English: reasons, trace text and free-text
   values are written in it. Choice values are the definition's own strings.
 - **Secrets:** provider keys in the Keychain through the existing secrets port; never in logs,
@@ -225,8 +252,9 @@ server, no telemetry service.
 **Recorded for every provider call** (`research_calls`, owner S): run_id, stage, provider, model,
 effort, the exact request sent (instructions and inputs, images by reference to the stored copy),
 the exact response received, usage, cost, duration, attempt number, error. The reduced images sent
-(HA3) are kept as files beside it. Kept for `research.record_days` (default 30), then removed;
-`research_runs`, `research_steps` and `research_feedback` are kept.
+(HA3) are kept as files beside it. Kept for `research.record_days` (default 30, minimum 2), then removed;
+`research_runs`, `research_steps`, `research_feedback`, `research_outbound` and the stage outputs are kept
+(R-IA26).
 
 **Export.** Settings → Research → **Export research**, for a date range or chosen items, writes one
 folder (zipped) holding, per run: the run and its steps; every call as above; the images sent; the
@@ -249,13 +277,13 @@ difference, without touching the work Mac or its data.
 | ID | Observable outcome, measured true ⇒ shipped | Defect family it guards |
 |---|---|---|
 | **MA1** | After any run, every field that was `human` or `ai`+`accepted` before it holds the same value and provenance; no cleared value came back. | checked values overwritten |
-| **MA2** | Every attribution value written by a run has the confidence the §6 table gives for the evidence recorded in its steps; none is above `low` without a read label or the required matching listings. | false designer or maker claims |
+| **MA2** | Every attribution value written by a run has the confidence the §6 table (08B MC-A4) gives for the evidence recorded in its steps, except a value a later run lowered to `low` because it lost its support (the reason says so); none is above `low` without a read label or the required matching listings. | false designer or maker claims |
 | **MA3** | Every image sent to a provider has a `research_outbound` row; none belongs to a `deleted` photo; no RAW or master bytes are sent. | photos leaking |
 | **MA4** | Kill-and-resume at any point of a run ends with the same values, confidences and steps as an uninterrupted run with the same provider answers; nothing is duplicated. | half-finished or doubled research |
 | **MA5** | No run's recorded cost exceeds its cap by more than the one call in flight; no run starts after the day cap is reached. | runaway spend |
 | **MA6** | Every value a run writes is in the item's layout and valid for its definition (a listed choice for choice fields); every `ai` value has at least one step naming its key. | invalid values, unexplained suggestions |
-| **MA8** | After a publish, the shop holds no value that was `ai`+`suggested` at `low` confidence at confirmation; every `ai`+`suggested` value it holds was `medium` or `high` then. | unchecked weak guesses on a live listing |
-| **MA9** | An export contains, for every run in its range, every step, every provider call with its exact request and response, every image sent, the values written and the photographer's action on each; replaying a stage from it sends the same inputs the original call sent. It contains no secret, no RAW and no `deleted` photo. | a wrong suggestion that cannot be explained or reproduced; secrets or deleted photos leaving in an export |
+| **MA8** | After a publish, the shop holds no value that was `ai`+`suggested` at `low` confidence (with no replaced value) at confirmation, and no unchecked suggestion that replaced a preset default or a value from Shopify; an item confirmed with conflicts issued no shop change before its last conflict was resolved, and sent each conflicted field as resolved; other items of that publish were not delayed (owner card 1, 2026-11-12). | unchecked weak guesses or replacements on a live listing |
+| **MA9** | An export contains, for every run in its range, every step, every provider call with its exact request and response, every image sent, the values written and the photographer's action on each; replaying a stage from it sends the same inputs the original call sent, for every call whose images are in the export and whose record has not expired (any other call is reported not replayable). It contains no secret, no RAW and no `deleted` photo. | a wrong suggestion that cannot be explained or reproduced; secrets or deleted photos leaving in an export |
 | **MA7** | With no key, no network or no integration, sessions, review, export and publish behave as on `main`; the panel states why research is not running. | core workflow coupled to AI |
 
 Operational measurement (recorded, not a test): on a set of owner-verified items, share of
@@ -329,3 +357,18 @@ The benchmark of §12A waits for them; ratification does not.
    deferred inputs (trusted sites, test set) and the provider benchmark of §12A. Owner's note on
    process: the faster test runs being built on `main` are merged into this branch before
    implementation starts.
+7. **2026-11-12 — Post-ratification amendments by owner cards** (mechanism inventory, chapter 08B; owner
+   answers relayed by the orchestrator). Card 1: suggestions over a preset default or a Shopify value keep the
+   replaced value and are conflicts the photographer resolves at publish (§5, §7, §8, MA8); the exact reading
+   awaits the owner's confirmation (ratify R-IA1). Card 2 B: each photo looked at once, Compare uses the cover
+   (§5 stage table and follow-up examples). Card 3 B: research images are cut from the adjusted preview (§5;
+   H3 amended in chapter 01). Card 4 A: with Condition photos, "None" may be set for a part no Condition photo
+   shows (§6). Card 5 B: the Decide reserve (§9). Inventory deltas folded with them: §3 `ai_suggest` fact; §6
+   visible-field wording and condition never raised by listings (ratify R-IA11, R-IA12); §8 `jobs.kind`, new
+   columns and tables; §10A what is kept (ratify R-IA26); MA2 and MA9 wording. Contracts: 08B. Status line
+   unchanged (RATIFIED); R-IA6…R-IA26 await the owner's ratification as a list.
+8. **2026-11-12 — Owner follow-up** (relayed by the orchestrator). Card 1 corrected: conflicts are a warning at
+   confirmation, and a confirmed item with conflicts waits until they are resolved without holding up the others
+   (§7, §8, MA8; 08B MC-A10). Inventory resolutions R-IA6…R-IA26 ratified as a list; their markers are now
+   `(R-IAn)` traces. Trusted-site priority stays reading order only (§6), as the orchestrator's choice by the owner's
+   delegation. Status line unchanged (RATIFIED).

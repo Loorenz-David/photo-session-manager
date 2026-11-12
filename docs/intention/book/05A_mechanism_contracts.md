@@ -202,6 +202,10 @@ greater run id. The Unassigned session has no status (it is shown as the Unassig
    `adjusted_preview_path` not null (a *stale* preview still counts, MC-17).
 5. `in_progress` — otherwise, including an empty session.
 
+**Research (08B MC-A10, branch `feature/agentic`, 2026-11-12):** step `held` (a confirmed item waiting for its
+research conflicts) counts in status rule 1 as `publishing`; its row label, placed before `Publishing n%`, is
+`Waiting for you · n conflicts`. M14's enumeration gains `held`.
+
 **Row label** (separate function; chapter 07's precedence list) **(ratify R-I7)**:
 `Publishing n%` if status is publishing → `Publish failed` (+ Retry) if the latest item is
 `failed` at a step other than `describe`, whether or not the session was published before →
@@ -299,6 +303,9 @@ the screen happens to show. One history per session, kept while the app runs; qu
 | composition saved (finished gesture, control change, Esc revert, Reset, Paste framing, Split/Normal) | the prior composition values, saved as a new revision (MC-27) |
 | Apply composition to selected | every touched photo's prior composition, as one step |
 | attribute value saved in the details form (a field committed, Accept all, Clear) | the prior value and provenance of every field the action changed |
+
+**Research (08B MC-A12, branch `feature/agentic`, 2026-11-12):** research writes are never steps; an attribute
+step whose field research changed since cannot apply; resolving a research conflict is a step.
 
 **Not steps** (never recorded, never reversed; earlier steps stay undoable): capture and import arrival,
 Capture One retouches, export, publish and its retries, SKU change (it renames folders and files, 05B), session
