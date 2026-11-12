@@ -178,13 +178,60 @@ impl ResearchService {
         })
     }
 
-    /// `fields_filled` and `to_review` of the status (R4·U6).
+    /// The status's derived counts (MC-A10, never stored): `fields_filled` = the keys the latest
+    /// run wrote; `to_review` = live `ai` + `suggested` rows whose key is in the current layout,
+    /// at every confidence.
     pub(crate) fn derived_counts(
         &self,
-        _item_id: i64,
-        _latest: Option<&crate::store::RunRow>,
+        item_id: i64,
+        latest: Option<&crate::store::RunRow>,
     ) -> Result<(usize, usize)> {
-        Ok((0, 0))
+        let fields_filled = match latest {
+            Some(run) => self
+                .store
+                .research_transaction(|tx| {
+                    crate::store::output(
+                        tx.conn(),
+                        run.id,
+                        crate::domain::Stage::Decide.as_str(),
+                        "decide",
+                    )
+                })?
+                .and_then(|row| serde_json::from_str::<Json>(&row.output).ok())
+                .and_then(|output| output["writes"].as_object().cloned())
+                .map(|writes| {
+                    writes
+                        .values()
+                        .filter(|w| w["outcome"].as_str() == Some("written"))
+                        .count()
+                })
+                .unwrap_or(0),
+            None => 0,
+        };
+        let layout: Vec<String> = form_snapshot(
+            &self.store,
+            self.clock.as_ref(),
+            self.integration.as_deref(),
+            item_id,
+        )?
+        .fields
+        .into_iter()
+        .map(|f| f.definition.key)
+        .collect();
+        let rows = self.store.research_transaction(|tx| {
+            use psm_core::ports::store::StoreTx;
+            tx.attribute_values(item_id)
+        })?;
+        let to_review = rows
+            .iter()
+            .filter(|v| {
+                v.is_live()
+                    && v.provenance == psm_core::domain::attribute::Provenance::Ai
+                    && v.ai_status == Some(psm_core::domain::attribute::AiStatus::Suggested)
+                    && layout.contains(&v.key)
+            })
+            .count();
+        Ok((fields_filled, to_review))
     }
 
     /// Runs the stages of a `running` run (08A §5) and ends it (MC-A7 commit rule; MC-A8 endings).

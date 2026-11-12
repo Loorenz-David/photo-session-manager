@@ -320,3 +320,68 @@ impl ResearchConfig {
         }
     }
 }
+
+/// Refuses a research settings value (whole or a patch of top-level keys) that holds a cap or a
+/// price that is not a decimal string with at most 6 fractional digits, `record_days` below 2, a
+/// negative `quiet_seconds` or `source_wait_seconds`, or a long edge that is not a positive
+/// integer. The text names the field.
+pub fn validate(value: &serde_json::Value) -> Result<(), String> {
+    use serde_json::Value as Json;
+    let Some(object) = value.as_object() else {
+        return Err("research settings must be an object".to_owned());
+    };
+    let money = |field: &str, value: &Json| -> Result<(), String> {
+        match value.as_str().and_then(crate::rules::cost::parse_micro_usd) {
+            Some(_) => Ok(()),
+            None => Err(format!(
+                "{field} must be an amount in USD like 0.50, with at most 6 decimals"
+            )),
+        }
+    };
+    for field in ["max_cost_per_run", "max_cost_per_day"] {
+        if let Some(value) = object.get(field) {
+            money(field, value)?;
+        }
+    }
+    if let Some(prices) = object.get("prices") {
+        let Some(rows) = prices.as_array() else {
+            return Err("prices must be a list".to_owned());
+        };
+        for row in rows {
+            for field in ["usd_per_million", "fallback_call_usd"] {
+                if let Some(value) = row.get(field).filter(|v| !v.is_null()) {
+                    money(field, value)?;
+                }
+            }
+        }
+    }
+    if let Some(days) = object.get("record_days")
+        && !days.as_i64().is_some_and(|d| d >= 2)
+    {
+        return Err("record_days must be a whole number of at least 2".to_owned());
+    }
+    for field in ["quiet_seconds", "source_wait_seconds"] {
+        if let Some(seconds) = object.get(field)
+            && !seconds.as_i64().is_some_and(|s| s >= 0)
+        {
+            return Err(format!("{field} must be a whole number of 0 or more"));
+        }
+    }
+    if let Some(stages) = object.get("stages") {
+        let Some(stages) = stages.as_object() else {
+            return Err("stages must be an object".to_owned());
+        };
+        for (name, stage) in stages {
+            if let Some(edge) = stage.get("image_long_edge")
+                && !edge
+                    .as_u64()
+                    .is_some_and(|e| e > 0 && e <= u64::from(u32::MAX))
+            {
+                return Err(format!(
+                    "stages.{name}.image_long_edge must be a whole number above 0"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
