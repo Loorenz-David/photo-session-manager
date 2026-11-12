@@ -515,3 +515,177 @@ pub fn outbound(conn: &Connection, run_id: Option<i64>) -> Result<Vec<OutboundRo
         .map_err(db)?;
     Ok(rows)
 }
+
+/// A trace step to commit; `seq` is taken in the committing transaction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewStep {
+    pub stage: String,
+    pub kind: crate::domain::StepKind,
+    pub summary: String,
+    pub detail: String,
+    pub source_url: Option<String>,
+    pub source_title: Option<String>,
+    pub photo_ids: Vec<i64>,
+    pub field_keys: Vec<String>,
+}
+
+/// One `research_steps` row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StepRow {
+    pub id: i64,
+    pub run_id: i64,
+    pub seq: i64,
+    pub stage: String,
+    pub kind: String,
+    pub summary: String,
+    pub detail: String,
+    pub source_url: Option<String>,
+    pub source_title: Option<String>,
+    pub photo_ids: Vec<i64>,
+    pub field_keys: Vec<String>,
+    pub created_at: i64,
+}
+
+/// Inserts a step at `max(seq of the run) + 1` (gapless, in commit order) and returns its seq.
+pub fn insert_step(conn: &Connection, run_id: i64, step: &NewStep, at: i64) -> Result<i64> {
+    let seq: i64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(seq),0)+1 FROM research_steps WHERE run_id=?1",
+            [run_id],
+            |r| r.get(0),
+        )
+        .map_err(db)?;
+    let photo_ids =
+        serde_json::to_string(&step.photo_ids).map_err(|e| Error::InvalidData(e.to_string()))?;
+    let field_keys =
+        serde_json::to_string(&step.field_keys).map_err(|e| Error::InvalidData(e.to_string()))?;
+    conn.execute(
+        "INSERT INTO research_steps(run_id,seq,stage,kind,summary,detail,source_url,source_title,\
+         photo_ids,field_keys,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
+        params![
+            run_id,
+            seq,
+            step.stage,
+            step.kind.as_str(),
+            step.summary,
+            step.detail,
+            step.source_url,
+            step.source_title,
+            photo_ids,
+            field_keys,
+            at,
+        ],
+    )
+    .map_err(db)?;
+    Ok(seq)
+}
+
+pub fn steps(conn: &Connection, run_id: i64) -> Result<Vec<StepRow>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id,run_id,seq,stage,kind,summary,detail,source_url,source_title,photo_ids,\
+             field_keys,created_at FROM research_steps WHERE run_id=?1 ORDER BY seq",
+        )
+        .map_err(db)?;
+    let rows = stmt
+        .query_map([run_id], |r| {
+            let photo_ids: String = r.get(9)?;
+            let field_keys: String = r.get(10)?;
+            Ok(StepRow {
+                id: r.get(0)?,
+                run_id: r.get(1)?,
+                seq: r.get(2)?,
+                stage: r.get(3)?,
+                kind: r.get(4)?,
+                summary: r.get(5)?,
+                detail: r.get(6)?,
+                source_url: r.get(7)?,
+                source_title: r.get(8)?,
+                photo_ids: serde_json::from_str(&photo_ids).unwrap_or_default(),
+                field_keys: serde_json::from_str(&field_keys).unwrap_or_default(),
+                created_at: r.get(11)?,
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    Ok(rows)
+}
+
+/// One committed unit (`research_stage_outputs`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputRow {
+    pub run_id: i64,
+    pub stage: String,
+    pub unit_key: String,
+    pub fingerprint: String,
+    pub output: String,
+    pub reused_from_run_id: Option<i64>,
+    pub committed_at: i64,
+}
+
+fn output_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<OutputRow> {
+    Ok(OutputRow {
+        run_id: r.get(0)?,
+        stage: r.get(1)?,
+        unit_key: r.get(2)?,
+        fingerprint: r.get(3)?,
+        output: r.get(4)?,
+        reused_from_run_id: r.get(5)?,
+        committed_at: r.get(6)?,
+    })
+}
+
+const OUTPUT_COLUMNS: &str =
+    "run_id,stage,unit_key,fingerprint,output,reused_from_run_id,committed_at";
+
+pub fn insert_output(conn: &Connection, row: &OutputRow) -> Result<()> {
+    conn.execute(
+        "INSERT INTO research_stage_outputs(run_id,stage,unit_key,fingerprint,output,\
+         reused_from_run_id,committed_at) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+        params![
+            row.run_id,
+            row.stage,
+            row.unit_key,
+            row.fingerprint,
+            row.output,
+            row.reused_from_run_id,
+            row.committed_at,
+        ],
+    )
+    .map_err(db)?;
+    Ok(())
+}
+
+pub fn output(
+    conn: &Connection,
+    run_id: i64,
+    stage: &str,
+    unit_key: &str,
+) -> Result<Option<OutputRow>> {
+    conn.query_row(
+        &format!(
+            "SELECT {OUTPUT_COLUMNS} FROM research_stage_outputs \
+             WHERE run_id=?1 AND stage=?2 AND unit_key=?3"
+        ),
+        params![run_id, stage, unit_key],
+        output_row,
+    )
+    .optional()
+    .map_err(db)
+}
+
+/// The committed units of a run, in commit order.
+pub fn outputs(conn: &Connection, run_id: i64) -> Result<Vec<OutputRow>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {OUTPUT_COLUMNS} FROM research_stage_outputs WHERE run_id=?1 ORDER BY rowid"
+        ))
+        .map_err(db)?;
+    let rows = stmt
+        .query_map([run_id], output_row)
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    Ok(rows)
+}

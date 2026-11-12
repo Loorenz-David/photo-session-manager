@@ -9,6 +9,7 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
+use psm_core::ports::commerce::CommerceAdapter;
 use psm_core::{
     domain::{
         attribute::{
@@ -20,7 +21,7 @@ use psm_core::{
     },
     ports::secrets::SecretStore,
 };
-use psm_infra::{imaging::ImageOpsImpl, sqlite::store::SqliteStore};
+use psm_infra::{imaging::ImageOpsImpl, settings_file::Settings, sqlite::store::SqliteStore};
 use psm_research::{
     config::{FallbackSnapshot, PriceSnapshot, ResearchConfig},
     domain::{RunState, RunTrigger},
@@ -29,6 +30,9 @@ use psm_research::{
     gateway::{CallGateway, SecretValues, Waiter},
     images::ResearchImages,
     ports::Providers,
+    service::{ResearchDeps, ResearchService, form_snapshot},
+    shop::CommerceShopFacts,
+    stages::ExecuteOutcome,
     store::{self as rstore, NewRun},
     writes::{self, WriteOutcome},
 };
@@ -58,6 +62,78 @@ pub const MONEY: &str = "test.money";
 pub const RATING: &str = "test.rating";
 /// A text definition with `writable = false`.
 pub const LOCKED: &str = "test.locked";
+
+/// Writes the `research` slot of the settings file.
+pub fn save_research(paths: &psm_infra::paths::AppPaths, value: Json) {
+    let mut settings = Settings::open(paths).unwrap();
+    settings.research = Some(value);
+    Settings::set(paths, &settings).unwrap();
+}
+
+fn build_service(
+    app: &TestApp,
+    model: &Arc<FakeModel>,
+    search: &Arc<FakeVisualSearch>,
+    reader: &Arc<FakePageReader>,
+) -> ResearchService {
+    let secrets = app.secrets.clone();
+    let paths = app.app.paths.clone();
+    let clock = app.clock.clone();
+    ResearchService::new(ResearchDeps {
+        store: app.app.store.clone(),
+        clock: app.clock.clone(),
+        imaging: Arc::new(ImageOpsImpl),
+        data_dir: app.app.paths.root.clone(),
+        providers: Providers {
+            model: Some(model.clone()),
+            search: Some(search.clone()),
+            reader: Some(reader.clone()),
+        },
+        secrets: app.secrets.clone(),
+        secret_values: Arc::new(move || {
+            let mut out: Vec<String> = secrets.values.lock().unwrap().values().cloned().collect();
+            out.push(SHOP_SECRET.to_owned());
+            out
+        }),
+        shop: app
+            .commerce
+            .clone()
+            .map(|c| Arc::new(CommerceShopFacts::new(c as Arc<dyn CommerceAdapter>))),
+        integration: Some(INTEGRATION.to_owned()),
+        settings: Arc::new(move || Settings::open(&paths).ok().and_then(|s| s.research)),
+        events: app.events.clone(),
+        wait: Arc::new(move |ms| clock.advance(i64::try_from(ms).unwrap())),
+    })
+}
+
+/// The stage rows' layout (item type Chair): an attribution text field, a multi-choice visible
+/// field, a dimension, a severity choice in the Condition step; the Product step holds the title.
+pub const DESIGNER: &str = "custom.designer";
+pub const WOODS: &str = "custom.woods";
+pub const WIDTH: &str = "custom.width";
+pub const SCRATCHES: &str = "custom.scratches";
+pub const TITLE: &str = "product.title";
+pub const SHOP_HOST: &str = "beyo.example";
+pub const E1: &str = "e1.example";
+pub const E2: &str = "e2.example";
+
+fn stage_definitions() -> Vec<Definition> {
+    use AttributeGroup::{Condition, Details};
+    use CoreType as T;
+    let mut width = def(WIDTH, T::Dimension, Details, &[]);
+    width.validations = json!({"units": ["CENTIMETERS"], "unit_names": {"cm": "CENTIMETERS"}});
+    vec![
+        def(DESIGNER, T::Text, Details, &[]),
+        def(WOODS, T::MultiChoice, Details, &["Oak", "Teak"]),
+        width,
+        def(
+            SCRATCHES,
+            T::Choice,
+            Condition,
+            &psm_core::mechanisms::values::SEVERITY_SET,
+        ),
+    ]
+}
 
 fn def(key: &str, core_type: CoreType, group: AttributeGroup, choices: &[&str]) -> Definition {
     Definition {
@@ -98,6 +174,7 @@ pub struct Harness {
     pub search: Arc<FakeVisualSearch>,
     pub reader: Arc<FakePageReader>,
     pub images: ResearchImages,
+    pub service: Arc<ResearchService>,
     next_colour: AtomicU8,
 }
 
@@ -110,8 +187,32 @@ impl Harness {
         psm_research::schema::ensure(&app.app.store).unwrap();
         let attributes = app.attributes(Some(INTEGRATION));
         attributes
-            .import_definitions(INTEGRATION, definitions())
+            .import_definitions(
+                INTEGRATION,
+                definitions()
+                    .into_iter()
+                    .chain(stage_definitions())
+                    .collect(),
+            )
             .unwrap();
+        for (group, keys) in [
+            (AttributeGroup::Details, vec![DESIGNER, WOODS, WIDTH]),
+            (AttributeGroup::Condition, vec![SCRATCHES]),
+        ] {
+            attributes
+                .presets_set(Preset {
+                    item_type: "Chair".into(),
+                    group,
+                    layout: keys
+                        .into_iter()
+                        .map(|key| PresetField {
+                            key: key.into(),
+                            default: None,
+                        })
+                        .collect(),
+                })
+                .unwrap();
+        }
         let details: Vec<PresetField> = definitions()
             .into_iter()
             .filter(|d| d.group == AttributeGroup::Details && d.key != OUTSIDE)
@@ -136,16 +237,122 @@ impl Harness {
             Arc::new(ImageOpsImpl),
             ResearchFiles::new(&app.app.paths.root),
         );
+        let model = Arc::new(FakeModel::default());
+        let search = Arc::new(FakeVisualSearch::default());
+        let reader = Arc::new(FakePageReader::default());
+        let service = Arc::new(build_service(&app, &model, &search, &reader));
         Harness {
             item_id: item.id,
             session_id: session.session.id,
             app,
-            model: Arc::new(FakeModel::default()),
-            search: Arc::new(FakeVisualSearch::default()),
-            reader: Arc::new(FakePageReader::default()),
+            model,
+            search,
+            reader,
             images,
+            service,
             next_colour: AtomicU8::new(0),
         }
+    }
+
+    /// A harness whose item is a Chair (the stage rows' layout) with its own session.
+    pub fn chair() -> Self {
+        let mut h = Self::new();
+        let (item, session) = h
+            .app
+            .items()
+            .create_local("R4-1", "Oak chair", "Chair", None)
+            .unwrap();
+        h.item_id = item.id;
+        h.session_id = session.session.id;
+        h
+    }
+
+    /// The live `research` settings slot of the settings file.
+    pub fn research_settings(&self) -> Option<Json> {
+        Settings::open(&self.app.app.paths).unwrap().research
+    }
+
+    /// Saves the live `research` settings slot to the settings file.
+    pub fn set_research_settings(&self, value: Json) {
+        save_research(&self.app.app.paths, value);
+    }
+
+    /// The stage rows' config: the test prices, the shop host, trusted `[e1, e2]`, the designer
+    /// as the attribution key, English.
+    pub fn stage_config(&self) -> ResearchConfig {
+        let mut config = self.config();
+        let facts = CommerceShopFacts::new(self.commerce())
+            .facts(self.external_id().as_deref())
+            .unwrap();
+        config.shop_hosts = if facts.hosts.is_empty() {
+            vec![SHOP_HOST.into()]
+        } else {
+            facts.hosts
+        };
+        config.own_listing_url = facts.own_listing.url;
+        config.own_listing_path_tail = facts.own_listing.path_tail;
+        config.trusted_sites = vec![E1.into(), E2.into()];
+        config.attribution_keys = vec![DESIGNER.into()];
+        config
+    }
+
+    pub fn commerce(&self) -> Arc<dyn CommerceAdapter> {
+        self.app.commerce.clone().unwrap()
+    }
+
+    /// The item's shop link id, if it is linked.
+    pub fn external_id(&self) -> Option<String> {
+        self.query(|c| {
+            use rusqlite::OptionalExtension;
+            c.query_row(
+                "SELECT external_id FROM item_links WHERE item_id=?1",
+                [self.item_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .unwrap()
+        })
+    }
+
+    /// Links the item to a shop product.
+    pub fn link_item(&self, external_id: &str) {
+        let item = self.item_id;
+        self.query(|c| {
+            c.execute(
+                "INSERT INTO item_links(item_id,integration,external_id) VALUES (?1,'shopify',?2)",
+                rusqlite::params![item, external_id],
+            )
+            .unwrap()
+        });
+    }
+
+    /// A `running` run with `config` and the item's form as its snapshots (what the start
+    /// transaction writes from R4·U4 on).
+    pub fn start_run(&self, config: &ResearchConfig) -> i64 {
+        let form = form_snapshot(
+            self.store(),
+            self.app.clock.as_ref(),
+            Some(INTEGRATION),
+            self.item_id,
+        )
+        .unwrap();
+        self.insert_run(
+            RunState::Running,
+            Some(serde_json::to_value(config).unwrap()),
+            Some(serde_json::to_value(&form).unwrap()),
+        )
+    }
+
+    pub fn execute(&self, run_id: i64) -> ExecuteOutcome {
+        self.service.execute(run_id).unwrap()
+    }
+
+    pub fn steps(&self, run_id: i64) -> Vec<rstore::StepRow> {
+        self.query(|c| rstore::steps(c, run_id).unwrap())
+    }
+
+    pub fn outputs(&self, run_id: i64) -> Vec<rstore::OutputRow> {
+        self.query(|c| rstore::outputs(c, run_id).unwrap())
     }
 
     pub fn store(&self) -> &Arc<SqliteStore> {
@@ -463,7 +670,11 @@ impl Harness {
     }
 
     pub fn definition(&self, key: &str) -> Definition {
-        definitions().into_iter().find(|d| d.key == key).unwrap()
+        definitions()
+            .into_iter()
+            .chain(stage_definitions())
+            .find(|d| d.key == key)
+            .unwrap()
     }
 
     pub fn suggest_with(

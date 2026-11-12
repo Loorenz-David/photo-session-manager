@@ -151,64 +151,80 @@ pub fn suggest(
     let now = clock.now_ms();
     let mut outcome = WriteOutcome::Unchanged;
     store.transaction(&mut |tx| {
-        let item = tx.item(item_id)?;
-        let all = definitions(tx, integration)?;
-        let Some(definition) = all.iter().find(|d| d.key == key) else {
-            outcome = WriteOutcome::NotResearched;
-            return Ok(());
-        };
-        let step = layout_step(tx, &item.item_type, key, &all)?;
-        if never_written(definition, step) {
-            outcome = WriteOutcome::NotResearched;
-            return Ok(());
-        }
-        let stored = tx
-            .attribute_values(item_id)?
-            .into_iter()
-            .find(|v| v.key == key);
-        let cleared = cleared_set(tx, stored.as_ref(), item_id, key)?;
-        let ai_prior = match decide_write(definition, stored.as_ref(), value, &cleared) {
-            WriteDecision::Write { ai_prior } => ai_prior,
-            WriteDecision::MatchesCleared => {
-                outcome = WriteOutcome::MatchesCleared;
-                return Ok(());
-            }
-            WriteDecision::AlreadyHolds => {
-                outcome = WriteOutcome::AlreadyHolds;
-                return Ok(());
-            }
-            WriteDecision::Refused(why) => {
-                outcome = WriteOutcome::Refused(why.to_owned());
-                return Ok(());
-            }
-        };
-        let Ok(canonical) = canonicalize(definition.core_type, definition, value.clone()) else {
-            outcome = WriteOutcome::Refused("the value is not valid for this field".to_owned());
-            return Ok(());
-        };
-        let row = Value {
+        outcome = suggest_in(
+            tx,
+            now,
+            integration,
             item_id,
-            key: key.to_owned(),
-            value: canonical.0,
-            valid: true,
-            provenance: Provenance::Ai,
-            ai_confidence: Some(confidence),
-            ai_status: Some(AiStatus::Suggested),
-            ai_reason: reason.map(str::to_owned),
-            ai_sources: Some(sources.to_vec()),
-            ai_prior,
-            updated_at: now,
-        };
-        if stored.as_ref().is_some_and(|s| same_content(s, &row)) {
-            outcome = WriteOutcome::Unchanged;
-            return Ok(());
-        }
-        tx.put_attribute_value(&row)?;
-        tx.set_item_activity(item_id, now)?;
-        outcome = WriteOutcome::Written(row);
+            key,
+            value,
+            confidence,
+            reason,
+            sources,
+        )?;
         Ok(())
     })?;
     Ok(outcome)
+}
+
+/// [`suggest`] inside the caller's transaction (stage 7 commits its writes with its steps,
+/// MC-A7 commit rule).
+#[allow(clippy::too_many_arguments)]
+pub fn suggest_in(
+    tx: &mut dyn StoreTx,
+    now: i64,
+    integration: Option<&str>,
+    item_id: i64,
+    key: &str,
+    value: &Json,
+    confidence: AiConfidence,
+    reason: Option<&str>,
+    sources: &[String],
+) -> Result<WriteOutcome> {
+    let item = tx.item(item_id)?;
+    let all = definitions(tx, integration)?;
+    let Some(definition) = all.iter().find(|d| d.key == key) else {
+        return Ok(WriteOutcome::NotResearched);
+    };
+    let step = layout_step(tx, &item.item_type, key, &all)?;
+    if never_written(definition, step) {
+        return Ok(WriteOutcome::NotResearched);
+    }
+    let stored = tx
+        .attribute_values(item_id)?
+        .into_iter()
+        .find(|v| v.key == key);
+    let cleared = cleared_set(tx, stored.as_ref(), item_id, key)?;
+    let ai_prior = match decide_write(definition, stored.as_ref(), value, &cleared) {
+        WriteDecision::Write { ai_prior } => ai_prior,
+        WriteDecision::MatchesCleared => return Ok(WriteOutcome::MatchesCleared),
+        WriteDecision::AlreadyHolds => return Ok(WriteOutcome::AlreadyHolds),
+        WriteDecision::Refused(why) => return Ok(WriteOutcome::Refused(why.to_owned())),
+    };
+    let Ok(canonical) = canonicalize(definition.core_type, definition, value.clone()) else {
+        return Ok(WriteOutcome::Refused(
+            "the value is not valid for this field".to_owned(),
+        ));
+    };
+    let row = Value {
+        item_id,
+        key: key.to_owned(),
+        value: canonical.0,
+        valid: true,
+        provenance: Provenance::Ai,
+        ai_confidence: Some(confidence),
+        ai_status: Some(AiStatus::Suggested),
+        ai_reason: reason.map(str::to_owned),
+        ai_sources: Some(sources.to_vec()),
+        ai_prior,
+        updated_at: now,
+    };
+    if stored.as_ref().is_some_and(|s| same_content(s, &row)) {
+        return Ok(WriteOutcome::Unchanged);
+    }
+    tx.put_attribute_value(&row)?;
+    tx.set_item_activity(item_id, now)?;
+    Ok(WriteOutcome::Written(row))
 }
 
 /// MC-A1 lowering: on an `ai` + `suggested` row, the same value at `low`, sources kept, reason
@@ -223,33 +239,41 @@ pub fn lower(
     let now = clock.now_ms();
     let mut outcome = WriteOutcome::Unchanged;
     store.transaction(&mut |tx| {
-        tx.item(item_id)?;
-        let Some(stored) = tx
-            .attribute_values(item_id)?
-            .into_iter()
-            .find(|v| v.key == key)
-        else {
-            outcome = WriteOutcome::Unchanged;
-            return Ok(());
-        };
-        if stored.provenance != Provenance::Ai || stored.ai_status != Some(AiStatus::Suggested) {
-            outcome = WriteOutcome::Unchanged;
-            return Ok(());
-        }
-        let row = Value {
-            ai_confidence: Some(AiConfidence::Low),
-            ai_reason: Some(format!("No longer supported: {reason}")),
-            updated_at: now,
-            ..stored.clone()
-        };
-        if same_content(&stored, &row) {
-            outcome = WriteOutcome::Unchanged;
-            return Ok(());
-        }
-        tx.put_attribute_value(&row)?;
-        tx.set_item_activity(item_id, now)?;
-        outcome = WriteOutcome::Written(row);
+        outcome = lower_in(tx, now, item_id, key, reason)?;
         Ok(())
     })?;
     Ok(outcome)
+}
+
+/// [`lower`] inside the caller's transaction.
+pub fn lower_in(
+    tx: &mut dyn StoreTx,
+    now: i64,
+    item_id: i64,
+    key: &str,
+    reason: &str,
+) -> Result<WriteOutcome> {
+    tx.item(item_id)?;
+    let Some(stored) = tx
+        .attribute_values(item_id)?
+        .into_iter()
+        .find(|v| v.key == key)
+    else {
+        return Ok(WriteOutcome::Unchanged);
+    };
+    if stored.provenance != Provenance::Ai || stored.ai_status != Some(AiStatus::Suggested) {
+        return Ok(WriteOutcome::Unchanged);
+    }
+    let row = Value {
+        ai_confidence: Some(AiConfidence::Low),
+        ai_reason: Some(format!("No longer supported: {reason}")),
+        updated_at: now,
+        ..stored.clone()
+    };
+    if same_content(&stored, &row) {
+        return Ok(WriteOutcome::Unchanged);
+    }
+    tx.put_attribute_value(&row)?;
+    tx.set_item_activity(item_id, now)?;
+    Ok(WriteOutcome::Written(row))
 }

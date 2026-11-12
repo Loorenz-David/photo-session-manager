@@ -3,4 +3,5 @@
 mod gateway;
 mod harness;
 mod images_and_storage;
+mod stages;
 mod writes;
