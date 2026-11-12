@@ -2,6 +2,7 @@ use psm_core::ports::{clock::Clock, store::Store};
 use psm_core::{Error, mechanisms::canon::canon};
 use psm_infra::paths::AppPaths;
 use psm_integrations::editing::capture_one::{jxa::JxaScripting, scripting::CaptureOneScripting};
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::TestApp;
 use rusqlite::Connection;
 use std::{
@@ -116,7 +117,7 @@ fn settings_rebuild_preserves_running_job_and_does_not_duplicate_active_publish_
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[session_id], "Publish images")
+        .confirm_as_shown(&[session_id], "Publish images")
         .unwrap();
     let item_id = app.app.store.active_publish_items().unwrap()[0];
     let job = app

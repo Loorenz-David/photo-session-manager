@@ -139,8 +139,8 @@ export const commands = {
 	researchSiteRemove: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_remove", { site })),
 	researchSitesReorder: (sites: string[]) => typedError<string, CommandError>(__TAURI_INVOKE("research_sites_reorder", { sites })),
 	researchExport: (selection: ExportSelectionDto, dest: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_export", { selection, dest })),
-	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
-	publishConfirm: (sessionIds: CommandId[], summaryText: string) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText })),
+	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto_Serialize, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
+	publishConfirm: (sessionIds: CommandId[], summaryText: string, shown: ShownSuggestionsDto[]) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText, shown })),
 	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
 	publishActivity: (sessionId: CommandId) => typedError<PublishActivityDto_Serialize | null, CommandError>(__TAURI_INVOKE("publish_activity", { sessionId })),
 	/**  Changelog 44 (P64): Cancel publish, after the photographer confirmed it in the popover. */
@@ -806,12 +806,55 @@ export type PresetFieldDto_Serialize = {
 	default: string | null,
 };
 
-export type PreviewDto = {
-	items: PreviewItemDto[],
+/**
+ *  One conflict as the confirmation shows it: values are canonical JSON text; `prior_provenance`
+ *  is `default` (preset default) or `integration` (from Shopify).
+ */
+export type PreviewConflictDto = PreviewConflictDto_Serialize | PreviewConflictDto_Deserialize;
+
+/**
+ *  One conflict as the confirmation shows it: values are canonical JSON text; `prior_provenance`
+ *  is `default` (preset default) or `integration` (from Shopify).
+ */
+export type PreviewConflictDto_Deserialize = {
+	key: string,
+	label: string,
+	prior_value: string,
+	prior_valid: boolean,
+	prior_provenance: string,
+	suggestion: string,
+	confidence?: string | null,
+};
+
+/**
+ *  One conflict as the confirmation shows it: values are canonical JSON text; `prior_provenance`
+ *  is `default` (preset default) or `integration` (from Shopify).
+ */
+export type PreviewConflictDto_Serialize = {
+	key: string,
+	label: string,
+	prior_value: string,
+	prior_valid: boolean,
+	prior_provenance: string,
+	suggestion: string,
+	confidence: string | null,
+};
+
+export type PreviewDto = PreviewDto_Serialize | PreviewDto_Deserialize;
+
+export type PreviewDto_Deserialize = {
+	items: PreviewItemDto_Deserialize[],
 	summary: string,
 };
 
-export type PreviewItemDto = {
+export type PreviewDto_Serialize = {
+	items: PreviewItemDto_Serialize[],
+	summary: string,
+};
+
+export type PreviewItemDto = PreviewItemDto_Serialize | PreviewItemDto_Deserialize;
+
+export type PreviewItemDto_Deserialize = {
 	session_id: number,
 	main: number[],
 	condition: number[],
@@ -822,6 +865,27 @@ export type PreviewItemDto = {
 	unreviewed: number,
 	announced_removals: string[],
 	create_item: boolean,
+	/**  MC-A10: low-confidence suggestions without a prior that will not be published. */
+	n_withheld: number,
+	/**  MC-A10: the conflicts this item waits on once confirmed. */
+	conflicts: PreviewConflictDto_Deserialize[],
+};
+
+export type PreviewItemDto_Serialize = {
+	session_id: number,
+	main: number[],
+	condition: number[],
+	main_thumbnails: (string | null)[],
+	condition_thumbnails: (string | null)[],
+	details_filled: number,
+	details_total: number,
+	unreviewed: number,
+	announced_removals: string[],
+	create_item: boolean,
+	/**  MC-A10: low-confidence suggestions without a prior that will not be published. */
+	n_withheld: number,
+	/**  MC-A10: the conflicts this item waits on once confirmed. */
+	conflicts: PreviewConflictDto_Serialize[],
 };
 
 /**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */
@@ -1159,6 +1223,16 @@ export type SettingsPatchDto_Serialize = {
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
 	export?: ExportSettingsDto,
+};
+
+/**
+ *  What the confirmation popover showed for one session (MC-A10): passed back to
+ *  `publish_confirm`, which refuses with `suggestions_changed` when either part changed.
+ */
+export type ShownSuggestionsDto = {
+	session_id: CommandId,
+	n_withheld: number,
+	conflict_keys: string[],
 };
 
 export type StepViewDto = StepViewDto_Serialize | StepViewDto_Deserialize;

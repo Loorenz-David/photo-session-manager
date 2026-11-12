@@ -1127,3 +1127,39 @@ impl TestApp {
         }
     }
 }
+
+/// R5 (MC-A10): a confirmation that passes what a fresh preview showed (each session's withheld
+/// count and conflict keys), as the publish popover does. A preview that fails is passed on as
+/// an empty shown set, so `confirm` reports its own error as before.
+pub trait ConfirmAsShown {
+    fn confirm_as_shown(&self, session_ids: &[i64], summary: &str) -> Result<i64>;
+}
+
+impl ConfirmAsShown for psm_core::services::publish::PublishService {
+    fn confirm_as_shown(&self, session_ids: &[i64], summary: &str) -> Result<i64> {
+        let shown: Vec<_> = match self.preview(session_ids) {
+            Ok(preview) => preview
+                .items
+                .into_iter()
+                .map(|p| psm_core::domain::publish::ShownSuggestions {
+                    session_id: p.session_id,
+                    n_withheld: p.n_withheld,
+                    conflict_keys: p.conflicts.into_iter().map(|c| c.key).collect(),
+                })
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+        self.confirm(session_ids, summary, &shown)
+    }
+}
+
+impl TestApp {
+    /// R5: [`ConfirmAsShown::confirm_as_shown`] on the app's publish service.
+    pub fn confirm_as_shown(&self, session_ids: &[i64], summary: &str) -> Result<i64> {
+        self.app
+            .publish
+            .as_ref()
+            .ok_or(psm_core::Error::NoIntegration)?
+            .confirm_as_shown(session_ids, summary)
+    }
+}

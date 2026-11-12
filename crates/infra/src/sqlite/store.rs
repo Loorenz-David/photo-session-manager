@@ -957,6 +957,65 @@ impl StoreTx for SqliteTx<'_> {
             )
             .collect()
     }
+    fn held_publish_item_for_item(&self, item_id: i64) -> Result<Option<PublishItem>> {
+        let sessions: Vec<i64> = self
+            .tx
+            .prepare("SELECT id FROM sessions WHERE item_id=?1 ORDER BY id")
+            .map_err(db)?
+            .query_map([item_id], |r| r.get(0))
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)?;
+        let mut held = None;
+        for session_id in sessions {
+            if let Some(latest) = latest_publish(&self.tx, session_id)?
+                && latest.step == PublishStep::Held
+                && held.is_none_or(|id| latest.item_id > id)
+            {
+                held = Some(latest.item_id);
+            }
+        }
+        held.map(|id| publish_item(&self.tx, id)).transpose()
+    }
+    fn publish_item_in_tx(&self, id: i64) -> Result<PublishItem> {
+        publish_item(&self.tx, id)
+    }
+    fn set_publish_resolved(
+        &mut self,
+        id: i64,
+        resolved: &std::collections::BTreeMap<String, serde_json::Value>,
+    ) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE publish_items SET resolved_attributes=?1 WHERE id=?2",
+                params![to_json(resolved)?, id],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn release_publish_item(&mut self, id: i64, at: i64) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE publish_items SET step='prepare',released_at=?1 WHERE id=?2 AND step='held'",
+                params![at, id],
+            )
+            .map_err(db)?;
+        let queued: bool = self.tx.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE kind='publish_step' AND target=?1 AND status='queued')", [id.to_string()], |r| r.get(0)).map_err(db)?;
+        if !queued {
+            self.tx.execute("INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES ('publish_step',?1,'{}','queued',0,?2,?2,?2)", params![id.to_string(), at]).map_err(db)?;
+        }
+        Ok(())
+    }
+    fn cancel_held_publish_item(&mut self, id: i64) -> Result<bool> {
+        let n = self
+            .tx
+            .execute(
+                "UPDATE publish_items SET step='cancelled' WHERE id=?1 AND step='held'",
+                [id],
+            )
+            .map_err(db)?;
+        Ok(n == 1)
+    }
     fn feedback_by_key(&self, item_id: i64, key: &str) -> Result<Vec<Feedback>> {
         feedback_rows(
             &self.tx,
@@ -1729,8 +1788,7 @@ impl Store for SqliteStore {
             let publish = latest_publish(&conn, id)?;
             let unresolved_conflicts = if let Some(latest) = &publish {
                 if latest.step == PublishStep::Held {
-                    let item = publish_item(&conn, latest.item_id)?;
-                    item.pending_conflicts.keys().filter(|key| !item.resolved_attributes.contains_key(*key)).count() as i64
+                    publish_item(&conn, latest.item_id)?.unresolved_conflicts() as i64
                 } else { 0 }
             } else { 0 };
             let (latest_step,failed_step,uploaded,total) = match &publish {

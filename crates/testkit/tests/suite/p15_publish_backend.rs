@@ -8,6 +8,7 @@ use psm_core::{
     ports::{clock::Clock, commerce::CommerceAdapter},
     services::sessions::SessionsService,
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::TestApp;
 use std::fs;
 
@@ -57,7 +58,7 @@ fn failed(a: &TestApp, s: i64) -> i64 {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "Publish images")
+        .confirm_as_shown(&[s], "Publish images")
         .unwrap();
     a.tick(1100).unwrap();
     a.complete_all_renders().unwrap();
@@ -111,7 +112,7 @@ fn c7b_session_photos_show_link_states_only_with_integration() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "Publish images")
+        .confirm_as_shown(&[s], "Publish images")
         .unwrap();
     a.store()
         .upsert_photo_link(

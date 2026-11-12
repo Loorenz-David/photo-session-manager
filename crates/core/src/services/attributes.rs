@@ -152,6 +152,29 @@ fn resolve_preset(
     }))
 }
 
+/// Every key of `item_type`'s current layout: the resolved preset of each of the three steps; a
+/// step with no stored preset lists every active definition of that step (as the form shows it).
+pub fn layout_keys(
+    tx: &dyn StoreTx,
+    item_type: &str,
+    integration: Option<&str>,
+) -> Result<std::collections::BTreeSet<String>> {
+    let definitions = active_definitions(tx, integration)?;
+    let mut out = std::collections::BTreeSet::new();
+    for group in AttributeGroup::ALL {
+        match resolve_preset(tx, item_type, group)? {
+            Some(preset) => out.extend(preset.layout.into_iter().map(|f| f.key)),
+            None => out.extend(
+                definitions
+                    .iter()
+                    .filter(|d| d.group == group)
+                    .map(|d| d.key.clone()),
+            ),
+        }
+    }
+    Ok(out)
+}
+
 /// The item's title presented as the value of `product.title`: the title has one home, `items.title`
 /// (ch05), so this is the single source of the field. An empty title is no value.
 fn title_value(item: &Item) -> Option<Value> {
@@ -228,6 +251,8 @@ struct Act {
     fields: Vec<FieldChange>,
     /// The step merges into the session's last step (coalesced typing).
     merge: bool,
+    /// The publish resolutions this action recorded (MC-A10), kept on its step for the redo.
+    resolutions: Vec<(String, Json)>,
 }
 
 /// What an action's transaction knows before it starts.
@@ -275,18 +300,31 @@ fn accepted(before: &Value, now: i64) -> Value {
     }
 }
 
-/// MC-A12: a photographer action on `key` in its own transaction. When the row before it was
-/// `ai` + `suggested` or `accepted`, one feedback row is written with the action's step token
-/// (an `ai` + `cleared` row's verdict was recorded by its clear). Returns whether it wrote one.
+/// MC-A12: a photographer action on `key` in its own transaction. When the key is pending on a
+/// `held` publish item, the same transaction records its resolution (and releases the item at
+/// the last one, MC-A10); a row after the action that is not live and valid resolves to "no
+/// value". When the row before was `ai` + `suggested` or `accepted`, one feedback row is written
+/// with the action's step token (an `ai` + `cleared` row's verdict was recorded by its clear).
+/// Returns whether it wrote one.
+#[allow(clippy::too_many_arguments)]
 fn note_action(
     tx: &mut dyn StoreTx,
     ctx: &ActCtx,
+    act: &mut Act,
     item_id: i64,
     key: &str,
     before: Option<&Value>,
     after: &Value,
     action: FeedbackAction,
 ) -> Result<bool> {
+    let resolved = (after.is_live() && after.valid)
+        .then(|| after.json())
+        .flatten();
+    if let Some(entry) = crate::services::publish::resolve_pending_in(
+        tx, item_id, key, resolved, action, &ctx.token, ctx.now,
+    )? {
+        act.resolutions.push((key.to_owned(), entry));
+    }
     let Some(before) = before.filter(|b| {
         b.provenance == Provenance::Ai
             && matches!(b.ai_status, Some(AiStatus::Suggested | AiStatus::Accepted))
@@ -388,6 +426,7 @@ impl<'a> AttributesService<'a> {
                         fields: act.fields,
                         token: ctx.token.clone(),
                         feedback: Vec::new(),
+                        resolutions: act.resolutions,
                     },
                 },
                 act.merge,
@@ -475,11 +514,14 @@ impl<'a> AttributesService<'a> {
                 return Ok(());
             };
             let wrote_feedback = match feedback {
-                Some(kind) => note_action(tx, ctx, item_id, key, stored.as_ref(), &row, kind)?,
+                Some(kind) => note_action(tx, ctx, act, item_id, key, stored.as_ref(), &row, kind)?,
                 None => false,
             };
             act.label = format!("{action} {}", definition.label);
-            act.merge = action == "Edit" && !wrote_feedback && ctx.merges(item_id, key);
+            act.merge = action == "Edit"
+                && !wrote_feedback
+                && act.resolutions.is_empty()
+                && ctx.merges(item_id, key);
             if act.merge {
                 ctx.update_edited_feedback(tx, key, &row)?;
             }
@@ -664,6 +706,7 @@ impl<'a> AttributesService<'a> {
                 note_action(
                     tx,
                     ctx,
+                    act,
                     item_id,
                     &before.key,
                     Some(&before),
@@ -713,6 +756,7 @@ impl<'a> AttributesService<'a> {
             note_action(
                 tx,
                 ctx,
+                act,
                 item_id,
                 key,
                 Some(&before),
@@ -770,6 +814,7 @@ impl<'a> AttributesService<'a> {
             note_action(
                 tx,
                 ctx,
+                act,
                 item_id,
                 key,
                 Some(&before),

@@ -15,6 +15,7 @@ use psm_core::{
     ports::clock::Clock,
     services::{attributes::AttributesService, photos::PhotosService, storage::Cleared},
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::{TestApp, fixtures::synthetic_jpeg::SyntheticJpeg};
 use serde_json::json;
 use std::{
@@ -398,7 +399,7 @@ fn c2b_i_deny_deletes_the_raw_when_the_sessions_next_publish_completes() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[session], "Publish images")
+        .confirm_as_shown(&[session], "Publish images")
         .unwrap();
     drain(&a);
     assert_eq!(

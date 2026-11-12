@@ -393,6 +393,17 @@ mod r5_command_tests {
             (Provenance::Human, None, "\"Walnut\"", None)
         );
     }
+
+    /// A09·C2(a): the refusal reaches the UI as the code R6·U3 keys on.
+    #[test]
+    fn r5_a09_c2a_suggestions_changed_is_its_own_code() {
+        let error = commands::items::CommandError::from(psm_core::Error::SuggestionsChanged);
+        assert_eq!(error.code, "suggestions_changed");
+        assert_eq!(
+            error.message,
+            "AI suggestions changed while you were confirming"
+        );
+    }
 }
 
 #[cfg(test)]

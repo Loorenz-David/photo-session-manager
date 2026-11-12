@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { SkeletonRows } from '@/components/pending/SkeletonRows';
 import { useAction, usePageData } from '@/lib/pending';
 import { previewUrl } from '@/services/sessions';
-import { publishConfirm, publishPreview, type PreviewDto } from '@/services/publish';
+import { publishConfirm, publishPreview, shownOf, type PreviewDto } from '@/services/publish';
 
 /** A refused confirmation: `needs_review` carries the backend's own naming of the photos ("Re-frame first: Main 02", MC-27 §Revisions); the popover stays open. */
 function publishFailureText(error: unknown): string {
@@ -24,7 +24,7 @@ export function PublishPopover({ sessionIds, onClose, onConfirmed, modal = false
   const count = preview?.items.reduce((n, item) => n + item.main.length + item.condition.length, 0) ?? 0;
   const confirm = useAction(async () => {
     if (!preview) return;
-    await publishConfirm(sessionIds, preview.summary);
+    await publishConfirm(sessionIds, preview.summary, shownOf(preview));
     (onConfirmed ?? onClose)();
   }, error => toast.error(publishFailureText(error)));
   const body = !preview ? <SkeletonRows n={3} /> : <>

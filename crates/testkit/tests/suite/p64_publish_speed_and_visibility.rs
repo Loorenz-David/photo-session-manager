@@ -17,6 +17,7 @@ use psm_core::{
 use psm_integrations::commerce::shopify::{
     PollConfig, ShopifyAdapter, ShopifyConfig, transport::HttpReply,
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::{
     TestApp,
     clock::ManualClock,
@@ -284,7 +285,7 @@ fn drain(a: &TestApp) {
     }
 }
 fn publish(a: &TestApp, s: i64) {
-    service(a).confirm(&[s], "Publish images").unwrap();
+    service(a).confirm_as_shown(&[s], "Publish images").unwrap();
     drain(a);
 }
 fn latest_item(a: &TestApp, s: i64) -> i64 {
@@ -381,7 +382,9 @@ fn c2b_crash_mid_batch_resumes_without_uploading_a_file_twice() {
     let cond: Vec<Photo> = (0..3)
         .map(|i| photo(&a, s, &format!("c{i}"), C::Condition))
         .collect();
-    service(&a).confirm(&[s], "Publish images").unwrap();
+    service(&a)
+        .confirm_as_shown(&[s], "Publish images")
+        .unwrap();
     // The process dies during the 6th upload: 5 uploads have finished.
     let uploads = Arc::new(AtomicUsize::new(0));
     let seen = uploads.clone();
@@ -436,7 +439,7 @@ fn c3a_progress_names_the_step_then_the_error_and_its_retry_state() {
         photo(&a, s, &format!("c{i}"), C::Condition);
     }
     let svc = service(&a);
-    svc.confirm(&[s], "Publish images").unwrap();
+    svc.confirm_as_shown(&[s], "Publish images").unwrap();
     // While the third condition file is checked for readiness, two of three are done.
     let seen: Arc<Mutex<Vec<psm_core::domain::publish::PublishActivity>>> = Arc::default();
     let polls = Arc::new(AtomicUsize::new(0));
@@ -467,7 +470,7 @@ fn c3a_progress_names_the_step_then_the_error_and_its_retry_state() {
     // the error is shown as being retried.
     let t = session(&a, "L");
     photo(&a, t, "n0", C::Main);
-    svc.confirm(&[t], "Publish images").unwrap();
+    svc.confirm_as_shown(&[t], "Publish images").unwrap();
     a.fake_shop().fail_before_effect("upload");
     drain(&a);
     let failed = svc.activity(t).unwrap().unwrap();
@@ -501,7 +504,7 @@ fn c3b_cancel_stops_after_the_request_in_flight_and_the_next_publish_continues()
         .map(|i| photo(&a, s, &format!("m{i}"), C::Main))
         .collect();
     let svc = service(&a);
-    svc.confirm(&[s], "Publish images").unwrap();
+    svc.confirm_as_shown(&[s], "Publish images").unwrap();
     let item = latest_item(&a, s);
     // The photographer cancels while the bar reads 3 of 8 (the 4th photo's readiness check is
     // the request in flight) and confirms.

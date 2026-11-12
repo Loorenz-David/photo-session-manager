@@ -2,7 +2,7 @@ use crate::domain::{
     attribute::Value as AttributeValue,
     composition::{CompositionState, CompositionValues, Origin},
     photo::Classification,
-    research::Feedback,
+    research::{Feedback, FeedbackAction},
     session::SessionDto,
 };
 use crate::events::AppEvent;
@@ -73,6 +73,9 @@ pub enum StepKind {
         token: String,
         /// The feedback rows an undo deleted, re-inserted by the redo (R5·U1 P6).
         feedback: Vec<Feedback>,
+        /// The publish resolutions this step recorded (key → `{value, action, at, step_token}`),
+        /// recorded again by its redo (MC-A10, R5·U2 N7).
+        resolutions: Vec<(String, serde_json::Value)>,
     },
 }
 
@@ -255,12 +258,15 @@ pub(crate) fn coalesces_into(last: &Step, item_id: i64, key: &str) -> bool {
     let StepKind::Attribute {
         item_id: old_item,
         fields,
+        resolutions,
         ..
     } = &last.kind
     else {
         return false;
     };
-    last.label.starts_with("Edit ")
+    // MC-A10 (N1): a step that recorded a resolution is never merged into.
+    resolutions.is_empty()
+        && last.label.starts_with("Edit ")
         && *old_item == item_id
         && fields.len() == 1
         && fields[0].key == key
@@ -764,6 +770,7 @@ fn apply(
             fields,
             token,
             feedback,
+            mut resolutions,
         } => {
             tx.item(item_id).map_err(|e| {
                 if matches!(e, Error::NotFound(_)) {
@@ -817,26 +824,73 @@ fn apply(
             if changed {
                 tx.set_item_activity(item_id, at)?;
             }
+            let fields = match &step.kind {
+                StepKind::Attribute { fields, .. } => fields.clone(),
+                _ => unreachable!(),
+            };
             // MC-A12: the step's feedback rows exist exactly while the step is applied.
             let kept = if undo {
                 let rows = tx.feedback_by_step(&token)?;
                 tx.delete_feedback_by_step(&token)?;
+                // MC-A10: its resolutions are removed while the item is still held.
+                crate::services::publish::unresolve_in(tx, item_id, &token)?;
                 rows
             } else {
                 for row in &feedback {
                     tx.insert_feedback(row)?;
+                }
+                // MC-A10 (changelog 6, 10): a redo that changes a key pending without an entry on
+                // a held item is that key's resolution, recorded as the action it replays.
+                for field in &fields {
+                    let (FieldState::Row(before), FieldState::Row(after)) =
+                        (&field.before, &field.after)
+                    else {
+                        continue;
+                    };
+                    if same_row(before.as_ref(), after.as_ref()) {
+                        continue;
+                    }
+                    let (value, action) = match resolutions.iter().find(|(k, _)| *k == field.key) {
+                        Some((_, entry)) => (
+                            entry.get("value").filter(|v| !v.is_null()).cloned(),
+                            entry
+                                .get("action")
+                                .and_then(serde_json::Value::as_str)
+                                .and_then(FeedbackAction::parse),
+                        ),
+                        None => (
+                            after
+                                .as_ref()
+                                .filter(|row| row.is_live() && row.valid)
+                                .and_then(AttributeValue::json),
+                            feedback
+                                .iter()
+                                .find(|f| f.key == field.key)
+                                .map(|f| f.action),
+                        ),
+                    };
+                    let action =
+                        action.unwrap_or(if after.as_ref().is_some_and(AttributeValue::is_live) {
+                            FeedbackAction::Edited
+                        } else {
+                            FeedbackAction::Cleared
+                        });
+                    if let Some(entry) = crate::services::publish::resolve_pending_in(
+                        tx, item_id, &field.key, value, action, &token, at,
+                    )? {
+                        resolutions.retain(|(k, _)| *k != field.key);
+                        resolutions.push((field.key.clone(), entry));
+                    }
                 }
                 Vec::new()
             };
             step.kind = StepKind::Attribute {
                 session_id,
                 item_id,
-                fields: match &step.kind {
-                    StepKind::Attribute { fields, .. } => fields.clone(),
-                    _ => unreachable!(),
-                },
+                fields,
                 token,
                 feedback: kept,
+                resolutions,
             };
             touched.push(session_id);
         }
@@ -963,6 +1017,7 @@ mod tests {
                     }],
                     token: String::new(),
                     feedback: Vec::new(),
+                    resolutions: Vec::new(),
                 },
             }
         }

@@ -93,6 +93,20 @@ pub trait StoreTx {
     ) -> Result<()>;
     fn insert_publish_run(&mut self, integration: &str, at: i64, summary: &str) -> Result<i64>;
     fn insert_publish_item(&mut self, item: &PublishItem) -> Result<i64>;
+    /// MC-A10 (R5·U2): the `held` publish item of the product `item_id`: among the item's
+    /// sessions, the session's latest publish item (as the row label reads it) when it is held.
+    fn held_publish_item_for_item(&self, item_id: i64) -> Result<Option<PublishItem>>;
+    fn publish_item_in_tx(&self, id: i64) -> Result<PublishItem>;
+    /// Stores the item's `resolved_attributes` (key → entry).
+    fn set_publish_resolved(
+        &mut self,
+        id: i64,
+        resolved: &std::collections::BTreeMap<String, serde_json::Value>,
+    ) -> Result<()>;
+    /// MC-A10 release: step `prepare`, `released_at = at`, and its `publish_step` job queued.
+    fn release_publish_item(&mut self, id: i64, at: i64) -> Result<()>;
+    /// MC-A10 cancel of a held item: step `cancelled` when it is still `held`; whether it was.
+    fn cancel_held_publish_item(&mut self, id: i64) -> Result<bool>;
     /// The stored definitions of one integration, in import order.
     fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>>;
     /// Replaces the whole stored definition set of `integration` with `definitions` (in this order).

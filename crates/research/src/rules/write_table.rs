@@ -87,14 +87,10 @@ pub fn decide_write(
     WriteDecision::Write { ai_prior }
 }
 
-/// A conflict: `ai` + `suggested`, with a prior, and the value not the same as the prior's.
+/// A conflict: `ai` + `suggested`, with a prior, and the value not the same as the prior's (the
+/// one implementation is core's, which the publish partition uses too).
 pub fn is_conflict(definition: &Definition, row: &Value) -> bool {
-    row.provenance == Provenance::Ai
-        && row.ai_status == Some(AiStatus::Suggested)
-        && row
-            .ai_prior
-            .as_ref()
-            .is_some_and(|prior| !same(definition, &parsed(&row.value), &parsed(&prior.value)))
+    psm_core::mechanisms::publish_partition::is_conflict(definition, row)
 }
 
 #[cfg(test)]

@@ -22,6 +22,7 @@ use psm_core::{
     services::{attributes::AttributesService, sessions::SessionsService},
 };
 use psm_infra::{paths::AppPaths, sqlite::store::SqliteStore};
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::{TestApp, fixtures::synthetic_jpeg::SyntheticJpeg};
 use serde_json::{Value as Json, json};
 use std::{fs, path::Path};
@@ -218,7 +219,7 @@ fn confirm(a: &TestApp, s: i64) -> psm_core::Result<i64> {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "Publish images")
+        .confirm_as_shown(&[s], "Publish images")
 }
 fn publish(a: &TestApp, s: i64) {
     confirm(a, s).unwrap();

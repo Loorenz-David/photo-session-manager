@@ -17,6 +17,7 @@ use psm_core::{
 use psm_integrations::commerce::shopify::{
     PollConfig, ShopifyAdapter, ShopifyConfig, transport::HttpReply,
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::{
     TestApp,
     clock::ManualClock,
@@ -310,7 +311,9 @@ fn c2a_publish_waits_for_capture_one_then_completes() {
     let first = unloaded_photo(&a, s, "DSC05162.ARW");
     let second = unloaded_photo(&a, s, "DSC05163.ARW");
     // Pressed while the previews are still pending: accepted.
-    service(&a).confirm(&[s], "Publish images").unwrap();
+    service(&a)
+        .confirm_as_shown(&[s], "Publish images")
+        .unwrap();
     let started = a.clock.now_ms();
     while a.clock.now_ms() - started < 20_000 {
         tick_render(&a, 1_000);
@@ -352,7 +355,9 @@ fn c2b_the_wait_ends_after_ten_minutes_and_other_errors_fail_at_once() {
     let a = shop_app();
     let (s, _) = session(&a, "W2");
     unloaded_photo(&a, s, "DSC05164.ARW");
-    service(&a).confirm(&[s], "Publish images").unwrap();
+    service(&a)
+        .confirm_as_shown(&[s], "Publish images")
+        .unwrap();
     tick_render(&a, 1_000);
     let started = a.clock.now_ms();
     while a.clock.now_ms() - started < 9 * 60_000 + 45_000 {
@@ -376,7 +381,9 @@ fn c2b_the_wait_ends_after_ten_minutes_and_other_errors_fail_at_once() {
     let (t, _) = session(&b, "W3");
     loaded_photo(&b, t, "DSC05165.ARW");
     b.fake.state.lock().unwrap().fail_process = true;
-    service(&b).confirm(&[t], "Publish images").unwrap();
+    service(&b)
+        .confirm_as_shown(&[t], "Publish images")
+        .unwrap();
     tick_render(&b, 1_000);
     tick_render(&b, 1_000);
     assert_eq!(
@@ -391,7 +398,7 @@ fn c2c_cancel_while_waiting_for_capture_one() {
     let (s, _) = session(&a, "W4");
     unloaded_photo(&a, s, "DSC05166.ARW");
     let svc = service(&a);
-    svc.confirm(&[s], "Publish images").unwrap();
+    svc.confirm_as_shown(&[s], "Publish images").unwrap();
     for _ in 0..5 {
         tick_render(&a, 1_000);
     }
@@ -433,7 +440,7 @@ fn shop_locations(a: &TestApp) {
     ];
 }
 fn publish_all(a: &TestApp, s: i64) {
-    service(a).confirm(&[s], "Publish images").unwrap();
+    service(a).confirm_as_shown(&[s], "Publish images").unwrap();
     for _ in 0..12 {
         tick_render(a, 1_100);
     }

@@ -6,6 +6,7 @@ use psm_core::{
 use psm_integrations::commerce::shopify::{
     PollConfig, ShopifyAdapter, ShopifyConfig, transport::HttpReply,
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::{
     TestApp,
     clock::ManualClock,
@@ -279,14 +280,14 @@ fn c3a_confirmed_publish_creates_and_updates_product_type() {
         .unwrap();
     let publish = a.app.publish.as_ref().unwrap();
     publish
-        .confirm(&[session.session.id], "Publish Lamp")
+        .confirm_as_shown(&[session.session.id], "Publish Lamp")
         .unwrap();
     a.items().set_type(item.id, "Chairs").unwrap();
     a.app.publish_jobs.tick(a.clock.now_ms()).unwrap();
     let remote = a.fake_shop().item_search("LAMP-3").unwrap();
     assert_eq!(remote[0].item_type.as_deref(), Some("Lamps"));
     publish
-        .confirm(&[session.session.id], "Publish Chair")
+        .confirm_as_shown(&[session.session.id], "Publish Chair")
         .unwrap();
     a.app.publish_jobs.tick(a.clock.now_ms()).unwrap();
     assert_eq!(
@@ -300,7 +301,7 @@ fn c3a_confirmed_publish_creates_and_updates_product_type() {
         .create_local("LAMP-4", "Untyped", "", None)
         .unwrap();
     publish
-        .confirm(&[empty_session.session.id], "Publish untyped")
+        .confirm_as_shown(&[empty_session.session.id], "Publish untyped")
         .unwrap();
     a.app.publish_jobs.tick(a.clock.now_ms()).unwrap();
     assert_eq!(

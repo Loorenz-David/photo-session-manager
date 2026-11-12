@@ -6,6 +6,7 @@ use psm_core::{
     mechanisms::hash::sha256_file,
     ports::clock::Clock,
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::TestApp;
 use serde_json::{Value, json};
 use std::{fs, os::unix::fs::PermissionsExt};
@@ -154,7 +155,7 @@ fn publish_one_session(app: &TestApp) {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[session], "Publish chair")
+        .confirm_as_shown(&[session], "Publish chair")
         .unwrap();
     for _ in 0..10 {
         app.tick(1100).unwrap();

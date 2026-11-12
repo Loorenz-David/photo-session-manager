@@ -2,14 +2,16 @@
 use crate::{
     Error, Result,
     domain::{
-        attribute::CoreType,
+        attribute::{CoreType, Definition},
         composition::{CompositionState, OutputSlot},
         output::slot_name,
         photo::{Classification, Integrity},
         publish::{
-            ConfirmedRun, Notification, PhotoLink, PublishActivity, PublishItem, PublishPreview,
-            PublishPreviewItem, StockChoice, StockLocations, StockOutcome,
+            ConfirmedRun, Notification, PhotoLink, PreviewConflict, PublishActivity, PublishItem,
+            PublishPreview, PublishPreviewItem, ShownSuggestions, StockChoice, StockLocations,
+            StockOutcome,
         },
+        research::FeedbackAction,
         session::PublishStep,
     },
     events::AppEvent,
@@ -19,6 +21,7 @@ use crate::{
         hash::sha256_file,
         naming::{ExportGroup, folder_key, output_names, review_label},
         publish::{frozen_main, publish_summary, replacement_candidates, upload_waves},
+        publish_partition::{Partition, partition},
         reconcile,
         status::progress_percent,
         upload_name,
@@ -28,10 +31,11 @@ use crate::{
         clock::Clock,
         commerce::{CommerceAdapter, StockDefaults},
         events::EventSink,
-        store::Store,
+        store::{Store, StoreTx},
     },
-    services::{export::ExportService, integrity::IntegrityCheck},
+    services::{attributes::layout_keys, export::ExportService, integrity::IntegrityCheck},
 };
+use serde_json::Value as Json;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::Path,
@@ -113,6 +117,89 @@ fn active(step: PublishStep) -> bool {
         step,
         PublishStep::Prepare | PublishStep::Upload | PublishStep::Update | PublishStep::Describe
     )
+}
+
+/// MC-A10 at confirmation, read in `tx`: the item's rows split against the integration's
+/// definitions and the item's current layout.
+fn partition_in(tx: &dyn StoreTx, item_id: i64) -> Result<(Partition, Vec<Definition>)> {
+    let item = tx.item(item_id)?;
+    let definitions = tx.attribute_definitions(INTEGRATION)?;
+    let layout = layout_keys(tx, &item.item_type, Some(INTEGRATION))?;
+    let values = tx.attribute_values(item_id)?;
+    Ok((partition(&values, &definitions, &layout), definitions))
+}
+
+/// The conflicts of a partition as the confirmation shows them, in key order.
+fn shown_conflicts(partition: &Partition, definitions: &[Definition]) -> Vec<PreviewConflict> {
+    partition
+        .pending
+        .values()
+        .filter_map(|row| {
+            let prior = row.ai_prior.as_ref()?;
+            Some(PreviewConflict {
+                key: row.key.clone(),
+                label: definitions
+                    .iter()
+                    .find(|d| d.key == row.key)
+                    .map_or_else(|| row.key.clone(), |d| d.label.clone()),
+                prior_value: prior.value.clone(),
+                prior_valid: prior.valid,
+                prior_provenance: prior.provenance,
+                suggestion: row.value.clone(),
+                confidence: row.ai_confidence,
+            })
+        })
+        .collect()
+}
+
+/// MC-A10 resolution, in the photographer action's own transaction: when `key` is pending
+/// without a resolution on the `held` publish item of `item_id`, records `{value, action, at,
+/// step_token}` (`value: null` is "no value": never sent) and, at the last pending key, releases
+/// the item (step `prepare`, `released_at`, its job queued). Returns the entry it wrote; `None`
+/// when the key was not waiting (a later action on a resolved key changes nothing).
+pub fn resolve_pending_in(
+    tx: &mut dyn StoreTx,
+    item_id: i64,
+    key: &str,
+    value: Option<Json>,
+    action: FeedbackAction,
+    step_token: &str,
+    now: i64,
+) -> Result<Option<Json>> {
+    let Some(mut held) = tx.held_publish_item_for_item(item_id)? else {
+        return Ok(None);
+    };
+    if !held.pending_conflicts.contains_key(key) || held.resolved_attributes.contains_key(key) {
+        return Ok(None);
+    }
+    let entry = serde_json::json!({
+        "value": value,
+        "action": action.as_str(),
+        "at": now,
+        "step_token": step_token,
+    });
+    held.resolved_attributes
+        .insert(key.to_owned(), entry.clone());
+    tx.set_publish_resolved(held.id, &held.resolved_attributes)?;
+    if held.unresolved_conflicts() == 0 {
+        tx.release_publish_item(held.id, now)?;
+    }
+    Ok(Some(entry))
+}
+
+/// MC-A10 undo of a resolution: while the item is still `held`, the entries the undone step
+/// wrote (its token) are removed and their keys wait again.
+pub fn unresolve_in(tx: &mut dyn StoreTx, item_id: i64, step_token: &str) -> Result<()> {
+    let Some(mut held) = tx.held_publish_item_for_item(item_id)? else {
+        return Ok(());
+    };
+    let before = held.resolved_attributes.len();
+    held.resolved_attributes
+        .retain(|_, entry| entry.get("step_token").and_then(Json::as_str) != Some(step_token));
+    if held.resolved_attributes.len() != before {
+        tx.set_publish_resolved(held.id, &held.resolved_attributes)?;
+    }
+    Ok(())
 }
 
 impl PublishService {
@@ -240,6 +327,20 @@ impl PublishService {
     /// already on the platform is deleted; the next publish reuses it.
     pub fn cancel(&self, item_id: i64) -> Result<()> {
         let item = self.store.publish_item(item_id)?;
+        if item.step == PublishStep::Held {
+            // MC-A10: nothing was sent, so nothing needs a safe point.
+            let mut cancelled = false;
+            self.store.transaction(&mut |tx| {
+                cancelled = tx.cancel_held_publish_item(item_id)?;
+                Ok(())
+            })?;
+            if cancelled {
+                self.with_live(item_id, |live| live.text = "Publish cancelled".into());
+                self.emit(&item, PublishStep::Cancelled);
+                return Ok(());
+            }
+            return self.cancel(item_id);
+        }
         if !active(item.step) {
             return Err(Error::InvalidValue("publish item is not running".into()));
         }
@@ -273,12 +374,12 @@ impl PublishService {
                 live.as_ref().map(|l| l.text.clone()).unwrap_or_default()
             }
             PublishStep::Prepare => "Preparing outputs".into(),
-            PublishStep::Held => format!(
-                "Waiting for you · {} conflicts",
-                item.pending_conflicts
-                    .len()
-                    .saturating_sub(item.resolved_attributes.len())
-            ),
+            PublishStep::Held => {
+                format!(
+                    "Waiting for you · {} conflicts",
+                    item.unresolved_conflicts()
+                )
+            }
             PublishStep::Upload => format!("Uploading photos {} of {}", item.uploaded, item.total),
             PublishStep::Update => "Updating the product".into(),
             PublishStep::Describe => "Writing the description".into(),
@@ -328,7 +429,9 @@ impl PublishService {
             elapsed_ms: (self.clock.now_ms() - started_at).max(0),
             error,
             retry,
-            can_cancel: running && !live.as_ref().is_some_and(|l| l.cancel),
+            // MC-A10: a held item can be cancelled (at once).
+            can_cancel: item.step == PublishStep::Held
+                || (running && !live.as_ref().is_some_and(|l| l.cancel)),
             masters_ready,
         }))
     }
@@ -564,6 +667,13 @@ impl PublishService {
                 Ok(())
             })?;
             let attributes = self.frozen_attributes(item_id)?;
+            let mut split = None;
+            self.store.transaction(&mut |tx| {
+                split = Some(partition_in(tx, item_id)?);
+                Ok(())
+            })?;
+            let (suggestions, all_definitions) =
+                split.ok_or_else(|| Error::InvalidData("partition".into()))?;
             let details_total = definitions
                 .iter()
                 .filter(|d| d.group == crate::domain::attribute::AttributeGroup::Details)
@@ -586,6 +696,8 @@ impl PublishService {
                 unreviewed,
                 announced_removals,
                 create_item: link.is_none(),
+                n_withheld: suggestions.withheld.len(),
+                conflicts: shown_conflicts(&suggestions, &all_definitions),
             });
         }
         let mut preview = PublishPreview {
@@ -595,7 +707,16 @@ impl PublishService {
         preview.summary = publish_summary(&preview);
         Ok(preview)
     }
-    pub fn confirm(&self, session_ids: &[i64], summary_text: &str) -> Result<i64> {
+    /// Confirms the publish of `session_ids` (07A MC-10, MC-A10). `shown` is what the popover
+    /// showed per session; a session without an entry is compared as nothing withheld and no
+    /// conflicts. The confirming transaction recomputes both from the rows it reads and refuses
+    /// the whole confirmation (`SuggestionsChanged`, nothing written) when either differs.
+    pub fn confirm(
+        &self,
+        session_ids: &[i64],
+        summary_text: &str,
+        shown: &[ShownSuggestions],
+    ) -> Result<i64> {
         // 10F Q3: a cleared item is never republished (its photos would need a new session).
         for session_id in session_ids {
             crate::services::retention::ensure_session_not_cleared(
@@ -637,6 +758,7 @@ impl PublishService {
         let mut run_id = 0;
         let mut item_ids = Vec::new();
         self.store.transaction(&mut |tx| {
+            item_ids.clear();
             run_id = tx.insert_publish_run("shopify", at, summary_text)?;
             for p in &preview.items {
                 let session = tx.session(p.session_id)?;
@@ -645,15 +767,29 @@ impl PublishService {
                         .item_id
                         .ok_or_else(|| Error::InvalidValue("unassigned".into()))?,
                 )?;
-                let mut attrs = BTreeMap::new();
-                for v in tx.attribute_values(item.id)? {
-                    if v.valid
-                        && v.is_live()
-                        && let Some(json) = v.json()
-                    {
-                        attrs.insert(v.key, json);
-                    }
+                // MC-A10: read inside the confirming transaction, compared with what was shown.
+                let (suggestions, definitions) = partition_in(tx, item.id)?;
+                let expected = shown
+                    .iter()
+                    .find(|s| s.session_id == p.session_id)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut expected_keys = expected.conflict_keys.clone();
+                expected_keys.sort();
+                expected_keys.dedup();
+                let keys: Vec<String> = suggestions.pending.keys().cloned().collect();
+                if expected.n_withheld != suggestions.withheld.len() || expected_keys != keys {
+                    return Err(Error::SuggestionsChanged);
                 }
+                let pending: BTreeMap<String, Json> = shown_conflicts(&suggestions, &definitions)
+                    .into_iter()
+                    .map(|c| {
+                        let key = c.key.clone();
+                        serde_json::to_value(c).map(|v| (key, v))
+                    })
+                    .collect::<std::result::Result<_, _>>()
+                    .map_err(|e| Error::InvalidData(e.to_string()))?;
+                let attrs = suggestions.frozen;
                 let photos = tx.photos(p.session_id)?;
                 let classes: Vec<_> = photos
                     .iter()
@@ -704,28 +840,37 @@ impl PublishService {
                     frozen_main: p.main.clone(),
                     frozen_condition: p.condition.clone(),
                     frozen_attributes: attrs,
-                    frozen_attribute_origin: Default::default(),
-                    pending_conflicts: Default::default(),
+                    frozen_attribute_origin: suggestions.origin,
+                    // MC-A10: an item with pending keys starts at `held` (no job queued).
+                    step: if pending.is_empty() {
+                        PublishStep::Prepare
+                    } else {
+                        PublishStep::Held
+                    },
+                    pending_conflicts: pending,
                     resolved_attributes: Default::default(),
                     released_at: None,
                     announced_removals: p.announced_removals.clone(),
                     confirmed_change_seq: session.change_seq,
-                    step: PublishStep::Prepare,
                     failed_step: None,
                     uploaded: 0,
                     total: totals.get(&p.session_id).copied().unwrap_or(0),
                     error: None,
                     export_run_id: None,
                 };
-                item_ids.push((tx.insert_publish_item(&row)?, p.session_id));
+                let held = row.step == PublishStep::Held;
+                item_ids.push((tx.insert_publish_item(&row)?, p.session_id, held));
             }
             Ok(())
         })?;
-        for (id, session_id) in item_ids {
+        for (id, session_id, held) in item_ids {
             if let Some(choice) = stocks.get(&session_id) {
                 self.store.set_publish_item_stock(id, choice)?;
             }
-            self.store.enqueue_publish_item(id, at)?;
+            // MC-A10: only the enqueue of a held item waits for its last resolution.
+            if !held {
+                self.store.enqueue_publish_item(id, at)?;
+            }
         }
         Ok(run_id)
     }
@@ -1140,7 +1285,7 @@ impl PublishService {
         }
         let id = self
             .export
-            .run_staged(item.session_id, main, condition, &item.frozen_attributes)?
+            .run_staged(item.session_id, main, condition, &item.run_attributes())?
             .0;
         self.store.set_publish_export(item.id, id)?;
         exports.insert(item.id, id);
@@ -1635,10 +1780,12 @@ impl PublishService {
             .into_iter()
             .collect();
         let remote_values = self.commerce.attributes_read(&external)?;
-        let mut changes = write_set(&item.frozen_attributes, &definitions, &remote_values);
+        // MC-A10: the frozen list with each resolved key's value; "no value" keys are left out.
+        let attributes = item.run_attributes();
+        let mut changes = write_set(&attributes, &definitions, &remote_values);
         if let Some(key) = self.condition_key()? {
             let selected = self.selected(item.session_id, &item.frozen_condition)?;
-            if !selected.is_empty() || item.frozen_attributes.contains_key(&key) {
+            if !selected.is_empty() || attributes.contains_key(&key) {
                 // 10D MC-29 §Damage report: the selected condition outputs in order.
                 let mut ids = Vec::new();
                 for photo_id in selected {
@@ -1784,8 +1931,7 @@ impl PublishService {
             }
         }
         let (remote_tags, remote_description) = self.commerce.product_fields(&external)?;
-        if let Some(description) = item
-            .frozen_attributes
+        if let Some(description) = attributes
             .get("product.description")
             .and_then(|v| v.as_str())
             && remote_description.as_deref()
@@ -1795,8 +1941,7 @@ impl PublishService {
             self.commerce
                 .update_description(run, &external, description)?;
         }
-        let local_tags = item
-            .frozen_attributes
+        let local_tags = attributes
             .get("product.tags")
             .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok());
         if local_tags.is_some() {

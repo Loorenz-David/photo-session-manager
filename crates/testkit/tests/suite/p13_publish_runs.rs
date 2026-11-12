@@ -11,6 +11,7 @@ use psm_core::{
 };
 use psm_infra::settings_file::Settings;
 use psm_integrations::{commerce::shopify::adapter::ShopifyConfig, commerce_from_settings};
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::TestApp;
 use std::{collections::HashSet, fs};
 
@@ -116,7 +117,7 @@ fn publish(a: &TestApp, session_id: i64) -> i64 {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[session_id], "Publish images")
+        .confirm_as_shown(&[session_id], "Publish images")
         .unwrap();
     drain(a);
     id
@@ -127,7 +128,7 @@ fn start_upload(a: &TestApp, session_id: i64) -> i64 {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[session_id], "Publish images")
+        .confirm_as_shown(&[session_id], "Publish images")
         .unwrap();
     a.tick(1100).unwrap();
     a.complete_all_renders().unwrap();
@@ -190,7 +191,7 @@ fn c1a_confirm_freezes_lists_and_excludes_unreviewed() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], &preview.summary)
+        .confirm_as_shown(&[s], &preview.summary)
         .unwrap();
     let id = a.store().active_publish_items().unwrap()[0];
     let item = a.store().publish_item(id).unwrap();
@@ -231,7 +232,7 @@ fn c1b_confirm_freezes_only_canonical_valid_values() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "confirmed")
+        .confirm_as_shown(&[s], "confirmed")
         .unwrap();
     let item = a.store().publish_item(1).unwrap();
     assert_eq!(
@@ -290,7 +291,7 @@ fn c1c_preview_removals_and_exact_confirmation_text() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "EXACT text!\n")
+        .confirm_as_shown(&[s], "EXACT text!\n")
         .unwrap();
     let conn = rusqlite::Connection::open(a.app.paths.db()).unwrap();
     let text: String = conn
@@ -391,7 +392,7 @@ fn c1d_confirm_stores_current_change_sequence_and_time() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     let item = a.store().publish_item(1).unwrap();
     assert_eq!(item.confirmed_change_seq, seq);
@@ -461,7 +462,7 @@ fn c3c_prepare_fails_when_two_products_carry_sku() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     a.tick(1100).unwrap();
     let item = a.store().publish_item(1).unwrap();
@@ -478,7 +479,7 @@ fn c3d_changed_raw_blocks_prepare_before_upload() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     fs::write(a.store().photo(p).unwrap().raw_path, b"changed").unwrap();
     a.tick(1100).unwrap();
@@ -797,7 +798,7 @@ fn c5d_wrong_order_readback_fails_at_update() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     drain(&a);
     let item = a.store().publish_item(1).unwrap();
@@ -835,7 +836,7 @@ fn c5e_update_refuses_unready_desired_media_before_deletion() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     a.store()
         .set_publish_step(1, PublishStep::Update, None, None, a.clock.now_ms())
@@ -889,7 +890,7 @@ fn c6a_deleted_after_confirmation_is_not_uploaded_or_in_gallery() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     a.review().delete(gone).unwrap();
     drain(&a);
@@ -932,7 +933,7 @@ fn c6b_moved_after_confirmation_is_skipped() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     a.review().move_photos(&[p], other).unwrap();
     drain(&a);

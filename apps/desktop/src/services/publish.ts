@@ -1,16 +1,23 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { commands, type NotificationDto, type PreviewDto, type PublishActivityDto } from './bindings';
+import { commands, type NotificationDto, type PreviewDto, type PublishActivityDto, type ShownSuggestionsDto } from './bindings';
 import { unwrap } from './sessions';
 
 export type { NotificationDto, PreviewDto, PublishActivityDto };
+/** What the confirmation showed for one session (08B MC-A10): its withheld count and conflict keys. */
+export type ShownSuggestions = ShownSuggestionsDto;
 export type PublishProgressEvent = { session_id: number; item_id: number; step: string; uploaded: number; total: number };
 
 export async function publishPreview(sessionIds: number[]): Promise<PreviewDto> {
   return unwrap(await commands.publishPreview(sessionIds));
 }
 
-export async function publishConfirm(sessionIds: number[], summary: string): Promise<number> {
-  return unwrap(await commands.publishConfirm(sessionIds, summary));
+/** What `preview` showed, per session: passed back to the confirmation, which refuses when it changed (MC-A10). */
+export function shownOf(preview: PreviewDto): ShownSuggestions[] {
+  return preview.items.map(item => ({ session_id: item.session_id, n_withheld: item.n_withheld, conflict_keys: item.conflicts.map(c => c.key) }));
+}
+
+export async function publishConfirm(sessionIds: number[], summary: string, shown: ShownSuggestions[]): Promise<number> {
+  return unwrap(await commands.publishConfirm(sessionIds, summary, shown));
 }
 
 export async function publishRetry(itemId: number): Promise<void> {

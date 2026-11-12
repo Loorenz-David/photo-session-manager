@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
-vi.mock('@/services/publish', () => ({ publishPreview: vi.fn(), publishConfirm: vi.fn(), publishRetry: vi.fn(), notificationsList: vi.fn(), onPublishProgress: vi.fn() }));
+vi.mock('@/services/publish', async importOriginal => ({ shownOf: (await importOriginal<typeof import('@/services/publish')>()).shownOf, publishPreview: vi.fn(), publishConfirm: vi.fn(), publishRetry: vi.fn(), notificationsList: vi.fn(), onPublishProgress: vi.fn() }));
 const delivered = vi.hoisted(() => ({ sessions: [] as (() => void)[], progress: [] as (() => void)[], workspace: [] as ((event: { kind: string; session_id: number }) => void)[] }));
 vi.mock('@/services/sessions', () => ({ previewUrl: (path: string) => path, listSessions: vi.fn(), createSession: vi.fn() }));
 vi.mock('@/services/events', () => ({ onSessionsChanged: vi.fn(async (handler: () => void) => { delivered.sessions.push(handler); delivered.progress.push(handler); return () => undefined; }), onWorkspaceEvents: vi.fn(async (handler: (event: { kind: string; session_id: number }) => void) => { delivered.workspace.push(handler); return () => undefined; }), onFileDrop: vi.fn(async () => () => undefined) }));
@@ -28,7 +28,7 @@ import { toast } from 'sonner';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); delivered.sessions.length = 0; delivered.progress.length = 0; delivered.workspace.length = 0; delete (window as Window & { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__; });
 
-const preview = { summary: 'Publish session 7: four selected images; remove one old image.', items: [{ session_id: 7, main: [4, 2, 3], condition: [9], main_thumbnails: ['/4.jpg', '/2.jpg', '/3.jpg'], condition_thumbnails: ['/9.jpg'], details_filled: 3, details_total: 8, unreviewed: 2, announced_removals: ['old'], create_item: true }] };
+const preview = { summary: 'Publish session 7: four selected images; remove one old image.', items: [{ session_id: 7, main: [4, 2, 3], condition: [9], main_thumbnails: ['/4.jpg', '/2.jpg', '/3.jpg'], condition_thumbnails: ['/9.jpg'], details_filled: 3, details_total: 8, unreviewed: 2, announced_removals: ['old'], create_item: true, n_withheld: 0, conflicts: [] }] };
 
 it('C1(a) renders ordered thumbnails, counts, notes and exact summary', async () => {
   vi.mocked(publishPreview).mockResolvedValue(preview);
@@ -48,7 +48,7 @@ it('C1(b) sends the exact summary displayed in the confirmation surface', async 
   vi.mocked(publishConfirm).mockResolvedValue(1);
   render(<PublishPopover sessionIds={[7]} onClose={() => undefined} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Publish 4 images' }));
-  await waitFor(() => expect(publishConfirm).toHaveBeenCalledWith([7], preview.summary));
+  await waitFor(() => expect(publishConfirm).toHaveBeenCalledWith([7], preview.summary, [{ session_id: 7, n_withheld: 0, conflict_keys: [] }]));
 });
 
 function queueFixtures() {
@@ -74,7 +74,7 @@ it('C5(a) publishes only the first two confirmed sessions with their fresh previ
   expect(within(review).getByText('1 gallery removals')).toBeInTheDocument();
   expect(publishConfirm).not.toHaveBeenCalled();
   press(within(review).getByRole('button', { name: 'Publish 4 images' }));
-  await waitFor(() => expect(publishConfirm).toHaveBeenCalledWith([1, 2], 'T_AB'));
+  await waitFor(() => expect(publishConfirm).toHaveBeenCalledWith([1, 2], 'T_AB', [{ session_id: 7, n_withheld: 0, conflict_keys: [] }]));
   expect(publishPreview).toHaveBeenCalledWith([1, 2]);
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
 });

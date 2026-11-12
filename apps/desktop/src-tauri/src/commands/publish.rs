@@ -4,7 +4,10 @@ use crate::{
 };
 use psm_core::{
     Error,
-    domain::publish::{Notification, PublishActivity, PublishPreview, StockChoice},
+    domain::publish::{
+        Notification, PreviewConflict, PublishActivity, PublishPreview, ShownSuggestions,
+        StockChoice,
+    },
     ports::store::Store,
 };
 use serde::{Deserialize, Serialize};
@@ -29,6 +32,45 @@ pub struct PreviewItemDto {
     pub unreviewed: usize,
     pub announced_removals: Vec<String>,
     pub create_item: bool,
+    /// MC-A10: low-confidence suggestions without a prior that will not be published.
+    #[specta(type = specta_typescript::Number)]
+    pub n_withheld: usize,
+    /// MC-A10: the conflicts this item waits on once confirmed.
+    pub conflicts: Vec<PreviewConflictDto>,
+}
+/// One conflict as the confirmation shows it: values are canonical JSON text; `prior_provenance`
+/// is `default` (preset default) or `integration` (from Shopify).
+#[derive(Serialize, Type)]
+pub struct PreviewConflictDto {
+    pub key: String,
+    pub label: String,
+    pub prior_value: String,
+    pub prior_valid: bool,
+    pub prior_provenance: String,
+    pub suggestion: String,
+    pub confidence: Option<String>,
+}
+impl From<PreviewConflict> for PreviewConflictDto {
+    fn from(c: PreviewConflict) -> Self {
+        Self {
+            key: c.key,
+            label: c.label,
+            prior_value: c.prior_value,
+            prior_valid: c.prior_valid,
+            prior_provenance: c.prior_provenance.as_str().into(),
+            suggestion: c.suggestion,
+            confidence: c.confidence.map(|c| c.as_str().into()),
+        }
+    }
+}
+/// What the confirmation popover showed for one session (MC-A10): passed back to
+/// `publish_confirm`, which refuses with `suggestions_changed` when either part changed.
+#[derive(Deserialize, Type)]
+pub struct ShownSuggestionsDto {
+    pub session_id: CommandId,
+    #[specta(type = specta_typescript::Number)]
+    pub n_withheld: usize,
+    pub conflict_keys: Vec<String>,
 }
 #[derive(Serialize, Type)]
 pub struct PreviewDto {
@@ -52,6 +94,8 @@ impl From<PublishPreview> for PreviewDto {
                     unreviewed: p.unreviewed,
                     announced_removals: p.announced_removals,
                     create_item: p.create_item,
+                    n_withheld: p.n_withheld,
+                    conflicts: p.conflicts.into_iter().map(Into::into).collect(),
                 })
                 .collect(),
             summary: preview.summary,
@@ -113,6 +157,7 @@ pub async fn publish_confirm(
     state: State<'_, AppState>,
     session_ids: Vec<CommandId>,
     summary_text: String,
+    shown: Vec<ShownSuggestionsDto>,
 ) -> Result<CommandId, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<CommandId, CommandError> {
@@ -124,6 +169,14 @@ pub async fn publish_confirm(
             .confirm(
                 &session_ids.into_iter().map(|id| id.0).collect::<Vec<_>>(),
                 &summary_text,
+                &shown
+                    .into_iter()
+                    .map(|s| ShownSuggestions {
+                        session_id: s.session_id.0,
+                        n_withheld: s.n_withheld,
+                        conflict_keys: s.conflict_keys,
+                    })
+                    .collect::<Vec<_>>(),
             )
             .map(CommandId)
             .map_err(Into::into)
