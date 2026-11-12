@@ -33,6 +33,15 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
 ## Carried from earlier reviews (orchestrator, 2026-11-12; wins over older wording below)
 - **U1–U3, "no credit" vs "bad key" (R3 review).** `rules::calls::classify` checks 401/403 before the quota flag. Each adapter sets the quota flag from the provider's real quota reply (RESEARCH-VERIFY-2, -3, -11) only where status is not 401/403, so an out-of-credit account never reads "key rejected".
 - **Knowing for failed runs (R4 review).** `store::next_attempt` counts the `unknown` call a kill left, so a unit re-issued after a kill gets two transient tries instead of three. No change required; do not "fix" retry counts in the adapters around it.
+- **Secrets in the export scan (R7 review, MA16).** `export.rs` writes requests and responses as JSON string fields, so a
+  secret containing `"`, `\` or a control character appears escaped and the plain / URL-encoded scan misses it. When the
+  adapters add their real key formats, add the JSON-escaped form of each secret to the scan's forms (fail closed), with
+  a row using a key that contains `"`.
+- **`ResearchStatus.wait_ends_at` (R7 review).** No backend row checks it (`source_wait_seconds × 1000 − since_change`,
+  0 for a manual run). Add one service-level row.
+- **Long calls and settings saves (R7 review, knowing).** A settings save that rebuilds the runtime detaches the old
+  research thread after 1 s; with real calls up to 180 s two runners briefly exist. `store::start_run`'s guard keeps one
+  running run; no change required unless a rebuild must cancel in-flight research.
 
 ## Unit 1 — OpenAI model adapter
 

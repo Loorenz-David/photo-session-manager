@@ -29,6 +29,9 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
 
 ## Carried from earlier reviews (orchestrator, 2026-11-12; wins over older wording below)
 - **U2, offline calls in the MA12 check (R4 review).** A `not_sent` call keeps its recorded request but has no outbound rows (nothing left the Mac). The acceptance check of MA12 applies to sent requests only (ledger wording amended, 08B changelog 5).
+- **Local-date test on UTC machines (R7 review).** `a21_c2a_selection_by_local_date` discriminates local from UTC only
+  off UTC. If any R9 test or the suite runs on a UTC machine, pin `TZ` for that module or choose instants that straddle
+  midnight in UTC too.
 
 ## Unit 1 — `psm-research report` and `replay`
 

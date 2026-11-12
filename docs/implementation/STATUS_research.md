@@ -4,7 +4,7 @@ Branch `feature/agentic`, worktree `~/Desktop/Developer/Photo-Session-Manager-ag
 against the sibling checkout `~/Desktop/Developer/Photo-Session-Manager` (`main`, the owner's other work).
 `docs/implementation/STATUS.md` belongs to `main`'s orchestrator; do not edit it from this track.
 
-**2026-11-12: R2–R6 APPROVED (with notes in `backlog_research/`); R7 running here; R1 on track B waits on an owner card.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
+**2026-11-12: R2–R7 APPROVED (with notes in `backlog_research/`); nothing running; R1 on track B waits on an owner card.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
 Ten milestones R1–R10 in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
 tracks and driver loop in `docs/implementation/master_plan_research.md`. `main` (with P70, the fast suite) was merged
 into this branch at `2026-11-12`; the branch is local, not pushed.
@@ -22,7 +22,13 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **Done:** `R6_research_ui` APPROVED_WITH_NOTES 2026-11-12 19:12. Notes folded into R7·U1 (settings save, release signal
   incl. undo/redo, wait clock, `conflict` field + bindings allowance, Accept all count); the rest stays in
   `backlog_research/R6_research_ui.md` (popover Edit for non-text fields, shop public domain shown).
-- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R7_research_wiring_and_export`, started 2026-11-12 19:12 (track A).
+- **Done:** `R7_research_wiring_and_export` APPROVED_WITH_NOTES 2026-11-12 19:52. Notes folded into R8 (export secret scan,
+  `wait_ends_at` row, long calls) and R9 (TZ pin); event→change rule stays in `backlog_research/`.
+- **No run in flight (2026-11-12 19:53).** Track A is idle: R9 needs R1 and R8; R8 needs R1 approved and the owner's
+  picks. Everything waits on the owner's R1 card (Cloud Vision billing).
+- **Plan once R1 is answered:** finish R1 on track B (re-run the Vision benchmark if A, then review), merge
+  `research/track-b` into `feature/agentic` here, then run **R8 on track A** (track B is then not needed: delete
+  `../Photo-Session-Manager-agentic-b/target` to free disk; keep the worktree until R1's files are merged).
 - **Next on track A:** R9 (needs R1, R8 merged from B) → R10. Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
   merge `feature/agentic` into `research/track-b` first (R4 and plan edits), then R8 once the owner's picks arrive.
