@@ -11,13 +11,15 @@ pub struct StatusInput {
     pub non_deleted_missing_preview_count: i64,
     pub uploaded: i64,
     pub total: i64,
+    pub unresolved_conflicts: i64,
 }
 
 pub fn derive_status(input: StatusInput) -> SessionStatus {
     if matches!(
         input.latest_step,
         Some(
-            PublishStep::Prepare
+            PublishStep::Held
+                | PublishStep::Prepare
                 | PublishStep::Upload
                 | PublishStep::Update
                 | PublishStep::Describe
@@ -41,7 +43,7 @@ pub fn derive_status(input: StatusInput) -> SessionStatus {
 
 pub fn progress_percent(step: PublishStep, uploaded: i64, total: i64) -> u8 {
     match step {
-        PublishStep::Prepare => 0,
+        PublishStep::Held | PublishStep::Prepare => 0,
         PublishStep::Upload => {
             let fraction = if total > 0 {
                 65 * uploaded.clamp(0, total) / total
@@ -60,6 +62,9 @@ pub fn progress_percent(step: PublishStep, uploaded: i64, total: i64) -> u8 {
 pub fn row_label(input: StatusInput) -> RowLabel {
     let status = derive_status(input);
     if status == SessionStatus::Publishing {
+        if input.latest_step == Some(PublishStep::Held) {
+            return RowLabel::WaitingForYou(input.unresolved_conflicts);
+        }
         RowLabel::Publishing(progress_percent(
             input.latest_step.unwrap(),
             input.uploaded,

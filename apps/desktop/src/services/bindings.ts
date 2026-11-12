@@ -124,6 +124,14 @@ export const commands = {
 	 *  Returns how many were filled.
 	 */
 	attributeFillDefaults: (itemId: CommandId) => typedError<number, CommandError>(__TAURI_INVOKE("attribute_fill_defaults", { itemId })),
+	researchStatus: (sessionId: CommandId) => typedError<ResearchStatusDto_Serialize, CommandError>(__TAURI_INVOKE("research_status", { sessionId })),
+	researchRun: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("research_run", { sessionId })),
+	researchSecretsSet: (input: SecretsInputDto_Deserialize) => typedError<null, CommandError>(__TAURI_INVOKE("research_secrets_set", { input })),
+	researchSecretsState: () => typedError<SecretsStateDto, CommandError>(__TAURI_INVOKE("research_secrets_state")),
+	researchSiteAdd: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_add", { site })),
+	researchSiteRemove: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_remove", { site })),
+	researchSitesReorder: (sites: string[]) => typedError<string, CommandError>(__TAURI_INVOKE("research_sites_reorder", { sites })),
+	researchExport: (selection: ExportSelectionDto, dest: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_export", { selection, dest })),
 	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
 	publishConfirm: (sessionIds: CommandId[], summaryText: string) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText })),
 	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
@@ -165,6 +173,12 @@ export const commands = {
 };
 
 /* Types */
+export type AiPriorDto = {
+	value: string,
+	valid: boolean,
+	provenance: string,
+};
+
 export type AppPathsDto = {
 	data_dir: string,
 	database: string,
@@ -235,6 +249,7 @@ export type AttributeValueDto_Deserialize = {
 	ai_status?: string | null,
 	ai_reason?: string | null,
 	ai_sources?: string[] | null,
+	ai_prior?: AiPriorDto | null,
 	updated_at: number,
 };
 
@@ -254,6 +269,7 @@ export type AttributeValueDto_Serialize = {
 	ai_status: string | null,
 	ai_reason: string | null,
 	ai_sources: string[] | null,
+	ai_prior: AiPriorDto | null,
 	updated_at: number,
 };
 
@@ -400,6 +416,8 @@ export type EditorStylesDto = {
 export type ExportRunResponse = {
 	run_id: number,
 };
+
+export type ExportSelectionDto = { kind: "range"; from: number; to: number } | { kind: "items"; ids: number[] };
 
 /**  Changelog 47 (P69): `export.prepare_masters` (Settings → Storage; default on). */
 export type ExportSettingsDto = {
@@ -829,11 +847,36 @@ export type PublishActivityDto_Serialize = {
 	masters_ready?: string,
 };
 
+export type ReasonDto = {
+	code: string,
+	sentence: string,
+};
+
 export type RectDto = {
 	x: number | null,
 	y: number | null,
 	w: number | null,
 	h: number | null,
+};
+
+export type ResearchStatusDto = ResearchStatusDto_Serialize | ResearchStatusDto_Deserialize;
+
+export type ResearchStatusDto_Deserialize = {
+	reason?: ReasonDto | null,
+	run?: RunViewDto_Deserialize | null,
+	steps: StepViewDto_Deserialize[],
+	fields_filled: number,
+	to_review: number,
+	can_run: boolean,
+};
+
+export type ResearchStatusDto_Serialize = {
+	reason: ReasonDto | null,
+	run: RunViewDto_Serialize | null,
+	steps: StepViewDto_Serialize[],
+	fields_filled: number,
+	to_review: number,
+	can_run: boolean,
 };
 
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;
@@ -848,13 +891,51 @@ export type ReviewResponse_Serialize = {
 	active_photo_id: number | null,
 };
 
-export type RowLabelResponse = { kind: "publishing"; value: number } | { kind: "publish_failed" } | 
+export type RowLabelResponse = { kind: "waiting_for_you"; value: number } | { kind: "publishing"; value: number } | { kind: "publish_failed" } | 
 /**  Changelog 44: `Publish cancelled · Publish`. */
 { kind: "publish_cancelled" } | { kind: "description_failed" } | { kind: "published" } | { kind: "ready" } | { kind: "in_progress"; value: number } | 
 /**  P62: published, local files cleared, photos shown from Shopify. */
 { kind: "archived" } | 
 /**  Changelog 45 (P65): the publish waits for Capture One (`Waiting for Capture One…`). */
 { kind: "waiting_for_editor" };
+
+export type RunViewDto = RunViewDto_Serialize | RunViewDto_Deserialize;
+
+export type RunViewDto_Deserialize = {
+	id: number,
+	state: string,
+	trigger: string,
+	stage_reached?: string | null,
+	error?: string | null,
+};
+
+export type RunViewDto_Serialize = {
+	id: number,
+	state: string,
+	trigger: string,
+	stage_reached: string | null,
+	error: string | null,
+};
+
+export type SecretsInputDto = SecretsInputDto_Serialize | SecretsInputDto_Deserialize;
+
+export type SecretsInputDto_Deserialize = {
+	model_key?: string | null,
+	search_key?: string | null,
+	reader_key?: string | null,
+};
+
+export type SecretsInputDto_Serialize = {
+	model_key: string | null,
+	search_key: string | null,
+	reader_key: string | null,
+};
+
+export type SecretsStateDto = {
+	model: boolean,
+	search: boolean,
+	reader: boolean,
+};
 
 export type SessionFilter = "open" | "published" | "all";
 
@@ -1068,6 +1149,32 @@ export type SettingsPatchDto_Serialize = {
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
 	export?: ExportSettingsDto,
+};
+
+export type StepViewDto = StepViewDto_Serialize | StepViewDto_Deserialize;
+
+export type StepViewDto_Deserialize = {
+	seq: number,
+	stage: string,
+	kind: string,
+	summary: string,
+	detail: string,
+	source_url?: string | null,
+	source_title?: string | null,
+	photo_ids: number[],
+	field_keys: string[],
+};
+
+export type StepViewDto_Serialize = {
+	seq: number,
+	stage: string,
+	kind: string,
+	summary: string,
+	detail: string,
+	source_url: string | null,
+	source_title: string | null,
+	photo_ids: number[],
+	field_keys: string[],
 };
 
 /**  Changelog 45 (P65): a stock location and quantity for a new product. */

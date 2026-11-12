@@ -10,7 +10,7 @@ use psm_core::{
     },
     ports::{
         clock::Clock,
-        commerce::{ALL_CAPABILITIES, CommerceAdapter},
+        commerce::{ALL_CAPABILITIES, CommerceAdapter, PublicListing},
     },
 };
 use serde_json::Value as Json;
@@ -36,6 +36,7 @@ pub struct Mutation {
 }
 #[derive(Default)]
 pub struct FakeShop {
+    pub public_listing: PublicListing,
     pub products: Vec<RemoteItem>,
     pub files: Vec<RemoteMedia>,
     pub definitions: Vec<(Definition, DefinitionLink)>,
@@ -101,6 +102,18 @@ struct MediaPollGate {
     entered: bool,
 }
 impl FakeCommerce {
+    pub fn set_public_listing(
+        &self,
+        hosts: Vec<String>,
+        item_url: Option<String>,
+        item_path_tail: String,
+    ) {
+        self.state.lock().unwrap().public_listing = PublicListing {
+            hosts,
+            item_url,
+            item_path_tail,
+        };
+    }
     pub fn new(clock: Arc<dyn Clock>) -> Self {
         Self::with_condition_key(clock, "custom.damage_report")
     }
@@ -249,6 +262,9 @@ impl FakeCommerce {
     }
 }
 impl CommerceAdapter for FakeCommerce {
+    fn public_listing(&self, _external_id: &str) -> Result<PublicListing> {
+        Ok(self.state.lock().unwrap().public_listing.clone())
+    }
     fn render_description(&self, paragraphs: &str) -> String {
         psm_integrations::commerce::shopify::adapter::description_html(paragraphs)
     }

@@ -203,6 +203,7 @@ fn c1a_open_creates_all_domain_columns() {
                 "ai_reason",
                 "ai_sources",
                 "updated_at",
+                "ai_prior",
             ],
         ),
         (
@@ -235,6 +236,24 @@ fn c1a_open_creates_all_domain_columns() {
                 "error",
                 "finished_at",
                 "frozen_item_type",
+                "frozen_attribute_origin",
+                "pending_conflicts",
+                "resolved_attributes",
+                "released_at",
+            ],
+        ),
+        (
+            "research_feedback",
+            &[
+                "id",
+                "item_id",
+                "key",
+                "suggested_value",
+                "confidence",
+                "final_value",
+                "action",
+                "at",
+                "step_token",
             ],
         ),
         (

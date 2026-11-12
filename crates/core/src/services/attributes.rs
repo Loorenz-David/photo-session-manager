@@ -125,6 +125,7 @@ pub fn prefill_defaults(
                 ai_status: None,
                 ai_reason: None,
                 ai_sources: None,
+                ai_prior: None,
                 updated_at: at,
             })?;
         }
@@ -160,6 +161,7 @@ fn title_value(item: &Item) -> Option<Value> {
         ai_status: None,
         ai_reason: None,
         ai_sources: None,
+        ai_prior: None,
         updated_at: item.updated_at,
     })
 }
@@ -389,6 +391,7 @@ impl<'a> AttributesService<'a> {
                 ai_status: None,
                 ai_reason: None,
                 ai_sources: None,
+                ai_prior: None,
                 updated_at: stored.updated_at,
             });
             Ok(())
@@ -464,6 +467,7 @@ impl<'a> AttributesService<'a> {
                     ai_status: None,
                     ai_reason: None,
                     ai_sources: None,
+                    ai_prior: None,
                     updated_at: now,
                 }))
             },
@@ -500,6 +504,7 @@ impl<'a> AttributesService<'a> {
                 ai_status: Some(AiStatus::Suggested),
                 ai_reason: reason.map(str::to_owned),
                 ai_sources: Some(sources.clone()),
+                ai_prior: None,
                 updated_at: now,
             }))
         })?
@@ -733,6 +738,7 @@ impl<'a> AttributesService<'a> {
                     ai_status: None,
                     ai_reason: None,
                     ai_sources: None,
+                    ai_prior: None,
                     updated_at: now,
                 };
                 let next = match incoming.get(&definition.key).filter(|v| !is_empty_json(v)) {
@@ -900,6 +906,7 @@ impl<'a> AttributesService<'a> {
                     ai_status: None,
                     ai_reason: None,
                     ai_sources: None,
+                    ai_prior: None,
                     updated_at: now,
                 };
                 tx.put_attribute_value(&row)?;

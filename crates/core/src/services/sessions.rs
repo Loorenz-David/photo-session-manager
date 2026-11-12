@@ -368,6 +368,7 @@ fn status_input(
         non_deleted_missing_preview_count: record.non_deleted_missing_preview_count,
         uploaded: record.uploaded,
         total: record.total,
+        unresolved_conflicts: record.unresolved_conflicts,
     }
 }
 

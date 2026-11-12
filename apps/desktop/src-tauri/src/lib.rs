@@ -189,6 +189,82 @@ mod p50_tests {
 }
 
 #[cfg(test)]
+mod r2_research_command_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+    #[test]
+    fn f_c1a_unwired_commands_return_research_unavailable() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let db_path = a.app.paths.db();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::research::research_status,
+                commands::research::research_run,
+                commands::research::research_secrets_state,
+                commands::research::research_site_add,
+                commands::research::research_export,
+                commands::sessions::session_active,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let before: i64 = rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM attribute_values", [], |r| r.get(0))
+            .unwrap();
+        for (cmd, args) in [
+            ("research_status", json!({"sessionId":1})),
+            ("research_run", json!({"sessionId":1})),
+            ("research_secrets_state", json!({})),
+            ("research_site_add", json!({"site":"example.com"})),
+            (
+                "research_export",
+                json!({"selection":{"kind":"items","ids":[1]},"dest":"/tmp/research.zip"}),
+            ),
+        ] {
+            let error = call(&w, cmd, args).unwrap_err();
+            assert_eq!(error["code"], "research_unavailable", "{cmd}: {error}");
+        }
+        assert!(call(&w, "session_active", json!({})).is_ok());
+        let after: i64 = rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM attribute_values", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(after, before);
+    }
+}
+
+#[cfg(test)]
 mod p39_tests {
     use super::*;
     use psm_core::domain::photo::Classification;
@@ -479,6 +555,11 @@ struct PublishProgressPayload {
 impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
     fn emit(&self, event: AppEvent) {
         match event {
+            AppEvent::ResearchChanged { session_id } => {
+                let _ = self
+                    .0
+                    .emit("research_changed", SessionChangedPayload { session_id });
+            }
             AppEvent::CameraStatusChanged { status } => {
                 let link = self
                     .0
@@ -652,6 +733,14 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::attributes::attribute_saved_value_add,
         commands::attributes::attribute_saved_value_remove,
         commands::attributes::attribute_fill_defaults,
+        commands::research::research_status,
+        commands::research::research_run,
+        commands::research::research_secrets_set,
+        commands::research::research_secrets_state,
+        commands::research::research_site_add,
+        commands::research::research_site_remove,
+        commands::research::research_sites_reorder,
+        commands::research::research_export,
         commands::publish::publish_preview,
         commands::publish::publish_confirm,
         commands::publish::publish_retry,

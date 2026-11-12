@@ -4,7 +4,7 @@ import type { CameraStatus } from './camera';
 
 /** Calls `refresh` whenever a session or its photos change (`session_changed`, `photo_added`). */
 export async function onSessionsChanged(refresh: () => void): Promise<UnlistenFn> {
-  const unlisteners = await Promise.all(['session_changed', 'photo_added', 'publish_progress'].map(name => listen(name, () => refresh())));
+  const unlisteners = await Promise.all(['session_changed', 'photo_added', 'publish_progress', 'research_changed'].map(name => listen(name, () => refresh())));
   return () => unlisteners.forEach(unlisten => unlisten());
 }
 

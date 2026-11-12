@@ -3,8 +3,8 @@ use psm_core::{
     Error, Result,
     domain::{
         attribute::{
-            AiConfidence, AiStatus, AttributeGroup, CoreType, Definition, Preset, Provenance,
-            Value as AttributeValue,
+            AiConfidence, AiPrior, AiStatus, AttributeGroup, CoreType, Definition, Preset,
+            Provenance, Value as AttributeValue,
         },
         camera::{
             Association, DeliveryOutcome, DeliveryRow, DeliveryState, Exposure, ExposureInitiator,
@@ -19,6 +19,7 @@ use psm_core::{
         output::slot_name,
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource},
         publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
+        research::{Feedback, FeedbackAction},
         session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
         storage::{ArchivedImage, ItemRetention},
     },
@@ -51,6 +52,7 @@ impl SqliteStore {
         let mut conn = Connection::open(paths.db())?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         Migrations::new(Self::migrations()).to_latest(&mut conn)?;
+        super::ensure::ensure_research_columns(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             default_shape: shape.to_string(),
@@ -98,6 +100,22 @@ impl SqliteStore {
             .map_err(|e| Error::InvalidData(e.to_string()))?
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(|e| Error::InvalidData(e.to_string()))
+    }
+
+    /// One commit contains both app-store writes and research SQL writes.
+    pub fn research_transaction<T>(
+        &self,
+        op: impl FnOnce(&mut SqliteTx<'_>) -> Result<T>,
+    ) -> Result<T> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let tx = conn.transaction().map_err(db)?;
+        let mut store_tx = SqliteTx { tx };
+        let value = op(&mut store_tx)?;
+        store_tx.tx.commit().map_err(db)?;
+        Ok(value)
     }
 }
 
@@ -393,6 +411,7 @@ fn job(conn: &Connection, id: i64) -> Result<Job> {
 
 fn parse_step(step: &str) -> Result<PublishStep> {
     match step {
+        "held" => Ok(PublishStep::Held),
         "prepare" => Ok(PublishStep::Prepare),
         "upload" => Ok(PublishStep::Upload),
         "update" => Ok(PublishStep::Update),
@@ -426,6 +445,7 @@ fn latest_publish(conn: &Connection, session_id: i64) -> Result<Option<LatestPub
 
 fn step_name(step: PublishStep) -> &'static str {
     match step {
+        PublishStep::Held => "held",
         PublishStep::Prepare => "prepare",
         PublishStep::Upload => "upload",
         PublishStep::Update => "update",
@@ -460,6 +480,10 @@ fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
         "SELECT id,run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,failed_step,uploaded,total,error,(SELECT CAST(value AS INTEGER) FROM settings WHERE key='publish_export:'||publish_items.id),frozen_item_type FROM publish_items WHERE id=?1", [id],
         |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?,r.get(8)?,r.get(9)?,r.get(10)?,r.get(11)?,r.get(12)?,r.get(13)?,r.get(14)?,r.get(15)?,r.get(16)?))
     ).optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("publish item {id}")))?;
+    let (origin, pending, resolved, released): (Option<String>, Option<String>, Option<String>, Option<i64>) = conn.query_row(
+        "SELECT frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at FROM publish_items WHERE id=?1", [id],
+        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)),
+    ).map_err(db)?;
     Ok(PublishItem {
         id: row.0,
         run_id: row.1,
@@ -470,6 +494,10 @@ fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
         frozen_main: from_json(row.5.as_deref().unwrap_or("[]"))?,
         frozen_condition: from_json(row.6.as_deref().unwrap_or("[]"))?,
         frozen_attributes: from_json(row.7.as_deref().unwrap_or("{}"))?,
+        frozen_attribute_origin: from_json(origin.as_deref().unwrap_or("{}"))?,
+        pending_conflicts: from_json(pending.as_deref().unwrap_or("{}"))?,
+        resolved_attributes: from_json(resolved.as_deref().unwrap_or("{}"))?,
+        released_at: released,
         announced_removals: from_json(row.8.as_deref().unwrap_or("[]"))?,
         confirmed_change_seq: row.9.unwrap_or_default(),
         step: parse_step(&row.10)?,
@@ -546,8 +574,14 @@ fn enqueue_mirror_tag(conn: &Connection, raw_path: &str, photo_id: i64, now_ms: 
     Ok(())
 }
 
-struct SqliteTx<'a> {
+pub struct SqliteTx<'a> {
     tx: Transaction<'a>,
+}
+
+impl SqliteTx<'_> {
+    pub fn conn(&self) -> &Connection {
+        &self.tx
+    }
 }
 
 impl StoreTx for SqliteTx<'_> {
@@ -729,8 +763,8 @@ impl StoreTx for SqliteTx<'_> {
         Ok(self.tx.last_insert_rowid())
     }
     fn insert_publish_item(&mut self, item: &PublishItem) -> Result<i64> {
-        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total,frozen_item_type) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11,?12)",
-            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total,item.frozen_item_type]).map_err(db)?;
+        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total,frozen_item_type,frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11,?12,?13,?14,?15,?16)",
+            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total,item.frozen_item_type,to_json(&item.frozen_attribute_origin)?,to_json(&item.pending_conflicts)?,to_json(&item.resolved_attributes)?,item.released_at]).map_err(db)?;
         Ok(self.tx.last_insert_rowid())
     }
     fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>> {
@@ -806,7 +840,7 @@ impl StoreTx for SqliteTx<'_> {
         Ok(())
     }
     fn attribute_values(&self, item_id: i64) -> Result<Vec<AttributeValue>> {
-        let mut stmt = self.tx.prepare("SELECT item_id,key,value,valid,provenance,ai_confidence,ai_status,ai_reason,ai_sources,updated_at FROM attribute_values WHERE item_id=?1 ORDER BY key").map_err(db)?;
+        let mut stmt = self.tx.prepare("SELECT item_id,key,value,valid,provenance,ai_confidence,ai_status,ai_reason,ai_sources,updated_at,ai_prior FROM attribute_values WHERE item_id=?1 ORDER BY key").map_err(db)?;
         let rows = stmt
             .query_map([item_id], |r| {
                 Ok((
@@ -820,6 +854,7 @@ impl StoreTx for SqliteTx<'_> {
                     r.get::<_, Option<String>>(7)?,
                     r.get::<_, Option<String>>(8)?,
                     r.get::<_, i64>(9)?,
+                    r.get::<_, Option<String>>(10)?,
                 ))
             })
             .map_err(db)?
@@ -838,6 +873,7 @@ impl StoreTx for SqliteTx<'_> {
                     reason,
                     sources,
                     updated_at,
+                    prior,
                 )| {
                     let bad = |what: &str| Error::InvalidData(format!("{what} of value {key}"));
                     Ok(AttributeValue {
@@ -852,6 +888,7 @@ impl StoreTx for SqliteTx<'_> {
                             .transpose()?,
                         ai_reason: reason,
                         ai_sources: sources.map(|s| from_json(&s)).transpose()?,
+                        ai_prior: prior.map(|s| from_json::<AiPrior>(&s)).transpose()?,
                         key,
                         value,
                         valid,
@@ -860,6 +897,72 @@ impl StoreTx for SqliteTx<'_> {
                 },
             )
             .collect()
+    }
+    fn feedback_by_key(&self, item_id: i64, key: &str) -> Result<Vec<Feedback>> {
+        let mut stmt = self.tx.prepare("SELECT id,item_id,key,suggested_value,confidence,final_value,action,at,step_token FROM research_feedback WHERE item_id=?1 AND key=?2 ORDER BY id").map_err(db)?;
+        let rows = stmt
+            .query_map(params![item_id, key], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, Option<String>>(5)?,
+                    r.get::<_, String>(6)?,
+                    r.get::<_, i64>(7)?,
+                    r.get::<_, Option<String>>(8)?,
+                ))
+            })
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)?;
+        rows.into_iter()
+            .map(
+                |(
+                    id,
+                    item_id,
+                    key,
+                    suggested_value,
+                    confidence,
+                    final_value,
+                    action,
+                    at,
+                    step_token,
+                )| {
+                    Ok(Feedback {
+                        id,
+                        item_id,
+                        key,
+                        suggested_value,
+                        confidence: AiConfidence::parse(&confidence)
+                            .ok_or_else(|| Error::InvalidData("feedback confidence".into()))?,
+                        final_value,
+                        action: FeedbackAction::parse(&action)
+                            .ok_or_else(|| Error::InvalidData("feedback action".into()))?,
+                        at,
+                        step_token,
+                    })
+                },
+            )
+            .collect()
+    }
+    fn insert_feedback(&mut self, feedback: &Feedback) -> Result<i64> {
+        self.tx.execute("INSERT INTO research_feedback(item_id,key,suggested_value,confidence,final_value,action,at,step_token) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", params![feedback.item_id,feedback.key,feedback.suggested_value,feedback.confidence.as_str(),feedback.final_value,feedback.action.as_str(),feedback.at,feedback.step_token]).map_err(db)?;
+        Ok(self.tx.last_insert_rowid())
+    }
+    fn delete_feedback_by_step(&mut self, step_token: &str) -> Result<()> {
+        self.tx
+            .execute(
+                "DELETE FROM research_feedback WHERE step_token=?1",
+                [step_token],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn reinsert_feedback(&mut self, feedback: &Feedback) -> Result<()> {
+        self.tx.execute("INSERT INTO research_feedback(id,item_id,key,suggested_value,confidence,final_value,action,at,step_token) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![feedback.id,feedback.item_id,feedback.key,feedback.suggested_value,feedback.confidence.as_str(),feedback.final_value,feedback.action.as_str(),feedback.at,feedback.step_token]).map_err(db)?;
+        Ok(())
     }
     fn delete_attribute_value(&mut self, item_id: i64, key: &str) -> Result<()> {
         self.tx
@@ -884,7 +987,8 @@ impl StoreTx for SqliteTx<'_> {
     }
     fn put_attribute_value(&mut self, v: &AttributeValue) -> Result<()> {
         let sources = v.ai_sources.as_ref().map(to_json).transpose()?;
-        self.tx.execute("INSERT INTO attribute_values(item_id,key,value,valid,provenance,ai_confidence,ai_status,ai_reason,ai_sources,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(item_id,key) DO UPDATE SET value=excluded.value,valid=excluded.valid,provenance=excluded.provenance,ai_confidence=excluded.ai_confidence,ai_status=excluded.ai_status,ai_reason=excluded.ai_reason,ai_sources=excluded.ai_sources,updated_at=excluded.updated_at", params![v.item_id,v.key,v.value,v.valid,v.provenance.as_str(),v.ai_confidence.map(AiConfidence::as_str),v.ai_status.map(AiStatus::as_str),v.ai_reason,sources,v.updated_at]).map_err(db)?;
+        let prior = v.ai_prior.as_ref().map(to_json).transpose()?;
+        self.tx.execute("INSERT INTO attribute_values(item_id,key,value,valid,provenance,ai_confidence,ai_status,ai_reason,ai_sources,updated_at,ai_prior) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) ON CONFLICT(item_id,key) DO UPDATE SET value=excluded.value,valid=excluded.valid,provenance=excluded.provenance,ai_confidence=excluded.ai_confidence,ai_status=excluded.ai_status,ai_reason=excluded.ai_reason,ai_sources=excluded.ai_sources,updated_at=excluded.updated_at,ai_prior=excluded.ai_prior", params![v.item_id,v.key,v.value,v.valid,v.provenance.as_str(),v.ai_confidence.map(AiConfidence::as_str),v.ai_status.map(AiStatus::as_str),v.ai_reason,sources,v.updated_at,prior]).map_err(db)?;
         Ok(())
     }
     fn set_item_activity(&mut self, item_id: i64, at: i64) -> Result<()> {
@@ -1594,12 +1698,18 @@ impl Store for SqliteStore {
             let non_deleted_missing_preview_count = conn.query_row("SELECT COUNT(*) FROM photos WHERE session_id=?1 AND classification<>'deleted' AND integrity<>'raw_missing' AND adjusted_preview_path IS NULL", [id], |r| r.get(0)).map_err(db)?;
             let cover_preview_path = conn.query_row("SELECT COALESCE(adjusted_preview_path,original_preview_path) FROM photos WHERE session_id=?1 AND classification='main' AND position=1", [id], |r| r.get(0)).optional().map_err(db)?.flatten();
             let publish = latest_publish(&conn, id)?;
+            let unresolved_conflicts = if let Some(latest) = &publish {
+                if latest.step == PublishStep::Held {
+                    let item = publish_item(&conn, latest.item_id)?;
+                    item.pending_conflicts.keys().filter(|key| !item.resolved_attributes.contains_key(*key)).count() as i64
+                } else { 0 }
+            } else { 0 };
             let (latest_step,failed_step,uploaded,total) = match &publish {
                 Some(latest) => (Some(latest.step),latest.failed_step,latest.uploaded,latest.total),
                 None => (None,None,0,0),
             };
             let waiting_for_editor: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE kind='render_export' AND target=?1 AND status='running' AND error='waiting_for_editor')", [format!("session:{id}")], |r| r.get(0)).map_err(db)?;
-            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total,publish,waiting_for_editor })
+            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total,unresolved_conflicts,publish,waiting_for_editor })
         }).collect()
     }
 

@@ -3,6 +3,8 @@ pub mod commerce;
 pub mod editing;
 pub mod render_output;
 
+use psm_research::api::ResearchApi;
+
 use camera::direct::StartOrder;
 use camera::runtime::{AppBinding, CameraRuntime};
 use camera::via_capture_one::CameraViaCaptureOne;
@@ -95,6 +97,7 @@ pub struct App {
     pub camera: Arc<dyn CameraProvider>,
     pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
+    pub research: Option<Arc<dyn ResearchApi>>,
     pub jobs: Arc<JobRunner>,
     pub publish_jobs: Arc<JobRunner>,
     /// The `render_output` runner (10D MC-28: one output render at a time, on its own thread).
@@ -137,6 +140,7 @@ pub struct AppHandles {
     pub camera: Arc<dyn CameraProvider>,
     pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
+    pub research: Option<Arc<dyn ResearchApi>>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
     pub follow: Arc<CaptureOneFollow>,
@@ -379,6 +383,7 @@ impl App {
             camera: self.camera.clone(),
             camera_runtime: self.camera_runtime.clone(),
             commerce: self.commerce.clone(),
+            research: self.research.clone(),
             arrival: self.arrival.clone(),
             previews: self.previews.clone(),
             follow: self.follow.clone(),
@@ -1038,6 +1043,7 @@ impl App {
             camera,
             camera_runtime,
             commerce,
+            research: None,
             jobs,
             publish_jobs,
             render_jobs,

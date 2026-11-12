@@ -103,6 +103,14 @@ pub trait StoreTx {
     ) -> Result<()>;
     /// Every stored value row of the item, cleared rows included, ordered by key.
     fn attribute_values(&self, item_id: i64) -> Result<Vec<AttributeValue>>;
+    fn feedback_by_key(
+        &self,
+        item_id: i64,
+        key: &str,
+    ) -> Result<Vec<crate::domain::research::Feedback>>;
+    fn insert_feedback(&mut self, feedback: &crate::domain::research::Feedback) -> Result<i64>;
+    fn delete_feedback_by_step(&mut self, step_token: &str) -> Result<()>;
+    fn reinsert_feedback(&mut self, feedback: &crate::domain::research::Feedback) -> Result<()>;
     fn delete_attribute_value(&mut self, item_id: i64, key: &str) -> Result<()>;
     /// Inserts or replaces the row (`item_id`, `key`).
     fn put_attribute_value(&mut self, value: &AttributeValue) -> Result<()>;

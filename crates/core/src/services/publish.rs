@@ -273,6 +273,12 @@ impl PublishService {
                 live.as_ref().map(|l| l.text.clone()).unwrap_or_default()
             }
             PublishStep::Prepare => "Preparing outputs".into(),
+            PublishStep::Held => format!(
+                "Waiting for you · {} conflicts",
+                item.pending_conflicts
+                    .len()
+                    .saturating_sub(item.resolved_attributes.len())
+            ),
             PublishStep::Upload => format!("Uploading photos {} of {}", item.uploaded, item.total),
             PublishStep::Update => "Updating the product".into(),
             PublishStep::Describe => "Writing the description".into(),
@@ -698,6 +704,10 @@ impl PublishService {
                     frozen_main: p.main.clone(),
                     frozen_condition: p.condition.clone(),
                     frozen_attributes: attrs,
+                    frozen_attribute_origin: Default::default(),
+                    pending_conflicts: Default::default(),
+                    resolved_attributes: Default::default(),
+                    released_at: None,
                     announced_removals: p.announced_removals.clone(),
                     confirmed_change_seq: session.change_seq,
                     step: PublishStep::Prepare,

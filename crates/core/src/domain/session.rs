@@ -47,6 +47,7 @@ pub struct LatestPublish {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PublishStep {
+    Held,
     Prepare,
     Upload,
     Update,
@@ -70,6 +71,7 @@ pub enum SessionStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RowLabel {
+    WaitingForYou(i64),
     Publishing(u8),
     PublishFailed,
     /// Changelog 44: `Publish cancelled · Publish`.
@@ -143,6 +145,7 @@ pub struct SessionListRecord {
     pub failed_step: Option<PublishStep>,
     pub uploaded: i64,
     pub total: i64,
+    pub unresolved_conflicts: i64,
     pub publish: Option<LatestPublish>,
     /// Changelog 45 (P65): the session's export run waits for the editor.
     pub waiting_for_editor: bool,

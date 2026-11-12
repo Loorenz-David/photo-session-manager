@@ -58,3 +58,4 @@ mod p66_approve_on_arrival_and_session_order;
 mod p67_form_values_defaults_and_batch_step;
 mod p68_setup_polish_address_password_shop;
 mod p69_faster_export_and_publish;
+mod research;

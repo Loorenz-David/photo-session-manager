@@ -251,6 +251,7 @@ pub struct SessionListCountsResponse {
 #[derive(Serialize, Type)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum RowLabelResponse {
+    WaitingForYou(#[specta(type = specta_typescript::Number)] i64),
     Publishing(u8),
     PublishFailed,
     /// Changelog 44: `Publish cancelled · Publish`.
@@ -340,6 +341,7 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
                                 SessionStatus::InProgress => SessionStatusResponse::InProgress,
                             },
                             label: match row.label {
+                                RowLabel::WaitingForYou(n) => RowLabelResponse::WaitingForYou(n),
                                 RowLabel::Publishing(p) => RowLabelResponse::Publishing(p),
                                 RowLabel::PublishFailed => RowLabelResponse::PublishFailed,
                                 RowLabel::PublishCancelled => RowLabelResponse::PublishCancelled,

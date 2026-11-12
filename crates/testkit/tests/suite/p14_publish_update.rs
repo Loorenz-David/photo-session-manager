@@ -222,6 +222,7 @@ fn c1c_invalid_local_is_not_written() {
                 ai_status: None,
                 ai_reason: None,
                 ai_sources: None,
+                ai_prior: None,
                 updated_at: 0,
             })
         })
@@ -254,6 +255,7 @@ fn c1d_read_only_reference_is_not_written() {
                 ai_status: None,
                 ai_reason: None,
                 ai_sources: None,
+                ai_prior: None,
                 updated_at: 0,
             })
         })
@@ -270,6 +272,7 @@ fn c1d_read_only_reference_is_not_written() {
                 ai_status: None,
                 ai_reason: None,
                 ai_sources: None,
+                ai_prior: None,
                 updated_at: 0,
             })
         })

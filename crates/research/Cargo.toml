@@ -1,0 +1,9 @@
+[package]
+name = "psm-research"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+psm-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true

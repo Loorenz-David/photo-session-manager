@@ -90,8 +90,16 @@ pub struct AttributeValueDto {
     pub ai_status: Option<String>,
     pub ai_reason: Option<String>,
     pub ai_sources: Option<Vec<String>>,
+    pub ai_prior: Option<AiPriorDto>,
     #[specta(type = specta_typescript::Number)]
     pub updated_at: i64,
+}
+
+#[derive(Serialize, Type)]
+pub struct AiPriorDto {
+    pub value: String,
+    pub valid: bool,
+    pub provenance: String,
 }
 
 impl From<Value> for AttributeValueDto {
@@ -106,6 +114,11 @@ impl From<Value> for AttributeValueDto {
             ai_status: v.ai_status.map(|s| s.as_str().into()),
             ai_reason: v.ai_reason,
             ai_sources: v.ai_sources,
+            ai_prior: v.ai_prior.map(|p| AiPriorDto {
+                value: p.value,
+                valid: p.valid,
+                provenance: p.provenance.as_str().into(),
+            }),
             updated_at: v.updated_at,
         }
     }
