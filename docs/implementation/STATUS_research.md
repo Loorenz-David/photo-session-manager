@@ -4,14 +4,17 @@ Branch `feature/agentic`, worktree `~/Desktop/Developer/Photo-Session-Manager-ag
 against the sibling checkout `~/Desktop/Developer/Photo-Session-Manager` (`main`, the owner's other work).
 `docs/implementation/STATUS.md` belongs to `main`'s orchestrator; do not edit it from this track.
 
-**2026-11-12: planned, nothing implemented.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
+**2026-11-12: R2 APPROVED (with notes, 3 to `backlog_research/`); R3 running.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
 Ten milestones R1–R10 in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
 tracks and driver loop in `docs/implementation/master_plan_research.md`. `main` (with P70, the fast suite) was merged
 into this branch at `2026-11-12`; the branch is local, not pushed.
 
-- **Run in flight:** `tools/pipeline/run_phase.sh phase R2_research_foundation`, started 2026-11-12 14:34 (track A, this worktree).
-- **Next after R2:**  Then Track A here: R3 → R4 → R7 → R9 → R10.
-- **Ready, needs a second worktree (Track B, branch `research/track-b`):** `R1_research_benchmark`. The keys file
+- **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
+  Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
+- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R3_research_rules`, started 2026-11-12 15:04 (track A).
+  Implementer on Opus via `PSM_IMPLEMENTER=claude` (the runner defaults to Codex; set the variable for every research run).
+- **Next on track A:** R4 → R7 → R9 → R10.
+- **Ready, needs a second worktree and the owner's yes (asked 2026-11-12, no answer yet) (Track B, branch `research/track-b`):** `R1_research_benchmark`. The keys file
   `~/.psm_research.env` exists with the three names set (checked for presence only; the keys have not been used).
   Then R5 → R6 → R8.
 - **Blocked on the owner:** R8 (search route and page-reading route, picked from R1's report); R10 (models per stage,
