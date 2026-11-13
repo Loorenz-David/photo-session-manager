@@ -8,7 +8,7 @@ blocked_on: the owner's keys (master_plan_research.md §7.6)
 ---
 # R1 — Research benchmark: probes, visual-search comparison, first model comparison
 
-**Tracker:** IMPLEMENTED · 2026-11-12 · opus · U1 `60f6d6c`, U2 `7b3a2f8`; 14/14 tool tests, clippy, fmt, workspace check green; Lens measured on 42 pieces, Cloud Vision blocked (billing disabled, owner card); 683 model calls USD 5.82 of 50.
+**Tracker:** APPROVED · 2026-11-13 · opus · review r1 APPROVED_WITH_NOTES: perimeter = the declared paths of `60f6d6c`..`7b3a2f8` (+ closing `0446282`); 22/22 rows hold (14 automated rows' tests fail on a wrong outcome; 8 manual rows checked against `~/psm-research-bench/` recordings, Lens and Vision counts recomputed independently); review-mode checks green on clean `c337a91` (tool 14/14, clippy, fmt, workspace check); fixtures scan clean, no third-party page body; no B1–B4; 9 notes in `backlog_research/R1_research_benchmark.md`; three owner picks pending (narrative).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -336,4 +336,41 @@ Results are in the evidence doc ("R1 results", "Benchmark 1", "Page reading", "F
 5. Piece 30's corrected `wood_type` "Rosewood" is not a shop choice ("Santos Rosewood" is).
 6. The invalid-key reply echoes the key masked to its last 4 characters.
 7. No real call is in any suite: the 14 tests use a stub seam.
+
+### 2026-11-13 · review r1 · opus (Claude Opus 5.5, `pipeline-reviewer`) — APPROVED_WITH_NOTES
+**Gate.** Tracker IMPLEMENTED; `60f6d6c`, `7b3a2f8`, `0446282` in `git log`. Tree clean at `c337a91`.
+**Perimeter.** `git diff --stat 60f6d6c^ 7b3a2f8` = the handoff's Files changed (59 paths: workspace `Cargo.toml`,
+`Cargo.lock`, `crates/research-tool/**`, `crates/research/fixtures/**`, the evidence doc); closing `0446282` = plan +
+handoff. `crates/research-tool` unchanged since `7b3a2f8`; the evidence doc's later +16 lines are the orchestrator's
+Vision rows (`942abdd`).
+**Checks (plan Review mode, once each, clean `c337a91`).** `cargo test -p psm-research-tool` 14/14 · clippy `-D
+warnings` clean · `cargo fmt --all -- --check` clean · `cargo check --workspace` clean. No real call re-run.
+**Verified correct.**
+- A01·C1(a–c): `answer_key::{is_naming, is_own_listing, key_entries}` on the row inputs; C1(c) on the real files
+  (6 corrections, each once, Corrected, corrected value, never OwnerVerified).
+- A01·C2(a–c): `Ledger::check` refuses `spent + worst ≥ ceiling` and a reached cap before `seam.send`; the stub
+  received nothing. `run` checks `--ceiling-usd` before the out folder or any call; the binary exits non-zero
+  naming the flag.
+- A01·C3(a–b): `Caller::write` scans the record and every image for each key, plain, URL-encoded and form-encoded,
+  before any write; declared URL/header/body parts read `<redacted>`; refusal names the call id, never the value.
+  Images become `{"image_sha256"}` and `images/<sha>.jpg`.
+- A02·C1(a–e): `score` maps by the byte-equal choice, then the unique `name_key` match (MC-A2); multi-choice as
+  sets; text by `name_key`, no aliases; corrected field in the corrected bucket only; read rule per the row.
+- A02·C2(a): a resumed call returns from disk before the budget check and is not added to the ledger; 3 + 2 sent,
+  5 recordings, 7 500 micro-USD.
+- A01·C4/C5/C6/C8, A02·C3/C5 against `~/psm-research-bench/`: U1 OpenAI 38 calls USD 0.243 472, SerpApi 45
+  searches / 44 uploads, shop 2, Vision 42×200 + 1×403 (ep4); U2 645 calls USD 5.580 194 (cap 700, ceiling 35).
+  Lens 24/25 and 6/7 (median rank 1) recomputed from the raw SerpApi replies; Vision 8/25 and 0/7 reproduced
+  (differences in a rough recompute traced to script text the tool rightly strips). V8 statuses = the table.
+- A01·C7, A02·C4: secret scan of `crates/research/fixtures/`, `crates/research-tool/` and the evidence doc for the
+  six values in `~/.psm_research.env` and `~/.psm_shopify.env` (plain, URL-encoded, form-encoded): 0 hits. Only
+  `pages/shop_listing_page.json` carries a body (the owner's shop); every third-party page record has `body: null`.
+  Missing: the successful `cloud_vision/` reply (declared; billing came later) — note.
+- H1 (V9 is one read-only query; no mutation), H3 (reduced copies via `psm_infra` thumbnail), H7/H8 (no app file).
+  Assumptions 1–15: none contradicts the intention.
+**Notes** (9, `backlog_research/R1_research_benchmark.md`): Vision success fixture missing; `fixtures` would now
+mislabel piece 2's 200 reply as the billing error; evidence table omits "without exact copies" (Vision 8 → 4);
+fixture count 31 not 32; A02·C1(e) scoring; piece 30 correction string; pamono country hosts; Shopify throttling;
+page tool returns no text (port contract).
+**Owner picks** (3 cards in the narrative): visual-search route, page-reading route, model and effort per stage.
 
