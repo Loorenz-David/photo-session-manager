@@ -2,7 +2,7 @@
 plan: R1_research_benchmark
 role: implement
 round: 1
-state: OWNER_DECISIONS_PENDING
+state: DONE
 date: 2026-11-12
 actor: opus
 ---
@@ -253,3 +253,11 @@ secret, and the test-store domain: 0 files.
 - *Recommendation:* A. The pick between a disputed vendor route and Google's own route should rest
   on numbers for both, and it costs nothing.
 - *What it blocks:* the visual-search adapter pick (R8·U2). Nothing else in R1.
+
+## Card 1 resolved (orchestrator, 2026-11-13)
+Owner chose **A**: billing is attached to the Google Cloud project of the Vision key (project `psm-research`,
+number 203931298590, billing account "Vision API Billing"; checked in the console by the orchestrator at the
+owner's request). The orchestrator ran Manual try-out step 5 on 2026-11-13 01:04 on track B; it exited 0 with 42
+successful Vision searches and rewrote `~/psm-research-bench/a01/report.md`. The evidence doc's Benchmark 1 now
+carries the Vision rows (orchestrator edit, numbers copied from `report.md`). Handoff state set to DONE so the
+runner resumes at the review (`RESUME=1`). Track B was merged into `feature/agentic`; the review runs on track A.

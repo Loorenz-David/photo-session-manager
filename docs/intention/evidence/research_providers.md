@@ -121,17 +121,20 @@ image. Full report with the check sheet: `~/psm-research-bench/a01/report.md`; n
 result has the key designer or manufacturer in its title or fetched page text; groups computed from
 the file's `published_online` and `attribution` fields).
 
-**Cloud Vision Web Detection could not be measured:** every call returned HTTP 403
-`BILLING_DISABLED`. Once billing is attached to the key's Google Cloud project,
-`psm-research bench-search --routes cloud_vision --out ~/psm-research-bench/a01 --ceiling-usd 15`
-runs only that route (42 units, inside the free 1,000) and `score-search` rewrites the tables.
+**Cloud Vision Web Detection, measured 2026-11-13 01:04** (owner attached billing to the key's Google Cloud
+project; the orchestrator ran `psm-research bench-search --routes cloud_vision --out ~/psm-research-bench/a01
+--ceiling-usd 15`, which rewrote `report.md`; 42 successful searches, 44 Vision units in total, inside the free
+1,000; model spend of the out folder unchanged at USD 0.243). The first attempt (2026-11-12) returned HTTP 403
+`BILLING_DISABLED` on every call. 21 of 42 pieces returned no web result at all from Vision.
 
 | Route | Group | Pieces | Naming result in first 10 | … only shop or trusted results | Median rank of first naming | Own listing returned |
 |---|---|---|---|---|---|---|
 | Lens via SerpApi | published, with attribution | 25 | **24** | 23 | 1 | 13 |
 | Lens via SerpApi | unpublished, with attribution | 7 | **6** | 6 | 1 | 0 |
 | Lens via SerpApi | published / unpublished, without attribution | 5 / 5 | (no key: first 10 listed in the report) | — | — | 0 / 0 |
-| Cloud Vision | all groups | 42 | not run (billing disabled) | — | — | — |
+| Cloud Vision Web Detection | published, with attribution | 25 | **8** | 5 | 8 | 4 |
+| Cloud Vision Web Detection | unpublished, with attribution | 7 | **0** | 0 | — | 0 |
+| Cloud Vision Web Detection | published / unpublished, without attribution | 5 / 5 | (no key: first 10 listed in the report) | — | — | 0 / 0 |
 
 - **Exact copies:** with `type=all` Lens marked no result as an exact copy of the photo, so the
   with/without-exact counts are equal. The unpublished group (photos not online) is the clean
@@ -145,6 +148,9 @@ runs only that route (42 units, inside the free 1,000) and `score-search` rewrit
   designer or model), auctionet.com 9, pamono.se / .eu / .co.uk 4, bukowskis.com 2, others 3.
   **pamono's country sites are not covered by the trusted entry `pamono.com`** (a different host,
   MC-A3); they would need their own entries.
+- **Lens vs Vision:** on the clean measure (photos never online) Lens 6 of 7, Vision 0 of 7; published pieces
+  Lens 24 of 25 (median rank 1), Vision 8 of 25 (median rank 8; 7 pieces with exact copies in its first 10).
+  Vision is faster (0.81 s vs 3.11 s per search) and first-party.
 - Calls: 42 searches + 42 uploads (+3 searches and 2 uploads in V6/V7); mean 3.1 s per search
   (1.6–11.0 s), upload 0.4 s. 45 of the free plan's 250 monthly searches used.
 - A naming result is not proof of the right listing: the report's **check sheet** (pieces 1–4,

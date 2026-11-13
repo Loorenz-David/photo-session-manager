@@ -24,11 +24,12 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   `backlog_research/R6_research_ui.md` (popover Edit for non-text fields, shop public domain shown).
 - **Done:** `R7_research_wiring_and_export` APPROVED_WITH_NOTES 2026-11-12 19:52. Notes folded into R8 (export secret scan,
   `wait_ends_at` row, long calls) and R9 (TZ pin); event→change rule stays in `backlog_research/`.
-- **No run in flight (2026-11-12 19:53).** Track A is idle: R9 needs R1 and R8; R8 needs R1 approved and the owner's
-  picks. Everything waits on the owner's R1 card (Cloud Vision billing).
-- **Plan once R1 is answered:** finish R1 on track B (re-run the Vision benchmark if A, then review), merge
-  `research/track-b` into `feature/agentic` here, then run **R8 on track A** (track B is then not needed: delete
-  `../Photo-Session-Manager-agentic-b/target` to free disk; keep the worktree until R1's files are merged).
+- **Owner, 2026-11-12 night:** attached billing (card A) and delegated: "take care of this and continue resolve
+  questions given the intention" while asleep. The orchestrator verified the link in the console, ran the Vision
+  benchmark (Lens 24/25 + 6/7 vs Vision 8/25 + 0/7), merged `research/track-b` into `feature/agentic` (`3297b17`,
+  workspace check green), set the R1 implement handoff to DONE with a resolution note.
+- **Run in flight:** `RESUME=1 PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R1_research_benchmark` (review
+  only), started 2026-11-13 01:05 (track A). Track B is no longer used (its build folder can be deleted).
 - **Next on track A:** R9 (needs R1, R8 merged from B) → R10. Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
   merge `feature/agentic` into `research/track-b` first (R4 and plan edits), then R8 once the owner's picks arrive.
@@ -41,9 +42,6 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   present (presence only). Then R8 on track B (R5, R6 moved to track A). Merge rule (master plan §5): after each approved B milestone
   merge `research/track-b` into `feature/agentic` here; after each approved A milestone merge `feature/agentic` into
   track B before B's next milestone. Track B's copy of this file is not maintained; this one is.
-- **Needs the owner (R1 card 1, asked 2026-11-12 18:0x):** attach billing to the Google Cloud project of the Vision key (A,
-  recommended; then re-run R1 Manual try-out step 5, ~3 min, USD 0), or pick Lens without comparison (B), or drop
-  Cloud Vision (C). Blocks only the R8·U2 visual-search pick. After the answer: finish R1 (review) on track B.
 - **Owner answered 2026-11-12 (both "yes"):** a capped run lowers nothing (→ R7·U1 carried note); saving keys or
   Automatic on starts nothing (owner withdrew the "start the open session" pick: no extra work). 08B changelog 7.
 - **Blocked on the owner:** R8 (search route and page-reading route, picked from R1's report); R10 (models per stage,
