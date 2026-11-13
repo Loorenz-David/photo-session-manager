@@ -261,7 +261,7 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
   `SecretsState {model, search, reader}` (booleans) · `ExportSelection {Range {from, to} | Items(ids)}`.
 - **Constructors used only by `crates/integrations/src/lib.rs` (R7·U1):** `psm_research::schema::ensure`,
   `ResearchService::new`, `psm_research::shop::CommerceShopFacts::new`, `psm_research::adapters::build` (from R8·U1:
-  `build(settings, secrets, files: ResearchFiles)`).
+  `build(settings, secrets: Arc<dyn SecretStore>, files: ResearchFiles)`, keys read per call).
 - **Ports (`psm_research::ports`, R4·U1).** `ModelProvider::call(&ModelRequest) -> Result<ModelReply, CallFailure>` ·
   `VisualSearchProvider::search(&ResearchImage) -> Result<SearchReply, CallFailure>` · `PageReader::read(&self, url:
   &str) -> Result<PageReply, CallFailure>` · `Exchange {request, response}` (carried by the three replies only) ·
@@ -396,6 +396,10 @@ present (never printing a value) before launching R1.
 - The intention map still says 08A/08B are "not planned yet".
 
 ## 9. Amendment log
+- 2026-11-13 v6 (orchestrator) — R8 projection r0 attempt 2 folded (ledger L1–L13, 0 owner cards; 08B MC-A3 body
+  aligned with changelog 11(d)); `adapters::build(settings, Arc<dyn SecretStore>, ResearchFiles)`, keys read per call;
+  testkit gains `TestApp::with_research_using`. R8 is 20 criteria / 35 rows. **Projection is off for R8 from attempt 3**
+  (two rounds, 0 owner cards after the first; the review is the gate; frontmatter `projection: no`).
 - 2026-11-13 v5 (orchestrator) — R8 projection r0 folded (card 1 = No for now; ledger L1–L31 applied to the R8 plan;
   08B changelog 11). §6.6 corrected to the code: `PageReader::read(&self, url)`, `CallFailure` without `exchange`,
   the `FailureKind` names, `adapters::build` gaining `ResearchFiles`, default provider ids from R8. §7.2: R8·U1 now

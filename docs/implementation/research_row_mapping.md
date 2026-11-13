@@ -452,4 +452,5 @@ Old rows: 393 · placed: 393 · new rows: 3 · total now: 396.
 | A15·C7(a) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
 | A17·C3(b) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
 | A17·C3(c) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
+| A17·C3(d) | R8 | new, from the R8 projection attempt 2 (orchestrator 2026-11-13) |  |
 | A17·C7(a) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |

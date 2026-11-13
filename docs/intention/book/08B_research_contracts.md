@@ -187,7 +187,9 @@ rule of MC-A8 stops reading. A page that cannot be obtained is recorded as a `re
 does not count (R-IA10). "Cannot be obtained" includes a page the site refuses (any non-2xx answer, after one
 `Retry-After` wait where the site asks for one) and a page request that times out or is reset after it was sent:
 these are outcomes of the page, not provider failures, and MC-A9's retry and error classes do not apply to them
-(changelog 11). Only a page request that never left the Mac (connect or DNS failure) is a failed call (`offline`). The trusted list, shop hosts and `max_pages` are part of the run's settings
+(changelog 11). A page request that never left the Mac (connect or DNS failure) is "could not be read" as well: the page reader
+never fails a call, so one dead listing domain cannot hold a run; offline is detected by the model and
+visual-search calls (changelog 11(d)). The trusted list, shop hosts and `max_pages` are part of the run's settings
 snapshot. Edits apply to runs that start later (08A §6).
 
 **Invariant (part of MA11).** Two pages count as different sites only if their site identities differ. A page on
