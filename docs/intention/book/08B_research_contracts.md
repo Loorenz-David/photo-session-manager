@@ -156,7 +156,8 @@ host ("already covered by …"). Entries are therefore disjoint. `research.trust
 priority is the index (0 first). A host `h` **matches** entry `e` iff `h = e` or `h` ends with `"." + e`.
 
 **Shop hosts.** The connected shop's public hosts as the commerce port reports them: primary domain, other domains
-and the platform domain (new port method; shape RESEARCH-VERIFY-9). They are normalised by `H` and snapshotted at
+and the platform domain (new port method; shape RESEARCH-VERIFY-9). Until the owner grants the Shopify app
+`read_markets`, the Shopify adapter reports the primary domain and the platform host only (changelog 11). They are normalised by `H` and snapshotted at
 run start. A host matches the shop when it equals a shop host or is one of its subdomains.
 
 **Site of a page.** Use the URL whose content was actually read: after redirects when the reader reports it
@@ -183,7 +184,10 @@ orchestrator by the owner's delegation, 2026-11-12).
 `untrusted` pages by rank. Ties on rank break by `U` ascending (byte order). Pages are read in that order until
 `research.max_pages` pages have been **obtained** (default 10, adjustable by the benchmark), or until the cost
 rule of MC-A8 stops reading. A page that cannot be obtained is recorded as a `read` step "could not be read" and
-does not count (R-IA10). The trusted list, shop hosts and `max_pages` are part of the run's settings
+does not count (R-IA10). "Cannot be obtained" includes a page the site refuses (any non-2xx answer, after one
+`Retry-After` wait where the site asks for one) and a page request that times out or is reset after it was sent:
+these are outcomes of the page, not provider failures, and MC-A9's retry and error classes do not apply to them
+(changelog 11). Only a page request that never left the Mac (connect or DNS failure) is a failed call (`offline`). The trusted list, shop hosts and `max_pages` are part of the run's settings
 snapshot. Edits apply to runs that start later (08A §6).
 
 **Invariant (part of MA11).** Two pages count as different sites only if their site identities differ. A page on
@@ -417,8 +421,11 @@ with at most 6 fractional digits, parsed exactly, never as floats.
 
 **Price table** `research.prices`: rows `{provider, model ("" for non-model providers), unit, usd_per_million}`
 plus, per `(provider, model)`, `fallback_call_usd`. Unit names are what the adapters report: `input_token`,
-`cached_input_token`, `output_token`, `web_search_call`, `image_search_call`, `page_fetch` (exact usage fields:
-RESEARCH-VERIFY-1, -6). Snapshotted at run start.
+`cached_input_token`, `cache_write_token`, `output_token`, `web_search_call`, `image_search_call`, `page_fetch`
+(exact usage fields: RESEARCH-VERIFY-1, -6). `input_token` is net: the provider's input count minus the cached
+and the cache-write tokens, so no token is counted under two units. `output_token` includes reasoning tokens.
+`web_search_call` is the provider's billed request count (`num_requests`), not the number of tool items in the
+reply. An adapter reports a unit only when its count is greater than 0 (changelog 11). Snapshotted at run start.
 
 **Call cost** = `ceil( Σ_u usage_u × p_u / 10^6 )` micro-USD, with `p_u` = `usd_per_million × 10^6` as an
 integer, computed in `i128`. A call whose usage is not reported (a timeout after send, a dropped connection after
@@ -795,3 +802,19 @@ to 07A MC-10 and 05A MC-30.
     it does not fit; Keep previous → the prior's value; Use suggestion / Accept all → the suggestion), and releases
     the item at the last pending key. Otherwise the item would wait on a field that no longer shows a conflict.
     Completes the owner's card 1, as changelogs 6 and 8 did.
+11. **2026-11-13 — Three readings from the R8 projection (orchestrator, under the owner's delegation).** (a) MC-A3,
+    pages: a page the site refuses (any non-2xx answer, after one `Retry-After` wait), or whose request times out
+    or is reset after it was sent, is "could not be read" (`obtained: false`): it does not count toward
+    `max_pages` and the run goes on. It is not a provider failure; MC-A9's transient retry and error classes are
+    for providers. Without this, one Etsy "forbidden" would have failed the whole run as "key rejected". (b) MC-A8,
+    units: `cache_write_token` is added (OpenAI bills cache writes at their own rate, R1 finding 1); `input_token`
+    is net of cached and cache-write tokens; `web_search_call` comes from `num_requests`; an adapter reports a unit
+    only when its count is greater than 0. The rule "a reported unit missing from the table is charged the
+    fallback" is unchanged, so a price table without `cache_write_token` charges the fallback for a call that
+    reports it; R10's shipped table carries the unit. (c) Shop hosts: the Shopify adapter reports the primary
+    domain and the platform (myshopify) host; the shop's other addresses need the `read_markets` permission, which
+    the owner's app does not have (R8 projection card 1, decided "No for now"). The owner may grant it later; a
+    follow-up then adds those hosts. Until then a shop page on another address would count as an outside site.
+    (d) Added the same night: for the page reader every transport failure (DNS, refused, connect timeout, timeout or
+    reset after send) is "could not be read", never an offline hold; offline is detected by the provider calls,
+    which run before pages. One dead listing domain must not hold a run.

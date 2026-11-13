@@ -260,11 +260,13 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
   field_keys}>, fields_filled, to_review, can_run}` · `SecretsInput {model_key, search_key, reader_key}` (each optional) ·
   `SecretsState {model, search, reader}` (booleans) · `ExportSelection {Range {from, to} | Items(ids)}`.
 - **Constructors used only by `crates/integrations/src/lib.rs` (R7·U1):** `psm_research::schema::ensure`,
-  `ResearchService::new`, `psm_research::shop::CommerceShopFacts::new`, `psm_research::adapters::build`.
+  `ResearchService::new`, `psm_research::shop::CommerceShopFacts::new`, `psm_research::adapters::build` (from R8·U1:
+  `build(settings, secrets, files: ResearchFiles)`).
 - **Ports (`psm_research::ports`, R4·U1).** `ModelProvider::call(&ModelRequest) -> Result<ModelReply, CallFailure>` ·
-  `VisualSearchProvider::search(&ResearchImage) -> Result<SearchReply, CallFailure>` · `PageReader::read(url, …) ->
-  Result<PageReply, CallFailure>` · `Exchange {request, response}` · `CallFailure {sent, status, kind, quota, text,
-  usage, exchange}`. `ResearchImage` has no public constructor; `ResearchImages::render` is the only maker.
+  `VisualSearchProvider::search(&ResearchImage) -> Result<SearchReply, CallFailure>` · `PageReader::read(&self, url:
+  &str) -> Result<PageReply, CallFailure>` · `Exchange {request, response}` (carried by the three replies only) ·
+  `CallFailure {sent, status, kind, quota, text, usage}` with `FailureKind {Connect, Timeout, Reset, Status, Schema,
+  Refusal}` (no `exchange` field; a refusal is a `CallFailure` of kind `Refusal`; `ModelReply.output` is plain JSON). `ResearchImage` has no public constructor; `ResearchImages::render` is the only maker.
 - **Core seams.** `Imaging::render_research(preview, values, long_edge, dest)` · `CommerceAdapter::public_listing(
   external_id) -> PublicListing {hosts, item_url, item_path_tail}` (default: empty) · unit names in
   `Definition.validations.unit_names` (filled by the Shopify adapter in R8·U3).
@@ -280,7 +282,8 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
   `stages.<stage>.{model, effort, image_long_edge}` (models and efforts empty until R10; long edge 1024 for observe,
   find, compare and 2048 for labels, condition) · `max_cost_per_run` ("0.50") · `max_cost_per_day` ("15") · `prices`
   ([] until R10) · `language` ("English") · `record_days` (30, minimum 2) · `call_timeout_seconds` ({model: 180,
-  other: 60}) · `providers.{model, visual_search, page_reader}` (adapter ids, empty until R8).
+  other: 60}) · `providers.{model, visual_search, page_reader}` (adapter ids; from R8 the defaults are `openai`, `serpapi_lens`,
+  `page_http`, and a saved `""` means the default).
 - **Panel sentences (MC-A6).** `NoIntegration` "Connect a shop to use research" · `NoModelKey` "Add the model key in
   Settings → Research" · `NoSearchKey` "Add the visual search key in Settings → Research" · `PriceMissing` "No price is
   set for <provider> <model>" · `NothingToResearch` "This item type has no fields research can fill" · `DayLimit` "Day
@@ -328,7 +331,7 @@ Per milestone (the exact commands are in each plan's unit and Closing gate secti
 | R5 | `research::r5_…::`, `p39`, `p40`, `p10`, `p13`, `p14`, `p64`, the form and publish UI tests | **full gate** |
 | R6 | `npx vitest run` of the touched features, typecheck | `npm run typecheck` · `npm test`; no cargo test (no Rust file changed) |
 | R7 | `research::r7_…::`, `p16`, `p21`, `p09`, `p01`, `p61`, research `export::`, settings UI tests | **full gate** + `cargo test -p psm-research` |
-| R8 | research `adapter_…::`; U3 also `research::r8_shop_facts::`, `p12` | **full gate** + `cargo test -p psm-research` |
+| R8 | research `adapter_…::`; U1 and U3 also `research::r7_wiring::`; U3 also `research::r8_shop_facts::`, `p12` | **full gate** + `cargo test -p psm-research` |
 | R9 | tool crate tests | tool crate tests + lint; no app suite |
 
 ### 7.3 Runner and templates
@@ -393,6 +396,10 @@ present (never printing a value) before launching R1.
 - The intention map still says 08A/08B are "not planned yet".
 
 ## 9. Amendment log
+- 2026-11-13 v5 (orchestrator) — R8 projection r0 folded (card 1 = No for now; ledger L1–L31 applied to the R8 plan;
+  08B changelog 11). §6.6 corrected to the code: `PageReader::read(&self, url)`, `CallFailure` without `exchange`,
+  the `FailureKind` names, `adapters::build` gaining `ResearchFiles`, default provider ids from R8. §7.2: R8·U1 now
+  changes an app file and runs `research::r7_wiring::`. R8 is 20 criteria / 34 rows.
 - 2026-11-12 (R7·U2 implementer) — §6.7 Export research files: the field names the plan delegated.
 - 2026-11-12 v4 (orchestrator) — R5 projection turned off after seven rounds (0 owner cards, each round smaller;
   every ledger applied to the plan and 08B changelogs 6, 8, 9, 10); the review is R5's gate. R8 keeps `projection: yes`.

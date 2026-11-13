@@ -448,3 +448,8 @@ Old rows: 393 · placed: 393 · new rows: 3 · total now: 396.
 | A24·C1(b) | R10·U1 | research harness with `ResearchSettings::default()` from `psm_research::config` (was `psm_infra::settings_file` and the wired `TestApp`) |  |
 | A24·C2(a) | R10·U1 | research harness with `ResearchSettings::default()` from `psm_research::config` (was `psm_infra::settings_file` and the wired `TestApp`) |  |
 | A24·C2(b) | R10·U1 | research harness with `ResearchSettings::default()` from `psm_research::config` (was `psm_infra::settings_file` and the wired `TestApp`) |  |
+| A15·C5(d) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
+| A15·C7(a) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
+| A17·C3(b) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
+| A17·C3(c) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
+| A17·C7(a) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |

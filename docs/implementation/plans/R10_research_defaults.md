@@ -28,6 +28,9 @@ This milestone is one runner phase made of 1 unit. Work the units in order. Afte
 
 ## Carried from earlier reviews (orchestrator, 2026-11-12; wins over older wording below)
 - **U1, default attribution keys (R4 review).** The shipped default `attribution_keys` is `["beyo.designer"]` (the shop's Designer field; the shop has no manufacturer field), not the registry's older `["custom.designer", "custom.manufacturer"]`; `master_plan_research.md` §6.6 is updated. Keep it unless the owner's pick says otherwise.
+- **U1, `cache_write_token` price (R8, 08B changelog 11).** OpenAI bills cache-write tokens as their own unit; the shipped
+  price table carries a `cache_write_token` row for every model default, or calls that report it are charged the
+  fallback.
 
 ## Unit 1 — Shipped defaults and the reachability check
 
