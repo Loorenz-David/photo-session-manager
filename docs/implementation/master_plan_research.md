@@ -187,6 +187,9 @@ Already in the lock file through `reqwest 0.13.5`: `url 2.5.8`, `idna 1.1.0`. `u
 dependency of `psm-core`. R2·U1 pins `unicode-casefold = 0.2.0` for full Unicode case folding and
 `unicode-general-category = 1.1.0` for a character's general category. Not verified by the planner: an HTML parser (R8·U3, HTTP route only). Each is a task
 with the pin recorded here. `psm-research` uses `rusqlite` and `reqwest` at the workspace's existing versions.
+R8 (implementer, 2026-11-13): `psm-research` uses `reqwest = 0.13` (`blocking`, `rustls`; 0.13.5 in the lock), `base64 =
+0.23` (0.23.1, already in the lock) for image data URLs, and `html5ever = 0.39` (0.39.0, already in the lock; its tokenizer
+only, no tree) as the HTML parser.
 
 ### 6.3 Enums (`psm_research::domain` unless noted; serialized snake_case)
 `RunState {Queued, Running, Finished, Failed, StoppedAtCap, Cancelled}` · `RunTrigger {Auto, Manual, FollowUp}` ·
