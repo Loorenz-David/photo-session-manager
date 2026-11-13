@@ -248,10 +248,14 @@ pub fn site_of(url: &str, shop_hosts: &[String], trusted: &[String]) -> SiteClas
     SiteClass::Other(h.strip_prefix("www.").unwrap_or(&h).to_owned())
 }
 
-/// The owner's nine trusted sites in priority order (evidence doc, owner 2026-11-12).
-pub const TRUSTED_SITES: [&str; 9] = [
+/// The owner's trusted sites in priority order (evidence doc, owner 2026-11-12; pamono's country
+/// sites added by the owner 2026-11-13).
+pub const TRUSTED_SITES: [&str; 12] = [
     "etsy.com",
     "pamono.com",
+    "pamono.se",
+    "pamono.eu",
+    "pamono.co.uk",
     "bukowskis.com",
     "midcenturymobler.com",
     "vntg.com",

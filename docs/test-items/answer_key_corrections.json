@@ -33,9 +33,9 @@
       "n": 30,
       "field": "wood_type",
       "key_value": ["Walnut"],
-      "corrected_value": ["Rosewood"],
+      "corrected_value": ["Santos Rosewood"],
       "certainty": "medium",
-      "basis": "Door veneer is red-brown with strong dark, near-black streaks running the full height, which reads as rosewood, not walnut. The title says rosewood; the description says walnut. Photo judgment only; a stained teak cannot be fully excluded."
+      "basis": "Door veneer is red-brown with strong dark, near-black streaks running the full height, which reads as rosewood, not walnut. The title says rosewood; the description says walnut. Photo judgment only; a stained teak cannot be fully excluded. Owner 2026-11-13: \"Rosewood\" was an older wood-type choice; it maps to today's shop choice \"Santos Rosewood\"."
     },
     {
       "n": 39,

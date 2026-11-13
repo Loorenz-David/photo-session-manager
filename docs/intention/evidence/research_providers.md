@@ -294,3 +294,21 @@ evidence above. The owner may change any of them; R8 and R10 read this section.
    `gpt-6.1-terra`, effort low; condition `gpt-6.1-terra`, effort high. R9's acceptance measurement confirms or
    changes them; R10 writes the shipped defaults from the result.
 
+## Owner answers (2026-11-13 morning)
+
+1. **Piece 30's wood:** the corrected value is the shop's current choice "Santos Rosewood" ("Rosewood" was an older
+   choice that maps to it). `docs/test-items/answer_key_corrections.json` updated.
+2. **pamono's country sites are trusted:** `pamono.se`, `pamono.eu`, `pamono.co.uk`, each right after `pamono.com`
+   in priority (12 entries). The measurement tool's list follows.
+3. **The owner's shop addresses:** `beyovintage.se` (primary), `www.beyovintage.se`, `beyovintage.com`,
+   `www.beyovintage.com` (the `.com` pair redirect to the primary), `beyovintage.myshopify.com`,
+   `68c5b4-6a.myshopify.com`. A result on any of them is the owner's own shop.
+4. **Designer and maker:** the owner's live shop names them "Designer" and "Manufacturer"
+   (`custom.designer`, `custom.manufacturer`, as in the 42-piece file). The app reads the linked shop's fields as they
+   come. The engine's shipped `attribution_keys` default `["beyo.designer"]` is the dev store's key (the store the
+   app's Shopify token points at, read 2026-11-13: `beyo.designer` "Designer", no manufacturer field), so it is not
+   a default that fits any other shop. R10 resolves it (see its carried notes).
+5. **The USD 40:** counts OpenAI API spend (the research agent's model calls on the key in `~/.psm_research.env`),
+   not the Codex subscription. Lens searches are priced 0 in the measurement and draw on the SerpApi plan's monthly
+   searches; page downloads are free.
+

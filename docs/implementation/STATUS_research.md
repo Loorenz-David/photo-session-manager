@@ -31,16 +31,17 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **Done:** `R1_research_benchmark` APPROVED_WITH_NOTES 2026-11-13 01:12, 3 owner cards. Picks made by the orchestrator under
   the owner's delegation, all as recommended, recorded in the evidence doc "Owner picks": Lens via SerpApi (Vision
   the replacement, not built), plain HTTP with slow Shopify hosts, models observe Sol low / read Terra low /
-  condition Terra high. R1 notes folded into R8·U3 and R9·U1/U2. Left for the owner: piece 30's corrected wood
-  "Rosewood" is not a shop choice ("Santos Rosewood" is) in `docs/test-items/answer_key_corrections.json`;
-  pamono country sites need their own trusted entries if wanted. Track B's build folder: deletion was denied by
-  the permission prompt; the owner may delete `../Photo-Session-Manager-agentic-b/target`.
+  condition Terra high. R1 notes folded into R8·U3 and R9·U1/U2. Owner answers 2026-11-13 morning (evidence doc
+  "Owner answers"): piece 30's wood is "Santos Rosewood" (corrections file updated); pamono.se/.eu/.co.uk trusted
+  (tool list now 12); shop addresses listed; designer and maker are the shop's "Designer"/"Manufacturer" fields and
+  R10 finds them by name; USD 40 is OpenAI API spend. Track B's build folder: the owner said delete it, but the
+  permission prompt denied the command again; the owner runs `rm -rf ../Photo-Session-Manager-agentic-b/target`.
 - **Done:** `R8_research_real_adapters` APPROVED_WITH_NOTES 2026-11-13 02:30 (attempt 3; two projection rounds archived;
   08B changelog 11; master plan v5–v6). Page-reader notes (charset, proxy, address ranges) folded into R9·U1 task 0;
   §3 Isolation lesson applied (v7). Not yet run live against the real services.
 - **Done:** `R9_research_tool_and_acceptance` APPROVED_WITH_NOTES 2026-11-13 03:07 (tool, `accept`, `score-accept`,
   page-reader fixes). Owner card in its narrative: models per stage after the measurement (→ R10).
-- **No run in flight. Held for the owner (2026-11-13 03:10): the measurement (R9·U2 tasks 3–6), owner-attended per the
+- **No run in flight. Held for the owner's "go" (2026-11-13 03:10; owner asked about the cost 09:35, no go yet): the measurement (R9·U2 tasks 3–6), owner-attended per the
   plan, real keys, ceiling USD 40 total for tasks 3–5.** Not run overnight although the owner delegated questions:
   the plan requires the owner nearby and it spends money. Run-book when the owner says go:
   1. `set -a; source ~/.psm_research.env; set +a` (via a script file; this session's guard refuses `.`/`source` inline),

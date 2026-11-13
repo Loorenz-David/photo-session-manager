@@ -67,7 +67,7 @@ pub const ATTRIBUTION_KEYS: [&str; 2] = ["custom.designer", "custom.manufacturer
 /// Run states after which nothing more happens.
 pub const FINAL_STATES: [&str; 4] = ["finished", "failed", "stopped_at_cap", "cancelled"];
 
-/// The owner's nine trusted sites in priority order (evidence doc, owner 2026-11-12).
+/// The owner's trusted sites in priority order (evidence doc; pamono country sites 2026-11-13).
 pub fn trusted_sites() -> Vec<String> {
     crate::answer_key::trusted_sites()
 }
@@ -363,7 +363,7 @@ pub fn layout(definitions: &[Definition], group: AttributeGroup) -> Vec<PresetFi
 /// The scratch settings: models per stage from the evidence doc's Owner picks (observe
 /// `gpt-6.1-sol` low, read `gpt-6.1-terra` low, condition `gpt-6.1-terra` high; the stages the
 /// picks do not name take the vision pick for images and the read pick for text), prices from
-/// R1's `prices.json`, caps 0.50 per run and 25 per day, manual runs only, the nine trusted sites,
+/// R1's `prices.json`, caps 0.50 per run and 25 per day, manual runs only, the owner's trusted sites,
 /// the fixture's designer and manufacturer as attribution keys. `patch` replaces top-level keys
 /// (`stages` per stage).
 pub fn scratch_settings(patch: Option<&Json>) -> Result<Json, String> {
