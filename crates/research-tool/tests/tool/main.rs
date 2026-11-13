@@ -3,6 +3,7 @@
 mod u1_probes_and_search;
 mod u2_stage_models;
 mod u3_report_and_replay;
+mod u4_accept;
 
 use psm_research_tool::http::{HttpSeam, Wire, WireError, WireReply};
 use std::{cell::RefCell, collections::VecDeque, path::Path};

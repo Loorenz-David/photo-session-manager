@@ -3421,6 +3421,7 @@ dependencies = [
  "chrono",
  "psm-core",
  "psm-infra",
+ "psm-integrations",
  "psm-research",
  "psm-testkit",
  "reqwest",

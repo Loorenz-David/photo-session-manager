@@ -2,8 +2,10 @@
 //! benchmarks); it makes real provider calls only when run by a person with keys in the
 //! environment; every exchange is recorded under the out folder (MC-A11 layout), scanned for key
 //! values before it is written, and counted against the spending ceiling and the call caps.
-//! R9: `report` and `replay` over an export of the app's research record (08A §10A).
+//! R9: `report` and `replay` over an export of the app's research record (08A §10A), and
+//! `accept`, the acceptance measurement on the real engine (08A §11).
 
+pub mod accept;
 pub mod answer_key;
 pub mod bench_models;
 pub mod bench_search;
@@ -40,6 +42,11 @@ commands:
                   or zip, or a benchmark recording folder) [--json]
   replay <export> --run <id> --stage <stage> [--model <m>] [--effort <e>] [--instructions <file>]
                   [--out <dir>]; the key is OPENAI_API_KEY from the environment
+  accept          --pieces <file> --data <scratch dir> --ceiling-usd <n> [--only <n,…>]
+                  [--settings <json file>]: the real engine over the test pieces (keys
+                  OPENAI_API_KEY, SERPAPI_API_KEY from the environment)
+  score-accept    --data <scratch dir> [--pieces <file>]: score every exported run against the
+                  key; writes <data>/scores.json
 options: --pieces <a-b>  --test-file <path>  --corrections <path>  --routes <r,…>  --models <a,b,c>  --stages <s,…>  --efforts <e,…>";
 
 /// Parsed command line.
@@ -68,6 +75,14 @@ pub struct Args {
     pub instructions: Option<PathBuf>,
     /// `report --json`.
     pub json: bool,
+    /// `accept --pieces <file>` (for `accept`, `--pieces` names the pieces file).
+    pub pieces_file: Option<PathBuf>,
+    /// `accept --data <scratch dir>`.
+    pub data: Option<PathBuf>,
+    /// `accept --only <n,…>`.
+    pub only: Option<Vec<u32>>,
+    /// `accept --settings <json file>`: replaces keys of the scratch research settings.
+    pub settings: Option<PathBuf>,
 }
 
 pub fn parse_args(args: &[String]) -> Result<Args, String> {
@@ -97,6 +112,19 @@ pub fn parse_args(args: &[String]) -> Result<Args, String> {
             "--effort" => a.effort = Some(value()?),
             "--instructions" => a.instructions = Some(PathBuf::from(value()?)),
             "--json" => a.json = true,
+            "--pieces" if matches!(a.command.as_str(), "accept" | "score-accept") => {
+                a.pieces_file = Some(PathBuf::from(value()?))
+            }
+            "--data" => a.data = Some(PathBuf::from(value()?)),
+            "--settings" => a.settings = Some(PathBuf::from(value()?)),
+            "--only" => {
+                a.only = Some(
+                    list(&value()?)
+                        .iter()
+                        .map(|n| n.trim().parse::<u32>().map_err(|_| "bad --only"))
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            }
             "--pieces" => {
                 let v = value()?;
                 let (from, to) = v.split_once('-').unwrap_or((&v, &v));
@@ -142,6 +170,8 @@ pub fn run_with(
 ) -> i32 {
     let result = match args.first().map(String::as_str) {
         Some("report" | "replay") => run_export_command(args, seam, env, out),
+        Some("accept") => run_accept(args, seam, env, out),
+        Some("score-accept") => run_score_accept(args, out),
         _ => run_inner(args, seam),
     };
     match result {
@@ -151,6 +181,79 @@ pub fn run_with(
             1
         }
     }
+}
+
+/// `accept …` (R9·U2): the acceptance run, then its summary printed.
+fn run_accept(
+    raw: &[String],
+    seam: &dyn HttpSeam,
+    env: &dyn Fn(&str) -> Option<String>,
+    out: &mut dyn Write,
+) -> Result<(), String> {
+    let args = parse_args(raw).map_err(|e| format!("{e}\n{USAGE}"))?;
+    let pieces = args
+        .pieces_file
+        .clone()
+        .ok_or("accept needs --pieces <file>")?;
+    let data = args
+        .data
+        .clone()
+        .ok_or("accept needs --data <scratch dir>")?;
+    let ceiling = parse_micro_usd(
+        args.ceiling_usd
+            .as_deref()
+            .ok_or("accept needs --ceiling-usd <n>")?,
+    )?;
+    let settings_patch = match &args.settings {
+        Some(file) => Some(
+            serde_json::from_str::<serde_json::Value>(
+                &std::fs::read_to_string(file)
+                    .map_err(|e| format!("cannot read {}: {e}", file.display()))?,
+            )
+            .map_err(|e| format!("{}: {e}", file.display()))?,
+        ),
+        None => None,
+    };
+    let opts = accept::AcceptOptions {
+        pieces,
+        data,
+        ceiling_micro: ceiling,
+        only: args.only.clone(),
+        settings_patch,
+        run_timeout: accept::RUN_TIMEOUT,
+    };
+    let mut log = std::io::stderr();
+    let outcome = accept::run(&opts, seam, env, &mut log)?;
+    let text = format!(
+        "{} piece(s) run; USD {} spent in the scratch store{}\n",
+        outcome.pieces.len(),
+        budget::format_usd(outcome.spent_micro_usd),
+        outcome
+            .stopped
+            .as_deref()
+            .map(|s| format!("; stopped: {s}"))
+            .unwrap_or_default()
+    );
+    out.write_all(text.as_bytes())
+        .map_err(|e| format!("output: {e}"))
+}
+
+/// `score-accept --data <dir>` (R9·U2): the scores of the acceptance runs, summary printed.
+fn run_score_accept(raw: &[String], out: &mut dyn Write) -> Result<(), String> {
+    let args = parse_args(raw).map_err(|e| format!("{e}\n{USAGE}"))?;
+    let data = args
+        .data
+        .clone()
+        .ok_or("score-accept needs --data <scratch dir>")?;
+    let pieces = args.pieces_file.clone().unwrap_or(args.test_file.clone());
+    let scores = accept::score_data(&data, &pieces, &args.corrections)?;
+    let text = serde_json::to_string_pretty(&serde_json::json!({
+        "groups": scores["groups"],
+        "per_piece": scores["per_piece"],
+    }))
+    .unwrap_or_default();
+    out.write_all(format!("{text}\nwrote {}\n", data.join("scores.json").display()).as_bytes())
+        .map_err(|e| format!("output: {e}"))
 }
 
 /// `report <export>` and `replay <export> …` (R9·U1).

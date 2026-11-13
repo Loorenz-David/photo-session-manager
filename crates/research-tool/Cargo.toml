@@ -24,11 +24,14 @@ chrono = "0.4"
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 psm-research = { path = "../research" }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# R9·U2 `accept`: the real app headless on a scratch folder. The testkit gives the shop
+# definitions fixture and the editor stand-in (no Capture One is ever driven).
+psm-integrations = { path = "../integrations" }
+psm-testkit = { path = "../testkit" }
 
 [dev-dependencies]
 tempfile = "3"
 # R9·U1: the export fixture is built in the test by the research crate's harness (included by path).
-psm-testkit = { path = "../testkit" }
 rusqlite = { version = "0.40", features = ["bundled"] }
 
 [[test]]

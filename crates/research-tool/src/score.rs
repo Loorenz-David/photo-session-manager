@@ -133,3 +133,195 @@ pub fn score_read(page_names_key: bool, key: &str, answer: Option<&str>) -> Outc
         Some(_) => Outcome::Wrong,
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Acceptance runs (R9·U2 task 2): each run's written values against the answer key.
+// ---------------------------------------------------------------------------------------------
+
+/// The confidences at which a hedged attribution counts as correct (`answer_key_corrections.json`
+/// `scoring_rules.hedged_attribution`: medium or low; high is wrong).
+pub const HEDGED_CORRECT_AT: [&str; 2] = ["medium", "low"];
+
+/// What a run wrote for a field: the value and its confidence (`writes.json`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Suggestion {
+    pub value: Json,
+    pub confidence: String,
+    pub sources: Vec<String>,
+}
+
+/// An attribution against the key. A key value: the same name (MC-A2 name key) is correct, but
+/// for a hedged piece only at medium or low; another name is wrong; nothing written is not
+/// determined. No key value: any suggestion is wrong, nothing written is correct.
+pub fn score_attribution(entry: Option<&KeyEntry>, suggestion: Option<&Suggestion>) -> Outcome {
+    match (entry, suggestion) {
+        (None, None) => Outcome::Correct,
+        (None, Some(_)) => Outcome::Wrong,
+        (Some(_), None) => Outcome::NotDetermined,
+        (Some(entry), Some(s)) => match score(&KeyKind::Text, &entry.value, Some(&s.value)) {
+            Outcome::Correct
+                if entry.hedged && !HEDGED_CORRECT_AT.contains(&s.confidence.as_str()) =>
+            {
+                Outcome::Wrong
+            }
+            other => other,
+        },
+    }
+}
+
+/// The class of a scored field in the tables of 08A §11.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldGroup {
+    Attribution,
+    Visible,
+    Condition,
+}
+
+/// One scored field of one run.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct FieldScore {
+    pub n: u32,
+    pub key: String,
+    pub group: FieldGroup,
+    /// `None`: an attribution the key leaves empty.
+    pub corrected: Option<bool>,
+    pub hedged: bool,
+    pub expected: Json,
+    pub suggested: Json,
+    pub confidence: Option<String>,
+    pub outcome: Outcome,
+    /// A disagreement with the key: listed for a human look with its evidence.
+    pub review_candidate: bool,
+    pub sources: Vec<String>,
+    /// The run's steps that name the field (`stage: summary` and the source, if any).
+    pub evidence: Vec<String>,
+}
+
+impl serde::Serialize for Outcome {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(match self {
+            Outcome::Correct => "correct",
+            Outcome::Wrong => "wrong",
+            Outcome::NotDetermined => "not_determined",
+        })
+    }
+}
+
+/// The key's field name of a definition key (`custom.designer` → `designer`).
+pub fn field_of(key: &str) -> &str {
+    key.split_once('.').map_or(key, |(_, field)| field)
+}
+
+fn kind_of(definition: &psm_core::domain::attribute::Definition) -> KeyKind {
+    use psm_core::domain::attribute::CoreType;
+    match definition.core_type {
+        CoreType::Choice => KeyKind::Choice(definition.choices.clone()),
+        CoreType::MultiChoice => KeyKind::MultiChoice(definition.choices.clone()),
+        _ => KeyKind::Text,
+    }
+}
+
+/// What a run's `writes.json` suggests for `key` (an entry that was written, kept or lowered).
+pub fn suggestion_of(writes: &Json, key: &str) -> Option<Suggestion> {
+    let write = writes["writes"].get(key)?;
+    let outcome = write["outcome"].as_str().unwrap_or_default();
+    if !matches!(outcome, "written" | "unchanged" | "lowered") {
+        return None;
+    }
+    Some(Suggestion {
+        value: write["value"].clone(),
+        confidence: write["confidence"].as_str().unwrap_or_default().to_owned(),
+        sources: write["sources"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|s| s.as_str().map(str::to_owned))
+            .collect(),
+    })
+}
+
+/// Scores one run of piece `n`: every attribution key, and every other definition the key holds
+/// a value for (fields the key does not hold are not scored).
+pub fn score_run(
+    n: u32,
+    writes: &Json,
+    steps: &[Json],
+    entries: &[KeyEntry],
+    definitions: &[psm_core::domain::attribute::Definition],
+    attribution_keys: &[String],
+) -> Vec<FieldScore> {
+    use psm_core::domain::attribute::AttributeGroup;
+    let mut out = Vec::new();
+    for definition in definitions {
+        let key = definition.key.as_str();
+        let entry = entries
+            .iter()
+            .find(|e| e.n == n && e.field == field_of(key));
+        let attribution = attribution_keys.iter().any(|k| k == key);
+        if !attribution && entry.is_none() {
+            continue;
+        }
+        let suggestion = suggestion_of(writes, key);
+        let (group, outcome) = if attribution {
+            (
+                FieldGroup::Attribution,
+                score_attribution(entry, suggestion.as_ref()),
+            )
+        } else {
+            let group = if definition.group == AttributeGroup::Condition {
+                FieldGroup::Condition
+            } else {
+                FieldGroup::Visible
+            };
+            let expected = entry.map(|e| e.value.clone()).unwrap_or(Json::Null);
+            (
+                group,
+                score(
+                    &kind_of(definition),
+                    &expected,
+                    suggestion.as_ref().map(|s| &s.value),
+                ),
+            )
+        };
+        let evidence = steps
+            .iter()
+            .filter(|s| {
+                s["field_keys"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|k| k.as_str() == Some(key))
+            })
+            .map(|s| {
+                let mut line = format!(
+                    "{}: {}",
+                    s["stage"].as_str().unwrap_or_default(),
+                    s["summary"].as_str().unwrap_or_default()
+                );
+                if let Some(url) = s["source_url"].as_str() {
+                    line.push_str(&format!(" ({url})"));
+                }
+                line
+            })
+            .collect();
+        out.push(FieldScore {
+            n,
+            key: key.to_owned(),
+            group,
+            corrected: entry.map(|e| e.bucket == Bucket::Corrected),
+            hedged: entry.is_some_and(|e| e.hedged),
+            expected: entry.map(|e| e.value.clone()).unwrap_or(Json::Null),
+            suggested: suggestion
+                .as_ref()
+                .map(|s| s.value.clone())
+                .unwrap_or(Json::Null),
+            confidence: suggestion.as_ref().map(|s| s.confidence.clone()),
+            outcome,
+            review_candidate: outcome == Outcome::Wrong,
+            sources: suggestion.map(|s| s.sources).unwrap_or_default(),
+            evidence,
+        });
+    }
+    out
+}
