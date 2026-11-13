@@ -1,0 +1,62 @@
+{
+  "cap": "page_fetch",
+  "cost_micro_usd": 0,
+  "duration_ms": 60335,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T15:17:12.241Z",
+  "fixture": {
+    "captured": "2026-11-12T15:16:11.906Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "pages/vgliving_co.json"
+  },
+  "id": "v8-http-vgliving_co-7fb674cd340c",
+  "meta": null,
+  "model": "",
+  "provider": "page_http",
+  "request": {
+    "body": null,
+    "headers": {
+      "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en"
+    },
+    "method": "GET",
+    "url": "https://vgliving.co/products/svend-aage-madsen-teak-dining-table"
+  },
+  "request_hash": "7fb674cd340c227a012b01cf21a2381a1d29aeebcc03253e804526f264b186d8",
+  "response": {
+    "body": null,
+    "body_bytes": 1568,
+    "body_omitted": "third-party page body not committed",
+    "final_url": "https://vgliving.co/products/svend-aage-madsen-teak-dining-table",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "1568",
+      "content-type": "text/html",
+      "date": "Thu, 12 Nov 2026 15:17:12 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.01,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=wjjpdCQBCpquf7%2FpVD9wKgF%2Bah2z8GeuHur8wJd1TIrMaEgijGHq%2BFbdIH62D5yFSXVVFV%2FK9hHlar8Z7MpK4idpgTR%2FfYlJXqzUivOMoKgQz8a3VpAwzmkTXurE\"}]}",
+      "retry-after": "60",
+      "server": "cloudflare",
+      "x-content-type-options": "nosniff",
+      "x-dc": "gcp-europe-west4",
+      "x-download-options": "noopen",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "3bd3a193-c00a-480b-aa9d-60e5de08cd30-1794496632",
+      "x-xss-protection": "1; mode=block"
+    },
+    "redirects": [],
+    "status": 429
+  },
+  "sent": true,
+  "started": "2026-11-12T15:16:11.906Z",
+  "usage": {
+    "page_fetch": 1
+  },
+  "waited_after_429_s": 60,
+  "worst_case_micro_usd": 0
+}

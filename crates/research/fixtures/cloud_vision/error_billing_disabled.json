@@ -1,0 +1,101 @@
+{
+  "cap": "cloud_vision",
+  "cost_micro_usd": 0,
+  "duration_ms": 474,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T14:47:23.569Z",
+  "fixture": {
+    "captured": "2026-11-12T14:47:23.095Z",
+    "probe": "RESEARCH-VERIFY-6",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "cloud_vision/error_billing_disabled.json"
+  },
+  "id": "cloud-vision-d28ab57d782f",
+  "model": "",
+  "provider": "cloud_vision",
+  "request": {
+    "body": {
+      "requests": [
+        {
+          "features": [
+            {
+              "maxResults": 10,
+              "type": "WEB_DETECTION"
+            }
+          ],
+          "image": {
+            "content": {
+              "image_sha256": "f39fd87ef4af58a1a51787dcccb14fc62b1714c65763670697125433a2b8e440"
+            }
+          }
+        }
+      ]
+    },
+    "headers": {
+      "content-type": "application/json",
+      "x-goog-api-key": "<redacted>"
+    },
+    "method": "POST",
+    "url": "https://vision.googleapis.com/v1/images:annotate"
+  },
+  "request_hash": "d28ab57d782fc9bd9b07adb1e211141824ee8a4ece1973a2ac047bb2024fd4f2",
+  "response": {
+    "body": {
+      "error": {
+        "code": 403,
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            "domain": "googleapis.com",
+            "metadata": {
+              "consoleUrl": "https://console.developers.google.com/billing/enable?project=<project-number>",
+              "consumer": "projects/<project-number>",
+              "containerInfo": "<project-number>",
+              "service": "vision.googleapis.com"
+            },
+            "reason": "BILLING_DISABLED"
+          },
+          {
+            "@type": "type.googleapis.com/google.rpc.LocalizedMessage",
+            "locale": "en-US",
+            "message": "This API method requires billing to be enabled. Please enable billing on project #<project-number> by visiting https://console.developers.google.com/billing/enable?project=<project-number> then retry. If you enabled billing for this project recently, wait a few minutes for the action to propagate to our systems and retry."
+          },
+          {
+            "@type": "type.googleapis.com/google.rpc.Help",
+            "links": [
+              {
+                "description": "Google developers console billing",
+                "url": "https://console.developers.google.com/billing/enable?project=<project-number>"
+              }
+            ]
+          }
+        ],
+        "message": "This API method requires billing to be enabled. Please enable billing on project #<project-number> by visiting https://console.developers.google.com/billing/enable?project=<project-number> then retry. If you enabled billing for this project recently, wait a few minutes for the action to propagate to our systems and retry.",
+        "status": "PERMISSION_DENIED"
+      }
+    },
+    "body_bytes": 1583,
+    "final_url": "https://vision.googleapis.com/v1/images:annotate",
+    "headers": {
+      "accept-ranges": "none",
+      "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "content-type": "application/json; charset=UTF-8",
+      "date": "Thu, 12 Nov 2026 14:47:23 GMT",
+      "server": "ESF",
+      "transfer-encoding": "chunked",
+      "vary": "X-Origin, Referer, Origin,Accept-Encoding",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN",
+      "x-xss-protection": "0"
+    },
+    "redirects": [],
+    "status": 403
+  },
+  "sent": true,
+  "started": "2026-11-12T14:47:23.095Z",
+  "usage": {
+    "unit": 1
+  },
+  "worst_case_micro_usd": 0
+}

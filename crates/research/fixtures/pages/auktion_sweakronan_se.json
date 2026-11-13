@@ -1,0 +1,59 @@
+{
+  "cap": "page_fetch",
+  "cost_micro_usd": 0,
+  "duration_ms": 353,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T15:16:05.661Z",
+  "fixture": {
+    "captured": "2026-11-12T15:16:05.308Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "pages/auktion_sweakronan_se.json"
+  },
+  "id": "v8-http-auktion_sweakronan_se-ab0acca28357",
+  "meta": null,
+  "model": "",
+  "provider": "page_http",
+  "request": {
+    "body": null,
+    "headers": {
+      "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en"
+    },
+    "method": "GET",
+    "url": "https://auktion.sweakronan.se/auktion/objekt/1/2383"
+  },
+  "request_hash": "ab0acca28357f415251d8008fd5b5fd843e9f7bc3145aa4f9b3029ee18607539",
+  "response": {
+    "body": null,
+    "body_bytes": 39140,
+    "body_omitted": "third-party page body not committed",
+    "final_url": "https://auktion.sweakronan.se/auktion/objekt/1/2383",
+    "headers": {
+      "cache-control": "no-store, no-cache, must-revalidate",
+      "connection": "keep-alive",
+      "content-security-policy": "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
+      "content-type": "text/html; charset=UTF-8",
+      "date": "Thu, 12 Nov 2026 15:16:05 GMT",
+      "expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+      "pragma": "no-cache",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "nginx",
+      "set-cookie": "<redacted>",
+      "transfer-encoding": "chunked",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN",
+      "x-powered-by": "PleskLin"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T15:16:05.308Z",
+  "usage": {
+    "page_fetch": 1
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 0
+}

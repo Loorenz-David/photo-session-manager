@@ -1,0 +1,59 @@
+{
+  "cap": "serpapi_search",
+  "cost_micro_usd": 0,
+  "duration_ms": 294,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T14:57:51.079Z",
+  "fixture": {
+    "captured": "2026-11-12T14:57:50.785Z",
+    "probe": "RESEARCH-VERIFY-7",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "serpapi_lens/error_image_id_expired.json"
+  },
+  "id": "v7-search-late2-4437b92c3f39",
+  "model": "",
+  "provider": "serpapi_lens",
+  "request": {
+    "body": null,
+    "headers": {},
+    "method": "GET",
+    "url": "https://serpapi.com/search.json?engine=google_lens&image_id=jTxQlnicu2lgbmqZZmCclGxiYJRqYmluaZicamBuYZacDGSZG5lY6mUVpKbHG5pbmphYmpibmgEAaV0Nlw&type=visual_matches&hl=en&country=se&api_key=<redacted>&no_cache=true&output=json"
+  },
+  "request_hash": "4437b92c3f39fdc4fed6239c8d6a73dee936b73906ab4cb98bf93c2423a23cda",
+  "response": {
+    "body": {
+      "error": "Image not found."
+    },
+    "body_bytes": 33,
+    "final_url": "https://serpapi.com/search.json?engine=google_lens&image_id=jTxQlnicu2lgbmqZZmCclGxiYJRqYmluaZicamBuYZacDGSZG5lY6mUVpKbHG5pbmphYmpibmgEAaV0Nlw&type=visual_matches&hl=en&country=se&api_key=<redacted>&no_cache=true&output=json",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "no-cache",
+      "cf-cache-status": "BYPASS",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Thu, 12 Nov 2026 14:57:51 GMT",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "cloudflare",
+      "transfer-encoding": "chunked",
+      "vary": "accept-encoding",
+      "x-content-type-options": "nosniff",
+      "x-download-options": "noopen",
+      "x-frame-options": "SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "b8e779f5-6c78-4eb6-9f32-0d51f9a66877",
+      "x-runtime": "0.004724",
+      "x-xss-protection": "1; mode=block"
+    },
+    "redirects": [],
+    "status": 400
+  },
+  "sent": true,
+  "started": "2026-11-12T14:57:50.785Z",
+  "usage": {
+    "search": 1
+  },
+  "worst_case_micro_usd": 0
+}

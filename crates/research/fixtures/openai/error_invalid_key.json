@@ -1,0 +1,80 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 0,
+  "duration_ms": 484,
+  "effort": "default",
+  "error": null,
+  "finished": "2026-11-12T14:44:33.065Z",
+  "fixture": {
+    "captured": "2026-11-12T14:44:32.581Z",
+    "probe": "RESEARCH-VERIFY-2",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/error_invalid_key.json"
+  },
+  "id": "v2-invalid-key-5e49af44bcd1",
+  "model": "gpt-6-luna",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Say OK.",
+              "type": "input_text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "max_output_tokens": 4000,
+      "model": "gpt-6-luna",
+      "store": false
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "5e49af44bcd15cc491d2d5397c2488c892a1af327cf7b7fc210fe05078c6ac45",
+  "response": {
+    "body": {
+      "error": {
+        "code": "invalid_api_key",
+        "message": "Incorrect API key provided: sk-proj-***********************************0000. You can find your API key at https://platform.openai.com/account/api-keys.",
+        "param": null,
+        "type": "invalid_request_error"
+      },
+      "status": 401
+    },
+    "body_bytes": 293,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "293",
+      "content-type": "text/plain",
+      "date": "Thu, 12 Nov 2026 14:44:33 GMT",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-error-json": "ewogICJlcnJvciI6IHsKICAgICJtZXNzYWdlIjogIkluY29ycmVjdCBBUEkga2V5IHByb3ZpZGVkOiBzay1wcm9qLSoqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqMDAwMC4gWW91IGNhbiBmaW5kIHlvdXIgQVBJIGtleSBhdCBodHRwczovL3BsYXRmb3JtLm9wZW5haS5jb20vYWNjb3VudC9hcGkta2V5cy4iLAogICAgInR5cGUiOiAiaW52YWxpZF9yZXF1ZXN0X2Vycm9yIiwKICAgICJjb2RlIjogImludmFsaWRfYXBpX2tleSIsCiAgICAicGFyYW0iOiBudWxsCiAgfSwKICAic3RhdHVzIjogNDAxCn0=",
+      "x-openai-authorization-error": "401",
+      "x-openai-ide-error-code": "invalid_api_key",
+      "x-openai-internal-caller": "unknown_through_ide",
+      "x-request-id": "req_a4e61b4512214418be410a44a147dd8e"
+    },
+    "redirects": [],
+    "status": 401
+  },
+  "sent": true,
+  "started": "2026-11-12T14:44:32.581Z",
+  "usage": null,
+  "worst_case_micro_usd": 0
+}

@@ -8,7 +8,7 @@ blocked_on: the owner's keys (master_plan_research.md §7.6)
 ---
 # R1 — Research benchmark: probes, visual-search comparison, first model comparison
 
-**Tracker:** NOT_STARTED · 2026-11-12 · planner · —
+**Tracker:** IMPLEMENTED · 2026-11-12 · opus · U1 `60f6d6c`, U2 `7b3a2f8`; 14/14 tool tests, clippy, fmt, workspace check green; Lens measured on 42 pieces, Cloud Vision blocked (billing disabled, owner card); 683 model calls USD 5.82 of 50.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -272,3 +272,68 @@ The reviewer runs `cargo test -p psm-research-tool`, `cargo clippy -p psm-resear
 5. Answer the three picks in **Needs you**.
 
 ## Review log
+
+### 2026-11-12 · implement r1 · opus
+**Built.** The tool crate `crates/research-tool` (package `psm-research-tool`, bin `psm-research`):
+- `recording`: one path per request, in this order: resume (same request hash → recorded call
+  returned, nothing sent), budget, send, record. Layout MC-A11; fields MC-A9; declared parts
+  `<redacted>`; fail-closed scan for every key value, plain and URL-encoded, naming the call id.
+- `budget`: integer micro-USD, prices from `prices.json`, ceiling and per-provider call caps.
+- `answer_key` (naming, own listing, buckets) and `score` (MC-A2 mapping by core `name_key`).
+- Provider modules: `openai`, `serpapi`, `cloud_vision`, `pages`, `shop`.
+- Commands: `probes` (V1–V10, ep4), `bench_search` + `report` (Benchmark 1, check sheet),
+  `bench_models` (matrix, resume, report), `fixtures` (sanitized export), `recost`.
+- Version-0 instructions in `src/instructions/`.
+
+Results are in the evidence doc ("R1 results", "Benchmark 1", "Page reading", "Findings against 08B",
+"Benchmark 2"). Captures are in `crates/research/fixtures/` (32 files + README). Checkpoints: U1
+`60f6d6c`, U2 `7b3a2f8`. Outside the tool crate and the fixtures folder only the workspace
+`Cargo.toml` (one member), `Cargo.lock` and the evidence doc changed.
+
+**Spend (A01·C8, A02·C5).**
+- U1: OpenAI 38 calls (cap 80), USD 0.243 (ceiling 15; includes a USD 0.018 worst-case charge for
+  the V10 timeout). SerpApi 45 searches (cap 130) and 44 uploads (cap 130), free plan (45 of 250
+  monthly searches by the tool's count; the account figure lags; uploads cost no credit). Cloud Vision 2 calls (cap 130), both 403 and
+  unbilled. Shop: 2 read-only calls plus 1 token call that was redone. Plain page fetches: 375
+  records (21 superseded after 429/403), at most one request per 2 s per host.
+- U2: OpenAI 645 calls (cap 700), USD 5.580 (ceiling 35; includes worst-case charges for 3 calls
+  that failed after send).
+- Total model spend USD 5.82 of the milestone's 50.
+
+**Judgment calls** (all 15 with reasons in the handoff §Assumptions). The ones to look at first:
+- Candidate models `gpt-6.1-sol` / `gpt-6.1-terra` / `gpt-6-luna` (Astra left out on price).
+- Cache-write tokens priced at the 30-min write rate instead of input.
+- Hedged piece 26 scored in a third bucket `FromText`.
+- A recorded 401/403/429/5xx is retried on a re-run (moved to `superseded/`).
+- U2 scored keys: observe `wood_type`; read `designer`/`manufacturer`; condition the piece's
+  `condition_*` keys.
+- Best model per stage by (correct − wrong).
+
+**Deviations** (handoff §Deviations):
+- The Cloud Vision route and its success fixture are missing: the key's project has billing
+  disabled (owner card).
+- V9 ran on the test store (no product fields observed).
+- V8 pages were chosen from the benchmark's results.
+- Row A01·C3(a) is tested with three exchanges.
+- U2 choices come from `claude_design/reference/SHOPIFY_PRODUCT_METAFIELDS.md`, because
+  `sv1_definitions_p1.json` is the test store's.
+- One V9 token recording was deleted by hand so the probe could re-run (the token was already
+  redacted).
+- U2 modules were drafted during U1's wait; the version-0 instruction files landed in U1's
+  checkpoint.
+- Tracker actor `opus` (this session), not `codex`.
+
+**Observations for the reviewer and planners.**
+1. Findings against 08B, reported and not adapted: MC-A8 has no cache-write unit; the web-search
+   count is `tool_usage.web_search.num_requests`; shop other domains need `read_markets`; the
+   model page tool returns no page text.
+2. Shopify storefronts (the owner's shop, midcenturymobler, vgliving) throttle plain fetches from
+   one client after a short burst (429, `Retry-After: 60`, not lifted by waiting).
+3. pamono's country sites (`pamono.se/.eu/.co.uk`) are not covered by the trusted entry
+   `pamono.com`.
+4. Row A02·C1(e)'s rule counts a correct reading of *another* piece's designer as wrong. The
+   evidence doc splits the read results by page kind; a candidate refinement for R9·U2's scoring.
+5. Piece 30's corrected `wood_type` "Rosewood" is not a shop choice ("Santos Rosewood" is).
+6. The invalid-key reply echoes the key masked to its last 4 characters.
+7. No real call is in any suite: the 14 tests use a stub seam.
+

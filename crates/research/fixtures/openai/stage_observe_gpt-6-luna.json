@@ -1,0 +1,342 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 234,
+  "duration_ms": 1976,
+  "effort": "default",
+  "error": null,
+  "finished": "2026-11-12T15:23:09.347Z",
+  "fixture": {
+    "captured": "2026-11-12T15:23:07.370Z",
+    "probe": "RESEARCH-VERIFY-3 (R1·U2)",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/stage_observe_gpt-6-luna.json"
+  },
+  "id": "observe-cover-gpt-6-luna-default-b0a7ae271e10",
+  "meta": {
+    "effort": "default",
+    "model": "gpt-6-luna",
+    "n": 1,
+    "stage": "observe",
+    "unit": "cover"
+  },
+  "model": "gpt-6-luna",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Fields:\n- wood_type (multi choice): the visible wood or material of the piece.",
+              "type": "input_text"
+            },
+            {
+              "image_url": {
+                "image_sha256": "fc2db478bd930215c6880392c6c70fe95c90d1b6fb4817f98658b2ae29d17703"
+              },
+              "type": "input_image"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "instructions": "Version 0 (R1·U2). Stage 1, Observe (08A §5).\n\nYou look at one photo of a vintage furniture piece taken in a studio. Report only what is visible in this photo.\n\n- For each field listed below, give the value seen in the photo, using only the field's own choice strings, exactly as written. If the photo does not let you tell, give an empty list and set `sure` to false.\n- Set `sure` to true only when the value is plainly visible; set it to false when you are guessing between similar choices (for example two similar woods).\n- `shows_marking`: true when a maker's label, stamp, brand plate or other marking is visible in the photo, else false.\n- `piece_type`: a short English name of the piece.\n- Never guess a designer, maker or period: those are not part of this stage.\n",
+      "max_output_tokens": 4000,
+      "model": "gpt-6-luna",
+      "store": false,
+      "text": {
+        "format": {
+          "name": "observe",
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "fields": {
+                "additionalProperties": false,
+                "properties": {
+                  "wood_type": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "items": {
+                          "enum": [
+                            "Teak",
+                            "Dark Teak",
+                            "Oak",
+                            "Dark Oak",
+                            "Santos Rosewood",
+                            "Mahogany",
+                            "Walnut",
+                            "Cherry",
+                            "Beech",
+                            "Birch",
+                            "Elm",
+                            "Pine",
+                            "Chrome/Steel"
+                          ],
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "wood_type"
+                ],
+                "type": "object"
+              },
+              "piece_type": {
+                "type": "string"
+              },
+              "shows_marking": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "piece_type",
+              "shows_marking",
+              "fields"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "json_schema"
+        }
+      }
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "b0a7ae271e1028f84f70b495383d03080f37b5ea09359bde9a80fe0ee08139e4",
+  "response": {
+    "body": {
+      "access_programs": null,
+      "background": false,
+      "billing": {
+        "payer": "developer"
+      },
+      "completed_at": 1794496989,
+      "created_at": 1794496987,
+      "error": null,
+      "frequency_penalty": 0.0,
+      "id": "resp_07e8a5b6ce8f3318016af5d9db7fec87d2b74f74c01a0d0091",
+      "image": {
+        "context_compression": "disabled"
+      },
+      "incomplete_details": null,
+      "instructions": "Version 0 (R1·U2). Stage 1, Observe (08A §5).\n\nYou look at one photo of a vintage furniture piece taken in a studio. Report only what is visible in this photo.\n\n- For each field listed below, give the value seen in the photo, using only the field's own choice strings, exactly as written. If the photo does not let you tell, give an empty list and set `sure` to false.\n- Set `sure` to true only when the value is plainly visible; set it to false when you are guessing between similar choices (for example two similar woods).\n- `shows_marking`: true when a maker's label, stamp, brand plate or other marking is visible in the photo, else false.\n- `piece_type`: a short English name of the piece.\n- Never guess a designer, maker or period: those are not part of this stage.\n",
+      "max_output_tokens": 4000,
+      "max_tool_calls": null,
+      "metadata": {},
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "object": "response",
+      "output": [
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9dndRJm_U5ObMKL5lSXE35HaR21mQjMf_kmnBr40C0t1CkPtsQb3jpjrNG8Bx8alZGk7Jjy8iyPf-6OzsBuOfcRUdO0tiN9HdScepVXjan8Rv_BaOyHfr2NqOvIaerEHuX8US7Y8zw4p_2sl8URmXwqpXk08UL0vzIVfweTjnx8AoXW5BvRscc4zaoNabF_guOjndM2b6XK7w6TZw18Ld8LOgQT0eFjxkVlUpN9Xxli78FCuyN8d_3ahQMPCozn3uZ3KxfKqIoTe5Sn3i5aNRrzBYqqspd3CKak4aybrFpeNC_Sy1ehWBynkabjdtH7VXHVwBOiJeIrG0k77mahFuMleQUJCdVewsU8FnPq16QWdNJEu-YreM2alXs75OcotSGx2vcqCFaNqIiBUvwmNDnEPYzDgSmNOaAlLT5j2zKCee3OCrj7z22puGI6BZLoRGXPlZYp3Iw3vAKggS1X5VvVoXodltNw1tD0ecMo7aN8WIx1Eg5hXmdbo_p1uqvJ865nITKOSXce3c4bw8FD5peQuEkkgX_0Gy9iVvPjkZc5qqF7Z3tYJElSHM3gOmoo1IyF60lv6oeoPQ6SDL797NwcoyBg6hkPCyBmENlyVP_RGZxEWAwoP7LJImEMic02c_6MW11_G4CkuA4qYWepcuKYb7eG4pQQXc1pI1YSVYkCQxVRZ4Sz8yDiXzu6h-uGsgCJmR42rCvain77nxNX_kTxkDC9uUGgY4WeJtQROJGJB0Quf9jgcVH0uQhuRPpJ_pLNVpDNrPvoiNuHB9aCmTPao5Q_8SEbMQtigjnOCKIMLIN-PqdUt2408qPdsqacN0vuFciHeqvksb7Vq_7PI3kHyWKhhI8uqSNEWarPf5nTaJwhrduHZMWkgW08-q1j4tBwUbCTGgu4-PXlhh4MJi1uZfNHXyZK4YVCielJrvZqjK3kyma00jfzyb1APfCOU1IIP8qVC4aYn5sYEVc5r9ILmPciHfq6SAVZi97sUYGzwOMLjePevWYZSYzB7719EDIYrmyYmRJhLSaofWMthwr-uebSebYxrebpuxECX3YiElzklEv6H9fKSLL7ibDKFG5tiYpgJOt-QBgfGF0k08YVqv354-tndwZtNVsSA5wPMMbOk0fCzCAJJjdVqsmEdgKrnVfHuNLYGuPIce0EqEr40j7xnakBm5nnGundn0x5pDDQx056FErMNwx0tF34un8idHc_3HhXAjEV42A6ODmy4R18NIdieJB3U_WdeaeZfBJ4rJRvrlqgm-YgPIRgGwI8WvQv_2xzZTqApx5DBGC0sUQmYZyd7wuE3d6mTvWmzRBhBdtgXga2emONNq69Pyl6GFtYHQ4ZLC2WbfO1DPG-3ss8FJrvK8MNbl9uoavjiVhp20JFyRrrljJc7xUw6WAgLRczq1EevmXWzVbKORFIswxIJTy631QIj1FDxvfl5f3hrLjv2g7YMwQCubbBP0jl0_3dTnO_LvlwTajJUD8knKRRxzYEl-JJxTt5O8FG120xDAvUBq61-D6CaZpE39ibOHABSuOj9Rt3PjA-gp_ZQQRlZw2C8pSggb1LXYedEm7l7X9QSkjO1R5eHmkEJcADr-S-Wwp_pnkiU6C8YsaU4wxBNbIdzHL_bXcbnIsHlrnnglwHXck7Z2CKz1LzLysZ8m4wxE9KsmqHV_xGcaGWT04OjIU-fdtEDqBcTsCqohhpeXaEEKY6CZTaezy0ZAMn_2EHiGDVIYsRMG4LOepjKWgxEM4EPBCpIrESGHkcw1iyoc6LM7mJHufuxoqyVGzn1Y5lSk9DAx4UKraGbf8mjCrinQd7AofltD_52GlYlXCzO5nsUypmCbHuJkpPcWnTasArFG2Jhtm8dtt7t0tSgt3jtAUAY9rF_N9DQK1Ep0Q3hU067X7I64WIzkn-u6xgbexyB6-saQf39Dvrszy-nXsbHvm4y5XmGuqXBTKw8nS7dXFId3Z8vLs89X5eYqoc6qXEsEg__-gazrLiOUuSp8yczyl9aLB5gpgNfjUeKolZq_CXrE4KQ8SCI83YWPiS-gtNqusNBF4ZhMNMXxABB7O7sFDXeEES5DBdBsAFt7Pqa5wtgBObrnaWxDniBS3sGmWjzcPmjXpbxzmKx-QTGzQ==",
+          "id": "rs_07e8a5b6ce8f3318016af5d9dc7d9887d2bd7ffc12e72c7726",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "content": [
+            {
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"fields\":{\"wood_type\":{\"sure\":false,\"value\":[]}},\"piece_type\":\"sectional sofa\",\"shows_marking\":false}",
+              "type": "output_text"
+            }
+          ],
+          "id": "msg_07e8a5b6ce8f3318016af5d9dcf7a487d296505786989d1487",
+          "phase": "final_answer",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0.0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "status": "completed",
+      "store": false,
+      "temperature": 1.0,
+      "text": {
+        "format": {
+          "description": null,
+          "name": "observe",
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "fields": {
+                "additionalProperties": false,
+                "properties": {
+                  "wood_type": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "items": {
+                          "enum": [
+                            "Teak",
+                            "Dark Teak",
+                            "Oak",
+                            "Dark Oak",
+                            "Santos Rosewood",
+                            "Mahogany",
+                            "Walnut",
+                            "Cherry",
+                            "Beech",
+                            "Birch",
+                            "Elm",
+                            "Pine",
+                            "Chrome/Steel"
+                          ],
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "wood_type"
+                ],
+                "type": "object"
+              },
+              "piece_type": {
+                "type": "string"
+              },
+              "shows_marking": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "piece_type",
+              "shows_marking",
+              "fields"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "json_schema"
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 1558,
+        "input_tokens_details": {
+          "cache_write_tokens": 1555,
+          "cached_tokens": 0
+        },
+        "output_tokens": 77,
+        "output_tokens_details": {
+          "reasoning_tokens": 41
+        },
+        "total_tokens": 1635
+      },
+      "user": null
+    },
+    "body_bytes": 7061,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "7061",
+      "content-type": "application/json",
+      "date": "Thu, 12 Nov 2026 15:23:09 GMT",
+      "openai-organization": "<openai-organization>",
+      "openai-processing-ms": "1856",
+      "openai-project": "<openai-project>",
+      "openai-version": "2020-10-01",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit-input-images": "50000",
+      "x-ratelimit-limit-requests": "5000",
+      "x-ratelimit-limit-tokens": "2000000",
+      "x-ratelimit-remaining-input-images": "49999",
+      "x-ratelimit-remaining-requests": "4999",
+      "x-ratelimit-remaining-tokens": "1999868",
+      "x-ratelimit-reset-input-images": "1ms",
+      "x-ratelimit-reset-requests": "12ms",
+      "x-ratelimit-reset-tokens": "3ms",
+      "x-request-id": "req_a6c2ab1db5bd4d6994017575d650c646"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T15:23:07.370Z",
+  "usage": {
+    "input_tokens": 1558,
+    "input_tokens_details": {
+      "cache_write_tokens": 1555,
+      "cached_tokens": 0
+    },
+    "output_tokens": 77,
+    "output_tokens_details": {
+      "reasoning_tokens": 41
+    },
+    "total_tokens": 1635,
+    "web_search_call": 0
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 2956
+}

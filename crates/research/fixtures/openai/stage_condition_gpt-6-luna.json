@@ -1,0 +1,1044 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 4076,
+  "duration_ms": 17023,
+  "effort": "default",
+  "error": null,
+  "finished": "2026-11-12T15:37:42.998Z",
+  "fixture": {
+    "captured": "2026-11-12T15:37:25.974Z",
+    "probe": "RESEARCH-VERIFY-3 (R1·U2)",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/stage_condition_gpt-6-luna.json"
+  },
+  "id": "condition-condition-gpt-6-luna-default-55559a0d983e",
+  "meta": {
+    "effort": "default",
+    "fields": [
+      "condition_cracks",
+      "condition_dents_chips",
+      "condition_function",
+      "condition_missing_parts",
+      "condition_mold",
+      "condition_odor",
+      "condition_scratch",
+      "condition_stability",
+      "condition_stains_discoloration",
+      "condition_upholstery",
+      "condition_veneer_damage",
+      "condition_water_damage"
+    ],
+    "model": "gpt-6-luna",
+    "n": 10,
+    "stage": "condition",
+    "unit": "condition"
+  },
+  "model": "gpt-6-luna",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Condition fields:\n- condition_cracks (choice)\n- condition_dents_chips (choice)\n- condition_function (choice)\n- condition_missing_parts (choice)\n- condition_mold (choice)\n- condition_odor (choice)\n- condition_scratch (choice)\n- condition_stability (choice)\n- condition_stains_discoloration (choice)\n- condition_upholstery (choice)\n- condition_veneer_damage (choice)\n- condition_water_damage (choice)",
+              "type": "input_text"
+            },
+            {
+              "image_url": {
+                "image_sha256": "b68876e853a17804d9c1eb633f18f1badcade9e4daae5cffc47c2af8493da937"
+              },
+              "type": "input_image"
+            },
+            {
+              "image_url": {
+                "image_sha256": "2f0b7708d69eb196c3d65885ad23ffe21e84208da8423ce925f2940049bac6a4"
+              },
+              "type": "input_image"
+            },
+            {
+              "image_url": {
+                "image_sha256": "76e7f8dd2257c36d7f79cb2fb63da144af5bda0e908c3f99393a9897c374cf76"
+              },
+              "type": "input_image"
+            },
+            {
+              "image_url": {
+                "image_sha256": "47edb2e918426b46aec073b927adf135a2c2cbb4d44dcba859b74388bfac0921"
+              },
+              "type": "input_image"
+            },
+            {
+              "image_url": {
+                "image_sha256": "8183cc47a772cc91912117c0106c742bc7eaa7472da8b03c54fb91cd9f5f2ec9"
+              },
+              "type": "input_image"
+            },
+            {
+              "image_url": {
+                "image_sha256": "7ebfa6f0bb393671bc734ef9b944e4470a6a35550ee5b288adee76a4b89368e1"
+              },
+              "type": "input_image"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "instructions": "Version 0 (R1·U2). Stage 6, Read condition (08A §5, §6; 08B MC-A4).\n\nYou look at the condition photos of one vintage furniture piece. The photographer took these photos to show its wear; every flaw is photographed.\n\n- For each condition field below, give one severity, using only the field's own choice strings exactly as written.\n- Use \"None\" for a field when no photo shows that kind of damage. Use \"N/A\" only when the field does not apply to this piece (for example upholstery on a piece without upholstery).\n- Set `sure` to false when the photos do not let you tell the severity with confidence.\n- Judge this piece's wear only from these photos.\n",
+      "max_output_tokens": 6000,
+      "model": "gpt-6-luna",
+      "store": false,
+      "text": {
+        "format": {
+          "name": "condition",
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "fields": {
+                "additionalProperties": false,
+                "properties": {
+                  "condition_cracks": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_dents_chips": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_function": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_missing_parts": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_mold": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_odor": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_scratch": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_stability": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_stains_discoloration": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_upholstery": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_veneer_damage": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_water_damage": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "condition_cracks",
+                  "condition_dents_chips",
+                  "condition_function",
+                  "condition_missing_parts",
+                  "condition_mold",
+                  "condition_odor",
+                  "condition_scratch",
+                  "condition_stability",
+                  "condition_stains_discoloration",
+                  "condition_upholstery",
+                  "condition_veneer_damage",
+                  "condition_water_damage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "fields"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "json_schema"
+        }
+      }
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "55559a0d983e8789cb43bb8cf73a34fcbb32c1b07dd5547ebd2b8f0210dce810",
+  "response": {
+    "body": {
+      "access_programs": null,
+      "background": false,
+      "billing": {
+        "payer": "developer"
+      },
+      "completed_at": 1794497862,
+      "created_at": 1794497848,
+      "error": null,
+      "frequency_penalty": 0.0,
+      "id": "resp_0419d6c56f7b0ab1016af5dd386e3087d29dd450f14362ab49",
+      "image": {
+        "context_compression": "disabled"
+      },
+      "incomplete_details": null,
+      "instructions": "Version 0 (R1·U2). Stage 6, Read condition (08A §5, §6; 08B MC-A4).\n\nYou look at the condition photos of one vintage furniture piece. The photographer took these photos to show its wear; every flaw is photographed.\n\n- For each condition field below, give one severity, using only the field's own choice strings exactly as written.\n- Use \"None\" for a field when no photo shows that kind of damage. Use \"N/A\" only when the field does not apply to this piece (for example upholstery on a piece without upholstery).\n- Set `sure` to false when the photos do not let you tell the severity with confidence.\n- Judge this piece's wear only from these photos.\n",
+      "max_output_tokens": 6000,
+      "max_tool_calls": null,
+      "metadata": {},
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "object": "response",
+      "output": [
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9d1Grl29zFQgcR8n1UApEVFxPaud6kUG_J7tz98D_oydZ6OHtTBR-ekUfQ6h3U9X0UMVgQcX-w-j1DCitb1s7gr-TbIphyQWL9u9E6rLGe1ZzHT9wdL6QOiayLFW2GFA0TMiIB4hc9ZyNQ1VFBaLIVfMGJkn9exJCOmDFmW0st_r-FTO1Uje10USXtWIFrIIsIClhBf02hNjjn_oEaKPL_SI0chBoFG9AzThZk8iHwkkp-0O7gyyx_27aMKAvWMNsFWgRkNAK7GxIc7JaZi55Ag3k4rRYCL6xIxpZ-FHeXBfz-1ColcygDq4e1kxhFAb8sSxookd1jc5Do1De1Klfb58Qes-FhW4uhYDpsBWe1bTJ9c7dd-kq6WJrveSnKMgFX7t5wwN_LmgMdRRNmUteTPz2Ab1ZCNw91X-ZPT8PbC7aveWm-sFIHv-FNK61m58l-TkG9ThKq_bQgUqBlGpF1HD0qP06QU3Bc0aH-Q2F1-Yb0mRutoya0huNoZN7PUFPGdQb0JNG66DyI7ZmVDVVxPmrDWzpukOAyv1vvpDWgXhMSyW4_IhhufIP7Iu99y_AGy5nV_ayeuG2GtaQ0mSoiiq3968FGEnG9-yEOBubTnOsMAGeVTN0XEvuXEv1nULrS5haZKeywmBQAfBcBV1xlSmggZ6Zg6Vra0NjfKvLNdjRnwnjoY9WwJVXplyzTO65RegUKNtkregUilEpLGa9bUzuw6ux5p4JXEUtg-IG2BSv4E_88JMzA4mp7gG1Mf6h-dbuBAfRpz7F0pWTypL86IB62ArY1ipIQNpy6WH_KTSBWREDjS5N2xJN677IjtB2dkTlugNjR7NGacbSNketc86Qn9LXjuNlBqA-ttrJPatjTEMEzNyb8vTYb1cbYz4Xar_lbHpvauBmeWNP0k391vcjVNfseoBuULFZUSXO8J0xqKAMfmt_q753mdMBbRqD50-c7Si-sYeZDMHNIWXOjn7iCI61EyHxWTgObJMAXA33gmEyK91V4nvDivVNC7oKyw3vnPCcJ0thyhRGZdPAT_1qy6niewqPpGpMJ8cmeUaqVF7GSpSF0wBSOSsNPFxIgLYtdgHbWJPd9uVWo04CKIBMCpr5shmUnnoJKzXLoO8BihTBbwcLFzCAYjaqpobbpeN5eYLZW0KEuZ7O9ejrl-bR8LqTOorhSVWxoKgL6eDKIsXnNUllIA2HECmBImJIG0zjDgVlWdDXLrcrQV6Nzb9ij6XeaXBhwLQ8Puq6tJpEmgHhx7DrT9HHAhU8R0AEnwbqhBDDncUSS7WZbXeB_jpOv2WqWsdsueHsKSuyDyOkIf4vkPSwCF0onvLbd51-eZpOfuRer3zVXuFMKsa8oNxnDf2ZLogYZb0NCLSiWETMbWIapPbvj51paSWYuabkQIvKaDQ3uHSSCxhYv-mQd_rLDDjj_yTU_CUEbHfaN91IbqF9LEF99o9YstN-hpncKfWpt26gzcA2giDRr_1otn3aen6TLJVZlGZdrRIwR57tnNFgwrnUJH3gg3qeY5n_BA3Vza3Y4uerVRhlaGq7F3bf_dWPDNT-42ZUb1Mc57Brhy96gSPXQImnySQ_zIF6xjR4XjU_kWY38O0X3px7Nl4GMBxyS5Lu_1oByBsQO0YQni-6lS1Yyw-0bwGIX26Hl1E0_CBZuYKt67FSR2BzQi8RHNy_s0MDNFiVO4tEs5VdngtE1wsgUFVYndihaqCn7aGKwBVE_D3YfBhzzB98czclPEg9bTSImtGttBLen7gw3mp1MDVIb0N9_GLpU8Hru8P0qHtptRAzmxzRTJbjxYqLgVTKlwgBw960tcjX3bXZ_tiGApvH8Dq2mGZOQKcXVqvgj2Ijsdo6d3R751XsW7L79lmbaGkPrpG9qYzdtpCuTGy224xbLPOCzV2nRJVETwz8HU1dGdNiSHMN0P4whj9lkchojDr_s-ijGKL0wViElwcsn_qRIpPic9ROxjZ8QG8gUU_sWZHH2PhpV9AylId34mIZ0_RuwBnDZuIGiTsL9ry2y7d3uiCF8NWwsE4rM8K8JMU1KSbInGasgB_9vjBirUfWfO_YSoZO0xnmDWE9a4mKlgOnCcpBZalfBtnhX5qGYUrPjSQGsjbbYguFoiibKkFLR1-qsTcxxCVRxijsRAFeRg3G6Ca0gyx2chR7HEHBrMoBHCheLP2jSR1mnaXG4aNna6rk46yNCFozHmewLjQwWpV4TO5k8gm3HA0JHQvSYBHKYvZ2BA6OYjzwFJqkz-0cxaT5EvVS0ZP9FC--Les8uGapKQPYxu1j34WJ6k1u10IdKDvjUX3uYHox1pFxU-9E8z-YY_-rL1iE-_s1VWCVFk6qXE912ad8kpD7otjMFvXZSpruDn7tKZYd3SndwwUT_3OEGDD4BdldHtt87oV7yja7JSeLbIEaa3xp4OJfln4YnZmnP3bClBLpd7S5p-zWrCUJen0o9vmBHquZJUVp_fXTvFJmKSBLUs7GRcesRhWCcC0wk6tDK4bJMePDsUeHJz0wZRtSjn9yuyiqBj0k0j2LIZQWUhyMRJmslxNoOST54yF9OzOLY499N3FhnrrOnmt3G1EpcBVwTWidLYd9lWjV-sTcoCO-lH8voEt3YMeihFNo8FXOEemd8GZ1Jx37H91V3Ke670867KUVhRQEa1Cfek61dA7gSfrteVD8NQzcBCOJ81X34DJMkWgCgY5cH0rzPGEZgEnKYsEDIt1lldMVWSTnQr2PJu_0GC2X4eGvt7EZ4bXMcPinjBq-qOMiRuxxg12Bkv67V_VfLY2K7inTXSShky3pHsdVJWiS4VIB7yMvsBEHcVmGriRWQLqww8j6UETd7s9zpEuRj_hClnldfz_wFR0YHWB_WWVbZ8bq2J1ijobDNDYjlAz4QbGLqdrtIeQy1Oh2CHaxua-jJdct-1ML15riB-uYLF8eO_PK5nclyxIKa4d5ksUQ4Cl0YCjYDQIJS0do4NFMfLXfli8_tnmZdB7wPdJOkE0ebcSK7kBDgBjwbjBJHbRf10rmphyDMdXu2VIKyDFNZqf0HN0ZF6ZfMY_mzu9WmuxSOFGM6SZdc9mczz-xNepDC9uQt8cqFHPC8IAkSDU3sK9pbnuJp0vcQ3YM1YPS8AQF1ZBJac4ZruoRxFDcP1uLnJ9X5F5dSWiEtMEmm_HNMVkvbStIX5KG0Eg6zK9t1OvJBe7pPFNKx6AFTm8ka8W3DG3BhkRXJ6n1nr9c947oVftMrbwfHI3AJN5A7bKqWQbRskkRUwP_yZU0JJc9ZeHsRHGAuISsgXtzxUlOA86e9ppeOMoEXAKhgt8GGujXuYatfQLcdIsxcgI7ZLAKAu0Q37IxzlkdaAk7BOmr7mqhX6VeCD2SsRwCrGIg8zsX7GIBgLm82YULptKLxlatt1-OYYEjf44IvhwrQEb8ZBkqufXpCSqOpCn1y75oWKCxkP4XxuZf1kAmWnRvDL0RKCrGHfLx6XZxKMCTggqkdozSYR0A3W0bjlnBIzVDApdZsjK4YTePp6pRyJE6UvcNtzl7RutVpq2534GON65fY75UwhtqvgY9EgO1LiTZk913H7ZO1ThRNjLQpF_qGTnknPo_TI1YQ4lTO855WEOVXa8P-6OyN85qQ1F1M29V_xLGmMnImoBL8UhGVQHV-nz3gDHnheevJFUQrzS86ksuDdm2_JJ94rGcnoD9U4WbYo6axkkBIpf70uVbP-gSvbjzGoLsDz7-ZzkoEtb1JkdXOeQV2IRPaxv2Xfi2-G30BZvnmkzxRTxPNtK0ZzJXKo7LQ2EcghGL34sAuZrsYAeznas9JpAYjzh-gGPGvRYikyFRdjrarnsKoTQS1a5NU5jqE45pZeNGZKGKxo7c42G4ppnruX1EYDJvMpBXffw7aWU_7NDqOgGzwZHdllqxuulLFpCTkIM1WwUUlUmGNIbCBigQ1prgWnNfiys-RSjTqg39tPJfGxtO9F387_buZLxhit3cxj5aXforlkgh_PKv25bjhlWo-KXiEsS1ue2mWQhEv_gypqtzYVHniYo5ZYNdHkVme-qc1fXOFCnrJwtb_DIX1o9LpyCe4WsUK3YC8WlQg4imt-yf5I-A2hubmfQRbnzJlvl6Viw6yunuKNaq29YuzZIq_6XPev2nuSUDApRtgrYCKhJeEYCjrhUkhK8PYRDMyZ2sHzomYCEjCX-noCZNppY07bjpsWMXcnAHatDvsk2Ui5F4ta70d_GDIHKGS0mXbef70XYnYRo3i_OkNU1Hqnk-wtoIt9-ioxqeLQMaMNP5NlzN0ncr-kHKlLsiYy1pYw-7YOC2xzlgTSBjBSjRsFYr3lP7Ud8QpOyJAe9JBbzevOnABJuf7mtTelqvcfm_jpoSWM_X3h1MUiRMNvxjD_DxkY6D4ab519zDNhXoC-vSDr2bvGK2rcyLlQgn09cXQd30eIsiSY2kK_7BTQ_898SQ7VNb1_T2Nl7icrLfuqsY5I_KOt_l0Hp-jndVfrcfi73bbuag7mntMzD_g9JC1VNg6-CGe1sL8X7saI7cWMFstErr6D8wBpIX85Q3y98q3HEonGwtJwIbpuri9Xs7Jn6B3UcbXXIp9dmdsG2yY11X0xowoOWVDfhkKxkvYJ_pMtg9-HwNBq8rBKIvkADhVLlkCnBov1I6sx266fH_0e1vqzDted2rR1Svy4FIge6JjvuIj9sj1RN4I_KJx4cJqYw80MADLW2XSdc0xml7Imo3vwYg7PetpU10UjY2yRyBft2jC-q9SekCAj7Z5GXULhf0lUQlKnec4l9oeQh79ufdEUVNcQG2D2GqpSWJL5q3UvPCE-njs8To7vW1jTD4kE9wQGCZjSOJtaRoeD9TRooFexxRWeSAb88ZYV7j1BI9vHFF0YhLP87M7CF0rY3dH-aXDevX_noYNtCLlsP8QUhASES35UNy6DLavN6lVG4LasLT8NsfO4cnpINhi-X-VUvyMYNihKiQtJN-5lFljEhx7OLX7lipLeg-BG1-wjkyQLqeolTUbEAxzBAWHfqtSPU7fnzfZRPuGfq2qn8WIE5AH5pJMo_eZSqtDj-wJqCuQ_4yt7iap2JQ5hV4uL0x8-NAo-kJqROj2f7xyVgFYQuNPwAE4gQyC19xInfR6bJG9JJopdmwpvk-UNzHrs0l7Y-QOJRl437qr6-X0zU4egWkTA49tIS4sxPmt3KVO3UZDrbFqoytB_FIy6qbK-B198W4_iyvdIBaKDIgdtra5Jy-5YnmJiMUKRfii4yVICdSr11bPq5HZiWRdSsWTzz1BIfnhUJ34BoH20teUjXxBolpA3Bli93-xsxAvSSBjk_DQtjrO35QxbXLDjFafEi7ovpS0kIWhX7Vn1mvj-czMdl7_6GnnQm-HPO1rpM-kpUKFjI76-XgXu4K4bV4apE8IkEGQ8WjxZAlhER7_9PREPCOWl7Pes8TSTzfa7YdZdzsoP7HwmW7ua7TjgGfF25i41m3stDzD9Uiv8yxgUSbdJtdotLGIWUsJnSviL-OR2mhlh6nYIvZ5QN20QU5btZdszNyZpKSL1k03Ab5ZhZ7_UiAWmmv3K53MhMrmoQJcIqJzXGUCR_Y6FHuNVcJzI1AMullIAjwTMETk6pPI55A6_5Dm_mII5Rmw9F8B_SNpWZ9XyhERf44rOKBQUBFjA7LOSWAHO1ZI_YttzDDhv3UujKL-WdOGKT0ZYje5LMkhS85fx0rJa6EuaiiOfFyZJFC1NiFZNORQWpmzEqSAR05THS2fvatBSsPb4cUGzxZhUsztcZWuOK4QDgXLt62Bgs2hTBxE7eT_H5ICgmb7ABb8sHJxp8D-dGTQ6yIn79n3em73NkoD6FBiGXnJCBc6LBQ_xiuWQ2RcWV9yh801UWz8rAWT7Xig1s3C8oQF8KSjhBQvuDbTJan9FgI5hwMXQaJ5_RNgA9pebMV8SQY9C18BZfBIKRM-PL7PnznGtJoSka2FwmIDWiZEHs5iXZc47WwSJ0cdDvaOqtnjeIhvLHiy4aA2Mn7FuBO1AV5g1TMxTjYiQME2ezyVAA7e7X8KCBSzktWb6cSl8IAp3c_I7XoQNFrCutUEpiAYAN06FH5tx5pU3rwLL-zQlwzUXTJraPlJe6hhaNjYYcs3P9jPAsMap71TW4IkfInVU_Cgqhtz40iwAuP1swF4AHyvtxa0wdb7ekhTYNWCYCyAqETXLHAzoaWVaeh7nSwhndpQjC_Je77xMEOv-XNL7ADN61kV27WDqyUgkOZbGyRg0WF79pv00yBS5oJuBS20bJf4FpnnsGFlKG-83psgqGi24nCcKplmzn4vPfssdMwlIAOrEgbGoHn3usa9zYFMwU1gcjedFNpyDGtrfGC61G8DRWUs_eL8O1YayXic5nvuy82l9J07fWH2OYerTgBRT1qRjA4yYpDqvRd_eo2qlSHzfncOmWy6Pm9jGw6rXDy-XCZ4tBgkA6Nq5O_qEc77OcK8heCrP7JbO2E31pj6vCGEOCyEZkxMzaZGMqR1q8CuPaY-SmgObwL6tz2yRKpsnefkpsb762jAVbL3IQrc-qlMK0GK_qgOeiGLkugkoa68QoNvwLEf1u",
+          "id": "rs_0419d6c56f7b0ab1016af5dd419dd887d2b6275bae940affca",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "content": [
+            {
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"fields\":{\"condition_cracks\":{\"sure\":true,\"value\":\"None\"},\"condition_dents_chips\":{\"sure\":true,\"value\":\"Minor\"},\"condition_function\":{\"sure\":false,\"value\":\"None\"},\"condition_missing_parts\":{\"sure\":true,\"value\":\"None\"},\"condition_mold\":{\"sure\":true,\"value\":\"None\"},\"condition_odor\":{\"sure\":false,\"value\":\"None\"},\"condition_scratch\":{\"sure\":true,\"value\":\"Minor\"},\"condition_stability\":{\"sure\":false,\"value\":\"None\"},\"condition_stains_discoloration\":{\"sure\":true,\"value\":\"None\"},\"condition_upholstery\":{\"sure\":true,\"value\":\"N/A\"},\"condition_veneer_damage\":{\"sure\":false,\"value\":\"Minor\"},\"condition_water_damage\":{\"sure\":true,\"value\":\"None\"}}}",
+              "type": "output_text"
+            }
+          ],
+          "id": "msg_0419d6c56f7b0ab1016af5dd4579a087d2935727b04cbaa7c6",
+          "phase": "final_answer",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0.0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "status": "completed",
+      "store": false,
+      "temperature": 1.0,
+      "text": {
+        "format": {
+          "description": null,
+          "name": "condition",
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "fields": {
+                "additionalProperties": false,
+                "properties": {
+                  "condition_cracks": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_dents_chips": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_function": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_missing_parts": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_mold": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_odor": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_scratch": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_stability": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_stains_discoloration": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_upholstery": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_veneer_damage": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  },
+                  "condition_water_damage": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sure": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "N/A",
+                              "None",
+                              "Minor",
+                              "Moderate",
+                              "Major"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "sure"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "condition_cracks",
+                  "condition_dents_chips",
+                  "condition_function",
+                  "condition_missing_parts",
+                  "condition_mold",
+                  "condition_odor",
+                  "condition_scratch",
+                  "condition_stability",
+                  "condition_stains_discoloration",
+                  "condition_upholstery",
+                  "condition_veneer_damage",
+                  "condition_water_damage"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "fields"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "json_schema"
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 30385,
+        "input_tokens_details": {
+          "cache_write_tokens": 30382,
+          "cached_tokens": 0
+        },
+        "output_tokens": 554,
+        "output_tokens_details": {
+          "reasoning_tokens": 378
+        },
+        "total_tokens": 30939
+      },
+      "user": null
+    },
+    "body_bytes": 21892,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "21892",
+      "content-type": "application/json",
+      "date": "Thu, 12 Nov 2026 15:37:42 GMT",
+      "openai-organization": "<openai-organization>",
+      "openai-processing-ms": "14901",
+      "openai-project": "<openai-project>",
+      "openai-version": "2020-10-01",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit-input-images": "50000",
+      "x-ratelimit-limit-requests": "5000",
+      "x-ratelimit-limit-tokens": "2000000",
+      "x-ratelimit-remaining-input-images": "49994",
+      "x-ratelimit-remaining-requests": "4999",
+      "x-ratelimit-remaining-tokens": "1994676",
+      "x-ratelimit-reset-input-images": "7ms",
+      "x-ratelimit-reset-requests": "12ms",
+      "x-ratelimit-reset-tokens": "159ms",
+      "x-request-id": "req_8e2b4112e5e84fcba95daba51d07bec0"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T15:37:25.974Z",
+  "usage": {
+    "input_tokens": 30385,
+    "input_tokens_details": {
+      "cache_write_tokens": 30382,
+      "cached_tokens": 0
+    },
+    "output_tokens": 554,
+    "output_tokens_details": {
+      "reasoning_tokens": 378
+    },
+    "total_tokens": 30939,
+    "web_search_call": 0
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 8074
+}

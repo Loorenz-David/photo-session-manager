@@ -1,0 +1,500 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 59703,
+  "duration_ms": 17339,
+  "effort": "low",
+  "error": null,
+  "finished": "2026-11-12T14:45:37.535Z",
+  "fixture": {
+    "captured": "2026-11-12T14:45:20.195Z",
+    "probe": "RESEARCH-VERIFY-5",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/image_and_web_search.json"
+  },
+  "id": "v5-image-and-web-search-242b0e3eb330",
+  "model": "gpt-6.1-terra",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "include": [
+        "web_search_call.action.sources"
+      ],
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Identify the designer and maker of the furniture piece in the photo by searching the web for listings of the same model. Give the listing URLs you used.",
+              "type": "input_text"
+            },
+            {
+              "image_url": {
+                "image_sha256": "f39fd87ef4af58a1a51787dcccb14fc62b1714c65763670697125433a2b8e440"
+              },
+              "type": "input_image"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "max_output_tokens": 3000,
+      "max_tool_calls": 3,
+      "model": "gpt-6.1-terra",
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "tools": [
+        {
+          "filters": {
+            "allowed_domains": [
+              "etsy.com",
+              "pamono.com",
+              "bukowskis.com",
+              "midcenturymobler.com",
+              "vntg.com",
+              "maleforsimports.com",
+              "auktion.sweakronan.se",
+              "vgliving.co",
+              "auctionet.com"
+            ]
+          },
+          "type": "web_search"
+        }
+      ]
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "242b0e3eb3309fbb28128f1acf46bb565a78d22725d2f2e20938b1d043380879",
+  "response": {
+    "body": {
+      "access_programs": {
+        "cyber": "standard"
+      },
+      "background": false,
+      "billing": {
+        "payer": "developer"
+      },
+      "completed_at": 1794494737,
+      "created_at": 1794494720,
+      "error": null,
+      "frequency_penalty": 0.0,
+      "id": "resp_0b01226b5dc7b75a016af5d1006e8887d2b8f77f1063582d30",
+      "image": {
+        "context_compression": "disabled"
+      },
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": 3000,
+      "max_tool_calls": 3,
+      "metadata": {},
+      "model": "gpt-6.1-terra",
+      "moderation": null,
+      "object": "response",
+      "output": [
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9dERW6uvfwLQZ1ylIQRsVLns4AlgQOR_aguql6ejv830OXpOaSH-wXipFPLO-vLmaLGrxvHqzclq275nJJpncjddgSrPqKmkR8rYdFMqxf2k6vs1aYUKDHy4TTFa0GoZpAa8x6DZadbojtJGAwoi7gtTrQ_sq_3aGM6FzzsvyrKxvCA0DlW0FHusgp0ATbYHlPk6pLphHdPA1J3Qm-zhQtpWIhPI0porUWqc6PeWglbX22arSIAf5_5c0ao9cX0IUFWZD85q217Avpc-ir3LweDKMORZwHo_t9EdA7e6NUQBXZnaVL99Qn5lJASd8CoE8qAbj6tCSTYagypxpLwmxWMLN0nu_tPdB6hdU-PiEVXG0di96MAZonj4ONkgGeOpGpGPVBudLdLNuEbF97lxohaELBBzEYl1nn6bnTMF8U_sfDE2eEP4iWul3NUZqJX16towhu4szI5wQeotUOwNc4-hAL1aoPXLf-QpQ4LstTOM5dIBu3xA1-NMeQFqx6TFS5rjqzo8GWroxNm6Jlc43H4QPUtv7iAxq8_qRT8ZQXzZb1eKmXUB52heoIFqMJX3CFwWXTyQTAJ-5rM3npBbDaSZSPoU7rmNJLG1qchjQRV9MvpVe2B67SVaj9frVJ_VDFTfi97F6mso1RovoC9FfY4OfTPKbuvzoSPPr3iLN55AWJQyr1rFwX3ik1_wCEASApQZOpmVh2YO3UbpKOmyRRvUutf5usVKyoxQ80M-uUmsArfrLc8bdtbSVUprn1vOM6UPz9-o4CmSiFjzrB1HnMHH77TGCOGeXdtwc4RIxCxsmyuvWwVTKET-RaJEbfcLKIlo32Bp0V1a52t5CeuA8O4ZPAnxFugqCm7EDDmmE8LqRXWa2xo3bpqK7cM4oQMg2iz0tCUCT9l_WEP7oWuAlU1hDlT8AZVSIfi13rXBnWunsHPL7QeNOUlO6seP7bWq-SZcJjA2guoIECp7Ucizw8zYhnwhDGR0TWOfk2PSrtdbwPZwAb-6j2KrDiaV8vHf5wUNOGpnaP5TdS5kuMOU9bYaQKdOtHGiaql-2U1RasEakR0QZQwCNvoGU45a6cUEZPqweJ5dZCM6JODtu-APJAIbCaHhf5L_TO8rUMb3zXt2VOT2F0CylU-HhPpF8z_ANeRU49Ed5d2vq0NPKh7ktjTq36rMQcwTO9Fn5Ep-i-I46l1APWc1kEqZ2I2vX7WUu4q-K1ivbQ-V_tFH2hg3CnXQPs-l2krx-YOdWEb_rVn6jbljt9HElq02bIbpCAX6yDGKiYn4HydsGeU2mxiDee2dVKDTSy2GmQxwaMYJUa73ImHmnnPCIzL10P-9jjcxb1hGQMT5oJv8PQNVFlvjKxjep3WKuH1cPCRofGHhahCcuibsbZ9dxvyGEK8IqeF9tt9lPUku-WX1z4XjYpTakKaTlrEZzTN-9BoIADfKTJ72Ov4iUxuBmB6oLLOl5hq2WdhYvdR0PJZAEDgezPofS0uo7uKP3Ol80Us3cMeI-VyvwgChV3sAOFgzsmw7ktrmkEAnyUjEatxxLO8pGTH1hM7kkPfevIerC84i4xOCmov6EmAdr9uYaphWwTMkl6Im7xh6gCOti6KXqrRIYITJ6Zae7Yo7gqKRQpUSGPI-dkByZHqyhd4rTtrlpBUFVHtNnlY4xoDPNRb7QpsHIhMpIoPwMBoWQLK0PTY6R8hA25Ptb8g=",
+          "id": "rs_0b01226b5dc7b75a016af5d101b74c87d287eeb4a4adb8f8ac",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "action": {
+            "queries": [
+              "site:maleforsimports.com teak square dining table designer",
+              "site:midcenturymobler.com square teak dining table danish legs corners",
+              "site:pamono.com square teak dining table tapered legs corner Danish designer"
+            ],
+            "query": "site:maleforsimports.com teak square dining table designer",
+            "sources": [
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/danish-extendable-square-teak-dining-table-with-curved-edges-by-poul-hundevad-for-hundevad-co-1960s"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/mid-century-danish-teak-dining-table-range-by-ib-kofod-larsen-for-g-plan-1960"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/extendable-oak-dining-table-with-rounded-corners-by-skovmand-andersen-denmark-1960s"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/square-teak-dining-table-with-pull-out-leaves-1950"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/designers/severin-hansen"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/small-extendable-teak-dining-table-by-poul-hundevad-for-hundevad-co-denmark-1960s"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/mid-century-danish-dining-table-in-teak-by-svend-age-madsen-1960s"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/extendable-dining-table-in-teak-by-johannes-andersen-for-uldum-mobelfabrik-1960s-1"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/teak-dining-table-by-johannes-andersen"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/dining-table-with-oval-top-and-rectangular-apron-1950s"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/mid-century-danish-teak-dining-table-by-johannes-andersen-for-uldum-mobelfabrik-1960s"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/extendable-dining-table-by-johannes-andersen-for-uldum-mobelfabrik-1960s-3"
+              }
+            ],
+            "type": "search"
+          },
+          "id": "ws_0b01226b5dc7b75a016af5d101ff1087d28e42e59c743652bb",
+          "status": "completed",
+          "type": "web_search_call"
+        },
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9dEReeQq-kVmH6MGxWH9qLmA3Dtgrx1H6aE9wKt7OjztmRU-poDhIbu8-rq5op_LON_iSQU31QB4pOMNDsicw0bBRH9ua8R0-yJWQDuwVHT_7gyGmimp-vvDdRipbJihz94yvifHW92V6ewTAkGYlSVx3ml4lT29GA8iiv2LrTfTIot4eFj2eeWHL_gzwBb2AfLj0YqsZgBpfGeuISxHrhrWfCW537fB2oPCe5CakYEFHmhU1FyTUzSh5LokVvOon-VYbb7lu94sIzXPdBIyhQIK8Hc3AcRMszQQxF8RSHjQGO5_QvZ45GAFB8XQa5Yp-eW537PsLCkhZKip7p9DttAbO4NbSQJHXB7l1hMO2sXxRX7-kTegERakXqsP_MTtsyzHmtMuVRTGfTN8BBDFVMDzgdX6dOEzETlohdy_Mza5afZIr1j9hDWGbTADYJBa35cIXtiBtwvUn7UgsxyNKmUb8M63-r_UbuusZA7wuTuzWC5yLzaeBETHx0fBybRhA-qLQrjDGn-VzppP1NHJCvnh3fDIfsjT5WeeSWqnSV4FsRWpzYTfRZlC7RZRGyfszGekx4EqDbIwUfhqV7sjAv83VN4ArLFOIGDkbQdTw8M9uymdG2r2IcHHEJTn04iV-I83RQ426p7MDqws2FAbRMMF49Xq_kCmE7ULEDLHFAmJUoyfA6SZ8uDrt74jqKXbXCnhxUV2YN-5zv_yN8ifJXHACuTsBH6uWcWSkIbooo7j8zoHV3QpG7q7o_xnQbVsWd80JT5RkC9Bf6MzWLKbybRm6pbv8pvRB0oj7WvojW2TH7rKtIkL4sqFx3vU4MWL7tDjqyvbIjPERpkPD5FegylQAm4rLV1vh7zoI_rEl0j6FULyvg7EAsi7vYoAzQDZwd7WHbJv4CxIDv4PnVRTmFiK3yvm3LTj4ZU_tHX9O0bgOzaVSLEkT4quz49DaAqdIb3TMRVTTHDHjijA26nhQdcIMS-v2sCSGt5Qaoeo8_i4ejpGkRkdGwqut3RKxBk5up4-mSIV0bjswGRrgB56YlzdHBTh1L0h1-SbyKEJs7IUjldqhzI1RscONjEXwUqR6SP1fv4qV-HHeKTvFFcbrZLLOvp3B6Rb_vGQs7XDABwZI0qe5VwLisveGDWAfARG4E6BxqXF33IpM9HjSvFBu9taN0R6G_srXe-dQIPXkeApclL3gZ3z3yzVKRDr2ep19EVYqn564wOXTjTUhkts1LMixN1qJ9-IZC08AYKTarVDSCy2gaUArDnRjtYn5v4S02XhEPed4u6FN3TVmV0DGzzudf_j3l4aCWUQ8_crUBEAAUjfyhAEKTdYZGo0htXazEy4MosX8rrPzdzhKtmp2YGI_lvzhFXFbh0cpn5wEztdp84xWmsxq6dROrmF7d6rC2yrcpD1IsbmObXVOgzkQuX9ZKwPur7GskqN4AI4mlKbepkk6d5kP5oyhvSZ06BzxdVZEfv-1pMKkgwm-71SLnokZ7nhfo8uPhByqOfyNdbK68bgUiilHu7QCCV3WXZbCsLe16Vtr9KHIGKltdlOvHy4BSthbPugTOckLwg45TW6dLAywaKIfT9y9vOYUI5QA9mVa9g0Yx5hNdwBuvwRGyTxPSb0kYiXEEsi5xFc2AgO2GVw1Ce9H4KQRiBCkyvr3f4aaiV4srGN20fEKpLm7xfVaKf4cu1KZwFL6sOQXq79JiIIYwoQ5G53imh0Fm3muV07iQ3ZaubaBQsUI6BY7PQrytUR61hxopl6JL0ijXcwxnK1oQTTbby5XilGrDAtNuS_9YzRgUVMTTJmRvlazHetDkp1uADEOrTB5yr0IoAUcZ6EAd8ZqV4QdyAdO7P1gJ-vqhb0hfZcWPfJgjwLTPvNQFWR33aw7aJf0SoWx9qdwCY=",
+          "id": "rs_0b01226b5dc7b75a016af5d104dcdc87d290c21b6dc2dea576",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "action": {
+            "queries": [
+              "site:vgliving.co \"dining table\" \"teak\" square designer",
+              "site:maleforsimports.com \"square\" \"dining table\" teak",
+              "site:etsy.com \"square\" \"teak\" \"dining table\" danish designer",
+              "site:vntg.com square teak dining table designer swedish"
+            ],
+            "query": "site:vgliving.co \"dining table\" \"teak\" square designer",
+            "sources": [
+              {
+                "type": "url",
+                "url": "https://www.vntg.com/208982/danish-square-teak-dining-table-with-curved-edges-by-poul-hundevad-1960s/"
+              },
+              {
+                "type": "url",
+                "url": "https://www.vntg.com/316818/vintage-square-danish-teak-extendable-dining-table-by-poul-hundevad-1960s/"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/listing/997690763/hans-j-wegner-for-andreas-tuck-danish"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/listing/1734238909/xl-danish-mid-century-modern-dining"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/listing/4441068887/mid-century-danish-teak-extension-dining"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/market/mobler_dining_table"
+              },
+              {
+                "type": "url",
+                "url": "https://vgliving.co/products/svend-aage-madsen-teak-dining-table"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/market/mobler_teak_dining_table"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/market/danish_teak_extendable_dining_tables"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/sg-en/market/vintage_teak_dining_table"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/in-en/listing/4532330174/danish-mid-century-modern-extension"
+              },
+              {
+                "type": "url",
+                "url": "https://www.etsy.com/market/mid_century_modern_danish_teak_dining_table"
+              }
+            ],
+            "type": "search"
+          },
+          "id": "ws_0b01226b5dc7b75a016af5d10559c887d2928e9736dbd66de5",
+          "status": "completed",
+          "type": "web_search_call"
+        },
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9dER_6PIxSRPRoi0n__RpDKJCKD0TbGAGpUGX8pJOr8OBVEJiggXa1MZXgdetyr0xapoFrG3WPV_bsIgZajsZCMb5LslUVCUUIx8wnLN8_K0LmbkBY-ah3m8vM6FIkHGGPFKtnk2V7ZFcW59dn8L-BV-oMB20jbzFmTGq68POpadflpCKXPVhu4c7DMecz23QAzHhzuMk78UsoOHMeYWpY1u0zZxteKhWl2jX6zn6NLJ-mpW2M55wg7-tHUlIFaqEwkkj_kG71_Tf2D4KmNzQb840BhUMvHz2McNZOcbZoKtErZDerUxegIVwlp6dBvSuxb9JOkrnkF0mQc4Jz-9aDXK7YWouiQInCAMUNC6F7RCd7cKWPhE2cby8UIVgfy4Uncp8uqJIfvgtCYSTLtYbvTbZnW6W17WZeypO6Rm4uyuz_MaFP0V7OiWWrtvQ9nwT6mFfm22_Arr6z9z8yPOErMG1TZeGWYWUTl7_rP4ov92LSmTpWDRiyZrZek8hYAFneQEoXzrAjAXPQOvuTfhrVpDVKjtuOYEQr2qFBPZQqXLwgadXiUmb9eE8p-Jak8khLpO0yHsdwb6pEvr8mL-Mcm075QHm43SNAmAIwUskomEMJO4wjEa1fxWDW3PQEyL-a2sgbU_Xsf74XuFnvDGOmhQU6YjlhPU_pQPnBKH8YSOqfw3SYVQIWpuqr10clEHckejw1of5aRsdn19FBRWTJq4NdSc3coVZ9DByKxIY-URNrxsvnnOrw5uBNb_kjuI6JZZRKSpgzAyvhc7aNcbnmPX_gNiNsDJYXe7WEqFk9x4-MeHU6pW31L_dLMVJDEmn_E57SvitioX5MIXrTZcr1gNkuGA3t0cx0QT01X9J-LHJ8OCEZLiixCf1CwT6YYVYzdYwxYVF_I04-VTLgPU_Rqs9WstHaMIDOpOGs8aq9sZGZXhTs9d5vKYZWi8fsj8PsD-U_7iizu2PQU4rU8T6Y0dzL6Er0X1WRw1Lt47RuGJmmojelFSg5eP6gytVZ-mlOyCoIRtgW24ZIN8ToowBl0Vx7m3hs3eRP0KP9PF-z42cn5I2UxsO7HUa1J5DS14oq9ioZFuHGJ83jhz7Q1sT1l7wRW4OtBhp0eRiaAWjLsf6qE0ui8RMtv2UntCY8CAub_sqkjkXh0NC0bnZWsu_O7ZNDRf7oEVQAFDGGNWVLeP7IwJw4hiuNadY3xWJZ0eJc84whoICzZyQ58FK4Oytpmfbzspc4HXg12cviN5d-ocGLLdyI2ow-ab6A1VtOwLS2BloSfTj1U2Htje5UhIG2H5PaTa48Trh3wLBARndTUY7xJBV-JkKKU3X4RccTQC6forkUr06aAba0ljmle6RYL18FPTdq0Ys__yKfIkOzRCrCX7vW4dPbaIAEE_dSpPlNuW37ZY1DUjzv7L3nQ2GjSUBkdNJxGfJoLk5f_Pd-Lsiqiw4rUovrlxt5_C7Ym_oBcuuil1ZGpi1qIGcoGM8d_2AXjQkzfVi9xT5l_ZFrtUdYtzBU0UfBbxVabqIhxtN32RF8daJ-1lJDv81W5Y5jna-33dR8s7VhExUKe7S7kRNJqW_Ho2qiy2N4PMqGuhp99RIKp54PgcsSoHkfMpRiX9lsgFqNyVmPYoml8WbZcHM6uCqQEkmTCqYqUVDIaqVrjHGtCfqS2fXuSvR5O8XSQMwFvcSoye2Ulaqlsz1hmIaxxgRwVcCuhNHKYux_Dgx5fyiOnykuYPg0zQc2eJyqka84cFGiN_SZHwNpG_WNzJxs2ByUpEd1NDqj3fuLfDCkDi6QJMgSD-rYX2Bll3dnpaNjLdNA5sycE9t6hfc7abBvZaQZzN45afCXlJa-J9wcca",
+          "id": "rs_0b01226b5dc7b75a016af5d108598c87d29c9bc376255be8c0",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "action": {
+            "queries": [
+              "\"square\" \"table\" \"kurt østervig\" \"kp\" teak",
+              "\"square\" \"table\" \"kaj winding\" \"hundevad\" teak",
+              "\"teak\" \"dining table\" \"square\" \"designer\" \"sweden\" 1960 auctionet"
+            ],
+            "query": "\"square\" \"table\" \"kurt østervig\" \"kp\" teak",
+            "sources": [
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/mid-century-danish-couch-side-table-in-teak-by-kurt-ostervig-for-kp-mobler-1960s"
+              },
+              {
+                "type": "url",
+                "url": "https://auctionet.com/en/search/16-mobler?is=active&page=97"
+              },
+              {
+                "type": "url",
+                "url": "https://auctionet.com/en/4974654-kurt-ostervig-square-coffee-table-made-of-solid-oak-kp-furniture-denmark"
+              },
+              {
+                "type": "url",
+                "url": "https://auctionet.com/en/3625462-a-terracotta-square-shaped-garden-pedestal"
+              },
+              {
+                "type": "url",
+                "url": "https://www.vntg.com/tables/dining-tables/5/"
+              },
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/designers/ilmari-tapiovaara/"
+              },
+              {
+                "type": "url",
+                "url": "https://auctionet.com/en/search?company_id=8t&country_code=DK&page=33"
+              }
+            ],
+            "type": "search"
+          },
+          "id": "ws_0b01226b5dc7b75a016af5d1089f3087d2b6b77fdd606a1b81",
+          "status": "completed",
+          "type": "web_search_call"
+        },
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9dER8yhbWIoo5bCWJCPuSBSmk-Knvhtw86TjjutGeUwaqVgZvceXqhY0lCEV-n76Mh9IpVJUxjJcEhWYpvGTk1uc-RqtSSeI82FbKa6f-kEumEaKCISuhk0HGZkctvrskVJx10GnvXdFji_xGJDdW_P5mGFb73QbLHiLU0eSYzreTML4KCKgziQ7zPP8q-s-Pv6O2tVUvH0rVG878RpxOdmf5b6PzOit0KKt5gUxCUC1o4j6NyrXjJePpPA7_UJeAD3Ljfm9f3N2PbJFgP0rjJeklERUm7QgiN-uC6K1F-16p-uqkmjkgYpteGGbIJ7Wv6wRBl-lzsPk0Z4f1h6LA60XF_wrCVs6TSfgc-d6WOLJP8mutmZ5Wai5V2A_v18Q74VhguYnxazSNc_vejmHjOtozABN4OvzRmqTtIIQRTtrSHwuWw0aDurjpHgQrDAhd8MIXYwkN2sfONZAM_8ewyT9AyWd-vpXTMLiM8DEHeGwLCZx32CG1UKA1xVe2zS5UQy4VY_E9bZZy8VLCY_cbKyO_44aZSXoi4bZcYxWjg0jWFd8NZ2L1GsNtL2FbaMTs3xTVqFGHfoXTjhKVe0FSfQJzXaziniK4WhJ5Wr0MtfJtVjmy-XNHXUi7RRJ_EJjhlD0dh7iKYA89AcZI9a-StGH2gL2Ml9ZuTNfaD5bdYy_mwymDVxMcc4cY6dnZE2E9P1p8UGjxvQdq1SbFqwgEKBxyip0YvvU9nNuAr9sRQZWI7HC0_kHK1VV03KdnDybMbnOv5s_U8OZrUQZ73buJ-jnZ-tYwpgMYj8MTCzl-XSU2XExZhSjYI98T0HlvXED06pZ-VcK1TdchggTjVozN3K4vXWWZj3uhL17XxDXQP9TQalxEA0_Mc3bFCBcuQhLX_dh2TlyZN1vNNcYMFw6nnPy0NqZxr-rrqrZht3ZTM__EoHjrnH2j8yNKWD8wqaYyqy-lNnNTrqRKFVP0e7bOcvXDiTnV4M0pOCzaYtHqeaNkhXUEigUl9oKqiDfsw5h4LofqXO101czbxa0nZrOGkm9YTk-0pkzDqLHem-mtGNVDYYcWRmBDmLuo462YQZIpxqNKo_m32xc3yo_6rL78BppdDcRHaTOMY_HCBfNmTlhFRPe28Ozgym232WFeteSljpSBLuZT5JuRX90qe2uqDKOmJxHTxryuCs3ptBWqk6HwFOCb7EAn3j-0ZYwnd7G-ed-_8s4zv8ieZSV5x0r45mx_6vGElDVl-7_LOQQdz6WNGoNI_RIvYI4tQj-OVYdY6NU4e_36aFU0BnHPVZiYeGcgMViFhe-O2mffhLz07B-3Lu6IivknuALuFsKAL4Yw7ts7zWqMa89TYldGxHDVVnBzPz17AYkYMi2C7PVu-NHFqxFoX122iCIQ0xPygVS5JjoR56Bw1WtDEf15tnHCTi2zCm8Gs4ssgP3IDyMg61COCNjtOiOcZsQ_DSu7-_i83d8cEcC_JHE4mTrOQgs-NW5bnzYrLIcdBY2vlSjL8zg8BGsERvYa8W93AF1EoF1kuIro4Ogqz5Rx-S0h8xhrE8bJSUXxfOZivExSJ_c1sQQD1vs2UMNXvpR4nwUlI-Qe34pER00SxTPEkkJLdHP9SKLGoc-lk7sZOCQQWXAt_tUDO0HuOo1LYgiZ_TVDulnajYJCSqPmM7iyT5NODfTCec2hQ8E6Tb94z9lPfHNFcq4OazXHl2ebhe1NoJlVxSLfXQ9EKAy4vnv_C7EAeHQz0EamIgm4807kyXqwOXDC993O5Ezc5QG_zDDoX4c5ox7ewwg-d2ex_GB0aYm8es1Wzmmq2y9RLOo69YeY5HqvG_gd2SdC3MXIvVypcQiIimJfUTRKXe-vIiRau6jhXirzwLBiofncQjv-1jXBdnRLoOtFCY=",
+          "id": "rs_0b01226b5dc7b75a016af5d10b360487d2923eb4ad29623b16",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "action": {
+            "queries": [
+              "\"square\" \"teak\" \"dining table\" site:maleforsimports.com",
+              "\"square\" \"dining table\" site:midcenturymobler.com teak",
+              "\"square\" \"dining table\" \"winding\" hundevad",
+              "\"square\" \"dining table\" \"ostervig\" \"kp mobler\""
+            ],
+            "query": "\"square\" \"teak\" \"dining table\" site:maleforsimports.com",
+            "sources": [
+              {
+                "type": "url",
+                "url": "https://www.pamono.com/danish-extendable-square-teak-dining-table-with-curved-edges-by-poul-hundevad-for-hundevad-co-1960s?utm_source=openai"
+              },
+              {
+                "type": "url",
+                "url": "https://www.vntg.com/316818/vintage-square-danish-teak-extendable-dining-table-by-poul-hundevad-1960s/?utm_source=openai"
+              }
+            ],
+            "type": "search"
+          },
+          "id": "ws_0b01226b5dc7b75a016af5d10b826c87d2b13c53f11161eec7",
+          "status": "searching",
+          "type": "web_search_call"
+        },
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9dERsH0SWKOkUEJjlke-41HHMIXsY93daf48a5KW5NLG5Akc22PUytO8dOCT6jsuk1ERBREtIx0eiUsIjntQLMh04ceUw1onqcjnYMW84iFH1PMEgRVTqVxOlF-jBLaajLe7AiHnwDr-2ID0gsJ0iGIrK9m0fvd9htKqQcPHXdiKZf97XTx3iD8FUEqRTR_TWLWXQy-HHo6PNFohwDkYtgSarH91WcgCNEatjcD9qp28Ew0moegFwecqSmQPmjQ1jciDiYYerFiD3JWtUNOO3FhZhc8dPQVaFsy4vgc31wKQMDVTYtLw-YyOzkz0Ot87w7ffsWhLubazOac2JLDZxFDEaMwuDeYp-JRssaoskEuz-sqBxGfzUVL_TDY40n3kFJINE1rKf4-LpQfy53sS6JXPm-1ELuK4ak1-SEUMSglAvW05T5RSTLi6fC0VqJEE7vTcGaMLqpeR9lzziouYUx7giyUY8J-Yy5xFFWfRM84mVOr5jERMDyLIeCZi-GsSrpg3nEPG-cKy8xL2wpAIHXSVWES9vJkrsujO7mooyh4EgUGMAwIY2wNWKeFiNdC2P8btp4JyXr59_GqP04659vFkL5Cs7NC7Qy8lhE8V9vkbnVYwoc42Tb-_vg7dHyeQCdNkZdBfjyAQpo5l0T3EHhPysBEejKxY8lJByBG0PxE9Zu4Huk6Up9aUvKb6ZA_Ky2wCL_SnF03No60iJL8mXJmQLbbUTeZOtAON2F0of6xbJKm5uy8BMGzkckKHa3osg1CD1PsJ3-jknxwm5QiBjqJUJ8_6l-R95LviLP2f2xwR6xUwLF3CD7VcpmcSM0LqLdhQ50urxwHobheAom0GAqlD_ilF9BvcnJd0FZFBXJJXeo5d0zlLQSB-XhNqQpxixlGO9s1-C6Pqq_Il6CGld4hkRmiYNsC2DUF4qTLFGv1CRvd8MUxErrH0bWCN1sCPvAou_z7_bAk0uBAnTfuMNazcAEKCxQOfSWquQUjk6Zyi8cAQYDlNieMwRyLHLBJgFQOmUPKsBZaVD4S0nZ-g8zQcd-nV7rhHkiLaUXnC5Rjtvn4J6bCgMpFa52D81X2u9Mhix9cCPUcTtBmDnOm-IJ8VEnzwz_3ZtGpy6Mwnuzb888VEFgsQKbQ_dvTi9VIQHbSFFBtTyCkimmGqB8yTsUg9_onBfkHUOgVk1-E_EnC67RhwEPB8OAvz-dJycm0RoiMIfjOhYcIoA-3jcvZ3djmQnlCv7IGrCJXt6Ow8yoro2SP-3KBavhdzEkz7uuTLcV13aGxsR8QLa0Wcz1qW8ET4_tlWJ2gyUJ1_9TOg5e1NM_KNh1WwO0PCi-yuKlKc9987Az_gSaDBlBnCxZyipiBomhZq0kVJ4GIq_gsKFpl3f4g8L_P4dmBRSnSQPqk04O94qFyI9t9hDmitpf8PPGLajA5d9pAi66v2KmaCMR7zl3Gu7dJcrwbVi0N9LIYWBdCWlcozD5tTU_g5AOkxDkFTilLV8HEHQ4svDoY4mZsEtPy1YkaHWBia0NkAy6jl1eWl3-psDQbK8BdO0XDlS2y1FTdJFaYdtEhTkQU0Bk1G_g48St8e_8aesq4Rp3k52zJjxEkRXCxULdvnsCOhD5qtdze8iSBGVhCvZJDJx36kxlxHpHSUTRr9zLwoQqrBGXUXaMDd5RysgdyvWY0SsPgbacxGNm9BdDpeW4-oXSbMOGBrZuA5cAFGlkE4Kn2Tgwk7jhW3F0f7Gi2CgzVJtAipFLPsHSyirpHBKeB6_ruDjhh3OoFNWDEzLpOdakQToCchPXu9RFD_OC1py3ZJ9NJA--6clf6tFhR93R_kSONryNBa7tyeAVpRsW_40R3VH0tpHqwVHPUkN_FDUfEpiLGnHaCWCOSrtXgYFG4Z06H2bfFaZv-CQt-8n4xPh91nLHUo",
+          "id": "rs_0b01226b5dc7b75a016af5d10e073087d2b1ef885387e1173a",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "content": [
+            {
+              "annotations": [
+                {
+                  "end_index": 642,
+                  "start_index": 486,
+                  "title": "Danish Extendable Square Teak Dining Table with Curved Edges by Poul Hundevad for Hundevad & Co., 1960s for sale at Pamono",
+                  "type": "url_citation",
+                  "url": "https://www.pamono.com/danish-extendable-square-teak-dining-table-with-curved-edges-by-poul-hundevad-for-hundevad-co-1960s?utm_source=openai"
+                },
+                {
+                  "end_index": 941,
+                  "start_index": 807,
+                  "title": "Vintage Square Danish Teak Extendable Dining Table by Poul Hundevad, 1960s | #316818",
+                  "type": "url_citation",
+                  "url": "https://www.vntg.com/316818/vintage-square-danish-teak-extendable-dining-table-by-poul-hundevad-1960s/?utm_source=openai"
+                }
+              ],
+              "logprobs": [],
+              "text": "I can’t confidently identify the designer and maker from the photo alone. A **possible match** is a square teak dining table attributed to **Poul Hundevad**, made by **Hundevad & Co.**, but I couldn’t establish that the listings show the same model as the pictured table.\n\nThe listings I found were:\n\n- [Pamono: Danish square teak dining table by Poul Hundevad](https://www.pamono.com/danish-extendable-square-teak-dining-table-with-curved-edges-by-poul-hundevad-for-hundevad-co-1960s) ([pamono.com](https://www.pamono.com/danish-extendable-square-teak-dining-table-with-curved-edges-by-poul-hundevad-for-hundevad-co-1960s?utm_source=openai))\n- [VNTG: Vintage square Danish teak table by Poul Hundevad](https://www.vntg.com/316818/vintage-square-danish-teak-extendable-dining-table-by-poul-hundevad-1960s/) ([vntg.com](https://www.vntg.com/316818/vintage-square-danish-teak-extendable-dining-table-by-poul-hundevad-1960s/?utm_source=openai))\n\nA photo of any label or stamp underneath, along with the table’s dimensions, would help verify the attribution.",
+              "type": "output_text"
+            }
+          ],
+          "id": "msg_0b01226b5dc7b75a016af5d10e573c87d288f7c2c34bc4e2d7",
+          "phase": "final_answer",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0.0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "low",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "status": "completed",
+      "store": false,
+      "temperature": 1.0,
+      "text": {
+        "format": {
+          "type": "text"
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 3
+        }
+      },
+      "tools": [
+        {
+          "filters": {
+            "allowed_domains": [
+              "etsy.com",
+              "pamono.com",
+              "bukowskis.com",
+              "midcenturymobler.com",
+              "vntg.com",
+              "maleforsimports.com",
+              "auktion.sweakronan.se",
+              "vgliving.co",
+              "auctionet.com"
+            ]
+          },
+          "return_token_budget": "default",
+          "search_content_types": [
+            "text"
+          ],
+          "search_context_size": "medium",
+          "type": "web_search",
+          "user_location": {
+            "city": null,
+            "country": "US",
+            "region": null,
+            "timezone": null,
+            "type": "approximate"
+          }
+        }
+      ],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 25461,
+        "input_tokens_details": {
+          "cache_write_tokens": 5746,
+          "cached_tokens": 0
+        },
+        "output_tokens": 561,
+        "output_tokens_details": {
+          "reasoning_tokens": 345
+        },
+        "total_tokens": 26022
+      },
+      "user": null
+    },
+    "body_bytes": 22512,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "22512",
+      "content-type": "application/json",
+      "date": "Thu, 12 Nov 2026 14:45:37 GMT",
+      "openai-organization": "<openai-organization>",
+      "openai-processing-ms": "17069",
+      "openai-project": "<openai-project>",
+      "openai-version": "2020-10-01",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit-input-images": "50000",
+      "x-ratelimit-limit-requests": "5000",
+      "x-ratelimit-limit-tokens": "1000000",
+      "x-ratelimit-remaining-input-images": "49999",
+      "x-ratelimit-remaining-requests": "4999",
+      "x-ratelimit-remaining-tokens": "999470",
+      "x-ratelimit-reset-input-images": "1ms",
+      "x-ratelimit-reset-requests": "12ms",
+      "x-ratelimit-reset-tokens": "31ms",
+      "x-request-id": "req_29fb5e1a363341c0b0b86109dba8388b"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T14:45:20.195Z",
+  "usage": {
+    "input_tokens": 25461,
+    "input_tokens_details": {
+      "cache_write_tokens": 5746,
+      "cached_tokens": 0
+    },
+    "output_tokens": 561,
+    "output_tokens_details": {
+      "reasoning_tokens": 345
+    },
+    "total_tokens": 26022,
+    "web_search_call": 3
+  },
+  "worst_case_micro_usd": 202940
+}
