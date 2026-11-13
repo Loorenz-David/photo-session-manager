@@ -24,14 +24,11 @@ use crate::{
 };
 use http::{AddressGuard, ReqwestResearchHttp, ResearchHttp};
 
-fn client(seconds: u32, guard: AddressGuard) -> Option<Arc<dyn ResearchHttp>> {
-    match ReqwestResearchHttp::new(Duration::from_secs(u64::from(seconds)), guard) {
-        Ok(client) => Some(Arc::new(client)),
-        Err(error) => {
-            tracing::warn!(%error, "research http client not available");
-            None
-        }
-    }
+fn client(seconds: u32, guard: AddressGuard) -> Arc<dyn ResearchHttp> {
+    Arc::new(ReqwestResearchHttp::new(
+        Duration::from_secs(u64::from(seconds)),
+        guard,
+    ))
 }
 
 /// The adapters for the saved ids. `wait` is the wiring's sleep: the page reader paces slow hosts
@@ -44,34 +41,26 @@ pub fn build(
 ) -> Providers {
     let ids = settings.providers.resolved();
     let timeouts = &settings.call_timeout_seconds;
-    let model: Option<Arc<dyn ModelProvider>> = if ids.model == DEFAULT_MODEL_PROVIDER {
-        client(timeouts.model, AddressGuard::Any).map(|http| {
-            Arc::new(openai::OpenAiModel::new(
-                http,
-                secrets.clone(),
-                files.clone(),
-            )) as Arc<dyn ModelProvider>
-        })
-    } else {
-        None
-    };
-    let search: Option<Arc<dyn VisualSearchProvider>> =
-        if ids.visual_search == DEFAULT_VISUAL_SEARCH_PROVIDER {
-            client(timeouts.other, AddressGuard::Any).map(|http| {
-                Arc::new(visual_search::SerpApiLens::new(http, secrets.clone()))
-                    as Arc<dyn VisualSearchProvider>
-            })
-        } else {
-            None
-        };
-    let reader: Option<Arc<dyn PageReader>> = if ids.page_reader == DEFAULT_PAGE_READER {
-        client(timeouts.other, AddressGuard::PublicOnly).map(|http| {
-            Arc::new(page_reader::HttpPageReader::new(http, wait, timeouts.other))
-                as Arc<dyn PageReader>
-        })
-    } else {
-        None
-    };
+    let model = (ids.model == DEFAULT_MODEL_PROVIDER).then(|| {
+        Arc::new(openai::OpenAiModel::new(
+            client(timeouts.model, AddressGuard::Any),
+            secrets.clone(),
+            files,
+        )) as Arc<dyn ModelProvider>
+    });
+    let search = (ids.visual_search == DEFAULT_VISUAL_SEARCH_PROVIDER).then(|| {
+        Arc::new(visual_search::SerpApiLens::new(
+            client(timeouts.other, AddressGuard::Any),
+            secrets.clone(),
+        )) as Arc<dyn VisualSearchProvider>
+    });
+    let reader = (ids.page_reader == DEFAULT_PAGE_READER).then(|| {
+        Arc::new(page_reader::HttpPageReader::new(
+            client(timeouts.other, AddressGuard::PublicOnly),
+            wait,
+            timeouts.other,
+        )) as Arc<dyn PageReader>
+    });
     Providers {
         model,
         search,

@@ -313,28 +313,49 @@ impl reqwest::dns::Resolve for PublicResolver {
     }
 }
 
-/// The live seam.
+/// The live seam. The client is built at the first request, never in `new`: reqwest refuses to
+/// build a blocking client inside an async context, and the app is rebuilt from async command
+/// handlers (a settings save); requests themselves run on the research runner's own thread.
 pub struct ReqwestResearchHttp {
-    client: reqwest::blocking::Client,
+    timeout: Duration,
     guard: AddressGuard,
+    client: std::sync::OnceLock<Result<reqwest::blocking::Client, String>>,
 }
 
 /// The generic client name of every request (V8 politeness rule: no product name).
 pub const USER_AGENT: &str = "Mozilla/5.0 (compatible; research/0.1)";
 
 impl ReqwestResearchHttp {
-    pub fn new(timeout: Duration, guard: AddressGuard) -> Result<Self, String> {
-        let mut builder = reqwest::blocking::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(USER_AGENT)
-            .timeout(timeout);
-        if guard == AddressGuard::PublicOnly {
-            builder = builder.dns_resolver(Arc::new(PublicResolver));
+    pub fn new(timeout: Duration, guard: AddressGuard) -> Self {
+        Self {
+            timeout,
+            guard,
+            client: std::sync::OnceLock::new(),
         }
-        let client = builder
-            .build()
-            .map_err(|e| format!("http client: {}", e.without_url()))?;
-        Ok(Self { client, guard })
+    }
+
+    fn client(&self) -> Result<&reqwest::blocking::Client, HttpFailure> {
+        self.client
+            .get_or_init(|| {
+                let mut builder = reqwest::blocking::Client::builder()
+                    .redirect(reqwest::redirect::Policy::none())
+                    .user_agent(USER_AGENT)
+                    .timeout(self.timeout);
+                if self.guard == AddressGuard::PublicOnly {
+                    builder = builder.dns_resolver(Arc::new(PublicResolver));
+                }
+                builder
+                    .build()
+                    .map_err(|e| format!("http client: {}", e.without_url()))
+            })
+            .as_ref()
+            .map_err(|text| HttpFailure {
+                // Not "offline": a client that cannot be built will not come back by waiting.
+                sent: true,
+                kind: FailureKind::Reset,
+                text: text.clone(),
+                blocked: false,
+            })
     }
 
     fn blocked(text: String) -> HttpFailure {
@@ -418,7 +439,7 @@ impl ResearchHttp for ReqwestResearchHttp {
                 text: format!("method: {e}"),
                 blocked: false,
             })?;
-        let mut builder = self.client.request(method, url);
+        let mut builder = self.client()?.request(method, url);
         let has_type = request
             .headers
             .iter()

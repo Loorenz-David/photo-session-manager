@@ -16,8 +16,7 @@ use psm_core::{
 };
 use psm_infra::imaging::ImageOpsImpl;
 use psm_infra::{paths::AppPaths, sqlite::store::SqliteStore};
-use psm_integrations::commerce::shopify::adapter::{PollConfig, ShopifyAdapter, ShopifyConfig};
-use psm_testkit::{TestApp, fake_transport::FakeTransport};
+use psm_testkit::TestApp;
 use rusqlite::{Connection, params};
 use rusqlite_migration::Migrations;
 
@@ -177,22 +176,8 @@ fn f_c2a_research_transaction_commits_and_rolls_back_both_views() {
 #[test]
 fn f_c3a_public_listing_default_and_fake_values() {
     let a = TestApp::new().unwrap();
-    let adapter = ShopifyAdapter::new(
-        ShopifyConfig {
-            shop_domain: "example.myshopify.com".into(),
-            api_version: "2026-01".into(),
-            client_id: String::new(),
-            client_secret: String::new(),
-            condition_photos_key: "custom.damage".into(),
-        },
-        Arc::new(FakeTransport::new()),
-        a.clock.clone(),
-        PollConfig::default(),
-    );
-    let empty = adapter.public_listing("remote-id").unwrap();
-    assert!(empty.hosts.is_empty());
-    assert_eq!(empty.item_url, None);
-    assert_eq!(empty.item_path_tail, "");
+    // R8·U3 implements `public_listing` for Shopify (rows A17·C4 in `r8_shop_facts.rs`), so the
+    // Shopify adapter no longer shows the empty default; the fake's values are checked here.
     let fake = a.commerce.unwrap_or_else(|| {
         Arc::new(psm_testkit::fake_commerce::FakeCommerce::new(
             a.clock.clone(),

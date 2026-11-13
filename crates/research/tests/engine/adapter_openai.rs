@@ -435,7 +435,7 @@ fn a15_c5b_closed_port_is_not_sent() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     drop(listener);
-    let http = ReqwestResearchHttp::new(Duration::from_secs(5), AddressGuard::Any).unwrap();
+    let http = ReqwestResearchHttp::new(Duration::from_secs(5), AddressGuard::Any);
     let url = format!("http://127.0.0.1:{port}/v1/responses?api_key=k-123");
     let failure = http
         .send(&HttpRequest::get(&url))
@@ -458,7 +458,7 @@ fn a15_c5c_silent_server_times_out_after_send() {
             std::thread::sleep(Duration::from_secs(3));
         }
     });
-    let http = ReqwestResearchHttp::new(Duration::from_millis(200), AddressGuard::Any).unwrap();
+    let http = ReqwestResearchHttp::new(Duration::from_millis(200), AddressGuard::Any);
     let started = Instant::now();
     let failure = http
         .send(&HttpRequest::get(&format!("http://127.0.0.1:{port}/x")))
