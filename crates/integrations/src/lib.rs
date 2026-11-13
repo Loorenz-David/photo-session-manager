@@ -1685,17 +1685,18 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
     };
     psm_research::schema::ensure(parts.store)?;
     let seams = research_test_seams(parts.paths);
+    let wait: psm_research::gateway::Waiter = match &seams {
+        Some(seams) => seams.wait.clone(),
+        None => Arc::new(|ms| thread::sleep(Duration::from_millis(ms))),
+    };
     let providers = match &seams {
         Some(seams) => seams.providers.clone(),
         None => psm_research::adapters::build(
             &ResearchSettings::from_slot(parts.settings.research.as_ref()),
             parts.secrets.clone(),
             psm_research::files::ResearchFiles::new(&parts.paths.root),
+            wait.clone(),
         ),
-    };
-    let wait: psm_research::gateway::Waiter = match &seams {
-        Some(seams) => seams.wait.clone(),
-        None => Arc::new(|ms| thread::sleep(Duration::from_millis(ms))),
     };
     let settings_paths = parts.paths.clone();
     let service = Arc::new(ResearchService::new(ResearchDeps {

@@ -1,0 +1,27 @@
+{
+  "source": "synthetic (R8·U3 row A17·C4(a); schema-grounded, not observed): the shop part of crates/research/fixtures/shop/hosts_query.json (RESEARCH-VERIFY-9) with primaryDomain host and url set to beyovintage.se; the product part built to the Admin GraphQL schema (Product.handle: String!, Product.onlineStoreUrl: URL, null when the product is not published to the online store); second case of the row: onlineStoreUrl null",
+  "request": {
+    "query": "query PublicListing($id: ID!) { shop { primaryDomain { host url } myshopifyDomain } product(id: $id) { handle onlineStoreUrl } }",
+    "variables": {
+      "id": "gid://shopify/Product/16185797640522"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "data": {
+        "shop": {
+          "primaryDomain": {
+            "host": "beyovintage.se",
+            "url": "https://beyovintage.se"
+          },
+          "myshopifyDomain": "example.myshopify.com"
+        },
+        "product": {
+          "handle": "swedish-bookshelf-in-oak-5",
+          "onlineStoreUrl": null
+        }
+      }
+    }
+  }
+}

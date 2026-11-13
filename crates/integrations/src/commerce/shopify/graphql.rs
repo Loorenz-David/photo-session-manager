@@ -71,3 +71,12 @@ pub const LOCATIONS: &str =
 /// P65: read-back of a created product's stock at one location (tracking and the `available`
 /// quantity of its first variant's inventory item).
 pub const INVENTORY_READBACK: &str = "query InventoryReadback($id: ID!, $locationId: ID!) { product(id: $id) { variants(first: 1) { nodes { inventoryItem { tracked inventoryLevel(locationId: $locationId) { quantities(names: [\"available\"]) { name quantity } } } } } } }";
+
+/// R8·U3 (08B MC-A3, RESEARCH-VERIFY-9): the shop's public hosts and one product's storefront URL
+/// and handle. No `webPresences`: it needs `read_markets`, which the app does not have (R8 card 1
+/// = No for now).
+pub const PUBLIC_LISTING: &str = "query PublicListing($id: ID!) { shop { primaryDomain { host url } myshopifyDomain } product(id: $id) { handle onlineStoreUrl } }";
+
+/// R8·U3: the shop's public hosts alone (an item that is not linked to a product).
+pub const SHOP_HOSTS: &str =
+    "query ShopHosts { shop { primaryDomain { host url } myshopifyDomain } }";

@@ -321,6 +321,32 @@ impl TestApp {
         app.research_fields(&["custom.designer"])?;
         Ok(app)
     }
+    /// R8·U3: what [`Self::with_research`] does, with `commerce` as the app's shop adapter (in
+    /// place of `FakeCommerce`, so `commerce` is `None`) and `providers` in the research seam (in
+    /// place of the research fakes, so `research` is `None`). A restart reopens without
+    /// `commerce`.
+    pub fn with_research_using(
+        commerce: Arc<dyn psm_core::ports::commerce::CommerceAdapter>,
+        providers: psm_research::ports::Providers,
+    ) -> Result<Self> {
+        let app = Self::create_inner(
+            true,
+            false,
+            "custom.damage_report",
+            None,
+            0,
+            None,
+            Some((commerce, providers)),
+        )?;
+        use psm_core::ports::secrets::SecretStore;
+        app.secrets
+            .set(psm_research::service::MODEL_ACCOUNT, RESEARCH_MODEL_KEY)?;
+        app.secrets
+            .set(psm_research::service::SEARCH_ACCOUNT, RESEARCH_SEARCH_KEY)?;
+        app.set_research_settings(research_test_settings())?;
+        app.research_fields(&["custom.designer"])?;
+        Ok(app)
+    }
     /// R7·U1: the wired app with the research fakes registered but nothing else: no shop
     /// integration, no key, no research settings (the core workflow without research).
     pub fn with_research_fakes_only() -> Result<Self> {
@@ -419,6 +445,31 @@ impl TestApp {
         sidecar: Option<serde_json::Value>,
         clock_start: i64,
         research: Option<ResearchFakes>,
+    ) -> Result<Self> {
+        Self::create_inner(
+            configure_document,
+            configure_shop,
+            condition_key,
+            sidecar,
+            clock_start,
+            research,
+            None,
+        )
+    }
+    /// `custom` (R8·U3): a commerce adapter opened in place of `FakeCommerce` and the providers
+    /// registered in the research seam in place of the research fakes.
+    #[allow(clippy::too_many_arguments)]
+    fn create_inner(
+        configure_document: bool,
+        configure_shop: bool,
+        condition_key: &str,
+        sidecar: Option<serde_json::Value>,
+        clock_start: i64,
+        research: Option<ResearchFakes>,
+        custom: Option<(
+            Arc<dyn psm_core::ports::commerce::CommerceAdapter>,
+            psm_research::ports::Providers,
+        )>,
     ) -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let mut paths = AppPaths::for_dir(dir.path());
@@ -530,17 +581,22 @@ impl TestApp {
         }
         let clock = Arc::new(ManualClock::new(clock_start));
         fake.set_clock(clock.clone());
-        if let Some(fakes) = &research {
+        let seam_providers = match (&custom, &research) {
+            (Some((_, providers)), _) => Some(providers.clone()),
+            (None, Some(fakes)) => Some(psm_research::ports::Providers {
+                model: Some(fakes.model.clone()),
+                search: Some(fakes.search.clone()),
+                reader: Some(fakes.reader.clone()),
+            }),
+            (None, None) => None,
+        };
+        if let Some(providers) = seam_providers {
             // P70 hazard: the wait between attempts moves the manual clock, never real time.
             let wait_clock = clock.clone();
             psm_integrations::with_test_research(
                 &paths,
                 psm_integrations::ResearchTestSeams {
-                    providers: psm_research::ports::Providers {
-                        model: Some(fakes.model.clone()),
-                        search: Some(fakes.search.clone()),
-                        reader: Some(fakes.reader.clone()),
-                    },
+                    providers,
                     wait: Arc::new(move |ms| {
                         wait_clock.advance(i64::try_from(ms).unwrap_or(i64::MAX))
                     }),
@@ -561,14 +617,18 @@ impl TestApp {
                 condition_key,
             ))
         });
+        let opened_commerce = match &custom {
+            Some((adapter, _)) => Some(adapter.clone()),
+            None => commerce
+                .as_ref()
+                .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
+        };
         let app = App::open_with_adapter(
             paths,
             fake.clone(),
             clock.clone(),
             run_startup,
-            commerce
-                .as_ref()
-                .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
+            opened_commerce,
             secrets.clone(),
         )?;
         let events = Arc::new(CollectingEventSink::default());

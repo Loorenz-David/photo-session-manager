@@ -6,6 +6,7 @@
 
 pub mod http;
 pub mod openai;
+pub mod page_reader;
 pub mod visual_search;
 
 use std::{sync::Arc, time::Duration};
@@ -13,9 +14,13 @@ use std::{sync::Arc, time::Duration};
 use psm_core::ports::secrets::SecretStore;
 
 use crate::{
-    config::{DEFAULT_MODEL_PROVIDER, DEFAULT_VISUAL_SEARCH_PROVIDER, ResearchSettings},
+    config::{
+        DEFAULT_MODEL_PROVIDER, DEFAULT_PAGE_READER, DEFAULT_VISUAL_SEARCH_PROVIDER,
+        ResearchSettings,
+    },
     files::ResearchFiles,
-    ports::{ModelProvider, Providers, VisualSearchProvider},
+    gateway::Waiter,
+    ports::{ModelProvider, PageReader, Providers, VisualSearchProvider},
 };
 use http::{AddressGuard, ReqwestResearchHttp, ResearchHttp};
 
@@ -29,10 +34,13 @@ fn client(seconds: u32, guard: AddressGuard) -> Option<Arc<dyn ResearchHttp>> {
     }
 }
 
+/// The adapters for the saved ids. `wait` is the wiring's sleep: the page reader paces slow hosts
+/// with it (R8·U3 task 3). The page reader needs no key.
 pub fn build(
     settings: &ResearchSettings,
     secrets: Arc<dyn SecretStore>,
     files: ResearchFiles,
+    wait: Waiter,
 ) -> Providers {
     let ids = settings.providers.resolved();
     let timeouts = &settings.call_timeout_seconds;
@@ -56,9 +64,17 @@ pub fn build(
         } else {
             None
         };
+    let reader: Option<Arc<dyn PageReader>> = if ids.page_reader == DEFAULT_PAGE_READER {
+        client(timeouts.other, AddressGuard::PublicOnly).map(|http| {
+            Arc::new(page_reader::HttpPageReader::new(http, wait, timeouts.other))
+                as Arc<dyn PageReader>
+        })
+    } else {
+        None
+    };
     Providers {
         model,
         search,
-        reader: None,
+        reader,
     }
 }
