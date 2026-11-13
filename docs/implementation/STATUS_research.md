@@ -4,7 +4,7 @@ Branch `feature/agentic`, worktree `~/Desktop/Developer/Photo-Session-Manager-ag
 against the sibling checkout `~/Desktop/Developer/Photo-Session-Manager` (`main`, the owner's other work).
 `docs/implementation/STATUS.md` belongs to `main`'s orchestrator; do not edit it from this track.
 
-**2026-11-13: R1–R9 APPROVED (with notes in `backlog_research/`); nothing running; the measurement waits for the owner; R1 on track B waits on an owner card.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
+**2026-11-13: R1–R9 APPROVED (with notes in `backlog_research/`); nothing running; the measurement waits for the owner.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
 Ten milestones R1–R10 in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
 tracks and driver loop in `docs/implementation/master_plan_research.md`. `main` (with P70, the fast suite) was merged
 into this branch at `2026-11-12`; the branch is local, not pushed.
