@@ -820,3 +820,15 @@ to 07A MC-10 and 05A MC-30.
     (d) Added the same night: for the page reader every transport failure (DNS, refused, connect timeout, timeout or
     reset after send) is "could not be read", never an offline hold; offline is detected by the provider calls,
     which run before pages. One dead listing domain must not hold a run.
+12. 2026-11-13 (owner, after the 42-piece measurement). Decisions for a follow-up phase (R11), not yet in the
+    contracts above: (a) **Physical fields are never researched**: the dimensions (total width, depth, height, seat
+    height) and damage details are measured or written by the person; research leaves them alone. (b) **Detailed
+    condition is derived**, not read: it follows from the levels in the condition fields. (c) **The condition step
+    waits** until the person has classified the condition photos and leaves the item (moves to the next item) or
+    publishes it, because condition photos are taken with the main photos and only classified when the session's
+    editing is done. (d) **The photo look follows the shoot template**: the first main photo is always wide, so
+    wood is read from the later (closer) photos; the template decides which photos serve which field. (e) Cost: a
+    light local parser before the model (owner idea, `backlog_research/owner_ideas.md`). Measurement findings for
+    the same phase: research must not take designer and maker from a look-alike listing in the owner's own shop
+    (pieces 6, 33).
+
