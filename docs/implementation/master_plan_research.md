@@ -401,7 +401,7 @@ present (never printing a value) before launching R1.
 
 ## 9. Amendment log
 - 2026-11-13 v8 (orchestrator) — after the acceptance measurement the owner set a follow-up phase **R11 research flow
-  by shoot template** (08B changelog 12): physical fields never researched, detailed condition derived, condition
+  by shoot template** (08B changelog 12): physical fields never researched (a settings picker of excluded fields: dimensions, weight, damage details for the owner), detailed condition derived, condition
   step deferred to classification + leaving/publishing, photo look by template position, a light local parser,
   no attribution from look-alike own listings. Not yet planned; it comes after R10 and needs its own plan.
 - 2026-11-13 v7 (orchestrator) — §3 Isolation names the testkit's R8 test surface (R8 review lesson); R8 page-reader

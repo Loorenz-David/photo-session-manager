@@ -822,7 +822,9 @@ to 07A MC-10 and 05A MC-30.
     which run before pages. One dead listing domain must not hold a run.
 12. 2026-11-13 (owner, after the 42-piece measurement). Decisions for a follow-up phase (R11), not yet in the
     contracts above: (a) **Physical fields are never researched**: the dimensions (total width, depth, height, seat
-    height) and damage details are measured or written by the person; research leaves them alone. (b) **Detailed
+    height), weight and damage details are measured or written by the person; research leaves them alone. The
+    list is a setting (Settings → Research, "fields research leaves alone", a picker of the shop's fields like the
+    designer/maker and condition-photos pickers); for the owner's shop it holds those fields. (b) **Detailed
     condition is derived**, not read: it follows from the levels in the condition fields. (c) **The condition step
     waits** until the person has classified the condition photos and leaves the item (moves to the next item) or
     publishes it, because condition photos are taken with the main photos and only classified when the session's
