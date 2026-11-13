@@ -35,13 +35,15 @@ This milestone is one runner phase made of 1 unit. Work the units in order. Afte
   `custom.manufacturer` (the 68-metafield fixture, which the answer key matches); the engine's default is
   `["beyo.designer"]` (R4). Before writing the shipped default, confirm against the live shop which keys hold designer
   and maker, so the measured behaviour is the shipped one; ask the owner if the shop has both namespaces.
-- **U1, designer and maker are found by name (owner 2026-11-13; replaces the "confirm the keys" note above).** The owner's
-  shop names them "Designer" and "Manufacturer" (`custom.designer`, `custom.manufacturer`); the dev store's designer is
-  `beyo.designer` and it has no manufacturer. A fixed key cannot be a default for every shop. Ship the default as "the
-  linked shop's product fields named Designer or Manufacturer" (name compared without case), resolved from the shop's
-  definitions when the run starts; a non-empty `attribution_keys` setting overrides it. Rows: a shop with
-  `custom.designer` "Designer" and `custom.manufacturer` "Manufacturer" → both treated as attribution fields; the dev
-  store → `beyo.designer` only; a setting with one key → that key only.
+- **U1, designer and maker are a setting the owner points (owner 2026-11-13; replaces the "confirm the keys" note
+  above).** The owner's shop names them "Designer" and "Manufacturer" (`custom.designer`, `custom.manufacturer`); the
+  dev store's designer is `beyo.designer` and it has no manufacturer, so no fixed key can be the default. Like the
+  condition-photos field, Settings → Research gets a picker of the linked shop's product fields for "designer and
+  maker" (one or more), stored in `attribution_keys`. The shipped default is empty; when the shop is linked and the
+  setting is still empty, the picker preselects the fields named Designer or Manufacturer (name compared without
+  case) for the owner to save or change. Rows: picker lists the shop's fields; saving two keys → both treated as
+  attribution fields; an empty setting → the engine's default `["beyo.designer"]` is gone and no field is treated
+  as attribution until chosen (the settings screen says so).
 - **U1, the shop's own addresses (owner 2026-11-13).** The owner's shop answers on `beyovintage.se`, `www.beyovintage.se`,
   `beyovintage.com`, `www.beyovintage.com`, `beyovintage.myshopify.com`, `68c5b4-6a.myshopify.com`. Shop hosts today
   are the primary domain and the platform host (08B changelog 11(c)). Without `read_markets` (declined for now), add a

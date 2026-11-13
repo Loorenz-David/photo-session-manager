@@ -307,7 +307,8 @@ evidence above. The owner may change any of them; R8 and R10 read this section.
    (`custom.designer`, `custom.manufacturer`, as in the 42-piece file). The app reads the linked shop's fields as they
    come. The engine's shipped `attribution_keys` default `["beyo.designer"]` is the dev store's key (the store the
    app's Shopify token points at, read 2026-11-13: `beyo.designer` "Designer", no manufacturer field), so it is not
-   a default that fits any other shop. R10 resolves it (see its carried notes).
+   a default that fits any other shop. Owner, same morning: make it a setting the owner points at the right fields,
+   like the condition-photos field (R10 carried notes).
 5. **The USD 40:** counts OpenAI API spend (the research agent's model calls on the key in `~/.psm_research.env`),
    not the Codex subscription. Lens searches are priced 0 in the measurement and draw on the SerpApi plan's monthly
    searches; page downloads are free.
