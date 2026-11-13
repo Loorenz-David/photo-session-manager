@@ -43,7 +43,7 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   page-reader fixes). Owner card in its narrative: models per stage after the measurement (→ R10).
 - **Owner decisions after the measurement (2026-11-13):** 08B changelog 12, master plan v8: follow-up phase R11
   (fields research leaves alone, condition deferred, photo look by shoot template, light parser, look-alike fix).
-  Task 5 comparison running (`scratchpad/compare_driver.py`, 12 pieces × 8 configs, out `~/psm-research-bench/cmp`).
+  Task 5 comparison done (96 replays, evidence doc "Model comparison"); waits for the owner's model pick → R10.
 - **Measurement tasks 3–4 done (2026-11-13):** 42/42 finished (a23 pieces 1–15, a24 pieces 16–42 after the owner added
   credit); results in the evidence doc "Acceptance measurement". Real spend ≈ USD 12.6; ledgers 8.77 + 7.89 = 16.66
   of the 40. Next: relay; task 5 model comparison (replay, budget by count) when the owner nods; owner asked about

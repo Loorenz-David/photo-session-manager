@@ -349,3 +349,31 @@ pieces' listings or from the photo, not from a statement about this piece.
 **Read first:** the look-alike listing (pieces 6, 33) and the measurements are the two patterns to fix before the
 defaults ship; the model comparison (task 5) has not run yet.
 
+## Model comparison (2026-11-13, R9·U2 task 5)
+
+`replay` of four stages on 12 pieces (2, 6, 11, 16 · 21, 24, 27, 30 · 31, 34, 37, 40: four per test group), each
+with two candidate models; the recorded answers are the baseline. Out folder `~/psm-research-bench/cmp`, scored by
+`scratchpad/score_cmp.py` against the key and the corrections. `replay` records no cost, so cost is from the
+measurement's per-stage figures and the price ratios (Terra about half of Sol, Luna about a tenth of Terra).
+
+| Stage | Model | Right | Wrong | Open | Note |
+|---|---|---|---|---|---|
+| Photo look (wood, country, years, quantity; majority of all answers) | Sol low (baseline) | 24 | 10 | 13 | ~USD 0.10 per piece |
+| | Terra low | 16 | 8 | 23 | about half the cost |
+| | Luna low | 4 | 1 | 42 | almost always "cannot tell" |
+| Reading listings (designer, maker per page) | Terra low (baseline) | 27 | 50 | 52 | "wrong" is mostly a page about another piece |
+| | Sol low | 27 | 52 | 50 | about twice the cost |
+| | Luna low | 25 | 58 | 46 | about 1/8 of the cost |
+| Comparing photos with a listing (117 pages) | Sol low (baseline) | — | — | — | match 25, similar 64, different 28 |
+| | Terra low | — | — | — | match 23, similar 77, different 17; agrees with Sol on 99 of 117 |
+| | Luna low | — | — | — | match 56, similar 33, different 28; agrees on 70 — over-matches |
+| Condition (condition level fields) | Terra high (baseline) | 23 | 11 | 20 | |
+| | Terra low | 13 | 7 | 34 | leaves more open |
+| | Luna low | 26 | 25 | 3 | fills everything, half wrong |
+
+**Reading:** Sol stays best for the photo look. Luna reads listings nearly as well as Terra at about 1/8 of the
+cost. Terra compares photos almost like Sol at half the cost and is a little more cautious; Luna calls twice as many
+pages a match, which would make the look-alike problem (pieces 6, 33) worse. Terra high stays best for condition.
+Recommended per stage: photo look Sol low, reading Luna low, comparing Terra low, condition Terra high; estimated
+cost per piece about USD 0.20 instead of 0.30. Small sample (12 pieces); the owner picks.
+
