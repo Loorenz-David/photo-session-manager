@@ -35,8 +35,13 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   "Rosewood" is not a shop choice ("Santos Rosewood" is) in `docs/test-items/answer_key_corrections.json`;
   pamono country sites need their own trusted entries if wanted. Track B's build folder: deletion was denied by
   the permission prompt; the owner may delete `../Photo-Session-Manager-agentic-b/target`.
-- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R8_research_real_adapters`, attempt 3 (projection off, review is the gate; master plan v6), started 2026-11-13 01:45 (track A). Attempt 2 stopped at projection (L1–L13, 0 cards; applied, archived). Attempt 1 stopped at projection (1 owner card: read_markets, decided No for now under delegation; L1–L31 applied by a planner session, 08B changelog 11, master plan v5; archived). Rule: if attempt 2's projection again needs only plan amendments, apply them and run attempt 3 with projection off.
-- **Next on track A:** R9 (needs R1, R8 merged from B) → R10. Schedule changed
+- **Done:** `R8_research_real_adapters` APPROVED_WITH_NOTES 2026-11-13 02:30 (attempt 3; two projection rounds archived;
+  08B changelog 11; master plan v5–v6). Page-reader notes (charset, proxy, address ranges) folded into R9·U1 task 0;
+  §3 Isolation lesson applied (v7). Not yet run live against the real services.
+- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R9_research_tool_and_acceptance`, started
+  2026-11-13 02:31 (track A). It builds the tool and `accept`; the **measurement run (U2 tasks 3–6, real keys, ceiling
+  USD 40) is owner-attended** and waits for the owner after the runner returns.
+- **Next on track A:** the owner-attended measurement, then R10 (models from its result). Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
   merge `feature/agentic` into `research/track-b` first (R4 and plan edits), then R8 once the owner's picks arrive.
 - **Track B (owner said yes 2026-11-12):** worktree `~/Desktop/Developer/Photo-Session-Manager-agentic-b`, branch

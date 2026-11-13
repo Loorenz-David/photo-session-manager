@@ -57,7 +57,8 @@ it and the book differ, the book wins and this file is amended.
   `crates/research/src/{adapters, config.rs}` and the tool.
 - **Isolation.** App crates use the research crate only through the surface of §6.6 (the `ResearchApi` trait and its
   shapes; four constructors called from `crates/integrations/src/lib.rs`). The testkit may also use
-  `psm_research::{writes, fakes}` in tests. The research crate depends on `psm-core` and `psm-infra`, never on
+  `psm_research::{writes, fakes}` in tests, and (from R8, for the shop-facts and wiring rows) `ports::Providers`,
+  `adapters::page_reader::HttpPageReader`, `rules::value_map::map_output` and `store` in tests. The research crate depends on `psm-core` and `psm-infra`, never on
   `psm-integrations` or the desktop crate; `psm-testkit` is a **dev**-dependency of it.
 - **Scratch data only.** Until this branch is merged into `main`, the app built from it runs only with
   `PSM_DATA_DIR=$HOME/psm-research-dev` (or another scratch folder): it writes a publish step (`held`) and columns a
@@ -399,6 +400,8 @@ present (never printing a value) before launching R1.
 - The intention map still says 08A/08B are "not planned yet".
 
 ## 9. Amendment log
+- 2026-11-13 v7 (orchestrator) — §3 Isolation names the testkit's R8 test surface (R8 review lesson); R8 page-reader
+  fixes (charset, no proxy, address ranges) added to R9·U1 task 0 before the measurement.
 - 2026-11-13 v6 (orchestrator) — R8 projection r0 attempt 2 folded (ledger L1–L13, 0 owner cards; 08B MC-A3 body
   aligned with changelog 11(d)); `adapters::build(settings, Arc<dyn SecretStore>, ResearchFiles)`, keys read per call;
   testkit gains `TestApp::with_research_using`. R8 is 20 criteria / 35 rows. **Projection is off for R8 from attempt 3**

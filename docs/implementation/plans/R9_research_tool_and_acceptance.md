@@ -40,6 +40,15 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
   Score "page does not name the key" apart, or the read stage looks half wrong when it does its job.
 - **U2, models under test (owner picks 2026-11-13).** The first models per stage are in the evidence doc's "Owner
   picks" (observe Sol low, read Terra low, condition Terra high); the acceptance measurement confirms or changes them.
+- **U1 task 0, page-reader fixes before the measurement (R8 review; orchestrator 2026-11-13, overrides "no change to the
+  engine" for these adapter lines only, all in `crates/research/src/adapters/`).** The measurement must not be skewed by
+  them. (a) `page_reader/http.rs` decodes every body as UTF-8: honour the reply's `charset` and `<meta charset>` (at
+  least `windows-1252` / `ISO-8859-1`, which older Swedish dealer sites use), and treat a non-HTML `content-type` as
+  "could not be read". (b) The `PublicOnly` client calls `.no_proxy()`, so an environment proxy cannot bypass the
+  resolver guard. (c) `adapters::http::is_public` also refuses `100.64.0.0/10`, `192.0.0.0/24`, `198.18.0.0/15`,
+  multicast (`224.0.0.0/4`, `ff00::/8`), `fec0::/10`, and IPv6 forms embedding IPv4 (`64:ff9b::/96`, `2002::/16`).
+  Rows: a `windows-1252` page with "mörk" reads "mörk"; a `application/pdf` reply → `obtained:false`; each new range
+  refused (one table-driven row). Run `cargo test -p psm-research --test engine adapter_` with them.
 
 ## Unit 1 — `psm-research report` and `replay`
 
