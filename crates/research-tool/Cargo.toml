@@ -6,6 +6,8 @@ autotests = false
 
 # R1: the dev-Mac benchmark tool (probes, visual-search and model benchmarks). Real provider calls
 # happen only when a person runs the binary with keys in the environment; the tests use a stub seam.
+# R9: `report` and `replay` over an export of the app's research record; the tool uses the
+# research crate's rules and export names (one-way: nothing in the app depends on the tool).
 
 [[bin]]
 name = "psm-research"
@@ -20,9 +22,14 @@ sha2 = "0.11"
 url = "2.5.8"
 chrono = "0.4"
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
+psm-research = { path = "../research" }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tempfile = "3"
+# R9·U1: the export fixture is built in the test by the research crate's harness (included by path).
+psm-testkit = { path = "../testkit" }
+rusqlite = { version = "0.40", features = ["bundled"] }
 
 [[test]]
 name = "tool"

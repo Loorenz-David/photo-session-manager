@@ -354,3 +354,101 @@ fn a17_c7a_build_selects_the_default_adapters() {
         (None, Some("serpapi_lens".into()), Some("page_http".into()))
     );
 }
+
+/// R9·U1 task 0 (R8 review): a page in windows-1252, by the reply's `charset` and by its own
+/// `<meta charset>`, reads its non-ASCII letters right.
+#[test]
+fn r9_t0a_a_windows_1252_page_reads_mork() {
+    let url = "https://dealer.example/byra";
+    let body =
+        b"<html><head><title>Byr\xE5</title></head><body><p>F\xE4rg: m\xF6rk ek</p></body></html>";
+    for (content_type, prefix) in [
+        ("text/html; charset=windows-1252", &b""[..]),
+        ("text/html", &b"<meta charset=\"ISO-8859-1\">"[..]),
+    ] {
+        let mut page = prefix.to_vec();
+        page.extend_from_slice(body);
+        let http = Arc::new(FakeResearchHttp::default());
+        http.once(
+            "GET",
+            url,
+            Ok(HttpReply {
+                status: 200,
+                headers: vec![("content-type".into(), content_type.into())],
+                body: page,
+            }),
+        );
+        let (r, _) = reader(&http, 60);
+        let reply = r.read(url).unwrap();
+        assert!(reply.obtained, "{content_type}");
+        assert!(
+            reply.text.contains("mörk"),
+            "{content_type}: {}",
+            reply.text
+        );
+        assert_eq!(reply.title, "Byrå", "{content_type}");
+    }
+}
+
+/// R9·U1 task 0: a reply whose `content-type` is not HTML is "could not be read".
+#[test]
+fn r9_t0b_a_pdf_reply_is_not_obtained() {
+    let url = "https://dealer.example/catalogue.pdf";
+    let http = Arc::new(FakeResearchHttp::default());
+    http.once(
+        "GET",
+        url,
+        Ok(HttpReply {
+            status: 200,
+            headers: vec![("content-type".into(), "application/pdf".into())],
+            body: b"<html><body><p>Designer: Hans Wegner</p></body></html>".to_vec(),
+        }),
+    );
+    let (r, _) = reader(&http, 60);
+    let reply = r.read(url).unwrap();
+    assert!(!reply.obtained);
+    assert_eq!(reply.text, "");
+    assert_eq!(reply.usage, page_fetch());
+}
+
+/// R9·U1 task 0: each added range is refused by the `PublicOnly` guard; public neighbours are not.
+#[test]
+fn r9_t0c_added_address_ranges_are_refused() {
+    use psm_research::adapters::http::is_public;
+    use std::net::IpAddr;
+    let refused = [
+        "100.64.0.1",
+        "100.127.255.254",
+        "192.0.0.8",
+        "198.18.0.1",
+        "198.19.255.255",
+        "224.0.0.1",
+        "239.255.255.250",
+        "ff02::1",
+        "ff0e::fb",
+        "fec0::1",
+        "64:ff9b::a00:1",
+        "64:ff9b::808:808",
+        "2002:c000:0204::1",
+        "2002:0808:0808::1",
+    ];
+    for text in refused {
+        let ip: IpAddr = text.parse().unwrap();
+        assert!(!is_public(ip), "{text} must be refused");
+    }
+    let public = [
+        "100.63.255.255",
+        "100.128.0.1",
+        "192.0.1.1",
+        "198.17.255.255",
+        "198.20.0.1",
+        "223.255.255.254",
+        "8.8.8.8",
+        "2a00:1450:4001::1",
+        "2001:db9::1",
+    ];
+    for text in public {
+        let ip: IpAddr = text.parse().unwrap();
+        assert!(is_public(ip), "{text} must pass");
+    }
+}

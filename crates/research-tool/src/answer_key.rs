@@ -205,22 +205,12 @@ pub fn is_naming(text: &str, names: &[String]) -> bool {
     })
 }
 
-/// `H(url)` without IDNA: lowercased host, trailing dot and port dropped; `None` for a non-http URL.
-pub fn host(url: &str) -> Option<String> {
-    let parsed = url::Url::parse(url).ok()?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return None;
-    }
-    let host = parsed
-        .host_str()?
-        .trim_end_matches('.')
-        .to_ascii_lowercase();
-    Some(host)
-}
+/// `H(url)` (MC-A3): the research crate's rule (R9·U1 task 5 replaced R1's private copy).
+pub use psm_research::rules::sites::host;
 
-/// `h` equals `entry` or is one of its subdomains.
-pub fn host_matches(h: &str, entry: &str) -> bool {
-    h == entry || h.ends_with(&format!(".{entry}"))
+/// `h` equals `entry` or is one of its subdomains (MC-A3 trusted-entry match).
+fn host_matches(h: &str, entry: &str) -> bool {
+    psm_research::rules::sites::TrustedSites::matches(h, entry)
 }
 
 /// The piece's own listing: a URL on a shop host (or a subdomain) whose path ends in

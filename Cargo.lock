@@ -3421,12 +3421,16 @@ dependencies = [
  "chrono",
  "psm-core",
  "psm-infra",
+ "psm-research",
+ "psm-testkit",
  "reqwest",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2 0.11.1",
  "tempfile",
  "url",
+ "zip",
 ]
 
 [[package]]

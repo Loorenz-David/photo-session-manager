@@ -3,45 +3,49 @@
 //! Money is integer micro-USD. Prices come from `prices.json` in the out folder (filled from the
 //! provider's pricing page on the day, with its URL and date) as decimal strings in USD per million
 //! units, parsed exactly. A call is refused when `spent + worst case of this call ≥ ceiling`, or
-//! when its cap is reached. The micro-USD helpers are temporary: R9·U1 replaces them with
-//! `psm_research::rules::cost`.
+//! when its cap is reached. Parsing and the cost sum are `psm_research::rules::cost` (MC-A8; R9·U1
+//! task 5 replaced R1's private copies).
 
 use serde_json::Value as Json;
 use std::{collections::BTreeMap, fmt, path::Path};
 
 pub const MICRO: i64 = 1_000_000;
 
-/// `"12.5"` → 12 500 000 micro-USD. At most 6 fractional digits; no sign, no exponent.
+/// `"12.5"` → 12 500 000 micro-USD (MC-A8 `parse_micro_usd`; surrounding blanks ignored).
 pub fn parse_micro_usd(text: &str) -> Result<i64, String> {
     let text = text.trim();
-    let (whole, frac) = text.split_once('.').unwrap_or((text, ""));
-    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
-    if !digits(whole) || (!frac.is_empty() && !digits(frac)) || frac.len() > 6 {
-        return Err(format!("not a USD amount: {text:?}"));
-    }
-    let whole: i64 = whole.parse().map_err(|_| format!("too large: {text:?}"))?;
-    let mut frac_micro = 0i64;
-    for (i, b) in frac.bytes().enumerate() {
-        frac_micro += i64::from(b - b'0') * 10i64.pow(5 - i as u32);
-    }
-    whole
-        .checked_mul(MICRO)
-        .and_then(|w| w.checked_add(frac_micro))
-        .ok_or_else(|| format!("too large: {text:?}"))
+    psm_research::rules::cost::parse_micro_usd(text)
+        .ok_or_else(|| format!("not a USD amount: {text:?}"))
 }
 
 pub fn format_usd(micro: i64) -> String {
     format!("{}.{:06}", micro / MICRO, (micro % MICRO).abs())
 }
 
-/// `ceil(Σ units × micro_usd_per_million / 10^6)`, in `i128`.
+/// `ceil(Σ units × micro_usd_per_million / 10^6)`: MC-A8 `call_cost` over a one-call price table
+/// holding one line per `(units, micro_usd_per_million)`.
 pub fn cost_micro(lines: &[(u64, i64)]) -> i64 {
-    let total: i128 = lines
+    use psm_research::rules::cost::{Price, PriceTable, call_cost};
+    let unit = |i: usize| format!("line{i}");
+    let prices = PriceTable {
+        prices: lines
+            .iter()
+            .enumerate()
+            .map(|(i, (_, per_million))| Price {
+                provider: "tool".to_owned(),
+                model: String::new(),
+                unit: unit(i),
+                micro_usd_per_million: *per_million,
+            })
+            .collect(),
+        fallbacks: Vec::new(),
+    };
+    let usage: Vec<(String, i64)> = lines
         .iter()
-        .map(|(units, per_million)| i128::from(*units) * i128::from(*per_million))
-        .sum();
-    let micro = (total + 999_999).div_euclid(1_000_000);
-    micro as i64
+        .enumerate()
+        .map(|(i, (units, _))| (unit(i), i64::try_from(*units).unwrap_or(i64::MAX)))
+        .collect();
+    call_cost(Some(&usage), true, "tool", "", &prices)
 }
 
 /// One model's prices, micro-USD per million tokens.

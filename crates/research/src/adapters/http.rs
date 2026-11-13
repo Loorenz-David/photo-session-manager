@@ -216,26 +216,42 @@ pub enum AddressGuard {
     PublicOnly,
 }
 
-/// True for an address the `PublicOnly` guard lets through.
+/// True for an address the `PublicOnly` guard lets through. Refused: loopback, private,
+/// link-local, unspecified, broadcast, `0.0.0.0/8`, shared address space `100.64.0.0/10`, IETF
+/// protocol assignments `192.0.0.0/24`, benchmarking `198.18.0.0/15`, multicast (`224.0.0.0/4`,
+/// `ff00::/8`), unique local `fc00::/7`, link-local `fe80::/10`, site-local `fec0::/10`, and the
+/// IPv6 forms that embed an IPv4 address (`::ffff:0:0/96` by its IPv4 address; `64:ff9b::/96` and
+/// `2002::/16` refused whole).
 pub fn is_public(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
+            let [a, b, c, _] = v4.octets();
             !(v4.is_loopback()
                 || v4.is_private()
                 || v4.is_link_local()
                 || v4.is_unspecified()
                 || v4.is_broadcast()
-                || v4.octets()[0] == 0)
+                || v4.is_multicast()
+                || a == 0
+                || (a == 100 && (b & 0xc0) == 64)
+                || (a == 192 && b == 0 && c == 0)
+                || (a == 198 && (b & 0xfe) == 18))
         }
         IpAddr::V6(v6) => {
             if let Some(v4) = v6.to_ipv4_mapped() {
                 return is_public(IpAddr::V4(v4));
             }
-            let first = v6.segments()[0];
+            let s = v6.segments();
+            let first = s[0];
+            let nat64 = s[..6] == [0x64, 0xff9b, 0, 0, 0, 0];
             !(v6.is_loopback()
                 || v6.is_unspecified()
+                || v6.is_multicast()
                 || (first & 0xfe00) == 0xfc00
-                || (first & 0xffc0) == 0xfe80)
+                || (first & 0xffc0) == 0xfe80
+                || (first & 0xffc0) == 0xfec0
+                || first == 0x2002
+                || nat64)
         }
     }
 }
@@ -342,7 +358,9 @@ impl ReqwestResearchHttp {
                     .user_agent(USER_AGENT)
                     .timeout(self.timeout);
                 if self.guard == AddressGuard::PublicOnly {
-                    builder = builder.dns_resolver(Arc::new(PublicResolver));
+                    // No proxy: a proxy from the environment would resolve the host itself and
+                    // so bypass the resolver guard (R9·U1 task 0).
+                    builder = builder.dns_resolver(Arc::new(PublicResolver)).no_proxy();
                 }
                 builder
                     .build()
