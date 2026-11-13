@@ -1689,7 +1689,8 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
         Some(seams) => seams.providers.clone(),
         None => psm_research::adapters::build(
             &ResearchSettings::from_slot(parts.settings.research.as_ref()),
-            parts.secrets.as_ref(),
+            parts.secrets.clone(),
+            psm_research::files::ResearchFiles::new(&parts.paths.root),
         ),
     };
     let wait: psm_research::gateway::Waiter = match &seams {

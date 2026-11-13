@@ -21,9 +21,9 @@ use serde_json::{Value as Json, json};
 
 use crate::harness::{DESIGNER, Harness, SCRATCHES, TITLE, WIDTH, WOODS};
 
-const P_E1: &str = "https://www.e1.example/p/1";
-const P_E2: &str = "https://e2.example/item/2";
-const P_UNTRUSTED: &str = "https://other.example/x";
+pub(crate) const P_E1: &str = "https://www.e1.example/p/1";
+pub(crate) const P_E2: &str = "https://e2.example/item/2";
+pub(crate) const P_UNTRUSTED: &str = "https://other.example/x";
 const P_SHOP: &str = "https://beyo.example/products/another-chair";
 
 fn u(url: &str) -> String {
@@ -99,22 +99,36 @@ struct Full {
 
 fn full() -> Full {
     let h = Harness::chair();
+    let (mains, condition) = full_script(&h);
+    let run = h.start_run(&h.stage_config());
+    Full {
+        h,
+        run,
+        mains,
+        condition,
+    }
+}
+
+/// C1's photos, search results, pages and scripted fake replies on a Chair harness, without the
+/// run (R8: the adapter rows run this script with a real adapter in place of one fake). Returns
+/// the two main photos and the condition photo.
+pub(crate) fn full_script(h: &Harness) -> (Vec<i64>, i64) {
     let mains = vec![
         h.add_main_photo_with_preview(h.session_id),
         h.add_main_photo_with_preview(h.session_id),
     ];
     let condition = h.add_photo_with_preview(h.session_id, Classification::Condition);
-    results(&h, &[P_E1, P_E2, P_UNTRUSTED]);
+    results(h, &[P_E1, P_E2, P_UNTRUSTED]);
     for (n, url) in [P_E1, P_E2, P_UNTRUSTED].iter().enumerate() {
-        page(&h, url, u8::try_from(n + 1).unwrap() * 40);
+        page(h, url, u8::try_from(n + 1).unwrap() * 40);
     }
-    states(&h, P_E1, DESIGNER, designer("Designer A"));
-    states(&h, P_E2, DESIGNER, designer("Designer A"));
-    verdict(&h, P_E1, "match");
-    verdict(&h, P_E2, "match");
-    verdict(&h, P_UNTRUSTED, "different");
+    states(h, P_E1, DESIGNER, designer("Designer A"));
+    states(h, P_E2, DESIGNER, designer("Designer A"));
+    verdict(h, P_E1, "match");
+    verdict(h, P_E2, "match");
+    verdict(h, P_UNTRUSTED, "different");
     observe(
-        &h,
+        h,
         mains[0],
         json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "shows_marking": false}),
     );
@@ -128,20 +142,19 @@ fn full() -> Full {
         "decide",
         json!({"reasons": {DESIGNER: "Two trusted dealers name Designer A."}}),
     );
-    let run = h.start_run(&h.stage_config());
-    Full {
-        h,
-        run,
-        mains,
-        condition,
-    }
+    (mains, condition)
 }
 
 #[test]
 fn a12_c1a_a_full_run_fills_the_form() {
     let f = full();
     assert_eq!(f.h.execute(f.run), ExecuteOutcome::Finished);
-    let h = &f.h;
+    assert_form_filled(&f.h, f.run);
+}
+
+/// What C1's run writes: designer A (medium, from e1 and e2), Teak, Minor; the run finished at
+/// Decide.
+pub(crate) fn assert_form_filled(h: &Harness, run_id: i64) {
     let designer_row = row(h, DESIGNER);
     assert_eq!(
         ai(&designer_row),
@@ -174,7 +187,7 @@ fn a12_c1a_a_full_run_fills_the_form() {
             AiStatus::Suggested
         )
     );
-    let run = h.run_row(f.run);
+    let run = h.run_row(run_id);
     assert_eq!(run.state, RunState::Finished);
     assert_eq!(run.stage_reached.as_deref(), Some("decide"));
 }

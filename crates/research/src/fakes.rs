@@ -472,3 +472,107 @@ impl PageReader for FakePageReader {
         })
     }
 }
+
+/// What [`FakeResearchHttp`] answers a matching request with.
+pub type HttpScript = Result<crate::adapters::http::HttpReply, crate::adapters::http::HttpFailure>;
+
+struct HttpRule {
+    method: String,
+    prefix: String,
+    reply: HttpScript,
+    once: bool,
+}
+
+#[derive(Default)]
+struct HttpState {
+    rules: Vec<HttpRule>,
+    log: Vec<crate::adapters::http::HttpRequest>,
+}
+
+/// The HTTP seam stand-in (R8·U1): replays scripted replies (typically capture files, see
+/// [`reply_from_capture`]) and records every request (method, URL, headers, every body part).
+///
+/// Matching: the first rule, in the order added, whose method equals the request's and whose URL
+/// prefix the request's URL starts with. A `once` rule is used up by its match; an `always` rule
+/// stays. An unscripted request gets a fixed 404 reply and is recorded; it never panics.
+#[derive(Default)]
+pub struct FakeResearchHttp {
+    state: Mutex<HttpState>,
+}
+
+/// The body of the fixed reply to an unscripted request.
+pub const UNSCRIPTED: &str = "not scripted";
+
+impl FakeResearchHttp {
+    fn add(&self, method: &str, prefix: &str, reply: HttpScript, once: bool) {
+        self.state.lock().unwrap().rules.push(HttpRule {
+            method: method.to_owned(),
+            prefix: prefix.to_owned(),
+            reply,
+            once,
+        });
+    }
+
+    /// Answers the next matching request once.
+    pub fn once(&self, method: &str, prefix: &str, reply: HttpScript) {
+        self.add(method, prefix, reply, true);
+    }
+
+    /// Answers every matching request.
+    pub fn always(&self, method: &str, prefix: &str, reply: HttpScript) {
+        self.add(method, prefix, reply, false);
+    }
+
+    /// Every request received, in order.
+    pub fn requests(&self) -> Vec<crate::adapters::http::HttpRequest> {
+        self.state.lock().unwrap().log.clone()
+    }
+
+    pub fn clear_requests(&self) {
+        self.state.lock().unwrap().log.clear();
+    }
+}
+
+impl crate::adapters::http::ResearchHttp for FakeResearchHttp {
+    fn send(&self, request: &crate::adapters::http::HttpRequest) -> HttpScript {
+        let mut state = self.state.lock().unwrap();
+        state.log.push(request.clone());
+        let found = state.rules.iter().position(|rule| {
+            rule.method.eq_ignore_ascii_case(&request.method)
+                && request.url.starts_with(&rule.prefix)
+        });
+        match found {
+            Some(at) if state.rules[at].once => state.rules.remove(at).reply,
+            Some(at) => state.rules[at].reply.clone(),
+            None => Ok(crate::adapters::http::HttpReply {
+                status: 404,
+                headers: Vec::new(),
+                body: UNSCRIPTED.as_bytes().to_vec(),
+            }),
+        }
+    }
+}
+
+/// The reply a capture file recorded (`response.status`, `.headers`, `.body`): a string body is
+/// its bytes, `null` (an omitted third-party body) is empty, any other JSON is serialized.
+pub fn reply_from_capture(capture: &Json) -> crate::adapters::http::HttpReply {
+    let response = &capture["response"];
+    let headers = response["headers"]
+        .as_object()
+        .map(|map| {
+            map.iter()
+                .map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_owned()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let body = match &response["body"] {
+        Json::Null => Vec::new(),
+        Json::String(text) => text.as_bytes().to_vec(),
+        other => serde_json::to_vec(other).unwrap_or_default(),
+    };
+    crate::adapters::http::HttpReply {
+        status: u16::try_from(response["status"].as_u64().unwrap_or(0)).unwrap_or(0),
+        headers,
+        body,
+    }
+}

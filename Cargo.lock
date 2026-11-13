@@ -3395,11 +3395,13 @@ dependencies = [
 name = "psm-research"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "chrono",
  "chrono-tz",
  "psm-core",
  "psm-infra",
  "psm-testkit",
+ "reqwest",
  "rusqlite",
  "serde",
  "serde_json",

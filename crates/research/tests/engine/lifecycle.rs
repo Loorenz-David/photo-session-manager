@@ -413,6 +413,39 @@ fn a13_c6b_no_source_at_all_waits_for_capture_one() {
 }
 
 #[test]
+fn a15_c7a_wait_ends_at_for_a_run_waiting_for_the_editor() {
+    // (1) An automatic run waits `source_wait_seconds` (120) from the session's last change.
+    let h = Harness::chair();
+    h.add_photo_without_preview(h.session_id, Classification::Main);
+    h.changed();
+    h.tick(30_000);
+    let runs = h.runs(h.session_id);
+    assert_eq!(
+        (runs[0].state, runs[0].trigger),
+        (RunState::Queued, RunTrigger::Auto)
+    );
+    let status = h.service.status(h.session_id).unwrap();
+    assert_eq!(status.reason.unwrap().code, "WaitingForEditor");
+    assert_eq!(status.wait_ends_at, Some(h.now() + 90_000));
+    // (2) A manual run's wait has already ended.
+    let h = Harness::chair();
+    h.add_photo_without_preview(h.session_id, Classification::Main);
+    h.service.run_again(h.session_id).unwrap();
+    h.tick(30_000);
+    let runs = h.runs(h.session_id);
+    assert_eq!(
+        (runs[0].state, runs[0].trigger),
+        (RunState::Queued, RunTrigger::Manual)
+    );
+    let status = h.service.status(h.session_id).unwrap();
+    assert_eq!(status.reason.unwrap().code, "WaitingForEditor");
+    assert_eq!(status.wait_ends_at, Some(h.now()));
+    // No waiting run: none.
+    let h = Harness::chair();
+    assert_eq!(h.service.status(h.session_id).unwrap().wait_ends_at, None);
+}
+
+#[test]
 fn a13_c7a_one_run_at_a_time() {
     let h = Harness::chair();
     let (_, other) = h.new_session("R4-B");

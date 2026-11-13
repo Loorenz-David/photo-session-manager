@@ -45,13 +45,50 @@ pub struct FallbackSnapshot {
     pub micro_usd: i64,
 }
 
-/// The adapter ids a run calls (the ids the price table is keyed by).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// The default model adapter id (R8·U1; the provider name in R1's captures).
+pub const DEFAULT_MODEL_PROVIDER: &str = "openai";
+/// The default visual-search adapter id: Google Lens through SerpApi (evidence "Owner picks" 1).
+pub const DEFAULT_VISUAL_SEARCH_PROVIDER: &str = "serpapi_lens";
+/// The default page reader id: plain HTTP download (evidence "Owner picks" 2).
+pub const DEFAULT_PAGE_READER: &str = "page_http";
+
+/// The adapter ids a run calls (the ids the price table is keyed by). A saved `""` means the
+/// default ([`ProviderIds::resolved`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ProviderIds {
     pub model: String,
     pub visual_search: String,
     pub page_reader: String,
+}
+
+impl Default for ProviderIds {
+    fn default() -> Self {
+        Self {
+            model: DEFAULT_MODEL_PROVIDER.to_owned(),
+            visual_search: DEFAULT_VISUAL_SEARCH_PROVIDER.to_owned(),
+            page_reader: DEFAULT_PAGE_READER.to_owned(),
+        }
+    }
+}
+
+impl ProviderIds {
+    /// The ids with every saved `""` (or blank) turned into its default; any other id is kept
+    /// as it is (an unknown id gives no adapter).
+    pub fn resolved(&self) -> Self {
+        let pick = |given: &str, default: &str| {
+            if given.trim().is_empty() {
+                default.to_owned()
+            } else {
+                given.to_owned()
+            }
+        };
+        Self {
+            model: pick(&self.model, DEFAULT_MODEL_PROVIDER),
+            visual_search: pick(&self.visual_search, DEFAULT_VISUAL_SEARCH_PROVIDER),
+            page_reader: pick(&self.page_reader, DEFAULT_PAGE_READER),
+        }
+    }
 }
 
 /// The run's settings snapshot (MC-A6 start transaction; MC-A3, MC-A8 snapshots).
@@ -315,7 +352,7 @@ impl ResearchConfig {
             own_listing_path_tail: shop.own_listing.path_tail.clone(),
             attribution_keys: settings.attribution_keys.clone(),
             language: settings.language.clone(),
-            providers: settings.providers.clone(),
+            providers: settings.providers.resolved(),
             ..Self::default()
         }
     }

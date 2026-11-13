@@ -1,5 +1,6 @@
 //! The research crate's one integration test program (`master_plan_research.md` §6.1).
 
+mod adapter_openai;
 mod api;
 mod export;
 mod gateway;

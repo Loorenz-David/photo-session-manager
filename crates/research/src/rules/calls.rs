@@ -78,8 +78,18 @@ fn url_encoded(secret: &str, upper: bool) -> String {
     out
 }
 
-/// Every occurrence of each secret, plain or URL-encoded (upper- or lowercase hex), becomes
-/// `<redacted>`. An empty secret is ignored.
+/// The secret as `serde_json` writes it inside a JSON string, without the outer quotes (R8·U1).
+fn json_escaped(secret: &str) -> String {
+    let quoted = serde_json::to_string(secret).unwrap_or_default();
+    quoted
+        .strip_prefix('"')
+        .and_then(|q| q.strip_suffix('"'))
+        .unwrap_or(secret)
+        .to_owned()
+}
+
+/// Every occurrence of each secret, plain, URL-encoded (upper- or lowercase hex) or JSON-escaped,
+/// becomes `<redacted>`. An empty secret is ignored.
 pub fn redact(text: &str, secrets: &[&str]) -> Redacted {
     let mut forms: Vec<String> = Vec::new();
     for secret in secrets.iter().filter(|s| !s.is_empty()) {
@@ -87,6 +97,7 @@ pub fn redact(text: &str, secrets: &[&str]) -> Redacted {
             (*secret).to_owned(),
             url_encoded(secret, true),
             url_encoded(secret, false),
+            json_escaped(secret),
         ] {
             if !forms.contains(&form) {
                 forms.push(form);

@@ -491,6 +491,40 @@ fn a21_c5a_a_secret_in_a_file_stops_the_export() {
 }
 
 #[test]
+fn a15_c5d_an_escaped_key_in_a_file_stops_the_export() {
+    use psm_core::ports::secrets::SecretStore;
+    let f = six_calls();
+    let h = &f.h;
+    let key = crate::adapter_openai::ESCAPED_KEY;
+    h.app
+        .secrets
+        .set(psm_research::service::MODEL_ACCOUNT, key)
+        .unwrap();
+    let call = h.calls(f.run)[0].id;
+    // Seeded as R7's test seeds its key; the call file then holds the key JSON-escaped.
+    h.query(|c| {
+        c.execute(
+            "UPDATE research_calls SET response=?1 WHERE id=?2",
+            rusqlite::params![format!("{{\"echo\":\"{key}\"}}"), call],
+        )
+        .unwrap()
+    });
+    let out = dest(h, "out");
+    let error = h
+        .service
+        .export(ExportSelection::Items(vec![h.item_id]), &out)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("Export research stopped: ")
+            && error.ends_with(&format!("calls/{call}.json contains a key")),
+        "{error}"
+    );
+    assert!(!error.contains(key), "{error}");
+    assert_eq!(fs::read_dir(&out).unwrap().count(), 0, "something remained");
+}
+
+#[test]
 fn a21_c6a_only_json_and_jpg_never_a_raw() {
     let f = six_calls();
     let h = &f.h;
