@@ -313,3 +313,39 @@ evidence above. The owner may change any of them; R8 and R10 read this section.
    not the Codex subscription. Lens searches are priced 0 in the measurement and draw on the SerpApi plan's monthly
    searches; page downloads are free.
 
+## Acceptance measurement (2026-11-13, R9·U2 tasks 3–4)
+
+Run by the orchestrator with the owner present. `accept` over `docs/test-items/beyo_test_samples_1.json` with the
+owner picks (observe Sol low, read Terra low, condition Terra high; Lens via SerpApi; plain HTTP pages; 12 trusted
+sites). Folder `~/psm-research-bench/a23` (pieces 1–15; the OpenAI account ran out of credit at piece 16 and
+16–42 failed at observe) and `a24` (pieces 16–42, `--only`, after the owner added credit). 42 of 42 finished.
+Real spend ≈ USD 12.6 (the a23 ledger shows 8.77 because refused calls are booked at their worst case).
+Pieces 1–30 are the published group, 31–42 the never-published group.
+
+**Cost and time per piece:** published median USD 0.30 (0.23–0.41), never-published median USD 0.27 (0.23–0.35);
+median about 5 min (3.6–11 min). On pieces 1–15: observe 32 % (one Sol call per main photo, ~USD 0.011 each), read
+26 % (the slowest step, ~166 s), compare 23 %, everything else under 5 %.
+
+**Designer and maker** (pieces where the shop has a value; "sure" = medium or high):
+
+| Group | Sure: right | Sure: wrong | Low: right | Low: wrong | Left open |
+|---|---|---|---|---|---|
+| Published (30) | 16 | 7 | 6 | 3 | 15 |
+| Never published (12) | 4 | 1 | 2 | 2 | 2 |
+
+Of the 8 sure "wrong": 3 are name forms of the right answer (Erik Wörtz/Wørts, Bertil/B. Fridhagen, AB
+Stilarmatur/AB Stilarmatur, Tranås); 2 are pieces where the key may be wrong (7 maker "Architecture & Design" vs AB
+Seffle möbelfabrik; 11 maker "Karl Andersson & Söner" vs NK Verkstäder; owner asked); 3 are real (piece 6 designer
+and maker taken from the owner's own look-alike "model 77" listing; piece 32 maker Anderstrup vs Nova Stolefabrik).
+Counting name forms as right: 23 of 28 sure answers right, 3 certainly wrong. Where the shop has **no** value,
+research suggested a name 15 times (12 low, 3 sure: piece 28 designer Erling Torvits; piece 33 Niels O. Møller and
+JL Møbelfabrik, which looks like the piece 6 look-alike again); these cannot be scored against the key.
+
+**Other fields, right / wrong / open** (all 42): quantity 40/2/0; country 31/3/6; wood type 25/13/0; years 23/16/1;
+detailed condition 21/19/0; width 6/18/18, depth 6/16/20, height 3/19/20, seat height 2/5/8; damage details 1/39/0
+(free text, an exact-match score says little). Measurements are mostly wrong when given: they come from other
+pieces' listings or from the photo, not from a statement about this piece.
+
+**Read first:** the look-alike listing (pieces 6, 33) and the measurements are the two patterns to fix before the
+defaults ship; the model comparison (task 5) has not run yet.
+

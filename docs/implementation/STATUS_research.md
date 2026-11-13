@@ -41,7 +41,10 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   §3 Isolation lesson applied (v7). Not yet run live against the real services.
 - **Done:** `R9_research_tool_and_acceptance` APPROVED_WITH_NOTES 2026-11-13 03:07 (tool, `accept`, `score-accept`,
   page-reader fixes). Owner card in its narrative: models per stage after the measurement (→ R10).
-- **Measurement stopped part-way (2026-11-13):** OpenAI account out of credit at piece 16 ("You have no credits
+- **Measurement tasks 3–4 done (2026-11-13):** 42/42 finished (a23 pieces 1–15, a24 pieces 16–42 after the owner added
+  credit); results in the evidence doc "Acceptance measurement". Real spend ≈ USD 12.6; ledgers 8.77 + 7.89 = 16.66
+  of the 40. Next: relay; task 5 model comparison (replay, budget by count) when the owner nods; owner asked about
+  pieces 7, 11 keys. Earlier note — measurement stopped part-way: OpenAI account out of credit at piece 16 ("You have no credits
   remaining"); pieces 1–15 finished (all published group), 16–42 failed at observe. Real spend ≈ USD 4.65 (15 × median
   0.30, 148 s median… 5–7.5 min each); the folder's ledger shows USD 8.77 because each refused call is charged its
   worst case (0.15 per failed run), which eats the per-folder ceiling. First look at the 15: designer/maker at
