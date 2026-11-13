@@ -31,6 +31,10 @@ This milestone is one runner phase made of 1 unit. Work the units in order. Afte
 - **U1, `cache_write_token` price (R8, 08B changelog 11).** OpenAI bills cache-write tokens as their own unit; the shipped
   price table carries a `cache_write_token` row for every model default, or calls that report it are charged the
   fallback.
+- **U1, which fields are designer and maker (R9 review).** The measurement uses `custom.designer` and
+  `custom.manufacturer` (the 68-metafield fixture, which the answer key matches); the engine's default is
+  `["beyo.designer"]` (R4). Before writing the shipped default, confirm against the live shop which keys hold designer
+  and maker, so the measured behaviour is the shipped one; ask the owner if the shop has both namespaces.
 
 ## Unit 1 — Shipped defaults and the reachability check
 

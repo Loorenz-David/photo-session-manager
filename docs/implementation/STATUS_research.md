@@ -4,7 +4,7 @@ Branch `feature/agentic`, worktree `~/Desktop/Developer/Photo-Session-Manager-ag
 against the sibling checkout `~/Desktop/Developer/Photo-Session-Manager` (`main`, the owner's other work).
 `docs/implementation/STATUS.md` belongs to `main`'s orchestrator; do not edit it from this track.
 
-**2026-11-12: R2–R7 APPROVED (with notes in `backlog_research/`); nothing running; R1 on track B waits on an owner card.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
+**2026-11-13: R1–R9 APPROVED (with notes in `backlog_research/`); nothing running; the measurement waits for the owner; R1 on track B waits on an owner card.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
 Ten milestones R1–R10 in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
 tracks and driver loop in `docs/implementation/master_plan_research.md`. `main` (with P70, the fast suite) was merged
 into this branch at `2026-11-12`; the branch is local, not pushed.
@@ -38,9 +38,18 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **Done:** `R8_research_real_adapters` APPROVED_WITH_NOTES 2026-11-13 02:30 (attempt 3; two projection rounds archived;
   08B changelog 11; master plan v5–v6). Page-reader notes (charset, proxy, address ranges) folded into R9·U1 task 0;
   §3 Isolation lesson applied (v7). Not yet run live against the real services.
-- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R9_research_tool_and_acceptance`, started
-  2026-11-13 02:31 (track A). It builds the tool and `accept`; the **measurement run (U2 tasks 3–6, real keys, ceiling
-  USD 40) is owner-attended** and waits for the owner after the runner returns.
+- **Done:** `R9_research_tool_and_acceptance` APPROVED_WITH_NOTES 2026-11-13 03:07 (tool, `accept`, `score-accept`,
+  page-reader fixes). Owner card in its narrative: models per stage after the measurement (→ R10).
+- **No run in flight. Held for the owner (2026-11-13 03:10): the measurement (R9·U2 tasks 3–6), owner-attended per the
+  plan, real keys, ceiling USD 40 total for tasks 3–5.** Not run overnight although the owner delegated questions:
+  the plan requires the owner nearby and it spends money. Run-book when the owner says go:
+  1. `set -a; source ~/.psm_research.env; set +a` (via a script file; this session's guard refuses `.`/`source` inline),
+     then `cargo run -p psm-research-tool -- accept --pieces docs/test-items/beyo_test_samples_1.json --data
+     ~/psm-research-bench/a23 --ceiling-usd 40`, then `score-accept --data ~/psm-research-bench/a23`.
+  2. Check `scores.json` has both groups and 42 runs before copying tables (R9 review note 3).
+  3. Task 5 comparisons: `replay` has no ceiling (R9 review note 1) and `accept`'s ceiling is per folder (note 4):
+     budget by invocation count and pass the remainder of USD 40 as the next folder's ceiling.
+  4. Record in the evidence doc "Acceptance measurement" and the R9 Review log; relay the tables; owner picks models.
 - **Next on track A:** the owner-attended measurement, then R10 (models from its result). Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
   merge `feature/agentic` into `research/track-b` first (R4 and plan edits), then R8 once the owner's picks arrive.
