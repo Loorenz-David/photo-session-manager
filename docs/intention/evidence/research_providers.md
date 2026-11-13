@@ -271,3 +271,26 @@ includes the tool's worst-case charge for each (no usage came back).
 - condition: `gpt-6.1-terra`, effort high.
 
 The owner's first pick goes under **Owner picks**; R9·U2 confirms it on the finished engine.
+
+## Owner picks (2026-11-13)
+
+Decided by the orchestrator under the owner's delegation of 2026-11-12 night ("take care of this and continue resolve
+questions given the intention"), each by the recommendation of the R1 narrative's card, which follows from the
+evidence above. The owner may change any of them; R8 and R10 read this section.
+
+1. **Visual-search route: Google Lens via SerpApi** (card 1, A). Photos never online: Lens 6 of 7, Cloud Vision 0 of
+   7. Published: Lens 24 of 25, Vision 8 of 25, and 4 of 25 once results that are exact copies of the owner's own
+   photos are set aside (`report.md`, "Naming in first 10 without exact copies"). Accepted risk: SerpApi reaches
+   Google by scraping (Google v. SerpApi, see Reverse image search above); if it is blocked, photo search stops until
+   a Cloud Vision adapter is switched in. Cloud Vision is the named replacement and is **not built in R8**; its 42
+   successful replies stay in `~/psm-research-bench/a01/*/run-bench/calls/cloud-vision-*.json` for a fixture if it is
+   ever needed.
+2. **Page-reading route: plain HTTP download from the Mac** (card 2, A), for every site. Shopify-hosted storefronts
+   (the owner's shop, midcenturymobler, vgliving) are read slowly: one request per host at a time, a per-host pace
+   that survives `429` with `Retry-After: 60` (see Page reading), and a page still refused after that is "could not be
+   read" (R4's rule). Etsy and vntg stay unread by download; their search results still count by title. OpenAI's page
+   tool is not used (it returns no page text, so it cannot satisfy the page-reader port of 08A §4).
+3. **First model per stage** (card 3, yes): photo look (observe) `gpt-6.1-sol`, effort low; page reading (read)
+   `gpt-6.1-terra`, effort low; condition `gpt-6.1-terra`, effort high. R9's acceptance measurement confirms or
+   changes them; R10 writes the shipped defaults from the result.
+

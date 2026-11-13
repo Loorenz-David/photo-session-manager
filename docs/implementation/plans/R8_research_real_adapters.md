@@ -42,6 +42,13 @@ This milestone is one runner phase made of 3 units. Work the units in order. Aft
 - **Long calls and settings saves (R7 review, knowing).** A settings save that rebuilds the runtime detaches the old
   research thread after 1 s; with real calls up to 180 s two runners briefly exist. `store::start_run`'s guard keeps one
   running run; no change required unless a rebuild must cancel in-flight research.
+- **Picks recorded (orchestrator, 2026-11-13).** The evidence doc's "Owner picks" names Lens via SerpApi (U2) and plain
+  HTTP for every site (U3). Cloud Vision is the named replacement and is not built here.
+- **U3, Shopify storefronts throttle (R1 review).** The owner's shop, midcenturymobler and vgliving answer `429` with
+  `Retry-After: 60` after a short burst, not lifted by one wait. The HTTP page reader keeps one request per host at a
+  time with a per-host pace for Shopify-hosted sites (recognised by the shop facts or the `x-shopid` / `powered-by:
+  Shopify` reply header), honours `Retry-After` up to the call timeout, and otherwise records "could not be read"
+  (R4). Add a row with a fake host answering 429 then 200.
 
 ## Unit 1 — OpenAI model adapter
 

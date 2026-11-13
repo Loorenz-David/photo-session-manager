@@ -32,6 +32,14 @@ This milestone is one runner phase made of 2 units. Work the units in order. Aft
 - **Local-date test on UTC machines (R7 review).** `a21_c2a_selection_by_local_date` discriminates local from UTC only
   off UTC. If any R9 test or the suite runs on a UTC machine, pin `TZ` for that module or choose instants that straddle
   midnight in UTC too.
+- **U1, the error fixture is picked by status (R1 review).** `fixtures.rs` picks piece 2's `cloud-vision` recording by
+  label; since the Vision re-run the same label finds a 200 reply, so re-running `psm-research fixtures` would write a
+  success under `cloud_vision/error_billing_disabled.json`. Select error fixtures by HTTP status (or from
+  `superseded/`).
+- **U2, read-stage scoring (R1 review).** Rule A02·C1(e) scores a correct reading of another piece's designer as wrong.
+  Score "page does not name the key" apart, or the read stage looks half wrong when it does its job.
+- **U2, models under test (owner picks 2026-11-13).** The first models per stage are in the evidence doc's "Owner
+  picks" (observe Sol low, read Terra low, condition Terra high); the acceptance measurement confirms or changes them.
 
 ## Unit 1 — `psm-research report` and `replay`
 

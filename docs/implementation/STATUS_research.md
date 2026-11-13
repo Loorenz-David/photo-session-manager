@@ -28,8 +28,14 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   questions given the intention" while asleep. The orchestrator verified the link in the console, ran the Vision
   benchmark (Lens 24/25 + 6/7 vs Vision 8/25 + 0/7), merged `research/track-b` into `feature/agentic` (`3297b17`,
   workspace check green), set the R1 implement handoff to DONE with a resolution note.
-- **Run in flight:** `RESUME=1 PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R1_research_benchmark` (review
-  only), started 2026-11-13 01:05 (track A). Track B is no longer used (its build folder can be deleted).
+- **Done:** `R1_research_benchmark` APPROVED_WITH_NOTES 2026-11-13 01:12, 3 owner cards. Picks made by the orchestrator under
+  the owner's delegation, all as recommended, recorded in the evidence doc "Owner picks": Lens via SerpApi (Vision
+  the replacement, not built), plain HTTP with slow Shopify hosts, models observe Sol low / read Terra low /
+  condition Terra high. R1 notes folded into R8·U3 and R9·U1/U2. Left for the owner: piece 30's corrected wood
+  "Rosewood" is not a shop choice ("Santos Rosewood" is) in `docs/test-items/answer_key_corrections.json`;
+  pamono country sites need their own trusted entries if wanted. Track B's build folder: deletion was denied by
+  the permission prompt; the owner may delete `../Photo-Session-Manager-agentic-b/target`.
+- **Run in flight:** `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase R8_research_real_adapters`, started 2026-11-13 01:13 (track A).
 - **Next on track A:** R9 (needs R1, R8 merged from B) → R10. Schedule changed
   (master plan v3): R5 and R6 moved to track A because track A was idle and B is busy with R1. Track B after R1:
   merge `feature/agentic` into `research/track-b` first (R4 and plan edits), then R8 once the owner's picks arrive.
@@ -44,7 +50,7 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   track B before B's next milestone. Track B's copy of this file is not maintained; this one is.
 - **Owner answered 2026-11-12 (both "yes"):** a capped run lowers nothing (→ R7·U1 carried note); saving keys or
   Automatic on starts nothing (owner withdrew the "start the open session" pick: no extra work). 08B changelog 7.
-- **Blocked on the owner:** R8 (search route and page-reading route, picked from R1's report); R10 (models per stage,
+- **Blocked on the owner:** R10 (models per stage,
   picked from R9's report). Picks arrive as decision cards in the R1 and R9 narratives.
 - **Unverified, watch for it:** this worktree has never been built (first cargo run is a full compile); the three
   template edits (`tools/pipeline/templates/{implement,review,fix}.md`) have never run; the research crate using the
