@@ -41,7 +41,14 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   §3 Isolation lesson applied (v7). Not yet run live against the real services.
 - **Done:** `R9_research_tool_and_acceptance` APPROVED_WITH_NOTES 2026-11-13 03:07 (tool, `accept`, `score-accept`,
   page-reader fixes). Owner card in its narrative: models per stage after the measurement (→ R10).
-- **Measurement running (owner said go 2026-11-13 morning):** `accept` → `score-accept` into `~/psm-research-bench/a23`,
+- **Measurement stopped part-way (2026-11-13):** OpenAI account out of credit at piece 16 ("You have no credits
+  remaining"); pieces 1–15 finished (all published group), 16–42 failed at observe. Real spend ≈ USD 4.65 (15 × median
+  0.30, 148 s median… 5–7.5 min each); the folder's ledger shows USD 8.77 because each refused call is charged its
+  worst case (0.15 per failed run), which eats the per-folder ceiling. First look at the 15: designer/maker at
+  medium/high 11 right, 6 "wrong", of which 2 are name forms (Wørts/Wörtz, B./Bertil Fridhagen), 2 doubtful keys
+  (piece 7 maker "Architecture & Design", piece 11 maker), 2 real (piece 6: matched the shop's look-alike "model 77"
+  listing). Waits for the owner to add OpenAI credit; then run pieces 16–42 in a fresh folder (a24) with the
+  remaining ceiling. Earlier note: `accept` → `score-accept` into `~/psm-research-bench/a23`,
   ceiling USD 40 (script `scratchpad/accept_run.sh`). Original hold note: the measurement (R9·U2 tasks 3–6), owner-attended per the
   plan, real keys, ceiling USD 40 total for tasks 3–5.** Not run overnight although the owner delegated questions:
   the plan requires the owner nearby and it spends money. Run-book when the owner says go:
