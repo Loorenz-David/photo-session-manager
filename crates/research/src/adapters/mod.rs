@@ -6,15 +6,16 @@
 
 pub mod http;
 pub mod openai;
+pub mod visual_search;
 
 use std::{sync::Arc, time::Duration};
 
 use psm_core::ports::secrets::SecretStore;
 
 use crate::{
-    config::{DEFAULT_MODEL_PROVIDER, ResearchSettings},
+    config::{DEFAULT_MODEL_PROVIDER, DEFAULT_VISUAL_SEARCH_PROVIDER, ResearchSettings},
     files::ResearchFiles,
-    ports::{ModelProvider, Providers},
+    ports::{ModelProvider, Providers, VisualSearchProvider},
 };
 use http::{AddressGuard, ReqwestResearchHttp, ResearchHttp};
 
@@ -46,9 +47,18 @@ pub fn build(
     } else {
         None
     };
+    let search: Option<Arc<dyn VisualSearchProvider>> =
+        if ids.visual_search == DEFAULT_VISUAL_SEARCH_PROVIDER {
+            client(timeouts.other, AddressGuard::Any).map(|http| {
+                Arc::new(visual_search::SerpApiLens::new(http, secrets.clone()))
+                    as Arc<dyn VisualSearchProvider>
+            })
+        } else {
+            None
+        };
     Providers {
         model,
-        search: None,
+        search,
         reader: None,
     }
 }
