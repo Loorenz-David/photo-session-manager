@@ -116,6 +116,10 @@ impl<R: Clone> Core<R> {
     fn reply(&self, key: String, reply: R) {
         self.script.lock().unwrap().replies.insert(key, reply);
     }
+
+    fn scripted(&self, key: &str) -> Option<R> {
+        self.script.lock().unwrap().replies.get(key).cloned()
+    }
 }
 
 /// A transient failure after the request was sent (a timeout; no usage reported).
@@ -180,7 +184,9 @@ fn model_key(stage: Stage, unit_key: &str) -> String {
 }
 
 /// The model provider stand-in (`fake-model`). Unscripted units answer `{}` with the default
-/// usage.
+/// usage. The one Observe unit (R12·U1), when not scripted itself, takes a reply scripted for
+/// one of its photos under the per-photo unit key used before R12 (`photo:<id>`), the first
+/// photo sent first.
 pub struct FakeModel {
     core: Core<ModelScript>,
     default_usage: Mutex<Option<Vec<(String, i64)>>>,
@@ -268,11 +274,26 @@ impl ModelProvider for FakeModel {
             url: None,
         };
         let key = model_key(request.stage, &request.unit_key);
-        let script = self.core.arrive(call, &key)?.unwrap_or(ModelScript {
-            output: json!({}),
-            usage: None,
-            response: None,
-        });
+        let script = self
+            .core
+            .arrive(call, &key)?
+            .or_else(|| {
+                (request.stage == Stage::Observe)
+                    .then(|| {
+                        request.images.iter().find_map(|image| {
+                            self.core.scripted(&model_key(
+                                Stage::Observe,
+                                &format!("photo:{}", image.photo_id()),
+                            ))
+                        })
+                    })
+                    .flatten()
+            })
+            .unwrap_or(ModelScript {
+                output: json!({}),
+                usage: None,
+                response: None,
+            });
         let usage = script
             .usage
             .clone()
