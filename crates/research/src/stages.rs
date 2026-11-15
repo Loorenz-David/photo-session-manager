@@ -53,7 +53,9 @@ const OBSERVE: &str = "The photos show one piece. Each photo is listed in `photo
 /// The unit key of the one stage 1 unit.
 pub const OBSERVE_UNIT: &str = "photos";
 const READ: &str = "For each listed field, quote what this listing page states and give the value \
-    in the field's terms, or null when it names nothing the field allows.";
+    in the field's terms, or null when it names nothing the field allows. Also say whether the \
+    page lists the same kind of piece as `piece`: answer false only when it clearly lists another \
+    kind, null when you cannot tell; and name the kind of piece the page lists.";
 const COMPARE: &str = "Compare the piece in the photo with the listing's images: match, similar \
     or different, with the features compared.";
 const LABELS: &str = "Transcribe the label, stamp or marking and give, per listed field, what it \
@@ -559,11 +561,13 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
         }
     }
     used.extend(pages.iter().cloned());
-    // Stage 4: one unit per obtained page with images.
+    // Stage 4: one unit per obtained page with images whose read did not say it lists another
+    // kind of piece (R12·U3; no answer counts as the same kind).
     if !stopped && let Some(cover) = &cover {
         for page in pages.iter().filter(|p| {
             p.output["obtained"].as_bool() == Some(true)
                 && p.output["images"].as_array().is_some_and(|i| !i.is_empty())
+                && !another_kind(&p.output)
         }) {
             match flow!(compare(&ctx, cover, page)?) {
                 Some(c) => used.push(c),
@@ -839,6 +843,11 @@ fn find(ctx: &Ctx<'_>, cover: &UsablePhoto) -> Result<Flow> {
     })
 }
 
+/// The Read output says the page lists another kind of piece (`same_kind` answered `false`).
+fn another_kind(read: &Json) -> bool {
+    read["same_kind"].as_bool() == Some(false)
+}
+
 fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
     let stage = Stage::Read;
     let settings = ctx.config.stage(stage);
@@ -864,6 +873,7 @@ fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
         "effort": settings.effort,
         "instructions_version": ctx.config.instructions_version,
         "keys": researched.iter().map(descriptor).collect::<Vec<_>>(),
+        "item_type": ctx.form.item_type,
     });
     ctx.unit(stage, identity_u, identity, |ctx| {
         let mut read_step = step(stage, StepKind::Read, "could not be read");
@@ -904,24 +914,28 @@ fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
         let trusted = crate::rules::sites::TrustedSites::new(ctx.config.trusted_sites.clone());
         let site = site_of(&read_url, &ctx.config.shop_hosts, &trusted);
         let page_u = page_identity(&read_url).unwrap_or_else(|| identity_u.to_owned());
-        let request = ctx.model_request(
-            stage,
-            identity_u,
-            READ,
-            json!({
-                "page": {"url": read_url, "title": page.title, "text": page.text},
-                "fields": researched.iter().map(descriptor).collect::<Vec<_>>(),
-            }),
-            Vec::new(),
-            Vec::new(),
-        );
+        let mut input = json!({
+            "page": {"url": read_url, "title": page.title, "text": page.text},
+            "fields": researched.iter().map(descriptor).collect::<Vec<_>>(),
+        });
+        if !ctx.form.item_type.trim().is_empty() {
+            input["piece"] = json!(ctx.form.item_type);
+        }
+        let request = ctx.model_request(stage, identity_u, READ, input, Vec::new(), Vec::new());
         let (asked, _) = ctx.ask(stage, identity_u, request)?;
-        let (statements, not_determined) = match asked {
-            Asked::Answer(Answer::Model(reply)) => {
-                (statements(&researched, &reply.output, "keys"), None)
-            }
-            Asked::Answer(_) => (Map::new(), None),
-            Asked::NotDetermined(text) => (Map::new(), Some(text)),
+        let (statements, not_determined, same_kind, page_kind) = match asked {
+            Asked::Answer(Answer::Model(reply)) => (
+                statements(&researched, &reply.output, "keys"),
+                None,
+                reply.output["same_kind"].as_bool(),
+                reply.output["page_kind"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|k| !k.is_empty())
+                    .map(str::to_owned),
+            ),
+            Asked::Answer(_) => (Map::new(), None, None, None),
+            Asked::NotDetermined(text) => (Map::new(), Some(text), None, None),
             Asked::Work(work) => return Ok(work),
         };
         read_step.summary = if page.title.is_empty() {
@@ -944,6 +958,18 @@ fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
             read_step.detail =
                 "another product of your shop: not used for designer and maker".into();
         }
+        if same_kind == Some(false) {
+            let kind = page_kind
+                .as_deref()
+                .map(|k| format!(" ({k})"))
+                .unwrap_or_default();
+            let line = format!("lists another kind of piece{kind}: not compared");
+            read_step.detail = if read_step.detail.is_empty() {
+                line
+            } else {
+                format!("{}\n{line}", read_step.detail)
+            };
+        }
         Ok(Work::Commit {
             output: json!({
                 "url": url,
@@ -954,6 +980,8 @@ fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
                 "obtained": true,
                 "site": site.map(|s| json!({"class": s.class, "identity": s.identity})),
                 "statements": statements,
+                "same_kind": same_kind,
+                "page_kind": page_kind,
                 "images": images,
                 "not_determined": not_determined,
                 "files": images,

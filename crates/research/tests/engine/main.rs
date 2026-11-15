@@ -14,6 +14,7 @@ mod images_and_storage;
 mod lifecycle;
 mod photo_look;
 mod resume;
+mod same_kind;
 mod settings_r11;
 mod stages;
 mod writes;

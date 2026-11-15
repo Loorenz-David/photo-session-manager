@@ -507,8 +507,11 @@ fn a15_c6a_full_run_with_the_openai_adapter() {
     let h = Harness::chair();
     let (mains, _condition) = full_script(&h);
     let none = json!({"stated": null, "value": null});
+    // R12·U3: the run's Read requests carry the piece, so the answer also says the kind.
     let states = |designer: Json| {
-        json!({"keys": {DESIGNER: designer, WOODS: none, WIDTH: none}}).to_string()
+        json!({"keys": {DESIGNER: designer, WOODS: none, WIDTH: none},
+               "same_kind": true, "page_kind": "chair"})
+        .to_string()
     };
     let designer_a = json!({"stated": "Designer A", "value": "Designer A"});
     // Derived: each reply is a captured envelope with `output_text` replaced by our payload,

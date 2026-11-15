@@ -120,6 +120,13 @@ pub fn schema_for(request: &ModelRequest) -> Json {
         ]),
         Stage::Observe => object(vec![reads(), ("shows_marking".to_owned(), boolean())]),
         Stage::Condition => object(vec![reads()]),
+        // R12·U3: a Read request whose input carries the `piece` also answers whether the page
+        // lists the same kind of piece (null: cannot tell) and the kind it lists.
+        Stage::Read if request.input.get("piece").is_some() => object(vec![
+            ("keys".to_owned(), per_field(request, statement)),
+            ("same_kind".to_owned(), nullable(boolean())),
+            ("page_kind".to_owned(), nullable(string())),
+        ]),
         Stage::Read => object(vec![("keys".to_owned(), per_field(request, statement))]),
         Stage::Compare => object(vec![(
             "verdict".to_owned(),
