@@ -15,6 +15,16 @@ package installed the camera goes through Capture One; Settings → Camera insta
 a zip. The Capture One document defaults to `<home>/Pictures/Session Manager` and is created by the
 app. Hash routes: `#/`, `#/session/<id>`, `#/health`, `#/settings`.
 
+Research in the dev app: connect a shop, enter the two keys in Settings → Research (they go to the
+Keychain), tick fields under "Fields research fills" (empty on a fresh install: research does nothing
+until then), then press "Arranged — next" in a session with a Main photo. Runs spend real money up
+to the Settings → Research cost limits. The research narratives' try-outs use a scratch folder,
+`PSM_DATA_DIR=$HOME/psm-research-dev npm run tauri -- dev`. That was a **rule only until research
+was merged into `main`** (research master plan §3 "Scratch data only"; merged 2026-11-15, PR #1), so
+it is no longer required; its reason still holds for any build made *before* the merge: such a build
+does not know the publish step `held` or the research columns, so never point it at a data dir a
+research build has written. A scratch folder stays the sensible choice for try-outs.
+
 ## Tests, lint, typecheck (flow §4A; one cargo command at a time, never two, never piped into `head`)
 | Purpose | Command |
 |---|---|
@@ -25,12 +35,24 @@ app. Hash routes: `#/`, `#/session/<id>`, `#/health`, `#/settings`.
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` · `cargo fmt --all -- --check` |
 | Bindings | `cargo test -p psm-desktop export_bindings` (writes `apps/desktop/src/services/bindings.ts`) |
 | Frontend | `cd apps/desktop && npm run typecheck` · `npm test` (vitest, ≈ 20 s) · one file: `npx vitest run src/features/<f>/__tests__/<file>` |
+| Research rules (inline unit tests) | `cargo test -p psm-research --lib rules::<module>` (e.g. `rules::confidence`) |
+| Research engine, one test file | `cargo test -p psm-research --test engine <stem>::` (stems = files in `crates/research/tests/engine/`, e.g. `chosen_fields::`, `stages::`, `resume::`) |
+| Whole research crate | `cargo test -p psm-research` |
+| Research tool crate | `cargo test -p psm-research-tool` (one file: `… <stem>::`, e.g. `u4_accept::`; stems in `crates/research-tool/tests/tool/`) |
+| Research app seams | `cargo test -p psm-testkit --test suite research::<stem>::` (stems in `crates/testkit/tests/suite/research/`, e.g. `research::r11_arranged::`); harness `TestApp::with_research()` + `research_test_settings()` |
+| Research UI | `npx vitest run src/features/form/__tests__/r6_research_panel.test.tsx` · `src/features/settings/__tests__/r13_research_fills.test.tsx` · `src/features/publish/__tests__/r6_research_publish.test.tsx` (from `apps/desktop`) |
+| Research-only lint | `cargo clippy -p psm-research --all-targets -- -D warnings` (same with `-p psm-research-tool`) · `cargo check --workspace` |
 | Sidecar (C++) | `tools/sidecar/build.sh --stub --test` (ctest; build dir `target/camera-sidecar/stub`) |
 | Timings of a runner session | `tools/pipeline/timeline.sh <.pipeline/runs/…log>` |
 "Green" for a phase (flow §5 B4) = suite, clippy, fmt, typecheck, `npm test` all exit 0.
 Test naming: `c<criterion><row>_<slug>` per criterion row; harness `psm_testkit::TestApp` (fakes for
 Capture One, commerce, secrets, processes, sleep, direct camera; `ManualClock`, `tick(ms)`). The
 suite never needs the camera, Capture One, Shopify or the network.
+Research (flow §10; research master plan §7.2): a change inside `crates/research` or the tool crate
+only runs that crate's tests, its lint and `cargo check --workspace`, **not** the app suite; a change
+to app files runs the touched `research::` / `p…::` stems and the full gate once at the end. Research
+tests are named after their criterion row (`a27_c3a_<slug>`); no research test reaches a provider
+(engine: `psm_research::fakes`; tool: the `Stub` HTTP seam in `tests/tool/main.rs`).
 
 ## Where the logs are and what the key lines mean
 Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yyyy-mm-dd>.log`
@@ -49,6 +71,12 @@ Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yy
 | `recipe repaired before rendering` / `render refused: recipe missing; repairing once` | 10F §5 self-repair of `PSM Preview`/`PSM Master` |
 | `settings.json invalid; using defaults` / `integration settings invalid; using Export mode` | the file did not parse; health `settings_invalid` |
 | `osascript` debug lines with `duration_ms` | every Capture One script call and its time (30 s timeout) |
+| `research call failed run_id= stage= class= attempt= error=` | one failed provider call of a run (class: offline, transient, key, quota, request, schema, refusal); the text is redacted |
+| `research not available` / `research turn deferred` | the engine could not be built at start (the app runs without research, commands answer `research_unavailable`) / one runner turn failed and is retried |
+| `a secret value was found in a research call record and redacted` (error) | a key value appeared in a provider exchange; the record has `redaction_hit` set |
+The research record itself is not in the log: runs, steps and calls are rows (`research_runs`,
+`research_steps`, `research_calls`), shown in the form's research panel, and leave the app through
+Settings → Research → "Export research" (a zip the tool's `report` and `replay` read).
 The Health page (`#/health`) lists every health item with its code and detail; the header dots show
 the first failing one. `camera_helper_log` shows the sidecar's recent stderr.
 
@@ -69,6 +97,9 @@ the first failing one. `camera_helper_log` shows the sidecar's recent stderr.
 | App starts but nothing arrives | Health `document_not_front`, `capture_folder_not_set`, `hooks_not_installed`; `spool/bad/` | Capture One shows another document; hooks not compiled; a hook payload failed to parse |
 | Files deleted by hand in Finder | `RAW missing` / `RAW back` lines | P60: the photo leaves the views and comes back when the file does; nothing breaks |
 | Item shows "Archived in Shopify" | `storage.item_cleared` | retention cleared its files (default 4 days after publish); read-only by design (`10F`); pin "Keep files" beforehand to prevent it |
+| Research does not run | the research panel's sentence (`rules::run_rules::first_failing`, `runs.rs::status`) | first failing prerequisite: no shop connected · model key or visual-search key missing · "No price is set for …" (a stage model without a price row) · no fillable field · **"Choose the fields research fills in Settings → Research"** (`fill_keys` empty: the fresh-install state) · day limit · offline; "Waiting for Capture One" = adjusted previews not there yet. "Arranged — next" also queues nothing when the session has no Main photo or nothing changed since the last run |
+| Research ran but a field stayed empty | the panel's steps (`not_determined`), the field's class | the key is not in "Fields research fills", is a never-written type (Product step, money, rich text, …), the person cleared that value before, or the evidence did not reach a decision |
+| Item stuck at "Waiting for you · n conflicts" | the publish popover's conflict list | a confirmed item with unresolved conflicts is `held` by design (MC-A10): resolve each (Keep previous / Use suggestion / Edit) or cancel |
 
 ## Release build with the SDK sidecar and distribution to the other Mac
 From STATUS entries 2026-11-09 … 2026-11-12. Nothing from the SDK is ever committed or bundled.
@@ -94,6 +125,37 @@ From STATUS entries 2026-11-09 … 2026-11-12. Nothing from the SDK is ever comm
 7. Afterwards put the repo back on the stub (`tools/sidecar/build.sh --stub`) if you built in the
    main tree. Never commit `binaries/`.
 
+## Research tool (`crates/research-tool`; usage text: `USAGE` in `crates/research-tool/src/lib.rs`)
+```
+cargo run -p psm-research-tool -- <command> …            # or the built binary:
+apps/desktop/src-tauri/target/debug/psm-research <command> …
+```
+| Purpose | Command (after `--`) |
+|---|---|
+| Acceptance measurement: the real engine and real providers over the test pieces, each run exported | `accept --pieces docs/test-items/beyo_test_samples_1.json --data <scratch dir outside the repo> --ceiling-usd <n> [--only 6,12,28,33] [--settings docs/test-items/accept_settings_owner.json]` |
+| Score those runs against the answer key | `score-accept --data <the same dir>` → `<data>/scores.json` (`--pieces <file>` for another pieces file) |
+| Summarise an export (from `accept`'s `<data>/exports/`, or the app's "Export research" zip) | `report <export folder or zip> [--json]` |
+| Re-send one recorded stage of one run, optionally changed | `replay <export> --run <id> --stage <stage> [--model <m>] [--effort <e>] [--instructions <file>] [--out <dir>]` |
+| R1's probes and benchmarks | `probe <id>`, `bench-search`, `bench-models` (each needs `--out <dir> --ceiling-usd <n>`); `score-search`, `score-models`, `recost`, `fixtures <dest>` (each needs `--out <dir>`) |
+- **`accept`, `replay`, `probe` and the two `bench-*` commands spend money on the owner's accounts**
+  (`report`, `score-*`, `recost`, `fixtures` send nothing). Run them only
+  when a plan or the owner says so, with the ceiling the plan names (research master plan §3
+  "Spending ceilings"). `accept` refuses without `--ceiling-usd`; its ceiling counts per data folder;
+  **`replay` has no ceiling**.
+- **Keys.** The tool reads `OPENAI_API_KEY` and `SERPAPI_API_KEY` from its environment only, hands
+  them to an in-memory store (never the Keychain); recordings and exports are scanned for them
+  before they are written. They come from
+  the owner's env file outside the repo (research master plan §7.6), which a launching script loads
+  into the environment; a session never reads that file, prints a value or writes one anywhere.
+  `report` and `score-accept` need no key.
+- `--settings <file>` replaces keys of the tool's scratch research settings
+  (`accept::scratch_settings`, which chooses every field of its stand-in shop);
+  `docs/test-items/accept_settings_owner.json` is the owner's set-up (22 `fill_keys`, extra shop
+  addresses, the detailed-condition table). `--only` takes piece numbers.
+- `accept` writes only under `--data` and never to a shop (its shop is a read-only stand-in). Past
+  runs and their findings: `docs/intention/evidence/research_providers.md`; how they were launched:
+  `docs/implementation/STATUS_research.md`.
+
 ## The pipeline in ten lines (authority: `docs/process/flow.md`, `docs/process/orchestrator.md`)
 1. The owner wakes an **orchestrator** Claude session (`docs/process/prompts/wake_orchestrator.md`);
    it reads `STATUS.md`, `flow.md`, `git status`, and never implements itself.
@@ -114,12 +176,37 @@ From STATUS entries 2026-11-09 … 2026-11-12. Nothing from the SDK is ever comm
 9. Fold-back: semantics → book chapter + changelog; skeleton → master plan; phase-local → plan file.
 10. Sessions commit only their perimeter as `CHECKPOINT (not approved):`; only the orchestrator pushes.
 
+## Research phases (authority: `docs/process/flow.md` §10; `docs/implementation/master_plan_research.md` §0, §5, §7)
+- A research **milestone is one runner phase**: `tools/pipeline/run_phase.sh phase R13_research_chosen_fields`
+  (ids in `docs/implementation/phases_research.txt`, R1–R13, all approved). `run_phase.sh all` reads
+  `phases.txt` only, so research milestones are started one by one.
+- Runner switches (`tools/pipeline/run_phase.sh` header): `PSM_IMPLEMENTER=claude` (Claude instead of
+  the default Codex implementer), `RESUME=1` (skip the implement and first review sessions whose
+  handoffs already say `state: DONE`, e.g. after a usage limit cut a later session), `DRY_RUN=1`.
+- The plan `docs/implementation/plans/R<n>_<slug>.md` is made of `## Unit` sections worked in order,
+  one `CHECKPOINT (not approved):` commit per unit; its **Tracker line** is the milestone's state and
+  its **Closing gate** names the commands (they replace the template's). One review, one fix budget,
+  one narrative (`narratives/R<n>_<slug>.md`) per milestone.
+- Criterion rows keep the id of the plan they were first written in (`A07·C1(a)`; R11 `A25·…`, R12
+  `A26·…`, R13 `A27·…`); `docs/implementation/research_row_mapping.md` says where each row is.
+- Reviewer notes go to `docs/implementation/backlog_research/<milestone id>.md`; the stop log is
+  `docs/implementation/STATUS_research.md`. Semantics decided after ratification are recorded in the
+  08B changelog and, until the chapters are rewritten, in the plan's "What this plan supersedes in
+  the book" section: a new research plan that changes behaviour needs both.
+- `[manual]` measurement rows (paid, real providers) are the orchestrator's or the owner's, never an
+  implementer session's and never a suite's.
+
 ## Keeping this guide current
 - A phase that changes architecture (a crate, module, flow, table, event, settings key), a rule, or a
   coupling updates the matching file in `docs/guide/` **in the same change**: new flow or module →
   `02_architecture.md`; new or amended rule → `03_rules_and_principles.md`; new coupling or fragile
   spot → `04_change_impact.md`; new command, log line or recipe → `05_working.md`; a product decision
   → `01_product.md` (and its "Book pending updates" table when the book lags).
+- Research changes update the research sections: `01_product.md` §Research assistant, `02_architecture.md`
+  §Research, `03_rules_and_principles.md` §Research hard rules, `04_change_impact.md` §Research,
+  this file's §Research tool and §Research phases. When 08A/08B are rewritten to absorb the
+  changelog and the "supersedes" sections, delete the three research rows from `01_product.md`
+  §Book pending updates and the "later wins" wording in `README.md`.
 - Every path written in the guide must exist; prefer pointing to the authority over copying it.
 - When the book catches up with the code, delete the row from `01_product.md` §Book pending updates.
 - The reviewer checks the guide like the registry: a phase that moves something the guide names

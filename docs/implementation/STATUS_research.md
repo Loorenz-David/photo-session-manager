@@ -4,11 +4,12 @@ Branch `feature/agentic`, worktree `~/Desktop/Developer/Photo-Session-Manager-ag
 against the sibling checkout `~/Desktop/Developer/Photo-Session-Manager` (`main`, the owner's other work).
 `docs/implementation/STATUS.md` belongs to `main`'s orchestrator; do not edit it from this track.
 
-**2026-11-13: R1–R9 APPROVED (with notes in `backlog_research/`); nothing running; the measurement waits for the owner.** Intention 08A RATIFIED and contracts 08B RATIFIED (owner, 2026-11-12).
-Ten milestones R1–R10 in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
-tracks and driver loop in `docs/implementation/master_plan_research.md`. `main` (with P70, the fast suite) was merged
-into this branch at `2026-11-12`; the branch is local, not pushed.
-
+**2026-11-15: R1–R13 APPROVED (notes in `backlog_research/`); research joined `main` on GitHub (PR #1, `04f26ad`);
+the agent guide `docs/guide/` covers research (PR #2). Nothing running.** Intention 08A RATIFIED and contracts 08B
+RATIFIED (owner, 2026-11-12); later owner decisions are 08B changelog 12–18 and the "supersedes" sections of the R11–R13
+plans. Thirteen milestones in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
+tracks and driver loop in `docs/implementation/master_plan_research.md` (its §3 "Scratch data only" and parts of §6.6
+predate the merge; `docs/guide/` notes where). Next for the owner: try it on the work Mac (backup, keys, chosen fields).
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4

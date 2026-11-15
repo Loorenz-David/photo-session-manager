@@ -1,10 +1,11 @@
 # Session Manager — agent guide (START HERE)
 
-Written 2026-11-15 at P70. This folder re-orients a new agent without a repo-wide search. It
+Written 2026-11-15 at P70; the research assistant was added the same day, after R13 (research joined
+`main` as PR #1). This folder re-orients a new agent without a repo-wide search. It
 summarises and points; it never replaces the authorities below. Keep it current (`05_working.md`
 §Keeping this guide current).
 
-## What the app is, in five lines
+## What the app is, in six lines
 1. A macOS desktop app (Tauri shell, **Rust backend**, React UI) for one photographer who lists
    second-hand items on Shopify: shoot an item, sort and frame the photos, fill the product form,
    publish. Two Macs: a studio/dev Mac and a work Mac; no server, no accounts.
@@ -17,13 +18,19 @@ summarises and points; it never replaces the authorities below. Keep it current 
    inventory. Nothing is written without a recorded confirmation (H1).
 5. Everything platform-specific lives behind ports in adapters; core knows Item, Session, Photo,
    Attribute only (H7, H8).
+6. A **research assistant** (its own crate, `crates/research`) looks at an arranged session's photos,
+   finds and reads matching listings on the web, and writes **suggested** form values with a
+   confidence and sources, only into the fields the person chose; the person checks them (HA1–HA6).
 
 ## Authority order
 | Question | Authority |
 |---|---|
 | What must the app do (semantics, contracts MC-n, constraints H1–H8, measurements M-n) | `docs/intention/intention.md` → `docs/intention/book/*.md` |
 | Names, tables, commands, settings keys, environment, exact commands | `docs/implementation/master_plan.md` (§6 registry, §7 environment) |
-| Process (roles, tests, verdicts, commits) | `docs/process/flow.md` |
+| Process (roles, tests, verdicts, commits) | `docs/process/flow.md` (research phases: §10 first) |
+| Research: what it must do (HA1–HA6, stages, contracts MC-A1…MC-A12, measurements MA-n) | `docs/intention/book/08A_research_agent.md`, `08B_research_contracts.md`. **Later wins:** 08B's changelog entries 12–18 and the sections "What this plan supersedes in the book" of the plans `R11`, `R12`, `R13` override the older chapter text until the chapters are rewritten (08B changelog 14, 18) |
+| Research: names, tables, settings keys, seams, commands, test commands | `docs/implementation/master_plan_research.md` (§6 registry, §7 environment); it wins over `master_plan.md` on a research name |
+| Research: what was built, measured and decided, newest state | `docs/implementation/STATUS_research.md`; `narratives/R*.md`; `backlog_research/R*.md`; measurements in `docs/intention/evidence/research_providers.md` |
 | What exists and how it behaves today | **the code**; then `docs/implementation/narratives/P*.md` (plain-language result per phase), `STATUS.md`, `backlog.md` |
 | Orientation | this guide |
 
@@ -42,6 +49,9 @@ few places (listed in `01_product.md` §Book pending updates).
 | Add a DB field or table | `02_architecture.md` §Persistence; `04_change_impact.md` row "DB change"; master plan §6.5; `crates/infra/src/sqlite/` |
 | Run a pipeline phase | `docs/process/flow.md`; `docs/process/orchestrator.md`; `05_working.md` §Pipeline in ten lines; `docs/implementation/STATUS.md` (top entries) |
 | Ship a build to the work Mac | `05_working.md` §Release build with the SDK sidecar |
+| Touch research (engine, rules, adapters, its settings or UI) | `01_product.md` §Research assistant; `02_architecture.md` §Research; `03_rules_and_principles.md` §Research hard rules; `04_change_impact.md` §Research; book `08A`, then the `08B` contract you touch **and** its changelog 12–18; the "supersedes" sections of plans `R11`–`R13`; `master_plan_research.md` §5 Seams, §6; `crates/research/src/`; narratives R11–R13 |
+| Run a research measurement or replay a stage | `05_working.md` §Research tool; `crates/research-tool/src/lib.rs` (`USAGE`); `master_plan_research.md` §3 (Rule 9, Keys, Spending ceilings); `docs/intention/evidence/research_providers.md` (how the earlier measurements were run and what they found) |
+| Run a research phase | `docs/process/flow.md` §10; `master_plan_research.md` §0, §5 Driver loop, §7.2; `docs/implementation/STATUS_research.md`; `docs/implementation/phases_research.txt`; the plan `docs/implementation/plans/R<n>_<slug>.md` (its Tracker line and Closing gate); `05_working.md` §Research phases |
 
 ## Repo map (one screen)
 ```
@@ -54,6 +64,11 @@ crates/infra/       psm-infra     SQLite store + migrations/, settings.json, pat
 crates/integrations/ psm-integrations  App wiring (lib.rs); editing/capture_one (adapter, JXA scripts, hooks, gates, follow),
                                   camera (runtime, sidecar supervisor+protocol, direct adapter, take-back, support packages),
                                   commerce/shopify (adapter, graphql documents, auth, type map, fixtures), render_output job
+crates/research/    psm-research  the research engine, isolated: domain, config, ports, rules/ (pure), stages, decide, gateway, store,
+                                  adapters/ (OpenAI, SerpApi Lens, page reader), fakes, fixtures/ (sanitised captures); own tests in
+                                  tests/engine/. App code reaches it through api.rs (ResearchApi) and the wiring in crates/integrations/src/lib.rs
+crates/research-tool/ psm-research-tool  dev-Mac CLI, bin `psm-research`: probes, benchmarks, accept, score-accept, report, replay;
+                                  tests in tests/tool/. Nothing in the app depends on it
 crates/testkit/     psm-testkit   TestApp harness, fakes (Capture One, commerce, transport, secrets, processes, sleep, direct camera),
                                   fake_sidecar binary, fixtures; tests/suite/ = ALL behaviour tests (one program, one module per phase)
 apps/desktop/src-tauri/           Tauri app psm-desktop: commands/, state.rs, lib.rs (specta builder, event bridge, run()), build.rs
@@ -65,6 +80,9 @@ tools/sidecar/                    build.sh (--stub | --sdk <root> [--test]), man
 tools/pipeline/                   run_phase.sh (the runner), templates/, wrappers/, timeline.sh
 docs/intention/                   intention.md (map) + book/ (chapters) + evidence/ (source facts)
 docs/implementation/              master_plan.md, plans/, narratives/, backlog.md, STATUS.md, handoffs/, prompts/, state/, phases.txt
+                                  research track: master_plan_research.md, phases_research.txt (R1–R13), plans/R*.md, narratives/R*.md,
+                                  backlog_research/, STATUS_research.md, research_row_mapping.md (where each criterion row went)
+docs/test-items/                  research test pieces + answer key, accept_settings_owner.json (the owner's research set-up for `accept`)
 docs/process/                     flow.md (process authority), orchestrator.md, prompts/
 docs/reference/                   capture_one_16.8.6.sdef
 docs/guide/                       this guide
