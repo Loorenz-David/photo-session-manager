@@ -8,7 +8,7 @@ blocked_on: none (one owner card, which the plan does not wait for: the detailed
 ---
 # R11 — Research starts when the session is arranged
 
-**Tracker:** IMPLEMENTED · 2026-11-15 · sonnet · fix 1: A25·C23(a) now arranges first on a Main-photo session and asserts `research_queued` and one queued `arranged` run; psm-desktop 25 green, clippy, fmt, typecheck green
+**Tracker:** APPROVED · 2026-11-15 · opus · re-review r2: APPROVED_WITH_NOTES; F1 resolved as corrected (A25·C23(a) now observes `research_queued` and one queued `arranged` run); perimeter clean; 8 r1 notes stay in `backlog_research/R11_research_on_arranged.md`
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -486,3 +486,11 @@ On scratch data (`PSM_DATA_DIR=$HOME/psm-research-dev npm run tauri -- dev`), sh
 
 ### 2026-11-15 · fix 1 · sonnet · IMPLEMENTED
 F1 (B2): `a25_c23a_new_commands_reach_wired_app_and_bindings` in `apps/desktop/src-tauri/src/lib.rs` now classifies its photo Main, calls `session_arrange_next` with the prices intact, and asserts `research_queued == true`, `arranged_at` set, and exactly one run, `queued`, trigger `arranged`. Only then does it write the emptied price table to the settings file and run the reset half unchanged. Probe with a changed input (photo classified Condition, reverted): the test fails at the `research_queued` assertion. No production file touched. Checks: `cargo test -p psm-desktop` 25 green; clippy, fmt, typecheck green. Judgment call: the emptied price table is written to the settings file directly (`Settings::open`/`set`) after the arrange call, since the settings live in a file and the commands read it at call time.
+
+### 2026-11-15 · re-review r2 · opus · APPROVED_WITH_NOTES
+**Gate.** Tracker `IMPLEMENTED` with the fix note; checkpoint `80adfc6` exists; tree clean at `8421c5d` (later commits are pipeline docs only).
+**Perimeter.** `git show --stat 80adfc6`: `apps/desktop/src-tauri/src/lib.rs` (the `a25_c23a_…` test only, +15/−3), the plan file (Tracker line, Review log entry), the fix handoff. All within F1's allowed files. Nothing else.
+**F1 resolved as corrected.** The test classifies its photo Main, calls `session_arrange_next` with the prices intact, asserts `research_queued == true`, `arranged_at` set, and exactly one run for that session, `queued`, trigger `arranged`; only the engine creates run rows, so a command that marked through core without calling `ResearchApi::arranged` now fails. The emptied prices are written with `Settings::open`/`set` after the arrange call, the same two calls `TestApp::set_research_settings` makes, so the reset half is unchanged in meaning. `AppState::new` starts no worker, so the `queued` assertion is not racy.
+**Checks (once each, `8421c5d`).** `cargo test -p psm-desktop` 25 green · `cargo clippy --workspace --all-targets -- -D warnings` green · `cargo fmt --all -- --check` green · `npm run typecheck` green.
+**Triage.** No blocking item remains; nothing to classify. Notes: the 8 r1 notes stand in `backlog_research/R11_research_on_arranged.md`; no new note.
+**Probes:** none. No file touched outside the review's own artifacts.
