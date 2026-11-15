@@ -48,6 +48,7 @@ vi.mock('@/services/items', () => ({ searchItems: vi.fn(), searchItemsShop: vi.f
 vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(), cameraRetry: vi.fn() }));
 vi.mock('@/services/events', () => ({
   onSessionsChanged: vi.fn(async () => () => undefined),
+  onResearchChanged: vi.fn(async () => () => undefined),
   onCameraStatus: vi.fn(async () => () => undefined),
   onWorkspaceEvents: vi.fn(async (handler: (event: WorkspaceEvent) => void) => {
     delivered.workspace.push(handler);

@@ -66,10 +66,8 @@ impl<'a> SessionsService<'a> {
             ));
         }
         let changed = self.store.arrange_session_once(id, self.clock.now_ms())?;
-        if changed {
-            if let Some(events) = self.events {
-                events.emit(AppEvent::SessionChanged { session_id: id });
-            }
+        if changed && let Some(events) = self.events {
+            events.emit(AppEvent::SessionChanged { session_id: id });
         }
         Ok(changed)
     }

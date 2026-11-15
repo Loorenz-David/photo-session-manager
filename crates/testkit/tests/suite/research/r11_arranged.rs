@@ -212,6 +212,8 @@ fn a25_c18d_ineligible_sessions_are_skipped() {
         .unwrap();
     let deleted = session(&a, "DEL");
     photo(&a, deleted, "DEL", C::Deleted, false);
+    // The Unassigned session (id 1) holds a photo that is not deleted, so only its own rule can skip it.
+    photo(&a, 1, "UNA", C::Unreviewed, false);
     assert_eq!(
         arrange_and_next(&a.app.handles(), current)
             .unwrap()
@@ -302,14 +304,24 @@ fn a25_c20d_preview_without_key_keeps_core_preview() {
 fn a25_c20e_confirm_while_research_runs_freezes_only_committed_values() {
     let a = app();
     let s = ready(&a, "P20E");
+    let p = a.store().photos_in_session(s).unwrap().pop().unwrap();
+    a.research_fakes().model.reply(
+        Stage::Observe,
+        &format!("photo:{}", p.id),
+        serde_json::json!({"reads": {"custom.designer": {"value": "Run value", "sure": true}}}),
+    );
     let preview = preview_for_publish(&a.app.handles(), &[s]).unwrap();
     assert_eq!(preview.researching, [true]);
     let (entered_tx, entered_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let release_rx = Arc::new(Mutex::new(release_rx));
+    // Holds only the run's first model call: the run's later calls (it goes on to write) pass through.
+    let mut first = true;
     a.research_fakes().model.before_call(move |_| {
-        entered_tx.send(()).unwrap();
-        release_rx.lock().unwrap().recv().unwrap();
+        if std::mem::take(&mut first) {
+            entered_tx.send(()).unwrap();
+            release_rx.lock().unwrap().recv().unwrap();
+        }
     });
     a.clock.advance(1_100);
     let runner = a.app.research_runner.clone().unwrap();
@@ -334,10 +346,26 @@ fn a25_c20e_confirm_while_research_runs_freezes_only_committed_values() {
         .confirm(&[s], &preview.preview.summary, &shown)
         .unwrap();
     let item = a.store().publish_item(id).unwrap();
-    assert!(item.frozen_attributes.get("custom.designer").is_none());
+    assert!(!item.frozen_attributes.contains_key("custom.designer"));
     a.research_fakes().model.clear_before_call();
     release_tx.send(()).unwrap();
     thread.join().unwrap();
+    // The run went on to write the value after the confirmation; the frozen publish item still does not hold it.
+    let item_id = a.sessions().get(s).unwrap().session.item_id.unwrap();
+    let mut written = Vec::new();
+    a.store()
+        .transaction(&mut |tx| {
+            written = tx.attribute_values(item_id)?;
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        written
+            .iter()
+            .any(|v| v.key == "custom.designer" && v.value == "\"Run value\"")
+    );
+    let item = a.store().publish_item(id).unwrap();
+    assert!(!item.frozen_attributes.contains_key("custom.designer"));
 }
 
 #[test]

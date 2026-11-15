@@ -8,7 +8,7 @@ blocked_on: none (one owner card, which the plan does not wait for: the detailed
 ---
 # R11 — Research starts when the session is arranged
 
-**Tracker:** NOT_STARTED · 2026-11-15 · planner · plan written (33 criteria, 99 rows, 6 units); one owner card on the detailed-condition table, not blocking
+**Tracker:** IMPLEMENTED · 2026-11-15 · codex · 6 units (U1–U5 codex, U6 + closing gate claude-opus resume); 99 rows → 99 `a25_*` tests; gate green: `cargo test --workspace` 1414 passed, clippy, fmt, typecheck, `npm test` 509 passed
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -457,3 +457,18 @@ On scratch data (`PSM_DATA_DIR=$HOME/psm-research-dev npm run tauri -- dev`), sh
 6. In the second session press **Publish** without arranging it: the popover says research is still running; wait until the line goes, or confirm at once to publish without it.
 
 ## Review log
+
+### 2026-11-15 · implement r1 · codex (U1–U5) + claude-opus (U6, closing gate; resumed after Codex's usage limit)
+**Built.** U1 the `arranged` trigger (`ResearchApi::arranged`, `rules::run_rules::arranged_needed`), the quiet period and `auto` retired, leftover `auto`/`follow_up` queued runs cancelled when the service is built · U2 `excluded_keys`, `extra_shop_hosts`, `settings_reset` · U3 `rules::derived_condition::derive`, `FieldClass::Derived`, shop listings left out of attribution decisions · U4 `sessions.arranged_at` (idempotent `ensure`), `SessionsService::{arrange, next_unarranged}`, `psm_integrations::arranged::{arrange_and_next, preview_for_publish}`, commands `session_arrange_next` and `research_settings_reset`, `researching` on preview items, bindings regenerated · U5 the "Arranged — next" button, the list tag, the publish line, the panel hint · U6 `ShopFieldPicker` used for Designer and maker and for Fields research leaves alone, extra shop addresses, the detailed-condition table, the reset with confirmation. Checkpoints: U1 `ff2fdec`, U2 `a32391b`, U3 `fea02f4`, U4 `a692083`, U5 `1c09727`, U6 `5a7abe7`, closing-gate fixes in the commit that carries this entry.
+
+**Judgment calls.**
+- U1: `arranged_needed` takes the latest started run's input snapshot and the snapshot of now (not the run rows); the leftover-run log line is "research: could not cancel queued runs from an earlier build" on failure, silent on success.
+- U4: `researching` is computed from `ResearchApi::status(session).run.state` (`queued` or `running`); the reset is saved through the existing `save_research` helper (same path as the site commands: settings save, validation, `settings_changed`). `SessionChanged` is emitted only when the mark is newly set.
+- U6: "the linked shop's fields" = definitions whose integration is not `core` (the built-in Product fields are left out; no adapter name in the UI). The picker has a filter box and a scrolling list (68 fields in the owner's shop). With no shop linked, or a shop with no fields, the picker says "Connect a shop to choose fields" and still lists chosen keys so they can be removed. The detailed-condition field select lists the shop's fields of core type `choice`; condition-level rows come from the choices of the shop's `condition`-group choice fields (the chosen detailed field itself left out); changing the field clears the table. A repeated extra address is not added twice. The suggestion line "suggested — not saved yet" shows only while the suggested field stays checked and disappears after Save.
+
+**Deviations.**
+- Closing gate showed three defects in committed U4/U5 work, fixed here: clippy `collapsible_if` in `crates/core/src/services/sessions.rs` (same behaviour); `p32_reframe` failed because the compose test harness's `@/services/events` mock lacked `onResearchChanged`, which the publish popover now subscribes to (U5); fixed by adding it to `apps/desktop/src/features/compose/__tests__/harness.tsx` (outside U5's listed files; a test mock forced by the new subscription); clippy `unnecessary_get_then_check` in `r11_arranged.rs`.
+- While on that line: A25·C20(e) could not fail (the run was held at its first model call and had nothing scripted, so nothing could ever be frozen). It now scripts a sure Observe read of `custom.designer`, holds only the first model call (the fake re-installs a hook cleared during a call, so a hook that held every call deadlocked once the run went on), and after release asserts the run did write "Run value" while the frozen publish item still lacks it. A25·C18(d) now puts a photo in the Unassigned session so the row's "and the Unassigned session" is exercised (`next_unarranged` skips it through `session_list_records`, which leaves out session 1).
+- U6 removes `a19_c5d` from `r6_research_settings.test.tsx` as the plan's table says (A25·C28(d) replaces it) and the now-unused helper.
+
+**For the reviewer.** A25·C23(a) (`apps/desktop/src-tauri/src/lib.rs`, `a25_c23a_new_commands_reach_wired_app_and_bindings`) calls `session_arrange_next` with prices emptied and an unreviewed photo, so it proves the mark through the command but not that the command queued a run; the reset half reaches the engine. Left as committed (resume note: keep U1–U5 unless the gate shows a defect). The owner's card was answered on 2026-11-15 (table A, 08B changelog 15); R12 writes it as the default, R11 ships the table empty as planned.
