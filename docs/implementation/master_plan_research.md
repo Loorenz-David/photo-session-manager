@@ -10,9 +10,9 @@ Every research session reads both files and flow §10. Where the two plans diffe
 
 | Thing | Where | Why |
 |---|---|---|
-| Milestone ids | `R1_research_benchmark` … `R12_research_cost` | cannot be confused with `main`'s `P…` or the superseded `A…`; the runner resolves every file from the id, so nothing collides. |
+| Milestone ids | `R1_research_benchmark` … `R13_research_chosen_fields` | cannot be confused with `main`'s `P…` or the superseded `A…`; the runner resolves every file from the id, so nothing collides. |
 | Plan files | `docs/implementation/plans/R<n>_<slug>.md`, one per milestone, made of `## Unit` sections | one runner phase per milestone (flow §10). The runner is unchanged; three templates gained a few lines (§7.3). |
-| Row ids | each criterion row keeps the id of the plan it was written in: `A07·C1(a)`; R11's rows are `A25·…`, R12's `A26·…` (v10) | stable row identity across the regrouping; `docs/implementation/research_row_mapping.md` lists where every row went. Tests are named after the row (`a07_c1a_<slug>`). |
+| Row ids | each criterion row keeps the id of the plan it was written in: `A07·C1(a)`; R11's rows are `A25·…`, R12's `A26·…` (v10), R13's `A27·…` (v12) | stable row identity across the regrouping; `docs/implementation/research_row_mapping.md` lists where every row went. Tests are named after the row (`a07_c1a_<slug>`). |
 | Tracker | the **Tracker line at the top of each milestone plan file** | two tracks run at the same time in two worktrees; a shared tracker table would conflict at every merge. §4 below is only an index. `master_plan.md` §4 is not used. |
 | Milestone list | `docs/implementation/phases_research.txt` | `phases.txt` is not touched. Driver loop in §5. |
 | Reviewer notes | `docs/implementation/backlog_research/<milestone id>.md` | one file per milestone: no shared file between tracks, none shared with `main`'s `backlog.md`. |
@@ -43,8 +43,8 @@ it and the book differ, the book wins and this file is amended.
 
 ## 3. Standing rules (additions; `master_plan.md` §3 and `flow.md` apply, flow §10 first)
 - **Trace.** Every row cites `MA1…MA18`, `MC-A1…MC-A12`, `HA1…HA6` or `H1…H8`. `[rule]` only for UI rendering and tool
-  output rows. `[manual]` only in R1, R9 and R12·U4 (recorded in the evidence doc and the Review log, never asserted by a suite).
-- **Rule 9.** No suite calls OpenAI, a search vendor, a listing site or the shop. Real calls happen only in R1, R9 and R12·U4,
+  output rows. `[manual]` only in R1, R9, R12·U4 and R13·U4 (recorded in the evidence doc and the Review log, never asserted by a suite).
+- **Rule 9.** No suite calls OpenAI, a search vendor, a listing site or the shop. Real calls happen only in R1, R9, R12·U4 and R13·U4 (task 3),
   from the tool, with keys from the environment.
 - **Rule 17.** A fixture whose shape a provider owns is a sanitized capture written by R1, cited as
   `fixtures/<provider>/<file> (RESEARCH-VERIFY-n)`; such rows are only in R8. Every other row is written against our
@@ -52,7 +52,7 @@ it and the book differ, the book wins and this file is amended.
 - **Keys.** Benchmark keys only in `~/.psm_research.env` (mode 0600, outside the repo); the app's keys only in the
   Keychain through `ports::secrets`. No key, and no URL carrying one, in any log, fixture, evidence doc, handoff,
   recording or commit. Every recording is scanned before it is written (fail closed).
-- **Spending ceilings.** R1: USD 50 (U1 15, U2 35). R9: USD 40 plus USD 2 for one replay. R12·U4: USD 20. Enforced by the tool.
+- **Spending ceilings.** R1: USD 50 (U1 15, U2 35). R9: USD 40 plus USD 2 for one replay. R12·U4: USD 20. R13·U4: USD 2. Enforced by the tool.
 - **HA5 in code.** No model name, vendor name or reseller domain as a literal in `crates/core`. Literals live in
   `crates/research/src/{adapters, config.rs}` and the tool.
 - **Isolation.** App crates use the research crate only through the surface of §6.6 (the `ResearchApi` trait and its
@@ -63,7 +63,7 @@ it and the book differ, the book wins and this file is amended.
 - **Scratch data only.** Until this branch is merged into `main`, the app built from it runs only with
   `PSM_DATA_DIR=$HOME/psm-research-dev` (or another scratch folder): it writes a publish step (`held`) and columns a
   `main` build does not know.
-- **No `implementer: fable`.** **Projection** only for R5 and R8 (flow §10); R11 and R12 carry `projection: no`.
+- **No `implementer: fable`.** **Projection** only for R5 and R8 (flow §10); R11, R12 and R13 carry `projection: no`.
 - **Checkpoints.** One `CHECKPOINT (not approved):` commit after each unit, paths of that unit only.
 
 ## 4. Milestones (index; the state of each is the Tracker line in its plan file)
@@ -81,16 +81,18 @@ it and the book differ, the book wins and this file is amended.
 | R10_research_defaults | U1 defaults and reachability | 2 / 4 | no | no | R9 | the owner's model pick |
 | R11_research_on_arranged | U1 the arranged trigger · U2 fields left alone, extra shop addresses, reset · U3 detailed condition derived, no attribution from another shop product · U4 session mark, Arranged — next, publish marks first · U5 button, tag, publish line, panel hint · U6 Settings pickers and reset | 33 / 99 | **yes** | no | R10 | — (one owner card on the detailed-condition table; not blocking) |
 | R12_research_cost | U1 photo look in one call · U2 product part of a page · U3 same kind or no comparison · U4 second acceptance measurement | 16 / 37 | no | no | R11 | U4: owner-attended measurement; keys |
+| R13_research_chosen_fields | U1 the list of fields research fills (engine and settings seam) · U2 detailed condition from the levels that have a value · U3 Settings: what the list means, warnings · U4 the tool's owner list and a check on a few pieces | 15 / 40 | **yes** | no | R12 | U4 task 3: the orchestrator's check on four pieces (USD 2); keys |
 
 Totals, computed from the plan files: 154 criteria, 396 rows (393 from the superseded plans, 3 new freeze rows; a
 criterion whose rows sit in two units is counted in both). Every unit has at most 8 criteria. R11 and R12 (v10) add
-49 criteria and 136 rows, computed from their plan files; their rows are new (`A25·…`, `A26·…`).
+49 criteria and 136 rows, computed from their plan files; their rows are new (`A25·…`, `A26·…`). R13 (v12) adds
+15 criteria and 40 rows (`A27·…`), computed from its plan file.
 
 ## 5. Sequencing, seams and the two tracks
 
 ### Dependency graph
 ```
-R2 ──► R3 ──► R4 ──────────────► R7 ──► R9 ──► R10 ──► R11 ──► R12
+R2 ──► R3 ──► R4 ──────────────► R7 ──► R9 ──► R10 ──► R11 ──► R12 ──► R13
         │      └──────► R8 ──────────────┘
         └──► R5 ──► R6 ──► R7
 R1 (keys) ──────────► R8, R9
@@ -133,7 +135,7 @@ Everything else is in `crates/research` or `crates/research-tool`.
 | 2 | **R4** engine, then **R5** app seams and **R6** UI (v3: moved here, track B busy with R1) | **R1** benchmark |
 | 3 | **R7** wiring and export | **R8** real adapters (needs R1 approved and the owner's two picks; otherwise R1, or idle) |
 | 4 | **R9** tool and acceptance, then **R10** defaults | — |
-| 5 | **R11** research on arranged, then **R12** research cost (v10: one track; each depends on the one before) | — |
+| 5 | **R11** research on arranged, then **R12** research cost (v10: one track; each depends on the one before), then **R13** research fills chosen fields (v12) | — |
 
 - **Create track B once**, after R2 is approved and committed on `feature/agentic`:
   `git worktree add ../Photo-Session-Manager-agentic-b -b research/track-b feature/agentic`, then
@@ -144,7 +146,7 @@ Everything else is in `crates/research` or `crates/research-tool`.
 - **Merge order.** Each milestone is merged the moment it is APPROVED, never two unmerged milestones on one branch:
   on track A's worktree `git merge --no-ff research/track-b` (after a B milestone), on track B's worktree
   `git merge --no-ff feature/agentic` (after an A milestone, and always before B starts its next milestone). So
-  the order is: R2 · R3 and R1 (either order) · R5 · R6 and R4 (either order) · R7 and R8 (either order) · R9 · R10 · R11 · R12.
+  the order is: R2 · R3 and R1 (either order) · R5 · R6 and R4 (either order) · R7 and R8 (either order) · R9 · R10 · R11 · R12 · R13.
 - **Expected conflicts, all one-line and mechanical:** workspace `Cargo.toml` `members` (R1 adds the tool crate, R2 the
   research crate) · `Cargo.lock` (take either side, then `cargo check --workspace`) · `crates/research/Cargo.toml`
   dependencies (R7 `zip`, R8 `reqwest` and a parser) · `crates/research/tests/engine/main.rs` and
@@ -175,6 +177,7 @@ R6·U2, R7·U2, R8, R9·U1 · MA17 R5·U2, R6·U3 · MA18 R5·U1. The operationa
 v10 additions: MA2 R11·U3, R12·U3, R12·U4 · MA3, MA12 R12·U1 · MA4 R12·U1 · MA5 R12·U4 · MA6 R11·U2, R11·U3 · MA7 R11·U1,
 R11·U2, R11·U4 · MA8, MA17 R11·U4 · MA9 R12·U1–U3 · MA10 R11·U2, R11·U3, R12·U4 · MA11 R11·U2, R11·U3, R12·U1, R12·U2 ·
 MA13 R11·U1 · MA14 R12·U1 · MA16 R12·U1, R12·U3. The second operational measurement is R12·U4.
+v12 additions: MA5 R13·U1 · MA6 R13·U1, R13·U2, R13·U4 · MA7 R13·U1 · MA10 R13·U1, R13·U2, R13·U4 · MA11 R13·U2, R13·U4.
 
 ## 6. Research skeleton and naming registry (new unless marked existing)
 
@@ -357,6 +360,23 @@ with that folder's name. Per run, `<item id>-<folder key>/run-<id>/`:
 - **Panel.** With every prerequisite passing and no run, the status carries no reason; the panel shows "Research starts
   when you press Arranged — next." and the Research button.
 
+### 6.9 Added and retired by R13 (v12; names fixed, signatures may gain parameters)
+- **Settings.** Added: `fill_keys` ([]: "Fields research fills"; a key not in it is treated as never-written, MC-A1).
+  **Retired: `excluded_keys`** (a saved slot that carries it loads; it is ignored and not written back). The settings
+  DTO and `bindings.ts` follow (R13·U1 regenerates the bindings). `attribution_keys` and `detailed_condition.key` only
+  say how a chosen field is decided.
+- **Field class.** `rules::confidence::field_class` takes the chosen list where it took the left-alone list. Order:
+  never-written (MC-A1) · not chosen · derived · condition · attribution · measured · visible.
+- **Prerequisite.** `NoFieldChosen` ("Choose the fields research fills in Settings → Research"), after
+  `NothingToResearch`, before `DayLimit`; it blocks the creation of a run row.
+- **Stage 6** makes no call when no condition field is chosen. Stage 7's identity names `fill_keys`;
+  `RESEARCH_FINGERPRINT_VERSION` stays 2.
+- **`rules::derived_condition::derive`** leaves out level fields with no value; the rule is in the R13 plan, Unit 2.
+- **Tool.** `scratch_settings` chooses every field of `accept::shop_definitions()`;
+  `docs/test-items/accept_settings_owner.json` carries the owner's 22 keys in `fill_keys`.
+- **Test helpers.** The engine harness (`test_settings()`, `Harness::config()`) and the testkit's
+  `research_test_settings()` choose every field their layouts use.
+
 ## 7. Environment (additions to `master_plan.md` §7)
 
 ### 7.2 Commands (flow §10: which tests a unit runs)
@@ -386,6 +406,7 @@ Per milestone (the exact commands are in each plan's unit and Closing gate secti
 | R9 | tool crate tests | tool crate tests + lint; no app suite |
 | R11 | U1–U3: research crate tests of the unit, research lint, `cargo check --workspace`; U1 also the tool crate and `research::` (it edits three testkit test files); U4: `research::r11_arranged::`, `research::r7_wiring::`, `p01`, `p03`, `p66`, `p13`, `p16`, `cargo test -p psm-desktop`, typecheck; U5, U6: `npx vitest run` of the touched features, typecheck | **full gate** + `cargo test -p psm-research` |
 | R12 | research crate tests of the unit, research lint, `cargo check --workspace`; U1 also the tool crate; U4 the tool crate | `cargo test -p psm-research` + `cargo test -p psm-research-tool` + `cargo test -p psm-testkit --test suite research::` + lint of both crates; no full app suite (the `research::` stems drive the wired engine with the crate's fakes, so they are run although no app file changed) |
+| R13 | U1: research crate, tool crate, `research::`, `cargo test -p psm-desktop`, `npx vitest run src/features/settings`, typecheck, research lint, `cargo check --workspace`; U2: research crate tests and lint; U3: `npx vitest run src/features/settings`, typecheck; U4: the tool crate's `u4_accept::` and lint | **full gate** (`cargo test --workspace` includes the research and tool crates) |
 
 ### 7.3 Runner and templates
 `run_phase.sh` is unchanged: a milestone is a phase to it. Three templates gained text that applies only when a plan
@@ -484,6 +505,14 @@ present (never printing a value) before launching R1.
   skipping the app suite does not hold for tests that drive the wired engine.
 
 ## 9. Amendment log
+- 2026-11-15 v12 (planner) — plan written for **R13_research_chosen_fields** (4 units, 15 criteria, 40 rows `A27·…`,
+  1 `[manual]`; changes app files; depends on R12; `projection: no`). §0 (ids), §3 (`[manual]`, real calls and a
+  USD 2 ceiling also in R13·U4 task 3; projection), §4 (one row, totals sentence), §5 (graph, schedule, merge order,
+  ledger coverage), new §6.9 (names added and retired), §7.2 (one row), this line. `research_row_mapping.md` gained
+  plan number A27 and the rows of A05, A13, A24, A25 and A26 that R13 retires or amends. Decided by planning, no
+  owner card: the list is empty on a fresh install and research then does nothing (prerequisite `NoFieldChosen`;
+  A24·C1(a) amended); a designer, maker or detailed-condition field must also be in the list; an old `excluded_keys`
+  is ignored, not converted; stage 6 is not called when no condition field is chosen; the fingerprint version stays 2.
 - 2026-11-15 v11 (orchestrator) — second measurement done (evidence doc "Acceptance measurement 2": USD 0.11 per
   piece, was 0.30; no sure designer/maker really wrong). Owner decision 08B changelog 17: research fills only the
   chosen fields (an allow-list replacing `excluded_keys`), and the detailed condition is derived from the levels that

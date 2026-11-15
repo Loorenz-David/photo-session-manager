@@ -16,3 +16,5 @@ R10_research_defaults
 # R11 and R12 (master plan v10): R11 needs R10 approved; R12 needs R11 approved, and its measurement (U4 tasks 3-6) is owner-attended.
 R11_research_on_arranged
 R12_research_cost
+# R13 (master plan v12): needs R12 approved; its check on four pieces (U4 task 3) is the orchestrator's.
+R13_research_chosen_fields

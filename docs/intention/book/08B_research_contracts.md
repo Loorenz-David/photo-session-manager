@@ -869,3 +869,10 @@ to 07A MC-10 and 05A MC-30.
     install: designer, maker, wood, country, years, colour, quantity, the condition levels, the condition report and
     the detailed condition.
 
+18. 2026-11-15 (orchestrator, with the R13 plan). The R13 plan's section "What this plan supersedes in the book" is
+    the rule for the 08A/08B text it names until those chapters are rewritten: `research.fill_keys` ("Fields research
+    fills") replaces `excluded_keys`; a key not in it is never-written (MC-A1) and the field class "not chosen"
+    replaces "left alone" (MC-A4); a new sixth prerequisite "no field chosen" (MC-A6); stage 6 makes no call when no
+    condition field is chosen (MC-A7); the detailed condition is derived from the filled levels only (R11 Unit 3 rule
+    step 2); `attribution_keys` and `detailed_condition.key` say how a chosen field is decided, never whether. A
+    fresh install chooses no field, so research does nothing until the person ticks fields.

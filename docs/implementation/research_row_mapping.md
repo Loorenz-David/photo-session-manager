@@ -627,3 +627,84 @@ New rows: A25 99 · A26 37 · together 136. Total now: 396 + the 6 rows added by
 | A26·C14(a) | R12·U4 | recorded evidence (`[manual]`) | new (v10) |
 | A26·C15(a) | R12·U4 | recorded evidence (`[manual]`) | new (v10) |
 | A26·C16(a) | R12·U4 | recorded evidence (`[manual]`) | new (v10) |
+
+## Rows added by R13 (2026-11-15, master plan v12)
+
+One new plan number, the next free one: **A27** = `R13_research_chosen_fields`. Criteria are numbered once across the plan's units. Tests are named after the row (`a27_c1a_<slug>`). Generated from the plan file; counts are computed, not typed.
+
+New rows: A27 40. Total now: 538 + 40 = 578.
+
+| Plan number | Now in | Rows per unit |
+|---|---|---|
+| A27 | R13·U1, R13·U2, R13·U3, R13·U4 | U1 20, U2 10, U3 7, U4 3 |
+
+### Rows of earlier plans that R13 retires or amends
+
+| Row | Was in | What happens | By |
+|---|---|---|---|
+| A05·C5(a) | R3·U3 | kept; input amended: each field's key is in the chosen list (the fourth parameter of `field_class` is the chosen list, no longer the left-alone list) | R13·U1 (08B changelog 17 a) |
+| A12·C1(c) | R4·U3 | kept; the stage 7 identity it spells out names `fill_keys` where it named `excluded_keys` | R13·U1 |
+| A13·C1(a), A13·C1(b) | R4·U4 | amended: eight prerequisites (`NoFieldChosen` after `NothingToResearch`); the new adjacent pairs are A27·C3(a)–(c) | R13·U1 |
+| A24·C1(a) | R10·U1 | amended: a fresh app names `NoFieldChosen` and starts no run (A27·C4(b)); the shipped defaults plus one chosen field start a run (A27·C4(c)) | R13·U1 (08B changelog 17 a) |
+| A25·C2(b) | R11·U1 | kept; gains the new creation-blocking reason | R13·U1 |
+| A25·C8(a) | R11·U2 | superseded: there is no left-alone step; replaced by A27·C1(a), A27·C1(b) | R13·U1 |
+| A25·C8(b) | R11·U2 | superseded; replaced by A27·C2(a) | R13·U1 |
+| A25·C8(c) | R11·U2 | superseded; replaced by A27·C3(d) (the reason is `NoFieldChosen`, not `NothingToResearch`) | R13·U1 |
+| A25·C8(d) | R11·U2 | superseded; replaced by A27·C2(b) | R13·U1 |
+| A25·C10(a) | R11·U2 | amended: the reset keeps `fill_keys` and returns no `excluded_keys` (A27·C5(b)) | R13·U1 |
+| A25·C10(b) | R11·U2 | kept; input amended: the live slot's list holds a field of the layout | R13·U1 |
+| A25·C11(a) | R11·U2 | amended: the `excluded_keys` clause is replaced by A27·C4(a); the other two defaults stand | R13·U1 |
+| A25·C12(g) | R11·U3 | superseded: an empty level no longer makes the grade undetermined; replaced by A27·C8(a) | R13·U2 (08B changelog 17 b) |
+| A25·C13(a), A25·C13(c) | R11·U3 | kept; input amended: the key is in the chosen list | R13·U1 |
+| A25·C13(b) | R11·U3 | superseded; replaced by A27·C1(b) (not chosen precedes derived) | R13·U1 |
+| A25·C14(b) | R11·U3 | amended: the reason is "no condition level has a value" (A27·C9(b)) | R13·U2 |
+| A25·C23(a) | R11·U4 | amended: the bindings carry `fill_keys` and not `excluded_keys` (A27·C7(a)) | R13·U1 |
+| A25·C29(a) | R11·U6 | superseded: the picker is "Fields research fills"; replaced by A27·C7(b) | R13·U1 |
+| A25·C32(a) | R11·U6 | amended: the confirmation names "Fields research fills" among the six kept things (A27·C13(a)) | R13·U3 |
+| A26·C13(b) | R12·U4 | superseded: the owner's file carries a list of chosen fields; replaced by A27·C14(a) | R13·U1 (deleted), R13·U4 (replacement) |
+| A23·C2(a), A26·C13(a) | R9·U2, R12·U4 | kept; the tool's scratch settings choose every field of its shop definitions (A27·C6(a)) | R13·U1 |
+
+### Every new row
+
+| Row | Unit | Boundary / test home | Text edit |
+|---|---|---|---|
+| A27·C1(a) | R13·U1 | inline unit tests (`crates/research/src/rules/confidence.rs`) | new (v12) |
+| A27·C1(b) | R13·U1 | inline unit tests (`crates/research/src/rules/confidence.rs`) | new (v12) |
+| A27·C1(c) | R13·U1 | inline unit tests (`crates/research/src/rules/confidence.rs`) | new (v12) |
+| A27·C2(a) | R13·U1 | research harness (`crates/research/tests/engine/chosen_fields.rs`) | new (v12) |
+| A27·C2(b) | R13·U1 | research harness (`crates/research/tests/engine/chosen_fields.rs`) | new (v12) |
+| A27·C2(c) | R13·U1 | research harness (`crates/research/tests/engine/chosen_fields.rs`) | new (v12) |
+| A27·C2(d) | R13·U1 | research harness (`crates/research/tests/engine/chosen_fields.rs`) | new (v12) |
+| A27·C3(a) | R13·U1 | (a)–(c) inline unit tests (`crates/research/src/rules/run_rules.rs`); (d), (e) research harness (`chosen_fields.rs`) | new (v12) |
+| A27·C3(b) | R13·U1 | (a)–(c) inline unit tests (`crates/research/src/rules/run_rules.rs`); (d), (e) research harness (`chosen_fields.rs`) | new (v12) |
+| A27·C3(c) | R13·U1 | (a)–(c) inline unit tests (`crates/research/src/rules/run_rules.rs`); (d), (e) research harness (`chosen_fields.rs`) | new (v12) |
+| A27·C3(d) | R13·U1 | (a)–(c) inline unit tests (`crates/research/src/rules/run_rules.rs`); (d), (e) research harness (`chosen_fields.rs`) | new (v12) |
+| A27·C3(e) | R13·U1 | (a)–(c) inline unit tests (`crates/research/src/rules/run_rules.rs`); (d), (e) research harness (`chosen_fields.rs`) | new (v12) |
+| A27·C4(a) | R13·U1 | research harness (`crates/research/tests/engine/defaults.rs`; (a) `chosen_fields.rs`) | new (v12) |
+| A27·C4(b) | R13·U1 | research harness (`crates/research/tests/engine/defaults.rs`; (a) `chosen_fields.rs`) | new (v12) |
+| A27·C4(c) | R13·U1 | research harness (`crates/research/tests/engine/defaults.rs`; (a) `chosen_fields.rs`) | new (v12) |
+| A27·C5(a) | R13·U1 | research harness (`crates/research/tests/engine/chosen_fields.rs`) | new (v12) |
+| A27·C5(b) | R13·U1 | research harness (`crates/research/tests/engine/chosen_fields.rs`) | new (v12) |
+| A27·C6(a) | R13·U1 | tool crate (`crates/research-tool/tests/tool/u4_accept.rs`) | new (v12) |
+| A27·C7(a) | R13·U1 | (a) desktop command test (`apps/desktop/src-tauri/src/lib.rs`); (b) UI test (`apps/desktop/src/features/settings/__tests__/r13_research_fills.test.tsx`) | new (v12) |
+| A27·C7(b) | R13·U1 | (a) desktop command test (`apps/desktop/src-tauri/src/lib.rs`); (b) UI test (`apps/desktop/src/features/settings/__tests__/r13_research_fills.test.tsx`) | new (v12) |
+| A27·C8(a) | R13·U2 | inline unit tests (`crates/research/src/rules/derived_condition.rs`) | new (v12) |
+| A27·C8(b) | R13·U2 | inline unit tests (`crates/research/src/rules/derived_condition.rs`) | new (v12) |
+| A27·C8(c) | R13·U2 | inline unit tests (`crates/research/src/rules/derived_condition.rs`) | new (v12) |
+| A27·C8(d) | R13·U2 | inline unit tests (`crates/research/src/rules/derived_condition.rs`) | new (v12) |
+| A27·C8(e) | R13·U2 | inline unit tests (`crates/research/src/rules/derived_condition.rs`) | new (v12) |
+| A27·C8(f) | R13·U2 | inline unit tests (`crates/research/src/rules/derived_condition.rs`) | new (v12) |
+| A27·C9(a) | R13·U2 | research harness (`crates/research/tests/engine/derived.rs`) | new (v12) |
+| A27·C9(b) | R13·U2 | research harness (`crates/research/tests/engine/derived.rs`) | new (v12) |
+| A27·C9(c) | R13·U2 | research harness (`crates/research/tests/engine/derived.rs`) | new (v12) |
+| A27·C9(d) | R13·U2 | research harness (`crates/research/tests/engine/derived.rs`) | new (v12) |
+| A27·C10(a) | R13·U3 | UI test (`apps/desktop/src/features/settings/__tests__/r13_research_fills.test.tsx`) | new (v12) |
+| A27·C10(b) | R13·U3 | UI test (`apps/desktop/src/features/settings/__tests__/r13_research_fills.test.tsx`) | new (v12) |
+| A27·C11(a) | R13·U3 | UI test (`apps/desktop/src/features/settings/__tests__/r13_research_fills.test.tsx`) | new (v12) |
+| A27·C12(a) | R13·U3 | UI test (`apps/desktop/src/features/settings/__tests__/r13_research_fills.test.tsx`) | new (v12) |
+| A27·C12(b) | R13·U3 | UI test (`apps/desktop/src/features/settings/__tests__/r13_research_fills.test.tsx`) | new (v12) |
+| A27·C12(c) | R13·U3 | UI test (`apps/desktop/src/features/settings/__tests__/r13_research_fills.test.tsx`) | new (v12) |
+| A27·C13(a) | R13·U3 | UI test (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`, amended) | new (v12) |
+| A27·C14(a) | R13·U4 | tool crate (`crates/research-tool/tests/tool/u4_accept.rs`) | new (v12) |
+| A27·C14(b) | R13·U4 | tool crate (`crates/research-tool/tests/tool/u4_accept.rs`) | new (v12) |
+| A27·C15(a) | R13·U4 | recorded evidence (`[manual]`) | new (v12) |
