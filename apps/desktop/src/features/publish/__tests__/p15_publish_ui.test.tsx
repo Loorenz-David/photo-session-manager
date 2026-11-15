@@ -31,7 +31,7 @@ import { toast } from 'sonner';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); delivered.sessions.length = 0; delivered.progress.length = 0; delivered.workspace.length = 0; delete (window as Window & { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__; });
 
-const preview = { summary: 'Publish session 7: four selected images; remove one old image.', items: [{ session_id: 7, main: [4, 2, 3], condition: [9], main_thumbnails: ['/4.jpg', '/2.jpg', '/3.jpg'], condition_thumbnails: ['/9.jpg'], details_filled: 3, details_total: 8, unreviewed: 2, announced_removals: ['old'], create_item: true, n_withheld: 0, conflicts: [] }] };
+const preview = { summary: 'Publish session 7: four selected images; remove one old image.', items: [{ session_id: 7, main: [4, 2, 3], condition: [9], main_thumbnails: ['/4.jpg', '/2.jpg', '/3.jpg'], condition_thumbnails: ['/9.jpg'], details_filled: 3, details_total: 8, unreviewed: 2, announced_removals: ['old'], create_item: true, n_withheld: 0, conflicts: [], researching: false }] };
 
 it('C1(a) renders ordered thumbnails, counts, notes and exact summary', async () => {
   vi.mocked(publishPreview).mockResolvedValue(preview);

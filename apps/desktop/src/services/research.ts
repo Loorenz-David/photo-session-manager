@@ -20,6 +20,10 @@ export async function setResearchSecrets(input: SecretsInputDto): Promise<void> 
 export async function researchSecretsState(): Promise<ResearchSecretsState> {
   return unwrap(await commands.researchSecretsState());
 }
+/** Restores operational research defaults while retaining the user's personal categories. */
+export async function resetResearchSettings(): Promise<string> {
+  return unwrap(await commands.researchSettingsReset());
+}
 /** The trusted sites of a `research` value the site commands return (the new value, saved by the command). */
 function sitesOf(text: string): string[] {
   const value = JSON.parse(text) as { trusted_sites?: unknown };

@@ -9,6 +9,7 @@ pub struct Session {
     pub change_seq: i64,
     pub last_activity_at: i64,
     pub created_at: i64,
+    pub arranged_at: Option<i64>,
     pub undo_slot: Option<String>,
 }
 
@@ -116,6 +117,7 @@ pub struct SessionRow {
     pub last_activity_at: i64,
     /// When the session was created: the list's order and time groups (changelog 46 (1)).
     pub created_at: i64,
+    pub arranged: bool,
     pub cover_preview_path: Option<String>,
     pub publish: Option<LatestPublish>,
 }

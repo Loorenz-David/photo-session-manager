@@ -327,6 +327,7 @@ fn session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SessionDto> {
             last_activity_at: r.get(5)?,
             created_at: r.get(6)?,
             undo_slot: r.get(7)?,
+            arranged_at: r.get(12)?,
         },
         dirty: published_at.is_some() && change_seq > published_seq,
         photo_count: r.get(8)?,
@@ -337,7 +338,7 @@ fn session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SessionDto> {
 }
 
 fn session(conn: &Connection, id: i64) -> Result<SessionDto> {
-    conn.query_row("SELECT s.id,s.item_id,s.published_at,s.published_seq,s.change_seq,s.last_activity_at,s.created_at,s.undo_slot,COUNT(p.id),COALESCE(SUM(p.classification='unreviewed'),0),COALESCE(SUM(p.classification='main'),0),COALESCE(SUM(p.classification='condition'),0) FROM sessions s LEFT JOIN photos p ON p.session_id=s.id WHERE s.id=?1 GROUP BY s.id", [id], session_row)
+    conn.query_row("SELECT s.id,s.item_id,s.published_at,s.published_seq,s.change_seq,s.last_activity_at,s.created_at,s.undo_slot,COUNT(p.id),COALESCE(SUM(p.classification='unreviewed'),0),COALESCE(SUM(p.classification='main'),0),COALESCE(SUM(p.classification='condition'),0),s.arranged_at FROM sessions s LEFT JOIN photos p ON p.session_id=s.id WHERE s.id=?1 GROUP BY s.id", [id], session_row)
         .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("session {id}")))
 }
 
@@ -1761,6 +1762,15 @@ impl Store for SqliteStore {
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         session(&conn, id)
+    }
+
+    fn arrange_session_once(&self, id: i64, at: i64) -> Result<bool> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        let changed = conn.execute("UPDATE sessions SET arranged_at=?1 WHERE id=?2 AND item_id IS NOT NULL AND arranged_at IS NULL", params![at, id]).map_err(db)?;
+        Ok(changed != 0)
     }
 
     fn session_list_records(&self) -> Result<Vec<SessionListRecord>> {

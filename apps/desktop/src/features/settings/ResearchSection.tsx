@@ -312,14 +312,6 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
         <label htmlFor="research-language">Language</label>
         <Input id="research-language" value={research.language} onChange={e => edit({ language: e.target.value })} />
       </div>
-      <label className="flex items-center gap-2">
-        <Checkbox aria-label="Automatic research" checked={research.auto} onCheckedChange={value => edit({ auto: value === true })} />
-        Automatic research (when a session has a Main photo)
-      </label>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="research-quiet_seconds">Quiet period (seconds)</label>
-        <Input id="research-quiet_seconds" type="number" value={research.quiet_seconds} onChange={e => edit({ quiet_seconds: Math.round(Number(e.target.value) || 0) })} />
-      </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="research-record_days">Keep research records (days)</label>
         <Input id="research-record_days" type="number" min={2} value={research.record_days} onChange={e => edit({ record_days: Math.round(Number(e.target.value) || 0) })} />

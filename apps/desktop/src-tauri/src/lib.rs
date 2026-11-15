@@ -20,6 +20,7 @@ struct PhotoAddedPayload {
 #[cfg(test)]
 mod p50_tests {
     use super::*;
+    use psm_core::ports::store::Store;
     use psm_integrations::camera::support::manifest::{Manifest, ManifestFile};
     use serde_json::{Value, json};
     use sha2::{Digest, Sha256};
@@ -51,6 +52,60 @@ mod p50_tests {
             InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
             InvokeResponseBody::Raw(_) => panic!("raw"),
         })
+    }
+    #[test]
+    fn a25_c23a_new_commands_reach_wired_app_and_bindings() {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        let s = a
+            .items()
+            .create_local("CMD-R11", "Chair", "Chair", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        a.add_photo(s, "command-r11.ARW").unwrap();
+        let store = a.app.store.clone();
+        let paths = a.app.paths.clone();
+        let mut settings = psm_testkit::research_test_settings();
+        settings["prices"] = json!([]);
+        a.set_research_settings(settings).unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::sessions::session_arrange_next,
+                commands::research::research_settings_reset,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let result = call(&w, "session_arrange_next", json!({"sessionId": s})).unwrap();
+        assert_eq!(result["next_session_id"], Value::Null);
+        assert!(store.session(s).unwrap().session.arranged_at.is_some());
+        let reset = call(&w, "research_settings_reset", json!({})).unwrap();
+        let value: Value = serde_json::from_str(reset.as_str().unwrap()).unwrap();
+        assert!(!value["prices"].as_array().unwrap().is_empty());
+        let saved = psm_infra::settings_file::Settings::open(&paths)
+            .unwrap()
+            .research
+            .unwrap();
+        assert_eq!(saved["prices"], value["prices"]);
+        let bindings = include_str!("../../src/services/bindings.ts");
+        for name in [
+            "sessionArrangeNext",
+            "researchSettingsReset",
+            "arranged",
+            "researching",
+            "excluded_keys",
+            "extra_shop_hosts",
+            "detailed_condition",
+        ] {
+            assert!(bindings.contains(name), "binding missing {name}");
+        }
+        assert!(!bindings.contains("quiet_seconds"));
+        assert!(!bindings.contains("auto?:"));
     }
     #[test]
     fn c8a_support_and_secret_commands_have_their_wire_shapes() {
@@ -957,6 +1012,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::sessions::session_activate,
         commands::sessions::session_deactivate,
         commands::sessions::session_active,
+        commands::sessions::session_arrange_next,
         commands::camera::camera_status,
         commands::camera::camera_retry,
         commands::camera::camera_take_back_availability,
@@ -1010,6 +1066,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::attributes::attribute_fill_defaults,
         commands::research::research_status,
         commands::research::research_run,
+        commands::research::research_settings_reset,
         commands::research::research_secrets_set,
         commands::research::research_secrets_state,
         commands::research::research_site_add,

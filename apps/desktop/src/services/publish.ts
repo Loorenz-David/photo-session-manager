@@ -3,6 +3,7 @@ import { commands, type NotificationDto, type PreviewConflictDto, type PreviewDt
 import { unwrap } from './sessions';
 
 export type { NotificationDto, PreviewDto, PublishActivityDto };
+export type PreviewItem = PreviewDto['items'][number];
 /** What the confirmation showed for one session (08B MC-A10): its withheld count and conflict keys. */
 export type ShownSuggestions = ShownSuggestionsDto;
 /** One conflict as the confirmation shows it (08B MC-A10). */

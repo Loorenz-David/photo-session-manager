@@ -20,6 +20,7 @@ pub fn ensure_research_columns(conn: &Connection) -> rusqlite::Result<()> {
         ("publish_items", "pending_conflicts", "TEXT"),
         ("publish_items", "resolved_attributes", "TEXT"),
         ("publish_items", "released_at", "INTEGER"),
+        ("sessions", "arranged_at", "INTEGER"),
     ] {
         if !has_column(conn, table, column)? {
             conn.execute(

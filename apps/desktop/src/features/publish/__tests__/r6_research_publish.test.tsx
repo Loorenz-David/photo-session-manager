@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 type Item = PreviewDto['items'][number];
 
 function item(session_id: number, extra: Partial<Item> = {}): Item {
-  return { session_id, main: [1], condition: [], main_thumbnails: ['/1.jpg'], condition_thumbnails: [], details_filled: 3, details_total: 3, unreviewed: 0, announced_removals: [], create_item: false, n_withheld: 0, conflicts: [], ...extra };
+  return { session_id, main: [1], condition: [], main_thumbnails: ['/1.jpg'], condition_thumbnails: [], details_filled: 3, details_total: 3, unreviewed: 0, announced_removals: [], create_item: false, n_withheld: 0, conflicts: [], researching: false, ...extra };
 }
 function preview(items: Item[], summary = 'Publish session 7: one image.'): PreviewDto {
   return { summary, items };

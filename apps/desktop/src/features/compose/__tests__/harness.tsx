@@ -135,6 +135,7 @@ export function view(photos: Photo[], sessionId = SESSION): SessionView {
       id: sessionId,
       item_id: sessionId === 1 ? null : ITEM.id,
       published_at: null,
+      arranged_at: null,
       published_seq: 0,
       change_seq: 0,
       dirty: false,

@@ -90,6 +90,7 @@ fn c1a_open_creates_all_domain_columns() {
                 "last_activity_at",
                 "created_at",
                 "undo_slot",
+                "arranged_at",
             ],
         ),
         (

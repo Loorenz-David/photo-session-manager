@@ -65,6 +65,8 @@ pub struct SessionResponse {
     pub last_activity_at: i64,
     #[specta(type = specta_typescript::Number)]
     pub created_at: i64,
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub arranged_at: Option<i64>,
     #[specta(type = specta_typescript::Number)]
     pub photo_count: i64,
     #[specta(type = specta_typescript::Number)]
@@ -87,6 +89,7 @@ impl From<SessionDto> for SessionResponse {
             dirty: dto.dirty,
             last_activity_at: dto.session.last_activity_at,
             created_at: dto.session.created_at,
+            arranged_at: dto.session.arranged_at,
             photo_count: dto.photo_count,
             unreviewed_count: dto.unreviewed_count,
             main_count: dto.main_count,
@@ -297,6 +300,7 @@ pub struct SessionRowResponse {
     /// Changelog 46 (1): the list's order, time groups and time filter.
     #[specta(type = specta_typescript::Number)]
     pub created_at: i64,
+    pub arranged: bool,
     pub cover_preview_path: Option<String>,
     pub publish: Option<LatestPublishResponse>,
 }
@@ -355,6 +359,7 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
                             progress: row.progress,
                             last_activity_at: row.last_activity_at,
                             created_at: row.created_at,
+                            arranged: row.arranged,
                             cover_preview_path: row.cover_preview_path,
                             publish: row.publish.map(Into::into),
                         })
@@ -404,6 +409,32 @@ pub async fn session_active(
             }
         },
     )
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+#[derive(Serialize, Type)]
+pub struct ArrangeNextResponse {
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub next_session_id: Option<i64>,
+    pub research_queued: bool,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn session_arrange_next(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<ArrangeNextResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        psm_integrations::arranged::arrange_and_next(&app, session_id.0)
+            .map(|result| ArrangeNextResponse {
+                next_session_id: result.next_session_id,
+                research_queued: result.research_queued,
+            })
+            .map_err(CommandError::from)
+    })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
@@ -490,6 +521,7 @@ mod list_tests {
                     created_at: 100,
                     cover_preview_path: Some("/cover.jpg".into()),
                     publish: None,
+                    arranged: false,
                 }],
             }],
             counts: ListCounts {

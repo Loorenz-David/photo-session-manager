@@ -73,12 +73,12 @@ pub struct ResearchProvidersDto {
 /// research engine validates it before it is saved (R7·U1).
 #[derive(Serialize, Deserialize, Type, Clone)]
 pub struct ResearchSettingsDto {
-    pub auto: bool,
-    #[specta(type = specta_typescript::Number)]
-    pub quiet_seconds: i64,
     #[specta(type = specta_typescript::Number)]
     pub source_wait_seconds: i64,
     pub attribution_keys: Vec<String>,
+    pub excluded_keys: Vec<String>,
+    pub extra_shop_hosts: Vec<String>,
+    pub detailed_condition: DetailedConditionDto,
     pub trusted_sites: Vec<String>,
     pub max_pages: u32,
     pub stages: std::collections::BTreeMap<String, ResearchStageDto>,
@@ -90,6 +90,18 @@ pub struct ResearchSettingsDto {
     pub record_days: i64,
     pub call_timeout_seconds: ResearchTimeoutsDto,
     pub providers: ResearchProvidersDto,
+}
+
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct DetailedConditionDto {
+    pub key: String,
+    pub levels: Vec<ConditionLevelDto>,
+}
+
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct ConditionLevelDto {
+    pub level: String,
+    pub choice: Option<String>,
 }
 
 /// `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the

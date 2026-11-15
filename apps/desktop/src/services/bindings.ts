@@ -22,6 +22,7 @@ export const commands = {
 	sessionActivate: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("session_activate", { sessionId })),
 	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
 	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
+	sessionArrangeNext: (sessionId: CommandId) => typedError<ArrangeNextResponse_Serialize, CommandError>(__TAURI_INVOKE("session_arrange_next", { sessionId })),
 	cameraStatus: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_status")),
 	cameraRetry: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_retry")),
 	cameraTakeBackAvailability: () => typedError<TakeBackAvailability_Serialize, CommandError>(__TAURI_INVOKE("camera_take_back_availability")),
@@ -133,6 +134,7 @@ export const commands = {
 	attributeFillDefaults: (itemId: CommandId) => typedError<number, CommandError>(__TAURI_INVOKE("attribute_fill_defaults", { itemId })),
 	researchStatus: (sessionId: CommandId) => typedError<ResearchStatusDto_Serialize, CommandError>(__TAURI_INVOKE("research_status", { sessionId })),
 	researchRun: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("research_run", { sessionId })),
+	researchSettingsReset: () => typedError<string, CommandError>(__TAURI_INVOKE("research_settings_reset")),
 	researchSecretsSet: (input: SecretsInputDto_Deserialize) => typedError<null, CommandError>(__TAURI_INVOKE("research_secrets_set", { input })),
 	researchSecretsState: () => typedError<SecretsStateDto, CommandError>(__TAURI_INVOKE("research_secrets_state")),
 	researchSiteAdd: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_add", { site })),
@@ -228,6 +230,18 @@ export type ArchivedPictureDto_Serialize = {
 	position: number,
 	url: string,
 	path: string | null,
+};
+
+export type ArrangeNextResponse = ArrangeNextResponse_Serialize | ArrangeNextResponse_Deserialize;
+
+export type ArrangeNextResponse_Deserialize = {
+	next_session_id?: number | null,
+	research_queued: boolean,
+};
+
+export type ArrangeNextResponse_Serialize = {
+	next_session_id: number | null,
+	research_queued: boolean,
 };
 
 export type AttributeGroupDto = "details" | "condition" | "product";
@@ -392,6 +406,18 @@ export type CompositionValuesDto = {
 	rect: RectDto,
 };
 
+export type ConditionLevelDto = ConditionLevelDto_Serialize | ConditionLevelDto_Deserialize;
+
+export type ConditionLevelDto_Deserialize = {
+	level: string,
+	choice?: string | null,
+};
+
+export type ConditionLevelDto_Serialize = {
+	level: string,
+	choice: string | null,
+};
+
 /**  The three actions on a conflict (MC-A10, MC-A12). */
 export type ConflictActionDto = "keep_previous" | "use_suggestion" | "edit";
 
@@ -422,6 +448,18 @@ export type DefinitionDto_Serialize = {
 	group: AttributeGroupDto,
 	description: string | null,
 	writable: boolean,
+};
+
+export type DetailedConditionDto = DetailedConditionDto_Serialize | DetailedConditionDto_Deserialize;
+
+export type DetailedConditionDto_Deserialize = {
+	key: string,
+	levels: ConditionLevelDto_Deserialize[],
+};
+
+export type DetailedConditionDto_Serialize = {
+	key: string,
+	levels: ConditionLevelDto_Serialize[],
 };
 
 /**
@@ -879,6 +917,7 @@ export type PreviewItemDto_Deserialize = {
 	n_withheld: number,
 	/**  MC-A10: the conflicts this item waits on once confirmed. */
 	conflicts: PreviewConflictDto_Deserialize[],
+	researching: boolean,
 };
 
 export type PreviewItemDto_Serialize = {
@@ -896,6 +935,7 @@ export type PreviewItemDto_Serialize = {
 	n_withheld: number,
 	/**  MC-A10: the conflicts this item waits on once confirmed. */
 	conflicts: PreviewConflictDto_Serialize[],
+	researching: boolean,
 };
 
 /**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */
@@ -983,10 +1023,11 @@ export type ResearchSettingsDto = ResearchSettingsDto_Serialize | ResearchSettin
  *  research engine validates it before it is saved (R7·U1).
  */
 export type ResearchSettingsDto_Deserialize = {
-	auto: boolean,
-	quiet_seconds: number,
 	source_wait_seconds: number,
 	attribution_keys: string[],
+	excluded_keys: string[],
+	extra_shop_hosts: string[],
+	detailed_condition: DetailedConditionDto_Deserialize,
 	trusted_sites: string[],
 	max_pages: number,
 	stages: { [key in string]: ResearchStageDto },
@@ -1005,10 +1046,11 @@ export type ResearchSettingsDto_Deserialize = {
  *  research engine validates it before it is saved (R7·U1).
  */
 export type ResearchSettingsDto_Serialize = {
-	auto: boolean,
-	quiet_seconds: number,
 	source_wait_seconds: number,
 	attribution_keys: string[],
+	excluded_keys: string[],
+	extra_shop_hosts: string[],
+	detailed_condition: DetailedConditionDto_Serialize,
 	trusted_sites: string[],
 	max_pages: number,
 	stages: { [key in string]: ResearchStageDto },
@@ -1166,6 +1208,7 @@ export type SessionResponse_Deserialize = {
 	dirty: boolean,
 	last_activity_at: number,
 	created_at: number,
+	arranged_at?: number | null,
 	photo_count: number,
 	unreviewed_count: number,
 	main_count: number,
@@ -1182,6 +1225,7 @@ export type SessionResponse_Serialize = {
 	dirty: boolean,
 	last_activity_at: number,
 	created_at: number,
+	arranged_at: number | null,
 	photo_count: number,
 	unreviewed_count: number,
 	main_count: number,
@@ -1205,6 +1249,7 @@ export type SessionRowResponse_Deserialize = {
 	last_activity_at: number,
 	/**  Changelog 46 (1): the list's order, time groups and time filter. */
 	created_at: number,
+	arranged: boolean,
 	cover_preview_path?: string | null,
 	publish?: LatestPublishResponse_Deserialize | null,
 };
@@ -1223,6 +1268,7 @@ export type SessionRowResponse_Serialize = {
 	last_activity_at: number,
 	/**  Changelog 46 (1): the list's order, time groups and time filter. */
 	created_at: number,
+	arranged: boolean,
 	cover_preview_path: string | null,
 	publish: LatestPublishResponse_Serialize | null,
 };

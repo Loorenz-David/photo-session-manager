@@ -184,8 +184,15 @@ fn save_research(
     state: &State<'_, AppState>,
     value: serde_json::Value,
 ) -> Result<String, CommandError> {
-    state.settings_set(&serde_json::json!({ "research": value.clone() }))?;
-    Ok(value.to_string())
+    let saved = state.settings_set(&serde_json::json!({ "research": value }))?;
+    Ok(saved["research"].to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn research_settings_reset(state: State<'_, AppState>) -> Result<String, CommandError> {
+    let value = engine(&state)?.settings_reset()?;
+    save_research(&state, value)
 }
 
 #[tauri::command]

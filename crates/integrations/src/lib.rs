@@ -1,3 +1,4 @@
+pub mod arranged;
 pub mod camera;
 pub mod commerce;
 pub mod editing;

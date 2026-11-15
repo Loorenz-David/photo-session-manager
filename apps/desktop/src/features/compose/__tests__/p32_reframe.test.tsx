@@ -127,7 +127,7 @@ describe('C8 export and publish refusals', () => {
 
   it('C8(b) a refused publish confirmation shows the same toast and leaves the popover open', async () => {
     vi.mocked(integrationKind).mockResolvedValue('shopify');
-    vi.mocked(publishPreview).mockResolvedValue({ summary: 'Publish session 5: two selected images.', items: [{ session_id: 5, main: [1, 2], condition: [], main_thumbnails: ['/1.jpg', '/2.jpg'], condition_thumbnails: [], details_filled: 0, details_total: 0, unreviewed: 0, announced_removals: [], create_item: false, n_withheld: 0, conflicts: [] }] });
+    vi.mocked(publishPreview).mockResolvedValue({ summary: 'Publish session 5: two selected images.', items: [{ session_id: 5, main: [1, 2], condition: [], main_thumbnails: ['/1.jpg', '/2.jpg'], condition_thumbnails: [], details_filled: 0, details_total: 0, unreviewed: 0, announced_removals: [], create_item: false, n_withheld: 0, conflicts: [], researching: false }] });
     vi.mocked(publishConfirm).mockRejectedValue(REFUSED());
     await openWorkspace([geometry()]);
     fireEvent.click(await screen.findByRole('button', { name: 'Publish' }));

@@ -248,6 +248,8 @@ pub trait Store: Send + Sync {
     fn transaction(&self, op: &mut dyn FnMut(&mut dyn StoreTx) -> Result<()>) -> Result<()>;
     fn item(&self, id: i64) -> Result<Item>;
     fn session(&self, id: i64) -> Result<SessionDto>;
+    /// Sets the first arranged timestamp, returning whether this call set it.
+    fn arrange_session_once(&self, id: i64, at: i64) -> Result<bool>;
     fn session_list_records(&self) -> Result<Vec<SessionListRecord>>;
     fn latest_publish(&self, session_id: i64) -> Result<Option<LatestPublish>>;
     fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;
