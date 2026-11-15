@@ -484,6 +484,10 @@ present (never printing a value) before launching R1.
   skipping the app suite does not hold for tests that drive the wired engine.
 
 ## 9. Amendment log
+- 2026-11-15 v11 (orchestrator) — second measurement done (evidence doc "Acceptance measurement 2": USD 0.11 per
+  piece, was 0.30; no sure designer/maker really wrong). Owner decision 08B changelog 17: research fills only the
+  chosen fields (an allow-list replacing `excluded_keys`), and the detailed condition is derived from the levels that
+  have a value. **R13 research fills chosen fields** named; needs its plan before it runs.
 - 2026-11-15 v10 (planner) — plans written for **R11_research_on_arranged** (6 units, 33 criteria, 99 rows `A25·…`;
   changes app files; depends on R10) and **R12_research_cost** (4 units, 16 criteria, 37 rows `A26·…`, 3 `[manual]`;
   research and tool crates only; depends on R11). §0, §3 (`[manual]` and real calls also in R12·U4; ceiling USD 20), §4,

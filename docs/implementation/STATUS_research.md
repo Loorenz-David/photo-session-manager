@@ -47,6 +47,9 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   (Codex built U1–U5, hit its usage limit until 16:42; Claude finished U6, one fix round). R12 APPROVED_WITH_NOTES 13:37
   (Claude, Codex limited). **Second measurement DONE 2026-11-15 20:56** (evidence doc "Acceptance measurement 2": USD 0.11 per piece, was 0.30; designer/maker sure answers 0 really wrong; detailed condition waits for all levels; finding: research fills price/location/link fields → owner) — was (R12·U4 tasks 3–6, ceiling USD 20, script `scratchpad/accept_run3.sh`, log `scratchpad/a25_run.log`,
   `accept --settings docs/test-items/accept_settings_owner.json` into `~/psm-research-bench/a25`, then `score-accept`). Owner: camera routing stays as is (08B changelog 16). Owner card open (not blocking): detailed-condition table (recommended A).
+- **2026-11-15 21:10: owner decision after the second measurement** (08B changelog 17, master plan v11): research
+  fills only chosen fields (allow-list replaces "leave alone"), detailed condition derived from the levels that have a
+  value. **R13_research_chosen_fields** named; planner launched (handoff `handoffs/reviewer/handoff_research_plan_r4.md`).
 - **2026-11-15: owner picked the models** (observe Sol low, read Luna low, compare Terra low, condition Terra high) and
   moved the trigger to an "Arranged — next" button (08B changelog 13, master plan v9). R10 amended (crate-only,
   auto off, attribution keys empty) and launched with Claude (Opus); **owner 2026-11-15: from R11 on, Codex implements again

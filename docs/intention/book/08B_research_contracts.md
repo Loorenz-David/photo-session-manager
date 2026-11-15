@@ -856,4 +856,16 @@ to 07A MC-10 and 05A MC-30.
 16. 2026-11-15 (owner). Camera routing stays as it is: opening a session (also through "Arranged — next") makes it
     the session new captures go to. The owner never arranges while shooting, and relies on this for retakes: to add
     a missed or retaken photo they open that session, then shoot.
+17. 2026-11-15 (owner, after the second measurement). **Research fills only the fields the person chose.** Both
+    measurements showed research suggesting values for shop fields that are not facts about the piece (prices of
+    other listings, "Reserved", review counts, storage location, a listing link, the Etsy description; evidence doc
+    "Acceptance measurement 2", finding). So: (a) a Settings → Research picker "Fields research fills" lists the
+    keys research may suggest; a field not in it is treated exactly as never-written (MC-A1). It replaces the R11
+    picker "fields research leaves alone" (`excluded_keys`): the physical fields are simply not chosen. A new field
+    in the shop is never filled until the person adds it. (b) The owner said this also answers the second question:
+    **the detailed condition is derived from the condition levels that have a value**; a level research is not asked
+    to fill, or left open, does not hold the grade back (orchestrator's reading, owner may correct: worst filled
+    level wins; with no filled level nothing is derived). The owner's list for the measurement tool and the scratch
+    install: designer, maker, wood, country, years, colour, quantity, the condition levels, the condition report and
+    the detailed condition.
 
