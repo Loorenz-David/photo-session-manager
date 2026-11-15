@@ -1,0 +1,8 @@
+# Shooting templates (book 10G, branch feature/agentic), single-track order. One runner phase each (flow.md §10; master_plan_templates.md §3).
+# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `tools/pipeline/run_phase.sh phase <id>`.
+# Each needs the one before it approved (the Tracker line of its plan file). No projection, no inventory gate (10G §10).
+# Owner card 1 (handoff_templates_plan_r1.md) blocks nothing: on silence T3 builds "swap"; an answer "always delete" is written into T4's Points before T4 starts.
+T1_templates_and_settings
+T2_template_placement
+T3_template_hand_changes
+T4_template_retake_and_shift
