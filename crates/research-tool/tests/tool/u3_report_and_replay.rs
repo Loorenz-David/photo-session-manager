@@ -95,10 +95,8 @@ fn five_field_run() -> (Harness, i64) {
         })
         .unwrap();
     h.patch_settings(json!({"attribution_keys": [DESIGNER, MAKER]}));
-    let mains = [
-        h.add_main_photo_with_preview(h.session_id),
-        h.add_main_photo_with_preview(h.session_id),
-    ];
+    h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
     h.add_photo_with_preview(h.session_id, Classification::Condition);
     h.search.set_results(
         [P_E1, P_E2, P_UNTRUSTED]
@@ -135,13 +133,14 @@ fn five_field_run() -> (Harness, i64) {
         &u(P_UNTRUSTED),
         json!({"verdict": "different"}),
     );
+    // R12·U1: one observe call over both main photos.
     h.model.reply(
         Stage::Observe,
-        &format!("photo:{}", mains[0]),
+        psm_research::stages::OBSERVE_UNIT,
         json!({"reads": {
             WOODS: {"value": ["Teak"], "sure": true},
             OUTSIDE: {"value": "Lacquered", "sure": true},
-        }, "shows_marking": false}),
+        }, "marking_photos": []}),
     );
     h.model.reply(
         Stage::Condition,

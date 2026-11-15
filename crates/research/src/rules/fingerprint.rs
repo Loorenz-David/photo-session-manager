@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use unicode_normalization::UnicodeNormalization;
 
 /// A change to any stage's identity field list bumps this.
-pub const RESEARCH_FINGERPRINT_VERSION: u32 = 1;
+pub const RESEARCH_FINGERPRINT_VERSION: u32 = 2;
 
 /// Canonical JSON cannot hold a float (decimals are MC-9 strings).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +72,8 @@ pub fn canonical(value: &Json) -> Result<String, FloatInIdentity> {
     Ok(out)
 }
 
-/// `F(unit)` = lowercase hex SHA-256 of the canonical form of `{"stage": n, "unit": …, "v": 1}`.
+/// `F(unit)` = lowercase hex SHA-256 of the canonical form of `{"stage": n, "unit": …, "v": V}`
+/// with `V` = [`RESEARCH_FINGERPRINT_VERSION`].
 pub fn fingerprint(stage: u8, unit: &Json) -> Result<String, FloatInIdentity> {
     let text = canonical(&serde_json::json!({
         "stage": stage,
@@ -98,7 +99,7 @@ mod tests {
     fn a04_c7a_fingerprint_bytes() {
         assert_eq!(
             fingerprint(2, &json!({"rev": 3, "cover": 7})).unwrap(),
-            sha256_hex(br#"{"stage":2,"unit":{"cover":7,"rev":3},"v":1}"#)
+            sha256_hex(br#"{"stage":2,"unit":{"cover":7,"rev":3},"v":2}"#)
         );
         assert_eq!(
             sha256_hex(b"abc"),

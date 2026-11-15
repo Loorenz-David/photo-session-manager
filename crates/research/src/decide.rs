@@ -84,7 +84,8 @@ fn named_text(named: &[Stated]) -> String {
 
 /// The evidence of the run, by stage.
 struct Evidence<'a> {
-    observe: Vec<&'a Json>,
+    /// The one stage 1 output (R12·U1): one read per visible field over the chosen photos.
+    observe: Option<&'a Json>,
     pages: Vec<&'a Json>,
     verdicts: BTreeMap<String, Verdict>,
     labels: Vec<&'a Json>,
@@ -107,7 +108,7 @@ impl<'a> Evidence<'a> {
             })
             .collect();
         Self {
-            observe: of(Stage::Observe),
+            observe: of(Stage::Observe).into_iter().next(),
             pages: of(Stage::Read)
                 .into_iter()
                 .filter(|p| p["obtained"].as_bool() == Some(true))
@@ -151,11 +152,11 @@ impl<'a> Evidence<'a> {
             .collect()
     }
 
-    /// The photo read of a visible field: the first observe read, else a mapped label statement.
+    /// The photo read of a visible field: the Observe unit's read for it, else a mapped label
+    /// statement.
     fn photo_read(&self, key: &str) -> Option<PhotoRead> {
         self.observe
-            .iter()
-            .find_map(|o| {
+            .and_then(|o| {
                 let read = o["reads"].get(key)?;
                 Some(PhotoRead {
                     value: read.get("value")?.clone(),

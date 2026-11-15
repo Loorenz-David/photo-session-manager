@@ -17,7 +17,10 @@ use crate::{
 };
 
 /// The version of the instructions each stage sends (part of every unit identity, MC-A7).
-pub const INSTRUCTIONS_VERSION: u32 = 1;
+pub const INSTRUCTIONS_VERSION: u32 = 2;
+
+/// How many photos stage 1 looks at by default (R12·U1).
+pub const DEFAULT_OBSERVE_MAX_PHOTOS: u32 = 8;
 
 /// Model, effort and image size of one stage.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,6 +113,7 @@ impl ProviderIds {
 pub struct ResearchConfig {
     pub stages: BTreeMap<String, StageConfig>,
     pub max_pages: u32,
+    pub observe_max_photos: u32,
     pub max_cost_per_run: i64,
     pub max_cost_per_day: i64,
     pub prices: Vec<PriceSnapshot>,
@@ -149,6 +153,7 @@ impl Default for ResearchConfig {
         Self {
             stages,
             max_pages: 10,
+            observe_max_photos: DEFAULT_OBSERVE_MAX_PHOTOS,
             max_cost_per_run: 500_000,
             max_cost_per_day: 15_000_000,
             prices: Vec::new(),
@@ -257,6 +262,8 @@ pub struct ResearchSettings {
     pub detailed_condition: DetailedCondition,
     pub trusted_sites: Vec<String>,
     pub max_pages: u32,
+    /// At most this many photos go to the one stage 1 call (Main photos first by position).
+    pub observe_max_photos: u32,
     pub stages: BTreeMap<String, StageConfig>,
     pub max_cost_per_run: String,
     pub max_cost_per_day: String,
@@ -356,6 +363,33 @@ fn default_prices() -> Vec<PriceRow> {
     prices
 }
 
+/// The owner's detailed-condition table (answer A to R11's card, 2026-11-15): the worst condition
+/// level None or Minor gives Very Good, Moderate gives Good, Major gives Worn; Excellent is never
+/// written. N/A is not a level of wear and counts for nothing. Choice strings as the shop defines
+/// `custom.detailed_condition`.
+fn default_detailed_condition() -> DetailedCondition {
+    let level = |level: &str, choice: Option<&str>| ConditionLevel {
+        level: level.to_owned(),
+        choice: choice.map(str::to_owned),
+    };
+    const VERY_GOOD: &str =
+        "Very Good - This vintage item has no defects, but it may show slight traces of use.";
+    const GOOD: &str =
+        "Good - This vintage item may have some wear such as scratches and other signs of ageing";
+    const WORN: &str = "Worn - This vintage item has visible damages, defects, or small missing \
+        parts. It may be in need of restoration.";
+    DetailedCondition {
+        key: "custom.detailed_condition".to_owned(),
+        levels: vec![
+            level("N/A", None),
+            level("None", Some(VERY_GOOD)),
+            level("Minor", Some(VERY_GOOD)),
+            level("Moderate", Some(GOOD)),
+            level("Major", Some(WORN)),
+        ],
+    }
+}
+
 impl Default for ResearchSettings {
     fn default() -> Self {
         Self {
@@ -364,9 +398,10 @@ impl Default for ResearchSettings {
             attribution_keys: Vec::new(),
             excluded_keys: Vec::new(),
             extra_shop_hosts: Vec::new(),
-            detailed_condition: DetailedCondition::default(),
+            detailed_condition: default_detailed_condition(),
             trusted_sites: Vec::new(),
             max_pages: 10,
+            observe_max_photos: DEFAULT_OBSERVE_MAX_PHOTOS,
             stages: default_stages(),
             max_cost_per_run: "0.50".to_owned(),
             max_cost_per_day: "15".to_owned(),
@@ -453,6 +488,7 @@ impl ResearchConfig {
         Self {
             stages: settings.stages.clone(),
             max_pages: settings.max_pages,
+            observe_max_photos: settings.observe_max_photos.max(1),
             max_cost_per_run: money(&settings.max_cost_per_run, &defaults.max_cost_per_run),
             max_cost_per_day: money(&settings.max_cost_per_day, &defaults.max_cost_per_day),
             prices: settings.unit_prices(),
@@ -484,7 +520,7 @@ impl ResearchConfig {
 
 /// Refuses a research settings value (whole or a patch of top-level keys) that holds a cap or a
 /// price that is not a decimal string with at most 6 fractional digits, `record_days` below 2, a
-/// negative `source_wait_seconds`, or a long edge that is not a positive
+/// negative `source_wait_seconds`, an `observe_max_photos` below 1, or a long edge that is not a positive
 /// integer. The text names the field.
 pub fn validate(value: &serde_json::Value) -> Result<(), String> {
     use serde_json::Value as Json;
@@ -520,6 +556,13 @@ pub fn validate(value: &serde_json::Value) -> Result<(), String> {
         && !days.as_i64().is_some_and(|d| d >= 2)
     {
         return Err("record_days must be a whole number of at least 2".to_owned());
+    }
+    if let Some(limit) = object.get("observe_max_photos")
+        && !limit
+            .as_u64()
+            .is_some_and(|n| n >= 1 && n <= u64::from(u32::MAX))
+    {
+        return Err("observe_max_photos must be a whole number of at least 1".into());
     }
     if let Some(seconds) = object.get("source_wait_seconds")
         && !seconds.as_i64().is_some_and(|s| s >= 0)

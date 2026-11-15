@@ -506,7 +506,6 @@ fn a15_c5d_escaped_key_is_redacted_in_the_call_record() {
 fn a15_c6a_full_run_with_the_openai_adapter() {
     let h = Harness::chair();
     let (mains, _condition) = full_script(&h);
-    let null_read = json!({"value": null, "sure": false});
     let none = json!({"stated": null, "value": null});
     let states = |designer: Json| {
         json!({"keys": {DESIGNER: designer, WOODS: none, WIDTH: none}}).to_string()
@@ -515,14 +514,11 @@ fn a15_c6a_full_run_with_the_openai_adapter() {
     // Derived: each reply is a captured envelope with `output_text` replaced by our payload,
     // in the order the run calls the model.
     let replies = [
+        // R12·U1: one observe call over both main photos.
         (
             OBSERVE_LUNA,
-            json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "shows_marking": false})
+            json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "marking_photos": []})
                 .to_string(),
-        ),
-        (
-            OBSERVE_LUNA,
-            json!({"reads": {WOODS: null_read}, "shows_marking": false}).to_string(),
         ),
         (
             "openai/stage_read_gpt-6-luna.json",
@@ -596,7 +592,6 @@ fn a15_c6a_full_run_with_the_openai_adapter() {
         .map(|c| (c.stage, c.cost_micro_usd))
         .collect();
     let expected: Vec<(String, i64)> = [
-        ("observe", 234),
         ("observe", 234),
         ("read", 243),
         ("read", 243),

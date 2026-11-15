@@ -18,6 +18,7 @@ use crate::{
     job::KIND,
     rules::{
         cost::{day_spend, parse_micro_usd},
+        photo_plan::{PhotoCandidate, look_at},
         run_rules::{
             InputSnapshot, MayStart, PrerequisiteInput, StartInput, arranged_needed, first_failing,
             may_start, start_order,
@@ -93,8 +94,15 @@ impl ResearchService {
         })
     }
 
-    /// The photo-derived input identities of the session now (photos with a source only).
-    pub(crate) fn input_now(&self, session_id: i64, item_id: i64) -> Result<InputSnapshot> {
+    /// The photo-derived input identities of the session now (photos with a source only). The
+    /// stage 1 part is the photos stage 1 looks at (`rules::photo_plan::look_at` under `limit`):
+    /// a change to a photo beyond the limit changes nothing.
+    pub(crate) fn input_now(
+        &self,
+        session_id: i64,
+        item_id: i64,
+        limit: u32,
+    ) -> Result<InputSnapshot> {
         let mut photos: Vec<SessionPhoto> = self
             .session_photos(session_id, item_id)?
             .into_iter()
@@ -110,8 +118,26 @@ impl ResearchService {
             ids.sort();
             ids
         };
+        let candidates: Vec<PhotoCandidate> = photos
+            .iter()
+            .map(|p| PhotoCandidate {
+                id: p.id,
+                classification: p.classification,
+                position: p.position,
+                revision: p.revision,
+            })
+            .collect();
+        let mut observe: Vec<(i64, i64)> = look_at(
+            &candidates,
+            usize::try_from(limit.max(1)).unwrap_or(usize::MAX),
+        )
+        .chosen
+        .iter()
+        .map(|c| (c.id, c.revision))
+        .collect();
+        observe.sort();
         Ok(InputSnapshot {
-            observe: ids(&|c| matches!(c, Classification::Main | Classification::Unreviewed)),
+            observe,
             cover: photos
                 .iter()
                 .find(|p| p.classification == Classification::Main)
@@ -309,7 +335,10 @@ impl ResearchService {
                     .find_map(|r| r.input_snapshot.as_deref())
                     .and_then(|s| serde_json::from_str(s).ok())
                     .unwrap_or_default();
-                arranged_needed(&snapshot, &self.input_now(session_id, item_id)?)
+                arranged_needed(
+                    &snapshot,
+                    &self.input_now(session_id, item_id, settings.observe_max_photos)?,
+                )
             }
         };
         if needed {
@@ -436,7 +465,7 @@ impl ResearchService {
             self.integration.as_deref(),
             run.item_id,
         )?;
-        let input = self.input_now(run.session_id, run.item_id)?;
+        let input = self.input_now(run.session_id, run.item_id, settings.observe_max_photos)?;
         let text = |value: serde_json::Result<String>| {
             value.map_err(|e| Error::InvalidData(e.to_string()))
         };

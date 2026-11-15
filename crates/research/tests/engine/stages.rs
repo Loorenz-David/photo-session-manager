@@ -14,7 +14,7 @@ use psm_research::{
     fakes::{self, ModelScript, PageScript},
     ports::SearchCandidate,
     rules::{fingerprint::fingerprint, sites::page_identity},
-    stages::ExecuteOutcome,
+    stages::{ExecuteOutcome, OBSERVE_UNIT},
 };
 use psm_testkit::fixtures::synthetic_jpeg::SyntheticJpeg;
 use serde_json::{Value as Json, json};
@@ -69,9 +69,9 @@ fn verdict(h: &Harness, url: &str, verdict: &str) {
         .reply(Stage::Compare, &u(url), json!({ "verdict": verdict }));
 }
 
-fn observe(h: &Harness, photo: i64, reply: Json) {
-    h.model
-        .reply(Stage::Observe, &format!("photo:{photo}"), reply);
+/// The reply of the run's one Observe unit (R12·U1).
+pub(crate) fn observe(h: &Harness, reply: Json) {
+    h.model.reply(Stage::Observe, OBSERVE_UNIT, reply);
 }
 
 fn row(h: &Harness, key: &str) -> Option<Value> {
@@ -129,8 +129,7 @@ pub(crate) fn full_script(h: &Harness) -> (Vec<i64>, i64) {
     verdict(h, P_UNTRUSTED, "different");
     observe(
         h,
-        mains[0],
-        json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "shows_marking": false}),
+        json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "marking_photos": []}),
     );
     h.model.reply(
         Stage::Condition,
@@ -206,7 +205,6 @@ fn a12_c1b_steps_are_gapless_and_in_stage_order() {
         kinds,
         vec![
             "looked",
-            "looked",
             "searched",
             "read",
             "read",
@@ -221,7 +219,8 @@ fn a12_c1b_steps_are_gapless_and_in_stage_order() {
             "not_determined",
         ]
     );
-    assert_eq!(steps[9].photo_ids, vec![f.condition]);
+    assert_eq!(steps[0].photo_ids, f.mains);
+    assert_eq!(steps[8].photo_ids, vec![f.condition]);
     for key in [DESIGNER, WOODS, SCRATCHES] {
         assert!(steps.iter().any(|s| s.field_keys.iter().any(|k| k == key)));
     }
@@ -237,11 +236,7 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
         .iter()
         .map(|o| (o.stage.clone(), o.unit_key.clone()))
         .collect();
-    let mut expected: Vec<(String, String)> = f
-        .mains
-        .iter()
-        .map(|p| ("observe".to_owned(), format!("photo:{p}")))
-        .collect();
+    let mut expected: Vec<(String, String)> = vec![("observe".into(), OBSERVE_UNIT.into())];
     expected.push(("find".into(), "cover".into()));
     for url in [P_E1, P_E2, P_UNTRUSTED] {
         expected.push(("read".into(), u(url)));
@@ -261,19 +256,21 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
         fingerprint(
             1,
             &json!({
-                "photo_id": f.mains[0],
-                "composition_rev": revision(f.mains[0]),
+                "photos": [
+                    [f.mains[0], revision(f.mains[0]), "wide"],
+                    [f.mains[1], revision(f.mains[1]), "closer"],
+                ],
                 "long_edge": 1024,
                 "model": observe.model,
                 "effort": observe.effort,
-                "instructions_version": 1,
+                "instructions_version": 2,
                 "language": "English",
             })
         )
         .unwrap()
     );
     assert_eq!(
-        outputs[2].fingerprint,
+        outputs[1].fingerprint,
         fingerprint(
             2,
             &json!({
@@ -285,14 +282,14 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
         .unwrap()
     );
     let page_images: Vec<String> =
-        serde_json::from_str::<Json>(&outputs[3].output).unwrap()["images"]
+        serde_json::from_str::<Json>(&outputs[2].output).unwrap()["images"]
             .as_array()
             .unwrap()
             .iter()
             .map(|s| s.as_str().unwrap().to_owned())
             .collect();
     assert_eq!(
-        outputs[6].fingerprint,
+        outputs[5].fingerprint,
         fingerprint(
             4,
             &json!({
@@ -303,7 +300,7 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
         )
         .unwrap()
     );
-    let decide: Json = serde_json::from_str(&outputs[10].output).unwrap();
+    let decide: Json = serde_json::from_str(&outputs[9].output).unwrap();
     let designer = &decide["writes"][DESIGNER];
     assert_eq!(designer["value"], json!("Designer A"));
     assert_eq!(designer["confidence"], json!("medium"));
@@ -313,7 +310,7 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
     );
     assert_eq!(designer["sources"], json!([u(P_E1), u(P_E2)]));
     assert_eq!(designer["outcome"], json!("written"));
-    let mut fps: Vec<&str> = outputs[..10]
+    let mut fps: Vec<&str> = outputs[..9]
         .iter()
         .map(|o| o.fingerprint.as_str())
         .collect();
@@ -321,7 +318,7 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
     let form: psm_research::service::FormSnapshot =
         serde_json::from_str(f.h.run_row(f.run).form_snapshot.as_deref().unwrap()).unwrap();
     assert_eq!(
-        outputs[10].fingerprint,
+        outputs[9].fingerprint,
         fingerprint(
             7,
             &json!({
@@ -334,7 +331,7 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
                 })).collect::<Vec<_>>(),
                 "attribution_keys": [DESIGNER],
                 "excluded_keys": [],
-                "detailed_condition": {"key": "", "levels": []},
+                "detailed_condition": config.detailed_condition,
             })
         )
         .unwrap()
@@ -462,7 +459,7 @@ fn a12_c3a_units_and_image_sizes() {
     let unreviewed = h.add_photo_with_preview(h.session_id, Classification::Unreviewed);
     let c1 = h.add_photo_with_preview(h.session_id, Classification::Condition);
     let c2 = h.add_photo_with_preview(h.session_id, Classification::Condition);
-    observe(&h, marked, json!({"reads": {}, "shows_marking": true}));
+    observe(&h, json!({"reads": {}, "marking_photos": [2]}));
     results(&h, &[P_E1]);
     page(&h, P_E1, 7);
     let run = h.start_run(&h.stage_config());
@@ -472,21 +469,16 @@ fn a12_c3a_units_and_image_sizes() {
         log.iter().filter(|c| c.stage == Some(stage)).collect()
     };
     let observed = of(Stage::Observe);
+    assert_eq!(observed.len(), 1);
+    assert_eq!(observed[0].unit_key, OBSERVE_UNIT);
+    let rendered = |p: i64| h.images.render(p, run, 1024).unwrap().sha256().to_owned();
     assert_eq!(
-        observed
-            .iter()
-            .map(|c| c.unit_key.clone())
-            .collect::<Vec<_>>(),
+        observed[0].images,
         vec![
-            format!("photo:{cover}"),
-            format!("photo:{marked}"),
-            format!("photo:{unreviewed}")
+            (rendered(cover), 1024),
+            (rendered(marked), 1024),
+            (rendered(unreviewed), 1024)
         ]
-    );
-    assert!(
-        observed
-            .iter()
-            .all(|c| c.images.len() == 1 && c.images[0].1 == 1024)
     );
     let labels = of(Stage::Labels);
     assert_eq!(labels.len(), 1);
@@ -515,7 +507,7 @@ fn a12_c3a_units_and_image_sizes() {
 fn a12_c3b_label_gives_high_without_sources() {
     let h = Harness::chair();
     let photo = h.add_main_photo_with_preview(h.session_id);
-    observe(&h, photo, json!({"reads": {}, "shows_marking": true}));
+    observe(&h, json!({"reads": {}, "marking_photos": [1]}));
     h.model.reply(
         Stage::Labels,
         &format!("photo:{photo}"),
@@ -666,9 +658,9 @@ fn r7_u1_a_capped_run_lowers_nothing() {
     h.recompose(f.mains[0]);
     h.model.script(
         Stage::Observe,
-        &format!("photo:{}", f.mains[0]),
+        OBSERVE_UNIT,
         ModelScript {
-            output: json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "shows_marking": false}),
+            output: json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "marking_photos": []}),
             usage: Some(vec![("input_token".into(), 199_500)]),
             response: None,
         },
@@ -704,10 +696,12 @@ fn r7_u1_a_capped_run_lowers_nothing() {
 fn a12_c4e_product_step_is_never_written() {
     let f = full();
     let h = &f.h;
-    h.model.reply(
-        Stage::Observe,
-        &format!("photo:{}", f.mains[1]),
-        json!({"reads": {TITLE: {"value": "A great chair", "sure": true}}}),
+    observe(
+        h,
+        json!({"reads": {
+            WOODS: {"value": ["Teak"], "sure": true},
+            TITLE: {"value": "A great chair", "sure": true},
+        }, "marking_photos": []}),
     );
     h.execute(f.run);
     assert_eq!(h.title(), "Oak chair");
@@ -725,10 +719,9 @@ fn a12_c4e_product_step_is_never_written() {
 #[test]
 fn a12_c4f_measured_from_listings_not_photos() {
     let h = Harness::chair();
-    let photo = h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
     observe(
         &h,
-        photo,
         json!({"reads": {WIDTH: {"value": {"value": 118, "unit": "cm"}, "sure": true}}}),
     );
     results(&h, &[P_E1, P_E2]);
@@ -755,11 +748,10 @@ fn a12_c4f_measured_from_listings_not_photos() {
 /// the cap.
 fn reserve_run() -> (Harness, i64) {
     let h = Harness::chair();
-    let a = h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
     h.add_main_photo_with_preview(h.session_id);
     observe(
         &h,
-        a,
         json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}}),
     );
     let third = "https://other.example/z";
@@ -767,14 +759,14 @@ fn reserve_run() -> (Harness, i64) {
     page(&h, P_E1, 1);
     page(&h, P_E2, 2);
     page(&h, third, 3);
-    // Before the second page's model call: 2 observe + find + read e1 (2 calls) + reader e2 =
-    // 6 fallbacks of 1 000. 493 500 more makes 499 500: cost + reserve (1 000) ≥ cap (500 000).
+    // Before the second page's model call: 1 observe + find + read e1 (2 calls) + reader e2 =
+    // 5 fallbacks of 1 000. 494 500 more makes 499 500: cost + reserve (1 000) ≥ cap (500 000).
     h.model.script(
         Stage::Read,
         &u(P_E2),
         ModelScript {
             output: json!({"keys": {DESIGNER: designer("Designer A")}}),
-            usage: Some(vec![("input_token".into(), 493_500)]),
+            usage: Some(vec![("input_token".into(), 494_500)]),
             response: None,
         },
     );
@@ -822,10 +814,10 @@ fn a12_c5c_cost_bound_is_cap_plus_one_call() {
 #[test]
 fn a12_c5b_cap_reached_before_decide_writes_nothing() {
     let h = Harness::chair();
-    let photo = h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
     h.model.script(
         Stage::Observe,
-        &format!("photo:{photo}"),
+        OBSERVE_UNIT,
         ModelScript {
             output: json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}}),
             usage: Some(vec![("input_token".into(), 500_000)]),
@@ -856,10 +848,9 @@ fn a12_c6a_failure_ends_the_run_and_keeps_earlier_values() {
         Some("an earlier run"),
         &[],
     );
-    let photo = h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
     observe(
         &h,
-        photo,
         json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}}),
     );
     results(&h, &[P_E1, P_E2]);
@@ -883,16 +874,15 @@ fn a12_c6a_failure_ends_the_run_and_keeps_earlier_values() {
 #[test]
 fn a12_c6b_refused_unit_is_not_determined_and_the_run_finishes() {
     let h = Harness::chair();
-    let refused = h.add_main_photo_with_preview(h.session_id);
-    let other = h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
     h.model.fault_for(
         Stage::Observe,
-        &format!("photo:{refused}"),
+        OBSERVE_UNIT,
         fakes::refusal("I can't describe this photo"),
     );
     observe(
         &h,
-        other,
         json!({"reads": {WOODS: {"value": ["Oak"], "sure": true}}}),
     );
     let run = h.start_run(&h.stage_config());
@@ -900,23 +890,23 @@ fn a12_c6b_refused_unit_is_not_determined_and_the_run_finishes() {
     let unit = h
         .outputs(run)
         .into_iter()
-        .find(|o| o.unit_key == format!("photo:{refused}"))
+        .find(|o| o.unit_key == OBSERVE_UNIT)
         .unwrap();
     let output: Json = serde_json::from_str(&unit.output).unwrap();
     assert_eq!(
         output["not_determined"],
         json!("I can't describe this photo")
     );
-    assert_eq!(ai(&row(&h, WOODS)).0, json!(["Oak"]));
+    // The one Observe unit was refused: no photo read, so woods is not written.
+    assert!(row(&h, WOODS).is_none());
 }
 
 #[test]
 fn a12_c7a_language_and_choices_reach_every_request() {
     let h = Harness::chair();
-    let photo = h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
     observe(
         &h,
-        photo,
         json!({"reads": {WOODS: {"value": ["teak"], "sure": true}}}),
     );
     results(&h, &[P_E1]);

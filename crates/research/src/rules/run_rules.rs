@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::{Prerequisite, RunTrigger};
 
-/// The photo-derived input identities a run started from (MC-A7 trigger set): the stage 1 unit
-/// photos `(photo id, composition revision)`, the cover's, and the stage 6 Condition photos'.
+/// The photo-derived input identities a run started from (MC-A7 trigger set): the photos the one
+/// stage 1 unit looks at `(photo id, composition revision)` (R12·U1), the cover's, and the stage 6
+/// Condition photos'.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputSnapshot {
     pub observe: Vec<(i64, i64)>,
@@ -109,7 +110,7 @@ pub fn start_order(queued: &[(RunTrigger, i64, i64)]) -> Vec<i64> {
     ordered.into_iter().map(|(_, _, id)| id).collect()
 }
 
-/// MC-A7 trigger set: a follow-up is needed iff the set of stage 1 unit identities, the cover
+/// MC-A7 trigger set: a follow-up is needed iff the set of photos stage 1 looks at, the cover
 /// identity or the Condition identity differs between the latest run's snapshot and now. Order
 /// within the sets does not count.
 pub fn arranged_needed(latest: &InputSnapshot, now: &InputSnapshot) -> bool {

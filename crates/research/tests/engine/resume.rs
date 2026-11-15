@@ -8,6 +8,7 @@ use psm_research::{
     fakes::PageScript,
     ports::SearchCandidate,
     rules::sites::page_identity,
+    stages::OBSERVE_UNIT,
 };
 use psm_testkit::fixtures::synthetic_jpeg::SyntheticJpeg;
 use serde_json::json;
@@ -58,7 +59,7 @@ fn pages(h: &Harness, urls: &[&str]) {
 }
 
 /// The run's script: two main photos and one condition photo, two matching pages naming
-/// designer A, Teak read on the first photo, Minor on the condition photo.
+/// designer A, Teak read by the one Observe call, Minor on the condition photo.
 struct Script {
     mains: Vec<i64>,
     condition: i64,
@@ -74,8 +75,8 @@ fn script(h: &Harness) -> Script {
     pages(h, &[P_E1, P_E2]);
     h.model.reply(
         Stage::Observe,
-        &format!("photo:{}", mains[0]),
-        json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "shows_marking": false}),
+        OBSERVE_UNIT,
+        json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "marking_photos": []}),
     );
     h.model.reply(
         Stage::Condition,
@@ -101,40 +102,11 @@ fn reference() -> (Harness, i64) {
     (h, run)
 }
 
-fn calls_of(h: &Harness, stage: Stage, unit: &str) -> usize {
-    h.model
-        .requests()
-        .iter()
-        .filter(|c| c.stage == Some(stage) && c.unit_key == unit)
-        .count()
-}
-
 fn resumed(h: &mut Harness) -> i64 {
     h.tick(0);
     let run = h.runs(h.session_id)[0].id;
     assert_eq!(h.run_row(run).state, RunState::Finished);
     run
-}
-
-#[test]
-fn a14_c1a_kill_when_the_second_observe_call_arrives() {
-    let (reference, reference_run) = reference();
-    let mut h = Harness::chair();
-    let s = script(&h);
-    let second = format!("photo:{}", s.mains[1]);
-    let target = second.clone();
-    h.model.before_call(move |call| {
-        if call.stage == Some(Stage::Observe) && call.unit_key == target {
-            kill();
-        }
-    });
-    h.tick_killed(1_000);
-    let run = resumed(&mut h);
-    assert_eq!(h.end_state(run), reference.end_state(reference_run));
-    assert_eq!(
-        calls_of(&h, Stage::Observe, &format!("photo:{}", s.mains[0])),
-        1
-    );
 }
 
 #[test]
@@ -344,21 +316,23 @@ fn model_calls(h: &Harness) -> Vec<(Stage, String)> {
 
 #[test]
 fn a14_c3a_follow_up_for_a_new_main_photo() {
-    let (h, _, first) = finished();
+    let (h, s, first) = finished();
     let added = h.add_main_photo_with_preview(h.session_id);
     h.changed();
     let run = follow_up(&h, first);
+    // R12·U1: the new photo costs one Observe call over all chosen photos.
     assert_eq!(
         model_calls(&h),
         vec![
-            (Stage::Observe, format!("photo:{added}")),
+            (Stage::Observe, OBSERVE_UNIT.to_owned()),
             (Stage::Decide, "decide".to_owned())
         ]
     );
+    let observe = &h.model.requests()[0];
+    assert_eq!(observe.images.len(), 3);
     assert!(h.search.requests().is_empty() && h.reader.requests().is_empty());
     for output in h.outputs(run) {
-        let fresh = (output.stage == "observe" && output.unit_key == format!("photo:{added}"))
-            || output.stage == "decide";
+        let fresh = output.stage == "observe" || output.stage == "decide";
         assert_eq!(
             output.reused_from_run_id.is_none(),
             fresh,
@@ -372,7 +346,7 @@ fn a14_c3a_follow_up_for_a_new_main_photo() {
         .filter(|s| s.kind == "looked")
         .map(|s| s.photo_ids)
         .collect();
-    assert_eq!(looked, vec![vec![added]]);
+    assert_eq!(looked, vec![vec![s.mains[0], s.mains[1], added]]);
 }
 
 #[test]
@@ -397,10 +371,13 @@ fn a14_c3c_follow_up_for_a_new_cover() {
     let run = follow_up(&h, first);
     assert_eq!(h.search.requests().len(), 1);
     assert_eq!(h.reader.requests().len(), 2);
+    // R12·U1: the new cover is the wide photo, so the Observe identity (photos in order with their
+    // roles) changed too: one Observe call over both photos.
     let stages: Vec<Stage> = model_calls(&h).into_iter().map(|(s, _)| s).collect();
     assert_eq!(
         stages,
         vec![
+            Stage::Observe,
             Stage::Read,
             Stage::Read,
             Stage::Compare,
@@ -408,12 +385,12 @@ fn a14_c3c_follow_up_for_a_new_cover() {
             Stage::Decide
         ]
     );
-    let observe_reused = h
+    let observe_fresh = h
         .outputs(run)
         .into_iter()
         .filter(|o| o.stage == "observe")
-        .all(|o| o.reused_from_run_id == Some(first));
-    assert!(observe_reused);
+        .all(|o| o.reused_from_run_id.is_none());
+    assert!(observe_fresh);
 }
 
 #[test]
@@ -422,13 +399,15 @@ fn a14_c3d_follow_up_for_a_recomposed_photo() {
     h.recompose(s.mains[1]);
     h.changed();
     follow_up(&h, first);
+    // R12·U1: one Observe call over all chosen photos.
     assert_eq!(
         model_calls(&h),
         vec![
-            (Stage::Observe, format!("photo:{}", s.mains[1])),
+            (Stage::Observe, OBSERVE_UNIT.to_owned()),
             (Stage::Decide, "decide".to_owned())
         ]
     );
+    assert_eq!(h.model.requests()[0].images.len(), 2);
     assert!(h.search.requests().is_empty() && h.reader.requests().is_empty());
     // The cover re-framed (its search finding other pages): find, read and compare too.
     let second = h.runs(h.session_id).last().unwrap().id;
@@ -501,9 +480,17 @@ fn a14_c4a_a_manual_run_reuses_nothing() {
             .all(|o| o.reused_from_run_id.is_none())
     );
     let calls = model_calls(&h);
-    for photo in &s.mains {
-        assert!(calls.contains(&(Stage::Observe, format!("photo:{photo}"))));
-    }
+    assert!(calls.contains(&(Stage::Observe, OBSERVE_UNIT.to_owned())));
+    assert_eq!(
+        h.model
+            .requests()
+            .iter()
+            .find(|c| c.stage == Some(Stage::Observe))
+            .unwrap()
+            .images
+            .len(),
+        s.mains.len()
+    );
     assert_eq!(h.search.requests().len(), 1);
     assert_eq!(h.reader.requests().len(), 2);
     assert!(calls.contains(&(Stage::Condition, "condition".to_owned())));

@@ -213,7 +213,7 @@ Condition, Attribution, Measured, Visible}` (R11: plus `Derived`) · `Prerequisi
 NothingToResearch, DayLimit, Offline, AutoOff}` (MC-A6 order; R11 removes `AutoOff`) plus `WaitingForEditor`. In core:
 `psm_core::domain::research::FeedbackAction {Accepted, Cleared, Edited, KeptPrevious}`; `PublishStep::Held`;
 `RowLabel::WaitingForYou(n)`. Job kind string `research`. Constants: `RESEARCH_NORMALISE_VERSION = 1` (core),
-`RESEARCH_FINGERPRINT_VERSION = 1` (R12·U1: 2), `RESEARCH_CALL_ATTEMPTS = 3`. `INSTRUCTIONS_VERSION = 1` (`psm_research::config`; R12·U1: 2).
+`RESEARCH_FINGERPRINT_VERSION = 2` (1 until R12·U1), `RESEARCH_CALL_ATTEMPTS = 3`. `INSTRUCTIONS_VERSION = 2` (`psm_research::config`; 1 until R12·U1).
 
 ### 6.4 Storage decision: one database file, schema steps outside the numbered list
 **Decision.** Every research table lives in the app's SQLite file and is written inside the app store's

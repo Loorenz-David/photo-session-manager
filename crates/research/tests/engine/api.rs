@@ -65,12 +65,12 @@ fn listing_pages(h: &Harness, urls: &[&str]) {
 /// A finished run that wrote designer, woods and scratches.
 fn three_written() -> Harness {
     let h = Harness::chair();
-    let photo = h.add_main_photo_with_preview(h.session_id);
+    h.add_main_photo_with_preview(h.session_id);
     h.add_photo_with_preview(h.session_id, Classification::Condition);
     listing_pages(&h, &["https://e1.example/a", "https://e2.example/b"]);
     h.model.reply(
         Stage::Observe,
-        &format!("photo:{photo}"),
+        psm_research::stages::OBSERVE_UNIT,
         json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}}),
     );
     h.model.reply(

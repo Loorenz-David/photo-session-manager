@@ -105,10 +105,19 @@ fn statement(field: &Json) -> Json {
     ])
 }
 
-/// The schema of the request's stage.
+/// The schema of the request's stage. An Observe request whose input carries `photos` (R12·U1:
+/// several photos in one call) answers the indexes of the marking photos; one without it (a
+/// replay of a run exported before R12) keeps the one-photo schema.
 pub fn schema_for(request: &ModelRequest) -> Json {
     let reads = || ("reads".to_owned(), per_field(request, photo_read));
     match request.stage {
+        Stage::Observe if request.input.get("photos").is_some() => object(vec![
+            reads(),
+            (
+                "marking_photos".to_owned(),
+                json!({ "type": "array", "items": { "type": "integer" } }),
+            ),
+        ]),
         Stage::Observe => object(vec![reads(), ("shows_marking".to_owned(), boolean())]),
         Stage::Condition => object(vec![reads()]),
         Stage::Read => object(vec![("keys".to_owned(), per_field(request, statement))]),

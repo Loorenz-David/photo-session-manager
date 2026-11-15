@@ -12,6 +12,7 @@ mod gateway;
 mod harness;
 mod images_and_storage;
 mod lifecycle;
+mod photo_look;
 mod resume;
 mod settings_r11;
 mod stages;

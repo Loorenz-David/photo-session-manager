@@ -22,6 +22,7 @@ use crate::{
     rules::{
         confidence::field_class,
         fingerprint::fingerprint,
+        photo_plan::{PhotoCandidate, PhotoPlan, Role, look_at},
         sites::{Candidate, page_identity, reading_order, site_of},
         value_map::{Mapped, Stated, map_output, same_statement},
         write_table::never_written,
@@ -43,9 +44,14 @@ pub enum ExecuteOutcome {
 }
 
 /// The instructions each stage sends (ours; versioned by `INSTRUCTIONS_VERSION`).
-const OBSERVE: &str = "Describe what is visible in the photo for each listed field. Answer with \
-    the field's own choice string when one names the same thing. Mark each read sure or unsure, \
-    and say whether the photo shows a label, stamp or marking.";
+const OBSERVE: &str = "The photos show one piece. Each photo is listed in `photos` by its index \
+    (from 1, in the order the images are given) and its role. The wide photo says what the piece \
+    is and how many there are; read wood, material, colour and surface from the closer photos. \
+    Give one answer per listed field, from the photo that shows it best, with the field's own \
+    choice string when one names the same thing, and mark it sure or unsure. List the indexes of \
+    the photos that show a label, stamp or marking.";
+/// The unit key of the one stage 1 unit.
+pub const OBSERVE_UNIT: &str = "photos";
 const READ: &str = "For each listed field, quote what this listing page states and give the value \
     in the field's terms, or null when it names nothing the field allows.";
 const COMPARE: &str = "Compare the piece in the photo with the listing's images: match, similar \
@@ -497,18 +503,11 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
             }
         };
     }
-    // Stage 1: one unit per main or unreviewed photo.
-    let mut observed: Vec<Committed> = Vec::new();
-    for photo in photos.iter().filter(|p| {
-        matches!(
-            p.classification,
-            Classification::Main | Classification::Unreviewed
-        )
-    }) {
-        match flow!(observe(&ctx, photo)?) {
-            Some(c) => observed.push(c),
-            None => break,
-        }
+    // Stage 1: one unit over the chosen photos (none: no unit).
+    let plan = photo_plan(&photos, ctx.config.observe_max_photos);
+    let mut observed: Option<Committed> = None;
+    if !plan.chosen.is_empty() {
+        observed = flow!(observe(&ctx, &plan)?);
     }
     used.extend(observed.iter().cloned());
     // Stage 2: the cover (main position 1).
@@ -572,16 +571,16 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
             }
         }
     }
-    // Stage 5: one unit per photo whose observe output shows a marking.
-    if !stopped {
-        for observe in observed
-            .iter()
-            .filter(|o| o.output["shows_marking"].as_bool() == Some(true))
-        {
-            let Some(photo) = photos
-                .iter()
-                .find(|p| Some(p.id) == observe.output["photo_id"].as_i64())
-            else {
+    // Stage 5: one unit per photo the observe output lists as showing a marking.
+    if !stopped && let Some(observe) = &observed {
+        let marked: Vec<i64> = observe.output["marking_photo_ids"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Json::as_i64)
+            .collect();
+        for id in marked {
+            let Some(photo) = photos.iter().find(|p| p.id == id) else {
                 continue;
             };
             match flow!(labels(&ctx, photo)?) {
@@ -605,13 +604,43 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
     crate::decide::decide(&ctx, &used, stopped)
 }
 
-fn observe(ctx: &Ctx<'_>, photo: &UsablePhoto) -> Result<Flow> {
+/// The photos stage 1 looks at (`rules::photo_plan::look_at`) out of the run's usable photos.
+pub(crate) fn photo_plan(photos: &[UsablePhoto], limit: u32) -> PhotoPlan {
+    let candidates: Vec<PhotoCandidate> = photos
+        .iter()
+        .map(|p| PhotoCandidate {
+            id: p.id,
+            classification: p.classification,
+            position: p.position,
+            revision: p.revision,
+        })
+        .collect();
+    look_at(
+        &candidates,
+        usize::try_from(limit.max(1)).unwrap_or(usize::MAX),
+    )
+}
+
+fn plural(n: usize, one: &str, many: &str) -> String {
+    if n == 1 {
+        format!("1 {one}")
+    } else {
+        format!("{n} {many}")
+    }
+}
+
+/// Stage 1: one call over the chosen photos, in order, each named by its index (from 1) and role.
+/// The model's marking indexes are indexes of the photos **sent** (MC-A5: a photo removed since is
+/// left out of the call), so they are mapped to photo ids from the sent list.
+fn observe(ctx: &Ctx<'_>, plan: &PhotoPlan) -> Result<Flow> {
     let stage = Stage::Observe;
     let settings = ctx.config.stage(stage);
-    let unit_key = format!("photo:{}", photo.id);
     let identity = json!({
-        "photo_id": photo.id,
-        "composition_rev": photo.revision,
+        "photos": plan
+            .chosen
+            .iter()
+            .map(|c| json!([c.id, c.revision, c.role.as_str()]))
+            .collect::<Vec<_>>(),
         "long_edge": settings.image_long_edge,
         "model": settings.model,
         "effort": settings.effort,
@@ -619,62 +648,121 @@ fn observe(ctx: &Ctx<'_>, photo: &UsablePhoto) -> Result<Flow> {
         "language": ctx.config.language,
     });
     let visible = fields_of(ctx, &[FieldClass::Visible]);
-    ctx.unit(stage, &unit_key, identity, |ctx| {
-        let mut looked = step(
-            stage,
-            StepKind::Looked,
-            format!("Looked at photo {}", photo.id),
-        );
-        looked.photo_ids = vec![photo.id];
-        let not_determined = |text: String, looked: NewStep| Work::Commit {
-            output: json!({
-                "photo_id": photo.id,
-                "reads": {},
-                "shows_marking": false,
-                "not_determined": text,
-                "files": [],
-            }),
-            steps: vec![NewStep {
-                summary: format!("Could not read photo {}", photo.id),
-                detail: text,
-                ..looked
-            }],
+    ctx.unit(stage, OBSERVE_UNIT, identity, |ctx| {
+        let mut rendered: Vec<(ResearchImage, Role)> = Vec::new();
+        let mut not_rendered: Vec<String> = Vec::new();
+        for chosen in &plan.chosen {
+            match ctx.render(chosen.id, stage) {
+                Ok(image) => rendered.push((image, chosen.role)),
+                Err(why) => not_rendered.push(format!("photo {}: {why}", chosen.id)),
+            }
+        }
+        let left_out = (plan.left_out > 0).then(|| {
+            format!(
+                "{} not looked at (the limit is {})",
+                plural(plan.left_out, "photo was", "photos were"),
+                ctx.config.observe_max_photos
+            )
+        });
+        let not_determined = |text: String, photo_ids: Vec<i64>| {
+            let mut looked = step(stage, StepKind::Looked, "Could not read the photos");
+            looked.photo_ids = photo_ids;
+            looked.detail = std::iter::once(text.clone())
+                .chain(left_out.clone())
+                .collect::<Vec<_>>()
+                .join("\n");
+            Work::Commit {
+                output: json!({
+                    "photos": [],
+                    "reads": {},
+                    "marking_photo_ids": [],
+                    "not_determined": text,
+                    "files": [],
+                }),
+                steps: vec![looked],
+            }
         };
-        let image = match ctx.render(photo.id, stage) {
-            Ok(image) => image,
-            Err(why) => return Ok(not_determined(why, looked)),
-        };
+        if rendered.is_empty() {
+            let ids = plan.chosen.iter().map(|c| c.id).collect();
+            return Ok(not_determined(not_rendered.join("\n"), ids));
+        }
+        let input_photos: Vec<Json> = rendered
+            .iter()
+            .enumerate()
+            .map(|(i, (_, role))| json!({ "index": i + 1, "role": role.as_str() }))
+            .collect();
         let request = ctx.model_request(
             stage,
-            &unit_key,
+            OBSERVE_UNIT,
             OBSERVE,
-            json!({ "fields": visible.iter().map(descriptor).collect::<Vec<_>>() }),
-            vec![image.clone()],
+            json!({
+                "photos": input_photos,
+                "fields": visible.iter().map(descriptor).collect::<Vec<_>>(),
+            }),
+            rendered.iter().map(|(image, _)| image.clone()).collect(),
             Vec::new(),
         );
-        let (asked, _) = ctx.ask(stage, &unit_key, request)?;
+        let (asked, dropped) = ctx.ask(stage, OBSERVE_UNIT, request)?;
+        let sent: Vec<&ResearchImage> = rendered
+            .iter()
+            .map(|(image, _)| image)
+            .filter(|image| !dropped.contains(&image.photo_id()))
+            .collect();
+        let sent_ids: Vec<i64> = sent.iter().map(|i| i.photo_id()).collect();
         let output = match asked {
             Asked::Answer(Answer::Model(reply)) => reply.output,
             Asked::Answer(_) => Json::Null,
-            Asked::NotDetermined(text) => return Ok(not_determined(text, looked)),
+            Asked::NotDetermined(text) => return Ok(not_determined(text, sent_ids)),
             Asked::Work(work) => return Ok(work),
         };
         let reads = reads(&visible, &output);
-        let shows_marking = output["shows_marking"].as_bool().unwrap_or(false);
+        let mut marking: Vec<i64> = Vec::new();
+        let mut ignored: Vec<String> = Vec::new();
+        for index in output["marking_photos"].as_array().into_iter().flatten() {
+            let photo = index
+                .as_u64()
+                .and_then(|i| usize::try_from(i).ok())
+                .filter(|i| *i >= 1)
+                .and_then(|i| sent_ids.get(i - 1));
+            match photo {
+                Some(id) if !marking.contains(id) => marking.push(*id),
+                Some(_) => {}
+                None => ignored.push(index.to_string()),
+            }
+        }
+        let mut looked = step(
+            stage,
+            StepKind::Looked,
+            format!("Looked at {}", plural(sent_ids.len(), "photo", "photos")),
+        );
+        looked.photo_ids = sent_ids.clone();
         looked.field_keys = reads.keys().cloned().collect();
-        looked.detail = reads
+        let mut detail: Vec<String> = reads
             .iter()
             .map(|(k, v)| format!("{k}: {}", display(&v["value"])))
-            .collect::<Vec<_>>()
-            .join("\n");
+            .collect();
+        detail.extend(left_out);
+        detail.extend(not_rendered);
+        detail.extend(
+            dropped
+                .iter()
+                .map(|id| format!("photo {id}: {PHOTO_REMOVED}")),
+        );
+        if !ignored.is_empty() {
+            detail.push(format!(
+                "marking photo {} ignored: only {} sent",
+                ignored.join(", "),
+                plural(sent_ids.len(), "photo was", "photos were")
+            ));
+        }
+        looked.detail = detail.join("\n");
+        let files: Vec<&str> = sent.iter().map(|i| i.sha256()).collect();
         Ok(Work::Commit {
             output: json!({
-                "photo_id": photo.id,
-                "composition_rev": photo.revision,
-                "image": image.sha256(),
+                "photos": sent_ids,
                 "reads": reads,
-                "shows_marking": shows_marking,
-                "files": [image.sha256()],
+                "marking_photo_ids": marking,
+                "files": files,
             }),
             steps: vec![looked],
         })

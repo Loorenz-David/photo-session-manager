@@ -22,24 +22,24 @@ use serde_json::{Value as Json, json};
 
 use crate::harness::*;
 
-/// A finished run of three Main photos: three observe calls, the cover's visual search, and the
-/// decide call that failed once (transient) and was answered at its second attempt: six calls,
-/// three sent images. Observe reads Teak (sure) on the first photo.
-struct Six {
+/// A finished run of three Main photos: one observe call over the three (R12·U1), the cover's
+/// visual search, and the decide call that failed once (transient) and was answered at its second
+/// attempt: four calls, three sent images. Observe reads Teak (sure).
+struct Four {
     h: Harness,
     run: i64,
     mains: Vec<i64>,
 }
 
-fn six_calls() -> Six {
+fn four_calls() -> Four {
     let h = Harness::chair();
     let mains: Vec<i64> = (0..3)
         .map(|_| h.add_main_photo_with_preview(h.session_id))
         .collect();
     h.model.reply(
         Stage::Observe,
-        &format!("photo:{}", mains[0]),
-        json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "shows_marking": false}),
+        psm_research::stages::OBSERVE_UNIT,
+        json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "marking_photos": []}),
     );
     h.model
         .fault_for(Stage::Decide, "decide", fakes::transient("busy"));
@@ -47,8 +47,8 @@ fn six_calls() -> Six {
     h.tick(1_000);
     let run = h.runs(h.session_id)[0].id;
     assert_eq!(h.run_row(run).state, RunState::Finished);
-    assert_eq!(h.calls(run).len(), 6);
-    Six { h, run, mains }
+    assert_eq!(h.calls(run).len(), 4);
+    Four { h, run, mains }
 }
 
 /// A fresh destination folder inside the test's directory.
@@ -207,7 +207,7 @@ fn a21_c1b_an_image_a_kept_call_references_stays() {
 
 #[test]
 fn a21_c1c_runs_steps_feedback_outbound_and_outputs_are_kept() {
-    let f = six_calls();
+    let f = four_calls();
     let h = &f.h;
     h.app
         .attributes(Some(INTEGRATION))
@@ -274,7 +274,7 @@ fn a21_c2b_selection_by_items() {
 
 #[test]
 fn a21_c3a_layout_and_zip() {
-    let f = six_calls();
+    let f = four_calls();
     let h = &f.h;
     let zip = h
         .service
@@ -324,7 +324,7 @@ fn a21_c3a_layout_and_zip() {
 
 #[test]
 fn a21_c3b_content_steps_calls_and_feedback() {
-    let f = six_calls();
+    let f = four_calls();
     let h = &f.h;
     // A later suggestion on the designer, then the photographer's two actions.
     h.suggest(DESIGNER, json!("Designer A"));
@@ -395,7 +395,7 @@ fn a21_c3b_content_steps_calls_and_feedback() {
 
 #[test]
 fn a21_c3c_expired_calls_are_named_in_run_json() {
-    let f = six_calls();
+    let f = four_calls();
     let h = &f.h;
     h.advance(31 * DAY_MS);
     h.service.purge_expired(h.now()).unwrap();
@@ -419,7 +419,7 @@ fn a21_c3c_expired_calls_are_named_in_run_json() {
 
 #[test]
 fn a21_c4a_a_deleted_photo_is_withheld() {
-    let f = six_calls();
+    let f = four_calls();
     let h = &f.h;
     let cover = f.mains[0];
     let outbound = h.outbound(f.run);
@@ -469,7 +469,7 @@ fn a21_c4a_a_deleted_photo_is_withheld() {
 
 #[test]
 fn a21_c5a_a_secret_in_a_file_stops_the_export() {
-    let f = six_calls();
+    let f = four_calls();
     let h = &f.h;
     let call = h.calls(f.run)[0].id;
     h.query(|c| {
@@ -493,7 +493,7 @@ fn a21_c5a_a_secret_in_a_file_stops_the_export() {
 #[test]
 fn a15_c5d_an_escaped_key_in_a_file_stops_the_export() {
     use psm_core::ports::secrets::SecretStore;
-    let f = six_calls();
+    let f = four_calls();
     let h = &f.h;
     let key = crate::adapter_openai::ESCAPED_KEY;
     h.app
@@ -526,7 +526,7 @@ fn a15_c5d_an_escaped_key_in_a_file_stops_the_export() {
 
 #[test]
 fn a21_c6a_only_json_and_jpg_never_a_raw() {
-    let f = six_calls();
+    let f = four_calls();
     let h = &f.h;
     let zip = h
         .service

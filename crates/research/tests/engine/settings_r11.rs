@@ -268,6 +268,56 @@ fn a25_c11a_new_settings_default_empty() {
     let value = ResearchSettings::default();
     assert!(value.excluded_keys.is_empty());
     assert!(value.extra_shop_hosts.is_empty());
-    assert!(value.detailed_condition.key.is_empty());
-    assert!(value.detailed_condition.levels.is_empty());
+    // R12 (owner 2026-11-15, answer A to R11's card): `detailed_condition` ships filled; its row
+    // is `a26_owner_detailed_condition_default`.
+}
+
+/// Carried into R12 from the owner (2026-11-15): `ResearchSettings::default()` carries the
+/// detailed-condition table of answer A: None and Minor give Very Good, Moderate Good, Major
+/// Worn, never Excellent; the choices are the shop's own strings for `custom.detailed_condition`.
+#[test]
+fn a26_owner_detailed_condition_default() {
+    use psm_core::domain::attribute::AiConfidence;
+    use psm_research::rules::derived_condition::{LevelValue, derive};
+    let table = ResearchSettings::default().detailed_condition;
+    assert_eq!(table.key, "custom.detailed_condition");
+    let grade = psm_testkit::fixtures::definitions::shop_definitions()
+        .into_iter()
+        .find(|d| d.key == table.key)
+        .unwrap();
+    let shop_choices = grade.choices.clone();
+    assert!(shop_choices[0].starts_with("Excellent"));
+    let worst = |levels: &[&str]| {
+        let values: Vec<LevelValue> = levels
+            .iter()
+            .enumerate()
+            .map(|(i, v)| LevelValue {
+                label: format!("level {i}"),
+                value: Some((*v).to_owned()),
+                ai_low: false,
+            })
+            .collect();
+        derive(&table.levels, &values, &grade)
+    };
+    for (levels, expected) in [
+        (vec!["None", "N/A"], 1),
+        (vec!["None", "Minor", "N/A"], 1),
+        (vec!["Minor", "Moderate", "None"], 2),
+        (vec!["Moderate", "Major"], 3),
+    ] {
+        let derived = worst(&levels);
+        assert_eq!(
+            derived.value,
+            Some(json!(shop_choices[expected])),
+            "{levels:?}"
+        );
+        assert_eq!(derived.confidence, Some(AiConfidence::Medium));
+    }
+    // Excellent is never written.
+    assert!(
+        table
+            .levels
+            .iter()
+            .all(|l| l.choice.as_deref() != Some(shop_choices[0].as_str()))
+    );
 }
