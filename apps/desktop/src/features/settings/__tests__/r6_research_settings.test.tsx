@@ -1,7 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { Definition } from '@/services/attributes';
 import type { ResearchSettings } from '@/services/settings';
 
 vi.mock('@/services/research', () => ({
@@ -15,7 +14,7 @@ vi.mock('@/services/attributes', () => ({ listDefinitions: vi.fn() }));
 vi.mock('@/services/settings', () => ({ saveResearchSettings: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-import { NOT_A_SHOP_FIELD, ResearchSection } from '@/features/settings/ResearchSection';
+import { ResearchSection } from '@/features/settings/ResearchSection';
 import { listDefinitions } from '@/services/attributes';
 import { addResearchSite, researchSecretsState, setResearchSecrets } from '@/services/research';
 
@@ -30,10 +29,6 @@ function research(extra: Partial<ResearchSettings> = {}): ResearchSettings {
     ...extra,
   };
 }
-function def(key: string): Definition {
-  return { integration: 'shopify', key, label: key, core_type: 'text', choices: [], validations: '{}', group: 'details', description: null, writable: true };
-}
-
 beforeEach(() => {
   vi.mocked(researchSecretsState).mockResolvedValue({ model: false, search: false, reader: false });
   vi.mocked(listDefinitions).mockResolvedValue([]);
@@ -82,16 +77,4 @@ it('a19_c5c_keys_are_never_shown_and_read_set_after_saving', async () => {
   expect(setResearchSecrets).toHaveBeenCalledWith({ model_key: 'sk-test-0001', search_key: null, reader_key: null });
   expect(model).toHaveValue('');
   expect(document.body.textContent).not.toContain('sk-test-0001');
-});
-
-it('a19_c5d_warning_only_under_an_attribution_key_the_shop_does_not_have', async () => {
-  vi.mocked(listDefinitions).mockResolvedValue([def('product.title'), def('custom.designer')]);
-  render(<ResearchSection research={research({ attribution_keys: ['custom.designer', 'custom.maker'] })} shopDomain={SHOP} />);
-  const list = screen.getByRole('list', { name: 'Attribution keys' });
-  await waitFor(() => expect(within(list).getAllByText(NOT_A_SHOP_FIELD)).toHaveLength(1));
-  const [designer, maker] = within(list).getAllByRole('listitem');
-  expect(designer).toHaveAttribute('data-attribution', 'custom.designer');
-  expect(within(designer).queryByText(NOT_A_SHOP_FIELD)).not.toBeInTheDocument();
-  expect(maker).toHaveAttribute('data-attribution', 'custom.maker');
-  expect(within(maker).getByText(NOT_A_SHOP_FIELD)).toBeInTheDocument();
 });

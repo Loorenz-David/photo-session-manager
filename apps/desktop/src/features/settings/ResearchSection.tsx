@@ -4,10 +4,11 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { listDefinitions } from '@/services/attributes';
+import { listDefinitions, type Definition } from '@/services/attributes';
 import { searchItems, type Item } from '@/services/items';
-import { addResearchSite, exportResearch, removeResearchSite, reorderResearchSites, researchSecretsState, setResearchSecrets, type ResearchSecretsState } from '@/services/research';
+import { addResearchSite, exportResearch, removeResearchSite, reorderResearchSites, researchSecretsState, resetResearchSettings, setResearchSecrets, type ResearchSecretsState } from '@/services/research';
 import { pickFolder, saveResearchSettings, type ResearchSettings } from '@/services/settings';
+import { ShopFieldPicker, shopFieldsOf } from './ShopFieldPicker';
 
 /** The three research keys, by the account each is stored under (master_plan_research §3, §6.6). */
 const KEYS = [
@@ -18,8 +19,16 @@ const KEYS = [
 type KeyId = (typeof KEYS)[number]['id'];
 const NO_KEYS: Record<KeyId, string> = { model: '', search: '', reader: '' };
 
-/** Shown under an attribution key that is not one of the shop's field keys. */
-export const NOT_A_SHOP_FIELD = 'Not one of your shop’s fields';
+export { NOT_A_SHOP_FIELD } from './ShopFieldPicker';
+/** Labels of the fields preselected for Designer and maker when none is saved (compared without case, owner 2026-11-13). */
+const ATTRIBUTION_LABELS = ['designer', 'manufacturer'];
+export const NO_ATTRIBUTION_FIELD = 'No designer or maker field is chosen: research will not suggest a designer or a maker.';
+/** What "Reset research settings to defaults" keeps (R11 "Reset keeps the person's lists"). */
+export const RESET_KEEPS = ['Trusted sites', 'Designer and maker fields', 'Fields research leaves alone', 'Extra shop addresses', 'The detailed-condition table', 'Language'];
+export const DETAILED_CONDITION_UNSET = 'Not set: Detailed condition is filled like any other field.';
+/** Select values of a detailed-condition row that are not a choice of the field. */
+const UNSET = '__unset__';
+const COUNTS_FOR_NOTHING = '__nothing__';
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : (error as { message?: string }).message ?? String(error);
@@ -133,7 +142,7 @@ type ResearchSectionProps = {
 
 /**
  * Settings → Research (08A §5, §6, §9): the keys (typed here, never read back), the trusted sites, model, effort and
- * image size per stage, cost limits, prices, language, automatic research, quiet period, record days, attribution keys.
+ * image size per stage, cost limits, prices, language, record days, and shop field choices.
  */
 export function ResearchSection({ research: loaded, shopDomain }: ResearchSectionProps) {
   const [research, setResearch] = useState<ResearchSettings>(loaded);
@@ -142,7 +151,10 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
   const [site, setSite] = useState('');
   const [siteError, setSiteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [shopKeys, setShopKeys] = useState<Set<string> | null>(null);
+  const [definitions, setDefinitions] = useState<Definition[]>([]);
+  const [suggested, setSuggested] = useState<string[]>([]);
+  const [extraHost, setExtraHost] = useState('');
+  const [resetOpen, setResetOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadedText = JSON.stringify(loaded);
@@ -150,7 +162,15 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
   useEffect(() => {
     let alive = true;
     researchSecretsState().then(state => { if (alive) setSecrets(state); }).catch(() => { if (alive) setSecrets({ model: false, search: false, reader: false }); });
-    listDefinitions().then(definitions => { if (alive) setShopKeys(new Set(definitions.map(d => d.key))); }).catch(() => undefined);
+    listDefinitions().then(fields => {
+      if (!alive) return;
+      setDefinitions(fields);
+      if (shopDomain && loaded.attribution_keys.length === 0) {
+        const keys = shopFieldsOf(fields).filter(d => ATTRIBUTION_LABELS.includes(d.label.trim().toLowerCase())).map(d => d.key);
+        setSuggested(keys);
+        setResearch(current => current.attribution_keys.length === 0 ? { ...current, attribution_keys: keys } : current);
+      }
+    }).catch(() => undefined);
     return () => { alive = false; };
   }, []);
 
@@ -197,6 +217,7 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
     try {
       const saved = await saveResearchSettings(research);
       if (saved) setResearch(saved);
+      setSuggested([]);
       setError(null);
       toast.success('Research settings saved');
     } catch (failure) {
@@ -212,6 +233,31 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
   const editPrice = (index: number, patch: Partial<ResearchSettings['prices'][number]>) =>
     edit({ prices: research.prices.map((row, i) => (i === index ? { ...row, ...patch } : row)) });
   const optional = (value: string) => (value.trim() === '' ? null : value);
+  const choiceFields = shopDomain ? shopFieldsOf(definitions).filter(d => d.core_type === 'choice') : [];
+  const detailed = choiceFields.find(d => d.key === research.detailed_condition.key);
+  /** One row per condition level: the choices of the Condition-step choice fields, in their own order (08B changelog 12 b). */
+  const conditionLevels = [...new Set(choiceFields.filter(d => d.group === 'condition' && d.key !== detailed?.key).flatMap(d => d.choices))];
+  const chosenLevel = (level: string) => {
+    const row = research.detailed_condition.levels.find(entry => entry.level === level);
+    return !row ? UNSET : row.choice === null ? COUNTS_FOR_NOTHING : row.choice;
+  };
+  const setLevel = (level: string, choice: string) => {
+    const values = new Map(research.detailed_condition.levels.map(row => [row.level, row.choice]));
+    if (choice === UNSET) values.delete(level);
+    else values.set(level, choice === COUNTS_FOR_NOTHING ? null : choice);
+    edit({ detailed_condition: { ...research.detailed_condition,
+      levels: conditionLevels.filter(name => values.has(name)).map(name => ({ level: name, choice: values.get(name) ?? null })) } });
+  };
+  const reset = async () => {
+    setBusy(true);
+    try {
+      setResearch(JSON.parse(await resetResearchSettings()) as ResearchSettings);
+      setSuggested([]);
+      setError(null);
+      setResetOpen(false);
+    } catch (failure) { setError(message(failure)); }
+    finally { setBusy(false); }
+  };
 
   return (
     <section className="health-section flex max-w-xl flex-col gap-4" aria-label="Research">
@@ -317,22 +363,85 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
         <Input id="research-record_days" type="number" min={2} value={research.record_days} onChange={e => edit({ record_days: Math.round(Number(e.target.value) || 0) })} />
       </div>
 
-      <h3>Attribution keys</h3>
-      <p className="health-detail">The shop fields that name a designer or maker.</p>
-      <ul aria-label="Attribution keys" className="flex flex-col gap-2">
-        {research.attribution_keys.map((key, index) => (
-          <li key={index} data-attribution={key} className="flex flex-col gap-1">
-            <div className="flex gap-2">
-              <Input aria-label={`Attribution key ${index + 1}`} value={key} onChange={e => edit({ attribution_keys: research.attribution_keys.map((k, i) => (i === index ? e.target.value : k)) })} />
-              <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove attribution key ${key}`} onClick={() => edit({ attribution_keys: research.attribution_keys.filter((_, i) => i !== index) })}><X /></Button>
-            </div>
-            {shopKeys && key.trim() !== '' && !shopKeys.has(key.trim()) && <p className="text-xs text-destructive" data-attribution-warning>{NOT_A_SHOP_FIELD}</p>}
-          </li>
-        ))}
-      </ul>
-      <Button type="button" variant="outline" className="self-start" onClick={() => edit({ attribution_keys: [...research.attribution_keys, ''] })}>
-        Add attribution key
-      </Button>
+      <div role="group" aria-label="Designer and maker" className="flex flex-col gap-2">
+        <h3>Designer and maker</h3>
+        <p className="health-detail">The shop fields that name a designer or a maker. Research suggests these only from trusted sites and labels.</p>
+        <ShopFieldPicker label="Designer and maker fields" definitions={definitions} shopDomain={shopDomain}
+          chosen={research.attribution_keys} suggested={suggested}
+          onChange={keys => { edit({ attribution_keys: keys }); setSuggested(current => current.filter(key => keys.includes(key))); }} />
+        {research.attribution_keys.length === 0 && <p className="health-detail" data-no-attribution>{NO_ATTRIBUTION_FIELD}</p>}
+      </div>
+
+      <div role="group" aria-label="Fields research leaves alone" className="flex flex-col gap-2">
+        <h3>Fields research leaves alone</h3>
+        <p className="health-detail">Research never asks for, suggests or spends on these fields; you fill them yourself.</p>
+        <ShopFieldPicker label="Fields research leaves alone" definitions={definitions} shopDomain={shopDomain}
+          chosen={research.excluded_keys} onChange={keys => edit({ excluded_keys: keys })} />
+      </div>
+
+      <div role="group" aria-label="Extra shop addresses" className="flex flex-col gap-2">
+        <h3>Extra shop addresses</h3>
+        <p className="health-detail">Other addresses of your own shop. Their pages are never evidence for a designer or a maker.</p>
+        <ul aria-label="Extra shop address list" className="flex flex-col gap-1">
+          {research.extra_shop_hosts.map(host => (
+            <li key={host} data-host={host} className="flex items-center gap-2">
+              <span>{host}</span>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove extra address ${host}`}
+                onClick={() => edit({ extra_shop_hosts: research.extra_shop_hosts.filter(value => value !== host) })}><X /></Button>
+            </li>
+          ))}
+        </ul>
+        <form className="flex gap-2" onSubmit={event => {
+          event.preventDefault();
+          const host = extraHost.trim();
+          if (host === '') return;
+          if (!research.extra_shop_hosts.includes(host)) edit({ extra_shop_hosts: [...research.extra_shop_hosts, host] });
+          setExtraHost('');
+        }}>
+          <Input aria-label="Extra shop address" placeholder="yourshop.com" value={extraHost} onChange={event => setExtraHost(event.target.value)} />
+          <Button type="submit" variant="outline" disabled={extraHost.trim() === ''}>Add address</Button>
+        </form>
+      </div>
+
+      <div role="group" aria-label="Detailed condition" className="flex flex-col gap-2">
+        <h3>Detailed condition</h3>
+        <label htmlFor="detailed-condition-field">Detailed condition field</label>
+        <select id="detailed-condition-field" className="rounded-md border px-2 py-1" value={research.detailed_condition.key}
+          onChange={event => edit({ detailed_condition: { key: event.target.value, levels: [] } })}>
+          <option value="">No field</option>
+          {choiceFields.map(field => <option key={field.key} value={field.key}>{field.label} ({field.key})</option>)}
+        </select>
+        {!detailed ? <p className="health-detail">{DETAILED_CONDITION_UNSET}</p> : (
+          <>
+            <p className="health-detail">For the worst condition level of an item, the grade research writes.</p>
+            <ul aria-label="Detailed condition levels" className="flex flex-col gap-1">
+              {conditionLevels.map(level => (
+                <li key={level} data-level={level} className="flex items-center justify-between gap-2">
+                  <span>{level}</span>
+                  <select aria-label={`Grade for ${level}`} className="rounded-md border px-2 py-1" value={chosenLevel(level)} onChange={event => setLevel(level, event.target.value)}>
+                    <option value={UNSET}>Unset</option>
+                    <option value={COUNTS_FOR_NOTHING}>counts for nothing</option>
+                    {detailed.choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
+                  </select>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+
+      <Button type="button" variant="outline" className="self-start" onClick={() => setResetOpen(true)}>Reset research settings to defaults</Button>
+      {resetOpen && <div role="dialog" aria-label="Confirm research settings reset" className="rounded-md border p-3">
+        <p>Models, efforts, image sizes, prices, cost limits, the page limit, waits, timeouts, record days and providers go back to their defaults. Kept as they are:</p>
+        <ul aria-label="Kept by the reset" className="list-disc pl-5">
+          {RESET_KEEPS.map(kept => <li key={kept}>{kept}</li>)}
+        </ul>
+        <p>Your keys are untouched.</p>
+        <div className="flex gap-2">
+          <Button type="button" onClick={() => void reset()} disabled={busy}>Confirm reset</Button>
+          <Button type="button" variant="outline" onClick={() => setResetOpen(false)}>Cancel</Button>
+        </div>
+      </div>}
 
       {error && <p role="alert">{error}</p>}
       <Button type="button" className="self-start" disabled={busy} onClick={() => void save()}>
