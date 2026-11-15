@@ -45,8 +45,7 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   auto off, attribution keys empty; notes → R11: reset-settings action, app tests set attribution keys). R11 and R12 plans
   written (planner handoff `handoffs/reviewer/handoff_research_plan_r3.md`; 08B changelog 14). R11 APPROVED_WITH_NOTES 13:02
   (Codex built U1–U5, hit its usage limit until 16:42; Claude finished U6, one fix round). R12 launched with Claude
-  (Codex limited); it stops before the owner-attended measurement. Open with the owner: whether the button should
-  leave camera routing on the session being shot. Owner card open (not blocking): detailed-condition table (recommended A).
+  (Codex limited); it stops before the owner-attended measurement. Owner: camera routing stays as is (08B changelog 16). Owner card open (not blocking): detailed-condition table (recommended A).
 - **2026-11-15: owner picked the models** (observe Sol low, read Luna low, compare Terra low, condition Terra high) and
   moved the trigger to an "Arranged — next" button (08B changelog 13, master plan v9). R10 amended (crate-only,
   auto off, attribution keys empty) and launched with Claude (Opus); **owner 2026-11-15: from R11 on, Codex implements again

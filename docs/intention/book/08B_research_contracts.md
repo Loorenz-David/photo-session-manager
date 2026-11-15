@@ -853,4 +853,7 @@ to 07A MC-10 and 05A MC-30.
 15. 2026-11-15 (owner). Detailed-condition table: card A (worst level None → Very Good, Minor → Very Good,
     Moderate → Good, Major → Worn, never Excellent) is the default "for now"; the owner will tweak it later. R11
     ships the table as a setting; R12 writes A as its default.
+16. 2026-11-15 (owner). Camera routing stays as it is: opening a session (also through "Arranged — next") makes it
+    the session new captures go to. The owner never arranges while shooting, and relies on this for retakes: to add
+    a missed or retaken photo they open that session, then shoot.
 
