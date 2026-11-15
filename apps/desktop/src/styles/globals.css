@@ -48,6 +48,13 @@ button { font: inherit; }
 .health-checked { color: var(--muted); font-size: var(--text-sm); }
 .health-title { font-family: var(--font-heading); font-size: 28px; letter-spacing: -0.04em; margin: 0; }
 .health-section { margin-top: 42px; }
+.settings-layout { max-width: 1120px; display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 36px; }
+.settings-nav { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding-top: 42px; }
+.settings-nav button { text-align: left; padding: 10px 12px; border-radius: 8px; color: var(--color-muted, inherit); }
+.settings-nav button[aria-current="page"] { color: var(--color-fg, inherit); background: var(--color-surface, #eee); font-weight: 700; }
+.settings-panes { min-width: 0; }
+.settings-panes [data-active="false"] { display: none; }
+@media (max-width: 650px) { .settings-layout { display: block; } .settings-nav { flex-direction: row; overflow-x: auto; padding-top: 0; } .settings-nav button { flex: none; } }
 .health-section h2 { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800; margin-bottom: 20px; }
 .health-list { border-top: 1px solid var(--hair); }
 .health-row { display: grid; grid-template-columns: 180px 1fr; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--hair); align-items: baseline; }

@@ -14,6 +14,8 @@ import { cameraSecretsSet } from '@/services/camera';
 import { StorageSection } from './StorageSection';
 import { StockSection } from './StockSection';
 import { ResearchSection } from './ResearchSection';
+import { SettingsNav, type SettingsSection } from './SettingsNav';
+import { TemplatesSection } from './TemplatesSection';
 
 const emptyIntegration: IntegrationSettings = {
   kind: 'shopify', shop_domain: '', api_version: '2026-10', client_id: '', client_secret: '', condition_photos_key: 'custom.damage_report',
@@ -50,6 +52,7 @@ type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition
 
 /** ch12 §Settings: a plain form over `settings.json` (undesigned in the handoff). The theme stays on the header toggle. */
 export function SettingsPage() {
+  const [section, setSection] = useState<SettingsSection>('capture-one');
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const page = usePageData(getSettings);
@@ -144,8 +147,11 @@ export function SettingsPage() {
       } : undefined} />
   </div>;
 
-  return <>{header}<main className="health-shell">
+  return <>{header}<main className="health-shell settings-layout">
+    <SettingsNav active={section} showResearch={Boolean(saved?.research)} onSelect={setSection} />
+    <div className="settings-panes">
     <form onSubmit={event => { event.preventDefault(); void save.run(); }} className="health-section flex max-w-xl flex-col gap-4" aria-label="Settings">
+      <section data-section="capture-one" data-active={section === 'capture-one'}>
       <h2>Capture One</h2>
       <div className="flex flex-col gap-1">
         <p>Capture One session</p>
@@ -159,7 +165,6 @@ export function SettingsPage() {
       {text('Preview recipe', 'preview_recipe')}
       {text('Master recipe', 'master_recipe')}
       <StyleField value={settings.style_name} styles={styles} onChange={style_name => edit({ style_name })} />
-      <CameraSection ports={settings.camera} onPortsChange={camera => edit({camera: {...camera, auto_take_back: camera.auto_take_back ?? true}})} login={login} onLoginChange={setLogin} />
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-default_shape">Default shape</label>
         <select id="settings-default_shape" value={settings.default_shape} onChange={e => edit({ default_shape: e.target.value })}>
@@ -172,6 +177,11 @@ export function SettingsPage() {
           <option value="free">Free</option>
         </select>
       </div>
+      </section>
+      <section data-section="camera" data-active={section === 'camera'}>
+        <CameraSection ports={settings.camera} onPortsChange={camera => edit({camera: {...camera, auto_take_back: camera.auto_take_back ?? true}})} login={login} onLoginChange={setLogin} />
+      </section>
+      <section data-section="export-and-previews" data-active={section === 'export-and-previews'}>
       <h2>Export and previews</h2>
       {text('Export folder', 'export_folder', 'Export folder')}
       <div className="flex flex-col gap-1">
@@ -190,14 +200,18 @@ export function SettingsPage() {
           onChange={e => edit({ preview_delay_s: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
         <p className="health-detail">In effect: {settings.effective_preview_delay_s} s (10–30 s)</p>
       </div>
+      </section>
+      <section data-section="shopify" data-active={section === 'shopify'}>
       <h2>Shopify</h2>
       {shop('Shop domain', 'shop_domain')}
       {shop('Client ID', 'client_id')}
       {shop('Client secret', 'client_secret', 'password')}
       {shop('Condition photos key', 'condition_photos_key')}
+      {saved?.integration && <StockSection />}
+      </section>
       {error && <p role="alert">{error}</p>}
       {/* P63: always in view (sticky footer), whatever the scroll position. */}
-      <div data-testid="settings-footer" style={{ position: 'sticky', bottom: 0, background: 'var(--color-bg)', padding: '12px 0', borderTop: '1px solid var(--hair)' }}>
+      <div data-testid="settings-footer" data-active={['capture-one','camera','export-and-previews','shopify'].includes(section) ? 'true' : 'false'} style={{ position: 'sticky', bottom: 0, background: 'var(--color-bg)', padding: '12px 0', borderTop: '1px solid var(--hair)' }}>
         <Button type="submit" disabled={save.busy} aria-busy={save.busy ? 'true' : undefined}>Save settings{save.busy ? '…' : ''}</Button>
       </div>
     </form>
@@ -225,8 +239,9 @@ export function SettingsPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
-    {saved?.integration && <StockSection />}
-    <StorageSection />
-    {saved?.research && <ResearchSection research={saved.research} shopDomain={saved.integration?.shop_domain || null} />}
+    <section data-section="storage" data-active={section === 'storage'}><StorageSection /></section>
+    {saved?.research && <section data-section="research" data-active={section === 'research'}><ResearchSection research={saved.research} shopDomain={saved.integration?.shop_domain || null} /></section>}
+    <section data-section="shooting-templates" data-active={section === 'shooting-templates'}><TemplatesSection /></section>
+    </div>
   </main></>;
 }
