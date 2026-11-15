@@ -4,7 +4,7 @@ title: Research works out of the box — the models, efforts and prices the owne
 difficulty: normal
 projection: no
 depends_on: [R9_research_tool_and_acceptance]
-blocked_on: the owner's pick of model and effort per stage (evidence doc, "Owner picks", after R9's measurement)
+blocked_on: none (owner picked the models 2026-11-15)
 ---
 # R10 — Defaults: research works out of the box
 
@@ -48,6 +48,18 @@ This milestone is one runner phase made of 1 unit. Work the units in order. Afte
   `beyovintage.com`, `www.beyovintage.com`, `beyovintage.myshopify.com`, `68c5b4-6a.myshopify.com`. Shop hosts today
   are the primary domain and the platform host (08B changelog 11(c)). Without `read_markets` (declined for now), add a
   settings list of extra shop addresses (empty by default), and check that `www.` of the primary is already covered.
+- **U1, scope after the owner's 2026-11-15 decisions (orchestrator; wins over every note above and the rows below).**
+  (1) Models: the evidence doc's "Owner pick of models" (observe Sol low, read Luna low, compare Terra low,
+  condition Terra high, labels Sol low, decide Terra low). Task 0 reads that section, not "Owner picks".
+  (2) Prices for exactly those models, each with a `cache_write_token` row, from the evidence doc's dated price table.
+  (3) `auto` defaults to **false**: runs will start from the "Arranged — next" button (R11, 08B changelog 13); until
+  then the manual "Run research" starts them. (4) `attribution_keys` defaults to **empty**; the engine's
+  `["beyo.designer"]` goes; an empty list means no field is treated as attribution. (5) The designer/maker picker,
+  the extra shop addresses and every other settings screen change are **R11, not here**; this phase changes no app
+  file. Rows changed accordingly: **A24·C1(a)** — fresh app, keys set, a session with a Main photo with a preview:
+  the quiet period passing creates **no** run; a manual run request starts one with no settings edit and `status`
+  names no prerequisite. **A24·C1(b)** unchanged except the trigger is the manual request. **A24·C2(b)** —
+  `attribution_keys` is empty by default (the row asserts only that; the rules are unchanged).
 
 ## Unit 1 — Shipped defaults and the reachability check
 

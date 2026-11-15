@@ -833,4 +833,14 @@ to 07A MC-10 and 05A MC-30.
     light local parser before the model (owner idea, `backlog_research/owner_ideas.md`). Measurement findings for
     the same phase: research must not take designer and maker from a look-alike listing in the owner's own shop
     (pieces 6, 33).
+13. 2026-11-15 (owner). **Research starts when the person says the session is arranged, not when photos arrive.**
+    In a real day (10–40 item sessions, one after another) the camera's files arrive late and out of order, and
+    condition photos are classified only after a batch is done. So: (a) the open session gets a button, "Arranged —
+    next", that marks the session arranged/edited and opens the next session not yet marked; (b) that mark is the
+    entrance point of research: the run for that session starts then (all photos present, sorted and classified);
+    (c) the automatic arranging of photos as they arrive stays live while shooting, independent of research;
+    (d) the quiet-period trigger (08A "Quiet period") no longer starts runs; the manual "Run research" stays;
+    (e) orchestrator's default, owner may change: photo changes after the mark start research again only on the
+    next "Arranged — next" or the manual button, and publishing an unmarked session marks it first. This covers
+    changelog 12(c). The owner's model pick is in the evidence doc "Owner pick of models".
 

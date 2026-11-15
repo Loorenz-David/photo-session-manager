@@ -377,3 +377,9 @@ pages a match, which would make the look-alike problem (pieces 6, 33) worse. Ter
 Recommended per stage: photo look Sol low, reading Luna low, comparing Terra low, condition Terra high; estimated
 cost per piece about USD 0.20 instead of 0.30. Small sample (12 pieces); the owner picks.
 
+## Owner pick of models (2026-11-15)
+
+The owner took the recommendation of "Model comparison": **observe `gpt-6.1-sol` low · read `gpt-6-luna` low ·
+compare `gpt-6.1-terra` low · condition `gpt-6.1-terra` high**. The stages the comparison did not test keep the
+measurement's values: labels `gpt-6.1-sol` low (2048), decide `gpt-6.1-terra` low. R10 ships these.
+

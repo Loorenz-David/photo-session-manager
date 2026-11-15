@@ -41,6 +41,10 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   §3 Isolation lesson applied (v7). Not yet run live against the real services.
 - **Done:** `R9_research_tool_and_acceptance` APPROVED_WITH_NOTES 2026-11-13 03:07 (tool, `accept`, `score-accept`,
   page-reader fixes). Owner card in its narrative: models per stage after the measurement (→ R10).
+- **2026-11-15: owner picked the models** (observe Sol low, read Luna low, compare Terra low, condition Terra high) and
+  moved the trigger to an "Arranged — next" button (08B changelog 13, master plan v9). R10 amended (crate-only,
+  auto off, attribution keys empty) and launched; R11 (trigger + pickers + derived condition + look-alike) and R12
+  (cost + re-measure) need plans.
 - **Owner decisions after the measurement (2026-11-13):** 08B changelog 12, master plan v8: follow-up phase R11
   (fields research leaves alone, condition deferred, photo look by shoot template, light parser, look-alike fix).
   Task 5 comparison done (96 replays, evidence doc "Model comparison"); waits for the owner's model pick → R10.

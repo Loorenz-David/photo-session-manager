@@ -400,6 +400,13 @@ present (never printing a value) before launching R1.
 - The intention map still says 08A/08B are "not planned yet".
 
 ## 9. Amendment log
+- 2026-11-15 v9 (orchestrator) — owner picked the models (evidence doc) and moved the research trigger to an
+  "Arranged — next" button (08B changelog 13). R10 stays crate-only: the picked models and prices, `auto` off by
+  default (the quiet-period trigger is retired), `attribution_keys` empty by default; the pickers move to R11.
+  **R11 research starts when the session is arranged** (the button and session mark, the trigger, the pickers for
+  designer/maker, fields research leaves alone and extra shop addresses, detailed condition derived, no attribution
+  from look-alike own listings). **R12 research cost** (photos chosen by the shoot template, a light local parser,
+  then the 42-piece measurement again). Both need their plans written before they run.
 - 2026-11-13 v8 (orchestrator) — after the acceptance measurement the owner set a follow-up phase **R11 research flow
   by shoot template** (08B changelog 12): physical fields never researched (a settings picker of excluded fields: dimensions, weight, damage details for the owner), detailed condition derived, condition
   step deferred to classification + leaving/publishing, photo look by template position, a light local parser,
