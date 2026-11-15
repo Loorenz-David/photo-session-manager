@@ -43,7 +43,8 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   page-reader fixes). Owner card in its narrative: models per stage after the measurement (→ R10).
 - **2026-11-15: owner picked the models** (observe Sol low, read Luna low, compare Terra low, condition Terra high) and
   moved the trigger to an "Arranged — next" button (08B changelog 13, master plan v9). R10 amended (crate-only,
-  auto off, attribution keys empty) and launched; R11 (trigger + pickers + derived condition + look-alike) and R12
+  auto off, attribution keys empty) and launched with Claude (Opus); **owner 2026-11-15: from R11 on, Codex implements again
+  (runner default, no `PSM_IMPLEMENTER`)**; R11 (trigger + pickers + derived condition + look-alike) and R12
   (cost + re-measure) need plans.
 - **Owner decisions after the measurement (2026-11-13):** 08B changelog 12, master plan v8: follow-up phase R11
   (fields research leaves alone, condition deferred, photo look by shoot template, light parser, look-alike fix).
