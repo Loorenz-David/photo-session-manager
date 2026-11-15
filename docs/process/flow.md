@@ -108,6 +108,13 @@ you** (each assumption in one sentence, and what to say to change it) · **Not y
 steps. The orchestrator relays it verbatim. The owner reviews phases at their own pace; the
 runner does not wait for them unless started with `--pause`.
 
+## 7A. The agent guide (owner 2026-11-15)
+`docs/guide/` orients any new agent or developer (start: `docs/guide/README.md`). A phase or session that
+changes the architecture (a crate, service, flow, table, event), a hard rule, a coupling or a command
+updates the matching guide file in the same change; the reviewer treats a stale guide row for the
+changed area as a note. The orchestrator folds the book-pending list in `01_product.md` as the book
+is updated.
+
 ## 8. Commits
 Implementer and fix sessions make `CHECKPOINT (not approved):` commits of their perimeter only.
 The runner commits prompts, handoffs, narratives and state, and makes the `APPROVED <phase>`
@@ -140,6 +147,8 @@ phase, so test runs are still budgeted:
   `tools/pipeline/timeline.sh <log>` prints wall-clock vs. command time and the slowest commands.
 
 ## Log
+- **2026-11-15 v1.5 (owner).** §7A: the agent guide `docs/guide/` (written by Fable at the owner's request,
+  verified by the orchestrator) and the rule to keep it current; `CLAUDE.md` points to it first.
 - **2026-11-12 v1.5 (P70).** §4A: the behaviour tests are one test program (`--test suite <stem>::`);
   measured suite time before/after (65 min → 8 min 43 s warm).
 - **2026-11-11 v1.4 (owner).** §4A test-run budget; the runner logs stream-json with timestamps
