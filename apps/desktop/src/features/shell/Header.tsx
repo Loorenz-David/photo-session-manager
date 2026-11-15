@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/tooltip';
 import { ActionButton } from '@/components/ui/action-button';
 import { integrationKind, onExportProgress, openExportFolder, runExport } from '@/services/export';
-import { listSessions } from '@/services/sessions';
+import { arrangeNext, listSessions } from '@/services/sessions';
 import { CameraDot } from './CameraDot';
 import { ThemeToggle, type Theme } from './ThemeToggle';
 import { PublishPopover } from '@/features/publish/PublishPopover';
@@ -26,7 +26,7 @@ type HeaderProps = {
   onDetails?: () => void;
 };
 
-type SessionIdentity = { name: string; sku: string };
+type SessionIdentity = { name: string; sku: string; arranged: boolean; archived: boolean };
 
 /** Item type (or title until a type is set) and SKU of the open session, read from the sessions list. */
 function useSessionIdentity(sessionId?: number): SessionIdentity | null {
@@ -38,7 +38,7 @@ function useSessionIdentity(sessionId?: number): SessionIdentity | null {
     listSessions({ filter: 'all', query: null })
       .then(list => {
         const row = list.groups.flatMap(group => group.rows).find(candidate => candidate.id === sessionId);
-        if (alive && row) setIdentity({ name: row.item_type || row.title, sku: row.sku });
+        if (alive && row) setIdentity({ name: row.item_type || row.title, sku: row.sku, arranged: row.arranged, archived: row.label.kind === 'archived' });
       })
       .catch(() => undefined);
     return () => {
@@ -180,6 +180,17 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
         ) : (
           <>
             <Hint text="Details (D)"><Button variant="outline" onClick={onDetails}><ClipboardList /> Details</Button></Hint>
+            {identity && !identity.archived && <ActionButton action={async () => {
+              try {
+                const next = await arrangeNext(sessionId);
+                if (next.next_session_id === null) {
+                  window.location.hash = '#/';
+                  toast.success('Every session is arranged');
+                } else window.location.hash = `#/session/${next.next_session_id}`;
+              } catch (error) {
+                toast.error((error as Error).message);
+              }
+            }}>{identity.arranged ? 'Arranged ✓ — next' : 'Arranged — next'}</ActionButton>}
             {integration === null && (
               <ActionButton action={() => runExport(sessionId)} onError={error => toast.error(exportFailureText(error), { id: EXPORT_TOAST_ID })} disabled={exporting.has(sessionId)} title="Export the main and condition photos to the export folder">
                 <FolderDown /> Export

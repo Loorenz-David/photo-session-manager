@@ -125,6 +125,7 @@ export function ResearchPanel({ status, fields, focusKey, onFocus, onRun, onAcce
             </p>
           )}
           {showReason && <p className="text-muted-foreground">{reason!.sentence}</p>}
+          {!run && !reason && status.can_run && <p className="text-muted-foreground">Research starts when you press Arranged — next.</p>}
           {status.can_run && (
             <ActionButton size="sm" variant="secondary" className="self-start" action={onRun}>
               {ended ? 'Run again' : 'Research'}

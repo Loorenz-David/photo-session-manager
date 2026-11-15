@@ -60,7 +60,7 @@ function step(seq: number, kind: string, extra: Partial<ResearchStep> = {}): Res
 function status(extra: Partial<ResearchStatus> = {}): ResearchStatus {
   return { reason: null, run: null, steps: [], fields_filled: 0, to_review: 0, can_run: false, wait_ends_at: null, ...extra };
 }
-const run = (state: string, extra: Partial<NonNullable<ResearchStatus['run']>> = {}) => ({ id: 1, state, trigger: 'auto', stage_reached: null, error: null, ...extra });
+const run = (state: string, extra: Partial<NonNullable<ResearchStatus['run']>> = {}) => ({ id: 1, state, trigger: 'arranged', stage_reached: null, error: null, ...extra });
 
 const panel = (s: ResearchStatus | null, props: Partial<Parameters<typeof ResearchPanel>[0]> = {}) =>
   render(<ResearchPanel status={s} fields={[]} focusKey={null} onFocus={() => undefined} onRun={async () => undefined} onAcceptAll={async () => undefined} onClose={() => undefined} {...props} />);

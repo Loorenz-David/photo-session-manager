@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { SkeletonRows } from '@/components/pending/SkeletonRows';
 import { useAction, usePageData } from '@/lib/pending';
 import { previewUrl } from '@/services/sessions';
+import { onResearchChanged } from '@/services/events';
 import { SUGGESTIONS_CHANGED, confirmedText, publishConfirm, publishPreview, shownOf, withheldLine, type PreviewDto } from '@/services/publish';
 import { ConflictList } from './ConflictList';
 
@@ -21,6 +22,16 @@ function publishFailureText(error: unknown): string {
 export function PublishPopover({ sessionIds, onClose, onConfirmed, modal = false }: { sessionIds: number[]; onClose: () => void; onConfirmed?: () => void; modal?: boolean }) {
   const key = sessionIds.join(',');
   const { data: preview, error, reload } = usePageData<PreviewDto>(() => publishPreview(sessionIds), [key]);
+  useEffect(() => {
+    let alive = true;
+    let stop: (() => void) | undefined;
+    onResearchChanged(id => { if (sessionIds.includes(id)) void reload(); })
+      .then(unlisten => { if (alive) stop = unlisten; else unlisten(); })
+      .catch(() => undefined);
+    return () => { alive = false; stop?.(); };
+    // `key` is the selection identity; reload is stable in usePageData.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, reload]);
   // MC-A10: the suggestions changed while the photographer was confirming; the popover says so and rebuilds.
   const [changed, setChanged] = useState<string | null>(null);
   useEffect(() => { if (error) toast.error(`Could not preview publish: ${(error as Error).message}`); }, [error]);
@@ -45,6 +56,7 @@ export function PublishPopover({ sessionIds, onClose, onConfirmed, modal = false
         {item.unreviewed > 0 && <p>{item.unreviewed} unreviewed photos will be published after the main photos</p>}
         {item.announced_removals.length > 0 && <p>{item.announced_removals.length} gallery removals</p>}
         {item.create_item && <p>A new product will be created</p>}
+        {item.researching && <p>Research is still running for this item. Its suggestions are not in this publish unless you wait.</p>}
         {item.n_withheld > 0 && <p data-withheld>{withheldLine(item.n_withheld)}</p>}
         {item.conflicts.length > 0 && <ConflictList sessionId={item.session_id} conflicts={item.conflicts} onResolved={() => { setChanged(null); void reload(); }} />}
       </div>)}
