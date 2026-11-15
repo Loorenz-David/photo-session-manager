@@ -864,7 +864,7 @@ to 07A MC-10 and 05A MC-30.
     picker "fields research leaves alone" (`excluded_keys`): the physical fields are simply not chosen. A new field
     in the shop is never filled until the person adds it. (b) The owner said this also answers the second question:
     **the detailed condition is derived from the condition levels that have a value**; a level research is not asked
-    to fill, or left open, does not hold the grade back (orchestrator's reading, owner may correct: worst filled
+    to fill, or left open, does not hold the grade back (owner confirmed: only Minor scratches seen → Very Good; worst filled
     level wins; with no filled level nothing is derived). The owner's list for the measurement tool and the scratch
     install: designer, maker, wood, country, years, colour, quantity, the condition levels, the condition report and
     the detailed condition.
