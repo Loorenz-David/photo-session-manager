@@ -364,7 +364,7 @@ pub(crate) fn decide(ctx: &Ctx<'_>, used: &[Committed], stopped: bool) -> Result
             }
         }
         // The level rows here include condition suggestions written just above, in this same
-        // transaction. A person-filled level counts even when research leaves that field alone.
+        // transaction. A person-filled level counts even when the field is not chosen.
         let level_fields: Vec<_> = ctx
             .form
             .fields

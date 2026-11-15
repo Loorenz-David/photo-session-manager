@@ -30,25 +30,18 @@ fn undetermined(reason: impl Into<String>) -> Derived {
     }
 }
 
-/// The latest applicable level wins. Missing or unknown levels refuse a grade rather than
-/// guessing; a saved choice is remapped against the field's current choices.
+/// The latest applicable filled level wins; a saved choice is remapped against the field's
+/// current choices.
 pub fn derive(levels: &[ConditionLevel], values: &[LevelValue], field: &Definition) -> Derived {
     if values.is_empty() {
         return undetermined("no condition levels in this form");
     }
-    let missing: Vec<&str> = values
-        .iter()
-        .filter(|v| v.value.is_none())
-        .map(|v| v.label.as_str())
-        .collect();
-    if !missing.is_empty() {
-        return undetermined(format!(
-            "condition levels are incomplete: {}",
-            missing.join(", ")
-        ));
+    let filled: Vec<&LevelValue> = values.iter().filter(|v| v.value.is_some()).collect();
+    if filled.is_empty() {
+        return undetermined("no condition level has a value");
     }
     let mut worst: Option<(usize, &str)> = None;
-    for value in values {
+    for value in &filled {
         let text = value.value.as_deref().unwrap_or_default();
         let Some(index) = levels.iter().position(|level| level.level == text) else {
             return undetermined(format!("no grade is set for {text}"));
@@ -64,12 +57,12 @@ pub fn derive(levels: &[ConditionLevel], values: &[LevelValue], field: &Definiti
     let Mapped::Value { value, .. } = map_output(field, &Json::String(choice.into())) else {
         return undetermined("the setting names a choice the field does not have");
     };
-    let labels = values
+    let labels = filled
         .iter()
         .filter(|v| v.value.as_deref() == Some(level))
         .map(|v| v.label.as_str())
         .collect::<Vec<_>>();
-    let confidence = if values.iter().any(|v| v.ai_low) {
+    let confidence = if filled.iter().any(|v| v.ai_low) {
         AiConfidence::Low
     } else {
         AiConfidence::Medium
@@ -80,7 +73,15 @@ pub fn derive(levels: &[ConditionLevel], values: &[LevelValue], field: &Definiti
         reason: format!(
             "From the condition levels: the worst is {level} ({}).",
             labels.join(", ")
-        ),
+        ) + &if filled.len() < values.len() {
+            format!(
+                " {} of {} condition levels have no value.",
+                values.len() - filled.len(),
+                values.len()
+            )
+        } else {
+            String::new()
+        },
     }
 }
 
@@ -188,17 +189,78 @@ mod tests {
     fn a25_c12f_only_na() {
         assert_eq!(got(&["N/A", "N/A"]).reason, "no condition level applies");
     }
-    #[test]
-    fn a25_c12g_missing_value_names_label() {
-        let mut v = values(&["Minor"]);
+    fn with_empty(names: &[&str], empty: &str) -> Vec<LevelValue> {
+        let mut v = values(names);
         v.push(LevelValue {
-            label: "Veneer".into(),
+            label: empty.into(),
             value: None,
             ai_low: false,
         });
+        v
+    }
+    #[test]
+    fn a27_c8a_one_empty_level_does_not_hold_the_grade() {
+        let result = derive(&table(), &with_empty(&["Minor"], "Veneer"), &field());
+        assert_eq!(result, Derived { value: Some(Json::String("B".into())), confidence: Some(AiConfidence::Medium), reason: "From the condition levels: the worst is Minor (Field 0). 1 of 2 condition levels have no value.".into() });
+    }
+    #[test]
+    fn a27_c8b_no_level_has_a_value() {
+        let v = vec![
+            LevelValue {
+                label: "Scratch".into(),
+                value: None,
+                ai_low: false,
+            },
+            LevelValue {
+                label: "Veneer".into(),
+                value: None,
+                ai_low: false,
+            },
+        ];
+        assert_eq!(
+            derive(&table(), &v, &field()),
+            undetermined("no condition level has a value")
+        );
+    }
+    #[test]
+    fn a27_c8c_worst_filled_level_wins() {
+        let result = derive(
+            &table(),
+            &with_empty(&["None", "Moderate"], "Veneer"),
+            &field(),
+        );
+        assert_eq!(
+            (result.value, result.confidence),
+            (Some(Json::String("C".into())), Some(AiConfidence::Medium))
+        );
+    }
+    #[test]
+    fn a27_c8d_low_filled_level_lowers_the_grade() {
+        let mut v = with_empty(&["Minor"], "Veneer");
+        v[0].ai_low = true;
         let result = derive(&table(), &v, &field());
-        assert!(result.value.is_none());
-        assert!(result.reason.contains("Veneer"));
+        assert_eq!(
+            (result.value, result.confidence),
+            (Some(Json::String("B".into())), Some(AiConfidence::Low))
+        );
+    }
+    #[test]
+    fn a27_c8e_only_na_and_an_empty_level() {
+        assert_eq!(
+            derive(&table(), &with_empty(&["N/A"], "Veneer"), &field()),
+            undetermined("no condition level applies")
+        );
+    }
+    #[test]
+    fn a27_c8f_unknown_held_level_with_an_empty_level() {
+        let t = table()
+            .into_iter()
+            .filter(|r| r.level != "Major")
+            .collect::<Vec<_>>();
+        assert_eq!(
+            derive(&t, &with_empty(&["Major"], "Veneer"), &field()),
+            undetermined("no grade is set for Major")
+        );
     }
     #[test]
     fn a25_c12h_low_level_lowers_grade() {
