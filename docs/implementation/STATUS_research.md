@@ -53,7 +53,7 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   cards; 08B changelog 18). **R13 APPROVED_WITH_NOTES 23:19** (Codex built, no fix round; 5 notes in
   `backlog_research/R13_…md`, incl. restore `spawn_blocking` in `settings_set`). U4 task 3 done (0 values outside the 22
   fields, detailed condition = table grade on 4/4, USD 0.40). Full suite, clippy, fmt, vitest 515, frontend build
-  green on `feature/agentic`; real-key scan of tip and branch history: 0. Next: the main join below.
+  green on `feature/agentic`; real-key scan of tip and branch history: 0. **Joined into `main` 2026-11-15 23:30: PR #1 merged on GitHub (`04f26ad`)** after merging `main` `e4d5c06` (docs/guide, backlog conflict kept both sides) into this branch. The local `main` checkout was not touched; the owner pulls it.
 - **After R13 (owner approved 2026-11-15): bring research into `main` for the work PC.** `main` has not moved since the
   merge base `9dc94dc` (P70), so the join is a fast-forward and this worktree is the combined version: run the full suite
   and a release build here, scan the branch for secrets, then push `feature/agentic`, open a PR to `main` and merge it on
