@@ -9,7 +9,7 @@ use psm_research::{
     adapters::{
         self,
         http::{HttpFailure, HttpReply},
-        page_reader::HttpPageReader,
+        page_reader::{HttpPageReader, extract::product_extract},
     },
     config::{ProviderIds, ResearchConfig, ResearchSettings},
     domain::{FailureKind, RunState},
@@ -34,6 +34,14 @@ const OG_IMAGE: &str =
 
 fn shop_page() -> HttpReply {
     reply_from_capture(&capture("pages/shop_listing_page.json"))
+}
+
+/// The HTML body of `pages/shop_listing_page.json`.
+fn shop_body() -> String {
+    capture("pages/shop_listing_page.json")["response"]["body"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }
 
 fn jpeg() -> Vec<u8> {
@@ -89,13 +97,8 @@ fn a17_c1a_a_shop_page_is_read_by_download() {
     let (reply, http, waits) = shop_read();
     assert!(reply.obtained);
     assert_eq!(reply.title, "Swedish bookshelf in oak");
-    assert!(
-        reply
-            .text
-            .contains("Bookshelf manufactured in Sweden in the 1950s-60s"),
-        "{}",
-        reply.text
-    );
+    // R12·U2: the page's text is its product extract.
+    assert_eq!(reply.text, product_extract(&shop_body()));
     assert!(reply.images.contains(&jpeg()));
     let requests = http.requests();
     assert_eq!(requests[0].url, SHOP_PAGE);
@@ -113,6 +116,18 @@ fn a17_c1a_a_shop_page_is_read_by_download() {
             .map(|&i| (2_000, i))
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn a26_c9a_the_page_text_is_the_product_extract() {
+    let (reply, _, _) = shop_read();
+    let extract = product_extract(&shop_body());
+    assert!(extract.starts_with("Title: Swedish bookshelf in oak\n"));
+    assert_eq!(reply.text, extract);
+    assert!(reply.obtained);
+    assert_eq!(reply.title, "Swedish bookshelf in oak");
+    assert_eq!(reply.final_url.as_deref(), Some(SHOP_PAGE));
+    assert_eq!(reply.images, vec![jpeg()]);
 }
 
 #[test]

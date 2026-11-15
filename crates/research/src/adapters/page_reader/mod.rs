@@ -1,9 +1,11 @@
 //! The page reader (R8·U3): a plain HTTP download from the Mac, for every site (evidence doc
 //! "Owner picks" 2), and what a downloaded page offers without running scripts: its title, its
-//! visible text and its main images, by the routes R1 found (`og:title` / `og:image`, JSON-LD
-//! `Product`, then the largest content images). HTML is read with html5ever's tokenizer (0.39);
-//! no script is ever run.
+//! text and its main images, by the routes R1 found (`og:title` / `og:image`, JSON-LD
+//! `Product`, then the largest content images). The text is the page's product extract (R12·U2,
+//! [`extract::product_extract`]). HTML is read with html5ever's tokenizer (0.39); no script is
+//! ever run.
 
+pub mod extract;
 pub mod http;
 
 use std::cell::RefCell;
@@ -19,13 +21,18 @@ use serde_json::Value as Json;
 
 pub use http::HttpPageReader;
 
-/// The visible text is cut to this many characters (it goes into a model request).
+/// The page's text (the product extract) is cut to this many characters (it goes into a model
+/// request).
 pub const MAX_TEXT_CHARS: usize = 30_000;
+/// The visible-text part of the extract is cut to this many characters (R12·U2, from the survey
+/// of the recorded pages, `master_plan_research.md` §7.4A).
+pub const PRODUCT_TEXT_CHARS: usize = 10_000;
 
 /// What a page offers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HtmlPage {
     pub title: String,
+    /// The product extract of the page (R12·U2).
     pub text: String,
     /// Candidate image URLs as written in the page, best first (not yet resolved).
     pub images: Vec<String>,
@@ -37,6 +44,11 @@ struct Collected {
     in_title: bool,
     og_title: Option<String>,
     og_image: Option<String>,
+    og_description: Option<String>,
+    meta_description: Option<String>,
+    /// The text of the document's first `<h1>` (visible or not), once it has ended.
+    h1: Option<String>,
+    in_h1: bool,
     json_ld: Vec<String>,
     in_json_ld: bool,
     /// Depth inside elements whose text is not visible (script, style, head, …).
@@ -102,6 +114,12 @@ impl TokenSink for Sink {
                                 (Some("og:image"), Some(v)) if c.og_image.is_none() => {
                                     c.og_image = Some(v)
                                 }
+                                (Some("og:description"), Some(v)) if c.og_description.is_none() => {
+                                    c.og_description = Some(v)
+                                }
+                                (Some("description"), Some(v)) if c.meta_description.is_none() => {
+                                    c.meta_description = Some(v)
+                                }
                                 _ => {}
                             }
                         }
@@ -117,6 +135,10 @@ impl TokenSink for Sink {
                         if name == "body" {
                             // A page whose `</head>` is missing still shows its body.
                             c.hidden = 0;
+                        }
+                        if name == "h1" && c.h1.is_none() && !tag.self_closing {
+                            c.in_h1 = true;
+                            c.h1 = Some(String::new());
                         }
                         if tag.self_closing {
                             return TokenSinkResult::Continue;
@@ -149,6 +171,9 @@ impl TokenSink for Sink {
                         if HIDDEN.contains(&name) {
                             c.hidden = c.hidden.saturating_sub(1);
                         }
+                        if name == "h1" {
+                            c.in_h1 = false;
+                        }
                         match name {
                             "title" => c.in_title = false,
                             "script" => c.in_json_ld = false,
@@ -165,8 +190,15 @@ impl TokenSink for Sink {
                     if let Some(last) = c.json_ld.last_mut() {
                         last.push_str(&text);
                     }
-                } else if c.hidden == 0 {
-                    c.text.push_str(&text);
+                } else {
+                    if c.in_h1
+                        && let Some(h1) = c.h1.as_mut()
+                    {
+                        h1.push_str(&text);
+                    }
+                    if c.hidden == 0 {
+                        c.text.push_str(&text);
+                    }
                 }
                 TokenSinkResult::Continue
             }
@@ -175,7 +207,7 @@ impl TokenSink for Sink {
     }
 }
 
-fn collapse(text: &str) -> String {
+pub(crate) fn collapse(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
@@ -214,8 +246,9 @@ fn ld_images(value: &Json, out: &mut Vec<String>) {
     }
 }
 
-/// The title, visible text and candidate images of an HTML document.
-pub fn read_html(html: &str) -> HtmlPage {
+/// What one tokenizer pass over a document collects, with its parsed `Product` block (a block
+/// that is not valid JSON is ignored).
+fn collect(html: &str) -> (Collected, Option<Json>) {
     let sink = Sink(RefCell::new(Collected::default()));
     let tokenizer = Tokenizer::new(sink, TokenizerOpts::default());
     let input = BufferQueue::default();
@@ -235,18 +268,29 @@ pub fn read_html(html: &str) -> HtmlPage {
             break;
         }
     }
-    let title = c
-        .og_title
-        .map(|t| collapse(&t))
+    (c, product)
+}
+
+/// The title: `og:title`, else the `Product` block's name, else `<title>`.
+fn title_of(c: &Collected, product: Option<&Json>) -> String {
+    c.og_title
+        .as_deref()
+        .map(collapse)
         .filter(|t| !t.is_empty())
         .or_else(|| {
             product
-                .as_ref()
                 .and_then(|p| p["name"].as_str())
                 .map(collapse)
                 .filter(|t| !t.is_empty())
         })
-        .unwrap_or_else(|| collapse(&c.title));
+        .unwrap_or_else(|| collapse(&c.title))
+}
+
+/// The title, the product extract as the text, and the candidate images of an HTML document.
+pub fn read_html(html: &str) -> HtmlPage {
+    let (c, product) = collect(html);
+    let title = title_of(&c, product.as_ref());
+    let text = extract::from_parts(&c, product.as_ref(), &title);
     let mut images: Vec<String> = Vec::new();
     images.extend(c.og_image);
     if let Some(product) = &product {
@@ -256,7 +300,6 @@ pub fn read_html(html: &str) -> HtmlPage {
     // Largest declared width first; equal widths keep document order.
     imgs.sort_by_key(|img| std::cmp::Reverse(img.0));
     images.extend(imgs.into_iter().map(|(_, src)| src));
-    let text: String = collapse(&c.text).chars().take(MAX_TEXT_CHARS).collect();
     HtmlPage {
         title,
         text,
