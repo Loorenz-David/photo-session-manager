@@ -31,6 +31,13 @@ This milestone is one runner phase made of 6 units. Work the units in order. Aft
 ## Read first (whole milestone)
 `docs/process/flow.md` (**§10 is the authority for this track**) · `docs/implementation/master_plan.md` §3, §6, §7 · `docs/implementation/master_plan_research.md` (all; §6.8 holds the names this plan adds; §9 v9 and v10) · book `01`, `14` §Research agent, `08A`, `08B` (**changelog 12 and 13 are the owner's decisions this plan implements; they win over older text in 08A and 08B**) · evidence `docs/intention/evidence/research_providers.md` ("Owner answers", "Acceptance measurement") · then each unit's own Read first. Name key and sameness are `psm_core::mechanisms::{name_key, sameness}` (R2·U1); every other research rule is `psm_research::rules`.
 
+## Resume note (orchestrator, 2026-11-15 12:25; wins for the continuing session)
+The first implementer session (Codex) stopped at its usage limit after checkpointing U1 (`ff2fdec`), U2 (`a32391b`),
+U3 (`fea02f4`), U4 (`a692083`) and U5 (`1c09727`). U6 was started and is uncommitted in the working tree
+(`apps/desktop/src/features/settings/ShopFieldPicker.tsx` new, `ResearchSection.tsx` edited). Continue at U6: read
+that work, finish U6, run U6's test commands and its checkpoint, then the closing gate, and write the handoff for the
+whole milestone (all six units). Keep U1–U5 as committed unless the closing gate shows a defect in them.
+
 ## What this plan supersedes in the book (the orchestrator folds these into 08A and 08B; until then this section is the rule)
 | Book text | Replaced by |
 |---|---|
