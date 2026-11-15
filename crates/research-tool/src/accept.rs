@@ -360,65 +360,31 @@ pub fn layout(definitions: &[Definition], group: AttributeGroup) -> Vec<PresetFi
         .collect()
 }
 
-/// The scratch settings: models per stage from the evidence doc's Owner picks (observe
-/// `gpt-6.1-sol` low, read `gpt-6.1-terra` low, condition `gpt-6.1-terra` high; the stages the
-/// picks do not name take the vision pick for images and the read pick for text), prices from
-/// R1's `prices.json`, caps 0.50 per run and 25 per day, manual runs only, the owner's trusted sites,
-/// the fixture's designer and manufacturer as attribution keys. `patch` replaces top-level keys
-/// (`stages` per stage).
+/// The measurement's day cap (R12·U4: the scratch settings' day cap is USD 20, the spending
+/// ceiling of the second measurement).
+pub const DAY_CAP_USD: &str = "20";
+
+/// The scratch settings (R12·U4 task 1): the shipped settings (`ResearchSettings::default()`:
+/// the stages, models, prices and limits of R10), then the measurement's own entries (the test
+/// file's two attribution keys, the owner's trusted sites, the visual search priced at 0, the day
+/// cap), then `patch` on top. `patch` replaces top-level keys (`stages` per stage). The tool names
+/// no model of its own.
 pub fn scratch_settings(patch: Option<&Json>) -> Result<Json, String> {
-    let stage = |model: &str, effort: &str, edge: u32| json!({"model": model, "effort": effort, "image_long_edge": edge});
-    let mut prices = Vec::new();
-    for (model, input, cached, write, output) in [
-        ("gpt-6.1-sol", "2.00", "0.10", "2.50", "10.00"),
-        ("gpt-6.1-terra", "1.00", "0.05", "1.25", "5.00"),
-        ("gpt-6-luna", "0.10", "0.01", "0.125", "0.50"),
-    ] {
-        for (unit, usd) in [
-            ("input_token", input),
-            ("cached_input_token", cached),
-            ("cache_write_token", write),
-            ("output_token", output),
-            ("web_search_call", "10000.00"),
-        ] {
-            prices.push(json!({"provider": "openai", "model": model, "unit": unit,
-                               "usd_per_million": usd}));
+    let mut settings = serde_json::to_value(psm_research::config::ResearchSettings::default())
+        .map_err(|e| format!("scratch settings: {e}"))?;
+    settings["attribution_keys"] = json!(ATTRIBUTION_KEYS);
+    settings["trusted_sites"] = json!(trusted_sites());
+    settings["max_cost_per_day"] = json!(DAY_CAP_USD);
+    let search = psm_research::config::DEFAULT_VISUAL_SEARCH_PROVIDER;
+    if let Some(prices) = settings["prices"].as_array_mut() {
+        for row in prices.iter_mut().filter(|row| row["provider"] == search) {
+            for field in ["usd_per_million", "fallback_call_usd"] {
+                if !row[field].is_null() {
+                    row[field] = json!("0");
+                }
+            }
         }
-        prices.push(json!({"provider": "openai", "model": model, "fallback_call_usd": "0.05"}));
     }
-    prices.push(
-        json!({"provider": "serpapi_lens", "model": "", "unit": "image_search_call",
-                       "usd_per_million": "0", "fallback_call_usd": "0"}),
-    );
-    prices.push(
-        json!({"provider": "page_http", "model": "", "unit": "page_fetch",
-                       "usd_per_million": "0", "fallback_call_usd": "0"}),
-    );
-    let mut settings = json!({
-        "auto": false,
-        "quiet_seconds": 1,
-        "source_wait_seconds": 120,
-        "attribution_keys": ATTRIBUTION_KEYS,
-        "trusted_sites": trusted_sites(),
-        "max_pages": 10,
-        "stages": {
-            "observe": stage("gpt-6.1-sol", "low", 1024),
-            "find": stage("", "", 1024),
-            "read": stage("gpt-6.1-terra", "low", 1024),
-            "compare": stage("gpt-6.1-sol", "low", 1024),
-            "labels": stage("gpt-6.1-sol", "low", 2048),
-            "condition": stage("gpt-6.1-terra", "high", 2048),
-            "decide": stage("gpt-6.1-terra", "low", 1024),
-        },
-        "max_cost_per_run": "0.50",
-        "max_cost_per_day": "25",
-        "prices": prices,
-        "language": "English",
-        "record_days": 30,
-        "call_timeout_seconds": {"model": 180, "other": 60},
-        "providers": {"model": "openai", "visual_search": "serpapi_lens",
-                      "page_reader": "page_http"},
-    });
     if let Some(Json::Object(patch)) = patch {
         for (key, value) in patch {
             match (key.as_str(), value) {

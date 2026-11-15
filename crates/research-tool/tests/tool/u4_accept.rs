@@ -143,7 +143,7 @@ fn capture(path: &str) -> HttpReply {
 
 /// The real adapters over `FakeResearchHttp` replaying R1's captures: every model call gets the
 /// observe capture, the Lens upload and search their captures; listing pages are unscripted.
-fn providers(data: &Path, secrets: Arc<dyn SecretStore>) -> Providers {
+fn providers(data: &Path, secrets: Arc<dyn SecretStore>) -> (Providers, Arc<FakeResearchHttp>) {
     let http = Arc::new(FakeResearchHttp::default());
     http.always(
         "POST",
@@ -160,15 +160,20 @@ fn providers(data: &Path, secrets: Arc<dyn SecretStore>) -> Providers {
         serpapi_lens::SEARCH_URL,
         Ok(capture("serpapi_lens/search_cut_to_3.json")),
     );
-    Providers {
+    let providers = Providers {
         model: Some(Arc::new(OpenAiModel::new(
             http.clone(),
             secrets.clone(),
             ResearchFiles::new(data),
         ))),
         search: Some(Arc::new(SerpApiLens::new(http.clone(), secrets))),
-        reader: Some(Arc::new(HttpPageReader::new(http, Arc::new(|_| {}), 60))),
-    }
+        reader: Some(Arc::new(HttpPageReader::new(
+            http.clone(),
+            Arc::new(|_| {}),
+            60,
+        ))),
+    };
+    (providers, http)
 }
 
 /// Every path under `dir`, relative, sorted.
@@ -188,8 +193,21 @@ fn tree(dir: &Path) -> Vec<String> {
     out
 }
 
-#[test]
-fn a23_c2a_accept_runs_two_pieces_in_the_scratch_folder() {
+/// `accept` over two pieces of the owner's file (one published, one not; two images and one
+/// condition image each) in a fresh scratch folder, with `settings_patch` as `--settings`.
+struct Accepted {
+    _root: tempfile::TempDir,
+    root_path: PathBuf,
+    data: PathBuf,
+    paths: psm_infra::paths::AppPaths,
+    outcome: accept::AcceptOutcome,
+    images: Images,
+    log: String,
+    /// The HTTP seam of the research adapters (every model request the stub received).
+    http: Arc<FakeResearchHttp>,
+}
+
+fn accept_two(settings_patch: Option<Json>) -> Accepted {
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path().canonicalize().unwrap();
     // Two pieces of the owner's file (one published, one not), with two images each.
@@ -228,10 +246,11 @@ fn a23_c2a_accept_runs_two_pieces_in_the_scratch_folder() {
         .unwrap();
         s
     };
+    let (seams, http) = providers(&data, secrets_for_providers);
     with_test_research(
         &paths,
         ResearchTestSeams {
-            providers: providers(&data, secrets_for_providers),
+            providers: seams,
             wait: Arc::new(|_| {}),
         },
     );
@@ -248,7 +267,7 @@ fn a23_c2a_accept_runs_two_pieces_in_the_scratch_folder() {
             data: data.clone(),
             ceiling_micro: 40_000_000,
             only: None,
-            settings_patch: None,
+            settings_patch,
             run_timeout: std::time::Duration::from_secs(120),
         },
         &images,
@@ -257,6 +276,30 @@ fn a23_c2a_accept_runs_two_pieces_in_the_scratch_folder() {
     )
     .unwrap();
     let log = String::from_utf8(log).unwrap();
+    Accepted {
+        _root: root,
+        root_path,
+        data,
+        paths,
+        outcome,
+        images,
+        log,
+        http,
+    }
+}
+
+#[test]
+fn a23_c2a_accept_runs_two_pieces_in_the_scratch_folder() {
+    let Accepted {
+        _root,
+        root_path,
+        data,
+        paths,
+        outcome,
+        images,
+        log,
+        ..
+    } = accept_two(None);
     assert_eq!(outcome.pieces.len(), 2, "{log}");
     assert_eq!(
         images.urls.borrow().len(),
@@ -325,4 +368,95 @@ fn a23_c2a_accept_runs_two_pieces_in_the_scratch_folder() {
         .filter(|p| !p.starts_with("data"))
         .collect();
     assert_eq!(beside, vec!["pieces.json".to_owned()]);
+}
+
+/// The six fields the owner's shop leaves alone (`docs/test-items/accept_settings_owner.json`).
+const LEFT_ALONE: [&str; 6] = [
+    "custom.totalwidth",
+    "custom.totaldepth",
+    "custom.totalheight",
+    "custom.seatheightchairs",
+    "custom.weight_definition",
+    "custom.damage_details",
+];
+
+/// Each run's settings snapshot, parsed.
+fn snapshots(a: &Accepted) -> Vec<Json> {
+    let store = psm_infra::sqlite::store::SqliteStore::open(&a.paths).unwrap();
+    let runs = store
+        .research_transaction(|tx| psm_research::store::runs(tx.conn(), None))
+        .unwrap();
+    assert_eq!(runs.len(), 2, "{}", a.log);
+    runs.iter()
+        .map(|r| serde_json::from_str(r.settings_snapshot.as_deref().unwrap()).unwrap())
+        .collect()
+}
+
+/// The field keys of every model request the stub received.
+fn model_request_fields(a: &Accepted) -> Vec<String> {
+    let mut keys = Vec::new();
+    for request in a.http.requests().iter().filter(|r| r.url == RESPONSES_URL) {
+        let psm_research::adapters::http::Body::Json(body) = &request.body else {
+            panic!("a model request without a JSON body");
+        };
+        let text = body["input"][0]["content"][0]["text"].as_str().unwrap();
+        let input: Json = serde_json::from_str(text).unwrap();
+        for field in input["fields"].as_array().into_iter().flatten() {
+            keys.push(field["key"].as_str().unwrap().to_owned());
+        }
+    }
+    keys
+}
+
+#[test]
+fn a26_c13a_accept_measures_the_shipped_models() {
+    let a = accept_two(None);
+    let shipped = psm_research::config::ResearchSettings::default();
+    for snapshot in snapshots(&a) {
+        for stage in psm_research::domain::Stage::ALL {
+            let expected = shipped.stage(stage);
+            let name = stage.as_str();
+            assert_eq!(
+                (
+                    snapshot["stages"][name]["model"].as_str().unwrap(),
+                    snapshot["stages"][name]["effort"].as_str().unwrap()
+                ),
+                (expected.model.as_str(), expected.effort.as_str()),
+                "{name}"
+            );
+        }
+        assert_eq!(
+            snapshot["attribution_keys"],
+            json!(accept::ATTRIBUTION_KEYS)
+        );
+    }
+}
+
+#[test]
+fn a26_c13b_the_owner_settings_leave_six_fields_alone() {
+    let file = repo_root().join("docs/test-items/accept_settings_owner.json");
+    let owner: Json = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+    let a = accept_two(Some(owner));
+    for snapshot in snapshots(&a) {
+        assert_eq!(snapshot["excluded_keys"], json!(LEFT_ALONE));
+        assert_eq!(
+            snapshot["extra_shop_hosts"],
+            json!([
+                "beyovintage.com",
+                "beyovintage.myshopify.com",
+                "68c5b4-6a.myshopify.com"
+            ])
+        );
+    }
+    let fields = model_request_fields(&a);
+    assert!(!fields.is_empty(), "{}", a.log);
+    for key in LEFT_ALONE {
+        assert!(!fields.iter().any(|f| f == key), "{key} reached a model");
+    }
+    // Without the file, some of the six do reach a model request (the rows are not vacuous).
+    let plain = model_request_fields(&accept_two(None));
+    assert!(
+        LEFT_ALONE.iter().any(|key| plain.iter().any(|f| f == key)),
+        "{plain:?}"
+    );
 }
