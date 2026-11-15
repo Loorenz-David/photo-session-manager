@@ -50,6 +50,12 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **2026-11-15 21:10: owner decision after the second measurement** (08B changelog 17, master plan v11): research
   fills only chosen fields (allow-list replaces "leave alone"), detailed condition derived from the levels that have a
   value. **R13_research_chosen_fields** named; planner launched (handoff `handoffs/reviewer/handoff_research_plan_r4.md`).
+- **After R13 (owner approved 2026-11-15): bring research into `main` for the work PC.** `main` has not moved since the
+  merge base `9dc94dc` (P70), so the join is a fast-forward and this worktree is the combined version: run the full suite
+  and a release build here, scan the branch for secrets, then push `feature/agentic`, open a PR to `main` and merge it on
+  GitHub (the sibling `main` checkout stays untouched; the owner pulls it). Test data in `docs/test-items/` stays (owner:
+  removing it is "not necessary"). Remind the owner: back up the work PC data folder before the first start (one-way
+  schema), enter both research keys, set the chosen fields; owner adds mark/stamp and contains key by hand as a test.
 - **2026-11-15: owner picked the models** (observe Sol low, read Luna low, compare Terra low, condition Terra high) and
   moved the trigger to an "Arranged — next" button (08B changelog 13, master plan v9). R10 amended (crate-only,
   auto off, attribution keys empty) and launched with Claude (Opus); **owner 2026-11-15: from R11 on, Codex implements again
