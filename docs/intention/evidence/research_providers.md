@@ -383,3 +383,54 @@ The owner took the recommendation of "Model comparison": **observe `gpt-6.1-sol`
 compare `gpt-6.1-terra` low · condition `gpt-6.1-terra` high**. The stages the comparison did not test keep the
 measurement's values: labels `gpt-6.1-sol` low (2048), decide `gpt-6.1-terra` low. R10 ships these.
 
+## Acceptance measurement 2 (2026-11-15, R12·U4 tasks 3–6)
+
+Run by the orchestrator on the owner's go. `accept --settings docs/test-items/accept_settings_owner.json` (the six
+excluded keys, the three extra shop hosts, detailed-condition table A) over the same 42 pieces with the shipped
+defaults (observe Sol low as one call over up to 8 photos, read Luna low on the product extract, compare Terra low,
+condition Terra high). Folder `~/psm-research-bench/a25`, script `scratchpad/accept_run3.sh`, comparison
+`scratchpad/cmp_measure.py` (first = a23 pieces 1–15 + a24 pieces 16–42). 42 of 42 finished; one photo of piece 28
+left out (download failed). The Mac slept about an hour during piece 9 (its 5 331 s is that pause).
+
+**Cost and time per piece:** total USD 5.25 (first 12.54). Published median USD 0.109 (0.068–0.249; first 0.296),
+never-published median USD 0.111 (0.065–0.164; first 0.266): **about 63 % less**. Time unchanged: median 326 s
+published, 350 s never-published (first 297 / 288).
+
+**Designer and maker** (pieces where the shop has a value; "sure" = medium or high), first → second:
+
+| Group | Sure: right | Sure: wrong | Low: right | Low: wrong | Left open |
+|---|---|---|---|---|---|
+| Published (30) | 16 → 18 | 7 → 2 | 6 → 8 | 3 → 4 | 15 → 15 |
+| Never published (12) | 4 → 2 | 1 → 1 | 2 → 0 | 2 → 2 | 2 → 6 |
+
+All three sure "wrong" are name forms of the right answer (12 ERIK WÖRTZ / Erik Wørts, 20 H.W. Klein / HENRY W.
+KLEIN, 34 Glasmäster / Glas Mäster): **no sure answer is really wrong** (first: 3). Piece 6 (the own-shop look-alike)
+is now right (Arne Hovmand-Olsen, Mogens Kold). Where the shop has **no** value, research suggested a name 6 times
+(first 15): 28 Erling Torvits (medium, two auction pages, as before) and 33 J.L. Møllers (medium, two pamono pages of
+a model 71 chair; no longer the own-shop look-alike; the owner is checking 33). The never-published group is more
+cautious (open 2 → 6; newly open there: 36 and 38 designer, 32 and 36 maker). Newly open among published: 7, 11
+(both pieces where the key may be wrong), 23, 24, 26 maker.
+Per field right/wrong/open: designer 21/14/7 → 26/8/8, maker 18/14/10 → 22/7/13.
+
+**Other fields, right / wrong / open, first → second:** wood type 25/13/0 → 29/9/0 (7 Santos Rosewood, 15 Walnut,
+26 and 31 Teak+Oak, 39 Cherry now right; 17 now wrong); country 31/3/6 → 29/1/10 (more left open); years 23/16/1 →
+25/14/1; quantity 40/2/0 unchanged; condition levels about the same (scratch 25/3 → 22/6, veneer 2/3 → 3/7).
+Dimensions, weight and damage details: not researched (0 written).
+
+**Detailed condition 21/19/0 → 0/0/40.** By design of R11 (`rules::derived_condition`): the grade is derived only
+when every condition level in the form has a value, and Function, Odor, Stability (and often Missing parts) are never
+answered from photos (open on 10 of 10 in both measurements). In the app the person fills those, then the grade is
+derived; in the tool nobody does. Owner question: should an empty level count as "None" for the grade.
+
+**Task 5 checks:** excluded keys written: none. Attribution above low: every one has two or more trusted pages or a
+label read (pieces 1, 17, 25, 34, 39 are `high` from a label read; the score file lists no `sources` for them).
+Spend USD 5.25 within the USD 20 ceiling.
+
+**Finding (both measurements): research fills shop fields that are not facts about the piece.** Written by
+research in a25 (similar counts in a23/a24): `custom.price_st` (6, prices of other listings), `custom.compare_at_price`
+(4), `custom.reserved` (2), `reviews.rating_count` (4), `custom.location` and `app.item_location` (storage place),
+`custom.link` (11, a listing URL), `custom.utstallning`, `custom.dimensionss` (6, a dimensions text field not in the
+excluded list), `custom.etsy_description` (42, description text), one Shopify related-products field. All low or
+medium suggestions, none checked. Fix without a build: add them to "fields research leaves alone"; the owner decides
+whether research should instead fill only a list of chosen fields.
+
