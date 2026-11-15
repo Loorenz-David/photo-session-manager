@@ -29,7 +29,7 @@ Probe files touched (applied and reverted): `apps/desktop/src-tauri/src/lib.rs` 
 `cargo test -p psm-desktop` 25 green · `cargo clippy --workspace --all-targets -- -D warnings` green · `cargo fmt --all -- --check` green · `npm run typecheck` green. The full suite was not re-run: no shared code changed (test-only edit).
 
 ## Checkpoint SHA
-See the `CHECKPOINT (not approved):` commit on this branch (`git log -1 --format=%h -- docs/implementation/handoffs/implementer/handoff_R11_research_on_arranged_fix_r2.md`).
+`80adfc6` (`CHECKPOINT (not approved): R11 fix 1`).
 
 ## Stamp
 Tree clean after the checkpoint commit; psm-desktop 25/25, no failure delta.
