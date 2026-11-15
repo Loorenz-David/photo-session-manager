@@ -5,6 +5,7 @@ mod adapter_pages;
 mod adapter_search;
 mod api;
 mod arranged;
+mod chosen_fields;
 mod defaults;
 mod derived;
 mod export;

@@ -22,7 +22,7 @@ const SHOP = 'beyo-design.myshopify.com';
 
 function research(extra: Partial<ResearchSettings> = {}): ResearchSettings {
   return {
-    source_wait_seconds: 120, attribution_keys: ['beyo.designer'], excluded_keys: [], extra_shop_hosts: [], detailed_condition: { key: '', levels: [] }, trusted_sites: [], max_pages: 10,
+    source_wait_seconds: 120, attribution_keys: ['beyo.designer'], fill_keys: [], extra_shop_hosts: [], detailed_condition: { key: '', levels: [] }, trusted_sites: [], max_pages: 10,
     stages: { observe: { model: '', effort: '', image_long_edge: 1024 } },
     max_cost_per_run: '0.50', max_cost_per_day: '15', prices: [], language: 'English', record_days: 30,
     call_timeout_seconds: { model: 180, other: 60 }, providers: { model: '', visual_search: '', page_reader: '' },

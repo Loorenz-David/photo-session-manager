@@ -330,7 +330,7 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
                     "step": f.step,
                 })).collect::<Vec<_>>(),
                 "attribution_keys": [DESIGNER],
-                "excluded_keys": [],
+                "fill_keys": config.fill_keys,
                 "detailed_condition": config.detailed_condition,
             })
         )

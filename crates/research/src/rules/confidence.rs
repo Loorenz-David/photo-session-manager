@@ -38,15 +38,15 @@ impl Decision {
     }
 }
 
-/// MC-A4 field class, first match: never-written, condition, attribution, measured, visible.
+/// MC-A4 field class, first match: never-written, chosen, derived, condition, attribution, measured, visible.
 pub fn field_class(
     definition: &Definition,
     never_written: bool,
     attribution_keys: &[String],
-    excluded_keys: &[String],
+    fill_keys: &[String],
     detailed_condition_key: &str,
 ) -> FieldClass {
-    if never_written || excluded_keys.contains(&definition.key) {
+    if never_written || !fill_keys.contains(&definition.key) {
         FieldClass::NeverWritten
     } else if !detailed_condition_key.is_empty() && definition.key == detailed_condition_key {
         FieldClass::Derived
@@ -797,58 +797,31 @@ mod tests {
             json!({}),
         );
         assert_eq!(
-            field_class(&wear, false, &keys, &[], ""),
+            field_class(&wear, false, &keys, std::slice::from_ref(&wear.key), ""),
             FieldClass::Condition
         );
         assert_eq!(
-            field_class(&width_attr, false, &keys, &[], ""),
+            field_class(
+                &width_attr,
+                false,
+                &keys,
+                std::slice::from_ref(&width_attr.key),
+                ""
+            ),
             FieldClass::Attribution
         );
         assert_eq!(
-            field_class(&width, false, &keys, &[], ""),
+            field_class(&width, false, &keys, std::slice::from_ref(&width.key), ""),
             FieldClass::Measured
         );
         assert_eq!(
-            field_class(&colour, false, &keys, &[], ""),
+            field_class(&colour, false, &keys, std::slice::from_ref(&colour.key), ""),
             FieldClass::Visible
         );
         assert_eq!(
-            field_class(&colour, true, &keys, &[], ""),
+            field_class(&colour, true, &keys, std::slice::from_ref(&colour.key), ""),
             FieldClass::NeverWritten
         );
-    }
-
-    #[test]
-    fn a25_c8a_excluded_fields_are_never_written() {
-        let details = def(
-            CoreType::Text,
-            AttributeGroup::Details,
-            "custom.text",
-            json!({}),
-        );
-        let width = def(
-            CoreType::Dimension,
-            AttributeGroup::Details,
-            "custom.width",
-            json!({}),
-        );
-        let condition = def(
-            CoreType::Choice,
-            AttributeGroup::Condition,
-            "custom.wear",
-            json!({}),
-        );
-        for (field, class) in [
-            (&details, FieldClass::Visible),
-            (&width, FieldClass::Measured),
-            (&condition, FieldClass::Condition),
-        ] {
-            assert_eq!(field_class(field, false, &[], &[], ""), class);
-            assert_eq!(
-                field_class(field, false, &[], std::slice::from_ref(&field.key), ""),
-                FieldClass::NeverWritten
-            );
-        }
     }
 
     #[test]
@@ -860,21 +833,14 @@ mod tests {
             json!({}),
         );
         assert_eq!(
-            field_class(&grade, false, &[], &[], "custom.grade"),
+            field_class(
+                &grade,
+                false,
+                &[],
+                std::slice::from_ref(&grade.key),
+                "custom.grade"
+            ),
             FieldClass::Derived
-        );
-    }
-    #[test]
-    fn a25_c13b_excluded_precedes_derived() {
-        let grade = def(
-            CoreType::Choice,
-            AttributeGroup::Details,
-            "custom.grade",
-            json!({}),
-        );
-        assert_eq!(
-            field_class(&grade, false, &[], &["custom.grade".into()], "custom.grade"),
-            FieldClass::NeverWritten
         );
     }
     #[test]
@@ -886,8 +852,110 @@ mod tests {
             json!({}),
         );
         assert_eq!(
-            field_class(&grade, false, &[], &[], ""),
+            field_class(&grade, false, &[], std::slice::from_ref(&grade.key), ""),
             FieldClass::Visible
+        );
+    }
+
+    #[test]
+    fn a27_c1a_chosen_fields_keep_their_classes() {
+        let keys = vec!["custom.designer".to_owned()];
+        let cases = [
+            (
+                CoreType::Text,
+                AttributeGroup::Details,
+                "custom.wood",
+                "",
+                FieldClass::Visible,
+            ),
+            (
+                CoreType::Dimension,
+                AttributeGroup::Details,
+                "custom.width",
+                "",
+                FieldClass::Measured,
+            ),
+            (
+                CoreType::Choice,
+                AttributeGroup::Condition,
+                "custom.scratch",
+                "",
+                FieldClass::Condition,
+            ),
+            (
+                CoreType::Text,
+                AttributeGroup::Details,
+                "custom.designer",
+                "",
+                FieldClass::Attribution,
+            ),
+            (
+                CoreType::Choice,
+                AttributeGroup::Details,
+                "custom.grade",
+                "custom.grade",
+                FieldClass::Derived,
+            ),
+        ];
+        for (kind, group, key, derived, expected) in cases {
+            let field = def(kind, group, key, json!({}));
+            assert_eq!(
+                field_class(&field, false, &keys, &[key.to_owned()], derived),
+                expected,
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn a27_c1b_unchosen_fields_are_never_written() {
+        for (kind, group, key, derived) in [
+            (CoreType::Text, AttributeGroup::Details, "custom.wood", ""),
+            (
+                CoreType::Dimension,
+                AttributeGroup::Details,
+                "custom.width",
+                "",
+            ),
+            (
+                CoreType::Choice,
+                AttributeGroup::Condition,
+                "custom.scratch",
+                "",
+            ),
+            (
+                CoreType::Text,
+                AttributeGroup::Details,
+                "custom.designer",
+                "",
+            ),
+            (
+                CoreType::Choice,
+                AttributeGroup::Details,
+                "custom.grade",
+                "custom.grade",
+            ),
+        ] {
+            let field = def(kind, group, key, json!({}));
+            assert_eq!(
+                field_class(&field, false, &[key.to_owned()], &[], derived),
+                FieldClass::NeverWritten,
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn a27_c1c_never_written_precedes_chosen() {
+        let field = def(
+            CoreType::Text,
+            AttributeGroup::Details,
+            "custom.wood",
+            json!({}),
+        );
+        assert_eq!(
+            field_class(&field, true, &[], std::slice::from_ref(&field.key), ""),
+            FieldClass::NeverWritten
         );
     }
 

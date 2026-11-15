@@ -30,7 +30,7 @@ const GRADES = ['Excellent', 'Very Good', 'Good', 'Worn'];
 
 function research(extra: Partial<ResearchSettings> = {}): ResearchSettings {
   return {
-    source_wait_seconds: 120, attribution_keys: [], excluded_keys: [], extra_shop_hosts: [], detailed_condition: { key: '', levels: [] }, trusted_sites: [], max_pages: 10,
+    source_wait_seconds: 120, attribution_keys: [], fill_keys: [], extra_shop_hosts: [], detailed_condition: { key: '', levels: [] }, trusted_sites: [], max_pages: 10,
     stages: { observe: { model: '', effort: '', image_long_edge: 1024 } },
     max_cost_per_run: '0.50', max_cost_per_day: '15', prices: [], language: 'English', record_days: 30,
     call_timeout_seconds: { model: 180, other: 60 }, providers: { model: '', visual_search: '', page_reader: '' },
@@ -127,16 +127,17 @@ it('a25_c28e_no_shop_linked_asks_to_connect_one_and_preselects_nothing', async (
   expect(saved().attribution_keys).toEqual([]);
 });
 
-it('a25_c29a_fields_left_alone_start_unchecked_and_save_the_two_checked', async () => {
+it('a27_c7b_fields_research_fills_start_unchecked_and_save_the_two_checked', async () => {
   vi.mocked(listDefinitions).mockResolvedValue(FIVE);
   render(<ResearchSection research={research()} shopDomain={SHOP} />);
-  await waitFor(() => expect(boxes('Fields research leaves alone')).toHaveLength(5));
-  expect(checkedKeys('Fields research leaves alone')).toEqual([]);
-  fireEvent.click(within(rowOf('Fields research leaves alone', 'custom.width')).getByRole('checkbox'));
-  fireEvent.click(within(rowOf('Fields research leaves alone', 'custom.era')).getByRole('checkbox'));
+  await waitFor(() => expect(boxes('Fields research fills')).toHaveLength(5));
+  expect(checkedKeys('Fields research fills')).toEqual([]);
+  fireEvent.click(within(rowOf('Fields research fills', 'custom.width')).getByRole('checkbox'));
+  fireEvent.click(within(rowOf('Fields research fills', 'custom.era')).getByRole('checkbox'));
   save();
   await waitFor(() => expect(saveResearchSettings).toHaveBeenCalledTimes(1));
-  expect(saved().excluded_keys).toEqual(['custom.width', 'custom.era']);
+  expect(saved().fill_keys).toEqual(['custom.width', 'custom.era']);
+  expect(screen.queryByRole('group', { name: 'Fields research leaves alone' })).not.toBeInTheDocument();
 });
 
 const hosts = () => within(screen.getByRole('list', { name: 'Extra shop address list' })).queryAllByRole('listitem').map(row => row.getAttribute('data-host'));
@@ -204,7 +205,7 @@ it('a25_c32a_reset_names_what_it_keeps_calls_the_command_once_and_shows_the_retu
   fireEvent.click(screen.getByRole('button', { name: 'Reset research settings to defaults' }));
   const dialog = screen.getByRole('dialog', { name: 'Confirm research settings reset' });
   expect(within(within(dialog).getByRole('list', { name: 'Kept by the reset' })).getAllByRole('listitem').map(row => row.textContent)).toEqual([
-    'Trusted sites', 'Designer and maker fields', 'Fields research leaves alone', 'Extra shop addresses', 'The detailed-condition table', 'Language']);
+    'Trusted sites', 'Designer and maker fields', 'Fields research fills', 'Extra shop addresses', 'The detailed-condition table', 'Language']);
   expect(dialog).toHaveTextContent('keys are untouched');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm reset' }));
   await waitFor(() => expect(screen.getByLabelText('observe model')).toHaveValue('gpt-6-luna'));

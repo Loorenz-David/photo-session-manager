@@ -244,6 +244,7 @@ pub fn test_settings() -> Json {
     json!({
         "source_wait_seconds": 120,
         "attribution_keys": [DESIGNER],
+        "fill_keys": [MAKER, WOOD, DESIGNER, WOODS, WIDTH, SCRATCHES, SUBTITLE],
         "trusted_sites": [E1, E2],
         "max_pages": 10,
         "stages": stages,
@@ -519,6 +520,10 @@ impl Harness {
         config.own_listing_path_tail = facts.own_listing.path_tail;
         config.trusted_sites = vec![E1.into(), E2.into()];
         config.attribution_keys = vec![DESIGNER.into()];
+        config.fill_keys = vec![MAKER, WOOD, DESIGNER, WOODS, WIDTH, SCRATCHES, SUBTITLE]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
         config
     }
 
@@ -838,6 +843,10 @@ impl Harness {
         config.providers.model = FakeModel::ID.into();
         config.providers.visual_search = FakeVisualSearch::ID.into();
         config.providers.page_reader = FakePageReader::ID.into();
+        config.fill_keys = vec![MAKER, WOOD, DESIGNER, WOODS, WIDTH, SCRATCHES, SUBTITLE]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
         config
     }
 

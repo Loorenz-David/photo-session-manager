@@ -1025,7 +1025,7 @@ export type ResearchSettingsDto = ResearchSettingsDto_Serialize | ResearchSettin
 export type ResearchSettingsDto_Deserialize = {
 	source_wait_seconds: number,
 	attribution_keys: string[],
-	excluded_keys: string[],
+	fill_keys: string[],
 	extra_shop_hosts: string[],
 	detailed_condition: DetailedConditionDto_Deserialize,
 	trusted_sites: string[],
@@ -1048,7 +1048,7 @@ export type ResearchSettingsDto_Deserialize = {
 export type ResearchSettingsDto_Serialize = {
 	source_wait_seconds: number,
 	attribution_keys: string[],
-	excluded_keys: string[],
+	fill_keys: string[],
 	extra_shop_hosts: string[],
 	detailed_condition: DetailedConditionDto_Serialize,
 	trusted_sites: string[],

@@ -24,7 +24,7 @@ export { NOT_A_SHOP_FIELD } from './ShopFieldPicker';
 const ATTRIBUTION_LABELS = ['designer', 'manufacturer'];
 export const NO_ATTRIBUTION_FIELD = 'No designer or maker field is chosen: research will not suggest a designer or a maker.';
 /** What "Reset research settings to defaults" keeps (R11 "Reset keeps the person's lists"). */
-export const RESET_KEEPS = ['Trusted sites', 'Designer and maker fields', 'Fields research leaves alone', 'Extra shop addresses', 'The detailed-condition table', 'Language'];
+export const RESET_KEEPS = ['Trusted sites', 'Designer and maker fields', 'Fields research fills', 'Extra shop addresses', 'The detailed-condition table', 'Language'];
 export const DETAILED_CONDITION_UNSET = 'Not set: Detailed condition is filled like any other field.';
 /** Select values of a detailed-condition row that are not a choice of the field. */
 const UNSET = '__unset__';
@@ -372,11 +372,11 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
         {research.attribution_keys.length === 0 && <p className="health-detail" data-no-attribution>{NO_ATTRIBUTION_FIELD}</p>}
       </div>
 
-      <div role="group" aria-label="Fields research leaves alone" className="flex flex-col gap-2">
-        <h3>Fields research leaves alone</h3>
-        <p className="health-detail">Research never asks for, suggests or spends on these fields; you fill them yourself.</p>
-        <ShopFieldPicker label="Fields research leaves alone" definitions={definitions} shopDomain={shopDomain}
-          chosen={research.excluded_keys} onChange={keys => edit({ excluded_keys: keys })} />
+      <div role="group" aria-label="Fields research fills" className="flex flex-col gap-2">
+        <h3>Fields research fills</h3>
+        <p className="health-detail">Research suggests values only for the fields ticked here. A new field in your shop stays empty until you tick it.</p>
+        <ShopFieldPicker label="Fields research fills" definitions={definitions} shopDomain={shopDomain}
+          chosen={research.fill_keys} onChange={keys => edit({ fill_keys: keys })} />
       </div>
 
       <div role="group" aria-label="Extra shop addresses" className="flex flex-col gap-2">

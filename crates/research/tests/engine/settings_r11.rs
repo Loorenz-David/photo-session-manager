@@ -1,13 +1,13 @@
 //! R11 U2: settings that bound what the engine researches.
 
-use crate::harness::{DESIGNER, E1, E2, Harness, SCRATCHES, WIDTH, WOODS};
+use crate::harness::{DESIGNER, E1, E2, Harness, WIDTH};
 use psm_research::{
     api::ResearchApi,
     config::{
         DEFAULT_MODEL_PROVIDER, DEFAULT_PAGE_READER, DEFAULT_VISUAL_SEARCH_PROVIDER,
         ResearchConfig, ResearchSettings,
     },
-    domain::{RunState, SiteClass, Stage},
+    domain::{RunState, SiteClass},
     ports::{
         CallFailure, ModelProvider, ModelReply, ModelRequest, PageReader, PageReply, Providers,
         ResearchImage, SearchCandidate, SearchReply, VisualSearchProvider,
@@ -17,70 +17,6 @@ use psm_research::{
 };
 use serde_json::json;
 use std::sync::Arc;
-
-#[test]
-fn a25_c8b_excluded_fields_leave_all_requests_and_writes() {
-    let h = Harness::chair();
-    crate::stages::full_script(&h);
-    let mut config = h.stage_config();
-    config.excluded_keys = vec![WIDTH.into(), SCRATCHES.into()];
-    let run = h.start_run(&config);
-    h.execute(run);
-    for call in h.model.requests().into_iter().filter(|c| {
-        matches!(
-            c.stage,
-            Some(Stage::Observe | Stage::Read | Stage::Labels | Stage::Condition)
-        )
-    }) {
-        let fields = call.input["fields"].to_string();
-        assert!(
-            !fields.contains(WIDTH) && !fields.contains(SCRATCHES),
-            "{fields}"
-        );
-    }
-    assert!(h.row(WIDTH).is_none());
-    assert!(h.row(SCRATCHES).is_none());
-    assert!(h.row(WOODS).is_some());
-    assert!(h.row(DESIGNER).is_some());
-    let steps = h.steps(run);
-    for key in [WIDTH, SCRATCHES] {
-        assert!(
-            steps
-                .iter()
-                .any(|s| s.field_keys.contains(&key.to_owned())
-                    && s.detail.contains("not researched")),
-            "{key}"
-        );
-    }
-}
-
-#[test]
-fn a25_c8c_all_fields_left_alone_means_nothing_to_research() {
-    let h = Harness::chair();
-    h.add_main_photo_with_preview(h.session_id);
-    h.patch_settings(json!({"excluded_keys": [DESIGNER, WOODS, WIDTH, SCRATCHES]}));
-    assert!(!h.service.arranged(h.session_id).unwrap());
-    assert!(h.runs(h.session_id).is_empty());
-    assert_eq!(
-        h.service.status(h.session_id).unwrap().reason.unwrap().code,
-        "NothingToResearch"
-    );
-}
-
-#[test]
-fn a25_c8d_existing_suggestion_in_left_alone_field_is_untouched() {
-    let h = Harness::chair();
-    let before = {
-        h.suggest(WIDTH, json!({"value": "120", "unit": "CENTIMETERS"}));
-        h.row(WIDTH).unwrap()
-    };
-    h.add_main_photo_with_preview(h.session_id);
-    let mut config = h.stage_config();
-    config.excluded_keys = vec![WIDTH.into()];
-    let run = h.start_run(&config);
-    h.execute(run);
-    assert_eq!(h.row(WIDTH).unwrap(), before);
-}
 
 #[test]
 fn a25_c9a_extra_hosts_join_snapshot_in_order_and_classify() {
@@ -186,7 +122,7 @@ fn a25_c10a_reset_keeps_personal_lists_and_restores_defaults() {
     let h = Harness::chair();
     h.patch_settings(json!({"auto": true, "prices": [], "stages": {}, "max_pages": 3,
         "language": "Svenska", "trusted_sites": [E1, E2], "attribution_keys": [DESIGNER],
-        "excluded_keys": [WIDTH], "extra_shop_hosts": ["x.com"],
+        "fill_keys": [DESIGNER, WIDTH], "extra_shop_hosts": ["x.com"],
         "detailed_condition": {"key": "custom.grade", "levels": [{"level":"Minor","choice":"Good"}]}}));
     let reset = h.service.settings_reset().unwrap();
     let defaults = serde_json::to_value(ResearchSettings::default()).unwrap();
@@ -206,7 +142,7 @@ fn a25_c10a_reset_keeps_personal_lists_and_restores_defaults() {
     for key in [
         "trusted_sites",
         "attribution_keys",
-        "excluded_keys",
+        "fill_keys",
         "extra_shop_hosts",
         "detailed_condition",
         "language",
@@ -266,7 +202,7 @@ impl PageReader for DefaultReader {
 #[test]
 fn a25_c11a_new_settings_default_empty() {
     let value = ResearchSettings::default();
-    assert!(value.excluded_keys.is_empty());
+    assert!(value.fill_keys.is_empty());
     assert!(value.extra_shop_hosts.is_empty());
     // R12 (owner 2026-11-15, answer A to R11's card): `detailed_condition` ships filled; its row
     // is `a26_owner_detailed_condition_default`.

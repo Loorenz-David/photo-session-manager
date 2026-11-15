@@ -94,7 +94,7 @@ fn five_field_run() -> (Harness, i64) {
                 .collect(),
         })
         .unwrap();
-    h.patch_settings(json!({"attribution_keys": [DESIGNER, MAKER]}));
+    h.patch_settings(json!({"attribution_keys": [DESIGNER, MAKER], "fill_keys": [DESIGNER, MAKER, WOODS, OUTSIDE, SCRATCHES]}));
     h.add_main_photo_with_preview(h.session_id);
     h.add_main_photo_with_preview(h.session_id);
     h.add_photo_with_preview(h.session_id, Classification::Condition);

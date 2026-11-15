@@ -204,6 +204,7 @@ struct Accepted {
     images: Images,
     log: String,
     /// The HTTP seam of the research adapters (every model request the stub received).
+    #[allow(dead_code)] // U4's chosen-field request test reads this capture.
     http: Arc<FakeResearchHttp>,
 }
 
@@ -370,16 +371,6 @@ fn a23_c2a_accept_runs_two_pieces_in_the_scratch_folder() {
     assert_eq!(beside, vec!["pieces.json".to_owned()]);
 }
 
-/// The six fields the owner's shop leaves alone (`docs/test-items/accept_settings_owner.json`).
-const LEFT_ALONE: [&str; 6] = [
-    "custom.totalwidth",
-    "custom.totaldepth",
-    "custom.totalheight",
-    "custom.seatheightchairs",
-    "custom.weight_definition",
-    "custom.damage_details",
-];
-
 /// Each run's settings snapshot, parsed.
 fn snapshots(a: &Accepted) -> Vec<Json> {
     let store = psm_infra::sqlite::store::SqliteStore::open(&a.paths).unwrap();
@@ -390,22 +381,6 @@ fn snapshots(a: &Accepted) -> Vec<Json> {
     runs.iter()
         .map(|r| serde_json::from_str(r.settings_snapshot.as_deref().unwrap()).unwrap())
         .collect()
-}
-
-/// The field keys of every model request the stub received.
-fn model_request_fields(a: &Accepted) -> Vec<String> {
-    let mut keys = Vec::new();
-    for request in a.http.requests().iter().filter(|r| r.url == RESPONSES_URL) {
-        let psm_research::adapters::http::Body::Json(body) = &request.body else {
-            panic!("a model request without a JSON body");
-        };
-        let text = body["input"][0]["content"][0]["text"].as_str().unwrap();
-        let input: Json = serde_json::from_str(text).unwrap();
-        for field in input["fields"].as_array().into_iter().flatten() {
-            keys.push(field["key"].as_str().unwrap().to_owned());
-        }
-    }
-    keys
 }
 
 #[test]
@@ -430,33 +405,4 @@ fn a26_c13a_accept_measures_the_shipped_models() {
             json!(accept::ATTRIBUTION_KEYS)
         );
     }
-}
-
-#[test]
-fn a26_c13b_the_owner_settings_leave_six_fields_alone() {
-    let file = repo_root().join("docs/test-items/accept_settings_owner.json");
-    let owner: Json = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
-    let a = accept_two(Some(owner));
-    for snapshot in snapshots(&a) {
-        assert_eq!(snapshot["excluded_keys"], json!(LEFT_ALONE));
-        assert_eq!(
-            snapshot["extra_shop_hosts"],
-            json!([
-                "beyovintage.com",
-                "beyovintage.myshopify.com",
-                "68c5b4-6a.myshopify.com"
-            ])
-        );
-    }
-    let fields = model_request_fields(&a);
-    assert!(!fields.is_empty(), "{}", a.log);
-    for key in LEFT_ALONE {
-        assert!(!fields.iter().any(|f| f == key), "{key} reached a model");
-    }
-    // Without the file, some of the six do reach a model request (the rows are not vacuous).
-    let plain = model_request_fields(&accept_two(None));
-    assert!(
-        LEFT_ALONE.iter().any(|key| plain.iter().any(|f| f == key)),
-        "{plain:?}"
-    );
 }

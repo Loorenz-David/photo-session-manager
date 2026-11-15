@@ -213,7 +213,7 @@ labels, condition, decide`) · `StepKind {Looked, Searched, Read, Compared, Conc
 {Sent, Answered, Failed, Unknown, NotSent}` · `SiteClass {Shop, Trusted, Untrusted}` · `Verdict {Match, Similar,
 Different}` · `ErrorClass {Offline, Transient, Key, Quota, Request, Schema, Refusal}` · `FieldClass {NeverWritten,
 Condition, Attribution, Measured, Visible}` (R11: plus `Derived`) · `Prerequisite {NoIntegration, NoModelKey, NoSearchKey, PriceMissing,
-NothingToResearch, DayLimit, Offline, AutoOff}` (MC-A6 order; R11 removes `AutoOff`) plus `WaitingForEditor`. In core:
+NothingToResearch, NoFieldChosen, DayLimit, Offline}` (MC-A6 order; R11 removes `AutoOff`, R13 adds `NoFieldChosen`) plus `WaitingForEditor`. In core:
 `psm_core::domain::research::FeedbackAction {Accepted, Cleared, Edited, KeptPrevious}`; `PublishStep::Held`;
 `RowLabel::WaitingForYou(n)`. Job kind string `research`. Constants: `RESEARCH_NORMALISE_VERSION = 1` (core),
 `RESEARCH_FINGERPRINT_VERSION = 2` (1 until R12·U1), `RESEARCH_CALL_ATTEMPTS = 3`. `INSTRUCTIONS_VERSION = 2` (`psm_research::config`; 1 until R12·U1).

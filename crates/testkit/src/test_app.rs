@@ -83,6 +83,7 @@ pub fn research_test_settings() -> serde_json::Value {
         "trusted_sites": [],
         "max_pages": 10,
         "stages": stages,
+        "fill_keys": crate::fixtures::definitions::shop_definitions().into_iter().map(|d| d.key).collect::<Vec<_>>(),
         "max_cost_per_run": "0.50",
         "max_cost_per_day": "15",
         "prices": [

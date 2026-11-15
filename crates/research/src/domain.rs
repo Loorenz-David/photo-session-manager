@@ -275,6 +275,7 @@ pub enum Prerequisite {
         model: String,
     },
     NothingToResearch,
+    NoFieldChosen,
     DayLimit,
     Offline,
     WaitingForEditor,
@@ -288,6 +289,7 @@ impl Prerequisite {
             Self::NoSearchKey => "NoSearchKey",
             Self::PriceMissing { .. } => "PriceMissing",
             Self::NothingToResearch => "NothingToResearch",
+            Self::NoFieldChosen => "NoFieldChosen",
             Self::DayLimit => "DayLimit",
             Self::Offline => "Offline",
             Self::WaitingForEditor => "WaitingForEditor",
@@ -306,6 +308,9 @@ impl Prerequisite {
                     .to_owned()
             }
             Self::NothingToResearch => "This item type has no fields research can fill".to_owned(),
+            Self::NoFieldChosen => {
+                "Choose the fields research fills in Settings → Research".to_owned()
+            }
             Self::DayLimit => "Day limit reached".to_owned(),
             Self::Offline => "Offline".to_owned(),
             Self::WaitingForEditor => "Waiting for Capture One".to_owned(),
@@ -321,6 +326,7 @@ impl Prerequisite {
                 | Self::NoSearchKey
                 | Self::PriceMissing { .. }
                 | Self::NothingToResearch
+                | Self::NoFieldChosen
         )
     }
 }

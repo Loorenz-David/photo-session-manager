@@ -146,7 +146,7 @@ pub(crate) fn class_of(ctx: &Ctx<'_>, definition: &Definition, step: AttributeGr
         definition,
         never_written(definition, Some(step)),
         &ctx.config.attribution_keys,
-        &ctx.config.excluded_keys,
+        &ctx.config.fill_keys,
         &ctx.config.detailed_condition.key,
     )
 }
@@ -600,6 +600,7 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
         .collect();
     if !stopped
         && !condition_photos.is_empty()
+        && !fields_of(&ctx, &[FieldClass::Condition]).is_empty()
         && let Some(c) = flow!(condition(&ctx, &condition_photos)?)
     {
         used.push(c);

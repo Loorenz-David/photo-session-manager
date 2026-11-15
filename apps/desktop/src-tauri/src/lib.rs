@@ -110,7 +110,7 @@ mod p50_tests {
             "researchSettingsReset",
             "arranged",
             "researching",
-            "excluded_keys",
+            "fill_keys",
             "extra_shop_hosts",
             "detailed_condition",
         ] {
@@ -118,6 +118,42 @@ mod p50_tests {
         }
         assert!(!bindings.contains("quiet_seconds"));
         assert!(!bindings.contains("auto?:"));
+        assert!(!bindings.contains("excluded_keys"));
+    }
+
+    #[test]
+    fn a27_c7a_settings_commands_use_the_chosen_field_list() {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        let paths = a.app.paths.clone();
+        let mut file = psm_infra::settings_file::Settings::open(&paths).unwrap();
+        file.research = Some(json!({"excluded_keys": ["custom.wood_type"]}));
+        psm_infra::settings_file::Settings::set(&paths, &file).unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::settings::settings_get,
+                commands::settings::settings_set,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let got = call(&w, "settings_get", json!({})).unwrap();
+        assert_eq!(got["research"]["fill_keys"], json!([]));
+        assert!(got["research"].get("excluded_keys").is_none());
+        let mut research = got["research"].clone();
+        research["fill_keys"] = json!(["custom.wood_type"]);
+        call(&w, "settings_set", json!({"patch": {"research": research}})).unwrap();
+        let saved = psm_infra::settings_file::Settings::open(&paths)
+            .unwrap()
+            .research
+            .unwrap();
+        assert_eq!(saved["fill_keys"], json!(["custom.wood_type"]));
+        let bindings = include_str!("../../src/services/bindings.ts");
+        assert!(bindings.contains("fill_keys: string[]"));
+        assert!(!bindings.contains("excluded_keys"));
     }
     #[test]
     fn c8a_support_and_secret_commands_have_their_wire_shapes() {

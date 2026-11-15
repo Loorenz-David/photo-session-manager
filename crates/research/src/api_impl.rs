@@ -78,7 +78,7 @@ impl ResearchApi for ResearchService {
         let reset = ResearchSettings {
             trusted_sites: live.trusted_sites,
             attribution_keys: live.attribution_keys,
-            excluded_keys: live.excluded_keys,
+            fill_keys: live.fill_keys,
             extra_shop_hosts: live.extra_shop_hosts,
             detailed_condition: live.detailed_condition,
             language: live.language,

@@ -76,7 +76,7 @@ pub struct ResearchSettingsDto {
     #[specta(type = specta_typescript::Number)]
     pub source_wait_seconds: i64,
     pub attribution_keys: Vec<String>,
-    pub excluded_keys: Vec<String>,
+    pub fill_keys: Vec<String>,
     pub extra_shop_hosts: Vec<String>,
     pub detailed_condition: DetailedConditionDto,
     pub trusted_sites: Vec<String>,
@@ -215,18 +215,12 @@ pub async fn editor_styles(
 #[tauri::command]
 #[specta::specta]
 pub async fn settings_set(
-    _state: State<'_, AppState>,
-    app_handle: AppHandle,
+    state: State<'_, AppState>,
     patch: SettingsPatchDto,
 ) -> Result<SettingsDto, CommandError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let patch = serde_json::to_value(&patch)
-            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-        let state = app_handle.state::<AppState>();
-        to_dto(state.settings_set(&patch)?)
-    })
-    .await
-    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    let patch =
+        serde_json::to_value(&patch).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+    to_dto(state.settings_set(&patch)?)
 }
 
 /// Settings → Storage (10F §4): free space on the disk holding the capture root, the space each

@@ -373,6 +373,12 @@ pub fn scratch_settings(patch: Option<&Json>) -> Result<Json, String> {
     let mut settings = serde_json::to_value(psm_research::config::ResearchSettings::default())
         .map_err(|e| format!("scratch settings: {e}"))?;
     settings["attribution_keys"] = json!(ATTRIBUTION_KEYS);
+    settings["fill_keys"] = json!(
+        shop_definitions()
+            .into_iter()
+            .map(|d| d.key)
+            .collect::<Vec<_>>()
+    );
     settings["trusted_sites"] = json!(trusted_sites());
     settings["max_cost_per_day"] = json!(DAY_CAP_USD);
     let search = psm_research::config::DEFAULT_VISUAL_SEARCH_PROVIDER;

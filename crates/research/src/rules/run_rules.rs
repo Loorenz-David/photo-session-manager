@@ -25,6 +25,7 @@ pub struct PrerequisiteInput {
     pub missing_price: Option<(String, String)>,
     /// The layout has a field research may write (MC-A1).
     pub writable_field: bool,
+    pub chosen_field: bool,
     pub day_limit_reached: bool,
     pub offline: bool,
 }
@@ -45,6 +46,8 @@ pub fn first_failing(input: &PrerequisiteInput) -> Option<Prerequisite> {
         })
     } else if !input.writable_field {
         Some(Prerequisite::NothingToResearch)
+    } else if !input.chosen_field {
+        Some(Prerequisite::NoFieldChosen)
     } else if input.day_limit_reached {
         Some(Prerequisite::DayLimit)
     } else if input.offline {
@@ -135,6 +138,7 @@ mod tests {
             search_key: true,
             missing_price: None,
             writable_field: true,
+            chosen_field: true,
             day_limit_reached: false,
             offline: false,
         }
@@ -165,6 +169,7 @@ mod tests {
                 |i| i.writable_field = false,
                 Prerequisite::NothingToResearch,
             ),
+            (|i| i.chosen_field = false, Prerequisite::NoFieldChosen),
             (|i| i.day_limit_reached = true, Prerequisite::DayLimit),
             (|i| i.offline = true, Prerequisite::Offline),
         ];
@@ -185,6 +190,29 @@ mod tests {
         input.offline = true;
         input.integration = false;
         assert_eq!(first_failing(&input), Some(Prerequisite::NoIntegration));
+    }
+
+    #[test]
+    fn a27_c3a_no_chosen_field_fails() {
+        let mut input = passing();
+        input.chosen_field = false;
+        assert_eq!(first_failing(&input), Some(Prerequisite::NoFieldChosen));
+    }
+
+    #[test]
+    fn a27_c3b_nothing_to_research_precedes_no_chosen_field() {
+        let mut input = passing();
+        input.writable_field = false;
+        input.chosen_field = false;
+        assert_eq!(first_failing(&input), Some(Prerequisite::NothingToResearch));
+    }
+
+    #[test]
+    fn a27_c3c_no_chosen_field_precedes_day_limit() {
+        let mut input = passing();
+        input.chosen_field = false;
+        input.day_limit_reached = true;
+        assert_eq!(first_failing(&input), Some(Prerequisite::NoFieldChosen));
     }
 
     fn ready(trigger: RunTrigger) -> StartInput {

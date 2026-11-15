@@ -297,7 +297,7 @@ pub(crate) fn decide(ctx: &Ctx<'_>, used: &[Committed], stopped: bool) -> Result
             "step": f.step,
         })).collect::<Vec<_>>(),
         "attribution_keys": ctx.config.attribution_keys,
-        "excluded_keys": ctx.config.excluded_keys,
+        "fill_keys": ctx.config.fill_keys,
         "detailed_condition": ctx.config.detailed_condition,
     });
     let unit_fingerprint = fingerprint(Stage::Decide.number(), &identity)

@@ -65,7 +65,7 @@ impl PageReader for Named<FakePageReader> {
 }
 
 /// A fresh app: no `research` settings slot at all, and the fakes under the default ids.
-fn fresh_app() -> (Harness, ResearchService) {
+pub(crate) fn fresh_app() -> (Harness, ResearchService) {
     let h = Harness::chair();
     let mut settings = Settings::open(&h.app.app.paths).unwrap();
     settings.research = None;
@@ -124,14 +124,28 @@ fn reason(svc: &ResearchService, session_id: i64) -> Option<(String, String)> {
 }
 
 #[test]
-fn a24_c1a_shipped_defaults_start_a_requested_run() {
+fn a27_c4b_c_shipped_defaults_wait_for_a_chosen_field() {
     let (h, svc) = fresh_app();
     first_main_photo(&h, &svc);
     // Photo arrival alone does not request research.
     h.app.clock.advance(2_000);
     assert_eq!(svc.tick().unwrap(), None);
     assert!(h.runs(h.session_id).is_empty());
-    // The photographer asks for a run; nothing in the settings was edited.
+    let refused = svc.run_again(h.session_id).unwrap_err();
+    assert!(
+        refused
+            .to_string()
+            .contains("Choose the fields research fills in Settings → Research")
+    );
+    assert!(h.runs(h.session_id).is_empty());
+    assert_eq!(reason(&svc, h.session_id).unwrap().0, "NoFieldChosen");
+    h.set_research_settings(
+        serde_json::to_value(ResearchSettings {
+            fill_keys: vec![crate::harness::WOODS.into()],
+            ..ResearchSettings::default()
+        })
+        .unwrap(),
+    );
     svc.run_again(h.session_id).unwrap();
     let started = svc
         .tick()
