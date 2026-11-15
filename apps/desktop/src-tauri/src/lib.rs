@@ -151,6 +151,7 @@ mod p50_tests {
             .research
             .unwrap();
         assert_eq!(saved["fill_keys"], json!(["custom.wood_type"]));
+        assert!(saved.get("excluded_keys").is_none());
         let bindings = include_str!("../../src/services/bindings.ts");
         assert!(bindings.contains("fill_keys: string[]"));
         assert!(!bindings.contains("excluded_keys"));

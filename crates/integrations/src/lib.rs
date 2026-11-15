@@ -212,6 +212,12 @@ impl SettingsSetContext {
             }
         }
         let mut next = SettingsService::set(&previous, patch)?;
+        if patch.get("research").is_some() {
+            next["research"] = serde_json::to_value(
+                psm_research::config::ResearchSettings::from_slot(next.get("research")),
+            )
+            .map_err(|e| psm_core::Error::InvalidValue(e.to_string()))?;
+        }
         // P68: the shop domain and keys as the photographer meant them.
         if patch.get("integration").is_some_and(|v| v.is_object())
             && let Some(integration) = next.get_mut("integration").and_then(|v| v.as_object_mut())

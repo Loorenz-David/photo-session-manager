@@ -1,6 +1,7 @@
 //! R13 U1: chosen fields at the research service boundary.
 
-use crate::harness::{DESIGNER, Harness, SCRATCHES, WIDTH, WOODS};
+use crate::harness::{DESIGNER, Harness, INTEGRATION, SCRATCHES, WIDTH, WOODS};
+use psm_core::domain::attribute::{AttributeGroup, CoreType, Definition, Preset, PresetField};
 use psm_research::{
     api::ResearchApi,
     config::{ResearchConfig, ResearchSettings},
@@ -8,9 +9,47 @@ use psm_research::{
 };
 use serde_json::json;
 
+const COLOUR: &str = "custom.colour";
+
+fn add_colour(h: &Harness) {
+    let attrs = h.app.attributes(Some(INTEGRATION));
+    let mut definitions: Vec<Definition> = attrs
+        .definitions(Some(INTEGRATION))
+        .unwrap()
+        .into_iter()
+        .filter(|d| d.integration == INTEGRATION)
+        .collect();
+    definitions.push(Definition {
+        integration: INTEGRATION.into(),
+        key: COLOUR.into(),
+        label: "Colour".into(),
+        core_type: CoreType::Choice,
+        choices: vec!["Brown".into()],
+        validations: json!({}),
+        group: AttributeGroup::Details,
+        description: None,
+        writable: true,
+    });
+    attrs.import_definitions(INTEGRATION, definitions).unwrap();
+    attrs
+        .presets_set(Preset {
+            item_type: "Chair".into(),
+            group: AttributeGroup::Details,
+            layout: [DESIGNER, WOODS, WIDTH, COLOUR]
+                .into_iter()
+                .map(|key| PresetField {
+                    key: key.into(),
+                    default: None,
+                })
+                .collect(),
+        })
+        .unwrap();
+}
+
 #[test]
 fn a27_c2a_only_chosen_fields_reach_requests_and_writes() {
     let h = Harness::chair();
+    add_colour(&h);
     crate::stages::full_script(&h);
     let mut config = h.stage_config();
     config.fill_keys = vec![WOODS.into(), DESIGNER.into()];
@@ -19,18 +58,40 @@ fn a27_c2a_only_chosen_fields_reach_requests_and_writes() {
     for call in h.model.requests() {
         let fields = call.input["fields"].to_string();
         assert!(
-            !fields.contains(WIDTH) && !fields.contains(SCRATCHES),
+            !fields.contains(COLOUR) && !fields.contains(WIDTH) && !fields.contains(SCRATCHES),
             "{fields}"
         );
     }
-    assert!(h.row(WIDTH).is_none() && h.row(SCRATCHES).is_none());
+    assert!(h.row(COLOUR).is_none() && h.row(WIDTH).is_none() && h.row(SCRATCHES).is_none());
     assert!(h.row(WOODS).is_some() && h.row(DESIGNER).is_some());
-    for key in [WIDTH, SCRATCHES] {
+    for key in [COLOUR, WIDTH, SCRATCHES] {
         assert!(
             h.steps(run)
                 .iter()
                 .any(|s| s.field_keys.contains(&key.to_owned())
                     && s.detail.contains("not researched")),
+            "{key}"
+        );
+    }
+    let all = Harness::chair();
+    add_colour(&all);
+    crate::stages::full_script(&all);
+    let mut all_config = all.stage_config();
+    all_config.fill_keys = vec![
+        WOODS.into(),
+        DESIGNER.into(),
+        COLOUR.into(),
+        WIDTH.into(),
+        SCRATCHES.into(),
+    ];
+    let all_run = all.start_run(&all_config);
+    all.execute(all_run);
+    for key in [WOODS, DESIGNER] {
+        let selected = h.row(key).unwrap();
+        let complete = all.row(key).unwrap();
+        assert_eq!(
+            (selected.value, selected.ai_confidence),
+            (complete.value, complete.ai_confidence),
             "{key}"
         );
     }

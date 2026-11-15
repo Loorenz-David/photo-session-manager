@@ -398,6 +398,19 @@ fn model_request_fields(a: &Accepted) -> Vec<String> {
 }
 
 #[test]
+fn a27_c6a_scratch_accept_chooses_all_shop_fields() {
+    let accepted = accept_two(None);
+    let keys: Vec<String> = accept::shop_definitions()
+        .into_iter()
+        .map(|d| d.key)
+        .collect();
+    for snapshot in snapshots(&accepted) {
+        assert_eq!(snapshot["fill_keys"], json!(keys));
+    }
+    assert_eq!(accepted.outcome.pieces.len(), 2);
+}
+
+#[test]
 fn a27_c14a_owner_settings_limit_every_model_request() {
     let owner: Json = serde_json::from_str(
         &std::fs::read_to_string(repo_root().join("docs/test-items/accept_settings_owner.json"))

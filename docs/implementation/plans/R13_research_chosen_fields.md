@@ -8,7 +8,7 @@ blocked_on: none (U4's check on a few pieces, task 3, is the orchestrator's, wit
 ---
 # R13 — Research fills only the fields you chose
 
-**Tracker:** NOT_STARTED · 2026-11-15 · planner · plan written (4 units, 15 criteria, 40 rows `A27·…`, 1 of them `[manual]`); needs R12 APPROVED
+**Tracker:** IMPLEMENTED · 2026-11-15 · codex · four units checkpointed; 39 automated rows covered, full workspace gate green; A27·C15(a) is the orchestrator's live check
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -299,3 +299,5 @@ On scratch data (`PSM_DATA_DIR=$HOME/psm-research-dev npm run tauri -- dev`), sh
 6. Add a field to the list afterwards: nothing starts by itself; **Run research** on the item fills it.
 
 ## Review log
+
+- **2026-11-15, codex, implement r1.** U1 replaced the exclusion list with `fill_keys` in the engine, settings DTO, generated bindings, picker and tool scratch settings; added `NoFieldChosen`, run snapshots and stage-6 skip. U2 derives detailed condition from the levels with a value and counts empty levels in its reason. U3 explains the chosen list and warns about modifier fields outside it. U4 saved the owner's 22 keys and added the tool boundary checks. Checkpoints: U1 `e80ce98`, U2 `f877640`, U3 `4d398b0`, U4 `f65c0bc`. Closing gate: `cargo test --workspace` (889 app suite, 233 research engine, 30 tool, plus crate tests and doctests), workspace clippy, fmt, desktop typecheck and `npm test` (515 UI) green. Assumptions: a saved unsupported shop key stays visible only so it can be unticked; an empty level is ignored before grade matching; a settings save normalizes the complete research slot, removing retired keys. Deviation: `crates/integrations/src/lib.rs` was needed because the app's deep merge otherwise wrote a legacy `excluded_keys` back to disk; `apps/desktop/src-tauri/src/commands/settings.rs` executes the local save directly so the real command can be tested through Tauri's mock runtime. U4 task 3 and A27·C15(a) belong to the orchestrator and remain open here. No owner card.

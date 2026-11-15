@@ -124,13 +124,9 @@ fn reason(svc: &ResearchService, session_id: i64) -> Option<(String, String)> {
 }
 
 #[test]
-fn a27_c4b_c_shipped_defaults_wait_for_a_chosen_field() {
+fn a27_c4b_shipped_defaults_refuse_an_unchosen_run() {
     let (h, svc) = fresh_app();
     first_main_photo(&h, &svc);
-    // Photo arrival alone does not request research.
-    h.app.clock.advance(2_000);
-    assert_eq!(svc.tick().unwrap(), None);
-    assert!(h.runs(h.session_id).is_empty());
     let refused = svc.run_again(h.session_id).unwrap_err();
     assert!(
         refused
@@ -139,6 +135,12 @@ fn a27_c4b_c_shipped_defaults_wait_for_a_chosen_field() {
     );
     assert!(h.runs(h.session_id).is_empty());
     assert_eq!(reason(&svc, h.session_id).unwrap().0, "NoFieldChosen");
+}
+
+#[test]
+fn a27_c4c_one_chosen_field_starts_with_shipped_defaults() {
+    let (h, svc) = fresh_app();
+    first_main_photo(&h, &svc);
     h.set_research_settings(
         serde_json::to_value(ResearchSettings {
             fill_keys: vec![crate::harness::WOODS.into()],
@@ -162,6 +164,7 @@ fn a27_c4b_c_shipped_defaults_wait_for_a_chosen_field() {
     // The run executes from the shipped defaults.
     let snapshot = ResearchConfig::from_snapshot(run.settings_snapshot.as_deref()).unwrap();
     assert_eq!(snapshot.stages, ResearchSettings::default().stages);
+    assert_eq!(snapshot.fill_keys, vec![crate::harness::WOODS]);
     assert_eq!(
         (
             snapshot.providers.model.as_str(),
