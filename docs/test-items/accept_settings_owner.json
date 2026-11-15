@@ -1,11 +1,27 @@
 {
-  "excluded_keys": [
-    "custom.totalwidth",
-    "custom.totaldepth",
-    "custom.totalheight",
-    "custom.seatheightchairs",
-    "custom.weight_definition",
-    "custom.damage_details"
+  "fill_keys": [
+    "custom.designer",
+    "custom.manufacturer",
+    "custom.wood_type",
+    "custom.country",
+    "custom.years",
+    "custom.color_furniture",
+    "custom.quantity",
+    "custom.condition_cracks",
+    "custom.condition_dents_chips",
+    "custom.condition_function",
+    "custom.condition_missing_parts",
+    "custom.condition_mold",
+    "custom.condition_odor",
+    "custom.condition_scratch",
+    "custom.condition_stability",
+    "custom.condition_stains_discoloration",
+    "custom.condition_upholstery",
+    "custom.condition_veneer_damage",
+    "custom.condition_water_damage",
+    "custom.condition_report",
+    "custom.condition_report_description",
+    "custom.detailed_condition"
   ],
   "extra_shop_hosts": [
     "beyovintage.com",
@@ -15,11 +31,26 @@
   "detailed_condition": {
     "key": "custom.detailed_condition",
     "levels": [
-      { "level": "N/A", "choice": null },
-      { "level": "None", "choice": "Very Good - This vintage item has no defects, but it may show slight traces of use." },
-      { "level": "Minor", "choice": "Very Good - This vintage item has no defects, but it may show slight traces of use." },
-      { "level": "Moderate", "choice": "Good - This vintage item may have some wear such as scratches and other signs of ageing" },
-      { "level": "Major", "choice": "Worn - This vintage item has visible damages, defects, or small missing parts. It may be in need of restoration." }
+      {
+        "level": "N/A",
+        "choice": null
+      },
+      {
+        "level": "None",
+        "choice": "Very Good - This vintage item has no defects, but it may show slight traces of use."
+      },
+      {
+        "level": "Minor",
+        "choice": "Very Good - This vintage item has no defects, but it may show slight traces of use."
+      },
+      {
+        "level": "Moderate",
+        "choice": "Good - This vintage item may have some wear such as scratches and other signs of ageing"
+      },
+      {
+        "level": "Major",
+        "choice": "Worn - This vintage item has visible damages, defects, or small missing parts. It may be in need of restoration."
+      }
     ]
   }
 }

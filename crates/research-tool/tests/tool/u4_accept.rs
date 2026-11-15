@@ -204,7 +204,6 @@ struct Accepted {
     images: Images,
     log: String,
     /// The HTTP seam of the research adapters (every model request the stub received).
-    #[allow(dead_code)] // U4's chosen-field request test reads this capture.
     http: Arc<FakeResearchHttp>,
 }
 
@@ -381,6 +380,76 @@ fn snapshots(a: &Accepted) -> Vec<Json> {
     runs.iter()
         .map(|r| serde_json::from_str(r.settings_snapshot.as_deref().unwrap()).unwrap())
         .collect()
+}
+
+fn model_request_fields(a: &Accepted) -> Vec<String> {
+    let mut keys = Vec::new();
+    for request in a.http.requests().iter().filter(|r| r.url == RESPONSES_URL) {
+        let psm_research::adapters::http::Body::Json(body) = &request.body else {
+            panic!("a model request without a JSON body");
+        };
+        let text = body["input"][0]["content"][0]["text"].as_str().unwrap();
+        let input: Json = serde_json::from_str(text).unwrap();
+        for field in input["fields"].as_array().into_iter().flatten() {
+            keys.push(field["key"].as_str().unwrap().to_owned());
+        }
+    }
+    keys
+}
+
+#[test]
+fn a27_c14a_owner_settings_limit_every_model_request() {
+    let owner: Json = serde_json::from_str(
+        &std::fs::read_to_string(repo_root().join("docs/test-items/accept_settings_owner.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    let with_owner = accept_two(Some(owner.clone()));
+    let chosen = owner["fill_keys"].as_array().unwrap();
+    for snapshot in snapshots(&with_owner) {
+        assert_eq!(snapshot["fill_keys"], owner["fill_keys"]);
+        assert_eq!(snapshot["extra_shop_hosts"], owner["extra_shop_hosts"]);
+    }
+    let sent = model_request_fields(&with_owner);
+    assert!(!sent.is_empty());
+    assert!(
+        sent.iter()
+            .all(|key| chosen.contains(&json!(key)) && key != "custom.detailed_condition"),
+        "{sent:?}"
+    );
+    let without_owner = accept_two(None);
+    let scratch_keys: Vec<String> = accept::shop_definitions()
+        .into_iter()
+        .map(|d| d.key)
+        .collect();
+    for snapshot in snapshots(&without_owner) {
+        assert_eq!(snapshot["fill_keys"], json!(scratch_keys));
+    }
+    assert!(
+        model_request_fields(&without_owner)
+            .iter()
+            .any(|key| !chosen.contains(&json!(key)))
+    );
+}
+
+#[test]
+fn a27_c14b_owner_file_has_only_22_real_unique_chosen_keys() {
+    let owner: Json = serde_json::from_str(
+        &std::fs::read_to_string(repo_root().join("docs/test-items/accept_settings_owner.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(owner.get("excluded_keys").is_none());
+    let chosen = owner["fill_keys"].as_array().unwrap();
+    assert_eq!(chosen.len(), 22);
+    let unique: std::collections::HashSet<&str> =
+        chosen.iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!(unique.len(), 22);
+    let definitions: std::collections::HashSet<String> = accept::shop_definitions()
+        .into_iter()
+        .map(|d| d.key)
+        .collect();
+    assert!(unique.iter().all(|key| definitions.contains(*key)));
 }
 
 #[test]
