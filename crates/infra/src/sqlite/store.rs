@@ -22,6 +22,7 @@ use psm_core::{
         research::{Feedback, FeedbackAction},
         session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
         storage::{ArchivedImage, ItemRetention},
+        template::{Container, Presets, Template, TemplateSummary},
     },
     mechanisms::{
         canon::canon,
@@ -76,6 +77,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/011_item_stock.sql")),
             M::up(include_str!("migrations/012_photo_denials.sql")),
             M::up(include_str!("migrations/013_form_values.sql")),
+            M::up(include_str!("migrations/014_shooting_templates.sql")),
         ]
     }
 
@@ -121,6 +123,83 @@ impl SqliteStore {
 
 fn db(error: rusqlite::Error) -> Error {
     Error::InvalidData(error.to_string())
+}
+
+fn template_read(conn: &Connection, id: i64) -> Result<Template> {
+    let item_type: String = conn
+        .query_row(
+            "SELECT item_type FROM shooting_templates WHERE id=?1",
+            [id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(db)?
+        .ok_or_else(|| Error::NotFound("template".into()))?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, final_no, shoot_no, example_file, split, shape, zoom
+         FROM template_containers WHERE template_id=?1 ORDER BY final_no",
+        )
+        .map_err(db)?;
+    let containers = stmt
+        .query_map([id], |r| {
+            let shape: Option<String> = r.get(5)?;
+            let shape = shape.map(parse_enum).transpose()?;
+            Ok(Container {
+                id: r.get(0)?,
+                final_no: r.get(1)?,
+                shoot_no: r.get(2)?,
+                example_file: r.get(3)?,
+                example_path: None,
+                presets: Presets {
+                    split: r.get::<_, i64>(4)? != 0,
+                    shape,
+                    zoom: r.get(6)?,
+                },
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    Ok(Template {
+        id,
+        item_type,
+        containers,
+    })
+}
+
+fn template_owner(conn: &Connection, container_id: i64) -> Result<i64> {
+    conn.query_row(
+        "SELECT template_id FROM template_containers WHERE id=?1",
+        [container_id],
+        |r| r.get(0),
+    )
+    .optional()
+    .map_err(db)?
+    .ok_or_else(|| Error::NotFound("container".into()))
+}
+
+fn template_touch(conn: &Connection, id: i64, at: i64) -> Result<()> {
+    conn.execute(
+        "UPDATE shooting_templates SET updated_at=?2 WHERE id=?1",
+        params![id, at],
+    )
+    .map_err(db)?;
+    Ok(())
+}
+
+fn template_tx<T>(
+    store: &SqliteStore,
+    op: impl FnOnce(&Transaction<'_>) -> Result<T>,
+) -> Result<T> {
+    let mut conn = store
+        .conn
+        .lock()
+        .map_err(|e| Error::InvalidData(e.to_string()))?;
+    let tx = conn.transaction().map_err(db)?;
+    let result = op(&tx)?;
+    tx.commit().map_err(db)?;
+    Ok(result)
 }
 
 const STYLE_ELIGIBLE_PENDING: i64 = i64::MIN;
@@ -1300,6 +1379,184 @@ fn from_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T> {
 }
 
 impl Store for SqliteStore {
+    fn template_list(&self) -> Result<Vec<TemplateSummary>> {
+        template_tx(self, |tx| {
+            let mut stmt = tx.prepare("SELECT t.id, t.item_type, COUNT(c.id) FROM shooting_templates t LEFT JOIN template_containers c ON c.template_id=t.id GROUP BY t.id ORDER BY t.item_type").map_err(db)?;
+            stmt.query_map([], |r| {
+                Ok(TemplateSummary {
+                    id: r.get(0)?,
+                    item_type: r.get(1)?,
+                    container_count: r.get(2)?,
+                })
+            })
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)
+        })
+    }
+    fn template_get(&self, key: &str) -> Result<Option<Template>> {
+        template_tx(self, |tx| {
+            let id: Option<i64> = tx
+                .query_row(
+                    "SELECT id FROM shooting_templates WHERE type_key=?1",
+                    [key],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(db)?;
+            id.map(|id| template_read(tx, id)).transpose()
+        })
+    }
+    fn template_get_by_id(&self, id: i64) -> Result<Template> {
+        template_tx(self, |tx| template_read(tx, id))
+    }
+    fn template_create(&self, item_type: &str, key: &str, at: i64) -> Result<Template> {
+        template_tx(self, |tx| {
+            if tx
+                .query_row(
+                    "SELECT id FROM shooting_templates WHERE type_key=?1",
+                    [key],
+                    |r| r.get::<_, i64>(0),
+                )
+                .optional()
+                .map_err(db)?
+                .is_some()
+            {
+                return Err(Error::TemplateExists);
+            }
+            tx.execute("INSERT INTO shooting_templates(item_type,type_key,created_at,updated_at) VALUES (?1,?2,?3,?3)", params![item_type, key, at]).map_err(db)?;
+            template_read(tx, tx.last_insert_rowid())
+        })
+    }
+    fn template_delete(&self, id: i64) -> Result<()> {
+        template_tx(self, |tx| {
+            template_read(tx, id)?;
+            tx.execute("DELETE FROM template_containers WHERE template_id=?1", [id])
+                .map_err(db)?;
+            tx.execute("DELETE FROM shooting_templates WHERE id=?1", [id])
+                .map_err(db)?;
+            Ok(())
+        })
+    }
+    fn template_container_add(
+        &self,
+        id: i64,
+        example_file: Option<&str>,
+        at: i64,
+    ) -> Result<Template> {
+        template_tx(self, |tx| {
+            let t = template_read(tx, id)?;
+            let next = t.containers.len() as i64 + 1;
+            tx.execute("INSERT INTO template_containers(template_id,final_no,shoot_no,example_file) VALUES (?1,?2,?2,?3)", params![id, next, example_file]).map_err(db)?;
+            template_touch(tx, id, at)?;
+            template_read(tx, id)
+        })
+    }
+    fn template_container_example_set(
+        &self,
+        id: i64,
+        example_file: &str,
+        at: i64,
+    ) -> Result<(Template, Option<String>)> {
+        template_tx(self, |tx| {
+            let owner = template_owner(tx, id)?;
+            let old: Option<String> = tx
+                .query_row(
+                    "SELECT example_file FROM template_containers WHERE id=?1",
+                    [id],
+                    |r| r.get(0),
+                )
+                .map_err(db)?;
+            tx.execute(
+                "UPDATE template_containers SET example_file=?2 WHERE id=?1",
+                params![id, example_file],
+            )
+            .map_err(db)?;
+            template_touch(tx, owner, at)?;
+            Ok((template_read(tx, owner)?, old))
+        })
+    }
+    fn template_container_remove(&self, id: i64, at: i64) -> Result<(Template, Option<String>)> {
+        template_tx(self, |tx| {
+            let owner = template_owner(tx, id)?;
+            let old = template_read(tx, owner)?;
+            let removed = old
+                .containers
+                .iter()
+                .find(|c| c.id == id)
+                .and_then(|c| c.example_file.clone());
+            tx.execute("DELETE FROM template_containers WHERE id=?1", [id])
+                .map_err(db)?;
+            let mut final_order: Vec<_> = old.containers.iter().filter(|c| c.id != id).collect();
+            final_order.sort_by_key(|c| c.final_no);
+            for (n, c) in final_order.iter().enumerate() {
+                tx.execute(
+                    "UPDATE template_containers SET final_no=?2 WHERE id=?1",
+                    params![c.id, n as i64 + 1],
+                )
+                .map_err(db)?;
+            }
+            final_order.sort_by_key(|c| c.shoot_no);
+            for (n, c) in final_order.iter().enumerate() {
+                tx.execute(
+                    "UPDATE template_containers SET shoot_no=?2 WHERE id=?1",
+                    params![c.id, n as i64 + 1],
+                )
+                .map_err(db)?;
+            }
+            template_touch(tx, owner, at)?;
+            Ok((template_read(tx, owner)?, removed))
+        })
+    }
+    fn template_order_set(
+        &self,
+        id: i64,
+        ids: &[i64],
+        shooting: bool,
+        at: i64,
+    ) -> Result<Template> {
+        template_tx(self, |tx| {
+            let current = template_read(tx, id)?;
+            let expected: std::collections::HashSet<i64> =
+                current.containers.iter().map(|c| c.id).collect();
+            let actual: std::collections::HashSet<i64> = ids.iter().copied().collect();
+            if ids.len() != expected.len() || actual != expected {
+                return Err(Error::InvalidValue(
+                    "container order must include every container once".into(),
+                ));
+            }
+            let column = if shooting { "shoot_no" } else { "final_no" };
+            let query = format!("UPDATE template_containers SET {column}=?2 WHERE id=?1");
+            for (n, container_id) in ids.iter().enumerate() {
+                tx.execute(&query, params![container_id, n as i64 + 1])
+                    .map_err(db)?;
+            }
+            template_touch(tx, id, at)?;
+            template_read(tx, id)
+        })
+    }
+    fn template_container_presets_set(
+        &self,
+        id: i64,
+        presets: &Presets,
+        at: i64,
+    ) -> Result<Template> {
+        template_tx(self, |tx| {
+            let owner = template_owner(tx, id)?;
+            tx.execute(
+                "UPDATE template_containers SET split=?2, shape=?3, zoom=?4 WHERE id=?1",
+                params![
+                    id,
+                    i64::from(presets.split),
+                    presets.shape.map(|s| s.as_str()),
+                    presets.zoom
+                ],
+            )
+            .map_err(db)?;
+            template_touch(tx, owner, at)?;
+            template_read(tx, owner)
+        })
+    }
     fn preview_states(&self) -> Result<Vec<RawPreviewState>> {
         let conn = self
             .conn

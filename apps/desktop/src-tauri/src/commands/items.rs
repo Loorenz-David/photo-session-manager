@@ -39,6 +39,9 @@ impl From<Error> for CommandError {
     fn from(error: Error) -> Self {
         let mut data = BTreeMap::new();
         let code = match &error {
+            Error::TemplateExists => "template_exists",
+            Error::TemplateImageUnreadable => "template_image_unreadable",
+            Error::NoTemplate => "no_template",
             Error::CompositionInvalid { reason } => {
                 data.insert("reason".into(), reason.clone());
                 "composition_invalid"

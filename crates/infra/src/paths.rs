@@ -31,6 +31,7 @@ impl AppPaths {
     pub fn create(&self) -> Result<()> {
         for name in [
             "previews",
+            "templates",
             "hooks",
             "spool",
             "spool/bad",

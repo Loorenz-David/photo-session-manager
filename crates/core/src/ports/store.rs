@@ -9,6 +9,7 @@ use crate::domain::{
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{LatestPublish, Session, SessionDto, SessionListRecord},
     storage::{ArchivedImage, ItemRetention, PhotoDenial},
+    template::{Presets, Template, TemplateSummary},
 };
 
 #[derive(Debug, Clone)]
@@ -176,6 +177,32 @@ pub trait StoreTx {
 }
 
 pub trait Store: Send + Sync {
+    fn template_list(&self) -> Result<Vec<TemplateSummary>>;
+    fn template_get(&self, type_key: &str) -> Result<Option<Template>>;
+    fn template_get_by_id(&self, id: i64) -> Result<Template>;
+    fn template_create(&self, item_type: &str, type_key: &str, at: i64) -> Result<Template>;
+    fn template_delete(&self, id: i64) -> Result<()>;
+    fn template_container_add(
+        &self,
+        id: i64,
+        example_file: Option<&str>,
+        at: i64,
+    ) -> Result<Template>;
+    fn template_container_example_set(
+        &self,
+        id: i64,
+        example_file: &str,
+        at: i64,
+    ) -> Result<(Template, Option<String>)>;
+    fn template_container_remove(&self, id: i64, at: i64) -> Result<(Template, Option<String>)>;
+    fn template_order_set(&self, id: i64, ids: &[i64], shooting: bool, at: i64)
+    -> Result<Template>;
+    fn template_container_presets_set(
+        &self,
+        id: i64,
+        presets: &Presets,
+        at: i64,
+    ) -> Result<Template>;
     fn preview_states(&self) -> Result<Vec<RawPreviewState>>;
     fn preview_state(&self, raw: &str) -> Result<Option<RawPreviewState>>;
     fn ensure_initial_generation(&self, raw: &str) -> Result<Option<i64>>;

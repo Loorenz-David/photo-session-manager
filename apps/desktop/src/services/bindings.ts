@@ -179,6 +179,16 @@ export const commands = {
 	 *  storage budget.
 	 */
 	itemKeepFilesSet: (sessionId: CommandId, keep: boolean) => typedError<ItemArchiveDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_keep_files_set", { sessionId, keep })),
+	templatesList: () => typedError<TemplateSummaryDto[], CommandError>(__TAURI_INVOKE("templates_list")),
+	templateGet: (itemType: string) => typedError<TemplateDto_Serialize | null, CommandError>(__TAURI_INVOKE("template_get", { itemType })),
+	templateCreate: (itemType: string) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_create", { itemType })),
+	templateDelete: (templateId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("template_delete", { templateId })),
+	templateContainerAdd: (templateId: CommandId, source: string | null) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_container_add", { templateId, source })),
+	templateContainerRemove: (containerId: CommandId) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_container_remove", { containerId })),
+	templateContainerExampleSet: (containerId: CommandId, source: string) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_container_example_set", { containerId, source })),
+	templateContainersReorder: (templateId: CommandId, containerIds: CommandId[]) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_containers_reorder", { templateId, containerIds })),
+	templateShootingOrderSet: (templateId: CommandId, containerIds: CommandId[]) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_shooting_order_set", { templateId, containerIds })),
+	templateContainerPresetsSet: (containerId: CommandId, presets: PresetsInput_Deserialize) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_container_presets_set", { containerId, presets })),
 };
 
 /* Types */
@@ -420,6 +430,26 @@ export type ConditionLevelDto_Serialize = {
 
 /**  The three actions on a conflict (MC-A10, MC-A12). */
 export type ConflictActionDto = "keep_previous" | "use_suggestion" | "edit";
+
+export type ContainerDto = ContainerDto_Serialize | ContainerDto_Deserialize;
+
+export type ContainerDto_Deserialize = {
+	id: number,
+	final_no: number,
+	shoot_no: number,
+	example_file?: string | null,
+	example_path?: string | null,
+	presets: PresetsDto_Deserialize,
+};
+
+export type ContainerDto_Serialize = {
+	id: number,
+	final_no: number,
+	shoot_no: number,
+	example_file: string | null,
+	example_path: string | null,
+	presets: PresetsDto_Serialize,
+};
 
 /**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */
 export type DefinitionDto = DefinitionDto_Serialize | DefinitionDto_Deserialize;
@@ -852,6 +882,34 @@ export type PresetFieldDto_Deserialize = {
 export type PresetFieldDto_Serialize = {
 	key: string,
 	default: string | null,
+};
+
+export type PresetsDto = PresetsDto_Serialize | PresetsDto_Deserialize;
+
+export type PresetsDto_Deserialize = {
+	split: boolean,
+	shape?: string | null,
+	zoom: number,
+};
+
+export type PresetsDto_Serialize = {
+	split: boolean,
+	shape: string | null,
+	zoom: number,
+};
+
+export type PresetsInput = PresetsInput_Serialize | PresetsInput_Deserialize;
+
+export type PresetsInput_Deserialize = {
+	split: boolean,
+	shape?: string | null,
+	zoom: number,
+};
+
+export type PresetsInput_Serialize = {
+	split: boolean,
+	shape: string | null,
+	zoom: number,
 };
 
 /**
@@ -1507,6 +1565,26 @@ export type TakeBackAvailability_Serialize = {
 export type TakeBackResponse = {
 	completed_steps: number,
 	camera_held: boolean,
+};
+
+export type TemplateDto = TemplateDto_Serialize | TemplateDto_Deserialize;
+
+export type TemplateDto_Deserialize = {
+	id: number,
+	item_type: string,
+	containers: ContainerDto_Deserialize[],
+};
+
+export type TemplateDto_Serialize = {
+	id: number,
+	item_type: string,
+	containers: ContainerDto_Serialize[],
+};
+
+export type TemplateSummaryDto = {
+	id: number,
+	item_type: string,
+	container_count: number,
 };
 
 /**

@@ -20,6 +20,7 @@ pub mod sameness;
 pub mod secrets;
 pub mod staleness;
 pub mod status;
+pub mod template;
 pub mod time;
 pub mod upload_name;
 pub mod values;
