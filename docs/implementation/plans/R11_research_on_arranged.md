@@ -8,7 +8,7 @@ blocked_on: none (one owner card, which the plan does not wait for: the detailed
 ---
 # R11 — Research starts when the session is arranged
 
-**Tracker:** IMPLEMENTED · 2026-11-15 · codex · 6 units (U1–U5 codex, U6 + closing gate claude-opus resume); 99 rows → 99 `a25_*` tests; gate green: `cargo test --workspace` 1414 passed, clippy, fmt, typecheck, `npm test` 509 passed
+**Tracker:** CHANGES_REQUESTED · 2026-11-15 · opus · review r1: one B2 (A25·C23(a): the desktop command test does not show `session_arrange_next` reaching the engine; fix touches only that test); 8 notes in `backlog_research/R11_research_on_arranged.md`; Review-mode checks all green
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -472,3 +472,14 @@ On scratch data (`PSM_DATA_DIR=$HOME/psm-research-dev npm run tauri -- dev`), sh
 - U6 removes `a19_c5d` from `r6_research_settings.test.tsx` as the plan's table says (A25·C28(d) replaces it) and the now-unused helper.
 
 **For the reviewer.** A25·C23(a) (`apps/desktop/src-tauri/src/lib.rs`, `a25_c23a_new_commands_reach_wired_app_and_bindings`) calls `session_arrange_next` with prices emptied and an unreviewed photo, so it proves the mark through the command but not that the command queued a run; the reset half reaches the engine. Left as committed (resume note: keep U1–U5 unless the gate shows a defect). The owner's card was answered on 2026-11-15 (table A, 08B changelog 15); R12 writes it as the default, R11 ships the table empty as planned.
+
+### 2026-11-15 · review r1 · opus · CHANGES_REQUESTED
+**Checks (Review mode, once each, on `3b93141`):** `cargo test -p psm-research` 142+202+1 · `--test suite research::` 77 · `p03_session_state_list::` 28 · `p13_publish_runs::` 36 · `cargo test -p psm-desktop` 25 · vitest (settings, shell, sessions, publish, form) 211 · clippy, fmt, typecheck green. The implementer's full-suite stamp stands.
+
+**Verified correct.** Perimeter per unit (small forced extras noted). Every retired test was handled as the table says, and no still-valid row was lost. U1: `arranged` (refusals, the five creation-blocking prerequisites, queued guard, failed/cancelled retry, MC-A7 comparison against the latest started run); `session_changed` only moves the source wait; no quiet period; reuse applies to `arranged`; legacy queued `auto`/`follow_up` cancelled when the service is built. U2: left-alone as the first class step and in the writable-field count; extra hosts in the snapshot and the refusals; validate and `site_add` refusals; reset keeps the six named values. U3: `derive` follows the contract's six steps; levels are read in stage 7's own transaction after this run's condition writes; the write goes through MC-A1; shop items are dropped only for attribution (measured and visible unchanged); the read-step detail. U4: `arranged_at` via `ensure`, set once, no `change_seq`/undo; `SessionChanged` only on a new mark; the next-session rule; composition in `crates/integrations` (H8); HA4 logging; confirm unchanged. U5/U6: button, tag, publish line with Confirm enabled, panel hint, pickers, table, reset dialog. Assumptions: none contradicts the intention. H1–H8 hold.
+
+**Findings.** F1 (B2, route production): the A25·C23(a) desktop command test calls `session_arrange_next` with prices emptied and no Main photo, and never asserts `research_queued`, so it cannot fail if the command skips the engine (charter rule 10). Fix: arrange first, on a session with a Main photo and the prices intact; assert `research_queued` true and one queued `arranged` run; then empty the prices for the reset half. Files: `apps/desktop/src-tauri/src/lib.rs` (that test only).
+
+**Notes** (8, in `backlog_research/R11_research_on_arranged.md`). C22(a)'s status clause compares against `"price_missing"` and can never fail; a probe shows the wired fakes do report `PriceMissing` after a reset (fake ids are not in the default price table); the real app is covered by C10(b) (plan lesson). C24(d) Unassigned half (safe by its branch). C33(a) saved-value half asserts the fixture. C7(a) partial. C9(c) sets the host directly. Stage 7 goes on past the cap for a derived-only decision (judgment call for 08B). Preview marks before the preview can fail. Declared-file differences.
+
+**Probes:** test files only, both reverted (`r11_arranged.rs` restored byte-identical; a temporary vitest file deleted). No production file touched.
