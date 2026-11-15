@@ -1,7 +1,7 @@
 # 02 — Architecture: layers, crates, flows, persistence, events, frontend
 
 Authorities: book `11_architecture_and_packaging.md` (layers), master plan §6 (names), the code.
-Paths below are real at P70; names in **bold** are the registry's.
+Paths below are real at P70 (§Research: after R13); names in **bold** are the registry's.
 
 ## Layers and the dependency rule (book `11` §Layers; master plan §6.1 "Layer rule")
 ```
@@ -42,7 +42,7 @@ replaces), `keychain.rs`, `processes.rs` (`ps`, read-only), `sleep.rs` (IOKit id
 ### `crates/integrations` (psm-integrations)
 | Module | Holds |
 |---|---|
-| `lib.rs` | **App** (every service, three job runners `jobs`/`publish_jobs`/`render_jobs`, background threads, `EventHub`, `Lanes`), **AppHandles** (clones for commands), `App::open` → `open_with_adapter_bind` → `build`; `apply_settings` (simple update vs full rebuild); `shutdown` |
+| `lib.rs` | **App** (every service, three job runners `jobs`/`publish_jobs`/`render_jobs`, background threads, `EventHub`, `Lanes`; plus the research runner `ResearchWiring`, §Research), **AppHandles** (clones for commands), `App::open` → `open_with_adapter_bind` → `build`; `apply_settings` (simple update vs full rebuild); `shutdown` |
 | `editing/capture_one/` | `adapter.rs` (**CaptureOneAdapter** = EditingProvider), `scripting.rs` (**CaptureOneScripting** trait + DTOs), `jxa.rs` (**JxaScripting**: the `SCRIPTS` table, 24 entries, written to `<data>/hooks/jxa/*.js` at start, each prefixed with `jxa/lib.js`), `jxa/*.js`, `hooks.rs` + `hooks/*.applescript.tmpl` (compiled hook scripts), `gate.rs` (**GatedScripting**: user and background lanes, the one gate every script passes), `launch_gate.rs` (**LaunchGate**, held by the take-back), `follow.rs` (current collection + `sync_folder` on arrival), `mirror.rs` (colour tags), `renders.rs` (render bookkeeping), `provision.rs` (ensure sequence, error classification), `recipes.rs` (**RecipeSpec**: `PSM Preview` JPEG, `PSM Master` 8-bit TIFF uncompressed) |
 | `camera/` | `runtime.rs` (**CameraRuntime**: one per process, owns supervisor, client, receiver, ledger, take-back, `tick`), `sidecar/{supervisor.rs, protocol.rs, client.rs, mod.rs (SidecarTimings, restart backoff)}`, `direct/{adapter.rs (DirectCameraAdapter), take_back.rs, ownership.rs, start_order.rs, filenames.rs}`, `support/{mod.rs, sony.rs, manifest.rs}` (support packages), `via_capture_one.rs` (fallback CameraProvider through Capture One) |
 | `commerce/shopify/` | `adapter.rs` (**ShopifyAdapter** = CommerceAdapter; `ShopifyConfig`, `PollConfig`), `graphql.rs` (hand-written documents, one `pub const` per operation), `auth.rs` (client-credentials token, memory only), `transport.rs` (**HttpTransport**: reqwest / fake), `type_map.rs` (MC-13), `types.rs`, `errors.rs`, `fixtures/*.json` (sanitised captures replayed in tests) |
@@ -192,21 +192,131 @@ take-back, export or publish runs; deletes at most a batch per tick; rules in `m
 `RetentionService` verified Shopify still holds every published image; `item_retention.keep_files` pin;
 `archived_images` for the read-only archived view). Every deletion logs `storage.cleared rule=… path=… bytes=…`.
 
+## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
+Names below are real after R13. The engine is one isolated crate; app code changes only at the seams
+listed in the research master plan §5 "Seams".
+
+### `crates/research` (psm-research; depends on `psm-core` and `psm-infra`, never on integrations or the desktop crate)
+| Module | Holds |
+|---|---|
+| `api.rs`, `api_impl.rs` | **ResearchApi** (the trait app code calls: `status`, `run`, `arranged`, `session_changed`, `settings_changed`, `settings_reset`, `validate_settings`, `secrets_set`, `secrets_state`, `site_add`, `site_remove`, `sites_reorder`, `export`, `purge_expired`) and its shapes (`ResearchStatus`, `RunView`, `StepView`, `Reason`, `SecretsInput`, `SecretsState`, `ExportSelection`); implemented for `ResearchService` |
+| `domain.rs` | `RunState`, `RunTrigger` (`Arranged`, `Manual`; `Auto`/`FollowUp` are only read from old rows), `Stage` (observe, find, read, compare, labels, condition, decide), `StepKind`, `CallState`, `SiteClass`, `Verdict`, `ErrorClass`, `FieldClass`, `Prerequisite`, `CallFailure` |
+| `config.rs` | **ResearchSettings** (the `research` slot of `settings.json`, read tolerantly by `from_slot`, checked by `validate`), **ResearchConfig** (the per-run snapshot, `from_settings` with the shop facts), the shipped defaults (stage models and efforts, prices, the detailed-condition table), `INSTRUCTIONS_VERSION`. With `adapters/`, the only place model and vendor names are literals (HA5) |
+| `ports.rs` | the three provider ports **ModelProvider** (`call(&ModelRequest)`), **VisualSearchProvider** (`search(&ResearchImage)`), **PageReader** (`read(url)`), their replies (each carries an `Exchange {request, response}` for the call record) and `Providers` (an `Option` per port) |
+| `adapters/` | `mod.rs::build` (adapters chosen by `research.providers.*`; default ids `openai`, `serpapi_lens`, `page_http`; keys read from the secrets port on every call), `http.rs` (the HTTP seam: `ReqwestResearchHttp` live, a fake in tests), `openai/` (Responses API, strict schemas), `visual_search/serpapi_lens.rs` (upload, then the Lens search), `page_reader/` (plain HTTP download, address guard, pacing of slow hosts, `extract.rs::product_extract`) |
+| `rules/` (pure, inline unit tests) | `value_map` (MC-A2), `sites` (MC-A3: hosts, trusted sites, reading order, own listing), `fingerprint` (MC-A7, `RESEARCH_FINGERPRINT_VERSION`), `confidence` (MC-A4: `field_class`, `decide_*`), `cost` (MC-A8, integer micro-USD), `calls` (MC-A9: classify, retry action, redact; `RESEARCH_CALL_ATTEMPTS`), `write_table` (MC-A1: `never_written`, `decide_write`), `run_rules` (MC-A6: `first_failing`, `may_start`, `start_order`, `arranged_needed`), `derived_condition` (`derive`), `photo_plan` (`look_at`) |
+| `runs.rs` | the life of a run around `execute`: when a run row is created (`arranged`, `run_again`), `tick` (start order), the start transaction, `status` for the panel |
+| `stages.rs`, `decide.rs` | stages 1–6 as units (`execute` resumes at the first uncommitted unit) and the instructions each stage sends; stage 7 Decide (class, evidence, confidence, reasons, then the writes) |
+| `gateway.rs` | **CallGateway::call**, the one door for every provider call: eligibility re-read, stop rule, call record and outbound rows are committed **before** the request leaves; reply, usage and cost are recorded after; retries, error classes, redaction |
+| `writes.rs` | the one door for the form values research writes (MC-A1), inside the writing transaction; no undo step |
+| `images.rs`, `files.rs` | **ResearchImage** (no public constructor: `ResearchImages::render` makes one only from an eligible photo's adjusted preview through `Imaging::render_research`, so a RAW or a master can never reach a port, MC-A5); the file store `<data>/research/images/<sha[0..2]>/<sha>.jpg` |
+| `store.rs`, `schema.rs` | the engine's SQL and `schema::ensure` (§Storage below) |
+| `service.rs`, `job.rs` | **ResearchService** (gateway, renderer, snapshots; the Keychain account names) and **ResearchJob**, the `jobs` handler of kind `research` (target = run id; an offline call holds the job, back-off at most 60 s) |
+| `shop.rs`, `export.rs`, `retention.rs` | shop facts through `CommerceAdapter::public_listing`; the export of the research record (folder, then zip; scanned for secrets, fail closed); deletion of call records and their images after `record_days` |
+| `fakes.rs`, `fixtures/` | scripted stand-in providers for tests; sanitised provider captures written by R1 (`fixtures/<provider>/`), never by hand |
+
+### A run, step by step
+1. **Trigger.** `session_arrange_next` (`commands/sessions.rs`) → `crates/integrations/src/arranged.rs`
+   `arrange_and_next`: `SessionsService::arrange` sets `sessions.arranged_at` (first press only; no
+   undo step, no `change_seq` bump), then `ResearchApi::arranged` queues a run (trigger `arranged`)
+   when no blocking prerequisite fails, the session has a Main photo, no run is already queued, and
+   the photo-derived input differs from the latest started run's snapshot
+   (`rules::run_rules::arranged_needed`). `publish_preview` marks unmarked sessions the same way
+   (`arranged::preview_for_publish`) and reports `researching` per item. `research_run` (the panel's
+   Research / Run again) queues a `manual` run. A photo change creates no run.
+2. **Prerequisites** (`rules::run_rules::first_failing`, first failing wins; the panel shows its
+   sentence): no integration · no model key · no visual-search key · a price missing · nothing to
+   research · no field chosen · day limit · offline; plus `WaitingForEditor` while a run waits for
+   Capture One's adjusted previews (`source_wait_seconds`).
+3. **Start.** The research runner (`ResearchWiring` in `crates/integrations/src/lib.rs`: its own
+   thread waking every 250 ms, its own `JobRunner` limited to kind `research`, one turn at a time)
+   calls `ResearchService::tick`: one run runs at a time; the start transaction sets `running`,
+   freezes the settings, form and input snapshots on the run row and inserts the `jobs` row.
+4. **Stages** (`stages::execute`): 1 **observe** (one call over at most `observe_max_photos` photos,
+   Main first) → 2 **find** (visual search on the cover, Main position 1) → 3 **read** (pages in
+   reading order: shop, trusted, untrusted; until `max_pages` are obtained) → 4 **compare** (the cover
+   against each obtained page that has images and lists the same kind of piece) → 5 **labels** (one
+   unit per photo stage 1 saw a marking on) → 6 **condition** (one unit over the Condition photos; no
+   call when no condition field is chosen) → 7 **decide**. Each unit commits its output, its steps
+   and the stage reached in one transaction, under a fingerprint; a committed unit never runs again
+   (crash-safe, H4), and an `arranged` run reuses an earlier run's unit with the same fingerprint (a
+   `manual` run reuses nothing). The cost stop rule (`max_cost_per_run`, `max_cost_per_day`) ends a
+   run as `stopped_at_cap`.
+5. **Decide and write** (`decide.rs`): per layout field its class, the evidence from the committed
+   outputs, the confidence rules; one model call writes the reasons; one transaction applies the
+   writes through `writes.rs` (`ai` + `suggested`; with an `ai_prior` when it replaced a default or
+   shop value) together with the `concluded` / `not_determined` steps. `AppEvent::ResearchChanged` →
+   Tauri event `research_changed {session_id}` → the form re-reads `research_status`.
+6. **Afterwards.** The person's Looks right / Clear / edit / Accept all / conflict resolution go
+   through core (`services/attributes.rs`, `services/history.rs`; commands `attribute_ai_accept`,
+   `attribute_ai_accept_all`, `attribute_conflict_resolve`), are undo steps and write
+   `research_feedback` rows (MC-A12). Publish splits an item's values with
+   `mechanisms/publish_partition.rs` (frozen / withheld / pending) and holds an item with pending
+   conflicts at `PublishStep::Held` (MC-A10).
+
+### Field classes (`rules::confidence::field_class`; first match wins)
+never-written (MC-A1, `rules::write_table::never_written`: the Product step or group; media-list,
+reference, rich-text, money and rating types; a non-writable field; the product title) · **not
+chosen** (key not in `fill_keys`; treated exactly as never-written) · **derived**
+(`detailed_condition.key`) · **condition** (the Condition group) · **attribution**
+(`attribution_keys`; HA2: never above `low` on looks alone) · **measured** (dimension, weight) ·
+**visible** (everything else).
+
+### Storage
+- Every research table is in the app database and written inside the app store's transactions
+  (`SqliteStore::research_transaction` hands the closure the `StoreTx` and the raw connection).
+  **Nothing is in the numbered migration list.** Two idempotent steps create the schema:
+  `crates/infra/src/sqlite/ensure.rs` `ensure_research_columns` (run by the store at every open):
+  `attribute_values.ai_prior`, `publish_items.{frozen_attribute_origin, pending_conflicts,
+  resolved_attributes, released_at}`, `sessions.arranged_at`, table `research_feedback`; and
+  `psm_research::schema::ensure` (called by `build_research` in integrations `lib.rs`): tables
+  `research_runs`, `research_steps`, `research_calls`, `research_outbound`,
+  `research_stage_outputs`. Columns: research master plan §6.4.
+- Settings: the `research` key of `settings.json` is an opaque JSON slot in `psm_infra`
+  (`Settings.research`); its shape is `ResearchSettings`. The engine reads it live, so a save is a
+  simple update; only a change of `research.providers` rebuilds the App.
+- Keys: Keychain only, under the app's one service, accounts `research-model-key`,
+  `research-search-key`, `research-reader-key` (`crates/research/src/service.rs`).
+
+### App-side touchpoints
+Core: `domain/research.rs` (`Feedback`, `FeedbackAction`), `mechanisms/{name_key.rs, sameness.rs,
+publish_partition.rs}`, `PublishStep::Held`, `RowLabel::WaitingForYou`, `AppEvent::ResearchChanged`,
+`Imaging::render_research` (implemented in `crates/infra/src/imaging/research.rs`),
+`CommerceAdapter::public_listing`. Commands: `apps/desktop/src-tauri/src/commands/research.rs`
+(`research_status`, `research_run`, `research_settings_reset`, `research_secrets_set`,
+`research_secrets_state`, `research_site_add`, `research_site_remove`, `research_sites_reorder`,
+`research_export`; each answers `research_unavailable` when the engine could not be built, and the
+rest of the app works: HA4), `session_arrange_next` in `commands/sessions.rs`, `ResearchSettingsDto`
+in `commands/settings.rs`, `researching` / `n_withheld` / `conflicts` in `commands/publish.rs`.
+Frontend: wrapper `apps/desktop/src/services/research.ts`. There is **no `features/research`
+folder**: the panel and pills are in `features/form/` (`ResearchPanel.tsx`, `AiPopover.tsx`,
+`AiPill.tsx`), the settings in `features/settings/` (`ResearchSection.tsx`, `ShopFieldPicker.tsx`),
+conflicts in `features/publish/ConflictList.tsx`, the button in `features/shell/Header.tsx`, the
+"Arranged" pill in `features/sessions/SessionRow.tsx`.
+
+### The tool (`crates/research-tool`, package `psm-research-tool`, bin `psm-research`)
+A dev-Mac CLI over the same crate (one-way: nothing in the app depends on it). `accept` opens the
+real `App` headless on a scratch data folder with a stand-in read-only shop, runs the real engine
+and adapters over the test pieces and exports each run; `score-accept` scores the exports against
+the answer key; `report` summarises an export (or a benchmark recording); `replay` re-sends one
+recorded stage of one run, optionally with another model, effort or instructions file; `probe`,
+`bench-search`, `bench-models` are R1's benchmarks. Commands: `05_working.md` §Research tool.
+
 ## Persistence
 | Where | What |
 |---|---|
-| `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` |
+| `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) |
 | Under the capture root (`<document folder>/Capture`) | item folders by `folder_key`; `.incoming/` (FTP parts, `sdk-<run>/`); `.duplicates/`; Capture One's own `CaptureOne/` and `Output/_session_manager/` |
 | SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 013_form_values.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`) |
-| `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`. A file that does not parse never stops the app (health `settings_invalid`) |
-| Keychain (`infra/keychain.rs`; names in `domain/camera.rs::secrets`) | service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`. Shopify client id/secret: `settings.json` only; access token: memory only |
+| `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research). A file that does not parse never stops the app (health `settings_invalid`) |
+| Keychain (`infra/keychain.rs`; names in `domain/camera.rs::secrets`) | service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`, and the three `research-*-key` accounts (§Research). Shopify client id/secret: `settings.json` only; access token: memory only |
 | `settings` table | app state, not user config (`mechanisms_version`, `active_session_id`, spool dedupe keys) |
 
 ## Events: Rust → UI
 `psm_core::events::AppEvent` → `EventHub` (integrations `lib.rs`) → `TauriEvents::emit` (desktop
 `lib.rs`) → Tauri event names: `session_changed`, `photo_added`, `photo_changed`, `publish_progress`,
 `export_progress`, `health_changed`, `camera_status_changed` (payload `CameraStatusResponse`),
-`camera_fingerprint_pending`, `history_changed`; plus `edit_menu` emitted by the menu handler. The UI
+`camera_fingerprint_pending`, `history_changed`, `research_changed`; plus `edit_menu` emitted by the menu handler. The UI
 subscribes in `apps/desktop/src/services/events.ts` (and `history.ts`). Events are **not** in the
 specta builder: adding one means a new `AppEvent` variant, a new match arm in `TauriEvents`, and a
 listener in `events.ts`.
@@ -227,9 +337,9 @@ hand-edit. Components never import `bindings.ts` directly: `services/*.ts` wrap 
   `sessions` (list, filters, batch bar, NewSessionDialog), `workspace` (Stage, PhotoGrid, PhotoPanel,
   SessionsPanel, review buttons/keys/swipe, ArchivedView, `useWorkspaceState.ts`, `order.ts`,
   `outputs.ts`), `compose` (editor; see above), `form` (FormDialog, StepTabs, MetafieldInput, kinds,
-  ItemTypePicker, StockFields, AI pills), `publish` (PublishPopover, PublishProgress, BatchQueue,
+  ItemTypePicker, StockFields, AI pills, ResearchPanel), `publish` (PublishPopover, PublishProgress, BatchQueue,
   FailurePopover, NotificationsDrawer, `usePublish.ts`), `settings` (SettingsPage, CameraSection,
-  FingerprintBox, StorageSection, StockSection, `cameraSteps.ts`), `health`, `history`, `pending`.
+  FingerprintBox, StorageSection, StockSection, ResearchSection, ShopFieldPicker, `cameraSteps.ts`), `health`, `history`, `pending`.
 - `components/ui/` shadcn primitives; `components/pending/` skeletons; `styles/tokens.css` from the
   design handoff.
 - State: React hooks per feature; no global store. Preview files are loaded through the Tauri asset
