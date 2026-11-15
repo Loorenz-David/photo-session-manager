@@ -49,7 +49,9 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
   `accept --settings docs/test-items/accept_settings_owner.json` into `~/psm-research-bench/a25`, then `score-accept`). Owner: camera routing stays as is (08B changelog 16). Owner card open (not blocking): detailed-condition table (recommended A).
 - **2026-11-15 21:10: owner decision after the second measurement** (08B changelog 17, master plan v11): research
   fills only chosen fields (allow-list replaces "leave alone"), detailed condition derived from the levels that have a
-  value. **R13_research_chosen_fields** named; planner launched (handoff `handoffs/reviewer/handoff_research_plan_r4.md`).
+  value. **R13_research_chosen_fields** planned (4 units, 15 criteria, 40 rows `A27·…`, planner handoff r4 DONE, 0 owner
+  cards; 08B changelog 18) and **running** (Codex, `scratchpad/r13_run.log`). After approval: U4 task 3 is the
+  orchestrator's (pieces 6, 12, 28, 33, owner settings, ceiling USD 2, `~/psm-research-bench/a27`).
 - **After R13 (owner approved 2026-11-15): bring research into `main` for the work PC.** `main` has not moved since the
   merge base `9dc94dc` (P70), so the join is a fast-forward and this worktree is the combined version: run the full suite
   and a release build here, scan the branch for secrets, then push `feature/agentic`, open a PR to `main` and merge it on
