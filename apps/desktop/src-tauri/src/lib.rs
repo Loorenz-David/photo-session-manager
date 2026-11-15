@@ -63,12 +63,12 @@ mod p50_tests {
             .1
             .session
             .id;
-        a.add_photo(s, "command-r11.ARW").unwrap();
+        let photo = a.add_photo(s, "command-r11.ARW").unwrap();
+        a.review()
+            .classify(photo.id, psm_core::domain::photo::Classification::Main)
+            .unwrap();
         let store = a.app.store.clone();
         let paths = a.app.paths.clone();
-        let mut settings = psm_testkit::research_test_settings();
-        settings["prices"] = json!([]);
-        a.set_research_settings(settings).unwrap();
         let psm_testkit::TestApp { dir: _dir, app, .. } = a;
         let tauri_app = mock_builder()
             .manage(AppState::new(app))
@@ -83,7 +83,19 @@ mod p50_tests {
             .unwrap();
         let result = call(&w, "session_arrange_next", json!({"sessionId": s})).unwrap();
         assert_eq!(result["next_session_id"], Value::Null);
+        assert_eq!(result["research_queued"], Value::Bool(true));
         assert!(store.session(s).unwrap().session.arranged_at.is_some());
+        let runs = store
+            .research_transaction(|tx| psm_research::store::runs(tx.conn(), Some(s)))
+            .unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].state, psm_research::domain::RunState::Queued);
+        assert_eq!(runs[0].trigger.as_str(), "arranged");
+        let mut emptied = psm_testkit::research_test_settings();
+        emptied["prices"] = json!([]);
+        let mut file = psm_infra::settings_file::Settings::open(&paths).unwrap();
+        file.research = Some(emptied);
+        psm_infra::settings_file::Settings::set(&paths, &file).unwrap();
         let reset = call(&w, "research_settings_reset", json!({})).unwrap();
         let value: Value = serde_json::from_str(reset.as_str().unwrap()).unwrap();
         assert!(!value["prices"].as_array().unwrap().is_empty());

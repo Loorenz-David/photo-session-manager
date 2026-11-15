@@ -8,7 +8,7 @@ blocked_on: none (one owner card, which the plan does not wait for: the detailed
 ---
 # R11 — Research starts when the session is arranged
 
-**Tracker:** CHANGES_REQUESTED · 2026-11-15 · opus · review r1: one B2 (A25·C23(a): the desktop command test does not show `session_arrange_next` reaching the engine; fix touches only that test); 8 notes in `backlog_research/R11_research_on_arranged.md`; Review-mode checks all green
+**Tracker:** IMPLEMENTED · 2026-11-15 · sonnet · fix 1: A25·C23(a) now arranges first on a Main-photo session and asserts `research_queued` and one queued `arranged` run; psm-desktop 25 green, clippy, fmt, typecheck green
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -483,3 +483,6 @@ On scratch data (`PSM_DATA_DIR=$HOME/psm-research-dev npm run tauri -- dev`), sh
 **Notes** (8, in `backlog_research/R11_research_on_arranged.md`). C22(a)'s status clause compares against `"price_missing"` and can never fail; a probe shows the wired fakes do report `PriceMissing` after a reset (fake ids are not in the default price table); the real app is covered by C10(b) (plan lesson). C24(d) Unassigned half (safe by its branch). C33(a) saved-value half asserts the fixture. C7(a) partial. C9(c) sets the host directly. Stage 7 goes on past the cap for a derived-only decision (judgment call for 08B). Preview marks before the preview can fail. Declared-file differences.
 
 **Probes:** test files only, both reverted (`r11_arranged.rs` restored byte-identical; a temporary vitest file deleted). No production file touched.
+
+### 2026-11-15 · fix 1 · sonnet · IMPLEMENTED
+F1 (B2): `a25_c23a_new_commands_reach_wired_app_and_bindings` in `apps/desktop/src-tauri/src/lib.rs` now classifies its photo Main, calls `session_arrange_next` with the prices intact, and asserts `research_queued == true`, `arranged_at` set, and exactly one run, `queued`, trigger `arranged`. Only then does it write the emptied price table to the settings file and run the reset half unchanged. Probe with a changed input (photo classified Condition, reverted): the test fails at the `research_queued` assertion. No production file touched. Checks: `cargo test -p psm-desktop` 25 green; clippy, fmt, typecheck green. Judgment call: the emptied price table is written to the settings file directly (`Settings::open`/`set`) after the arrange call, since the settings live in a file and the commands read it at call time.
