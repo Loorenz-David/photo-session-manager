@@ -1,0 +1,20 @@
+# Research agent milestones (branch feature/agentic), single-track order. One runner phase each (flow.md §10).
+# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `tools/pipeline/run_phase.sh phase <id>`.
+# Two-track schedule, worktrees and merge order: docs/implementation/master_plan_research.md §5.
+# R1 needs the owner's keys (§7.6); without them start at R2 and take R1 when they arrive.
+# R8 waits for R1's evidence and the owner's two picks; R9's measurement is owner-attended; R10 waits for the model pick.
+R1_research_benchmark
+R2_research_foundation
+R3_research_rules
+R4_research_engine
+R5_research_app_seams
+R6_research_ui
+R7_research_wiring_and_export
+R8_research_real_adapters
+R9_research_tool_and_acceptance
+R10_research_defaults
+# R11 and R12 (master plan v10): R11 needs R10 approved; R12 needs R11 approved, and its measurement (U4 tasks 3-6) is owner-attended.
+R11_research_on_arranged
+R12_research_cost
+# R13 (master plan v12): needs R12 approved; its check on four pieces (U4 task 3) is the orchestrator's.
+R13_research_chosen_fields

@@ -1,0 +1,66 @@
+{
+  "cap": "page_fetch",
+  "cost_micro_usd": 0,
+  "duration_ms": 558,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T15:14:45.687Z",
+  "fixture": {
+    "captured": "2026-11-12T15:14:45.129Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "pages/www_bukowskis_com.json"
+  },
+  "id": "v8-http-bukowskis_com-c2a885cbe1de",
+  "meta": null,
+  "model": "",
+  "provider": "page_http",
+  "request": {
+    "body": null,
+    "headers": {
+      "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en"
+    },
+    "method": "GET",
+    "url": "https://www.bukowskis.com/en/lots/1501733-johannes-andersen-a-1960s-teak-dining-table-uldum-denmark"
+  },
+  "request_hash": "c2a885cbe1dea48d5893b0c21e438141d79aeb57220183451bef096fab12257e",
+  "response": {
+    "body": null,
+    "body_bytes": 183341,
+    "body_omitted": "third-party page body not committed",
+    "final_url": "https://www.bukowskis.com/en/lots/1501733-johannes-andersen-a-1960s-teak-dining-table-uldum-denmark",
+    "headers": {
+      "cache-control": "max-age=0, private, must-revalidate",
+      "connection": "keep-alive",
+      "content-length": "183341",
+      "content-security-policy": "default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https:; frame-ancestors 'self'; script-src 'self' 'unsafe-eval' 'strict-dynamic' 'report-sample' https://ga.jspm.io https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://code.jquery.com https://www.googletagmanager.com https://www.google.com https://www.gstatic.com https://recaptcha.net https://checkout.dibspayment.eu https://cdn.bukowskis.com 'nonce-MSJU9f4AgSLJkf1QdEVTFA=='; style-src 'self' 'unsafe-inline' https:; font-src 'self' https:; img-src data: blob: https:; media-src https:; connect-src 'self' https: wss:; worker-src 'self' blob:; frame-src https:; report-uri /csp-violation-reports/efa6d35208ad33e12e82c2f10c70c43afa206605",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Thu, 12 Nov 2026 15:14:45 GMT",
+      "etag": "W/\"afab60f3646771f59d8e5ea8e10205c4\"",
+      "link": "<https://cdn.bukowskis.com/assets/public-0a7628e45d171dbeb12a4f0d235ccd2e3d65275c996b36bb728c86d893f2b388.css>; rel=preload; as=style; nopush,<https://cdn.bukowskis.com/assets/es-module-shims.min-d89e73202ec09dede55fb74115af9c5f9f2bb965433de1c2446e1faa6dac2470.js>; rel=preload; as=script; nopush,<https://cdn.bukowskis.com/assets/vendor/silktide-consent-manager-2a30eb26ae3b0e4fb2db6e0ad047aa0c1e9c64cc3618e9b8b49ff1c5e72de4aa.js>; rel=preload; as=script; nopush",
+      "permissions-policy": "accelerometer=(), camera=(self), display-capture=(), geolocation=(), gyroscope=(), hid=(), magnetometer=(), microphone=(), midi=(), serial=(), usb=(), autoplay=(self \"https://player.vindral.com\"), payment=(self \"https://checkout.dibspayment.eu\" \"https://js.live.kustom.co\")",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "nginx",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=63072000; includeSubDomains",
+      "vary": "Accept-Encoding",
+      "x-content-type-options": "nosniff, nosniff",
+      "x-download-options": "noopen",
+      "x-frame-options": "SAMEORIGIN, SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "10fbfd55-73ff-45be-9aec-23e6c0caba72",
+      "x-runtime": "0.212935",
+      "x-xss-protection": "0"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T15:14:45.129Z",
+  "usage": {
+    "page_fetch": 1
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 0
+}

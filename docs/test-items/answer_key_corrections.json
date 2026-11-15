@@ -1,0 +1,57 @@
+{
+  "about": "Corrections to the answer key in beyo_test_samples_1.json for fields where the shop's own data contradicts itself. Judged by Claude on 2026-11-12 from the product's photos, title and description (owner asked for this). These are judgments, not owner-verified facts: the benchmark scores them in a separate 'corrected key' bucket and reports them apart from the owner-verified fields. The owner's file is not edited.",
+  "scoring_rules": {
+    "hedged_attribution": "Pieces 2, 26, 37 ('most likely by') and 38 ('in the style of'): the named designer/manufacturer counts as correct at medium or low confidence and as wrong at high (owner 2026-11-12).",
+    "disagreements": "Where the agent disagrees with the key on any piece, the report lists the case with the agent's evidence for a human look. A disagreement is a review candidate, not automatically an agent error: the shop data is known to contain mistakes."
+  },
+  "corrections": [
+    {
+      "n": 27,
+      "field": "country",
+      "key_value": "Denmark",
+      "corrected_value": "Sweden",
+      "certainty": "medium",
+      "basis": "Title and description both say Sweden; teak carcass on a light beech stretcher base is a common Swedish construction; nothing in the photos points to Denmark. 'Denmark' looks like a preset default left in place."
+    },
+    {
+      "n": 30,
+      "field": "manufacturer",
+      "key_value": null,
+      "corrected_value": "Tidaholms Möbelfabrik",
+      "certainty": "medium",
+      "basis": "Named in both title and description; the field is simply empty. No label seen in the two photos examined."
+    },
+    {
+      "n": 30,
+      "field": "country",
+      "key_value": "Denmark",
+      "corrected_value": "Sweden",
+      "certainty": "medium",
+      "basis": "Follows from the maker (Tidaholm is a Swedish town) and the description."
+    },
+    {
+      "n": 30,
+      "field": "wood_type",
+      "key_value": ["Walnut"],
+      "corrected_value": ["Santos Rosewood"],
+      "certainty": "medium",
+      "basis": "Door veneer is red-brown with strong dark, near-black streaks running the full height, which reads as rosewood, not walnut. The title says rosewood; the description says walnut. Photo judgment only; a stained teak cannot be fully excluded. Owner 2026-11-13: \"Rosewood\" was an older wood-type choice; it maps to today's shop choice \"Santos Rosewood\"."
+    },
+    {
+      "n": 39,
+      "field": "wood_type",
+      "key_value": ["Beech"],
+      "corrected_value": ["Cherry"],
+      "certainty": "medium",
+      "basis": "Warm orange-honey colour with fine, soft cathedral grain on the lower doors reads as cherry; beech would be paler with visible flecks. Title and description both say cherry."
+    },
+    {
+      "n": 41,
+      "field": "quantity",
+      "key_value": "1",
+      "corrected_value": "8",
+      "certainty": "low",
+      "basis": "Description says a set of 8 sold as a set. Other pieces count pieces (the pair of bedside tables has quantity 2). The cover photo shows one chair, so the count rests on the text, not the photos. Owner knows the true number."
+    }
+  ]
+}

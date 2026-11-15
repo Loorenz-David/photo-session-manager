@@ -1,7 +1,10 @@
+pub mod arranged;
 pub mod camera;
 pub mod commerce;
 pub mod editing;
 pub mod render_output;
+
+use psm_research::api::ResearchApi;
 
 use camera::direct::StartOrder;
 use camera::runtime::{AppBinding, CameraRuntime};
@@ -79,6 +82,8 @@ use std::{
 };
 
 pub const EDITOR_WAIT: Duration = Duration::from_secs(45);
+/// How often the research runner looks for work (R7·U1).
+const RESEARCH_WAKE: Duration = Duration::from_millis(250);
 /// How long shutdown waits for the spool/arrival thread (P63).
 const BACKGROUND_JOIN_BOUND: Duration = Duration::from_secs(1);
 
@@ -95,6 +100,9 @@ pub struct App {
     pub camera: Arc<dyn CameraProvider>,
     pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
+    pub research: Option<Arc<dyn ResearchApi>>,
+    /// R7·U1: the research runner (its own jobs, its own thread).
+    pub research_runner: Option<Arc<ResearchWiring>>,
     pub jobs: Arc<JobRunner>,
     pub publish_jobs: Arc<JobRunner>,
     /// The `render_output` runner (10D MC-28: one output render at a time, on its own thread).
@@ -123,6 +131,7 @@ pub struct App {
     render_background: Option<thread::JoinHandle<()>>,
     storage_background: Option<thread::JoinHandle<()>>,
     prepare_background: Option<thread::JoinHandle<()>>,
+    research_background: Option<thread::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
@@ -137,6 +146,7 @@ pub struct AppHandles {
     pub camera: Arc<dyn CameraProvider>,
     pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
+    pub research: Option<Arc<dyn ResearchApi>>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
     pub follow: Arc<CaptureOneFollow>,
@@ -174,6 +184,7 @@ pub struct SettingsSetContext {
     run_startup: bool,
     commerce_override: Option<Arc<dyn CommerceAdapter>>,
     history_store: HistoryStore,
+    research: Option<Arc<dyn ResearchApi>>,
 }
 
 pub enum PreparedSettings {
@@ -188,9 +199,25 @@ impl SettingsSetContext {
         let mut current = self.settings.clone();
         if let Ok(on_disk) = Settings::open(&self.paths) {
             current.commerce = on_disk.commerce;
+            // R7·U1: the engine reads the `research` slot live from the file; it is the current.
+            current.research = on_disk.research;
         }
         let previous = settings_value(&current)?;
+        // R7·U1: a `research` patch passes the engine's validation first; its text is the refusal.
+        if let Some(research) = patch.get("research") {
+            match &self.research {
+                Some(api) => api.validate_settings(research)?,
+                None => psm_research::config::validate(research)
+                    .map_err(psm_core::Error::InvalidData)?,
+            }
+        }
         let mut next = SettingsService::set(&previous, patch)?;
+        if patch.get("research").is_some() {
+            next["research"] = serde_json::to_value(
+                psm_research::config::ResearchSettings::from_slot(next.get("research")),
+            )
+            .map_err(|e| psm_core::Error::InvalidValue(e.to_string()))?;
+        }
         // P68: the shop domain and keys as the photographer meant them.
         if patch.get("integration").is_some_and(|v| v.is_object())
             && let Some(integration) = next.get_mut("integration").and_then(|v| v.as_object_mut())
@@ -220,6 +247,15 @@ impl SettingsSetContext {
         }
         a["camera"]["auto_take_back"] = serde_json::Value::Null;
         b["camera"]["auto_take_back"] = serde_json::Value::Null;
+        // R7·U1: research settings are read live by the engine; only a change of the chosen
+        // adapters needs the runtime rebuilt (they are built with it).
+        for value in [&mut a, &mut b] {
+            let providers = value
+                .get("research")
+                .and_then(|r| r.get("providers"))
+                .cloned();
+            value["research"] = providers.unwrap_or(serde_json::Value::Null);
+        }
         if a == b {
             return Ok(PreparedSettings::Simple(Box::new(settings)));
         }
@@ -333,6 +369,7 @@ impl App {
             run_startup: self.run_startup,
             commerce_override: self.commerce_override.clone(),
             history_store: self.history.store(),
+            research: self.research.clone(),
         }
     }
     pub fn apply_settings(
@@ -365,6 +402,11 @@ impl App {
                 Some(old)
             }
         };
+        // R7·U1: a saved research setting is evaluated by the engine (`auto` off cancels queued
+        // automatic runs, R-IA25).
+        if let Some(research) = &self.research {
+            research.settings_changed();
+        }
         Ok((self.settings_get()?, old))
     }
     pub fn handles(&self) -> AppHandles {
@@ -379,6 +421,7 @@ impl App {
             camera: self.camera.clone(),
             camera_runtime: self.camera_runtime.clone(),
             commerce: self.commerce.clone(),
+            research: self.research.clone(),
             arrival: self.arrival.clone(),
             previews: self.previews.clone(),
             follow: self.follow.clone(),
@@ -690,8 +733,11 @@ impl App {
         if let Err(error) = previews.on_startup() {
             tracing::warn!(%error, "startup sidecar check deferred");
         }
-        let mut runner =
-            JobRunner::new(store.clone()).excluding_kinds(&["publish_step", "render_output"]);
+        let mut runner = JobRunner::new(store.clone()).excluding_kinds(&[
+            "publish_step",
+            "render_output",
+            psm_research::job::KIND,
+        ]);
         let mut publish_runner = JobRunner::new(store.clone()).only_kind("publish_step");
         let mut render_runner = JobRunner::new(store.clone()).only_kind("render_output");
         render_runner.register(
@@ -748,6 +794,42 @@ impl App {
         let jobs = Arc::new(runner);
         let publish_jobs = Arc::new(publish_runner);
         let render_jobs = Arc::new(render_runner);
+        let stop = Arc::new(AtomicBool::new(false));
+        // R7·U1: the research engine. A failure leaves the app without research, never without
+        // its core workflow (HA4).
+        let research_wiring = match build_research(ResearchParts {
+            paths: &paths,
+            settings: &settings,
+            store: &store,
+            clock: &clock,
+            imaging: &imaging,
+            secrets: camera_runtime.secret_store(),
+            commerce: &commerce,
+            client_secret: integration.as_ref().map(|i| i.client_secret.clone()),
+            events: &events,
+        }) {
+            Ok(wiring) => Some(wiring),
+            Err(error) => {
+                tracing::warn!(%error, "research not available");
+                None
+            }
+        };
+        let research_background = match (&research_wiring, run_startup) {
+            (Some(wiring), true) => {
+                let worker_stop = stop.clone();
+                let worker = wiring.clone();
+                let worker_clock = clock.clone();
+                Some(thread::spawn(move || {
+                    while !worker_stop.load(Ordering::Relaxed) {
+                        if let Err(error) = worker.tick(worker_clock.now_ms()) {
+                            tracing::warn!(%error, "research turn deferred");
+                        }
+                        thread::sleep(RESEARCH_WAKE);
+                    }
+                }))
+            }
+            _ => None,
+        };
         if run_startup {
             let startup_editing = editing.clone();
             let startup_store = store.clone();
@@ -784,7 +866,6 @@ impl App {
                 }
             });
         }
-        let stop = Arc::new(AtomicBool::new(false));
         let bg_stop = stop.clone();
         let bg_spool = spool.clone();
         let bg_store = store.clone();
@@ -1038,6 +1119,10 @@ impl App {
             camera,
             camera_runtime,
             commerce,
+            research: research_wiring
+                .as_ref()
+                .map(|wiring| wiring.service.clone() as Arc<dyn ResearchApi>),
+            research_runner: research_wiring,
             jobs,
             publish_jobs,
             render_jobs,
@@ -1063,7 +1148,15 @@ impl App {
             render_background,
             storage_background,
             prepare_background,
+            research_background,
         })
+    }
+    /// One turn of the research runner (what its thread does; `false` while a turn is running).
+    pub fn research_tick(&self, now_ms: i64) -> Result<bool> {
+        match &self.research_runner {
+            Some(runner) => runner.tick(now_ms),
+            None => Ok(false),
+        }
     }
     pub fn nudge_port(&self) -> u16 {
         self.nudge.port()
@@ -1157,6 +1250,17 @@ impl App {
         if let Some(bg) = self.prepare_background.take() {
             let _ = bg.join();
         }
+        if let Some(bg) = self.research_background.take() {
+            // MC-A6 Quit: a run inside a provider call is not waited for; it stays `running` and
+            // the next launch re-queues its job.
+            let end = std::time::Instant::now() + BACKGROUND_JOIN_BOUND;
+            while !bg.is_finished() && std::time::Instant::now() < end {
+                thread::sleep(Duration::from_millis(5));
+            }
+            if bg.is_finished() {
+                let _ = bg.join();
+            }
+        }
     }
 
     /// Rebuilds the runtime over the current `settings.json`, keeping the event target.
@@ -1212,6 +1316,8 @@ pub struct EventHub {
 struct EventHubState {
     target: Option<Arc<dyn EventSink>>,
     queued: Vec<AppEvent>,
+    /// Sinks inside the app that hear every event as it is emitted (R7·U1: research).
+    observers: Vec<Arc<dyn EventSink>>,
 }
 impl EventHub {
     pub fn transfer_target_to(&self, other: &EventHub) {
@@ -1219,6 +1325,12 @@ impl EventHub {
             && let Some(target) = state.target.clone()
         {
             other.set_target(target);
+        }
+    }
+    /// Registers a sink that hears every event when it is emitted (before the target).
+    pub fn observe(&self, observer: Arc<dyn EventSink>) {
+        if let Ok(mut state) = self.state.lock() {
+            state.observers.push(observer);
         }
     }
     pub fn set_target(&self, target: Arc<dyn EventSink>) {
@@ -1234,6 +1346,14 @@ impl EventHub {
 }
 impl EventSink for EventHub {
     fn emit(&self, event: AppEvent) {
+        let observers = self
+            .state
+            .lock()
+            .map(|state| state.observers.clone())
+            .unwrap_or_default();
+        for observer in observers {
+            observer.emit(event.clone());
+        }
         if let Ok(mut state) = self.state.lock() {
             if let Some(target) = state.target.clone() {
                 drop(state);
@@ -1393,4 +1513,241 @@ impl Drop for App {
     fn drop(&mut self) {
         self.shutdown();
     }
+}
+
+/// R7·U1: the research engine joined to the app. H8: this only constructs and connects; every
+/// research rule is in `psm_research`. One runner turn at a time (`busy`), so the engine's
+/// `tick` is called from exactly one place (MC-A6: one running run app-wide; R4 review).
+pub struct ResearchWiring {
+    service: Arc<psm_research::service::ResearchService>,
+    jobs: JobRunner,
+    store: Arc<SqliteStore>,
+    /// Sessions whose photos may have changed since the last turn: `true` = a photo event
+    /// (created, changed, a source arrived), `false` = an undo step only (counted when it moved
+    /// the session's `change_seq`, MC-6; an attribute edit does not).
+    changed: std::sync::Mutex<std::collections::BTreeMap<i64, bool>>,
+    /// The last `change_seq` seen per session.
+    seen: std::sync::Mutex<std::collections::HashMap<i64, i64>>,
+    busy: std::sync::Mutex<()>,
+    /// When call records were last purged (MC-A11: at launch, then hourly; UTC ms).
+    last_purge: std::sync::Mutex<i64>,
+}
+
+/// MC-A11: call records are purged at launch and then every hour.
+const RESEARCH_PURGE_EVERY_MS: i64 = 3_600_000;
+
+impl ResearchWiring {
+    /// MC-A11 retention, at launch and when an hour has passed since the last purge.
+    fn purge_if_due(&self, now_ms: i64, at_launch: bool) {
+        let Ok(mut last) = self.last_purge.lock() else {
+            return;
+        };
+        if !at_launch && now_ms.saturating_sub(*last) < RESEARCH_PURGE_EVERY_MS {
+            return;
+        }
+        *last = now_ms;
+        if let Err(error) = self.service.purge_expired(now_ms) {
+            tracing::warn!(%error, "research call records not purged");
+        }
+    }
+
+    /// One turn of the research runner: the engine hears of the sessions that changed (outside
+    /// every other service's transaction), starts what may start, then runs the due research
+    /// jobs. `Ok(false)` when another turn is in progress (a wake-up never runs a second one).
+    pub fn tick(&self, now_ms: i64) -> Result<bool> {
+        let _turn = match self.busy.try_lock() {
+            Ok(guard) => guard,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(false),
+        };
+        let changed = std::mem::take(
+            &mut *self
+                .changed
+                .lock()
+                .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
+        );
+        for (session_id, photo_event) in changed {
+            let seq = self
+                .store
+                .session(session_id)
+                .map(|s| s.session.change_seq)
+                .ok();
+            let moved = {
+                let mut seen = self
+                    .seen
+                    .lock()
+                    .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+                match seq {
+                    Some(seq) => seen.insert(session_id, seq) != Some(seq),
+                    None => false,
+                }
+            };
+            if photo_event || moved {
+                self.service.session_changed(session_id);
+            }
+        }
+        self.purge_if_due(now_ms, false);
+        self.service.tick()?;
+        self.jobs.tick(now_ms)?;
+        Ok(true)
+    }
+
+    fn note(&self, session_id: i64, photo_event: bool) {
+        if let Ok(mut changed) = self.changed.lock() {
+            let entry = changed.entry(session_id).or_insert(false);
+            *entry |= photo_event;
+        }
+    }
+}
+
+/// Hears the app's events and notes the sessions whose photos may have changed (MC-A6 "a
+/// change"); the research runner's next turn tells the engine.
+struct ResearchObserver(std::sync::Weak<ResearchWiring>);
+
+impl EventSink for ResearchObserver {
+    fn emit(&self, event: AppEvent) {
+        let (session_id, photo_event) = match event {
+            AppEvent::PhotoAdded { session_id, .. }
+            | AppEvent::PhotoChanged { session_id, .. }
+            | AppEvent::SessionChanged { session_id } => (session_id, true),
+            AppEvent::HistoryChanged { session_id, .. } => (session_id, false),
+            _ => return,
+        };
+        if let Some(wiring) = self.0.upgrade() {
+            wiring.note(session_id, photo_event);
+        }
+    }
+}
+
+/// What a test puts in place of the research adapters and the real-time wait between attempts
+/// (as `camera::support::with_test_manifest`, keyed by the data folder; survives a reopen).
+#[derive(Clone)]
+pub struct ResearchTestSeams {
+    pub providers: psm_research::ports::Providers,
+    pub wait: psm_research::gateway::Waiter,
+}
+
+static RESEARCH_TEST_SEAMS: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, ResearchTestSeams>>,
+> = std::sync::OnceLock::new();
+
+pub fn with_test_research(paths: &AppPaths, seams: ResearchTestSeams) {
+    if let Ok(mut all) = RESEARCH_TEST_SEAMS.get_or_init(Default::default).lock() {
+        all.insert(paths.root.clone(), seams);
+    }
+}
+
+fn research_test_seams(paths: &AppPaths) -> Option<ResearchTestSeams> {
+    RESEARCH_TEST_SEAMS
+        .get()
+        .and_then(|all| all.lock().ok()?.get(&paths.root).cloned())
+}
+
+/// Every value the secrets port holds for the app (the research keys, the camera's secrets) and
+/// the integration's client secret: what the redaction scan and the export check look for
+/// (MC-A9, MC-A11).
+fn research_secret_values(
+    secrets: Arc<dyn SecretStore>,
+    client_secret: Option<String>,
+) -> psm_research::gateway::SecretValues {
+    use psm_core::domain::camera::secrets as camera;
+    use psm_research::service::{MODEL_ACCOUNT, READER_ACCOUNT, SEARCH_ACCOUNT};
+    Arc::new(move || {
+        [
+            MODEL_ACCOUNT,
+            SEARCH_ACCOUNT,
+            READER_ACCOUNT,
+            camera::FTP_PASSWORD,
+            camera::ACCESS_AUTH_USER,
+            camera::ACCESS_AUTH_PASSWORD,
+        ]
+        .into_iter()
+        .filter_map(|account| secrets.get(account).ok().flatten())
+        .chain(client_secret.clone())
+        .filter(|value| !value.trim().is_empty())
+        .collect()
+    })
+}
+
+/// The pieces `build_research` needs from `App::build`.
+struct ResearchParts<'a> {
+    paths: &'a AppPaths,
+    settings: &'a Settings,
+    store: &'a Arc<SqliteStore>,
+    clock: &'a Arc<dyn Clock>,
+    imaging: &'a Arc<dyn psm_core::ports::images::Imaging>,
+    secrets: Arc<dyn SecretStore>,
+    commerce: &'a Option<Arc<dyn CommerceAdapter>>,
+    client_secret: Option<String>,
+    events: &'a Arc<EventHub>,
+}
+
+/// R7·U1 task 1: the engine's tables, the service over the app's store, clock, imaging, secrets,
+/// shop and events, its dedicated runner, and the observer on the app's events.
+fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
+    use psm_research::{
+        config::ResearchSettings,
+        service::{ResearchDeps, ResearchService},
+        shop::CommerceShopFacts,
+    };
+    psm_research::schema::ensure(parts.store)?;
+    let seams = research_test_seams(parts.paths);
+    let wait: psm_research::gateway::Waiter = match &seams {
+        Some(seams) => seams.wait.clone(),
+        None => Arc::new(|ms| thread::sleep(Duration::from_millis(ms))),
+    };
+    let providers = match &seams {
+        Some(seams) => seams.providers.clone(),
+        None => psm_research::adapters::build(
+            &ResearchSettings::from_slot(parts.settings.research.as_ref()),
+            parts.secrets.clone(),
+            psm_research::files::ResearchFiles::new(&parts.paths.root),
+            wait.clone(),
+        ),
+    };
+    let settings_paths = parts.paths.clone();
+    let service = Arc::new(ResearchService::new(ResearchDeps {
+        store: parts.store.clone(),
+        clock: parts.clock.clone(),
+        imaging: parts.imaging.clone(),
+        data_dir: parts.paths.root.clone(),
+        providers,
+        secret_values: research_secret_values(parts.secrets.clone(), parts.client_secret),
+        secrets: parts.secrets,
+        shop: parts
+            .commerce
+            .clone()
+            .map(|adapter| Arc::new(CommerceShopFacts::new(adapter))),
+        // The only commerce adapter is Shopify's; its definitions are the form's.
+        integration: parts
+            .commerce
+            .is_some()
+            .then(|| commerce::shopify::adapter::INTEGRATION.to_owned()),
+        settings: Arc::new(move || {
+            Settings::open(&settings_paths)
+                .ok()
+                .and_then(|settings| settings.research)
+        }),
+        events: parts.events.clone(),
+        wait,
+    }));
+    let mut jobs = JobRunner::new(parts.store.clone()).only_kind(psm_research::job::KIND);
+    jobs.register(
+        psm_research::job::KIND,
+        Arc::new(psm_research::job::ResearchJob::new(service.clone())),
+    );
+    let wiring = Arc::new(ResearchWiring {
+        service,
+        jobs,
+        store: parts.store.clone(),
+        changed: Default::default(),
+        seen: Default::default(),
+        busy: std::sync::Mutex::new(()),
+        last_purge: std::sync::Mutex::new(parts.clock.now_ms()),
+    });
+    wiring.purge_if_due(parts.clock.now_ms(), true);
+    parts
+        .events
+        .observe(Arc::new(ResearchObserver(Arc::downgrade(&wiring))));
+    Ok(wiring)
 }

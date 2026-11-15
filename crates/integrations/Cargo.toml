@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+psm-research = { path = "../research" }
 psm-core = { path = "../core" }
 psm-infra = { path = "../infra" }
 serde.workspace = true

@@ -53,3 +53,36 @@ cite either the `M` id or the `MC` id.
 
 Operational measurements (recorded in S0 and S8, not tests): shot-to-original-preview and
 shot-to-adjusted-preview times; cold start of the packaged app on a fresh Mac.
+
+## Research agent (chapter 08A, ratified 2026-11-12)
+
+Ids stay `MA…` (the `M` numbers continue on `main`). Criteria of research phases cite these or a
+mechanism contract of 08A.
+
+| ID | Observable outcome, measured true ⇒ shipped | Defect family it guards |
+|---|---|---|
+| **MA1** | After any run, every field that was `human` or `ai`+`accepted` before it holds the same value and provenance; no cleared value came back. | checked values overwritten |
+| **MA2** | Every attribution value written by a run has the confidence the §6 table (08B MC-A4) gives for the evidence recorded in its steps, except a value a later run lowered to `low` because it lost its support (the reason says so); none is above `low` without a read label or the required matching listings. | false designer or maker claims |
+| **MA3** | Every image sent to a provider has a `research_outbound` row; none belongs to a `deleted` photo; no RAW or master bytes are sent. | photos leaking |
+| **MA4** | Kill-and-resume at any point of a run ends with the same values, confidences and steps as an uninterrupted run with the same provider answers; nothing is duplicated. | half-finished or doubled research |
+| **MA5** | No run's recorded cost exceeds its cap by more than the one call in flight; no run starts after the day cap is reached. | runaway spend |
+| **MA6** | Every value a run writes is in the item's layout and valid for its definition (a listed choice for choice fields); every `ai` value has at least one step naming its key. | invalid values, unexplained suggestions |
+| **MA7** | With no key, no network or no integration, sessions, review, export and publish behave as on `main`; the panel states why research is not running. | core workflow coupled to AI |
+| **MA8** | After a publish, the shop holds no value that was `ai`+`suggested` at `low` confidence (with no replaced value) at confirmation, and no unchecked suggestion that replaced a preset default or a value from Shopify; an item confirmed with conflicts issued no shop change before its last conflict was resolved, and sent each conflicted field as resolved; other items of that publish were not delayed (owner card 1, 2026-11-12). | unchecked weak guesses or replacements on a live listing |
+| **MA9** | An export contains, for every run in its range, every step, every provider call with its exact request and response, every image sent, the values written and the photographer's action on each; replaying a stage from it sends the same inputs the original call sent, for every call whose images are in the export and whose record has not expired (any other call is reported not replayable). It contains no secret, no RAW and no `deleted` photo. | a wrong suggestion that cannot be explained or reproduced; secrets or deleted photos leaving in an export |
+
+### Research mechanism-contract invariants (mechanism inventory, 2026-11-12; chapter 08B)
+
+Each row is the invariant of one contract in `08B_research_contracts.md`. All contracts are ratified (owner 2026-11-12).
+
+| ID | Contract | Invariant, measured true ⇒ the mechanism holds | Defect family it guards |
+|---|---|---|---|
+| **MA10** | MC-A1 (08B) | For every stored field state of the write table and every research write, the row changes only where the table allows; no value in the field's cleared set (current clear plus earlier clears) is ever written by research; never-written fields and types are never written. | checked values overwritten, cleared values returning |
+| **MA11** | MC-A2, MC-A3, MC-A4 (08B) | For every enumerated evidence row, the written value and confidence equal that row's single outcome, computed by code, never by a model; two pages count as two sites only with different site identities; the item's own listing never counts; every stored research value is valid for its definition. | false attribution at medium or high, one dealer counted twice |
+| **MA12** | MC-A5 (08B) | The photos in every recorded provider request that was sent (not `not_sent`) are exactly its outbound rows, each eligible (not `deleted`, still in the run's session) in the transaction committed before the send; nothing but a research image can reach a provider port. | deleted photos or RAW/master bytes leaving the Mac |
+| **MA13** | MC-A6 (08B) | At most one research run `running` app-wide and one `queued` per session; no automatic run starts inside its session's quiet period; no run starts while today's spend is at or above the day cap. | runs on test frames, parallel spend past the cap |
+| **MA14** | MC-A7 (08B) | Kill-and-resume at any instant equals an uninterrupted run given the same provider answers; no committed unit is called again and no step appears twice; a follow-up calls providers only for units whose input fingerprint has no committed equal. | doubled cost and steps, follow-ups that redo or miss work |
+| **MA15** | MC-A8 (08B) | Every call's cost equals the integer micro-USD formula over its reported usage and the run's price snapshot, or the fallback when none was reported; no run exceeds its cap by more than one call; today's spend sums calls by local calendar date. | silent overspend, cap on the wrong day, float money |
+| **MA16** | MC-A9, MC-A11 (08B) | No call record, research log line or export file contains a value held by the secrets port (an export with one is aborted); no export holds a RAW, a master or an image of a photo `deleted` at export time; a replayed request differs from the recorded one only in the substituted fields; call records older than `record_days` are gone. | leaked keys, leaked deleted photos, replays that silently differ |
+| **MA17** | MC-A10 (08B) | For every confirmed item: no integration mutation precedes the resolution of its last pending conflict; it sends no `ai`+`suggested`+`low` value without a prior and no unresolved conflict; each pending key is sent with the value recorded at its resolution and every other key with the value frozen at confirmation; the withheld count and conflict set equal those shown; other items of the same confirmation never wait for it. | unchecked replacements on the live listing, a held item that mutates early or holds up others, a popover that lied |
+| **MA18** | MC-A12 (08B) | An undo or redo never overwrites a research write made after its step; feedback rows exist exactly for the photographer actions on `ai` rows that are currently applied. | undo erasing newer suggestions, false evaluation data |

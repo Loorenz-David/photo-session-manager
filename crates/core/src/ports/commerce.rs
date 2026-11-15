@@ -23,7 +23,17 @@ pub const ALL_CAPABILITIES: [&str; 9] = [
     "description.publish",
 ];
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PublicListing {
+    pub hosts: Vec<String>,
+    pub item_url: Option<String>,
+    pub item_path_tail: String,
+}
+
 pub trait CommerceAdapter: Send + Sync {
+    fn public_listing(&self, _external_id: &str) -> Result<PublicListing> {
+        Ok(PublicListing::default())
+    }
     fn check_token(&self) -> Result<()>;
     fn capabilities(&self) -> Vec<&'static str>;
     fn condition_photos_key(&self) -> &str;

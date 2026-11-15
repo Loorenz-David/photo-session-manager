@@ -216,7 +216,15 @@ pub struct Value {
     pub ai_status: Option<AiStatus>,
     pub ai_reason: Option<String>,
     pub ai_sources: Option<Vec<String>>,
+    pub ai_prior: Option<AiPrior>,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiPrior {
+    pub value: String,
+    pub valid: bool,
+    pub provenance: Provenance,
 }
 
 impl Value {

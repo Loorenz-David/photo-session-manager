@@ -75,6 +75,7 @@ impl From<Error> for CommandError {
             Error::InvalidData(_) => "invalid_data",
             Error::Provider(_) => "provider",
             Error::EditorWaitExpired(_) => "editor_wait_expired",
+            Error::SuggestionsChanged => "suggestions_changed",
             Error::TargetHasRaw => "target_has_raw",
             Error::TargetPublished => "target_published",
             Error::NothingToUndo => "nothing_to_undo",

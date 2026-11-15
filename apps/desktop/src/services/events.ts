@@ -4,8 +4,13 @@ import type { CameraStatus } from './camera';
 
 /** Calls `refresh` whenever a session or its photos change (`session_changed`, `photo_added`). */
 export async function onSessionsChanged(refresh: () => void): Promise<UnlistenFn> {
-  const unlisteners = await Promise.all(['session_changed', 'photo_added', 'publish_progress'].map(name => listen(name, () => refresh())));
+  const unlisteners = await Promise.all(['session_changed', 'photo_added', 'publish_progress', 'research_changed'].map(name => listen(name, () => refresh())));
   return () => unlisteners.forEach(unlisten => unlisten());
+}
+
+/** `research_changed {session_id}`: a research run of that session changed (a step, its state, its writes). */
+export async function onResearchChanged(handler: (sessionId: number) => void): Promise<UnlistenFn> {
+  return listen<{ session_id: number }>('research_changed', event => handler(event.payload.session_id));
 }
 
 /** Delivers every `camera_status_changed` payload (the new status). */

@@ -34,6 +34,7 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
           <span className="row-name">
             <strong>{name}</strong>
             <small>{row.sku}</small>
+            {row.arranged && <span className="pill">Arranged</span>}
           </span>
         </button>
       </HoverPreview>

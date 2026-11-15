@@ -1,0 +1,32 @@
+[package]
+name = "psm-research"
+version.workspace = true
+edition.workspace = true
+autotests = false
+
+[dependencies]
+psm-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.11"
+unicode-normalization = "0.1"
+url = "2.5.8"
+psm-infra = { path = "../infra" }
+chrono = "0.4"
+rusqlite = { version = "0.40", features = ["bundled"] }
+tracing.workspace = true
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# R8·U1: the HTTP seam of the real adapters (the tool crate's set); base64 for image data URLs.
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
+base64 = "0.23"
+# R8·U3: the HTML tokenizer of the page reader (0.39.0, already in the lock file).
+html5ever = "0.39"
+
+[dev-dependencies]
+chrono-tz = "0.10"
+psm-testkit = { path = "../testkit" }
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+
+[[test]]
+name = "engine"
+path = "tests/engine/main.rs"

@@ -1,0 +1,67 @@
+{
+  "cap": "page_fetch",
+  "cost_micro_usd": 0,
+  "duration_ms": 155,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T15:15:56.647Z",
+  "fixture": {
+    "captured": "2026-11-12T15:15:56.492Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "pages/www_vntg_com.json"
+  },
+  "id": "v8-http-vntg_com-940d8e0a447f",
+  "meta": null,
+  "model": "",
+  "provider": "page_http",
+  "request": {
+    "body": null,
+    "headers": {
+      "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en"
+    },
+    "method": "GET",
+    "url": "https://www.vntg.com/251946/mid-century-danish-teak-dining-table-by-johannes-andersen-for-uldum-mobelfabrik-1960s/"
+  },
+  "request_hash": "940d8e0a447f32b530e3619fd9d92ba96c42a26fd99a7f4dd8c9eeec1613ca35",
+  "response": {
+    "body": null,
+    "body_bytes": 5884,
+    "body_omitted": "third-party page body not committed",
+    "final_url": "https://www.vntg.com/251946/mid-century-danish-teak-dining-table-by-johannes-andersen-for-uldum-mobelfabrik-1960s/",
+    "headers": {
+      "accept-ch": "Sec-CH-UA-Bitness, Sec-CH-UA-Arch, Sec-CH-UA-Full-Version, Sec-CH-UA-Mobile, Sec-CH-UA-Model, Sec-CH-UA-Platform-Version, Sec-CH-UA-Full-Version-List, Sec-CH-UA-Platform, Sec-CH-UA, UA-Bitness, UA-Arch, UA-Full-Version, UA-Mobile, UA-Model, UA-Platform-Version, UA-Platform, UA",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-mitigated": "challenge",
+      "cf-ray": "<cf-ray>",
+      "connection": "close",
+      "content-length": "5884",
+      "content-security-policy": "default-src 'none'; script-src 'nonce-s7cxFOsAlEiirYYwAyAj98' 'unsafe-eval' https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'unsafe-inline'; img-src 'self' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com blob:; child-src 'self' https://challenges.cloudflare.com blob:; worker-src blob:; form-action http: https:; base-uri 'self'",
+      "content-type": "text/html; charset=UTF-8",
+      "critical-ch": "Sec-CH-UA-Bitness, Sec-CH-UA-Arch, Sec-CH-UA-Full-Version, Sec-CH-UA-Mobile, Sec-CH-UA-Model, Sec-CH-UA-Platform-Version, Sec-CH-UA-Full-Version-List, Sec-CH-UA-Platform, Sec-CH-UA, UA-Bitness, UA-Arch, UA-Full-Version, UA-Mobile, UA-Model, UA-Platform-Version, UA-Platform, UA",
+      "cross-origin-embedder-policy": "require-corp",
+      "cross-origin-opener-policy": "same-origin",
+      "cross-origin-resource-policy": "same-origin",
+      "date": "Thu, 12 Nov 2026 15:15:56 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "origin-agent-cluster": "?1",
+      "permissions-policy": "accelerometer=(),camera=(),clipboard-read=(),clipboard-write=(),geolocation=(),gyroscope=(),hid=(),magnetometer=(),microphone=(),payment=(),publickey-credentials-get=(),screen-wake-lock=(),serial=(),sync-xhr=(),usb=(),xr-spatial-tracking=*",
+      "referrer-policy": "same-origin",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=24%2FLNGWDKW6CQh0n9s4LtaDP4cXF6AvTR8OvYi6LS0RM76qFwigOeKxtozGifZTV%2BZLfpbrHumvkIGiLlaG0vOiiPBESQfM7LRaiWNT4NClgDR8vQk9xaYPPk12U5AAPKANZ1tBpHOOhzQ%3D%3D\"}]}",
+      "server": "cloudflare",
+      "server-timing": "chlray;desc=\"a5967eb6ffd9f3bd\"",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "redirects": [],
+    "status": 403
+  },
+  "sent": true,
+  "started": "2026-11-12T15:15:56.492Z",
+  "usage": {
+    "page_fetch": 1
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 0
+}

@@ -48,6 +48,7 @@ vi.mock('@/services/items', () => ({ searchItems: vi.fn(), searchItemsShop: vi.f
 vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(), cameraRetry: vi.fn() }));
 vi.mock('@/services/events', () => ({
   onSessionsChanged: vi.fn(async () => () => undefined),
+  onResearchChanged: vi.fn(async () => () => undefined),
   onCameraStatus: vi.fn(async () => () => undefined),
   onWorkspaceEvents: vi.fn(async (handler: (event: WorkspaceEvent) => void) => {
     delivered.workspace.push(handler);
@@ -135,6 +136,7 @@ export function view(photos: Photo[], sessionId = SESSION): SessionView {
       id: sessionId,
       item_id: sessionId === 1 ? null : ITEM.id,
       published_at: null,
+      arranged_at: null,
       published_seq: 0,
       change_seq: 0,
       dirty: false,

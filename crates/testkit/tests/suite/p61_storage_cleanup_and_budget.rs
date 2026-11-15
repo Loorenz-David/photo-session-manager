@@ -12,6 +12,7 @@ use psm_core::{
     ports::{camera::CaptureSink, clock::Clock},
     services::storage::{Cleared, DISK_ALMOST_FULL, TickOutcome},
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::{TestApp, fixtures::synthetic_jpeg::SyntheticJpeg};
 use sha2::{Digest, Sha256};
 use std::{
@@ -407,8 +408,12 @@ fn c3a_masters_go_after_publish_while_a_publishing_session_keeps_its_own() {
     let b1 = photo(second, "b1");
     let b2 = photo(second, "b2");
     let publish = a.app.publish.as_ref().unwrap();
-    publish.confirm(&[first], "Publish images").unwrap();
-    publish.confirm(&[second], "Publish images").unwrap();
+    publish
+        .confirm_as_shown(&[first], "Publish images")
+        .unwrap();
+    publish
+        .confirm_as_shown(&[second], "Publish images")
+        .unwrap();
     // Every render completes except b2's master: B stays in its prepare step (publishing).
     let step = |s: i64| {
         let id: i64 = rusqlite::Connection::open(a.app.paths.db())

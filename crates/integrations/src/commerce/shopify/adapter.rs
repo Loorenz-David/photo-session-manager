@@ -23,7 +23,7 @@ use psm_core::{
     mechanisms::{upload_name, values::canonical_decimal},
     ports::{
         clock::Clock,
-        commerce::{ALL_CAPABILITIES, CommerceAdapter},
+        commerce::{ALL_CAPABILITIES, CommerceAdapter, PublicListing},
     },
 };
 use serde_json::{Value as Json, json};
@@ -459,7 +459,12 @@ impl ShopifyAdapter {
             AttributeGroup::Details
         };
         let validations = if let Some(units) = type_map::units_for(platform_type) {
-            json!({ "units": units })
+            if matches!(platform_type, "dimension" | "weight") {
+                // R8·U3: research converts measurements by these names (08B MC-A2).
+                json!({ "units": units, "unit_names": type_map::unit_names() })
+            } else {
+                json!({ "units": units })
+            }
         } else if core_type == CoreType::Rating {
             let bound = |name: &str| {
                 type_map::validation(&node.validations, name)
@@ -584,6 +589,43 @@ impl CommerceAdapter for ShopifyAdapter {
     fn render_description(&self, paragraphs: &str) -> String {
         description_html(paragraphs)
     }
+    /// R8·U3 (08B MC-A3): the shop's public hosts (primary domain and the myshopify host; no
+    /// `webPresences`, which needs `read_markets`) and the linked product's storefront URL and
+    /// path tail. An unlinked item (`""`) or a product the shop no longer has gives the hosts
+    /// only.
+    fn public_listing(&self, external_id: &str) -> Result<PublicListing> {
+        let data = if external_id.is_empty() {
+            self.call(graphql::SHOP_HOSTS, json!({}))?
+        } else {
+            self.call(graphql::PUBLIC_LISTING, json!({ "id": external_id }))?
+        };
+        let shop = &data["shop"];
+        let mut hosts: Vec<String> = Vec::new();
+        for host in [
+            shop["primaryDomain"]["host"].as_str(),
+            shop["myshopifyDomain"].as_str(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        {
+            if !hosts.iter().any(|h| h == host) {
+                hosts.push(host.to_owned());
+            }
+        }
+        let product = &data["product"];
+        Ok(PublicListing {
+            hosts,
+            item_url: product["onlineStoreUrl"].as_str().map(str::to_owned),
+            item_path_tail: product["handle"]
+                .as_str()
+                .filter(|h| !h.is_empty())
+                .map(|h| format!("products/{h}"))
+                .unwrap_or_default(),
+        })
+    }
+
     fn check_token(&self) -> Result<()> {
         self.call("query { shop { name } }", serde_json::json!({}))?;
         Ok(())

@@ -15,7 +15,7 @@ type StatusPillProps = {
 
 const LATER = 'Arrives with publishing';
 
-/** Row status in the order of ch07: Publishing n%, Publish cancelled · Publish (changelog 44), Publish failed, Description failed, Published, Ready · Publish, In progress; Archived in Shopify (P62). */
+/** Row status in the order of ch07: Waiting for you · n conflicts (08B MC-A10), Publishing n%, Publish cancelled · Publish (changelog 44), Publish failed, Description failed, Published, Ready · Publish, In progress; Archived in Shopify (P62). */
 export function StatusPill({ label, onRetry, onPublish, sessionId }: StatusPillProps) {
   const retry = useAction(async () => { await onRetry?.(); });
   switch (label.kind) {
@@ -25,6 +25,15 @@ export function StatusPill({ label, onRetry, onPublish, sessionId }: StatusPillP
           <div className="status-cell">
             <span className="pill pill-progress">Publishing {label.value}%</span>
             <Progress value={label.value} aria-label={`Publishing ${label.value}%`} className="pill-bar" />
+          </div>
+        </PublishActivityPopover>
+      );
+    case 'waiting_for_you':
+      // 08B MC-A10: a confirmed item waits for its conflicts; its activity popover keeps Cancel (the way out).
+      return (
+        <PublishActivityPopover sessionId={sessionId}>
+          <div className="status-cell">
+            <span className="pill pill-progress">Waiting for you · {label.value} {label.value === 1 ? 'conflict' : 'conflicts'}</span>
           </div>
         </PublishActivityPopover>
       );

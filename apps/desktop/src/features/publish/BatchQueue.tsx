@@ -46,7 +46,7 @@ export function BatchQueue({ ids, onClose }: { ids: number[]; onClose: () => voi
   const remoteRead = item && linked ? reads.get(item.id) : undefined;
   return <>
     {(!item || (linked && !remoteRead)) && <div className="p-6"><SkeletonRows n={4} /></div>}
-    {item && view && (!linked || remoteRead) && <FormDialog key={ids[index]} open onOpenChange={open => !open && onClose()} item={item} photos={view.photos} onItemChanged={() => void getSessionView(ids[index]).then(updated => setViews(old => new Map(old).set(ids[index], updated)))}
+    {item && view && (!linked || remoteRead) && <FormDialog key={ids[index]} open onOpenChange={open => !open && onClose()} item={item} photos={view.photos} sessionId={ids[index]} onItemChanged={() => void getSessionView(ids[index]).then(updated => setViews(old => new Map(old).set(ids[index], updated)))}
       remoteRead={remoteRead}
       position={position.current}
       onPosition={next => { position.current = next; }}

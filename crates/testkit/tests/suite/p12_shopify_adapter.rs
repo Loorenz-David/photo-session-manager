@@ -352,13 +352,21 @@ fn c4h_decimal() {
 #[test]
 fn c4i_dimension_units() {
     let d = assert_type("beyo.fx_dimension", CoreType::Dimension, true);
-    assert_eq!(d.validations, json!({ "units": DIMENSION_UNITS }));
+    // R8·U3 task 6: dimension definitions also carry research's unit names.
+    assert_eq!(
+        d.validations,
+        json!({ "units": DIMENSION_UNITS, "unit_names": type_map::unit_names() })
+    );
 }
 
 #[test]
 fn c4j_weight_units() {
     let d = assert_type("beyo.fx_weight", CoreType::Weight, true);
-    assert_eq!(d.validations, json!({ "units": WEIGHT_UNITS }));
+    // R8·U3 task 6: weight definitions also carry research's unit names.
+    assert_eq!(
+        d.validations,
+        json!({ "units": WEIGHT_UNITS, "unit_names": type_map::unit_names() })
+    );
 }
 
 #[test]

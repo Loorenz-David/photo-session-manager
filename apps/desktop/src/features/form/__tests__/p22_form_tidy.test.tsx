@@ -7,13 +7,13 @@ import type { Item } from '@/services/items';
 vi.mock('@/services/attributes', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/attributes')>()),
   getForm: vi.fn(), listDefinitions: vi.fn(), setAttributeValue: vi.fn(), clearAttribute: vi.fn(),
-  acceptAllSuggestions: vi.fn(), updateIdentity: vi.fn(),
+  acceptAllSuggestions: vi.fn(), acceptSuggestion: vi.fn(), updateIdentity: vi.fn(),
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { FormDialog } from '@/features/form/FormDialog';
 import { IdentityEditor } from '@/features/form/IdentityEditor';
-import { getForm, setAttributeValue, updateIdentity } from '@/services/attributes';
+import { acceptSuggestion, getForm, setAttributeValue, updateIdentity } from '@/services/attributes';
 import { toast } from 'sonner';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
@@ -24,7 +24,7 @@ Element.prototype.releasePointerCapture ??= () => undefined;
 const ITEM_ID = 7;
 const item: Item = { id: ITEM_ID, sku: 'VF-0042', folder_key: 'VF-0042', barcode: '4006381333931', item_type: 'Chair', title: 'Oak chair', origin: 'local', external_id: null, created_at: 0, updated_at: 0 };
 const def = (key: string, core_type: string, label: string, group: Group = 'details'): Definition => ({ integration: 'shopify', key, label, core_type, choices: [], validations: '{}', group, description: null, writable: true });
-const stored = (key: string, value: unknown, extra: Partial<AttributeValue> = {}): AttributeValue => ({ item_id: ITEM_ID, key, value: JSON.stringify(value), valid: true, provenance: 'human', ai_confidence: null, ai_status: null, ai_reason: null, ai_sources: null, updated_at: 1, ...extra });
+const stored = (key: string, value: unknown, extra: Partial<AttributeValue> = {}): AttributeValue => ({ item_id: ITEM_ID, key, value: JSON.stringify(value), valid: true, provenance: 'human', ai_confidence: null, ai_status: null, ai_reason: null, ai_sources: null, ai_prior: null, updated_at: 1, conflict: false, ...extra });
 const field = (definition: Definition, value: AttributeValue | null): FormField => ({ definition, value, is_default: false, is_severity: false, selected: null, default: null, saved: [] });
 const form = (groups: Partial<Record<Group, FormField[]>>): Form => ({ item_id: ITEM_ID, item_type_from_integration: false, groups: (['details', 'condition', 'product'] as Group[]).map(group => ({ group, fields: groups[group] ?? [], filled: 0, total: groups[group]?.length ?? 0 })) });
 const renderForm = (onOpenChange = vi.fn(), onItemChanged = vi.fn()) => render(<FormDialog open onOpenChange={onOpenChange} item={item} photos={[]} onItemChanged={onItemChanged} />);
@@ -40,7 +40,7 @@ it('C4(a) queues two AI accept clicks and reloads even when the second action fa
   ] }));
   let resolveA!: (value: AttributeValue) => void;
   let rejectB!: (reason: Error) => void;
-  vi.mocked(setAttributeValue)
+  vi.mocked(acceptSuggestion)
     .mockReturnValueOnce(new Promise(resolve => { resolveA = resolve; }))
     .mockReturnValueOnce(new Promise((_resolve, reject) => { rejectB = reject; }));
   renderForm();
@@ -50,11 +50,11 @@ it('C4(a) queues two AI accept clicks and reloads even when the second action fa
   const maker = screen.getByLabelText('Maker');
   fireEvent.click(within(maker.closest('[data-field]') as HTMLElement).getByRole('button', { name: /AI suggestion/ }));
   fireEvent.click(await screen.findByRole('button', { name: 'Looks right' }));
-  expect(setAttributeValue).toHaveBeenCalledTimes(1);
-  expect(setAttributeValue).toHaveBeenNthCalledWith(1, ITEM_ID, 'custom.era', '1960s');
+  expect(acceptSuggestion).toHaveBeenCalledTimes(1);
+  expect(acceptSuggestion).toHaveBeenNthCalledWith(1, ITEM_ID, 'custom.era');
   await act(async () => { resolveA(stored('custom.era', '1960s')); });
-  await waitFor(() => expect(setAttributeValue).toHaveBeenCalledTimes(2));
-  expect(setAttributeValue).toHaveBeenNthCalledWith(2, ITEM_ID, 'custom.maker', 'Oak & Co');
+  await waitFor(() => expect(acceptSuggestion).toHaveBeenCalledTimes(2));
+  expect(acceptSuggestion).toHaveBeenNthCalledWith(2, ITEM_ID, 'custom.maker');
   const beforeFailure = vi.mocked(getForm).mock.calls.length;
   await act(async () => { rejectB(new Error('nope')); });
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('nope')));

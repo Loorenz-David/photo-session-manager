@@ -1,0 +1,39 @@
+[package]
+name = "psm-research-tool"
+version.workspace = true
+edition.workspace = true
+autotests = false
+
+# R1: the dev-Mac benchmark tool (probes, visual-search and model benchmarks). Real provider calls
+# happen only when a person runs the binary with keys in the environment; the tests use a stub seam.
+# R9: `report` and `replay` over an export of the app's research record; the tool uses the
+# research crate's rules and export names (one-way: nothing in the app depends on the tool).
+
+[[bin]]
+name = "psm-research"
+path = "src/main.rs"
+
+[dependencies]
+psm-core = { path = "../core" }
+psm-infra = { path = "../infra" }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.11"
+url = "2.5.8"
+chrono = "0.4"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
+psm-research = { path = "../research" }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# R9·U2 `accept`: the real app headless on a scratch folder. The testkit gives the shop
+# definitions fixture and the editor stand-in (no Capture One is ever driven).
+psm-integrations = { path = "../integrations" }
+psm-testkit = { path = "../testkit" }
+
+[dev-dependencies]
+tempfile = "3"
+# R9·U1: the export fixture is built in the test by the research crate's harness (included by path).
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+[[test]]
+name = "tool"
+path = "tests/tool/main.rs"

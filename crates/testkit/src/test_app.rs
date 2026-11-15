@@ -41,7 +41,62 @@ pub struct TestApp {
     pub fake_processes: Arc<FakeProcessList>,
     /// The idle-sleep assertion (P48).
     pub fake_sleep: Arc<FakeSleepInhibitor>,
+    /// R7·U1: the research fakes the app's engine calls (`with_research…` only).
+    pub research: Option<ResearchFakes>,
     next_hook: AtomicU64,
+}
+
+/// The research crate's fakes, registered as the app's research providers (R7·U1).
+#[derive(Clone, Default)]
+pub struct ResearchFakes {
+    pub model: Arc<psm_research::fakes::FakeModel>,
+    pub search: Arc<psm_research::fakes::FakeVisualSearch>,
+    pub reader: Arc<psm_research::fakes::FakePageReader>,
+}
+
+/// Distinctive research key values (they appear in no expected text).
+pub const RESEARCH_MODEL_KEY: &str = "sk-psm-APP-model+key/31c7";
+pub const RESEARCH_SEARCH_KEY: &str = "srch-psm-APP-key-8d02";
+
+/// Research settings under which every prerequisite passes with the fakes: their ids, model
+/// `m1` for every stage, a price of 0.001 USD per call for each, auto on, a 1 s quiet period.
+pub fn research_test_settings() -> serde_json::Value {
+    use psm_research::{
+        domain::Stage,
+        fakes::{FakeModel, FakePageReader, FakeVisualSearch},
+    };
+    let stages: serde_json::Map<String, serde_json::Value> = Stage::ALL
+        .into_iter()
+        .map(|stage| {
+            let edge = match stage {
+                Stage::Labels | Stage::Condition => 2048,
+                _ => 1024,
+            };
+            (
+                stage.as_str().to_owned(),
+                serde_json::json!({"model": "m1", "effort": "low", "image_long_edge": edge}),
+            )
+        })
+        .collect();
+    serde_json::json!({
+        "source_wait_seconds": 120,
+        "trusted_sites": [],
+        "max_pages": 10,
+        "stages": stages,
+        "fill_keys": crate::fixtures::definitions::shop_definitions().into_iter().map(|d| d.key).collect::<Vec<_>>(),
+        "max_cost_per_run": "0.50",
+        "max_cost_per_day": "15",
+        "prices": [
+            {"provider": FakeModel::ID, "model": "m1", "unit": "input_token",
+             "usd_per_million": "1", "fallback_call_usd": "0.001"},
+            {"provider": FakeVisualSearch::ID, "model": "", "fallback_call_usd": "0.001"},
+            {"provider": FakePageReader::ID, "model": "", "fallback_call_usd": "0.001"},
+        ],
+        "language": "English",
+        "record_days": 30,
+        "providers": {"model": FakeModel::ID, "visual_search": FakeVisualSearch::ID,
+                      "page_reader": FakePageReader::ID},
+    })
 }
 
 #[derive(Default)]
@@ -251,6 +306,64 @@ impl TestApp {
     pub fn new() -> Result<Self> {
         Self::create(false, false, "custom.damage_report", None, 0)
     }
+    /// R7·U1: the wired app with research ready to run: a fake shop, the research fakes as its
+    /// providers, both keys in `FakeSecrets`, [`research_test_settings`] saved, and a Details
+    /// text field `custom.designer` research may write.
+    pub fn with_research() -> Result<Self> {
+        let app = Self::create_with_research(true, ResearchFakes::default())?;
+        use psm_core::ports::secrets::SecretStore;
+        app.secrets
+            .set(psm_research::service::MODEL_ACCOUNT, RESEARCH_MODEL_KEY)?;
+        app.secrets
+            .set(psm_research::service::SEARCH_ACCOUNT, RESEARCH_SEARCH_KEY)?;
+        app.set_research_settings(research_test_settings())?;
+        app.research_fields(&["custom.designer"])?;
+        Ok(app)
+    }
+    /// R8·U3: what [`Self::with_research`] does, with `commerce` as the app's shop adapter (in
+    /// place of `FakeCommerce`, so `commerce` is `None`) and `providers` in the research seam (in
+    /// place of the research fakes, so `research` is `None`). A restart reopens without
+    /// `commerce`.
+    pub fn with_research_using(
+        commerce: Arc<dyn psm_core::ports::commerce::CommerceAdapter>,
+        providers: psm_research::ports::Providers,
+    ) -> Result<Self> {
+        let app = Self::create_inner(
+            true,
+            false,
+            "custom.damage_report",
+            None,
+            0,
+            None,
+            Some((commerce, providers)),
+        )?;
+        use psm_core::ports::secrets::SecretStore;
+        app.secrets
+            .set(psm_research::service::MODEL_ACCOUNT, RESEARCH_MODEL_KEY)?;
+        app.secrets
+            .set(psm_research::service::SEARCH_ACCOUNT, RESEARCH_SEARCH_KEY)?;
+        app.set_research_settings(research_test_settings())?;
+        app.research_fields(&["custom.designer"])?;
+        Ok(app)
+    }
+    /// R7·U1: the wired app with the research fakes registered but nothing else: no shop
+    /// integration, no key, no research settings (the core workflow without research).
+    pub fn with_research_fakes_only() -> Result<Self> {
+        Self::create_with_research(false, ResearchFakes::default())
+    }
+    fn create_with_research(shop: bool, fakes: ResearchFakes) -> Result<Self> {
+        Self::create_full(true, shop, "custom.damage_report", None, 0, Some(fakes))
+    }
+    /// Writes the `research` slot of the settings file (read live by the engine).
+    pub fn set_research_settings(&self, value: serde_json::Value) -> Result<()> {
+        let mut settings = psm_infra::settings_file::Settings::open(&self.app.paths)?;
+        settings.research = Some(value);
+        psm_infra::settings_file::Settings::set(&self.app.paths, &settings)
+    }
+    /// The research fakes (`with_research…` apps only).
+    pub fn research_fakes(&self) -> &ResearchFakes {
+        self.research.as_ref().expect("research fakes registered")
+    }
     pub fn with_fake_document() -> Result<Self> {
         Self::create(true, false, "custom.damage_report", None, 0)
     }
@@ -314,6 +427,48 @@ impl TestApp {
         condition_key: &str,
         sidecar: Option<serde_json::Value>,
         clock_start: i64,
+    ) -> Result<Self> {
+        Self::create_full(
+            configure_document,
+            configure_shop,
+            condition_key,
+            sidecar,
+            clock_start,
+            None,
+        )
+    }
+    fn create_full(
+        configure_document: bool,
+        configure_shop: bool,
+        condition_key: &str,
+        sidecar: Option<serde_json::Value>,
+        clock_start: i64,
+        research: Option<ResearchFakes>,
+    ) -> Result<Self> {
+        Self::create_inner(
+            configure_document,
+            configure_shop,
+            condition_key,
+            sidecar,
+            clock_start,
+            research,
+            None,
+        )
+    }
+    /// `custom` (R8·U3): a commerce adapter opened in place of `FakeCommerce` and the providers
+    /// registered in the research seam in place of the research fakes.
+    #[allow(clippy::too_many_arguments)]
+    fn create_inner(
+        configure_document: bool,
+        configure_shop: bool,
+        condition_key: &str,
+        sidecar: Option<serde_json::Value>,
+        clock_start: i64,
+        research: Option<ResearchFakes>,
+        custom: Option<(
+            Arc<dyn psm_core::ports::commerce::CommerceAdapter>,
+            psm_research::ports::Providers,
+        )>,
     ) -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let mut paths = AppPaths::for_dir(dir.path());
@@ -425,6 +580,28 @@ impl TestApp {
         }
         let clock = Arc::new(ManualClock::new(clock_start));
         fake.set_clock(clock.clone());
+        let seam_providers = match (&custom, &research) {
+            (Some((_, providers)), _) => Some(providers.clone()),
+            (None, Some(fakes)) => Some(psm_research::ports::Providers {
+                model: Some(fakes.model.clone()),
+                search: Some(fakes.search.clone()),
+                reader: Some(fakes.reader.clone()),
+            }),
+            (None, None) => None,
+        };
+        if let Some(providers) = seam_providers {
+            // P70 hazard: the wait between attempts moves the manual clock, never real time.
+            let wait_clock = clock.clone();
+            psm_integrations::with_test_research(
+                &paths,
+                psm_integrations::ResearchTestSeams {
+                    providers,
+                    wait: Arc::new(move |ms| {
+                        wait_clock.advance(i64::try_from(ms).unwrap_or(i64::MAX))
+                    }),
+                },
+            );
+        }
         let secrets = Arc::new(FakeSecrets::default());
         if !secret_cache_enabled {
             secrets.disable_cache();
@@ -439,14 +616,18 @@ impl TestApp {
                 condition_key,
             ))
         });
+        let opened_commerce = match &custom {
+            Some((adapter, _)) => Some(adapter.clone()),
+            None => commerce
+                .as_ref()
+                .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
+        };
         let app = App::open_with_adapter(
             paths,
             fake.clone(),
             clock.clone(),
             run_startup,
-            commerce
-                .as_ref()
-                .map(|c| c.clone() as Arc<dyn psm_core::ports::commerce::CommerceAdapter>),
+            opened_commerce,
             secrets.clone(),
         )?;
         let events = Arc::new(CollectingEventSink::default());
@@ -466,6 +647,7 @@ impl TestApp {
             secrets,
             fake_processes,
             fake_sleep,
+            research,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -524,6 +706,8 @@ impl TestApp {
         let count = count + self.app.render_jobs.tick(self.clock.now_ms())?;
         let count = count + self.app.publish_jobs.tick(self.clock.now_ms())?;
         self.app.previews.tick()?;
+        // R7·U1: one turn of the research runner (skipped while another thread is in one).
+        self.app.research_tick(self.clock.now_ms())?;
         self.app.camera_runtime.tick(self.clock.mono());
         Ok(count)
     }
@@ -1007,5 +1191,159 @@ impl TestApp {
             self.store(),
             conn.last_insert_rowid(),
         )
+    }
+}
+
+/// The integration name research fixtures use: the definitions `publish` reads (R5).
+pub const RESEARCH_INTEGRATION: &str = "shopify";
+
+impl TestApp {
+    /// R5: text fields `keys` (Details step) of the integration [`RESEARCH_INTEGRATION`], added
+    /// to its definitions. With a fake shop they are the shop's definitions, read by a schema
+    /// refresh (so a publish writes them); without one they are imported directly.
+    pub fn research_fields(&self, keys: &[&str]) -> Result<()> {
+        use psm_core::domain::{
+            attribute::{AttributeGroup, CoreType, Definition},
+            publish::DefinitionLink,
+        };
+        let definition = |key: &str| Definition {
+            integration: RESEARCH_INTEGRATION.into(),
+            key: key.into(),
+            label: key.into(),
+            core_type: CoreType::Text,
+            choices: Vec::new(),
+            validations: serde_json::json!({}),
+            group: AttributeGroup::Details,
+            description: None,
+            writable: true,
+        };
+        let service = AttributesService::new(
+            self.app.store.as_ref(),
+            self.clock.as_ref(),
+            Some(RESEARCH_INTEGRATION),
+        );
+        if let Some(shop) = &self.commerce {
+            {
+                let mut state = shop.state.lock().unwrap();
+                for key in keys {
+                    if !state.definitions.iter().any(|(d, _)| d.key == *key) {
+                        state.definitions.push((
+                            definition(key),
+                            DefinitionLink {
+                                platform_type: "single_line_text_field".into(),
+                                platform_meta: serde_json::json!({}),
+                            },
+                        ));
+                    }
+                }
+            }
+            return service.refresh_schema(shop.as_ref());
+        }
+        let mut all = Vec::new();
+        self.app.store.transaction(&mut |tx| {
+            all = tx.attribute_definitions(RESEARCH_INTEGRATION)?;
+            Ok(())
+        })?;
+        for key in keys {
+            if !all.iter().any(|d| d.key == *key) {
+                all.push(definition(key));
+            }
+        }
+        service.import_definitions(RESEARCH_INTEGRATION, all)
+    }
+
+    /// R5: one research suggestion through the research write path
+    /// (`psm_research::writes::suggest`, MC-A1), with a fixed reason and source.
+    pub fn research_suggest(
+        &self,
+        item_id: i64,
+        key: &str,
+        value: &str,
+        confidence: psm_core::domain::attribute::AiConfidence,
+    ) -> Result<psm_research::writes::WriteOutcome> {
+        psm_research::writes::suggest(
+            self.app.store.as_ref(),
+            self.clock.as_ref(),
+            Some(RESEARCH_INTEGRATION),
+            item_id,
+            key,
+            &serde_json::Value::String(value.into()),
+            confidence,
+            Some("fixture reason"),
+            &["https://example.com/listing".to_owned()],
+        )
+    }
+
+    /// R5: a conflict on `key` (MC-A1): a `default` row holding `prior` (written directly, no
+    /// undo step), then research's suggestion `suggestion` over it, which keeps the default as
+    /// the row's `ai_prior`.
+    pub fn research_conflict(
+        &self,
+        item_id: i64,
+        key: &str,
+        prior: &str,
+        suggestion: &str,
+        confidence: psm_core::domain::attribute::AiConfidence,
+    ) -> Result<()> {
+        use psm_core::domain::attribute::{Provenance, Value};
+        let now = self.clock.now_ms();
+        self.app.store.transaction(&mut |tx| {
+            tx.put_attribute_value(&Value {
+                item_id,
+                key: key.into(),
+                value: serde_json::Value::String(prior.into()).to_string(),
+                valid: true,
+                provenance: Provenance::Default,
+                ai_confidence: None,
+                ai_status: None,
+                ai_reason: None,
+                ai_sources: None,
+                ai_prior: None,
+                updated_at: now,
+            })
+        })?;
+        match self.research_suggest(item_id, key, suggestion, confidence)? {
+            psm_research::writes::WriteOutcome::Written(_) => Ok(()),
+            other => Err(psm_core::Error::InvalidData(format!(
+                "conflict fixture not written: {}",
+                other.text()
+            ))),
+        }
+    }
+}
+
+/// R5 (MC-A10): a confirmation that passes what a fresh preview showed (each session's withheld
+/// count and conflict keys), as the publish popover does. A preview that fails is passed on as
+/// an empty shown set, so `confirm` reports its own error as before.
+pub trait ConfirmAsShown {
+    fn confirm_as_shown(&self, session_ids: &[i64], summary: &str) -> Result<i64>;
+}
+
+impl ConfirmAsShown for psm_core::services::publish::PublishService {
+    fn confirm_as_shown(&self, session_ids: &[i64], summary: &str) -> Result<i64> {
+        let shown: Vec<_> = match self.preview(session_ids) {
+            Ok(preview) => preview
+                .items
+                .into_iter()
+                .map(|p| psm_core::domain::publish::ShownSuggestions {
+                    session_id: p.session_id,
+                    n_withheld: p.n_withheld,
+                    conflict_keys: p.conflicts.into_iter().map(|c| c.key).collect(),
+                })
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+        self.confirm(session_ids, summary, &shown)
+    }
+}
+
+impl TestApp {
+    /// R5: [`ConfirmAsShown::confirm_as_shown`] on the app's publish service.
+    pub fn confirm_as_shown(&self, session_ids: &[i64], summary: &str) -> Result<i64> {
+        self.app
+            .publish
+            .as_ref()
+            .ok_or(psm_core::Error::NoIntegration)?
+            .confirm_as_shown(session_ids, summary)
     }
 }

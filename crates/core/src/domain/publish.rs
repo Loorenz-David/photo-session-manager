@@ -141,6 +141,32 @@ pub struct PublishPreviewItem {
     pub unreviewed: usize,
     pub announced_removals: Vec<String>,
     pub create_item: bool,
+    /// MC-A10: low-confidence suggestions without a prior, left out of the publish for good.
+    pub n_withheld: usize,
+    /// MC-A10: the item's conflicts, which wait for the photographer once confirmed.
+    pub conflicts: Vec<PreviewConflict>,
+}
+
+/// One conflict as the confirmation shows it (MC-A10): the field, the previous value and where it
+/// came from, the suggestion and its confidence. Values are canonical JSON text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PreviewConflict {
+    pub key: String,
+    pub label: String,
+    pub prior_value: String,
+    pub prior_valid: bool,
+    pub prior_provenance: crate::domain::attribute::Provenance,
+    pub suggestion: String,
+    pub confidence: Option<crate::domain::attribute::AiConfidence>,
+}
+
+/// What the confirmation popover showed for one session (MC-A10, R-IA22): the confirming
+/// transaction recomputes both and refuses the confirmation when either differs.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShownSuggestions {
+    pub session_id: i64,
+    pub n_withheld: usize,
+    pub conflict_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,6 +186,10 @@ pub struct PublishItem {
     pub frozen_main: Vec<i64>,
     pub frozen_condition: Vec<i64>,
     pub frozen_attributes: std::collections::BTreeMap<String, Json>,
+    pub frozen_attribute_origin: std::collections::BTreeMap<String, Json>,
+    pub pending_conflicts: std::collections::BTreeMap<String, Json>,
+    pub resolved_attributes: std::collections::BTreeMap<String, Json>,
+    pub released_at: Option<i64>,
     pub announced_removals: Vec<String>,
     pub confirmed_change_seq: i64,
     pub step: crate::domain::session::PublishStep,
@@ -168,6 +198,33 @@ pub struct PublishItem {
     pub total: i64,
     pub error: Option<String>,
     pub export_run_id: Option<i64>,
+}
+
+impl PublishItem {
+    /// MC-A10's n: the pending keys without a resolution. The one count the row label and the
+    /// progress text use.
+    pub fn unresolved_conflicts(&self) -> usize {
+        self.pending_conflicts
+            .keys()
+            .filter(|key| !self.resolved_attributes.contains_key(*key))
+            .count()
+    }
+    /// The values a run sends (MC-A10): the frozen list plus each resolved key's frozen value;
+    /// a resolution that recorded "no value" (`value: null`) is left out.
+    pub fn run_attributes(&self) -> std::collections::BTreeMap<String, Json> {
+        let mut out = self.frozen_attributes.clone();
+        for (key, entry) in &self.resolved_attributes {
+            match entry.get("value") {
+                Some(value) if !value.is_null() => {
+                    out.insert(key.clone(), value.clone());
+                }
+                _ => {
+                    out.remove(key);
+                }
+            }
+        }
+        out
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

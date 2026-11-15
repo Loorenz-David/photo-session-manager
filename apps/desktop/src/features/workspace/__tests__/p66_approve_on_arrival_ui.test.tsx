@@ -100,6 +100,7 @@ function view(photos: Photo[]): SessionView {
       id: SESSION,
       item_id: ITEM.id,
       published_at: null,
+      arranged_at: null,
       published_seq: 0,
       change_seq: 0,
       dirty: false,
@@ -172,6 +173,7 @@ function sessionRow(id: number, title: string, createdAt: number, lastActivityAt
     last_activity_at: lastActivityAt,
     created_at: createdAt,
     cover_preview_path: null,
+    arranged: false,
     publish: null,
   };
 }

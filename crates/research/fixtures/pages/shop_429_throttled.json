@@ -1,0 +1,63 @@
+{
+  "cap": "page_fetch",
+  "cost_micro_usd": 0,
+  "duration_ms": 60281,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T15:14:28.694Z",
+  "fixture": {
+    "captured": "2026-11-12T15:13:28.412Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "pages/shop_429_throttled.json"
+  },
+  "id": "v8-http-beyovintage_se-4db4de2c84a1",
+  "meta": null,
+  "model": "",
+  "provider": "page_http",
+  "request": {
+    "body": null,
+    "headers": {
+      "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en"
+    },
+    "method": "GET",
+    "url": "https://beyovintage.se/en/products/square-teak-dining-table"
+  },
+  "request_hash": "4db4de2c84a1898df3d227656543521aba23efe14991483a1102763abbf28548",
+  "response": {
+    "body": null,
+    "body_bytes": 1568,
+    "body_omitted": "throttle page",
+    "final_url": "https://beyovintage.se/en/products/square-teak-dining-table",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "1568",
+      "content-type": "text/html",
+      "date": "Thu, 12 Nov 2026 15:14:28 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.01,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=oikuVcnh%2Bsxv28m7QT7qNsiBTM%2Bk%2FDakClt8ud%2FeByEw%2F5Joq7fo26kimHUvVlXS7hOPC%2BbXLks5VHwMVe6RyZnrvX1duBa7yhfBivUr%2FCDKqkAiYOJB4y5IlVWHFyMxCAXr2vLe1ElOhhK9\"}]}",
+      "retry-after": "60",
+      "server": "cloudflare",
+      "server-timing": "ipv6",
+      "x-content-type-options": "nosniff",
+      "x-dc": "gcp-europe-west4",
+      "x-download-options": "noopen",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "7ad5e615-02f3-428d-9506-4f6e20f25e81-1794496468",
+      "x-xss-protection": "1; mode=block"
+    },
+    "redirects": [],
+    "status": 429
+  },
+  "sent": true,
+  "started": "2026-11-12T15:13:28.412Z",
+  "usage": {
+    "page_fetch": 1
+  },
+  "waited_after_429_s": 60,
+  "worst_case_micro_usd": 0
+}

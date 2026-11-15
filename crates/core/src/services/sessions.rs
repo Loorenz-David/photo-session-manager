@@ -2,11 +2,13 @@ use crate::{
     Error, Result,
     domain::editing::ProvisionInputs,
     domain::session::SessionDto,
+    events::AppEvent,
     mechanisms::time::now_ms,
     ports::{
         camera::{ArrivalFollow, CameraProvider},
         clock::Clock,
         editing::EditingProvider,
+        events::EventSink,
         store::Store,
     },
     services::{editing_startup::EDITOR_NOT_FOLLOWING, health::HealthService},
@@ -21,6 +23,7 @@ pub struct SessionsService<'a> {
     commerce: Option<&'a dyn crate::ports::commerce::CommerceAdapter>,
     camera: Option<&'a dyn CameraProvider>,
     follow: Option<&'a dyn ArrivalFollow>,
+    events: Option<&'a dyn EventSink>,
 }
 
 impl<'a> SessionsService<'a> {
@@ -34,6 +37,7 @@ impl<'a> SessionsService<'a> {
             commerce: None,
             camera: None,
             follow: None,
+            events: None,
         }
     }
 
@@ -47,6 +51,56 @@ impl<'a> SessionsService<'a> {
     pub fn with_follow(mut self, follow: &'a dyn ArrivalFollow) -> Self {
         self.follow = Some(follow);
         self
+    }
+
+    pub fn with_events(mut self, events: &'a dyn EventSink) -> Self {
+        self.events = Some(events);
+        self
+    }
+
+    pub fn arrange(&self, id: i64) -> Result<bool> {
+        let session = self.store.session(id)?;
+        if session.session.item_id.is_none() {
+            return Err(Error::InvalidData(
+                "the Unassigned session cannot be arranged".into(),
+            ));
+        }
+        let changed = self.store.arrange_session_once(id, self.clock.now_ms())?;
+        if changed && let Some(events) = self.events {
+            events.emit(AppEvent::SessionChanged { session_id: id });
+        }
+        Ok(changed)
+    }
+
+    pub fn next_unarranged(&self, after: i64) -> Result<Option<i64>> {
+        let current = self.store.session(after)?.session;
+        let cleared = crate::services::retention::cleared_sessions(self.store)?;
+        let mut candidates = Vec::new();
+        for record in self.store.session_list_records()? {
+            let session = &record.session.session;
+            if session.id == after
+                || session.arranged_at.is_some()
+                || session.published_at.is_some()
+                || cleared.contains(&session.id)
+            {
+                continue;
+            }
+            if !self
+                .store
+                .photos_in_session(session.id)?
+                .iter()
+                .any(|p| p.classification != crate::domain::photo::Classification::Deleted)
+            {
+                continue;
+            }
+            candidates.push((session.created_at, session.id));
+        }
+        candidates.sort();
+        Ok(candidates
+            .iter()
+            .find(|(at, id)| (*at, *id) > (current.created_at, current.id))
+            .or_else(|| candidates.first())
+            .map(|(_, id)| *id))
     }
 
     /// R-I33: the camera does not need Capture One to shoot.
@@ -320,6 +374,7 @@ impl SessionsService<'_> {
                 progress,
                 last_activity_at: dto.session.last_activity_at,
                 created_at: dto.session.created_at,
+                arranged: dto.session.arranged_at.is_some(),
                 cover_preview_path: record.cover_preview_path,
                 publish: record.publish,
             });
@@ -368,6 +423,7 @@ fn status_input(
         non_deleted_missing_preview_count: record.non_deleted_missing_preview_count,
         uploaded: record.uploaded,
         total: record.total,
+        unresolved_conflicts: record.unresolved_conflicts,
     }
 }
 

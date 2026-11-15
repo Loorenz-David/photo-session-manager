@@ -37,6 +37,73 @@ pub struct ExportSettingsDto {
     pub prepare_masters: bool,
 }
 
+/// One research stage's model, effort and image long edge (`master_plan_research.md` §6.6).
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct ResearchStageDto {
+    pub model: String,
+    pub effort: String,
+    pub image_long_edge: u32,
+}
+
+/// One price row of `research.prices`: decimal strings (MC-A8).
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct ResearchPriceDto {
+    pub provider: String,
+    pub model: String,
+    pub unit: Option<String>,
+    pub usd_per_million: Option<String>,
+    pub fallback_call_usd: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct ResearchTimeoutsDto {
+    pub model: u32,
+    pub other: u32,
+}
+
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct ResearchProvidersDto {
+    pub model: String,
+    pub visual_search: String,
+    pub page_reader: String,
+}
+
+/// The `research` block (`psm_research::config::ResearchSettings`, §6.6). On read every field is
+/// present (a missing slot or field shows its default); a patch replaces the whole block, and the
+/// research engine validates it before it is saved (R7·U1).
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct ResearchSettingsDto {
+    #[specta(type = specta_typescript::Number)]
+    pub source_wait_seconds: i64,
+    pub attribution_keys: Vec<String>,
+    pub fill_keys: Vec<String>,
+    pub extra_shop_hosts: Vec<String>,
+    pub detailed_condition: DetailedConditionDto,
+    pub trusted_sites: Vec<String>,
+    pub max_pages: u32,
+    pub stages: std::collections::BTreeMap<String, ResearchStageDto>,
+    pub max_cost_per_run: String,
+    pub max_cost_per_day: String,
+    pub prices: Vec<ResearchPriceDto>,
+    pub language: String,
+    #[specta(type = specta_typescript::Number)]
+    pub record_days: i64,
+    pub call_timeout_seconds: ResearchTimeoutsDto,
+    pub providers: ResearchProvidersDto,
+}
+
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct DetailedConditionDto {
+    pub key: String,
+    pub levels: Vec<ConditionLevelDto>,
+}
+
+#[derive(Serialize, Deserialize, Type, Clone)]
+pub struct ConditionLevelDto {
+    pub level: String,
+    pub choice: Option<String>,
+}
+
 /// `settings.json` as shown in the settings screen (ch12 §Settings). `preview_delay_s` is the
 /// stored value; `effective_preview_delay_s` is the value clamped to 10–30 s (MC-17).
 #[derive(Serialize, Deserialize, Type)]
@@ -58,6 +125,9 @@ pub struct SettingsDto {
     pub integration: Option<IntegrationSettingsDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub export: Option<ExportSettingsDto>,
+    /// Settings → Research (R6·U2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub research: Option<ResearchSettingsDto>,
 }
 
 /// A partial update: absent fields stay as stored.
@@ -89,9 +159,15 @@ pub struct SettingsPatchDto {
     pub integration: Option<IntegrationSettingsDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub export: Option<ExportSettingsDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub research: Option<ResearchSettingsDto>,
 }
 
-fn to_dto(value: serde_json::Value) -> Result<SettingsDto, CommandError> {
+fn to_dto(mut value: serde_json::Value) -> Result<SettingsDto, CommandError> {
+    // The stored `research` slot read tolerantly, every field present (R6·U2).
+    let research = psm_research::config::ResearchSettings::from_slot(value.get("research"));
+    value["research"] = serde_json::to_value(research)
+        .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?;
     serde_json::from_value(value).map_err(|e| psm_core::Error::InvalidData(e.to_string()).into())
 }
 
@@ -139,18 +215,12 @@ pub async fn editor_styles(
 #[tauri::command]
 #[specta::specta]
 pub async fn settings_set(
-    _state: State<'_, AppState>,
-    app_handle: AppHandle,
+    state: State<'_, AppState>,
     patch: SettingsPatchDto,
 ) -> Result<SettingsDto, CommandError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let patch = serde_json::to_value(&patch)
-            .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-        let state = app_handle.state::<AppState>();
-        to_dto(state.settings_set(&patch)?)
-    })
-    .await
-    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    let patch =
+        serde_json::to_value(&patch).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+    to_dto(state.settings_set(&patch)?)
 }
 
 /// Settings → Storage (10F §4): free space on the disk holding the capture root, the space each

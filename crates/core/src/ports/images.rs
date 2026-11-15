@@ -21,6 +21,14 @@ pub trait Imaging: Send + Sync {
         format: &OutputFormat,
         dest: &Path,
     ) -> Result<OutputInfo>;
+    /// A reduced copy of an adjusted JPEG preview, framed with MC-27 and stripped of metadata.
+    fn render_research(
+        &self,
+        preview: &Path,
+        values: &CompositionValues,
+        long_edge: u32,
+        dest: &Path,
+    ) -> Result<OutputInfo>;
 }
 pub struct NoImaging;
 impl Imaging for NoImaging {
@@ -36,6 +44,15 @@ impl Imaging for NoImaging {
         _values: &CompositionValues,
         _slot: OutputSlot,
         _format: &OutputFormat,
+        _dest: &Path,
+    ) -> Result<OutputInfo> {
+        Err(Error::InvalidData("no renderer".into()))
+    }
+    fn render_research(
+        &self,
+        _preview: &Path,
+        _values: &CompositionValues,
+        _long_edge: u32,
         _dest: &Path,
     ) -> Result<OutputInfo> {
         Err(Error::InvalidData("no renderer".into()))

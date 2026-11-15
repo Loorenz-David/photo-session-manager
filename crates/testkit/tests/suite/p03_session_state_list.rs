@@ -21,6 +21,7 @@ fn input() -> StatusInput {
         non_deleted_missing_preview_count: 0,
         uploaded: 0,
         total: 0,
+        unresolved_conflicts: 0,
     }
 }
 fn app() -> TestApp {

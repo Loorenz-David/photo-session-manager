@@ -1,0 +1,73 @@
+{
+  "cap": "serpapi_account",
+  "cost_micro_usd": 0,
+  "duration_ms": 327,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T14:51:38.298Z",
+  "fixture": {
+    "captured": "2026-11-12T14:51:37.970Z",
+    "probe": "RESEARCH-VERIFY-7",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "serpapi_lens/account.json"
+  },
+  "id": "v7-account-after-late-dcdeafd00d63",
+  "model": "",
+  "provider": "serpapi_lens",
+  "request": {
+    "body": null,
+    "headers": {},
+    "method": "GET",
+    "url": "https://serpapi.com/account.json?api_key=<redacted>"
+  },
+  "request_hash": "dcdeafd00d63a8b171c743f057d184d7392a06492c3ffdcb6c59fd01cd84a3c2",
+  "response": {
+    "body": {
+      "account_email": "loorenz.david@gmail.com",
+      "account_id": "6af5be14283e752b3bed1dc2",
+      "account_rate_limit_per_hour": 250,
+      "account_status": "Active",
+      "api_key": "<redacted>",
+      "extra_credits": 0,
+      "last_hour_searches": 0,
+      "plan_id": "free",
+      "plan_monthly_price": 0.0,
+      "plan_name": "Free Plan",
+      "plan_renewal_date": "2026-12-12",
+      "plan_searches_left": 227,
+      "searches_per_month": 250,
+      "this_hour_searches": 22,
+      "this_month_usage": 23,
+      "total_searches_left": 227
+    },
+    "body_bytes": 547,
+    "final_url": "https://serpapi.com/account.json?api_key=<redacted>",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "max-age=0, private, must-revalidate",
+      "cf-cache-status": "BYPASS",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "547",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Thu, 12 Nov 2026 14:51:38 GMT",
+      "etag": "W/\"eacd8946bbfb57dd8e7ba1e75bc9beac\"",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "cloudflare",
+      "vary": "accept-encoding",
+      "x-content-type-options": "nosniff",
+      "x-download-options": "noopen",
+      "x-frame-options": "SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "fea149c6-faff-42c0-a401-f46484b1ee1b",
+      "x-runtime": "0.002915",
+      "x-xss-protection": "1; mode=block"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T14:51:37.970Z",
+  "usage": {},
+  "worst_case_micro_usd": 0
+}

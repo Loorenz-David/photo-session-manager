@@ -2,6 +2,7 @@ use crate::domain::{
     attribute::Value as AttributeValue,
     composition::{CompositionState, CompositionValues, Origin},
     photo::Classification,
+    research::{Feedback, FeedbackAction},
     session::SessionDto,
 };
 use crate::events::AppEvent;
@@ -14,7 +15,7 @@ use crate::ports::{
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 pub const HISTORY_LIMIT: usize = 25;
 pub type HistoryStore = Arc<Mutex<HashMap<i64, SessionHistory>>>;
@@ -68,6 +69,13 @@ pub enum StepKind {
         session_id: i64,
         item_id: i64,
         fields: Vec<FieldChange>,
+        /// The step's id: the `step_token` of the feedback rows it wrote (MC-A12).
+        token: String,
+        /// The feedback rows an undo deleted, re-inserted by the redo (R5·U1 P6).
+        feedback: Vec<Feedback>,
+        /// The publish resolutions this step recorded (key → `{value, action, at, step_token}`),
+        /// recorded again by its redo (MC-A10, R5·U2 N7).
+        resolutions: Vec<(String, serde_json::Value)>,
     },
 }
 
@@ -152,16 +160,45 @@ impl History {
     }
     pub fn record(&self, session_id: i64, step: Step) {
         let op = self.operation.lock().unwrap();
+        let merge = self
+            .last_step(session_id)
+            .is_some_and(|last| coalesces(&last, &step));
+        self.record_held(op, session_id, step, merge);
+    }
+    /// Takes the history's operation lock: no undo, redo or record runs until the guard is
+    /// dropped. An attribute action takes it **before** its store transaction (order: operation →
+    /// store; R5·U1 T1) and hands it to [`History::record_held`].
+    pub(crate) fn lock(&self) -> MutexGuard<'_, ()> {
+        self.operation.lock().unwrap()
+    }
+    /// The session's last undo step, when a new step could merge into it (the redo list is
+    /// empty). Read under the operation lock, it stays the last step until the lock is dropped.
+    pub(crate) fn last_step(&self, session_id: i64) -> Option<Step> {
+        let all = self.store.lock().unwrap();
+        let list = all.get(&session_id)?;
+        if !list.redo.is_empty() {
+            return None;
+        }
+        list.undo.back().cloned()
+    }
+    /// Records `step` under the held operation lock. `merge` is the caller's coalescing decision,
+    /// taken once in the action's transaction (R5·U1 Q2); it is not re-decided here.
+    pub(crate) fn record_held(
+        &self,
+        op: MutexGuard<'_, ()>,
+        session_id: i64,
+        step: Step,
+        merge: bool,
+    ) {
         {
             let mut all = self.store.lock().unwrap();
             let list = all.entry(session_id).or_default();
-            let merged = if list.redo.is_empty() {
-                list.undo
+            let merged = merge
+                && list.redo.is_empty()
+                && list
+                    .undo
                     .back_mut()
-                    .is_some_and(|last| coalesce_attribute(last, &step))
-            } else {
-                false
-            };
+                    .is_some_and(|last| coalesce_attribute(last, &step));
             if !merged {
                 list.undo.push_back(step);
             }
@@ -206,6 +243,10 @@ impl History {
             })
             .unwrap_or_default()
     }
+    /// MC-A10: a held publish item was released by a committed action, undo or redo.
+    pub(crate) fn emit_released(&self, released: crate::services::publish::Released) {
+        crate::services::publish::emit_released(self.events.as_ref(), released);
+    }
     fn emit(&self, session_id: i64) {
         let state = self.state(session_id);
         self.events.emit(AppEvent::HistoryChanged {
@@ -216,28 +257,44 @@ impl History {
     }
 }
 
-fn coalesce_attribute(last: &mut Step, next: &Step) -> bool {
-    if !last.label.starts_with("Edit ") || !next.label.starts_with("Edit ") {
-        return false;
-    }
-    let (
-        StepKind::Attribute {
-            item_id: old_item,
-            fields: old,
-            ..
-        },
-        StepKind::Attribute {
-            item_id: new_item,
-            fields: new,
-            ..
-        },
-    ) = (&mut last.kind, &next.kind)
+/// Whether an "Edit" of `key` on `item_id` merges into `last` (typing in one field is one step).
+pub(crate) fn coalesces_into(last: &Step, item_id: i64, key: &str) -> bool {
+    let StepKind::Attribute {
+        item_id: old_item,
+        fields,
+        resolutions,
+        ..
+    } = &last.kind
     else {
         return false;
     };
-    if old_item != new_item || old.len() != 1 || new.len() != 1 || old[0].key != new[0].key {
+    // MC-A10 (N1): a step that recorded a resolution is never merged into.
+    resolutions.is_empty()
+        && last.label.starts_with("Edit ")
+        && *old_item == item_id
+        && fields.len() == 1
+        && fields[0].key == key
+}
+fn coalesces(last: &Step, next: &Step) -> bool {
+    let StepKind::Attribute {
+        item_id, fields, ..
+    } = &next.kind
+    else {
+        return false;
+    };
+    next.label.starts_with("Edit ")
+        && fields.len() == 1
+        && coalesces_into(last, *item_id, &fields[0].key)
+}
+fn coalesce_attribute(last: &mut Step, next: &Step) -> bool {
+    if !coalesces(last, next) {
         return false;
     }
+    let (StepKind::Attribute { fields: old, .. }, StepKind::Attribute { fields: new, .. }) =
+        (&mut last.kind, &next.kind)
+    else {
+        return false;
+    };
     old[0].after = new[0].after.clone();
     true
 }
@@ -282,8 +339,10 @@ impl<'a> HistoryService<'a> {
         let mut touched = Vec::new();
         let mut active = None;
         let mut changed_photos = Vec::new();
+        let mut released = None;
         let at = self.clock.now_ms();
         let result = self.store.transaction(&mut |tx| {
+            released = None;
             apply(
                 tx,
                 &mut step,
@@ -292,6 +351,7 @@ impl<'a> HistoryService<'a> {
                 &mut touched,
                 &mut active,
                 &mut changed_photos,
+                &mut released,
             )
         });
         match &result {
@@ -320,6 +380,9 @@ impl<'a> HistoryService<'a> {
             self.history.emit(session_id);
         }
         result?;
+        if let Some(released) = released {
+            self.history.emit_released(released);
+        }
         if !changed_photos.is_empty() {
             for photo_id in changed_photos {
                 self.history.events.emit(AppEvent::PhotoChanged {
@@ -408,6 +471,7 @@ fn published_clean(tx: &dyn StoreTx, session_id: i64) -> Result<bool> {
     let s = tx.session(session_id)?;
     Ok(s.published_at.is_some() && s.change_seq <= s.published_seq)
 }
+#[allow(clippy::too_many_arguments)]
 fn apply(
     tx: &mut dyn StoreTx,
     step: &mut Step,
@@ -416,6 +480,7 @@ fn apply(
     touched: &mut Vec<i64>,
     active: &mut Option<i64>,
     changed_photos: &mut Vec<i64>,
+    released: &mut Option<crate::services::publish::Released>,
 ) -> Result<()> {
     match step.kind.clone() {
         StepKind::Classify { session_id, photos } => {
@@ -715,6 +780,9 @@ fn apply(
             session_id,
             item_id,
             fields,
+            token,
+            feedback,
+            mut resolutions,
         } => {
             tx.item(item_id).map_err(|e| {
                 if matches!(e, Error::NotFound(_)) {
@@ -723,13 +791,26 @@ fn apply(
                     e
                 }
             })?;
+            let undo = direction == Direction::Undone;
+            // MC-A12 (R-IA21): every field must still hold the row the step left (undo) or found
+            // (redo); otherwise the whole step cannot apply. Title fields restore as before.
+            let stored = tx.attribute_values(item_id)?;
+            for field in &fields {
+                let expected = if undo { &field.after } else { &field.before };
+                if let FieldState::Row(expected) = expected {
+                    let current = stored.iter().find(|v| v.key == field.key);
+                    if !same_row(current, expected.as_ref()) {
+                        return Err(cannot(
+                            step,
+                            direction,
+                            "that field was changed by research",
+                        ));
+                    }
+                }
+            }
             let mut changed = false;
             for field in fields {
-                let target = if direction == Direction::Undone {
-                    &field.before
-                } else {
-                    &field.after
-                };
+                let target = if undo { &field.before } else { &field.after };
                 match target {
                     FieldState::Row(row) => {
                         let current = tx
@@ -755,10 +836,96 @@ fn apply(
             if changed {
                 tx.set_item_activity(item_id, at)?;
             }
+            let fields = match &step.kind {
+                StepKind::Attribute { fields, .. } => fields.clone(),
+                _ => unreachable!(),
+            };
+            // MC-A12: the step's feedback rows exist exactly while the step is applied.
+            let kept = if undo {
+                let rows = tx.feedback_by_step(&token)?;
+                tx.delete_feedback_by_step(&token)?;
+                // MC-A10: its resolutions are removed while the item is still held.
+                crate::services::publish::unresolve_in(tx, item_id, &token)?;
+                rows
+            } else {
+                for row in &feedback {
+                    tx.insert_feedback(row)?;
+                }
+                // MC-A10 (changelog 6, 10): a redo that changes a key pending without an entry on
+                // a held item is that key's resolution, recorded as the action it replays.
+                for field in &fields {
+                    let (FieldState::Row(before), FieldState::Row(after)) =
+                        (&field.before, &field.after)
+                    else {
+                        continue;
+                    };
+                    if same_row(before.as_ref(), after.as_ref()) {
+                        continue;
+                    }
+                    let (value, action) = match resolutions.iter().find(|(k, _)| *k == field.key) {
+                        Some((_, entry)) => (
+                            entry.get("value").filter(|v| !v.is_null()).cloned(),
+                            entry
+                                .get("action")
+                                .and_then(serde_json::Value::as_str)
+                                .and_then(FeedbackAction::parse),
+                        ),
+                        None => (
+                            after
+                                .as_ref()
+                                .filter(|row| row.is_live() && row.valid)
+                                .and_then(AttributeValue::json),
+                            feedback
+                                .iter()
+                                .find(|f| f.key == field.key)
+                                .map(|f| f.action),
+                        ),
+                    };
+                    let action =
+                        action.unwrap_or(if after.as_ref().is_some_and(AttributeValue::is_live) {
+                            FeedbackAction::Edited
+                        } else {
+                            FeedbackAction::Cleared
+                        });
+                    if let Some((entry, release)) = crate::services::publish::resolve_pending_in(
+                        tx, item_id, &field.key, value, action, &token, at,
+                    )? {
+                        resolutions.retain(|(k, _)| *k != field.key);
+                        resolutions.push((field.key.clone(), entry));
+                        *released = released.or(release);
+                    }
+                }
+                Vec::new()
+            };
+            step.kind = StepKind::Attribute {
+                session_id,
+                item_id,
+                fields,
+                token,
+                feedback: kept,
+                resolutions,
+            };
             touched.push(session_id);
         }
     }
     Ok(())
+}
+
+/// The same stored row, `updated_at` aside (MC-A12's comparison).
+fn same_row(a: Option<&AttributeValue>, b: Option<&AttributeValue>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            AttributeValue {
+                updated_at: 0,
+                ..a.clone()
+            } == AttributeValue {
+                updated_at: 0,
+                ..b.clone()
+            }
+        }
+        _ => false,
+    }
 }
 
 pub fn label_classify(before: Place, after: Place, count: usize) -> String {
@@ -861,6 +1028,9 @@ mod tests {
                         before: FieldState::Title(before.into()),
                         after: FieldState::Title(after.into()),
                     }],
+                    token: String::new(),
+                    feedback: Vec::new(),
+                    resolutions: Vec::new(),
                 },
             }
         }

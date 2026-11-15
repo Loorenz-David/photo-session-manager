@@ -34,6 +34,8 @@ pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sku_prefix: Option<String>,
     pub integration: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub research: Option<serde_json::Value>,
     /// 10F §4: the minimum free space (Settings → Storage; default 20 GB).
     pub storage: StorageSettings,
     /// Changelog 47 (P69): `export.prepare_masters` — masters prepared once a session is Ready.
@@ -87,6 +89,7 @@ impl Default for Settings {
             theme: "light".into(),
             sku_prefix: None,
             integration: None,
+            research: None,
             storage: StorageSettings::default(),
             export: ExportSettings::default(),
             commerce: CommerceSettings::default(),

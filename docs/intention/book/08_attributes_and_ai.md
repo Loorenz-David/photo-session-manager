@@ -29,6 +29,7 @@ human-owned; AI never overwrites it. AI values carry confidence (high/medium/low
 low-confidence ones. Values save locally as typed; the form never blocks publishing.
 
 ## AI agent (architecture now, agent post-MVP — decision C3)
+**The agent is specified in chapter 08A (ratified 2026-11-12); where 08A differs from this section, 08A wins.**
 The MVP ships the schema, provenance fields, pills, popover and research-panel UI states driven by
 stored provenance, with no agent running. The agent, when added, operates only on the generic
 schema: look at the main photo, search, read sources, set suggested values with confidence and

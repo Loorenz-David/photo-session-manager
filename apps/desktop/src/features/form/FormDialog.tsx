@@ -10,13 +10,14 @@ import { cn } from '@/lib/utils';
 import {
   PRODUCT_TITLE,
   acceptAllSuggestions,
+  acceptSuggestion,
   addSavedValue,
   clearAttribute,
   fillDefaults,
   listDefinitions,
   readShopValues,
   removeSavedValue,
-  setAttributeValue,
+  resolveConflict,
   setFieldDefault,
   type Definition,
   type FormField,
@@ -25,16 +26,19 @@ import {
 } from '@/services/attributes';
 import { setItemType, type Item } from '@/services/items';
 import type { Photo } from '@/services/photos';
+import { onResearchChanged } from '@/services/events';
+import { researchStatus, runResearch, type ResearchStatus } from '@/services/research';
 import { displayOrder } from '@/features/workspace/order';
 import { CustomizeMode } from './CustomizeMode';
 import { IdentityEditor } from './IdentityEditor';
 import { ItemTypePicker, useItemTypes } from './ItemTypePicker';
 import { MediaColumn } from './MediaColumn';
 import { MetafieldInput, type FieldPresets } from './MetafieldInput';
+import type { ConflictActions } from './AiPopover';
 import { ResearchPanel } from './ResearchPanel';
 import { STEP_LABEL, StepTabs } from './StepTabs';
 import { StockFields } from './StockFields';
-import { useFormState, type SaveState } from './useFormState';
+import { isEmptyValue, storedValue, useFormState, type SaveState } from './useFormState';
 
 const STEPS: Group[] = ['details', 'condition', 'product'];
 
@@ -52,15 +56,6 @@ function parseJson(text: string | null): unknown {
     return JSON.parse(text);
   } catch {
     return null;
-  }
-}
-
-/** The stored row's value in its core form, for "Looks right" (the same value, now human-owned). */
-function rawValue(field: FormField): unknown {
-  try {
-    return JSON.parse(field.value!.value);
-  } catch {
-    return field.value!.value;
   }
 }
 
@@ -82,7 +77,52 @@ type FormDialogProps = {
   position?: FormPosition | null;
   /** P67: the step and scroll as the photographer moves (a batch remembers it). */
   onPosition?: (position: FormPosition) => void;
+  /** The item's session: its research status and runs (08A §1). Absent → no research state is read. */
+  sessionId?: number;
 };
+
+/** "n to review" (08B MC-A10, derived): the form's fields holding a live `ai` + `suggested` value, at every confidence. */
+export function toReview(fields: FormField[]): number {
+  return fields.filter(field => field.value?.provenance === 'ai' && field.value.ai_status === 'suggested').length;
+}
+
+/**
+ * The session's research status, re-read on `research_changed` for the session. Null while research is not available
+ * (before the engine is wired every `research_*` command answers `research_unavailable`): the form works as before.
+ */
+function useResearchStatus(sessionId: number | undefined, onChanged: () => void) {
+  const [status, setStatus] = useState<ResearchStatus | null>(null);
+  const changed = useRef(onChanged);
+  changed.current = onChanged;
+  const latest = useRef(0);
+  const reload = useMemo(() => async () => {
+    if (sessionId === undefined) return;
+    const mine = ++latest.current;
+    try {
+      const next = await researchStatus(sessionId);
+      if (mine === latest.current) setStatus(next);
+    } catch {
+      if (mine === latest.current) setStatus(null);
+    }
+  }, [sessionId]);
+  useEffect(() => {
+    if (sessionId === undefined) return;
+    let alive = true;
+    let off: (() => void) | undefined;
+    void reload();
+    // Without the event (no Tauri runtime) the panel still re-reads the status when it opens.
+    Promise.resolve()
+      .then(() => onResearchChanged(changedId => {
+        if (changedId !== sessionId) return;
+        void reload();
+        changed.current();
+      }))
+      .then(unlisten => { if (alive) off = unlisten; else unlisten(); })
+      .catch(() => undefined);
+    return () => { alive = false; off?.(); };
+  }, [sessionId, reload]);
+  return { status, reload };
+}
 
 /** The product details form (NOTES §Screens 6–7): a dialog over the workspace. */
 export function FormDialog({ open, onOpenChange, ...rest }: FormDialogProps) {
@@ -104,7 +144,7 @@ export function FormDialog({ open, onOpenChange, ...rest }: FormDialogProps) {
 
 type FormBodyProps = Omit<FormDialogProps, 'open' | 'onOpenChange'> & { close: () => void; registerClose: (close: () => void) => void };
 
-function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition }: FormBodyProps) {
+function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition, sessionId }: FormBodyProps) {
   const state = useFormState(item.id);
   const { form } = state;
   const [step, setStep] = useState<Group>(position?.step ?? 'details');
@@ -119,7 +159,16 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const [customizing, setCustomizing] = useState(false);
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [research, setResearch] = useState<{ open: boolean; focus: string | null }>({ open: false, focus: null });
+  const researchState = useResearchStatus(sessionId, () => void state.reload());
   const actionQueue = useRef<Promise<unknown>>(Promise.resolve());
+  /**
+   * Edits of fields in conflict (08B MC-A10, R5 projection N1). On a held publish item the first save of a pending key
+   * resolves it, so these are never written on the typing debounce: only once, on Enter, leaving the field, or Save &
+   * close, through the conflict's Edit.
+   */
+  const [conflictDrafts, setConflictDrafts] = useState<Record<string, unknown>>({});
+  const conflictDraftsRef = useRef(conflictDrafts);
+  conflictDraftsRef.current = conflictDrafts;
   const closing = useRef(false);
 
   // P67 (changelog 46 (3)): a linked item's form shows the product's values. The product is read once (a batch
@@ -183,6 +232,12 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
 
   const conditionPhotos = useMemo(() => displayOrder(photos).condition, [photos]);
   const aiFields = state.fields.filter(field => field.value?.provenance === 'ai');
+  const reviewCount = toReview(state.fields);
+  /** Opens the research panel; it re-reads the status on open in case an event was missed. */
+  const openResearch = (focus: string | null) => {
+    setResearch({ open: true, focus });
+    void researchState.reload();
+  };
   const group = form?.groups.find(g => g.group === step);
   const filled = form?.groups.reduce((sum, g) => sum + g.filled, 0) ?? 0;
   const total = form?.groups.reduce((sum, g) => sum + g.total, 0) ?? 0;
@@ -227,6 +282,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
     if (closing.current) return;
     closing.current = true;
     const titleEdited = state.isEdited(PRODUCT_TITLE);
+    await Promise.all(state.fields.filter(field => field.definition.key in conflictDraftsRef.current).map(commitConflict));
     await state.flush();
     if (itemType !== savedType && (!types?.length || types.includes(itemType))) await commitType(itemType);
     if (titleEdited) onItemChanged();
@@ -239,6 +295,33 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
     const titleEdited = key === PRODUCT_TITLE && state.isEdited(PRODUCT_TITLE);
     await state.blur();
     if (titleEdited) onItemChanged();
+  }
+
+  /** Writes a conflict field's edit once (Edit with the typed value; emptied → Clear); an unchanged edit is dropped. */
+  function commitConflict(field: FormField): Promise<unknown> {
+    const key = field.definition.key;
+    if (!(key in conflictDraftsRef.current)) return Promise.resolve();
+    const value = conflictDraftsRef.current[key];
+    const rest = { ...conflictDraftsRef.current };
+    delete rest[key];
+    conflictDraftsRef.current = rest;
+    setConflictDrafts(rest);
+    if (JSON.stringify(value) === JSON.stringify(storedValue(field))) return Promise.resolve();
+    return act(() => (isEmptyValue(value) ? clearAttribute(item.id, key) : resolveConflict(item.id, key, 'edit', value)), 'Could not save');
+  }
+
+  function conflictActions(field: FormField): ConflictActions | undefined {
+    // MC-A1 conflict, decided by the backend (`AttributeValueDto.conflict`; R7·U1).
+    if (!field.value?.conflict) return undefined;
+    const key = field.definition.key;
+    return {
+      onKeepPrevious: () => act(() => resolveConflict(item.id, key, 'keep_previous'), 'Could not keep the previous value'),
+      onUseSuggestion: () => act(() => resolveConflict(item.id, key, 'use_suggestion'), 'Could not use the suggestion'),
+      onEdit: () => {
+        setConflictDrafts(current => ({ ...current, [key]: state.valueOf(field) }));
+        window.setTimeout(() => document.getElementById(`field-${key}`)?.focus(), 0);
+      },
+    };
   }
 
   function finishCustomizing() {
@@ -269,8 +352,13 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
           {SAVE_LABEL[state.saveState]}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          {aiFields.length > 0 && (
-            <Button variant="secondary" size="sm" className="text-(--ai-foreground)" onClick={() => setResearch(current => ({ open: !current.open, focus: null }))}>
+          {reviewCount > 0 && (
+            <button type="button" data-to-review className="rounded-full bg-(--ai-muted) px-2.5 py-0.5 text-xs font-semibold text-(--ai-foreground)" onClick={() => openResearch(null)}>
+              {reviewCount} to review
+            </button>
+          )}
+          {(aiFields.length > 0 || researchState.status !== null) && (
+            <Button variant="secondary" size="sm" className="text-(--ai-foreground)" onClick={() => (research.open ? setResearch({ open: false, focus: null }) : openResearch(null))}>
               <Sparkles /> Research
             </Button>
           )}
@@ -302,26 +390,49 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
               {!reading && group && group.fields.length === 0 && (
                 <p className="text-sm text-muted-foreground">No fields in this step. Use Customize fields to add some.</p>
               )}
-              {!reading && group?.fields.map(field => (
+              {!reading && group?.fields.map(field => {
+                const key = field.definition.key;
+                const conflict = conflictActions(field);
+                const editingConflict = key in conflictDrafts;
+                const routed = conflict !== undefined || editingConflict;
+                return (
+                <div key={key} className="contents" onKeyDown={routed ? event => {
+                  if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+                    event.preventDefault();
+                    void commitConflict(field);
+                  }
+                } : undefined}>
                 <MetafieldInput
-                  key={field.definition.key}
                   field={field}
-                  value={state.valueOf(field)}
-                  edited={state.isEdited(field.definition.key)}
-                  onChange={value => state.edit(field.definition.key, value)}
-                  onBlur={() => void blurField(field.definition.key)}
+                  value={editingConflict ? conflictDrafts[key] : state.valueOf(field)}
+                  edited={editingConflict || state.isEdited(key)}
+                  onChange={routed ? value => setConflictDrafts(current => ({ ...current, [key]: value })) : value => state.edit(key, value)}
+                  onBlur={routed ? () => void commitConflict(field) : () => void blurField(key)}
+                  conflict={conflict}
                   conditionPhotos={conditionPhotos}
-                  onLooksRight={f => act(() => setAttributeValue(item.id, f.definition.key, rawValue(f)), 'Could not accept')}
+                  onLooksRight={f => act(() => acceptSuggestion(item.id, f.definition.key), 'Could not accept')}
                   onClearAi={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
-                  onSeeResearch={key => setResearch({ open: true, focus: key })}
+                  onSeeResearch={key => openResearch(key)}
                   presets={presetsOf(field)}
                 />
-              ))}
+                </div>
+                );
+              })}
               {form && !reading && step === 'product' && <StockFields itemId={item.id} />}
             </section>
             {research.open && (
               <ResearchPanel
-                fields={aiFields}
+                status={researchState.status}
+                fields={state.fields}
+                onRun={async () => {
+                  if (sessionId === undefined) return;
+                  try {
+                    await runResearch(sessionId);
+                  } catch (error) {
+                    toast.error(`Could not start research: ${(error as Error).message}`);
+                  }
+                  await researchState.reload();
+                }}
                 focusKey={research.focus}
                 onFocus={focus => setResearch(current => ({ ...current, focus }))}
                 onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}

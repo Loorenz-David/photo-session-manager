@@ -8,6 +8,7 @@ use psm_core::{
     ports::clock::Clock,
     services::{camera::CameraService, integrity::IntegrityCheck},
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::TestApp;
 use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command};
@@ -312,7 +313,7 @@ fn c5b_publish_of_recent_unhashed_photo_passes_prepare() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     a.tick(1100).unwrap();
     a.complete_all_renders().unwrap();

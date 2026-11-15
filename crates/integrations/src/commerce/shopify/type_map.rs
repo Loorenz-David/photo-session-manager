@@ -20,6 +20,28 @@ pub const DIMENSION_UNITS: [&str; 6] = [
 ];
 /// The unit codes Shopify stores in weight values (SV-1).
 pub const WEIGHT_UNITS: [&str; 4] = ["OUNCES", "POUNDS", "GRAMS", "KILOGRAMS"];
+/// R8·U3 (08B MC-A2): the seven neutral unit names research uses → this adapter's unit codes. Put
+/// into the `validations.unit_names` of every dimension and weight definition it imports.
+pub const UNIT_NAMES: [(&str, &str); 7] = [
+    ("mm", "MILLIMETERS"),
+    ("cm", "CENTIMETERS"),
+    ("m", "METERS"),
+    ("in", "INCHES"),
+    ("g", "GRAMS"),
+    ("kg", "KILOGRAMS"),
+    ("lb", "POUNDS"),
+];
+
+/// [`UNIT_NAMES`] as the JSON object `{name: code}`.
+pub fn unit_names() -> Json {
+    Json::Object(
+        UNIT_NAMES
+            .iter()
+            .map(|(name, code)| ((*name).to_owned(), json!(code)))
+            .collect(),
+    )
+}
+
 /// The unit codes Shopify stores in volume values (SV-1).
 pub const VOLUME_UNITS: [&str; 12] = [
     "MILLILITERS",

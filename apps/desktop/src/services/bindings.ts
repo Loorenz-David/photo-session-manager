@@ -22,6 +22,7 @@ export const commands = {
 	sessionActivate: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("session_activate", { sessionId })),
 	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
 	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
+	sessionArrangeNext: (sessionId: CommandId) => typedError<ArrangeNextResponse_Serialize, CommandError>(__TAURI_INVOKE("session_arrange_next", { sessionId })),
 	cameraStatus: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_status")),
 	cameraRetry: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_retry")),
 	cameraTakeBackAvailability: () => typedError<TakeBackAvailability_Serialize, CommandError>(__TAURI_INVOKE("camera_take_back_availability")),
@@ -93,6 +94,13 @@ export const commands = {
 	/**  "Accept all": suggested AI values except low-confidence ones become accepted. Returns the count. */
 	attributeAiAcceptAll: (itemId: CommandId) => typedError<number, CommandError>(__TAURI_INVOKE("attribute_ai_accept_all", { itemId })),
 	attributeAiClear: (itemId: CommandId, key: string) => typedError<null, CommandError>(__TAURI_INVOKE("attribute_ai_clear", { itemId, key })),
+	/**  "Looks right" on a suggestion (MC-A12): `ai` + `suggested` becomes `ai` + `accepted`. */
+	attributeAiAccept: (itemId: CommandId, key: string) => typedError<AttributeValueDto_Serialize, CommandError>(__TAURI_INVOKE("attribute_ai_accept", { itemId, key })),
+	/**
+	 *  Resolves a conflict: Keep previous, Use suggestion, or Edit with `value` (JSON text, as in
+	 *  `attribute_values_set`). `value` is required for Edit and refused with any other action.
+	 */
+	attributeConflictResolve: (itemId: CommandId, key: string, action: ConflictActionDto, value: string | null) => typedError<AttributeValueDto_Serialize, CommandError>(__TAURI_INVOKE("attribute_conflict_resolve", { itemId, key, action, value })),
 	presetsGet: (itemType: string, group: AttributeGroupDto) => typedError<PresetDto_Serialize, CommandError>(__TAURI_INVOKE("presets_get", { itemType, group })),
 	/**
 	 *  Customize fields: stores the layout of one step for one item type (refused with
@@ -124,8 +132,17 @@ export const commands = {
 	 *  Returns how many were filled.
 	 */
 	attributeFillDefaults: (itemId: CommandId) => typedError<number, CommandError>(__TAURI_INVOKE("attribute_fill_defaults", { itemId })),
-	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
-	publishConfirm: (sessionIds: CommandId[], summaryText: string) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText })),
+	researchStatus: (sessionId: CommandId) => typedError<ResearchStatusDto_Serialize, CommandError>(__TAURI_INVOKE("research_status", { sessionId })),
+	researchRun: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("research_run", { sessionId })),
+	researchSettingsReset: () => typedError<string, CommandError>(__TAURI_INVOKE("research_settings_reset")),
+	researchSecretsSet: (input: SecretsInputDto_Deserialize) => typedError<null, CommandError>(__TAURI_INVOKE("research_secrets_set", { input })),
+	researchSecretsState: () => typedError<SecretsStateDto, CommandError>(__TAURI_INVOKE("research_secrets_state")),
+	researchSiteAdd: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_add", { site })),
+	researchSiteRemove: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_remove", { site })),
+	researchSitesReorder: (sites: string[]) => typedError<string, CommandError>(__TAURI_INVOKE("research_sites_reorder", { sites })),
+	researchExport: (selection: ExportSelectionDto, dest: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_export", { selection, dest })),
+	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto_Serialize, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
+	publishConfirm: (sessionIds: CommandId[], summaryText: string, shown: ShownSuggestionsDto[]) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText, shown })),
 	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
 	publishActivity: (sessionId: CommandId) => typedError<PublishActivityDto_Serialize | null, CommandError>(__TAURI_INVOKE("publish_activity", { sessionId })),
 	/**  Changelog 44 (P64): Cancel publish, after the photographer confirmed it in the popover. */
@@ -165,6 +182,12 @@ export const commands = {
 };
 
 /* Types */
+export type AiPriorDto = {
+	value: string,
+	valid: boolean,
+	provenance: string,
+};
+
 export type AppPathsDto = {
 	data_dir: string,
 	database: string,
@@ -209,6 +232,18 @@ export type ArchivedPictureDto_Serialize = {
 	path: string | null,
 };
 
+export type ArrangeNextResponse = ArrangeNextResponse_Serialize | ArrangeNextResponse_Deserialize;
+
+export type ArrangeNextResponse_Deserialize = {
+	next_session_id?: number | null,
+	research_queued: boolean,
+};
+
+export type ArrangeNextResponse_Serialize = {
+	next_session_id: number | null,
+	research_queued: boolean,
+};
+
 export type AttributeGroupDto = "details" | "condition" | "product";
 
 /**
@@ -235,7 +270,13 @@ export type AttributeValueDto_Deserialize = {
 	ai_status?: string | null,
 	ai_reason?: string | null,
 	ai_sources?: string[] | null,
+	ai_prior?: AiPriorDto | null,
 	updated_at: number,
+	/**
+	 *  MC-A1 conflict (`publish_partition::is_conflict`; R7·U1): the form offers Keep previous /
+	 *  Use suggestion / Edit exactly when this is true.
+	 */
+	conflict: boolean,
 };
 
 /**
@@ -254,7 +295,13 @@ export type AttributeValueDto_Serialize = {
 	ai_status: string | null,
 	ai_reason: string | null,
 	ai_sources: string[] | null,
+	ai_prior: AiPriorDto | null,
 	updated_at: number,
+	/**
+	 *  MC-A1 conflict (`publish_partition::is_conflict`; R7·U1): the form offers Keep previous /
+	 *  Use suggestion / Edit exactly when this is true.
+	 */
+	conflict: boolean,
 };
 
 export type CameraSettingsDto = CameraSettingsDto_Serialize | CameraSettingsDto_Deserialize;
@@ -359,6 +406,21 @@ export type CompositionValuesDto = {
 	rect: RectDto,
 };
 
+export type ConditionLevelDto = ConditionLevelDto_Serialize | ConditionLevelDto_Deserialize;
+
+export type ConditionLevelDto_Deserialize = {
+	level: string,
+	choice?: string | null,
+};
+
+export type ConditionLevelDto_Serialize = {
+	level: string,
+	choice: string | null,
+};
+
+/**  The three actions on a conflict (MC-A10, MC-A12). */
+export type ConflictActionDto = "keep_previous" | "use_suggestion" | "edit";
+
 /**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */
 export type DefinitionDto = DefinitionDto_Serialize | DefinitionDto_Deserialize;
 
@@ -388,6 +450,18 @@ export type DefinitionDto_Serialize = {
 	writable: boolean,
 };
 
+export type DetailedConditionDto = DetailedConditionDto_Serialize | DetailedConditionDto_Deserialize;
+
+export type DetailedConditionDto_Deserialize = {
+	key: string,
+	levels: ConditionLevelDto_Deserialize[],
+};
+
+export type DetailedConditionDto_Serialize = {
+	key: string,
+	levels: ConditionLevelDto_Serialize[],
+};
+
 /**
  *  The styles Capture One lists for Settings → Style (P63): the photographer's own first, then the
  *  built-in ones.
@@ -400,6 +474,8 @@ export type EditorStylesDto = {
 export type ExportRunResponse = {
 	run_id: number,
 };
+
+export type ExportSelectionDto = { kind: "range"; from: number; to: number } | { kind: "items"; ids: number[] };
 
 /**  Changelog 47 (P69): `export.prepare_masters` (Settings → Storage; default on). */
 export type ExportSettingsDto = {
@@ -778,12 +854,55 @@ export type PresetFieldDto_Serialize = {
 	default: string | null,
 };
 
-export type PreviewDto = {
-	items: PreviewItemDto[],
+/**
+ *  One conflict as the confirmation shows it: values are canonical JSON text; `prior_provenance`
+ *  is `default` (preset default) or `integration` (from Shopify).
+ */
+export type PreviewConflictDto = PreviewConflictDto_Serialize | PreviewConflictDto_Deserialize;
+
+/**
+ *  One conflict as the confirmation shows it: values are canonical JSON text; `prior_provenance`
+ *  is `default` (preset default) or `integration` (from Shopify).
+ */
+export type PreviewConflictDto_Deserialize = {
+	key: string,
+	label: string,
+	prior_value: string,
+	prior_valid: boolean,
+	prior_provenance: string,
+	suggestion: string,
+	confidence?: string | null,
+};
+
+/**
+ *  One conflict as the confirmation shows it: values are canonical JSON text; `prior_provenance`
+ *  is `default` (preset default) or `integration` (from Shopify).
+ */
+export type PreviewConflictDto_Serialize = {
+	key: string,
+	label: string,
+	prior_value: string,
+	prior_valid: boolean,
+	prior_provenance: string,
+	suggestion: string,
+	confidence: string | null,
+};
+
+export type PreviewDto = PreviewDto_Serialize | PreviewDto_Deserialize;
+
+export type PreviewDto_Deserialize = {
+	items: PreviewItemDto_Deserialize[],
 	summary: string,
 };
 
-export type PreviewItemDto = {
+export type PreviewDto_Serialize = {
+	items: PreviewItemDto_Serialize[],
+	summary: string,
+};
+
+export type PreviewItemDto = PreviewItemDto_Serialize | PreviewItemDto_Deserialize;
+
+export type PreviewItemDto_Deserialize = {
 	session_id: number,
 	main: number[],
 	condition: number[],
@@ -794,6 +913,29 @@ export type PreviewItemDto = {
 	unreviewed: number,
 	announced_removals: string[],
 	create_item: boolean,
+	/**  MC-A10: low-confidence suggestions without a prior that will not be published. */
+	n_withheld: number,
+	/**  MC-A10: the conflicts this item waits on once confirmed. */
+	conflicts: PreviewConflictDto_Deserialize[],
+	researching: boolean,
+};
+
+export type PreviewItemDto_Serialize = {
+	session_id: number,
+	main: number[],
+	condition: number[],
+	main_thumbnails: (string | null)[],
+	condition_thumbnails: (string | null)[],
+	details_filled: number,
+	details_total: number,
+	unreviewed: number,
+	announced_removals: string[],
+	create_item: boolean,
+	/**  MC-A10: low-confidence suggestions without a prior that will not be published. */
+	n_withheld: number,
+	/**  MC-A10: the conflicts this item waits on once confirmed. */
+	conflicts: PreviewConflictDto_Serialize[],
+	researching: boolean,
 };
 
 /**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */
@@ -829,11 +971,138 @@ export type PublishActivityDto_Serialize = {
 	masters_ready?: string,
 };
 
+export type ReasonDto = {
+	code: string,
+	sentence: string,
+};
+
 export type RectDto = {
 	x: number | null,
 	y: number | null,
 	w: number | null,
 	h: number | null,
+};
+
+/**  One price row of `research.prices`: decimal strings (MC-A8). */
+export type ResearchPriceDto = ResearchPriceDto_Serialize | ResearchPriceDto_Deserialize;
+
+/**  One price row of `research.prices`: decimal strings (MC-A8). */
+export type ResearchPriceDto_Deserialize = {
+	provider: string,
+	model: string,
+	unit?: string | null,
+	usd_per_million?: string | null,
+	fallback_call_usd?: string | null,
+};
+
+/**  One price row of `research.prices`: decimal strings (MC-A8). */
+export type ResearchPriceDto_Serialize = {
+	provider: string,
+	model: string,
+	unit: string | null,
+	usd_per_million: string | null,
+	fallback_call_usd: string | null,
+};
+
+export type ResearchProvidersDto = {
+	model: string,
+	visual_search: string,
+	page_reader: string,
+};
+
+/**
+ *  The `research` block (`psm_research::config::ResearchSettings`, §6.6). On read every field is
+ *  present (a missing slot or field shows its default); a patch replaces the whole block, and the
+ *  research engine validates it before it is saved (R7·U1).
+ */
+export type ResearchSettingsDto = ResearchSettingsDto_Serialize | ResearchSettingsDto_Deserialize;
+
+/**
+ *  The `research` block (`psm_research::config::ResearchSettings`, §6.6). On read every field is
+ *  present (a missing slot or field shows its default); a patch replaces the whole block, and the
+ *  research engine validates it before it is saved (R7·U1).
+ */
+export type ResearchSettingsDto_Deserialize = {
+	source_wait_seconds: number,
+	attribution_keys: string[],
+	fill_keys: string[],
+	extra_shop_hosts: string[],
+	detailed_condition: DetailedConditionDto_Deserialize,
+	trusted_sites: string[],
+	max_pages: number,
+	stages: { [key in string]: ResearchStageDto },
+	max_cost_per_run: string,
+	max_cost_per_day: string,
+	prices: ResearchPriceDto_Deserialize[],
+	language: string,
+	record_days: number,
+	call_timeout_seconds: ResearchTimeoutsDto,
+	providers: ResearchProvidersDto,
+};
+
+/**
+ *  The `research` block (`psm_research::config::ResearchSettings`, §6.6). On read every field is
+ *  present (a missing slot or field shows its default); a patch replaces the whole block, and the
+ *  research engine validates it before it is saved (R7·U1).
+ */
+export type ResearchSettingsDto_Serialize = {
+	source_wait_seconds: number,
+	attribution_keys: string[],
+	fill_keys: string[],
+	extra_shop_hosts: string[],
+	detailed_condition: DetailedConditionDto_Serialize,
+	trusted_sites: string[],
+	max_pages: number,
+	stages: { [key in string]: ResearchStageDto },
+	max_cost_per_run: string,
+	max_cost_per_day: string,
+	prices: ResearchPriceDto_Serialize[],
+	language: string,
+	record_days: number,
+	call_timeout_seconds: ResearchTimeoutsDto,
+	providers: ResearchProvidersDto,
+};
+
+/**  One research stage's model, effort and image long edge (`master_plan_research.md` §6.6). */
+export type ResearchStageDto = {
+	model: string,
+	effort: string,
+	image_long_edge: number,
+};
+
+export type ResearchStatusDto = ResearchStatusDto_Serialize | ResearchStatusDto_Deserialize;
+
+export type ResearchStatusDto_Deserialize = {
+	reason?: ReasonDto | null,
+	run?: RunViewDto_Deserialize | null,
+	steps: StepViewDto_Deserialize[],
+	fields_filled: number,
+	to_review: number,
+	can_run: boolean,
+	/**
+	 *  With the `WaitingForEditor` reason: when the wait for Capture One's previews ends (ms
+	 *  since the epoch); the panel says "Waiting for Capture One" from then on.
+	 */
+	wait_ends_at?: number | null,
+};
+
+export type ResearchStatusDto_Serialize = {
+	reason: ReasonDto | null,
+	run: RunViewDto_Serialize | null,
+	steps: StepViewDto_Serialize[],
+	fields_filled: number,
+	to_review: number,
+	can_run: boolean,
+	/**
+	 *  With the `WaitingForEditor` reason: when the wait for Capture One's previews ends (ms
+	 *  since the epoch); the panel says "Waiting for Capture One" from then on.
+	 */
+	wait_ends_at: number | null,
+};
+
+export type ResearchTimeoutsDto = {
+	model: number,
+	other: number,
 };
 
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;
@@ -848,13 +1117,51 @@ export type ReviewResponse_Serialize = {
 	active_photo_id: number | null,
 };
 
-export type RowLabelResponse = { kind: "publishing"; value: number } | { kind: "publish_failed" } | 
+export type RowLabelResponse = { kind: "waiting_for_you"; value: number } | { kind: "publishing"; value: number } | { kind: "publish_failed" } | 
 /**  Changelog 44: `Publish cancelled · Publish`. */
 { kind: "publish_cancelled" } | { kind: "description_failed" } | { kind: "published" } | { kind: "ready" } | { kind: "in_progress"; value: number } | 
 /**  P62: published, local files cleared, photos shown from Shopify. */
 { kind: "archived" } | 
 /**  Changelog 45 (P65): the publish waits for Capture One (`Waiting for Capture One…`). */
 { kind: "waiting_for_editor" };
+
+export type RunViewDto = RunViewDto_Serialize | RunViewDto_Deserialize;
+
+export type RunViewDto_Deserialize = {
+	id: number,
+	state: string,
+	trigger: string,
+	stage_reached?: string | null,
+	error?: string | null,
+};
+
+export type RunViewDto_Serialize = {
+	id: number,
+	state: string,
+	trigger: string,
+	stage_reached: string | null,
+	error: string | null,
+};
+
+export type SecretsInputDto = SecretsInputDto_Serialize | SecretsInputDto_Deserialize;
+
+export type SecretsInputDto_Deserialize = {
+	model_key?: string | null,
+	search_key?: string | null,
+	reader_key?: string | null,
+};
+
+export type SecretsInputDto_Serialize = {
+	model_key: string | null,
+	search_key: string | null,
+	reader_key: string | null,
+};
+
+export type SecretsStateDto = {
+	model: boolean,
+	search: boolean,
+	reader: boolean,
+};
 
 export type SessionFilter = "open" | "published" | "all";
 
@@ -901,6 +1208,7 @@ export type SessionResponse_Deserialize = {
 	dirty: boolean,
 	last_activity_at: number,
 	created_at: number,
+	arranged_at?: number | null,
 	photo_count: number,
 	unreviewed_count: number,
 	main_count: number,
@@ -917,6 +1225,7 @@ export type SessionResponse_Serialize = {
 	dirty: boolean,
 	last_activity_at: number,
 	created_at: number,
+	arranged_at: number | null,
 	photo_count: number,
 	unreviewed_count: number,
 	main_count: number,
@@ -940,6 +1249,7 @@ export type SessionRowResponse_Deserialize = {
 	last_activity_at: number,
 	/**  Changelog 46 (1): the list's order, time groups and time filter. */
 	created_at: number,
+	arranged: boolean,
 	cover_preview_path?: string | null,
 	publish?: LatestPublishResponse_Deserialize | null,
 };
@@ -958,6 +1268,7 @@ export type SessionRowResponse_Serialize = {
 	last_activity_at: number,
 	/**  Changelog 46 (1): the list's order, time groups and time filter. */
 	created_at: number,
+	arranged: boolean,
 	cover_preview_path: string | null,
 	publish: LatestPublishResponse_Serialize | null,
 };
@@ -1008,6 +1319,8 @@ export type SettingsDto_Deserialize = {
 	sku_prefix?: string | null,
 	integration?: IntegrationSettingsDto | null,
 	export?: ExportSettingsDto | null,
+	/**  Settings → Research (R6·U2). */
+	research?: ResearchSettingsDto_Deserialize | null,
 };
 
 /**
@@ -1031,6 +1344,8 @@ export type SettingsDto_Serialize = {
 	sku_prefix: string | null,
 	integration: IntegrationSettingsDto | null,
 	export?: ExportSettingsDto,
+	/**  Settings → Research (R6·U2). */
+	research?: ResearchSettingsDto_Serialize,
 };
 
 /**  A partial update: absent fields stay as stored. */
@@ -1051,6 +1366,7 @@ export type SettingsPatchDto_Deserialize = {
 	sku_prefix?: string | null,
 	integration?: IntegrationSettingsDto | null,
 	export?: ExportSettingsDto | null,
+	research?: ResearchSettingsDto_Deserialize | null,
 };
 
 /**  A partial update: absent fields stay as stored. */
@@ -1068,6 +1384,43 @@ export type SettingsPatchDto_Serialize = {
 	sku_prefix?: string,
 	integration?: IntegrationSettingsDto,
 	export?: ExportSettingsDto,
+	research?: ResearchSettingsDto_Serialize,
+};
+
+/**
+ *  What the confirmation popover showed for one session (MC-A10): passed back to
+ *  `publish_confirm`, which refuses with `suggestions_changed` when either part changed.
+ */
+export type ShownSuggestionsDto = {
+	session_id: CommandId,
+	n_withheld: number,
+	conflict_keys: string[],
+};
+
+export type StepViewDto = StepViewDto_Serialize | StepViewDto_Deserialize;
+
+export type StepViewDto_Deserialize = {
+	seq: number,
+	stage: string,
+	kind: string,
+	summary: string,
+	detail: string,
+	source_url?: string | null,
+	source_title?: string | null,
+	photo_ids: number[],
+	field_keys: string[],
+};
+
+export type StepViewDto_Serialize = {
+	seq: number,
+	stage: string,
+	kind: string,
+	summary: string,
+	detail: string,
+	source_url: string | null,
+	source_title: string | null,
+	photo_ids: number[],
+	field_keys: string[],
 };
 
 /**  Changelog 45 (P65): a stock location and quantity for a new product. */

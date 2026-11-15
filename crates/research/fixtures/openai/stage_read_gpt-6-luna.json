@@ -1,0 +1,345 @@
+{
+  "cap": "openai",
+  "cost_micro_usd": 243,
+  "duration_ms": 2445,
+  "effort": "default",
+  "error": null,
+  "finished": "2026-11-12T15:57:35.997Z",
+  "fixture": {
+    "captured": "2026-11-12T15:57:33.551Z",
+    "probe": "RESEARCH-VERIFY-3 (R1·U2)",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "openai/stage_read_gpt-6-luna.json"
+  },
+  "id": "read-page2-gpt-6-luna-default-80988aae892d",
+  "meta": {
+    "effort": "default",
+    "model": "gpt-6-luna",
+    "n": 11,
+    "page_names": {
+      "designer": false,
+      "manufacturer": false
+    },
+    "page_names_any_key": false,
+    "stage": "read",
+    "unit": "page2",
+    "url": "https://beyovintage.se/en/products/swedish-bookshelf-in-oak-5"
+  },
+  "model": "gpt-6-luna",
+  "provider": "openai",
+  "request": {
+    "body": {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Keys:\n- designer (text): the person who designed the piece.\n- manufacturer (text): the company or workshop that made it.\n\nPage URL: https://beyovintage.se/en/products/swedish-bookshelf-in-oak-5\nPage text:\nVintage Swedish bookshelf in oak buy in Stockholm Skip to content Email Phone Facebook Instagram 10% off all storage units this week only! Code: STORAGE10 Language English Svenska English Deutsch Español Français Search Account Open cart Cart 0 Open menu Menu Shop All products Dining chairs Dining tables Armchairs Bar cabinets Bedside tables Bookshelves Chest of drawers Mirrors Highboards Nest of tables Sideboards Coffee tables Sofas Stools Writing desks Side tables Cabinets Sale Designers Carl Malmsten Alf Svensson Nils Jonsson Folke Ohlsson Erik Kirkegaard Poul Hundevad Erik Wörtz Ole Knudsen Niels Koefoed Kai Kristiansen Henning Kjaernulf Thomas Harlev Erik Buch DUX Bodafors Farstrup Skovby Findahl About us Contact Us Delivery Personalize Sell To Us Reserve Now B2B Newsletter Blog News Restoration Designers Menu Close sidebar Home Shop Back All products Dining chairs Dining tables Armchairs Bar cabinets Bedside tables Bookshelves Chest of drawers Mirrors Highboards Nest of tables Sideboards Coffee tables Sofas Stools Writing desks Side tables Cabinets Sale Designers Back Carl Malmsten Alf Svensson Nils Jonsson Folke Ohlsson Erik Kirkegaard Poul Hundevad Erik Wörtz Ole Knudsen Niels Koefoed Kai Kristiansen Henning Kjaernulf Thomas Harlev Erik Buch DUX Bodafors Farstrup Skovby Findahl About us Contact Us Delivery Personalize Sell To Us Reserve Now B2B Newsletter Blog Back News Restoration Designers Account Home / Collections / Swedish bookshelf in oak \", \"thumbnailsDOM\": \" \",\"listenScroll\": false }' class=\"css-slider--bottom-navigation element--border-radius\" style=\"display:block\" > Home / Collections / Swedish bookshelf in oak Swedish bookshelf in oak Choose variants Select Title Default Title Out of stock Price 3,500 kr Quantity Sold out Reserve Item × Reservati…<cut: 3599 more characters>",
+              "type": "input_text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "instructions": "Version 0 (R1·U2). Stage 3, Read candidates (08A §5, 08B MC-A2 \"What a listing states\").\n\nYou read the text of one web page (a furniture listing, an auction lot, a shop page or something else). Report what this page itself states about the piece it lists, for each key below.\n\n- `stated`: the words as they appear on the page (one short phrase), or null when the page does not state it.\n- `value`: the name the page gives, written as the page writes it; null when the page does not state it.\n- Report only what the page states. Never add knowledge of your own and never infer a designer or maker from the style.\n- If the page states two different values for one key, give null for that key.\n- A page that lists several pieces (a category or search page) states nothing about any one piece: give null.\n",
+      "max_output_tokens": 4000,
+      "model": "gpt-6-luna",
+      "store": false,
+      "text": {
+        "format": {
+          "name": "read",
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "keys": {
+                "additionalProperties": false,
+                "properties": {
+                  "designer": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "stated": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "value": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "stated",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "manufacturer": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "stated": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "value": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "stated",
+                      "value"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "designer",
+                  "manufacturer"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "keys"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "json_schema"
+        }
+      }
+    },
+    "headers": {
+      "authorization": "<redacted>",
+      "content-type": "application/json"
+    },
+    "method": "POST",
+    "url": "https://api.openai.com/v1/responses"
+  },
+  "request_hash": "80988aae892daedb8d77e54155b6b357536a71769e79ca66d938e9df21360b09",
+  "response": {
+    "body": {
+      "access_programs": null,
+      "background": false,
+      "billing": {
+        "payer": "developer"
+      },
+      "completed_at": 1794499055,
+      "created_at": 1794499053,
+      "error": null,
+      "frequency_penalty": 0.0,
+      "id": "resp_0b6fd45710bee1b1016af5e1edb27c87d2987dfe4c6b8f799f",
+      "image": {
+        "context_compression": "disabled"
+      },
+      "incomplete_details": null,
+      "instructions": "Version 0 (R1·U2). Stage 3, Read candidates (08A §5, 08B MC-A2 \"What a listing states\").\n\nYou read the text of one web page (a furniture listing, an auction lot, a shop page or something else). Report what this page itself states about the piece it lists, for each key below.\n\n- `stated`: the words as they appear on the page (one short phrase), or null when the page does not state it.\n- `value`: the name the page gives, written as the page writes it; null when the page does not state it.\n- Report only what the page states. Never add knowledge of your own and never infer a designer or maker from the style.\n- If the page states two different values for one key, give null for that key.\n- A page that lists several pieces (a category or search page) states nothing about any one piece: give null.\n",
+      "max_output_tokens": 4000,
+      "max_tool_calls": null,
+      "metadata": {},
+      "model": "gpt-6-luna",
+      "moderation": null,
+      "object": "response",
+      "output": [
+        {
+          "content": [],
+          "encrypted_content": "gAAAAABq9eHv74Rml4GflEWDNbl3luixHF1Danr9ojWn716tpIR9hWyHJzx3KX2hqB7Joiq0DhCX2_zCe5qLv524r3M2aUp8G2D42k4Jarh3W7otebg8WWYMsEpcqrsj8YMrlRWrHAeBwgV0zGE0YDWA3accpHvR9hGmcJ90GMgb-1yzBC_W5KXbEfTJha_wWalzCx_ya4TJS2lc296huR0-C-3jQqY9Jt0CWrsUDbgqCFqbKzlrUJnK6cn9PjENFtuRH6yxTm7J_BdY67LNJRQOVeAtpJXPzxRtgsLv1xKdT8TOOl5Jm5pyACNDlWe25l_5mru7yxWpYH3YeBlI72ihhvbEy57BdENFVlldgl_uHO1N9PJveoECCtUmJ6fop2F6NRLACW3fayuiyncqdro32CahI-3U-HVXpDbC7UwiPfpaH7JwihfO5KAdmyy9f3qa6fEIlfqXrAPKY70E5b2vYd_E0XfeB0DFCRiM46JpmB5YvLRiyKI-NcVVvmusHvoc1TRJFSjorwDlQWjWWOU8P77_pgBfmVOAjNrukr0GRDIQSguYoXMAbuzKL4UMzCzbMfGNHcd7m6arNPv5n5R7OT6kS-WECDhfHnRYZ7YrJ2MEnAgYuuZQE6dTY9WD3sdQ_uKmf3yooAraGRfp5OFWJg-9K7okP8fZGExkhxviS5LG5s_-Bse6_f-f4yNvGORKenw0alzGirWqLmxOFtjNbjnxLUQP7UCcaXfKBA5NyeUCkyrzSHtbeBjbVP3GTyZKEBHl7UdDXVxyomlP_f4e1D9v9mWYvCguAd_PjtrjzXon86EcZ3v_yXIkpYpVqINAsvBBJx7rnZAmmmuPf8k5-nWRz5iBMzl7vIDHgtH1d-FVogAi7jDz2v2ODddxrXQo8zdX7B1VBIMdQK--9rgXV83ExhUewoDlTSyT4W4r4yREz1oxBqIZ9bIcomZtjQs3PQi03NyrRx0lCKkdaxuBm_sxYOkBIPWdPs7Wepm4D36mZxVBl3e3V1qtE9QCS_08x3ULz864_HBB7q0r4M0UOgAxItUDyHi4BRpR5K6Pt-meEFx-0av1XYjt7jOKLaRzSHIcTFGjccjBhprnir__9s1FDz21PN8GgEFu9kD6kjlEMFkcoRnlqUx6tqQ9w8SvpzPpLPTuB-5M4jfHi-kCZ-OgCFW9m4I3tayUKnNvr_k2OCMDI-ibIvrM_ip9r5ud5YoeS9wnBIEsgdLsB2Rbh_-SdEGVx_yv6Ttiezs2DaH1jgLy8RSpZfQHIHWoRyFIF4HTz8jc8cs4sPk63Ys80mkMGkCwM_y887mqabTCUq1L-OdlhW46Tyypf3jsk8dkbE9tTCTLUfb-uREQ1w2KbxqyLTpAi5SWf6eL2iJa6m8BNeDJD36sUEUCJVppeLz997r7gl4Y-X0Hifw-iza_iLlZ9zj1w26XmYFLxvV-ZkOczwbxp0fCgUerxPoye58p2PnBakoVUM09qICoRHaUXEEzFBVbKxTgDZ6yW3hxbvGrWtzHLi4GA3m5hOqW7whSMzntLt6K-y4Ol9EzaALrAxn6G5OIavrByn-YXZWDVy3J7r23iXsm-ZwAJTCGAsH1BsQ7FpkchiNNAZTK50Lp-rKiG-eIDXZSG3xi-C_OxiXSSF0RS1nK4J18WELFQGxBcTdOj8m2dm1FkkNq4mubh8Kx543qnkIGHv6cpOL9CDMSPl_Xx5YC7uGm-aaTpZL5VQVW1y7zAT4ucDlqabv8puVfGPAqfihHJ0N271SaM3WL87lT2_PP9es0UUFOc6Z3IlNxAXf2ZNHxzGuWsZtNHXL2PpQ-Cc9eapPMZ-MvMV-T78oD3KkJZDLHWvyOpce-Afc6ZhRZGs_cdxzPSiopRJuxr119wxSoUPdVqUziM5tj7sew6TXLk1ZjieCdaEHSu3I0XcpQpBOYxq_y3OgBteDmyuv4v4gHixkVj9I8n-0TlQDHi8aRP-iCz1bjXO6HEIlh2JhqRD3I5hdX26JD3ovQ8M8mok72vMkFu0U-lRR5XnxaTZlNX_aTYPAYD7akNvzLSzQxWNSsdOatfrvEKI1Y3A7OyCAC6b-0EZfjQMr7rO5495yeGDJYOsotsSlJJ0N659_RE7ywmdVXf108FHE6t_jTffdNsn_M11YbD4JRWXz5hbRc3oPDDYqUTJP-5Bxd08B4rFYXUW2XAC4dVOJcKa6JEhElqpzZ9q7VRSCFvQai7mewBJALFIlzOh61gk9MRFGKBZl14yQR4-OPjAbEHyiDsiyTjeiBdnaqBBa0VqCeJvBGsIPp4Riyk2vPnImo-0jBDAkxUvpe-VbULUvwB8HdoiKWZjLV95njDzPWteiekKRF2zWNntyGhcDziKSgijpqbVOTt5HVEkG2aVc_nHqEw3iSunQdIjQ4pXL1LfluhnXzboQKey6wWL8pfK4izs_yFOG7inugnTnkXQjPKV14U3nr9xEwjpN4NKOIIwBazc6cSe9yrq1tXH_tZ5dZIOv0SR4cjey_GZ1sJxRujZ2Xan94XpiYtwFLM2kqo2Equ7f61JNbslz6p9TMUwDhYPUzytTrA5CP_kfAq_ViZOwL-A4aFxd5NKr4WPtCva6_ySw=",
+          "id": "rs_0b6fd45710bee1b1016af5e1eee19887d289bf0505d1df805a",
+          "summary": [],
+          "type": "reasoning"
+        },
+        {
+          "content": [
+            {
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"keys\":{\"designer\":{\"stated\":null,\"value\":null},\"manufacturer\":{\"stated\":null,\"value\":null}}}",
+              "type": "output_text"
+            }
+          ],
+          "id": "msg_0b6fd45710bee1b1016af5e1efa79c87d2ae40034a609aacfa",
+          "phase": "final_answer",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0.0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "status": "completed",
+      "store": false,
+      "temperature": 1.0,
+      "text": {
+        "format": {
+          "description": null,
+          "name": "read",
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "keys": {
+                "additionalProperties": false,
+                "properties": {
+                  "designer": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "stated": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "value": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "stated",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "manufacturer": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "stated": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "value": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "stated",
+                      "value"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "designer",
+                  "manufacturer"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "keys"
+            ],
+            "type": "object"
+          },
+          "strict": true,
+          "type": "json_schema"
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 1482,
+        "input_tokens_details": {
+          "cache_write_tokens": 1479,
+          "cached_tokens": 0
+        },
+        "output_tokens": 115,
+        "output_tokens_details": {
+          "reasoning_tokens": 80
+        },
+        "total_tokens": 1597
+      },
+      "user": null
+    },
+    "body_bytes": 7547,
+    "final_url": "https://api.openai.com/v1/responses",
+    "headers": {
+      "access-control-expose-headers": "X-Request-ID, Server-Timing-Total, X-OpenAI-Inference-Capacity-Reason, CF-Ray, CF-Ray",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "7547",
+      "content-type": "application/json",
+      "date": "Thu, 12 Nov 2026 15:57:36 GMT",
+      "openai-organization": "<openai-organization>",
+      "openai-processing-ms": "2306",
+      "openai-project": "<openai-project>",
+      "openai-version": "2020-10-01",
+      "server": "cloudflare",
+      "set-cookie": "<redacted>",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "x-ratelimit-limit-requests": "5000",
+      "x-ratelimit-limit-tokens": "2000000",
+      "x-ratelimit-remaining-requests": "4999",
+      "x-ratelimit-remaining-tokens": "2000000",
+      "x-ratelimit-reset-requests": "12ms",
+      "x-ratelimit-reset-tokens": "0s",
+      "x-request-id": "req_67f92aedbd904617afda6391b644dfe8"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T15:57:33.551Z",
+  "usage": {
+    "input_tokens": 1482,
+    "input_tokens_details": {
+      "cache_write_tokens": 1479,
+      "cached_tokens": 0
+    },
+    "output_tokens": 115,
+    "output_tokens_details": {
+      "reasoning_tokens": 80
+    },
+    "total_tokens": 1597,
+    "web_search_call": 0
+  },
+  "waited_after_429_s": null,
+  "worst_case_micro_usd": 2899
+}

@@ -1,0 +1,62 @@
+{
+  "cap": "page_fetch",
+  "cost_micro_usd": 0,
+  "duration_ms": 60325,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T15:15:50.955Z",
+  "fixture": {
+    "captured": "2026-11-12T15:14:50.630Z",
+    "probe": "RESEARCH-VERIFY-8",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "pages/midcenturymobler_com.json"
+  },
+  "id": "v8-http-midcenturymobler_com-47dd66d03601",
+  "meta": null,
+  "model": "",
+  "provider": "page_http",
+  "request": {
+    "body": null,
+    "headers": {
+      "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en"
+    },
+    "method": "GET",
+    "url": "https://midcenturymobler.com/products/danish-modern-square-flip-top-dining-table-in-rosewood"
+  },
+  "request_hash": "47dd66d03601b7abb0a38f939c3957f5b7228edbc46262ee059eb9557a84e628",
+  "response": {
+    "body": null,
+    "body_bytes": 1568,
+    "body_omitted": "third-party page body not committed",
+    "final_url": "https://midcenturymobler.com/products/danish-modern-square-flip-top-dining-table-in-rosewood",
+    "headers": {
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-cache-status": "DYNAMIC",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "1568",
+      "content-type": "text/html",
+      "date": "Thu, 12 Nov 2026 15:15:50 GMT",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.01,\"max_age\":604800}",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=jZKXEbH%2FpU%2FCghJQxPpI76krVtvKPyt%2FBdaH%2F1xFLyF%2BpW3rJTN4PyHi%2FQmnUgaNSEbsNBj9daOGHycq8d9q72hOw6NRQoB1Ds%2BQwXmBumMelncSonjZTCgRvcF%2BJEp%2BNue79T96\"}]}",
+      "retry-after": "60",
+      "server": "cloudflare",
+      "x-content-type-options": "nosniff",
+      "x-dc": "gcp-europe-west4",
+      "x-download-options": "noopen",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "8dc3cdf9-376b-431f-83dc-c91ab212f7c6-1794496550",
+      "x-xss-protection": "1; mode=block"
+    },
+    "redirects": [],
+    "status": 429
+  },
+  "sent": true,
+  "started": "2026-11-12T15:14:50.630Z",
+  "usage": {
+    "page_fetch": 1
+  },
+  "waited_after_429_s": 60,
+  "worst_case_micro_usd": 0
+}

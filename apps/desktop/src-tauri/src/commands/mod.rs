@@ -7,5 +7,6 @@ pub mod history;
 pub mod items;
 pub mod photos;
 pub mod publish;
+pub mod research;
 pub mod sessions;
 pub mod settings;

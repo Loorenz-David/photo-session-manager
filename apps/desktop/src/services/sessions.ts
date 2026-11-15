@@ -48,6 +48,11 @@ export async function deactivateSession(): Promise<void> {
   unwrap(await commands.sessionDeactivate());
 }
 
+/** Records the arranged mark and returns the next eligible session, if there is one. */
+export async function arrangeNext(sessionId: number): Promise<{ next_session_id: number | null; research_queued: boolean }> {
+  return unwrap(await commands.sessionArrangeNext(sessionId));
+}
+
 /** URL the webview can load for a preview file on disk. */
 export function previewUrl(path: string): string {
   return convertFileSrc(path);

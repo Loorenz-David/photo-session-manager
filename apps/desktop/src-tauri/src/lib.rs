@@ -20,6 +20,7 @@ struct PhotoAddedPayload {
 #[cfg(test)]
 mod p50_tests {
     use super::*;
+    use psm_core::ports::store::Store;
     use psm_integrations::camera::support::manifest::{Manifest, ManifestFile};
     use serde_json::{Value, json};
     use sha2::{Digest, Sha256};
@@ -51,6 +52,109 @@ mod p50_tests {
             InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
             InvokeResponseBody::Raw(_) => panic!("raw"),
         })
+    }
+    #[test]
+    fn a25_c23a_new_commands_reach_wired_app_and_bindings() {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        let s = a
+            .items()
+            .create_local("CMD-R11", "Chair", "Chair", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let photo = a.add_photo(s, "command-r11.ARW").unwrap();
+        a.review()
+            .classify(photo.id, psm_core::domain::photo::Classification::Main)
+            .unwrap();
+        let store = a.app.store.clone();
+        let paths = a.app.paths.clone();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::sessions::session_arrange_next,
+                commands::research::research_settings_reset,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let result = call(&w, "session_arrange_next", json!({"sessionId": s})).unwrap();
+        assert_eq!(result["next_session_id"], Value::Null);
+        assert_eq!(result["research_queued"], Value::Bool(true));
+        assert!(store.session(s).unwrap().session.arranged_at.is_some());
+        let runs = store
+            .research_transaction(|tx| psm_research::store::runs(tx.conn(), Some(s)))
+            .unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].state, psm_research::domain::RunState::Queued);
+        assert_eq!(runs[0].trigger.as_str(), "arranged");
+        let mut emptied = psm_testkit::research_test_settings();
+        emptied["prices"] = json!([]);
+        let mut file = psm_infra::settings_file::Settings::open(&paths).unwrap();
+        file.research = Some(emptied);
+        psm_infra::settings_file::Settings::set(&paths, &file).unwrap();
+        let reset = call(&w, "research_settings_reset", json!({})).unwrap();
+        let value: Value = serde_json::from_str(reset.as_str().unwrap()).unwrap();
+        assert!(!value["prices"].as_array().unwrap().is_empty());
+        let saved = psm_infra::settings_file::Settings::open(&paths)
+            .unwrap()
+            .research
+            .unwrap();
+        assert_eq!(saved["prices"], value["prices"]);
+        let bindings = include_str!("../../src/services/bindings.ts");
+        for name in [
+            "sessionArrangeNext",
+            "researchSettingsReset",
+            "arranged",
+            "researching",
+            "fill_keys",
+            "extra_shop_hosts",
+            "detailed_condition",
+        ] {
+            assert!(bindings.contains(name), "binding missing {name}");
+        }
+        assert!(!bindings.contains("quiet_seconds"));
+        assert!(!bindings.contains("auto?:"));
+        assert!(!bindings.contains("excluded_keys"));
+    }
+
+    #[test]
+    fn a27_c7a_settings_commands_use_the_chosen_field_list() {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        let paths = a.app.paths.clone();
+        let mut file = psm_infra::settings_file::Settings::open(&paths).unwrap();
+        file.research = Some(json!({"excluded_keys": ["custom.wood_type"]}));
+        psm_infra::settings_file::Settings::set(&paths, &file).unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::settings::settings_get,
+                commands::settings::settings_set,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let got = call(&w, "settings_get", json!({})).unwrap();
+        assert_eq!(got["research"]["fill_keys"], json!([]));
+        assert!(got["research"].get("excluded_keys").is_none());
+        let mut research = got["research"].clone();
+        research["fill_keys"] = json!(["custom.wood_type"]);
+        call(&w, "settings_set", json!({"patch": {"research": research}})).unwrap();
+        let saved = psm_infra::settings_file::Settings::open(&paths)
+            .unwrap()
+            .research
+            .unwrap();
+        assert_eq!(saved["fill_keys"], json!(["custom.wood_type"]));
+        assert!(saved.get("excluded_keys").is_none());
+        let bindings = include_str!("../../src/services/bindings.ts");
+        assert!(bindings.contains("fill_keys: string[]"));
+        assert!(!bindings.contains("excluded_keys"));
     }
     #[test]
     fn c8a_support_and_secret_commands_have_their_wire_shapes() {
@@ -184,6 +288,355 @@ mod p50_tests {
         assert_eq!(
             *payloads.lock().unwrap(),
             vec![json!({"fingerprint":"ab:cd:ef","replace":true})]
+        );
+    }
+}
+
+#[cfg(test)]
+mod r2_research_command_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+    /// R2 F·C1(a), superseded by R7·U1: the commands reach the engine the app now builds (none
+    /// answers `research_unavailable`), and none writes a form value.
+    #[test]
+    fn f_c1a_research_commands_reach_the_wired_engine() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let db_path = a.app.paths.db();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::research::research_status,
+                commands::research::research_run,
+                commands::research::research_secrets_state,
+                commands::research::research_site_add,
+                commands::sessions::session_active,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let before: i64 = rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM attribute_values", [], |r| r.get(0))
+            .unwrap();
+        for (cmd, args) in [
+            ("research_status", json!({"sessionId":1})),
+            ("research_run", json!({"sessionId":1})),
+            ("research_secrets_state", json!({})),
+            ("research_site_add", json!({"site":"example.com"})),
+        ] {
+            if let Err(error) = call(&w, cmd, args) {
+                assert_ne!(error["code"], "research_unavailable", "{cmd}: {error}");
+            }
+        }
+        assert_eq!(
+            call(&w, "research_secrets_state", json!({})).unwrap(),
+            json!({"model": false, "search": false, "reader": false})
+        );
+        assert!(call(&w, "session_active", json!({})).is_ok());
+        let after: i64 = rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM attribute_values", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(after, before);
+    }
+}
+
+#[cfg(test)]
+mod r5_command_tests {
+    use super::*;
+    use psm_core::domain::attribute::{AiConfidence, AiStatus, Provenance};
+    use psm_core::ports::store::Store;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    /// A08·C5(a): each conflict command is one undo step and leaves the row of C1(a), C1(c),
+    /// C1(a), C1(e).
+    #[test]
+    fn r5_a08_c5a_attribute_commands_are_one_step_each() {
+        let mut a = psm_testkit::TestApp::new().unwrap();
+        a.settings_set(
+            &json!({"integration":{"kind":"shopify","shop_domain":"x.myshopify.com",
+            "api_version":"2026-10","client_id":"c","client_secret":"s"}}),
+        )
+        .unwrap();
+        let keys = ["k1", "k2", "k3", "k4"];
+        a.research_fields(&keys).unwrap();
+        let (item, created) = a
+            .items()
+            .create_local("R5-CMD", "Oak chair", "object", None)
+            .unwrap();
+        for key in keys {
+            a.research_conflict(item.id, key, "D", "A", AiConfidence::Medium)
+                .unwrap();
+        }
+        let session = created.session.id;
+        let history = a.app.history.store();
+        let store = a.app.store.clone();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::attributes::attribute_ai_accept,
+                commands::attributes::attribute_conflict_resolve,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let depth = || {
+            history
+                .lock()
+                .unwrap()
+                .get(&session)
+                .map_or(0, |l| l.undo.len())
+        };
+        let row = |key: &str| {
+            let mut out = None;
+            store
+                .transaction(&mut |tx| {
+                    out = tx
+                        .attribute_values(item.id)?
+                        .into_iter()
+                        .find(|v| v.key == key);
+                    Ok(())
+                })
+                .unwrap();
+            out.unwrap()
+        };
+        let calls = [
+            (
+                "attribute_ai_accept",
+                json!({"itemId": item.id, "key": "k1"}),
+            ),
+            (
+                "attribute_conflict_resolve",
+                json!({"itemId": item.id, "key": "k2", "action": "keep_previous", "value": null}),
+            ),
+            (
+                "attribute_conflict_resolve",
+                json!({"itemId": item.id, "key": "k3", "action": "use_suggestion", "value": null}),
+            ),
+            (
+                "attribute_conflict_resolve",
+                json!({"itemId": item.id, "key": "k4", "action": "edit", "value": "\"Walnut\""}),
+            ),
+        ];
+        for (n, (cmd, args)) in calls.into_iter().enumerate() {
+            call(&w, cmd, args.clone()).unwrap_or_else(|e| panic!("{cmd} {args}: {e}"));
+            assert_eq!(depth(), n + 1, "{cmd} {args}");
+        }
+        for key in ["k1", "k3"] {
+            let r = row(key);
+            assert_eq!(
+                (r.provenance, r.ai_status, r.value.as_str(), r.ai_prior),
+                (Provenance::Ai, Some(AiStatus::Accepted), "\"A\"", None),
+                "{key}"
+            );
+        }
+        let r = row("k2");
+        assert_eq!(
+            (r.provenance, r.ai_status, r.value.as_str(), r.ai_prior),
+            (Provenance::Default, None, "\"D\"", None)
+        );
+        let r = row("k4");
+        assert_eq!(
+            (r.provenance, r.ai_status, r.value.as_str(), r.ai_prior),
+            (Provenance::Human, None, "\"Walnut\"", None)
+        );
+    }
+
+    /// A09·C2(a): the refusal reaches the UI as the code R6·U3 keys on.
+    #[test]
+    fn r5_a09_c2a_suggestions_changed_is_its_own_code() {
+        let error = commands::items::CommandError::from(psm_core::Error::SuggestionsChanged);
+        assert_eq!(error.code, "suggestions_changed");
+        assert_eq!(
+            error.message,
+            "AI suggestions changed while you were confirming"
+        );
+    }
+}
+
+#[cfg(test)]
+mod r6_command_tests {
+    use super::*;
+    use psm_core::domain::attribute::AiConfidence;
+    use psm_core::domain::photo::{Classification, NewPhoto, PhotoSource};
+    use psm_core::domain::session::PublishStep;
+    use psm_core::events::AppEvent;
+    use psm_core::mechanisms::hash::sha256_file;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    const NOW_MS: i64 = 1_762_840_000_000;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    /// R6·U3 (R5 review): resolving the last conflict of a held publish item tells the UI
+    /// (`session_changed`, `publish_progress`), so the row flips from "Waiting for you" to
+    /// "Publishing" without a manual refresh; resolving one of two tells it nothing.
+    #[test]
+    fn r6_a20_release_emits_session_changed_and_publish_progress() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        a.clock.advance(NOW_MS);
+        a.research_fields(&["k1", "k2"]).unwrap();
+        let (item, created) = a
+            .items()
+            .create_local("R6-REL", "Oak", "Sideboard", None)
+            .unwrap();
+        let session = created.session.id;
+        let dir = a.dir.path().join("Capture/raws");
+        std::fs::create_dir_all(&dir).unwrap();
+        let raw = dir.join("R6-REL.ARW");
+        std::fs::write(&raw, "raw bytes").unwrap();
+        let photo = a
+            .store()
+            .photo_insert_or_get(NewPhoto {
+                session_id: session,
+                raw_path: raw.to_string_lossy().into_owned(),
+                raw_hash: Some(sha256_file(&raw).unwrap()),
+                captured_at: Some(NOW_MS),
+                source: PhotoSource::Capture,
+                created_at: NOW_MS,
+            })
+            .unwrap();
+        a.store().upsert_raw_state(&photo.raw_path, None).unwrap();
+        a.review().classify(photo.id, Classification::Main).unwrap();
+        a.fake.add_image(&photo.raw_path, &["v1"], false);
+        a.research_conflict(item.id, "k1", "Oak", "Walnut", AiConfidence::High)
+            .unwrap();
+        a.research_conflict(item.id, "k2", "Pine", "Teak", AiConfidence::High)
+            .unwrap();
+        a.confirm_as_shown(&[session], "Publish").unwrap();
+        let events = a.events.clone();
+        let psm_testkit::TestApp {
+            dir: _dir, mut app, ..
+        } = a;
+        // The commands read the active definitions of the configured integration's kind.
+        app.settings.integration = Some(json!({"kind": psm_testkit::RESEARCH_INTEGRATION}));
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::attributes::attribute_conflict_resolve,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let told = || {
+            let mut out = Vec::new();
+            for event in events.0.lock().unwrap().drain(..) {
+                match event {
+                    AppEvent::SessionChanged { session_id } => {
+                        out.push(format!("session_changed {session_id}"))
+                    }
+                    AppEvent::PublishProgress {
+                        session_id, step, ..
+                    } => out.push(format!("publish_progress {session_id} {step:?}")),
+                    _ => {}
+                }
+            }
+            out
+        };
+        told();
+        call(
+            &w,
+            "attribute_conflict_resolve",
+            json!({"itemId": item.id, "key": "k1", "action": "keep_previous", "value": null}),
+        )
+        .unwrap();
+        assert_eq!(told(), Vec::<String>::new(), "one conflict still waits");
+        call(
+            &w,
+            "attribute_conflict_resolve",
+            json!({"itemId": item.id, "key": "k2", "action": "use_suggestion", "value": null}),
+        )
+        .unwrap();
+        assert_eq!(
+            told(),
+            vec![
+                format!("session_changed {session}"),
+                format!("publish_progress {session} {:?}", PublishStep::Prepare),
+            ]
         );
     }
 }
@@ -479,6 +932,11 @@ struct PublishProgressPayload {
 impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
     fn emit(&self, event: AppEvent) {
         match event {
+            AppEvent::ResearchChanged { session_id } => {
+                let _ = self
+                    .0
+                    .emit("research_changed", SessionChangedPayload { session_id });
+            }
             AppEvent::CameraStatusChanged { status } => {
                 let link = self
                     .0
@@ -603,6 +1061,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::sessions::session_activate,
         commands::sessions::session_deactivate,
         commands::sessions::session_active,
+        commands::sessions::session_arrange_next,
         commands::camera::camera_status,
         commands::camera::camera_retry,
         commands::camera::camera_take_back_availability,
@@ -644,6 +1103,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::attributes::attribute_values_set,
         commands::attributes::attribute_ai_accept_all,
         commands::attributes::attribute_ai_clear,
+        commands::attributes::attribute_ai_accept,
+        commands::attributes::attribute_conflict_resolve,
         commands::attributes::presets_get,
         commands::attributes::presets_set,
         commands::attributes::form_get,
@@ -652,6 +1113,15 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::attributes::attribute_saved_value_add,
         commands::attributes::attribute_saved_value_remove,
         commands::attributes::attribute_fill_defaults,
+        commands::research::research_status,
+        commands::research::research_run,
+        commands::research::research_settings_reset,
+        commands::research::research_secrets_set,
+        commands::research::research_secrets_state,
+        commands::research::research_site_add,
+        commands::research::research_site_remove,
+        commands::research::research_sites_reorder,
+        commands::research::research_export,
         commands::publish::publish_preview,
         commands::publish::publish_confirm,
         commands::publish::publish_retry,

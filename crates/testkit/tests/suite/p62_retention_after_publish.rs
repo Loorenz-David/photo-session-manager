@@ -25,6 +25,7 @@ use psm_core::{
         storage::{Cleared, RETENTION_NOT_CLEARED},
     },
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::{
     TestApp,
     fake_commerce::{fake_image_bytes, fake_image_url},
@@ -208,7 +209,7 @@ fn published(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[it.session], "Publish images")
+        .confirm_as_shown(&[it.session], "Publish images")
         .unwrap();
     drain(a);
     assert_eq!(latest_step(a, it.session), Some(PublishStep::Done), "{sku}");
@@ -712,7 +713,7 @@ fn c3b_a_cleared_item_refuses_what_needs_images_and_saves_an_attribute_without_i
             .publish
             .as_ref()
             .unwrap()
-            .confirm(&[it.session], "Publish images")
+            .confirm_as_shown(&[it.session], "Publish images")
             .map(|_| ()),
     );
     // Nothing changed: the photo keeps its place.

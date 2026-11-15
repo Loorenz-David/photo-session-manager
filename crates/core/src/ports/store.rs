@@ -93,6 +93,20 @@ pub trait StoreTx {
     ) -> Result<()>;
     fn insert_publish_run(&mut self, integration: &str, at: i64, summary: &str) -> Result<i64>;
     fn insert_publish_item(&mut self, item: &PublishItem) -> Result<i64>;
+    /// MC-A10 (R5·U2): the `held` publish item of the product `item_id`: among the item's
+    /// sessions, the session's latest publish item (as the row label reads it) when it is held.
+    fn held_publish_item_for_item(&self, item_id: i64) -> Result<Option<PublishItem>>;
+    fn publish_item_in_tx(&self, id: i64) -> Result<PublishItem>;
+    /// Stores the item's `resolved_attributes` (key → entry).
+    fn set_publish_resolved(
+        &mut self,
+        id: i64,
+        resolved: &std::collections::BTreeMap<String, serde_json::Value>,
+    ) -> Result<()>;
+    /// MC-A10 release: step `prepare`, `released_at = at`, and its `publish_step` job queued.
+    fn release_publish_item(&mut self, id: i64, at: i64) -> Result<()>;
+    /// MC-A10 cancel of a held item: step `cancelled` when it is still `held`; whether it was.
+    fn cancel_held_publish_item(&mut self, id: i64) -> Result<bool>;
     /// The stored definitions of one integration, in import order.
     fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>>;
     /// Replaces the whole stored definition set of `integration` with `definitions` (in this order).
@@ -103,6 +117,18 @@ pub trait StoreTx {
     ) -> Result<()>;
     /// Every stored value row of the item, cleared rows included, ordered by key.
     fn attribute_values(&self, item_id: i64) -> Result<Vec<AttributeValue>>;
+    fn feedback_by_key(
+        &self,
+        item_id: i64,
+        key: &str,
+    ) -> Result<Vec<crate::domain::research::Feedback>>;
+    /// The feedback rows written by the undo step `step_token` (MC-A12), oldest first.
+    fn feedback_by_step(&self, step_token: &str) -> Result<Vec<crate::domain::research::Feedback>>;
+    /// Sets the `final_value` of one feedback row (a coalesced edit, R5·U1).
+    fn update_feedback_final_value(&mut self, id: i64, final_value: Option<&str>) -> Result<()>;
+    fn insert_feedback(&mut self, feedback: &crate::domain::research::Feedback) -> Result<i64>;
+    fn delete_feedback_by_step(&mut self, step_token: &str) -> Result<()>;
+    fn reinsert_feedback(&mut self, feedback: &crate::domain::research::Feedback) -> Result<()>;
     fn delete_attribute_value(&mut self, item_id: i64, key: &str) -> Result<()>;
     /// Inserts or replaces the row (`item_id`, `key`).
     fn put_attribute_value(&mut self, value: &AttributeValue) -> Result<()>;
@@ -222,6 +248,8 @@ pub trait Store: Send + Sync {
     fn transaction(&self, op: &mut dyn FnMut(&mut dyn StoreTx) -> Result<()>) -> Result<()>;
     fn item(&self, id: i64) -> Result<Item>;
     fn session(&self, id: i64) -> Result<SessionDto>;
+    /// Sets the first arranged timestamp, returning whether this call set it.
+    fn arrange_session_once(&self, id: i64, at: i64) -> Result<bool>;
     fn session_list_records(&self) -> Result<Vec<SessionListRecord>>;
     fn latest_publish(&self, session_id: i64) -> Result<Option<LatestPublish>>;
     fn photo_insert_or_get(&self, photo: NewPhoto) -> Result<Photo>;

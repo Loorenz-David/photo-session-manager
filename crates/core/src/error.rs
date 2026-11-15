@@ -123,6 +123,10 @@ pub enum Error {
     /// names the photo (`Capture One has not loaded DSC05162.ARW after 10 minutes`).
     #[error("{0}")]
     EditorWaitExpired(String),
+    /// MC-A10 (R-IA22): the withheld count or the conflict set changed since the popover showed
+    /// them; nothing was confirmed.
+    #[error("AI suggestions changed while you were confirming")]
+    SuggestionsChanged,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

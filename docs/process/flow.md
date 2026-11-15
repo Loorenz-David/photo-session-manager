@@ -146,6 +146,31 @@ phase, so test runs are still budgeted:
 - **Timings are logged.** The runner writes `<session>.timeline` next to each session log;
   `tools/pipeline/timeline.sh <log>` prints wall-clock vs. command time and the slowest commands.
 
+## 10. Research track: milestones on an isolated crate (owner 2026-11-12, branch `feature/agentic`)
+The research agent (book 08A, 08B) is built under these rules; where they differ from §3–§9 and
+§4A, this section wins for research phases only. Reason, recorded as the charter requires for
+phases above 8 criteria: 24 separate phase cycles cost more in fixed overhead and test runs than
+the work itself; the contracts of 08B are enumerated tables, so the risk of a bad row is low.
+- **Isolation.** The engine lives in its own crate, `crates/research` (rules, stages, run engine,
+  provider ports and fakes), with its own tests in that crate. The benchmark and replay tool is a
+  separate crate. App code changes only at named seams (what research may write, undo, the publish
+  hold, storage, commands, UI).
+- **Milestone = one runner phase.** A milestone has one plan file made of **units**; each unit is
+  what a phase was (≤ 8 criteria, its own rows, core mechanisms and try-out). One implementer
+  session works the units in order and makes a `CHECKPOINT (not approved):` commit after each. One
+  review, one fix budget (§5) and one narrative per milestone.
+- **Tests.** A unit that changes no file outside `crates/research` or the tool crate runs that
+  crate's tests, lint, and `cargo check --workspace`; **the app suite is not run** (no app file
+  changed, so no app test can change). A unit that changes app files runs the app tests of the
+  area it touches (`--test suite <stem>::`, the touched UI test files). The full app suite
+  (`cargo test --workspace`) runs **once, at the end of a milestone that changed app files**, and
+  never for a milestone that did not.
+- **Projection** only where a plan says `projection: yes`: the publish hold and the real adapters.
+- **Parallel tracks.** Milestones without a dependency between them may run at the same time,
+  each in its own git worktree with its own build folder; at most two at once on the dev Mac.
+- **Planner model:** Fable for this track (owner 2026-11-12), notwithstanding log v1.3.
+  Implementation stays on Opus / Codex as §2 says; no plan sets `implementer: fable`.
+
 ## Log
 - **2026-11-15 v1.5 (owner).** §7A: the agent guide `docs/guide/` (written by Fable at the owner's request,
   verified by the orchestrator) and the rule to keep it current; `CLAUDE.md` points to it first.

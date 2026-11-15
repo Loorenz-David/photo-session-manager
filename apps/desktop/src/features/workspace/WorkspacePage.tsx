@@ -401,7 +401,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   // 10F §3, Q3: a cleared item is shown from Shopify, read-only; its details form stays available.
   if (archived && archive) return <>
     <ArchivedView pictures={archive.pictures} onEdit={item ? () => onDetailsOpenChange(true) : undefined} />
-    {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} onItemChanged={() => void state.reload()} />}
+    {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} sessionId={sessionId} onItemChanged={() => void state.reload()} />}
   </>;
 
   // The stage column's other occupants, in both the normal stage and the editor.
@@ -481,7 +481,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         onOpenChange={open => !open && setPicker(null)}
         onPick={item => { if (picker) return assignSome(item, picker.photoIds); }}
       />
-      {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} onItemChanged={() => void state.reload()} />}
+      {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} sessionId={sessionId} onItemChanged={() => void state.reload()} />}
       {unassigned && <ItemPickerDialog open={assignOpen} title="Assign product" onOpenChange={onAssignOpenChange} onPick={assignWhole} />}
     </DndContext>
     </PublishFailedContext.Provider>

@@ -9,6 +9,7 @@ use psm_core::{
     ports::{clock::Clock, commerce::CommerceAdapter},
     services::attributes::AttributesService,
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::TestApp;
 use serde_json::{Value as Json, json};
 use std::fs;
@@ -96,7 +97,7 @@ fn drain(a: &TestApp) {
 }
 fn run(a: &TestApp, s: i64) -> i64 {
     let service = a.app.publish.as_ref().unwrap();
-    let run = service.confirm(&[s], "Publish images").unwrap();
+    let run = service.confirm_as_shown(&[s], "Publish images").unwrap();
     drain(a);
     run
 }
@@ -222,6 +223,7 @@ fn c1c_invalid_local_is_not_written() {
                 ai_status: None,
                 ai_reason: None,
                 ai_sources: None,
+                ai_prior: None,
                 updated_at: 0,
             })
         })
@@ -254,6 +256,7 @@ fn c1d_read_only_reference_is_not_written() {
                 ai_status: None,
                 ai_reason: None,
                 ai_sources: None,
+                ai_prior: None,
                 updated_at: 0,
             })
         })
@@ -270,6 +273,7 @@ fn c1d_read_only_reference_is_not_written() {
                 ai_status: None,
                 ai_reason: None,
                 ai_sources: None,
+                ai_prior: None,
                 updated_at: 0,
             })
         })
@@ -847,7 +851,7 @@ fn c5d_crash_adopts_only_current_revision() {
         .publish
         .as_ref()
         .unwrap()
-        .confirm(&[s], "yes")
+        .confirm_as_shown(&[s], "yes")
         .unwrap();
     a.fake_shop().fail_after_effect("product_create_media");
     let killed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drain(&a)));

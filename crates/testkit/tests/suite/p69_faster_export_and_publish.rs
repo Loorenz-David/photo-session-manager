@@ -16,6 +16,7 @@ use psm_core::{
     ports::{commerce::CommerceAdapter, images::uid12},
     services::{prepare_masters::PrepareOutcome, publish::PublishService},
 };
+use psm_testkit::ConfirmAsShown;
 use psm_testkit::{
     TestApp,
     fixtures::{
@@ -214,7 +215,9 @@ fn drain(a: &TestApp) {
     }
 }
 fn publish(a: &TestApp, sessions: &[i64]) {
-    service(a).confirm(sessions, "Publish images").unwrap();
+    service(a)
+        .confirm_as_shown(sessions, "Publish images")
+        .unwrap();
     drain(a);
 }
 fn step(a: &TestApp, s: i64) -> PublishStep {
@@ -421,7 +424,9 @@ fn c2b_nothing_is_asked_during_a_preview_render_another_publish_or_with_the_sett
     .unwrap();
 
     // Another session publishes.
-    service(&a).confirm(&[other], "Publish images").unwrap();
+    service(&a)
+        .confirm_as_shown(&[other], "Publish images")
+        .unwrap();
     assert_eq!(prepare(&a), paused("publish"));
     drain(&a);
     assert_eq!(step(&a, other), PublishStep::Done);

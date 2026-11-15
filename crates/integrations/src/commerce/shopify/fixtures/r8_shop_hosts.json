@@ -1,0 +1,21 @@
+{
+  "source": "synthetic (R8·U3 row A17·C4(b)): the shop part of crates/research/fixtures/shop/hosts_query.json (RESEARCH-VERIFY-9) as captured (primary domain = myshopify domain = example.myshopify.com), for the document without a product part",
+  "request": {
+    "query": "query ShopHosts { shop { primaryDomain { host url } myshopifyDomain } }",
+    "variables": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "data": {
+        "shop": {
+          "primaryDomain": {
+            "host": "example.myshopify.com",
+            "url": "https://example.myshopify.com"
+          },
+          "myshopifyDomain": "example.myshopify.com"
+        }
+      }
+    }
+  }
+}

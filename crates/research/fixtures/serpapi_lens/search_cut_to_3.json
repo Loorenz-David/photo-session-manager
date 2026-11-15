@@ -1,0 +1,213 @@
+{
+  "cap": "serpapi_search",
+  "cost_micro_usd": 0,
+  "duration_ms": 3737,
+  "effort": "",
+  "error": null,
+  "finished": "2026-11-12T14:47:42.618Z",
+  "fixture": {
+    "captured": "2026-11-12T14:47:38.880Z",
+    "probe": "RESEARCH-VERIFY-6",
+    "sanitized": "R1·U1 psm-research fixtures",
+    "source": "serpapi_lens/search_cut_to_3.json"
+  },
+  "id": "serpapi-search-cf20eb6ee4ba",
+  "model": "",
+  "provider": "serpapi_lens",
+  "request": {
+    "body": null,
+    "headers": {},
+    "method": "GET",
+    "url": "https://serpapi.com/search.json?engine=google_lens&image_id=spDlPHicu2lgZGiSbJySaJBiaGhmZpFkmZpmZmBgkGhpZmZklGieZqKXVZCaHm9obmliYmliYWoBAGuxDaw&type=all&hl=en&country=se&api_key=<redacted>"
+  },
+  "request_hash": "cf20eb6ee4ba5c4702af8c72244e3ffa17ce6385205a4740087927bc74322494",
+  "response": {
+    "body": {
+      "ai_overview": {
+        "page_token": "iV84y3iczVfdkqJGFH6CPEa42lVAndGporaatkVUdBhRB24saBD5EwdQBi_3Ms-RqlTlYVKV27xH7tPgH1qju9mbpEuhOZw-_XWf8_WnX3_1nZX310-_LZNkHT9Vq2maVuwwtH2rgsOgqsfZClcXoR9HePnF9rnYopY-Z60ofxXPg9C0uM2-H2-ihY4tjn2g4nATkR6xVlLLqGy8FbUxg_zNNnZWCQeB_AbtEEKAx8C2uyJAD2IaztoyAKDdnJIreH6nARDBvEdsdruZghcIIO9s-PGksJNQkWNycCQorGbxkTb2-ksABYCcniCyIwFl0m4aDBSvrro4GbZVRnXo-tDV_IEyoUeKuJOEF19q9xxp14dgLEK8wqFA92joNGItmCRad5oYr97DSBB3QwXXVcVLhgpihw5NS4Gaktis5oqJpkwaqivRw5n6rirSDnliX4Ytx1hJWxJzqwatTMtamZntbYYw3eCMCXDQ2pikr0FmiQVvi7u9rQbJ3LPGbjDTMoNt0KTvDWadVB833yW3o_MgzHHWay1lsTZ1GACJyrZcjcIxR1OWw7lml9HXxkwwxru3JH6uJ7MQyVSRR25u6LHlkjS_u3F1XiUX7-damzxU4oq1mgt85SHl--wbGAe-WGFptlYZVfWA-ID_riEEbJB_oAzQXc_x9wUkoRD55vEum3wwkNthIqFwF_OKIxfAF-9uwAxzLzIQ8blPHkDk58KzNCRmePTqwFvj900kY3n78MCrR7z5KJS_ur8BHzTv2AnPtptr2EP4wFag7l89H0DeiyVch0lBE5SyKF-Nl4vVHpt9Qo1tCbfbPJrcm6xAQ9A3PDBGFxhvNRg-QN8goGDVtEmV01UjIjem6uAlLjpRnBc_VFp0KIx7QYdZql28S_wJX9fRxA-yyaLz-c2uYoP4-aFuWuZ8Oaer62L4l8LMsEyDbtUem58K_uH4RMC4TEBFeXVVS3a1h2ZlUOGZI_XgRcLsiwXw5Pi8Mh320S429jrTsNy7U0sIyKW8nMuelCfZ2u5l0hBc8mneOZYYXwdAAi59Bekc7Tb1irlPwArqhScPdKqWyyUjAcBeGfy5iTdWic5UP40SxfaBenL78LJ9jnhd5zby9iQ_YS03SOyeGPLgsIK3ulgcC3nE8_GCZIiQfU5LOYYIZBuUj46DCyx5AOgVJkkmD2MLIcgTnOIJsyjCU0h0XoC8v5zXfjFHD3RJTd0_I243_jsHQnDk2jV1SpRDM6_VjevT4Yum7nS_8ziqPTMNplnfDeSPuRUGxr9TN_y_JuBB-_iT9t0kYJZ3vk3AXPuW4FvaV0x10r5wr32yLN8k4KYg4Mfad9KAC-37gICiWiJgoX0ycG9r348RUL5LwJJIXhLwrH1lAvL3CJivu0RAiN5P2nck4CmLEJS070jAH9M-_ge0r-Chtb9dCuHGtW8KItq13HZPHSG5idFmNaJXXaSqolobpN8tiIsgeQp00_80d8wnnu0lmflpTgzhk2VSb1TgRyFH63X18bUzXSPHGL0rwDdqycIaAU1NsGg_z6ZrmaHN9LktR53PyeOuMe9DRsaaAtEiGSxeV5vMX28nkjAdjF5aUT0ChrcLItRashI2t43An4Tkx_gCDtQF3YleFy8eoke8KvQny-ZglqHpNH59Qc2BsFWdjFZGaYEr5iJ5V592dFcSEUUwxxbHUEGEyf8bUE_TjgxmAOiAaGOPMLhPCqNP7gNyH5C6lLsqKUabfEOSeirG-tyKt1zDaOpss8G2DNZgWIumAjvJ1twDS8WriGN-x5GlJ2RP9eQP9-8_f_kHZ2Hz_A",
+        "serpapi_link": "https://serpapi.com/search.json?engine=google_ai_overview&page_token=iV84y3iczVfdkqJGFH6CPEa42lVAndGporaatkVUdBhRB24saBD5EwdQBi_3Ms-RqlTlYVKV27xH7tPgH1qju9mbpEuhOZw-_XWf8_WnX3_1nZX310-_LZNkHT9Vq2maVuwwtH2rgsOgqsfZClcXoR9HePnF9rnYopY-Z60ofxXPg9C0uM2-H2-ihY4tjn2g4nATkR6xVlLLqGy8FbUxg_zNNnZWCQeB_AbtEEKAx8C2uyJAD2IaztoyAKDdnJIreH6nARDBvEdsdruZghcIIO9s-PGksJNQkWNycCQorGbxkTb2-ksABYCcniCyIwFl0m4aDBSvrro4GbZVRnXo-tDV_IEyoUeKuJOEF19q9xxp14dgLEK8wqFA92joNGItmCRad5oYr97DSBB3QwXXVcVLhgpihw5NS4Gaktis5oqJpkwaqivRw5n6rirSDnliX4Ytx1hJWxJzqwatTMtamZntbYYw3eCMCXDQ2pikr0FmiQVvi7u9rQbJ3LPGbjDTMoNt0KTvDWadVB833yW3o_MgzHHWay1lsTZ1GACJyrZcjcIxR1OWw7lml9HXxkwwxru3JH6uJ7MQyVSRR25u6LHlkjS_u3F1XiUX7-damzxU4oq1mgt85SHl--wbGAe-WGFptlYZVfWA-ID_riEEbJB_oAzQXc_x9wUkoRD55vEum3wwkNthIqFwF_OKIxfAF-9uwAxzLzIQ8blPHkDk58KzNCRmePTqwFvj900kY3n78MCrR7z5KJS_ur8BHzTv2AnPtptr2EP4wFag7l89H0DeiyVch0lBE5SyKF-Nl4vVHpt9Qo1tCbfbPJrcm6xAQ9A3PDBGFxhvNRg-QN8goGDVtEmV01UjIjem6uAlLjpRnBc_VFp0KIx7QYdZql28S_wJX9fRxA-yyaLz-c2uYoP4-aFuWuZ8Oaer62L4l8LMsEyDbtUem58K_uH4RMC4TEBFeXVVS3a1h2ZlUOGZI_XgRcLsiwXw5Pi8Mh320S429jrTsNy7U0sIyKW8nMuelCfZ2u5l0hBc8mneOZYYXwdAAi59Bekc7Tb1irlPwArqhScPdKqWyyUjAcBeGfy5iTdWic5UP40SxfaBenL78LJ9jnhd5zby9iQ_YS03SOyeGPLgsIK3ulgcC3nE8_GCZIiQfU5LOYYIZBuUj46DCyx5AOgVJkkmD2MLIcgTnOIJsyjCU0h0XoC8v5zXfjFHD3RJTd0_I243_jsHQnDk2jV1SpRDM6_VjevT4Yum7nS_8ziqPTMNplnfDeSPuRUGxr9TN_y_JuBB-_iT9t0kYJZ3vk3AXPuW4FvaV0x10r5wr32yLN8k4KYg4Mfad9KAC-37gICiWiJgoX0ycG9r348RUL5LwJJIXhLwrH1lAvL3CJivu0RAiN5P2nck4CmLEJS070jAH9M-_ge0r-Chtb9dCuHGtW8KItq13HZPHSG5idFmNaJXXaSqolobpN8tiIsgeQp00_80d8wnnu0lmflpTgzhk2VSb1TgRyFH63X18bUzXSPHGL0rwDdqycIaAU1NsGg_z6ZrmaHN9LktR53PyeOuMe9DRsaaAtEiGSxeV5vMX28nkjAdjF5aUT0ChrcLItRashI2t43An4Tkx_gCDtQF3YleFy8eoke8KvQny-ZglqHpNH59Qc2BsFWdjFZGaYEr5iJ5V592dFcSEUUwxxbHUEGEyf8bUE_TjgxmAOiAaGOPMLhPCqNP7gNyH5C6lLsqKUabfEOSeirG-tyKt1zDaOpss8G2DNZgWIumAjvJ1twDS8WriGN-x5GlJ2RP9eQP9-8_f_kHZ2Hz_A"
+      },
+      "organic_results": [
+        {
+          "about_page_link": "https://lens.google.com/search/about-this-result?origin=www.google.com&req=CswBL2dvdG8_dXJsPUNBRVNqQUVCeENKRjEtUTZCSjMzbnM1ZUpMdTAybHdaVnBfQUJfaXhxNzBCTTJtazVYRlhtVGpSQzZXQzY1QTZSbl96TGNidExqc3FIOVZGZG1DQzd0SzRqSHVzS01qdy1OWk1mNzBoWjYzaWJVa0luZHo2VkFIZVpYeVJUTFNudlphVmo3YmhybGFqc1V1SU9yWDIyYzQxQ2NyTVRqNDM0R3JtRmhaRlhpTDlDWThVMFdNT2JXWUV1MVp2Z09tQWl3EgQaAggAGiISABoCCAEiACoAMgYIARICc2U6AEIECAIQAEoAWgByAHoAIgIQAUgAWABoAA",
+          "about_page_serpapi_link": "https://serpapi.com/search.json?engine=google_about_this_result&google_domain=google.com&req_token=CswBL2dvdG8_dXJsPUNBRVNqQUVCeENKRjEtUTZCSjMzbnM1ZUpMdTAybHdaVnBfQUJfaXhxNzBCTTJtazVYRlhtVGpSQzZXQzY1QTZSbl96TGNidExqc3FIOVZGZG1DQzd0SzRqSHVzS01qdy1OWk1mNzBoWjYzaWJVa0luZHo2VkFIZVpYeVJUTFNudlphVmo3YmhybGFqc1V1SU9yWDIyYzQxQ2NyTVRqNDM0R3JtRmhaRlhpTDlDWThVMFdNT2JXWUV1MVp2Z09tQWl3EgQaAggAGiISABoCCAEiACoAMgYIARICc2U6AEIECAIQAEoAWgByAHoAIgIQAUgAWABoAA",
+          "about_this_result": {
+            "languages": [
+              "en"
+            ],
+            "regions": [
+              "SE"
+            ],
+            "source": {
+              "description": "Auctionet har nätauktioner med inredning, design, konst och vardagsantikviteter. Vi samlar Europas auktionshus. Bjud på auktion idag.",
+              "icon": "https://serpapi.com/images/i/iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAAAAABXZoBIAAAApUlEQVR4AeTJEQwDMRSA4ea5O50ndZlj-ZzqSR1Oq_WkXq9LtVhpMofSk39LT7d5sk8_ww__lGoVF74kAm18Sql6iK0pYzvAsJTLi1v0w0xpTdryqR5stmRp6oJKNygqik_XdWcM2UF2xTYDrJ0h3plC9pDPbC9DqCq8M_k7Q9zpmmC8KGK7j1N0p_R0Qn7wcKYAs64-qBPgWRkdZoP6GqEQGpUEAEP_0hvhm1sEAAAAAElFTkSuQmCC.png",
+              "source_info_link": "https://auctionet.com/sv/5091518-ausziehbarer-esstisch-teak-1960er-jahre/images"
+            }
+          },
+          "displayed_link": "https://auctionet.com › ... › Matbord",
+          "favicon": "https://serpapi.com/images/i/iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAAAAABXZoBIAAAApUlEQVR4AeTJEQwDMRSA4ea5O50ndZlj-ZzqSR1Oq_WkXq9LtVhpMofSk39LT7d5sk8_ww__lGoVF74kAm18Sql6iK0pYzvAsJTLi1v0w0xpTdryqR5stmRp6oJKNygqik_XdWcM2UF2xTYDrJ0h3plC9pDPbC9DqCq8M_k7Q9zpmmC8KGK7j1N0p_R0Qn7wcKYAs64-qBPgWRkdZoP6GqEQGpUEAEP_0hvhm1sEAAAAAElFTkSuQmCC.png",
+          "link": "https://auctionet.com/sv/5091518-ausziehbarer-esstisch-teak-1960er-jahre/images",
+          "position": 1,
+          "redirect_link": "https://lens.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESjAEBxCJF14leLonq9-k-PaAeaynBB22ymuwAa4Kf2UWSy0bQyJdze4_t8YtVMEDnfzp_DaBNu5s-a__fQUW_kjYfgBXgvq5sWilZab5wJ_0tNWswTgECyPR6D8HJAVJ-09Hftq0epvsA2_zhBYc2AwhMaDsrP2c3XXrYis2gfmAlk7M9-scNzzS3k7yoew&ved=2ahUKEwjW0JCm1oKYAxW0mWoFHeIqKgIQFnoFCMkDEAE&uoh=1",
+          "snippet": "Auctionet har nätauktioner med inredning, design, konst och vardagsantikviteter. Vi samlar Europas auktionshus. Bjud på auktion idag.",
+          "snippet_highlighted_words": [
+            "Auctionet har nätauktioner med inredning, design, konst och vardagsantikviteter"
+          ],
+          "source": "Auctionet",
+          "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQW4nQjQ4WkcC_2WRHFEjEj6No4a8Hvdk1Ssyt2dUTJaTnWmdmJFWTp&usqp=CAE&s",
+          "title": "5091518. POUL HUNDEVAD. Utdragbart matbord, teak ..."
+        },
+        {
+          "about_page_link": "https://lens.google.com/search/about-this-result?origin=www.google.com&req=CvQBL2dvdG8_dXJsPUNBRVNxZ0VCeENKRjE2WVFCaV9PSG9WdktJazF3cEVwSVc4em9UaEtES1Y3d0k4RjQ5RGQwX3hoZUxpZFBRLWtyTUpCRGtnTExNSERpXzJkdEhfTGwyZTJ1eU56WmNMQ2djQ3BYRVZFZkhjN0YtRS04Y3A5OFYzR2JHWFBnTnFfbHFya0VpNXBkaVdiNWtsMkVPR1QtRDNqWFY2N0syYVNUVmF3eldVZHdITTA1U1NQVVdqa241dmpma2txay1fMjV2c0ZxRkE1WnlBcWZnRHBCVGRYU1NoZmotVU9kSHNDQVVMQjlWT1NiQRIEGgIIABoiEgAaAggBIgAqADIGCAMSAnNlOgBCBAgBEABKAFoAcgB6ACICEAFIAFgAaAA",
+          "about_page_serpapi_link": "https://serpapi.com/search.json?engine=google_about_this_result&google_domain=google.com&req_token=CvQBL2dvdG8_dXJsPUNBRVNxZ0VCeENKRjE2WVFCaV9PSG9WdktJazF3cEVwSVc4em9UaEtES1Y3d0k4RjQ5RGQwX3hoZUxpZFBRLWtyTUpCRGtnTExNSERpXzJkdEhfTGwyZTJ1eU56WmNMQ2djQ3BYRVZFZkhjN0YtRS04Y3A5OFYzR2JHWFBnTnFfbHFya0VpNXBkaVdiNWtsMkVPR1QtRDNqWFY2N0syYVNUVmF3eldVZHdITTA1U1NQVVdqa241dmpma2txay1fMjV2c0ZxRkE1WnlBcWZnRHBCVGRYU1NoZmotVU9kSHNDQVVMQjlWT1NiQRIEGgIIABoiEgAaAggBIgAqADIGCAMSAnNlOgBCBAgBEABKAFoAcgB6ACICEAFIAFgAaAA",
+          "about_this_result": {
+            "languages": [
+              "en"
+            ],
+            "regions": [
+              "SE"
+            ],
+            "source": {
+              "description": "Minimalistic vintage dining table original from the 1960s in teak by Poul Hundevad. Can be extended on two sides with a pull-out shelf. Neat condition",
+              "icon": "https://serpapi.com/images/i/iVBORw0KGgoAAAANSUhEUgAAABwAAAAcBAMAAACAI8KnAAAAKlBMVEVHcEyq1d-q1d-q1d-q1d-q1d-q1d-o1N653OXv-PnH4-rX6_Di8fSk0t3cBpX6AAAABnRSTlMAUMjt65rpJh09AAAA90lEQVR4AWJgEDJxgQJnRQYG1jQkEMAgBiTTYdxEBjUgmVEG5SYxmAElO5dDuSkMbkASwJQc6yAIQ1EA_dtbjXF9jSAzluhKCsCqEnAX0BUqMgMxfIyBInE8OZ6kP5pNSiBwTSaS4UKZp0ivzEmKcxfbE82n4se6Re-OZIIrmBGwzWlcSS4gCSwdacg24pYAjImI69J5hTbf1BN5HHp31Tq-i5Ggleyy6zuzNbE-iTwMFc1MejkcSg5Npna34lNhJsp0qHb2j-zRBFZBy-79rVliIWucgDS_MgNRVafboaGhBqLSy2FBJ4YczoAlogc7g5ALHCgyAABK9q_3ytwAtgAAAABJRU5ErkJggg.png",
+              "source_info_link": "https://www.pamono.se/mid-century-danish-teak-extendable-dining-table-by-poul-hundvad-for-hundevad-co-1960s-1"
+            }
+          },
+          "displayed_link": "https://www.pamono.se › ...",
+          "favicon": "https://serpapi.com/images/i/iVBORw0KGgoAAAANSUhEUgAAABwAAAAcBAMAAACAI8KnAAAAKlBMVEVHcEyq1d-q1d-q1d-q1d-q1d-q1d-o1N653OXv-PnH4-rX6_Di8fSk0t3cBpX6AAAABnRSTlMAUMjt65rpJh09AAAA90lEQVR4AWJgEDJxgQJnRQYG1jQkEMAgBiTTYdxEBjUgmVEG5SYxmAElO5dDuSkMbkASwJQc6yAIQ1EA_dtbjXF9jSAzluhKCsCqEnAX0BUqMgMxfIyBInE8OZ6kP5pNSiBwTSaS4UKZp0ivzEmKcxfbE82n4se6Re-OZIIrmBGwzWlcSS4gCSwdacg24pYAjImI69J5hTbf1BN5HHp31Tq-i5Ggleyy6zuzNbE-iTwMFc1MejkcSg5Npna34lNhJsp0qHb2j-zRBFZBy-79rVliIWucgDS_MgNRVafboaGhBqLSy2FBJ4YczoAlogc7g5ALHCgyAABK9q_3ytwAtgAAAABJRU5ErkJggg.png",
+          "link": "https://www.pamono.se/mid-century-danish-teak-extendable-dining-table-by-poul-hundvad-for-hundevad-co-1960s-1",
+          "position": 2,
+          "redirect_link": "https://lens.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAESqgEBxCJF11VTMLpiNM_BeQ0o-WPi18JD8GmDlQvbOhdhAYsgFO63QE6ewlsTe_yZizJfV45x_HcS0C3H4HunO3Y9WYI3NvhPivQSjmm3qsIPVMbkylSHcpxF3JMDYZjz3th-rmwBRqGXh3_QMF80I_A0uMw_UYTwC1GlmJP-nV6yRzVukSXAgFe_lPJ6GcKi-ZvKTbrI4O2S1FcTgRoT6OJ-znU6YZMAQ6SHOg&ved=2ahUKEwjW0JCm1oKYAxW0mWoFHeIqKgIQFnoFCMsDEAE&uoh=1",
+          "snippet": "Minimalistic vintage dining table original from the 1960s in teak by Poul Hundevad. Can be extended on two sides with a pull-out shelf. Neat condition",
+          "snippet_highlighted_words": [
+            "vintage dining table original from the 1960s in teak by Poul Hundevad"
+          ],
+          "source": "pamono.se",
+          "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR6kfjKySC7ZeKlldkqGjX5M16njBpnMikzw0q1NB7h6vrTRlKRRXWW&usqp=CAE&s",
+          "title": "Mid-Century Danish Teak Extendable Dining Table ..."
+        },
+        {
+          "about_page_link": "https://lens.google.com/search/about-this-result?origin=www.google.com&req=CrkCL2dvdG8_dXJsPUNBRVMzZ0VCeENKRjE3MUJ6S2V3QnRXNnRQTUItbC0tRV9BSjZBRGFYdnY3RUZublZpQW1ERzNjOW9HLXdvZmlyNjVEVUhqTndySWtOQllYYTZVVV9SaVZpQ0lGQ3dOY1lhdVEydGdOWDloRmFiSzlaWnNFOUVVZ2VmYWIyVEFwNnptSHV2b2M1M2hlYzI3REhuOWVBaTVEczVtZjlRRGVIVmVONDU4LUI1UFFCOGFraTRJWm5sVmNRRTV4ZHRlNjVMUVdNTGpFZVNzSzFEVEFUcm5kN1FieVAyQmxIWlhtZFVsZU5xTkIzcDFrcTFmRWM5WnE5cC04a1NYTVRXdU9qWVRDZWNldy1GY3lTSzZYZGNYVS1DdXFRUnJ5bUhGNm1HdG82SlFzeXBzaXFLWRIEGgIIABoiEgAaAggBIgAqADIGCAESAnNlOgBCBAgBEABKAFoAcgB6ACICEAFIAFgAaAA",
+          "about_page_serpapi_link": "https://serpapi.com/search.json?engine=google_about_this_result&google_domain=google.com&req_token=CrkCL2dvdG8_dXJsPUNBRVMzZ0VCeENKRjE3MUJ6S2V3QnRXNnRQTUItbC0tRV9BSjZBRGFYdnY3RUZublZpQW1ERzNjOW9HLXdvZmlyNjVEVUhqTndySWtOQllYYTZVVV9SaVZpQ0lGQ3dOY1lhdVEydGdOWDloRmFiSzlaWnNFOUVVZ2VmYWIyVEFwNnptSHV2b2M1M2hlYzI3REhuOWVBaTVEczVtZjlRRGVIVmVONDU4LUI1UFFCOGFraTRJWm5sVmNRRTV4ZHRlNjVMUVdNTGpFZVNzSzFEVEFUcm5kN1FieVAyQmxIWlhtZFVsZU5xTkIzcDFrcTFmRWM5WnE5cC04a1NYTVRXdU9qWVRDZWNldy1GY3lTSzZYZGNYVS1DdXFRUnJ5bUhGNm1HdG82SlFzeXBzaXFLWRIEGgIIABoiEgAaAggBIgAqADIGCAESAnNlOgBCBAgBEABKAFoAcgB6ACICEAFIAFgAaAA",
+          "about_this_result": {
+            "languages": [
+              "en"
+            ],
+            "regions": [
+              "SE"
+            ],
+            "source": {
+              "description": "Made in Denmark during the 1950s-60s. Square and compact at 85 cm, this teak dining table suits a kitchen corner or a small flat, and its two 42 cm draw leaves ...",
+              "icon": "https://serpapi.com/images/i/_9j_4AAQSkZJRgABAQAAAQABAAD_2wCEAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys_RD84QzQ5OjcBCgoKDQwNGg0PFS8lHx03Kzc1LS0tLS0rKy0rKysrLSsrKysrKystLS0rKysrKysrKystKysrNy0rKysrKy0rLf_AABEIACAAIAMBIgACEQEDEQH_xAAYAAADAQEAAAAAAAAAAAAAAAAAAwQCB__EACkQAAEDAwIFAwUAAAAAAAAAAAECAxEAEiEEMRNRYYGRMkFxFFKhsdH_xAAWAQEBAQAAAAAAAAAAAAAAAAAAAwH_xAAWEQEBAQAAAAAAAAAAAAAAAAABABH_2gAMAwEAAhEDEQA_AO0PvKuLbRAI9S_t5AdamUlm4hYCljeUlxXflS_q2ENhC3w28pN5wSRdmY98T4prer0iUANuptBjEnJk99j4qa7bASwVw2nhqOwCS2rtzqhh5V4bdMk-lW09DyNSq12hdbNz6CggknMCOvtFCn2y0pCXQt1sFe0TB3_EeaDkhOna4aXCylbzQCSYzjBjtTW9PpuGOG23YYIgYxt4pr7KgsuNC6fWiYu-Ov7qYqbCiS5wlneTYT8g4NEyWlaTSIbNzLQQBmRiMfwUv6ZpDKlNsJacdFggZzgT28VoKaKgQ4XVgyIN58DAqlhlVwcdEWiEImbepPuaBsv_2Q.jpg",
+              "source_info_link": "https://www.google.com/goto?url=CAES3gEBxCJF171BzKewBtW6tPMB-l--E_AJ6ADaXvv7EFnnViAmDG3c9oG-wofir65DUHjNwrIkNBYXa6UU_RiViCIFCwNcYauQ2tgNX9hFabK9ZZsE9EUgefab2TAp6zmHuvoc53hec27DHn9eAi5Ds5mf9QDeHVeN458-B5PQB8aki4IZnlVcQE5xdte65LQWMLjEeSsK1DTATrnd7QbyP2BlHZXmdUleNqNB3p1kq1fEc9Zq9p-8kSXMTWuOjYTCecew-FcySK6XdcXU-CuqQRrymHF6mGto6JQsypsiqKY"
+            }
+          },
+          "displayed_link": "https://beyovintage.se › dining-tables › products › small-...",
+          "favicon": "https://serpapi.com/images/i/_9j_4AAQSkZJRgABAQAAAQABAAD_2wCEAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys_RD84QzQ5OjcBCgoKDQwNGg0PFS8lHx03Kzc1LS0tLS0rKy0rKysrLSsrKysrKystLS0rKysrKysrKystKysrNy0rKysrKy0rLf_AABEIACAAIAMBIgACEQEDEQH_xAAYAAADAQEAAAAAAAAAAAAAAAAAAwQCB__EACkQAAEDAwIFAwUAAAAAAAAAAAECAxEAEiEEMRNRYYGRMkFxFFKhsdH_xAAWAQEBAQAAAAAAAAAAAAAAAAAAAwH_xAAWEQEBAQAAAAAAAAAAAAAAAAABABH_2gAMAwEAAhEDEQA_AO0PvKuLbRAI9S_t5AdamUlm4hYCljeUlxXflS_q2ENhC3w28pN5wSRdmY98T4prer0iUANuptBjEnJk99j4qa7bASwVw2nhqOwCS2rtzqhh5V4bdMk-lW09DyNSq12hdbNz6CggknMCOvtFCn2y0pCXQt1sFe0TB3_EeaDkhOna4aXCylbzQCSYzjBjtTW9PpuGOG23YYIgYxt4pr7KgsuNC6fWiYu-Ov7qYqbCiS5wlneTYT8g4NEyWlaTSIbNzLQQBmRiMfwUv6ZpDKlNsJacdFggZzgT28VoKaKgQ4XVgyIN58DAqlhlVwcdEWiEImbepPuaBsv_2Q.jpg",
+          "link": "https://www.google.com/goto?url=CAES3gEBxCJF171BzKewBtW6tPMB-l--E_AJ6ADaXvv7EFnnViAmDG3c9oG-wofir65DUHjNwrIkNBYXa6UU_RiViCIFCwNcYauQ2tgNX9hFabK9ZZsE9EUgefab2TAp6zmHuvoc53hec27DHn9eAi5Ds5mf9QDeHVeN458-B5PQB8aki4IZnlVcQE5xdte65LQWMLjEeSsK1DTATrnd7QbyP2BlHZXmdUleNqNB3p1kq1fEc9Zq9p-8kSXMTWuOjYTCecew-FcySK6XdcXU-CuqQRrymHF6mGto6JQsypsiqKY",
+          "position": 3,
+          "redirect_link": "https://lens.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=CAES3gEBxCJF1_u9u-wD2soM8TkUyyLkEhoDiXXa8WfUSG0tFxb8A9xzGBn2K0WtZjEN9YU85a3-3sljbyfvqK3AvHvCxvIUckECXmc_MJ-pllw5vWk05TIABsID-JJomwLV6lL5ct5BE59cOsZxm2E-KQGjEokOld41zTwUs_T9Ao7Xcwt2KesoiAbUzDwVml9dOvMSctZFkqAoOrf-xEg7-LRW3It6VKa38mpRxtvlnGTwvleSZltIUql7Uri-R1TM8e_f_ckzVp-zqjK6cvkQGMPMXsPmHYvY-NeEM7zgujE&ved=2ahUKEwjW0JCm1oKYAxW0mWoFHeIqKgIQFnoFCNADEAE&uoh=1",
+          "snippet": "Made in Denmark during the 1950s-60s. Square and compact at 85 cm, this teak dining table suits a kitchen corner or a small flat, and its two 42 cm draw leaves ...",
+          "snippet_highlighted_words": [
+            "Square and compact at 85 cm"
+          ],
+          "source": "Beyo Vintage",
+          "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRd4Hyw5mRSWkEf5vHOd1Gkldm1kb_X5Osr2zgTlw_MLN5zuZTRpxq3&usqp=CAE&s",
+          "title": "Small Teak Extendable Dining Table"
+        }
+      ],
+      "search_metadata": {
+        "created_at": "2026-11-12 14:47:38 UTC",
+        "id": "6af5d18a2d916a2bfbb99cbc",
+        "json_endpoint": "https://serpapi.com/searches/GkYJjUtMPUWTwRPqXL0nrdxEfW7uEEKHtdSKGRjVqvQ/6af5d18a2d916a2bfbb99cbc.json",
+        "markdown_endpoint": "https://serpapi.com/searches/GkYJjUtMPUWTwRPqXL0nrdxEfW7uEEKHtdSKGRjVqvQ/6af5d18a2d916a2bfbb99cbc.md",
+        "processed_at": "2026-11-12 14:47:38 UTC",
+        "raw_html_file": "https://serpapi.com/searches/GkYJjUtMPUWTwRPqXL0nrdxEfW7uEEKHtdSKGRjVqvQ/6af5d18a2d916a2bfbb99cbc.html",
+        "status": "Success",
+        "total_time_taken": 3.51
+      },
+      "search_parameters": {
+        "country": "SE",
+        "engine": "google_lens",
+        "hl": "en",
+        "image_id": "spDlPHicu2lgZGiSbJySaJBiaGhmZpFkmZpmZmBgkGhpZmZklGieZqKXVZCaHm9obmliYmliYWoBAGuxDaw",
+        "type": "all"
+      },
+      "visual_matches": [
+        {
+          "image": "https://images.auctionet.com/thumbs/large_item_5091518_925c1bcb0b.jpg",
+          "image_height": 1290,
+          "image_width": 1290,
+          "link": "https://auctionet.com/en/5091518-poul-hundevad-extendable-dining-table-teak-1960s",
+          "position": 1,
+          "source": "Auctionet",
+          "source_icon": "https://serpapi.com/images/i/iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABlUlEQVRYhe2X0XWDMAxFrzkdwNnAG8TZwBskG4RRWIEN2IBmAsgE7QbxBrCB-tHiksYkgaTwk_elcyxZD0k82wCIiBGRSkQa-X80IlKKiAFQP8YHoJkXLbBRIlICu5mTd6iViDTM__UdWiUislByAJIlk78IALwNLdR1zfF4BMAYw36_H7Vxnue0bQvAdrvFWht3HFILY4wAAkhRFKPVpizLEO-cG_SLEqiq6q7gW3DOhX2qqor6RGegKIpgp2k6qvR97Ha_-nY4HO5vgbU2MG-a6cdD0zRhH2tt1CdK4FbQGPRnKYaLFnjvg22MmVz-Duv1Orp3h6sEtH78iFitVlfXLwg8I-kYXCXQCckjiJX9DLHB0FoLIMaYpw2h1vq-IQSCbHrvH6qC9z5UYEiKowScc8HO83wygbqug90XpTPEytIXEK31ZDHqa8DpdIr6DB5GfR3Psmx08izLQnyapoN-g1eyfv_-tmVs-a21g7_36074IpDw_URaCm0CfC5I4Lj44zRRSnlgA7wzTztaoAY2Sin_BSwy2T-wOpabAAAAAElFTkSuQmCC.png",
+          "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZs0kXI1xnaLBk9ptR9J6rr4eivA383X3vnA&s",
+          "thumbnail_height": 225,
+          "thumbnail_width": 225,
+          "title": "POUL HUNDEVAD. Extendable dining table, teak, 1960s ..."
+        },
+        {
+          "image": "https://beyovintage.se/cdn/shop/files/5F4B7699-99F0-42F2-8ADF-505839334DC4.jpg?v=1758709840&width=1920",
+          "image_height": 1920,
+          "image_width": 1920,
+          "link": "https://beyovintage.se/en/products/swedish-side-table-in-teak-by-alberts-in-tibro",
+          "position": 2,
+          "source": "Beyo Vintage",
+          "source_icon": "https://serpapi.com/images/i/_9j_4AAQSkZJRgABAQAAAQABAAD_2wCEAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys_RD84QzQ5OjcBCgoKDQwNGg0PFS8lHx03Kzc1LS0tLS0rKy0rKysrLSsrKysrKystLS0rKysrKysrKystKysrNy0rKysrKy0rLf_AABEIACAAIAMBIgACEQEDEQH_xAAYAAADAQEAAAAAAAAAAAAAAAAAAwQCB__EACkQAAEDAwIFAwUAAAAAAAAAAAECAxEAEiEEMRNRYYGRMkFxFFKhsdH_xAAWAQEBAQAAAAAAAAAAAAAAAAAAAwH_xAAWEQEBAQAAAAAAAAAAAAAAAAABABH_2gAMAwEAAhEDEQA_AO0PvKuLbRAI9S_t5AdamUlm4hYCljeUlxXflS_q2ENhC3w28pN5wSRdmY98T4prer0iUANuptBjEnJk99j4qa7bASwVw2nhqOwCS2rtzqhh5V4bdMk-lW09DyNSq12hdbNz6CggknMCOvtFCn2y0pCXQt1sFe0TB3_EeaDkhOna4aXCylbzQCSYzjBjtTW9PpuGOG23YYIgYxt4pr7KgsuNC6fWiYu-Ov7qYqbCiS5wlneTYT8g4NEyWlaTSIbNzLQQBmRiMfwUv6ZpDKlNsJacdFggZzgT28VoKaKgQ4XVgyIN58DAqlhlVwcdEWiEImbepPuaBsv_2Q.jpg",
+          "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTJ6mW5TKoXAgwgDwpHbfLeNduXHUikdRGWCQ&s",
+          "thumbnail_height": 225,
+          "thumbnail_width": 225,
+          "title": "Vintage Swedish side table in teak by Alberts in Tibro buy ..."
+        },
+        {
+          "image": "https://cdn20.pamono.com/p/g/2/6/2677012_ghmkasgupq/small-vintage-extendable-dining-table-in-teak-1950-1.jpg",
+          "image_height": 400,
+          "image_width": 400,
+          "link": "https://www.pamono.se/small-vintage-extendable-dining-table-in-teak-1950",
+          "position": 3,
+          "source": "Pamono",
+          "source_icon": "https://serpapi.com/images/i/iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACHElEQVRYhcWX0XHiMBCGPzwpgBK4DpwOxMy-5zoAOggVHFcBdABUcJf3nbE6iDu4lEAJ9yAZFgU5dmKHfbHHWu3_W1pp_53Q00TEAS4z7FXV94k36QG6AJYd4x6AYxcyrQREpAS25P_4I_PAWlXr3gREZAP8uhHwhbDUdeJfEog-8Z7wWlV3nQmIyJ7r5fbASlXfcoST-TNgnxA5qOrqQwIJ-InA_tAF-EasJWELpzkSk2TCc5zQgM_b9q8jiRKoDImr7Zgkjq9DgreQeGxiF8Zva95bM7evxVjrW1iTyNBFhhAyfD4UuDURqbgk5lxVfbMCC-P3LlMHNBt7AZctWMan73rUPmMxtreYRVz-xl7GAr-FISKu4Pqy8N9AwGI4ewoYMvNzlmIUOcfvsrsTeBgbIBamJVATTtnJjheJczkCB0co63-AMsUoSLJyBAL2kqsTDF8ksulpBAJv8XmIy3_GUFXf1AKrAX4McRuKyBR4BnaEKjglVNl_htCqyYGjmbsfCLwi7H0F5_NvYx_hWg_YSrX6ggpyEWgWP9XAHPhpCJwrrj2Gay6CZCside5mjEdr2ozHzC4JCeeMawM-I9EbzUsqyTZclHBWFYnIlrC_bbYDfkfwrCRLa8GG0FQQJ1RRWKbmWoD_RuJrwrJb8EMqzz8lyzPtmQdqVT19SZYbElYhW5DxG5Mk6H1as4SI4x7NaQsZlxnu3Z7_B2RcABTG-BlTAAAAAElFTkSuQmCC.png",
+          "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIaEnD2qYE-2N0qPcfLCfXtRFYdcu_BL5fLg&s",
+          "thumbnail_height": 225,
+          "thumbnail_width": 225,
+          "title": "Small Vintage Extendable Dining Table in Teak, 1950 for sale ..."
+        }
+      ]
+    },
+    "body_bytes": 89977,
+    "final_url": "https://serpapi.com/search.json?engine=google_lens&image_id=spDlPHicu2lgZGiSbJySaJBiaGhmZpFkmZpmZmBgkGhpZmZklGieZqKXVZCaHm9obmliYmliYWoBAGuxDaw&type=all&hl=en&country=se&api_key=<redacted>",
+    "headers": {
+      "accept-ranges": "bytes",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cache-control": "max-age=3600, public",
+      "cf-cache-status": "MISS",
+      "cf-ray": "<cf-ray>",
+      "connection": "keep-alive",
+      "content-length": "89977",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Thu, 12 Nov 2026 14:47:42 GMT",
+      "etag": "W/\"a7d53ffeb4e836c2ab4a46e70b391c9f\"",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "serpapi-search-id": "6af5d18a2d916a2bfbb99cbc",
+      "server": "cloudflare",
+      "vary": "accept-encoding",
+      "x-content-type-options": "nosniff",
+      "x-download-options": "noopen",
+      "x-frame-options": "SAMEORIGIN",
+      "x-permitted-cross-domain-policies": "none",
+      "x-request-id": "06d25573-5417-47cf-b95a-4e4fe7a859f4",
+      "x-robots-tag": "noindex, nofollow",
+      "x-runtime": "3.581314",
+      "x-xss-protection": "1; mode=block"
+    },
+    "redirects": [],
+    "status": 200
+  },
+  "sent": true,
+  "started": "2026-11-12T14:47:38.880Z",
+  "usage": {
+    "search": 1
+  },
+  "worst_case_micro_usd": 0
+}
