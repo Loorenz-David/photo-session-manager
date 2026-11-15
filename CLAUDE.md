@@ -1,3 +1,10 @@
+## Start here
+
+New to this repo (agent or developer)? Read **`docs/guide/README.md`** first: what the app is, the
+authority order, a reading order per task, the rules that must never break (`03_rules_and_principles.md`)
+and what else must change when you change something (`04_change_impact.md`). Keep the guide current
+in the same change when you alter architecture, rules or couplings.
+
 
 ## Build decisions (owner, updated 2026-10-24, Rust revision)
 

@@ -1,0 +1,90 @@
+# 04 — Change impact: what moves, and what breaks when it does
+
+Each row: change X → also change Y → otherwise Z → check with C. Rows are verified against the code
+at P70; add a row whenever a phase creates a new coupling, delete it when the coupling goes.
+
+## Backend ↔ frontend contract
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| A Tauri command signature, a DTO (`#[derive(Type)]` struct/enum in `apps/desktop/src-tauri/src/commands/*.rs`), or add/remove a command in `specta_builder()` (`src-tauri/src/lib.rs`) | regenerate `apps/desktop/src/services/bindings.ts` (`cargo test -p psm-desktop export_bindings`), adapt `apps/desktop/src/services/*.ts` wrappers and the features that use them; register the command/DTO in master plan §6.7 | `npm run typecheck` is red, or the UI calls a command that no longer exists (runtime `CommandError`); the reviewer diffs committed vs regenerated bindings | `cargo test -p psm-desktop export_bindings && git diff --stat apps/desktop/src/services/bindings.ts && (cd apps/desktop && npm run typecheck)` |
+| A new `AppEvent` variant (`crates/core/src/events.rs`) or a payload field | the match in `impl EventSink for TauriEvents` (`src-tauri/src/lib.rs`), a listener in `apps/desktop/src/services/events.ts` (or `history.ts`), master plan §6.7 events | the event compiles but never reaches the window (the match has no arm) or the UI never refreshes | the phase's UI test on the event; `cargo test -p psm-desktop` inline event tests (`c7c_…`, `c8b_…`) |
+| An error code (`psm_core::Error` in `crates/core/src/error.rs`, `data` keys) | the UI texts that switch on `code` (`useWorkspaceState.ts` refusalText, `features/compose`, `features/settings`, `features/history`, `features/shell/CameraCard.tsx`), master plan §6.6; `CommandError.data` values are **strings** (a numeric step arrives as `"3"`) | the user sees the raw backend message; a UI branch keyed on the old code is dead | grep the old code in `apps/desktop/src`; the touched UI tests |
+| A health code or its detail sentence (`HealthService`, codes in master plan §6.6; camera precedence in `crates/core/src/mechanisms/camera_status.rs`) | `features/health/HealthPage.tsx`, `features/shell/CameraDot.tsx`, `CameraCard.tsx`, `features/settings/FingerprintBox.tsx` where they switch on codes; the owning writer (direct adapter owns 12 codes in `OWNED_CODES`, the ledger owns `camera_files_not_received`, `services/camera.rs` owns `camera_address_changed`) | the dot shows the wrong state or an item is set by one writer and cleared by another | `cargo test -p psm-testkit --test suite p46_direct_camera_adapter::` and the Health UI test |
+| A settings field (`psm_infra::settings_file::Settings`, master plan §6.8) | `SettingsDto` + `SettingsPatchDto` (`commands/settings.rs`), bindings, `features/settings/SettingsPage.tsx` control (the unsaved-changes guard compares the whole DTO, so a field with no control is silently "dirty-able"), validation in `SettingsService::set` (`crates/core/src/services/settings.rs`), and **`App::prepare`/`apply_settings`** (`crates/integrations/src/lib.rs`): a field not in the `Simple` list (`theme`, `output_format`, `storage`, `export`, `camera.auto_take_back`) triggers a full App rebuild on save — decide which it is | a save rebuilds the App (closing lanes, re-reading Capture One) for a cosmetic field, or a runtime field is applied only after a relaunch | `cargo test -p psm-testkit --test suite p16_operations::` and `p63_final_check_fixes::`; `npx vitest run src/features/settings/__tests__/` |
+
+## Persistence
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| The schema (table, column, index) | a **new** `crates/infra/src/sqlite/migrations/0NN_*.sql` (next number; never edit an existing file) + its `M::up(include_str!(…))` line in `SqliteStore::migrations()` (`crates/infra/src/sqlite/store.rs`), the `Store`/`StoreTx` trait (`crates/core/src/ports/store.rs`) and the SQLite impl, master plan §6.5, the phase's behaviour test | the migration never runs (missing `M::up`), or an existing data dir fails `to_latest`; a renumbered file breaks every installed database | `cargo test -p psm-testkit --test suite <stem>::` (TestApp applies migrations on a temp DB); a `user_version` rewind test exists for `IF NOT EXISTS` migrations |
+| `AppPaths` layout (`crates/infra/src/paths.rs`) or cache names (`media_store.rs`, `previews_store.rs`) | `AppPaths::create`, the asset-protocol scope in `src-tauri/src/lib.rs` (only `previews/` is readable by the webview), the storage clean-up candidates (`services/storage.rs`), master plan §6.3 | previews do not display; clean-up misses or deletes the wrong files | `p61_storage_cleanup_and_budget::`, `p62_retention_after_publish::` |
+| A Keychain account name (`crates/core/src/domain/camera.rs::secrets`) | the sidecar credential hand-over in `camera/runtime.rs`, Settings → Camera texts, `10E` R-I21 | the camera login is read from an account nobody writes | `p50_camera_settings_and_support::` |
+
+## Capture One
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| A `CaptureOneScripting` method (`editing/capture_one/scripting.rs`) | its delegate in **`GatedScripting`** (`gate.rs`, the gate every script passes since P60/P63), `JxaScripting` (`jxa.rs`) + a `jxa/<name>.js` + its row in the `SCRIPTS` table (24 entries; the script is written to `<data>/hooks/jxa/` at start), `FakeCaptureOneScripting` (`crates/testkit/src/fake_capture_one.rs`), master plan §6.4 | the trait does not compile, or the new script runs ungated and wakes Capture One during a take-back | `cargo check -p psm-integrations`; `p48_camera_ownership::`, `p63_final_check_fixes::` |
+| A JXA script body or a property name | verify against `docs/reference/capture_one_16.8.6.sdef` and the VERIFY items in `docs/intention/evidence/capture_one_16.8.6.md`; record a live probe in the evidence | the fake passes, the real Capture One fails or hangs 30 s (`OsaRunner` timeout) | a manual probe on the dev Mac (flow §6A); the fake cannot catch it |
+| A recipe value (`editing/capture_one/recipes.rs`: `PSM Preview` JPEG; `PSM Master` TIFF `bits: 8`, `Uncompressed`) | `RecipeProps` read-back/repair (`provision.rs`, `adapter.rs::recipe_fault`), the output renderer's expectations (`infra/imaging/render.rs` reads the master TIFF), `10D` MC-28, `10F` §5 | the self-repair rewrites the recipe back on the next render batch, or the renderer refuses the master | `p29_master_and_output_render::`, `p69_faster_export_and_publish::` |
+| A hook template (`editing/capture_one/hooks/*.applescript.tmpl`) or the spool payload | `mechanisms/hook_payload.rs` parser, `infra/spool.rs`, `services/editing_events.rs`; hooks must stay fire-and-forget (MC-15, they block Capture One while running) | events land in `spool/bad/` and arrivals fall back to the watcher | `p05_capture_arrival::`, `p06_live_previews::` |
+| Something that may launch Capture One | route it through the lanes (`App.user_lane()` / background) and respect `LaunchGate`/`StartOrder`; never call `scripting` directly from a new thread | Capture One is woken during a take-back (regression of P60 #22) or before USB had its chance at start | `p48_camera_ownership::`, `p57_camera_auto_take_back_and_run2_fixes::`, `p60_take_back_and_self_healing::` |
+
+## Camera sidecar and support
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| The sidecar protocol (an event or field in `native/camera-sidecar/src/*.cpp`, a command) | `camera/sidecar/protocol.rs` (`SidecarEvent`/`Command`), `client.rs` correlation, `direct/adapter.rs` event table, the fixtures `camera/sidecar/fixtures/*.jsonl` (each line cites a C++ emit site), the fake's scripts `testkit/src/fixtures/sidecar_scripts/*.txt` and `testkit/src/bin/fake_sidecar.rs`, book `10E` MC-31, `native/camera-sidecar/README.md` | the Rust side parses `Unknown` and the status machine stalls; the fake keeps proving the old protocol | `tools/sidecar/build.sh --stub --test` (ctest), `p45_sidecar_and_protocol::`, `p46_direct_camera_adapter::` |
+| Any C++ file | rebuild the binary yourself: `tools/sidecar/build.sh --stub` (or `--sdk <root>`); `build.rs` builds the stub **only when the file is absent** | you test the old binary | `ls -l apps/desktop/src-tauri/binaries/` (mtime) |
+| The sidecar binary in `apps/desktop/src-tauri/binaries/` (stub ≈ 220 KB vs SDK build ≈ 350 KB on 2026-11-12) | know that **`p45` c2a rebuilds the stub into that path** on every run, and tauri-build re-runs when the file changes (so `cargo test --workspace` rebuilds `psm-desktop`) | an SDK sidecar is silently replaced by the stub before a release build; the shipped app says "camera helper could not start" | `ls -l` the size before `npm run tauri -- build`; build release apps from a separate worktree (STATUS 2026-11-12 05:20) |
+| The Sony SDK version / support files | `tools/sidecar/manifest.sh <sdk root> <version>` → `native/camera-sidecar/manifest/sony-<version>.json` (hashes only), `camera/support/manifest.rs` (`include_str!` of the JSON, `SUPPORTED_SDK_VERSIONS`), the installer's file list in `support/sony.rs`, Settings → Camera texts | the installer refuses the zip as "missing or changed"; no SDK file is ever committed | `p50_camera_settings_and_support::`; the inline `c8a_support_and_secret_commands…` test |
+| A production timing (`camera/sidecar/mod.rs::SidecarTimings`, `RESTART_BACKOFF_S`, `QUIT_GRACE_MS`; take-back polls in `direct/take_back.rs`) | the unit test `production_timings_unchanged` (`sidecar/mod.rs`) states today's values; only the test harness may call `CameraRuntime::set_sidecar_timings` | the test fails on purpose: a timing changed in production without a decision | `cargo test -p psm-integrations production_timings` |
+| FTP receiver behaviour (`crates/infra/src/ftp/`) | the ledger contract `10E` MC-32/MC-33, `testkit/src/ftp_client.rs`, the Settings → Camera steps (`features/settings/cameraSteps.ts`: user `sessionmanager`, port, password) | the camera's uploads are refused or filed twice | `p43_ftp_receiver::`, `p44_capture_ledger::`, `p53_camera_upload_and_log::` |
+
+## Shopify
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| A GraphQL document (`commerce/shopify/graphql.rs`) or a response shape | the request/response fixture pair in `commerce/shopify/fixtures/*.json` (sanitised; **no shop domain, ids or tokens**), `types.rs`, `adapter.rs`, the `FakeCommerce` behaviour (`testkit/src/fake_commerce.rs`), `docs/intention/evidence/shopify_admin.md` (SV-n) | the fake proves a shape Shopify rejects; the first real publish fails | `p12_shopify_adapter::`, `p13_…`, `p14_…`, `p64_…`, `p65_…`; the real store is the only full proof |
+| The Admin API version (`settings.integration.api_version`, default `2026-10` in `settings_file.rs`) | re-check every document against that version; fixtures record the version they were captured on | deprecated fields return errors on the live store only | a probe run (`crates/integrations/examples/shopify_probe.rs`) against the test store |
+| A mutation that needs a new scope (inventory needs `read_locations` + `write_inventory`; `adapter.rs` names them in `STOCK_ACCESS_MISSING`) | the owner must add the scope to the custom app; the adapter's fallback and message (`item_create_stocked` → untracked create) | `ACCESS_DENIED` on the live store, silently degraded behaviour | the narrative's "Needs you"/"Try it" steps |
+| The condition-photos metafield key (`condition_photos_key`, `custom.damage_report`) or type map (`type_map.rs`) | `09A` MC-24, `mechanisms/values.rs`, `attribute_write.rs` | `condition_field_missing` health, attribute verification failures | `p10_attributes::`, `p14_publish_update::` |
+
+## Tests and build
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| Add a behaviour-test file `crates/testkit/tests/suite/<stem>.rs` | add `mod <stem>;` to `crates/testkit/tests/suite/main.rs` | **the file never compiles or runs, and nothing warns** (`autotests = false`); `--test suite <stem>::` prints `0 passed` | `cargo test -p psm-testkit --test suite <stem>::` must list your tests |
+| A test that installs a global subscriber, sets an env var, changes cwd or binds a fixed port | wrap it in `psm_testkit::isolation::in_own_process`, or make it thread-safe | other tests in the one process see the state; intermittent reds | run the module twice under `cargo test --workspace` |
+| The TestApp harness (`testkit/src/test_app.rs`) or a fake | every phase module that uses it (one program: a compile error anywhere stops all tests) | the suite does not build | `cargo check -p psm-testkit --tests` |
+| `[profile.dev.package."*"] opt-level = 2` (root `Cargo.toml`, P70) | nothing — but know it: dependencies are optimised in dev/test, workspace crates are not; the first build after a change to it is long | removing it makes the suite ~40 % slower (115 s → 188 s for the suite program) | `time cargo test --workspace` twice |
+| `.cargo/config.toml` `target-dir = apps/desktop/src-tauri/target` | the orchestrator's clean-up habit (the folder reached ≈ 92 GB) | disk fills; the SDK build and the stub build share the dir | `du -sh apps/desktop/src-tauri/target` |
+| `composition_cases.json` (`crates/core/src/mechanisms/`) | nothing else: both the Rust unit test and `apps/desktop/src/features/compose/__tests__/geometry.test.ts` read it; a geometry rule change edits the table once and both implementations | the two implementations drift | `cargo test -p psm-core composition::tests` and `npx vitest run src/features/compose/__tests__/geometry.test.ts` |
+| Switching between `cargo test -p psm-testkit --test suite …` and `cargo test --workspace` | nothing — know it: features resolve differently per package vs workspace, so `psm-integrations`/`psm-testkit` recompile each time and macOS re-checks the new binary (minutes) | you think the build is broken when it is just slow | `tools/pipeline/timeline.sh <log>` on a runner log |
+
+## Pipeline
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| A template `tools/pipeline/templates/*.md` placeholder (`{{KEY}}`) | the `render` call in `tools/pipeline/run_phase.sh` that passes `KEY=…` | the runner exits 20 with "template … missing values" | `DRY_RUN=1 tools/pipeline/run_phase.sh phase <ID>` |
+| Handoff frontmatter keys (`state`, `verdict`) or the chat line `HANDOFF: … \| STATE: …` | `frontmatter`/`chatfield` readers in `run_phase.sh`, the role agents in `~/.claude/agents` and the templates | the runner cannot read the verdict and stops | dry run + a past handoff in `docs/implementation/handoffs/` |
+| `docs/implementation/phases.txt` | nothing — it is the order `run_phase.sh all` consumes; phases after P52 were run one by one | a stale list re-runs an approved phase | read before `run_phase.sh all` |
+| A rule in `docs/process/flow.md` | the templates (`tools/pipeline/templates/`) that restate it (§4A appears in `implement.md`), `03_rules_and_principles.md` | sessions follow the old rule | diff the template against flow.md |
+
+## Fragile spots and known intermittent tests (from `docs/implementation/backlog.md`, narratives, STATUS)
+- `apps/desktop/src/features/workspace/__tests__/p33_split_grid.test.tsx` C4(d) (stage bar after a
+  tile click) fails intermittently under full-suite load; still open (backlog P35/P37/P45/P70 notes).
+  Rerun alone before blaming your change.
+- `p53_camera_upload_and_log` C3(a): a 3 s log wait vs slow `TestApp` shutdown in a large build dir
+  recurred (backlog P60). `p62_retention_after_publish` once failed under load (backlog P63). `p65`
+  had one timing-only failure on a busy Mac (narrative).
+- `p48_camera_ownership` runs real-time take-back waits (~10–12 s per run after P60/P63).
+- First `cargo test --workspace` after a relink: 15–17 min (macOS first-start check of the new
+  binaries); warm run ≈ 8 min. The agent tool's 10-minute foreground limit forces a background run
+  then, against flow §4A (backlog P68/P70 process notes).
+- `p45` c2a rewrites the sidecar binary → tauri-build re-runs → `psm-desktop` rebuilds every full run.
+- Hooks block Capture One while they run (evidence VERIFY-2); keep hook bodies fire-and-forget.
+- Keychain prompts can block the sidecar spawn after an ad-hoc re-sign (P47 finding); the first
+  launches of a new build ask 3–4 times.
+- Sony's SDK download zip is refused by the installer (runtime files nested in `RemoteCli.zip`);
+  install from a zip holding the seven dylibs at top level (`sony_camera_lab.md` A0).
+- `ptpcamerad` claims the cable when Capture One starts; only the take-back sequence wins it back.
+- `Save settings` writes the camera login before the settings (partial save on a failed settings
+  validation) and an empty password when only the user is typed (backlog P68).
+- Deleting a denied photo's files drops whole multi-photo undo steps (backlog P66).
+- Core carries platform text/literals (`"shopify"`, Capture One error numbers, Sony sentences):
+  H7 debts, do not extend them (backlog P13/P14/P21/P65/P67/P68/P69 "H7 family").
