@@ -843,4 +843,11 @@ to 07A MC-10 and 05A MC-30.
     (e) orchestrator's default, owner may change: photo changes after the mark start research again only on the
     next "Arranged — next" or the manual button, and publishing an unmarked session marks it first. This covers
     changelog 12(c). The owner's model pick is in the evidence doc "Owner pick of models".
+14. 2026-11-15 (orchestrator, with the R11 and R12 plans). The plans' sections "What this plan supersedes in the book"
+    are the rule for the 08A/08B text they name until those chapters are rewritten: R11 (the arranged trigger
+    replaces the quiet period and the photo-arrival event rows; `auto`/`quiet_seconds` removed; fields left alone
+    and derived as new field classes; extra shop addresses; for designer and maker no page of the owner's shop is
+    evidence) and R12 (one stage-1 call over at most 8 chosen photos, the first wide Main photo used only for the
+    search; the page reader's text is the product extract; no Compare for a page that lists another kind of piece;
+    fingerprint version 2). There is no shoot template in the app yet (08A defers it); R12 chooses photos by position.
 

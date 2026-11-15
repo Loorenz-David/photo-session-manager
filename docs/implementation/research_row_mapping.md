@@ -454,3 +454,176 @@ Old rows: 393 · placed: 393 · new rows: 3 · total now: 396.
 | A17·C3(c) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
 | A17·C3(d) | R8 | new, from the R8 projection attempt 2 (orchestrator 2026-11-13) |  |
 | A17·C7(a) | R8 | new, from the R8 projection (orchestrator 2026-11-13) |  |
+
+## Rows added by R11 and R12 (2026-11-15, master plan v10)
+
+Two new plan numbers, the next free ones: **A25** = `R11_research_on_arranged`, **A26** = `R12_research_cost`. Criteria are numbered once across each plan's units. Tests are named after the row (`a25_c1a_<slug>`, `a26_c1a_<slug>`). Generated from the plan files; counts are computed, not typed.
+
+New rows: A25 99 · A26 37 · together 136. Total now: 396 + the 6 rows added by the R8 projection + 136 = 538.
+
+| Plan number | Now in | Rows per unit |
+|---|---|---|
+| A25 | R11·U1, R11·U2, R11·U3, R11·U4, R11·U5, R11·U6 | U1 22, U2 12, U3 26, U4 17, U5 9, U6 13 |
+| A26 | R12·U1, R12·U2, R12·U3, R12·U4 | U1 17, U2 9, U3 6, U4 5 |
+
+### Rows of earlier plans that R11 and R12 retire or amend
+
+| Row | Was in | What happens | By |
+|---|---|---|---|
+| A13·C1(a), A13·C1(b) | R4·U4 | amended: seven prerequisites (`AutoOff` removed) | R11·U1 (08B changelog 13 d) |
+| A13·C2(a) | R7·U1 | superseded: a photo change queues no run; replaced by A25·C21(a) | R11·U1, R11·U4 |
+| A13·C2(b) | R4·U4 | superseded; replaced by A25·C1(b) | R11·U1 |
+| A13·C4(a), A13·C4(b) | R4·U4 | superseded: there is no `auto` setting | R11·U1 |
+| A13·C5(a), A13·C5(b), A13·C5(c) | R4·U4 | superseded: there is no quiet period; replaced by A25·C4(a) | R11·U1 |
+| A13·C6(a), A13·C6(b), A15·C7(a) | R4·U4, R8 | superseded as written (an `auto` run); the same outcomes for an `arranged` run are A25·C4(b), A25·C4(c) | R11·U1 |
+| A13·C7(a)–(c), A13·C8(a), A13·C8(b) | R4·U4 | kept; input amended: the run is started by `arranged` (C7(b): "before an earlier `arranged`") | R11·U1 |
+| A14·C3(a)–(e), A14·C6(a) | R4·U5 | kept; input amended: the second run is started by a second `arranged`, trigger `arranged` | R11·U1 |
+| A14·C5(a), A14·C5(b) | R4·U5 | amended: the trigger set decides whether the next `arranged` creates a run; a photo change alone queues nothing | R11·U1 |
+| A19·C4(a) | R4·U6 | superseded: there is no `auto` setting | R11·U1 |
+| A19·C5(d) | R6·U2 | superseded: attribution keys are a picker; replaced by A25·C28(d) | R11·U6 |
+| A24·C1(a) | R10·U1 | amended: with everything in place the status names no reason (was `AutoOff` with an empty sentence) | R11·U1 |
+| A12·C1(a)–(c), A12·C3(a), A12·C3(b) | R4·U3 | kept; input amended: one Observe unit and one `looked` step for the chosen photos | R12·U1 |
+| A14·C1(a) | R4·U5 | superseded (a kill between two Observe calls cannot happen); replaced by A26·C5(a) | R12·U1 |
+| A14·C3(a), A14·C3(d) | R4·U5 | amended: a new or recomposed chosen photo costs one Observe call over all chosen photos (A26·C4(b)) | R12·U1 |
+| A17·C1–C3 (the page text cell) | R8·U3 | amended: `PageReply.text` is the product extract (A26·C9(a)); title, images, redirects and pacing unchanged | R12·U2 |
+
+### Every new row
+
+| Row | Unit | Boundary / test home | Text edit |
+|---|---|---|---|
+| A25·C1(a) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(b) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(c) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(d) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(e) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(f) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(g) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(h) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(i) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C1(j) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C2(a) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C2(b) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C2(c) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C3(a) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C3(b) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C4(a) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C4(b) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C4(c) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C4(d) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C5(a) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C6(a) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C7(a) | R11·U1 | research harness (`crates/research/tests/engine/arranged.rs`) | new (v10) |
+| A25·C8(a) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C8(b) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C8(c) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C8(d) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C9(a) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C9(b) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C9(c) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C9(d) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C9(e) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C10(a) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C10(b) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C11(a) | R11·U2 | rule unit tests and research harness (`crates/research/tests/engine/settings_r11.rs`) | new (v10) |
+| A25·C12(a) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(b) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(c) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(d) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(e) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(f) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(g) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(h) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(i) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(j) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C12(k) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C13(a) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C13(b) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C13(c) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C14(a) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C14(b) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C14(c) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C14(d) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C15(a) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C15(b) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C15(c) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C15(d) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C15(e) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C15(f) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C15(g) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C16(a) | R11·U3 | rule unit tests and research harness (`crates/research/tests/engine/derived.rs`) | new (v10) |
+| A25·C17(a) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C17(b) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C17(c) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C17(d) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C18(a) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C18(b) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C18(c) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C18(d) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C19(a) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C20(a) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C20(b) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C20(c) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C20(d) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C20(e) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C21(a) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C22(a) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C23(a) | R11·U4 | app suite on the wired app (`crates/testkit/tests/suite/research/r11_arranged.rs`); C23 the desktop crate | new (v10) |
+| A25·C24(a) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C24(b) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C24(c) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C24(d) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C24(e) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C25(a) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C26(a) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C26(b) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C27(a) | R11·U5 | UI tests (`apps/desktop/src/features/{shell,sessions,publish,form}/__tests__/r11_*.test.tsx`) | new (v10) |
+| A25·C28(a) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C28(b) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C28(c) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C28(d) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C28(e) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C29(a) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C30(a) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C30(b) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C31(a) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C31(b) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C32(a) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C32(b) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A25·C33(a) | R11·U6 | UI tests (`apps/desktop/src/features/settings/__tests__/r11_research_pickers.test.tsx`) | new (v10) |
+| A26·C1(a) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C1(b) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C1(c) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C1(d) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C2(a) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C2(b) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C3(a) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C3(b) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C3(c) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C4(a) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C4(b) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C4(c) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C5(a) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C6(a) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C6(b) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C7(a) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C7(b) | R12·U1 | rule unit tests and research harness (`crates/research/tests/engine/photo_look.rs`); C7 `adapter_openai.rs` | new (v10) |
+| A26·C8(a) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C8(b) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C8(c) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C8(d) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C8(e) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C8(f) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C8(g) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C8(h) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C9(a) | R12·U2 | adapter unit tests and `crates/research/tests/engine/adapter_pages.rs` | new (v10) |
+| A26·C10(a) | R12·U3 | research harness (`crates/research/tests/engine/same_kind.rs`); C12 `adapter_openai.rs` | new (v10) |
+| A26·C10(b) | R12·U3 | research harness (`crates/research/tests/engine/same_kind.rs`); C12 `adapter_openai.rs` | new (v10) |
+| A26·C10(c) | R12·U3 | research harness (`crates/research/tests/engine/same_kind.rs`); C12 `adapter_openai.rs` | new (v10) |
+| A26·C10(d) | R12·U3 | research harness (`crates/research/tests/engine/same_kind.rs`); C12 `adapter_openai.rs` | new (v10) |
+| A26·C11(a) | R12·U3 | research harness (`crates/research/tests/engine/same_kind.rs`); C12 `adapter_openai.rs` | new (v10) |
+| A26·C12(a) | R12·U3 | research harness (`crates/research/tests/engine/same_kind.rs`); C12 `adapter_openai.rs` | new (v10) |
+| A26·C13(a) | R12·U4 | tool crate (`crates/research-tool/tests/tool/u4_accept.rs`); `[manual]` rows recorded evidence | new (v10) |
+| A26·C13(b) | R12·U4 | tool crate (`crates/research-tool/tests/tool/u4_accept.rs`); `[manual]` rows recorded evidence | new (v10) |
+| A26·C14(a) | R12·U4 | recorded evidence (`[manual]`) | new (v10) |
+| A26·C15(a) | R12·U4 | recorded evidence (`[manual]`) | new (v10) |
+| A26·C16(a) | R12·U4 | recorded evidence (`[manual]`) | new (v10) |

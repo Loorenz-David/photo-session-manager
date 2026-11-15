@@ -13,3 +13,6 @@ R7_research_wiring_and_export
 R8_research_real_adapters
 R9_research_tool_and_acceptance
 R10_research_defaults
+# R11 and R12 (master plan v10): R11 needs R10 approved; R12 needs R11 approved, and its measurement (U4 tasks 3-6) is owner-attended.
+R11_research_on_arranged
+R12_research_cost

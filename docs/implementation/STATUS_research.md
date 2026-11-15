@@ -42,8 +42,9 @@ into this branch at `2026-11-12`; the branch is local, not pushed.
 - **Done:** `R9_research_tool_and_acceptance` APPROVED_WITH_NOTES 2026-11-13 03:07 (tool, `accept`, `score-accept`,
   page-reader fixes). Owner card in its narrative: models per stage after the measurement (→ R10).
 - **2026-11-15 11:11: R10 APPROVED_WITH_NOTES** (defaults: picked models, prices incl. cache-write and Lens USD 0.025,
-  auto off, attribution keys empty; notes → R11: reset-settings action, app tests set attribution keys). A planner
-  agent is writing R11 and R12 plans (not committed yet). Next: review the plans, then run R11 with Codex.
+  auto off, attribution keys empty; notes → R11: reset-settings action, app tests set attribution keys). R11 and R12 plans
+  written (planner handoff `handoffs/reviewer/handoff_research_plan_r3.md`; 08B changelog 14). R11 launched with Codex
+  (runner default). Owner card open (not blocking): detailed-condition table (recommended A).
 - **2026-11-15: owner picked the models** (observe Sol low, read Luna low, compare Terra low, condition Terra high) and
   moved the trigger to an "Arranged — next" button (08B changelog 13, master plan v9). R10 amended (crate-only,
   auto off, attribution keys empty) and launched with Claude (Opus); **owner 2026-11-15: from R11 on, Codex implements again

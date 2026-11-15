@@ -10,9 +10,9 @@ Every research session reads both files and flow §10. Where the two plans diffe
 
 | Thing | Where | Why |
 |---|---|---|
-| Milestone ids | `R1_research_benchmark` … `R10_research_defaults` | cannot be confused with `main`'s `P…` or the superseded `A…`; the runner resolves every file from the id, so nothing collides. |
+| Milestone ids | `R1_research_benchmark` … `R12_research_cost` | cannot be confused with `main`'s `P…` or the superseded `A…`; the runner resolves every file from the id, so nothing collides. |
 | Plan files | `docs/implementation/plans/R<n>_<slug>.md`, one per milestone, made of `## Unit` sections | one runner phase per milestone (flow §10). The runner is unchanged; three templates gained a few lines (§7.3). |
-| Row ids | each criterion row keeps the id of the plan it was written in: `A07·C1(a)` | stable row identity across the regrouping; `docs/implementation/research_row_mapping.md` lists where every row went. Tests are named after the row (`a07_c1a_<slug>`). |
+| Row ids | each criterion row keeps the id of the plan it was written in: `A07·C1(a)`; R11's rows are `A25·…`, R12's `A26·…` (v10) | stable row identity across the regrouping; `docs/implementation/research_row_mapping.md` lists where every row went. Tests are named after the row (`a07_c1a_<slug>`). |
 | Tracker | the **Tracker line at the top of each milestone plan file** | two tracks run at the same time in two worktrees; a shared tracker table would conflict at every merge. §4 below is only an index. `master_plan.md` §4 is not used. |
 | Milestone list | `docs/implementation/phases_research.txt` | `phases.txt` is not touched. Driver loop in §5. |
 | Reviewer notes | `docs/implementation/backlog_research/<milestone id>.md` | one file per milestone: no shared file between tracks, none shared with `main`'s `backlog.md`. |
@@ -43,8 +43,8 @@ it and the book differ, the book wins and this file is amended.
 
 ## 3. Standing rules (additions; `master_plan.md` §3 and `flow.md` apply, flow §10 first)
 - **Trace.** Every row cites `MA1…MA18`, `MC-A1…MC-A12`, `HA1…HA6` or `H1…H8`. `[rule]` only for UI rendering and tool
-  output rows. `[manual]` only in R1 and R9 (recorded in the evidence doc and the Review log, never asserted by a suite).
-- **Rule 9.** No suite calls OpenAI, a search vendor, a listing site or the shop. Real calls happen only in R1 and R9,
+  output rows. `[manual]` only in R1, R9 and R12·U4 (recorded in the evidence doc and the Review log, never asserted by a suite).
+- **Rule 9.** No suite calls OpenAI, a search vendor, a listing site or the shop. Real calls happen only in R1, R9 and R12·U4,
   from the tool, with keys from the environment.
 - **Rule 17.** A fixture whose shape a provider owns is a sanitized capture written by R1, cited as
   `fixtures/<provider>/<file> (RESEARCH-VERIFY-n)`; such rows are only in R8. Every other row is written against our
@@ -52,7 +52,7 @@ it and the book differ, the book wins and this file is amended.
 - **Keys.** Benchmark keys only in `~/.psm_research.env` (mode 0600, outside the repo); the app's keys only in the
   Keychain through `ports::secrets`. No key, and no URL carrying one, in any log, fixture, evidence doc, handoff,
   recording or commit. Every recording is scanned before it is written (fail closed).
-- **Spending ceilings.** R1: USD 50 (U1 15, U2 35). R9: USD 40 plus USD 2 for one replay. Enforced by the tool.
+- **Spending ceilings.** R1: USD 50 (U1 15, U2 35). R9: USD 40 plus USD 2 for one replay. R12·U4: USD 20. Enforced by the tool.
 - **HA5 in code.** No model name, vendor name or reseller domain as a literal in `crates/core`. Literals live in
   `crates/research/src/{adapters, config.rs}` and the tool.
 - **Isolation.** App crates use the research crate only through the surface of §6.6 (the `ResearchApi` trait and its
@@ -63,7 +63,7 @@ it and the book differ, the book wins and this file is amended.
 - **Scratch data only.** Until this branch is merged into `main`, the app built from it runs only with
   `PSM_DATA_DIR=$HOME/psm-research-dev` (or another scratch folder): it writes a publish step (`held`) and columns a
   `main` build does not know.
-- **No `implementer: fable`.** **Projection** only for R5 and R8 (flow §10).
+- **No `implementer: fable`.** **Projection** only for R5 and R8 (flow §10); R11 and R12 carry `projection: no`.
 - **Checkpoints.** One `CHECKPOINT (not approved):` commit after each unit, paths of that unit only.
 
 ## 4. Milestones (index; the state of each is the Tracker line in its plan file)
@@ -79,15 +79,18 @@ it and the book differ, the book wins and this file is amended.
 | R8_research_real_adapters | U1 OpenAI · U2 visual search · U3 page reader and shop facts | 18 / 29 | **yes** (U3: Shopify adapter) | **yes** | R4, R1 | R1's evidence; the owner's two picks |
 | R9_research_tool_and_acceptance | U1 report and replay · U2 acceptance measurement | 10 / 15 | no | no | R7, R8, R1 | owner-attended measurement; keys |
 | R10_research_defaults | U1 defaults and reachability | 2 / 4 | no | no | R9 | the owner's model pick |
+| R11_research_on_arranged | U1 the arranged trigger · U2 fields left alone, extra shop addresses, reset · U3 detailed condition derived, no attribution from another shop product · U4 session mark, Arranged — next, publish marks first · U5 button, tag, publish line, panel hint · U6 Settings pickers and reset | 33 / 99 | **yes** | no | R10 | — (one owner card on the detailed-condition table; not blocking) |
+| R12_research_cost | U1 photo look in one call · U2 product part of a page · U3 same kind or no comparison · U4 second acceptance measurement | 16 / 37 | no | no | R11 | U4: owner-attended measurement; keys |
 
 Totals, computed from the plan files: 154 criteria, 396 rows (393 from the superseded plans, 3 new freeze rows; a
-criterion whose rows sit in two units is counted in both). Every unit has at most 8 criteria.
+criterion whose rows sit in two units is counted in both). Every unit has at most 8 criteria. R11 and R12 (v10) add
+49 criteria and 136 rows, computed from their plan files; their rows are new (`A25·…`, `A26·…`).
 
 ## 5. Sequencing, seams and the two tracks
 
 ### Dependency graph
 ```
-R2 ──► R3 ──► R4 ──────────────► R7 ──► R9 ──► R10
+R2 ──► R3 ──► R4 ──────────────► R7 ──► R9 ──► R10 ──► R11 ──► R12
         │      └──────► R8 ──────────────┘
         └──► R5 ──► R6 ──► R7
 R1 (keys) ──────────► R8, R9
@@ -102,7 +105,8 @@ fields · `PublishStep::Held`, `RowLabel::WaitingForYou(n)` · `AppEvent::Resear
 `SqliteStore::research_transaction` · `Imaging::render_research` · `psm_research::api` (the `ResearchApi` trait and
 its shapes, §6.6) · the eight research commands and their generated bindings (`apps/desktop/src/services/bindings.ts`).
 R5 adds two attribute commands and widens the publish preview and confirm; R6 (same track, after R5) builds on them.
-**No other milestone regenerates `bindings.ts`.**
+**No other milestone regenerates `bindings.ts`,** except R7·U1 (two fields, v3) and R11·U4 (v10: two commands and the
+shapes of §6.8).
 
 ### Seams: every place app code changes, and where
 | Seam | App files | Milestone·unit |
@@ -117,6 +121,8 @@ R5 adds two attribute commands and widens the publish preview and confirm; R6 (s
 | UI | `apps/desktop/src/features/{form, settings, publish, sessions}` | R6; the Export button R7·U2 |
 | Wiring (job runner, service, call sites, settings save, purge schedule) | `crates/integrations/src/lib.rs`, the `session_changed` call sites, `crates/testkit/src/test_app.rs` | R7·U1, R7·U2 |
 | Shop facts for Shopify | `crates/integrations/src/commerce/shopify/{adapter.rs, graphql.rs, type_map.rs}` | R8·U3 |
+| The session mark and "Arranged — next" | `crates/core/src/{domain/session.rs, ports/store.rs, services/sessions.rs}`, `crates/infra/src/sqlite/{ensure.rs, store.rs}`, `crates/integrations/src/{arranged.rs, lib.rs}`, `apps/desktop/src-tauri/src/commands/{sessions.rs, publish.rs, research.rs, settings.rs}`, `bindings.ts` | R11·U4 |
+| UI of R11 | `apps/desktop/src/features/{shell/Header.tsx, sessions/SessionRow.tsx, publish/PublishPopover.tsx, form/ResearchPanel.tsx, settings/{ResearchSection.tsx, ShopFieldPicker.tsx}}` | R11·U5, R11·U6 |
 Everything else is in `crates/research` or `crates/research-tool`.
 
 ### Two-track schedule (at most two milestones at once, each in its own worktree with its own build folder)
@@ -127,6 +133,7 @@ Everything else is in `crates/research` or `crates/research-tool`.
 | 2 | **R4** engine, then **R5** app seams and **R6** UI (v3: moved here, track B busy with R1) | **R1** benchmark |
 | 3 | **R7** wiring and export | **R8** real adapters (needs R1 approved and the owner's two picks; otherwise R1, or idle) |
 | 4 | **R9** tool and acceptance, then **R10** defaults | — |
+| 5 | **R11** research on arranged, then **R12** research cost (v10: one track; each depends on the one before) | — |
 
 - **Create track B once**, after R2 is approved and committed on `feature/agentic`:
   `git worktree add ../Photo-Session-Manager-agentic-b -b research/track-b feature/agentic`, then
@@ -137,7 +144,7 @@ Everything else is in `crates/research` or `crates/research-tool`.
 - **Merge order.** Each milestone is merged the moment it is APPROVED, never two unmerged milestones on one branch:
   on track A's worktree `git merge --no-ff research/track-b` (after a B milestone), on track B's worktree
   `git merge --no-ff feature/agentic` (after an A milestone, and always before B starts its next milestone). So
-  the order is: R2 · R3 and R1 (either order) · R5 · R6 and R4 (either order) · R7 and R8 (either order) · R9 · R10.
+  the order is: R2 · R3 and R1 (either order) · R5 · R6 and R4 (either order) · R7 and R8 (either order) · R9 · R10 · R11 · R12.
 - **Expected conflicts, all one-line and mechanical:** workspace `Cargo.toml` `members` (R1 adds the tool crate, R2 the
   research crate) · `Cargo.lock` (take either side, then `cargo check --workspace`) · `crates/research/Cargo.toml`
   dependencies (R7 `zip`, R8 `reqwest` and a parser) · `crates/research/tests/engine/main.rs` and
@@ -165,6 +172,9 @@ MA5 R1, R3·U4, R4·U2, R4·U3, R10 · MA6 R3·U1, R4·U3 · MA7 R2·U2, R4·U4,
 MA9 R7·U2, R9·U1 · MA10 R3·U5, R4·U3 · MA11 R2·U1, R3·U1–U3, R4·U3, R8·U3 · MA12 R2·U3, R4·U1, R4·U2, R8·U2 ·
 MA13 R4·U1, R4·U4, R4·U5 · MA14 R2·U2, R3·U2, R3·U5, R4·U3, R4·U5 · MA15 R3·U4, R4·U2, R8 · MA16 R1, R3·U4, R4·U2, R4·U6,
 R6·U2, R7·U2, R8, R9·U1 · MA17 R5·U2, R6·U3 · MA18 R5·U1. The operational measurement of 08A §11 is R9·U2.
+v10 additions: MA2 R11·U3, R12·U3, R12·U4 · MA3, MA12 R12·U1 · MA4 R12·U1 · MA5 R12·U4 · MA6 R11·U2, R11·U3 · MA7 R11·U1,
+R11·U2, R11·U4 · MA8, MA17 R11·U4 · MA9 R12·U1–U3 · MA10 R11·U2, R11·U3, R12·U4 · MA11 R11·U2, R11·U3, R12·U1, R12·U2 ·
+MA13 R11·U1 · MA14 R12·U1 · MA16 R12·U1, R12·U3. The second operational measurement is R12·U4.
 
 ## 6. Research skeleton and naming registry (new unless marked existing)
 
@@ -193,16 +203,17 @@ R8 (implementer, 2026-11-13): `psm-research` uses `reqwest = 0.13` (`blocking`, 
 only, no tree) as the HTML parser.
 
 ### 6.3 Enums (`psm_research::domain` unless noted; serialized snake_case)
-`RunState {Queued, Running, Finished, Failed, StoppedAtCap, Cancelled}` · `RunTrigger {Auto, Manual, FollowUp}` ·
+`RunState {Queued, Running, Finished, Failed, StoppedAtCap, Cancelled}` · `RunTrigger {Auto, Manual, FollowUp}` (R11: plus
+`Arranged`; `Auto` and `FollowUp` are read from old rows and never created) ·
 `Stage {Observe, Find, Read, Compare, Labels, Condition, Decide}` (1–7; settings names `observe, find, read, compare,
 labels, condition, decide`) · `StepKind {Looked, Searched, Read, Compared, Concluded, NotDetermined}` · `CallState
 {Sent, Answered, Failed, Unknown, NotSent}` · `SiteClass {Shop, Trusted, Untrusted}` · `Verdict {Match, Similar,
 Different}` · `ErrorClass {Offline, Transient, Key, Quota, Request, Schema, Refusal}` · `FieldClass {NeverWritten,
-Condition, Attribution, Measured, Visible}` · `Prerequisite {NoIntegration, NoModelKey, NoSearchKey, PriceMissing,
-NothingToResearch, DayLimit, Offline, AutoOff}` (MC-A6 order) plus `WaitingForEditor`. In core:
+Condition, Attribution, Measured, Visible}` (R11: plus `Derived`) · `Prerequisite {NoIntegration, NoModelKey, NoSearchKey, PriceMissing,
+NothingToResearch, DayLimit, Offline, AutoOff}` (MC-A6 order; R11 removes `AutoOff`) plus `WaitingForEditor`. In core:
 `psm_core::domain::research::FeedbackAction {Accepted, Cleared, Edited, KeptPrevious}`; `PublishStep::Held`;
 `RowLabel::WaitingForYou(n)`. Job kind string `research`. Constants: `RESEARCH_NORMALISE_VERSION = 1` (core),
-`RESEARCH_FINGERPRINT_VERSION = 1`, `RESEARCH_CALL_ATTEMPTS = 3`.
+`RESEARCH_FINGERPRINT_VERSION = 1` (R12·U1: 2), `RESEARCH_CALL_ATTEMPTS = 3`. `INSTRUCTIONS_VERSION = 1` (`psm_research::config`; R12·U1: 2).
 
 ### 6.4 Storage decision: one database file, schema steps outside the numbered list
 **Decision.** Every research table lives in the app's SQLite file and is written inside the app store's
@@ -252,6 +263,10 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
 | `rules::calls` | `classify`; `action`; `redact` | MC-A9 | R3·U4 |
 | `rules::write_table` | `never_written`; `decide_write`; `is_conflict` (delegates to core from R5·U2) | MC-A1 | R3·U5 |
 | `rules::run_rules` | `first_failing`; `may_start`; `start_order`; `follow_up_needed` | MC-A6, MC-A7 | R4·U4, R4·U5 |
+| `rules::run_rules` | `arranged_needed` (whether an "Arranged" press creates a run) | MC-A6, MC-A7, 08B changelog 13 | R11·U1 |
+| `rules::derived_condition` | `derive` | MC-A4, 08B changelog 12 (b); the rule is in the R11 plan, Unit 3 | R11·U3 |
+| `rules::photo_plan` | `look_at` (which photos stage 1 looks at, in which order and role) | MC-A7, 08B changelog 12 (d) | R12·U1 |
+| `adapters::page_reader::extract` (an adapter module, not a rule) | `product_extract` | 08A §4; the rule is in the R12 plan, Unit 2 | R12·U2 |
 
 ### 6.6 The surface app code uses, ports, secrets, commands, settings
 - **`psm_research::api` (frozen by R2·U2).** `trait ResearchApi: Send + Sync { status(session_id) -> Result<ResearchStatus>;
@@ -281,7 +296,7 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
   `attribute_ai_accept(item_id, key)`, `attribute_conflict_resolve(item_id, key, action, value?)` and widens
   `publish_preview` (`n_withheld`, `conflicts`) and `publish_confirm` (the shown set).
 - **Settings** (`settings.json` key `research`, a JSON slot in `psm_infra`; the shape is `psm_research::config::
-  ResearchSettings`, R4·U4). `auto` (false; owner 2026-11-15, runs start from an explicit request, 08B changelog 13) ·
+  ResearchSettings`, R4·U4). **R11 removes `auto` and `quiet_seconds` and adds three settings, R12 one: §6.8.** `auto` (false; owner 2026-11-15, runs start from an explicit request, 08B changelog 13) ·
   `quiet_seconds` (1) · `source_wait_seconds` (120) · `attribution_keys` ([]: no field is attribution until the owner
   points at the shop's designer and maker fields; owner 2026-11-15, R10) · `trusted_sites` ([]) · `max_pages` (10) ·
   `stages.<stage>.{model, effort, image_long_edge}` (R10, evidence "Owner pick of models" 2026-11-15: observe
@@ -317,6 +332,31 @@ with that folder's name. Per run, `<item id>-<folder key>/run-<id>/`:
   export time reads `{"withheld":"photo deleted"}` in place of `{"image_sha256": …}`.
 - `images/<sha256>.jpg`: every stored image the run's exported call records reference.
 
+### 6.8 Added by R11 and R12 (v10; names fixed, signatures may gain parameters)
+- **Session mark.** `sessions.arranged_at INTEGER NULL` (UTC ms of the first press), created by
+  `psm_infra::sqlite::ensure` like the other app-owned research columns (§6.4); `Session.arranged_at`; `SessionRow.arranged`.
+  `SessionsService::{arrange(session_id) -> bool, next_unarranged(after) -> Option<session id>}`. Not an undo step; no
+  `change_seq` bump.
+- **`ResearchApi` gains** `arranged(session_id) -> Result<bool>` (a run was queued) and `settings_reset() -> Result<Json>`
+  (the `research` value to save). `session_changed` creates no run from R11 on.
+- **Integration layer.** `crates/integrations/src/arranged.rs`: arrange and next; preview for publish (marks the
+  unmarked sessions of the selection first, then `PublishService::preview`, then which items have a research run queued
+  or running). Constructs and connects only (H8).
+- **Commands.** `session_arrange_next(session_id) -> {next_session_id, research_queued}` · `research_settings_reset() ->`
+  the saved `research` value · `publish_preview` items gain `researching`. R11·U4 regenerates `bindings.ts`.
+- **Settings (R11).** Removed: `auto`, `quiet_seconds` (a saved slot that carries them loads; they are ignored and not
+  written back). Added: `excluded_keys` ([]: fields research leaves alone, treated as never-written) · `extra_shop_hosts`
+  ([]: stored as typed, used as `H` with one leading `www.` removed) · `detailed_condition` (`{key: "", levels: []}`; a
+  level is `{level, choice}` with `choice` null for "counts for nothing"; best level first).
+- **Settings (R12).** `observe_max_photos` (8, at least 1).
+- **Page text (R12·U2).** `PageReply.text` is the product extract; `PRODUCT_TEXT_CHARS = 10_000` beside
+  `MAX_TEXT_CHARS` in `adapters::page_reader`.
+- **Stage shapes (R12).** Stage 1 is one unit; its output holds `reads` and the ids of the photos that show a marking.
+  The Read output gains the same-kind answer and the page's kind. The OpenAI strict schemas gain the new members only
+  for requests that carry the new input (`photos`, `piece`), so R1's captures and replays of older exports stay valid.
+- **Panel.** With every prerequisite passing and no run, the status carries no reason; the panel shows "Research starts
+  when you press Arranged — next." and the Research button.
+
 ## 7. Environment (additions to `master_plan.md` §7)
 
 ### 7.2 Commands (flow §10: which tests a unit runs)
@@ -344,6 +384,8 @@ Per milestone (the exact commands are in each plan's unit and Closing gate secti
 | R7 | `research::r7_…::`, `p16`, `p21`, `p09`, `p01`, `p61`, research `export::`, settings UI tests | **full gate** + `cargo test -p psm-research` |
 | R8 | research `adapter_…::`; U1 and U3 also `research::r7_wiring::`; U3 also `research::r8_shop_facts::`, `p12` | **full gate** + `cargo test -p psm-research` |
 | R9 | tool crate tests | tool crate tests + lint; no app suite |
+| R11 | U1–U3: research crate tests of the unit, research lint, `cargo check --workspace`; U1 also the tool crate and `research::` (it edits three testkit test files); U4: `research::r11_arranged::`, `research::r7_wiring::`, `p01`, `p03`, `p66`, `p13`, `p16`, `cargo test -p psm-desktop`, typecheck; U5, U6: `npx vitest run` of the touched features, typecheck | **full gate** + `cargo test -p psm-research` |
+| R12 | research crate tests of the unit, research lint, `cargo check --workspace`; U1 also the tool crate; U4 the tool crate | `cargo test -p psm-research` + `cargo test -p psm-research-tool` + `cargo test -p psm-testkit --test suite research::` + lint of both crates; no full app suite (the `research::` stems drive the wired engine with the crate's fakes, so they are run although no app file changed) |
 
 ### 7.3 Runner and templates
 `run_phase.sh` is unchanged: a milestone is a phase to it. Three templates gained text that applies only when a plan
@@ -372,6 +414,37 @@ plan and the implement template say one per unit, and the plan wins.
   on `psm-research`, is a dev-dependency cycle, which Cargo allows; integration tests then link one copy of the
   crate. Inline unit tests (`--lib`) must not use testkit types. Not run by the planner (no cargo in this session);
   R3·U5 is the first unit to exercise it and reports `BLOCKED` with the error if Cargo refuses.
+
+### 7.4A Verified by the planner (2026-11-15, for R11 and R12)
+- **No shoot template exists** in the code or the book (grep "template": 08A §3 "Not existing: shot templates", §12
+  deferred; the only code hits are HTML templates and Capture One hook templates).
+- **No field picker exists.** "Condition photos key" is a text box (`apps/desktop/src/features/settings/SettingsPage.tsx`);
+  the attribution keys are text boxes checked against `listDefinitions()` (`ResearchSection.tsx`).
+- **`www.` of a shop host is covered:** `rules::sites` matches a shop host or any subdomain of it (`covers`).
+- **Shop pages and attribution today:** `rules::confidence::decide_attribution` gives `high` for a `match` on site class
+  `shop` and counts `shop` toward `medium`; the item's own listing is set apart in `rules::sites::reading_order` and
+  never read (R-IA9). `decide_measured` and `decide_visible` call the same function.
+- **Stage 1 today:** one unit and one model call per Main or unreviewed photo (`stages.rs`, `observe`); stage 7 takes a
+  visible field's photo read from the first Observe output that has one, which is the cover's (`decide.rs`,
+  `Evidence::photo_read`).
+- **Cost of one photo call (R1 capture `fixtures/openai/stage_observe_gpt-6-luna.json`):** 1,558 input tokens for one
+  1024 px image with its instructions and fields, 77 output tokens. **Several images in one request work**
+  (`stage_condition_gpt-6-luna.json`: six images, 30,385 input tokens at 2048 px).
+- **Detailed condition against the condition levels, 42 test pieces** (`docs/test-items/beyo_test_samples_1.json`): of
+  the 28 pieces that have both, worst level None → Very Good 2; Minor → Very Good 17, Good 5; Moderate → Very Good 2,
+  Good 2; "Excellent" and a worst level of Major do not occur. The data does not determine a table (R11 owner card).
+- **Recorded listing pages** (`~/psm-research-bench/a01/pages/calls`, R1, 375 plain fetches, read on the dev Mac, not
+  committed). A schema.org Product block: the owner's shop 37 of 42 pages, bukowskis 3 of 35, maleforsimports 1 of 1,
+  auctionet 0 of 84, pamono (.se, .com, .eu) 0 of 38. Its `brand` names the seller on the shop ("Beyo Vintage") and on
+  two dealers; only bukowskis names a designer, as `creator`, on those 3 pages. No trusted site states a maker in a
+  structured field. Exactly one `<h1>` whose text occurs in the visible text: auctionet 83 of 84, pamono 38 of 38, the
+  shop 42 of 42; bukowskis has none (35 of 35). Median visible text: auctionet about 3,900 characters, bukowskis 3,200,
+  the shop 5,500, pamono 17,700 to 21,500 with the `<h1>` about 7,800 characters in and the "Creator / Manufacturer"
+  block about 4,300 characters after it (90th percentile of its end 7,200 on .se, 9,700 on .com and .eu); the shop's
+  "Designer:" block about 2,500 after its `<h1>`.
+- **App tests that depend on the research crate's behaviour:** `crates/testkit/tests/suite/research/{r7_wiring.rs,
+  r7_export_schedule.rs}` start runs through the wired engine with `"auto": true`; R11·U1 changes them, and R12's
+  closing gate runs the `research::` stems.
 
 ### 7.5 Test harnesses
 - **Research harness** (`crates/research/tests/engine/harness.rs`, grown by R3·U5 → R4): a `TestApp` with a fake shop,
@@ -405,8 +478,22 @@ present (never printing a value) before launching R1.
 - **The implementer wrapper's "one commit"** is overridden by the plan (one per unit); if the orchestrator prefers,
   the wrapper can say so in one line.
 - The intention map still says 08A/08B are "not planned yet".
+- **R11 and R12 supersede book text** (each plan has a table "What this plan supersedes in the book"). The
+  orchestrator folds those tables into 08A and 08B as changelog entries; until then the plan tables are the rule.
+- **R12's closing gate runs the `research::` app stems** although no app file changes (§7.2); flow §10's reason for
+  skipping the app suite does not hold for tests that drive the wired engine.
 
 ## 9. Amendment log
+- 2026-11-15 v10 (planner) — plans written for **R11_research_on_arranged** (6 units, 33 criteria, 99 rows `A25·…`;
+  changes app files; depends on R10) and **R12_research_cost** (4 units, 16 criteria, 37 rows `A26·…`, 3 `[manual]`;
+  research and tool crates only; depends on R11). §0, §3 (`[manual]` and real calls also in R12·U4; ceiling USD 20), §4,
+  §5 (graph, seams, schedule, merge order, ledger coverage), §6.3, §6.5, new §6.8 (names), §7.2, new §7.4A (facts
+  verified by the planner), §8. Decisions recorded in the plans: the mark is `sessions.arranged_at` through the ensure
+  step; `auto` and `quiet_seconds` are removed, not kept inert; "next" is shooting order with wrap; publishing marks
+  at the popover's preview and Confirm is never disabled; reset keeps the person's lists; for designer and maker no
+  page of the shop is evidence; stage 1 becomes one call over at most 8 photos (supersedes owner card 2 for stage 1,
+  on the owner's cost idea); no template and no skip-on-structured-data rule are built, with the reasons. One owner
+  card (the detailed-condition table), not blocking. `phases_research.txt` and `research_row_mapping.md` updated.
 - 2026-11-15 v9 (orchestrator) — owner picked the models (evidence doc) and moved the research trigger to an
   "Arranged — next" button (08B changelog 13). R10 stays crate-only: the picked models and prices, `auto` off by
   default (the quiet-period trigger is retired), `attribution_keys` empty by default; the pickers move to R11.
