@@ -248,6 +248,7 @@ fn a17_c6a_the_items_own_listing_is_no_evidence_in_the_wired_app() {
     a.set_research_settings(settings).unwrap();
     a.clock.advance(1_762_900_000_000);
     let s = linked_session(&a);
+    a.app.research.as_ref().unwrap().arranged(s).unwrap();
     a.tick(0).unwrap();
     a.tick(1_100).unwrap();
     let run = a

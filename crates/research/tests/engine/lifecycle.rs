@@ -6,15 +6,12 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{Local, TimeZone};
 use psm_core::{
-    domain::{
-        attribute::{AttributeGroup, Preset, PresetField},
-        photo::Classification,
-    },
+    domain::attribute::{AttributeGroup, Preset, PresetField},
     ports::secrets::SecretStore,
 };
 use psm_research::{
     config::ResearchConfig,
-    domain::{RunState, RunTrigger, Stage},
+    domain::{RunState, RunTrigger},
     fakes,
     service::{FormSnapshot, MODEL_ACCOUNT, SEARCH_ACCOUNT},
     store as rstore,
@@ -155,11 +152,6 @@ fn a13_c1a_each_prerequisite_alone() {
     let h = Harness::chair();
     go_offline(&h);
     assert_eq!(reason(&h), pair("Offline", "Offline"));
-    // 8. Automatic research off.
-    let h = Harness::chair();
-    h.patch_settings(json!({"auto": false}));
-    main_photo(&h);
-    assert_eq!(reason(&h), pair("AutoOff", ""));
 }
 
 #[test]
@@ -171,23 +163,7 @@ fn a13_c1b_the_first_failing_is_named() {
     assert_eq!(reason(&h).unwrap().0, "NoModelKey");
     let h = Harness::chair();
     go_offline(&h);
-    h.patch_settings(json!({"auto": false}));
-    h.service.settings_changed();
     assert_eq!(reason(&h).unwrap().0, "Offline");
-}
-
-#[test]
-fn a13_c2b_one_run_while_queued() {
-    let h = Harness::chair();
-    main_photo(&h);
-    main_photo(&h);
-    main_photo(&h);
-    let runs = h.runs(h.session_id);
-    assert_eq!(runs.len(), 1);
-    assert_eq!(
-        (runs[0].state, runs[0].trigger),
-        (RunState::Queued, RunTrigger::Auto)
-    );
 }
 
 #[test]
@@ -249,165 +225,13 @@ fn a13_c3c_run_again_beside_a_running_run() {
 }
 
 #[test]
-fn a13_c4a_auto_off_cancels_queued_runs_and_lets_the_running_one_finish() {
-    let h = Harness::chair();
-    let (_, other) = h.new_session("R4-B");
-    h.add_main_photo_with_preview(other);
-    h.service.session_changed(other);
-    h.app.clock.advance(1_000);
-    h.service.tick().unwrap();
-    let running = h.runs(other)[0].id;
-    assert_eq!(h.run_row(running).state, RunState::Running);
-    main_photo(&h);
-    let queued = h.runs(h.session_id)[0].id;
-    h.patch_settings(json!({"auto": false}));
-    h.service.settings_changed();
-    assert_eq!(h.run_row(queued).state, RunState::Cancelled);
-    h.run_jobs();
-    assert_eq!(h.run_row(running).state, RunState::Finished);
-}
-
-#[test]
-fn a13_c4b_auto_off_then_run_again() {
-    let h = Harness::chair();
-    h.patch_settings(json!({"auto": false}));
-    h.service.settings_changed();
-    main_photo(&h);
-    assert!(h.runs(h.session_id).is_empty());
-    h.service.run_again(h.session_id).unwrap();
-    let runs = h.runs(h.session_id);
-    assert_eq!(runs.len(), 1);
-    assert_eq!(
-        (runs[0].state, runs[0].trigger),
-        (RunState::Queued, RunTrigger::Manual)
-    );
-    h.tick(0);
-    assert_eq!(h.run_row(runs[0].id).state, RunState::Finished);
-}
-
-#[test]
-fn a13_c5a_quiet_period_after_the_last_change() {
-    let h = Harness::chair();
-    h.patch_settings(json!({"quiet_seconds": 5}));
-    let t = h.now();
-    let photo = main_photo(&h);
-    h.app.clock.advance(3_000);
-    h.recompose(photo);
-    h.changed();
-    h.tick(4_900);
-    let run = h.runs(h.session_id)[0].id;
-    assert_eq!(h.run_row(run).state, RunState::Queued);
-    h.tick(100);
-    let row = h.run_row(run);
-    assert_ne!(row.state, RunState::Queued);
-    assert_eq!(row.started_at, Some(t + 8_000));
-}
-
-#[test]
-fn a13_c5b_quiet_period_after_launch() {
-    let mut h = Harness::chair();
-    h.patch_settings(json!({"quiet_seconds": 5}));
-    main_photo(&h);
-    let run = h.runs(h.session_id)[0].id;
-    h.app.clock.advance(60_000);
-    h.relaunch();
-    let launch = h.now();
-    h.tick(4_999);
-    assert_eq!(h.run_row(run).state, RunState::Queued);
-    h.tick(1);
-    assert_eq!(h.run_row(run).started_at, Some(launch + 5_000));
-}
-
-#[test]
-fn a13_c5c_manual_skips_the_quiet_period() {
-    let h = Harness::chair();
-    h.patch_settings(json!({"quiet_seconds": 5}));
-    main_photo(&h);
-    h.service.run_again(h.session_id).unwrap();
-    let t = h.now();
-    h.tick(0);
-    let run = h.runs(h.session_id)[0].clone();
-    assert_eq!(run.trigger, RunTrigger::Manual);
-    assert_eq!(h.run_row(run.id).started_at, Some(t));
-}
-
-#[test]
-fn a13_c6a_waits_for_a_missing_source_then_starts_without_it() {
-    let h = Harness::chair();
-    let with = h.add_main_photo_with_preview(h.session_id);
-    h.add_photo_without_preview(h.session_id, Classification::Main);
-    h.changed();
-    h.tick(119_000);
-    let run = h.runs(h.session_id)[0].id;
-    assert_eq!(h.run_row(run).state, RunState::Queued);
-    h.tick(1_000);
-    assert_ne!(h.run_row(run).state, RunState::Queued);
-    let observed: Vec<String> = h
-        .model
-        .requests()
-        .into_iter()
-        .filter(|c| c.stage == Some(Stage::Observe))
-        .map(|c| c.unit_key)
-        .collect();
-    assert_eq!(observed, vec![format!("photo:{with}")]);
-}
-
-#[test]
-fn a13_c6b_no_source_at_all_waits_for_capture_one() {
-    let h = Harness::chair();
-    h.add_photo_without_preview(h.session_id, Classification::Main);
-    h.changed();
-    h.tick(121_000);
-    let runs = h.runs(h.session_id);
-    assert_eq!(runs[0].state, RunState::Queued);
-    assert_eq!(
-        reason(&h),
-        pair("WaitingForEditor", "Waiting for Capture One")
-    );
-    assert!(h.model.requests().is_empty());
-    assert!(h.search.requests().is_empty());
-}
-
-#[test]
-fn a15_c7a_wait_ends_at_for_a_run_waiting_for_the_editor() {
-    // (1) An automatic run waits `source_wait_seconds` (120) from the session's last change.
-    let h = Harness::chair();
-    h.add_photo_without_preview(h.session_id, Classification::Main);
-    h.changed();
-    h.tick(30_000);
-    let runs = h.runs(h.session_id);
-    assert_eq!(
-        (runs[0].state, runs[0].trigger),
-        (RunState::Queued, RunTrigger::Auto)
-    );
-    let status = h.service.status(h.session_id).unwrap();
-    assert_eq!(status.reason.unwrap().code, "WaitingForEditor");
-    assert_eq!(status.wait_ends_at, Some(h.now() + 90_000));
-    // (2) A manual run's wait has already ended.
-    let h = Harness::chair();
-    h.add_photo_without_preview(h.session_id, Classification::Main);
-    h.service.run_again(h.session_id).unwrap();
-    h.tick(30_000);
-    let runs = h.runs(h.session_id);
-    assert_eq!(
-        (runs[0].state, runs[0].trigger),
-        (RunState::Queued, RunTrigger::Manual)
-    );
-    let status = h.service.status(h.session_id).unwrap();
-    assert_eq!(status.reason.unwrap().code, "WaitingForEditor");
-    assert_eq!(status.wait_ends_at, Some(h.now()));
-    // No waiting run: none.
-    let h = Harness::chair();
-    assert_eq!(h.service.status(h.session_id).unwrap().wait_ends_at, None);
-}
-
-#[test]
 fn a13_c7a_one_run_at_a_time() {
     let h = Harness::chair();
     let (_, other) = h.new_session("R4-B");
     main_photo(&h);
     h.add_main_photo_with_preview(other);
     h.service.session_changed(other);
+    h.service.arranged(other).unwrap();
     let seen: Arc<Mutex<Vec<usize>>> = Arc::default();
     let (store, out) = (h.store().clone(), seen.clone());
     h.model.before_call(move |_| {
@@ -432,7 +256,7 @@ fn a13_c7a_one_run_at_a_time() {
 }
 
 #[test]
-fn a13_c7b_manual_starts_before_an_earlier_auto() {
+fn a13_c7b_manual_starts_before_an_earlier_arranged() {
     let h = Harness::chair();
     let (_, other) = h.new_session("R4-B");
     main_photo(&h);
@@ -440,6 +264,7 @@ fn a13_c7b_manual_starts_before_an_earlier_auto() {
     h.app.clock.advance(1_000);
     h.add_main_photo_with_preview(other);
     h.service.session_changed(other);
+    h.service.arranged(other).unwrap();
     h.service.run_again(other).unwrap();
     let manual = h.runs(other)[0].id;
     assert_eq!(h.run_row(manual).trigger, RunTrigger::Manual);

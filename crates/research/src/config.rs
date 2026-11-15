@@ -229,8 +229,6 @@ impl Default for CallTimeouts {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ResearchSettings {
-    pub auto: bool,
-    pub quiet_seconds: i64,
     pub source_wait_seconds: i64,
     /// The shop's designer and maker fields (08A §6), as the owner points them; empty by default
     /// (no field is treated as attribution until chosen).
@@ -339,9 +337,6 @@ fn default_prices() -> Vec<PriceRow> {
 impl Default for ResearchSettings {
     fn default() -> Self {
         Self {
-            // Owner 2026-11-15: runs start from an explicit request (08B changelog 13).
-            auto: false,
-            quiet_seconds: 1,
             source_wait_seconds: 120,
             // Owner 2026-11-15: no field is attribution until the owner points at one.
             attribution_keys: Vec::new(),
@@ -451,7 +446,7 @@ impl ResearchConfig {
 
 /// Refuses a research settings value (whole or a patch of top-level keys) that holds a cap or a
 /// price that is not a decimal string with at most 6 fractional digits, `record_days` below 2, a
-/// negative `quiet_seconds` or `source_wait_seconds`, or a long edge that is not a positive
+/// negative `source_wait_seconds`, or a long edge that is not a positive
 /// integer. The text names the field.
 pub fn validate(value: &serde_json::Value) -> Result<(), String> {
     use serde_json::Value as Json;
@@ -488,12 +483,10 @@ pub fn validate(value: &serde_json::Value) -> Result<(), String> {
     {
         return Err("record_days must be a whole number of at least 2".to_owned());
     }
-    for field in ["quiet_seconds", "source_wait_seconds"] {
-        if let Some(seconds) = object.get(field)
-            && !seconds.as_i64().is_some_and(|s| s >= 0)
-        {
-            return Err(format!("{field} must be a whole number of 0 or more"));
-        }
+    if let Some(seconds) = object.get("source_wait_seconds")
+        && !seconds.as_i64().is_some_and(|s| s >= 0)
+    {
+        return Err("source_wait_seconds must be a whole number of 0 or more".into());
     }
     if let Some(stages) = object.get("stages") {
         let Some(stages) = stages.as_object() else {

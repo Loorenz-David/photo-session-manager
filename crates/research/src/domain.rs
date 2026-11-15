@@ -202,12 +202,14 @@ pub enum RunTrigger {
     Auto,
     Manual,
     FollowUp,
+    Arranged,
 }
 
 stored_names!(RunTrigger {
     Auto => "auto",
     Manual => "manual",
     FollowUp => "follow_up",
+    Arranged => "arranged",
 });
 
 /// The kind of a trace step (08A §8).
@@ -274,7 +276,6 @@ pub enum Prerequisite {
     NothingToResearch,
     DayLimit,
     Offline,
-    AutoOff,
     WaitingForEditor,
 }
 
@@ -288,12 +289,11 @@ impl Prerequisite {
             Self::NothingToResearch => "NothingToResearch",
             Self::DayLimit => "DayLimit",
             Self::Offline => "Offline",
-            Self::AutoOff => "AutoOff",
             Self::WaitingForEditor => "WaitingForEditor",
         }
     }
 
-    /// The panel sentence (`master_plan_research.md` §6.6); `AutoOff` has none.
+    /// The panel sentence (`master_plan_research.md` §6.6).
     pub fn sentence(&self) -> String {
         match self {
             Self::NoIntegration => "Connect a shop to use research".to_owned(),
@@ -307,7 +307,6 @@ impl Prerequisite {
             Self::NothingToResearch => "This item type has no fields research can fill".to_owned(),
             Self::DayLimit => "Day limit reached".to_owned(),
             Self::Offline => "Offline".to_owned(),
-            Self::AutoOff => String::new(),
             Self::WaitingForEditor => "Waiting for Capture One".to_owned(),
         }
     }

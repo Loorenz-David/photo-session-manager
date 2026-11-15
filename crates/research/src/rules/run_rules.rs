@@ -26,11 +26,10 @@ pub struct PrerequisiteInput {
     pub writable_field: bool,
     pub day_limit_reached: bool,
     pub offline: bool,
-    pub auto: bool,
 }
 
 /// MC-A6 order: no integration; no model key; no visual-search key; a price missing; nothing to
-/// research; day limit; offline; `auto` off.
+/// research; day limit; offline.
 pub fn first_failing(input: &PrerequisiteInput) -> Option<Prerequisite> {
     if !input.integration {
         Some(Prerequisite::NoIntegration)
@@ -49,8 +48,6 @@ pub fn first_failing(input: &PrerequisiteInput) -> Option<Prerequisite> {
         Some(Prerequisite::DayLimit)
     } else if input.offline {
         Some(Prerequisite::Offline)
-    } else if !input.auto {
-        Some(Prerequisite::AutoOff)
     } else {
         None
     }
@@ -66,7 +63,6 @@ pub struct StartInput {
     pub day_limit_reached: bool,
     /// Since the session's last change (at launch: since the launch).
     pub since_change_ms: i64,
-    pub quiet_ms: i64,
     pub source_wait_ms: i64,
     /// Eligible photos with and without a research source.
     pub with_source: usize,
@@ -80,13 +76,12 @@ pub enum MayStart {
     Blocked,
     OtherRunning,
     DayLimit,
-    Quiet,
     WaitingForSource,
     /// No eligible photo has a source (Capture One closed): "Waiting for Capture One".
     WaitingForEditor,
 }
 
-/// MC-A6 start: one run app-wide; the day cap; the quiet period (`manual` skips it); readiness
+/// MC-A6 start: one run app-wide; the day cap; readiness
 /// (an automatic run waits up to the source wait for missing sources; no source at all waits).
 pub fn may_start(input: &StartInput) -> MayStart {
     let automatic = input.trigger != RunTrigger::Manual;
@@ -96,8 +91,6 @@ pub fn may_start(input: &StartInput) -> MayStart {
         MayStart::OtherRunning
     } else if input.day_limit_reached {
         MayStart::DayLimit
-    } else if automatic && input.since_change_ms < input.quiet_ms {
-        MayStart::Quiet
     } else if input.with_source == 0 {
         MayStart::WaitingForEditor
     } else if automatic && input.without_source > 0 && input.since_change_ms < input.source_wait_ms
@@ -119,7 +112,7 @@ pub fn start_order(queued: &[(RunTrigger, i64, i64)]) -> Vec<i64> {
 /// MC-A7 trigger set: a follow-up is needed iff the set of stage 1 unit identities, the cover
 /// identity or the Condition identity differs between the latest run's snapshot and now. Order
 /// within the sets does not count.
-pub fn follow_up_needed(latest: &InputSnapshot, now: &InputSnapshot) -> bool {
+pub fn arranged_needed(latest: &InputSnapshot, now: &InputSnapshot) -> bool {
     let set = |ids: &[(i64, i64)]| {
         ids.iter()
             .copied()
@@ -143,7 +136,6 @@ mod tests {
             writable_field: true,
             day_limit_reached: false,
             offline: false,
-            auto: true,
         }
     }
 
@@ -174,7 +166,6 @@ mod tests {
             ),
             (|i| i.day_limit_reached = true, Prerequisite::DayLimit),
             (|i| i.offline = true, Prerequisite::Offline),
-            (|i| i.auto = false, Prerequisite::AutoOff),
         ];
         for (fail, expected) in cases {
             let mut input = passing();
@@ -191,11 +182,7 @@ mod tests {
         assert_eq!(first_failing(&input), Some(Prerequisite::NoModelKey));
         let mut input = passing();
         input.offline = true;
-        input.auto = false;
-        assert_eq!(first_failing(&input), Some(Prerequisite::Offline));
-        let mut input = passing();
         input.integration = false;
-        input.auto = false;
         assert_eq!(first_failing(&input), Some(Prerequisite::NoIntegration));
     }
 
@@ -206,7 +193,6 @@ mod tests {
             any_running: false,
             day_limit_reached: false,
             since_change_ms: 10_000,
-            quiet_ms: 1_000,
             source_wait_ms: 120_000,
             with_source: 1,
             without_source: 0,
@@ -215,22 +201,14 @@ mod tests {
 
     #[test]
     fn may_start_ready() {
-        assert_eq!(may_start(&ready(RunTrigger::Auto)), MayStart::Yes);
+        assert_eq!(may_start(&ready(RunTrigger::Arranged)), MayStart::Yes);
     }
 
     #[test]
-    fn may_start_quiet_period_boundary() {
-        let mut input = ready(RunTrigger::Auto);
-        input.since_change_ms = 999;
-        assert_eq!(may_start(&input), MayStart::Quiet);
-        input.since_change_ms = 1_000;
+    fn may_start_arranged_without_wait() {
+        let mut input = ready(RunTrigger::Arranged);
+        input.since_change_ms = 0;
         assert_eq!(may_start(&input), MayStart::Yes);
-        let mut manual = ready(RunTrigger::Manual);
-        manual.since_change_ms = 0;
-        assert_eq!(may_start(&manual), MayStart::Yes);
-        let mut follow = ready(RunTrigger::FollowUp);
-        follow.since_change_ms = 0;
-        assert_eq!(may_start(&follow), MayStart::Quiet);
     }
 
     #[test]
@@ -248,7 +226,7 @@ mod tests {
 
     #[test]
     fn may_start_readiness() {
-        let mut input = ready(RunTrigger::Auto);
+        let mut input = ready(RunTrigger::Arranged);
         input.without_source = 1;
         input.since_change_ms = 119_999;
         assert_eq!(may_start(&input), MayStart::WaitingForSource);
@@ -265,10 +243,10 @@ mod tests {
     #[test]
     fn start_order_manual_then_fifo_then_id() {
         let queued = vec![
-            (RunTrigger::Auto, 100, 1),
-            (RunTrigger::FollowUp, 50, 4),
+            (RunTrigger::Arranged, 100, 1),
+            (RunTrigger::Arranged, 50, 4),
             (RunTrigger::Manual, 200, 3),
-            (RunTrigger::Auto, 50, 2),
+            (RunTrigger::Arranged, 50, 2),
             (RunTrigger::Manual, 200, 5),
         ];
         assert_eq!(start_order(&queued), vec![3, 5, 2, 4, 1]);
@@ -287,23 +265,23 @@ mod tests {
         let mut now = snapshot();
         now.observe.reverse();
         now.condition.reverse();
-        assert!(!follow_up_needed(&snapshot(), &now));
+        assert!(!arranged_needed(&snapshot(), &now));
     }
 
     #[test]
-    fn follow_up_needed_by_each_identity() {
+    fn arranged_needed_by_each_identity() {
         let mut added = snapshot();
         added.observe.push((4, 1));
-        assert!(follow_up_needed(&snapshot(), &added));
+        assert!(arranged_needed(&snapshot(), &added));
         let mut recomposed = snapshot();
         recomposed.observe[2] = (3, 3);
-        assert!(follow_up_needed(&snapshot(), &recomposed));
+        assert!(arranged_needed(&snapshot(), &recomposed));
         let mut cover = snapshot();
         cover.cover = Some((2, 1));
-        assert!(follow_up_needed(&snapshot(), &cover));
+        assert!(arranged_needed(&snapshot(), &cover));
         let mut condition = snapshot();
         condition.condition.pop();
-        assert!(follow_up_needed(&snapshot(), &condition));
-        assert!(!follow_up_needed(&snapshot(), &snapshot()));
+        assert!(arranged_needed(&snapshot(), &condition));
+        assert!(!arranged_needed(&snapshot(), &snapshot()));
     }
 }

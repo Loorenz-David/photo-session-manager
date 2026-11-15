@@ -327,7 +327,7 @@ fn follow_up(h: &Harness, first: i64) -> i64 {
         .iter()
         .find(|r| r.id > first && r.state == RunState::Queued)
         .expect("a follow-up");
-    assert_eq!(follow.trigger, RunTrigger::FollowUp);
+    assert_eq!(follow.trigger, RunTrigger::Arranged);
     h.tick(1_000);
     assert_eq!(h.run_row(follow.id).state, RunState::Finished);
     follow.id
@@ -527,7 +527,7 @@ fn trigger_base() -> (Harness, Script, i64, i64) {
 fn queued_follow_ups(h: &Harness) -> usize {
     h.runs(h.session_id)
         .iter()
-        .filter(|r| r.state == RunState::Queued && r.trigger == RunTrigger::FollowUp)
+        .filter(|r| r.state == RunState::Queued && r.trigger == RunTrigger::Arranged)
         .count()
 }
 
@@ -614,14 +614,12 @@ fn a14_c6a_changes_during_a_run_queue_one_follow_up() {
     let follow = h
         .runs(h.session_id)
         .into_iter()
-        .find(|r| r.trigger == RunTrigger::FollowUp)
+        .find(|r| r.trigger == RunTrigger::Arranged)
         .unwrap()
         .id;
-    h.tick(999);
-    assert_eq!(h.run_row(follow).state, RunState::Queued);
-    h.tick(1);
+    h.tick(0);
     let row = h.run_row(follow);
-    assert_eq!(row.started_at, Some(last_change + 1_000));
+    assert_eq!(row.started_at, Some(last_change));
     assert!(row.started_at.unwrap() >= h.run_row(first).finished_at.unwrap());
     assert_eq!(queued_follow_ups(&h), 0);
 }

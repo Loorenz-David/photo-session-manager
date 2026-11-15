@@ -19,7 +19,7 @@ use psm_core::{
     ports::clock::Clock,
 };
 use psm_research::{
-    domain::{RunState, RunTrigger},
+    domain::RunState,
     store::{self as rstore, RunRow},
 };
 use psm_testkit::{RESEARCH_INTEGRATION, TestApp, fixtures::synthetic_jpeg::SyntheticJpeg};
@@ -99,6 +99,7 @@ fn ready_session(a: &TestApp, sku: &str, colour: [u8; 3]) -> (i64, i64) {
     let (s, item) = session(a, sku);
     let p = photo(a, s, sku, C::Main);
     give_preview(a, &p, colour);
+    a.app.research.as_ref().unwrap().arranged(s).unwrap();
     (s, item)
 }
 
@@ -179,29 +180,9 @@ fn a13_c1c_core_workflow_is_untouched_without_research() {
 }
 
 #[test]
-fn a13_c2a_first_main_photo_queues_an_auto_run() {
-    let a = research_app();
-    let (s, item) = session(&a, "R7-C2A");
-    photo(&a, s, "first", C::Main);
-    a.tick(0).unwrap();
-    let all = runs(&a, None);
-    assert_eq!(all.len(), 1, "{all:?}");
-    assert_eq!(
-        (
-            all[0].session_id,
-            all[0].item_id,
-            all[0].state,
-            all[0].trigger
-        ),
-        (s, item, RunState::Queued, RunTrigger::Auto)
-    );
-}
-
-#[test]
 fn a13_c8c_a_running_run_is_resumed_after_a_restart() {
     let mut a = research_app();
     let (s, _) = ready_session(&a, "R7-C8C", [200, 40, 40]);
-    a.tick(0).unwrap();
     a.research_fakes()
         .model
         .before_call(|_| std::panic::resume_unwind(Box::new(Killed)));
@@ -231,7 +212,6 @@ fn a13_c8c_a_running_run_is_resumed_after_a_restart() {
 fn a13_c8d_research_has_its_own_runner() {
     let a = research_app();
     let (research_session, _) = ready_session(&a, "R7-C8D-R", [40, 200, 40]);
-    a.tick(0).unwrap();
     a.clock.advance(1_100);
     let (entered_tx, entered_rx) = mpsc::channel::<()>();
     let (release_tx, release_rx) = mpsc::channel::<()>();
@@ -273,7 +253,6 @@ fn r7_u1_two_concurrent_wake_ups_never_run_two() {
     let a = research_app();
     let (s1, _) = ready_session(&a, "R7-MA13-A", [10, 10, 200]);
     let (s2, _) = ready_session(&a, "R7-MA13-B", [10, 200, 200]);
-    a.tick(0).unwrap();
     assert_eq!(runs(&a, None).len(), 2);
     a.clock.advance(1_100);
     let seen: Arc<Mutex<Vec<usize>>> = Arc::default();

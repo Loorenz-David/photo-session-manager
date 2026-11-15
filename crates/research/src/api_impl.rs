@@ -57,6 +57,10 @@ impl ResearchApi for ResearchService {
         ResearchService::session_changed(self, session_id);
     }
 
+    fn arranged(&self, session_id: i64) -> Result<bool> {
+        ResearchService::arranged(self, session_id)
+    }
+
     fn settings_changed(&self) {
         ResearchService::settings_changed(self);
     }

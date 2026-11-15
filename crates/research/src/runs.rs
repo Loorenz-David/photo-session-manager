@@ -19,8 +19,8 @@ use crate::{
     rules::{
         cost::{day_spend, parse_micro_usd},
         run_rules::{
-            InputSnapshot, MayStart, PrerequisiteInput, StartInput, first_failing,
-            follow_up_needed, may_start, start_order,
+            InputSnapshot, MayStart, PrerequisiteInput, StartInput, arranged_needed, first_failing,
+            may_start, start_order,
         },
         write_table::never_written,
     },
@@ -29,8 +29,7 @@ use crate::{
     store::{self, NewRun, RunRow},
 };
 
-/// What the service keeps in memory: the instant of each session's last change (MC-A6 quiet
-/// period; until one is seen, the launch instant counts).
+/// The instant of each session's last change, used for the missing-source wait.
 #[derive(Debug, Default)]
 pub struct LiveState {
     pub last_change: HashMap<i64, Instant>,
@@ -64,7 +63,7 @@ impl ResearchService {
             id: 0,
             item_id,
             session_id,
-            trigger: RunTrigger::Auto,
+            trigger: RunTrigger::Arranged,
             state: RunState::Queued,
             stage_reached: None,
             queued_at: 0,
@@ -196,7 +195,6 @@ impl ResearchService {
                 .any(|f| !never_written(&f.definition, Some(f.step))),
             day_limit_reached: self.day_limit_reached(settings)?,
             offline: self.gateway.offline(),
-            auto: settings.auto,
         })
     }
 
@@ -232,7 +230,7 @@ impl ResearchService {
     }
 
     /// A photo row was created, or a classification, position or composition changed, or a
-    /// research source became available, in the session (MC-A6 event table, `auto` trigger).
+    /// research source became available. This only moves the source-wait clock.
     /// Never call it inside another service's transaction.
     pub fn session_changed(&self, session_id: i64) {
         if let Err(error) = self.session_changed_inner(session_id) {
@@ -241,7 +239,7 @@ impl ResearchService {
     }
 
     fn session_changed_inner(&self, session_id: i64) -> Result<()> {
-        let Some(item_id) = self.session_item(session_id)? else {
+        let Some(_) = self.session_item(session_id)? else {
             return Ok(());
         };
         self.state
@@ -249,44 +247,19 @@ impl ResearchService {
             .map_err(|e| Error::InvalidData(e.to_string()))?
             .last_change
             .insert(session_id, self.clock.mono());
-        let settings = self.settings();
-        let input = self.prerequisite_input(item_id, &settings)?;
-        if first_failing(&input).is_some_and(|p| p.blocks_creation()) || !settings.auto {
-            return Ok(());
-        }
-        let runs = self
-            .store
-            .research_transaction(|tx| store::runs(tx.conn(), Some(session_id)))?;
-        if runs.is_empty() {
-            let has_main = self
-                .session_photos(session_id, item_id)?
-                .iter()
-                .any(|p| p.classification == Classification::Main);
-            if has_main {
-                self.insert_queued(item_id, session_id, RunTrigger::Auto)?;
-            }
-            return Ok(());
-        }
-        self.follow_up(session_id, item_id, &runs)
+        Ok(())
     }
 
-    /// A research setting or key was saved: switching `auto` off cancels queued `auto` and
-    /// `follow_up` runs (R-IA25); a running run finishes.
-    pub fn settings_changed(&self) {
-        if let Err(error) = self.settings_changed_inner() {
-            tracing::warn!(%error, "research: settings change not evaluated");
-        }
-    }
+    /// A settings save does not start or cancel a research run.
+    pub fn settings_changed(&self) {}
 
-    fn settings_changed_inner(&self) -> Result<()> {
-        if self.settings().auto {
-            return Ok(());
-        }
+    /// Retire queued runs from builds where photo changes started them automatically.
+    pub(crate) fn cancel_legacy_queued(&self) -> Result<()> {
         let now = self.clock.now_ms();
         let cancelled = self.store.research_transaction(|tx| {
             let mut sessions = Vec::new();
             for run in store::runs_in_state(tx.conn(), RunState::Queued)? {
-                if run.trigger != RunTrigger::Manual {
+                if matches!(run.trigger, RunTrigger::Auto | RunTrigger::FollowUp) {
                     store::set_run_state(tx.conn(), run.id, RunState::Cancelled, None, Some(now))?;
                     sessions.push(run.session_id);
                 }
@@ -297,6 +270,52 @@ impl ResearchService {
             self.changed(session_id);
         }
         Ok(())
+    }
+
+    /// A photographer has finished arranging this session. Queue only when its photo-derived
+    /// inputs have not already been researched by the latest started run.
+    pub fn arranged(&self, session_id: i64) -> Result<bool> {
+        let Some(item_id) = self.session_item(session_id)? else {
+            return Err(Error::InvalidData(
+                "the Unassigned session is never researched".into(),
+            ));
+        };
+        let settings = self.settings();
+        if first_failing(&self.prerequisite_input(item_id, &settings)?)
+            .is_some_and(|p| p.blocks_creation())
+        {
+            return Ok(false);
+        }
+        if !self
+            .session_photos(session_id, item_id)?
+            .iter()
+            .any(|p| p.classification == Classification::Main)
+        {
+            return Ok(false);
+        }
+        let runs = self
+            .store
+            .research_transaction(|tx| store::runs(tx.conn(), Some(session_id)))?;
+        if runs.iter().any(|r| r.state == RunState::Queued) {
+            return Ok(false);
+        }
+        let needed = match runs.last() {
+            None => true,
+            Some(latest) if matches!(latest.state, RunState::Failed | RunState::Cancelled) => true,
+            Some(_) => {
+                let snapshot: InputSnapshot = runs
+                    .iter()
+                    .rev()
+                    .find_map(|r| r.input_snapshot.as_deref())
+                    .and_then(|s| serde_json::from_str(s).ok())
+                    .unwrap_or_default();
+                arranged_needed(&snapshot, &self.input_now(session_id, item_id)?)
+            }
+        };
+        if needed {
+            self.insert_queued(item_id, session_id, RunTrigger::Arranged)?;
+        }
+        Ok(needed)
     }
 
     /// **Run again** (MC-A6): a queued run becomes `manual`; otherwise one `manual` run is
@@ -366,7 +385,6 @@ impl ResearchService {
             any_running,
             day_limit_reached: input.day_limit_reached,
             since_change_ms: self.since_change_ms(run.session_id)?,
-            quiet_ms: settings.quiet_seconds.saturating_mul(1_000),
             source_wait_ms: settings.source_wait_seconds.saturating_mul(1_000),
             with_source: photos.iter().filter(|p| p.has_source).count(),
             without_source: photos.iter().filter(|p| !p.has_source).count(),
@@ -525,27 +543,6 @@ impl ResearchService {
             can_run: !failing.as_ref().is_some_and(Prerequisite::blocks_creation),
             wait_ends_at,
         })
-    }
-
-    /// MC-A6's follow-up row for a session that has runs: when the photo-derived inputs differ
-    /// from the latest started run's snapshot (MC-A7 trigger set), a queued run is kept (its
-    /// start moves with the quiet period); otherwise one `follow_up` run is queued, also beside
-    /// a running run.
-    fn follow_up(&self, session_id: i64, item_id: i64, runs: &[RunRow]) -> Result<()> {
-        if runs.iter().any(|r| r.state == RunState::Queued) {
-            return Ok(());
-        }
-        let latest: InputSnapshot = runs
-            .iter()
-            .rev()
-            .find_map(|r| r.input_snapshot.as_deref())
-            .and_then(|text| serde_json::from_str(text).ok())
-            .unwrap_or_default();
-        let now = self.input_now(session_id, item_id)?;
-        if follow_up_needed(&latest, &now) {
-            self.insert_queued(item_id, session_id, RunTrigger::FollowUp)?;
-        }
-        Ok(())
     }
 
     /// The store, as the port the app's services take.

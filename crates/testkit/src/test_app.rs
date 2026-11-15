@@ -79,8 +79,6 @@ pub fn research_test_settings() -> serde_json::Value {
         })
         .collect();
     serde_json::json!({
-        "auto": true,
-        "quiet_seconds": 1,
         "source_wait_seconds": 120,
         "trusted_sites": [],
         "max_pages": 10,

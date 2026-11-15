@@ -242,8 +242,6 @@ pub fn test_settings() -> Json {
         })
         .collect();
     json!({
-        "auto": true,
-        "quiet_seconds": 1,
         "source_wait_seconds": 120,
         "attribution_keys": [DESIGNER],
         "trusted_sites": [E1, E2],
@@ -462,6 +460,7 @@ impl Harness {
     /// The call the app makes after a photo change in the session.
     pub fn changed(&self) {
         self.service.session_changed(self.session_id);
+        self.service.arranged(self.session_id).unwrap();
     }
 
     /// Updates the live research settings with `patch` (top-level keys), as a settings save does.

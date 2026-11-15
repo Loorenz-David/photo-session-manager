@@ -127,7 +127,7 @@ fn reason(svc: &ResearchService, session_id: i64) -> Option<(String, String)> {
 fn a24_c1a_shipped_defaults_start_a_requested_run() {
     let (h, svc) = fresh_app();
     first_main_photo(&h, &svc);
-    // The quiet period passes: automatic research is off by default, so no run.
+    // Photo arrival alone does not request research.
     h.app.clock.advance(2_000);
     assert_eq!(svc.tick().unwrap(), None);
     assert!(h.runs(h.session_id).is_empty());
@@ -160,11 +160,7 @@ fn a24_c1a_shipped_defaults_start_a_requested_run() {
             DEFAULT_PAGE_READER
         )
     );
-    // No prerequisite is named: only "automatic research off", which has no panel sentence.
-    assert_eq!(
-        reason(&svc, h.session_id),
-        Some(("AutoOff".to_owned(), String::new()))
-    );
+    assert_eq!(reason(&svc, h.session_id), None);
 }
 
 #[test]

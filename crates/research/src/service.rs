@@ -133,7 +133,7 @@ impl ResearchService {
             files.clone(),
             deps.wait.clone(),
         );
-        Self {
+        let service = Self {
             launched: deps.clock.mono(),
             store: deps.store,
             clock: deps.clock,
@@ -147,7 +147,11 @@ impl ResearchService {
             settings: deps.settings,
             events: deps.events,
             state: std::sync::Mutex::new(crate::runs::LiveState::default()),
+        };
+        if let Err(error) = service.cancel_legacy_queued() {
+            tracing::warn!(%error, "research: could not cancel queued runs from an earlier build");
         }
+        service
     }
 
     pub fn gateway(&self) -> &CallGateway {

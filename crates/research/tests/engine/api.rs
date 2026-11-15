@@ -299,18 +299,3 @@ fn a19_c3a_settings_validation() {
         );
     }
 }
-
-#[test]
-fn a19_c4a_switching_automatic_research_off_cancels_the_queued_run() {
-    let h = Harness::chair();
-    h.add_main_photo_with_preview(h.session_id);
-    h.changed();
-    let run = h.runs(h.session_id)[0].clone();
-    assert_eq!(
-        (run.state, run.trigger),
-        (RunState::Queued, RunTrigger::Auto)
-    );
-    h.patch_settings(json!({"auto": false}));
-    api(&h).settings_changed();
-    assert_eq!(h.run_row(run.id).state, RunState::Cancelled);
-}
