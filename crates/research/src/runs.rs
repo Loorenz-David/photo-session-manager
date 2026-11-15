@@ -189,10 +189,10 @@ impl ResearchService {
             search_key: self.providers.search.is_some()
                 && self.key_set(crate::service::SEARCH_ACCOUNT),
             missing_price: self.missing_price(settings),
-            writable_field: form
-                .fields
-                .iter()
-                .any(|f| !never_written(&f.definition, Some(f.step))),
+            writable_field: form.fields.iter().any(|f| {
+                !never_written(&f.definition, Some(f.step))
+                    && !settings.excluded_keys.contains(&f.definition.key)
+            }),
             day_limit_reached: self.day_limit_reached(settings)?,
             offline: self.gateway.offline(),
         })

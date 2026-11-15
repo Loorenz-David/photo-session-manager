@@ -16,10 +16,18 @@ use crate::{
 impl ResearchService {
     /// The shop's hosts (refusals of trusted entries name them).
     fn shop_hosts(&self) -> Result<Vec<String>> {
-        match &self.shop {
-            Some(shop) => Ok(shop.facts(None)?.hosts),
-            None => Ok(Vec::new()),
+        let mut hosts = match &self.shop {
+            Some(shop) => shop.facts(None)?.hosts,
+            None => Vec::new(),
+        };
+        for typed in &self.settings().extra_shop_hosts {
+            if let Ok(host) = TrustedSites::parse_entry(typed)
+                && !hosts.contains(&host)
+            {
+                hosts.push(host);
+            }
         }
+        Ok(hosts)
     }
 
     /// The live `research` value with `trusted_sites` replaced: what the caller saves.
@@ -65,8 +73,29 @@ impl ResearchApi for ResearchService {
         ResearchService::settings_changed(self);
     }
 
+    fn settings_reset(&self) -> Result<Json> {
+        let live = self.settings();
+        let reset = ResearchSettings {
+            trusted_sites: live.trusted_sites,
+            attribution_keys: live.attribution_keys,
+            excluded_keys: live.excluded_keys,
+            extra_shop_hosts: live.extra_shop_hosts,
+            detailed_condition: live.detailed_condition,
+            language: live.language,
+            ..ResearchSettings::default()
+        };
+        serde_json::to_value(reset).map_err(|e| Error::InvalidData(e.to_string()))
+    }
+
     fn validate_settings(&self, settings: &Json) -> Result<()> {
-        validate(settings).map_err(Error::InvalidData)
+        let mut merged =
+            serde_json::to_value(self.settings()).map_err(|e| Error::InvalidData(e.to_string()))?;
+        if let Some(patch) = settings.as_object() {
+            for (key, value) in patch {
+                merged[key] = value.clone();
+            }
+        }
+        validate(&merged).map_err(Error::InvalidData)
     }
 
     /// Writes each given key under its account (an empty key removes it); never returns one.

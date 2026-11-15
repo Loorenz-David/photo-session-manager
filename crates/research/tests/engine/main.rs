@@ -12,5 +12,6 @@ mod harness;
 mod images_and_storage;
 mod lifecycle;
 mod resume;
+mod settings_r11;
 mod stages;
 mod writes;

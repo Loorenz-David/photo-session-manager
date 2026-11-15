@@ -138,6 +138,7 @@ pub(crate) fn class_of(ctx: &Ctx<'_>, definition: &Definition, step: AttributeGr
         definition,
         never_written(definition, Some(step)),
         &ctx.config.attribution_keys,
+        &ctx.config.excluded_keys,
     )
 }
 

@@ -62,6 +62,19 @@ pub struct ProviderIds {
     pub page_reader: String,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DetailedCondition {
+    pub key: String,
+    pub levels: Vec<ConditionLevel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConditionLevel {
+    pub level: String,
+    pub choice: Option<String>,
+}
+
 impl Default for ProviderIds {
     fn default() -> Self {
         Self {
@@ -106,6 +119,9 @@ pub struct ResearchConfig {
     pub own_listing_url: Option<String>,
     pub own_listing_path_tail: Vec<String>,
     pub attribution_keys: Vec<String>,
+    pub excluded_keys: Vec<String>,
+    pub extra_shop_hosts: Vec<String>,
+    pub detailed_condition: DetailedCondition,
     pub language: String,
     pub providers: ProviderIds,
     pub normalise_version: u32,
@@ -142,6 +158,9 @@ impl Default for ResearchConfig {
             own_listing_url: None,
             own_listing_path_tail: Vec::new(),
             attribution_keys: Vec::new(),
+            excluded_keys: Vec::new(),
+            extra_shop_hosts: Vec::new(),
+            detailed_condition: DetailedCondition::default(),
             language: "English".to_owned(),
             providers: ProviderIds::default(),
             normalise_version: psm_core::mechanisms::name_key::RESEARCH_NORMALISE_VERSION,
@@ -233,6 +252,9 @@ pub struct ResearchSettings {
     /// The shop's designer and maker fields (08A §6), as the owner points them; empty by default
     /// (no field is treated as attribution until chosen).
     pub attribution_keys: Vec<String>,
+    pub excluded_keys: Vec<String>,
+    pub extra_shop_hosts: Vec<String>,
+    pub detailed_condition: DetailedCondition,
     pub trusted_sites: Vec<String>,
     pub max_pages: u32,
     pub stages: BTreeMap<String, StageConfig>,
@@ -340,6 +362,9 @@ impl Default for ResearchSettings {
             source_wait_seconds: 120,
             // Owner 2026-11-15: no field is attribution until the owner points at one.
             attribution_keys: Vec::new(),
+            excluded_keys: Vec::new(),
+            extra_shop_hosts: Vec::new(),
+            detailed_condition: DetailedCondition::default(),
             trusted_sites: Vec::new(),
             max_pages: 10,
             stages: default_stages(),
@@ -433,10 +458,23 @@ impl ResearchConfig {
             prices: settings.unit_prices(),
             fallbacks: settings.fallbacks(),
             trusted_sites: settings.trusted_sites.clone(),
-            shop_hosts: shop.hosts.clone(),
+            shop_hosts: {
+                let mut hosts = shop.hosts.clone();
+                for typed in &settings.extra_shop_hosts {
+                    if let Ok(host) = crate::rules::sites::TrustedSites::parse_entry(typed)
+                        && !hosts.contains(&host)
+                    {
+                        hosts.push(host);
+                    }
+                }
+                hosts
+            },
             own_listing_url: shop.own_listing.url.clone(),
             own_listing_path_tail: shop.own_listing.path_tail.clone(),
             attribution_keys: settings.attribution_keys.clone(),
+            excluded_keys: settings.excluded_keys.clone(),
+            extra_shop_hosts: settings.extra_shop_hosts.clone(),
+            detailed_condition: settings.detailed_condition.clone(),
             language: settings.language.clone(),
             providers: settings.providers.resolved(),
             ..Self::default()
@@ -500,6 +538,20 @@ pub fn validate(value: &serde_json::Value) -> Result<(), String> {
             {
                 return Err(format!(
                     "stages.{name}.image_long_edge must be a whole number above 0"
+                ));
+            }
+        }
+    }
+    let settings = ResearchSettings::from_slot(Some(value));
+    for typed in &settings.extra_shop_hosts {
+        let host = crate::rules::sites::TrustedSites::parse_entry(typed)
+            .map_err(|reason| format!("extra shop address {typed:?}: {reason}"))?;
+        for trusted in &settings.trusted_sites {
+            let trusted_host = crate::rules::sites::TrustedSites::parse_entry(trusted)
+                .unwrap_or_else(|_| trusted.clone());
+            if crate::rules::sites::overlaps(&host, &trusted_host) {
+                return Err(format!(
+                    "extra shop address {typed:?} is already a trusted site"
                 ));
             }
         }

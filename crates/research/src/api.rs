@@ -74,6 +74,7 @@ pub trait ResearchApi: Send + Sync {
     fn session_changed(&self, session_id: i64);
     fn arranged(&self, session_id: i64) -> Result<bool>;
     fn settings_changed(&self);
+    fn settings_reset(&self) -> Result<Json>;
     fn validate_settings(&self, settings: &Json) -> Result<()>;
     fn secrets_set(&self, input: SecretsInput) -> Result<()>;
     fn secrets_state(&self) -> Result<SecretsState>;

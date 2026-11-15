@@ -43,8 +43,9 @@ pub fn field_class(
     definition: &Definition,
     never_written: bool,
     attribution_keys: &[String],
+    excluded_keys: &[String],
 ) -> FieldClass {
-    if never_written {
+    if never_written || excluded_keys.contains(&definition.key) {
         FieldClass::NeverWritten
     } else if definition.group == AttributeGroup::Condition {
         FieldClass::Condition
@@ -777,14 +778,50 @@ mod tests {
             "custom.color",
             json!({}),
         );
-        assert_eq!(field_class(&wear, false, &keys), FieldClass::Condition);
+        assert_eq!(field_class(&wear, false, &keys, &[]), FieldClass::Condition);
         assert_eq!(
-            field_class(&width_attr, false, &keys),
+            field_class(&width_attr, false, &keys, &[]),
             FieldClass::Attribution
         );
-        assert_eq!(field_class(&width, false, &keys), FieldClass::Measured);
-        assert_eq!(field_class(&colour, false, &keys), FieldClass::Visible);
-        assert_eq!(field_class(&colour, true, &keys), FieldClass::NeverWritten);
+        assert_eq!(field_class(&width, false, &keys, &[]), FieldClass::Measured);
+        assert_eq!(field_class(&colour, false, &keys, &[]), FieldClass::Visible);
+        assert_eq!(
+            field_class(&colour, true, &keys, &[]),
+            FieldClass::NeverWritten
+        );
+    }
+
+    #[test]
+    fn a25_c8a_excluded_fields_are_never_written() {
+        let details = def(
+            CoreType::Text,
+            AttributeGroup::Details,
+            "custom.text",
+            json!({}),
+        );
+        let width = def(
+            CoreType::Dimension,
+            AttributeGroup::Details,
+            "custom.width",
+            json!({}),
+        );
+        let condition = def(
+            CoreType::Choice,
+            AttributeGroup::Condition,
+            "custom.wear",
+            json!({}),
+        );
+        for (field, class) in [
+            (&details, FieldClass::Visible),
+            (&width, FieldClass::Measured),
+            (&condition, FieldClass::Condition),
+        ] {
+            assert_eq!(field_class(field, false, &[], &[]), class);
+            assert_eq!(
+                field_class(field, false, &[], std::slice::from_ref(&field.key)),
+                FieldClass::NeverWritten
+            );
+        }
     }
 
     #[test]

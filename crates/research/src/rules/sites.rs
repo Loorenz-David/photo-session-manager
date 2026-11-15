@@ -47,6 +47,10 @@ fn covers(entry: &str, host: &str) -> bool {
             .is_some_and(|rest| rest.ends_with('.'))
 }
 
+pub fn overlaps(a: &str, b: &str) -> bool {
+    covers(a, b) || covers(b, a)
+}
+
 /// The ordered, disjoint list of trusted entries (`research.trusted_sites`); priority is the index.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TrustedSites {
