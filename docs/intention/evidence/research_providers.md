@@ -434,3 +434,19 @@ excluded list), `custom.etsy_description` (42, description text), one Shopify re
 medium suggestions, none checked. Fix without a build: add them to "fields research leaves alone"; the owner decides
 whether research should instead fill only a list of chosen fields.
 
+## Chosen fields check (R13, 2026-11-15, U4 task 3)
+
+`accept --only 6,12,28,33 --settings docs/test-items/accept_settings_owner.json --ceiling-usd 2` into
+`~/psm-research-bench/a27` (script `scratchpad/accept_run4.sh`), the owner's 22 `fill_keys`, runs 1–4.
+
+**(1) Values outside the 22 chosen fields: 0.** Every value research wrote (62 over the four pieces) is one of the 22
+keys; no price, link, location, Etsy description, dimensions or review field. **(2) Detailed condition:** each piece's
+worst written level is Minor (levels written: cracks, dents/chips, mold, scratch, stains, water damage, upholstery on
+28 and 33; Function, Odor, Stability, Missing parts, Veneer left open), and each got the table's grade for Minor,
+"Very Good", at `low` (some level is an `ai` low). The shop itself has Very Good on 12 and 28 and Good on 6 and 33:
+the owner graded those two stricter than table A, as the R11 card's own count showed (Minor → Good 5 of 22).
+**(3) Spend: USD 0.40** (0.098, 0.092, 0.100, 0.111) within the USD 2 ceiling. Also seen: piece 6 designer and maker
+right (now `low`); 12 designer Erik Wörtz (name form of Wørts), maker Ikea, wood Santos Rosewood right; 28 designer
+Erling Torvits `medium` again (two auction pages; shop empty, owner checking); 33 designer Niels Otto Møller `medium`
+(pamono and Bukowskis model 71 pages, no own-shop page; shop empty, owner checking).
+
