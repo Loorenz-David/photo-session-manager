@@ -8,7 +8,7 @@ blocked_on: none (owner picked the models 2026-11-15)
 ---
 # R10 — Defaults: research works out of the box
 
-**Tracker:** IMPLEMENTED · 2026-11-15 · codex · U1 shipped defaults (owner's models, prices with cache_write_token, auto off, attribution keys empty) + 4 row tests; research crate 294 tests, clippy, fmt, workspace check green
+**Tracker:** APPROVED · 2026-11-15 · opus · review r1 APPROVED_WITH_NOTES: perimeter = the 6 declared paths (`4d87ea8`); defaults:: 4/4, clippy, fmt, workspace check green (reviewer run); all 4 rows have a boundary test that fails on a wrong outcome; values match the evidence doc's owner pick and price table; H1–H8 hold; 5 backlog notes
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -148,3 +148,29 @@ The reviewer reads the units in order and runs, once: the milestone's research-c
   A13·C1(d)), which asserted the non-empty `beyo.designer` default the owner's 2026-11-15 decision removes (A24·C2(b)
   now asserts the empty default); its unused imports went with it. `max_pages` unchanged (10).
 
+### 2026-11-15 · review r1 (Claude Opus 5.5, `pipeline-reviewer`) · APPROVED_WITH_NOTES
+- **Gate.** Tracker IMPLEMENTED; checkpoint `4d87ea8` in `git log`. Perimeter: `git show --stat 4d87ea8` = the 6
+  declared paths (config.rs, defaults.rs, engine main.rs, lifecycle.rs, master_plan_research.md, this plan). Nothing
+  is extra or missing. lifecycle.rs is outside the plan's Files list, but the handoff declares it and the edit was forced (see notes).
+- **Checks (Review mode, reviewer run once):** `cargo test -p psm-research --test engine defaults::` 4 passed ·
+  clippy `-D warnings` clean · `cargo fmt --all -- --check` exit 0 · `cargo check --workspace` clean. No app suite
+  (no app file changed, flow §10). The implementer's crate stamp (294 tests) stands.
+- **Verified correct.** The defaults equal the evidence doc's "Owner pick of models (2026-11-15)" stage for stage. The
+  token prices equal the "Candidate models" table (input/cached/cache-write/output). Web search is 10 per 1,000, which the
+  evidence doc confirms. Lens is USD 25 / 1,000 (cheapest paid plan). Every OpenAI pair has a `cache_write_token` row (carried R8 note). The unit
+  names match what the adapters emit (`usage_of`, `serpapi_lens` `image_search_call`, `http` `page_fetch`). The gateway charges search and
+  page calls under model `""`, which is the key the rows use. `missing_price` checks exactly the six model stages + search +
+  reader, so the shipped table clears MC-A6's price prerequisite. The stop-rule reserve (Decide fallback 0.05) sits below the
+  0.50 cap. `auto` false, `attribution_keys` empty. §6.6's long-edge text matches `ResearchConfig::default`.
+- **Rows.** C1(a): with the old defaults `run_again` would be refused (`PriceMissing`) and with `auto` true `tick`
+  would create an auto run, so the test fails on either wrong default. It asserts the run is manual, running, with the default
+  stages/providers snapshot and the exact reason (`AutoOff`, ""). C1(b): refusal sentence, no run, exact `NoModelKey` reason,
+  export Done + file on disk. C2(a): units come from the adapter's own usage mapping, so a missing `cache_write_token` row
+  fails it. C2(b): asserts the empty default, as the 2026-11-15 scope note narrows it.
+- **Assumptions:** none contradicts the book. `AutoOff` as "no prerequisite" follows from MC-A6 order plus the owner's `auto`
+  off; Find without a model is the visual search; Lens and page fallbacks are recorded in the narrative.
+- **H1–H8:** hold. The change is research-crate defaults only. Model literals are in `crates/research/src/config.rs` (HA5).
+  No key or secret appears in the diff.
+- **Notes** (5) → `docs/implementation/backlog_research/R10_research_defaults.md`: plan lesson about tests that pin an
+  old default; testkit settings lack `attribution_keys` (→ R11); tracker actor said codex; Lens price ≠ measurement's 0;
+  a research slot saved before R10 keeps the old empty prices/models (→ R11 reset, or a fresh folder).
