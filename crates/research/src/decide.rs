@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 
 use psm_core::{
     Result,
-    domain::attribute::{AiConfidence, Definition},
+    domain::attribute::{AiConfidence, AiStatus, AttributeGroup, CoreType, Definition, Provenance},
+    ports::store::StoreTx,
 };
 use serde_json::{Map, Value as Json, json};
 
@@ -16,8 +17,10 @@ use crate::{
     gateway::Answer,
     rules::{
         confidence::{
-            Decision, decide_attribution, decide_condition, decide_measured, decide_visible,
+            Decision, decide_attribution_without_shop, decide_condition, decide_measured,
+            decide_visible,
         },
+        derived_condition::{LevelValue, derive},
         fingerprint::fingerprint,
         sites::Site,
         value_map::Stated,
@@ -181,6 +184,7 @@ pub(crate) fn decide(ctx: &Ctx<'_>, used: &[Committed], stopped: bool) -> Result
     let evidence = Evidence::of(used);
     let mut decided: Vec<Decided> = Vec::new();
     let mut not_determined: Vec<(Definition, String)> = Vec::new();
+    let mut derived: Vec<Definition> = Vec::new();
     for field in &ctx.form.fields {
         let definition = &field.definition;
         let key = definition.key.as_str();
@@ -190,13 +194,19 @@ pub(crate) fn decide(ctx: &Ctx<'_>, used: &[Committed], stopped: bool) -> Result
                 not_determined.push((definition.clone(), "not researched".to_owned()));
                 continue;
             }
+            FieldClass::Derived => {
+                derived.push(definition.clone());
+                continue;
+            }
             FieldClass::Condition => decide_condition(
                 evidence.condition_read(key).as_ref(),
                 evidence.condition.is_some(),
             ),
-            FieldClass::Attribution => {
-                decide_attribution(definition, &evidence.labels(key), &evidence.listings(key))
-            }
+            FieldClass::Attribution => decide_attribution_without_shop(
+                definition,
+                &evidence.labels(key),
+                &evidence.listings(key),
+            ),
             FieldClass::Measured => decide_measured(definition, &evidence.listings(key)),
             FieldClass::Visible => decide_visible(
                 definition,
@@ -265,7 +275,7 @@ pub(crate) fn decide(ctx: &Ctx<'_>, used: &[Committed], stopped: bool) -> Result
             .research_transaction(|tx| store::run(tx.conn(), ctx.run.id))?
             .map(|r| r.cost_micro_usd)
             .unwrap_or(0);
-        if cost >= ctx.config.max_cost_per_run {
+        if cost >= ctx.config.max_cost_per_run && derived.is_empty() {
             end(ctx, RunState::StoppedAtCap)?;
             return Ok(ExecuteOutcome::StoppedAtCap);
         }
@@ -286,6 +296,8 @@ pub(crate) fn decide(ctx: &Ctx<'_>, used: &[Committed], stopped: bool) -> Result
             "step": f.step,
         })).collect::<Vec<_>>(),
         "attribution_keys": ctx.config.attribution_keys,
+        "excluded_keys": ctx.config.excluded_keys,
+        "detailed_condition": ctx.config.detailed_condition,
     });
     let unit_fingerprint = fingerprint(Stage::Decide.number(), &identity)
         .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
@@ -348,6 +360,76 @@ pub(crate) fn decide(ctx: &Ctx<'_>, used: &[Committed], stopped: bool) -> Result
                     steps.push(concluded);
                 }
                 other => not_written.push((d.definition.clone(), other.text())),
+            }
+        }
+        // The level rows here include condition suggestions written just above, in this same
+        // transaction. A person-filled level counts even when research leaves that field alone.
+        let level_fields: Vec<_> = ctx
+            .form
+            .fields
+            .iter()
+            .filter(|f| {
+                f.step == AttributeGroup::Condition
+                    && f.definition.group == AttributeGroup::Condition
+                    && f.definition.core_type == CoreType::Choice
+            })
+            .collect();
+        let current = tx.attribute_values(item_id)?;
+        for definition in &derived {
+            let values: Vec<LevelValue> = level_fields
+                .iter()
+                .map(|field| {
+                    let row = current.iter().find(|v| {
+                        v.key == field.definition.key && v.ai_status != Some(AiStatus::Cleared)
+                    });
+                    LevelValue {
+                        label: field.definition.label.clone(),
+                        value: row.and_then(|v| serde_json::from_str::<String>(&v.value).ok()),
+                        ai_low: row.is_some_and(|v| {
+                            v.provenance == Provenance::Ai
+                                && v.ai_confidence == Some(AiConfidence::Low)
+                        }),
+                    }
+                })
+                .collect();
+            let grade = derive(&ctx.config.detailed_condition.levels, &values, definition);
+            match (grade.value, grade.confidence) {
+                (Some(value), Some(confidence)) => {
+                    let outcome = writes::suggest_in(
+                        tx,
+                        now,
+                        integration.as_deref(),
+                        item_id,
+                        &definition.key,
+                        &value,
+                        confidence,
+                        Some(&grade.reason),
+                        &[],
+                    )?;
+                    writes_out.insert(definition.key.clone(), json!({
+                        "value": value, "confidence": confidence.as_str(), "reason": grade.reason,
+                        "sources": [], "outcome": outcome.text(),
+                    }));
+                    match outcome {
+                        WriteOutcome::Written(_) | WriteOutcome::Unchanged => {
+                            let mut concluded = step(
+                                Stage::Decide,
+                                StepKind::Concluded,
+                                format!(
+                                    "{}: {} ({})",
+                                    definition.label,
+                                    display(&value),
+                                    confidence.as_str()
+                                ),
+                            );
+                            concluded.detail = grade.reason;
+                            concluded.field_keys = vec![definition.key.clone()];
+                            steps.push(concluded);
+                        }
+                        other => not_written.push((definition.clone(), other.text())),
+                    }
+                }
+                _ => not_written.push((definition.clone(), grade.reason)),
             }
         }
         let mut nd_map: Map<String, Json> = Map::new();

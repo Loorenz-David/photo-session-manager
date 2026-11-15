@@ -3,6 +3,7 @@
 pub mod calls;
 pub mod confidence;
 pub mod cost;
+pub mod derived_condition;
 pub mod fingerprint;
 pub mod run_rules;
 pub mod sites;

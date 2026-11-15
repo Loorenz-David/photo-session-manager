@@ -25,6 +25,7 @@ pub enum Verdict {
 #[serde(rename_all = "snake_case")]
 pub enum FieldClass {
     NeverWritten,
+    Derived,
     Condition,
     Attribution,
     Measured,

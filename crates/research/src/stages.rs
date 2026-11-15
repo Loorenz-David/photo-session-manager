@@ -139,6 +139,7 @@ pub(crate) fn class_of(ctx: &Ctx<'_>, definition: &Definition, step: AttributeGr
         never_written(definition, Some(step)),
         &ctx.config.attribution_keys,
         &ctx.config.excluded_keys,
+        &ctx.config.detailed_condition.key,
     )
 }
 
@@ -845,6 +846,15 @@ fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
         read_step.field_keys = statements.keys().cloned().collect();
         if let Some(text) = &not_determined {
             read_step.detail = text.clone();
+        } else if site
+            .as_ref()
+            .is_some_and(|s| s.class == crate::domain::SiteClass::Shop)
+            && statements
+                .keys()
+                .any(|key| ctx.config.attribution_keys.contains(key))
+        {
+            read_step.detail =
+                "another product of your shop: not used for designer and maker".into();
         }
         Ok(Work::Commit {
             output: json!({

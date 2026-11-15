@@ -44,9 +44,12 @@ pub fn field_class(
     never_written: bool,
     attribution_keys: &[String],
     excluded_keys: &[String],
+    detailed_condition_key: &str,
 ) -> FieldClass {
     if never_written || excluded_keys.contains(&definition.key) {
         FieldClass::NeverWritten
+    } else if !detailed_condition_key.is_empty() && definition.key == detailed_condition_key {
+        FieldClass::Derived
     } else if definition.group == AttributeGroup::Condition {
         FieldClass::Condition
     } else if attribution_keys.contains(&definition.key) {
@@ -244,6 +247,21 @@ pub fn decide_attribution(
         },
         Stated::Unmapped(_) => Decision::not_determined(others(None)),
     }
+}
+
+/// Attribution alone discards every other product of the linked shop. Visible and measured
+/// decisions continue to use those listings under MC-A4.
+pub fn decide_attribution_without_shop(
+    definition: &Definition,
+    labels: &[LabelItem],
+    listings: &[ListingItem],
+) -> Decision {
+    let other_sites: Vec<ListingItem> = listings
+        .iter()
+        .filter(|item| item.site.class != SiteClass::Shop)
+        .cloned()
+        .collect();
+    decide_attribution(definition, labels, &other_sites)
 }
 
 /// MC-A4 measured fields: the attribution function over `match` listing items only, with a
@@ -778,15 +796,24 @@ mod tests {
             "custom.color",
             json!({}),
         );
-        assert_eq!(field_class(&wear, false, &keys, &[]), FieldClass::Condition);
         assert_eq!(
-            field_class(&width_attr, false, &keys, &[]),
+            field_class(&wear, false, &keys, &[], ""),
+            FieldClass::Condition
+        );
+        assert_eq!(
+            field_class(&width_attr, false, &keys, &[], ""),
             FieldClass::Attribution
         );
-        assert_eq!(field_class(&width, false, &keys, &[]), FieldClass::Measured);
-        assert_eq!(field_class(&colour, false, &keys, &[]), FieldClass::Visible);
         assert_eq!(
-            field_class(&colour, true, &keys, &[]),
+            field_class(&width, false, &keys, &[], ""),
+            FieldClass::Measured
+        );
+        assert_eq!(
+            field_class(&colour, false, &keys, &[], ""),
+            FieldClass::Visible
+        );
+        assert_eq!(
+            field_class(&colour, true, &keys, &[], ""),
             FieldClass::NeverWritten
         );
     }
@@ -816,12 +843,141 @@ mod tests {
             (&width, FieldClass::Measured),
             (&condition, FieldClass::Condition),
         ] {
-            assert_eq!(field_class(field, false, &[], &[]), class);
+            assert_eq!(field_class(field, false, &[], &[], ""), class);
             assert_eq!(
-                field_class(field, false, &[], std::slice::from_ref(&field.key)),
+                field_class(field, false, &[], std::slice::from_ref(&field.key), ""),
                 FieldClass::NeverWritten
             );
         }
+    }
+
+    #[test]
+    fn a25_c13a_detail_grade_is_derived() {
+        let grade = def(
+            CoreType::Choice,
+            AttributeGroup::Details,
+            "custom.grade",
+            json!({}),
+        );
+        assert_eq!(
+            field_class(&grade, false, &[], &[], "custom.grade"),
+            FieldClass::Derived
+        );
+    }
+    #[test]
+    fn a25_c13b_excluded_precedes_derived() {
+        let grade = def(
+            CoreType::Choice,
+            AttributeGroup::Details,
+            "custom.grade",
+            json!({}),
+        );
+        assert_eq!(
+            field_class(&grade, false, &[], &["custom.grade".into()], "custom.grade"),
+            FieldClass::NeverWritten
+        );
+    }
+    #[test]
+    fn a25_c13c_empty_grade_key_keeps_visible() {
+        let grade = def(
+            CoreType::Choice,
+            AttributeGroup::Details,
+            "custom.grade",
+            json!({}),
+        );
+        assert_eq!(
+            field_class(&grade, false, &[], &[], ""),
+            FieldClass::Visible
+        );
+    }
+
+    #[test]
+    fn a25_c15a_shop_match_alone_is_no_attribution() {
+        let got =
+            decide_attribution_without_shop(&maker(), &[], &[shop("shop/p", Verdict::Match, a())]);
+        assert_eq!(got.written, None);
+    }
+    #[test]
+    fn a25_c15b_shop_similar_alone_is_no_attribution() {
+        let got = decide_attribution_without_shop(
+            &maker(),
+            &[],
+            &[shop("shop/p", Verdict::Similar, a())],
+        );
+        assert_eq!(got.written, None);
+    }
+    #[test]
+    fn a25_c15c_one_trusted_match_is_low() {
+        let got = decide_attribution_without_shop(
+            &maker(),
+            &[],
+            &[
+                shop("shop/p", Verdict::Match, a()),
+                trusted("e1", Verdict::Match, a()),
+            ],
+        );
+        assert_eq!(got.written, Some((json!("A"), AiConfidence::Low)));
+    }
+    #[test]
+    fn a25_c15d_two_trusted_matches_beat_shop() {
+        let got = decide_attribution_without_shop(
+            &maker(),
+            &[],
+            &[
+                shop("shop/p", Verdict::Match, a()),
+                trusted("e1", Verdict::Match, b()),
+                trusted("e2", Verdict::Match, b()),
+            ],
+        );
+        assert_eq!(got.written, Some((json!("B"), AiConfidence::Medium)));
+        assert!(!got.named.contains(&a()));
+    }
+    #[test]
+    fn a25_c15e_label_beats_shop() {
+        let got = decide_attribution_without_shop(
+            &maker(),
+            &[label(1, a())],
+            &[shop("shop/p", Verdict::Match, b())],
+        );
+        assert_eq!(got.written, Some((json!("A"), AiConfidence::High)));
+        assert!(!got.named.contains(&b()));
+    }
+    #[test]
+    fn a25_c15f_measured_shop_match_is_unchanged() {
+        let d = def(
+            CoreType::Dimension,
+            AttributeGroup::Details,
+            "custom.width",
+            json!({"units": ["CENTIMETERS"], "unit_names": {"cm": "CENTIMETERS"}}),
+        );
+        let width = json!({"value": "120.0", "unit": "CENTIMETERS"});
+        let got = decide_measured(
+            &d,
+            &[shop(
+                "shop/p",
+                Verdict::Match,
+                Stated::Mapped(width.clone()),
+            )],
+        );
+        assert_eq!(got.written, Some((width, AiConfidence::Medium)));
+    }
+    #[test]
+    fn a25_c15g_visible_shop_match_is_unchanged() {
+        let d = def(
+            CoreType::Choice,
+            AttributeGroup::Details,
+            "custom.wood",
+            json!({}),
+        );
+        let got = decide_visible(
+            &d,
+            Some(&PhotoRead {
+                value: json!("A"),
+                sure: true,
+            }),
+            &[shop("shop/p", Verdict::Match, a())],
+        );
+        assert_eq!(got.written, Some((json!("A"), AiConfidence::High)));
     }
 
     #[test]

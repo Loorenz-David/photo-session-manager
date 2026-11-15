@@ -6,6 +6,7 @@ mod adapter_search;
 mod api;
 mod arranged;
 mod defaults;
+mod derived;
 mod export;
 mod gateway;
 mod harness;
