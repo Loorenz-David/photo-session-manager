@@ -850,4 +850,7 @@ to 07A MC-10 and 05A MC-30.
     evidence) and R12 (one stage-1 call over at most 8 chosen photos, the first wide Main photo used only for the
     search; the page reader's text is the product extract; no Compare for a page that lists another kind of piece;
     fingerprint version 2). There is no shoot template in the app yet (08A defers it); R12 chooses photos by position.
+15. 2026-11-15 (owner). Detailed-condition table: card A (worst level None → Very Good, Minor → Very Good,
+    Moderate → Good, Major → Worn, never Excellent) is the default "for now"; the owner will tweak it later. R11
+    ships the table as a setting; R12 writes A as its default.
 

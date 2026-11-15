@@ -62,6 +62,13 @@ On the 375 listing pages R1 recorded, no trusted site states a designer or a mak
 | the Read rows of the adapter tests (`stage_read_gpt-6-luna.json`) | `crates/research/tests/engine/adapter_openai.rs` | the Read schema `keys` | U3: kept green unchanged (a request without `piece` keeps that schema: A26·C12(a)) |
 No shipped default changes value. One default is new (`observe_max_photos`, 8); A24·C2(a) stands.
 
+## Carried from the owner (2026-11-15; orchestrator)
+- **U1 or the first unit touching `crates/research/src/config.rs`: ship the detailed-condition table filled.** The
+  owner answered R11's card with A: worst condition level None → Very Good, Minor → Very Good, Moderate → Good,
+  Major → Worn, never Excellent (choice strings as in the shop definitions fixture). R11 ships the table empty
+  (its "on silence"); this phase writes A as the default and adds one row: `ResearchSettings::default()` carries
+  that table. The owner will tweak it later in Settings → Research.
+
 ## Unit 1 — The photo look in one call, by position
 
 **Unit id:** `R12·U1` · **Rows:** A26·C1–C7 · **Changes app files:** no
