@@ -197,7 +197,7 @@ it('a25_c31b_no_field_chosen_says_not_set', async () => {
   expect(screen.queryByRole('list', { name: 'Detailed condition levels' })).not.toBeInTheDocument();
 });
 
-it('a25_c32a_reset_names_what_it_keeps_calls_the_command_once_and_shows_the_returned_values', async () => {
+it('a27_c13a_reset_keeps_the_fields_research_fills', async () => {
   const value = research({ stages: { observe: { model: 'gpt-6-luna', effort: 'low', image_long_edge: 1536 } },
     prices: [{ provider: 'openai', model: 'gpt-6-luna', unit: 'input', usd_per_million: '0.4', fallback_call_usd: null }] });
   vi.mocked(resetResearchSettings).mockResolvedValue(JSON.stringify(value));
@@ -207,6 +207,7 @@ it('a25_c32a_reset_names_what_it_keeps_calls_the_command_once_and_shows_the_retu
   expect(within(within(dialog).getByRole('list', { name: 'Kept by the reset' })).getAllByRole('listitem').map(row => row.textContent)).toEqual([
     'Trusted sites', 'Designer and maker fields', 'Fields research fills', 'Extra shop addresses', 'The detailed-condition table', 'Language']);
   expect(dialog).toHaveTextContent('keys are untouched');
+  expect(dialog).not.toHaveTextContent('Fields research leaves alone');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm reset' }));
   await waitFor(() => expect(screen.getByLabelText('observe model')).toHaveValue('gpt-6-luna'));
   expect(resetResearchSettings).toHaveBeenCalledTimes(1);

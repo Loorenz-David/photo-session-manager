@@ -26,6 +26,8 @@ export const NO_ATTRIBUTION_FIELD = 'No designer or maker field is chosen: resea
 /** What "Reset research settings to defaults" keeps (R11 "Reset keeps the person's lists"). */
 export const RESET_KEEPS = ['Trusted sites', 'Designer and maker fields', 'Fields research fills', 'Extra shop addresses', 'The detailed-condition table', 'Language'];
 export const DETAILED_CONDITION_UNSET = 'Not set: Detailed condition is filled like any other field.';
+const researchFillable = (definition: Definition) => definition.group !== 'product' && definition.writable
+  && !['media_list', 'reference', 'rich_text', 'money', 'rating'].includes(definition.core_type);
 /** Select values of a detailed-condition row that are not a choice of the field. */
 const UNSET = '__unset__';
 const COUNTS_FOR_NOTHING = '__nothing__';
@@ -235,6 +237,8 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
   const optional = (value: string) => (value.trim() === '' ? null : value);
   const choiceFields = shopDomain ? shopFieldsOf(definitions).filter(d => d.core_type === 'choice') : [];
   const detailed = choiceFields.find(d => d.key === research.detailed_condition.key);
+  const unchosenAttribution = research.attribution_keys.filter(key => !research.fill_keys.includes(key))
+    .map(key => definitions.find(definition => definition.key === key)?.label ?? key);
   /** One row per condition level: the choices of the Condition-step choice fields, in their own order (08B changelog 12 b). */
   const conditionLevels = [...new Set(choiceFields.filter(d => d.group === 'condition' && d.key !== detailed?.key).flatMap(d => d.choices))];
   const chosenLevel = (level: string) => {
@@ -370,13 +374,15 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
           chosen={research.attribution_keys} suggested={suggested}
           onChange={keys => { edit({ attribution_keys: keys }); setSuggested(current => current.filter(key => keys.includes(key))); }} />
         {research.attribution_keys.length === 0 && <p className="health-detail" data-no-attribution>{NO_ATTRIBUTION_FIELD}</p>}
+        {unchosenAttribution.length > 0 && <p className="health-detail">Not among the fields research fills, so research will not suggest it: {unchosenAttribution.join(', ')}</p>}
       </div>
 
       <div role="group" aria-label="Fields research fills" className="flex flex-col gap-2">
         <h3>Fields research fills</h3>
         <p className="health-detail">Research suggests values only for the fields ticked here. A new field in your shop stays empty until you tick it.</p>
         <ShopFieldPicker label="Fields research fills" definitions={definitions} shopDomain={shopDomain}
-          chosen={research.fill_keys} onChange={keys => edit({ fill_keys: keys })} />
+          chosen={research.fill_keys} eligible={researchFillable} onChange={keys => edit({ fill_keys: keys })} />
+        {research.fill_keys.length === 0 && <p className="health-detail">No field is chosen: research will not fill anything.</p>}
       </div>
 
       <div role="group" aria-label="Extra shop addresses" className="flex flex-col gap-2">
@@ -405,6 +411,8 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
 
       <div role="group" aria-label="Detailed condition" className="flex flex-col gap-2">
         <h3>Detailed condition</h3>
+        {research.detailed_condition.key !== '' && !research.fill_keys.includes(research.detailed_condition.key)
+          && <p className="health-detail">Not among the fields research fills, so the detailed condition will not be worked out.</p>}
         <label htmlFor="detailed-condition-field">Detailed condition field</label>
         <select id="detailed-condition-field" className="rounded-md border px-2 py-1" value={research.detailed_condition.key}
           onChange={event => edit({ detailed_condition: { key: event.target.value, levels: [] } })}>
@@ -414,6 +422,7 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
         {!detailed ? <p className="health-detail">{DETAILED_CONDITION_UNSET}</p> : (
           <>
             <p className="health-detail">For the worst condition level of an item, the grade research writes.</p>
+            <p className="health-detail">Levels with no value do not hold the grade back.</p>
             <ul aria-label="Detailed condition levels" className="flex flex-col gap-1">
               {conditionLevels.map(level => (
                 <li key={level} data-level={level} className="flex items-center justify-between gap-2">
