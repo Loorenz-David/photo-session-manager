@@ -281,11 +281,18 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
   `attribute_ai_accept(item_id, key)`, `attribute_conflict_resolve(item_id, key, action, value?)` and widens
   `publish_preview` (`n_withheld`, `conflicts`) and `publish_confirm` (the shown set).
 - **Settings** (`settings.json` key `research`, a JSON slot in `psm_infra`; the shape is `psm_research::config::
-  ResearchSettings`, R4·U4). `auto` (true) · `quiet_seconds` (1) · `source_wait_seconds` (120) · `attribution_keys`
-  (`["beyo.designer"]`: the shop fixture's Designer field, no manufacturer field; R4 review, orchestrator 2026-11-12) · `trusted_sites` ([]) · `max_pages` (10) ·
-  `stages.<stage>.{model, effort, image_long_edge}` (models and efforts empty until R10; long edge 1024 for observe,
-  find, compare and 2048 for labels, condition) · `max_cost_per_run` ("0.50") · `max_cost_per_day` ("15") · `prices`
-  ([] until R10) · `language` ("English") · `record_days` (30, minimum 2) · `call_timeout_seconds` ({model: 180,
+  ResearchSettings`, R4·U4). `auto` (false; owner 2026-11-15, runs start from an explicit request, 08B changelog 13) ·
+  `quiet_seconds` (1) · `source_wait_seconds` (120) · `attribution_keys` ([]: no field is attribution until the owner
+  points at the shop's designer and maker fields; owner 2026-11-15, R10) · `trusted_sites` ([]) · `max_pages` (10) ·
+  `stages.<stage>.{model, effort, image_long_edge}` (R10, evidence "Owner pick of models" 2026-11-15: observe
+  `gpt-6.1-sol` low · find no model (the visual search) · read `gpt-6-luna` low · compare `gpt-6.1-terra` low · labels
+  `gpt-6.1-sol` low · condition `gpt-6.1-terra` high · decide `gpt-6.1-terra` low; long edge 1024 for observe, find,
+  read, compare, decide and 2048 for labels, condition) · `max_cost_per_run` ("0.50") · `max_cost_per_day` ("15") ·
+  `prices` (R10: for `openai` × each of the three models the rows `input_token`, `cached_input_token`,
+  `cache_write_token`, `output_token` (Sol 2.00/0.10/2.50/10.00, Terra 1.00/0.05/1.25/5.00, Luna 0.10/0.01/0.125/0.50
+  USD per 1M, pricing page read 2026-11-12) and `web_search_call` (10000 per 1M = USD 10 per 1,000), fallback "0.05"
+  per call; `serpapi_lens` `image_search_call` 25000 per 1M (USD 25 per 1,000 searches), fallback "0.025";
+  `page_http` `page_fetch` 0, fallback "0.000001") · `language` ("English") · `record_days` (30, minimum 2) · `call_timeout_seconds` ({model: 180,
   other: 60}) · `providers.{model, visual_search, page_reader}` (adapter ids; from R8 the defaults are `openai`, `serpapi_lens`,
   `page_http`, and a saved `""` means the default).
 - **Panel sentences (MC-A6).** `NoIntegration` "Connect a shop to use research" · `NoModelKey` "Add the model key in

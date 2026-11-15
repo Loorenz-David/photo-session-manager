@@ -232,8 +232,8 @@ pub struct ResearchSettings {
     pub auto: bool,
     pub quiet_seconds: i64,
     pub source_wait_seconds: i64,
-    /// The shop's designer field (08A §6: the shop's designer and manufacturer keys; the
-    /// connected shop has no manufacturer field).
+    /// The shop's designer and maker fields (08A §6), as the owner points them; empty by default
+    /// (no field is treated as attribution until chosen).
     pub attribution_keys: Vec<String>,
     pub trusted_sites: Vec<String>,
     pub max_pages: u32,
@@ -247,19 +247,110 @@ pub struct ResearchSettings {
     pub providers: ProviderIds,
 }
 
+/// The shipped model per stage (evidence `research_providers.md` "Owner pick of models",
+/// 2026-11-15): `(stage, model, effort)`. Find calls no model (it is the visual search).
+const DEFAULT_STAGE_MODELS: [(Stage, &str, &str); 6] = [
+    (Stage::Observe, "gpt-6.1-sol", "low"),
+    (Stage::Read, "gpt-6-luna", "low"),
+    (Stage::Compare, "gpt-6.1-terra", "low"),
+    (Stage::Labels, "gpt-6.1-sol", "low"),
+    (Stage::Condition, "gpt-6.1-terra", "high"),
+    (Stage::Decide, "gpt-6.1-terra", "low"),
+];
+
+/// OpenAI prices of the shipped models, USD per 1M tokens: input, cached input, cache write
+/// (30 min), output (evidence "Candidate models", pricing page read 2026-11-12, Standard tier).
+const DEFAULT_MODEL_PRICES: [(&str, &str, &str, &str, &str); 3] = [
+    ("gpt-6.1-sol", "2.00", "0.10", "2.50", "10.00"),
+    ("gpt-6.1-terra", "1.00", "0.05", "1.25", "5.00"),
+    ("gpt-6-luna", "0.10", "0.01", "0.125", "0.50"),
+];
+
+/// The web search tool: USD 10 per 1,000 calls (evidence "Model provider: OpenAI API").
+const WEB_SEARCH_USD_PER_MILLION: &str = "10000";
+/// A model call whose usage is unknown (the acceptance measurement's worst case per call).
+const MODEL_FALLBACK_CALL_USD: &str = "0.05";
+/// SerpApi Google Lens: USD 25 per 1,000 searches (cheapest paid plan, evidence "Reverse image
+/// search", read 2026-11-12); an upload costs no credit (V7).
+const LENS_USD_PER_MILLION: &str = "25000";
+const LENS_FALLBACK_CALL_USD: &str = "0.025";
+/// A plain page download costs nothing; its fallback is the smallest positive amount (1 µUSD).
+const PAGE_FALLBACK_CALL_USD: &str = "0.000001";
+
+fn default_stages() -> BTreeMap<String, StageConfig> {
+    let mut stages = ResearchConfig::default().stages;
+    for (stage, model, effort) in DEFAULT_STAGE_MODELS {
+        if let Some(entry) = stages.get_mut(stage.as_str()) {
+            entry.model = model.to_owned();
+            entry.effort = effort.to_owned();
+        }
+    }
+    stages
+}
+
+fn default_prices() -> Vec<PriceRow> {
+    let row = |provider: &str, model: &str, unit: &str, usd: &str| PriceRow {
+        provider: provider.to_owned(),
+        model: model.to_owned(),
+        unit: Some(unit.to_owned()),
+        usd_per_million: Some(usd.to_owned()),
+        fallback_call_usd: None,
+    };
+    let fallback = |provider: &str, model: &str, usd: &str| PriceRow {
+        provider: provider.to_owned(),
+        model: model.to_owned(),
+        unit: None,
+        usd_per_million: None,
+        fallback_call_usd: Some(usd.to_owned()),
+    };
+    let mut prices = Vec::new();
+    for (model, input, cached, write, output) in DEFAULT_MODEL_PRICES {
+        for (unit, usd) in [
+            ("input_token", input),
+            ("cached_input_token", cached),
+            ("cache_write_token", write),
+            ("output_token", output),
+            ("web_search_call", WEB_SEARCH_USD_PER_MILLION),
+        ] {
+            prices.push(row(DEFAULT_MODEL_PROVIDER, model, unit, usd));
+        }
+        prices.push(fallback(
+            DEFAULT_MODEL_PROVIDER,
+            model,
+            MODEL_FALLBACK_CALL_USD,
+        ));
+    }
+    prices.push(row(
+        DEFAULT_VISUAL_SEARCH_PROVIDER,
+        "",
+        "image_search_call",
+        LENS_USD_PER_MILLION,
+    ));
+    prices.push(fallback(
+        DEFAULT_VISUAL_SEARCH_PROVIDER,
+        "",
+        LENS_FALLBACK_CALL_USD,
+    ));
+    prices.push(row(DEFAULT_PAGE_READER, "", "page_fetch", "0"));
+    prices.push(fallback(DEFAULT_PAGE_READER, "", PAGE_FALLBACK_CALL_USD));
+    prices
+}
+
 impl Default for ResearchSettings {
     fn default() -> Self {
         Self {
-            auto: true,
+            // Owner 2026-11-15: runs start from an explicit request (08B changelog 13).
+            auto: false,
             quiet_seconds: 1,
             source_wait_seconds: 120,
-            attribution_keys: vec!["beyo.designer".to_owned()],
+            // Owner 2026-11-15: no field is attribution until the owner points at one.
+            attribution_keys: Vec::new(),
             trusted_sites: Vec::new(),
             max_pages: 10,
-            stages: ResearchConfig::default().stages,
+            stages: default_stages(),
             max_cost_per_run: "0.50".to_owned(),
             max_cost_per_day: "15".to_owned(),
-            prices: Vec::new(),
+            prices: default_prices(),
             language: "English".to_owned(),
             record_days: 30,
             call_timeout_seconds: CallTimeouts::default(),

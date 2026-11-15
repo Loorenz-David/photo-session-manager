@@ -8,7 +8,7 @@ blocked_on: none (owner picked the models 2026-11-15)
 ---
 # R10 — Defaults: research works out of the box
 
-**Tracker:** NOT_STARTED · 2026-11-12 · planner · —
+**Tracker:** IMPLEMENTED · 2026-11-15 · codex · U1 shipped defaults (owner's models, prices with cache_write_token, auto off, attribution keys empty) + 4 row tests; research crate 294 tests, clippy, fmt, workspace check green
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. The gate for `depends_on` is the Tracker line of each plan named there. `master_plan.md` §4 is not used for research milestones.)
 
@@ -127,3 +127,24 @@ The reviewer reads the units in order and runs, once: the milestone's research-c
 2. Create a session and shoot one photo. Without touching any other research setting, the form's research panel starts showing steps within a few seconds.
 
 ## Review log
+
+### 2026-11-15 · implement r1 (Claude Opus 5.5, launched as `pipeline-implementer`)
+- **Built (R10·U1).** `ResearchSettings::default()` (`crates/research/src/config.rs`) now ships the owner's pick of
+  2026-11-15: observe `gpt-6.1-sol` low, read `gpt-6-luna` low, compare `gpt-6.1-terra` low, labels `gpt-6.1-sol` low,
+  condition `gpt-6.1-terra` high, decide `gpt-6.1-terra` low (find calls no model); the price table for exactly
+  those three models (`input_token`, `cached_input_token`, `cache_write_token`, `output_token`, `web_search_call`,
+  fallback 0.05 per call), `serpapi_lens` `image_search_call` (USD 25 per 1,000, fallback 0.025) and `page_http`
+  `page_fetch` (0, fallback 0.000001); `auto` false; `attribution_keys` empty. `master_plan_research.md` §6.6 records
+  the values. Tests `crates/research/tests/engine/defaults.rs`: `a24_c1a_…`, `a24_c1b_…`, `a24_c2a_…`, `a24_c2b_…`.
+- **Assumptions.** (1) "status names no prerequisite" with `auto` off = the status reason is `AutoOff` with an empty
+  sentence (MC-A6 puts `auto` off last and the panel shows no sentence for it); the test asserts exactly that.
+  (2) C2(a) "every stage has a model" = every stage that calls the model; Find is the visual search and keeps an empty
+  model. (3) Lens is priced at the cheapest paid SerpApi plan (USD 25 / 1,000), not 0 as in the measurement, so the
+  caps count searches. (4) `page_http` gets a 1 µUSD fallback to satisfy "positive fallback" for a free download.
+  (5) Model fallback 0.05 per call = the measurement tool's worst case. (6) The fresh app is built inside the test
+  file (settings slot removed, fakes wrapped under the default ids) instead of a new `Harness::with_default_settings()`,
+  so `harness.rs` stays untouched.
+- **Deviations.** `tests/engine/lifecycle.rs`: removed `a13_c1d_default_attribution_keys_are_the_shops` (R4·U4,
+  A13·C1(d)), which asserted the non-empty `beyo.designer` default the owner's 2026-11-15 decision removes (A24·C2(b)
+  now asserts the empty default); its unused imports went with it. `max_pages` unchanged (10).
+

@@ -7,20 +7,19 @@ use std::sync::{Arc, Mutex};
 use chrono::{Local, TimeZone};
 use psm_core::{
     domain::{
-        attribute::{AttributeGroup, CoreType, Definition, Preset, PresetField},
+        attribute::{AttributeGroup, Preset, PresetField},
         photo::Classification,
     },
     ports::secrets::SecretStore,
 };
 use psm_research::{
-    config::{ResearchConfig, ResearchSettings},
+    config::ResearchConfig,
     domain::{RunState, RunTrigger, Stage},
     fakes,
-    rules::confidence::field_class,
     service::{FormSnapshot, MODEL_ACCOUNT, SEARCH_ACCOUNT},
     store as rstore,
 };
-use serde_json::{Value as Json, json};
+use serde_json::json;
 
 use crate::harness::{DESIGNER, E1, E2, Harness, INTEGRATION, LOCKED, WOODS};
 
@@ -175,49 +174,6 @@ fn a13_c1b_the_first_failing_is_named() {
     h.patch_settings(json!({"auto": false}));
     h.service.settings_changed();
     assert_eq!(reason(&h).unwrap().0, "Offline");
-}
-
-#[test]
-fn a13_c1d_default_attribution_keys_are_the_shops() {
-    let settings = ResearchSettings::default();
-    assert!(!settings.attribution_keys.is_empty());
-    let text = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../integrations/src/commerce/shopify/fixtures/sv1_definitions_p1.json"
-    ))
-    .unwrap();
-    let page: Json = serde_json::from_str(&text).unwrap();
-    let nodes = page["response"]["body"]["data"]["metafieldDefinitions"]["nodes"]
-        .as_array()
-        .unwrap();
-    let keys: Vec<String> = nodes
-        .iter()
-        .map(|n| {
-            format!(
-                "{}.{}",
-                n["namespace"].as_str().unwrap(),
-                n["key"].as_str().unwrap()
-            )
-        })
-        .collect();
-    for key in &settings.attribution_keys {
-        assert!(keys.contains(key), "{key} is not a definition of the shop");
-        let definition = Definition {
-            integration: "shopify".into(),
-            key: key.clone(),
-            label: key.clone(),
-            core_type: CoreType::Text,
-            choices: vec![],
-            validations: json!({}),
-            group: AttributeGroup::Details,
-            description: None,
-            writable: true,
-        };
-        assert_eq!(
-            field_class(&definition, false, &settings.attribution_keys),
-            psm_research::domain::FieldClass::Attribution
-        );
-    }
 }
 
 #[test]

@@ -4,6 +4,7 @@ mod adapter_openai;
 mod adapter_pages;
 mod adapter_search;
 mod api;
+mod defaults;
 mod export;
 mod gateway;
 mod harness;
