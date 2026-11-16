@@ -16,3 +16,12 @@ Opus reviews, one fix round). Deadline: on the work Mac the morning of 2026-11-1
 - **01:35 T2: Codex hit its usage limit (until 03:43)** after Units 1–2 (`efcc86c`, `0bff768`); partial Unit 3
   committed as `fa8a484`, resume note in the T2 plan; chain restarted from T2 with `PSM_IMPLEMENTER=claude`
   (`scratchpad/templates_chain2.sh`, T2→T4).
+- **02:03 T2 APPROVED_WITH_NOTES** (Claude implementer; one fix round: a dragged Main photo now keeps its place).
+- **02:40 T3 APPROVED_WITH_NOTES** (one fix round: undo of a drag between extras restores both photos).
+- **03:10 T4 APPROVED_WITH_NOTES** (one fix round: Shift the rest back shows only when something would move). Chain done.
+- **Join checks on tip `929f2f1`:** cargo test, clippy `-D warnings`, fmt, vitest 538/538 (86 files), frontend build all
+  green; real-key scan of tracked files and of every commit `origin/main..feature/agentic`: 0 hits. `origin/main` unmoved
+  at `23cd3c6`, nothing to merge. PR into `main` and merge per owner answer 4.
+- **Morning items for the owner:** card 1 built as swap (B = one rule); no hardware try-out yet (first run with the
+  Sony is on the work Mac); small edge left: a placed photo dragged to behind the extras gets a dot without moving, ⌘Z
+  does not clear it, Back to template does.
