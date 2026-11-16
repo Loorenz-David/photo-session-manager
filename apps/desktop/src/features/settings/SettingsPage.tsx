@@ -241,7 +241,7 @@ export function SettingsPage() {
     </Dialog>
     <section data-section="storage" data-active={section === 'storage'}><StorageSection /></section>
     {saved?.research && <section data-section="research" data-active={section === 'research'}><ResearchSection research={saved.research} shopDomain={saved.integration?.shop_domain || null} /></section>}
-    <section data-section="shooting-templates" data-active={section === 'shooting-templates'}><TemplatesSection /></section>
+    <section data-section="shooting-templates" data-active={section === 'shooting-templates'}><TemplatesSection active={section === 'shooting-templates'} /></section>
     </div>
   </main></>;
 }

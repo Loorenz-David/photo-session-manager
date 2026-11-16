@@ -22,10 +22,10 @@ are thin and run off the app lock (`spawn_blocking`); business logic never depen
 ### `crates/core` (psm-core)
 | Module | Holds |
 |---|---|
-| `domain/` | `item.rs`, `session.rs` (SessionStatus, PublishStep, RowLabel), `photo.rs` (Classification, Integrity), `attribute.rs`, `composition.rs` (10D values, Frame, Rect, EditorGeometry), `output.rs` (OutputFormat), `publish.rs`, `camera.rs` (CameraStatus, Link, reasons, CameraSettings, Keychain account names, ledger constants), `editing.rs` (Job, ProvisionInputs, RecipeProps…), `storage.rs` (StorageSettings, ExportSettings) |
-| `mechanisms/` (pure, unit-testable; the only place plans allow unit tests) | `arrival.rs` (candidate filter, path_key), `canon.rs` (NFC canonical path), `hash.rs` (SHA-256), `position.rs`, `status.rs` (status derivation, progress %), `time.rs`, `naming.rs` (folder key, export names), `values.rs` (MC-9 canonical attribute values, MC-14 selection), `attribute_write.rs` (MC-13 diff), `reconcile.rs` (MC-12 gallery diff), `publish.rs` (frozen_main, upload waves), `upload_name.rs`, `staleness.rs`, `backoff.rs` (render backoff; `editor_wait` = "Waiting for Capture One…", 10 min max), `missing.rs` (files deleted outside the app), `composition.rs` + `composition_cases.json` (shared with the TS editor), `capture_ledger.rs` (MC-33 rules), `camera_status.rs` (precedence, sentences), `secrets.rs` (FTP password), `cleanup.rs` + `retention.rs` (10F decisions), `hook_payload.rs` |
+| `domain/` | `item.rs`, `session.rs` (SessionStatus, PublishStep, RowLabel), `photo.rs` (Classification, Integrity), `attribute.rs`, `composition.rs` (10D values, Frame, Rect, EditorGeometry), `template.rs` (shooting templates, containers, presets), `output.rs` (OutputFormat), `publish.rs`, `camera.rs` (CameraStatus, Link, reasons, CameraSettings, Keychain account names, ledger constants), `editing.rs` (Job, ProvisionInputs, RecipeProps…), `storage.rs` (StorageSettings, ExportSettings) |
+| `mechanisms/` (pure, unit-testable; the only place plans allow unit tests) | `arrival.rs` (candidate filter, path_key), `canon.rs` (NFC canonical path), `hash.rs` (SHA-256), `position.rs`, `status.rs` (status derivation, progress %), `time.rs`, `naming.rs` (folder key, export names), `template.rs` (item type key), `values.rs` (MC-9 canonical attribute values, MC-14 selection), `attribute_write.rs` (MC-13 diff), `reconcile.rs` (MC-12 gallery diff), `publish.rs` (frozen_main, upload waves), `upload_name.rs`, `staleness.rs`, `backoff.rs` (render backoff; `editor_wait` = "Waiting for Capture One…", 10 min max), `missing.rs` (files deleted outside the app), `composition.rs` + `composition_cases.json` (shared with the TS editor), `capture_ledger.rs` (MC-33 rules), `camera_status.rs` (precedence, sentences), `secrets.rs` (FTP password), `cleanup.rs` + `retention.rs` (10F decisions), `hook_payload.rs` |
 | `ports/` | `store.rs` (Store/StoreTx; one impl: SQLite), `clock.rs`, `editing.rs`, `camera.rs` (CameraProvider, CaptureSink, ArrivalSource, ArrivalFollow, CompletedNames, DeliveryFs), `commerce.rs`, `images.rs`, `raw_previews.rs`, `secrets.rs`, `system.rs`, `storage.rs`, `events.rs` |
-| `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing, archived view) |
+| `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `templates` (local editor, each action saved immediately), `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing, archived view) |
 | `events.rs` | `AppEvent` (below); `error.rs`: `Error` with snake_case codes carried to the UI as `{code, message, data}` |
 
 ### `crates/infra` (psm-infra)
@@ -56,7 +56,7 @@ constructors `new`, `with_fake_document`, `with_fake_shop`, `with_camera*`), fak
 
 ### `apps/desktop/src-tauri` (psm-desktop)
 `src/lib.rs`: `specta_builder()` (the command list), `TauriEvents` (AppEvent → Tauri event), `run()`
-(opens the App, Edit menu with ⌘Z/⌘⇧Z, asset protocol scoped to `previews/`, window focus → preview
+(opens the App, Edit menu with ⌘Z/⌘⇧Z, asset protocol scoped to `previews/` and `templates/`, window focus → preview
 check, `camera_runtime.shutdown()` on exit), inline command tests, `export_bindings` test.
 `src/state.rs`: **AppState** (`RwLock<App>`, `handles()`, `mutate()`, `settings_set`). `src/commands/*.rs`:
 one file per area. `build.rs`: builds the stub sidecar if `binaries/camera-sidecar-aarch64-apple-darwin`
@@ -64,6 +64,14 @@ is missing. `tauri.conf.json`: `externalBin: binaries/camera-sidecar`, ad-hoc si
 `Info.plist`: `NSAppleEventsUsageDescription`, `NSLocalNetworkUsageDescription`.
 
 ## Runtime flows (step lists with the files involved)
+### Shooting templates (book `10G`, T1)
+Settings keeps its existing controls mounted in section panes. `TemplatesSection` calls
+`src/services/templates.ts` → ten Tauri commands → `TemplatesService` over the `Store` port.
+`shooting_templates` and `template_containers` live in SQLite migration 014. Optional example
+images are JPEG copies under `<data>/templates/<template id>/` made by `ImageOpsImpl::thumbnail`;
+the original is left alone and the webview can read only that data folder through the asset
+protocol. T1 only edits templates: placement on arriving photos begins in T2.
+
 ### Start-up (`psm_desktop_lib::run` → `open_logged` → `App::open` → `App::build`, `crates/integrations/src/lib.rs`)
 1. `AppPaths::from_env_or_default` → `paths.create()` → `logging::init` (so the start is logged).
 2. `JxaScripting::new` writes the 24 scripts to `<data>/hooks/jxa/`; one `LaunchGate`, one
