@@ -2,7 +2,7 @@
 plan: T1_templates_and_settings
 role: fix
 round: 2
-state: BLOCKED
+state: DONE
 date: 2026-11-16
 actor: codex
 ---
@@ -51,3 +51,7 @@ No Rust production or capability file changed, so no Rust test suite was run. No
 ## ⚠ OWNER DECISIONS REQUIRED (0)
 
 None.
+
+## Orchestrator resolution (2026-11-16 01:20)
+
+The only block was the sandbox refusing `git add`. The orchestrator re-ran `npx vitest run src/features/settings` (80/80) and committed the two fix files as checkpoint `a801f3a`; state set to DONE so the runner resumes at review r2.
