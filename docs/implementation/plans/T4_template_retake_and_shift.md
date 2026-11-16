@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 of `handoffs/reviewer/handoff_templates_plan_r1.m
 ---
 # T4 — Retakes and bad shots
 
-**Tracker:** CHANGES_REQUESTED · 2026-11-16 · opus (pipeline-reviewer) · review r1: one B1 (T4-R1-B1, production): Shift the rest back is offered and "succeeds" with nothing to shift after a Condition photo is denied (10G §6.4); perimeter clean; t4 11, t3 19, t2 21, desktop 30, UI 165, clippy/fmt/typecheck green; 4 backlog notes
+**Tracker:** IMPLEMENTED · 2026-11-16 · claude sonnet 5.5 (pipeline-implementer) · fix 1: T4-R1-B1 fixed (`can_shift_back` true only when releasing the denied photos moves a template-placed photo; new row (e) test); t4 12/12, t3 19, t2 21, clippy/fmt/typecheck green
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -222,3 +222,11 @@ On scratch data, with the dining-chair template:
 **Notes** (in `backlog.md` under T4): the 10G §4.2 wording versus §6.4; the page path of Shift the rest back has no UI test; `psm-desktop` fails once after a new command; T3 N2 and N6 are still open.
 
 **Probe.** A test was appended to `t4_template_retake_shift.rs`, run and reverted (checksum matched). No production file was touched.
+
+### 2026-11-16 · fix r2 (fix 1) · claude sonnet 5.5 (pipeline-implementer)
+**T4-R1-B1 fixed.** `can_shift_back` (`template_placement.rs`) now computes the shot indexes twice: as they are, and with every Deleted photo's shot left out (as released). It is true only when at least one photo that is not Deleted and has `place_by_hand = 0` has a different expected place (classification or slot, P5) between the two. Otherwise false, and `shift_back` answers `nothing_to_shift` with no write and no step (it already called the same function). `shot_indexes` now delegates to `shot_indexes_without`; behaviour of placement is unchanged (t2 21/21, t3 19/19). New test `t4_c2e2_…` (row (e)): S0, F4 denied → `can_shift_back` false, `shift_back` refused with `NothingToShift`, undo label still the denial's. Rows C2(a), (c), (f) and A7 unchanged and green (t4 12/12).
+
+**Judgment call.** The comparison is of the expected place before and after release, as the correction says; presets are not compared (a different container always means a different slot).
+
+**Not done (outside the finding's files).** `docs/guide/02_architecture.md` line ~88 still describes `can_shift_back` as "a later …" photo existing; the guide row is now slightly wider than the code. Left for the orchestrator or the next guide touch.
+

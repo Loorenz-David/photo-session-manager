@@ -374,6 +374,18 @@ fn t4_c2e_nothing_later_nothing_to_shift() {
 }
 
 #[test]
+fn t4_c2e2_denied_condition_shot_with_later_condition_photo_has_nothing_to_shift() {
+    let a = app();
+    let (s, f) = s0(&a, "C2E2");
+    a.review().delete(f[3].id).unwrap();
+    let label = a.history().state(s).undo;
+    assert!(label.is_some());
+    assert!(!view(&a, s).can_shift_back);
+    assert!(matches!(shift(&a, s), Err(Error::NothingToShift)));
+    assert_eq!(a.history().state(s).undo, label);
+}
+
+#[test]
 fn t4_c2f_hand_placed_later_photos_are_not_shifted() {
     let a = app();
     let (s, f) = chair_with(&a, "C2F", 3);

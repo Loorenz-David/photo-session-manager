@@ -235,10 +235,20 @@ fn template_of(tx: &dyn StoreTx, session_id: i64) -> Result<Option<Template>> {
 /// P2–P4: the 1-based shot index of every shot of the session (holds counted), as placement
 /// reads it at `now`.
 fn shot_indexes(tx: &dyn StoreTx, session_id: i64, now: i64) -> Result<HashMap<i64, usize>> {
+    shot_indexes_without(tx, session_id, now, &std::collections::HashSet::new())
+}
+
+/// The same indexes with the shots of `skipped` photos left out (as if they were released).
+fn shot_indexes_without(
+    tx: &dyn StoreTx,
+    session_id: i64,
+    now: i64,
+    skipped: &std::collections::HashSet<i64>,
+) -> Result<HashMap<i64, usize>> {
     let shots = tx
         .shot_keys(session_id)?
         .into_iter()
-        .filter(|s| !s.released)
+        .filter(|s| !s.released && !skipped.contains(&s.photo_id))
         .map(|s| Shot {
             photo_id: s.photo_id,
             at: s.at,
@@ -344,43 +354,49 @@ pub fn session_view_at(store: &dyn Store, now: i64, session_id: i64) -> Result<T
                 differs,
             });
         }
-        result.can_shift_back = can_shift_back(tx, session_id, &indexes)?;
+        result.can_shift_back = can_shift_back(tx, session_id, &template, now, &indexes)?;
         result.containers = template.containers;
         Ok(())
     })?;
     Ok(result)
 }
 
-/// 10G §6.4: a Deleted photo that is not released has a later shot (greater shot index) that is
-/// not Deleted and was placed by the template (a row with `place_by_hand = 0`).
+/// 10G §6.4: the button is offered only when pressing it would change something. Releasing the
+/// session's unreleased Deleted photos must change the expected place (classification or slot,
+/// P5) of at least one photo that is not Deleted and was placed by the template (a row with
+/// `place_by_hand = 0`). A denied photo with nothing later, with only hand-placed photos later, or
+/// beyond the last container (later photos stay Condition) leaves nothing to shift.
 fn can_shift_back(
     tx: &dyn StoreTx,
     session_id: i64,
+    template: &Template,
+    now: i64,
     indexes: &HashMap<i64, usize>,
 ) -> Result<bool> {
     let photos = tx.photos(session_id)?;
-    let mut first_denied: Option<usize> = None;
-    for p in photos
+    let denied: std::collections::HashSet<i64> = photos
         .iter()
         .filter(|p| p.classification == Classification::Deleted)
-    {
-        if tx.photo_place_row(p.id)?.is_some_and(|r| r.released) {
-            continue;
-        }
-        if let Some(&index) = indexes.get(&p.id) {
-            first_denied = Some(first_denied.map_or(index, |f| f.min(index)));
-        }
-    }
-    let Some(first_denied) = first_denied else {
+        .map(|p| p.id)
+        .collect();
+    if !denied.iter().any(|id| indexes.contains_key(id)) {
         return Ok(false);
-    };
+    }
+    let released = shot_indexes_without(tx, session_id, now, &denied)?;
     for p in photos
         .iter()
         .filter(|p| p.classification != Classification::Deleted)
     {
-        if tx.photo_place_row(p.id)?.is_some_and(|r| !r.place_by_hand)
-            && indexes.get(&p.id).is_some_and(|&i| i > first_denied)
-        {
+        if !tx.photo_place_row(p.id)?.is_some_and(|r| !r.place_by_hand) {
+            continue;
+        }
+        let (Some(&now_index), Some(&then_index)) = (indexes.get(&p.id), released.get(&p.id))
+        else {
+            continue;
+        };
+        let (class_now, slot_now, _) = expected_place(now_index, &template.containers);
+        let (class_then, slot_then, _) = expected_place(then_index, &template.containers);
+        if (class_now, slot_now) != (class_then, slot_then) {
             return Ok(true);
         }
     }
@@ -400,7 +416,7 @@ pub fn shift_back(h: &HandAction<'_>, session_id: i64) -> Result<ReviewResult> {
         step = None;
         let template = template_of(tx, session_id)?.ok_or(Error::NoTemplate)?;
         let indexes = shot_indexes(tx, session_id, at)?;
-        if !can_shift_back(tx, session_id, &indexes)? {
+        if !can_shift_back(tx, session_id, &template, at, &indexes)? {
             return Err(Error::NothingToShift);
         }
         let photos = tx.photos(session_id)?;
