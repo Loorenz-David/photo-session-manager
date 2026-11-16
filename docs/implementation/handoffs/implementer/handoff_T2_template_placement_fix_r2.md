@@ -29,7 +29,7 @@ actor: claude sonnet 5.5 (pipeline-implementer)
 Checks, one cargo command at a time: `t2_template_placement::` 21/21 (20 + the new one); `psm-core mechanisms::` 93/93; `p02_review_order::` 25, `p39_undo_history_core::` 24, `t1_templates::` 12, all green; clippy (core, infra, desktop, testkit, `-D warnings`), `cargo fmt --check`, `npm run typecheck`: green. Full suite not run: no shared store/migration code changed (the renumber is a no-op for untemplated sessions).
 
 ## Checkpoint SHA
-See the `CHECKPOINT (not approved): T2 fix 1` commit on this branch (`git log -1 --format=%h`).
+`46d5ea8` (code and docs). This handoff line was added after the commit and is committed by the runner.
 
 ## Stamp
 Code tree after the checkpoint commit; targeted runs above green, no failures.
