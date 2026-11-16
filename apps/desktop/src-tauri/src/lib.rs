@@ -1153,6 +1153,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::templates::template_shooting_order_set,
         commands::templates::template_container_presets_set,
         commands::templates::template_session_view,
+        commands::templates::template_drop,
+        commands::templates::template_back,
     ])
 }
 
@@ -1859,6 +1861,76 @@ mod t1_tests {
         assert_eq!(view["templated"], false);
         assert_eq!(view["containers"], json!([]));
         assert!(include_str!("../../src/services/bindings.ts").contains("template_session_view"));
+    }
+}
+
+#[cfg(test)]
+mod t3_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets},
+        webview::InvokeRequest,
+    };
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    #[test]
+    fn t3_c3g_template_commands_answer_no_template() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let session = a
+            .items()
+            .create_local("C3G", "C3G", "Table", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let photo = a.add_photo(session, "DSC00001.ARW").unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::templates::template_back,
+                commands::templates::template_drop,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let back = call(&w, "template_back", json!({"sessionId":session})).unwrap_err();
+        assert_eq!(back["code"], "no_template");
+        let dropped = call(
+            &w,
+            "template_drop",
+            json!({"photoId":photo.id,"containerNo":1}),
+        )
+        .unwrap_err();
+        assert_eq!(dropped["code"], "no_template");
+        let bindings = include_str!("../../src/services/bindings.ts");
+        assert!(bindings.contains("template_drop") && bindings.contains("template_back"));
     }
 }
 

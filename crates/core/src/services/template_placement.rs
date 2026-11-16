@@ -356,7 +356,11 @@ pub fn renumber_main(tx: &mut dyn StoreTx, session_id: i64) -> Result<()> {
 /// photo's position and slot first) keeps the dragged order, and a photo returned to its
 /// container by undo or Back to template takes that container's place.
 fn main_positions(main: &[&Photo], rows: &HashMap<i64, Option<PlaceRow>>) -> Vec<(i64, i64)> {
-    let slot = |p: &Photo| rows.get(&p.id).and_then(Option::as_ref).and_then(|r| r.slot);
+    let slot = |p: &Photo| {
+        rows.get(&p.id)
+            .and_then(Option::as_ref)
+            .and_then(|r| r.slot)
+    };
     let mut sorted: Vec<_> = main.to_vec();
     sorted.sort_by_key(|p| {
         (
@@ -444,12 +448,7 @@ fn put_by_hand(tx: &mut dyn StoreTx, photo_id: i64, slot: Option<i64>) -> Result
 
 /// Moves the photo to `class` at the end of that group (Condition stays dense); no change when
 /// it is already there.
-fn reclassify(
-    tx: &mut dyn StoreTx,
-    photo: &Photo,
-    class: Classification,
-    at: i64,
-) -> Result<()> {
+fn reclassify(tx: &mut dyn StoreTx, photo: &Photo, class: Classification, at: i64) -> Result<()> {
     if photo.classification == class {
         return Ok(());
     }
@@ -543,4 +542,100 @@ pub fn drop_on_container(h: &HandAction<'_>, photo_id: i64, n: i64) -> Result<Re
         Ok(())
     })?;
     h.finish(session_id, step)
+}
+
+/// 10G §6 rule 2: the photos that differ (P9) go back to their expected place (P5) with
+/// `place_by_hand = 0` and `frame_by_hand = 0`, and take that place's presets (P8: a container
+/// with presets gives them; a container without presets and a Condition place leave the
+/// composition as it is). The current template and shot order are used. One transaction, one
+/// undo step "Back to template"; nothing differs → nothing is written and no step.
+pub fn back_to_template(h: &HandAction<'_>, session_id: i64) -> Result<ReviewResult> {
+    crate::services::retention::ensure_session_not_cleared(h.store, session_id)?;
+    let at = h.clock.now_ms();
+    let mut step = None;
+    h.store.transaction(&mut |tx| {
+        step = None;
+        let template = template_of(tx, session_id)?.ok_or(Error::NoTemplate)?;
+        let indexes = shot_indexes(tx, session_id, at)?;
+        let mut differing = Vec::new();
+        for photo in tx.photos(session_id)? {
+            let row = tx.photo_place_row(photo.id)?;
+            if differs(&photo, row.as_ref(), &indexes, &template.containers) {
+                differing.push((indexes[&photo.id], photo, row));
+            }
+        }
+        if differing.is_empty() {
+            return Ok(());
+        }
+        differing.sort_by_key(|(index, photo, _)| (*index, photo.id));
+        let ids: Vec<i64> = differing.iter().map(|(_, p, _)| p.id).collect();
+        let before = snapshot(tx, &ids)?;
+        for (index, photo, row) in &differing {
+            let (class, slot, presets) = expected_place(*index, &template.containers);
+            let current = tx.photo(photo.id)?;
+            reclassify(tx, &current, class, at)?;
+            tx.photo_place_put(&PlaceRow {
+                slot,
+                place_by_hand: false,
+                frame_by_hand: false,
+                ..row.clone().unwrap_or(PlaceRow {
+                    photo_id: photo.id,
+                    ..PlaceRow::default()
+                })
+            })?;
+            if let Some(presets) = presets.filter(|p| has_presets(p)) {
+                apply_frame(tx, photo.id, Some(presets), false, at)?;
+            }
+        }
+        condition_in_shot_order(tx, session_id, &indexes)?;
+        renumber_main(tx, session_id)?;
+        tx.touch_session(session_id, at)?;
+        let after = snapshot(tx, &ids)?;
+        step = Some(template_step(
+            "Back to template".into(),
+            session_id,
+            &ids,
+            before,
+            after,
+        ));
+        Ok(())
+    })?;
+    h.finish(session_id, step)
+}
+
+/// P7 for Condition: positions are kept; the template-placed Condition photos take, in shot
+/// order, the positions that group holds.
+fn condition_in_shot_order(
+    tx: &mut dyn StoreTx,
+    session_id: i64,
+    indexes: &HashMap<i64, usize>,
+) -> Result<()> {
+    let mut condition: Vec<Photo> = tx
+        .photos(session_id)?
+        .into_iter()
+        .filter(|p| p.classification == Classification::Condition)
+        .collect();
+    condition.sort_by_key(|p| (p.position.unwrap_or(i64::MAX), p.id));
+    let mut placed = Vec::new();
+    for p in &condition {
+        if tx.photo_place_row(p.id)?.is_some_and(|r| !r.place_by_hand) {
+            placed.push(p.id);
+        }
+    }
+    let mut in_order = placed.clone();
+    in_order.sort_by_key(|id| (indexes.get(id).copied().unwrap_or(usize::MAX), *id));
+    let mut next = in_order.into_iter();
+    let positions: Vec<(i64, i64)> = condition
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let id = if placed.contains(&p.id) {
+                next.next().expect("template-placed condition photo")
+            } else {
+                p.id
+            };
+            (id, i as i64 + 1)
+        })
+        .collect();
+    tx.set_positions(&positions)
 }

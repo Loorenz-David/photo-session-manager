@@ -1,12 +1,17 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { commands, type TemplateDto_Serialize, type TemplateSummaryDto, type TemplateViewDto_Serialize } from './bindings';
 import { unwrap } from './sessions';
+import type { ReviewResult } from './photos';
 
 export type Template = TemplateDto_Serialize;
 export type TemplateSummary = TemplateSummaryDto;
 export type Presets = { split: boolean; shape: string | null; zoom: number };
 export type TemplateView = TemplateViewDto_Serialize;
 export async function getTemplateView(sessionId: number): Promise<TemplateView> { return unwrap(await commands.templateSessionView(sessionId)); }
+/** T3: put a photo into container `containerNo` (fill an empty one, swap two placed photos). */
+export async function templateDrop(photoId: number, containerNo: number): Promise<ReviewResult> { return unwrap(await commands.templateDrop(photoId, containerNo)); }
+/** T3: Back to template for the session's differing photos (one undo step). */
+export async function templateBack(sessionId: number): Promise<ReviewResult> { return unwrap(await commands.templateBack(sessionId)); }
 
 export async function listTemplates(): Promise<TemplateSummary[]> { return unwrap(await commands.templatesList()); }
 export async function getTemplate(itemType: string): Promise<Template | null> { return unwrap(await commands.templateGet(itemType)); }

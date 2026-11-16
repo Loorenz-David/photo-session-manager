@@ -2,6 +2,7 @@
 //! Fixture Chair-3 of the T2 plan: K1, K2, K3; shot 1 → K2, shot 2 → K1, shot 3 → K3; K3 split +
 //! zoom 20. S0 = F1…F5 arrived in order (F2 slot 1, F1 slot 2, F3 slot 3, F4 and F5 Condition).
 use psm_core::{
+    Error,
     domain::{
         composition::{
             CompositionKind, EditorGeometry, Fingerprint, Flip, Frame, FrameSource, Orientation,
@@ -12,10 +13,9 @@ use psm_core::{
     },
     ports::clock::Clock,
     services::{
-        template_placement::{HandAction, drop_on_container, session_view_at},
+        template_placement::{HandAction, back_to_template, drop_on_container, session_view_at},
         templates::TemplatesService,
     },
-    Error,
 };
 use psm_infra::imaging::ImageOpsImpl;
 use psm_testkit::TestApp;
@@ -126,6 +126,14 @@ fn hand(a: &TestApp) -> HandAction<'_> {
 }
 fn drop_on(a: &TestApp, id: i64, n: i64) -> Result<(), Error> {
     drop_on_container(&hand(a), id, n).map(|_| ())
+}
+fn back(a: &TestApp, s: i64) {
+    back_to_template(&hand(a), s).unwrap();
+}
+fn rect_eq(a: Rect, b: Rect) {
+    for (x, y) in [(a.x, b.x), (a.y, b.y), (a.w, b.w), (a.h, b.h)] {
+        assert!((x - y).abs() < 1e-9, "{x} != {y}");
+    }
 }
 /// Every photo of the session: (id, classification, position, slot, place_by_hand).
 fn state(a: &TestApp, s: i64) -> Vec<(i64, C, Option<i64>, Option<i64>, bool)> {
@@ -285,7 +293,10 @@ fn t3_c2b_drop_on_filled_container_swaps() {
     let a = app();
     let (s, f) = s0(&a, "C2B", false);
     drop_on(&a, f[2].id, 2).unwrap();
-    assert_eq!((place(&a, f[2].id).2, place(&a, f[0].id).2), (Some(2), Some(3)));
+    assert_eq!(
+        (place(&a, f[2].id).2, place(&a, f[0].id).2),
+        (Some(2), Some(3))
+    );
     assert_eq!(
         (pos(&a, f[1].id), pos(&a, f[2].id), pos(&a, f[0].id)),
         (Some(1), Some(2), Some(3))
@@ -311,7 +322,10 @@ fn t3_c2d_condition_photo_onto_filled_container_refused() {
     let a = app();
     let (s, f) = s0(&a, "C2D", false);
     let before = state(&a, s);
-    assert!(matches!(drop_on(&a, f[3].id, 1), Err(Error::ContainerFilled)));
+    assert!(matches!(
+        drop_on(&a, f[3].id, 1),
+        Err(Error::ContainerFilled)
+    ));
     assert_eq!(state(&a, s), before);
     assert!(a.history().state(s).undo.is_none());
 }
@@ -320,8 +334,14 @@ fn t3_c2d_condition_photo_onto_filled_container_refused() {
 fn t3_c2e_drop_refusals() {
     let a = app();
     let (_, f) = s0(&a, "C2E", false);
-    assert!(matches!(drop_on(&a, f[2].id, 0), Err(Error::InvalidValue(_))));
-    assert!(matches!(drop_on(&a, f[2].id, 4), Err(Error::InvalidValue(_))));
+    assert!(matches!(
+        drop_on(&a, f[2].id, 0),
+        Err(Error::InvalidValue(_))
+    ));
+    assert!(matches!(
+        drop_on(&a, f[2].id, 4),
+        Err(Error::InvalidValue(_))
+    ));
     let t = session(&a, "C2E2", "Table");
     let g = arrive(&a, t, "DSC00011.ARW");
     assert!(matches!(drop_on(&a, g.id, 1), Err(Error::NoTemplate)));
@@ -346,4 +366,142 @@ fn t3_c2f_drop_is_one_undo_step() {
     a.history().redo(s).unwrap();
     assert_eq!(state(&a, s), dropped);
     assert_eq!(view(&a, s).differs, 2);
+}
+
+#[test]
+fn t3_c3a_back_to_template_undoes_the_swap() {
+    let a = app();
+    let (s, f) = s0(&a, "C3A", false);
+    drop_on(&a, f[2].id, 2).unwrap();
+    back(&a, s);
+    assert_eq!(
+        (place(&a, f[2].id).2, place(&a, f[0].id).2),
+        (Some(3), Some(2))
+    );
+    assert_eq!(
+        (pos(&a, f[1].id), pos(&a, f[0].id), pos(&a, f[2].id)),
+        (Some(1), Some(2), Some(3))
+    );
+    let v = view(&a, s);
+    assert_eq!((marks(&v, f[2].id).1, marks(&v, f[0].id).1), (false, false));
+    assert_eq!(v.differs, 0);
+}
+
+#[test]
+fn t3_c3b_back_to_template_reapplies_presets() {
+    let a = app();
+    let (s, f) = s0(&a, "C3B", true);
+    own_normal(&a, f[2].id);
+    back(&a, s);
+    let c = a.composition(f[2].id).unwrap();
+    assert_eq!(
+        (c.kind, c.origin),
+        (
+            CompositionKind::Split,
+            psm_core::domain::composition::Origin::User
+        )
+    );
+    rect_eq(
+        c.rect.unwrap(),
+        Rect {
+            x: 0.1,
+            y: 0.2,
+            w: 0.8,
+            h: 0.6,
+        },
+    );
+    assert!(
+        !a.store()
+            .photo_place_row(f[2].id)
+            .unwrap()
+            .unwrap()
+            .frame_by_hand
+    );
+    assert_eq!(view(&a, s).differs, 0);
+}
+
+#[test]
+fn t3_c3c_back_to_template_returns_extra_main_to_condition() {
+    let a = app();
+    let (s, f) = s0(&a, "C3C", false);
+    a.review().classify(f[3].id, C::Main).unwrap();
+    back(&a, s);
+    assert_eq!(place(&a, f[3].id), (C::Condition, Some(1), None));
+    assert_eq!(place(&a, f[4].id), (C::Condition, Some(2), None));
+    let main = state(&a, s).into_iter().filter(|p| p.1 == C::Main).count();
+    assert_eq!(main, 3);
+    assert_eq!(view(&a, s).differs, 0);
+}
+
+#[test]
+fn t3_c3d_back_to_template_is_one_undo_step() {
+    let a = app();
+    let (s, f) = s0(&a, "C3D", false);
+    drop_on(&a, f[2].id, 2).unwrap();
+    let swapped = state(&a, s);
+    back(&a, s);
+    let backed = state(&a, s);
+    assert_eq!(
+        a.history().state(s).undo.as_deref(),
+        Some("Back to template")
+    );
+    a.history().undo(s).unwrap();
+    assert_eq!(state(&a, s), swapped);
+    assert_eq!(
+        (place(&a, f[2].id).2, place(&a, f[0].id).2),
+        (Some(2), Some(3))
+    );
+    let v = view(&a, s);
+    assert_eq!((marks(&v, f[2].id).1, marks(&v, f[0].id).1), (true, true));
+    assert_eq!(v.differs, 2);
+    a.history().redo(s).unwrap();
+    assert_eq!(view(&a, s).differs, 0);
+    assert_eq!(state(&a, s), backed);
+}
+
+#[test]
+fn t3_c3e_back_to_template_leaves_a_denial() {
+    let a = app();
+    let (s, f) = s0(&a, "C3E", false);
+    a.review().delete(f[0].id).unwrap();
+    let label = a.history().state(s).undo;
+    assert!(label.is_some());
+    assert_eq!(view(&a, s).differs, 0);
+    back(&a, s);
+    assert_eq!(a.store().photo(f[0].id).unwrap().classification, C::Deleted);
+    assert!(a.store().photo_denial(f[0].id).unwrap().is_some());
+    assert_eq!(view(&a, s).differs, 0);
+    assert_eq!(a.history().state(s).undo, label);
+}
+
+#[test]
+fn t3_c3f_photos_from_before_the_template_are_filed_by_back() {
+    let a = app();
+    let s = session(&a, "C3F", "Stool");
+    let g1 = arrive(&a, s, "DSC00001.ARW");
+    let g2 = arrive(&a, s, "DSC00002.ARW");
+    let t = templates(&a).create("Stool").unwrap();
+    let t = templates(&a).container_add(t.id, None).unwrap();
+    let t = templates(&a).container_add(t.id, None).unwrap();
+    let ids: Vec<_> = t.containers.iter().map(|c| c.id).collect();
+    templates(&a)
+        .shooting_order_set(t.id, &[ids[1], ids[0]])
+        .unwrap();
+    let v = view(&a, s);
+    assert_eq!((marks(&v, g1.id).1, marks(&v, g1.id).2), (true, true));
+    assert_eq!((marks(&v, g2.id).1, marks(&v, g2.id).2), (true, true));
+    assert_eq!(v.differs, 2);
+    back(&a, s);
+    assert_eq!((place(&a, g1.id).2, place(&a, g2.id).2), (Some(2), Some(1)));
+    assert_eq!((pos(&a, g2.id), pos(&a, g1.id)), (Some(1), Some(2)));
+    for id in [g1.id, g2.id] {
+        assert!(
+            !a.store()
+                .photo_place_row(id)
+                .unwrap()
+                .unwrap()
+                .place_by_hand
+        );
+    }
+    assert_eq!(view(&a, s).differs, 0);
 }

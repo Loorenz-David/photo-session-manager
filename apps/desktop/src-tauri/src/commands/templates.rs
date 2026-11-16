@@ -1,5 +1,8 @@
 use crate::{
-    commands::items::{CommandError, CommandId},
+    commands::{
+        items::{CommandError, CommandId},
+        photos::ReviewResponse,
+    },
     state::AppState,
 };
 use psm_core::{
@@ -161,6 +164,57 @@ pub async fn template_session_view(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
     .map_err(CommandError::from)
 }
+/// Runs a person's template action (drop, Back to template) on the wired app.
+async fn hand_action(
+    state: State<'_, AppState>,
+    op: impl FnOnce(
+        &psm_core::services::template_placement::HandAction<'_>,
+    ) -> Result<psm_core::services::review::ReviewResult>
+    + Send
+    + 'static,
+) -> std::result::Result<ReviewResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        op(&psm_core::services::template_placement::HandAction {
+            store: app.store.as_ref(),
+            clock: app.clock.as_ref(),
+            events: app.events.as_ref(),
+            history: app.history.as_ref(),
+        })
+        .map(ReviewResponse::from)
+        .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// T3: drop a photo onto container `container_no` (its final number); the touched session.
+#[tauri::command]
+#[specta::specta]
+pub async fn template_drop(
+    state: State<'_, AppState>,
+    photo_id: CommandId,
+    container_no: CommandId,
+) -> std::result::Result<ReviewResponse, CommandError> {
+    hand_action(state, move |h| {
+        psm_core::services::template_placement::drop_on_container(h, photo_id.0, container_no.0)
+    })
+    .await
+}
+
+/// T3: Back to template for the session's differing photos; the touched session.
+#[tauri::command]
+#[specta::specta]
+pub async fn template_back(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> std::result::Result<ReviewResponse, CommandError> {
+    hand_action(state, move |h| {
+        psm_core::services::template_placement::back_to_template(h, session_id.0)
+    })
+    .await
+}
+
 async fn run<T: Send + 'static>(
     state: State<'_, AppState>,
     op: impl FnOnce(&TemplatesService<'_>) -> Result<T> + Send + 'static,

@@ -190,6 +190,10 @@ export const commands = {
 	templateShootingOrderSet: (templateId: CommandId, containerIds: CommandId[]) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_shooting_order_set", { templateId, containerIds })),
 	templateContainerPresetsSet: (containerId: CommandId, presets: PresetsInput_Deserialize) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_container_presets_set", { containerId, presets })),
 	templateSessionView: (sessionId: CommandId) => typedError<TemplateViewDto_Serialize, CommandError>(__TAURI_INVOKE("template_session_view", { sessionId })),
+	/**  T3: drop a photo onto container `container_no` (its final number); the touched session. */
+	templateDrop: (photoId: CommandId, containerNo: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("template_drop", { photoId, containerNo })),
+	/**  T3: Back to template for the session's differing photos; the touched session. */
+	templateBack: (sessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("template_back", { sessionId })),
 };
 
 /* Types */

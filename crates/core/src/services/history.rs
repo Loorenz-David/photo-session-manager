@@ -2,9 +2,9 @@ use crate::domain::{
     attribute::Value as AttributeValue,
     composition::{Composition, CompositionState, CompositionValues, Origin},
     photo::Classification,
-    template::PlaceRow,
     research::{Feedback, FeedbackAction},
     session::SessionDto,
+    template::PlaceRow,
 };
 use crate::events::AppEvent;
 use crate::mechanisms::{
