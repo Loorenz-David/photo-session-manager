@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 of `handoffs/reviewer/handoff_templates_plan_r1.m
 ---
 # T4 — Retakes and bad shots
 
-**Tracker:** IMPLEMENTED · 2026-11-16 · claude sonnet 5.5 (pipeline-implementer) · fix 1: T4-R1-B1 fixed (`can_shift_back` true only when releasing the denied photos moves a template-placed photo; new row (e) test); t4 12/12, t3 19, t2 21, clippy/fmt/typecheck green
+**Tracker:** APPROVED · 2026-11-16 · opus (pipeline-reviewer) · re-review r2: APPROVED_WITH_NOTES; T4-R1-B1 resolved as corrected (`can_shift_back` true only when releasing the denied photos changes a template-placed photo's expected place); perimeter clean; t4 12 + t3 19 + t2 21, psm-core 96, clippy/fmt/typecheck green; one guide note to backlog
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -230,3 +230,16 @@ On scratch data, with the dining-chair template:
 
 **Not done (outside the finding's files).** `docs/guide/02_architecture.md` line ~88 still describes `can_shift_back` as "a later …" photo existing; the guide row is now slightly wider than the code. Left for the orchestrator or the next guide touch.
 
+
+### 2026-11-16 · re-review r2 · opus (pipeline-reviewer) · APPROVED_WITH_NOTES
+**Perimeter.** `3b4f8fe`: `template_placement.rs`, `t4_template_retake_shift.rs` (the two files the finding allowed), plus this plan's Tracker line + Review log and the fix handoff. `50a3585`: the fix handoff only (SHA line). Nothing else. Tree clean at review start.
+
+**T4-R1-B1 resolved as corrected.** `can_shift_back` builds the shot indexes as they are and again with every Deleted photo's shot left out (`shot_indexes_without`), and is true only when some non-Deleted, `place_by_hand = 0` photo's expected (class, slot) differs between the two. `shift_back` calls the same function on the same `at` before any write, so a false answer is `nothing_to_shift` with no write and no step. Consistency: `shift_back` releases exactly the set the check simulates (every unreleased Deleted photo; released ones are already outside `indexes`), and `place_template_photos` moves every template-placed photo to `expected_place` without an occupancy check, so "check true" ⇔ "something moves" for photos that sit at their expected place. Holds are kept in both index computations (same `hold_times(now)`). Case table from r1's lesson: nothing later (`t4_c2e`), only hand-placed later (`t4_c2f`), later but beyond the last container (`t4_c2e2`, new; the old rule returns true for this fixture, so the test discriminates). Rows C2(a), C2(c), C2(f), A7 unchanged and green.
+
+**Checks** (tree `a0e17ce`, docs-only beyond `3b4f8fe`; one cargo command at a time): `--test suite -- t4_template_retake_shift:: t3_template_hand:: t2_template_placement::` 52/52 (12 + 19 + 21); `cargo test -p psm-core` 96/96; clippy core/infra/desktop/testkit all targets `-D warnings` ok; `cargo fmt --all -- --check` ok; `npm run typecheck` ok. Full suite not re-run (change local to one service function; no store, migration or shared code).
+
+**Triage.** No blocking item remains; nothing to classify.
+
+**Note** (backlog): `docs/guide/02_architecture.md` (Retake and shift bullet) still says `can_shift_back` "says a later template-placed photo exists"; the code now says "releasing the denied photos would move one" (flow §7A stale-row note; the fix's file list did not allow the guide).
+
+**Probes.** None. No file touched outside this review's own documents.
