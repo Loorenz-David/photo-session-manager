@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 of `handoffs/reviewer/handoff_templates_plan_r1.m
 ---
 # T3 — Your changes win, and there is a way back
 
-**Tracker:** NOT_STARTED · 2026-11-16 · planner · plan written from 10G (ratified 2026-11-16)
+**Tracker:** IMPLEMENTED · 2026-11-16 · claude-opus (implementer) · 4 units, 24 rows tested (19 Rust behaviour, 1 wired command, 4 UI); closing gate green; Main order rule unified as (no slot, slot, previous position), see Review log
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -231,3 +231,15 @@ On scratch data, in a dining-chair session with all containers filled and a few 
 5. Drop a Condition photo onto an empty container: it is placed there.
 
 ## Review log
+
+### 2026-11-16 · implement r1 · claude-opus
+**Built.** U1 (`8057056`): `session_view` reports `differs` per photo and the count by P9, using the same shot order as placement read at the call (`session_view_at(store, now, id)`; `session_view` = system clock); `HistoryService::reverse` renumbers Main by P7 in every touched templated session; `delete_photo_row` deletes the `photo_places` row. U2 (`3d7ea16`): `StepKind::Template` (per photo: classification, position, whole place row, full composition, denial time; undo/redo check session, classification and slot, restore, keep ordered groups dense); `drop_on_container` (fill, swap, no-op, `container_filled`, `invalid_value`, `no_template`), label "Move to container <n>"; error `ContainerFilled` → code `container_filled`. U3 (`8db8fe4`): `back_to_template` (differing photos only, P8 presets for containers that have them, Condition in shot order, label "Back to template"); commands `template_drop`, `template_back` (answer `ReviewResponse`), wrappers `templateDrop`, `templateBack`, bindings. U4 (`f4e9432`): `TemplateWarning` (status line + Back to template through the workspace action runner, undo toast), `data-differs` + amber dot on every differing tile, `templateDrop.ts::dropAction`, droppable placeholders, the page drop handler asks `dropAction` first; toast "That container is filled".
+
+**Assumptions.** (1) P7's Main key is applied as (has no slot, slot, previous position): the "placed by hand" key and T2 fix 1's "hand-placed photos keep their absolute position" are replaced by this single rule, because the fixed-position rule contradicts T3·C1(g) and T3·C2(b) (backlog T2 r2 note) while the slot rule keeps T2's dragged-order test green (a drag writes the dragged photo's position and slot first; ties keep that order). (2) A photo keeps its slot in its row when it is classified or denied (the slot is the container it was last in); only a Main photo is given a new slot by a reorder (a Condition reorder no longer writes its Condition position into the slot, backlog T2 r1 note). This is what makes T3·C1(b) and T3·C1(g) come back to their container. (3) Undo/redo of a reorder in a templated Main writes the slot of the position it restores (mirror of what the drag wrote). (4) A swap also exchanges the two photos' positions. (5) Back to template keeps the composition (and any pending zoom) of a photo going to a container without presets or to Condition. (6) The template view also re-reads on `history_changed` (a review action emits no photo event, so the warning would not update after classify/compose otherwise).
+
+**Deviations.** Outside the per-unit file lists, each needed: `apps/desktop/src-tauri/src/commands/items.rs` (exhaustive error-code match for `ContainerFilled`), `crates/core/src/ports/store.rs` (`photo_denied_at` on `StoreTx`, for the step snapshot), `apps/desktop/src/features/workspace/PhotoTile.tsx` (`TemplateDiffersContext`, `data-differs`, mark), `useTemplateView.ts` (assumption 6). `crates/core/src/domain/template.rs` was not needed (the step state lives in `history.rs`).
+
+**Known edge (not a row).** A container photo dragged (reorder) behind the extra Main photos gets the slot number of its position, so it sorts before the extras rather than after them; the template drop replaces drags onto placed tiles, and it differs, so Back to template restores it.
+
+**Stamp.** `cargo test --workspace` ok (1540 tests, 3 min 48 s) · `cargo clippy --workspace --all-targets -- -D warnings` ok (after one test-file type alias; T3 stem re-run ok) · `cargo fmt --all -- --check` ok · `npm run typecheck` ok · `npm test` ok (85 files, 536 tests).
+

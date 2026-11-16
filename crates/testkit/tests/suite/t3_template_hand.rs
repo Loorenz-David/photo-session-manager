@@ -135,8 +135,10 @@ fn rect_eq(a: Rect, b: Rect) {
         assert!((x - y).abs() < 1e-9, "{x} != {y}");
     }
 }
-/// Every photo of the session: (id, classification, position, slot, place_by_hand).
-fn state(a: &TestApp, s: i64) -> Vec<(i64, C, Option<i64>, Option<i64>, bool)> {
+/// One stored photo: (id, classification, position, slot, place_by_hand).
+type Stored = (i64, C, Option<i64>, Option<i64>, bool);
+/// Every photo of the session.
+fn state(a: &TestApp, s: i64) -> Vec<Stored> {
     a.store()
         .photos_in_session(s)
         .unwrap()
