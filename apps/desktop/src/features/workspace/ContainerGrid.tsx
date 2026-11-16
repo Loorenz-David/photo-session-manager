@@ -1,5 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
+import { TemplateExample } from '@/features/settings/TemplateExample';
 import type { Photo } from '@/services/photos';
 import type { TemplateView } from '@/services/templates';
 import { outputNumbers } from './outputs';
@@ -10,17 +11,33 @@ import { containerDropId } from './templateDrop';
 
 type Props = TileHandlers & { photos: Photo[]; view: TemplateView };
 
-/** A faded numbered empty container; a photo dropped on it goes into that container (10G §6.1). */
-function Placeholder({ number }: { number: number }) {
+type ContainerView = TemplateView['containers'][number];
+
+/**
+ * A faded numbered empty container; a photo dropped on it goes into that container (10G §6.1). It shows its example
+ * (black and white) and its place in the shooting order; the container the next shot goes to is outlined ("Next").
+ */
+function Placeholder({ container, next }: { container: ContainerView; next: boolean }) {
+  const number = container.final_no;
   const { setNodeRef, isOver } = useDroppable({ id: containerDropId(number) });
   return (
-    <div ref={setNodeRef} className="container-placeholder" data-container={number} data-empty="true" data-over={isOver || undefined} aria-label={`Empty container ${number}`}>
-      {number}
+    <div
+      ref={setNodeRef}
+      className="container-placeholder"
+      data-container={number}
+      data-empty="true"
+      data-next={next || undefined}
+      data-over={isOver || undefined}
+      aria-label={`Empty container ${number}, shot ${container.shoot_no}${next ? ', next to shoot' : ''}`}
+    >
+      {container.example_path && <TemplateExample path={container.example_path} />}
+      <span className="container-number">{number}</span>
+      <span className="container-shot">{next ? `Next · Shot ${container.shoot_no}` : `Shot ${container.shoot_no}`}</span>
     </div>
   );
 }
 
-type Cell = { kind: 'photo'; photo: Photo } | { kind: 'empty'; number: number };
+type Cell = { kind: 'photo'; photo: Photo; slot: number | null } | { kind: 'empty'; container: ContainerView };
 
 /**
  * The Main area of a templated session (10G §5): the containers in final order, each with its Main photos (today's
@@ -34,21 +51,23 @@ export function ContainerGrid({ photos, view, activeId, selection, onOpen, onTog
   const slotOf = (photo: Photo) => slots.get(photo.id) ?? null;
   const cells: Cell[] = view.containers.flatMap((container): Cell[] => {
     const filled = main.filter(photo => slotOf(photo) === container.final_no);
-    return filled.length ? filled.map(photo => ({ kind: 'photo', photo })) : [{ kind: 'empty', number: container.final_no }];
+    return filled.length ? filled.map(photo => ({ kind: 'photo', photo, slot: container.final_no })) : [{ kind: 'empty', container }];
   });
   const containerNumbers = new Set(view.containers.map(container => container.final_no));
   const rest = photos.filter(photo => photo.classification !== 'main' || !containerNumbers.has(slotOf(photo) ?? -1));
-  cells.push(...rest.map(photo => ({ kind: 'photo' as const, photo })));
+  cells.push(...rest.map(photo => ({ kind: 'photo' as const, photo, slot: null })));
+  // The container the next shot goes to (10G §5 guidance); none once every container has had its shot.
+  const nextFinal = view.containers.find(container => container.shoot_no === view.next_shot)?.final_no ?? null;
   const ordered = cells.flatMap(cell => (cell.kind === 'photo' ? [cell.photo] : []));
   const numbers = outputNumbers(ordered);
   return (
     <SortableContext id="main" items={ordered.map(photo => photoDragId(photo.id))} strategy={rectSortingStrategy}>
       <div ref={setNodeRef} className="photo-group group-grid container-grid" data-group="main" data-over={isOver || undefined}>
         {cells.map((cell, index) => cell.kind === 'empty' ? (
-          <Placeholder key={`empty-${cell.number}`} number={cell.number} />
+          <Placeholder key={`empty-${cell.container.final_no}`} container={cell.container} next={cell.container.final_no === nextFinal} />
         ) : (
           <PhotoContextMenu key={cell.photo.id} photo={cell.photo} onAction={onMenu} canApply={selection.size > 0}>
-            <div className="tile-wrap">
+            <div className="tile-wrap" data-next={(cell.slot !== null && cell.slot === nextFinal) || undefined}>
               <PhotoTile
                 photo={cell.photo}
                 number={numbers.get(cell.photo.id)?.first ?? index + 1}

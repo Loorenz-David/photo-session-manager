@@ -76,6 +76,8 @@ pub struct TemplateViewDto {
     #[specta(type = specta_typescript::Number)]
     pub differs: i64,
     pub can_shift_back: bool,
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub next_shot: Option<i64>,
 }
 impl From<Template> for TemplateDto {
     fn from(t: Template) -> Self {
@@ -133,6 +135,7 @@ impl From<TemplateView> for TemplateViewDto {
                 .collect(),
             differs: v.differs,
             can_shift_back: v.can_shift_back,
+            next_shot: v.next_shot,
         }
     }
 }

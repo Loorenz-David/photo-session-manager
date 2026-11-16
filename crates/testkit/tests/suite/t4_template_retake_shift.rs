@@ -597,3 +597,37 @@ fn t4_c4a_the_owners_story() {
         assert!(a.store().photo_place_row(p.id).unwrap().is_none());
     }
 }
+
+// ---- Shooting guidance: the container the next shot goes to (10G §5, "next to shoot") ----
+
+#[test]
+fn next_shot_follows_the_shooting_order_and_counts_denied_and_reported_shots() {
+    let a = app();
+    chair(&a); // shot 1 → K2, shot 2 → K1, shot 3 → K3
+    let s = session(&a, "NX1", "Chair");
+    assert_eq!(
+        view(&a, s).next_shot,
+        Some(1),
+        "nothing shot yet: shooting number 1 is next"
+    );
+    let f = arrive_framed(&a, s, 1..=2);
+    assert_eq!(view(&a, s).next_shot, Some(3));
+    // A denied photo keeps counting as a shot (10G §6.4): the next one is still shot 3.
+    a.review().delete(f[1].id).unwrap();
+    assert_eq!(view(&a, s).next_shot, Some(3));
+    arrive_framed(&a, s, 3..=3);
+    assert_eq!(
+        view(&a, s).next_shot,
+        None,
+        "past the last container: Condition comes next"
+    );
+
+    // A reported shutter whose file has not arrived yet holds its place (P3): the guidance moves on.
+    let b = app();
+    chair(&b);
+    let s2 = session(&b, "NX2", "Chair");
+    assert_eq!(view(&b, s2).next_shot, Some(1));
+    let at = b.clock.now_ms() + 1_000;
+    expose(&b, at, 1);
+    assert_eq!(view(&b, s2).next_shot, Some(2));
+}
