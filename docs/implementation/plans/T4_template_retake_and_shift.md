@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 of `handoffs/reviewer/handoff_templates_plan_r1.m
 ---
 # T4 — Retakes and bad shots
 
-**Tracker:** IMPLEMENTED · 2026-11-16 · claude opus 5.5 (pipeline-implementer) · 3 units, 14 rows tested (11 Rust behaviour incl. the one-test owner's story, 1 wired command, 2 UI); closing gate green (Rust suite 952, UI 538, clippy, fmt, typecheck)
+**Tracker:** CHANGES_REQUESTED · 2026-11-16 · opus (pipeline-reviewer) · review r1: one B1 (T4-R1-B1, production): Shift the rest back is offered and "succeeds" with nothing to shift after a Condition photo is denied (10G §6.4); perimeter clean; t4 11, t3 19, t2 21, desktop 30, UI 165, clippy/fmt/typecheck green; 4 backlog notes
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -202,3 +202,23 @@ On scratch data, with the dining-chair template:
 
 **For the reviewer.** No red baseline was recorded before the production edits (flow.md has no Task 0; stated rather than reconstructed). `cargo test -p psm-desktop` fails once on a fresh command (`include_str!` of `bindings.ts` compiles before `export_bindings` rewrites it) and passes on the second run; the committed bindings are the regenerated ones (tree clean after the closing gate).
 
+
+### 2026-11-16 · review r1 · opus (pipeline-reviewer) · CHANGES_REQUESTED
+**Verified correct.**
+- **Perimeter.** The perimeter equals the declared files across `2015c99`, `332237d`, `6e026d2` and `76a84a3`. The four deviations are disclosed and each is required by a task.
+- **Checks** (Review mode, on the clean tree `e8cc68a`): t4 11/11, t3 19/19, t2 21/21, `psm-desktop` 30/30, clippy on core/infra/desktop/testkit, fmt, typecheck, vitest workspace+settings 34 files / 165 tests. The implementer's full-suite stamp stands.
+- **Retake.** It denies exactly as `ReviewService::delete` does, plus `released`. The dropped photo is Main in slot n, placed by hand, `frame_by_hand` 0, with the old photo's effective key (P2) and the container's presets (P8). It is one step "Retake container <n>", and undo removes the denial.
+- **`shift_back`.** Release, then re-place through `place_template_photos` (the `place_arrival` loop, unchanged), then one step with the whole-session before/after snapshot.
+- **Command, binding and wrapper** are wired.
+- **`container_filled`** is gone from code, bindings, UI and §4. The pinned-test table was handled as written.
+- **Rows.** All 14 have a boundary test that fails on a wrong outcome.
+- **Story test.** A1–A9 run in one test, in order.
+- **Guide.** Every path it names exists.
+- **Assumptions and constraints.** None of the assumptions contradicts 10G. H1–H8 hold.
+
+**Findings.**
+- **T4-R1-B1** (B1, route production). `can_shift_back` follows task 1's rule ("a later template-placed photo exists"). So after a Condition photo (a shot beyond the last container) is denied and a later Condition photo exists, the button shows, and `shift_back` releases the denied photo and records "Shift the rest back" while no photo moves. A probe confirmed it (S0, deny F4: offered true, shift Ok, places identical). Authority: 10G §6.4, "The button disappears when there is nothing to shift", and this plan's U2 Notes. Correction: true only when releasing the unreleased denied photos would change the expected place (class or slot) of at least one non-Deleted template-placed photo; otherwise false and `nothing_to_shift`. Add a row (e)-boundary test for S0 + F4 denied. Files: `crates/core/src/services/template_placement.rs`, `crates/testkit/tests/suite/t4_template_retake_shift.rs`.
+
+**Notes** (in `backlog.md` under T4): the 10G §4.2 wording versus §6.4; the page path of Shift the rest back has no UI test; `psm-desktop` fails once after a new command; T3 N2 and N6 are still open.
+
+**Probe.** A test was appended to `t4_template_retake_shift.rs`, run and reverted (checksum matched). No production file was touched.
