@@ -1586,14 +1586,14 @@ export type TemplatePhotoViewDto = TemplatePhotoViewDto_Serialize | TemplatePhot
 
 export type TemplatePhotoViewDto_Deserialize = {
 	photo_id: number,
-	slot?: number,
+	slot?: number | null,
 	by_hand: boolean,
 	differs: boolean,
 };
 
 export type TemplatePhotoViewDto_Serialize = {
 	photo_id: number,
-	slot: number,
+	slot: number | null,
 	by_hand: boolean,
 	differs: boolean,
 };
@@ -1608,7 +1608,7 @@ export type TemplateViewDto = TemplateViewDto_Serialize | TemplateViewDto_Deseri
 
 export type TemplateViewDto_Deserialize = {
 	templated: boolean,
-	template_id?: number,
+	template_id?: number | null,
 	containers: ContainerDto_Deserialize[],
 	photos: TemplatePhotoViewDto_Deserialize[],
 	differs: number,
@@ -1617,7 +1617,7 @@ export type TemplateViewDto_Deserialize = {
 
 export type TemplateViewDto_Serialize = {
 	templated: boolean,
-	template_id: number,
+	template_id: number | null,
 	containers: ContainerDto_Serialize[],
 	photos: TemplatePhotoViewDto_Serialize[],
 	differs: number,

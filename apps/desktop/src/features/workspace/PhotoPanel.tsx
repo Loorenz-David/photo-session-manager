@@ -1,12 +1,12 @@
-import { FolderInput, PanelRightClose, PanelsRightBottom } from 'lucide-react';
+import { FolderInput, Info, PanelRightClose, PanelsRightBottom } from 'lucide-react';
 import { useState } from 'react';
 import { Hint } from '@/components/ui/tooltip';
 import { useAction } from '@/lib/pending';
 import type { Photo } from '@/services/photos';
 import type { TemplateView } from '@/services/templates';
 import { displayOrder } from './order';
-import { PhotoGrid, type TileHandlers } from './PhotoGrid';
 import { ContainerGrid } from './ContainerGrid';
+import { PhotoGrid, type TileHandlers } from './PhotoGrid';
 import { TemplateInfoDialog } from './TemplateInfoDialog';
 
 type PhotoPanelProps = TileHandlers & {
@@ -46,7 +46,7 @@ export function PhotoPanel({ photos, templateView, onFold, onImport, sessionsOpe
           <h3 className="section-caps">
             Main images <span>{order.main.length}</span>
             {order.unreviewed.length > 0 && <small>{order.unreviewed.length} to review</small>}
-            {templateView?.templated && <button type="button" className="template-info-button" aria-label="Show template" onClick={() => setInfoOpen(true)}>Template</button>}
+            {templateView?.templated && <button type="button" className="template-info-button" aria-label="Show template" onClick={() => setInfoOpen(true)}><Info aria-hidden />Template</button>}
           </h3>
           {templateView?.templated ? <ContainerGrid photos={mainShown} view={templateView} {...handlers} /> : <PhotoGrid group="main" photos={mainShown} variant="grid" {...handlers} />}
         </section>

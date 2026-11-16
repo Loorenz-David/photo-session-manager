@@ -58,7 +58,7 @@ pub struct TemplateSummaryDto {
 pub struct TemplatePhotoViewDto {
     #[specta(type = specta_typescript::Number)]
     pub photo_id: i64,
-    #[specta(type = specta_typescript::Number)]
+    #[specta(type = Option<specta_typescript::Number>)]
     pub slot: Option<i64>,
     pub by_hand: bool,
     pub differs: bool,
@@ -66,7 +66,7 @@ pub struct TemplatePhotoViewDto {
 #[derive(Serialize, Type)]
 pub struct TemplateViewDto {
     pub templated: bool,
-    #[specta(type = specta_typescript::Number)]
+    #[specta(type = Option<specta_typescript::Number>)]
     pub template_id: Option<i64>,
     pub containers: Vec<ContainerDto>,
     pub photos: Vec<TemplatePhotoViewDto>,
