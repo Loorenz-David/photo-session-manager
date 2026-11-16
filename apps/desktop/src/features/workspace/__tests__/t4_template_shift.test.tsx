@@ -55,6 +55,7 @@ function view(entries: Array<[number, number | null, boolean]>, can_shift_back: 
     photos: entries.map(([photo_id, slot, differs]) => ({ photo_id, slot, by_hand: differs, differs })),
     differs: entries.filter(([, , differs]) => differs).length,
     can_shift_back,
+    next_shot: null,
   };
 }
 

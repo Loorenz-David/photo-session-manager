@@ -82,6 +82,9 @@ is missing. `tauri.conf.json`: `externalBin: binaries/camera-sidecar`, ad-hoc si
   (`frame_by_hand`) and a move/copy (row deleted) make a photo "by hand". `drop_on_container` fills an
   empty container or swaps two placed photos ("Move to container <n>"); `session_view` counts photos that
   differ; `back_to_template` re-places them (one `StepKind::Template` step "Back to template").
+- **Shooting guidance (2026-11-16, after T4).** `session_view` also returns `next_shot`: the `shoot_no`
+  the next shot would take (P5 applied to one past the current shot order, holds included, denied photos
+  still counted; `None` past the last container). Display only; placement never reads it.
 - **Retake and shift (T4).** A photo without a container dropped on a filled one: the old photo is denied
   as Deny does (red, undo window) and `released`; the dropped photo takes its container, its shot key
   (`key_at`, `key_name`) and the container's presets ("Retake container <n>"). Deny leaves the container
@@ -96,8 +99,9 @@ is missing. `tauri.conf.json`: `externalBin: binaries/camera-sidecar`, ad-hoc si
   T4 `template_shift_back`. Error codes `template_exists`, `template_image_unreadable`, `no_template`,
   `nothing_to_shift`.
 - **Frontend** (`features/workspace/`): `useTemplateView.ts` (re-reads `template_session_view` on
-  `photo_added`, `photo_changed`, `session_changed`), `ContainerGrid.tsx` (faded numbered containers),
-  `TemplateInfoDialog.tsx` (the info button), `TemplateWarning.tsx` (the warning, Back to template,
+  `photo_added`, `photo_changed`, `session_changed`), `ContainerGrid.tsx` (faded numbered containers with
+  their black-and-white example and "Shot n"; the container of `TemplateView.next_shot` is outlined "Next"),
+  `TemplateInfoDialog.tsx` (the info button; Final order / Shooting order switch, next shot marked), `TemplateWarning.tsx` (the warning, Back to template,
   Shift the rest back), `templateDrop.ts` (`dropAction`: which drops are template drops), wired in
   `PhotoPanel.tsx`, `WorkspacePage.tsx`, `useWorkspaceState.ts`.
 

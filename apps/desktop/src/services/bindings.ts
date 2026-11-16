@@ -1619,6 +1619,7 @@ export type TemplateViewDto_Deserialize = {
 	photos: TemplatePhotoViewDto_Deserialize[],
 	differs: number,
 	can_shift_back: boolean,
+	next_shot?: number | null,
 };
 
 export type TemplateViewDto_Serialize = {
@@ -1628,6 +1629,7 @@ export type TemplateViewDto_Serialize = {
 	photos: TemplatePhotoViewDto_Serialize[],
 	differs: number,
 	can_shift_back: boolean,
+	next_shot: number | null,
 };
 
 /**

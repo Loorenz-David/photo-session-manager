@@ -68,4 +68,7 @@ pub struct TemplateView {
     pub photos: Vec<TemplatePhotoView>,
     pub differs: i64,
     pub can_shift_back: bool,
+    /// The shooting number (`shoot_no`) of the container the next shot goes to, or `None` when the
+    /// next shot lands after the last container (Condition). Display only (10G §5 guidance).
+    pub next_shot: Option<i64>,
 }

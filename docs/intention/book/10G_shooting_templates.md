@@ -88,6 +88,11 @@ arrives Main, end of list).
   shows the photo as today. Empty containers are visible placeholders only (not photos; never exported/published).
 - An **info button** opens the template (the black-and-white examples with their numbers and presets) so the person
   can check the placement.
+- **Shooting guidance (owner, 2026-11-16 morning):** each empty container also shows its example (black and white)
+  and its place in the shooting order ("Shot n"); the container the **next shot** goes to is outlined ("Next") and
+  the outline moves on as photos arrive (the same shot count as §4: denied shots and reported shutters count; none
+  once every container has had its shot). The info window can list the containers in **final order** or in
+  **shooting order**, the next shot marked. Display only: placement is unchanged.
 - Untemplated sessions look exactly as today.
 
 ## 6. Manual changes win; warnings and recovery

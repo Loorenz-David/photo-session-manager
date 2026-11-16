@@ -53,6 +53,7 @@ function view(entries: Array<[number, number | null, boolean]>): TemplateView {
     photos: entries.map(([photo_id, slot, differs]) => ({ photo_id, slot, by_hand: differs, differs })),
     differs: entries.filter(([, , differs]) => differs).length,
     can_shift_back: false,
+    next_shot: null,
   };
 }
 
@@ -106,6 +107,6 @@ it('T3·C4(d) dropAction: container placeholders and placed tiles are template d
   expect(dropAction(14, 'photo:13', templated, photos)).toEqual({ kind: 'default' });
   expect(dropAction(12, 'photo:13', templated, photos)).toEqual({ kind: 'default' });
   expect(dropAction(12, 'group:condition', templated, photos)).toEqual({ kind: 'default' });
-  const untemplated: TemplateView = { templated: false, template_id: null, containers: [], photos: [], differs: 0, can_shift_back: false };
+  const untemplated: TemplateView = { templated: false, template_id: null, containers: [], photos: [], differs: 0, can_shift_back: false, next_shot: null };
   expect(dropAction(12, 'photo:11', untemplated, photos)).toEqual({ kind: 'default' });
 });

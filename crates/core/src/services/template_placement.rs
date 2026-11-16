@@ -245,6 +245,23 @@ fn shot_indexes_without(
     now: i64,
     skipped: &std::collections::HashSet<i64>,
 ) -> Result<HashMap<i64, usize>> {
+    Ok(shot_entries(tx, session_id, now, skipped)?
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| match e {
+            Entry::Shot(s) => Some((s.photo_id, i + 1)),
+            Entry::Hold { .. } => None,
+        })
+        .collect())
+}
+
+/// The session's shot order (P1–P4): its unreleased shots, `skipped` left out, and held places.
+fn shot_entries(
+    tx: &dyn StoreTx,
+    session_id: i64,
+    now: i64,
+    skipped: &std::collections::HashSet<i64>,
+) -> Result<Vec<Entry>> {
     let shots = tx
         .shot_keys(session_id)?
         .into_iter()
@@ -255,14 +272,22 @@ fn shot_indexes_without(
             counter: s.name.as_deref().and_then(|name| seq_of(&stem_key(name))),
         })
         .collect();
-    Ok(shot_order::order(shots, tx.hold_times(session_id, now)?)
-        .iter()
-        .enumerate()
-        .filter_map(|(i, e)| match e {
-            Entry::Shot(s) => Some((s.photo_id, i + 1)),
-            Entry::Hold { .. } => None,
-        })
-        .collect())
+    Ok(shot_order::order(shots, tx.hold_times(session_id, now)?))
+}
+
+/// The `shoot_no` of the container the next shot would go to (P5 applied to one past the current
+/// shot order, held places for reported shutters included), or `None` when it would be Condition.
+fn next_shot(
+    tx: &dyn StoreTx,
+    session_id: i64,
+    now: i64,
+    containers: &[Container],
+) -> Result<Option<i64>> {
+    let taken = shot_entries(tx, session_id, now, &std::collections::HashSet::new())?.len();
+    Ok(match template::expected(taken + 1, containers) {
+        Expected::Main(c) => Some(c.shoot_no),
+        Expected::Condition => None,
+    })
 }
 
 /// P5: classification, slot and presets of the place of shot `index`.
@@ -330,6 +355,7 @@ pub fn session_view_at(store: &dyn Store, now: i64, session_id: i64) -> Result<T
         photos: Vec::new(),
         differs: 0,
         can_shift_back: false,
+        next_shot: None,
     };
     store.transaction(&mut |tx| {
         result.photos.clear();
@@ -355,6 +381,7 @@ pub fn session_view_at(store: &dyn Store, now: i64, session_id: i64) -> Result<T
             });
         }
         result.can_shift_back = can_shift_back(tx, session_id, &template, now, &indexes)?;
+        result.next_shot = next_shot(tx, session_id, now, &template.containers)?;
         result.containers = template.containers;
         Ok(())
     })?;
