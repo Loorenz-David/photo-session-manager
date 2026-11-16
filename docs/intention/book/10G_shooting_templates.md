@@ -93,7 +93,8 @@ arrives Main, end of list).
 - In a templated session the Main area shows the containers **faded, numbered, in final order**; a filled container
   shows the photo as today. Empty containers are visible placeholders only (not photos; never exported/published).
 - An **info button** opens the template (the black-and-white examples with their numbers and presets) so the person
-  can check the placement.
+  can check the placement. It shows the containers **two per row, like products in a web shop**: the example on
+  top with its number, then the name, the shot (or image) number, the presets and the description.
 - **Shooting guidance (owner, 2026-11-16 morning):** each empty container also shows its example (black and white)
   and its place in the shooting order ("Shot n"); the container the **next shot** goes to is outlined ("Next") and
   the outline moves on as photos arrive (the same shot count as §4: denied shots and reported shutters count; none
@@ -115,6 +116,13 @@ arrives Main, end of list).
    (later photos do not move), and shows a **"Shift the rest back"** button on that session: pressing it moves
    every later templated photo back one container in shooting order (for the case where the person reshot at
    once), as one undoable step. The button disappears when there is nothing to shift.
+   **Refill (owner, 2026-11-16 evening):** the next shot that arrives **fills the empty container** instead of going
+   to Condition: it takes the deleted shot's place in the shot order (the deleted photo is released, as Shift the
+   rest back and a retake release it), so it gets that container and its presets and no other photo moves. With
+   several empty containers the shots fill them **in shooting order**. Only the latest shot refills: a file that
+   arrives late, with later shots already in, keeps its own place (taking an earlier one would move the photos
+   after it). The "Next" outline (§5) points at the first empty container, after any reported shutters whose
+   files are still on the way. A container emptied by hand (a drag or a move to Condition) is not refilled.
 5. Undo/redo (05A MC-30) covers the person's actions and Back to template / Shift the rest back; automatic
    placement on arrival is not an undo step (like arrival today).
 
@@ -133,7 +141,7 @@ shows the faded numbered containers and the info button. A3 arrival: shots 1, 3,
 containers by shooting order, shot 3 with split + zoom. A4 after the last Main container's shot, photos arrive as
 Condition. A5 moving four Condition photos to Main shows the warning and nothing reverts. A6 dragging the split photo
 to place 2 shows the warning; Back to template returns it (and undo restores the hand placement). A7 Deny leaves the
-container empty; Shift the rest back moves later photos back one. A8 retake dropped onto a filled container: the old
+container empty and outlined as next; the next shot fills it (§6 rule 4, refill). A8 retake dropped onto a filled container: the old
 one is deleted (red). A9 a session whose item type has no template behaves exactly as before (P66).
 
 ## 9. Owner answers (2026-11-16 00:20)

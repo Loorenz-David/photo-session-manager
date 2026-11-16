@@ -205,3 +205,17 @@ it('t1_c6j_the_corner_x_removes_a_container_after_a_confirmation', async () => {
   await waitFor(() => expect(removeContainer).toHaveBeenCalledExactlyOnceWith(2));
   await waitFor(() => expect(cardIds()).toEqual([1, 3]));
 });
+
+it('types_with_a_template_come_first_in_the_list_with_their_container_count', async () => {
+  vi.mocked(listTemplates).mockResolvedValue([{ id: 8, item_type: 'Armchairs', container_count: 6 }]);
+  render(<TemplatesSection />);
+  await waitFor(() => expect(listTemplates).toHaveBeenCalled());
+  // The unexplained "Armchairs · 6 containers" button is gone (owner 2026-11-16); the list says it instead.
+  expect(screen.queryByRole('button', { name: /6 containers/ })).toBeNull();
+  fireEvent.click(await screen.findByRole('button', { name: 'Show item types' }));
+  const option = within(screen.getByRole('listbox', { name: 'Item types' })).getByRole('option', { name: /Armchairs/ });
+  expect(option).toHaveTextContent('6 containers');
+  fireEvent.click(option);
+  expect(screen.getByRole('combobox', { name: 'Item type' })).toHaveValue('Armchairs');
+  await waitFor(() => expect(getTemplate).toHaveBeenCalledWith('Armchairs'));
+});

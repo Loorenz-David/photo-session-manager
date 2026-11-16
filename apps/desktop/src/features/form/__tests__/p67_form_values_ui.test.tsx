@@ -79,7 +79,7 @@ it('C1(a) a linked item\'s form waits quietly for the product, then shows its va
   expect(within(fieldBox('Color')).getByText('from Shopify')).toBeInTheDocument();
   expect(within(fieldBox('Country')).getByText('from Shopify')).toBeInTheDocument();
   expect(screen.getByLabelText('Item type')).toHaveValue('Sofa');
-  expect(screen.getByLabelText('Item type').parentElement!.querySelector('[data-from-integration]')).toHaveTextContent('from Shopify');
+  expect(document.querySelector('label[for="form-item-type"] [data-from-integration]')).toHaveTextContent('from Shopify');
   fireEvent.click(screen.getByRole('tab', { name: /Condition/ }));
   expect(within(await screen.findByText('Scratch').then(label => label.closest('[data-field]') as HTMLElement)).getByText('from Shopify')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: /Product/ }));

@@ -18,7 +18,7 @@ export function TemplateInfoDialog({ view, open, onOpenChange }: { view: Templat
   const shooting = order === 'shooting';
   const containers = [...view.containers].sort((a, b) => (shooting ? a.shoot_no - b.shoot_no : a.final_no - b.final_no));
   return <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="template-info-dialog">
+    <DialogContent className="template-info-dialog sm:max-w-3xl">
       <DialogTitle>Shooting template</DialogTitle>
       <DialogDescription>{shooting ? 'Containers in the order you shoot them.' : 'Containers in final image order.'}</DialogDescription>
       <div className="template-order-switch" role="group" aria-label="Order">
@@ -28,17 +28,22 @@ export function TemplateInfoDialog({ view, open, onOpenChange }: { view: Templat
       <div className="template-info-list">
         {containers.map(container => {
           const next = container.shoot_no === view.next_shot;
-          return <div key={container.id} className="template-info-entry" data-container={container.final_no} data-next={next || undefined}>
-            <strong>{shooting ? container.shoot_no : container.final_no}</strong>
-            <TemplateExample path={container.example_path} />
-            <div>
-              {container.name && <span className="template-info-name">{container.name}</span>}
-              <span>{shooting ? `Image ${container.final_no}` : `Shot ${container.shoot_no}`}</span>
+          const number = shooting ? container.shoot_no : container.final_no;
+          const presets = presetText(container.presets);
+          // Like a product in a web shop (owner 2026-11-16): the picture, then the name and the details below it.
+          return <article key={container.id} className="template-info-entry" data-container={container.final_no} data-next={next || undefined}>
+            <div className="template-info-picture">
+              <TemplateExample path={container.example_path} />
+              <strong className="template-info-number">{number}</strong>
               {next && <span className="template-next-mark">Next</span>}
-              {presetText(container.presets) && <p>{presetText(container.presets)}</p>}
+            </div>
+            <div className="template-info-text">
+              {container.name && <span className="template-info-name">{container.name}</span>}
+              <span className="template-info-meta">{shooting ? `Image ${container.final_no}` : `Shot ${container.shoot_no}`}</span>
+              {presets && <p className="template-info-presets">{presets}</p>}
               {container.description && <p className="template-info-description">{container.description}</p>}
             </div>
-          </div>;
+          </article>;
         })}
       </div>
     </DialogContent>

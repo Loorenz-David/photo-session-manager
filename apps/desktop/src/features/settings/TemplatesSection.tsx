@@ -118,15 +118,15 @@ function TemplateCard({ container, order, onPresets, onLabel, onReplace, onRemov
     <div className="template-card-controls">
       <label className="template-split"><Checkbox aria-label={`Split container ${container.final_no}`} checked={container.presets.split}
         onCheckedChange={checked => onPresets({ ...container.presets, split: checked === true })} /> Split into Left and Right</label>
-      <label className="template-shape">Shape
-        <ChoiceSelect aria-label={`Shape container ${container.final_no}`} value={container.presets.shape ?? ''} choices={SHAPES}
-          onValueChange={shape => onPresets({ ...container.presets, shape: shape || null })} />
-      </label>
-      <label className="template-zoom">Zoom
+      <span className="template-control-label" aria-hidden>Shape</span>
+      <ChoiceSelect className="template-shape-select" aria-label={`Shape container ${container.final_no}`} value={container.presets.shape ?? ''} choices={SHAPES}
+        onValueChange={shape => onPresets({ ...container.presets, shape: shape || null })} />
+      <span className="template-control-label" aria-hidden>Zoom</span>
+      <div className="template-zoom">
         <input type="range" min={0} max={80} step={5} aria-label={`Zoom container ${container.final_no}`} value={zoom}
           onChange={event => setZoom(Number(event.target.value))} />
         <output aria-label={`Zoom of container ${container.final_no}`}>{zoom === 0 ? 'None' : `${zoom} % · ${(100 / (100 - zoom)).toFixed(2).replace(/\.?0+$/, '')}×`}</output>
-      </label>
+      </div>
     </div>
   </article>;
 }
@@ -152,7 +152,9 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
     void getTemplate(itemType).then(found => { if (live) setTemplate(found); }).catch(e => { if (live) setError(String(e)); });
     return () => { live = false; };
   }, [active, itemType]);
-  const choices = useMemo(() => Array.from(new Set([...(shopTypes.types ?? []), ...summaries.map(s => s.item_type)])), [shopTypes.types, summaries]);
+  // Types with a template come first, then the shop's other types.
+  const choices = useMemo(() => Array.from(new Set([...summaries.map(s => s.item_type), ...(shopTypes.types ?? [])])), [shopTypes.types, summaries]);
+  const hints = useMemo(() => Object.fromEntries(summaries.map(s => [s.item_type, s.container_count === 1 ? '1 container' : `${s.container_count} containers`])), [summaries]);
   const ordered = template?.containers.slice().sort((a, b) => order === 'shooting' ? a.shoot_no - b.shoot_no : a.final_no - b.final_no) ?? [];
   const refreshList = () => { void listTemplates().then(setSummaries).catch(e => setError(String(e))); };
   const failure = async (cause: unknown) => {
@@ -200,12 +202,8 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
 
   return <div className="templates-editor">
     <h2>Shooting templates</h2>
-    <ItemTypePicker id="template-item-type" value={itemType} onChange={setItemType} types={choices} failed={shopTypes.failed} />
-    {summaries.length > 0 && <div className="template-list" aria-label="Existing templates">
-      {summaries.map(summary => <Button key={summary.id} type="button" variant="outline" onClick={() => setItemType(summary.item_type)}>
-        {summary.item_type} · {summary.container_count} containers
-      </Button>)}
-    </div>}
+    <p className="health-detail">Choose an item type to see or make its template. Types that already have one show how many containers it has.</p>
+    <ItemTypePicker id="template-item-type" value={itemType} onChange={setItemType} types={choices} failed={shopTypes.failed} hints={hints} />
     {error && <p role="alert">{error}</p>}
     {itemType.trim() && !template && <Button type="button" onClick={() => void create()}>Create template</Button>}
     {template && <>

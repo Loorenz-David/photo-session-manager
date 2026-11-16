@@ -84,12 +84,17 @@ is missing. `tauri.conf.json`: `externalBin: binaries/camera-sidecar`, ad-hoc si
   empty container or swaps two placed photos ("Move to container <n>"); `session_view` counts photos that
   differ; `back_to_template` re-places them (one `StepKind::Template` step "Back to template").
 - **Shooting guidance (2026-11-16, after T4).** `session_view` also returns `next_shot`: the `shoot_no`
-  the next shot would take (P5 applied to one past the current shot order, holds included, denied photos
-  still counted; `None` past the last container). Display only; placement never reads it.
+  the next shot would take: the first empty container left by a deleted shot (`gaps`) after the holds
+  that will fill earlier gaps, else P5 applied to one past the shot order less the gaps; `None` past the
+  last container. Display only; placement never reads it.
 - **Retake and shift (T4).** A photo without a container dropped on a filled one: the old photo is denied
   as Deny does (red, undo window) and `released`; the dropped photo takes its container, its shot key
   (`key_at`, `key_name`) and the container's presets ("Retake container <n>"). Deny leaves the container
-  empty (a denied photo still counts as a shot); `TemplateView.can_shift_back` says a later
+  empty (a denied photo still counts as a shot) until the next shot refills it: `place_arrival` calls
+  `gap_for_arrival` (only when the arrival is the latest shot in the order) and `take_shot_key` (the
+  denied photo is `released`, the arrival takes its `key_at`/`key_name`), so P5 puts the arrival in that
+  container and nothing else moves; several gaps fill in shooting order (owner 2026-11-16 evening).
+  `TemplateView.can_shift_back` says a later
   template-placed photo exists; `shift_back` releases the denied photos and re-places the template-placed
   ones ("Shift the rest back"). Every template step stores each photo's whole state (place, row,
   composition, denial) before and after; `HistoryService` restores it.
@@ -385,7 +390,9 @@ hand-edit. Components never import `bindings.ts` directly: `services/*.ts` wrap 
   FingerprintBox, StorageSection, StockSection, ResearchSection, ShopFieldPicker, `cameraSteps.ts`; a drawer of sections: SettingsNav, TemplatesSection, TemplateExample), `health`, `history`, `pending`.
 - `components/ui/` shadcn primitives; `components/pending/` skeletons; `styles/tokens.css` from the
   design handoff. **Drop-downs** are `components/ui/select.tsx` (Radix Select; `ChoiceSelect` for plain
-  value/label lists, "" = none), never a native `<select>` (owner 2026-11-16). Tests pick options with
+  value/label lists, "" = none), never a native `<select>` (owner 2026-11-16). A typed field with
+  suggestions (the item type, `features/form/ItemTypePicker.tsx`) is a combobox: an input plus the app's
+  own list in a Popover (chevron, arrows, Return, `hints` per option), never a `<datalist>`. Tests pick options with
   `src/test/select.ts` (`choose`, `chooseValue`, `optionsOf`); `src/test/setup.ts` adds the jsdom no-ops Radix needs.
 - State: React hooks per feature; no global store. Preview files are loaded through the Tauri asset
   protocol (`convertFileSrc`), scoped to the `previews/` folder in `lib.rs`.
