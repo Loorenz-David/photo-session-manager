@@ -53,6 +53,10 @@ pub enum StepKind {
         photo_id: i64,
         from: i64,
         to: i64,
+        /// The photo's place row before and after the drag, as (slot, placed by hand): undo and
+        /// redo write these back, so an extra that had no slot has none again (MC-30).
+        place_before: (Option<i64>, bool),
+        place_after: (Option<i64>, bool),
     },
     Move {
         source: i64,
@@ -590,6 +594,8 @@ fn apply(
             photo_id,
             from,
             to,
+            place_before,
+            place_after,
         } => {
             let p = tx.photo(photo_id).map_err(|e| {
                 if matches!(e, Error::NotFound(_)) {
@@ -610,9 +616,23 @@ fn apply(
             let next = position::reorder(&old, photo_id, target);
             if old != next {
                 tx.set_positions(&next)?;
-                // A drag in a templated Main wrote the slot of its target position; undo and
-                // redo write the slot of the position they restore (nothing when untemplated).
-                tx.photo_place_mark(photo_id, true, false, Some(target))?;
+                // A drag in a templated Main wrote a slot and the by-hand mark; undo restores
+                // the row as it was before the drag, redo writes what the drag wrote.
+                let (slot, by_hand) = if direction == Direction::Undone {
+                    place_before
+                } else {
+                    place_after
+                };
+                let row = tx.photo_place_row(photo_id)?;
+                if row.is_some() || slot.is_some() || by_hand {
+                    let mut row = row.unwrap_or(PlaceRow {
+                        photo_id,
+                        ..PlaceRow::default()
+                    });
+                    row.slot = slot;
+                    row.place_by_hand = by_hand;
+                    tx.photo_place_put(&row)?;
+                }
                 tx.touch_session(session_id, at)?;
             }
             touched.push(session_id);
@@ -1168,6 +1188,8 @@ mod tests {
                 photo_id: n,
                 from: n,
                 to: 1,
+                place_before: (None, false),
+                place_after: (None, false),
             },
         }
     }

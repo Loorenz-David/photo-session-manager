@@ -279,6 +279,22 @@ fn t3_c1g_undo_keeps_container_order() {
 }
 
 #[test]
+fn t3_c1g_undo_of_a_reorder_among_extra_main_photos_restores_the_order() {
+    let a = app();
+    let (s, p) = s0(&a, "C1GR", false);
+    let (f4, f5) = (p[3].id, p[4].id);
+    a.review().classify(f4, C::Main).unwrap();
+    a.review().classify(f5, C::Main).unwrap();
+    assert_eq!((pos(&a, f4), pos(&a, f5)), (Some(4), Some(5)));
+    a.review().reorder(f5, 4).unwrap();
+    assert_eq!((pos(&a, f4), pos(&a, f5)), (Some(5), Some(4)));
+    a.history().undo(s).unwrap();
+    assert_eq!((pos(&a, f4), pos(&a, f5)), (Some(4), Some(5)));
+    a.history().redo(s).unwrap();
+    assert_eq!((pos(&a, f5), pos(&a, f4)), (Some(4), Some(5)));
+}
+
+#[test]
 fn t3_c2a_drop_fills_empty_container() {
     let a = app();
     chair(&a);

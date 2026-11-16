@@ -126,7 +126,14 @@ impl<'a> ReviewService<'a> {
                 return Ok(());
             }
             tx.set_positions(&next)?;
+            let place_of_row = |tx: &mut dyn StoreTx| -> Result<(Option<i64>, bool)> {
+                Ok(tx
+                    .photo_place_row(photo_id)?
+                    .map_or((None, false), |r| (r.slot, r.place_by_hand)))
+            };
+            let place_before = place_of_row(tx)?;
             tx.photo_place_mark(photo_id, true, false, Some(position))?;
+            let place_after = place_of_row(tx)?;
             crate::services::template_placement::renumber_main(tx, session_id)?;
             tx.touch_session(session_id, at)?;
             let from = photo.position.unwrap();
@@ -138,6 +145,8 @@ impl<'a> ReviewService<'a> {
                     photo_id,
                     from,
                     to,
+                    place_before,
+                    place_after,
                 },
             });
             Ok(())
