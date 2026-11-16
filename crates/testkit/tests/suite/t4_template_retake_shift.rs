@@ -4,15 +4,18 @@
 use psm_core::{
     Error,
     domain::{
+        camera::{CaptureId, ExposureInitiator, ExposureObserved},
         composition::{
             CompositionKind, EditorGeometry, Fingerprint, Frame, FrameSource, Origin, Rect,
         },
         photo::{Classification as C, Photo},
         template::{PlaceRow, Presets, Template, TemplateView},
     },
-    ports::clock::Clock,
+    ports::{camera::CaptureSink, clock::Clock},
     services::{
-        template_placement::{HandAction, drop_on_container, session_view_at, shift_back},
+        template_placement::{
+            HandAction, back_to_template, drop_on_container, session_view_at, shift_back,
+        },
         templates::TemplatesService,
     },
 };
@@ -377,4 +380,208 @@ fn t4_c2f_hand_placed_later_photos_are_not_shifted() {
     a.review().classify(f[2].id, C::Condition).unwrap();
     a.review().delete(f[1].id).unwrap();
     assert!(!view(&a, s).can_shift_back);
+}
+
+// ---- Unit 3: the owner's story (10G §8 A1–A9) ----
+
+fn expose(a: &TestApp, at: i64, n: i64) {
+    let now = a.clock.now_ms();
+    a.clock.advance(at - now);
+    a.ledger()
+        .exposure_observed(ExposureObserved {
+            capture_id: Some(CaptureId(format!("story-shot-{n}"))),
+            at,
+            initiated: ExposureInitiator::App,
+            provisional: false,
+        })
+        .unwrap();
+}
+fn example(a: &TestApp, name: &str) -> std::path::PathBuf {
+    let path = a.app.paths.root.join(name);
+    image::RgbImage::from_pixel(300, 200, image::Rgb([120, 90, 50]))
+        .save(&path)
+        .unwrap();
+    path
+}
+/// The photo ids in containers 1…n of the view (None for an empty container).
+fn containers(v: &TemplateView, n: i64) -> Vec<Option<i64>> {
+    (1..=n)
+        .map(|k| {
+            v.photos
+                .iter()
+                .find(|p| p.slot == Some(k))
+                .map(|p| p.photo_id)
+        })
+        .collect()
+}
+fn arrive_one(a: &TestApp, s: i64, n: u32) -> Photo {
+    let p = arrive(a, s, &format!("DSC{n:05}.ARW"));
+    frame(a, &p);
+    p
+}
+
+#[test]
+fn t4_c4a_the_owners_story() {
+    let mut a = app();
+
+    // A1: the template editor; everything is kept across a restart.
+    let t = templates(&a).create("Dining chair").unwrap();
+    for n in 1..=4 {
+        let path = example(&a, &format!("example-{n}.jpg"));
+        templates(&a).container_add(t.id, Some(&path)).unwrap();
+    }
+    let t = templates(&a).get("Dining chair").unwrap().unwrap();
+    let ids: Vec<i64> = t.containers.iter().map(|c| c.id).collect();
+    assert_eq!(ids.len(), 4);
+    assert!(t.containers.iter().all(|c| c.example_file.is_some()));
+    // Another final order: the fourth example first.
+    let t = templates(&a)
+        .containers_reorder(t.id, &[ids[3], ids[0], ids[1], ids[2]])
+        .unwrap();
+    let by_final = |t: &Template, n: i64| t.containers.iter().find(|c| c.final_no == n).unwrap().id;
+    let finals: Vec<i64> = (1..=4).map(|n| by_final(&t, n)).collect();
+    assert_eq!(finals, vec![ids[3], ids[0], ids[1], ids[2]]);
+    templates(&a)
+        .container_presets_set(
+            finals[2],
+            Presets {
+                split: true,
+                shape: None,
+                zoom: 20,
+            },
+        )
+        .unwrap();
+    // Shot 1 → container 2, shot 2 → container 1, shot 3 → container 3, shot 4 → container 4.
+    templates(&a)
+        .shooting_order_set(t.id, &[finals[1], finals[0], finals[2], finals[3]])
+        .unwrap();
+    let saved = templates(&a).get("Dining chair").unwrap().unwrap();
+    let shoot = |t: &Template| -> Vec<(i64, i64)> {
+        let mut v: Vec<_> = t
+            .containers
+            .iter()
+            .map(|c| (c.final_no, c.shoot_no))
+            .collect();
+        v.sort();
+        v
+    };
+    assert_eq!(shoot(&saved), vec![(1, 2), (2, 1), (3, 3), (4, 4)]);
+    a.kill_and_restart().unwrap();
+    let loaded = templates(&a).get("Dining chair").unwrap().unwrap();
+    assert_eq!(loaded, saved);
+    let c3 = loaded.containers.iter().find(|c| c.final_no == 3).unwrap();
+    assert_eq!(
+        c3.presets,
+        Presets {
+            split: true,
+            shape: None,
+            zoom: 20
+        }
+    );
+
+    // A2: a new dining-chair session shows four empty containers.
+    let s = session(&a, "STORY1", "Dining chair");
+    let v = view(&a, s);
+    assert!(v.templated);
+    assert_eq!(v.containers.len(), 4);
+    assert!(v.photos.is_empty());
+
+    // A3: three shutters; files 1, 3, 2 arrive in that order.
+    let base = a.clock.now_ms();
+    for n in 1..=3 {
+        expose(&a, base + n * 2000, n);
+    }
+    let f1 = arrive_one(&a, s, 1);
+    let f3 = arrive_one(&a, s, 3);
+    let v = view(&a, s);
+    assert_eq!(
+        containers(&v, 4),
+        vec![None, Some(f1.id), Some(f3.id), None]
+    );
+    let f2 = arrive_one(&a, s, 2);
+    let v = view(&a, s);
+    assert_eq!(
+        containers(&v, 4),
+        vec![Some(f2.id), Some(f1.id), Some(f3.id), None]
+    );
+    let (kind, _, rect) = comp(&a, f3.id);
+    assert_eq!(kind, CompositionKind::Split);
+    rect_eq(rect.unwrap(), SPLIT_ZOOM_20);
+
+    // A4: file 4 fills container 4; files 5–8 arrive as Condition.
+    let f4 = arrive_one(&a, s, 4);
+    assert_eq!(containers(&view(&a, s), 4)[3], Some(f4.id));
+    let extra: Vec<Photo> = (5..=8).map(|n| arrive_one(&a, s, n)).collect();
+    for p in &extra {
+        assert_eq!(a.store().photo(p.id).unwrap().classification, C::Condition);
+    }
+
+    // A5: four Condition photos made Main: the warning counts 4; nothing reverts.
+    for p in &extra {
+        a.review().classify(p.id, C::Main).unwrap();
+    }
+    assert_eq!(view(&a, s).differs, 4);
+    let f9 = arrive_one(&a, s, 9);
+    assert_eq!(a.store().photo(f9.id).unwrap().classification, C::Condition);
+    for p in &extra {
+        assert_eq!(a.store().photo(p.id).unwrap().classification, C::Main);
+    }
+    assert_eq!(view(&a, s).differs, 4);
+
+    // A6: the next chair; the split photo dragged to place 2; Back to template; undo; redo.
+    let s2 = session(&a, "STORY2", "Dining chair");
+    let g: Vec<Photo> = (11..=14).map(|n| arrive_one(&a, s2, n)).collect();
+    assert_eq!(
+        containers(&view(&a, s2), 4),
+        vec![Some(g[1].id), Some(g[0].id), Some(g[2].id), Some(g[3].id)]
+    );
+    drop_on(&a, g[2].id, 2);
+    assert_eq!(view(&a, s2).differs, 2);
+    back_to_template(&hand(&a), s2).unwrap();
+    let v = view(&a, s2);
+    assert_eq!(v.differs, 0);
+    assert_eq!(marks(&v, g[2].id).0, Some(3));
+    a.history().undo(s2).unwrap();
+    assert_eq!(view(&a, s2).differs, 2);
+    a.history().redo(s2).unwrap();
+    assert_eq!(view(&a, s2).differs, 0);
+
+    // A7: Deny the photo in container 4: the container is empty; nothing later to shift until
+    // file 5 arrives; Shift the rest back puts file 5 in container 4.
+    a.review().delete(g[3].id).unwrap();
+    let v = view(&a, s2);
+    assert_eq!(containers(&v, 4)[3], None);
+    assert!(!v.can_shift_back);
+    let g5 = arrive_one(&a, s2, 15);
+    assert_eq!(a.store().photo(g5.id).unwrap().classification, C::Condition);
+    assert!(view(&a, s2).can_shift_back);
+    shift(&a, s2).unwrap();
+    let v = view(&a, s2);
+    assert_eq!(containers(&v, 4)[3], Some(g5.id));
+    assert!(!v.can_shift_back);
+
+    // A8: a retake dropped onto container 1: the old photo is deleted (red); no warning.
+    let g6 = arrive_one(&a, s2, 16);
+    assert_eq!(a.store().photo(g6.id).unwrap().classification, C::Condition);
+    let old = containers(&view(&a, s2), 4)[0].unwrap();
+    drop_on(&a, g6.id, 1);
+    assert_eq!(a.store().photo(old).unwrap().classification, C::Deleted);
+    assert!(denied(&a, old));
+    let v = view(&a, s2);
+    assert_eq!(containers(&v, 4)[0], Some(g6.id));
+    assert_eq!(v.differs, 0);
+
+    // A9: a type without a template behaves as before (P66).
+    let s3 = session(&a, "STORY3", "Table");
+    let h: Vec<Photo> = (21..=23)
+        .map(|n| arrive(&a, s3, &format!("DSC{n:05}.ARW")))
+        .collect();
+    for (i, p) in h.iter().enumerate() {
+        let stored = a.store().photo(p.id).unwrap();
+        assert_eq!(
+            (stored.classification, stored.position),
+            (C::Main, Some(i as i64 + 1))
+        );
+        assert!(a.store().photo_place_row(p.id).unwrap().is_none());
+    }
 }

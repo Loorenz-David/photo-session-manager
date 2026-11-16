@@ -461,7 +461,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         {composing ? null : folded ? (
           <FoldedStrip photos={state.photos} onUnfold={() => setFolded(false)} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
         ) : (
-          <PhotoPanel photos={state.photos} templateView={templateView} sessionId={sessionId} onTemplateBack={state.templateBack} onFold={() => setFolded(true)} onImport={() => pickAndImport()} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
+          <PhotoPanel photos={state.photos} templateView={templateView} sessionId={sessionId} onTemplateBack={state.templateBack} onTemplateShiftBack={state.templateShiftBack} onFold={() => setFolded(true)} onImport={() => pickAndImport()} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
         )}
         {sessionsOpen && <SessionsPanel currentSessionId={sessionId} onClose={() => setSessionsOpen(false)} />}
         <ImportDropZone />
