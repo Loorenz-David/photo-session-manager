@@ -115,10 +115,15 @@ it('t1_c6g_failed_write_shows_error_and_reloads_stored_presets', async () => {
 });
 
 it('t1_c6h_confirms_deletion_and_returns_to_create', async () => {
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
   vi.mocked(deleteTemplate).mockResolvedValue();
   await show();
   fireEvent.click(screen.getByRole('button', { name: 'Delete template' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('Delete the template for Dining chair?');
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(deleteTemplate).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Add photos' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Delete template' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete template' }));
   await waitFor(() => expect(deleteTemplate).toHaveBeenCalledExactlyOnceWith(8));
   expect(await screen.findByRole('button', { name: 'Create template' })).toBeInTheDocument();
 });

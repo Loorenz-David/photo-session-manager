@@ -3,6 +3,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } f
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { ItemTypePicker, useItemTypes } from '@/features/form/ItemTypePicker';
 import {
   addContainer, createTemplate, deleteTemplate, getTemplate, listTemplates, pickExampleFiles,
@@ -64,6 +65,7 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [shooting, setShooting] = useState(false);
   const [tapped, setTapped] = useState<number[]>([]);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const shopTypes = useItemTypes(active);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -132,7 +134,7 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
   };
   const remove = (container: Container) => { void change(() => removeContainer(container.id).then(t => { refreshList(); return t; })); };
   const deleteCurrent = async () => {
-    if (!template || !window.confirm(`Delete the template for ${template.item_type}?`)) return;
+    if (!template) return;
     try { await deleteTemplate(template.id); setTemplate(null); setError(null); refreshList(); } catch (cause) { await failure(cause); }
   };
 
@@ -152,7 +154,7 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
         <Button type="button" variant="outline" onClick={() => void change(() => addContainer(template.id, null).then(t => { refreshList(); return t; }))}>Add empty container</Button>
         {shooting ? <Button type="button" variant="outline" onClick={() => { setShooting(false); setTapped([]); }}>Done</Button>
           : <Button type="button" variant="outline" onClick={() => { setTapped([]); setShooting(true); }}>Set shooting order</Button>}
-        <Button type="button" variant="outline" onClick={() => void deleteCurrent()}>Delete template</Button>
+        <Button type="button" variant="outline" onClick={() => setDeleteOpen(true)}>Delete template</Button>
       </div>
       {shooting && <p>Tap the containers in the order you shoot them.</p>}
       <DndContext sensors={sensors} onDragEnd={dragEnd}>
@@ -166,5 +168,15 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
         </SortableContext>
       </DndContext>
     </>}
+    <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <DialogContent>
+        <DialogTitle>Delete shooting template?</DialogTitle>
+        <DialogDescription>Delete the template for {template?.item_type}? Its example photos will also be removed.</DialogDescription>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+          <Button type="button" onClick={() => { setDeleteOpen(false); void deleteCurrent(); }}>Delete template</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>;
 }
