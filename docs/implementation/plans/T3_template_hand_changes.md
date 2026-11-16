@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 of `handoffs/reviewer/handoff_templates_plan_r1.m
 ---
 # T3 — Your changes win, and there is a way back
 
-**Tracker:** IMPLEMENTED · 2026-11-16 · claude sonnet (pipeline-implementer) · fix 1: B1 closed (undo/redo of a reorder restores the place row the drag changed); t3_template_hand 20/20, p39 24, t2 21, p02 25, p62 12, t1 12, core 96, clippy/fmt/typecheck green
+**Tracker:** APPROVED · 2026-11-16 · opus (pipeline-reviewer) · re-review r2: fix 1 closes T3-R1-B1 (undo/redo of a reorder restores the place row); perimeter clean; t3 20, p39 24, t2 21, p02 25, core 96, clippy/fmt/typecheck green; APPROVED_WITH_NOTES (N6 → T4)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -280,3 +280,17 @@ On scratch data, in a dining-chair session with all containers filled and a few 
 - **Judgment call.** Undo also restores `place_by_hand` as it was before the drag (the finding says "as it was before the drag"); an untemplated session writes no row, so nothing is written there. No store port change was needed.
 - **Test.** `t3_c1g_undo_of_a_reorder_among_extra_main_photos_restores_the_order` (probe input: F4, F5 → Main; `reorder(F5, 4)`; undo → F4 4, F5 5; redo → F5 4, F4 5).
 - **Runs.** `t3_template_hand::` 20, `p39_undo_history_core::` 24, `t2_template_placement::` 21, `p02_review_order::` 25, `p62_retention` 12, `t1_templates::` 12, `cargo test -p psm-core` 96, clippy (core/infra/desktop/testkit), fmt, typecheck. The full suite was not run: the change is local to the Reorder step.
+
+### 2026-11-16 · re-review r2 · opus (pipeline-reviewer) · APPROVED_WITH_NOTES
+**Verified correct.**
+- Perimeter: `git show --stat 4e1ba0c` = `services/{history.rs, review.rs}`, `t3_template_hand.rs`, the plan file, the fix handoff; all inside the finding's allowed list. `4e1ba0c..HEAD` touches only pipeline docs.
+- Checks, run once each on `ee4a4ec` (= `4e1ba0c` + docs): `t3_template_hand::` 20, `p39_undo_history_core::` 24, `t2_template_placement::` 21, `p02_review_order::` 25, `cargo test -p psm-core` 96, clippy (core/infra/desktop/testkit, `-D warnings`), fmt, typecheck. The full-suite stamp of r1 stands (shared code unchanged beyond the Reorder step).
+- **T3-R1-B1 resolved as its correction said.** `ReviewService::reorder` reads (slot, place_by_hand) from the place row before and after `photo_place_mark`; `apply` writes `place_before` on undo and `place_after` on redo via `photo_place_row` + `photo_place_put` (clears a slot). No row is created when nothing exists and the value is the default, so untemplated sessions write nothing (`place_before == place_after` there, since `photo_place_mark` returns early). The new test (`t3_c1g_undo_of_a_reorder_among_extra_main_photos_restores_the_order`) uses the r1 probe input and asserts exact positions after undo and redo; on the r1 code its undo assertion fails (r1 probe observed F4 5, F5 4). It traces to T3·C1(g) / the U1 goal.
+- Changed seam, by reading: a container photo dragged into another container and undone returns to its own slot with `place_by_hand` cleared (better than r1, which kept it marked); an extra dragged into the containers and undone has no slot again and sorts last. `Step` is in-memory only (`Debug, Clone`), so the new fields have no persistence impact.
+
+**Triage.** No blocking item remains; nothing to classify.
+
+**Notes → backlog (T3).** N6 (extends N2, → T4): undo of a reorder whose drag left Main's final order unchanged skips the place-row restore (inside `if old != next`), so the photo stays marked after ⌘Z. Pre-existing, not a fix regression. r1's N1–N5 dispositions stand.
+
+**Probes.** None. No file edited outside this review's perimeter.
+
