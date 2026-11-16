@@ -49,6 +49,9 @@ pub fn place_arrival(
                 ..PlaceRow::default()
             })?;
         }
+        if let Some(old) = gap_for_arrival(tx, session_id, now, &template, photo_id)? {
+            take_shot_key(tx, photo_id, old)?;
+        }
         changed = place_template_photos(tx, session_id, &template, now, Some(photo_id))?;
         tx.touch_session(session_id, now)?;
         Ok(())
@@ -275,18 +278,116 @@ fn shot_entries(
     Ok(shot_order::order(shots, tx.hold_times(session_id, now)?))
 }
 
-/// The `shoot_no` of the container the next shot would go to (P5 applied to one past the current
-/// shot order, held places for reported shutters included), or `None` when it would be Condition.
+/// The `shoot_no` of the container the next shot would go to, or `None` when it would be
+/// Condition. Reported shutters whose files have not arrived (held places) fill the empty
+/// containers first (owner 2026-11-16); past those, P5 applies to one past the shot order.
 fn next_shot(
     tx: &dyn StoreTx,
     session_id: i64,
     now: i64,
     containers: &[Container],
 ) -> Result<Option<i64>> {
-    let taken = shot_entries(tx, session_id, now, &std::collections::HashSet::new())?.len();
+    let entries = shot_entries(tx, session_id, now, &std::collections::HashSet::new())?;
+    let holds = entries
+        .iter()
+        .filter(|e| matches!(e, Entry::Hold { .. }))
+        .count();
+    let gaps = gaps(tx, session_id, now, containers)?;
+    if let Some((shoot_no, _)) = gaps.get(holds) {
+        return Ok(Some(*shoot_no));
+    }
+    let taken = entries.len() - gaps.len();
     Ok(match template::expected(taken + 1, containers) {
         Expected::Main(c) => Some(c.shoot_no),
         Expected::Condition => None,
+    })
+}
+
+/// The containers a deleted shot left empty (owner 2026-11-16), in shooting order: for each
+/// Deleted, not released photo whose shot's place (P5) is a container that no photo is in now,
+/// that container's `shoot_no` and the deleted photo.
+fn gaps(
+    tx: &dyn StoreTx,
+    session_id: i64,
+    now: i64,
+    containers: &[Container],
+) -> Result<Vec<(i64, i64)>> {
+    let indexes = shot_indexes(tx, session_id, now)?;
+    let photos = tx.photos(session_id)?;
+    let mut filled = std::collections::HashSet::new();
+    for p in photos
+        .iter()
+        .filter(|p| p.classification != Classification::Deleted)
+    {
+        if let Some(slot) = place_of(p, tx.photo_place_row(p.id)?.as_ref()).1 {
+            filled.insert(slot);
+        }
+    }
+    let mut gaps: Vec<(i64, i64)> = photos
+        .iter()
+        .filter(|p| p.classification == Classification::Deleted)
+        .filter_map(
+            |p| match template::expected(*indexes.get(&p.id)?, containers) {
+                Expected::Main(c) if !filled.contains(&c.final_no) => Some((c.shoot_no, p.id)),
+                _ => None,
+            },
+        )
+        .collect();
+    gaps.sort_unstable();
+    gaps.dedup_by_key(|(shoot_no, _)| *shoot_no);
+    Ok(gaps)
+}
+
+/// The deleted photo whose empty container the arrival fills (owner 2026-11-16): the first gap in
+/// shooting order, but only when the arrival is the latest shot of the session. A file that
+/// arrives late, with later shots already in, keeps its own place: taking an earlier one would
+/// move every shot after it.
+fn gap_for_arrival(
+    tx: &dyn StoreTx,
+    session_id: i64,
+    now: i64,
+    template: &Template,
+    arrived: i64,
+) -> Result<Option<i64>> {
+    let entries = shot_entries(tx, session_id, now, &std::collections::HashSet::new())?;
+    let last_shot = entries.iter().rev().find_map(|e| match e {
+        Entry::Shot(s) => Some(s.photo_id),
+        Entry::Hold { .. } => None,
+    });
+    if last_shot != Some(arrived) {
+        return Ok(None);
+    }
+    Ok(gaps(tx, session_id, now, &template.containers)?
+        .first()
+        .map(|(_, photo_id)| *photo_id))
+}
+
+/// The arrival takes the deleted photo's place in the shot order: the deleted photo is released
+/// (it leaves the count, as Shift the rest back and a retake release it) and the arrival takes its
+/// shot key, so placement (P5) puts the arrival in that container and no other shot moves.
+fn take_shot_key(tx: &mut dyn StoreTx, arrived: i64, old: i64) -> Result<()> {
+    let session_id = tx.photo(old)?.session_id;
+    let key = tx
+        .shot_keys(session_id)?
+        .into_iter()
+        .find(|k| k.photo_id == old)
+        .ok_or_else(|| Error::NotFound(format!("photo {old}")))?;
+    let old_row = tx.photo_place_row(old)?.unwrap_or(PlaceRow {
+        photo_id: old,
+        ..PlaceRow::default()
+    });
+    tx.photo_place_put(&PlaceRow {
+        released: true,
+        ..old_row
+    })?;
+    let row = tx.photo_place_row(arrived)?.unwrap_or(PlaceRow {
+        photo_id: arrived,
+        ..PlaceRow::default()
+    });
+    tx.photo_place_put(&PlaceRow {
+        key_at: Some(key.at),
+        key_name: key.name,
+        ..row
     })
 }
 

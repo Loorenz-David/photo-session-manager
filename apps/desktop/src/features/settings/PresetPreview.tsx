@@ -37,11 +37,14 @@ export function PresetPreview({ path, presets }: { path: string | null; presets:
     : [rect];
   const resultRatio = (rect.w * frame.w) / (rect.h * frame.h);
   return <div className="preset-preview" data-bw="true">
-    <div className="preset-source" style={{ aspectRatio: `${frame.w} / ${frame.h}` }}>
-      <img src={src} alt="Example angle" draggable={false}
-        onLoad={event => { const img = event.currentTarget; if (img.naturalWidth && img.naturalHeight) setFrame({ w: img.naturalWidth, h: img.naturalHeight }); }} />
-      <div className="preset-crop" data-split={presets.split || undefined}
-        style={{ left: pct(rect.x), top: pct(rect.y), width: pct(rect.w), height: pct(rect.h) }} />
+    {/* A fixed-height stage (owner 2026-11-16: every card the same height); the photo fits inside it. */}
+    <div className="preset-stage">
+      <div className="preset-source" style={{ '--ratio': frame.w / frame.h } as CSSProperties}>
+        <img src={src} alt="Example angle" draggable={false}
+          onLoad={event => { const img = event.currentTarget; if (img.naturalWidth && img.naturalHeight) setFrame({ w: img.naturalWidth, h: img.naturalHeight }); }} />
+        <div className="preset-crop" data-split={presets.split || undefined}
+          style={{ left: pct(rect.x), top: pct(rect.y), width: pct(rect.w), height: pct(rect.h) }} />
+      </div>
     </div>
     <div className="preset-result" aria-label={presets.split ? 'Result: Left and Right' : 'Result'}>
       {halves.map((part, index) => <div key={index} className="preset-result-picture"
