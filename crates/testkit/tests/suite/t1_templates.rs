@@ -346,3 +346,33 @@ fn t1_c3a_restart_keeps_template() {
             .all(|c| exists(&c.example_path))
     );
 }
+#[test]
+fn label_a_container_name_and_description_are_trimmed_cleared_and_kept_over_a_restart() {
+    let mut a = TestApp::new().unwrap();
+    let t = three(&a);
+    let c2 = t.containers[1].id;
+    let s = service(&a);
+    let after = s
+        .container_label_set(
+            c2,
+            "  Front, low ",
+            "Kneel at seat height.\nWhole chair in frame.",
+        )
+        .unwrap();
+    assert_eq!(after.containers[1].name.as_deref(), Some("Front, low"));
+    assert_eq!(
+        after.containers[1].description.as_deref(),
+        Some("Kneel at seat height.\nWhole chair in frame.")
+    );
+    assert_eq!(after.containers[0].name, None);
+    assert_eq!(
+        code(s.container_label_set(c2, &"x".repeat(61), "").unwrap_err()),
+        "invalid_value"
+    );
+    a.kill_and_restart().unwrap();
+    let loaded = service(&a).get("dining chair").unwrap().unwrap();
+    assert_eq!(loaded.containers[1].name.as_deref(), Some("Front, low"));
+    let cleared = service(&a).container_label_set(c2, "   ", "").unwrap();
+    assert_eq!(cleared.containers[1].name, None);
+    assert_eq!(cleared.containers[1].description, None);
+}

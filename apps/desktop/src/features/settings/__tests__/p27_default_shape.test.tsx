@@ -5,6 +5,7 @@ import { SettingsPage } from '../SettingsPage';
 import { HealthPage } from '@/features/health/HealthPage';
 import { getSettings, saveSettings, type Settings } from '@/services/settings';
 import { getAppPaths, getHealth } from '@/services/health';
+import { choose, optionsOf } from '@/test/select';
 
 vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), saveSettings: vi.fn(), pickFolder: vi.fn(), pickSessionFile: vi.fn() }));
 vi.mock('@/services/health', () => ({ getHealth: vi.fn(), getAppPaths: vi.fn() }));
@@ -30,14 +31,11 @@ it('C5(a) Settings shows the seven default shapes and saves the master recipe', 
   vi.mocked(saveSettings).mockResolvedValue(shown);
   render(<SettingsPage />);
   const shape = await screen.findByRole('combobox', { name: 'Default shape' });
-  expect(shape).toHaveValue('1:1');
-  expect(Array.from(shape.querySelectorAll('option')).map(option => [option.value, option.textContent])).toEqual([
-    ['original', 'Original'], ['1:1', 'Square (1:1)'], ['4:5', '4:5'], ['3:2', '3:2'],
-    ['2:3', '2:3'], ['16:9', '16:9'], ['free', 'Free'],
-  ]);
+  expect(shape).toHaveTextContent('Square (1:1)');
+  expect(await optionsOf(shape)).toEqual(['Original', 'Square (1:1)', '4:5', '3:2', '2:3', '16:9', 'Free']);
   expect(screen.queryByLabelText('Shape on arrival')).not.toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: 'Master recipe' })).toHaveValue('PSM Master');
-  fireEvent.change(shape, { target: { value: '4:5' } });
+  await choose(shape, '4:5');
   fireEvent.change(screen.getByRole('textbox', { name: 'Master recipe' }), { target: { value: 'My Master' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
   await waitFor(() => expect(saveSettings).toHaveBeenCalledTimes(1));

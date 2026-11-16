@@ -442,6 +442,8 @@ fn c1a_open_creates_all_domain_columns() {
                 "split",
                 "shape",
                 "zoom",
+                "name",
+                "description",
             ],
         ),
         (

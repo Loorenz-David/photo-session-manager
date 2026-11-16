@@ -66,7 +66,8 @@ is missing. `tauri.conf.json`: `externalBin: binaries/camera-sidecar`, ad-hoc si
 ## Runtime flows (step lists with the files involved)
 ### Shooting templates (book `10G`; T1–T4; contract `docs/implementation/master_plan_templates.md` §5 P1–P10)
 - **Editor (T1).** Settings → Shooting templates (`features/settings/{SettingsNav.tsx, TemplatesSection.tsx,
-  TemplateExample.tsx}`) → `src/services/templates.ts` → ten commands → `TemplatesService`
+  TemplateExample.tsx, PresetPreview.tsx}`) → `src/services/templates.ts` → eleven commands (incl.
+  `template_container_label_set`: name + description, migration 016) → `TemplatesService`
   (`services/templates.rs`) over the `Store` port; every change is its own write (no Save). Example images
   are JPEG copies under `<data>/templates/<template id>/<uuid>.jpg` (`ImageOpsImpl::thumbnail`; the webview
   reads that folder through the asset protocol), shown black and white.
@@ -383,7 +384,9 @@ hand-edit. Components never import `bindings.ts` directly: `services/*.ts` wrap 
   FailurePopover, NotificationsDrawer, `usePublish.ts`), `settings` (SettingsPage, CameraSection,
   FingerprintBox, StorageSection, StockSection, ResearchSection, ShopFieldPicker, `cameraSteps.ts`; a drawer of sections: SettingsNav, TemplatesSection, TemplateExample), `health`, `history`, `pending`.
 - `components/ui/` shadcn primitives; `components/pending/` skeletons; `styles/tokens.css` from the
-  design handoff.
+  design handoff. **Drop-downs** are `components/ui/select.tsx` (Radix Select; `ChoiceSelect` for plain
+  value/label lists, "" = none), never a native `<select>` (owner 2026-11-16). Tests pick options with
+  `src/test/select.ts` (`choose`, `chooseValue`, `optionsOf`); `src/test/setup.ts` adds the jsdom no-ops Radix needs.
 - State: React hooks per feature; no global store. Preview files are loaded through the Tauri asset
   protocol (`convertFileSrc`), scoped to the `previews/` folder in `lib.rs`.
 - Tests: vitest + jsdom + Testing Library, `features/<f>/__tests__/<phase>_<slug>.test.tsx`,

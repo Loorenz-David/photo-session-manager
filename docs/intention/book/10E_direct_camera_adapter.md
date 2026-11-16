@@ -175,7 +175,8 @@ SDK is ever committed to the repo; the sidecar is compiled on a build machine th
   its environment, because another process of the same user can read a child's environment (`ps -E`). Neither side ever logs that line
   (its `cmd.received` carries no fields). Every secret is registered with the log redactor (`logging::add_secret`) before the sidecar is
   spawned or the receiver starts, and the sidecar's stderr reaches the log only through that redactor. The app generates the FTP password
-  (32 random characters from `[A-Za-z0-9]`) and shows it once in camera setup, for the photographer to enter on the camera; it can be
+  (32 random characters from `[A-Za-z0-9]`; since 2026-11-16 **four random digits**, owner: "too complex to write on the camera"; the
+  receiver listens on the local network only) and shows it in camera setup, for the photographer to enter on the camera; it can be
   changed there. No secret appears in argv, settings.json or the repo. Pinned fingerprints (not secret) live in
   `<app support>/camera/fingerprints/`, passed as `CRLAB_FINGERPRINT_DIR`. A known cost, checked in spike S6: with ad-hoc signing, every
   new build has a new code identity, so macOS asks again for Keychain access after each update.

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { ChoiceSelect } from '@/components/ui/select';
 import { listDefinitions, type Definition } from '@/services/attributes';
 import { searchItems, type Item } from '@/services/items';
 import { addResearchSite, exportResearch, removeResearchSite, reorderResearchSites, researchSecretsState, resetResearchSettings, setResearchSecrets, type ResearchSecretsState } from '@/services/research';
@@ -414,11 +415,9 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
         {research.detailed_condition.key !== '' && !research.fill_keys.includes(research.detailed_condition.key)
           && <p className="health-detail">Not among the fields research fills, so the detailed condition will not be worked out.</p>}
         <label htmlFor="detailed-condition-field">Detailed condition field</label>
-        <select id="detailed-condition-field" className="rounded-md border px-2 py-1" value={research.detailed_condition.key}
-          onChange={event => edit({ detailed_condition: { key: event.target.value, levels: [] } })}>
-          <option value="">No field</option>
-          {choiceFields.map(field => <option key={field.key} value={field.key}>{field.label} ({field.key})</option>)}
-        </select>
+        <ChoiceSelect id="detailed-condition-field" className="w-full" value={research.detailed_condition.key}
+          onValueChange={key => edit({ detailed_condition: { key, levels: [] } })}
+          choices={[{ value: '', label: 'No field' }, ...choiceFields.map(field => ({ value: field.key, label: `${field.label} (${field.key})` }))]} />
         {!detailed ? <p className="health-detail">{DETAILED_CONDITION_UNSET}</p> : (
           <>
             <p className="health-detail">For the worst condition level of an item, the grade research writes.</p>
@@ -427,11 +426,8 @@ export function ResearchSection({ research: loaded, shopDomain }: ResearchSectio
               {conditionLevels.map(level => (
                 <li key={level} data-level={level} className="flex items-center justify-between gap-2">
                   <span>{level}</span>
-                  <select aria-label={`Grade for ${level}`} className="rounded-md border px-2 py-1" value={chosenLevel(level)} onChange={event => setLevel(level, event.target.value)}>
-                    <option value={UNSET}>Unset</option>
-                    <option value={COUNTS_FOR_NOTHING}>counts for nothing</option>
-                    {detailed.choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                  </select>
+                  <ChoiceSelect aria-label={`Grade for ${level}`} value={chosenLevel(level)} onValueChange={next => setLevel(level, next)}
+                    choices={[{ value: UNSET, label: 'Unset' }, { value: COUNTS_FOR_NOTHING, label: 'counts for nothing' }, ...detailed.choices.map(choice => ({ value: choice, label: choice }))]} />
                 </li>
               ))}
             </ul>

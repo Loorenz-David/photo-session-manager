@@ -43,7 +43,7 @@ function photo(id: number, classification: Photo['classification'], position: nu
 }
 
 const container = (final_no: number, shoot_no: number) => ({
-  id: 100 + final_no, final_no, shoot_no, example_file: null, example_path: null, presets: { split: false, shape: null, zoom: 0 },
+  id: 100 + final_no, final_no, shoot_no, example_file: null, example_path: null, presets: { split: false, shape: null, zoom: 0 }, name: null, description: null,
 });
 
 /** Three containers; `entries` are [photo id, slot, differs]. */

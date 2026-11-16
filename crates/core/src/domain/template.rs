@@ -16,6 +16,10 @@ pub struct Container {
     pub example_file: Option<String>,
     pub example_path: Option<String>,
     pub presets: Presets,
+    /// The photographer's name for the shot angle ("Front, low"); `None` shows "Container n".
+    pub name: Option<String>,
+    /// How to take the shot, shown behind an info button. Display only.
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

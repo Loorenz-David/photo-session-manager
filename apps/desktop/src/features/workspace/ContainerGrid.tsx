@@ -1,4 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
+import { Info } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { TemplateExample } from '@/features/settings/TemplateExample';
 import type { Photo } from '@/services/photos';
@@ -28,11 +30,21 @@ function Placeholder({ container, next }: { container: ContainerView; next: bool
       data-empty="true"
       data-next={next || undefined}
       data-over={isOver || undefined}
-      aria-label={`Empty container ${number}, shot ${container.shoot_no}${next ? ', next to shoot' : ''}`}
+      aria-label={`Empty container ${number}${container.name ? ` (${container.name})` : ''}, shot ${container.shoot_no}${next ? ', next to shoot' : ''}`}
     >
       {container.example_path && <TemplateExample path={container.example_path} />}
       <span className="container-number">{number}</span>
+      {container.name && <span className="container-name">{container.name}</span>}
       <span className="container-shot">{next ? `Next · Shot ${container.shoot_no}` : `Shot ${container.shoot_no}`}</span>
+      {container.description && <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" className="container-info" aria-label={`How to take shot ${container.shoot_no}`}><Info aria-hidden /></button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="container-info-text">
+          <strong>{container.name ?? `Container ${number}`}</strong>
+          <p>{container.description}</p>
+        </PopoverContent>
+      </Popover>}
     </div>
   );
 }

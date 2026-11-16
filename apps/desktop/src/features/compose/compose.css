@@ -73,7 +73,7 @@
 .compose-segment[aria-disabled="true"] { cursor: default; opacity: .5; }
 .compose-field { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
 .compose-field > span, .compose-field > label { flex: none; width: 64px; color: var(--muted); font-weight: var(--weight-bold); }
-.compose-field select { flex: 1; min-width: 0; height: 28px; padding: 0 var(--space-2); border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--color-bg); color: var(--color-text); font-size: var(--text-md); }
+.compose-field [data-slot="select-trigger"] { flex: 1; min-width: 0; height: 28px; padding: 0 var(--space-2); border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--color-bg); color: var(--color-text); font-size: var(--text-md); }
 .compose-straighten input[type="range"] { flex: 1; min-width: 0; accent-color: var(--color-accent); }
 .compose-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .compose-tool { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--hair-strong); border-radius: var(--r); background: var(--color-bg); color: var(--color-text); font-size: var(--text-sm); font-weight: var(--weight-bold); cursor: pointer; }

@@ -229,6 +229,14 @@ pub trait Store: Send + Sync {
         presets: &Presets,
         at: i64,
     ) -> Result<Template>;
+    /// The container's name and description (owner 2026-11-16); `None` clears them.
+    fn template_container_label_set(
+        &self,
+        id: i64,
+        name: Option<&str>,
+        description: Option<&str>,
+        at: i64,
+    ) -> Result<Template>;
     fn preview_states(&self) -> Result<Vec<RawPreviewState>>;
     fn preview_state(&self, raw: &str) -> Result<Option<RawPreviewState>>;
     fn ensure_initial_generation(&self, raw: &str) -> Result<Option<i64>>;

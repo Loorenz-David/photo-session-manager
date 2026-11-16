@@ -1,5 +1,6 @@
 import { compose, layoutStage, openWorkspace, savedValues, twoPhotos } from './harness';
 import { act, fireEvent } from '@testing-library/react';
+import { chooseValue } from '@/test/select';
 import { setComposition } from '@/services/compositions';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -68,9 +69,9 @@ describe('P36 straightening', () => {
   });
   it('C7(a) returns the keyboard to the editor after choosing Shape', async () => {
     await start();
-    const shape = document.querySelector<HTMLSelectElement>('#compose-shape')!;
+    const shape = document.querySelector<HTMLElement>('#compose-shape')!;
     act(() => shape.focus());
-    fireEvent.change(shape, { target: { value: '4:5' } });
+    await chooseValue(shape, '4:5');
     await act(async () => press(document.activeElement!, 'x'));
     expect(setComposition).toHaveBeenCalledTimes(2);
     expect(savedValues(0).shape).toBe('4:5');

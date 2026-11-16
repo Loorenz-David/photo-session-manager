@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { chooseValue, optionsOf } from '@/test/select';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SettingsPage } from '../SettingsPage';
 import { getSettings, saveSettings, type Settings } from '@/services/settings';
@@ -75,9 +76,9 @@ it('C4(a) leaving without a change does not ask', async () => {
 it('C6(b) Style is a drop-down of Capture One\'s styles, the photographer\'s own first; the choice is saved by its exact name', async () => {
   render(<SettingsPage />);
   const style = await screen.findByRole('combobox', { name: 'Style' });
-  await waitFor(() => expect(within(style).getAllByRole('option').map(o => o.textContent)).toEqual(['No style', 'test-style', 'Vivid']));
-  expect(style).toHaveValue('');
-  fireEvent.change(style, { target: { value: 'test-style' } });
+  expect(style).toHaveTextContent('No style');
+  await waitFor(async () => expect(await optionsOf(style)).toEqual(['No style', 'test-style', 'Vivid']));
+  await chooseValue(style, 'test-style');
   fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
   await waitFor(() => expect(saveSettings).toHaveBeenCalledTimes(1));
   expect(vi.mocked(saveSettings).mock.calls[0][0].style_name).toBe('test-style');

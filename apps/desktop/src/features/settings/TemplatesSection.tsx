@@ -1,59 +1,133 @@
-import { useEffect, useMemo, useState } from 'react';
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { GripVertical, Info, Plus, X } from 'lucide-react';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ChoiceSelect } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { ItemTypePicker, useItemTypes } from '@/features/form/ItemTypePicker';
 import {
   addContainer, createTemplate, deleteTemplate, getTemplate, listTemplates, pickExampleFiles,
-  removeContainer, reorderContainers, setExample, setPresets, setShootingOrder,
+  removeContainer, reorderContainers, setExample, setLabel, setPresets, setShootingOrder,
   type Presets, type Template, type TemplateSummary,
 } from '@/services/templates';
-import { TemplateExample } from './TemplateExample';
+import { PresetPreview } from './PresetPreview';
 
 type Container = Template['containers'][number];
+type Order = 'final' | 'shooting';
 const SHAPES = [
-  { value: '', label: 'None' }, { value: 'original', label: 'Original' },
+  { value: '', label: 'As the session' }, { value: 'original', label: 'Original' },
   { value: '1:1', label: '1:1' }, { value: '4:5', label: '4:5' },
   { value: '3:2', label: '3:2' }, { value: '2:3', label: '2:3' }, { value: '16:9', label: '16:9' },
 ];
+const ZOOM_SAVE_MS = 300;
 
-function TemplateCard({ container, onMove, onTap, onPresets, onReplace, onRemove, shooting }:
-  { container: Container; onMove: (direction: -1 | 1) => void; onTap: () => void;
-    onPresets: (presets: Presets) => void; onReplace: () => void; onRemove: () => void; shooting: boolean }) {
-  const sortable = useSortable({ id: container.id, disabled: shooting });
-  return <article ref={sortable.setNodeRef} className="template-card" data-testid={`template-card-${container.id}`}
-    style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }}>
+/** The ids of `ids` with `active` moved to where `over` is (dnd-kit's sortable move). */
+export function moved(ids: number[], active: number, over: number): number[] | null {
+  const from = ids.indexOf(active);
+  const to = ids.indexOf(over);
+  if (from < 0 || to < 0 || from === to) return null;
+  const next = ids.slice();
+  next.splice(to, 0, next.splice(from, 1)[0]);
+  return next;
+}
+
+/** The container's zoom slider: the preview follows the slider at once, the value is saved once it rests. */
+function useZoomDraft(container: Container, onPresets: (presets: Presets) => void) {
+  const [draft, setDraft] = useState(container.presets.zoom);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => { setDraft(container.presets.zoom); }, [container.presets.zoom]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const change = (zoom: number) => {
+    setDraft(zoom);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => { if (zoom !== container.presets.zoom) onPresets({ ...container.presets, zoom }); }, ZOOM_SAVE_MS);
+  };
+  return [draft, change] as const;
+}
+
+function DescriptionButton({ container, title, onSave }: { container: Container; title: string; onSave: (description: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(container.description ?? '');
+  useEffect(() => { if (open) setText(container.description ?? ''); }, [open, container.description]);
+  return <Popover open={open} onOpenChange={setOpen}>
+    <PopoverTrigger asChild>
+      <button type="button" className="template-icon-button" aria-label={`Description, ${title}`} data-filled={container.description ? true : undefined}><Info aria-hidden /></button>
+    </PopoverTrigger>
+    <PopoverContent align="end" className="w-80">
+      <label className="flex flex-col gap-1 text-sm font-medium">How to take this shot
+        <Textarea aria-label={`Description of ${title}`} value={text} placeholder="Where you stand, the height, what must be in the frame…"
+          onChange={event => setText(event.target.value)} />
+      </label>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+        <Button type="button" size="sm" onClick={() => { onSave(text); setOpen(false); }}>Save description</Button>
+      </div>
+    </PopoverContent>
+  </Popover>;
+}
+
+function RemoveButton({ title, onRemove }: { title: string; onRemove: () => void }) {
+  const [open, setOpen] = useState(false);
+  return <Popover open={open} onOpenChange={setOpen}>
+    <PopoverTrigger asChild>
+      <button type="button" className="template-icon-button" aria-label={`Remove ${title}`}><X aria-hidden /></button>
+    </PopoverTrigger>
+    <PopoverContent align="end" className="w-64">
+      <p>Remove {title} and its example photo?</p>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>Keep</Button>
+        <Button type="button" size="sm" onClick={() => { setOpen(false); onRemove(); }}>Remove</Button>
+      </div>
+    </PopoverContent>
+  </Popover>;
+}
+
+function TemplateCard({ container, order, onPresets, onLabel, onReplace, onRemove }:
+  { container: Container; order: Order; onPresets: (presets: Presets) => void;
+    onLabel: (name: string, description: string) => void; onReplace: () => void; onRemove: () => void }) {
+  const sortable = useSortable({ id: container.id });
+  const [zoom, setZoom] = useZoomDraft(container, onPresets);
+  const number = order === 'shooting' ? container.shoot_no : container.final_no;
+  const title = container.name ?? `Container ${container.final_no}`;
+  const saveName = (value: string) => { if (value.trim() !== (container.name ?? '')) onLabel(value, container.description ?? ''); };
+  return <article ref={sortable.setNodeRef} className="template-card" data-testid={`template-card-${container.id}`} data-dragging={sortable.isDragging || undefined}
+    style={{ transform: CSS.Translate.toString(sortable.transform), transition: sortable.transition }}>
     <div className="template-card-heading">
-      <button type="button" className="template-drag-handle" aria-label={`Drag container ${container.final_no}`}
-        {...sortable.attributes} {...sortable.listeners}>⋮⋮</button>
-      <strong>Container {container.final_no}</strong>
-      <span className="template-shoot-badge" aria-label={`Shooting number ${container.shoot_no}`}>Shoot {container.shoot_no}</span>
+      <button type="button" className="template-drag-handle" aria-label={`Drag ${title}`} {...sortable.attributes} {...sortable.listeners}><GripVertical aria-hidden /></button>
+      <span className="template-card-number" aria-label={order === 'shooting' ? `Shot ${number}` : `Image ${number}`}>{number}</span>
+      <Input key={`${container.id}-${container.name ?? ''}`} className="template-name" aria-label={`Name of container ${container.final_no}`}
+        placeholder={`Container ${container.final_no}`} defaultValue={container.name ?? ''} maxLength={60}
+        onBlur={event => saveName(event.target.value)}
+        onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { event.currentTarget.value = container.name ?? ''; event.currentTarget.blur(); } }} />
+      <DescriptionButton container={container} title={title} onSave={description => onLabel(container.name ?? '', description)} />
+      <RemoveButton title={title} onRemove={onRemove} />
     </div>
-    <TemplateExample path={container.example_path} />
-    {shooting ? <Button type="button" onClick={onTap}>Tap container {container.final_no}</Button> : <>
-      <div className="template-card-controls">
-        <label><input type="checkbox" aria-label={`Split container ${container.final_no}`} checked={container.presets.split}
-          onChange={e => onPresets({ ...container.presets, split: e.target.checked })} /> Split</label>
-        <label>Shape
-          <select aria-label={`Shape container ${container.final_no}`} value={container.presets.shape ?? ''}
-            onChange={e => onPresets({ ...container.presets, shape: e.target.value || null })}>
-            {SHAPES.map(shape => <option key={shape.value} value={shape.value}>{shape.label}</option>)}
-          </select>
-        </label>
-        <label>Zoom %
-          <input type="number" min={0} max={80} aria-label={`Zoom container ${container.final_no}`} value={container.presets.zoom}
-            onChange={e => onPresets({ ...container.presets, zoom: Math.min(80, Math.max(0, Number(e.target.value) || 0)) })} />
-        </label>
-      </div>
-      <div className="template-card-actions">
-        <Button type="button" variant="outline" onClick={() => onMove(-1)} aria-label={`Move earlier container ${container.final_no}`}>Move earlier</Button>
-        <Button type="button" variant="outline" onClick={() => onMove(1)} aria-label={`Move later container ${container.final_no}`}>Move later</Button>
-        <Button type="button" variant="outline" onClick={onReplace}>Replace photo</Button>
-        <Button type="button" variant="outline" onClick={onRemove}>Remove</Button>
-      </div>
-    </>}
+    <button type="button" className="template-replace" onClick={onReplace} aria-label={container.example_path ? `Replace photo, ${title}` : `Add photo, ${title}`}>
+      <PresetPreview path={container.example_path} presets={{ ...container.presets, zoom }} />
+      <span className="template-replace-hint">{container.example_path ? 'Replace photo' : 'Add photo'}</span>
+    </button>
+    <span className="template-shoot-badge" aria-label={order === 'shooting' ? `Final image ${container.final_no}` : `Shooting number ${container.shoot_no}`}>
+      {order === 'shooting' ? `Image ${container.final_no}` : `Shot ${container.shoot_no}`}
+    </span>
+    <div className="template-card-controls">
+      <label className="template-split"><Checkbox aria-label={`Split container ${container.final_no}`} checked={container.presets.split}
+        onCheckedChange={checked => onPresets({ ...container.presets, split: checked === true })} /> Split into Left and Right</label>
+      <label className="template-shape">Shape
+        <ChoiceSelect aria-label={`Shape container ${container.final_no}`} value={container.presets.shape ?? ''} choices={SHAPES}
+          onValueChange={shape => onPresets({ ...container.presets, shape: shape || null })} />
+      </label>
+      <label className="template-zoom">Zoom
+        <input type="range" min={0} max={80} step={5} aria-label={`Zoom container ${container.final_no}`} value={zoom}
+          onChange={event => setZoom(Number(event.target.value))} />
+        <output aria-label={`Zoom of container ${container.final_no}`}>{zoom === 0 ? 'None' : `${zoom} % · ${(100 / (100 - zoom)).toFixed(2).replace(/\.?0+$/, '')}×`}</output>
+      </label>
+    </div>
   </article>;
 }
 
@@ -63,11 +137,13 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
   const [summaries, setSummaries] = useState<TemplateSummary[]>([]);
   const [template, setTemplate] = useState<Template | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [shooting, setShooting] = useState(false);
-  const [tapped, setTapped] = useState<number[]>([]);
+  const [order, setOrder] = useState<Order>('final');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const shopTypes = useItemTypes(active);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   useEffect(() => { if (active) void listTemplates().then(setSummaries).catch(e => setError(String(e))); }, [active]);
   useEffect(() => {
@@ -77,11 +153,10 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
     return () => { live = false; };
   }, [active, itemType]);
   const choices = useMemo(() => Array.from(new Set([...(shopTypes.types ?? []), ...summaries.map(s => s.item_type)])), [shopTypes.types, summaries]);
-  const ordered = template?.containers.slice().sort((a,b) => a.final_no - b.final_no) ?? [];
+  const ordered = template?.containers.slice().sort((a, b) => order === 'shooting' ? a.shoot_no - b.shoot_no : a.final_no - b.final_no) ?? [];
   const refreshList = () => { void listTemplates().then(setSummaries).catch(e => setError(String(e))); };
   const failure = async (cause: unknown) => {
     setError(cause instanceof Error ? cause.message : String(cause));
-    setTapped([]);
     if (itemType.trim()) {
       try { setTemplate(await getTemplate(itemType)); } catch { /* keep the visible failure */ }
     }
@@ -101,30 +176,15 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
       if (latest) { setTemplate(latest); refreshList(); setError(null); }
     } catch (cause) { await failure(cause); }
   };
-  const move = (container: Container, direction: -1 | 1) => {
-    if (!template) return;
-    const ids = ordered.map(c => c.id);
-    const index = ids.indexOf(container.id);
-    const other = index + direction;
-    if (other < 0 || other >= ids.length) return;
-    [ids[index], ids[other]] = [ids[other], ids[index]];
-    void change(() => reorderContainers(template.id, ids));
-  };
   const dragEnd = (event: DragEndEvent) => {
-    if (!template || !event.over || event.active.id === event.over.id) return;
-    const ids = ordered.map(c => c.id);
-    const from = ids.indexOf(Number(event.active.id));
-    const to = ids.indexOf(Number(event.over.id));
-    if (from < 0 || to < 0) return;
-    ids.splice(to, 0, ids.splice(from, 1)[0]);
-    void change(() => reorderContainers(template.id, ids));
-  };
-  const tap = (container: Container) => {
-    if (!template || tapped.includes(container.id)) return;
-    const next = [...tapped, container.id];
-    setTapped(next);
-    const rest = template.containers.slice().sort((a,b) => a.shoot_no - b.shoot_no).map(c => c.id).filter(id => !next.includes(id));
-    void change(() => setShootingOrder(template.id, [...next, ...rest]));
+    if (!template || !event.over) return;
+    const ids = moved(ordered.map(c => c.id), Number(event.active.id), Number(event.over.id));
+    if (!ids) return;
+    // Show the new order at once; the stored template replaces it when the write returns.
+    const position = new Map(ids.map((id, index) => [id, index + 1]));
+    const key = order === 'shooting' ? 'shoot_no' : 'final_no';
+    setTemplate({ ...template, containers: template.containers.map(c => ({ ...c, [key]: position.get(c.id) ?? c[key] })) });
+    void change(() => order === 'shooting' ? setShootingOrder(template.id, ids) : reorderContainers(template.id, ids));
   };
   const replace = async (container: Container) => {
     try {
@@ -150,20 +210,29 @@ export function TemplatesSection({ active = true }: { active?: boolean }) {
     {itemType.trim() && !template && <Button type="button" onClick={() => void create()}>Create template</Button>}
     {template && <>
       <div className="template-toolbar">
-        <Button type="button" onClick={() => void addPhotos()}>Add photos</Button>
-        <Button type="button" variant="outline" onClick={() => void change(() => addContainer(template.id, null).then(t => { refreshList(); return t; }))}>Add empty container</Button>
-        {shooting ? <Button type="button" variant="outline" onClick={() => { setShooting(false); setTapped([]); }}>Done</Button>
-          : <Button type="button" variant="outline" onClick={() => { setTapped([]); setShooting(true); }}>Set shooting order</Button>}
-        <Button type="button" variant="outline" onClick={() => setDeleteOpen(true)}>Delete template</Button>
+        <div className="template-order-switch" role="group" aria-label="Order">
+          <button type="button" aria-pressed={order === 'final'} onClick={() => setOrder('final')}>Final order</button>
+          <button type="button" aria-pressed={order === 'shooting'} onClick={() => setOrder('shooting')}>Shooting order</button>
+        </div>
+        <Button type="button" variant="outline" className="template-delete" onClick={() => setDeleteOpen(true)}>Delete template</Button>
       </div>
-      {shooting && <p>Tap the containers in the order you shoot them.</p>}
-      <DndContext sensors={sensors} onDragEnd={dragEnd}>
-        <SortableContext items={ordered.map(c => c.id)} strategy={verticalListSortingStrategy}>
+      <p className="health-detail">{order === 'shooting'
+        ? 'Drag the containers into the order you shoot them. The final image order stays as it is.'
+        : 'Drag the containers into the order the images are published in.'}</p>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dragEnd}>
+        <SortableContext items={ordered.map(c => c.id)} strategy={rectSortingStrategy}>
           <div className="template-cards">
-            {ordered.map(container => <TemplateCard key={container.id} container={container} shooting={shooting}
-              onTap={() => tap(container)} onMove={direction => move(container, direction)}
+            {ordered.map(container => <TemplateCard key={container.id} container={container} order={order}
               onPresets={presets => void change(() => setPresets(container.id, presets))}
+              onLabel={(name, description) => void change(() => setLabel(container.id, name, description))}
               onReplace={() => void replace(container)} onRemove={() => remove(container)} />)}
+            <div className="template-add-tile">
+              <button type="button" className="template-add-main" onClick={() => void addPhotos()}>
+                <Plus aria-hidden /><span>Add container</span><small>Choose one or more example photos</small>
+              </button>
+              <button type="button" className="template-add-empty"
+                onClick={() => void change(() => addContainer(template.id, null).then(t => { refreshList(); return t; }))}>Add without a photo</button>
+            </div>
           </div>
         </SortableContext>
       </DndContext>

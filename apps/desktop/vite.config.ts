@@ -7,6 +7,6 @@ export default defineConfig({
   resolve: { alias: { '@': new URL('./src', import.meta.url).pathname } },
   clearScreen: false,
   server: { port: 1420, strictPort: true },
-  test: { environment: 'jsdom' }
+  test: { environment: 'jsdom', setupFiles: ['./src/test/setup.ts'] }
 });
 

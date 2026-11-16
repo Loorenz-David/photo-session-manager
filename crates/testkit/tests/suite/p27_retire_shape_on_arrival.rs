@@ -361,6 +361,13 @@ fn c4a_migration_removes_old_jobs_and_health_codes() {
             .unwrap();
         conn.execute("ALTER TABLE item_links DROP COLUMN item_type_base", [])
             .unwrap();
+        conn.execute("ALTER TABLE template_containers DROP COLUMN name", [])
+            .unwrap();
+        conn.execute(
+            "ALTER TABLE template_containers DROP COLUMN description",
+            [],
+        )
+        .unwrap();
         conn.pragma_update(None, "user_version", 2).unwrap();
     }
     a.kill_and_restart().unwrap();

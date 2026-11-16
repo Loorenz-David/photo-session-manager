@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
+import { ChoiceSelect } from '@/components/ui/select';
 import { itemStockGet, itemStockSet, stockLocations, type StockChoiceDto, type StockLocationsDto } from '@/services/stock';
 
 /** Shown when no location is chosen: the product is created without stock tracking. */
@@ -16,10 +17,8 @@ export function StockPicker({ idPrefix, locations, value, onChange }: {
   return <>
     <div className="flex flex-col gap-1">
       <label htmlFor={`${idPrefix}-location`}>Location</label>
-      <select id={`${idPrefix}-location`} value={value.locationId} onChange={e => onChange({ ...value, locationId: e.target.value })}>
-        <option value="">No location</option>
-        {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
-      </select>
+      <ChoiceSelect id={`${idPrefix}-location`} className="w-full" value={value.locationId} onValueChange={locationId => onChange({ ...value, locationId })}
+        choices={[{ value: '', label: 'No location' }, ...locations.map(location => ({ value: location.id, label: location.name }))]} />
     </div>
     <div className="flex flex-col gap-1">
       <label htmlFor={`${idPrefix}-quantity`}>Quantity</label>

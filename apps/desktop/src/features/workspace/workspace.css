@@ -166,3 +166,9 @@
 .template-back-button { margin-left: auto; border: 1px solid var(--hair-strong); border-radius: var(--r-sm); padding: 2px 7px; background: transparent; color: var(--color-text); font-size: var(--text-xs); cursor: pointer; }
 .tile-differs { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--color-bg); pointer-events: none; }
 .container-placeholder[data-over] { opacity: .9; border-color: var(--color-text); }
+.container-placeholder .container-name { position: absolute; left: 6px; right: 34px; top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); font-size: var(--text-xs); font-weight: var(--weight-bold); }
+.container-placeholder .container-info { position: absolute; right: 4px; top: 4px; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 12px; background: var(--color-bg); color: var(--color-text); cursor: pointer; }
+.container-placeholder .container-info svg { width: 14px; height: 14px; }
+.container-info-text p { margin: 4px 0 0; white-space: pre-wrap; }
+.template-info-name { display: block; font-weight: var(--weight-bold); }
+.template-info-description { white-space: pre-wrap; }
