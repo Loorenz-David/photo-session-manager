@@ -1,17 +1,23 @@
 import { FolderInput, Info, PanelRightClose, PanelsRightBottom } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Hint } from '@/components/ui/tooltip';
 import { useAction } from '@/lib/pending';
 import type { Photo } from '@/services/photos';
-import type { TemplateView } from '@/services/templates';
+import { templateBack, type TemplateView } from '@/services/templates';
 import { displayOrder } from './order';
 import { ContainerGrid } from './ContainerGrid';
 import { PhotoGrid, type TileHandlers } from './PhotoGrid';
+import { TemplateDiffersContext } from './PhotoTile';
 import { TemplateInfoDialog } from './TemplateInfoDialog';
+import { TemplateWarning } from './TemplateWarning';
 
 type PhotoPanelProps = TileHandlers & {
   photos: readonly Photo[];
   templateView?: TemplateView | null;
+  /** The session shown (defaults to the photos' session). */
+  sessionId?: number;
+  /** Back to template through the workspace's action runner (defaults to the plain command). */
+  onTemplateBack?: () => Promise<unknown>;
   onFold: () => void;
   onImport: () => Promise<unknown>;
   sessionsOpen: boolean;
@@ -19,8 +25,14 @@ type PhotoPanelProps = TileHandlers & {
 };
 
 /** The photo panel (NOTES.md §Screens 4): Main images (unreviewed shown after Main), then Condition. */
-export function PhotoPanel({ photos, templateView, onFold, onImport, sessionsOpen, onToggleSessions, ...handlers }: PhotoPanelProps) {
+export function PhotoPanel({ photos, templateView, sessionId, onTemplateBack, onFold, onImport, sessionsOpen, onToggleSessions, ...handlers }: PhotoPanelProps) {
   const [infoOpen, setInfoOpen] = useState(false);
+  const session = sessionId ?? photos[0]?.session_id;
+  const back = onTemplateBack ?? (async () => { if (session !== undefined) await templateBack(session); });
+  const differing = useMemo(
+    () => new Set(templateView?.templated ? templateView.photos.filter(entry => entry.differs).map(entry => entry.photo_id) : []),
+    [templateView],
+  );
   const importing = useAction(onImport);
   const order = displayOrder(photos);
   const mainShown = [...order.main, ...order.unreviewed];
@@ -41,7 +53,9 @@ export function PhotoPanel({ photos, templateView, onFold, onImport, sessionsOpe
           </button></Hint>
         </span>
       </div>
+      <TemplateDiffersContext.Provider value={differing}>
       <div className="panel-scroll">
+        {templateView?.templated && <TemplateWarning count={templateView.differs} onBack={back} />}
         <section className="panel-section" aria-label="Main images">
           <h3 className="section-caps">
             Main images <span>{order.main.length}</span>
@@ -57,6 +71,7 @@ export function PhotoPanel({ photos, templateView, onFold, onImport, sessionsOpe
           <PhotoGrid group="condition" photos={order.condition} variant="grid" {...handlers} />
         </section>
       </div>
+      </TemplateDiffersContext.Provider>
       {templateView?.templated && <TemplateInfoDialog view={templateView} open={infoOpen} onOpenChange={setInfoOpen} />}
     </aside>
   );

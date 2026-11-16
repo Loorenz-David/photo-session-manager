@@ -6,8 +6,19 @@ import { outputNumbers } from './outputs';
 import { groupDropId, type TileHandlers } from './PhotoGrid';
 import { PhotoContextMenu } from './PhotoMenu';
 import { PhotoTile, photoDragId } from './PhotoTile';
+import { containerDropId } from './templateDrop';
 
 type Props = TileHandlers & { photos: Photo[]; view: TemplateView };
+
+/** A faded numbered empty container; a photo dropped on it goes into that container (10G §6.1). */
+function Placeholder({ number }: { number: number }) {
+  const { setNodeRef, isOver } = useDroppable({ id: containerDropId(number) });
+  return (
+    <div ref={setNodeRef} className="container-placeholder" data-container={number} data-empty="true" data-over={isOver || undefined} aria-label={`Empty container ${number}`}>
+      {number}
+    </div>
+  );
+}
 
 type Cell = { kind: 'photo'; photo: Photo } | { kind: 'empty'; number: number };
 
@@ -34,9 +45,7 @@ export function ContainerGrid({ photos, view, activeId, selection, onOpen, onTog
     <SortableContext id="main" items={ordered.map(photo => photoDragId(photo.id))} strategy={rectSortingStrategy}>
       <div ref={setNodeRef} className="photo-group group-grid container-grid" data-group="main" data-over={isOver || undefined}>
         {cells.map((cell, index) => cell.kind === 'empty' ? (
-          <div key={`empty-${cell.number}`} className="container-placeholder" data-container={cell.number} data-empty="true" aria-label={`Empty container ${cell.number}`}>
-            {cell.number}
-          </div>
+          <Placeholder key={`empty-${cell.number}`} number={cell.number} />
         ) : (
           <PhotoContextMenu key={cell.photo.id} photo={cell.photo} onAction={onMenu} canApply={selection.size > 0}>
             <div className="tile-wrap">

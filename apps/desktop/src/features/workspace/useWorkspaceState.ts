@@ -16,6 +16,7 @@ import {
   type SessionView,
 } from '@/services/photos';
 import { ServiceError } from '@/services/sessions';
+import { templateBack as templateBackCommand, templateDrop as templateDropCommand } from '@/services/templates';
 import { displayOrder, displaySequence } from './order';
 
 export type ViewMode = 'adjusted' | 'original';
@@ -28,6 +29,7 @@ function refusalText(error: unknown): string {
   if (error instanceof ServiceError) {
     if (error.code === 'target_published') return 'Published sessions cannot receive photos.';
     if (error.code === 'target_has_raw') return 'That session already has this photo.';
+    if (error.code === 'container_filled') return 'That container is filled';
   }
   return (error as Error).message || 'Something went wrong.';
 }
@@ -234,6 +236,21 @@ export function useWorkspaceState(sessionId: number) {
 
   const copy = useCallback((photoIds: number[], target: number) => run(() => copyPhotos(photoIds, target)), [run]);
 
+  /** T3: put a photo into a container (one undo step; a refusal is a toast like any review action). */
+  const templateDrop = useCallback((photoId: number, containerNo: number) => run(() => templateDropCommand(photoId, containerNo)), [run]);
+
+  /** T3: Back to template, one undo step with the usual undo toast. */
+  const templateBack = useCallback(async () => {
+    const result = await run(() => templateBackCommand(sessionId));
+    if (result) {
+      toast('Back to template · Undo ⌘Z', {
+        id: UNDO_TOAST_ID,
+        duration: UNDO_TOAST_MS,
+        action: { label: 'Undo', onClick: () => void undo() },
+      });
+    }
+  }, [run, sessionId, undo]);
+
   const step = useCallback(
     (delta: number) => {
       const sequence = displaySequence(photosRef.current);
@@ -284,6 +301,8 @@ export function useWorkspaceState(sessionId: number) {
     reorder,
     move,
     copy,
+    templateDrop,
+    templateBack,
     step,
   };
 }
