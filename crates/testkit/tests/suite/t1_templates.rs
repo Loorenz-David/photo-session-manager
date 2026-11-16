@@ -85,8 +85,9 @@ fn t1_c1b_duplicate_type() {
 #[test]
 fn t1_c1c_delete_template_and_examples() {
     let a = TestApp::new().unwrap();
-    let t = three(&a);
+    let initial = three(&a);
     let s = service(&a);
+    let t = s.container_remove(initial.containers[2].id).unwrap();
     assert!(exists(&t.containers[0].example_path));
     s.delete(t.id).unwrap();
     assert!(s.get("Dining chair").unwrap().is_none());
@@ -103,7 +104,15 @@ fn t1_c1c_delete_template_and_examples() {
 #[test]
 fn t1_c2a_add_examples_and_empty_container() {
     let a = TestApp::new().unwrap();
-    let t = three(&a);
+    let jpeg = image(&a, "first.jpg", 3000, 2000);
+    let png = image(&a, "second.png", 100, 80);
+    let jpeg_before = fs::read(&jpeg).unwrap();
+    let png_before = fs::read(&png).unwrap();
+    let s = service(&a);
+    let t = s.create("Dining chair").unwrap();
+    let t = s.container_add(t.id, Some(&jpeg)).unwrap();
+    let t = s.container_add(t.id, Some(&png)).unwrap();
+    let t = s.container_add(t.id, None).unwrap();
     assert_eq!(
         t.containers.iter().map(|c| c.final_no).collect::<Vec<_>>(),
         vec![1, 2, 3]
@@ -125,16 +134,18 @@ fn t1_c2a_add_examples_and_empty_container() {
                     .unwrap()
             )
         );
-        assert_eq!(
-            image::ImageFormat::from_path(path).unwrap(),
-            image::ImageFormat::Jpeg
-        );
+        let reader = image::ImageReader::open(path)
+            .unwrap()
+            .with_guessed_format()
+            .unwrap();
+        assert_eq!(reader.format(), Some(image::ImageFormat::Jpeg));
+        assert!(reader.decode().is_ok());
         let (w, h) = image::image_dimensions(path).unwrap();
         assert!(w.max(h) <= 1600);
     }
     assert!(t.containers[2].example_file.is_none());
-    assert!(a.app.paths.root.join("first.jpg").exists());
-    assert!(a.app.paths.root.join("second.png").exists());
+    assert_eq!(fs::read(jpeg).unwrap(), jpeg_before);
+    assert_eq!(fs::read(png).unwrap(), png_before);
 }
 #[test]
 fn t1_c2b_unreadable_does_not_add() {

@@ -427,6 +427,23 @@ fn c1a_open_creates_all_domain_columns() {
                 "committed_at",
             ],
         ),
+        (
+            "shooting_templates",
+            &["id", "item_type", "type_key", "created_at", "updated_at"],
+        ),
+        (
+            "template_containers",
+            &[
+                "id",
+                "template_id",
+                "final_no",
+                "shoot_no",
+                "example_file",
+                "split",
+                "shape",
+                "zoom",
+            ],
+        ),
     ];
     let actual_tables: BTreeSet<String> = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__rusqlite_%'").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
     let expected_tables: BTreeSet<String> = expected

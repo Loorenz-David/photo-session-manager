@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # T1 — Shooting templates can be made and kept
 
-**Tracker:** NOT_STARTED · 2026-11-16 · planner · plan written from 10G (ratified 2026-11-16)
+**Tracker:** IMPLEMENTED · 2026-11-16 · codex · 26/26 row tests added; Rust schema assertion updated for migration 014; closing failure fixed and targeted module green
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. `master_plan.md` §4 and `STATUS.md` are not used for these phases.)
 
@@ -211,3 +211,4 @@ On scratch data (`PSM_DATA_DIR=$HOME/psm-templates-dev npm run tauri -- dev`):
 7. Try a file that is not a picture: a sentence says so, and the template is unchanged.
 
 ## Review log
+- **2026-11-16, implement r1, codex.** Built migration 014, the template domain and service, ten wired commands and generated bindings; Settings now has mounted section panes; Shooting templates edits examples, both orders and presets with immediate saves. Tests: 14 Rust/desktop row tests, 4 Settings drawer tests, 8 editor tests. Closing `cargo test --workspace` ran once: 900 of 901 suite cases passed; `p01_storage_identity::c1a` held an exact table list from before migration 014. The expected schema was extended, and its 20-test module passed on the targeted rerun. Workspace clippy, fmt, typecheck and 527 UI tests passed. Assumptions: example copies retain colour and are shown grayscale; a template's list can use local types when Shopify is absent; the editor loads its data when its mounted pane is selected; deletion uses the platform confirmation dialog; old example files and template folders are removed after the row transaction. Deviations: U2 created the `TemplatesSection` stub earlier than U3's file list to keep its pane mounted; U3 touched `SettingsPage.tsx` to defer editor service calls while inactive; guide architecture/change-impact rows and the inherited P01 exact-schema test changed with the new table and asset folder. No photo placement or session behaviour changed.

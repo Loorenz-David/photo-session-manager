@@ -102,7 +102,12 @@ it('t1_c6f_move_earlier_reorders_the_final_containers', async () => {
 
 it('t1_c6g_failed_write_shows_error_and_reloads_stored_presets', async () => {
   vi.mocked(setPresets).mockRejectedValue(new Error('disk full'));
-  await show();
+  const before = t([c(1), c(2), { ...c(3), presets: { split: true, shape: null, zoom: 0 } }]);
+  const stored = t();
+  vi.mocked(getTemplate).mockResolvedValueOnce(before).mockResolvedValueOnce(stored);
+  render(<TemplatesSection />);
+  fireEvent.change(screen.getByRole('combobox', { name: 'Item type' }), { target: { value: 'Dining chair' } });
+  await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Split container 3' })).toBeChecked());
   fireEvent.click(screen.getByRole('checkbox', { name: 'Split container 3' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('disk full');
   await waitFor(() => expect(getTemplate).toHaveBeenCalledTimes(2));
