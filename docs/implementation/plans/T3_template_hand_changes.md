@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 of `handoffs/reviewer/handoff_templates_plan_r1.m
 ---
 # T3 — Your changes win, and there is a way back
 
-**Tracker:** IMPLEMENTED · 2026-11-16 · claude-opus (implementer) · 4 units, 24 rows tested (19 Rust behaviour, 1 wired command, 4 UI); closing gate green; Main order rule unified as (no slot, slot, previous position), see Review log
+**Tracker:** CHANGES_REQUESTED · 2026-11-16 · opus (reviewer) · review r1: one B1 (undo of a reorder among extra Main photos in a templated session no longer restores the order, MC-30; route production); perimeter, checks, all 24 rows, H1–H8 hold; 5 backlog notes
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -243,3 +243,34 @@ On scratch data, in a dining-chair session with all containers filled and a few 
 
 **Stamp.** `cargo test --workspace` ok (1540 tests, 3 min 48 s) · `cargo clippy --workspace --all-targets -- -D warnings` ok (after one test-file type alias; T3 stem re-run ok) · `cargo fmt --all -- --check` ok · `npm run typecheck` ok · `npm test` ok (85 files, 536 tests).
 
+
+### 2026-11-16 · review r1 · opus (pipeline-reviewer) · CHANGES_REQUESTED
+**Verified correct.**
+- Perimeter: `8057056^..ab51a43` = the 24 declared paths.
+- Checks green, run once each on `58f285f`:
+  - `t3_template_hand::` 19, `p39_undo_history_core::` 24, `t2_template_placement::` 21, `psm-desktop` 29
+  - clippy (core/infra/desktop/testkit), fmt
+  - vitest workspace 15 files / 83 tests, typecheck
+  - The implementer's full-suite stamp stands.
+- U1: `differs` matches P9 (Deleted and released never; by hand or no row vs the expected place from the shared `shot_indexes`; frame by hand only in its expected container with presets). `reverse` renumbers templated Main. `delete_photo_row` removes `photo_places`.
+- U2:
+  - `drop_on_container` refusals: `no_template`, `invalid_value` ×2, `container_filled`.
+  - Cases: no-op, fill, swap with positions.
+  - `StepKind::Template` snapshot: classification, position, row, full composition, denial. Pre-checks run before any write.
+- U3: `back_to_template` acts only on differing photos, current template, presets only where the container has them, Condition in shot order, one step. Commands are thin; bindings regenerated.
+- U4: warning, marks, pure `dropAction`, droppable placeholders.
+- Rows: all 24 tests observe their row's outcome at the row's boundary and fail on a wrong one. No orphans.
+- Review-mode reads hold: hand-placed photos change only by Back or the person's action; the snapshot includes compositions; untemplated sessions take no new path.
+- H1–H8 hold. No assumption contradicts the book.
+
+**Findings.**
+- **T3-R1-B1 (B1, route production).** Undo/redo of a `Reorder` in a templated Main writes `slot = <restored position>` (assumption 3), and `reverse` now renumbers by (no slot, slot, position). An extra Main photo (no slot) dragged onto another extra therefore gets a slot on undo and keeps sorting first: the undo is a visible no-op.
+  - Probe: S0, F4 and F5 → Main (4, 5); `reorder(F5, 4)`; undo → F4 5, F5 4, slots (None, 5).
+  - It is a regression: T2's `reverse` restored it.
+  - Authority: 05A MC-30 (reorder: undo restores the prior position), 10G §6.5, U1 goal.
+  - Fix: restore the slot the photo had before the drag on undo, and the drag's slot on redo (record it in the step). Add one test at `HistoryService::undo`/`redo` with the probe input.
+  - Files: `services/{history.rs, review.rs}`, the store port/impl only if a slot-clearing write is needed, `t3_template_hand.rs`.
+
+**Notes → backlog (T3).** N1: P7 in `master_plan_templates.md` is stale against assumption 1 (fold upstream) · N2: a reorder still writes non-container slot numbers · N3: `container_filled` string not seen by a command-level test · N4: the page's Back to template path (undo toast) has no UI test · N5: guide update carried to T4.
+
+**Probes.** Two scratch tests appended to `t3_template_hand.rs`, run, and removed (`git checkout`, checksum identical). No production code edited.
