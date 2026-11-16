@@ -30,7 +30,7 @@ No mutation probes. Not touched: `docs/guide/02_architecture.md` line ~88 still 
 `t4_template_retake_shift::` 12/12 · `t2_template_placement::` 21/21 · `t3_template_hand::` 19/19 · clippy (core, infra, desktop, testkit, all targets, `-D warnings`) ok · `cargo fmt --all -- --check` ok · `npm run typecheck` ok. Full suite not run: the change is local to one service function and its one caller (no store, migration or shared code changed).
 
 ## Checkpoint SHA
-See the commit `CHECKPOINT (not approved): T4 fix 1` (the SHA is the HEAD of the branch after this session).
+`3b4f8fe` (CHECKPOINT (not approved): T4 fix 1). The handoff is part of that commit; the SHA was added to it afterwards.
 
 ## Stamp
 Tree clean after the checkpoint commit; files above only.
