@@ -25,3 +25,4 @@ Opus reviews, one fix round). Deadline: on the work Mac the morning of 2026-11-1
 - **Morning items for the owner:** card 1 built as swap (B = one rule); no hardware try-out yet (first run with the
   Sony is on the work Mac); small edge left: a placed photo dragged to behind the extras gets a dot without moving, ⌘Z
   does not clear it, Back to template does.
+- **Joined:** PR #3 merged into `main` as `3c0a98d`; branch fast-forwarded to it. Local `main` checkout untouched (owner pulls).
