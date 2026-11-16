@@ -444,6 +444,19 @@ fn c1a_open_creates_all_domain_columns() {
                 "zoom",
             ],
         ),
+        (
+            "photo_places",
+            &[
+                "photo_id",
+                "slot",
+                "place_by_hand",
+                "frame_by_hand",
+                "released",
+                "key_at",
+                "key_name",
+                "pending_zoom",
+            ],
+        ),
     ];
     let actual_tables: BTreeSet<String> = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__rusqlite_%'").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
     let expected_tables: BTreeSet<String> = expected

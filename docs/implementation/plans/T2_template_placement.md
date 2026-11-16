@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # T2 — Photos file themselves
 
-**Tracker:** NOT_STARTED · 2026-11-16 · planner · plan written from 10G (ratified 2026-11-16)
+**Tracker:** IMPLEMENTED · 2026-11-16 · codex (U1, U2) + opus (U3, close) · 3 units: U1 14 unit tests, U2 20 behaviour tests, U3 5 UI tests; closing gate green (Rust suite 921, UI 532, clippy, fmt, typecheck)
 
 **Resume note (orchestrator, 2026-11-16 01:40) — read before anything else.** The first implement session (Codex) was cut off by its usage limit after committing **Unit 1** (`efcc86c`) and **Unit 2** (`0bff768`); it had started **Unit 3** and its unfinished, unverified files are committed as `fa8a484` (`apps/desktop/src/features/workspace/{ContainerGrid.tsx, TemplateInfoDialog.tsx, useTemplateView.ts}` new; `PhotoPanel.tsx`, `WorkspacePage.tsx`, `workspace.css` edited). This session: do not redo Units 1–2; check that their Unit test commands pass (fix only what fails); then finish Unit 3 from those files (keep, rewrite or drop them as the plan requires), run its tests, make its checkpoint, then the Closing gate and the handoff as usual.
 
@@ -214,3 +214,12 @@ On scratch data, with the dining-chair template of T1 (say five containers, the 
 5. Open a session of a type without a template: everything is as before.
 
 ## Review log
+
+### 2026-11-16 · implement r1 · codex (U1 `efcc86c`, U2 `0bff768`, U3 partial `fa8a484`) + opus (U3 finish `018dc27`, close)
+- **Built.** U1: `shot_order::order` (P4, four steps) and `template::{expected, zoomed, preset_values}` with unit tests for C1(a–j), C2(a–c). U2: migration `015_photo_places.sql`; store reads/writes for template-of-session, shot keys, holds, place rows; `template_placement::{place_arrival, session_view}`; `ArrivalService::accept` calls placement after the insert and before `photo_added`, logging a failure and going on; `adopt_frame_tx` applies `pending_zoom` in its first-rect branch; classify/reorder/delete set `place_by_hand`, a move drops the row, Compose set/apply/reset set `frame_by_hand`; command `template_session_view` + wrapper + bindings; 20 behaviour tests C3–C7. U3: `useTemplateView`, `ContainerGrid` (containers in final order, faded numbered placeholders, then slotless Main and unreviewed photos), the "Template" info button and `TemplateInfoDialog`; 5 UI tests C8(a–e).
+- **Resume (opus).** U1 and U2 unit commands re-run and green, nothing redone. U3 kept the three new files; `ContainerGrid` rewritten into one ordered cell list (a Main photo whose slot names no current container now falls after the containers instead of vanishing); info icon added.
+- **Deviation 1 (U2 perimeter, typing only).** `TemplatePhotoViewDto.slot` and `TemplateViewDto.template_id` were generated as non-null `number` though Rust sends `null`; changed to `Option<specta_typescript::Number>` as every other optional id in the commands, bindings regenerated. No runtime change.
+- **Deviation 2 (outside the plan's file list).** `crates/testkit/tests/suite/p01_storage_identity.rs` C1(a), the schema tripwire, failed in the closing suite because it enumerates every table; `photo_places` with its eight columns was added to its list, as T1 did for its tables.
+- **Assumptions.** Placement reads and writes inside one store transaction (delegated). Placeholder look: dashed, faded tile with the number; info button: small outlined "Template" with an info icon in the Main heading; the dialog lists number, black-and-white example, "Shot n" and presets in words. The folded strip is unchanged (no placeholders there).
+- **Not done.** No hardware try-out in this session (suite is hardware-free). The agent guide is not updated here: the templates master plan gives the guide to T4.
+
