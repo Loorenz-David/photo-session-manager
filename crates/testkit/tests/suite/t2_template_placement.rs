@@ -500,3 +500,33 @@ fn t2_c7d_compose_edit_survives_late_arrival() {
             .frame_by_hand
     );
 }
+#[test]
+fn t2_b1_reorder_in_templated_session_keeps_the_dragged_order() {
+    let a = app();
+    chair(&a);
+    let s = session(&a, "B1", "Chair");
+    let f1 = arrive(&a, s, "DSC00001.ARW");
+    let f2 = arrive(&a, s, "DSC00002.ARW");
+    let f3 = arrive(&a, s, "DSC00003.ARW");
+    let pos = |id| place(&a, id).1;
+    assert_eq!(
+        (pos(f2.id), pos(f1.id), pos(f3.id)),
+        (Some(1), Some(2), Some(3))
+    );
+    a.review().reorder(f1.id, 1).unwrap();
+    assert_eq!(
+        (pos(f1.id), pos(f2.id), pos(f3.id)),
+        (Some(1), Some(2), Some(3))
+    );
+    a.review().reorder(f3.id, 1).unwrap();
+    assert_eq!(
+        (pos(f3.id), pos(f1.id), pos(f2.id)),
+        (Some(1), Some(2), Some(3))
+    );
+    // A later arrival does not move the hand-ordered photos.
+    arrive(&a, s, "DSC00004.ARW");
+    assert_eq!(
+        (pos(f3.id), pos(f1.id), pos(f2.id)),
+        (Some(1), Some(2), Some(3))
+    );
+}

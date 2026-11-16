@@ -102,7 +102,7 @@ pub fn place_arrival(
         }
         // Main's stored order is the final container order; photos with no slot follow it.
         let mut after = tx.photos(session_id)?;
-        let mut main: Vec<_> = after
+        let main: Vec<_> = after
             .iter()
             .filter(|p| p.classification == Classification::Main)
             .collect();
@@ -110,23 +110,7 @@ pub fn place_arrival(
         for p in &main {
             main_keys.insert(p.id, tx.photo_place_row(p.id)?);
         }
-        main.sort_by_key(|p| {
-            let row = main_keys.get(&p.id).and_then(Option::as_ref);
-            (
-                row.and_then(|r| r.slot).is_none(),
-                row.and_then(|r| r.slot).unwrap_or(i64::MAX),
-                row.is_some_and(|r| r.place_by_hand),
-                p.position.unwrap_or(i64::MAX),
-                p.id,
-            )
-        });
-        tx.set_positions(
-            &main
-                .iter()
-                .enumerate()
-                .map(|(i, p)| (p.id, i as i64 + 1))
-                .collect::<Vec<_>>(),
-        )?;
+        tx.set_positions(&main_positions(&main, &main_keys))?;
         let mut condition: Vec<_> = after
             .iter()
             .filter(|p| p.classification == Classification::Condition)
@@ -292,7 +276,7 @@ pub fn renumber_main(tx: &mut dyn StoreTx, session_id: i64) -> Result<()> {
     if template.containers.is_empty() {
         return Ok(());
     }
-    let mut main: Vec<_> = tx
+    let main: Vec<_> = tx
         .photos(session_id)?
         .into_iter()
         .filter(|p| p.classification == Classification::Main)
@@ -301,21 +285,53 @@ pub fn renumber_main(tx: &mut dyn StoreTx, session_id: i64) -> Result<()> {
     for photo in &main {
         rows.insert(photo.id, tx.photo_place_row(photo.id)?);
     }
-    main.sort_by_key(|p| {
-        let r = rows.get(&p.id).and_then(Option::as_ref);
+    tx.set_positions(&main_positions(&main.iter().collect::<Vec<_>>(), &rows))
+}
+
+/// P7 for Main: positions stay dense (1…m). A photo placed by hand that has a position keeps
+/// it (moved only as far as needed to stay inside 1…m and clear of another such photo); every
+/// other photo fills the remaining positions sorted by (no slot, slot, previous position).
+fn main_positions(
+    main: &[&crate::domain::photo::Photo],
+    rows: &HashMap<i64, Option<crate::domain::template::PlaceRow>>,
+) -> Vec<(i64, i64)> {
+    let row = |p: &crate::domain::photo::Photo| rows.get(&p.id).and_then(Option::as_ref);
+    let m = main.len();
+    let mut fixed: Vec<_> = main
+        .iter()
+        .filter(|p| p.position.is_some() && row(p).is_some_and(|r| r.place_by_hand))
+        .collect();
+    fixed.sort_by_key(|p| (p.position, p.id));
+    let mut rest: Vec<_> = main
+        .iter()
+        .filter(|p| !fixed.iter().any(|f| f.id == p.id))
+        .collect();
+    rest.sort_by_key(|p| {
+        let r = row(p);
         (
             r.and_then(|r| r.slot).is_none(),
             r.and_then(|r| r.slot).unwrap_or(i64::MAX),
-            r.is_some_and(|r| r.place_by_hand),
             p.position.unwrap_or(i64::MAX),
             p.id,
         )
     });
-    tx.set_positions(
-        &main
-            .iter()
-            .enumerate()
-            .map(|(i, p)| (p.id, i as i64 + 1))
-            .collect::<Vec<_>>(),
-    )
+    let mut out: Vec<Option<i64>> = vec![None; m];
+    let mut prev = 0usize;
+    let k = fixed.len();
+    for (j, p) in fixed.iter().enumerate() {
+        let wanted = (p.position.unwrap_or(1).max(1) as usize).min(m);
+        let at = wanted.max(prev + 1).min(m - (k - j) + 1);
+        out[at - 1] = Some(p.id);
+        prev = at;
+    }
+    let mut rest = rest.into_iter();
+    out.into_iter()
+        .enumerate()
+        .map(|(i, id)| {
+            (
+                id.unwrap_or_else(|| rest.next().expect("main photo").id),
+                i as i64 + 1,
+            )
+        })
+        .collect()
 }
