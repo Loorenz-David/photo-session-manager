@@ -9,7 +9,7 @@ use crate::domain::{
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{LatestPublish, Session, SessionDto, SessionListRecord},
     storage::{ArchivedImage, ItemRetention, PhotoDenial},
-    template::{Presets, Template, TemplateSummary},
+    template::{PlaceRow, Presets, ShotKey, Template, TemplateSummary},
 };
 
 #[derive(Debug, Clone)]
@@ -40,6 +40,29 @@ pub struct FrameCommit {
 }
 
 pub trait StoreTx {
+    fn template_for_session(&self, session_id: i64) -> Result<Option<Template>>;
+    fn shot_keys(&self, session_id: i64) -> Result<Vec<ShotKey>>;
+    fn hold_times(&self, session_id: i64, now_ms: i64) -> Result<Vec<(i64, i64)>>;
+    fn photo_place_row(&self, photo_id: i64) -> Result<Option<PlaceRow>>;
+    fn photo_place_put(&mut self, row: &PlaceRow) -> Result<()>;
+    fn photo_place_mark(
+        &mut self,
+        photo_id: i64,
+        place: bool,
+        frame: bool,
+        slot: Option<i64>,
+    ) -> Result<()>;
+    fn photo_place_delete(&mut self, photo_id: i64) -> Result<()>;
+    fn template_frame_unknown(
+        &mut self,
+        photo_id: i64,
+        kind: crate::domain::composition::CompositionKind,
+        shape: crate::domain::composition::Shape,
+        origin: Origin,
+        zoom: Option<u8>,
+        at: i64,
+    ) -> Result<()>;
+    fn default_shape(&self) -> crate::domain::composition::Shape;
     fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()>;
     fn session(&self, id: i64) -> Result<Session>;
     fn photo(&self, id: i64) -> Result<Photo>;
@@ -177,6 +200,7 @@ pub trait StoreTx {
 }
 
 pub trait Store: Send + Sync {
+    fn photo_place_row(&self, photo_id: i64) -> Result<Option<PlaceRow>>;
     fn template_list(&self) -> Result<Vec<TemplateSummary>>;
     fn template_get(&self, type_key: &str) -> Result<Option<Template>>;
     fn template_get_by_id(&self, id: i64) -> Result<Template>;

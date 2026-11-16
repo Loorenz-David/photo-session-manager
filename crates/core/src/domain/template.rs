@@ -31,3 +31,41 @@ pub struct TemplateSummary {
     pub item_type: String,
     pub container_count: i64,
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceRow {
+    pub photo_id: i64,
+    pub slot: Option<i64>,
+    pub place_by_hand: bool,
+    pub frame_by_hand: bool,
+    pub released: bool,
+    pub key_at: Option<i64>,
+    pub key_name: Option<String>,
+    pub pending_zoom: Option<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShotKey {
+    pub photo_id: i64,
+    pub at: i64,
+    pub name: Option<String>,
+    pub released: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplatePhotoView {
+    pub photo_id: i64,
+    pub slot: Option<i64>,
+    pub by_hand: bool,
+    pub differs: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateView {
+    pub templated: bool,
+    pub template_id: Option<i64>,
+    pub containers: Vec<Container>,
+    pub photos: Vec<TemplatePhotoView>,
+    pub differs: i64,
+    pub can_shift_back: bool,
+}

@@ -19,4 +19,5 @@ pub mod review;
 pub mod sessions;
 pub mod settings;
 pub mod storage;
+pub mod template_placement;
 pub mod templates;

@@ -81,6 +81,8 @@ impl<'a> ReviewService<'a> {
                 None
             };
             tx.set_photo_review(photo_id, session_id, target, next)?;
+            tx.photo_place_mark(photo_id, true, false, None)?;
+            crate::services::template_placement::renumber_main(tx, session_id)?;
             tx.enqueue_mirror_tag(&photo.raw_path, photo_id, at)?;
             tx.touch_session(session_id, at)?;
             let before = photo_place(&photo);
@@ -124,6 +126,8 @@ impl<'a> ReviewService<'a> {
                 return Ok(());
             }
             tx.set_positions(&next)?;
+            tx.photo_place_mark(photo_id, true, false, Some(position))?;
+            crate::services::template_placement::renumber_main(tx, session_id)?;
             tx.touch_session(session_id, at)?;
             let from = photo.position.unwrap();
             let to = next.iter().find(|(id, _)| *id == photo_id).unwrap().1;
@@ -160,6 +164,8 @@ impl<'a> ReviewService<'a> {
                 tx.set_positions(&position::remove_at(&old, photo_id))?;
             }
             tx.set_photo_review(photo_id, session_id, Classification::Deleted, None)?;
+            tx.photo_place_mark(photo_id, true, false, None)?;
+            crate::services::template_placement::renumber_main(tx, session_id)?;
             // Changelog 46 (2): Deny starts the undo window; the RAW goes when it closes.
             tx.set_photo_denied(photo_id, at)?;
             tx.enqueue_mirror_tag(&photo.raw_path, photo_id, at)?;
@@ -271,6 +277,7 @@ impl<'a> ReviewService<'a> {
                         .push((photo.id, id));
                 } else {
                     tx.set_photo_review(photo.id, target, photo.classification, next)?;
+                    tx.photo_place_delete(photo.id)?;
                     touched.insert(photo.session_id);
                     steps.entry(photo.session_id).or_default().push(PhotoPlace {
                         photo_id: photo.id,

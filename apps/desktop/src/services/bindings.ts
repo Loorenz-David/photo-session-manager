@@ -189,6 +189,7 @@ export const commands = {
 	templateContainersReorder: (templateId: CommandId, containerIds: CommandId[]) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_containers_reorder", { templateId, containerIds })),
 	templateShootingOrderSet: (templateId: CommandId, containerIds: CommandId[]) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_shooting_order_set", { templateId, containerIds })),
 	templateContainerPresetsSet: (containerId: CommandId, presets: PresetsInput_Deserialize) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_container_presets_set", { containerId, presets })),
+	templateSessionView: (sessionId: CommandId) => typedError<TemplateViewDto_Serialize, CommandError>(__TAURI_INVOKE("template_session_view", { sessionId })),
 };
 
 /* Types */
@@ -1581,10 +1582,46 @@ export type TemplateDto_Serialize = {
 	containers: ContainerDto_Serialize[],
 };
 
+export type TemplatePhotoViewDto = TemplatePhotoViewDto_Serialize | TemplatePhotoViewDto_Deserialize;
+
+export type TemplatePhotoViewDto_Deserialize = {
+	photo_id: number,
+	slot?: number,
+	by_hand: boolean,
+	differs: boolean,
+};
+
+export type TemplatePhotoViewDto_Serialize = {
+	photo_id: number,
+	slot: number,
+	by_hand: boolean,
+	differs: boolean,
+};
+
 export type TemplateSummaryDto = {
 	id: number,
 	item_type: string,
 	container_count: number,
+};
+
+export type TemplateViewDto = TemplateViewDto_Serialize | TemplateViewDto_Deserialize;
+
+export type TemplateViewDto_Deserialize = {
+	templated: boolean,
+	template_id?: number,
+	containers: ContainerDto_Deserialize[],
+	photos: TemplatePhotoViewDto_Deserialize[],
+	differs: number,
+	can_shift_back: boolean,
+};
+
+export type TemplateViewDto_Serialize = {
+	templated: boolean,
+	template_id: number,
+	containers: ContainerDto_Serialize[],
+	photos: TemplatePhotoViewDto_Serialize[],
+	differs: number,
+	can_shift_back: boolean,
 };
 
 /**

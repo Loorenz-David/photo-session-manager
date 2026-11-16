@@ -22,7 +22,7 @@ use psm_core::{
         research::{Feedback, FeedbackAction},
         session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
         storage::{ArchivedImage, ItemRetention},
-        template::{Container, Presets, Template, TemplateSummary},
+        template::{Container, PlaceRow, Presets, ShotKey, Template, TemplateSummary},
     },
     mechanisms::{
         canon::canon,
@@ -78,6 +78,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/012_photo_denials.sql")),
             M::up(include_str!("migrations/013_form_values.sql")),
             M::up(include_str!("migrations/014_shooting_templates.sql")),
+            M::up(include_str!("migrations/015_photo_places.sql")),
         ]
     }
 
@@ -114,7 +115,10 @@ impl SqliteStore {
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         let tx = conn.transaction().map_err(db)?;
-        let mut store_tx = SqliteTx { tx };
+        let mut store_tx = SqliteTx {
+            tx,
+            default_shape: self.default_shape.clone(),
+        };
         let value = op(&mut store_tx)?;
         store_tx.tx.commit().map_err(db)?;
         Ok(value)
@@ -166,6 +170,14 @@ fn template_read(conn: &Connection, id: i64) -> Result<Template> {
         item_type,
         containers,
     })
+}
+
+fn photo_place_read(conn: &Connection, photo_id: i64) -> Result<Option<PlaceRow>> {
+    conn.query_row("SELECT photo_id,slot,place_by_hand,frame_by_hand,released,key_at,key_name,pending_zoom FROM photo_places WHERE photo_id=?1", [photo_id], |r| Ok(PlaceRow {
+        photo_id: r.get(0)?, slot: r.get(1)?, place_by_hand: r.get::<_,i64>(2)? != 0,
+        frame_by_hand: r.get::<_,i64>(3)? != 0, released: r.get::<_,i64>(4)? != 0,
+        key_at: r.get(5)?, key_name: r.get(6)?, pending_zoom: r.get(7)?,
+    })).optional().map_err(db)
 }
 
 fn template_owner(conn: &Connection, container_id: i64) -> Result<i64> {
@@ -312,7 +324,8 @@ fn adopt_frame_tx(conn: &Connection, raw: &str, observed: &Fingerprint) -> Resul
     for &(id, session_id) in &rows {
         let current = composition(conn, id)?;
         if current.fingerprint.is_none() {
-            let rect = current.rect.unwrap_or_else(|| {
+            let pending_zoom = photo_place_read(conn, id)?.and_then(|r| r.pending_zoom);
+            let mut rect = current.rect.unwrap_or_else(|| {
                 default_rect(
                     current.kind,
                     current.shape,
@@ -320,7 +333,17 @@ fn adopt_frame_tx(conn: &Connection, raw: &str, observed: &Fingerprint) -> Resul
                     turned_frame(observed.frame, current.quarter_turns),
                 )
             });
+            if let Some(zoom) = pending_zoom {
+                rect = psm_core::mechanisms::template::zoomed(rect, zoom);
+            }
             conn.execute("UPDATE compositions SET x=?1,y=?2,w=?3,h=?4,frame_w=?5,frame_h=?6,frame_source=?7,geometry=?8 WHERE photo_id=?9", params![rect.x,rect.y,rect.w,rect.h,observed.frame.w,observed.frame.h,observed.source.as_str(),geometry,id]).map_err(db)?;
+            if pending_zoom.is_some() {
+                conn.execute(
+                    "UPDATE photo_places SET pending_zoom=NULL WHERE photo_id=?1",
+                    [id],
+                )
+                .map_err(db)?;
+            }
         } else if let Some(stored) = &current.fingerprint {
             if observed.source == FrameSource::Camera {
                 // P58: the camera preview only stands in until Capture One has measured the frame.
@@ -656,6 +679,7 @@ fn enqueue_mirror_tag(conn: &Connection, raw_path: &str, photo_id: i64, now_ms: 
 
 pub struct SqliteTx<'a> {
     tx: Transaction<'a>,
+    default_shape: String,
 }
 
 impl SqliteTx<'_> {
@@ -724,6 +748,109 @@ fn feedback_rows(
 }
 
 impl StoreTx for SqliteTx<'_> {
+    fn template_for_session(&self, session_id: i64) -> Result<Option<Template>> {
+        let Some(item_id) = session(&self.tx, session_id)?.session.item_id else {
+            return Ok(None);
+        };
+        let key = psm_core::mechanisms::template::type_key(&item(&self.tx, item_id)?.item_type);
+        let id: Option<i64> = self
+            .tx
+            .query_row(
+                "SELECT id FROM shooting_templates WHERE type_key=?1",
+                [key],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)?;
+        id.map(|id| template_read(&self.tx, id)).transpose()
+    }
+    fn shot_keys(&self, session_id: i64) -> Result<Vec<ShotKey>> {
+        let mut stmt = self.tx.prepare("SELECT p.id,COALESCE(pp.key_at,p.captured_at,p.created_at),COALESCE(pp.key_name,(SELECT d.file_key FROM camera_deliveries d WHERE d.final_path=p.raw_path AND d.state='done' AND d.outcome!='duplicate' ORDER BY d.id DESC LIMIT 1)),COALESCE(pp.released,0) FROM photos p LEFT JOIN photo_places pp ON pp.photo_id=p.id WHERE p.session_id=?1 ORDER BY p.id").map_err(db)?;
+        stmt.query_map([session_id], |r| {
+            Ok(ShotKey {
+                photo_id: r.get(0)?,
+                at: r.get(1)?,
+                name: r.get(2)?,
+                released: r.get::<_, i64>(3)? != 0,
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)
+    }
+    fn hold_times(&self, session_id: i64, now_ms: i64) -> Result<Vec<(i64, i64)>> {
+        let mut stmt = self.tx.prepare("SELECT e.exposed_at,e.id FROM camera_exposures e WHERE e.session_id=?1 AND e.status='expecting' AND ?2-e.exposed_at<=?3 AND NOT EXISTS(SELECT 1 FROM camera_deliveries d WHERE d.exposure_id=e.id AND d.outcome!='duplicate') ORDER BY e.exposed_at,e.id").map_err(db)?;
+        stmt.query_map(
+            params![session_id, now_ms, psm_core::domain::camera::FIFO_WINDOW_MS],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)
+    }
+    fn photo_place_row(&self, photo_id: i64) -> Result<Option<PlaceRow>> {
+        photo_place_read(&self.tx, photo_id)
+    }
+    fn photo_place_put(&mut self, row: &PlaceRow) -> Result<()> {
+        self.tx.execute("INSERT INTO photo_places(photo_id,slot,place_by_hand,frame_by_hand,released,key_at,key_name,pending_zoom) VALUES (?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(photo_id) DO UPDATE SET slot=excluded.slot,place_by_hand=excluded.place_by_hand,frame_by_hand=excluded.frame_by_hand,released=excluded.released,key_at=excluded.key_at,key_name=excluded.key_name,pending_zoom=excluded.pending_zoom", params![row.photo_id,row.slot,row.place_by_hand as i64,row.frame_by_hand as i64,row.released as i64,row.key_at,row.key_name,row.pending_zoom]).map_err(db)?;
+        Ok(())
+    }
+    fn photo_place_mark(
+        &mut self,
+        photo_id: i64,
+        place: bool,
+        frame: bool,
+        slot: Option<i64>,
+    ) -> Result<()> {
+        let photo = photo(&self.tx, photo_id)?;
+        if self
+            .template_for_session(photo.session_id)?
+            .is_none_or(|t| t.containers.is_empty())
+        {
+            return Ok(());
+        }
+        let mut row = photo_place_read(&self.tx, photo_id)?.unwrap_or(PlaceRow {
+            photo_id,
+            ..PlaceRow::default()
+        });
+        if place {
+            row.place_by_hand = true;
+            row.slot = slot;
+        }
+        if frame {
+            row.frame_by_hand = true;
+            row.pending_zoom = None;
+        }
+        self.photo_place_put(&row)
+    }
+    fn photo_place_delete(&mut self, photo_id: i64) -> Result<()> {
+        self.tx
+            .execute("DELETE FROM photo_places WHERE photo_id=?1", [photo_id])
+            .map_err(db)?;
+        Ok(())
+    }
+    fn template_frame_unknown(
+        &mut self,
+        photo_id: i64,
+        kind: psm_core::domain::composition::CompositionKind,
+        shape: psm_core::domain::composition::Shape,
+        origin: Origin,
+        zoom: Option<u8>,
+        at: i64,
+    ) -> Result<()> {
+        self.tx.execute("UPDATE compositions SET kind=?2,shape=?3,orientation='named',x=NULL,y=NULL,w=NULL,h=NULL,origin=?4,revision=revision+1,state='ok',review_reason=NULL,updated_at=?5 WHERE photo_id=?1",params![photo_id,kind.as_str(),shape.as_str(),origin.as_str(),at]).map_err(db)?;
+        self.tx
+            .execute(
+                "UPDATE photo_places SET pending_zoom=?2 WHERE photo_id=?1",
+                params![photo_id, zoom],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn default_shape(&self) -> psm_core::domain::composition::Shape {
+        psm_core::domain::composition::Shape::parse(&self.default_shape)
+            .unwrap_or(psm_core::domain::composition::Shape::Square)
+    }
     fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()> {
         enqueue_mirror_tag(&self.tx, raw_path, photo_id, now_ms)
     }
@@ -1379,6 +1506,13 @@ fn from_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T> {
 }
 
 impl Store for SqliteStore {
+    fn photo_place_row(&self, photo_id: i64) -> Result<Option<PlaceRow>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        photo_place_read(&conn, photo_id)
+    }
     fn template_list(&self) -> Result<Vec<TemplateSummary>> {
         template_tx(self, |tx| {
             let mut stmt = tx.prepare("SELECT t.id, t.item_type, COUNT(c.id) FROM shooting_templates t LEFT JOIN template_containers c ON c.template_id=t.id GROUP BY t.id ORDER BY t.item_type").map_err(db)?;
@@ -2000,7 +2134,10 @@ impl Store for SqliteStore {
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
         let tx = conn.transaction().map_err(db)?;
-        let mut store_tx = SqliteTx { tx };
+        let mut store_tx = SqliteTx {
+            tx,
+            default_shape: self.default_shape.clone(),
+        };
         op(&mut store_tx)?;
         store_tx.tx.commit().map_err(db)
     }

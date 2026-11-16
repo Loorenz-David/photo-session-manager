@@ -1152,6 +1152,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::templates::template_containers_reorder,
         commands::templates::template_shooting_order_set,
         commands::templates::template_container_presets_set,
+        commands::templates::template_session_view,
     ])
 }
 
@@ -1838,6 +1839,26 @@ mod t1_tests {
         ] {
             assert!(bindings.contains(name), "missing {name}");
         }
+    }
+
+    #[test]
+    fn t2_c6b_session_view_command_and_bindings() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::templates::template_session_view
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let view = call(&w, "template_session_view", json!({"sessionId":1}));
+        assert_eq!(view["templated"], false);
+        assert_eq!(view["containers"], json!([]));
+        assert!(include_str!("../../src/services/bindings.ts").contains("template_session_view"));
     }
 }
 

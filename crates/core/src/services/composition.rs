@@ -152,9 +152,16 @@ impl CompositionService {
         values: &CompositionValues,
         origin: Origin,
     ) -> Result<(Composition, bool)> {
-        let (result, changed) =
-            self.store
-                .save_composition(photo_id, values, origin, self.clock.now_ms())?;
+        let mut saved = None;
+        self.store.transaction(&mut |tx| {
+            let value = tx.save_composition(photo_id, values, origin, self.clock.now_ms())?;
+            if value.1 {
+                tx.photo_place_mark(photo_id, false, true, None)?;
+            }
+            saved = Some(value);
+            Ok(())
+        })?;
+        let (result, changed) = saved.expect("transaction saved composition");
         if changed {
             let session_id = self.store.photo(photo_id)?.session_id;
             self.events.emit(AppEvent::PhotoChanged {

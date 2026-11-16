@@ -1,10 +1,12 @@
 import { open } from '@tauri-apps/plugin-dialog';
-import { commands, type TemplateDto_Serialize, type TemplateSummaryDto } from './bindings';
+import { commands, type TemplateDto_Serialize, type TemplateSummaryDto, type TemplateViewDto_Serialize } from './bindings';
 import { unwrap } from './sessions';
 
 export type Template = TemplateDto_Serialize;
 export type TemplateSummary = TemplateSummaryDto;
 export type Presets = { split: boolean; shape: string | null; zoom: number };
+export type TemplateView = TemplateViewDto_Serialize;
+export async function getTemplateView(sessionId: number): Promise<TemplateView> { return unwrap(await commands.templateSessionView(sessionId)); }
 
 export async function listTemplates(): Promise<TemplateSummary[]> { return unwrap(await commands.templatesList()); }
 export async function getTemplate(itemType: string): Promise<Template | null> { return unwrap(await commands.templateGet(itemType)); }

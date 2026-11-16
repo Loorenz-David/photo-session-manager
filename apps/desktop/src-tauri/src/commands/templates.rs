@@ -6,7 +6,7 @@ use psm_core::{
     Result,
     domain::{
         composition::Shape,
-        template::{Presets, Template, TemplateSummary},
+        template::{Presets, Template, TemplateSummary, TemplateView},
     },
     services::templates::TemplatesService,
 };
@@ -54,6 +54,26 @@ pub struct TemplateSummaryDto {
     #[specta(type = specta_typescript::Number)]
     pub container_count: i64,
 }
+#[derive(Serialize, Type)]
+pub struct TemplatePhotoViewDto {
+    #[specta(type = specta_typescript::Number)]
+    pub photo_id: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub slot: Option<i64>,
+    pub by_hand: bool,
+    pub differs: bool,
+}
+#[derive(Serialize, Type)]
+pub struct TemplateViewDto {
+    pub templated: bool,
+    #[specta(type = specta_typescript::Number)]
+    pub template_id: Option<i64>,
+    pub containers: Vec<ContainerDto>,
+    pub photos: Vec<TemplatePhotoViewDto>,
+    #[specta(type = specta_typescript::Number)]
+    pub differs: i64,
+    pub can_shift_back: bool,
+}
 impl From<Template> for TemplateDto {
     fn from(t: Template) -> Self {
         Self {
@@ -86,6 +106,60 @@ impl From<TemplateSummary> for TemplateSummaryDto {
             container_count: s.container_count,
         }
     }
+}
+impl From<TemplateView> for TemplateViewDto {
+    fn from(v: TemplateView) -> Self {
+        Self {
+            templated: v.templated,
+            template_id: v.template_id,
+            containers: TemplateDto::from(Template {
+                id: 0,
+                item_type: String::new(),
+                containers: v.containers,
+            })
+            .containers,
+            photos: v
+                .photos
+                .into_iter()
+                .map(|p| TemplatePhotoViewDto {
+                    photo_id: p.photo_id,
+                    slot: p.slot,
+                    by_hand: p.by_hand,
+                    differs: p.differs,
+                })
+                .collect(),
+            differs: v.differs,
+            can_shift_back: v.can_shift_back,
+        }
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn template_session_view(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> std::result::Result<TemplateViewDto, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut view =
+            psm_core::services::template_placement::session_view(app.store.as_ref(), session_id.0)?;
+        for c in &mut view.containers {
+            c.example_path = c.example_file.as_ref().map(|file| {
+                app.paths
+                    .root
+                    .join("templates")
+                    .join(view.template_id.expect("templated view id").to_string())
+                    .join(file)
+                    .to_string_lossy()
+                    .into_owned()
+            });
+        }
+        Ok::<_, psm_core::Error>(TemplateViewDto::from(view))
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+    .map_err(CommandError::from)
 }
 async fn run<T: Send + 'static>(
     state: State<'_, AppState>,
