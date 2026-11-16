@@ -26,3 +26,4 @@ Opus reviews, one fix round). Deadline: on the work Mac the morning of 2026-11-1
   Sony is on the work Mac); small edge left: a placed photo dragged to behind the extras gets a dot without moving, ⌘Z
   does not clear it, Back to template does.
 - **Joined:** PR #3 merged into `main` as `3c0a98d`; branch fast-forwarded to it. Local `main` checkout untouched (owner pulls).
+- **Shooting guidance (owner request, morning):** empty containers show example + "Shot n", next shot outlined, template window Final/Shooting order (`c475fef`; 10G §5 amendment, changelog A3). Built by the orchestrator directly (display only, no phase). Checks green (vitest 542/542 ×3 after one flaky run), key scan 0. PR into `main`.
