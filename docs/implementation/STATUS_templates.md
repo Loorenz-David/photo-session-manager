@@ -11,3 +11,8 @@ Opus reviews, one fix round). Deadline: on the work Mac the morning of 2026-11-1
   owner asleep, on-silence default **A, swap** is built (10G §10 delegation); tell the owner in the morning, B is one
   rule in one place. Phases chained overnight by `scratchpad/templates_chain.sh` (T1→T4, stops at the first non-zero
   exit). After T4: full checks, real-key scan, PR into `main`, merge (owner answer 4).
+- **01:18 T1 fix BLOCKED only because the Codex fix sandbox refused `git add`**; orchestrator re-ran the settings
+  tests (80/80), committed `a801f3a`, set the fix handoff DONE, resumed. **T1 APPROVED** (review r2).
+- **01:35 T2: Codex hit its usage limit (until 03:43)** after Units 1–2 (`efcc86c`, `0bff768`); partial Unit 3
+  committed as `fa8a484`, resume note in the T2 plan; chain restarted from T2 with `PSM_IMPLEMENTER=claude`
+  (`scratchpad/templates_chain2.sh`, T2→T4).
