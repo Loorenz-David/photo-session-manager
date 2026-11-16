@@ -44,6 +44,7 @@ import { Stage } from './Stage';
 import type { SwipeAction } from './SwipeLayer';
 import { useWorkspaceKeyboard } from './useKeyboard';
 import { useWorkspaceState, type WorkspaceState } from './useWorkspaceState';
+import { useTemplateView } from './useTemplateView';
 import './workspace.css';
 
 export const UNASSIGNED_SESSION_ID = 1;
@@ -133,6 +134,7 @@ function useDrop(state: WorkspaceState) {
 /** The session workspace (NOTES.md §Screens 4–5): stage, photo panel or strip, and in Unassigned the sessions panel. */
 export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detailsOpen = false, onDetailsOpenChange = () => undefined, navigate }: WorkspacePageProps) {
   const state = useWorkspaceState(sessionId);
+  const templateView = useTemplateView(sessionId);
   const unassigned = sessionId === UNASSIGNED_SESSION_ID;
   const [folded, setFolded] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(unassigned);
@@ -451,7 +453,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         {composing ? null : folded ? (
           <FoldedStrip photos={state.photos} onUnfold={() => setFolded(false)} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
         ) : (
-          <PhotoPanel photos={state.photos} onFold={() => setFolded(true)} onImport={() => pickAndImport()} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
+          <PhotoPanel photos={state.photos} templateView={templateView} onFold={() => setFolded(true)} onImport={() => pickAndImport()} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
         )}
         {sessionsOpen && <SessionsPanel currentSessionId={sessionId} onClose={() => setSessionsOpen(false)} />}
         <ImportDropZone />

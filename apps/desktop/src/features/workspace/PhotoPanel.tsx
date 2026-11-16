@@ -1,12 +1,17 @@
 import { FolderInput, PanelRightClose, PanelsRightBottom } from 'lucide-react';
+import { useState } from 'react';
 import { Hint } from '@/components/ui/tooltip';
 import { useAction } from '@/lib/pending';
 import type { Photo } from '@/services/photos';
+import type { TemplateView } from '@/services/templates';
 import { displayOrder } from './order';
 import { PhotoGrid, type TileHandlers } from './PhotoGrid';
+import { ContainerGrid } from './ContainerGrid';
+import { TemplateInfoDialog } from './TemplateInfoDialog';
 
 type PhotoPanelProps = TileHandlers & {
   photos: readonly Photo[];
+  templateView?: TemplateView | null;
   onFold: () => void;
   onImport: () => Promise<unknown>;
   sessionsOpen: boolean;
@@ -14,7 +19,8 @@ type PhotoPanelProps = TileHandlers & {
 };
 
 /** The photo panel (NOTES.md §Screens 4): Main images (unreviewed shown after Main), then Condition. */
-export function PhotoPanel({ photos, onFold, onImport, sessionsOpen, onToggleSessions, ...handlers }: PhotoPanelProps) {
+export function PhotoPanel({ photos, templateView, onFold, onImport, sessionsOpen, onToggleSessions, ...handlers }: PhotoPanelProps) {
+  const [infoOpen, setInfoOpen] = useState(false);
   const importing = useAction(onImport);
   const order = displayOrder(photos);
   const mainShown = [...order.main, ...order.unreviewed];
@@ -40,8 +46,9 @@ export function PhotoPanel({ photos, onFold, onImport, sessionsOpen, onToggleSes
           <h3 className="section-caps">
             Main images <span>{order.main.length}</span>
             {order.unreviewed.length > 0 && <small>{order.unreviewed.length} to review</small>}
+            {templateView?.templated && <button type="button" className="template-info-button" aria-label="Show template" onClick={() => setInfoOpen(true)}>Template</button>}
           </h3>
-          <PhotoGrid group="main" photos={mainShown} variant="grid" {...handlers} />
+          {templateView?.templated ? <ContainerGrid photos={mainShown} view={templateView} {...handlers} /> : <PhotoGrid group="main" photos={mainShown} variant="grid" {...handlers} />}
         </section>
         <section className="panel-section" aria-label="Condition">
           <h3 className="section-caps">
@@ -50,6 +57,7 @@ export function PhotoPanel({ photos, onFold, onImport, sessionsOpen, onToggleSes
           <PhotoGrid group="condition" photos={order.condition} variant="grid" {...handlers} />
         </section>
       </div>
+      {templateView?.templated && <TemplateInfoDialog view={templateView} open={infoOpen} onOpenChange={setInfoOpen} />}
     </aside>
   );
 }
