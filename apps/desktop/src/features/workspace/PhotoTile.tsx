@@ -14,6 +14,8 @@ import { PhotoUploadBadge } from '@/features/publish/PhotoUploadBadge';
 
 export const photoDragId = (photoId: number) => `photo:${photoId}`;
 export const PublishFailedContext = createContext(false);
+/** The photos that differ from the session's template (10G §6.2); their tiles carry a small mark. */
+export const TemplateDiffersContext = createContext<ReadonlySet<number>>(new Set());
 
 type ThumbProps = { photo: Photo; transform?: string; swapped?: boolean };
 
@@ -92,6 +94,7 @@ export function PhotoTileFace({ photo, number, last = number, variant }: Pick<Ph
 export function PhotoTile({ photo, number, last = number, active, selected, variant, onOpen, onToggleSelected }: PhotoTileProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: photoDragId(photo.id) });
   const unreviewed = photo.classification === 'unreviewed';
+  const differs = useContext(TemplateDiffersContext).has(photo.id);
 
   function onClick(event: MouseEvent) {
     if (event.metaKey || event.shiftKey) onToggleSelected(photo.id);
@@ -106,6 +109,7 @@ export function PhotoTile({ photo, number, last = number, active, selected, vari
       data-active={active || undefined}
       data-selected={selected || undefined}
       data-dragging={isDragging || undefined}
+      data-differs={differs || undefined}
       aria-current={active ? 'true' : undefined}
       aria-label={`Photo ${outputLabel(number, last)}${unreviewed ? ', to review' : ''}`}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1 }}
@@ -115,6 +119,7 @@ export function PhotoTile({ photo, number, last = number, active, selected, vari
       role="button"
     >
       <PhotoTileFace photo={photo} number={number} last={last} variant={variant} />
+      {differs && <span className="tile-differs" aria-label="Differs from the template" />}
     </div>
   );
 }

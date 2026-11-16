@@ -1142,6 +1142,20 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::settings::storage_retention_set,
         commands::items::item_archive_get,
         commands::items::item_keep_files_set,
+        commands::templates::templates_list,
+        commands::templates::template_get,
+        commands::templates::template_create,
+        commands::templates::template_delete,
+        commands::templates::template_container_add,
+        commands::templates::template_container_remove,
+        commands::templates::template_container_example_set,
+        commands::templates::template_containers_reorder,
+        commands::templates::template_shooting_order_set,
+        commands::templates::template_container_presets_set,
+        commands::templates::template_session_view,
+        commands::templates::template_drop,
+        commands::templates::template_back,
+        commands::templates::template_shift_back,
     ])
 }
 
@@ -1193,16 +1207,17 @@ pub fn run() {
         })
         .setup(|handle| {
             let state = handle.state::<AppState>();
-            let previews = {
+            let (previews, templates) = {
                 let app = state.handles().expect("app state");
                 app.events
                     .set_target(Arc::new(TauriEvents(handle.handle().clone())));
-                app.paths.root.join("previews")
+                (app.paths.root.join("previews"), app.paths.root.join("templates"))
             };
             // The workspace loads preview files through the asset protocol; only the previews folder is readable.
             handle
                 .asset_protocol_scope()
                 .allow_directory(previews, true)?;
+            handle.asset_protocol_scope().allow_directory(templates, true)?;
             if let Some(window) = handle.get_webview_window("main") {
                 let app_handle = handle.handle().clone();
                 window.on_window_event(move |event| {
@@ -1753,6 +1768,200 @@ mod tests {
                 "../src/services/bindings.ts",
             )
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod t1_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+
+    fn call(w: &tauri::WebviewWindow<tauri::test::MockRuntime>, cmd: &str, args: Value) -> Value {
+        let body = get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .unwrap();
+        match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        }
+    }
+
+    #[test]
+    fn t1_c3b_commands_reach_wired_app_and_bindings() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::templates::template_create,
+                commands::templates::template_container_add,
+                commands::templates::template_get,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let created = call(&w, "template_create", json!({"itemType":"Chair"}));
+        let id = created["id"].as_i64().unwrap();
+        call(
+            &w,
+            "template_container_add",
+            json!({"templateId":id,"source":null}),
+        );
+        let got = call(&w, "template_get", json!({"itemType":"chair"}));
+        assert_eq!(got["containers"][0]["final_no"], 1);
+        assert_eq!(got["containers"][0]["shoot_no"], 1);
+        let bindings = include_str!("../../src/services/bindings.ts");
+        for name in [
+            "templatesList",
+            "templateGet",
+            "templateCreate",
+            "templateDelete",
+            "templateContainerAdd",
+            "templateContainerRemove",
+            "templateContainerExampleSet",
+            "templateContainersReorder",
+            "templateShootingOrderSet",
+            "templateContainerPresetsSet",
+        ] {
+            assert!(bindings.contains(name), "missing {name}");
+        }
+    }
+
+    #[test]
+    fn t2_c6b_session_view_command_and_bindings() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::templates::template_session_view
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let view = call(&w, "template_session_view", json!({"sessionId":1}));
+        assert_eq!(view["templated"], false);
+        assert_eq!(view["containers"], json!([]));
+        assert!(include_str!("../../src/services/bindings.ts").contains("template_session_view"));
+    }
+}
+
+#[cfg(test)]
+mod t3_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets},
+        webview::InvokeRequest,
+    };
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    #[test]
+    fn t3_c3g_template_commands_answer_no_template() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let session = a
+            .items()
+            .create_local("C3G", "C3G", "Table", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let photo = a.add_photo(session, "DSC00001.ARW").unwrap();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::templates::template_back,
+                commands::templates::template_drop,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let back = call(&w, "template_back", json!({"sessionId":session})).unwrap_err();
+        assert_eq!(back["code"], "no_template");
+        let dropped = call(
+            &w,
+            "template_drop",
+            json!({"photoId":photo.id,"containerNo":1}),
+        )
+        .unwrap_err();
+        assert_eq!(dropped["code"], "no_template");
+        let bindings = include_str!("../../src/services/bindings.ts");
+        assert!(bindings.contains("template_drop") && bindings.contains("template_back"));
+    }
+
+    #[test]
+    fn t4_c2g_shift_back_command_answers_no_template() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let session = a
+            .items()
+            .create_local("C2G", "C2G", "Table", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::templates::template_shift_back
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let shifted = call(&w, "template_shift_back", json!({"sessionId":session})).unwrap_err();
+        assert_eq!(shifted["code"], "no_template");
+        // T4·C2(e) refusal as the UI sees it.
+        let nothing = commands::items::CommandError::from(psm_core::Error::NothingToShift);
+        assert_eq!(nothing.code, "nothing_to_shift");
+        let bindings = include_str!("../../src/services/bindings.ts");
+        assert!(bindings.contains("template_shift_back"));
     }
 }
 

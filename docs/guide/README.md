@@ -31,6 +31,7 @@ summarises and points; it never replaces the authorities below. Keep it current 
 | Research: what it must do (HA1–HA6, stages, contracts MC-A1…MC-A12, measurements MA-n) | `docs/intention/book/08A_research_agent.md`, `08B_research_contracts.md`. **Later wins:** 08B's changelog entries 12–18 and the sections "What this plan supersedes in the book" of the plans `R11`, `R12`, `R13` override the older chapter text until the chapters are rewritten (08B changelog 14, 18) |
 | Research: names, tables, settings keys, seams, commands, test commands | `docs/implementation/master_plan_research.md` (§6 registry, §7 environment); it wins over `master_plan.md` on a research name |
 | Research: what was built, measured and decided, newest state | `docs/implementation/STATUS_research.md`; `narratives/R*.md`; `backlog_research/R*.md`; measurements in `docs/intention/evidence/research_providers.md` |
+| Shooting templates: what they must do; names, tables, commands and the placement contract (P1–P10) | `docs/intention/book/10G_shooting_templates.md`; `docs/implementation/master_plan_templates.md` (wins over `master_plan.md` on a template name); plans `T1`–`T4` |
 | What exists and how it behaves today | **the code**; then `docs/implementation/narratives/P*.md` (plain-language result per phase), `STATUS.md`, `backlog.md` |
 | Orientation | this guide |
 
@@ -51,6 +52,7 @@ few places (listed in `01_product.md` §Book pending updates).
 | Ship a build to the work Mac | `05_working.md` §Release build with the SDK sidecar |
 | Touch research (engine, rules, adapters, its settings or UI) | `01_product.md` §Research assistant; `02_architecture.md` §Research; `03_rules_and_principles.md` §Research hard rules; `04_change_impact.md` §Research; book `08A`, then the `08B` contract you touch **and** its changelog 12–18; the "supersedes" sections of plans `R11`–`R13`; `master_plan_research.md` §5 Seams, §6; `crates/research/src/`; narratives R11–R13 |
 | Run a research measurement or replay a stage | `05_working.md` §Research tool; `crates/research-tool/src/lib.rs` (`USAGE`); `master_plan_research.md` §3 (Rule 9, Keys, Spending ceilings); `docs/intention/evidence/research_providers.md` (how the earlier measurements were run and what they found) |
+| Touch shooting templates (editor, placement, hand changes, retake, shift) | `01_product.md` workflow row "Shooting template"; `02_architecture.md` §Shooting templates; `04_change_impact.md` §Shooting templates; book `10G`; `master_plan_templates.md` §4, §5; `crates/core/src/services/template_placement.rs`; tests `crates/testkit/tests/suite/t1_templates.rs`…`t4_template_retake_shift.rs` |
 | Run a research phase | `docs/process/flow.md` §10; `master_plan_research.md` §0, §5 Driver loop, §7.2; `docs/implementation/STATUS_research.md`; `docs/implementation/phases_research.txt`; the plan `docs/implementation/plans/R<n>_<slug>.md` (its Tracker line and Closing gate); `05_working.md` §Research phases |
 
 ## Repo map (one screen)

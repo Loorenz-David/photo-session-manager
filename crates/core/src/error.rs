@@ -1,5 +1,14 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("template_exists")]
+    TemplateExists,
+    #[error("The app could not read that file as an image. Use a JPEG, PNG or TIFF.")]
+    TemplateImageUnreadable,
+    #[error("no_template")]
+    NoTemplate,
+    /// T4: Shift the rest back with no denied photo before a template-placed one.
+    #[error("There is nothing to shift back")]
+    NothingToShift,
     #[error("composition_invalid: {reason}")]
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]

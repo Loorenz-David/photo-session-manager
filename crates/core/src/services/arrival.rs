@@ -329,6 +329,14 @@ impl ArrivalService {
             Classification::Main,
         )?;
         if inserted {
+            if let Err(error) = crate::services::template_placement::place_arrival(
+                self.store.as_ref(),
+                self.clock.as_ref(),
+                self.events.as_ref(),
+                photo.id,
+            ) {
+                tracing::warn!(photo_id = photo.id, %error, "template placement failed; photo kept");
+            }
             if let Some(follow) = &self.follow
                 && (source == PhotoSource::Import || self.follow_capture)
             {

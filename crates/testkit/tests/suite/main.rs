@@ -59,3 +59,7 @@ mod p67_form_values_defaults_and_batch_step;
 mod p68_setup_polish_address_password_shop;
 mod p69_faster_export_and_publish;
 mod research;
+mod t1_templates;
+mod t2_template_placement;
+mod t3_template_hand;
+mod t4_template_retake_shift;

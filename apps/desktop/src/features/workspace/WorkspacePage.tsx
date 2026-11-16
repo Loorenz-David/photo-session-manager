@@ -44,6 +44,9 @@ import { Stage } from './Stage';
 import type { SwipeAction } from './SwipeLayer';
 import { useWorkspaceKeyboard } from './useKeyboard';
 import { useWorkspaceState, type WorkspaceState } from './useWorkspaceState';
+import { useTemplateView } from './useTemplateView';
+import { dropAction } from './templateDrop';
+import type { TemplateView } from '@/services/templates';
 import './workspace.css';
 
 export const UNASSIGNED_SESSION_ID = 1;
@@ -77,10 +80,10 @@ function placedAt(group: readonly Photo[], photo: Photo, slot: number): Photo[] 
 
 const NO_NUMBERS: OutputNumbers = { first: 0, last: 0 };
 
-/** Drops land on what is under the pointer; a tile wins over the group around it. */
+/** Drops land on what is under the pointer; a tile or an empty container wins over the group around it. */
 const collisions: CollisionDetection = args => {
   const within = pointerWithin(args);
-  const tile = within.find(hit => String(hit.id).startsWith('photo:'));
+  const tile = within.find(hit => String(hit.id).startsWith('photo:')) ?? within.find(hit => String(hit.id).startsWith('container:'));
   return tile ? [tile] : within;
 };
 
@@ -99,12 +102,18 @@ const dropAnimation: DropAnimation = {
  * under the pointer; into the other group it classifies (end of that group, whatever the drop index); onto a
  * session row it moves the dragged set there.
  */
-function useDrop(state: WorkspaceState) {
+function useDrop(state: WorkspaceState, templateView: TemplateView | null) {
   return useCallback(
     (photoId: number, overId: string | number) => {
       const photos = state.photos;
       const photo = photos.find(candidate => candidate.id === photoId);
       if (!photo) return;
+      // T3: in a templated session a drop onto a container puts the photo there (fill or swap).
+      const action = dropAction(photoId, overId, templateView, photos);
+      if (action.kind === 'template') {
+        void state.templateDrop(photoId, action.container);
+        return;
+      }
       const targetSession = idNumber(overId, 'session:');
       if (targetSession !== null) {
         const dragged = state.selection.has(photoId) ? displaySequence(photos).filter(p => state.selection.has(p.id)).map(p => p.id) : [photoId];
@@ -126,13 +135,14 @@ function useDrop(state: WorkspaceState) {
       const position = projectedSlot(group, overPhoto.id);
       if (position !== photo.position) void state.reorder(photoId, position);
     },
-    [state],
+    [state, templateView],
   );
 }
 
 /** The session workspace (NOTES.md §Screens 4–5): stage, photo panel or strip, and in Unassigned the sessions panel. */
 export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detailsOpen = false, onDetailsOpenChange = () => undefined, navigate }: WorkspacePageProps) {
   const state = useWorkspaceState(sessionId);
+  const templateView = useTemplateView(sessionId);
   const unassigned = sessionId === UNASSIGNED_SESSION_ID;
   const [folded, setFolded] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(unassigned);
@@ -144,7 +154,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   const [composing, setComposing] = useState(false);
   const shownFailure = useRef<number | null>(null);
   const shownFailureSession = useRef(sessionId);
-  const drop = useDrop(state);
+  const drop = useDrop(state, templateView);
   // P62: the item's retention state, re-read with every session view (a clean-up may have cleared it meanwhile).
   const [archive, setArchive] = useState<ItemArchive | null>(null);
   const loadedView = state.view;
@@ -451,7 +461,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         {composing ? null : folded ? (
           <FoldedStrip photos={state.photos} onUnfold={() => setFolded(false)} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
         ) : (
-          <PhotoPanel photos={state.photos} onFold={() => setFolded(true)} onImport={() => pickAndImport()} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
+          <PhotoPanel photos={state.photos} templateView={templateView} sessionId={sessionId} onTemplateBack={state.templateBack} onTemplateShiftBack={state.templateShiftBack} onFold={() => setFolded(true)} onImport={() => pickAndImport()} sessionsOpen={sessionsOpen} onToggleSessions={() => setSessionsOpen(open => !open)} {...tileHandlers} />
         )}
         {sessionsOpen && <SessionsPanel currentSessionId={sessionId} onClose={() => setSessionsOpen(false)} />}
         <ImportDropZone />

@@ -16,6 +16,7 @@ import {
   type SessionView,
 } from '@/services/photos';
 import { ServiceError } from '@/services/sessions';
+import { templateBack as templateBackCommand, templateDrop as templateDropCommand, templateShiftBack as templateShiftBackCommand } from '@/services/templates';
 import { displayOrder, displaySequence } from './order';
 
 export type ViewMode = 'adjusted' | 'original';
@@ -234,6 +235,33 @@ export function useWorkspaceState(sessionId: number) {
 
   const copy = useCallback((photoIds: number[], target: number) => run(() => copyPhotos(photoIds, target)), [run]);
 
+  /** T3: put a photo into a container (one undo step; a refusal is a toast like any review action). */
+  const templateDrop = useCallback((photoId: number, containerNo: number) => run(() => templateDropCommand(photoId, containerNo)), [run]);
+
+  /** T3: Back to template, one undo step with the usual undo toast. */
+  const templateBack = useCallback(async () => {
+    const result = await run(() => templateBackCommand(sessionId));
+    if (result) {
+      toast('Back to template · Undo ⌘Z', {
+        id: UNDO_TOAST_ID,
+        duration: UNDO_TOAST_MS,
+        action: { label: 'Undo', onClick: () => void undo() },
+      });
+    }
+  }, [run, sessionId, undo]);
+
+  /** T4: Shift the rest back, one undo step with the usual undo toast. */
+  const templateShiftBack = useCallback(async () => {
+    const result = await run(() => templateShiftBackCommand(sessionId));
+    if (result) {
+      toast('Shifted the rest back · Undo ⌘Z', {
+        id: UNDO_TOAST_ID,
+        duration: UNDO_TOAST_MS,
+        action: { label: 'Undo', onClick: () => void undo() },
+      });
+    }
+  }, [run, sessionId, undo]);
+
   const step = useCallback(
     (delta: number) => {
       const sequence = displaySequence(photosRef.current);
@@ -284,6 +312,9 @@ export function useWorkspaceState(sessionId: number) {
     reorder,
     move,
     copy,
+    templateDrop,
+    templateBack,
+    templateShiftBack,
     step,
   };
 }

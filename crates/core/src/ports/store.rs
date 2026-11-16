@@ -9,6 +9,7 @@ use crate::domain::{
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{LatestPublish, Session, SessionDto, SessionListRecord},
     storage::{ArchivedImage, ItemRetention, PhotoDenial},
+    template::{PlaceRow, Presets, ShotKey, Template, TemplateSummary},
 };
 
 #[derive(Debug, Clone)]
@@ -39,6 +40,29 @@ pub struct FrameCommit {
 }
 
 pub trait StoreTx {
+    fn template_for_session(&self, session_id: i64) -> Result<Option<Template>>;
+    fn shot_keys(&self, session_id: i64) -> Result<Vec<ShotKey>>;
+    fn hold_times(&self, session_id: i64, now_ms: i64) -> Result<Vec<(i64, i64)>>;
+    fn photo_place_row(&self, photo_id: i64) -> Result<Option<PlaceRow>>;
+    fn photo_place_put(&mut self, row: &PlaceRow) -> Result<()>;
+    fn photo_place_mark(
+        &mut self,
+        photo_id: i64,
+        place: bool,
+        frame: bool,
+        slot: Option<i64>,
+    ) -> Result<()>;
+    fn photo_place_delete(&mut self, photo_id: i64) -> Result<()>;
+    fn template_frame_unknown(
+        &mut self,
+        photo_id: i64,
+        kind: crate::domain::composition::CompositionKind,
+        shape: crate::domain::composition::Shape,
+        origin: Origin,
+        zoom: Option<u8>,
+        at: i64,
+    ) -> Result<()>;
+    fn default_shape(&self) -> crate::domain::composition::Shape;
     fn enqueue_mirror_tag(&mut self, raw_path: &str, photo_id: i64, now_ms: i64) -> Result<()>;
     fn session(&self, id: i64) -> Result<Session>;
     fn photo(&self, id: i64) -> Result<Photo>;
@@ -61,6 +85,8 @@ pub trait StoreTx {
     /// P66: the photo was denied at `at` (its undo window starts). A later classification other
     /// than `deleted` (undo) removes the mark unless its files are already deleted.
     fn set_photo_denied(&mut self, id: i64, at: i64) -> Result<()>;
+    /// When the photo was denied, if it has a denial row whose files are not deleted (P66).
+    fn photo_denied_at(&self, id: i64) -> Result<Option<i64>>;
     fn publish_confirmed_since(&self, session_id: i64, seq: i64) -> Result<bool>;
     fn touch_session(&mut self, session_id: i64, at: i64) -> Result<()>;
     fn items(&self) -> Result<Vec<Item>>;
@@ -176,6 +202,33 @@ pub trait StoreTx {
 }
 
 pub trait Store: Send + Sync {
+    fn photo_place_row(&self, photo_id: i64) -> Result<Option<PlaceRow>>;
+    fn template_list(&self) -> Result<Vec<TemplateSummary>>;
+    fn template_get(&self, type_key: &str) -> Result<Option<Template>>;
+    fn template_get_by_id(&self, id: i64) -> Result<Template>;
+    fn template_create(&self, item_type: &str, type_key: &str, at: i64) -> Result<Template>;
+    fn template_delete(&self, id: i64) -> Result<()>;
+    fn template_container_add(
+        &self,
+        id: i64,
+        example_file: Option<&str>,
+        at: i64,
+    ) -> Result<Template>;
+    fn template_container_example_set(
+        &self,
+        id: i64,
+        example_file: &str,
+        at: i64,
+    ) -> Result<(Template, Option<String>)>;
+    fn template_container_remove(&self, id: i64, at: i64) -> Result<(Template, Option<String>)>;
+    fn template_order_set(&self, id: i64, ids: &[i64], shooting: bool, at: i64)
+    -> Result<Template>;
+    fn template_container_presets_set(
+        &self,
+        id: i64,
+        presets: &Presets,
+        at: i64,
+    ) -> Result<Template>;
     fn preview_states(&self) -> Result<Vec<RawPreviewState>>;
     fn preview_state(&self, raw: &str) -> Result<Option<RawPreviewState>>;
     fn ensure_initial_generation(&self, raw: &str) -> Result<Option<i64>>;

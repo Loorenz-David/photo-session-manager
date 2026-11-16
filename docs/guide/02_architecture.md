@@ -22,10 +22,10 @@ are thin and run off the app lock (`spawn_blocking`); business logic never depen
 ### `crates/core` (psm-core)
 | Module | Holds |
 |---|---|
-| `domain/` | `item.rs`, `session.rs` (SessionStatus, PublishStep, RowLabel), `photo.rs` (Classification, Integrity), `attribute.rs`, `composition.rs` (10D values, Frame, Rect, EditorGeometry), `output.rs` (OutputFormat), `publish.rs`, `camera.rs` (CameraStatus, Link, reasons, CameraSettings, Keychain account names, ledger constants), `editing.rs` (Job, ProvisionInputs, RecipeProps…), `storage.rs` (StorageSettings, ExportSettings) |
-| `mechanisms/` (pure, unit-testable; the only place plans allow unit tests) | `arrival.rs` (candidate filter, path_key), `canon.rs` (NFC canonical path), `hash.rs` (SHA-256), `position.rs`, `status.rs` (status derivation, progress %), `time.rs`, `naming.rs` (folder key, export names), `values.rs` (MC-9 canonical attribute values, MC-14 selection), `attribute_write.rs` (MC-13 diff), `reconcile.rs` (MC-12 gallery diff), `publish.rs` (frozen_main, upload waves), `upload_name.rs`, `staleness.rs`, `backoff.rs` (render backoff; `editor_wait` = "Waiting for Capture One…", 10 min max), `missing.rs` (files deleted outside the app), `composition.rs` + `composition_cases.json` (shared with the TS editor), `capture_ledger.rs` (MC-33 rules), `camera_status.rs` (precedence, sentences), `secrets.rs` (FTP password), `cleanup.rs` + `retention.rs` (10F decisions), `hook_payload.rs` |
+| `domain/` | `item.rs`, `session.rs` (SessionStatus, PublishStep, RowLabel), `photo.rs` (Classification, Integrity), `attribute.rs`, `composition.rs` (10D values, Frame, Rect, EditorGeometry), `template.rs` (shooting templates, containers, presets), `output.rs` (OutputFormat), `publish.rs`, `camera.rs` (CameraStatus, Link, reasons, CameraSettings, Keychain account names, ledger constants), `editing.rs` (Job, ProvisionInputs, RecipeProps…), `storage.rs` (StorageSettings, ExportSettings) |
+| `mechanisms/` (pure, unit-testable; the only place plans allow unit tests) | `arrival.rs` (candidate filter, path_key), `canon.rs` (NFC canonical path), `hash.rs` (SHA-256), `position.rs`, `status.rs` (status derivation, progress %), `time.rs`, `naming.rs` (folder key, export names), `template.rs` (item type key, `expected` place, `zoomed`, `preset_values`), `shot_order.rs` (P4 shot order: slots, counter runs, holds), `values.rs` (MC-9 canonical attribute values, MC-14 selection), `attribute_write.rs` (MC-13 diff), `reconcile.rs` (MC-12 gallery diff), `publish.rs` (frozen_main, upload waves), `upload_name.rs`, `staleness.rs`, `backoff.rs` (render backoff; `editor_wait` = "Waiting for Capture One…", 10 min max), `missing.rs` (files deleted outside the app), `composition.rs` + `composition_cases.json` (shared with the TS editor), `capture_ledger.rs` (MC-33 rules), `camera_status.rs` (precedence, sentences), `secrets.rs` (FTP password), `cleanup.rs` + `retention.rs` (10F decisions), `hook_payload.rs` |
 | `ports/` | `store.rs` (Store/StoreTx; one impl: SQLite), `clock.rs`, `editing.rs`, `camera.rs` (CameraProvider, CaptureSink, ArrivalSource, ArrivalFollow, CompletedNames, DeliveryFs), `commerce.rs`, `images.rs`, `raw_previews.rs`, `secrets.rs`, `system.rs`, `storage.rs`, `events.rs` |
-| `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing, archived view) |
+| `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `templates` (local editor, each action saved immediately), `template_placement` (placement on arrival, the session's `TemplateView`, drop onto a container / retake, Back to template, Shift the rest back), `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing, archived view) |
 | `events.rs` | `AppEvent` (below); `error.rs`: `Error` with snake_case codes carried to the UI as `{code, message, data}` |
 
 ### `crates/infra` (psm-infra)
@@ -56,7 +56,7 @@ constructors `new`, `with_fake_document`, `with_fake_shop`, `with_camera*`), fak
 
 ### `apps/desktop/src-tauri` (psm-desktop)
 `src/lib.rs`: `specta_builder()` (the command list), `TauriEvents` (AppEvent → Tauri event), `run()`
-(opens the App, Edit menu with ⌘Z/⌘⇧Z, asset protocol scoped to `previews/`, window focus → preview
+(opens the App, Edit menu with ⌘Z/⌘⇧Z, asset protocol scoped to `previews/` and `templates/`, window focus → preview
 check, `camera_runtime.shutdown()` on exit), inline command tests, `export_bindings` test.
 `src/state.rs`: **AppState** (`RwLock<App>`, `handles()`, `mutate()`, `settings_set`). `src/commands/*.rs`:
 one file per area. `build.rs`: builds the stub sidecar if `binaries/camera-sidecar-aarch64-apple-darwin`
@@ -64,6 +64,43 @@ is missing. `tauri.conf.json`: `externalBin: binaries/camera-sidecar`, ad-hoc si
 `Info.plist`: `NSAppleEventsUsageDescription`, `NSLocalNetworkUsageDescription`.
 
 ## Runtime flows (step lists with the files involved)
+### Shooting templates (book `10G`; T1–T4; contract `docs/implementation/master_plan_templates.md` §5 P1–P10)
+- **Editor (T1).** Settings → Shooting templates (`features/settings/{SettingsNav.tsx, TemplatesSection.tsx,
+  TemplateExample.tsx}`) → `src/services/templates.ts` → ten commands → `TemplatesService`
+  (`services/templates.rs`) over the `Store` port; every change is its own write (no Save). Example images
+  are JPEG copies under `<data>/templates/<template id>/<uuid>.jpg` (`ImageOpsImpl::thumbnail`; the webview
+  reads that folder through the asset protocol), shown black and white.
+- **Placement on arrival (T2).** `ArrivalService::accept` → `template_placement::place_arrival` (one
+  transaction; an error is logged and the photo stays where P66 put it). The session's shots (all photos,
+  any classification, not `released`) and holds (reported shutters still expecting a file, ≤ 5 min) are
+  ordered by `mechanisms::shot_order::order`; shot k goes to the container with `shoot_no` k
+  (`mechanisms::template::expected`), beyond the last container → Condition. Only rows with
+  `place_by_hand = 0` move; Main positions are renumbered dense by slot (`renumber_main`, P7). Presets
+  become the photo's composition (P8); while the frame is unknown `pending_zoom` waits and
+  `adopt_frame_tx` (`crates/infra/src/sqlite/store.rs`) applies it to the first rect. No undo step.
+- **Hand changes (T3).** classify, reorder, Deny (`ReviewService`, `photo_place_mark`), a Compose edit
+  (`frame_by_hand`) and a move/copy (row deleted) make a photo "by hand". `drop_on_container` fills an
+  empty container or swaps two placed photos ("Move to container <n>"); `session_view` counts photos that
+  differ; `back_to_template` re-places them (one `StepKind::Template` step "Back to template").
+- **Retake and shift (T4).** A photo without a container dropped on a filled one: the old photo is denied
+  as Deny does (red, undo window) and `released`; the dropped photo takes its container, its shot key
+  (`key_at`, `key_name`) and the container's presets ("Retake container <n>"). Deny leaves the container
+  empty (a denied photo still counts as a shot); `TemplateView.can_shift_back` says a later
+  template-placed photo exists; `shift_back` releases the denied photos and re-places the template-placed
+  ones ("Shift the rest back"). Every template step stores each photo's whole state (place, row,
+  composition, denial) before and after; `HistoryService` restores it.
+- **Commands** (`commands/templates.rs`): T1 `templates_list`, `template_get`, `template_create`,
+  `template_delete`, `template_container_add`, `template_container_remove`,
+  `template_container_example_set`, `template_containers_reorder`, `template_shooting_order_set`,
+  `template_container_presets_set` · T2 `template_session_view` · T3 `template_drop`, `template_back` ·
+  T4 `template_shift_back`. Error codes `template_exists`, `template_image_unreadable`, `no_template`,
+  `nothing_to_shift`.
+- **Frontend** (`features/workspace/`): `useTemplateView.ts` (re-reads `template_session_view` on
+  `photo_added`, `photo_changed`, `session_changed`), `ContainerGrid.tsx` (faded numbered containers),
+  `TemplateInfoDialog.tsx` (the info button), `TemplateWarning.tsx` (the warning, Back to template,
+  Shift the rest back), `templateDrop.ts` (`dropAction`: which drops are template drops), wired in
+  `PhotoPanel.tsx`, `WorkspacePage.tsx`, `useWorkspaceState.ts`.
+
 ### Start-up (`psm_desktop_lib::run` → `open_logged` → `App::open` → `App::build`, `crates/integrations/src/lib.rs`)
 1. `AppPaths::from_env_or_default` → `paths.create()` → `logging::init` (so the start is logged).
 2. `JxaScripting::new` writes the 24 scripts to `<data>/hooks/jxa/`; one `LaunchGate`, one
@@ -305,9 +342,9 @@ recorded stage of one run, optionally with another model, effort or instructions
 ## Persistence
 | Where | What |
 |---|---|
-| `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) |
+| `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) · `templates/<template id>/<uuid>.jpg` (shooting-template examples) |
 | Under the capture root (`<document folder>/Capture`) | item folders by `folder_key`; `.incoming/` (FTP parts, `sdk-<run>/`); `.duplicates/`; Capture One's own `CaptureOne/` and `Output/_session_manager/` |
-| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 013_form_values.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`) |
+| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 015_photo_places.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`; 014 and 015 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
 | `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research). A file that does not parse never stops the app (health `settings_invalid`) |
 | Keychain (`infra/keychain.rs`; names in `domain/camera.rs::secrets`) | service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`, and the three `research-*-key` accounts (§Research). Shopify client id/secret: `settings.json` only; access token: memory only |
 | `settings` table | app state, not user config (`mechanisms_version`, `active_session_id`, spool dedupe keys) |
@@ -336,10 +373,11 @@ hand-edit. Components never import `bindings.ts` directly: `services/*.ts` wrap 
 - `features/`: `shell` (Header, CameraDot/CameraCard, NotificationsBell, ArrivalToasts, ThemeToggle),
   `sessions` (list, filters, batch bar, NewSessionDialog), `workspace` (Stage, PhotoGrid, PhotoPanel,
   SessionsPanel, review buttons/keys/swipe, ArchivedView, `useWorkspaceState.ts`, `order.ts`,
-  `outputs.ts`), `compose` (editor; see above), `form` (FormDialog, StepTabs, MetafieldInput, kinds,
+  `outputs.ts`; shooting templates: ContainerGrid, TemplateInfoDialog, TemplateWarning, `templateDrop.ts`,
+  `useTemplateView.ts`), `compose` (editor; see above), `form` (FormDialog, StepTabs, MetafieldInput, kinds,
   ItemTypePicker, StockFields, AI pills, ResearchPanel), `publish` (PublishPopover, PublishProgress, BatchQueue,
   FailurePopover, NotificationsDrawer, `usePublish.ts`), `settings` (SettingsPage, CameraSection,
-  FingerprintBox, StorageSection, StockSection, ResearchSection, ShopFieldPicker, `cameraSteps.ts`), `health`, `history`, `pending`.
+  FingerprintBox, StorageSection, StockSection, ResearchSection, ShopFieldPicker, `cameraSteps.ts`; a drawer of sections: SettingsNav, TemplatesSection, TemplateExample), `health`, `history`, `pending`.
 - `components/ui/` shadcn primitives; `components/pending/` skeletons; `styles/tokens.css` from the
   design handoff.
 - State: React hooks per feature; no global store. Preview files are loaded through the Tauri asset

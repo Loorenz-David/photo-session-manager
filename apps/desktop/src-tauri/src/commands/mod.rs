@@ -10,3 +10,4 @@ pub mod publish;
 pub mod research;
 pub mod sessions;
 pub mod settings;
+pub mod templates;

@@ -12,6 +12,7 @@ pub mod publish;
 pub mod research;
 pub mod session;
 pub mod storage;
+pub mod template;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthItem {
