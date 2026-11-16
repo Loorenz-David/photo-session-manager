@@ -352,7 +352,15 @@ impl<'a> HistoryService<'a> {
                 &mut active,
                 &mut changed_photos,
                 &mut released,
-            )
+            )?;
+            // P7: Main stays in container order in every templated session the step touched.
+            let mut sessions = touched.clone();
+            sessions.sort_unstable();
+            sessions.dedup();
+            for session in sessions {
+                crate::services::template_placement::renumber_main(tx, session)?;
+            }
+            Ok(())
         });
         match &result {
             Ok(()) | Err(Error::StepCannotApply { .. }) => {
@@ -556,17 +564,17 @@ fn apply(
                 return Err(cannot(step, direction, "that photo already changed"));
             }
             let old = group(tx, session_id, p.classification)?;
-            let next = position::reorder(
-                &old,
-                photo_id,
-                if direction == Direction::Undone {
-                    from
-                } else {
-                    to
-                },
-            );
+            let target = if direction == Direction::Undone {
+                from
+            } else {
+                to
+            };
+            let next = position::reorder(&old, photo_id, target);
             if old != next {
                 tx.set_positions(&next)?;
+                // A drag in a templated Main wrote the slot of its target position; undo and
+                // redo write the slot of the position they restore (nothing when untemplated).
+                tx.photo_place_mark(photo_id, true, false, Some(target))?;
                 tx.touch_session(session_id, at)?;
             }
             touched.push(session_id);

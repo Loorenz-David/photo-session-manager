@@ -815,7 +815,11 @@ impl StoreTx for SqliteTx<'_> {
         });
         if place {
             row.place_by_hand = true;
-            row.slot = slot;
+            // The slot is the container the photo was last in: a classification or a Deny keeps
+            // it (undo brings the photo back to it); only a Main photo is given a new one.
+            if slot.is_some() && photo.classification == Classification::Main {
+                row.slot = slot;
+            }
         }
         if frame {
             row.frame_by_hand = true;
@@ -924,6 +928,9 @@ impl StoreTx for SqliteTx<'_> {
     fn delete_photo_row(&mut self, id: i64) -> Result<()> {
         self.tx
             .execute("DELETE FROM compositions WHERE photo_id=?1", [id])
+            .map_err(db)?;
+        self.tx
+            .execute("DELETE FROM photo_places WHERE photo_id=?1", [id])
             .map_err(db)?;
         self.tx
             .execute("DELETE FROM photo_denials WHERE photo_id=?1", [id])

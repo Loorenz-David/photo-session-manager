@@ -3,8 +3,8 @@ use crate::{
     Result,
     domain::{
         composition::{CompositionKind, CompositionValues, Flip, Orientation, Origin},
-        photo::Classification,
-        template::{PlaceRow, TemplatePhotoView, TemplateView},
+        photo::{Classification, Photo},
+        template::{Container, PlaceRow, Presets, Template, TemplatePhotoView, TemplateView},
     },
     events::AppEvent,
     mechanisms::{
@@ -14,7 +14,7 @@ use crate::{
         template::{self, Expected},
     },
     ports::{
-        clock::Clock,
+        clock::{Clock, SystemClock},
         events::EventSink,
         store::{Store, StoreTx},
     },
@@ -34,12 +34,9 @@ pub fn place_arrival(
     store.transaction(&mut |tx| {
         let arrived = tx.photo(photo_id)?;
         session_id = arrived.session_id;
-        let Some(template) = tx.template_for_session(session_id)? else {
+        let Some(template) = template_of(tx, session_id)? else {
             return Ok(());
         };
-        if template.containers.is_empty() {
-            return Ok(());
-        }
         templated = true;
         if tx.photo_place_row(photo_id)?.is_none() {
             tx.photo_place_put(&PlaceRow {
@@ -48,25 +45,7 @@ pub fn place_arrival(
             })?;
         }
         let before = tx.photos(session_id)?;
-        let shots = tx
-            .shot_keys(session_id)?
-            .into_iter()
-            .filter(|s| !s.released)
-            .map(|s| Shot {
-                photo_id: s.photo_id,
-                at: s.at,
-                counter: s.name.as_deref().and_then(|name| seq_of(&stem_key(name))),
-            })
-            .collect();
-        let ordered = shot_order::order(shots, tx.hold_times(session_id, now)?);
-        let indexes: HashMap<i64, usize> = ordered
-            .iter()
-            .enumerate()
-            .filter_map(|(i, e)| match e {
-                Entry::Shot(s) => Some((s.photo_id, i + 1)),
-                Entry::Hold { .. } => None,
-            })
-            .collect();
+        let indexes = shot_indexes(tx, session_id, now)?;
         let mut condition_order = Vec::new();
         for photo in &before {
             let Some(mut row) = tx.photo_place_row(photo.id)? else {
@@ -78,11 +57,7 @@ pub fn place_arrival(
             let Some(&index) = indexes.get(&photo.id) else {
                 continue;
             };
-            let expected = template::expected(index, &template.containers);
-            let (class, slot, presets) = match expected {
-                Expected::Main(c) => (Classification::Main, Some(c.final_no), Some(&c.presets)),
-                Expected::Condition => (Classification::Condition, None, None),
-            };
+            let (class, slot, presets) = expected_place(index, &template.containers);
             let place_changed = row.slot != slot || photo.classification != class;
             if place_changed && photo.id != photo_id && !changed.contains(&photo.id) {
                 changed.push(photo.id);
@@ -166,7 +141,7 @@ pub fn place_arrival(
 fn apply_frame(
     tx: &mut dyn StoreTx,
     photo_id: i64,
-    presets: Option<&crate::domain::template::Presets>,
+    presets: Option<&Presets>,
     frame_by_hand: bool,
     now: i64,
 ) -> Result<()> {
@@ -174,7 +149,7 @@ fn apply_frame(
         return Ok(());
     }
     let current = tx.composition(photo_id)?;
-    let active = presets.is_some_and(|p| p.split || p.shape.is_some() || p.zoom > 0);
+    let active = presets.is_some_and(has_presets);
     if !active && current.origin != Origin::User {
         return Ok(());
     }
@@ -229,7 +204,94 @@ fn apply_frame(
     Ok(())
 }
 
+/// The template of a templated session (P1): one exists for the item's type and has containers.
+fn template_of(tx: &dyn StoreTx, session_id: i64) -> Result<Option<Template>> {
+    Ok(tx
+        .template_for_session(session_id)?
+        .filter(|t| !t.containers.is_empty()))
+}
+
+/// P2–P4: the 1-based shot index of every shot of the session (holds counted), as placement
+/// reads it at `now`.
+fn shot_indexes(tx: &dyn StoreTx, session_id: i64, now: i64) -> Result<HashMap<i64, usize>> {
+    let shots = tx
+        .shot_keys(session_id)?
+        .into_iter()
+        .filter(|s| !s.released)
+        .map(|s| Shot {
+            photo_id: s.photo_id,
+            at: s.at,
+            counter: s.name.as_deref().and_then(|name| seq_of(&stem_key(name))),
+        })
+        .collect();
+    Ok(shot_order::order(shots, tx.hold_times(session_id, now)?)
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| match e {
+            Entry::Shot(s) => Some((s.photo_id, i + 1)),
+            Entry::Hold { .. } => None,
+        })
+        .collect())
+}
+
+/// P5: classification, slot and presets of the place of shot `index`.
+fn expected_place(
+    index: usize,
+    containers: &[Container],
+) -> (Classification, Option<i64>, Option<&Presets>) {
+    match template::expected(index, containers) {
+        Expected::Main(c) => (Classification::Main, Some(c.final_no), Some(&c.presets)),
+        Expected::Condition => (Classification::Condition, None, None),
+    }
+}
+
+fn has_presets(presets: &Presets) -> bool {
+    presets.split || presets.shape.is_some() || presets.zoom > 0
+}
+
+/// A photo's place as the template compares it: its classification, and its slot when Main.
+fn place_of(photo: &Photo, row: Option<&PlaceRow>) -> (Classification, Option<i64>) {
+    (
+        photo.classification,
+        if photo.classification == Classification::Main {
+            row.and_then(|r| r.slot)
+        } else {
+            None
+        },
+    )
+}
+
+/// P9: whether the photo differs from the template. A photo without a shot index (released)
+/// never differs.
+fn differs(
+    photo: &Photo,
+    row: Option<&PlaceRow>,
+    indexes: &HashMap<i64, usize>,
+    containers: &[Container],
+) -> bool {
+    if photo.classification == Classification::Deleted {
+        return false;
+    }
+    let Some(&index) = indexes.get(&photo.id) else {
+        return false;
+    };
+    let (class, slot, presets) = expected_place(index, containers);
+    let here = place_of(photo, row);
+    let by_hand = row.is_none_or(|r| r.place_by_hand);
+    (by_hand && here != (class, slot))
+        || (row.is_some_and(|r| r.frame_by_hand)
+            && class == Classification::Main
+            && here == (class, slot)
+            && presets.is_some_and(has_presets))
+}
+
+/// The session's template view, with "differs" read at the system clock's now.
 pub fn session_view(store: &dyn Store, session_id: i64) -> Result<TemplateView> {
+    session_view_at(store, SystemClock.now_ms(), session_id)
+}
+
+/// The session's template view; "differs" uses the shot order placement would use at `now`.
+pub fn session_view_at(store: &dyn Store, now: i64, session_id: i64) -> Result<TemplateView> {
     let mut result = TemplateView {
         templated: false,
         template_id: None,
@@ -239,41 +301,37 @@ pub fn session_view(store: &dyn Store, session_id: i64) -> Result<TemplateView> 
         can_shift_back: false,
     };
     store.transaction(&mut |tx| {
-        let Some(template) = tx.template_for_session(session_id)? else {
+        result.photos.clear();
+        result.differs = 0;
+        let Some(template) = template_of(tx, session_id)? else {
             return Ok(());
         };
-        if template.containers.is_empty() {
-            return Ok(());
-        }
+        let indexes = shot_indexes(tx, session_id, now)?;
         result.templated = true;
         result.template_id = Some(template.id);
-        result.containers = template.containers;
         for photo in tx.photos(session_id)? {
             if photo.classification == Classification::Deleted {
                 continue;
             }
             let row = tx.photo_place_row(photo.id)?;
+            let differs = differs(&photo, row.as_ref(), &indexes, &template.containers);
+            result.differs += i64::from(differs);
             result.photos.push(TemplatePhotoView {
                 photo_id: photo.id,
-                slot: if photo.classification == Classification::Main {
-                    row.as_ref().and_then(|r| r.slot)
-                } else {
-                    None
-                },
+                slot: place_of(&photo, row.as_ref()).1,
                 by_hand: row.as_ref().is_none_or(|r| r.place_by_hand),
-                differs: false,
+                differs,
             });
         }
+        result.containers = template.containers;
         Ok(())
     })?;
     Ok(result)
 }
 
+/// P7 for Main after any change in a templated session; nothing for an untemplated one.
 pub fn renumber_main(tx: &mut dyn StoreTx, session_id: i64) -> Result<()> {
-    let Some(template) = tx.template_for_session(session_id)? else {
-        return Ok(());
-    };
-    if template.containers.is_empty() {
+    if template_of(tx, session_id)?.is_none() {
         return Ok(());
     }
     let main: Vec<_> = tx
@@ -288,50 +346,24 @@ pub fn renumber_main(tx: &mut dyn StoreTx, session_id: i64) -> Result<()> {
     tx.set_positions(&main_positions(&main.iter().collect::<Vec<_>>(), &rows))
 }
 
-/// P7 for Main: positions stay dense (1…m). A photo placed by hand that has a position keeps
-/// it (moved only as far as needed to stay inside 1…m and clear of another such photo); every
-/// other photo fills the remaining positions sorted by (no slot, slot, previous position).
-fn main_positions(
-    main: &[&crate::domain::photo::Photo],
-    rows: &HashMap<i64, Option<crate::domain::template::PlaceRow>>,
-) -> Vec<(i64, i64)> {
-    let row = |p: &crate::domain::photo::Photo| rows.get(&p.id).and_then(Option::as_ref);
-    let m = main.len();
-    let mut fixed: Vec<_> = main
-        .iter()
-        .filter(|p| p.position.is_some() && row(p).is_some_and(|r| r.place_by_hand))
-        .collect();
-    fixed.sort_by_key(|p| (p.position, p.id));
-    let mut rest: Vec<_> = main
-        .iter()
-        .filter(|p| !fixed.iter().any(|f| f.id == p.id))
-        .collect();
-    rest.sort_by_key(|p| {
-        let r = row(p);
+/// P7 for Main: positions stay dense (1…m), sorted by (has no slot, slot, previous position).
+/// Photos that share a slot keep the order they had, so a drag (which writes the dragged
+/// photo's position and slot first) keeps the dragged order, and a photo returned to its
+/// container by undo or Back to template takes that container's place.
+fn main_positions(main: &[&Photo], rows: &HashMap<i64, Option<PlaceRow>>) -> Vec<(i64, i64)> {
+    let slot = |p: &Photo| rows.get(&p.id).and_then(Option::as_ref).and_then(|r| r.slot);
+    let mut sorted: Vec<_> = main.to_vec();
+    sorted.sort_by_key(|p| {
         (
-            r.and_then(|r| r.slot).is_none(),
-            r.and_then(|r| r.slot).unwrap_or(i64::MAX),
+            slot(p).is_none(),
+            slot(p).unwrap_or(i64::MAX),
             p.position.unwrap_or(i64::MAX),
             p.id,
         )
     });
-    let mut out: Vec<Option<i64>> = vec![None; m];
-    let mut prev = 0usize;
-    let k = fixed.len();
-    for (j, p) in fixed.iter().enumerate() {
-        let wanted = (p.position.unwrap_or(1).max(1) as usize).min(m);
-        let at = wanted.max(prev + 1).min(m - (k - j) + 1);
-        out[at - 1] = Some(p.id);
-        prev = at;
-    }
-    let mut rest = rest.into_iter();
-    out.into_iter()
+    sorted
+        .into_iter()
         .enumerate()
-        .map(|(i, id)| {
-            (
-                id.unwrap_or_else(|| rest.next().expect("main photo").id),
-                i as i64 + 1,
-            )
-        })
+        .map(|(i, p)| (p.id, i as i64 + 1))
         .collect()
 }

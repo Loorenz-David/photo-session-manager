@@ -61,3 +61,4 @@ mod p69_faster_export_and_publish;
 mod research;
 mod t1_templates;
 mod t2_template_placement;
+mod t3_template_hand;
