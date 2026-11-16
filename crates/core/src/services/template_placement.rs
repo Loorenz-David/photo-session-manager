@@ -1,6 +1,6 @@
 //! Placement on arrival (10G P1–P9). Every read and write for an arrival shares one store transaction.
 use crate::{
-    Result,
+    Error, Result,
     domain::{
         composition::{CompositionKind, CompositionValues, Flip, Orientation, Origin},
         photo::{Classification, Photo},
@@ -10,6 +10,7 @@ use crate::{
     mechanisms::{
         capture_ledger::{seq_of, stem_key},
         composition::{default_rect, turned_frame},
+        position,
         shot_order::{self, Entry, Shot},
         template::{self, Expected},
     },
@@ -17,6 +18,10 @@ use crate::{
         clock::{Clock, SystemClock},
         events::EventSink,
         store::{Store, StoreTx},
+    },
+    services::{
+        history::{History, PhotoState, Step, StepKind, TemplateChange, photo_state},
+        review::ReviewResult,
     },
 };
 use std::collections::HashMap;
@@ -366,4 +371,176 @@ fn main_positions(main: &[&Photo], rows: &HashMap<i64, Option<PlaceRow>>) -> Vec
         .enumerate()
         .map(|(i, p)| (p.id, i as i64 + 1))
         .collect()
+}
+
+/// The dependencies of a person's template action (drop onto a container, Back to template).
+pub struct HandAction<'a> {
+    pub store: &'a dyn Store,
+    pub clock: &'a dyn Clock,
+    pub events: &'a dyn EventSink,
+    pub history: &'a History,
+}
+
+impl HandAction<'_> {
+    /// After the commit: `photo_changed` per changed photo, `session_changed`, the step recorded.
+    fn finish(&self, session_id: i64, step: Option<Step>) -> Result<ReviewResult> {
+        if let Some(step) = step {
+            if let StepKind::Template { photos, .. } = &step.kind {
+                for change in photos {
+                    self.events.emit(AppEvent::PhotoChanged {
+                        photo_id: change.photo_id,
+                        session_id,
+                    });
+                }
+            }
+            self.events.emit(AppEvent::SessionChanged { session_id });
+            self.history.record(session_id, step);
+        }
+        Ok(ReviewResult {
+            sessions: vec![self.store.session(session_id)?],
+            active_photo_id: None,
+        })
+    }
+}
+
+fn snapshot(tx: &dyn StoreTx, ids: &[i64]) -> Result<Vec<PhotoState>> {
+    ids.iter().map(|id| photo_state(tx, *id)).collect()
+}
+
+fn template_step(
+    label: String,
+    session_id: i64,
+    ids: &[i64],
+    before: Vec<PhotoState>,
+    after: Vec<PhotoState>,
+) -> Step {
+    Step {
+        label,
+        kind: StepKind::Template {
+            session_id,
+            photos: ids
+                .iter()
+                .zip(before.into_iter().zip(after))
+                .map(|(id, (before, after))| TemplateChange {
+                    photo_id: *id,
+                    before,
+                    after,
+                })
+                .collect(),
+        },
+    }
+}
+
+/// The photo is placed by hand in `slot` (its row is created when missing).
+fn put_by_hand(tx: &mut dyn StoreTx, photo_id: i64, slot: Option<i64>) -> Result<()> {
+    let mut row = tx.photo_place_row(photo_id)?.unwrap_or(PlaceRow {
+        photo_id,
+        ..PlaceRow::default()
+    });
+    row.place_by_hand = true;
+    row.slot = slot;
+    tx.photo_place_put(&row)
+}
+
+/// Moves the photo to `class` at the end of that group (Condition stays dense); no change when
+/// it is already there.
+fn reclassify(
+    tx: &mut dyn StoreTx,
+    photo: &Photo,
+    class: Classification,
+    at: i64,
+) -> Result<()> {
+    if photo.classification == class {
+        return Ok(());
+    }
+    let group = |tx: &dyn StoreTx, c: Classification| -> Result<Vec<(i64, i64)>> {
+        Ok(tx
+            .photos(photo.session_id)?
+            .into_iter()
+            .filter(|p| p.classification == c)
+            .filter_map(|p| p.position.map(|n| (p.id, n)))
+            .collect())
+    };
+    if photo.classification.is_ordered() {
+        let old = group(tx, photo.classification)?;
+        tx.set_positions(&position::remove_at(&old, photo.id))?;
+    }
+    let next = if class.is_ordered() {
+        Some(group(tx, class)?.len() as i64 + 1)
+    } else {
+        None
+    };
+    tx.set_photo_review(photo.id, photo.session_id, class, next)?;
+    tx.enqueue_mirror_tag(&photo.raw_path, photo.id, at)
+}
+
+/// 10G §6 rules 1 and 5: the person puts a photo into container `n` (its final number). An empty
+/// container is filled; a photo that has a container swaps with the one in `n`; a photo without
+/// a container cannot go onto a filled one in this phase (`container_filled`; T4's retake). One
+/// transaction, one undo step "Move to container <n>". Compositions are not touched.
+pub fn drop_on_container(h: &HandAction<'_>, photo_id: i64, n: i64) -> Result<ReviewResult> {
+    crate::services::retention::ensure_photo_not_cleared(h.store, photo_id)?;
+    let at = h.clock.now_ms();
+    let mut session_id = 0;
+    let mut step = None;
+    h.store.transaction(&mut |tx| {
+        step = None;
+        let dropped = tx.photo(photo_id)?;
+        session_id = dropped.session_id;
+        let template = template_of(tx, session_id)?.ok_or(Error::NoTemplate)?;
+        if !template.containers.iter().any(|c| c.final_no == n) {
+            return Err(Error::InvalidValue(format!("no container {n}")));
+        }
+        if dropped.classification == Classification::Deleted {
+            return Err(Error::InvalidValue("the photo is deleted".into()));
+        }
+        let mut occupant: Option<Photo> = None;
+        for p in tx.photos(session_id)? {
+            let slot = place_of(&p, tx.photo_place_row(p.id)?.as_ref()).1;
+            if p.id != photo_id
+                && slot == Some(n)
+                && occupant
+                    .as_ref()
+                    .is_none_or(|o| (p.position, p.id) < (o.position, o.id))
+            {
+                occupant = Some(p);
+            }
+        }
+        let own = place_of(&dropped, tx.photo_place_row(photo_id)?.as_ref()).1;
+        if own == Some(n) {
+            return Ok(());
+        }
+        let ids: Vec<i64> = match (&occupant, own) {
+            (Some(_), None) => return Err(Error::ContainerFilled),
+            (Some(o), Some(_)) => vec![photo_id, o.id],
+            (None, _) => vec![photo_id],
+        };
+        let before = snapshot(tx, &ids)?;
+        match occupant {
+            None => {
+                reclassify(tx, &dropped, Classification::Main, at)?;
+                put_by_hand(tx, photo_id, Some(n))?;
+            }
+            Some(o) => {
+                // The two exchange containers and positions (the swap; owner card 1).
+                if let (Some(a), Some(b)) = (dropped.position, o.position) {
+                    tx.set_positions(&[(photo_id, b), (o.id, a)])?;
+                }
+                put_by_hand(tx, photo_id, Some(n))?;
+                put_by_hand(tx, o.id, own)?;
+            }
+        }
+        renumber_main(tx, session_id)?;
+        tx.touch_session(session_id, at)?;
+        let after = snapshot(tx, &ids)?;
+        step = Some(template_step(
+            format!("Move to container {n}"),
+            session_id,
+            &ids,
+            before,
+            after,
+        ));
+        Ok(())
+    })?;
+    h.finish(session_id, step)
 }

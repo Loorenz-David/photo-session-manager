@@ -11,7 +11,11 @@ use psm_core::{
         template::{Presets, Template, TemplateView},
     },
     ports::clock::Clock,
-    services::{template_placement::session_view_at, templates::TemplatesService},
+    services::{
+        template_placement::{HandAction, drop_on_container, session_view_at},
+        templates::TemplatesService,
+    },
+    Error,
 };
 use psm_infra::imaging::ImageOpsImpl;
 use psm_testkit::TestApp;
@@ -111,6 +115,35 @@ fn place(a: &TestApp, id: i64) -> (C, Option<i64>, Option<i64>) {
 }
 fn pos(a: &TestApp, id: i64) -> Option<i64> {
     a.store().photo(id).unwrap().position
+}
+fn hand(a: &TestApp) -> HandAction<'_> {
+    HandAction {
+        store: a.store(),
+        clock: a.clock.as_ref(),
+        events: a.events.as_ref(),
+        history: a.app.history.as_ref(),
+    }
+}
+fn drop_on(a: &TestApp, id: i64, n: i64) -> Result<(), Error> {
+    drop_on_container(&hand(a), id, n).map(|_| ())
+}
+/// Every photo of the session: (id, classification, position, slot, place_by_hand).
+fn state(a: &TestApp, s: i64) -> Vec<(i64, C, Option<i64>, Option<i64>, bool)> {
+    a.store()
+        .photos_in_session(s)
+        .unwrap()
+        .into_iter()
+        .map(|p| {
+            let r = a.store().photo_place_row(p.id).unwrap();
+            (
+                p.id,
+                p.classification,
+                p.position,
+                r.as_ref().and_then(|r| r.slot),
+                r.is_some_and(|r| r.place_by_hand),
+            )
+        })
+        .collect()
 }
 fn own_normal(a: &TestApp, id: i64) {
     let mut values = a.composition(id).unwrap().values().unwrap();
@@ -233,4 +266,84 @@ fn t3_c1g_undo_keeps_container_order() {
         (pos(&a, f2.id), pos(&a, f1.id), pos(&a, f3.id)),
         (Some(1), Some(2), Some(3))
     );
+}
+
+#[test]
+fn t3_c2a_drop_fills_empty_container() {
+    let a = app();
+    chair(&a);
+    let s = session(&a, "C2A", "Chair");
+    let f1 = arrive(&a, s, "DSC00001.ARW");
+    a.review().classify(f1.id, C::Condition).unwrap();
+    drop_on(&a, f1.id, 3).unwrap();
+    assert_eq!(place(&a, f1.id), (C::Main, Some(1), Some(3)));
+    assert_eq!(marks(&view(&a, s), f1.id), (Some(3), true, true));
+}
+
+#[test]
+fn t3_c2b_drop_on_filled_container_swaps() {
+    let a = app();
+    let (s, f) = s0(&a, "C2B", false);
+    drop_on(&a, f[2].id, 2).unwrap();
+    assert_eq!((place(&a, f[2].id).2, place(&a, f[0].id).2), (Some(2), Some(3)));
+    assert_eq!(
+        (pos(&a, f[1].id), pos(&a, f[2].id), pos(&a, f[0].id)),
+        (Some(1), Some(2), Some(3))
+    );
+    let v = view(&a, s);
+    assert_eq!(marks(&v, f[2].id), (Some(2), true, true));
+    assert_eq!(marks(&v, f[0].id), (Some(3), true, true));
+    assert_eq!(v.differs, 2);
+}
+
+#[test]
+fn t3_c2c_drop_on_own_container_changes_nothing() {
+    let a = app();
+    let (s, f) = s0(&a, "C2C", false);
+    let before = state(&a, s);
+    drop_on(&a, f[2].id, 3).unwrap();
+    assert_eq!(state(&a, s), before);
+    assert!(a.history().state(s).undo.is_none());
+}
+
+#[test]
+fn t3_c2d_condition_photo_onto_filled_container_refused() {
+    let a = app();
+    let (s, f) = s0(&a, "C2D", false);
+    let before = state(&a, s);
+    assert!(matches!(drop_on(&a, f[3].id, 1), Err(Error::ContainerFilled)));
+    assert_eq!(state(&a, s), before);
+    assert!(a.history().state(s).undo.is_none());
+}
+
+#[test]
+fn t3_c2e_drop_refusals() {
+    let a = app();
+    let (_, f) = s0(&a, "C2E", false);
+    assert!(matches!(drop_on(&a, f[2].id, 0), Err(Error::InvalidValue(_))));
+    assert!(matches!(drop_on(&a, f[2].id, 4), Err(Error::InvalidValue(_))));
+    let t = session(&a, "C2E2", "Table");
+    let g = arrive(&a, t, "DSC00011.ARW");
+    assert!(matches!(drop_on(&a, g.id, 1), Err(Error::NoTemplate)));
+}
+
+#[test]
+fn t3_c2f_drop_is_one_undo_step() {
+    let a = app();
+    let (s, f) = s0(&a, "C2F", false);
+    let s0_state = state(&a, s);
+    drop_on(&a, f[2].id, 2).unwrap();
+    let dropped = state(&a, s);
+    assert_eq!(
+        a.history().state(s).undo.as_deref(),
+        Some("Move to container 2")
+    );
+    a.history().undo(s).unwrap();
+    assert_eq!(state(&a, s), s0_state);
+    let v = view(&a, s);
+    assert_eq!((marks(&v, f[2].id).1, marks(&v, f[0].id).1), (false, false));
+    assert_eq!(v.differs, 0);
+    a.history().redo(s).unwrap();
+    assert_eq!(state(&a, s), dropped);
+    assert_eq!(view(&a, s).differs, 2);
 }

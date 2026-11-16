@@ -6,6 +6,9 @@ pub enum Error {
     TemplateImageUnreadable,
     #[error("no_template")]
     NoTemplate,
+    /// T3 only (retired by T4's retake): a photo without a container was dropped onto a filled one.
+    #[error("That container is filled")]
+    ContainerFilled,
     #[error("composition_invalid: {reason}")]
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]

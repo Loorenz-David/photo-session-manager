@@ -1,12 +1,16 @@
 use crate::domain::{
     attribute::Value as AttributeValue,
-    composition::{CompositionState, CompositionValues, Origin},
+    composition::{Composition, CompositionState, CompositionValues, Origin},
     photo::Classification,
+    template::PlaceRow,
     research::{Feedback, FeedbackAction},
     session::SessionDto,
 };
 use crate::events::AppEvent;
-use crate::mechanisms::{composition::validate, position};
+use crate::mechanisms::{
+    composition::{default_rect, turned_frame, validate},
+    position, template,
+};
 use crate::ports::{
     clock::Clock,
     events::EventSink,
@@ -65,6 +69,12 @@ pub enum StepKind {
         session_id: i64,
         photos: Vec<CompositionChange>,
     },
+    /// A template action (drop onto a container, Back to template; T4 retake, shift): the whole
+    /// state of every photo it changed, before and after (10G §6.5).
+    Template {
+        session_id: i64,
+        photos: Vec<TemplateChange>,
+    },
     Attribute {
         session_id: i64,
         item_id: i64,
@@ -91,6 +101,7 @@ impl Step {
                 .iter()
                 .any(|(source, copy)| *source == photo_id || *copy == photo_id),
             StepKind::Composition { photos, .. } => photos.iter().any(|p| p.photo_id == photo_id),
+            StepKind::Template { photos, .. } => photos.iter().any(|p| p.photo_id == photo_id),
             StepKind::Attribute { .. } => false,
         }
     }
@@ -112,6 +123,33 @@ pub struct CompositionChange {
     pub photo_id: i64,
     pub before: (CompositionValues, Origin),
     pub after: (CompositionValues, Origin),
+}
+/// One photo's state as a template step records it: place, `photo_places` row, composition
+/// (values with origin, or kind/shape/origin while the frame is unknown) and denial.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhotoState {
+    pub classification: Classification,
+    pub position: Option<i64>,
+    pub row: Option<PlaceRow>,
+    pub composition: Composition,
+    pub denied_at: Option<i64>,
+}
+#[derive(Debug, Clone)]
+pub struct TemplateChange {
+    pub photo_id: i64,
+    pub before: PhotoState,
+    pub after: PhotoState,
+}
+/// The photo's state now, inside the caller's transaction.
+pub fn photo_state(tx: &dyn StoreTx, photo_id: i64) -> Result<PhotoState> {
+    let photo = tx.photo(photo_id)?;
+    Ok(PhotoState {
+        classification: photo.classification,
+        position: photo.position,
+        row: tx.photo_place_row(photo_id)?,
+        composition: tx.composition(photo_id)?,
+        denied_at: tx.photo_denied_at(photo_id)?,
+    })
 }
 #[derive(Debug, Clone)]
 pub enum FieldState {
@@ -784,6 +822,11 @@ fn apply(
             }
             touched.push(session_id);
         }
+        StepKind::Template { session_id, photos } => {
+            apply_template(tx, step, direction, at, session_id, &photos, changed_photos)?;
+            touched.push(session_id);
+            *active = photos.first().map(|p| p.photo_id);
+        }
         StepKind::Attribute {
             session_id,
             item_id,
@@ -914,6 +957,146 @@ fn apply(
                 resolutions,
             };
             touched.push(session_id);
+        }
+    }
+    Ok(())
+}
+
+/// Undo writes every photo's `before`, redo its `after`. Each photo must still be where the step
+/// left it (session, classification, slot); otherwise nothing is written. Main is renumbered by
+/// the caller (P7); the step's photos in ordered groups go back to their recorded positions.
+fn apply_template(
+    tx: &mut dyn StoreTx,
+    step: &Step,
+    direction: Direction,
+    at: i64,
+    session_id: i64,
+    photos: &[TemplateChange],
+    changed_photos: &mut Vec<i64>,
+) -> Result<()> {
+    let undo = direction == Direction::Undone;
+    fn pick(c: &TemplateChange, before: bool) -> &PhotoState {
+        if before { &c.before } else { &c.after }
+    }
+    let wanted = |c| pick(c, undo);
+    let left = |c| pick(c, !undo);
+    for change in photos {
+        let expected = left(change);
+        check_photo(
+            tx,
+            change.photo_id,
+            session_id,
+            expected.classification,
+            step,
+            direction,
+            "that photo is gone",
+        )?;
+        let slot = tx.photo_place_row(change.photo_id)?.and_then(|r| r.slot);
+        if slot != expected.row.as_ref().and_then(|r| r.slot) {
+            return Err(cannot(step, direction, "that photo already changed"));
+        }
+    }
+    for change in photos {
+        let current = tx.photo(change.photo_id)?;
+        if current.classification.is_ordered() {
+            let old = group(tx, session_id, current.classification)?;
+            tx.set_positions(&position::remove_at(&old, change.photo_id))?;
+        }
+        tx.set_photo_review(
+            change.photo_id,
+            session_id,
+            wanted(change).classification,
+            None,
+        )?;
+    }
+    let mut sorted: Vec<_> = photos.iter().collect();
+    sorted.sort_by_key(|c| {
+        let w = wanted(c);
+        (
+            w.classification.as_str().to_owned(),
+            w.position.unwrap_or(i64::MAX),
+        )
+    });
+    for change in sorted {
+        let target = wanted(change);
+        let place = Place {
+            classification: target.classification,
+            position: target.position,
+        };
+        let n = inserted(tx, session_id, change.photo_id, place)?;
+        tx.set_photo_review(change.photo_id, session_id, target.classification, n)?;
+        if let Some(denied_at) = target.denied_at {
+            tx.set_photo_denied(change.photo_id, denied_at)?;
+        }
+        restore_composition(tx, change.photo_id, target, at)?;
+        match &target.row {
+            Some(row) => tx.photo_place_put(row)?,
+            None => tx.photo_place_delete(change.photo_id)?,
+        }
+        if left(change).classification != target.classification {
+            let raw = tx.photo(change.photo_id)?.raw_path;
+            tx.enqueue_mirror_tag(&raw, change.photo_id, at)?;
+        }
+        changed_photos.push(change.photo_id);
+    }
+    if !photos.is_empty() {
+        tx.touch_session(session_id, at)?;
+    }
+    Ok(())
+}
+
+/// Writes the recorded composition back when it differs from the stored one. A composition
+/// recorded while the frame was unknown is written as kind, shape and origin; when the frame has
+/// become known since, it gets that kind's default rect (zoomed by the row's pending zoom).
+fn restore_composition(
+    tx: &mut dyn StoreTx,
+    photo_id: i64,
+    target: &PhotoState,
+    at: i64,
+) -> Result<()> {
+    let current = tx.composition(photo_id)?;
+    let wanted = &target.composition;
+    if let Some(values) = wanted.values() {
+        if current.values().as_ref() != Some(&values) || current.origin != wanted.origin {
+            tx.save_composition(photo_id, &values, wanted.origin, at)?;
+        }
+        return Ok(());
+    }
+    let pending = target.row.as_ref().and_then(|r| r.pending_zoom);
+    match current.frame() {
+        Some(frame) => {
+            let rect = default_rect(
+                wanted.kind,
+                wanted.shape,
+                wanted.orientation,
+                turned_frame(frame, wanted.quarter_turns),
+            );
+            let values = CompositionValues {
+                kind: wanted.kind,
+                shape: wanted.shape,
+                orientation: wanted.orientation,
+                quarter_turns: wanted.quarter_turns,
+                flip: wanted.flip,
+                straighten: wanted.straighten,
+                rect: pending.map_or(rect, |zoom| template::zoomed(rect, zoom)),
+            };
+            if current.values().as_ref() != Some(&values) || current.origin != wanted.origin {
+                tx.save_composition(photo_id, &values, wanted.origin, at)?;
+            }
+        }
+        None => {
+            if (current.kind, current.shape, current.origin)
+                != (wanted.kind, wanted.shape, wanted.origin)
+            {
+                tx.template_frame_unknown(
+                    photo_id,
+                    wanted.kind,
+                    wanted.shape,
+                    wanted.origin,
+                    pending,
+                    at,
+                )?;
+            }
         }
     }
     Ok(())

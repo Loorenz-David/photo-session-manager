@@ -42,6 +42,7 @@ impl From<Error> for CommandError {
             Error::TemplateExists => "template_exists",
             Error::TemplateImageUnreadable => "template_image_unreadable",
             Error::NoTemplate => "no_template",
+            Error::ContainerFilled => "container_filled",
             Error::CompositionInvalid { reason } => {
                 data.insert("reason".into(), reason.clone());
                 "composition_invalid"

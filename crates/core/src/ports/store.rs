@@ -85,6 +85,8 @@ pub trait StoreTx {
     /// P66: the photo was denied at `at` (its undo window starts). A later classification other
     /// than `deleted` (undo) removes the mark unless its files are already deleted.
     fn set_photo_denied(&mut self, id: i64, at: i64) -> Result<()>;
+    /// When the photo was denied, if it has a denial row whose files are not deleted (P66).
+    fn photo_denied_at(&self, id: i64) -> Result<Option<i64>>;
     fn publish_confirmed_since(&self, session_id: i64, seq: i64) -> Result<bool>;
     fn touch_session(&mut self, session_id: i64, at: i64) -> Result<()>;
     fn items(&self) -> Result<Vec<Item>>;

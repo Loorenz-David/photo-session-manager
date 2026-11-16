@@ -867,6 +867,16 @@ impl StoreTx for SqliteTx<'_> {
             .map_err(db)?;
         Ok(())
     }
+    fn photo_denied_at(&self, id: i64) -> Result<Option<i64>> {
+        self.tx
+            .query_row(
+                "SELECT denied_at FROM photo_denials WHERE photo_id=?1 AND files_deleted_at IS NULL",
+                [id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db)
+    }
     fn session(&self, id: i64) -> Result<Session> {
         Ok(session(&self.tx, id)?.session)
     }
