@@ -28,7 +28,7 @@ actor: claude sonnet 5.5 (pipeline-implementer)
 No mutation probes; no production file was edited and reverted.
 
 ## Checkpoint SHA
-See the commit with subject `CHECKPOINT (not approved): T3 fix 1 …` (`git log -1` on the branch).
+`4e1ba0c` (`CHECKPOINT (not approved): T3 fix 1 …`). This line was added after the commit; the runner commits the handoff.
 
 ## Stamp
 Run one after the other on the fixed tree: `t3_template_hand::` 20/20 · `p39_undo_history_core::` 24 · `t2_template_placement::` 21 · `p02_review_order::` 25 · `p62_retention` 12 · `t1_templates::` 12 · `cargo test -p psm-core` 96 · clippy (core, infra, desktop, testkit, `-D warnings`) ok · `cargo fmt --check` ok · `npm run typecheck` ok. Full suite not run (change local to the Reorder step; no store, migration or binding change).
