@@ -336,19 +336,6 @@ fn t3_c2c_drop_on_own_container_changes_nothing() {
 }
 
 #[test]
-fn t3_c2d_condition_photo_onto_filled_container_refused() {
-    let a = app();
-    let (s, f) = s0(&a, "C2D", false);
-    let before = state(&a, s);
-    assert!(matches!(
-        drop_on(&a, f[3].id, 1),
-        Err(Error::ContainerFilled)
-    ));
-    assert_eq!(state(&a, s), before);
-    assert!(a.history().state(s).undo.is_none());
-}
-
-#[test]
 fn t3_c2e_drop_refusals() {
     let a = app();
     let (_, f) = s0(&a, "C2E", false);

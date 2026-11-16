@@ -37,7 +37,7 @@ Research's schema steps (`ensure_research_columns`, `psm_research::schema::ensur
 
 **Commands** (`apps/desktop/src-tauri/src/commands/templates.rs`, registered in `specta_builder()`; wrapper `apps/desktop/src/services/templates.ts`): T1 `templates_list`, `template_get`, `template_create`, `template_delete`, `template_container_add`, `template_container_remove`, `template_container_example_set`, `template_containers_reorder`, `template_shooting_order_set`, `template_container_presets_set` · T2 `template_session_view` · T3 `template_drop`, `template_back` · T4 `template_shift_back`.
 
-**Error codes** (`psm_core::Error`, snake_case): `template_exists`, `template_image_unreadable`, `no_template`, `container_filled` (T3 only; retired by T4), `nothing_to_shift`; a bad list, number or preset is the existing `invalid_value`.
+**Error codes** (`psm_core::Error`, snake_case): `template_exists`, `template_image_unreadable`, `no_template`, `nothing_to_shift`; a bad list, number or preset is the existing `invalid_value`.
 
 **History:** `StepKind::Template` (T3), labels "Move to container <n>", "Back to template", "Retake container <n>", "Shift the rest back".
 

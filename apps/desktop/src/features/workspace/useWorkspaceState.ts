@@ -29,7 +29,6 @@ function refusalText(error: unknown): string {
   if (error instanceof ServiceError) {
     if (error.code === 'target_published') return 'Published sessions cannot receive photos.';
     if (error.code === 'target_has_raw') return 'That session already has this photo.';
-    if (error.code === 'container_filled') return 'That container is filled';
   }
   return (error as Error).message || 'Something went wrong.';
 }

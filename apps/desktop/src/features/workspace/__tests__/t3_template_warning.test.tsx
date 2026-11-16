@@ -97,10 +97,13 @@ it('T3·C4(c) a differing photo carries the mark; a matching one does not', () =
 });
 
 it('T3·C4(d) dropAction: container placeholders and placed tiles are template drops; the rest is default', () => {
-  const photos = [photo(11, 'main', 1), photo(12, 'main', 2), photo(13, 'main', 3)];
-  const templated = view([[11, 1, false], [12, 3, false], [13, null, true]]);
+  const photos = [photo(11, 'main', 1), photo(12, 'main', 2), photo(13, 'main', 3), photo(14, 'condition', 1)];
+  const templated = view([[11, 1, false], [12, 3, false], [13, null, true], [14, null, false]]);
   expect(dropAction(12, 'container:2', templated, photos)).toEqual({ kind: 'template', container: 2 });
   expect(dropAction(12, 'photo:11', templated, photos)).toEqual({ kind: 'template', container: 1 });
+  // T4: a photo without a slot over a filled container's tile is a retake onto that container.
+  expect(dropAction(14, 'photo:11', templated, photos)).toEqual({ kind: 'template', container: 1 });
+  expect(dropAction(14, 'photo:13', templated, photos)).toEqual({ kind: 'default' });
   expect(dropAction(12, 'photo:13', templated, photos)).toEqual({ kind: 'default' });
   expect(dropAction(12, 'group:condition', templated, photos)).toEqual({ kind: 'default' });
   const untemplated: TemplateView = { templated: false, template_id: null, containers: [], photos: [], differs: 0, can_shift_back: false };

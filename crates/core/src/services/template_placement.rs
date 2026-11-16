@@ -473,10 +473,12 @@ fn reclassify(tx: &mut dyn StoreTx, photo: &Photo, class: Classification, at: i6
     tx.enqueue_mirror_tag(&photo.raw_path, photo.id, at)
 }
 
-/// 10G §6 rules 1 and 5: the person puts a photo into container `n` (its final number). An empty
-/// container is filled; a photo that has a container swaps with the one in `n`; a photo without
-/// a container cannot go onto a filled one in this phase (`container_filled`; T4's retake). One
-/// transaction, one undo step "Move to container <n>". Compositions are not touched.
+/// 10G §6 rules 1, 3 and 5: the person puts a photo into container `n` (its final number). An
+/// empty container is filled; a photo that has a container swaps with the one in `n` (one undo
+/// step "Move to container <n>"; compositions are not touched). A photo without a container
+/// dropped onto a filled one is a retake (P10): the photo that was there is denied and released,
+/// the dropped photo takes its container, its key and the container's presets (P8); one undo
+/// step "Retake container <n>". One transaction.
 pub fn drop_on_container(h: &HandAction<'_>, photo_id: i64, n: i64) -> Result<ReviewResult> {
     crate::services::retention::ensure_photo_not_cleared(h.store, photo_id)?;
     let at = h.clock.now_ms();
@@ -510,12 +512,16 @@ pub fn drop_on_container(h: &HandAction<'_>, photo_id: i64, n: i64) -> Result<Re
             return Ok(());
         }
         let ids: Vec<i64> = match (&occupant, own) {
-            (Some(_), None) => return Err(Error::ContainerFilled),
-            (Some(o), Some(_)) => vec![photo_id, o.id],
+            (Some(o), _) => vec![photo_id, o.id],
             (None, _) => vec![photo_id],
         };
         let before = snapshot(tx, &ids)?;
+        let mut label = format!("Move to container {n}");
         match occupant {
+            Some(o) if own.is_none() => {
+                retake(tx, &dropped, &o, &template, n, at)?;
+                label = format!("Retake container {n}");
+            }
             None => {
                 reclassify(tx, &dropped, Classification::Main, at)?;
                 put_by_hand(tx, photo_id, Some(n))?;
@@ -532,16 +538,74 @@ pub fn drop_on_container(h: &HandAction<'_>, photo_id: i64, n: i64) -> Result<Re
         renumber_main(tx, session_id)?;
         tx.touch_session(session_id, at)?;
         let after = snapshot(tx, &ids)?;
-        step = Some(template_step(
-            format!("Move to container {n}"),
-            session_id,
-            &ids,
-            before,
-            after,
-        ));
+        step = Some(template_step(label, session_id, &ids, before, after));
         Ok(())
     })?;
     h.finish(session_id, step)
+}
+
+/// 10G §6 rule 3 (P10): `old` is denied exactly as `ReviewService::delete` denies (Deleted, no
+/// position, placed by hand, the denial row, the mirror tag) and released; `new` becomes Main in
+/// container `n`, placed by hand, with `old`'s shot key (its own overrides, else its captured time
+/// and camera file key) and container `n`'s presets (P8). Main is renumbered by the caller.
+fn retake(
+    tx: &mut dyn StoreTx,
+    new: &Photo,
+    old: &Photo,
+    template: &Template,
+    n: i64,
+    at: i64,
+) -> Result<()> {
+    let key = tx
+        .shot_keys(old.session_id)?
+        .into_iter()
+        .find(|k| k.photo_id == old.id)
+        .ok_or_else(|| Error::NotFound(format!("photo {}", old.id)))?;
+    if old.classification.is_ordered() {
+        let group: Vec<(i64, i64)> = tx
+            .photos(old.session_id)?
+            .into_iter()
+            .filter(|p| p.classification == old.classification)
+            .filter_map(|p| p.position.map(|pos| (p.id, pos)))
+            .collect();
+        tx.set_positions(&position::remove_at(&group, old.id))?;
+    }
+    tx.set_photo_review(old.id, old.session_id, Classification::Deleted, None)?;
+    let mut old_row = tx.photo_place_row(old.id)?.unwrap_or(PlaceRow {
+        photo_id: old.id,
+        ..PlaceRow::default()
+    });
+    old_row.place_by_hand = true;
+    old_row.released = true;
+    tx.photo_place_put(&old_row)?;
+    tx.set_photo_denied(old.id, at)?;
+    tx.enqueue_mirror_tag(&old.raw_path, old.id, at)?;
+
+    let current = tx.photo(new.id)?;
+    reclassify(tx, &current, Classification::Main, at)?;
+    let row = tx.photo_place_row(new.id)?.unwrap_or(PlaceRow {
+        photo_id: new.id,
+        ..PlaceRow::default()
+    });
+    let framed_by_hand = row.frame_by_hand;
+    tx.photo_place_put(&PlaceRow {
+        slot: Some(n),
+        place_by_hand: true,
+        frame_by_hand: false,
+        key_at: Some(key.at),
+        key_name: key.name,
+        ..row
+    })?;
+    let presets = template
+        .containers
+        .iter()
+        .find(|c| c.final_no == n)
+        .map(|c| &c.presets);
+    // P8: a container without presets leaves a composition the person made alone.
+    if presets.is_some_and(has_presets) || !framed_by_hand {
+        apply_frame(tx, new.id, presets, false, at)?;
+    }
+    Ok(())
 }
 
 /// 10G §6 rule 2: the photos that differ (P9) go back to their expected place (P5) with

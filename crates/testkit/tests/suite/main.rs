@@ -62,3 +62,4 @@ mod research;
 mod t1_templates;
 mod t2_template_placement;
 mod t3_template_hand;
+mod t4_template_retake_shift;
