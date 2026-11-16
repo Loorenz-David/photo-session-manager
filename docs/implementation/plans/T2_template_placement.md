@@ -10,6 +10,8 @@ blocked_on: none
 
 **Tracker:** NOT_STARTED · 2026-11-16 · planner · plan written from 10G (ratified 2026-11-16)
 
+**Resume note (orchestrator, 2026-11-16 01:40) — read before anything else.** The first implement session (Codex) was cut off by its usage limit after committing **Unit 1** (`efcc86c`) and **Unit 2** (`0bff768`); it had started **Unit 3** and its unfinished, unverified files are committed as `fa8a484` (`apps/desktop/src/features/workspace/{ContainerGrid.tsx, TemplateInfoDialog.tsx, useTemplateView.ts}` new; `PhotoPanel.tsx`, `WorkspacePage.tsx`, `workspace.css` edited). This session: do not redo Units 1–2; check that their Unit test commands pass (fix only what fails); then finish Unit 3 from those files (keep, rewrite or drop them as the plan requires), run its tests, make its checkpoint, then the Closing gate and the handoff as usual.
+
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
 ## Goal
