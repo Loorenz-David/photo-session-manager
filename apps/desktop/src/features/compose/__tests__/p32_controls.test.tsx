@@ -1,6 +1,7 @@
 // The harness registers the service mocks; it must be evaluated before this file's own service imports.
 import { captureFrames, compose, composition, DEFAULT_RECT, image, layoutStage, openWorkspace, photo, pointer, savedValues, stage, transformOf, twoPhotos, view } from './harness';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { chooseValue } from '@/test/select';
 import { describe, expect, it, vi } from 'vitest';
 import { setComposition, type Rect } from '@/services/compositions';
 
@@ -32,7 +33,7 @@ const boxNear = (box: { x: number; y: number; width: number; height: number }, t
 };
 const button = (name: string) => screen.getByRole('button', { name });
 const click = (name: string) => act(async () => { if (name === 'Rotate and flip') fireEvent.pointerDown(button(name), { button: 0, ctrlKey: false, pointerType: 'mouse' }); fireEvent.click(button(name)); });
-const chooseShape = (value: string) => act(async () => { fireEvent.change(document.querySelector('#compose-shape')!, { target: { value } }); });
+const chooseShape = (value: string) => chooseValue(document.querySelector('#compose-shape')!, value);
 const innerTransform = () => image()!.querySelector('img')!.style.transform;
 const handle = (name: string) => document.querySelector<SVGElement>(`.compose-handle[data-handle="${name}"]`)!;
 
@@ -61,7 +62,7 @@ describe('C3 the Composition section', () => {
     expect(values).toMatchObject({ shape: '4:5', orientation: 'named', kind: 'normal', quarter_turns: 0, flip: 'none', straighten: 0 });
     rectNear(values.rect, PORTRAIT, 1e-9);
     boxNear({ x: 239.2, y: 24, width: 521.6, height: 652 });
-    expect((document.querySelector('#compose-shape') as HTMLSelectElement).value).toBe('4:5');
+    expect(document.querySelector('#compose-shape')).toHaveTextContent('4:5');
   });
 
   it('C3(b) Turn frame (and X) turns the 4:5 frame to 5:4 keeping the area and centre', async () => {

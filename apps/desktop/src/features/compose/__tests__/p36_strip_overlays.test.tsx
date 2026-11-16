@@ -1,5 +1,6 @@
 import { compose, layoutStage, openWorkspace, tile, twoPhotos } from './harness';
 import { act, fireEvent, waitFor } from '@testing-library/react';
+import { chooseValue } from '@/test/select';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 beforeEach(() => window.localStorage.removeItem('compose.overlay'));
@@ -42,7 +43,7 @@ describe('P36 strip and overlays', () => {
     for (const [name, count] of [['grid', 10], ['golden', 4], ['diagonals', 2], ['off', 0]] as const) {
       await key('o'); expect(overlay()).toHaveAttribute('data-overlay', name); expect(overlay().children).toHaveLength(count);
     }
-    fireEvent.change(document.querySelector('#compose-overlay')!, { target: { value: 'golden' } });
+    await chooseValue(document.querySelector('#compose-overlay')!, 'golden');
     expect(window.localStorage.getItem('compose.overlay')).toBe('golden');
     await key('Enter'); await compose();
     expect(overlay()).toHaveAttribute('data-overlay', 'golden');

@@ -122,14 +122,14 @@ fn c2a_easy_password_generated_and_shown_again() {
         |_| a.camera_runtime().ftp_password_changed(),
     )
     .unwrap();
-    assert_eq!(generated.len(), 16);
+    assert_eq!(generated.len(), 4);
     assert!(
         generated
             .bytes()
             .all(|b| FTP_PASSWORD_ALPHABET.contains(&b)),
         "{generated}"
     );
-    assert!(!generated.contains(['0', 'o', '1', 'l', 'i']));
+    assert!(generated.bytes().all(|b| b.is_ascii_digit()), "{generated}");
     assert_eq!(
         CameraService::ftp_password(a.secrets.as_ref())
             .unwrap()

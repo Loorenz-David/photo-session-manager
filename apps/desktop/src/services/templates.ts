@@ -30,3 +30,4 @@ export async function pickExampleFiles(): Promise<string[]> {
   if (!chosen) return [];
   return Array.isArray(chosen) ? chosen : [chosen];
 }
+export async function setLabel(id: number, name: string, description: string): Promise<Template> { return unwrap(await commands.templateContainerLabelSet(id, name, description)); }

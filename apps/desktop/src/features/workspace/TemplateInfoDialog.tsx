@@ -32,9 +32,11 @@ export function TemplateInfoDialog({ view, open, onOpenChange }: { view: Templat
             <strong>{shooting ? container.shoot_no : container.final_no}</strong>
             <TemplateExample path={container.example_path} />
             <div>
+              {container.name && <span className="template-info-name">{container.name}</span>}
               <span>{shooting ? `Image ${container.final_no}` : `Shot ${container.shoot_no}`}</span>
               {next && <span className="template-next-mark">Next</span>}
               {presetText(container.presets) && <p>{presetText(container.presets)}</p>}
+              {container.description && <p className="template-info-description">{container.description}</p>}
             </div>
           </div>;
         })}

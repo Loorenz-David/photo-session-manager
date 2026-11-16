@@ -228,7 +228,7 @@ mod p50_tests {
             .as_str()
             .unwrap()
             .to_owned();
-        assert_eq!(pw.len(), 16);
+        assert_eq!(pw.len(), 4);
         assert_eq!(
             call(
                 &w,
@@ -1152,6 +1152,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::templates::template_containers_reorder,
         commands::templates::template_shooting_order_set,
         commands::templates::template_container_presets_set,
+        commands::templates::template_container_label_set,
         commands::templates::template_session_view,
         commands::templates::template_drop,
         commands::templates::template_back,

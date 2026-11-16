@@ -1,6 +1,7 @@
 // The harness registers the service mocks; it must be evaluated before this file's own service imports.
 import { captureFrames, compose, composition, DEFAULT_RECT, image, layoutStage, openWorkspace, photo, pointer, savedValues, stage, transformOf, twoPhotos, view } from './harness';
 import { act, fireEvent, screen } from '@testing-library/react';
+import { chooseValue } from '@/test/select';
 import { describe, expect, it } from 'vitest';
 import { setComposition, type Rect } from '@/services/compositions';
 
@@ -26,7 +27,7 @@ const boxNear = (box: { x: number; y: number; width: number; height: number }, t
 const middle = () => document.querySelector('.compose-middle');
 const press = (key: string) => act(async () => { fireEvent.keyDown(window, { key }); });
 const click = (name: string) => act(async () => { fireEvent.click(screen.getByRole('button', { name })); });
-const chooseShape = (value: string) => act(async () => { fireEvent.change(document.querySelector('#compose-shape')!, { target: { value } }); });
+const chooseShape = (value: string) => chooseValue(document.querySelector('#compose-shape')!, value);
 const handle = (name: string) => document.querySelector<SVGElement>(`.compose-handle[data-handle="${name}"]`)!;
 const imageSrc = () => image()!.querySelector('img')!.getAttribute('src');
 

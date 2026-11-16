@@ -84,6 +84,8 @@ mod tests {
                 example_file: None,
                 example_path: None,
                 presets: Presets::default(),
+                name: None,
+                description: None,
             })
             .collect()
     }

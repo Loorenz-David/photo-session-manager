@@ -189,6 +189,7 @@ export const commands = {
 	templateContainersReorder: (templateId: CommandId, containerIds: CommandId[]) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_containers_reorder", { templateId, containerIds })),
 	templateShootingOrderSet: (templateId: CommandId, containerIds: CommandId[]) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_shooting_order_set", { templateId, containerIds })),
 	templateContainerPresetsSet: (containerId: CommandId, presets: PresetsInput_Deserialize) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_container_presets_set", { containerId, presets })),
+	templateContainerLabelSet: (containerId: CommandId, name: string, description: string) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_container_label_set", { containerId, name, description })),
 	templateSessionView: (sessionId: CommandId) => typedError<TemplateViewDto_Serialize, CommandError>(__TAURI_INVOKE("template_session_view", { sessionId })),
 	/**  T3: drop a photo onto container `container_no` (its final number); the touched session. */
 	templateDrop: (photoId: CommandId, containerNo: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("template_drop", { photoId, containerNo })),
@@ -447,6 +448,8 @@ export type ContainerDto_Deserialize = {
 	example_file?: string | null,
 	example_path?: string | null,
 	presets: PresetsDto_Deserialize,
+	name?: string | null,
+	description?: string | null,
 };
 
 export type ContainerDto_Serialize = {
@@ -456,6 +459,8 @@ export type ContainerDto_Serialize = {
 	example_file: string | null,
 	example_path: string | null,
 	presets: PresetsDto_Serialize,
+	name: string | null,
+	description: string | null,
 };
 
 /**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */

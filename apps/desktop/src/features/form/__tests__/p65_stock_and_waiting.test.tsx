@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { chooseValue, optionsOf } from '@/test/select';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { StockFields } from '../StockFields';
 import { StockSection } from '@/features/settings/StockSection';
@@ -24,11 +25,11 @@ it('C3(c) a new item\'s Product step shows Location and Quantity prefilled from 
   vi.mocked(itemStockGet).mockResolvedValue({ new_item: true, choice: { location_id: 'gid://shopify/Location/2', location_name: 'Shop floor', quantity: 3 } });
   render(<StockFields itemId={7} />);
   const location = await screen.findByRole('combobox', { name: 'Location' });
-  expect(within(location).getAllByRole('option').map(o => o.textContent)).toEqual(['No location', 'Warehouse', 'Shop floor']);
-  expect(location).toHaveValue('gid://shopify/Location/2');
+  await waitFor(() => expect(location).toHaveTextContent('Shop floor'));
+  expect(await optionsOf(location)).toEqual(['No location', 'Warehouse', 'Shop floor']);
   expect(screen.getByRole('spinbutton', { name: 'Quantity' })).toHaveValue(3);
   expect(screen.queryByText('Choose a location to track stock')).not.toBeInTheDocument();
-  fireEvent.change(location, { target: { value: 'gid://shopify/Location/1' } });
+  await chooseValue(location, 'gid://shopify/Location/1');
   await waitFor(() => expect(itemStockSet).toHaveBeenLastCalledWith(7, { location_id: 'gid://shopify/Location/1', location_name: 'Warehouse', quantity: 3 }));
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Quantity' }), { target: { value: '1' } });
   await waitFor(() => expect(itemStockSet).toHaveBeenLastCalledWith(7, { location_id: 'gid://shopify/Location/1', location_name: 'Warehouse', quantity: 1 }));
@@ -38,7 +39,7 @@ it('C3(c) without a default or a chosen location the form says "Choose a locatio
   vi.mocked(itemStockGet).mockResolvedValue({ new_item: true, choice: null });
   render(<StockFields itemId={8} />);
   expect(await screen.findByText('Choose a location to track stock')).toBeInTheDocument();
-  expect(screen.getByRole('combobox', { name: 'Location' })).toHaveValue('');
+  expect(screen.getByRole('combobox', { name: 'Location' })).toHaveTextContent('No location');
   expect(screen.getByRole('spinbutton', { name: 'Quantity' })).toHaveValue(1);
   cleanup();
   vi.mocked(itemStockGet).mockResolvedValue({ new_item: false, choice: null });
@@ -64,9 +65,9 @@ it('C3(c) Settings → Shopify shows the remembered default and saves an edit', 
   vi.mocked(stockDefaultGet).mockResolvedValue({ location_id: 'gid://shopify/Location/1', location_name: 'Warehouse', quantity: 1 });
   render(<StockSection />);
   const location = await screen.findByRole('combobox', { name: 'Location' });
-  await waitFor(() => expect(location).toHaveValue('gid://shopify/Location/1'));
+  await waitFor(() => expect(location).toHaveTextContent('Warehouse'));
   expect(screen.getByRole('spinbutton', { name: 'Quantity' })).toHaveValue(1);
-  fireEvent.change(location, { target: { value: 'gid://shopify/Location/2' } });
+  await chooseValue(location, 'gid://shopify/Location/2');
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Quantity' }), { target: { value: '4' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save stock default' }));
   await waitFor(() => expect(stockDefaultSet).toHaveBeenCalledWith({ location_id: 'gid://shopify/Location/2', location_name: 'Shop floor', quantity: 4 }));

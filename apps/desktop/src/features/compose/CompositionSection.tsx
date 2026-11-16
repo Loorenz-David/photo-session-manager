@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, FlipHorizontal2, Move, RectangleVertical, RotateCcw, RotateCw } from 'lucide-react';
 import { DropdownMenu, Popover } from 'radix-ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Hint } from '@/components/ui/tooltip';
+
+/** After a pick the focus leaves the dropdown, so the editor's single-key shortcuts keep working. */
+const keepShortcuts = (event: Event) => { event.preventDefault(); (document.activeElement as HTMLElement | null)?.blur?.(); };
 import type { Photo } from '@/services/photos';
 import type { ComposeState } from './machine';
 import type { SetValuesCause } from './machine';
@@ -89,16 +93,18 @@ export function CompositionSection({ photo, state, controller, onReset, onDone, 
 
       <div className="compose-field">
         <label htmlFor="compose-shape">Shape</label>
-        <Hint text={{ name: 'Shape', key: '1–6, 0', description: 'Original, Square, 4:5, 3:2, 2:3, 16:9 or Free' }}><select id="compose-shape" value={values.shape} onChange={event => { set({ kind: 'shape', shape: event.target.value }); event.target.blur(); }}>
-          {SHAPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select></Hint>
+        <Select value={values.shape} onValueChange={shape => set({ kind: 'shape', shape })}>
+          <Hint text={{ name: 'Shape', key: '1–6, 0', description: 'Original, Square, 4:5, 3:2, 2:3, 16:9 or Free' }}><SelectTrigger id="compose-shape" size="sm"><SelectValue /></SelectTrigger></Hint>
+          <SelectContent onCloseAutoFocus={keepShortcuts}>{SHAPE_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+        </Select>
         <Hint text={{ name: 'Turn frame', key: 'X', description: 'Portrait or landscape, same centre and area' }}><button type="button" className="compose-tool" aria-label="Turn frame" onClick={() => set({ kind: 'orientation', orientation: values.orientation === 'turned' ? 'named' : 'turned' })}><RectangleVertical aria-hidden /></button></Hint>
       </div>
 
       <label className="compose-field" htmlFor="compose-overlay"><span>Overlay</span>
-        <Hint text={{ name: 'Overlay', key: 'O', description: 'Guides inside the frame; O cycles them' }}><select id="compose-overlay" value={overlay} onChange={event => { onOverlay(event.target.value as OverlayKind); event.target.blur(); }}>
-          {OVERLAY_ORDER.map(value => <option key={value} value={value}>{value === 'golden' ? 'Golden ratio' : value[0].toUpperCase() + value.slice(1)}</option>)}
-        </select></Hint>
+        <Select value={overlay} onValueChange={value => onOverlay(value as OverlayKind)}>
+          <Hint text={{ name: 'Overlay', key: 'O', description: 'Guides inside the frame; O cycles them' }}><SelectTrigger id="compose-overlay" size="sm"><SelectValue /></SelectTrigger></Hint>
+          <SelectContent onCloseAutoFocus={keepShortcuts}>{OVERLAY_ORDER.map(value => <SelectItem key={value} value={value}>{value === 'golden' ? 'Golden ratio' : value[0].toUpperCase() + value.slice(1)}</SelectItem>)}</SelectContent>
+        </Select>
       </label>
 
       <StraightenControl value={straighten} onSet={(degrees, live) => set({ kind: 'straighten', degrees }, live ? 'live' : 'set')} onStraightening={onStraightening} grid={straightenGrid} onGrid={onStraightenGrid}>

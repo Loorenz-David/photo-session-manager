@@ -43,8 +43,9 @@ function photo(id: number, classification: Photo['classification'], position: nu
   };
 }
 
-const container = (final_no: number, shoot_no: number, presets = { split: false, shape: null as string | null, zoom: 0 }) => ({
-  id: 100 + final_no, final_no, shoot_no, example_file: `${final_no}.jpg`, example_path: `/templates/8/${final_no}.jpg`, presets,
+const container = (final_no: number, shoot_no: number, presets = { split: false, shape: null as string | null, zoom: 0 },
+  name: string | null = null, description: string | null = null) => ({
+  id: 100 + final_no, final_no, shoot_no, example_file: `${final_no}.jpg`, example_path: `/templates/8/${final_no}.jpg`, presets, name, description,
 });
 
 /** The Chair-3 template: shooting order K2, K1, K3; K3 split + zoom 20. */
@@ -168,6 +169,23 @@ it('guide_d_template_window_switches_to_shooting_order_and_marks_the_next_shot',
   const next = dialog.querySelector('[data-next]') as HTMLElement;
   expect(next).toHaveAttribute('data-container', '1');
   expect(within(next).getByText('Next')).toBeInTheDocument();
+});
+
+it('label_a_empty_containers_show_their_name_and_the_description_behind_an_info_button', async () => {
+  const view = chairView([[1, 2]], 2);
+  view.containers[0] = container(1, 2, undefined, 'Front, low', 'Kneel at seat height, whole chair in frame.');
+  const main = panel([photo(1, 'main', 1)], view);
+  const k1 = main.querySelector('[data-container="1"]') as HTMLElement;
+  expect(within(k1).getByText('Front, low')).toBeInTheDocument();
+  expect(k1).toHaveAttribute('aria-label', 'Empty container 1 (Front, low), shot 2, next to shoot');
+  expect(main.querySelector('[data-container="3"] .container-info')).toBeNull();
+  fireEvent.click(within(k1).getByRole('button', { name: 'How to take shot 2' }));
+  expect(await screen.findByText('Kneel at seat height, whole chair in frame.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Show template' }));
+  const dialog = await screen.findByRole('dialog');
+  const entry = dialog.querySelector('[data-container="1"]') as HTMLElement;
+  expect(within(entry).getByText('Front, low')).toBeInTheDocument();
+  expect(within(entry).getByText('Kneel at seat height, whole chair in frame.')).toBeInTheDocument();
 });
 
 it('t2_c8e_view_reloads_on_events_of_its_session_only', async () => {

@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { chooseValue } from '@/test/select';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Definition } from '@/services/attributes';
 import type { ResearchSettings } from '@/services/settings';
@@ -172,16 +173,16 @@ it('a25_c31a_the_detailed_condition_table_saves_its_rows_in_order', async () => 
   vi.mocked(listDefinitions).mockResolvedValue([choice('custom.condition_scratch', 'Scratch', LEVELS, 'condition'),
     choice('custom.condition_veneer', 'Veneer', LEVELS, 'condition'), choice('custom.detailed_condition', 'Detailed condition', GRADES)]);
   render(<ResearchSection research={research()} shopDomain={SHOP} />);
-  const field = screen.getByLabelText('Detailed condition field');
-  await waitFor(() => expect(within(field).getByRole('option', { name: 'Detailed condition (custom.detailed_condition)' })).toBeInTheDocument());
-  fireEvent.change(field, { target: { value: 'custom.detailed_condition' } });
+  const field = screen.getByRole('combobox', { name: 'Detailed condition field' });
+  await waitFor(() => expect(listDefinitions).toHaveBeenCalled());
+  await chooseValue(field, 'custom.detailed_condition');
   const rows = within(screen.getByRole('list', { name: 'Detailed condition levels' })).getAllByRole('listitem');
   expect(rows.map(row => row.getAttribute('data-level'))).toEqual(LEVELS);
   const grade = (level: string) => screen.getByRole('combobox', { name: `Grade for ${level}` });
-  fireEvent.change(grade('None'), { target: { value: GRADES[1] } });
-  fireEvent.change(grade('Minor'), { target: { value: GRADES[1] } });
-  fireEvent.change(grade('Moderate'), { target: { value: GRADES[2] } });
-  fireEvent.change(grade('N/A'), { target: { value: '__nothing__' } });
+  await chooseValue(grade('None'), GRADES[1]);
+  await chooseValue(grade('Minor'), GRADES[1]);
+  await chooseValue(grade('Moderate'), GRADES[2]);
+  await chooseValue(grade('N/A'), '__nothing__');
   save();
   await waitFor(() => expect(saveResearchSettings).toHaveBeenCalledTimes(1));
   expect(saved().detailed_condition).toEqual({ key: 'custom.detailed_condition', levels: [

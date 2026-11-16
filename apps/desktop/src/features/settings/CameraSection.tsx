@@ -73,7 +73,7 @@ export function CameraSection({ ports, onPortsChange, login: givenLogin, onLogin
       {password && <div className="rounded border p-3">
         {fresh && <p>Enter this password on the camera now. You can show it again here later.</p>}
         <code data-testid="ftp-password">{grouped(password)}</code>
-        <p className="health-detail">Type it without the spaces.</p>
+        {password.length > 4 && <p className="health-detail">Type it without the spaces. Generate password makes a shorter, four-digit one.</p>}
         <Button type="button" onClick={() => copy(password, 'password')}>{copied === 'password' ? 'Copied' : 'Copy'}</Button>
       </div>}
       <ol className="list-decimal pl-5">{steps.map((step, index) => <li key={step}>{step}

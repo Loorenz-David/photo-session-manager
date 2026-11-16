@@ -79,6 +79,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/013_form_values.sql")),
             M::up(include_str!("migrations/014_shooting_templates.sql")),
             M::up(include_str!("migrations/015_photo_places.sql")),
+            M::up(include_str!("migrations/016_container_labels.sql")),
         ]
     }
 
@@ -141,7 +142,7 @@ fn template_read(conn: &Connection, id: i64) -> Result<Template> {
         .ok_or_else(|| Error::NotFound("template".into()))?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, final_no, shoot_no, example_file, split, shape, zoom
+            "SELECT id, final_no, shoot_no, example_file, split, shape, zoom, name, description
          FROM template_containers WHERE template_id=?1 ORDER BY final_no",
         )
         .map_err(db)?;
@@ -160,6 +161,8 @@ fn template_read(conn: &Connection, id: i64) -> Result<Template> {
                     shape,
                     zoom: r.get(6)?,
                 },
+                name: r.get(7)?,
+                description: r.get(8)?,
             })
         })
         .map_err(db)?
@@ -1684,6 +1687,24 @@ impl Store for SqliteStore {
             }
             template_touch(tx, id, at)?;
             template_read(tx, id)
+        })
+    }
+    fn template_container_label_set(
+        &self,
+        id: i64,
+        name: Option<&str>,
+        description: Option<&str>,
+        at: i64,
+    ) -> Result<Template> {
+        template_tx(self, |tx| {
+            let owner = template_owner(tx, id)?;
+            tx.execute(
+                "UPDATE template_containers SET name=?2, description=?3 WHERE id=?1",
+                params![id, name, description],
+            )
+            .map_err(db)?;
+            template_touch(tx, owner, at)?;
+            template_read(tx, owner)
         })
     }
     fn template_container_presets_set(

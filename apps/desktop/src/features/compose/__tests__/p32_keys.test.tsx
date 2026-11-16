@@ -84,7 +84,7 @@ describe('C5 the editor keys', () => {
     near(savedValues(3).rect.w, Math.sqrt(1365.6 * 1707 * 1.5) / 2560, 1e-6);
     near(savedValues(3).rect.h, Math.sqrt(1365.6 * 1707 * 1.5) / 1.5 / 1707, 1e-6);
     expect(savedValues(6).rect).toEqual(savedValues(5).rect); // free keeps the rect
-    expect((document.querySelector('#compose-shape') as HTMLSelectElement).value).toBe('free');
+    expect(document.querySelector('#compose-shape')).toHaveTextContent('Free');
   });
 
   it('C5(d) `]` and `[` move through the display sequence keeping the changes, without wrapping; a pending save lands on its own photo', async () => {

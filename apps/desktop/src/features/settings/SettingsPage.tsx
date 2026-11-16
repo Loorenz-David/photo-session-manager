@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { SkeletonFields } from '@/components/pending/SkeletonFields';
 import { Input } from '@/components/ui/input';
+import { ChoiceSelect, SELECT_NONE, Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAction, usePageData } from '@/lib/pending';
 import { getSettings, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
@@ -40,12 +41,15 @@ function StyleField({ value, styles, onChange }: { value: string; styles: Editor
   const listed = [...styles.user, ...styles.built_in];
   return <div className="flex flex-col gap-1">
     <label htmlFor="settings-style_name">Style</label>
-    <select id="settings-style_name" value={value} onChange={e => onChange(e.target.value)}>
-      <option value="">No style</option>
-      {value !== '' && !listed.includes(value) && <option value={value}>{value} (not in Capture One)</option>}
-      {styles.user.length > 0 && <optgroup label="Your styles">{styles.user.map(name => <option key={`u-${name}`} value={name}>{name}</option>)}</optgroup>}
-      {styles.built_in.length > 0 && <optgroup label="Built-in styles">{styles.built_in.map(name => <option key={`b-${name}`} value={name}>{name}</option>)}</optgroup>}
-    </select>
+    <Select value={value || SELECT_NONE} onValueChange={next => onChange(next === SELECT_NONE ? '' : next)}>
+      <SelectTrigger id="settings-style_name" className="w-full"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value={SELECT_NONE}>No style</SelectItem>
+        {value !== '' && !listed.includes(value) && <SelectItem value={value}>{value} (not in Capture One)</SelectItem>}
+        {styles.user.length > 0 && <SelectGroup><SelectLabel>Your styles</SelectLabel>{styles.user.map(name => <SelectItem key={`u-${name}`} value={name}>{name}</SelectItem>)}</SelectGroup>}
+        {styles.built_in.length > 0 && <SelectGroup><SelectLabel>Built-in styles</SelectLabel>{styles.built_in.filter(name => !styles.user.includes(name)).map(name => <SelectItem key={`b-${name}`} value={name}>{name}</SelectItem>)}</SelectGroup>}
+      </SelectContent>
+    </Select>
   </div>;
 }
 type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition_photos_key';
@@ -167,15 +171,9 @@ export function SettingsPage() {
       <StyleField value={settings.style_name} styles={styles} onChange={style_name => edit({ style_name })} />
       <div className="flex flex-col gap-1">
         <label htmlFor="settings-default_shape">Default shape</label>
-        <select id="settings-default_shape" value={settings.default_shape} onChange={e => edit({ default_shape: e.target.value })}>
-          <option value="original">Original</option>
-          <option value="1:1">Square (1:1)</option>
-          <option value="4:5">4:5</option>
-          <option value="3:2">3:2</option>
-          <option value="2:3">2:3</option>
-          <option value="16:9">16:9</option>
-          <option value="free">Free</option>
-        </select>
+        <ChoiceSelect id="settings-default_shape" className="w-full" value={settings.default_shape} onValueChange={default_shape => edit({ default_shape })}
+          choices={[{ value: 'original', label: 'Original' }, { value: '1:1', label: 'Square (1:1)' }, { value: '4:5', label: '4:5' },
+            { value: '3:2', label: '3:2' }, { value: '2:3', label: '2:3' }, { value: '16:9', label: '16:9' }, { value: 'free', label: 'Free' }]} />
       </div>
       </section>
       <section data-section="camera" data-active={section === 'camera'}>

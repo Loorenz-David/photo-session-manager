@@ -34,7 +34,9 @@ mistakenly puts the split third photo in second place, sees the warning, taps Ba
 
 - **Shooting template** — per item type (the session's `item_type`, 05 / changelog 42): an ordered list of
   **containers** (final order 1…n), a **shooting order** (a permutation of the containers), and per container an
-  optional example image and optional **framing presets**. At most one template per item type.
+  optional example image, optional **framing presets**, and an optional **name** and **description** (owner
+  2026-11-16: "instead of … 'container #' i can give it a name", the description "of the shot angle" behind an info
+  button). At most one template per item type.
 - **Container** — one slot of the final Main order. Shown by number only in the session (the example image is not
   shown there; §5). Its presets are values of the existing composition model (10D MC-27…MC-29): split, shape, a
   centred zoom-in crop amount; nothing outside 10D.
@@ -50,9 +52,13 @@ mistakenly puts the split third photo in second place, sees the warning, taps Ba
 - **Shooting templates section**: choose an item type (the existing item-type list); create its template; **upload
   example photos** (one per container; any image file; stored in the app's data folder, never in the repo; shown in
   black and white everywhere); **drag the containers into final order**; per container set presets (split on/off,
-  shape, zoom-in amount); **set the shooting order** by pressing "Set shooting order" and **tapping the containers
-  in the order they are shot** (each shows a small second number; can be redone); the number of containers is the
-  number of Main containers. **Every change is saved immediately** (no Save button; a failure is shown and nothing
+  shape, zoom-in amount); **set the shooting order** by switching to "Shooting order" and **dragging the containers
+  into the order they are shot** (owner 2026-11-16, replacing tap-in-order: "allow drag and drop behaviour for
+  arranging also"); the number of containers is the number of Main containers. Editor layout (owner 2026-11-16): a
+  dashed **add tile** with a plus at the end of the cards (choose photos, or add without a photo); per card the
+  remove control is an **×** in the top-right corner (with a confirmation), a name field and an **info** button for
+  the description; the card shows the example with the **crop the presets give it** (zoom shown as % and as
+  magnification) and the **result** as the session shows it (a Split as its two square halves); no move buttons. **Every change is saved immediately** (no Save button; a failure is shown and nothing
   already saved is lost). A template can be deleted. Templates are local settings of this Mac (not in Shopify).
 
 ## 4. Placement on arrival (the rule)
@@ -117,7 +123,7 @@ arrives Main, end of list).
 Any model or image analysis (matching a photo's content to an angle, auto-straighten, duplicate detection) — the
 later assistant; per-container shape for Condition photos; templates shared between Macs or stored in Shopify;
 editing a template moving photos already placed (a changed template applies to new arrivals; Back to template uses
-the current template); a graph editor for the shooting order (owner chose tap-in-order).
+the current template); a graph editor for the shooting order (owner chose tap-in-order, then dragging, 2026-11-16).
 
 ## 8. Acceptance (the owner's story as checks)
 
@@ -133,7 +139,7 @@ one is deleted (red). A9 a session whose item type has no template behaves exact
 ## 9. Owner answers (2026-11-16 00:20)
 
 1. Bad shot: **both happen** → §6 rule 4. 2. Retake onto a filled container: **old one deleted** → §6 rule 3.
-3. Shooting order editor: **tap in order** → §3. 4. Delivery: when built and all checks pass, **join into `main` on
+3. Shooting order editor: **tap in order** → §3 (now **drag into order**, owner 2026-11-16). 4. Delivery: when built and all checks pass, **join into `main` on
 GitHub** for the work Mac, as with research.
 
 ## 10. Process for this chapter (owner: "open for you to modify the flow")

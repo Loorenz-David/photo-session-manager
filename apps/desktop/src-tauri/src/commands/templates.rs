@@ -41,6 +41,8 @@ pub struct ContainerDto {
     pub example_file: Option<String>,
     pub example_path: Option<String>,
     pub presets: PresetsDto,
+    pub name: Option<String>,
+    pub description: Option<String>,
 }
 #[derive(Serialize, Type)]
 pub struct TemplateDto {
@@ -98,6 +100,8 @@ impl From<Template> for TemplateDto {
                         shape: c.presets.shape.map(|s| s.as_str().to_owned()),
                         zoom: c.presets.zoom,
                     },
+                    name: c.name,
+                    description: c.description,
                 })
                 .collect(),
         }
@@ -350,6 +354,20 @@ pub async fn template_shooting_order_set(
             &container_ids.iter().map(|id| id.0).collect::<Vec<_>>(),
         )
         .map(Into::into)
+    })
+    .await
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn template_container_label_set(
+    state: State<'_, AppState>,
+    container_id: CommandId,
+    name: String,
+    description: String,
+) -> std::result::Result<TemplateDto, CommandError> {
+    run(state, move |s| {
+        s.container_label_set(container_id.0, &name, &description)
+            .map(Into::into)
     })
     .await
 }

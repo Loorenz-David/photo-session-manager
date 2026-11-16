@@ -156,4 +156,35 @@ impl<'a> TemplatesService<'a> {
             .template_container_presets_set(container_id, &presets, self.clock.now_ms())
             .map(|t| self.present(t))
     }
+    /// Names and describes a container; blank text (after trimming) clears it.
+    pub fn container_label_set(
+        &self,
+        container_id: i64,
+        name: &str,
+        description: &str,
+    ) -> Result<Template> {
+        let clean = |text: &str| {
+            Some(text.trim())
+                .filter(|t| !t.is_empty())
+                .map(str::to_owned)
+        };
+        let (name, description) = (clean(name), clean(description));
+        if name.as_ref().is_some_and(|n| n.chars().count() > 60)
+            || description
+                .as_ref()
+                .is_some_and(|d| d.chars().count() > 1000)
+        {
+            return Err(Error::InvalidValue(
+                "name or description is too long".into(),
+            ));
+        }
+        self.store
+            .template_container_label_set(
+                container_id,
+                name.as_deref(),
+                description.as_deref(),
+                self.clock.now_ms(),
+            )
+            .map(|t| self.present(t))
+    }
 }
