@@ -2,6 +2,7 @@
 //! Fixture Chair-3 of the T2 plan: K1, K2, K3; shot 1 → K2, shot 2 → K1, shot 3 → K3; K3 split +
 //! zoom 20. S0 = F1…F5 arrived in order (F2 slot 1, F1 slot 2, F3 slot 3, F4 and F5 Condition).
 use psm_core::{
+    Error,
     domain::{
         composition::{
             CompositionKind, EditorGeometry, Fingerprint, Frame, FrameSource, Origin, Rect,
@@ -11,7 +12,7 @@ use psm_core::{
     },
     ports::clock::Clock,
     services::{
-        template_placement::{HandAction, drop_on_container, session_view_at},
+        template_placement::{HandAction, drop_on_container, session_view_at, shift_back},
         templates::TemplatesService,
     },
 };
@@ -254,4 +255,126 @@ fn t4_c1d_retake_of_a_retake_carries_the_key_on() {
     let v = view(&a, s);
     assert!(!marks(&v, f[4].id).2);
     assert_eq!(v.differs, 0);
+}
+
+// ---- Unit 2: Deny leaves the container empty; Shift the rest back ----
+
+fn shift(a: &TestApp, s: i64) -> Result<(), Error> {
+    shift_back(&hand(a), s).map(|_| ())
+}
+/// Chair-3, session `sku`: files 1–`last` arrive in order, frames adopted.
+fn chair_with(a: &TestApp, sku: &str, last: u32) -> (i64, Vec<Photo>) {
+    chair(a);
+    let s = session(a, sku, "Chair");
+    let photos = arrive_framed(a, s, 1..=last);
+    (s, photos)
+}
+
+#[test]
+fn t4_c2a_deny_leaves_the_container_empty() {
+    let a = app();
+    let (s, f) = chair_with(&a, "C2A", 3);
+    a.review().delete(f[1].id).unwrap();
+    assert_eq!(a.store().photo(f[1].id).unwrap().classification, C::Deleted);
+    assert_eq!(place(&a, f[0].id).2, Some(2));
+    assert_eq!(place(&a, f[2].id).2, Some(3));
+    let v = view(&a, s);
+    assert!(!v.photos.iter().any(|p| p.slot == Some(1)));
+    let main_slot_1 = a
+        .store()
+        .photos_in_session(s)
+        .unwrap()
+        .into_iter()
+        .filter(|p| p.classification == C::Main)
+        .any(|p| place(&a, p.id).2 == Some(1));
+    assert!(!main_slot_1);
+    assert!(v.can_shift_back);
+}
+
+#[test]
+fn t4_c2b_arrival_after_a_deny_does_not_move_later_photos() {
+    let a = app();
+    let (s, f) = chair_with(&a, "C2B", 3);
+    a.review().delete(f[1].id).unwrap();
+    let f1 = place(&a, f[0].id);
+    let f3 = place(&a, f[2].id);
+    let f4 = arrive(&a, s, "DSC00004.ARW");
+    assert_eq!(a.store().photo(f4.id).unwrap().classification, C::Condition);
+    assert_eq!(place(&a, f[0].id), f1);
+    assert_eq!(place(&a, f[2].id), f3);
+}
+
+#[test]
+fn t4_c2c_shift_the_rest_back_moves_later_photos_back_one() {
+    let a = app();
+    let (s, f) = chair_with(&a, "C2C", 4);
+    assert_eq!(place(&a, f[2].id).2, Some(3));
+    assert_eq!(place(&a, f[3].id).0, C::Condition);
+    a.review().delete(f[1].id).unwrap();
+    shift(&a, s).unwrap();
+    assert_eq!(place(&a, f[2].id), (C::Main, Some(1), Some(1)));
+    let (kind, origin, _) = comp(&a, f[2].id);
+    assert_eq!((kind, origin), (CompositionKind::Normal, Origin::Default));
+    assert_eq!(place(&a, f[3].id).0, C::Main);
+    assert_eq!(place(&a, f[3].id).2, Some(3));
+    let (kind, _, rect) = comp(&a, f[3].id);
+    assert_eq!(kind, CompositionKind::Split);
+    rect_eq(rect.unwrap(), SPLIT_ZOOM_20);
+    let condition = a
+        .store()
+        .photos_in_session(s)
+        .unwrap()
+        .into_iter()
+        .filter(|p| p.classification == C::Condition)
+        .count();
+    assert_eq!(condition, 0);
+    assert!(row(&a, f[1].id).released);
+    assert!(!view(&a, s).can_shift_back);
+}
+
+#[test]
+fn t4_c2d_shift_is_one_undo_step_then_the_deny() {
+    let a = app();
+    let (s, f) = chair_with(&a, "C2D", 4);
+    a.review().delete(f[1].id).unwrap();
+    let denied_state = full(&a, s);
+    shift(&a, s).unwrap();
+    assert_eq!(
+        a.history().state(s).undo.as_deref(),
+        Some("Shift the rest back")
+    );
+    a.history().undo(s).unwrap();
+    assert_eq!(full(&a, s), denied_state);
+    assert_eq!(place(&a, f[2].id).2, Some(3));
+    assert_eq!(comp(&a, f[2].id).0, CompositionKind::Split);
+    assert_eq!(place(&a, f[3].id), (C::Condition, Some(1), None));
+    let (kind, origin, _) = comp(&a, f[3].id);
+    assert_eq!((kind, origin), (CompositionKind::Normal, Origin::Default));
+    assert_eq!(a.store().photo(f[1].id).unwrap().classification, C::Deleted);
+    assert!(!row(&a, f[1].id).released);
+    assert!(view(&a, s).can_shift_back);
+    a.history().undo(s).unwrap();
+    let f2 = place(&a, f[1].id);
+    assert_eq!((f2.0, f2.2), (C::Main, Some(1)));
+}
+
+#[test]
+fn t4_c2e_nothing_later_nothing_to_shift() {
+    let a = app();
+    let (s, f) = s0(&a, "C2E");
+    a.review().delete(f[4].id).unwrap();
+    let label = a.history().state(s).undo;
+    assert!(label.is_some());
+    assert!(!view(&a, s).can_shift_back);
+    assert!(matches!(shift(&a, s), Err(Error::NothingToShift)));
+    assert_eq!(a.history().state(s).undo, label);
+}
+
+#[test]
+fn t4_c2f_hand_placed_later_photos_are_not_shifted() {
+    let a = app();
+    let (s, f) = chair_with(&a, "C2F", 3);
+    a.review().classify(f[2].id, C::Condition).unwrap();
+    a.review().delete(f[1].id).unwrap();
+    assert!(!view(&a, s).can_shift_back);
 }

@@ -215,6 +215,19 @@ pub async fn template_back(
     .await
 }
 
+/// T4: Shift the rest back for the session; the touched session.
+#[tauri::command]
+#[specta::specta]
+pub async fn template_shift_back(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> std::result::Result<ReviewResponse, CommandError> {
+    hand_action(state, move |h| {
+        psm_core::services::template_placement::shift_back(h, session_id.0)
+    })
+    .await
+}
+
 async fn run<T: Send + 'static>(
     state: State<'_, AppState>,
     op: impl FnOnce(&TemplatesService<'_>) -> Result<T> + Send + 'static,

@@ -1155,6 +1155,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::templates::template_session_view,
         commands::templates::template_drop,
         commands::templates::template_back,
+        commands::templates::template_shift_back,
     ])
 }
 
@@ -1931,6 +1932,36 @@ mod t3_tests {
         assert_eq!(dropped["code"], "no_template");
         let bindings = include_str!("../../src/services/bindings.ts");
         assert!(bindings.contains("template_drop") && bindings.contains("template_back"));
+    }
+
+    #[test]
+    fn t4_c2g_shift_back_command_answers_no_template() {
+        let a = psm_testkit::TestApp::new().unwrap();
+        let session = a
+            .items()
+            .create_local("C2G", "C2G", "Table", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::templates::template_shift_back
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        let shifted = call(&w, "template_shift_back", json!({"sessionId":session})).unwrap_err();
+        assert_eq!(shifted["code"], "no_template");
+        // T4·C2(e) refusal as the UI sees it.
+        let nothing = commands::items::CommandError::from(psm_core::Error::NothingToShift);
+        assert_eq!(nothing.code, "nothing_to_shift");
+        let bindings = include_str!("../../src/services/bindings.ts");
+        assert!(bindings.contains("template_shift_back"));
     }
 }
 

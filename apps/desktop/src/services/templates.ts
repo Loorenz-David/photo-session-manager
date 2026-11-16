@@ -12,6 +12,8 @@ export async function getTemplateView(sessionId: number): Promise<TemplateView> 
 export async function templateDrop(photoId: number, containerNo: number): Promise<ReviewResult> { return unwrap(await commands.templateDrop(photoId, containerNo)); }
 /** T3: Back to template for the session's differing photos (one undo step). */
 export async function templateBack(sessionId: number): Promise<ReviewResult> { return unwrap(await commands.templateBack(sessionId)); }
+/** T4: Shift the rest back — later template-placed photos move back over the denied ones (one undo step). */
+export async function templateShiftBack(sessionId: number): Promise<ReviewResult> { return unwrap(await commands.templateShiftBack(sessionId)); }
 
 export async function listTemplates(): Promise<TemplateSummary[]> { return unwrap(await commands.templatesList()); }
 export async function getTemplate(itemType: string): Promise<Template | null> { return unwrap(await commands.templateGet(itemType)); }

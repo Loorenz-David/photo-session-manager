@@ -6,6 +6,9 @@ pub enum Error {
     TemplateImageUnreadable,
     #[error("no_template")]
     NoTemplate,
+    /// T4: Shift the rest back with no denied photo before a template-placed one.
+    #[error("There is nothing to shift back")]
+    NothingToShift,
     #[error("composition_invalid: {reason}")]
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]

@@ -49,85 +49,7 @@ pub fn place_arrival(
                 ..PlaceRow::default()
             })?;
         }
-        let before = tx.photos(session_id)?;
-        let indexes = shot_indexes(tx, session_id, now)?;
-        let mut condition_order = Vec::new();
-        for photo in &before {
-            let Some(mut row) = tx.photo_place_row(photo.id)? else {
-                continue;
-            };
-            if row.place_by_hand || photo.classification == Classification::Deleted {
-                continue;
-            }
-            let Some(&index) = indexes.get(&photo.id) else {
-                continue;
-            };
-            let (class, slot, presets) = expected_place(index, &template.containers);
-            let place_changed = row.slot != slot || photo.classification != class;
-            if place_changed && photo.id != photo_id && !changed.contains(&photo.id) {
-                changed.push(photo.id);
-            }
-            row.slot = slot;
-            tx.photo_place_put(&row)?;
-            if class == Classification::Condition {
-                condition_order.push((index, photo.id));
-            }
-            if photo.classification != class {
-                tx.set_photo_review(photo.id, session_id, class, None)?;
-                tx.enqueue_mirror_tag(&photo.raw_path, photo.id, now)?;
-            }
-            if place_changed || photo.id == photo_id {
-                apply_frame(tx, photo.id, presets, row.frame_by_hand, now)?;
-            }
-        }
-        // Main's stored order is the final container order; photos with no slot follow it.
-        let mut after = tx.photos(session_id)?;
-        let main: Vec<_> = after
-            .iter()
-            .filter(|p| p.classification == Classification::Main)
-            .collect();
-        let mut main_keys = HashMap::new();
-        for p in &main {
-            main_keys.insert(p.id, tx.photo_place_row(p.id)?);
-        }
-        tx.set_positions(&main_positions(&main, &main_keys))?;
-        let mut condition: Vec<_> = after
-            .iter()
-            .filter(|p| p.classification == Classification::Condition)
-            .collect();
-        condition.sort_by_key(|p| (p.position.unwrap_or(i64::MAX), p.id));
-        condition_order.sort_by_key(|(index, id)| (*index, *id));
-        let placed_ids: std::collections::HashSet<i64> =
-            condition_order.iter().map(|(_, id)| *id).collect();
-        let mut template_ids = condition_order.into_iter().map(|(_, id)| id);
-        tx.set_positions(
-            &condition
-                .iter()
-                .enumerate()
-                .map(|(i, p)| {
-                    (
-                        if placed_ids.contains(&p.id) {
-                            template_ids.next().expect("template condition")
-                        } else {
-                            p.id
-                        },
-                        i as i64 + 1,
-                    )
-                })
-                .collect::<Vec<_>>(),
-        )?;
-        after = tx.photos(session_id)?;
-        for p in &after {
-            if p.id == photo_id {
-                continue;
-            }
-            if let Some(old) = before.iter().find(|b| b.id == p.id)
-                && (old.classification != p.classification || old.position != p.position)
-                && !changed.contains(&p.id)
-            {
-                changed.push(p.id);
-            }
-        }
+        changed = place_template_photos(tx, session_id, &template, now, Some(photo_id))?;
         tx.touch_session(session_id, now)?;
         Ok(())
     })?;
@@ -141,6 +63,100 @@ pub fn place_arrival(
         events.emit(AppEvent::SessionChanged { session_id });
     }
     Ok(())
+}
+
+/// P6–P8: every photo of the session that has a row with `place_by_hand = 0` and is not Deleted
+/// goes to its expected place (P5) with that place's composition when its place changed (always
+/// for `arrived`, the photo that just arrived); then Main and Condition are ordered (P7). Returns
+/// the photos (other than `arrived`) whose place, classification or position changed.
+fn place_template_photos(
+    tx: &mut dyn StoreTx,
+    session_id: i64,
+    template: &Template,
+    now: i64,
+    arrived: Option<i64>,
+) -> Result<Vec<i64>> {
+    let mut changed = Vec::new();
+    let before = tx.photos(session_id)?;
+    let indexes = shot_indexes(tx, session_id, now)?;
+    let mut condition_order = Vec::new();
+    for photo in &before {
+        let Some(mut row) = tx.photo_place_row(photo.id)? else {
+            continue;
+        };
+        if row.place_by_hand || photo.classification == Classification::Deleted {
+            continue;
+        }
+        let Some(&index) = indexes.get(&photo.id) else {
+            continue;
+        };
+        let (class, slot, presets) = expected_place(index, &template.containers);
+        let place_changed = row.slot != slot || photo.classification != class;
+        if place_changed && Some(photo.id) != arrived && !changed.contains(&photo.id) {
+            changed.push(photo.id);
+        }
+        row.slot = slot;
+        tx.photo_place_put(&row)?;
+        if class == Classification::Condition {
+            condition_order.push((index, photo.id));
+        }
+        if photo.classification != class {
+            tx.set_photo_review(photo.id, session_id, class, None)?;
+            tx.enqueue_mirror_tag(&photo.raw_path, photo.id, now)?;
+        }
+        if place_changed || Some(photo.id) == arrived {
+            apply_frame(tx, photo.id, presets, row.frame_by_hand, now)?;
+        }
+    }
+    // Main's stored order is the final container order; photos with no slot follow it.
+    let mut after = tx.photos(session_id)?;
+    let main: Vec<_> = after
+        .iter()
+        .filter(|p| p.classification == Classification::Main)
+        .collect();
+    let mut main_keys = HashMap::new();
+    for p in &main {
+        main_keys.insert(p.id, tx.photo_place_row(p.id)?);
+    }
+    tx.set_positions(&main_positions(&main, &main_keys))?;
+    let mut condition: Vec<_> = after
+        .iter()
+        .filter(|p| p.classification == Classification::Condition)
+        .collect();
+    condition.sort_by_key(|p| (p.position.unwrap_or(i64::MAX), p.id));
+    condition_order.sort_by_key(|(index, id)| (*index, *id));
+    let placed_ids: std::collections::HashSet<i64> =
+        condition_order.iter().map(|(_, id)| *id).collect();
+    let mut template_ids = condition_order.into_iter().map(|(_, id)| id);
+    tx.set_positions(
+        &condition
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                (
+                    if placed_ids.contains(&p.id) {
+                        template_ids.next().expect("template condition")
+                    } else {
+                        p.id
+                    },
+                    i as i64 + 1,
+                )
+            })
+            .collect::<Vec<_>>(),
+    )?;
+    after = tx.photos(session_id)?;
+    for p in &after {
+        if Some(p.id) == arrived {
+            continue;
+        }
+        if let Some(old) = before.iter().find(|b| b.id == p.id)
+            && (old.classification != p.classification || old.position != p.position)
+            && !changed.contains(&p.id)
+        {
+            changed.push(p.id);
+        }
+    }
+    Ok(changed)
 }
 
 fn apply_frame(
@@ -328,10 +344,104 @@ pub fn session_view_at(store: &dyn Store, now: i64, session_id: i64) -> Result<T
                 differs,
             });
         }
+        result.can_shift_back = can_shift_back(tx, session_id, &indexes)?;
         result.containers = template.containers;
         Ok(())
     })?;
     Ok(result)
+}
+
+/// 10G §6.4: a Deleted photo that is not released has a later shot (greater shot index) that is
+/// not Deleted and was placed by the template (a row with `place_by_hand = 0`).
+fn can_shift_back(
+    tx: &dyn StoreTx,
+    session_id: i64,
+    indexes: &HashMap<i64, usize>,
+) -> Result<bool> {
+    let photos = tx.photos(session_id)?;
+    let mut first_denied: Option<usize> = None;
+    for p in photos
+        .iter()
+        .filter(|p| p.classification == Classification::Deleted)
+    {
+        if tx.photo_place_row(p.id)?.is_some_and(|r| r.released) {
+            continue;
+        }
+        if let Some(&index) = indexes.get(&p.id) {
+            first_denied = Some(first_denied.map_or(index, |f| f.min(index)));
+        }
+    }
+    let Some(first_denied) = first_denied else {
+        return Ok(false);
+    };
+    for p in photos
+        .iter()
+        .filter(|p| p.classification != Classification::Deleted)
+    {
+        if tx.photo_place_row(p.id)?.is_some_and(|r| !r.place_by_hand)
+            && indexes.get(&p.id).is_some_and(|&i| i > first_denied)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// 10G §6.4 Shift the rest back (P10): every Deleted, not released photo of the session is
+/// released (it leaves the shot count), then the template-placed photos go to their expected
+/// places with those places' compositions (P6, P8) and the orders are renumbered (P7). Not
+/// templated → `no_template`; nothing to shift → `nothing_to_shift`. One transaction, one undo
+/// step "Shift the rest back" naming every photo whose place, row or composition changed.
+pub fn shift_back(h: &HandAction<'_>, session_id: i64) -> Result<ReviewResult> {
+    crate::services::retention::ensure_session_not_cleared(h.store, session_id)?;
+    let at = h.clock.now_ms();
+    let mut step = None;
+    h.store.transaction(&mut |tx| {
+        step = None;
+        let template = template_of(tx, session_id)?.ok_or(Error::NoTemplate)?;
+        let indexes = shot_indexes(tx, session_id, at)?;
+        if !can_shift_back(tx, session_id, &indexes)? {
+            return Err(Error::NothingToShift);
+        }
+        let photos = tx.photos(session_id)?;
+        let ids: Vec<i64> = photos.iter().map(|p| p.id).collect();
+        let before = snapshot(tx, &ids)?;
+        for p in photos
+            .iter()
+            .filter(|p| p.classification == Classification::Deleted)
+        {
+            let row = tx.photo_place_row(p.id)?.unwrap_or(PlaceRow {
+                photo_id: p.id,
+                ..PlaceRow::default()
+            });
+            if !row.released {
+                tx.photo_place_put(&PlaceRow {
+                    released: true,
+                    ..row
+                })?;
+            }
+        }
+        place_template_photos(tx, session_id, &template, at, None)?;
+        tx.touch_session(session_id, at)?;
+        let after = snapshot(tx, &ids)?;
+        let mut changed = (Vec::new(), Vec::new(), Vec::new());
+        for ((id, b), a) in ids.iter().zip(before).zip(after) {
+            if b != a {
+                changed.0.push(*id);
+                changed.1.push(b);
+                changed.2.push(a);
+            }
+        }
+        step = Some(template_step(
+            "Shift the rest back".into(),
+            session_id,
+            &changed.0,
+            changed.1,
+            changed.2,
+        ));
+        Ok(())
+    })?;
+    h.finish(session_id, step)
 }
 
 /// P7 for Main after any change in a templated session; nothing for an untemplated one.

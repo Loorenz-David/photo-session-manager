@@ -194,6 +194,8 @@ export const commands = {
 	templateDrop: (photoId: CommandId, containerNo: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("template_drop", { photoId, containerNo })),
 	/**  T3: Back to template for the session's differing photos; the touched session. */
 	templateBack: (sessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("template_back", { sessionId })),
+	/**  T4: Shift the rest back for the session; the touched session. */
+	templateShiftBack: (sessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("template_shift_back", { sessionId })),
 };
 
 /* Types */
