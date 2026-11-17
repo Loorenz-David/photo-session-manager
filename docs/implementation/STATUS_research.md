@@ -21,6 +21,16 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
   `~/Desktop/Session Manager.zip` 12,550,675 bytes. **Waiting on the owner:** the work Mac's log folder and
   `session_manager.db` for the many "could not be read" pages on the owner's own shop (page reader, not touched yet);
   the deferred batch idea (several sessions at once + OpenAI Flex), read later by the owner.
+- **2026-11-17: owner corrections A7** (changelog A7; 08B MC-A9/MC-A11 and 08A §7 amended). Export research stopped
+  with "…images/<sha>.jpg contains a key": the fail-closed check read JPEG pixel data as text and a short stored
+  value (the camera's access user name or a short password) turned up by chance. Now a JPEG is checked up to its
+  first start-of-scan marker (`export::scanned_part`; other files and unwalkable JPEGs whole) and
+  `research_secret_values` leaves out `access-auth-user` (a name, not a secret). Research steps have distinct
+  looks (icon, label, rail; conclusions stand out, `StepView.unread` pages are a muted "Could not read" warning).
+  Joined: PR #8 merged into `main` as `c6e662c`; release build installed in /Applications (helper 352928 bytes in
+  the bundle); the A6 build and zip moved to the old folder as "(2026-11-17 A6)"; new
+  `~/Desktop/Session Manager.zip` 12,552,228 bytes. Still waiting on the owner's work-Mac files for "could not be
+  read" on the owner's shop.
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4
