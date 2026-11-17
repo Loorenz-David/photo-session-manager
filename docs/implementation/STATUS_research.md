@@ -10,6 +10,17 @@ RATIFIED (owner, 2026-11-12); later owner decisions are 08B changelog 12–18 an
 plans. Thirteen milestones in `docs/implementation/phases_research.txt`; rules in `docs/process/flow.md` §10; skeleton,
 tracks and driver loop in `docs/implementation/master_plan_research.md` (its §3 "Scratch data only" and parts of §6.6
 predate the merge; `docs/guide/` notes where). Next for the owner: try it on the work Mac (backup, keys, chosen fields).
+- **2026-11-17: owner tried research on the work Mac.** Nothing ran until "Fields research fills" was ticked (fresh
+  install: empty list; `arranged` queues nothing while a creation prerequisite fails). **Owner corrections A6**
+  (changelog A6, 08A §7 amended): web links open in the default browser (`tauri-plugin-opener` 2.7.2, http/https only,
+  `components/ExternalLink.tsx`); "n to review" opens a list of the fields and goes to the chosen one's popover;
+  `research_overview` shows each session's research state in the sessions list and the session header; a queued run
+  says whom it waits for and its place (`ResearchStatus.queue`). One run at a time unchanged. Joined: PR #7 merged into
+  `main` as `da08fe3`; release build from `da08fe3` (SDK helper 352928 bytes in the bundle) installed in /Applications;
+  the previous (A5) build and zip moved to `~/Desktop/Session Manager old (2026-11-12)/` as "(2026-11-16 evening)"; new
+  `~/Desktop/Session Manager.zip` 12,550,675 bytes. **Waiting on the owner:** the work Mac's log folder and
+  `session_manager.db` for the many "could not be read" pages on the owner's own shop (page reader, not touched yet);
+  the deferred batch idea (several sessions at once + OpenAI Flex), read later by the owner.
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4
