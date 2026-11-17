@@ -2,7 +2,9 @@
 
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
-use psm_research::api::{ExportSelection, ResearchApi, ResearchStatus, SecretsInput};
+use psm_research::api::{
+    ExportSelection, ResearchApi, ResearchStatus, SecretsInput, SessionResearch,
+};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -40,6 +42,44 @@ pub struct ResearchStatusDto {
     /// since the epoch); the panel says "Waiting for Capture One" from then on.
     #[specta(type = Option<specta_typescript::Number>)]
     pub wait_ends_at: Option<i64>,
+    /// A6: the latest run is queued: its place in the line and the session being researched.
+    pub queue: Option<QueueViewDto>,
+}
+#[derive(Serialize, Type)]
+pub struct QueueViewDto {
+    pub position: u32,
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub running_session_id: Option<i64>,
+    pub running_name: Option<String>,
+    pub manual: bool,
+}
+/// A6: one session's research state (`researching`, `waiting`, `to_review`, `done`, `failed`,
+/// `blocked`) for the sessions list and the session header.
+#[derive(Serialize, Type)]
+pub struct SessionResearchDto {
+    #[specta(type = specta_typescript::Number)]
+    pub session_id: i64,
+    pub state: String,
+    pub position: Option<u32>,
+    pub to_review: u32,
+    pub reason: Option<ReasonDto>,
+}
+fn count(n: usize) -> u32 {
+    n.try_into().unwrap_or(u32::MAX)
+}
+impl From<SessionResearch> for SessionResearchDto {
+    fn from(s: SessionResearch) -> Self {
+        Self {
+            session_id: s.session_id,
+            state: s.state,
+            position: s.position.map(count),
+            to_review: count(s.to_review),
+            reason: s.reason.map(|r| ReasonDto {
+                code: r.code,
+                sentence: r.sentence,
+            }),
+        }
+    }
 }
 #[derive(Serialize, Type)]
 pub struct ReasonDto {
@@ -98,10 +138,16 @@ impl From<ResearchStatus> for ResearchStatusDto {
                     field_keys: v.field_keys,
                 })
                 .collect(),
-            fields_filled: s.fields_filled.try_into().unwrap_or(u32::MAX),
-            to_review: s.to_review.try_into().unwrap_or(u32::MAX),
+            fields_filled: count(s.fields_filled),
+            to_review: count(s.to_review),
             can_run: s.can_run,
             wait_ends_at: s.wait_ends_at,
+            queue: s.queue.map(|q| QueueViewDto {
+                position: count(q.position),
+                running_session_id: q.running_session_id,
+                running_name: q.running_name,
+                manual: q.manual,
+            }),
         }
     }
 }
@@ -141,6 +187,18 @@ pub async fn research_status(
     engine(&state)?
         .status(session_id.0)
         .map(Into::into)
+        .map_err(Into::into)
+}
+/// A6: the research state of every session that has one (or of `session_id` only), in one call.
+#[tauri::command]
+#[specta::specta]
+pub async fn research_overview(
+    state: State<'_, AppState>,
+    session_id: Option<CommandId>,
+) -> Result<Vec<SessionResearchDto>, CommandError> {
+    engine(&state)?
+        .overview(session_id.map(|s| s.0))
+        .map(|rows| rows.into_iter().map(Into::into).collect())
         .map_err(Into::into)
 }
 #[tauri::command]

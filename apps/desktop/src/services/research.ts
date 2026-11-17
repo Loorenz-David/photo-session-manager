@@ -1,4 +1,4 @@
-import { commands, type ExportSelectionDto, type ResearchStatusDto_Serialize, type SecretsInputDto, type SecretsStateDto, type StepViewDto_Serialize } from './bindings';
+import { commands, type ExportSelectionDto, type ResearchStatusDto_Serialize, type SecretsInputDto, type SecretsStateDto, type SessionResearchDto_Serialize, type StepViewDto_Serialize } from './bindings';
 import { unwrap } from './sessions';
 
 export type ResearchStatus = ResearchStatusDto_Serialize;
@@ -10,6 +10,11 @@ export const RESEARCH_UNAVAILABLE = 'research_unavailable';
 
 export async function researchStatus(sessionId: number): Promise<ResearchStatus> {
   return unwrap(await commands.researchStatus(sessionId));
+}
+export type SessionResearch = SessionResearchDto_Serialize;
+/** A6: the research state of every session that has one (or of one session), in one call. */
+export async function researchOverview(sessionId: number | null = null): Promise<SessionResearch[]> {
+  return unwrap(await commands.researchOverview(sessionId));
 }
 export async function runResearch(sessionId: number): Promise<void> {
   unwrap(await commands.researchRun(sessionId));

@@ -261,6 +261,15 @@ button.pill:disabled { cursor: default; }
 .pill-archived { border-style: dashed; }
 .pill-progress { background: transparent; padding-left: 0; }
 .pill-bar { width: 120px; }
+/* A6: a session's research state beside "Arranged" (sessions list, session header). */
+.row-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.research-pill { background: var(--ai-muted); color: var(--ai-foreground); font-weight: var(--weight-medium, 500); }
+button.research-pill { cursor: pointer; }
+.research-pill[data-research-state="to_review"] { font-weight: var(--weight-bold); }
+.research-pill[data-research-state="blocked"], .research-pill[data-research-state="failed"] { background: transparent; border-color: var(--hair-strong); color: var(--muted); }
+.research-pill-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ai, currentColor); animation: research-pulse 1.2s ease-in-out infinite; }
+@keyframes research-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .research-pill-dot { animation: none; } }
 .to-review { color: var(--muted); font-size: var(--text-xs); }
 
 .hover-preview { width: 400px; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); }

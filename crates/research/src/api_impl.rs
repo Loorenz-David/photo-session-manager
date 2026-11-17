@@ -7,7 +7,9 @@ use psm_core::{Error, Result};
 use serde_json::Value as Json;
 
 use crate::{
-    api::{ExportSelection, ResearchApi, ResearchStatus, SecretsInput, SecretsState},
+    api::{
+        ExportSelection, ResearchApi, ResearchStatus, SecretsInput, SecretsState, SessionResearch,
+    },
     config::{ResearchSettings, validate},
     rules::sites::TrustedSites,
     service::{MODEL_ACCOUNT, READER_ACCOUNT, ResearchService, SEARCH_ACCOUNT},
@@ -55,6 +57,10 @@ impl ResearchService {
 impl ResearchApi for ResearchService {
     fn status(&self, session_id: i64) -> Result<ResearchStatus> {
         ResearchService::status(self, session_id)
+    }
+
+    fn overview(&self, session: Option<i64>) -> Result<Vec<SessionResearch>> {
+        ResearchService::overview(self, session)
     }
 
     fn run(&self, session_id: i64) -> Result<()> {

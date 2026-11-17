@@ -58,7 +58,7 @@ function step(seq: number, kind: string, extra: Partial<ResearchStep> = {}): Res
   return { seq, stage: 'observe', kind, summary: `summary ${seq}`, detail: `detail ${seq}`, source_url: null, source_title: null, photo_ids: [], field_keys: [], ...extra };
 }
 function status(extra: Partial<ResearchStatus> = {}): ResearchStatus {
-  return { reason: null, run: null, steps: [], fields_filled: 0, to_review: 0, can_run: false, wait_ends_at: null, ...extra };
+  return { reason: null, run: null, steps: [], fields_filled: 0, to_review: 0, can_run: false, wait_ends_at: null, queue: null, ...extra };
 }
 const run = (state: string, extra: Partial<NonNullable<ResearchStatus['run']>> = {}) => ({ id: 1, state, trigger: 'arranged', stage_reached: null, error: null, ...extra });
 
@@ -180,7 +180,8 @@ it('a18_c4a_focus_from_a_field_popover_dims_other_steps', async () => {
   expect(dimmed()).toEqual([false, false, false]);
 });
 
-it('a18_c5a_header_to_review_opens_the_panel_and_hides_at_zero', async () => {
+// A6: the chip opens the list of fields to review; See research (in the list) opens the panel.
+it('a18_c5a_header_to_review_lists_the_fields_opens_the_panel_and_hides_at_zero', async () => {
   vi.mocked(getForm).mockResolvedValue(form([
     field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner')),
     field(def('maker', 'Maker'), ai('maker', 'Carl Hansen', { ai_confidence: 'low' })),
@@ -191,6 +192,9 @@ it('a18_c5a_header_to_review_opens_the_panel_and_hides_at_zero', async () => {
   const label = await screen.findByRole('button', { name: '2 to review' });
   expect(screen.queryByRole('complementary', { name: 'Research' })).not.toBeInTheDocument();
   fireEvent.click(label);
+  const list = await screen.findByRole('list', { name: 'Fields to review' });
+  expect([...list.querySelectorAll('[data-review-field]')].map(b => b.getAttribute('data-review-field'))).toEqual(['designer', 'maker']);
+  fireEvent.click(screen.getByRole('button', { name: /See research/ }));
   expect(await screen.findByRole('complementary', { name: 'Research' })).toBeInTheDocument();
   vi.mocked(getForm).mockResolvedValue(form([
     field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' })),

@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import { useEffect, useRef, type ComponentType } from 'react';
 import { BookmarkPlus, Pin, X } from 'lucide-react';
 import { PRODUCT_DESCRIPTION, PRODUCT_TITLE, type AttributeValue, type Definition, type FormField } from '@/services/attributes';
 import type { Photo } from '@/services/photos';
@@ -136,14 +136,20 @@ type MetafieldInputProps = {
   presets?: FieldPresets;
   /** The field is in conflict (08B MC-A10): marked, and its popover offers the conflict's actions. */
   conflict?: ConflictActions;
+  /** A6: each new value scrolls the field into view and opens its AI popover (chosen in the "to review" list). */
+  reveal?: number;
 };
 
 /**
  * One generated field (ch08 §Field kinds): label, the AI pill for a value with provenance `ai`, the Default
  * marker, the invalid marker with the verbatim value (MC-9), and the input of the definition's kind.
  */
-export function MetafieldInput({ field, value, edited, onChange, onBlur, placeholder, conditionPhotos, onLooksRight, onClearAi, onSeeResearch, presets, conflict }: MetafieldInputProps) {
+export function MetafieldInput({ field, value, edited, onChange, onBlur, placeholder, conditionPhotos, onLooksRight, onClearAi, onSeeResearch, presets, conflict, reveal }: MetafieldInputProps) {
   const { definition } = field;
+  const box = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (reveal) box.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [reveal]);
   const stored = field.value;
   const kind = definition.writable ? kindOf(definition) : 'unsupported';
   const Input = definition.key === PRODUCT_DESCRIPTION ? DescriptionInput : INPUTS[kind];
@@ -152,13 +158,13 @@ export function MetafieldInput({ field, value, edited, onChange, onBlur, placeho
   const invalid = !edited && stored !== null && !stored.valid;
 
   return (
-    <div className="flex flex-col gap-2" data-field={definition.key} data-kind={kind} data-conflict={conflict && !edited ? '' : undefined}>
+    <div ref={box} className="flex flex-col gap-2" data-field={definition.key} data-kind={kind} data-conflict={conflict && !edited ? '' : undefined}>
       <div className="flex items-center gap-2">
         <label htmlFor={id} className="text-sm font-semibold">
           {definition.label}
         </label>
         {showAi && stored && (
-          <AiPopover value={stored} label={definition.label} onLooksRight={() => onLooksRight(field)} onClear={() => onClearAi(field)} onSeeResearch={() => onSeeResearch(definition.key)} conflict={conflict} />
+          <AiPopover value={stored} label={definition.label} onLooksRight={() => onLooksRight(field)} onClear={() => onClearAi(field)} onSeeResearch={() => onSeeResearch(definition.key)} conflict={conflict} openSignal={reveal} />
         )}
         {showAi && conflict && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900" data-conflict-mark>Conflict</span>}
         {!edited && field.is_default && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Default</span>}

@@ -6,7 +6,7 @@ use psm_core::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reason {
     pub code: String,
     pub sentence: String,
@@ -45,6 +45,35 @@ pub struct ResearchStatus {
     /// With the `WaitingForEditor` reason: when the run's wait for Capture One's previews ends
     /// (UTC ms; R7·U1). The panel says "Waiting for Capture One" from then on.
     pub wait_ends_at: Option<i64>,
+    /// A6: the latest run is queued: its place in the line and the session being researched.
+    pub queue: Option<QueueView>,
+}
+
+/// A6: where a queued run stands. Research runs one session at a time (MC-A6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueueView {
+    /// 1 = the next to start, in MC-A6 start order (`manual` first, then oldest).
+    pub position: usize,
+    /// The session whose run is running now, if any.
+    pub running_session_id: Option<i64>,
+    /// Its name as the sessions list shows it (item type, or the title when there is none) and SKU.
+    pub running_name: Option<String>,
+    /// The run was asked for by hand (Research / Run again), so it goes before arranged ones.
+    pub manual: bool,
+}
+
+/// A6: one session's research state for the sessions list and the session header.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionResearch {
+    pub session_id: i64,
+    /// `researching` · `waiting` · `to_review` · `done` · `failed` · `blocked`.
+    pub state: String,
+    /// With `waiting`: the place in the line (1 = next).
+    pub position: Option<usize>,
+    /// Live unchecked AI suggestions of the item (as the form's "n to review").
+    pub to_review: usize,
+    /// With `blocked`: why research cannot run (the first failing prerequisite).
+    pub reason: Option<Reason>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -70,6 +99,8 @@ pub enum ExportSelection {
 
 pub trait ResearchApi: Send + Sync {
     fn status(&self, session_id: i64) -> Result<ResearchStatus>;
+    /// A6: the research state of every session that has one (or of `session` only), in one call.
+    fn overview(&self, session: Option<i64>) -> Result<Vec<SessionResearch>>;
     fn run(&self, session_id: i64) -> Result<()>;
     fn session_changed(&self, session_id: i64);
     fn arranged(&self, session_id: i64) -> Result<bool>;

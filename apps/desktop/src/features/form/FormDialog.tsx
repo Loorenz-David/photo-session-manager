@@ -36,6 +36,7 @@ import { MediaColumn } from './MediaColumn';
 import { MetafieldInput, type FieldPresets } from './MetafieldInput';
 import type { ConflictActions } from './AiPopover';
 import { ResearchPanel } from './ResearchPanel';
+import { ReviewList, type ReviewEntry } from './ReviewList';
 import { STEP_LABEL, StepTabs } from './StepTabs';
 import { StockFields } from './StockFields';
 import { isEmptyValue, storedValue, useFormState, type SaveState } from './useFormState';
@@ -160,6 +161,8 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [research, setResearch] = useState<{ open: boolean; focus: string | null }>({ open: false, focus: null });
   const researchState = useResearchStatus(sessionId, () => void state.reload());
+  /** A6: the field chosen in the "to review" list; `n` changes on every choice so the same field opens again. */
+  const [reveal, setReveal] = useState<{ key: string | null; n: number }>({ key: null, n: 0 });
   const actionQueue = useRef<Promise<unknown>>(Promise.resolve());
   /**
    * Edits of fields in conflict (08B MC-A10, R5 projection N1). On a held publish item the first save of a pending key
@@ -232,7 +235,10 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
 
   const conditionPhotos = useMemo(() => displayOrder(photos).condition, [photos]);
   const aiFields = state.fields.filter(field => field.value?.provenance === 'ai');
-  const reviewCount = toReview(state.fields);
+  // A6: the "to review" list, in step and form order; Accept all's count as in the research panel (MC-A12).
+  const reviewEntries: ReviewEntry[] = (form?.groups ?? []).flatMap(g =>
+    g.fields.filter(field => field.value?.provenance === 'ai' && field.value.ai_status === 'suggested').map(field => ({ field, group: g.group })));
+  const acceptable = reviewEntries.filter(entry => entry.field.value!.ai_confidence !== 'low' && !entry.field.value!.conflict).length;
   /** Opens the research panel; it re-reads the status on open in case an event was missed. */
   const openResearch = (focus: string | null) => {
     setResearch({ open: true, focus });
@@ -352,11 +358,17 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
           {SAVE_LABEL[state.saveState]}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          {reviewCount > 0 && (
-            <button type="button" data-to-review className="rounded-full bg-(--ai-muted) px-2.5 py-0.5 text-xs font-semibold text-(--ai-foreground)" onClick={() => openResearch(null)}>
-              {reviewCount} to review
-            </button>
-          )}
+          <ReviewList
+            entries={reviewEntries}
+            acceptable={acceptable}
+            onChoose={entry => {
+              setCustomizing(false);
+              setStep(entry.group);
+              setReveal(current => ({ key: entry.field.definition.key, n: current.n + 1 }));
+            }}
+            onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}
+            onOpenResearch={() => openResearch(null)}
+          />
           {(aiFields.length > 0 || researchState.status !== null) && (
             <Button variant="secondary" size="sm" className="text-(--ai-foreground)" onClick={() => (research.open ? setResearch({ open: false, focus: null }) : openResearch(null))}>
               <Sparkles /> Research
@@ -414,6 +426,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   onClearAi={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
                   onSeeResearch={key => openResearch(key)}
                   presets={presetsOf(field)}
+                  reveal={reveal.key === key ? reveal.n : undefined}
                 />
                 </div>
                 );

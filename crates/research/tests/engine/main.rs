@@ -13,6 +13,7 @@ mod gateway;
 mod harness;
 mod images_and_storage;
 mod lifecycle;
+mod overview;
 mod photo_look;
 mod resume;
 mod same_kind;
