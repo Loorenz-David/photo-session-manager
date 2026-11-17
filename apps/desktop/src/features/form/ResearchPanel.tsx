@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { CircleCheck, CircleHelp, Eye, FileText, Scale, Search, TriangleAlert, X, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ActionButton } from '@/components/ui/action-button';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,30 @@ export const STEP_VERB: Record<string, string> = {
   concluded: 'Concluded',
   not_determined: 'Not determined',
 };
+
+/**
+ * How each step looks (owner correction A7, 2026-11-17): the kinds were one colour and hard to tell apart. Each look
+ * has its own icon, label and rail (`.research-step[data-look]` in globals.css), so it never relies on colour alone.
+ * Gathering steps (looked, searched) are quiet, reading and comparing carry the AI colour, a conclusion stands out
+ * most, and a page that could not be read is a muted warning.
+ */
+export type StepLook = 'gather' | 'read' | 'unread' | 'compare' | 'conclude' | 'undetermined';
+export const STEP_LOOK: Record<StepLook, { icon: LucideIcon; label?: string }> = {
+  gather: { icon: Search },
+  read: { icon: FileText },
+  unread: { icon: TriangleAlert, label: 'Could not read' },
+  compare: { icon: Scale },
+  conclude: { icon: CircleCheck },
+  undetermined: { icon: CircleHelp },
+};
+
+export function stepLook(step: Pick<ResearchStep, 'kind' | 'unread'>): StepLook {
+  if (step.kind === 'read') return step.unread ? 'unread' : 'read';
+  if (step.kind === 'compared') return 'compare';
+  if (step.kind === 'concluded') return 'conclude';
+  if (step.kind === 'not_determined') return 'undetermined';
+  return 'gather';
+}
 
 /** The run states whose run is over with an outcome (08A §3). */
 const DONE = new Set(['finished', 'stopped_at_cap']);
@@ -74,19 +98,23 @@ function useNowPast(at: number | null | undefined): boolean {
 }
 
 function Step({ step, dimmed }: { step: ResearchStep; dimmed: boolean }) {
-  const verb = STEP_VERB[step.kind] ?? step.kind;
+  const look = stepLook(step);
+  const { label } = STEP_LOOK[look];
+  const Icon = step.kind === 'looked' ? Eye : STEP_LOOK[look].icon;
+  const verb = label ?? STEP_VERB[step.kind] ?? step.kind;
   return (
-    <li data-step={step.seq} data-kind={step.kind} data-dimmed={dimmed || undefined} className={cn('flex flex-col gap-1 border-l-2 border-(--ai) pl-3', dimmed && 'opacity-35')}>
-      <span className="text-xs">
-        <span className="font-semibold text-(--ai-foreground)">{verb}</span>
-        {step.summary && <> {step.summary}</>}
+    <li data-step={step.seq} data-kind={step.kind} data-look={look} data-dimmed={dimmed || undefined} className={cn('research-step', dimmed && 'opacity-35')}>
+      <span className="research-step-head">
+        <Icon className="research-step-icon" aria-hidden />
+        <span className="research-step-verb">{verb}</span>
+        {step.summary && !step.unread && <>{' '}<span className="research-step-summary">{step.summary}</span></>}
       </span>
       {step.kind === 'read' && step.source_url && (
         <ExternalLink href={step.source_url} className="truncate text-xs">
           {step.source_title || step.source_url}
         </ExternalLink>
       )}
-      {step.detail && <span className="text-xs text-muted-foreground">{step.detail}</span>}
+      {step.detail && <span className="research-step-detail">{step.detail}</span>}
     </li>
   );
 }

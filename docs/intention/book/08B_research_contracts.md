@@ -490,7 +490,10 @@ calls, 60 for the others.
 When the attempts run out, the run ends `failed`, naming the stage and the error. Values written earlier stay.
 
 **Invariant (MA16, part).** No call record, research log line or research setting contains a value held by the
-secrets port.
+secrets port. **Amended (owner correction A7, 2026-11-17):** the values are the secrets the port holds (the three
+research keys, the camera's access and FTP passwords) and the shop's client secret; the camera's access **user
+name** is held there too but is a name, not a secret, and is not among them (a short everyday word was "found" in
+page text and image bytes).
 
 ---
 
@@ -596,7 +599,10 @@ A run whose calls have expired says "call record expired".
 **Exclusions at export time.** The image of a photo that is now `deleted`, or whose row is gone, is omitted, and
 the requests that referenced it carry `"withheld": "photo deleted"`. **Secret check, fail closed:** before
 zipping, every file is scanned for every value held by the secrets port (all accounts, plain and URL-encoded).
-Any hit aborts the export, deletes the partial folder and names the file.
+Any hit aborts the export, deletes the partial folder and names the file. **Amended (owner correction A7,
+2026-11-17):** a well-formed JPEG is scanned up to its first start-of-scan marker, that is its header segments
+(EXIF, XMP, comments: where any text lives), not its compressed pixel data, where a short value turned up by chance
+and stopped real exports; any other file, or a JPEG whose segments cannot be walked, is scanned whole.
 
 **Replay identity** (dev-Mac tool). The tool rebuilds the recorded request body, resolving images by SHA-256 from
 `images/`. It substitutes only the model, effort or instructions given on its command line, and every other byte

@@ -545,6 +545,8 @@ impl ResearchService {
                 .research_transaction(|tx| store::steps(tx.conn(), run.id))?
                 .into_iter()
                 .map(|s| StepView {
+                    unread: s.kind == crate::domain::StepKind::Read.as_str()
+                        && s.summary == crate::stages::UNREAD,
                     seq: s.seq,
                     stage: s.stage,
                     kind: s.kind,

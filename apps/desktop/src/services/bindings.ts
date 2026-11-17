@@ -1531,6 +1531,7 @@ export type StepViewDto_Deserialize = {
 	source_title?: string | null,
 	photo_ids: number[],
 	field_keys: string[],
+	unread: boolean,
 };
 
 export type StepViewDto_Serialize = {
@@ -1543,6 +1544,7 @@ export type StepViewDto_Serialize = {
 	source_title: string | null,
 	photo_ids: number[],
 	field_keys: string[],
+	unread: boolean,
 };
 
 /**  Changelog 45 (P65): a stock location and quantity for a new product. */

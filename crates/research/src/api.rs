@@ -23,6 +23,8 @@ pub struct StepView {
     pub source_title: Option<String>,
     pub photo_ids: Vec<i64>,
     pub field_keys: Vec<String>,
+    /// A `read` step whose page could not be read (owner correction A7): shown as a warning.
+    pub unread: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

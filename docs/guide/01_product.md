@@ -56,7 +56,8 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   sources with **Looks right / Clear** (or just edit the field; a human edit makes it human-owned);
   the header's **"n to review"** opens the list of those fields (value, confidence, conflict); choosing
   one goes to its step and opens its popover (A6). The header's Research button opens the **research
-  panel** (every step the run took, "Finished · n fields filled · n to review", why research cannot
+  panel** (every step the run took, each kind with its own icon and look: conclusions stand out, a page
+  that could not be read is a muted "Could not read" (A7); "Finished · n fields filled · n to review", why research cannot
   run, Research / Run again, **Accept all**, which skips `low` suggestions and conflicts). Source
   links open in the default browser. A checked value is never overwritten and a cleared value is
   never suggested again (HA1).

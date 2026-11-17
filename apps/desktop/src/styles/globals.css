@@ -328,3 +328,27 @@ button.research-pill { cursor: pointer; }
 .camera-button[data-state="busy"] .camera-light { background: #d99020; box-shadow: 0 0 0 3px color-mix(in srgb, #d99020 16%, transparent); }
 .camera-button[data-state="connecting"] .camera-light { animation: camera-pulse 1.2s ease-in-out infinite; }
 @keyframes camera-pulse { 50% { opacity: .35; } }
+
+/* Research steps (owner correction A7, 2026-11-17): each kind has its own icon, label and rail, so reading, comparing and
+   concluding are told apart at a glance (never by colour alone). Tokens: --ai (agent), --warn (needs attention). */
+.research-step { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 2px 12px; border-left: 2px solid var(--hair-strong); font-size: var(--text-sm); }
+.research-step-head { display: flex; align-items: flex-start; gap: 6px; line-height: 1.35; }
+.research-step-icon { width: 14px; height: 14px; flex: none; margin-top: 1px; color: var(--muted); }
+.research-step-verb { font-weight: var(--weight-semibold); color: var(--muted); white-space: nowrap; }
+.research-step-summary { color: var(--color-text); min-width: 0; }
+.research-step-detail { color: var(--muted); font-size: var(--text-xs); }
+.research-step a { font-size: var(--text-xs); }
+.research-step[data-look="read"],
+.research-step[data-look="compare"] { border-left-color: color-mix(in srgb, var(--ai) 55%, transparent); }
+.research-step[data-look="read"] :is(.research-step-icon, .research-step-verb),
+.research-step[data-look="compare"] :is(.research-step-icon, .research-step-verb) { color: var(--ai-foreground); }
+.research-step[data-look="compare"] { border-left-style: double; border-left-width: 3px; }
+.research-step[data-look="conclude"] { border-left: 3px solid var(--ai); background: var(--ai-muted); border-radius: 0 6px 6px 0; padding: 8px 10px 8px 12px; }
+.research-step[data-look="conclude"] :is(.research-step-icon, .research-step-verb) { color: var(--ai-foreground); }
+.research-step[data-look="conclude"] .research-step-verb { font-weight: var(--weight-bold); }
+.research-step[data-look="conclude"] .research-step-summary { font-weight: var(--weight-medium); }
+.research-step[data-look="unread"] { border-left: 2px dashed var(--warn); }
+.research-step[data-look="unread"] .research-step-icon { color: var(--warn); }
+.research-step[data-look="unread"] .research-step-verb { color: var(--muted); }
+.research-step[data-look="unread"] a { color: var(--muted); }
+.research-step[data-look="undetermined"] { border-left-style: dashed; }

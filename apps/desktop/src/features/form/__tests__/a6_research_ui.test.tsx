@@ -75,7 +75,7 @@ it('a6_1_a_source_link_opens_in_the_default_browser', () => {
 });
 
 it('a6_1_a_research_step_link_goes_through_the_opener_and_a_non_web_address_is_not_a_link', () => {
-  panel(status({ run: run('running'), steps: [{ seq: 1, stage: 'read', kind: 'read', summary: 'a page', detail: '', source_url: 'https://example.com/chair', source_title: 'Example · Chair', photo_ids: [], field_keys: [] }] }));
+  panel(status({ run: run('running'), steps: [{ seq: 1, stage: 'read', kind: 'read', summary: 'a page', detail: '', source_url: 'https://example.com/chair', source_title: 'Example · Chair', photo_ids: [], field_keys: [], unread: false }] }));
   fireEvent.click(screen.getByRole('link', { name: 'Example · Chair' }));
   expect(openUrl).toHaveBeenCalledWith('https://example.com/chair');
   cleanup();

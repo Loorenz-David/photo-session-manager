@@ -1643,9 +1643,11 @@ fn research_test_seams(paths: &AppPaths) -> Option<ResearchTestSeams> {
         .and_then(|all| all.lock().ok()?.get(&paths.root).cloned())
 }
 
-/// Every value the secrets port holds for the app (the research keys, the camera's secrets) and
+/// Every secret the secrets port holds for the app (the research keys, the camera's passwords) and
 /// the integration's client secret: what the redaction scan and the export check look for
-/// (MC-A9, MC-A11).
+/// (MC-A9, MC-A11). The camera's access user name is held there too but is a name, not a secret:
+/// it is left out, since a short everyday word would be "found" in page text and image bytes
+/// (owner correction A7, 2026-11-17).
 fn research_secret_values(
     secrets: Arc<dyn SecretStore>,
     client_secret: Option<String>,
@@ -1658,7 +1660,6 @@ fn research_secret_values(
             SEARCH_ACCOUNT,
             READER_ACCOUNT,
             camera::FTP_PASSWORD,
-            camera::ACCESS_AUTH_USER,
             camera::ACCESS_AUTH_PASSWORD,
         ]
         .into_iter()
@@ -1750,4 +1751,48 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
         .events
         .observe(Arc::new(ResearchObserver(Arc::downgrade(&wiring))));
     Ok(wiring)
+}
+
+#[cfg(test)]
+mod research_secret_tests {
+    use super::*;
+    use psm_core::domain::camera::secrets as camera;
+    use std::{collections::HashMap, sync::Mutex};
+
+    #[derive(Default)]
+    struct Store(Mutex<HashMap<String, String>>);
+    impl SecretStore for Store {
+        fn get(&self, account: &str) -> psm_core::Result<Option<String>> {
+            Ok(self.0.lock().unwrap().get(account).cloned())
+        }
+        fn set(&self, account: &str, value: &str) -> psm_core::Result<()> {
+            self.0
+                .lock()
+                .unwrap()
+                .insert(account.to_owned(), value.to_owned());
+            Ok(())
+        }
+        fn delete(&self, account: &str) -> psm_core::Result<()> {
+            self.0.lock().unwrap().remove(account);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a7_the_camera_user_name_is_not_a_secret_but_its_passwords_are() {
+        let store = Arc::new(Store::default());
+        store.set(camera::ACCESS_AUTH_USER, "admin").unwrap();
+        store
+            .set(camera::ACCESS_AUTH_PASSWORD, "pw-access-1")
+            .unwrap();
+        store.set(camera::FTP_PASSWORD, "pw-ftp-2").unwrap();
+        store
+            .set(psm_research::service::MODEL_ACCOUNT, "sk-model-3")
+            .unwrap();
+        let values = research_secret_values(store, Some("client-4".into()))();
+        assert!(!values.contains(&"admin".to_owned()), "{values:?}");
+        for expected in ["pw-access-1", "pw-ftp-2", "sk-model-3", "client-4"] {
+            assert!(values.contains(&expected.to_owned()), "{values:?}");
+        }
+    }
 }
