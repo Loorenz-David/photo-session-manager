@@ -281,6 +281,10 @@ All `*_at` are UTC ms; money is `INTEGER` micro-USD; JSON is TEXT.
   stage_reached, error}>, steps: Vec<StepView {seq, stage, kind, summary, detail, source_url, source_title, photo_ids,
   field_keys}>, fields_filled, to_review, can_run}` · `SecretsInput {model_key, search_key, reader_key}` (each optional) ·
   `SecretsState {model, search, reader}` (booleans) · `ExportSelection {Range {from, to} | Items(ids)}`.
+  **Widened by the orchestrator for owner correction A6 (2026-11-17):** `overview(session: Option<i64>) ->
+  Result<Vec<SessionResearch {session_id, state, position, to_review, reason}>>` (command `research_overview`), and
+  `ResearchStatus.queue: Option<QueueView {position, running_session_id, running_name, manual}>`; see
+  `docs/guide/02_architecture.md` §Research "Status across sessions".
 - **Constructors used only by `crates/integrations/src/lib.rs` (R7·U1):** `psm_research::schema::ensure`,
   `ResearchService::new`, `psm_research::shop::CommerceShopFacts::new`, `psm_research::adapters::build` (from R8·U1:
   `build(settings, secrets: Arc<dyn SecretStore>, files: ResearchFiles)`, keys read per call).

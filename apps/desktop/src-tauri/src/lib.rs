@@ -333,6 +333,7 @@ mod r2_research_command_tests {
             .manage(AppState::new(app))
             .invoke_handler(tauri::generate_handler![
                 commands::research::research_status,
+                commands::research::research_overview,
                 commands::research::research_run,
                 commands::research::research_secrets_state,
                 commands::research::research_site_add,
@@ -349,6 +350,7 @@ mod r2_research_command_tests {
             .unwrap();
         for (cmd, args) in [
             ("research_status", json!({"sessionId":1})),
+            ("research_overview", json!({"sessionId":null})),
             ("research_run", json!({"sessionId":1})),
             ("research_secrets_state", json!({})),
             ("research_site_add", json!({"site":"example.com"})),
@@ -1114,6 +1116,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::attributes::attribute_saved_value_remove,
         commands::attributes::attribute_fill_defaults,
         commands::research::research_status,
+        commands::research::research_overview,
         commands::research::research_run,
         commands::research::research_settings_reset,
         commands::research::research_secrets_set,
@@ -1180,6 +1183,8 @@ pub fn run() {
     let builder = specta_builder();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // A6: research sources open in the default browser (capability limited to http/https).
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState::new(app))
         .menu(|handle| {
             let menu = Menu::default(handle)?;

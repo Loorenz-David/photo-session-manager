@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ExternalLink } from '@/components/ExternalLink';
 import { ActionButton } from '@/components/ui/action-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AttributeValue } from '@/services/attributes';
@@ -46,6 +47,8 @@ type AiPopoverProps = {
   onSeeResearch: () => void;
   /** Set when the field is in conflict: the popover shows the previous value and the conflict's actions. */
   conflict?: ConflictActions;
+  /** A6: each new value opens the popover (the "to review" list chose this field). */
+  openSignal?: number;
 };
 
 /**
@@ -53,8 +56,11 @@ type AiPopoverProps = {
  * See research. Looks right accepts a suggestion, so it is offered only on a suggested row (08B MC-A12). A conflict
  * shows the previous value and where it came from, and Keep previous / Use suggestion / Edit instead (MC-A10).
  */
-export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch, conflict }: AiPopoverProps) {
+export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch, conflict, openSignal }: AiPopoverProps) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (openSignal) setOpen(true);
+  }, [openSignal]);
   const act = (action: () => void) => () => {
     setOpen(false);
     action();
@@ -78,9 +84,7 @@ export function AiPopover({ value, label, onLooksRight, onClear, onSeeResearch, 
           <ul className="flex flex-col gap-0.5 text-xs">
             {(value.ai_sources ?? []).map(source => (
               <li key={source} className="truncate">
-                <a href={source} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-                  {source}
-                </a>
+                <ExternalLink href={source} />
               </li>
             ))}
           </ul>

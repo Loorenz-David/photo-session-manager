@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ActionButton } from '@/components/ui/action-button';
 import { cn } from '@/lib/utils';
+import { ExternalLink } from '@/components/ExternalLink';
+import { ordinal } from '@/features/sessions/ResearchPill';
 import type { FormField } from '@/services/attributes';
 import type { ResearchStatus, ResearchStep } from '@/services/research';
 
@@ -31,6 +33,15 @@ export function finishedLine(status: ResearchStatus): string {
   const filled = status.fields_filled === 0 ? 'no fields changed' : plural(status.fields_filled, 'field filled', 'fields filled');
   const capped = status.run?.state === 'stopped_at_cap' ? ' · stopped at the cost limit' : '';
   return `Finished · ${filled} · ${status.to_review} to review${capped}`;
+}
+
+/**
+ * A6 (owner 2026-11-17): a queued run says it is waiting, behind which session and where in the line; research runs
+ * one session at a time (MC-A6).
+ */
+export function waitingLine(queue: NonNullable<ResearchStatus['queue']>): string {
+  const place = `${ordinal(queue.position)} in line`;
+  return queue.running_name ? `Waiting — researching ${queue.running_name} first (${place})` : `Waiting to start (${place})`;
 }
 
 type ResearchPanelProps = {
@@ -71,9 +82,9 @@ function Step({ step, dimmed }: { step: ResearchStep; dimmed: boolean }) {
         {step.summary && <> {step.summary}</>}
       </span>
       {step.kind === 'read' && step.source_url && (
-        <a href={step.source_url} target="_blank" rel="noreferrer" className="truncate text-xs underline underline-offset-2">
+        <ExternalLink href={step.source_url} className="truncate text-xs">
           {step.source_title || step.source_url}
-        </a>
+        </ExternalLink>
       )}
       {step.detail && <span className="text-xs text-muted-foreground">{step.detail}</span>}
     </li>
@@ -95,6 +106,7 @@ export function ResearchPanel({ status, fields, focusKey, onFocus, onRun, onAcce
   const showReason = reason !== null && !!reason.sentence && (reason.code !== 'WaitingForEditor' || waitOver);
   const running = run?.state === 'running';
   const ended = run !== null && run.state !== 'running' && run.state !== 'queued';
+  const queued = run?.state === 'queued';
 
   return (
     <aside aria-label="Research" className="flex w-80 shrink-0 flex-col border-l bg-background">
@@ -124,11 +136,13 @@ export function ResearchPanel({ status, fields, focusKey, onFocus, onRun, onAcce
               Stopped at {run.stage_reached ?? 'the start'}{run.error ? `: ${run.error}` : ''}
             </p>
           )}
+          {queued && status.queue && <p className="font-semibold" data-waiting>{waitingLine(status.queue)}</p>}
+          {queued && status.queue?.manual && <p className="text-muted-foreground">You asked for it, so it goes before the sessions marked arranged.</p>}
           {showReason && <p className="text-muted-foreground">{reason!.sentence}</p>}
           {!run && !reason && status.can_run && <p className="text-muted-foreground">Research starts when you press Arranged — next.</p>}
-          {status.can_run && (
+          {status.can_run && !(queued && status.queue?.manual) && (
             <ActionButton size="sm" variant="secondary" className="self-start" action={onRun}>
-              {ended ? 'Run again' : 'Research'}
+              {ended ? 'Run again' : queued ? 'Research this next' : 'Research'}
             </ActionButton>
           )}
         </div>

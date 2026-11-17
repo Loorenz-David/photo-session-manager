@@ -62,6 +62,10 @@ check, `camera_runtime.shutdown()` on exit), inline command tests, `export_bindi
 one file per area. `build.rs`: builds the stub sidecar if `binaries/camera-sidecar-aarch64-apple-darwin`
 is missing. `tauri.conf.json`: `externalBin: binaries/camera-sidecar`, ad-hoc signing, min macOS 13.
 `Info.plist`: `NSAppleEventsUsageDescription`, `NSLocalNetworkUsageDescription`.
+Plugins: `tauri-plugin-dialog` (folder pickers) and `tauri-plugin-opener` (A6: web links open in the default
+browser; `capabilities/default.json` allows `opener:allow-open-url` for `http://*` and `https://*` only). The
+webview ignores `<a target="_blank">`: every link to a web page is `components/ExternalLink.tsx`
+(`openExternal(url)`), never a bare `<a href>`.
 
 ## Runtime flows (step lists with the files involved)
 ### Shooting templates (book `10G`; T1–T4; contract `docs/implementation/master_plan_templates.md` §5 P1–P10)
@@ -294,6 +298,15 @@ listed in the research master plan §5 "Seams".
    writes through `writes.rs` (`ai` + `suggested`; with an `ai_prior` when it replaced a default or
    shop value) together with the `concluded` / `not_determined` steps. `AppEvent::ResearchChanged` →
    Tauri event `research_changed {session_id}` → the form re-reads `research_status`.
+   **Status across sessions (A6, 2026-11-17).** `research_status` also carries `queue` (`QueueView`:
+   place in the MC-A6 start order, the running session's id and "name · SKU", `manual`) for a queued run.
+   `research_overview(session_id?)` → `ResearchService::overview` (`runs.rs`): one pass over the latest
+   run per unpublished session, the suggestion counts per item (the layout is read only for items holding
+   a suggestion, through `derived_counts`) and the queued line; states `researching` / `waiting` (+
+   position) / `to_review` / `done` / `failed`, plus `blocked` (+ the first failing creation
+   prerequisite) for an arranged session with no run. The sessions list (`useResearchOverview(null)`,
+   `features/sessions/ResearchPill.tsx`) and the session header (`useResearchOverview(id)`) re-read it on
+   `onSessionsChanged` (which includes `research_changed`). Never N `research_status` calls for a list.
 6. **Afterwards.** The person's Looks right / Clear / edit / Accept all / conflict resolution go
    through core (`services/attributes.rs`, `services/history.rs`; commands `attribute_ai_accept`,
    `attribute_ai_accept_all`, `attribute_conflict_resolve`), are undo steps and write

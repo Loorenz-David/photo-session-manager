@@ -11,7 +11,7 @@ use psm_core::{
 use rusqlite::params;
 
 use crate::{
-    api::{Reason, ResearchStatus, RunView, StepView},
+    api::{QueueView, Reason, ResearchStatus, RunView, SessionResearch, StepView},
     config::{ResearchConfig, ResearchSettings},
     domain::{Prerequisite, RunState, RunTrigger, Stage},
     images::{eligible, source},
@@ -510,6 +510,7 @@ impl ResearchService {
                 to_review: 0,
                 can_run: false,
                 wait_ends_at: None,
+                queue: None,
             });
         };
         let settings = self.settings();
@@ -558,6 +559,10 @@ impl ResearchService {
             None => Vec::new(),
         };
         let (fields_filled, to_review) = self.derived_counts(item_id, latest.as_ref())?;
+        let queue = match latest.as_ref().filter(|r| r.state == RunState::Queued) {
+            Some(run) => self.queue_of(run)?,
+            None => None,
+        };
         Ok(ResearchStatus {
             reason: reason.map(|r| Reason {
                 code: r.code().to_owned(),
@@ -575,7 +580,176 @@ impl ResearchService {
             to_review,
             can_run: !failing.as_ref().is_some_and(Prerequisite::blocks_creation),
             wait_ends_at,
+            queue,
         })
+    }
+
+    /// The name the sessions list shows for a session (item type, or the title when there is
+    /// none) with its SKU.
+    fn session_name(&self, session_id: i64) -> Result<Option<String>> {
+        self.store.research_transaction(|tx| {
+            use rusqlite::OptionalExtension;
+            tx.conn()
+                .query_row(
+                    "SELECT CASE WHEN i.item_type<>'' THEN i.item_type ELSE i.title END, i.sku \
+                     FROM sessions s JOIN items i ON i.id=s.item_id WHERE s.id=?1",
+                    [session_id],
+                    |r| {
+                        Ok(format!(
+                            "{} · {}",
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?
+                        ))
+                    },
+                )
+                .optional()
+                .map_err(store::db)
+        })
+    }
+
+    /// A6: the queued runs app-wide in MC-A6 start order, and the running run's session.
+    fn line(&self) -> Result<(Vec<RunRow>, Option<i64>)> {
+        let (running, queued) = self.store.research_transaction(|tx| {
+            Ok((
+                store::runs_in_state(tx.conn(), RunState::Running)?,
+                store::runs_in_state(tx.conn(), RunState::Queued)?,
+            ))
+        })?;
+        let order = start_order(
+            &queued
+                .iter()
+                .map(|r| (r.trigger, r.queued_at, r.id))
+                .collect::<Vec<_>>(),
+        );
+        let mut line: Vec<RunRow> = Vec::with_capacity(queued.len());
+        for id in order {
+            if let Some(run) = queued.iter().find(|r| r.id == id) {
+                line.push(run.clone());
+            }
+        }
+        Ok((line, running.first().map(|r| r.session_id)))
+    }
+
+    /// A6: where a queued run stands in the line.
+    fn queue_of(&self, run: &RunRow) -> Result<Option<QueueView>> {
+        let (line, running) = self.line()?;
+        let Some(index) = line.iter().position(|r| r.id == run.id) else {
+            return Ok(None);
+        };
+        let running_name = match running {
+            Some(session_id) => self.session_name(session_id)?,
+            None => None,
+        };
+        Ok(Some(QueueView {
+            position: index + 1,
+            running_session_id: running,
+            running_name,
+            manual: run.trigger == RunTrigger::Manual,
+        }))
+    }
+
+    /// A6: the research state of each unpublished session that has a run, or that is arranged
+    /// and cannot be researched; `session` limits it to one session. One pass over the runs and
+    /// the suggestions; the form layout is read only for items holding a suggestion.
+    pub fn overview(&self, session: Option<i64>) -> Result<Vec<SessionResearch>> {
+        /// `(session_id, item_id, state)` of each session's latest run.
+        type Latest = (i64, i64, String);
+        /// Live unchecked AI suggestions per item.
+        type Suggested = HashMap<i64, i64>;
+        /// `(session_id, item_id)` of arranged sessions with no run.
+        type Unrun = Vec<(i64, i64)>;
+        let (latest, suggested, unrun): (Vec<Latest>, Suggested, Unrun) =
+            self.store.research_transaction(|tx| {
+                let conn = tx.conn();
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT r.session_id, r.item_id, r.state FROM research_runs r \
+                         JOIN sessions s ON s.id=r.session_id \
+                         WHERE r.id=(SELECT MAX(id) FROM research_runs WHERE session_id=r.session_id) \
+                         AND s.published_at IS NULL AND (?1 IS NULL OR r.session_id=?1) \
+                         ORDER BY r.session_id",
+                    )
+                    .map_err(store::db)?;
+                let latest = stmt
+                    .query_map([session], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                    .map_err(store::db)?
+                    .collect::<rusqlite::Result<Vec<Latest>>>()
+                    .map_err(store::db)?;
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT item_id, COUNT(*) FROM attribute_values \
+                         WHERE provenance='ai' AND ai_status='suggested' GROUP BY item_id",
+                    )
+                    .map_err(store::db)?;
+                let suggested = stmt
+                    .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+                    .map_err(store::db)?
+                    .collect::<rusqlite::Result<HashMap<i64, i64>>>()
+                    .map_err(store::db)?;
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT s.id, s.item_id FROM sessions s WHERE s.arranged_at IS NOT NULL \
+                         AND s.item_id IS NOT NULL AND s.published_at IS NULL \
+                         AND NOT EXISTS (SELECT 1 FROM research_runs r WHERE r.session_id=s.id) \
+                         AND (?1 IS NULL OR s.id=?1) ORDER BY s.id",
+                    )
+                    .map_err(store::db)?;
+                let unrun = stmt
+                    .query_map([session], |r| Ok((r.get(0)?, r.get(1)?)))
+                    .map_err(store::db)?
+                    .collect::<rusqlite::Result<Vec<(i64, i64)>>>()
+                    .map_err(store::db)?;
+                Ok((latest, suggested, unrun))
+            })?;
+        let (line, _) = self.line()?;
+        let mut out = Vec::new();
+        for (session_id, item_id, state) in latest {
+            let to_review = if suggested.get(&item_id).copied().unwrap_or(0) > 0 {
+                self.derived_counts(item_id, None)?.1
+            } else {
+                0
+            };
+            let position = line
+                .iter()
+                .position(|r| r.session_id == session_id)
+                .map(|i| i + 1);
+            let state = match state.as_str() {
+                "running" => "researching",
+                "queued" => "waiting",
+                _ if to_review > 0 => "to_review",
+                "finished" | "stopped_at_cap" => "done",
+                "failed" => "failed",
+                _ => continue,
+            };
+            out.push(SessionResearch {
+                session_id,
+                state: state.to_owned(),
+                position: if state == "waiting" { position } else { None },
+                to_review,
+                reason: None,
+            });
+        }
+        if !unrun.is_empty() {
+            let settings = self.settings();
+            for (session_id, item_id) in unrun {
+                if let Some(blocking) = first_failing(&self.prerequisite_input(item_id, &settings)?)
+                    .filter(Prerequisite::blocks_creation)
+                {
+                    out.push(SessionResearch {
+                        session_id,
+                        state: "blocked".to_owned(),
+                        position: None,
+                        to_review: 0,
+                        reason: Some(Reason {
+                            code: blocking.code().to_owned(),
+                            sentence: blocking.sentence(),
+                        }),
+                    });
+                }
+            }
+        }
+        out.sort_by_key(|s| s.session_id);
+        Ok(out)
     }
 
     /// The store, as the port the app's services take.

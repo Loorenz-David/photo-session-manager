@@ -54,10 +54,17 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   no value do not hold the grade back").
 - **In the form** (`features/form`): the AI pill's popover shows confidence, value, reason and
   sources with **Looks right / Clear** (or just edit the field; a human edit makes it human-owned);
-  the header shows "n to review" and opens the **research panel** (every step the run took, "Finished
-  · n fields filled · n to review", why research cannot run, Research / Run again, **Accept all**,
-  which skips `low` suggestions and conflicts). A checked value is never overwritten and a cleared
-  value is never suggested again (HA1).
+  the header's **"n to review"** opens the list of those fields (value, confidence, conflict); choosing
+  one goes to its step and opens its popover (A6). The header's Research button opens the **research
+  panel** (every step the run took, "Finished · n fields filled · n to review", why research cannot
+  run, Research / Run again, **Accept all**, which skips `low` suggestions and conflicts). Source
+  links open in the default browser. A checked value is never overwritten and a cleared value is
+  never suggested again (HA1).
+- **One at a time.** Research runs one session at a time app-wide (MC-A6). A queued session's panel
+  says "Waiting — researching *name · SKU* first (*n*th in line)"; "Research this next" moves it to
+  the front. The sessions list (beside "Arranged") and the session header show each session's research
+  state: AI researching…, AI waiting · *n*th in line, AI · *n* to review, AI done, AI stopped, AI
+  can't run · *reason* (A6, owner 2026-11-17).
 - **At publish.** An unchecked suggestion is sent only at `medium` or `high` confidence, inside a
   confirmed publish; a `low` one never is (the popover counts them). A **conflict** (a suggestion that
   replaced a preset default or a Shopify value and is still unchecked) is shown with Keep previous /

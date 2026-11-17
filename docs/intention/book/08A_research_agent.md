@@ -191,6 +191,15 @@ Condition photo shows (owner card 4, 2026-11-12: every flaw is photographed).
 - Suggestions written by a run are not undo steps (they are the system's, like arrival); Looks
   right, Clear, Accept all and edits are, as today (MC-30).
 - The form header shows "n to review" and opens the research panel (design mock-up).
+  **Amended (owner, 2026-11-17, changelog A6):** the chip opens the **list of fields to review** (label, step,
+  suggested value, confidence, conflicts marked); choosing one goes to its step, scrolls to it and opens its AI
+  popover (Looks right / Clear, or the conflict's choices). Accept all and See research are in the list too.
+  Source links (panel steps, popover sources) open in the default browser. A **queued** run says so in the panel:
+  "Waiting — researching *name · SKU* first (*n*th in line)"; research still runs one session at a time. Pressing
+  "Research this next" moves it to the front, and the panel then says it goes before the sessions marked arranged.
+  The **sessions list** (beside "Arranged") and the **session header** show each session's research state:
+  AI researching…, AI waiting · *n*th in line, AI · *n* to review, AI done, AI stopped, or AI can't run · *reason*
+  (an arranged session whose research cannot start); in the header a tap opens Details.
 
 ## 8. Domain model (additions; owner S unless stated)
 

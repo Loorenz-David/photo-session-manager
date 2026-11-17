@@ -2,6 +2,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { activityLabel, photoSummary } from '@/lib/format';
 import type { SessionList } from '@/services/sessions';
 import { HoverPreview, Thumb } from './HoverPreview';
+import type { SessionResearch } from '@/services/research';
+import { ResearchPill } from './ResearchPill';
 import { StatusPill } from './StatusPill';
 
 type Row = SessionList['groups'][number]['rows'][number];
@@ -19,9 +21,11 @@ type SessionRowProps = {
   onPublish?: () => void;
   onRetry?: () => Promise<unknown> | void;
   now: number;
+  /** A6: the session's research state (absent: none to show). */
+  research?: SessionResearch;
 };
 
-export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now }: SessionRowProps) {
+export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research }: SessionRowProps) {
   const name = row.item_type || row.title;
   return (
     <div className="session-row" data-testid={`session-row-${row.id}`} data-selected={selected || undefined}>
@@ -34,7 +38,12 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
           <span className="row-name">
             <strong>{name}</strong>
             <small>{row.sku}</small>
-            {row.arranged && <span className="pill">Arranged</span>}
+            {(row.arranged || research) && (
+              <span className="row-pills">
+                {row.arranged && <span className="pill">Arranged</span>}
+                <ResearchPill research={research} />
+              </span>
+            )}
           </span>
         </button>
       </HoverPreview>

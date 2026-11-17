@@ -16,6 +16,7 @@ import { BatchBar } from './BatchBar';
 import { Filters } from './Filters';
 import { GroupHeader } from './GroupHeader';
 import { SessionRow, isSelectable } from './SessionRow';
+import { useResearchOverview } from './ResearchPill';
 import { TimeFilter } from './TimeFilter';
 import { UnassignedCard } from './UnassignedCard';
 
@@ -34,6 +35,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   const [publishId, setPublishId] = useState<number | null>(null);
   const debouncedQuery = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
   const { data: list, loading, error, reload: load } = usePageData(() => listSessions({ filter, query: debouncedQuery || null }), [filter, debouncedQuery]);
+  const research = useResearchOverview(null);
   useEffect(() => { if (error) toast.error(`Could not load sessions: ${(error as Error).message}`); }, [error]);
 
   const latestLoad = useRef(load);
@@ -149,6 +151,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
                   key={row.id}
                   row={row}
                   now={now}
+                  research={research.get(row.id)}
                   selected={selected.has(row.id)}
                   onToggle={() => toggle(row.id)}
                   onOpen={() => navigate(row.id)}

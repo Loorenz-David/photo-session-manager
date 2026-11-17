@@ -133,6 +133,8 @@ export const commands = {
 	 */
 	attributeFillDefaults: (itemId: CommandId) => typedError<number, CommandError>(__TAURI_INVOKE("attribute_fill_defaults", { itemId })),
 	researchStatus: (sessionId: CommandId) => typedError<ResearchStatusDto_Serialize, CommandError>(__TAURI_INVOKE("research_status", { sessionId })),
+	/**  A6: the research state of every session that has one (or of `session_id` only), in one call. */
+	researchOverview: (sessionId: CommandId | null) => typedError<SessionResearchDto_Serialize[], CommandError>(__TAURI_INVOKE("research_overview", { sessionId })),
 	researchRun: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("research_run", { sessionId })),
 	researchSettingsReset: () => typedError<string, CommandError>(__TAURI_INVOKE("research_settings_reset")),
 	researchSecretsSet: (input: SecretsInputDto_Deserialize) => typedError<null, CommandError>(__TAURI_INVOKE("research_secrets_set", { input })),
@@ -1041,6 +1043,22 @@ export type PublishActivityDto_Serialize = {
 	masters_ready?: string,
 };
 
+export type QueueViewDto = QueueViewDto_Serialize | QueueViewDto_Deserialize;
+
+export type QueueViewDto_Deserialize = {
+	position: number,
+	running_session_id?: number | null,
+	running_name?: string | null,
+	manual: boolean,
+};
+
+export type QueueViewDto_Serialize = {
+	position: number,
+	running_session_id: number | null,
+	running_name: string | null,
+	manual: boolean,
+};
+
 export type ReasonDto = {
 	code: string,
 	sentence: string,
@@ -1154,6 +1172,8 @@ export type ResearchStatusDto_Deserialize = {
 	 *  since the epoch); the panel says "Waiting for Capture One" from then on.
 	 */
 	wait_ends_at?: number | null,
+	/**  A6: the latest run is queued: its place in the line and the session being researched. */
+	queue?: QueueViewDto_Deserialize | null,
 };
 
 export type ResearchStatusDto_Serialize = {
@@ -1168,6 +1188,8 @@ export type ResearchStatusDto_Serialize = {
 	 *  since the epoch); the panel says "Waiting for Capture One" from then on.
 	 */
 	wait_ends_at: number | null,
+	/**  A6: the latest run is queued: its place in the line and the session being researched. */
+	queue: QueueViewDto_Serialize | null,
 };
 
 export type ResearchTimeoutsDto = {
@@ -1265,6 +1287,36 @@ export type SessionListResponse_Serialize = {
 	groups: SessionListGroupResponse_Serialize[],
 	counts: SessionListCountsResponse,
 	unassigned_count: number,
+};
+
+/**
+ *  A6: one session's research state (`researching`, `waiting`, `to_review`, `done`, `failed`,
+ *  `blocked`) for the sessions list and the session header.
+ */
+export type SessionResearchDto = SessionResearchDto_Serialize | SessionResearchDto_Deserialize;
+
+/**
+ *  A6: one session's research state (`researching`, `waiting`, `to_review`, `done`, `failed`,
+ *  `blocked`) for the sessions list and the session header.
+ */
+export type SessionResearchDto_Deserialize = {
+	session_id: number,
+	state: string,
+	position?: number | null,
+	to_review: number,
+	reason?: ReasonDto | null,
+};
+
+/**
+ *  A6: one session's research state (`researching`, `waiting`, `to_review`, `done`, `failed`,
+ *  `blocked`) for the sessions list and the session header.
+ */
+export type SessionResearchDto_Serialize = {
+	session_id: number,
+	state: string,
+	position: number | null,
+	to_review: number,
+	reason: ReasonDto | null,
 };
 
 export type SessionResponse = SessionResponse_Serialize | SessionResponse_Deserialize;
