@@ -375,6 +375,15 @@ fn a12_c2b_page_limit_counts_obtained_pages() {
         .collect();
     assert_eq!(reads[0].summary, "could not be read");
     assert_eq!(reads[0].source_url.as_deref(), Some(P_E1));
+    // A7: the status view marks exactly that step `unread` (shown as a warning).
+    let view = psm_research::api::ResearchApi::status(h.service.as_ref(), h.session_id).unwrap();
+    let unread: Vec<_> = view
+        .steps
+        .iter()
+        .filter(|s| s.unread)
+        .map(|s| (s.kind.as_str(), s.source_url.as_deref()))
+        .collect();
+    assert_eq!(unread, vec![("read", Some(P_E1))]);
     let obtained = h
         .outputs(run)
         .iter()

@@ -108,6 +108,7 @@ pub struct StepViewDto {
     #[specta(type = Vec<specta_typescript::Number>)]
     pub photo_ids: Vec<i64>,
     pub field_keys: Vec<String>,
+    pub unread: bool,
 }
 impl From<ResearchStatus> for ResearchStatusDto {
     fn from(s: ResearchStatus) -> Self {
@@ -136,6 +137,7 @@ impl From<ResearchStatus> for ResearchStatusDto {
                     source_title: v.source_title,
                     photo_ids: v.photo_ids,
                     field_keys: v.field_keys,
+                    unread: v.unread,
                 })
                 .collect(),
             fields_filled: count(s.fields_filled),

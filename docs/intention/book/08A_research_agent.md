@@ -200,6 +200,10 @@ Condition photo shows (owner card 4, 2026-11-12: every flaw is photographed).
   The **sessions list** (beside "Arranged") and the **session header** show each session's research state:
   AI researching…, AI waiting · *n*th in line, AI · *n* to review, AI done, AI stopped, or AI can't run · *reason*
   (an arranged session whose research cannot start); in the header a tap opens Details.
+  **Amended (owner, 2026-11-17, changelog A7):** in the panel each kind of step has its own icon, label and rail
+  (never colour alone): Looked and Searched quiet; Read and Compared in the AI colour; **Concluded** stands out most
+  (tinted, bold); a page that could not be read is a muted warning, "Could not read" with its link; Not determined
+  dashed.
 
 ## 8. Domain model (additions; owner S unless stated)
 

@@ -524,6 +524,82 @@ fn a15_c5d_an_escaped_key_in_a_file_stops_the_export() {
     assert_eq!(fs::read_dir(&out).unwrap().count(), 0, "something remained");
 }
 
+/// A JPEG: SOI, an APP0 segment, an optional comment segment, SOS, `pixels`, EOI.
+fn jpeg(comment: Option<&[u8]>, pixels: &[u8]) -> Vec<u8> {
+    let mut out = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10];
+    out.extend_from_slice(b"JFIF\0\x01\x01\0\0\x01\0\x01\0\0");
+    if let Some(text) = comment {
+        out.extend_from_slice(&[0xFF, 0xFE]);
+        out.extend_from_slice(&u16::try_from(text.len() + 2).unwrap().to_be_bytes());
+        out.extend_from_slice(text);
+    }
+    out.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00]);
+    out.extend_from_slice(pixels);
+    out.extend_from_slice(&[0xFF, 0xD9]);
+    out
+}
+
+/// Replaces the stored bytes of one image the run sent; returns its SHA (the exported name).
+fn replace_sent_image(f: &Four, bytes: &[u8]) -> String {
+    let sha = f.h.outbound(f.run)[0].sha256.clone();
+    fs::write(f.h.files().path(&sha), bytes).unwrap();
+    sha
+}
+
+#[test]
+fn a7_a_value_by_chance_in_an_images_pixel_data_does_not_stop_the_export() {
+    let f = four_calls();
+    let h = &f.h;
+    let bytes = jpeg(None, format!("\x12\x34{MODEL_KEY}\x56").as_bytes());
+    let sha = replace_sent_image(&f, &bytes);
+    let zip = h
+        .service
+        .export(ExportSelection::Items(vec![h.item_id]), &dest(h, "out"))
+        .unwrap();
+    let folder = folder_of(&zip);
+    let run_dir = format!("{}-{}/run-{}", h.item_id, folder_key(h, h.item_id), f.run);
+    assert_eq!(
+        fs::read(
+            folder
+                .join(run_dir)
+                .join("images")
+                .join(format!("{sha}.jpg"))
+        )
+        .unwrap(),
+        bytes
+    );
+}
+
+#[test]
+fn a7_a_value_in_an_images_header_or_a_non_jpeg_stops_the_export() {
+    for bytes in [
+        jpeg(Some(MODEL_KEY.as_bytes()), b"\x01\x02"),
+        format!("not a jpeg {MODEL_KEY}").into_bytes(),
+        // A JPEG whose segments run past the end is read whole.
+        [
+            &[0xFF, 0xD8, 0xFF, 0xE1, 0x7F, 0xFF][..],
+            MODEL_KEY.as_bytes(),
+        ]
+        .concat(),
+    ] {
+        let f = four_calls();
+        let h = &f.h;
+        let sha = replace_sent_image(&f, &bytes);
+        let out = dest(h, "out");
+        let error = h
+            .service
+            .export(ExportSelection::Items(vec![h.item_id]), &out)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.ends_with(&format!("images/{sha}.jpg contains a key")),
+            "{error}"
+        );
+        assert!(!error.contains(MODEL_KEY), "{error}");
+        assert_eq!(fs::read_dir(&out).unwrap().count(), 0, "something remained");
+    }
+}
+
 #[test]
 fn a21_c6a_only_json_and_jpg_never_a_raw() {
     let f = four_calls();

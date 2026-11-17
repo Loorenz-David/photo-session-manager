@@ -6,8 +6,8 @@
 //! Exclusions are decided at export time: the image of a photo that is now `deleted` (or whose
 //! row is gone) is not written and every request that referenced it says
 //! `"withheld": "photo deleted"`. Before zipping, every written file is scanned for every value
-//! of the secrets port, plain and URL-encoded; a hit deletes the partial folder, writes no zip and
-//! names the file (fail closed).
+//! of the secrets port, plain and URL-encoded (a JPEG up to its pixel data: `scanned_part`); a hit
+//! deletes the partial folder, writes no zip and names the file (fail closed).
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -91,6 +91,46 @@ fn withhold(text: &str, withheld: &BTreeSet<String>) -> String {
     };
     walk(&mut value, withheld);
     value.to_string()
+}
+
+/// The part of an exported file the secret check reads (owner correction A7, 2026-11-17). A
+/// well-formed JPEG is read up to its first start-of-scan marker: the header segments, where any
+/// text (EXIF, XMP, comments) lives. The compressed pixel data after it holds no text, and a short
+/// stored value turns up in it by chance, which stopped real exports. Any other file, or a JPEG
+/// whose segments cannot be walked, is read whole (fail closed).
+pub fn scanned_part(bytes: &[u8]) -> &[u8] {
+    jpeg_header_len(bytes).map_or(bytes, |len| &bytes[..len])
+}
+
+/// The length of a JPEG's header (SOI up to, not including, the first SOS marker); `None` when
+/// the bytes are not a JPEG or its segments run past the end.
+fn jpeg_header_len(bytes: &[u8]) -> Option<usize> {
+    if !bytes.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut i = 2;
+    loop {
+        if *bytes.get(i)? != 0xFF {
+            return None;
+        }
+        // Fill bytes before a marker.
+        while *bytes.get(i + 1)? == 0xFF {
+            i += 1;
+        }
+        let marker = *bytes.get(i + 1)?;
+        match marker {
+            0xDA => return Some(i),
+            0xD9 => return None,
+            0x01 | 0xD0..=0xD7 => i += 2,
+            _ => {
+                let len = usize::from(u16::from_be_bytes([*bytes.get(i + 2)?, *bytes.get(i + 3)?]));
+                if len < 2 {
+                    return None;
+                }
+                i += 2 + len;
+            }
+        }
+    }
 }
 
 /// Every file under `root`, as (path, path relative to `root` with `/` separators), sorted.
@@ -346,7 +386,7 @@ impl ResearchService {
         let secrets: Vec<&str> = secrets.iter().map(String::as_str).collect();
         for (path, relative) in files_under(&partial)? {
             let bytes = fs::read(&path).map_err(io)?;
-            if redact(&String::from_utf8_lossy(&bytes), &secrets).hit {
+            if redact(&String::from_utf8_lossy(scanned_part(&bytes)), &secrets).hit {
                 let _ = fs::remove_dir_all(&partial);
                 return Err(Error::InvalidData(format!(
                     "Export research stopped: {relative} contains a key"

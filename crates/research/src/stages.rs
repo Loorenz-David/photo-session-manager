@@ -107,6 +107,9 @@ pub(crate) struct Ctx<'a> {
     pub form: FormSnapshot,
 }
 
+/// The summary of a `read` step whose page could not be read (MC-A3); `StepView::unread` says it.
+pub const UNREAD: &str = "could not be read";
+
 pub(crate) fn step(stage: Stage, kind: StepKind, summary: impl Into<String>) -> NewStep {
     NewStep {
         stage: stage.as_str().to_owned(),
@@ -877,7 +880,7 @@ fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
         "item_type": ctx.form.item_type,
     });
     ctx.unit(stage, identity_u, identity, |ctx| {
-        let mut read_step = step(stage, StepKind::Read, "could not be read");
+        let mut read_step = step(stage, StepKind::Read, UNREAD);
         read_step.source_url = Some(url.to_owned());
         let unread = |read_step: NewStep| Work::Commit {
             output: json!({

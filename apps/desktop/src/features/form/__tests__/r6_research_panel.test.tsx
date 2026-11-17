@@ -55,7 +55,7 @@ function form(fields: FormField[]): Form {
   return { item_id: ITEM.id, item_type_from_integration: false, groups: [{ group: 'details', fields, filled: fields.length, total: fields.length }, { group: 'condition', fields: [], filled: 0, total: 0 }, { group: 'product', fields: [], filled: 0, total: 0 }] };
 }
 function step(seq: number, kind: string, extra: Partial<ResearchStep> = {}): ResearchStep {
-  return { seq, stage: 'observe', kind, summary: `summary ${seq}`, detail: `detail ${seq}`, source_url: null, source_title: null, photo_ids: [], field_keys: [], ...extra };
+  return { seq, stage: 'observe', kind, summary: `summary ${seq}`, detail: `detail ${seq}`, source_url: null, source_title: null, photo_ids: [], field_keys: [], unread: false, ...extra };
 }
 function status(extra: Partial<ResearchStatus> = {}): ResearchStatus {
   return { reason: null, run: null, steps: [], fields_filled: 0, to_review: 0, can_run: false, wait_ends_at: null, queue: null, ...extra };
@@ -205,4 +205,28 @@ it('a18_c5a_header_to_review_lists_the_fields_opens_the_panel_and_hides_at_zero'
   fireEvent.click(screen.getAllByRole('button', { name: /AI suggestion, high confidence|AI suggestion, low confidence/ })[0]);
   fireEvent.click(await screen.findByRole('button', { name: 'Looks right' }));
   await waitFor(() => expect(screen.queryByRole('button', { name: /to review$/ })).not.toBeInTheDocument());
+});
+
+it('a7_each_step_kind_has_its_own_look_and_an_unread_page_is_a_warning', () => {
+  panel(status({ run: run('finished'), steps: [
+    step(1, 'looked'),
+    step(2, 'searched'),
+    step(3, 'read', { source_url: 'https://shop.example/a', source_title: 'A chair' }),
+    step(4, 'read', { summary: 'could not be read', source_url: 'https://shop.example/b', unread: true }),
+    step(5, 'compared'),
+    step(6, 'concluded'),
+    step(7, 'not_determined'),
+  ] }));
+  const steps = [...document.querySelectorAll<HTMLElement>('[data-step]')];
+  expect(steps.map(s => s.getAttribute('data-look'))).toEqual(['gather', 'gather', 'read', 'unread', 'compare', 'conclude', 'undetermined']);
+  // Never colour alone: every step has an icon and a label.
+  for (const s of steps) {
+    expect(s.querySelector('svg.research-step-icon')).not.toBeNull();
+    expect(s.querySelector('.research-step-verb')?.textContent).toBeTruthy();
+  }
+  const unread = steps[3];
+  expect(within(unread).getByText('Could not read')).toBeInTheDocument();
+  expect(within(unread).queryByText('could not be read')).not.toBeInTheDocument();
+  expect(within(unread).getByText('https://shop.example/b')).toBeInTheDocument();
+  expect(within(steps[5]).getByText('Concluded')).toBeInTheDocument();
 });
