@@ -410,7 +410,7 @@ hand-edit. Components never import `bindings.ts` directly: `services/*.ts` wrap 
   SessionsPanel, review buttons/keys/swipe, ArchivedView, `useWorkspaceState.ts`, `order.ts`,
   `outputs.ts`; shooting templates: ContainerGrid, TemplateInfoDialog, TemplateWarning, `templateDrop.ts`,
   `useTemplateView.ts`), `compose` (editor; see above), `form` (FormDialog, StepTabs, MetafieldInput, kinds,
-  ItemTypePicker, StockFields, AI pills, ResearchPanel), `publish` (PublishPopover, PublishProgress, BatchQueue,
+  ItemTypePicker, StockFields, AI pills, AiReviewTab, ResearchPanel), `publish` (PublishPopover, PublishProgress, BatchQueue,
   FailurePopover, NotificationsDrawer, `usePublish.ts`), `settings` (SettingsPage, CameraSection,
   FingerprintBox, StorageSection, StockSection, ResearchSection, ShopFieldPicker, `cameraSteps.ts`; a drawer of sections: SettingsNav, TemplatesSection, TemplateExample), `health`, `history`, `pending`.
 - `components/ui/` shadcn primitives; `components/pending/` skeletons; `styles/tokens.css` from the

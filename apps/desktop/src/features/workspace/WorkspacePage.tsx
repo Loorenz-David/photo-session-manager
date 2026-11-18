@@ -26,6 +26,7 @@ import { clipboardComposition, refitClipboard } from '@/features/compose/useClip
 import { ComposeMode } from '@/features/compose/ComposeMode';
 import { refit } from '@/features/compose/refit';
 import { FormDialog } from '@/features/form/FormDialog';
+import type { Step } from '@/features/form/StepTabs';
 import { FailurePopover } from '@/features/publish/FailurePopover';
 import { publishRetry } from '@/services/publish';
 import { getItemArchive, setKeepFiles, type ItemArchive } from '@/services/retention';
@@ -58,6 +59,8 @@ type WorkspacePageProps = {
   onAssignOpenChange: (open: boolean) => void;
   detailsOpen?: boolean;
   onDetailsOpenChange?: (open: boolean) => void;
+  /** A11: the tab the details form opens on (AI review from the header pill); absent → Details. */
+  detailsStep?: Step | null;
   navigate: (sessionId?: number) => void;
 };
 
@@ -140,7 +143,7 @@ function useDrop(state: WorkspaceState, templateView: TemplateView | null) {
 }
 
 /** The session workspace (NOTES.md §Screens 4–5): stage, photo panel or strip, and in Unassigned the sessions panel. */
-export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detailsOpen = false, onDetailsOpenChange = () => undefined, navigate }: WorkspacePageProps) {
+export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detailsOpen = false, onDetailsOpenChange = () => undefined, detailsStep = null, navigate }: WorkspacePageProps) {
   const state = useWorkspaceState(sessionId);
   const templateView = useTemplateView(sessionId);
   const unassigned = sessionId === UNASSIGNED_SESSION_ID;
@@ -411,7 +414,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   // 10F §3, Q3: a cleared item is shown from Shopify, read-only; its details form stays available.
   if (archived && archive) return <>
     <ArchivedView pictures={archive.pictures} onEdit={item ? () => onDetailsOpenChange(true) : undefined} />
-    {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} sessionId={sessionId} onItemChanged={() => void state.reload()} />}
+    {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} sessionId={sessionId} position={detailsStep ? { step: detailsStep, scroll: 0 } : undefined} onItemChanged={() => void state.reload()} />}
   </>;
 
   // The stage column's other occupants, in both the normal stage and the editor.
@@ -491,7 +494,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         onOpenChange={open => !open && setPicker(null)}
         onPick={item => { if (picker) return assignSome(item, picker.photoIds); }}
       />
-      {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} sessionId={sessionId} onItemChanged={() => void state.reload()} />}
+      {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} sessionId={sessionId} position={detailsStep ? { step: detailsStep, scroll: 0 } : undefined} onItemChanged={() => void state.reload()} />}
       {unassigned && <ItemPickerDialog open={assignOpen} title="Assign product" onOpenChange={onAssignOpenChange} onPick={assignWhole} />}
     </DndContext>
     </PublishFailedContext.Provider>

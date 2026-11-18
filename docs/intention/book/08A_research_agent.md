@@ -210,6 +210,13 @@ Condition photo shows (owner card 4, 2026-11-12: every flaw is photographed).
   (never colour alone): Looked and Searched quiet; Read and Compared in the AI colour; **Concluded** stands out most
   (tinted, bold); a page that could not be read is a muted warning, "Could not read" with its link; Not determined
   dashed.
+  **Amended (owner, 2026-11-18, changelog A11):** the form has a fourth tab, **AI review**, after Details /
+  Condition / Product, with the number of suggestions still to check. It lists every field holding an unchecked
+  suggestion, each with its step, what the field held before, the suggestion, confidence, reason, sources, and the
+  same choices as its AI popover (Looks right / Clear, or the conflict's Keep previous / Use suggestion / Edit, Edit
+  going to the field), plus Show field; Accept all is at its top. A checked row leaves the list; the undo is the
+  popover's. At zero it stays and says why (research running, not run yet and why, all checked, nothing suggested).
+  The form's "n to review" chip and the header's "AI · n to review" open the form on this tab (replacing A6's list).
 
 ## 8. Domain model (additions; owner S unless stated)
 

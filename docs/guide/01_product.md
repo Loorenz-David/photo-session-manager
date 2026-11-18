@@ -54,8 +54,16 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   no value do not hold the grade back").
 - **In the form** (`features/form`): the AI pill's popover shows confidence, value, reason and
   sources with **Looks right / Clear** (or just edit the field; a human edit makes it human-owned);
-  the header's **"n to review"** opens the list of those fields (value, confidence, conflict); choosing
-  one goes to its step and opens its popover (A6). The header's Research button opens the **research
+  a fourth tab, **AI review**, after Details / Condition / Product, gathers every field holding an
+  unchecked suggestion in one place, with the count on the tab (A11, owner 2026-11-18). Each row shows the
+  field and its step, what the field held before ("The field was empty" or "Replaces *x* · from Shopify /
+  preset default"), the suggestion, confidence, reason and sources, and the same actions as the pill
+  (`SuggestionBody`, shared with the popover, so the same rules and undo apply): Looks right / Clear, or a
+  conflict's Keep previous / Use suggestion / Edit, where Edit goes to the field on its own step. **Show field**
+  goes to the field and opens its popover. **Accept all** is at the top of the tab. At zero the tab stays
+  visible and says why: research is running, hasn't run (and why it can't), every suggestion was
+  checked, or the run suggested nothing. The form header's **"n to review"** chip and the session
+  header's "AI · n to review" pill open the form on this tab. The header's Research button opens the **research
   panel** (every step the run took, each kind with its own icon and look: conclusions stand out, a page
   that could not be read is a muted "Could not read" (A7), with the reason underneath: a site blocking automated
   reading is asked once per run and its other pages say "Skipped: <site> is blocking automated reading"; the shop's

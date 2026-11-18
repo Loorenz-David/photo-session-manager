@@ -180,7 +180,7 @@ it('a18_c4a_focus_from_a_field_popover_dims_other_steps', async () => {
   expect(dimmed()).toEqual([false, false, false]);
 });
 
-// A6: the chip opens the list of fields to review; See research (in the list) opens the panel.
+// A6, A11: the chip opens the AI review tab listing the fields to review; See research (in the tab) opens the panel.
 it('a18_c5a_header_to_review_lists_the_fields_opens_the_panel_and_hides_at_zero', async () => {
   vi.mocked(getForm).mockResolvedValue(form([
     field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner')),
@@ -192,9 +192,9 @@ it('a18_c5a_header_to_review_lists_the_fields_opens_the_panel_and_hides_at_zero'
   const label = await screen.findByRole('button', { name: '2 to review' });
   expect(screen.queryByRole('complementary', { name: 'Research' })).not.toBeInTheDocument();
   fireEvent.click(label);
-  const list = await screen.findByRole('list', { name: 'Fields to review' });
-  expect([...list.querySelectorAll('[data-review-field]')].map(b => b.getAttribute('data-review-field'))).toEqual(['designer', 'maker']);
-  fireEvent.click(screen.getByRole('button', { name: /See research/ }));
+  const list = await screen.findByRole('list', { name: 'Suggestions to confirm' });
+  expect([...list.querySelectorAll('[data-review-row]')].map(b => b.getAttribute('data-review-row'))).toEqual(['designer', 'maker']);
+  fireEvent.click(screen.getAllByRole('button', { name: /See research/ })[0]);
   expect(await screen.findByRole('complementary', { name: 'Research' })).toBeInTheDocument();
   vi.mocked(getForm).mockResolvedValue(form([
     field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' })),
@@ -202,8 +202,7 @@ it('a18_c5a_header_to_review_lists_the_fields_opens_the_panel_and_hides_at_zero'
     field(def('model', 'Model'), ai('model', 'CH24', { ai_status: 'accepted' })),
   ]));
   vi.mocked(acceptSuggestion).mockResolvedValue(ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }));
-  fireEvent.click(screen.getAllByRole('button', { name: /AI suggestion, high confidence|AI suggestion, low confidence/ })[0]);
-  fireEvent.click(await screen.findByRole('button', { name: 'Looks right' }));
+  fireEvent.click(within(list).getAllByRole('button', { name: 'Looks right' })[0]);
   await waitFor(() => expect(screen.queryByRole('button', { name: /to review$/ })).not.toBeInTheDocument());
 });
 

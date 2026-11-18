@@ -28,6 +28,8 @@ type HeaderProps = {
   /** Unassigned workspace: "Assign product" replaces Publish (ch06 §Unassigned). */
   onAssignProduct?: () => void;
   onDetails?: () => void;
+  /** A11: "AI · n to review" opens the details form on its AI review tab. */
+  onReview?: () => void;
 };
 
 type SessionIdentity = { name: string; sku: string; arranged: boolean; archived: boolean; changes: PublishedChanges | null };
@@ -149,7 +151,7 @@ function useExportToasts(): Set<number> {
 }
 
 /** App header (COMPONENTS.md §App shell): Sessions page or session view. */
-export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssignProduct, onDetails }: HeaderProps) {
+export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssignProduct, onDetails, onReview }: HeaderProps) {
   const [identity, reloadIdentity] = useSessionIdentity(sessionId);
   // A6: the open session's research state beside its name; a tap opens Details (the form and its research).
   const research = useResearchOverview(sessionId !== undefined && sessionId !== 1 ? sessionId : undefined);
@@ -189,7 +191,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
             <strong className="header-name">{identity?.name ?? ''}</strong>
             <span className="header-sku">{identity?.sku ?? ''}</span>
             <Info className="header-info" aria-hidden />
-            <ResearchPill research={research.get(sessionId)} onClick={onDetails} />
+            <ResearchPill research={research.get(sessionId)} onClick={research.get(sessionId)?.state === 'to_review' && onReview ? onReview : onDetails} />
             <ChangedPill sessionId={sessionId} changes={identity?.changes} onKept={reloadIdentity} />
           </>
         )}

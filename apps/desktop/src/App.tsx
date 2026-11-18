@@ -9,6 +9,7 @@ import { NewSessionDialog } from './features/sessions/NewSessionDialog';
 import { SessionsPage } from './features/sessions/SessionsPage';
 import { ArrivalToasts } from './features/shell/ArrivalToasts';
 import { WorkspacePage } from './features/workspace/WorkspacePage';
+import { REVIEW_STEP, type Step } from './features/form/StepTabs';
 import { useHistory } from './features/history/useHistory';
 import { useHistoryKeys } from './features/history/useHistoryKeys';
 import { useKeyboard } from './lib/keyboard';
@@ -97,7 +98,13 @@ export default function App() {
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  useEffect(() => { setDetailsOpen(false); }, [sessionId]);
+  // A11: the tab the details form opens on; reset whenever the form closes.
+  const [detailsStep, setDetailsStep] = useState<Step | null>(null);
+  const changeDetailsOpen = useCallback((open: boolean) => {
+    setDetailsOpen(open);
+    if (!open) setDetailsStep(null);
+  }, []);
+  useEffect(() => { changeDetailsOpen(false); }, [sessionId, changeDetailsOpen]);
   useCaptureTarget(sessionId);
   useHistory(sessionId);
   useHistoryKeys(sessionId);
@@ -116,7 +123,8 @@ export default function App() {
         onThemeChange={setTheme}
         onNewSession={() => setNewSessionOpen(true)}
         onAssignProduct={() => setAssignOpen(true)}
-        onDetails={() => setDetailsOpen(true)}
+        onDetails={() => { setDetailsStep(null); setDetailsOpen(true); }}
+        onReview={() => { setDetailsStep(REVIEW_STEP); setDetailsOpen(true); }}
       />
       {sessionId === undefined ? (
         <SessionsPage navigate={navigate} />
@@ -127,7 +135,8 @@ export default function App() {
           assignOpen={assignOpen}
           onAssignOpenChange={setAssignOpen}
           detailsOpen={detailsOpen}
-          onDetailsOpenChange={setDetailsOpen}
+          onDetailsOpenChange={changeDetailsOpen}
+          detailsStep={detailsStep}
           navigate={navigate}
         />
       )}
