@@ -59,6 +59,17 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
   "(2026-11-18 A8)"; new `~/Desktop/Session Manager.zip` 12,570,736 bytes. Not verified: the API read against the
   owner's real shop (the query was accepted by the dev store, whose products have no fields), and a run on the work
   Mac. Next: the owner installs the zip on the work Mac, re-exports and runs research again.
+- **2026-11-18: owner correction A11** (changelog A11; 08A §7 amended). Checking suggestions one by one ("n to
+  review" → field → AI pill) was slow. The form has a fourth tab, **AI review** (`AiReviewTab.tsx`), with the
+  number still to check. It lists every `ai` + `suggested` field, each with its step, what the field held before,
+  the suggestion, confidence, reason, sources and the pill's own actions (`SuggestionBody`, shared with
+  `AiPopover`; same rules and undo), plus Show field. Accept all is at the top. At 0 the tab says why. The form's
+  "n to review" chip and the header's "AI · n to review" open it; A6's popover list is gone. No separate "Confirm
+  all high-confidence": Accept all already is that. Checks: fmt and clippy clean; `cargo test --workspace` 1586
+  passed, 0 failed; tsc; vitest 571/571 (new: a11_ai_review_tab 6, a11_header_review 2); frontend build; key scan 0.
+  Joined: PR #12 merged into `main` as `37edffe` (code `28a97ab`). Release build installed in /Applications (helper
+  352928 bytes in the bundle). The A10 build and zip moved to the old folder as "(2026-11-18 A10)". New
+  `~/Desktop/Session Manager.zip` 12,606,400 bytes. Not verified on screen (jsdom tests only).
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4
