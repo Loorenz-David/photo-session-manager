@@ -65,6 +65,15 @@ Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yy
 | `export failed` / `export stopped waiting for Capture One` | an export (or the export step of a publish) failed or gave up after the 10 min wait |
 | `master asked for in advance` / `master prepared in advance` | background master preparation (P69) |
 | `ftp.upload started|completed|filed|failed name=… reason=transfer|hash|delivery` (target `psm::camera`) | the FTP receiver's view of one camera upload |
+| `arrival.photo_added file= folder= session= photo= source=capture|import filed_to_row_ms=` (target `psm::arrival`, A10) | a file became a photo; ms from the file's last write (≈ "filed") to the photo row. More than a few seconds means arrival waited |
+| `arrival.preview_ready file= folder= session= photo= row_to_preview_ms=` (`psm::arrival`, A10) | the photo's first adjusted preview from Capture One; ms since its row. Long values: Capture One had no variant (wrong collection, busy) |
+| `arrival.given_up reason=stability_timeout event_id=` (warn, `psm::arrival`, A10) | a seen file kept changing or stayed missing for 120 looks; it is not added (a launch scan may add it later) |
+| `arrival.rescan reason=watcher_dropped_events` (`psm::arrival`, A10) | macOS dropped folder events; the capture folders were scanned instead |
+| `capture_one.switch reason=open_session|leave_session|photo_arrived from= to= folder= ms= result=ok|error: …` (`psm::capture_one`, A10) | one Capture One collection switch (opening a session, back to the list, a photo arriving in another folder) and its outcome |
+| `capture_one.switch_step reason= to= folder= step=ensure|bring_document_to_front|inspect_document|set_capture_folder|set_current_collection|collection_switched ms= result=` (`psm::capture_one`, A10) | each Capture One call of a switch; the failing step and its error text |
+| `capture_one.switch_skipped request= reason=a_newer_request_follows` (`psm::capture_one`, A10) | a switch the person had already overtaken by opening another session; not applied |
+| `photos.moved|copied file= from_session= from_folder= to_session= to_folder= raw_moved=no capture_one_calls=none` (`psm::capture_one`, A10) | one photo moved or copied between sessions: the RAW stays in its folder and Capture One is not told (no folder or collection is made for the target) |
+| `session.kept_as_published session= denied_late_photos=` (`psm::arrival`, A10) | "Keep as published" on a session that changed after publishing |
 | `camera.event <name> {fields}` | every sidecar event, redacted |
 | `camera helper restarted for the new Capture One session` / `camera helper waits: the Capture One session is missing` | P63 document handling |
 | `storage.cleared rule=<rule> path=… bytes=…` / `storage.item_cleared item=<sku> …` / `storage.not_cleared item=<sku> missing=n` | 10F clean-up, retention clearing, Shopify verification failure |

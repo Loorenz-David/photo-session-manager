@@ -139,7 +139,7 @@ function view(photos: Photo[], sessionId = SESSION): SessionView {
       unreviewed_count: photos.filter(p => p.classification === 'unreviewed').length,
       main_count: photos.filter(p => p.classification === 'main').length,
       condition_count: photos.filter(p => p.classification === 'condition').length,
-      publish: null,
+      publish: null, changes: null,
     },
     item: sessionId === 1 ? null : ITEM,
     photos: photos.map(p => ({ ...p, session_id: sessionId })),
@@ -162,7 +162,7 @@ function sessionRow(id: number, title: string, status: SessionStatusResponse = '
     created_at: 0,
     cover_preview_path: null,
     arranged: false,
-    publish: null,
+    publish: null, changes: null,
   };
 }
 

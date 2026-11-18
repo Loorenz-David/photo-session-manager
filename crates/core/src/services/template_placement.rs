@@ -53,7 +53,8 @@ pub fn place_arrival(
             take_shot_key(tx, photo_id, old)?;
         }
         changed = place_template_photos(tx, session_id, &template, now, Some(photo_id))?;
-        tx.touch_session(session_id, now)?;
+        // A10: part of the arrival, not an edit in the app.
+        tx.touch_session_on_arrival(session_id, now)?;
         Ok(())
     })?;
     if templated {

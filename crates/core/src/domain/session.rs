@@ -17,10 +17,26 @@ pub struct Session {
 pub struct SessionDto {
     pub session: Session,
     pub dirty: bool,
+    /// A10: why a published session is open again (set only while `dirty`).
+    pub changes: Option<PublishedChanges>,
     pub photo_count: i64,
     pub unreviewed_count: i64,
     pub main_count: i64,
     pub condition_count: i64,
+}
+
+/// Owner correction A10 (2026-11-18): what changed in a published session since it was
+/// published, so it never reopens without a reason on screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct PublishedChanges {
+    /// Photos (not denied) that arrived after the publish.
+    pub new_photos: i64,
+    /// Photos of the session whose adjustments changed in Capture One after the publish.
+    pub editor_edits: i64,
+    /// Something was changed in the app (review, move, crop by hand, template action, undo).
+    pub app_edits: bool,
+    /// Changed before this version recorded reasons: the reason is not known.
+    pub unrecorded: bool,
 }
 
 /// What the session workspace shows: the session, its item (none for Unassigned) and its visible photos
@@ -120,6 +136,8 @@ pub struct SessionRow {
     pub arranged: bool,
     pub cover_preview_path: Option<String>,
     pub publish: Option<LatestPublish>,
+    /// A10: why a published session is open again.
+    pub changes: Option<PublishedChanges>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

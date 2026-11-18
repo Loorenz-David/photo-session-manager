@@ -2,6 +2,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import {
   commands,
   type CommandError,
+  type PublishedChangesResponse,
   type SessionFilter,
   type SessionListResponse_Serialize,
   type SessionResponse_Serialize,
@@ -9,6 +10,8 @@ import {
 
 export type SessionList = SessionListResponse_Serialize;
 export type Session = SessionResponse_Serialize;
+/** A10: why a published session is open again. */
+export type PublishedChanges = PublishedChangesResponse;
 
 /** A command failure carried to the UI as `{code, message, data}` (master plan §6.6). */
 export class ServiceError extends Error {
@@ -56,4 +59,12 @@ export async function arrangeNext(sessionId: number): Promise<{ next_session_id:
 /** URL the webview can load for a preview file on disk. */
 export function previewUrl(path: string): string {
   return convertFileSrc(path);
+}
+
+/**
+ * A10 "Keep as published": a published session that changed since is marked published again as it is, without
+ * republishing; photos that arrived after the publish are denied. One undo step in the session.
+ */
+export async function keepPublished(sessionId: number): Promise<void> {
+  unwrap(await commands.sessionKeepPublished(sessionId));
 }

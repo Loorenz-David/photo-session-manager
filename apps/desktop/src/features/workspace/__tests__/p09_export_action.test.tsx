@@ -17,7 +17,7 @@ vi.mock('@/services/export', () => ({
 }));
 vi.mock('@/services/sessions', () => ({ listSessions: vi.fn(async () => ({ groups: [] })) }));
 vi.mock('@/services/camera', () => ({ cameraStatus: vi.fn(async () => ({ kind: 'disconnected' })), cameraRetry: vi.fn() }));
-vi.mock('@/services/events', () => ({ onCameraStatus: vi.fn(async () => () => undefined) }));
+vi.mock('@/services/events', () => ({ onCameraStatus: vi.fn(async () => () => undefined), onSessionsChanged: vi.fn(async () => () => undefined) }));
 
 import { Toaster } from '@/components/ui/sonner';
 import { Header } from '@/features/shell/Header';

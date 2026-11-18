@@ -79,6 +79,16 @@ pub enum StepKind {
         session_id: i64,
         photos: Vec<TemplateChange>,
     },
+    /// "Keep as published" (owner correction A10, 2026-11-18): the photos that arrived after the
+    /// publish are denied and the session's changes count as published, without republishing.
+    /// Undo restores the photos and the changed state.
+    KeepPublished {
+        session_id: i64,
+        photos: Vec<PhotoPlace>,
+        /// `published_seq` before the step, and the one it set.
+        seq_before: i64,
+        seq_after: i64,
+    },
     Attribute {
         session_id: i64,
         item_id: i64,
@@ -97,7 +107,9 @@ impl Step {
     /// Whether undoing or redoing this step would change the photo `photo_id`.
     fn names_photo(&self, photo_id: i64) -> bool {
         match &self.kind {
-            StepKind::Classify { photos, .. } | StepKind::Move { photos, .. } => {
+            StepKind::Classify { photos, .. }
+            | StepKind::Move { photos, .. }
+            | StepKind::KeepPublished { photos, .. } => {
                 photos.iter().any(|p| p.photo_id == photo_id)
             }
             StepKind::Reorder { photo_id: id, .. } => *id == photo_id,
@@ -846,6 +858,48 @@ fn apply(
             apply_template(tx, step, direction, at, session_id, &photos, changed_photos)?;
             touched.push(session_id);
             *active = photos.first().map(|p| p.photo_id);
+        }
+        StepKind::KeepPublished {
+            session_id,
+            photos,
+            seq_before,
+            seq_after,
+        } => {
+            let undo = direction == Direction::Undone;
+            let current = tx.session(session_id)?;
+            if current.published_seq != if undo { seq_after } else { seq_before } {
+                return Err(cannot(step, direction, "the session was published again"));
+            }
+            let mut classify = Step {
+                label: step.label.clone(),
+                kind: StepKind::Classify {
+                    session_id,
+                    photos: photos.clone(),
+                },
+            };
+            apply(
+                tx,
+                &mut classify,
+                direction,
+                at,
+                touched,
+                active,
+                changed_photos,
+                released,
+            )?;
+            if undo {
+                tx.set_published_seq(session_id, seq_before)?;
+            } else {
+                let now_seq = tx.session(session_id)?.change_seq;
+                tx.set_published_seq(session_id, now_seq)?;
+                step.kind = StepKind::KeepPublished {
+                    session_id,
+                    photos,
+                    seq_before,
+                    seq_after: now_seq,
+                };
+            }
+            touched.push(session_id);
         }
         StepKind::Attribute {
             session_id,

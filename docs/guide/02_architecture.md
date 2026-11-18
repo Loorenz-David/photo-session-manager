@@ -134,6 +134,12 @@ webview ignores `<a target="_blank">`: every link to a web page is `components/E
    `PreparedSettings::Runtime`), transfers the event target, and shuts the old one down
    (`AppState::settings_set` in `src-tauri/src/state.rs`); the camera runtime, gate and lanes survive.
 
+### Capture target switches (A10)
+`session_activate` / `session_deactivate` take a ticket from `CAPTURE_TARGET_ORDER`
+(`services/sessions.rs`, `SwitchOrder`) when called and run one at a time; a request a newer one
+has overtaken is skipped, so overlapping switches (opening sessions one after another) cannot end on
+a stale session. Each Capture One step logs `capture_one.switch_step`, each switch `capture_one.switch`.
+
 ### Arrival (book `06` §Arrival, `10A` MC-15/MC-19/MC-20, `10E` MC-32/MC-33)
 1. A RAW lands under the capture root `canon(<document folder>/Capture)`:
    - **Direct camera, Wi-Fi**: camera → `psm_infra::ftp` receiver (user `sessionmanager`, port 2121,
@@ -145,7 +151,13 @@ webview ignores `<a target="_blank">`: every link to a web page is `components/E
    - **Capture One tether**: Capture One writes the file; its `capture_done` hook (an AppleScript
      compiled from `hooks/capture_done.applescript.tmpl`) writes a JSON file into `<data>/spool/` and
      nudges the loopback listener (`infra/nudge.rs`); `Spool::drain` → `EditingEventsDispatcher`.
-   - Fallbacks: `FsWatcher` on the capture root; startup scan (`ArrivalService::scan`).
+   - Fallbacks: `FsWatcher` on the capture root; startup scan (`ArrivalService::scan`); a scan when
+     the watcher reports dropped events (`WatchEvent.rescan`, FSEvents "must scan subdirs").
+   - **Thread (A10):** the capture watcher and `ArrivalService::tick` run on their own thread
+     (`App.arrival_background`), never behind Capture One work; stability counts looks
+     (`STABILITY_CHECKS` = 120), not wall time. With the background loop running, the arrival's
+     Capture One follow-up goes through `DeferredFollow` (`follow.rs`): queued, then run by the
+     loop (`flush` before `CaptureOneFollow::tick`); without it (tests) it stays inline.
 2. `ArrivalService` (`services/arrival.rs`): `is_candidate` (RAW extension, no dot-prefixed folder),
    `path_key`, attribute to the active session else Unassigned; inserts the photo **approved** (P66),
    a `capture_events` row, queues `original_preview` + `hash` jobs; emits `photo_added`.
@@ -367,7 +379,7 @@ recorded stage of one run, optionally with another model, effort or instructions
 |---|---|
 | `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) · `templates/<template id>/<uuid>.jpg` (shooting-template examples) |
 | Under the capture root (`<document folder>/Capture`) | item folders by `folder_key`; `.incoming/` (FTP parts, `sdk-<run>/`); `.duplicates/`; Capture One's own `CaptureOne/` and `Output/_session_manager/` |
-| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 015_photo_places.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`; 014 and 015 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
+| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 015_photo_places.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`, 016 container labels, 017 `session_changes` (A10: one row per counted change with its `kind` arrival/editor/app/auto and the `seq` it produced; read by `published_changes` for "Changed after publishing", pruned when a publish completes); 014, 015 and 017 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
 | `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research). A file that does not parse never stops the app (health `settings_invalid`) |
 | Keychain (`infra/keychain.rs`; names in `domain/camera.rs::secrets`) | service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`, and the three `research-*-key` accounts (§Research). What research redacts and the export looks for (`integrations::research_secret_values`): the three `research-*-key` accounts plus the client secret, nothing of the camera's (A9: the short FTP code turned up by chance in records and image headers). Shopify client id/secret: `settings.json` only; access token: memory only |
 | `settings` table | app state, not user config (`mechanisms_version`, `active_session_id`, spool dedupe keys) |

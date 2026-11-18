@@ -4,6 +4,7 @@ import type { SessionList } from '@/services/sessions';
 import { HoverPreview, Thumb } from './HoverPreview';
 import type { SessionResearch } from '@/services/research';
 import { ResearchPill } from './ResearchPill';
+import { ChangedPill } from './ChangedPill';
 import { StatusPill } from './StatusPill';
 
 type Row = SessionList['groups'][number]['rows'][number];
@@ -23,9 +24,11 @@ type SessionRowProps = {
   now: number;
   /** A6: the session's research state (absent: none to show). */
   research?: SessionResearch;
+  /** A10: after "Keep as published". */
+  onChanged?: () => void;
 };
 
-export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research }: SessionRowProps) {
+export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged }: SessionRowProps) {
   const name = row.item_type || row.title;
   return (
     <div className="session-row" data-testid={`session-row-${row.id}`} data-selected={selected || undefined}>
@@ -48,7 +51,14 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
         </button>
       </HoverPreview>
       <span className="row-photos">{photoSummary(row.main_count, row.condition_count)}</span>
-      <StatusPill label={row.label} onPublish={onPublish} onRetry={onRetry} sessionId={row.id} />
+      {row.changes ? (
+        <div className="row-status">
+          <StatusPill label={row.label} onPublish={onPublish} onRetry={onRetry} sessionId={row.id} />
+          <ChangedPill sessionId={row.id} changes={row.changes} onKept={onChanged} />
+        </div>
+      ) : (
+        <StatusPill label={row.label} onPublish={onPublish} onRetry={onRetry} sessionId={row.id} />
+      )}
       {/* Changelog 46 (1): the list is in creation order, so the row shows when the session was created. */}
       <time className="row-time" dateTime={new Date(row.created_at).toISOString()}>
         {activityLabel(row.created_at, now)}

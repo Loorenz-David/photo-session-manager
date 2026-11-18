@@ -12,9 +12,9 @@ use psm_core::{
         session::{LatestPublish, PublishStep, SessionDto, SessionView},
     },
     ports::clock::SystemClock,
-    services::sessions::SessionsService,
+    services::sessions::{CAPTURE_TARGET_ORDER, SessionsService},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
 
@@ -76,6 +76,30 @@ pub struct SessionResponse {
     #[specta(type = specta_typescript::Number)]
     pub condition_count: i64,
     pub publish: Option<LatestPublishResponse>,
+    /// A10: why a published session is open again (null unless it changed since publishing).
+    pub changes: Option<PublishedChangesResponse>,
+}
+
+/// A10: what changed in a published session since it was published.
+#[derive(Serialize, Deserialize, Type, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PublishedChangesResponse {
+    #[specta(type = specta_typescript::Number)]
+    pub new_photos: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub editor_edits: i64,
+    pub app_edits: bool,
+    pub unrecorded: bool,
+}
+
+impl From<psm_core::domain::session::PublishedChanges> for PublishedChangesResponse {
+    fn from(c: psm_core::domain::session::PublishedChanges) -> Self {
+        Self {
+            new_photos: c.new_photos,
+            editor_edits: c.editor_edits,
+            app_edits: c.app_edits,
+            unrecorded: c.unrecorded,
+        }
+    }
 }
 
 impl From<SessionDto> for SessionResponse {
@@ -95,6 +119,7 @@ impl From<SessionDto> for SessionResponse {
             main_count: dto.main_count,
             condition_count: dto.condition_count,
             publish: None,
+            changes: dto.changes.map(Into::into),
         }
     }
 }
@@ -303,6 +328,8 @@ pub struct SessionRowResponse {
     pub arranged: bool,
     pub cover_preview_path: Option<String>,
     pub publish: Option<LatestPublishResponse>,
+    /// A10: why a published session is open again.
+    pub changes: Option<PublishedChangesResponse>,
 }
 #[derive(Serialize, Type)]
 pub struct SessionListGroupResponse {
@@ -362,6 +389,7 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
                             arranged: row.arranged,
                             cover_preview_path: row.cover_preview_path,
                             publish: row.publish.map(Into::into),
+                            changes: row.changes.map(Into::into),
                         })
                         .collect(),
                 })
@@ -456,12 +484,16 @@ pub async fn session_activate(
             app.follow.clone(),
         )
     };
+    // A10: switches apply in the order they were asked for (the ticket is taken now).
+    let ticket = CAPTURE_TARGET_ORDER.ticket();
     tauri::async_runtime::spawn_blocking(move || {
-        SessionsService::new(store.as_ref(), &SystemClock)
-            .with_editing(editing.as_ref(), health.as_ref(), &provision)
-            .with_camera(camera.as_ref())
-            .with_follow(follow.as_ref())
-            .activate(session_id.0)
+        CAPTURE_TARGET_ORDER.run(ticket, &format!("open session {}", session_id.0), || {
+            SessionsService::new(store.as_ref(), &SystemClock)
+                .with_editing(editing.as_ref(), health.as_ref(), &provision)
+                .with_camera(camera.as_ref())
+                .with_follow(follow.as_ref())
+                .activate(session_id.0)
+        })
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -482,12 +514,15 @@ pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), Comman
             app.follow.clone(),
         )
     };
+    let ticket = CAPTURE_TARGET_ORDER.ticket();
     tauri::async_runtime::spawn_blocking(move || {
-        SessionsService::new(store.as_ref(), &SystemClock)
-            .with_editing(editing.as_ref(), health.as_ref(), &provision)
-            .with_camera(camera.as_ref())
-            .with_follow(follow.as_ref())
-            .deactivate()
+        CAPTURE_TARGET_ORDER.run(ticket, "leave session", || {
+            SessionsService::new(store.as_ref(), &SystemClock)
+                .with_editing(editing.as_ref(), health.as_ref(), &provision)
+                .with_camera(camera.as_ref())
+                .with_follow(follow.as_ref())
+                .deactivate()
+        })
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -521,6 +556,7 @@ mod list_tests {
                     created_at: 100,
                     cover_preview_path: Some("/cover.jpg".into()),
                     publish: None,
+                    changes: None,
                     arranged: false,
                 }],
             }],

@@ -43,6 +43,22 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
   merged into `main` as `430f156`; release build installed in /Applications (helper 352928 bytes in the bundle);
   the A7 build and zip moved to the old folder as "(2026-11-17 A7)"; new `~/Desktop/Session Manager.zip`
   12,555,683 bytes. Next: the owner exports on the work Mac and sends the zip (the "could not be read" pages).
+- **2026-11-18: owner corrections A9** (changelog A9; 08B MC-A3, MC-A9, MC-A11 amended; 08A §6), from the work
+  Mac's data (database, logs and the stuck image, brought by the owner). Export still stopped on the same image: a
+  real JPEG with a 42 KB header (EXIF and Photoshop thumbnails, XMP), so A8's premise did not hold for it; the cause
+  was the camera's short FTP code on research's secret list (it had also redacted one search record).
+  `research_secret_values` is now the three research keys plus the client secret. 6 runs took 4–8 min, 3–6 min of
+  it waiting: the owner's shop answered 21 of 23 page reads 429 with `Retry-After: 60`. The shop's own product pages
+  are now read through Shopify (`CommerceAdapter::shop_product`, `productByIdentifier`; `ShopPageReader` wraps the
+  reader in the app wiring; read identity route `+shop_api`). `Retry-After` is waited only up to 10 s; a 403 or a
+  long 429 is `blocked` and the run skips that host ("Skipped: <site> is blocking automated reading"). Locale and
+  collection spellings of one product are read once; collection and category pages are not read. Checks: workspace
+  1579 passed, app crate 30, clippy (after boxing `Answer::Page`'s reply) and fmt clean, tsc, vitest 560/560,
+  frontend build, key scan 0. Joined: PR #10 merged into `main` as `4228653`; release build installed in
+  /Applications (helper 352928 bytes in the bundle); the A8 build and zip moved to the old folder as
+  "(2026-11-18 A8)"; new `~/Desktop/Session Manager.zip` 12,570,736 bytes. Not verified: the API read against the
+  owner's real shop (the query was accepted by the dev store, whose products have no fields), and a run on the work
+  Mac. Next: the owner installs the zip on the work Mac, re-exports and runs research again.
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4

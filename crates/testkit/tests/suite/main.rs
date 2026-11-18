@@ -2,6 +2,7 @@
 //! module here, so the workspace links and starts one test binary instead of one per phase.
 //! Run one phase's tests with `cargo test -p psm-testkit --test suite <module>::`.
 
+mod a10_arrival_and_published_changes;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

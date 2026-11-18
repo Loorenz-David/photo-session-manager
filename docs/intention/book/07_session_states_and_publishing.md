@@ -17,6 +17,17 @@ reviewed photo: 07B) sets `dirty`; a published session
 therefore returns to `ready` or `in_progress`. Attribute edits alone do not set dirty (they are
 sent on the next publish regardless).
 
+**Changed after publishing (owner correction A10, 2026-11-18).** A published session that is dirty
+never reopens silently: its list row and its header say **"Changed after publishing"** with the
+reasons — *n new photos* (photos that arrived after the publish), *n photos edited in Capture One*
+(07B adjustments), *edited in the app* (review, move, crop by hand, template action, undo), or, for
+changes made before reasons were recorded, that the reason is not known. Next to it, **"Keep as
+published"** marks the session published again as it is, without publishing: the photos that
+arrived after the publish are **denied** (so no later publish sends them; Deny's undo window and
+RAW clean-up apply as usual), and the session's current changes count as published. It is one undo
+step; undo restores the photos and the changed state. Nothing is moved to Unassigned and nothing is
+published by itself.
+
 ## Completion without an integration (H6, M7)
 With no integration configured the header action is **Export**. It writes the session's main and
 condition photos through the provider's web recipe into

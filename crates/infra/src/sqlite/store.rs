@@ -20,7 +20,9 @@ use psm_core::{
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource},
         publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
         research::{Feedback, FeedbackAction},
-        session::{LatestPublish, PublishStep, Session, SessionDto, SessionListRecord},
+        session::{
+            LatestPublish, PublishStep, PublishedChanges, Session, SessionDto, SessionListRecord,
+        },
         storage::{ArchivedImage, ItemRetention},
         template::{Container, PlaceRow, Presets, ShotKey, Template, TemplateSummary},
     },
@@ -80,6 +82,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/014_shooting_templates.sql")),
             M::up(include_str!("migrations/015_photo_places.sql")),
             M::up(include_str!("migrations/016_container_labels.sql")),
+            M::up(include_str!("migrations/017_session_changes.sql")),
         ]
     }
 
@@ -309,6 +312,13 @@ fn save_composition_in(
     }
     conn.execute("UPDATE compositions SET kind=?1,shape=?2,orientation=?3,quarter_turns=?4,flip=?5,straighten=?6,x=?7,y=?8,w=?9,h=?10,origin=?11,revision=revision+1,state='ok',review_reason=NULL,updated_at=?12 WHERE photo_id=?13", params![values.kind.as_str(),values.shape.as_str(),values.orientation.as_str(),values.quarter_turns,values.flip.as_str(),values.straighten,values.rect.x,values.rect.y,values.rect.w,values.rect.h,origin.as_str(),now_ms,photo_id]).map_err(db)?;
     conn.execute("UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=(SELECT session_id FROM photos WHERE id=?2 AND classification!='deleted')", params![now_ms,photo_id]).map_err(db)?;
+    // A10: a crop by hand is an edit in the app; one the app set itself is not.
+    let kind = if origin == Origin::User {
+        "app"
+    } else {
+        "auto"
+    };
+    conn.execute("INSERT INTO session_changes(session_id,seq,kind,raw_path,at) SELECT s.id,s.change_seq,?1,NULL,?2 FROM sessions s WHERE s.id=(SELECT session_id FROM photos WHERE id=?3 AND classification!='deleted')", params![kind,now_ms,photo_id]).map_err(db)?;
     Ok((composition(conn, photo_id)?, true))
 }
 fn adopt_frame_tx(conn: &Connection, raw: &str, observed: &Fingerprint) -> Result<Vec<(i64, i64)>> {
@@ -435,6 +445,7 @@ fn session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SessionDto> {
             arranged_at: r.get(12)?,
         },
         dirty: published_at.is_some() && change_seq > published_seq,
+        changes: None,
         photo_count: r.get(8)?,
         unreviewed_count: r.get(9)?,
         main_count: r.get(10)?,
@@ -443,8 +454,47 @@ fn session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<SessionDto> {
 }
 
 fn session(conn: &Connection, id: i64) -> Result<SessionDto> {
-    conn.query_row("SELECT s.id,s.item_id,s.published_at,s.published_seq,s.change_seq,s.last_activity_at,s.created_at,s.undo_slot,COUNT(p.id),COALESCE(SUM(p.classification='unreviewed'),0),COALESCE(SUM(p.classification='main'),0),COALESCE(SUM(p.classification='condition'),0),s.arranged_at FROM sessions s LEFT JOIN photos p ON p.session_id=s.id WHERE s.id=?1 GROUP BY s.id", [id], session_row)
-        .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("session {id}")))
+    let mut dto = conn.query_row("SELECT s.id,s.item_id,s.published_at,s.published_seq,s.change_seq,s.last_activity_at,s.created_at,s.undo_slot,COUNT(p.id),COALESCE(SUM(p.classification='unreviewed'),0),COALESCE(SUM(p.classification='main'),0),COALESCE(SUM(p.classification='condition'),0),s.arranged_at FROM sessions s LEFT JOIN photos p ON p.session_id=s.id WHERE s.id=?1 GROUP BY s.id", [id], session_row)
+        .optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("session {id}")))?;
+    if dto.dirty {
+        dto.changes = Some(published_changes(conn, &dto.session)?);
+    }
+    Ok(dto)
+}
+
+/// A10: why a published session is open again (`session_changes` rows past the publish; new
+/// photos by creation time, which also covers changes made before that table existed).
+fn published_changes(conn: &Connection, s: &Session) -> Result<PublishedChanges> {
+    let published_at = s.published_at.unwrap_or(i64::MAX);
+    let new_photos: i64 = conn.query_row("SELECT COUNT(*) FROM photos WHERE session_id=?1 AND classification<>'deleted' AND created_at>?2", params![s.id, published_at], |r| r.get(0)).map_err(db)?;
+    let editor_edits: i64 = conn.query_row("SELECT COUNT(DISTINCT c.raw_path) FROM session_changes c WHERE c.session_id=?1 AND c.kind='editor' AND c.seq>?2 AND EXISTS(SELECT 1 FROM photos p WHERE p.session_id=?1 AND p.raw_path=c.raw_path AND p.classification IN ('main','condition'))", params![s.id, s.published_seq], |r| r.get(0)).map_err(db)?;
+    let app_edits: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM session_changes WHERE session_id=?1 AND kind='app' AND seq>?2)", params![s.id, s.published_seq], |r| r.get(0)).map_err(db)?;
+    let recorded: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM session_changes WHERE session_id=?1 AND seq>?2)",
+            params![s.id, s.published_seq],
+            |r| r.get(0),
+        )
+        .map_err(db)?;
+    Ok(PublishedChanges {
+        new_photos,
+        editor_edits,
+        app_edits,
+        // Changes counted before this version kept no reason.
+        unrecorded: new_photos == 0 && !recorded,
+    })
+}
+
+/// A10: one `session_changes` row for the change just counted on `session_id`.
+fn record_change(
+    conn: &Connection,
+    session_id: i64,
+    kind: &str,
+    raw: Option<&str>,
+    at: i64,
+) -> Result<()> {
+    conn.execute("INSERT INTO session_changes(session_id,seq,kind,raw_path,at) SELECT id,change_seq,?2,?3,?4 FROM sessions WHERE id=?1", params![session_id, kind, raw, at]).map_err(db)?;
+    Ok(())
 }
 
 fn photo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Photo> {
@@ -961,6 +1011,26 @@ impl StoreTx for SqliteTx<'_> {
             .execute(
                 "UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=?2",
                 params![at, session_id],
+            )
+            .map_err(db)?;
+        record_change(&self.tx, session_id, "app", None, at)?;
+        Ok(())
+    }
+    fn touch_session_on_arrival(&mut self, session_id: i64, at: i64) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE sessions SET change_seq=change_seq+1,last_activity_at=?1 WHERE id=?2",
+                params![at, session_id],
+            )
+            .map_err(db)?;
+        record_change(&self.tx, session_id, "arrival", None, at)?;
+        Ok(())
+    }
+    fn set_published_seq(&mut self, session_id: i64, seq: i64) -> Result<()> {
+        self.tx
+            .execute(
+                "UPDATE sessions SET published_seq=?1 WHERE id=?2",
+                params![seq, session_id],
             )
             .map_err(db)?;
         Ok(())
@@ -1811,6 +1881,15 @@ impl Store for SqliteStore {
                     [id],
                 )
                 .map_err(db)?;
+                // A10: an adjustment made in Capture One.
+                let now: i64 = tx
+                    .query_row(
+                        "SELECT CAST(strftime('%s','now') AS INTEGER)*1000",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .map_err(db)?;
+                record_change(&tx, *id, "editor", Some(raw), now)?;
             }
             ids
         } else {
@@ -2281,6 +2360,13 @@ impl Store for SqliteStore {
             params![new.created_at, new.session_id],
         )
         .map_err(db)?;
+        record_change(
+            &tx,
+            new.session_id,
+            "arrival",
+            Some(&new.raw_path),
+            new.created_at,
+        )?;
         tx.commit().map_err(db)?;
         photo(&conn, id)
     }
@@ -2353,6 +2439,13 @@ impl Store for SqliteStore {
             params![new.created_at, new.session_id],
         )
         .map_err(db)?;
+        record_change(
+            &tx,
+            new.session_id,
+            "arrival",
+            Some(&new.raw_path),
+            new.created_at,
+        )?;
         tx.commit().map_err(db)?;
         Ok((photo(&conn, id)?, true))
     }
@@ -2894,6 +2987,8 @@ impl Store for SqliteStore {
         let tx = conn.transaction().map_err(db)?;
         tx.execute("UPDATE publish_items SET step='done',failed_step=NULL,error=NULL,finished_at=?1 WHERE id=?2",params![at,item_id]).map_err(db)?;
         tx.execute("UPDATE sessions SET published_at=?1,published_seq=(SELECT confirmed_change_seq FROM publish_items WHERE id=?2),last_activity_at=?1 WHERE id=(SELECT session_id FROM publish_items WHERE id=?2)",params![at,item_id]).map_err(db)?;
+        // A10: the reasons this publish answered are gone.
+        tx.execute("DELETE FROM session_changes WHERE session_id=(SELECT session_id FROM publish_items WHERE id=?1) AND seq<=(SELECT published_seq FROM sessions WHERE id=(SELECT session_id FROM publish_items WHERE id=?1))",params![item_id]).map_err(db)?;
         tx.execute("INSERT INTO notifications(session_id,run_id,kind,text,created_at) SELECT session_id,run_id,'published',?1,?2 FROM publish_items WHERE id=?3",params![text,at,item_id]).map_err(db)?;
         tx.execute(
             "DELETE FROM settings WHERE key=?1",
