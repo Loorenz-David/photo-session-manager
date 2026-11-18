@@ -19,7 +19,9 @@ vi.mock('@/services/search', () => ({
   savedPages: vi.fn(async () => []),
   savePage: vi.fn(),
   removePage: vi.fn(async () => undefined),
-  putText: vi.fn(async () => ({})),
+  putText: vi.fn(async () => ({ stored: {}, previous: null })),
+  putBack: vi.fn(async () => undefined),
+  openAiReview: vi.fn(async () => undefined),
   askAi: vi.fn(async () => ({ suggested: [], not_written: [], cost_micro_usd: 0 })),
   onSearchEvents: vi.fn(),
 }));

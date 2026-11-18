@@ -15,6 +15,7 @@ import { useHistoryKeys } from './features/history/useHistoryKeys';
 import { useKeyboard } from './lib/keyboard';
 export { parentRoute, routeLabel } from './lib/routes';
 import { activateSession, activeSession, deactivateSession } from './services/sessions';
+import { useReviewFromSearch } from './features/search/useReviewFromSearch';
 
 /** Routes: `#/` sessions, `#/session/:id` session view, `#/health` health screen, `#/settings` settings (hash routing works for the bundled app's file URLs). */
 function routeSessionId(): number | undefined {
@@ -105,6 +106,8 @@ export default function App() {
     if (!open) setDetailsStep(null);
   }, []);
   useEffect(() => { changeDetailsOpen(false); }, [sessionId, changeDetailsOpen]);
+  // A14: "Open AI review" in a search window (declared after the reset above, so it opens after it).
+  useReviewFromSearch(sessionId, navigate, useCallback(() => { setDetailsStep(REVIEW_STEP); setDetailsOpen(true); }, []));
   useCaptureTarget(sessionId);
   useHistory(sessionId);
   useHistoryKeys(sessionId);

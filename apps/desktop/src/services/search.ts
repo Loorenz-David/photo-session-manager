@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { commands, type AskAnswerDto, type AttributeValueDto_Serialize, type SavedPageDto, type SelectionAnswerDto_Serialize, type VisualMatchDto_Serialize } from './bindings';
+import { commands, type AskAnswerDto, type PutTextDto_Serialize, type SavedPageDto, type SelectionAnswerDto_Serialize, type VisualMatchDto_Serialize } from './bindings';
 import { unwrap } from './sessions';
 
 /** Owner correction A12: the "Search this photo" window. */
@@ -7,6 +7,7 @@ export type VisualMatch = VisualMatchDto_Serialize;
 export type SavedPage = SavedPageDto;
 export type SelectionAnswer = SelectionAnswerDto_Serialize;
 export type AskAnswer = AskAnswerDto;
+export type PutText = PutTextDto_Serialize;
 
 /** Opens the session's search window pinned on the photo (or brings it forward on that photo). */
 export async function openSearchWindow(sessionId: number, photoId: number): Promise<void> {
@@ -66,9 +67,24 @@ export async function removePage(pageId: number): Promise<void> {
   unwrap(await commands.searchPageRemove(pageId));
 }
 
-/** "Put in <field>": the selected text into the field, as the person's own edit. */
-export async function putText(sessionId: number, key: string, text: string): Promise<AttributeValueDto_Serialize> {
+/** "Put in <field>": the selected text into the field, as the person's own edit; `previous` is what the field held. */
+export async function putText(sessionId: number, key: string, text: string): Promise<PutText> {
   return unwrap(await commands.searchPutText(sessionId, key, text));
+}
+
+/** A14: Undo of "Put in": the field gets back `previous` (its stored text), or is emptied when that is null. */
+export async function putBack(sessionId: number, key: string, previous: string | null): Promise<void> {
+  unwrap(await commands.searchPutBack(sessionId, key, previous));
+}
+
+/** A14: the main window comes forward on the session's AI review tab. */
+export async function openAiReview(sessionId: number): Promise<void> {
+  unwrap(await commands.searchOpenReview(sessionId));
+}
+
+/** A14: the main window's side of `openAiReview`. */
+export async function onOpenAiReview(handler: (sessionId: number) => void): Promise<UnlistenFn> {
+  return listen<{ session_id: number }>('search_open_review', event => handler(event.payload.session_id));
 }
 
 /** "Ask AI…": the answer becomes AI suggestions (AI review tab). */

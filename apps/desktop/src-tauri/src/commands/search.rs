@@ -454,7 +454,23 @@ pub fn value_from_text(
     }
 }
 
-/// "Put in <field>": the selected text into a field, as a person's edit (one undo step).
+/// What "Put in <field>" did: the stored value, and what the field held before (its stored JSON
+/// text; `None`: it was empty), so the window's toast can put it back (A14).
+#[derive(Serialize, Type)]
+pub struct PutTextDto {
+    pub stored: AttributeValueDto,
+    pub previous: Option<String>,
+}
+
+fn session_item(app: &psm_integrations::AppHandles, sid: i64) -> Result<i64, CommandError> {
+    Store::session(app.store.as_ref(), sid)
+        .map_err(CommandError::from)?
+        .session
+        .item_id
+        .ok_or_else(|| refused("no_item", "This session has no item"))
+}
+
+/// "Put in <field>": the selected text into a field, as a person's edit.
 #[tauri::command]
 #[specta::specta]
 pub async fn search_put_text(
@@ -462,19 +478,15 @@ pub async fn search_put_text(
     session_id: CommandId,
     key: String,
     text: String,
-) -> Result<AttributeValueDto, CommandError> {
+) -> Result<PutTextDto, CommandError> {
     if text.chars().count() > MAX_SELECTION_CHARS {
         return Err(refused("selection_too_long", "The selection is too long"));
     }
     let handles = state.handles().map_err(CommandError::from)?;
     let sid = session_id.0;
     let app = handles.clone();
-    let stored = tauri::async_runtime::spawn_blocking(move || -> Result<_, CommandError> {
-        let item_id = Store::session(app.store.as_ref(), sid)
-            .map_err(CommandError::from)?
-            .session
-            .item_id
-            .ok_or_else(|| refused("no_item", "This session has no item"))?;
+    let put = tauri::async_runtime::spawn_blocking(move || -> Result<_, CommandError> {
+        let item_id = session_item(&app, sid)?;
         with_service(&app, |service| {
             let definitions = service.definitions(integration(&app).as_deref())?;
             let definition = definitions
@@ -482,13 +494,26 @@ pub async fn search_put_text(
                 .find(|d| d.key == key)
                 .ok_or_else(|| Error::NotFound(format!("field {key}")))?;
             let value = value_from_text(definition, &text).map_err(Error::InvalidValue)?;
+            // A14: what the field held as the form shows it (the title is the item's own), for the
+            // toast's Undo.
+            let previous = service
+                .form_get(item_id)?
+                .groups
+                .into_iter()
+                .flat_map(|g| g.fields)
+                .find(|f| f.definition.key == key)
+                .and_then(|f| f.value)
+                .map(|v| v.value);
             let stored = service.set_value(item_id, &key, value, Provenance::Human)?;
             tracing::info!(
                 target: "psm::search",
                 "search_window.text_to_field session={sid} key={key} chars={}",
                 text.chars().count()
             );
-            Ok(stored)
+            Ok(PutTextDto {
+                stored: stored.into(),
+                previous,
+            })
         })
     })
     .await
@@ -496,7 +521,66 @@ pub async fn search_put_text(
     handles
         .events
         .emit(AppEvent::ResearchChanged { session_id: sid });
-    Ok(stored.into())
+    Ok(put)
+}
+
+/// A14: Undo of "Put in <field>": the field gets back what it held (`previous`, the stored JSON
+/// text `search_put_text` answered), or is emptied when it was empty. A person's edit.
+#[tauri::command]
+#[specta::specta]
+pub async fn search_put_back(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+    key: String,
+    previous: Option<String>,
+) -> Result<(), CommandError> {
+    let handles = state.handles().map_err(CommandError::from)?;
+    let sid = session_id.0;
+    let app = handles.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), CommandError> {
+        let item_id = session_item(&app, sid)?;
+        let value = previous
+            .as_deref()
+            .map(serde_json::from_str::<serde_json::Value>)
+            .transpose()
+            .map_err(|_| refused("not_restorable", "The previous value cannot be put back"))?;
+        with_service(&app, |service| {
+            match value {
+                Some(value) => {
+                    service.set_value(item_id, &key, value, Provenance::Human)?;
+                }
+                None => service.clear(item_id, &key)?,
+            }
+            tracing::info!(
+                target: "psm::search",
+                "search_window.text_to_field_undone session={sid} key={key}"
+            );
+            Ok(())
+        })
+    })
+    .await
+    .map_err(joined)??;
+    handles
+        .events
+        .emit(AppEvent::ResearchChanged { session_id: sid });
+    Ok(())
+}
+
+/// A14: "Open AI review" from the search window: the main window comes forward and opens the
+/// session's details on the AI review tab (event `search_open_review`).
+#[tauri::command]
+#[specta::specta]
+pub async fn search_open_review(app: AppHandle, session_id: CommandId) -> Result<(), CommandError> {
+    use tauri::Emitter;
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.unminimize();
+        let _ = main.set_focus();
+    }
+    app.emit(
+        "search_open_review",
+        serde_json::json!({ "session_id": session_id.0 }),
+    )
+    .map_err(tauri_error)
 }
 
 #[derive(Serialize, Type)]

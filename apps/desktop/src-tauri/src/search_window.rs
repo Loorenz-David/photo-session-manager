@@ -13,6 +13,10 @@
 //! ([`SELECTION_SCRIPT`], evaluated in the page) and checks the answer
 //! ([`parse_selection_report`]). Writing a field or asking the model happens only from a click in
 //! the app's own page.
+//!
+//! A14: every frame of the page webview also runs [`POPUP_SHIM`] at its start. It only turns a
+//! page's "open in a new window" (links, forms, `window.open`) into a navigation of the page itself;
+//! it reads and sends nothing, and the navigation check above still applies.
 
 use std::{
     collections::HashMap,
@@ -102,6 +106,61 @@ pub fn allowed_navigation(url: &str) -> bool {
     match http_host(url.trim()) {
         Some((_, host)) => !local_host(&host),
         None => false,
+    }
+}
+
+/// Why the page webview may not load `url` (`None`: it may). For the logs: a word, never the
+/// address itself.
+pub fn refusal_reason(url: &str) -> Option<&'static str> {
+    if allowed_navigation(url) {
+        return None;
+    }
+    let lower = url.trim().to_ascii_lowercase();
+    Some(if lower.is_empty() {
+        "empty"
+    } else if http_host(url.trim()).is_some()
+        || lower
+            .strip_prefix("blob:")
+            .is_some_and(|inner| http_host(inner).is_some())
+    {
+        "local_address"
+    } else {
+        "not_a_web_page"
+    })
+}
+
+/// A14: the script every frame of the page webview runs at its start (see `page_popups.js`): links
+/// and pop-ups aimed at a new window open in this page instead. `go` navigates the top page (the
+/// navigation check still applies).
+pub const POPUP_SHIM: &str = include_str!("page_popups.js");
+const POPUP_GO: &str =
+    "function(u){try{window.top.location.href=u}catch(e){try{window.location.href=u}catch(e2){}}}";
+
+pub fn popup_script() -> String {
+    format!("({})({POPUP_GO});", POPUP_SHIM.trim())
+}
+
+/// What the page webview does when a page asks for a new window (A14).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NewWindow {
+    /// Load the address in the page webview itself.
+    OpenHere,
+    /// Do nothing; the word says why (for the logs).
+    Ignore(&'static str),
+}
+
+/// A14: a new window a page asks for opens in the page webview when it is a public web page. An
+/// empty window (`about:blank`, which a page then points somewhere by script) is never loaded over
+/// the page; the page script ([`POPUP_SHIM`]) sends such windows' address here itself.
+pub fn new_window(url: &str) -> NewWindow {
+    let lower = url.trim().to_ascii_lowercase();
+    if lower.is_empty() || lower.starts_with("about:") {
+        return NewWindow::Ignore("blank_window");
+    }
+    match refusal_reason(url) {
+        None if http_host(url.trim()).is_some() => NewWindow::OpenHere,
+        None => NewWindow::Ignore("not_a_web_page"),
+        Some(why) => NewWindow::Ignore(why),
     }
 }
 
@@ -656,24 +715,38 @@ pub mod window {
         WebviewBuilder::new(web_label(session_id), WebviewUrl::External(blank))
             // A13: Safari's identity, so Google serves its current pages and Lens results.
             .user_agent(PAGE_USER_AGENT)
+            // A14: links and pop-ups aimed at a new window open in this page (every frame).
+            .initialization_script_for_all_frames(popup_script())
             .on_navigation(move |url| {
-                let allowed = allowed_navigation(url.as_str());
-                if !allowed {
+                let refused = refusal_reason(url.as_str());
+                if let Some(why) = refused {
                     tracing::info!(
                         target: "psm::search",
-                        "search_window.navigation_refused session={session_id} scheme={}",
-                        url.scheme()
+                        "search_window.navigation_refused session={session_id} scheme={} host={} why={why}",
+                        url.scheme(),
+                        url.host_str().unwrap_or("-")
                     );
                 }
-                allowed
+                refused.is_none()
             })
             .on_download(|_, _| false)
             .on_new_window(move |url, _| {
                 // A link that would open a new window opens here instead.
-                if allowed_navigation(url.as_str())
-                    && let Some(web) = popups.get_webview(&web_label(session_id))
-                {
-                    let _ = web.navigate(url);
+                let host = url.host_str().unwrap_or("-").to_owned();
+                match new_window(url.as_str()) {
+                    NewWindow::OpenHere => {
+                        if let Some(web) = popups.get_webview(&web_label(session_id)) {
+                            let _ = web.navigate(url);
+                        }
+                        tracing::info!(
+                            target: "psm::search",
+                            "search_window.new_window session={session_id} host={host} result=opened_here"
+                        );
+                    }
+                    NewWindow::Ignore(why) => tracing::info!(
+                        target: "psm::search",
+                        "search_window.new_window session={session_id} host={host} result=ignored why={why}"
+                    ),
                 }
                 NewWindowResponse::Deny
             })
@@ -1003,6 +1076,78 @@ mod tests {
             Some(("shop.example.se".into(), "other"))
         );
         assert_eq!(kind("about:blank"), None);
+    }
+
+    #[test]
+    fn a14_a_new_window_a_page_asks_for_opens_in_the_page_itself() {
+        for url in [
+            "https://www.rusta.com/sv/vattenflaska-500-ml",
+            "https://www.google.com/url?q=https://www.amazon.se/x&sa=U",
+            "http://shop.example.se/p?id=1#top",
+        ] {
+            assert_eq!(new_window(url), NewWindow::OpenHere, "{url}");
+        }
+        // An empty window is never loaded over the page (the page script sends its address).
+        assert_eq!(new_window("about:blank"), NewWindow::Ignore("blank_window"));
+        assert_eq!(new_window(""), NewWindow::Ignore("blank_window"));
+        // Never anything but a public web page.
+        assert_eq!(
+            new_window("http://localhost:1420/index.html"),
+            NewWindow::Ignore("local_address")
+        );
+        assert_eq!(
+            new_window("tauri://localhost/"),
+            NewWindow::Ignore("not_a_web_page")
+        );
+        assert_eq!(
+            new_window("javascript:alert(1)"),
+            NewWindow::Ignore("not_a_web_page")
+        );
+        assert_eq!(
+            new_window("blob:https://www.google.com/1"),
+            NewWindow::Ignore("not_a_web_page")
+        );
+    }
+
+    #[test]
+    fn a14_refused_navigations_say_why_in_a_word() {
+        assert_eq!(refusal_reason("https://www.google.com/search?q=x"), None);
+        assert_eq!(refusal_reason("about:blank"), None);
+        assert_eq!(refusal_reason(""), Some("empty"));
+        assert_eq!(
+            refusal_reason("http://192.168.1.10/router"),
+            Some("local_address")
+        );
+        assert_eq!(
+            refusal_reason("blob:http://localhost:1420/1"),
+            Some("local_address")
+        );
+        assert_eq!(refusal_reason("file:///etc/hosts"), Some("not_a_web_page"));
+        assert_eq!(
+            refusal_reason("intent://x#Intent;end"),
+            Some("not_a_web_page")
+        );
+    }
+
+    #[test]
+    fn a14_the_page_script_turns_new_windows_into_this_page_and_reaches_nothing_else() {
+        let script = popup_script();
+        // The script file is wrapped as `(<function>)(<go>);`.
+        assert!(script.starts_with('(') && script.ends_with(");"));
+        assert!(POPUP_SHIM.contains("window.open = function"));
+        assert!(POPUP_SHIM.contains("addEventListener('click', retarget, true)"));
+        assert!(script.contains("window.top.location.href=u"));
+        // It never talks to the app.
+        for word in [
+            "__TAURI",
+            "ipc",
+            "invoke",
+            "postMessage(",
+            "fetch(",
+            "XMLHttpRequest",
+        ] {
+            assert!(!POPUP_SHIM.contains(word), "{word}");
+        }
     }
 
     #[test]

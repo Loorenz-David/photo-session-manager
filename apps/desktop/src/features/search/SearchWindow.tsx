@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Bookmark, LayoutGrid, Loader2, RotateCw, Search, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, Globe, LayoutGrid, Loader2, RotateCw, ScanSearch, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Toaster } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { getForm, type FormField } from '@/services/attributes';
@@ -11,6 +10,8 @@ import { previewUrl } from '@/services/sessions';
 import {
   askAi,
   browserStep,
+  openAiReview,
+  putBack,
   giveUpLens,
   goTo,
   lensResults,
@@ -32,6 +33,7 @@ import { Thumb } from '@/features/workspace/PhotoTile';
 import { orientationTransform } from '@/features/workspace/StageImage';
 import { displayOrder } from '@/features/workspace/order';
 import { useTheme } from '@/features/shell/ThemeToggle';
+import { SelectionBar, type AskOutcome, type Selected } from './SelectionBar';
 
 /** How often the window asks the page what is selected (ms). */
 export const SELECTION_POLL_MS = 700;
@@ -64,7 +66,6 @@ export function putFields(fields: FormField[]): FormField[] {
 
 type Mode = 'web' | 'list';
 type Page = { url: string; title: string; loading: boolean };
-type Selected = { text: string; url: string; title: string };
 
 /**
  * A13: the browser area's place as sent to the app: the element's box in this page's CSS pixels,
@@ -106,7 +107,7 @@ function lensNote(lens: LensEvent['state'] | null, waiting: boolean): string | n
  * is a separate webview placed over the browser area; this page never reads it except for the selected text.
  */
 export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number; initialPhotoId: number }) {
-  useTheme();
+  const [theme] = useTheme();
   const [view, setView] = useState<SessionView | null>(null);
   const [fields, setFields] = useState<FormField[]>([]);
   const [photoId, setPhotoId] = useState(initialPhotoId);
@@ -120,9 +121,6 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
   const [pages, setPages] = useState<SavedPage[]>([]);
   const [selected, setSelected] = useState<Selected | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
-  const [instruction, setInstruction] = useState('');
-  const [asking, setAsking] = useState(false);
-  const [other, setOther] = useState('');
   const browserArea = useRef<HTMLDivElement>(null);
   const searchedPhotos = useRef(new Set<number>());
   const photoIdRef = useRef(photoId);
@@ -318,38 +316,41 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
     }
   }
 
-  async function put(field: FormField) {
-    if (!selected) return;
+  /** "Put in <field>", confirmed by a toast whose Undo gives the field back what it held. */
+  async function put(field: FormField, selection: Selected) {
+    const { key, label } = field.definition;
     try {
-      await putText(sessionId, field.definition.key, selected.text);
-      toast.success(`Put in ${field.definition.label}`);
+      const done = await putText(sessionId, key, selection.text);
+      toast.success(`Put in ${label}`, {
+        description: selection.text.length > 80 ? `${selection.text.slice(0, 80)}…` : selection.text,
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            putBack(sessionId, key, done.previous)
+              .then(() => toast.message(done.previous === null ? `${label} is empty again` : `${label} has its previous value again`))
+              .catch(error => toast.error(`Could not undo: ${(error as Error).message}`));
+          },
+        },
+      });
     } catch (error) {
       toast.error((error as Error).message);
     }
   }
 
-  async function ask() {
-    if (!selected) return;
-    setAsking(true);
+  /** "Ask AI…": the answer for the bar to show (null when the call failed; a toast says why). */
+  async function ask(selection: Selected, instruction: string): Promise<AskOutcome | null> {
     try {
-      const answer = await askAi(sessionId, selected, instruction);
-      if (answer.suggested.length > 0) {
-        const names = answer.suggested.map(s => `${s.label}: ${s.value}`).join(' · ');
-        toast.success(`AI suggested ${answer.suggested.length === 1 ? '1 field' : `${answer.suggested.length} fields`} — check ${answer.suggested.length === 1 ? 'it' : 'them'} in AI review`, { description: names });
-      } else if (answer.not_written.length > 0) {
-        toast.message('Nothing new to suggest', { description: answer.not_written.map(([label, why]) => `${label}: ${why}`).join(' · ') });
-      } else {
-        toast.message('AI found nothing for that in the selected text');
-      }
+      const answer = await askAi(sessionId, selection, instruction);
+      return { suggested: answer.suggested, notWritten: answer.not_written };
     } catch (error) {
       toast.error(`Ask AI: ${(error as Error).message}`);
-    } finally {
-      setAsking(false);
+      return null;
     }
   }
 
   const note = lensNote(lens, waiting);
   const current = page?.url;
+  const currentSaved = mode === 'web' && current !== undefined && pages.some(p => p.url === current);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
@@ -379,38 +380,70 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5">
-          <Button variant="ghost" size="icon-sm" aria-label="Back" title="Back" onClick={() => void browserStep(sessionId, 'back').catch(() => undefined)}><ArrowLeft /></Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Forward" title="Forward" onClick={() => void browserStep(sessionId, 'forward').catch(() => undefined)}><ArrowRight /></Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Reload" title="Reload" onClick={() => void browserStep(sessionId, 'reload').catch(() => undefined)}>
-            {page?.loading ? <Loader2 className="animate-spin" /> : <RotateCw />}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => void backToResults()}><LayoutGrid /> Results</Button>
-          <div className="mx-2 min-w-0 flex-1 truncate text-xs" title={current}>
-            {mode === 'list'
-              ? <span className="text-muted-foreground">Matches for this photo</span>
-              : page
-                ? <><span className="font-semibold">{hostOf(page.url)}</span>{page.title ? <span className="text-muted-foreground"> — {page.title}</span> : null}</>
-                : <span className="text-muted-foreground">…</span>}
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
+          <div className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5">
+            <Button variant="ghost" size="icon-sm" aria-label="Back" title="Back" onClick={() => void browserStep(sessionId, 'back').catch(() => undefined)}><ArrowLeft /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Forward" title="Forward" onClick={() => void browserStep(sessionId, 'forward').catch(() => undefined)}><ArrowRight /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Reload" title="Reload" onClick={() => void browserStep(sessionId, 'reload').catch(() => undefined)}><RotateCw /></Button>
           </div>
-          <Button variant="outline" size="sm" disabled={mode !== 'web' || !page || !/^https?:/.test(page.url)} onClick={() => void saveCurrent()}><Bookmark /> Save page</Button>
-          <Button variant="ghost" size="sm" title="Search Google again for the pinned photo" onClick={() => void searchGoogle(photoId)}><Search /> Google</Button>
+          <Button variant="secondary" size="sm" title="Back to the results for the pinned photo" onClick={() => void backToResults()}><LayoutGrid /> Results</Button>
+          <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-full bg-muted/60 px-3 text-xs" title={current} data-testid="address">
+            {page?.loading && mode === 'web' ? <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" /> : <Globe className="size-3.5 shrink-0 text-muted-foreground" />}
+            <span className="min-w-0 truncate">
+              {mode === 'list'
+                ? <span className="text-muted-foreground">Matches for this photo</span>
+                : page
+                  ? <><span className="font-semibold">{hostOf(page.url)}</span>{page.title ? <span className="text-muted-foreground"> — {page.title}</span> : null}</>
+                  : <span className="text-muted-foreground">…</span>}
+            </span>
+          </div>
+          {currentSaved ? (
+            <Button variant="secondary" size="sm" disabled title="This page is saved"><BookmarkCheck /> Saved</Button>
+          ) : (
+            <Button variant="outline" size="sm" title="Keep this page as a tab for this item" disabled={mode !== 'web' || !page || !/^https?:/.test(page.url)} onClick={() => void saveCurrent()}><Bookmark /> Save page</Button>
+          )}
+          <Button variant="ghost" size="icon-sm" aria-label="Search Google again" title="Search Google again for the pinned photo" onClick={() => void searchGoogle(photoId)}><ScanSearch /></Button>
         </div>
 
         {pages.length > 0 && (
-          <div className="flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1" aria-label="Saved pages">
-            {pages.map(saved => (
-              <div key={saved.id} className={cn('flex max-w-[220px] shrink-0 items-center rounded-md border text-xs', mode === 'web' && current === saved.url ? 'border-primary bg-primary/10' : 'bg-muted/50')}>
-                <button type="button" className="min-w-0 truncate px-2 py-1 text-left" title={saved.url} onClick={() => void open(saved.url)}>
-                  <span className="font-semibold">{hostOf(saved.url)}</span>{saved.title ? ` · ${saved.title}` : ''}
-                </button>
-                <button type="button" aria-label={`Remove saved page ${hostOf(saved.url)}`} className="px-1 text-muted-foreground hover:text-foreground" onClick={() => void unsave(saved)}><X className="size-3" /></button>
-              </div>
-            ))}
+          <div className="flex h-10 shrink-0 items-center gap-1.5 overflow-x-auto border-b px-2" aria-label="Saved pages">
+            <span className="shrink-0 px-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Saved</span>
+            {pages.map(saved => {
+              const on = mode === 'web' && current === saved.url;
+              return (
+                <div
+                  key={saved.id}
+                  data-active={on || undefined}
+                  className={cn(
+                    'group flex h-7 max-w-[240px] shrink-0 items-center rounded-full border pr-0.5 pl-2.5 text-xs transition-colors',
+                    on ? 'border-transparent bg-foreground text-background' : 'bg-background hover:bg-muted',
+                  )}
+                >
+                  <button type="button" className="min-w-0 truncate text-left" title={`${saved.title ? `${saved.title}\n` : ''}${saved.url}`} onClick={() => void open(saved.url)}>
+                    <span className="font-semibold">{hostOf(saved.url)}</span>
+                    {saved.title ? <span className={on ? 'opacity-70' : 'text-muted-foreground'}> · {saved.title}</span> : null}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove saved page ${hostOf(saved.url)}`}
+                    title="Remove from saved"
+                    className="ml-1 flex size-5 shrink-0 items-center justify-center rounded-full opacity-60 group-hover:opacity-100 hover:bg-current/15"
+                    onClick={() => void unsave(saved)}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {note && mode === 'web' && <div className="shrink-0 border-b bg-muted/50 px-3 py-1.5 text-xs" role="status">{note}</div>}
+        {note && mode === 'web' && (
+          <div className="flex h-9 shrink-0 items-center gap-2 border-b bg-(--ai-muted)/50 px-3 text-xs text-(--ai-foreground)" role="status">
+            {lens === 'consent' ? null : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+            {note}
+          </div>
+        )}
 
         <div className="relative min-h-0 flex-1">
           {/* The page webview is placed exactly over this area. */}
@@ -428,8 +461,8 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
                   {matches && matches.length === 0 && <p className="text-sm text-muted-foreground">No matches.</p>}
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
                     {(matches ?? []).map(match => (
-                      <button key={match.url} type="button" onClick={() => void open(match.url)} className="flex flex-col gap-1 rounded-md border p-2 text-left hover:bg-muted">
-                        {match.thumbnail ? <img src={match.thumbnail} alt="" className="aspect-square w-full rounded object-cover" /> : <div className="aspect-square w-full rounded bg-muted" />}
+                      <button key={match.url} type="button" onClick={() => void open(match.url)} className="flex flex-col gap-1 rounded-lg border p-2 text-left shadow-(--shadow-sm) transition-colors hover:bg-muted">
+                        {match.thumbnail ? <img src={match.thumbnail} alt="" className="aspect-square w-full rounded-md object-cover" /> : <div className="aspect-square w-full rounded-md bg-muted" />}
                         <span className="line-clamp-2 text-xs font-semibold">{match.title || hostOf(match.url)}</span>
                         <span className="truncate text-[11px] text-muted-foreground">{match.source || hostOf(match.url)}</span>
                       </button>
@@ -441,49 +474,18 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
           )}
         </div>
 
-        <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 px-3 py-2" aria-label="Selected text">
-          {selected ? (
-            <>
-              <p className="line-clamp-2 text-xs"><span className="font-semibold">Selected:</span> “{selected.text}” <span className="text-muted-foreground">— {hostOf(selected.url)}</span></p>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {quick.map(field => (
-                  <Button key={field.definition.key} size="sm" variant="secondary" onClick={() => void put(field)}>Put in {field.definition.label}</Button>
-                ))}
-                {rest.length > 0 && (
-                  <select
-                    aria-label="Put in another field"
-                    className="h-7 rounded-md border bg-background px-2 text-xs"
-                    value={other}
-                    onChange={event => {
-                      const field = rest.find(f => f.definition.key === event.target.value);
-                      setOther('');
-                      if (field) void put(field);
-                    }}
-                  >
-                    <option value="">{quick.length > 0 ? 'Other field…' : 'Put in field…'}</option>
-                    {rest.map(field => <option key={field.definition.key} value={field.definition.key}>{field.definition.label}</option>)}
-                  </select>
-                )}
-                <div className="ml-auto flex min-w-[320px] flex-1 items-center gap-1.5">
-                  <Input
-                    aria-label="Instruction for AI"
-                    className="h-7 text-xs"
-                    placeholder="Ask AI… e.g. find the production year"
-                    maxLength={300}
-                    value={instruction}
-                    onChange={event => setInstruction(event.target.value)}
-                    onKeyDown={event => { if (event.key === 'Enter') void ask(); }}
-                  />
-                  <Button size="sm" disabled={asking} onClick={() => void ask()}>{asking ? <Loader2 className="animate-spin" /> : <Sparkles />} Ask AI</Button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground">{refused ?? 'Select text on the page to put it in a field or ask AI about it.'}</p>
-          )}
-        </div>
+        <SelectionBar
+          selected={selected}
+          refused={refused}
+          quick={quick}
+          rest={rest}
+          onPut={put}
+          onAsk={ask}
+          onOpenReview={() => void openAiReview(sessionId).catch(error => toast.error((error as Error).message))}
+        />
       </main>
-      <Toaster />
+      {/* Toasts sit over the photo panel: anything drawn over the page area would be hidden under the page. */}
+      <Toaster theme={theme} position="bottom-left" offset={12} visibleToasts={3} closeButton />
     </div>
   );
 }

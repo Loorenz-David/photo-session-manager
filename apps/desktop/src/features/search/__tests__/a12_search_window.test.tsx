@@ -19,7 +19,9 @@ vi.mock('@/services/search', () => ({
   savedPages: vi.fn(async () => []),
   savePage: vi.fn(),
   removePage: vi.fn(async () => undefined),
-  putText: vi.fn(async () => ({})),
+  putText: vi.fn(async () => ({ stored: {}, previous: null })),
+  putBack: vi.fn(async () => undefined),
+  openAiReview: vi.fn(async () => undefined),
   askAi: vi.fn(async () => ({ suggested: [], not_written: [], cost_micro_usd: 0 })),
   onSearchEvents: vi.fn(),
 }));
@@ -146,9 +148,9 @@ it('a12_with_no_research_matches_one_new_search_of_the_pinned_photo_runs', async
 it('a12_consent_is_explained_and_results_stop_the_wait', async () => {
   await renderWindow();
   act(() => handlers.lens({ session_id: SESSION, state: 'consent' }));
-  expect(screen.getByRole('status')).toHaveTextContent('Google asks about cookies');
+  expect(screen.getByText(/Google asks about cookies/)).toBeInTheDocument();
   act(() => handlers.lens({ session_id: SESSION, state: 'results', url: 'https://www.google.com/search?udm=26' }));
-  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Google asks about cookies/)).not.toBeInTheDocument();
 });
 
 it('a12_saved_pages_are_tabs_to_add_open_and_remove', async () => {
@@ -182,16 +184,19 @@ it('a12_selected_text_can_go_into_a_field_or_to_ai_from_the_apps_own_bar', async
   const bar = screen.getByLabelText('Selected text');
   await within(bar).findByText(/designed by Kai Kristiansen/);
   // Manufacturer and Designer come first; the list holds the rest (never a photo field).
-  const quick = within(bar).getAllByRole('button', { name: /^Put in / }).map(b => b.textContent);
+  const quick = within(bar).getAllByRole('button', { name: /^Put in / }).map(b => b.getAttribute('aria-label'));
   expect(quick).toEqual(['Put in Designer', 'Put in Manufacturer']);
-  const other = within(bar).getByLabelText('Put in another field');
-  expect(within(other).queryByText('Damage photos')).not.toBeInTheDocument();
   fireEvent.click(within(bar).getByRole('button', { name: 'Put in Manufacturer' }));
   await waitFor(() => expect(search.putText).toHaveBeenCalledWith(SESSION, 'custom.manufacturer', 'designed by Kai Kristiansen'));
-  fireEvent.change(other, { target: { value: 'custom.wood' } });
+  // A14: the other fields are an inline list in the bar (anything drawn over the page would be hidden).
+  fireEvent.click(within(bar).getByRole('button', { name: /Other field/ }));
+  const list = within(bar).getByRole('listbox', { name: 'Fields' });
+  expect(within(list).queryByText('Damage photos')).not.toBeInTheDocument();
+  fireEvent.click(within(list).getByRole('option', { name: 'Wood' }));
   await waitFor(() => expect(search.putText).toHaveBeenCalledWith(SESSION, 'custom.wood', 'designed by Kai Kristiansen'));
-  fireEvent.change(within(bar).getByLabelText('Instruction for AI'), { target: { value: 'who designed it' } });
   fireEvent.click(within(bar).getByRole('button', { name: /Ask AI/ }));
+  fireEvent.change(within(bar).getByLabelText('Instruction for AI'), { target: { value: 'who designed it' } });
+  fireEvent.click(within(bar).getByRole('button', { name: 'Send to AI' }));
   await waitFor(() => expect(search.askAi).toHaveBeenCalledWith(SESSION, { text: 'designed by Kai Kristiansen', url: 'https://e1.example/a', title: 'A' }, 'who designed it'));
 });
 

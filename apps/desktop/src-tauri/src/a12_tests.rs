@@ -56,6 +56,7 @@ fn setup() -> Setup {
             commands::search::search_page_save,
             commands::search::search_page_remove,
             commands::search::search_put_text,
+            commands::search::search_put_back,
             commands::attributes::form_get,
             commands::history::history_undo,
         ])
@@ -139,12 +140,15 @@ fn a12_saved_pages_are_kept_per_item_until_removed() {
 fn a12_put_text_is_a_persons_edit_with_one_undo_step() {
     let s = setup();
     let (w, item, session) = (&s.w, s.item, s.session);
-    let stored = call(
+    let put = call(
         w,
         "search_put_text",
         json!({"sessionId": session, "key": "product.title", "text": "  Kai Kristiansen teak sideboard "}),
     )
     .unwrap();
+    // A14: the answer also says what the field held (for the toast's Undo).
+    let stored = &put["stored"];
+    assert_eq!(put["previous"], json!(json!("Teak sideboard").to_string()));
     assert_eq!(stored["provenance"], "human");
     assert_eq!(
         stored["value"],
@@ -201,6 +205,86 @@ fn a12_a_remote_page_cannot_call_the_windows_commands() {
     }
     // The app's own page can.
     assert!(call(w, "search_pages", json!({"itemId": item})).is_ok());
+    // A14: nor the Undo of "Put in".
+    assert!(
+        call_from(
+            w,
+            "https://www.google.com/",
+            "search_put_back",
+            json!({"sessionId": session, "key": "product.title", "previous": null}),
+        )
+        .is_err()
+    );
+}
+
+/// The value a field of the item's form holds (its stored JSON text), or null.
+fn field_value(w: &W, item: i64, key: &str) -> Value {
+    let form = call(w, "form_get", json!({"itemId": item})).unwrap();
+    form["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|g| g["fields"].as_array().unwrap().iter())
+        .find(|f| f["definition"]["key"] == key)
+        .map(|f| f["value"]["value"].clone())
+        .unwrap_or(Value::Null)
+}
+
+#[test]
+fn a14_undo_of_put_in_gives_the_field_back_what_it_held() {
+    let s = setup();
+    let (w, item, session) = (&s.w, s.item, s.session);
+    let before = field_value(w, item, "product.title");
+    assert_eq!(before, json!(json!("Teak sideboard").to_string()));
+    let put = call(
+        w,
+        "search_put_text",
+        json!({"sessionId": session, "key": "product.title", "text": "Kai Kristiansen sideboard"}),
+    )
+    .unwrap();
+    assert_ne!(field_value(w, item, "product.title"), before);
+    call(
+        w,
+        "search_put_back",
+        json!({"sessionId": session, "key": "product.title", "previous": put["previous"]}),
+    )
+    .unwrap();
+    assert_eq!(field_value(w, item, "product.title"), before);
+    // A field that was empty is emptied again.
+    call(
+        w,
+        "search_put_back",
+        json!({"sessionId": session, "key": "product.title", "previous": null}),
+    )
+    .unwrap();
+    assert_eq!(field_value(w, item, "product.title"), Value::Null);
+    let put = call(
+        w,
+        "search_put_text",
+        json!({"sessionId": session, "key": "product.title", "text": "Teak sideboard, 1960s"}),
+    )
+    .unwrap();
+    assert_eq!(put["previous"], Value::Null);
+    assert_eq!(
+        field_value(w, item, "product.title"),
+        json!(json!("Teak sideboard, 1960s").to_string())
+    );
+    call(
+        w,
+        "search_put_back",
+        json!({"sessionId": session, "key": "product.title", "previous": put["previous"]}),
+    )
+    .unwrap();
+    assert_eq!(field_value(w, item, "product.title"), Value::Null);
+    // Something that is not a stored value is refused.
+    assert!(
+        call(
+            w,
+            "search_put_back",
+            json!({"sessionId": session, "key": "product.title", "previous": "not json"}),
+        )
+        .is_err()
+    );
 }
 
 #[test]
