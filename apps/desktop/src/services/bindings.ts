@@ -151,8 +151,9 @@ export const commands = {
 	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
-	 *  Where the browser area is in the app's page (CSS pixels of the window), and whether the page
-	 *  webview shows (hidden while the window's own results list shows).
+	 *  Where the browser area is in the app's page (CSS pixels of the app's page, i.e. logical
+	 *  points), and whether the page webview shows (hidden while the window's own results list shows).
+	 *  A13: moved by where the app's page sits in the window (below the title bar).
 	 */
 	searchWebPlace: (sessionId: CommandId, x: number | null, y: number | null, width: number | null, height: number | null, visible: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_place", { sessionId, x, y, width, height, visible })),
 	/**  Opens a web page in the window's browser. */

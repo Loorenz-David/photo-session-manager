@@ -66,6 +66,16 @@ type Mode = 'web' | 'list';
 type Page = { url: string; title: string; loading: boolean };
 type Selected = { text: string; url: string; title: string };
 
+/**
+ * A13: the browser area's place as sent to the app: the element's box in this page's CSS pixels,
+ * which are logical points at any screen scale (never multiplied by `devicePixelRatio`), rounded
+ * to whole points so the page webview never sits a fraction off.
+ */
+export function browserBounds(rect: { left: number; top: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
+  const whole = (v: number) => (Number.isFinite(v) ? Math.round(v) : 0);
+  return { x: whole(rect.left), y: whole(rect.top), width: Math.max(1, whole(rect.width)), height: Math.max(1, whole(rect.height)) };
+}
+
 function PinnedPhoto({ photo }: { photo: Photo }) {
   if (photo.adjusted_preview_path) {
     return <img src={previewUrl(photo.adjusted_preview_path)} alt="Pinned photo" className="max-h-full max-w-full object-contain" draggable={false} />;
@@ -146,21 +156,32 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
   }, [sessionId]);
 
   // The browser area's place, so the page webview sits exactly over it (hidden while the list shows).
+  // A13: CSS pixels of this page (logical points, never device pixels); the app adds where this
+  // page sits in the window. Sent only when the place changed.
+  const lastPlace = useRef('');
   const place = useCallback(() => {
     const area = browserArea.current;
     if (!area) return;
-    const rect = area.getBoundingClientRect();
-    void placeBrowser(sessionId, { x: rect.left, y: rect.top, width: rect.width, height: rect.height }, mode === 'web').catch(() => undefined);
+    const bounds = browserBounds(area.getBoundingClientRect());
+    const visible = mode === 'web';
+    const key = JSON.stringify([bounds, visible]);
+    if (key === lastPlace.current) return;
+    lastPlace.current = key;
+    void placeBrowser(sessionId, bounds, visible).catch(() => { lastPlace.current = ''; });
   }, [sessionId, mode]);
   useLayoutEffect(() => {
     place();
     const area = browserArea.current;
     if (!area || typeof ResizeObserver === 'undefined') return;
+    // The area moves when a bar above it appears, grows or goes (saved pages, the Google note,
+    // the selection bar): watch every row of the browser column, not only the area.
     const observer = new ResizeObserver(() => place());
     observer.observe(area);
+    const column = area.parentElement?.parentElement;
+    if (column) for (const row of Array.from(column.children)) observer.observe(row);
     window.addEventListener('resize', place);
     return () => { observer.disconnect(); window.removeEventListener('resize', place); };
-  }, [place]);
+  }, [place, pages.length, lensNote(lens, waiting) !== null, selected !== null]);
 
   const showList = useCallback(async (forPhoto: number) => {
     setMode('list');
