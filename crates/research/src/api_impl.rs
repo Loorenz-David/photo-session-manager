@@ -158,4 +158,20 @@ impl ResearchApi for ResearchService {
     fn purge_expired(&self, now_ms: i64) -> Result<()> {
         ResearchService::purge_expired(self, now_ms)
     }
+
+    fn browse_matches(&self, session_id: i64) -> Result<Vec<crate::browse::VisualMatch>> {
+        ResearchService::browse_matches(self, session_id)
+    }
+
+    fn browse_search(
+        &self,
+        session_id: i64,
+        photo_id: i64,
+    ) -> Result<Vec<crate::browse::VisualMatch>> {
+        ResearchService::browse_search(self, session_id, photo_id)
+    }
+
+    fn browse_ask(&self, request: &crate::browse::AskRequest) -> Result<crate::browse::AskAnswer> {
+        ResearchService::browse_ask(self, request)
+    }
 }

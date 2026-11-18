@@ -144,7 +144,7 @@ impl ResearchService {
     fn selected_runs(&self, selection: &ExportSelection) -> Result<Vec<RunRow>> {
         let all = self
             .store
-            .research_transaction(|tx| store::runs(tx.conn(), None))?;
+            .research_transaction(|tx| store::all_runs(tx.conn(), None))?;
         Ok(all
             .into_iter()
             .filter(|run| match selection {

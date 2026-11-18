@@ -124,7 +124,7 @@ pub(crate) fn step(stage: Stage, kind: StepKind, summary: impl Into<String>) -> 
 }
 
 /// A field as a request describes it.
-fn descriptor(definition: &Definition) -> Json {
+pub(crate) fn descriptor(definition: &Definition) -> Json {
     json!({
         "key": definition.key,
         "label": definition.label,
@@ -175,7 +175,7 @@ pub(crate) fn stated_from(json: &Json) -> Option<Stated> {
 /// What one answer states for a key: `{stated, value}` or a list of them. A model value that maps
 /// is the statement; otherwise the stated text counts as its own (unmapped) value. Two different
 /// values state nothing.
-fn statement_of(definition: &Definition, entry: &Json) -> Option<Stated> {
+pub(crate) fn statement_of(definition: &Definition, entry: &Json) -> Option<Stated> {
     let entries: Vec<&Json> = match entry {
         Json::Array(items) => items.iter().collect(),
         Json::Null => Vec::new(),

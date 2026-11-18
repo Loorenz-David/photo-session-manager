@@ -139,7 +139,9 @@ pub(crate) fn source(tx: &SqliteTx<'_>, photo_id: i64) -> Result<Option<(PathBuf
 
 /// The composition values a research copy is framed with; a composition with no rect yet frames
 /// the whole preview.
-fn values_of(composition: &psm_core::domain::composition::Composition) -> CompositionValues {
+pub(crate) fn values_of(
+    composition: &psm_core::domain::composition::Composition,
+) -> CompositionValues {
     composition.values().unwrap_or(CompositionValues {
         kind: composition.kind,
         shape: composition.shape,

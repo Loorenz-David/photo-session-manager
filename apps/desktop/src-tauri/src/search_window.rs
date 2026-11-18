@@ -1,0 +1,690 @@
+//! Owner correction A12 (2026-11-18): the "Search this photo" window.
+//!
+//! One window per session (`search-<session>`) holding two webviews (Tauri's multiwebview):
+//! - `search-ui-<session>`: the app's own page (trusted): the pinned photo, the browser controls,
+//!   the saved pages and the selection bar with its actions;
+//! - `search-web-<session>`: the web pages (untrusted), placed over the area the app's page
+//!   leaves for it.
+//!
+//! Trust boundary (docs/guide/03 §A12): the page webview never reaches the app. Tauri refuses
+//! every command from a remote origin (no capability names a remote URL), and
+//! [`allowed_navigation`] keeps every frame of it on public `http`/`https` pages, so it can never
+//! become an app-origin page. The selected text travels one way only: the app's page asks
+//! ([`SELECTION_SCRIPT`], evaluated in the page) and checks the answer
+//! ([`parse_selection_report`]). Writing a field or asking the model happens only from a click in
+//! the app's own page.
+
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
+use serde::{Deserialize, Serialize};
+
+/// The longest selected text the window takes (the same limit "Ask AI…" has).
+pub const MAX_SELECTION_CHARS: usize = psm_research::browse::MAX_SELECTION_CHARS;
+/// The longest raw answer the page may give to the selection question (bytes).
+pub const MAX_REPORT_BYTES: usize = 32 * 1024;
+const MAX_TITLE_CHARS: usize = 300;
+const MAX_URL_CHARS: usize = 2_048;
+
+/// Where a search starts: Google's own image search page, from which the photo is posted to
+/// Google Lens (the route Google's page itself uses; probed 2026-11-18: `POST
+/// https://lens.google.com/v3/upload` with the file field `encoded_image` answers `303` to the
+/// results page `https://www.google.com/search?…&udm=26…`).
+pub const GOOGLE_START: &str = "https://www.google.com/imghp?hl=en";
+pub const LENS_UPLOAD: &str = "https://lens.google.com/v3/upload";
+
+pub fn window_label(session_id: i64) -> String {
+    format!("search-{session_id}")
+}
+pub fn ui_label(session_id: i64) -> String {
+    format!("search-ui-{session_id}")
+}
+pub fn web_label(session_id: i64) -> String {
+    format!("search-web-{session_id}")
+}
+
+/// The host of an `http(s)` URL, lowercased, without a trailing dot.
+fn http_host(url: &str) -> Option<(String, String)> {
+    let (scheme, rest) = url.split_once("://")?;
+    let scheme = scheme.to_ascii_lowercase();
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host_port = authority.rsplit('@').next()?;
+    let host = if let Some(stripped) = host_port.strip_prefix('[') {
+        // IPv6 literal.
+        format!("[{}]", stripped.split(']').next()?)
+    } else {
+        host_port.split(':').next()?.to_owned()
+    };
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    (!host.is_empty()).then_some((scheme, host))
+}
+
+/// A host the page webview may never load: this Mac, the local network's names and the app's
+/// own origins (`tauri.localhost`, the dev server).
+fn local_host(host: &str) -> bool {
+    host == "localhost"
+        || host.ends_with(".localhost")
+        || host.ends_with(".local")
+        || host == "0.0.0.0"
+        || host.starts_with("127.")
+        || host == "[::1]"
+        || host == "[::]"
+        || host.starts_with("[fe80:")
+        || host.starts_with("10.")
+        || host.starts_with("192.168.")
+        || (host.starts_with("172.")
+            && host
+                .split('.')
+                .nth(1)
+                .and_then(|n| n.parse::<u8>().ok())
+                .is_some_and(|n| (16..=31).contains(&n)))
+        || host.starts_with("169.254.")
+        || !host.contains('.') && !host.starts_with('[')
+}
+
+/// SECURITY: whether a frame of the page webview may load `url`. Only public `http`/`https`
+/// pages, and the blank documents pages make for their own frames. Never the app's own page
+/// (`tauri:`, `asset:`, `ipc:`, the dev server on localhost), a file, or another scheme, so the
+/// page webview can never turn into an app page that may call the app.
+pub fn allowed_navigation(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    if lower == "about:blank" || lower == "about:srcdoc" {
+        return true;
+    }
+    if let Some(inner) = lower.strip_prefix("blob:") {
+        return http_host(inner).is_some_and(|(_, host)| !local_host(&host));
+    }
+    match http_host(url.trim()) {
+        Some((_, host)) => !local_host(&host),
+        None => false,
+    }
+}
+
+/// The script evaluated in the page to read what is selected. It only reads; its answer is a
+/// string (JSON text) or `""`, whatever the page has changed around it.
+pub const SELECTION_SCRIPT: &str = "(function(){try{\
+var s=window.getSelection?(''+window.getSelection()):'';\
+var o=JSON.stringify({text:(''+s).slice(0,2001),url:''+location.href,title:(''+document.title).slice(0,300)});\
+return typeof o==='string'?o:'';}catch(e){return '';}})()";
+
+/// What is selected on the page, as the app's page shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Selection {
+    pub text: String,
+    pub url: String,
+    pub title: String,
+}
+
+/// Why a selection answer was refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Rejected {
+    TooLarge,
+    NotJson,
+    UnexpectedShape,
+    TooLong,
+    NotAWebPage,
+}
+
+impl Rejected {
+    pub fn sentence(&self) -> &'static str {
+        match self {
+            Rejected::TooLong => "The selection is too long — select at most 2,000 characters",
+            Rejected::NotAWebPage => "This page cannot be used",
+            _ => "The page gave an answer the app does not accept",
+        }
+    }
+}
+
+/// SECURITY: checks the page's answer to [`SELECTION_SCRIPT`] (the raw JSON the webview hands
+/// back). Accepted: nothing selected (`None`), or exactly `{text, url, title}` as strings, the text
+/// at most [`MAX_SELECTION_CHARS`] characters, the URL a page the webview may load. Anything else
+/// is refused.
+pub fn parse_selection_report(raw: &str) -> Result<Option<Selection>, Rejected> {
+    if raw.len() > MAX_REPORT_BYTES {
+        return Err(Rejected::TooLarge);
+    }
+    let raw = raw.trim();
+    if raw.is_empty() || raw == "null" {
+        return Ok(None);
+    }
+    // The webview hands back the script's string value as JSON text.
+    let outer: serde_json::Value = serde_json::from_str(raw).map_err(|_| Rejected::NotJson)?;
+    let inner = match outer {
+        serde_json::Value::String(text) => text,
+        _ => return Err(Rejected::UnexpectedShape),
+    };
+    if inner.is_empty() {
+        return Ok(None);
+    }
+    let value: serde_json::Value = serde_json::from_str(&inner).map_err(|_| Rejected::NotJson)?;
+    let object = value.as_object().ok_or(Rejected::UnexpectedShape)?;
+    if object.len() != 3
+        || !["text", "url", "title"]
+            .iter()
+            .all(|k| object.contains_key(*k))
+    {
+        return Err(Rejected::UnexpectedShape);
+    }
+    let text = object["text"].as_str().ok_or(Rejected::UnexpectedShape)?;
+    let url = object["url"].as_str().ok_or(Rejected::UnexpectedShape)?;
+    let title = object["title"].as_str().ok_or(Rejected::UnexpectedShape)?;
+    if url.chars().count() > MAX_URL_CHARS || !allowed_navigation(url) || url.starts_with("about:")
+    {
+        return Err(Rejected::NotAWebPage);
+    }
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    if text.chars().count() > MAX_SELECTION_CHARS {
+        return Err(Rejected::TooLong);
+    }
+    Ok(Some(Selection {
+        text: text.to_owned(),
+        url: url.to_owned(),
+        title: title.chars().take(MAX_TITLE_CHARS).collect(),
+    }))
+}
+
+/// Where the Google Lens route of one window stands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum LensPhase {
+    /// Nothing asked, or the person is browsing.
+    Idle,
+    /// Google's start page is loading; the photo is posted once it has.
+    Opening,
+    /// Google shows its cookie choice; the photo is posted once the person has chosen.
+    Consent,
+    /// The photo was posted; waiting for the results page.
+    Uploading,
+    /// Google's results page for the photo.
+    Results { url: String },
+    /// The route did not work (the window shows its own list instead).
+    Failed { why: String },
+}
+
+/// What a finished page load means for the Lens route: the next phase, and whether the photo is
+/// to be posted now (on the page just loaded).
+pub fn lens_on_page(phase: &LensPhase, url: &str) -> (LensPhase, bool) {
+    let Some((_, host)) = http_host(url) else {
+        return (phase.clone(), false);
+    };
+    let path = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.find('/').map(|i| &rest[i..]))
+        .unwrap_or("/");
+    let consent = host.starts_with("consent.google.");
+    let google = host == "www.google.com" || host.starts_with("www.google.");
+    let lens = host == "lens.google.com";
+    let sorry = google && path.starts_with("/sorry");
+    match phase {
+        LensPhase::Opening | LensPhase::Consent if consent => (LensPhase::Consent, false),
+        LensPhase::Opening | LensPhase::Consent if sorry => (
+            LensPhase::Failed {
+                why: "Google asks to confirm you are a person".into(),
+            },
+            false,
+        ),
+        LensPhase::Opening | LensPhase::Consent if google => (LensPhase::Uploading, true),
+        LensPhase::Opening => (
+            LensPhase::Failed {
+                why: "Google's page did not open".into(),
+            },
+            false,
+        ),
+        LensPhase::Consent => (phase.clone(), false),
+        LensPhase::Uploading if consent => (LensPhase::Consent, false),
+        LensPhase::Uploading if sorry => (
+            LensPhase::Failed {
+                why: "Google asks to confirm you are a person".into(),
+            },
+            false,
+        ),
+        LensPhase::Uploading if google && path.starts_with("/search") => (
+            LensPhase::Results {
+                url: url.to_owned(),
+            },
+            false,
+        ),
+        LensPhase::Uploading if lens => (LensPhase::Uploading, false),
+        LensPhase::Uploading => (
+            LensPhase::Failed {
+                why: "Google did not answer with results".into(),
+            },
+            false,
+        ),
+        other => (other.clone(), false),
+    }
+}
+
+/// The script that posts the photo to Google Lens from Google's own page (a same-site form post,
+/// as Google's page does it when a picture is dropped on it). `base64` is the JPEG.
+pub fn upload_script(base64: &str) -> String {
+    format!(
+        "(function(b){{try{{var s=atob(b);var u=new Uint8Array(s.length);\
+for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);\
+var f=new File([u],'photo.jpg',{{type:'image/jpeg'}});var d=new DataTransfer();d.items.add(f);\
+var form=document.createElement('form');form.method='POST';form.enctype='multipart/form-data';\
+form.action='{LENS_UPLOAD}?hl=en&st='+Date.now();\
+var i2=document.createElement('input');i2.type='file';i2.name='encoded_image';i2.files=d.files;\
+form.appendChild(i2);form.style.display='none';document.documentElement.appendChild(form);\
+HTMLFormElement.prototype.submit.call(form);}}catch(e){{}}}})('{base64}')"
+    )
+}
+
+/// One window's Lens route and the photo waiting to be posted.
+#[derive(Debug, Clone)]
+pub struct LensState {
+    pub phase: LensPhase,
+    /// The JPEG to post, base64, until it is posted.
+    pub pending: Option<String>,
+    pub photo_id: i64,
+}
+
+/// The windows' Lens routes, by session (managed by Tauri).
+#[derive(Default, Clone)]
+pub struct SearchWindows {
+    pub lens: Arc<Mutex<HashMap<i64, LensState>>>,
+}
+
+impl SearchWindows {
+    /// A page finished loading in `session`'s page webview: the next phase, and the script to run
+    /// in it (the photo post) when it is time.
+    pub fn page_loaded(&self, session_id: i64, url: &str) -> (Option<LensPhase>, Option<String>) {
+        let mut lens = self.lens.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(state) = lens.get_mut(&session_id) else {
+            return (None, None);
+        };
+        let before = state.phase.clone();
+        let (next, post) = lens_on_page(&state.phase, url);
+        state.phase = next.clone();
+        let script = if post {
+            state.pending.take().map(|b| upload_script(&b))
+        } else {
+            None
+        };
+        // Time to post but nothing left to post (it went already): the route is over.
+        let next = if post && script.is_none() {
+            state.phase = LensPhase::Idle;
+            LensPhase::Idle
+        } else {
+            next
+        };
+        ((next != before || script.is_some()).then_some(next), script)
+    }
+
+    pub fn start(&self, session_id: i64, photo_id: i64, jpeg_base64: String) {
+        self.lens.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            session_id,
+            LensState {
+                phase: LensPhase::Opening,
+                pending: Some(jpeg_base64),
+                photo_id,
+            },
+        );
+    }
+
+    pub fn phase(&self, session_id: i64) -> Option<LensPhase> {
+        self.lens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&session_id)
+            .map(|s| s.phase.clone())
+    }
+
+    pub fn fail(&self, session_id: i64, why: &str) {
+        if let Some(state) = self
+            .lens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_mut(&session_id)
+        {
+            state.pending = None;
+            state.phase = LensPhase::Failed { why: why.into() };
+        }
+    }
+
+    pub fn forget(&self, session_id: i64) {
+        self.lens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&session_id);
+    }
+}
+
+/// The page webview's page, for the app's page (event `search_web_page`).
+#[derive(Debug, Clone, Serialize)]
+pub struct PagePayload {
+    pub session_id: i64,
+    pub url: String,
+    pub title: Option<String>,
+    pub loading: bool,
+}
+
+/// The Lens route's phase, for the app's page (event `search_lens`).
+#[derive(Debug, Clone, Serialize)]
+pub struct LensPayload {
+    pub session_id: i64,
+    #[serde(flatten)]
+    pub phase: LensPhase,
+}
+
+#[cfg(desktop)]
+pub mod window {
+    //! Creating the window and its two webviews (macOS; not reachable from tests).
+
+    use super::*;
+    use tauri::{
+        AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, WebviewUrl,
+        webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder},
+    };
+
+    /// Opens the session's search window on `photo_id`, or brings it forward and switches its
+    /// pinned photo when it is open.
+    pub fn open<R: Runtime>(
+        app: &AppHandle<R>,
+        session_id: i64,
+        photo_id: i64,
+        title: &str,
+    ) -> tauri::Result<()> {
+        if let Some(window) = app.get_window(&window_label(session_id)) {
+            let _ = window.unminimize();
+            window.set_focus()?;
+            app.emit(
+                "search_photo",
+                serde_json::json!({"session_id": session_id, "photo_id": photo_id}),
+            )?;
+            return Ok(());
+        }
+        let width = 1_440.0;
+        let height = 900.0;
+        let window = tauri::window::WindowBuilder::new(app, window_label(session_id))
+            .title(title)
+            .inner_size(width, height)
+            .min_inner_size(1_000.0, 640.0)
+            .build()?;
+        let ui = WebviewBuilder::new(
+            ui_label(session_id),
+            WebviewUrl::App(format!("index.html#/search/{session_id}/{photo_id}").into()),
+        )
+        .auto_resize();
+        window.add_child(
+            ui,
+            LogicalPosition::new(0.0, 0.0),
+            LogicalSize::new(width, height),
+        )?;
+        let page = page_webview(app, session_id);
+        // Off to the side until the app's page says where the browser area is.
+        let web = window.add_child(
+            page,
+            LogicalPosition::new(0.0, 0.0),
+            LogicalSize::new(1.0, 1.0),
+        )?;
+        let _ = web.hide();
+        let handle = app.clone();
+        window.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                handle.state::<SearchWindows>().forget(session_id);
+            }
+        });
+        tracing::info!(
+            target: "psm::search",
+            "search_window.opened session={session_id} photo={photo_id}"
+        );
+        Ok(())
+    }
+
+    fn page_webview<R: Runtime>(app: &AppHandle<R>, session_id: i64) -> WebviewBuilder<R> {
+        let blank = "about:blank".parse().expect("about:blank");
+        let titles = app.clone();
+        let loads = app.clone();
+        let popups = app.clone();
+        WebviewBuilder::new(web_label(session_id), WebviewUrl::External(blank))
+            .on_navigation(move |url| {
+                let allowed = allowed_navigation(url.as_str());
+                if !allowed {
+                    tracing::info!(
+                        target: "psm::search",
+                        "search_window.navigation_refused session={session_id} scheme={}",
+                        url.scheme()
+                    );
+                }
+                allowed
+            })
+            .on_download(|_, _| false)
+            .on_new_window(move |url, _| {
+                // A link that would open a new window opens here instead.
+                if allowed_navigation(url.as_str())
+                    && let Some(web) = popups.get_webview(&web_label(session_id))
+                {
+                    let _ = web.navigate(url);
+                }
+                NewWindowResponse::Deny
+            })
+            .on_document_title_changed(move |webview, title| {
+                let url = webview.url().map(|u| u.to_string()).unwrap_or_default();
+                let _ = titles.emit(
+                    "search_web_page",
+                    PagePayload {
+                        session_id,
+                        url,
+                        title: Some(title.chars().take(MAX_TITLE_CHARS).collect()),
+                        loading: false,
+                    },
+                );
+            })
+            .on_page_load(move |webview, payload| {
+                let url = payload.url().to_string();
+                let loading = matches!(payload.event(), PageLoadEvent::Started);
+                let _ = loads.emit(
+                    "search_web_page",
+                    PagePayload {
+                        session_id,
+                        url: url.clone(),
+                        title: None,
+                        loading,
+                    },
+                );
+                if loading {
+                    return;
+                }
+                let windows = loads.state::<SearchWindows>();
+                let (phase, script) = windows.page_loaded(session_id, &url);
+                if let Some(script) = script {
+                    let _ = webview.eval(script);
+                    tracing::info!(
+                        target: "psm::search",
+                        "search_window.lens_route step=photo_posted session={session_id}"
+                    );
+                }
+                if let Some(phase) = phase {
+                    log_phase(session_id, &phase);
+                    let _ = loads.emit("search_lens", LensPayload { session_id, phase });
+                }
+            })
+    }
+
+    fn log_phase(session_id: i64, phase: &LensPhase) {
+        let (state, why) = match phase {
+            LensPhase::Idle => ("idle", ""),
+            LensPhase::Opening => ("opening", ""),
+            LensPhase::Consent => ("consent", ""),
+            LensPhase::Uploading => ("uploading", ""),
+            LensPhase::Results { .. } => ("ok", ""),
+            LensPhase::Failed { why } => ("fallback", why.as_str()),
+        };
+        tracing::info!(
+            target: "psm::search",
+            "search_window.lens_route result={state} session={session_id} why={why:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a12_page_webview_loads_only_public_web_pages() {
+        for ok in [
+            "https://www.google.com/search?q=teak",
+            "http://example.com/a",
+            "https://shop.example.se:8443/x?y#z",
+            "about:blank",
+            "about:srcdoc",
+            "blob:https://www.google.com/1234-5678",
+        ] {
+            assert!(allowed_navigation(ok), "{ok}");
+        }
+        for refused in [
+            // The app's own origins: a page that loaded these could call the app.
+            "tauri://localhost/index.html",
+            "https://tauri.localhost/index.html",
+            "http://tauri.localhost/",
+            "http://localhost:1420/index.html#/settings",
+            "http://127.0.0.1:1420/",
+            "http://[::1]:1420/",
+            "asset://localhost/%2FUsers%2Fme%2Fphoto.jpg",
+            "ipc://localhost/research_ask",
+            "file:///Users/me/Library/Application%20Support/x.db",
+            "javascript:alert(1)",
+            "data:text/html,<script>1</script>",
+            "blob:tauri://localhost/123",
+            "blob:http://localhost:1420/123",
+            "mailto:a@b.example",
+            "http://192.168.1.10/router",
+            "http://10.0.0.1/",
+            "http://172.16.0.1/",
+            "http://169.254.169.254/latest",
+            "http://printer.local/",
+            "http://intranet/",
+            "",
+        ] {
+            assert!(!allowed_navigation(refused), "{refused}");
+        }
+    }
+
+    fn report(value: serde_json::Value) -> String {
+        serde_json::Value::String(value.to_string()).to_string()
+    }
+
+    #[test]
+    fn a12_selection_answer_is_checked_before_the_app_shows_it() {
+        let ok = report(serde_json::json!({
+            "text": "  designed by Kai Kristiansen ",
+            "url": "https://e1.example/p",
+            "title": "Teak sideboard"
+        }));
+        assert_eq!(
+            parse_selection_report(&ok).unwrap(),
+            Some(Selection {
+                text: "designed by Kai Kristiansen".into(),
+                url: "https://e1.example/p".into(),
+                title: "Teak sideboard".into(),
+            })
+        );
+        // Nothing selected.
+        assert_eq!(parse_selection_report("").unwrap(), None);
+        assert_eq!(parse_selection_report("\"\"").unwrap(), None);
+        let blank =
+            report(serde_json::json!({"text": "   ", "url": "https://e1.example/", "title": ""}));
+        assert_eq!(parse_selection_report(&blank).unwrap(), None);
+        // Too long a selection.
+        let long = report(serde_json::json!({
+            "text": "x".repeat(MAX_SELECTION_CHARS + 1),
+            "url": "https://e1.example/",
+            "title": ""
+        }));
+        assert_eq!(parse_selection_report(&long), Err(Rejected::TooLong));
+        // An oversize answer is refused before it is read.
+        let huge = format!("\"{}\"", "y".repeat(MAX_REPORT_BYTES + 1));
+        assert_eq!(parse_selection_report(&huge), Err(Rejected::TooLarge));
+        // Unexpected shapes: extra keys, missing keys, wrong types, not a string, not JSON.
+        for bad in [
+            report(
+                serde_json::json!({"text": "a", "url": "https://e1.example/", "title": "", "action": "put"}),
+            ),
+            report(serde_json::json!({"text": "a", "url": "https://e1.example/"})),
+            report(serde_json::json!({"text": 1, "url": "https://e1.example/", "title": ""})),
+            report(serde_json::json!(["a"])),
+            serde_json::json!({"text": "a", "url": "https://e1.example/", "title": ""}).to_string(),
+            "not json".to_owned(),
+            "\"not json inside\"".to_owned(),
+        ] {
+            assert!(parse_selection_report(&bad).is_err(), "{bad}");
+        }
+        // A page that is not a public web page.
+        for url in [
+            "tauri://localhost/",
+            "http://localhost:1420/",
+            "about:blank",
+        ] {
+            let bad = report(serde_json::json!({"text": "a", "url": url, "title": ""}));
+            assert_eq!(
+                parse_selection_report(&bad),
+                Err(Rejected::NotAWebPage),
+                "{url}"
+            );
+        }
+    }
+
+    #[test]
+    fn a12_lens_route_posts_once_on_googles_page_and_finds_the_results() {
+        let windows = SearchWindows::default();
+        windows.start(5, 9, "QUJD".into());
+        // Consent first (EU): no post on the consent page.
+        let (phase, script) = windows.page_loaded(5, "https://consent.google.com/m?continue=x");
+        assert_eq!(phase, Some(LensPhase::Consent));
+        assert!(script.is_none());
+        // Back on Google after the choice: the photo is posted, once.
+        let (phase, script) = windows.page_loaded(5, "https://www.google.com/imghp?hl=en");
+        assert_eq!(phase, Some(LensPhase::Uploading));
+        let script = script.unwrap();
+        assert!(script.contains("lens.google.com/v3/upload"));
+        assert!(script.contains("encoded_image"));
+        assert!(script.contains("'QUJD'"));
+        // The results page.
+        let results = "https://www.google.com/search?vsrid=abc&udm=26&lns_mode=un";
+        let (phase, script) = windows.page_loaded(5, results);
+        assert_eq!(
+            phase,
+            Some(LensPhase::Results {
+                url: results.into()
+            })
+        );
+        assert!(script.is_none());
+        // Browsing on: nothing changes, nothing is posted again.
+        assert_eq!(windows.page_loaded(5, "https://e1.example/p"), (None, None));
+        assert_eq!(
+            windows.phase(5),
+            Some(LensPhase::Results {
+                url: results.into()
+            })
+        );
+        // Another session's window has no route.
+        assert_eq!(
+            windows.page_loaded(6, "https://www.google.com/"),
+            (None, None)
+        );
+    }
+
+    #[test]
+    fn a12_lens_route_falls_back_when_google_does_not_answer_with_results() {
+        let (phase, post) = lens_on_page(&LensPhase::Opening, "https://example.com/");
+        assert!(matches!(phase, LensPhase::Failed { .. }));
+        assert!(!post);
+        let (phase, _) = lens_on_page(&LensPhase::Uploading, "https://www.google.com/sorry/index");
+        assert!(matches!(phase, LensPhase::Failed { .. }));
+        let (phase, _) = lens_on_page(&LensPhase::Uploading, "https://www.google.com/imghp");
+        assert!(matches!(phase, LensPhase::Failed { .. }));
+        // Lens's own address in between is fine.
+        let (phase, _) = lens_on_page(&LensPhase::Uploading, "https://lens.google.com/v3/upload?x");
+        assert_eq!(phase, LensPhase::Uploading);
+    }
+}

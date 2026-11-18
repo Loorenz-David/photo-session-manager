@@ -153,13 +153,13 @@ impl ResearchService {
         Ok(day_spend(&calls, self.clock.now_ms(), &chrono::Local))
     }
 
-    fn day_limit_reached(&self, settings: &ResearchSettings) -> Result<bool> {
+    pub(crate) fn day_limit_reached(&self, settings: &ResearchSettings) -> Result<bool> {
         let cap = parse_micro_usd(&settings.max_cost_per_day).unwrap_or(0);
         Ok(self.today_spend()? >= cap)
     }
 
     /// The first `(provider, model)` a run can call with no `fallback_call_usd`.
-    fn missing_price(&self, settings: &ResearchSettings) -> Option<(String, String)> {
+    pub(crate) fn missing_price(&self, settings: &ResearchSettings) -> Option<(String, String)> {
         let fallbacks = settings.fallbacks();
         let has = |provider: &str, model: &str| {
             fallbacks
@@ -188,7 +188,7 @@ impl ResearchService {
         pairs.into_iter().find(|(p, m)| !has(p, m))
     }
 
-    fn key_set(&self, account: &str) -> bool {
+    pub(crate) fn key_set(&self, account: &str) -> bool {
         self.secrets
             .get(account)
             .ok()
@@ -667,7 +667,8 @@ impl ResearchService {
                     .prepare(
                         "SELECT r.session_id, r.item_id, r.state FROM research_runs r \
                          JOIN sessions s ON s.id=r.session_id \
-                         WHERE r.id=(SELECT MAX(id) FROM research_runs WHERE session_id=r.session_id) \
+                         WHERE r.id=(SELECT MAX(id) FROM research_runs WHERE session_id=r.session_id \
+                         AND trigger<>'browse') \
                          AND s.published_at IS NULL AND (?1 IS NULL OR r.session_id=?1) \
                          ORDER BY r.session_id",
                     )
@@ -692,7 +693,8 @@ impl ResearchService {
                     .prepare(
                         "SELECT s.id, s.item_id FROM sessions s WHERE s.arranged_at IS NOT NULL \
                          AND s.item_id IS NOT NULL AND s.published_at IS NULL \
-                         AND NOT EXISTS (SELECT 1 FROM research_runs r WHERE r.session_id=s.id) \
+                         AND NOT EXISTS (SELECT 1 FROM research_runs r WHERE r.session_id=s.id \
+                         AND r.trigger<>'browse') \
                          AND (?1 IS NULL OR s.id=?1) ORDER BY s.id",
                     )
                     .map_err(store::db)?;

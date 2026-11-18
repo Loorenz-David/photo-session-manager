@@ -217,6 +217,15 @@ Condition photo shows (owner card 4, 2026-11-12: every flaw is photographed).
   going to the field), plus Show field; Accept all is at its top. A checked row leaves the list; the undo is the
   popover's. At zero it stays and says why (research running, not run yet and why, all checked, nothing suggested).
   The form's "n to review" chip and the header's "AI · n to review" open the form on this tab (replacing A6's list).
+  **Amended (owner, 2026-11-18, changelog A12):** a photo of the form's media preview opens **Search this photo**:
+  the photo pinned beside a browser showing Google Lens results for it; pages can be saved per item and reopened;
+  text selected on a page can be put in a field (the person's edit) or given to **Ask AI…** with an instruction.
+  Ask AI is one model call on the selected text only; what it states for a field becomes an AI suggestion at
+  `medium` with the page as source, through the same write table (never over a human or accepted value, never a
+  cleared value again), shown in the AI review tab. When Google cannot be used the window lists research's
+  visual matches or runs one visual search of the photo. These calls are `browse` runs (recorded, costed, day
+  limit, export), never the session's research run. The web page cannot reach the app; only the person's clicks
+  in the app's own page act.
 
 ## 8. Domain model (additions; owner S unless stated)
 

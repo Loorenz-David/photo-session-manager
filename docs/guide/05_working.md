@@ -74,6 +74,11 @@ Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yy
 | `capture_one.switch_skipped request= reason=a_newer_request_follows` (`psm::capture_one`, A10) | a switch the person had already overtaken by opening another session; not applied |
 | `photos.moved|copied file= from_session= from_folder= to_session= to_folder= raw_moved=no capture_one_calls=none` (`psm::capture_one`, A10) | one photo moved or copied between sessions: the RAW stays in its folder and Capture One is not told (no folder or collection is made for the target) |
 | `session.kept_as_published session= denied_late_photos=` (`psm::arrival`, A10) | "Keep as published" on a session that changed after publishing |
+| `search_window.opened session= photo=` (`psm::search`, A12) | the "Search this photo" window opened |
+| `search_window.lens_route step=start\|photo_posted …` / `result=consent\|uploading\|ok\|fallback why=` (`psm::search`, A12) | the Google Lens route: photo prepared, posted from Google's page, and its outcome; `fallback` = the window showed its own list (why: no results in 30 s, Google's page did not open, a "confirm you are a person" page) |
+| `search_window.navigation_refused session= scheme=` (`psm::search`, A12) | the page webview was kept from loading something that is not a public web page |
+| `search_window.page_saved item= host=` / `search_window.text_to_field session= key= chars=` (`psm::search`, A12) | a page saved; selected text put in a field (no text in the log) |
+| `search_window.ask_ai session= run= result=ok suggested=n\|failed cost_micro_usd=` / `search_window.serpapi_search …` (`psm::search`, A12) | Ask AI on selected text, or the window's own visual search, with its cost; the call itself is in the research record (`browse` run) |
 | `camera.event <name> {fields}` | every sidecar event, redacted |
 | `camera helper restarted for the new Capture One session` / `camera helper waits: the Capture One session is missing` | P63 document handling |
 | `storage.cleared rule=<rule> path=… bytes=…` / `storage.item_cleared item=<sku> …` / `storage.not_cleared item=<sku> missing=n` | 10F clean-up, retention clearing, Shopify verification failure |

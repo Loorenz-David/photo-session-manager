@@ -244,7 +244,7 @@ fn parse(text: &str) -> Result<serde_json::Value, CommandError> {
 }
 
 /// The configured integration's kind, whose definitions are the active set (none without one).
-fn integration(app: &psm_integrations::AppHandles) -> Option<String> {
+pub(crate) fn integration(app: &psm_integrations::AppHandles) -> Option<String> {
     app.settings
         .integration
         .as_ref()
@@ -253,7 +253,7 @@ fn integration(app: &psm_integrations::AppHandles) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn with_service<T>(
+pub(crate) fn with_service<T>(
     app: &psm_integrations::AppHandles,
     op: impl FnOnce(&AttributesService<'_>) -> psm_core::Result<T>,
 ) -> Result<T, CommandError> {

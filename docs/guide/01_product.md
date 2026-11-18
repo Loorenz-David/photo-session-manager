@@ -72,6 +72,22 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   run, Research / Run again, **Accept all**, which skips `low` suggestions and conflicts). Source
   links open in the default browser. A checked value is never overwritten and a cleared value is
   never suggested again (HA1).
+- **Search this photo** (A12, owner 2026-11-18): tapping a photo in the form's media preview opens a separate
+  window for that item: the photo pinned on the left (the item's other photos below it, tap one to pin it and
+  search again), a browser on the right showing **Google Lens results for the pinned photo**, as if the person had
+  dropped the picture into Google. Back / Forward / Reload, **Results** (back to Google's results page), the
+  current site and title. **Save page** keeps the page as a small tab above the browser (site · title; tap to
+  reopen, ✕ to remove); saved pages belong to the item and are still there in a later search. Selecting text on a
+  page shows it in the bar under the browser with **Put in Manufacturer / Designer** (the fields whose name says
+  so first; "Other field…" lists the rest), which writes the text as the person's own edit (one undo step; a
+  choice or number field takes it only when the text maps to one of its values), and **Ask AI…** with the person's
+  instruction ("find the production year"): the model reads only the selected text and its answers become
+  **AI suggestions** (medium, the page as source) in the AI review tab, never applied. Google's first page in the
+  EU asks about cookies: the person chooses, and the search starts right after. When Google cannot be used
+  (no results within 30 s, a "confirm you are a person" page) the window shows its own list: the matches
+  research already found for the item, or one new visual search of the pinned photo (a research call, counted
+  in the day's spend). Every Ask AI and visual search is a `browse` run in the research record and export, but
+  never shows as the session's research run.
 - **One at a time.** Research runs one session at a time app-wide (MC-A6). A queued session's panel
   says "Waiting — researching *name · SKU* first (*n*th in line)"; "Research this next" moves it to
   the front. The sessions list (beside "Arranged") and the session header show each session's research

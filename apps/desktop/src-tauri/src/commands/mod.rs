@@ -8,6 +8,7 @@ pub mod items;
 pub mod photos;
 pub mod publish;
 pub mod research;
+pub mod search;
 pub mod sessions;
 pub mod settings;
 pub mod templates;

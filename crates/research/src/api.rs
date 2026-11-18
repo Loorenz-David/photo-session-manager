@@ -116,4 +116,14 @@ pub trait ResearchApi: Send + Sync {
     fn sites_reorder(&self, sites: &[String]) -> Result<Json>;
     fn export(&self, selection: ExportSelection, dest: &Path) -> Result<PathBuf>;
     fn purge_expired(&self, now_ms: i64) -> Result<()>;
+    /// A12: the visual matches research already found for the session (no new call).
+    fn browse_matches(&self, session_id: i64) -> Result<Vec<crate::browse::VisualMatch>>;
+    /// A12: one new visual search of a photo of the session (a counted research call).
+    fn browse_search(
+        &self,
+        session_id: i64,
+        photo_id: i64,
+    ) -> Result<Vec<crate::browse::VisualMatch>>;
+    /// A12: "Ask AI…" on selected page text; the answer becomes AI suggestions.
+    fn browse_ask(&self, request: &crate::browse::AskRequest) -> Result<crate::browse::AskAnswer>;
 }

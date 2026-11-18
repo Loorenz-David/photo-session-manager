@@ -204,6 +204,11 @@ pub enum RunTrigger {
     Manual,
     FollowUp,
     Arranged,
+    /// Owner correction A12: one call from the "Search this photo" window (Ask AI on selected
+    /// text, or a visual search of the pinned photo). Never queued or started; it holds that one
+    /// call's record and cost, and is not one of the session's research runs (the panel, the
+    /// "Arranged" check and reuse never see it). The export includes it.
+    Browse,
 }
 
 stored_names!(RunTrigger {
@@ -211,6 +216,7 @@ stored_names!(RunTrigger {
     Manual => "manual",
     FollowUp => "follow_up",
     Arranged => "arranged",
+    Browse => "browse",
 });
 
 /// The kind of a trace step (08A §8).

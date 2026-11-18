@@ -72,6 +72,33 @@ pub fn candidates(body: &Json) -> Vec<SearchCandidate> {
         .collect()
 }
 
+/// A12: `visual_matches` for the search window's list, in the reply's order: link, title, the
+/// site's name and the match's thumbnail (remote addresses). A result without a link is dropped.
+pub fn display_matches(body: &Json) -> Vec<crate::browse::VisualMatch> {
+    body["visual_matches"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| {
+            let url = m["link"].as_str().filter(|l| !l.trim().is_empty())?;
+            let thumbnail = m["thumbnail"]
+                .as_str()
+                .filter(|t| t.starts_with("https://"))
+                .map(str::to_owned);
+            Some(crate::browse::VisualMatch {
+                url: url.to_owned(),
+                title: m["title"].as_str().unwrap_or("").to_owned(),
+                source: m["source"]
+                    .as_str()
+                    .map(str::to_owned)
+                    .or_else(|| crate::rules::sites::host(url))
+                    .unwrap_or_default(),
+                thumbnail,
+            })
+        })
+        .collect()
+}
+
 impl SerpApiLens {
     pub fn new(http: Arc<dyn ResearchHttp>, secrets: Arc<dyn SecretStore>) -> Self {
         Self { http, secrets }

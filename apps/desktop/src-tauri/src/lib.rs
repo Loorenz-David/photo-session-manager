@@ -1,4 +1,7 @@
+#[cfg(test)]
+mod a12_tests;
 mod commands;
+pub mod search_window;
 mod state;
 
 use psm_core::{events::AppEvent, ports::events::EventSink};
@@ -1126,6 +1129,21 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::research::research_site_remove,
         commands::research::research_sites_reorder,
         commands::research::research_export,
+        commands::search::search_window_open,
+        commands::search::search_web_place,
+        commands::search::search_web_go,
+        commands::search::search_web_step,
+        commands::search::search_lens_start,
+        commands::search::search_lens_give_up,
+        commands::search::search_lens_results,
+        commands::search::search_web_selection,
+        commands::search::search_matches,
+        commands::search::search_visual,
+        commands::search::search_pages,
+        commands::search::search_page_save,
+        commands::search::search_page_remove,
+        commands::search::search_put_text,
+        commands::search::search_ask,
         commands::publish::publish_preview,
         commands::publish::publish_confirm,
         commands::publish::publish_retry,
@@ -1187,6 +1205,8 @@ pub fn run() {
         // A6: research sources open in the default browser (capability limited to http/https).
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::new(app))
+        // A12: the "Search this photo" windows' Google Lens routes.
+        .manage(search_window::SearchWindows::default())
         .menu(|handle| {
             let menu = Menu::default(handle)?;
             let undo = MenuItem::with_id(handle, "edit.undo", "Undo", false, Some("CmdOrCtrl+Z"))?;
