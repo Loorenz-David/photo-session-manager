@@ -191,6 +191,78 @@ pub fn parse_selection_report(raw: &str) -> Result<Option<Selection>, Rejected> 
     }))
 }
 
+/// The browser identity the page webview gives (A13). WebKit's own default lacks Safari's
+/// `Version/… Safari/…` part, and Google then serves its basic pages: the Lens upload lands on a
+/// plain, empty search page instead of the visual matches (probed 2026-11-18: without these tokens
+/// the redirect carries no `udm=26`; with them it does).
+pub const PAGE_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15";
+
+/// How many times the photo is posted to Google in one search (the first post, and one more when
+/// Google lost it, e.g. on its cookie page). Never more: no loop.
+pub const MAX_POSTS: u8 = 2;
+
+/// What kind of page the page webview just loaded, for the Lens route and the logs (A13). The logs
+/// get the host and this kind only: never the path's details, the query or the page's text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavKind {
+    /// Google's cookie choice (`consent.google.*`).
+    Consent,
+    /// Google's "confirm you are a person" page.
+    Sorry,
+    /// Google's results page for a posted photo.
+    Results,
+    /// Google Lens's own address, in between.
+    LensUpload,
+    /// Any other Google page (the start page, the home page, an empty search page).
+    GoogleOther,
+    /// Any other site.
+    Other,
+}
+
+impl NavKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            NavKind::Consent => "google_consent",
+            NavKind::Sorry => "google_sorry",
+            NavKind::Results => "google_results",
+            NavKind::LensUpload => "lens_upload",
+            NavKind::GoogleOther => "google_other",
+            NavKind::Other => "other",
+        }
+    }
+}
+
+/// The host and kind of a loaded page (`None`: not an `http(s)` page).
+pub fn nav_kind(url: &str) -> Option<(String, NavKind)> {
+    let (_, host) = http_host(url)?;
+    let rest = url.split_once("://").map(|(_, r)| r).unwrap_or("");
+    let path_query = rest.find('/').map(|i| &rest[i..]).unwrap_or("/");
+    let (path, query) = path_query.split_once('?').unwrap_or((path_query, ""));
+    let query = query.split('#').next().unwrap_or("");
+    let google =
+        host == "google.com" || host.starts_with("www.google.") || host.starts_with("google.");
+    let kind = if host.starts_with("consent.google.") {
+        NavKind::Consent
+    } else if host == "lens.google.com" {
+        NavKind::LensUpload
+    } else if google && path.starts_with("/sorry") {
+        NavKind::Sorry
+    } else if google
+        && path.starts_with("/search")
+        && query
+            .split('&')
+            .any(|pair| pair.starts_with("vsrid=") || pair == "udm=26" || pair.starts_with("lns_"))
+    {
+        NavKind::Results
+    } else if google {
+        NavKind::GoogleOther
+    } else {
+        NavKind::Other
+    };
+    Some((host, kind))
+}
+
 /// Where the Google Lens route of one window stands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
@@ -209,57 +281,49 @@ pub enum LensPhase {
     Failed { why: String },
 }
 
-/// What a finished page load means for the Lens route: the next phase, and whether the photo is
-/// to be posted now (on the page just loaded).
-pub fn lens_on_page(phase: &LensPhase, url: &str) -> (LensPhase, bool) {
-    let Some((_, host)) = http_host(url) else {
+const WHY_PERSON: &str = "Google asks to confirm you are a person";
+const WHY_NOT_OPENED: &str = "Google's page did not open";
+const WHY_NO_RESULTS: &str = "Google showed a page without results for the photo";
+
+/// What a finished page load means for the Lens route, given how often the photo was posted
+/// already: the next phase, and whether the photo is to be posted now (on the page just loaded).
+///
+/// A13: the photo is posted again (up to [`MAX_POSTS`] in all) whenever the route, still waiting,
+/// lands on a Google page that is not the results: after the cookie choice, or when Google answers
+/// the post with its home page. After that the route gives up and the window shows its own list.
+pub fn lens_on_page(phase: &LensPhase, posts: u8, url: &str) -> (LensPhase, bool) {
+    let waiting = matches!(
+        phase,
+        LensPhase::Opening | LensPhase::Consent | LensPhase::Uploading
+    );
+    if !waiting {
+        return (phase.clone(), false);
+    }
+    let Some((_, kind)) = nav_kind(url) else {
         return (phase.clone(), false);
     };
-    let path = url
-        .split_once("://")
-        .and_then(|(_, rest)| rest.find('/').map(|i| &rest[i..]))
-        .unwrap_or("/");
-    let consent = host.starts_with("consent.google.");
-    let google = host == "www.google.com" || host.starts_with("www.google.");
-    let lens = host == "lens.google.com";
-    let sorry = google && path.starts_with("/sorry");
-    match phase {
-        LensPhase::Opening | LensPhase::Consent if consent => (LensPhase::Consent, false),
-        LensPhase::Opening | LensPhase::Consent if sorry => (
-            LensPhase::Failed {
-                why: "Google asks to confirm you are a person".into(),
-            },
-            false,
-        ),
-        LensPhase::Opening | LensPhase::Consent if google => (LensPhase::Uploading, true),
-        LensPhase::Opening => (
-            LensPhase::Failed {
-                why: "Google's page did not open".into(),
-            },
-            false,
-        ),
-        LensPhase::Consent => (phase.clone(), false),
-        LensPhase::Uploading if consent => (LensPhase::Consent, false),
-        LensPhase::Uploading if sorry => (
-            LensPhase::Failed {
-                why: "Google asks to confirm you are a person".into(),
-            },
-            false,
-        ),
-        LensPhase::Uploading if google && path.starts_with("/search") => (
+    let failed = |why: &str| (LensPhase::Failed { why: why.into() }, false);
+    let post_again = || {
+        if posts < MAX_POSTS {
+            (LensPhase::Uploading, true)
+        } else {
+            failed(WHY_NO_RESULTS)
+        }
+    };
+    match kind {
+        NavKind::Consent => (LensPhase::Consent, false),
+        NavKind::Sorry => failed(WHY_PERSON),
+        NavKind::Results if *phase == LensPhase::Uploading => (
             LensPhase::Results {
                 url: url.to_owned(),
             },
             false,
         ),
-        LensPhase::Uploading if lens => (LensPhase::Uploading, false),
-        LensPhase::Uploading => (
-            LensPhase::Failed {
-                why: "Google did not answer with results".into(),
-            },
-            false,
-        ),
-        other => (other.clone(), false),
+        // Results without our post (an old address Google went back to): post the photo.
+        NavKind::Results | NavKind::GoogleOther => post_again(),
+        NavKind::LensUpload => (phase.clone(), false),
+        NavKind::Other if *phase == LensPhase::Uploading => failed(WHY_NO_RESULTS),
+        NavKind::Other => failed(WHY_NOT_OPENED),
     }
 }
 
@@ -278,44 +342,102 @@ HTMLFormElement.prototype.submit.call(form);}}catch(e){{}}}})('{base64}')"
     )
 }
 
-/// One window's Lens route and the photo waiting to be posted.
+/// One window's Lens route and the photo it posts.
 #[derive(Debug, Clone)]
 pub struct LensState {
     pub phase: LensPhase,
-    /// The JPEG to post, base64, until it is posted.
-    pub pending: Option<String>,
+    /// The JPEG to post, base64, kept until the route is over (results or given up), so it can be
+    /// posted again.
+    pub photo: Option<String>,
     pub photo_id: i64,
+    /// How often the photo was posted in this search.
+    pub posts: u8,
 }
 
-/// The windows' Lens routes, by session (managed by Tauri).
+/// A rectangle in logical points (CSS pixels), from the window's content's top-left.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Bounds {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// The tallest title bar the layout accepts (anything above is a misreading and is ignored).
+pub const MAX_TITLE_INSET: f64 = 120.0;
+
+/// A13: the app's page fills the window's content area below the title bar. On macOS the window's
+/// content view runs under the title bar (probed 2026-11-18: content 900 pt tall, the area below
+/// the title bar 868 pt), so a webview placed at the top would hide its first 32 pt behind it.
+/// `inner_*` is the content view's size and `title_inset` the title bar's height, in points.
+pub fn ui_bounds(inner_width: f64, inner_height: f64, title_inset: f64) -> Bounds {
+    let inset = if title_inset.is_finite() && (0.0..=MAX_TITLE_INSET).contains(&title_inset) {
+        title_inset
+    } else {
+        0.0
+    };
+    Bounds {
+        x: 0.0,
+        y: inset,
+        width: inner_width.max(1.0),
+        height: (inner_height - inset).max(1.0),
+    }
+}
+
+/// A13: the page webview's place: the browser area as the app's page measured it (CSS pixels of
+/// the app's page, which are logical points, never device pixels), moved by where the app's page
+/// sits in the window, and kept inside the app's page.
+pub fn web_bounds(area: Bounds, ui: Bounds) -> Bounds {
+    let finite = |v: f64| if v.is_finite() { v } else { 0.0 };
+    let x = finite(area.x).clamp(0.0, ui.width);
+    let y = finite(area.y).clamp(0.0, ui.height);
+    Bounds {
+        x: ui.x + x,
+        y: ui.y + y,
+        width: finite(area.width).clamp(1.0, (ui.width - x).max(1.0)),
+        height: finite(area.height).clamp(1.0, (ui.height - y).max(1.0)),
+    }
+}
+
+/// The windows' Lens routes and layouts, by session (managed by Tauri).
 #[derive(Default, Clone)]
 pub struct SearchWindows {
     pub lens: Arc<Mutex<HashMap<i64, LensState>>>,
+    /// Where each window's app page sits (see [`ui_bounds`]).
+    pub layout: Arc<Mutex<HashMap<i64, Bounds>>>,
 }
 
 impl SearchWindows {
-    /// A page finished loading in `session`'s page webview: the next phase, and the script to run
-    /// in it (the photo post) when it is time.
+    /// A page finished loading in `session`'s page webview: the next phase (when it changed or the
+    /// photo is posted), and the script to run in it (the photo post) when it is time.
     pub fn page_loaded(&self, session_id: i64, url: &str) -> (Option<LensPhase>, Option<String>) {
         let mut lens = self.lens.lock().unwrap_or_else(|e| e.into_inner());
         let Some(state) = lens.get_mut(&session_id) else {
             return (None, None);
         };
         let before = state.phase.clone();
-        let (next, post) = lens_on_page(&state.phase, url);
-        state.phase = next.clone();
+        let (next, post) = lens_on_page(&state.phase, state.posts, url);
         let script = if post {
-            state.pending.take().map(|b| upload_script(&b))
+            state.photo.as_deref().map(upload_script)
         } else {
             None
         };
-        // Time to post but nothing left to post (it went already): the route is over.
+        // Time to post but no photo to post: the route is over.
         let next = if post && script.is_none() {
-            state.phase = LensPhase::Idle;
             LensPhase::Idle
         } else {
             next
         };
+        if script.is_some() {
+            state.posts += 1;
+        }
+        if matches!(
+            next,
+            LensPhase::Results { .. } | LensPhase::Failed { .. } | LensPhase::Idle
+        ) {
+            state.photo = None;
+        }
+        state.phase = next.clone();
         ((next != before || script.is_some()).then_some(next), script)
     }
 
@@ -324,8 +446,9 @@ impl SearchWindows {
             session_id,
             LensState {
                 phase: LensPhase::Opening,
-                pending: Some(jpeg_base64),
+                photo: Some(jpeg_base64),
                 photo_id,
+                posts: 0,
             },
         );
     }
@@ -338,6 +461,15 @@ impl SearchWindows {
             .map(|s| s.phase.clone())
     }
 
+    /// How often the photo was posted in the current search.
+    pub fn posts(&self, session_id: i64) -> u8 {
+        self.lens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&session_id)
+            .map_or(0, |s| s.posts)
+    }
+
     pub fn fail(&self, session_id: i64, why: &str) {
         if let Some(state) = self
             .lens
@@ -345,13 +477,33 @@ impl SearchWindows {
             .unwrap_or_else(|e| e.into_inner())
             .get_mut(&session_id)
         {
-            state.pending = None;
+            state.photo = None;
             state.phase = LensPhase::Failed { why: why.into() };
         }
     }
 
+    pub fn set_layout(&self, session_id: i64, ui: Bounds) {
+        self.layout
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(session_id, ui);
+    }
+
+    /// Where the app's page sits (the whole content area until the window has laid it out).
+    pub fn layout(&self, session_id: i64) -> Option<Bounds> {
+        self.layout
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&session_id)
+            .copied()
+    }
+
     pub fn forget(&self, session_id: i64) {
         self.lens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&session_id);
+        self.layout
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&session_id);
@@ -409,29 +561,35 @@ pub mod window {
             .inner_size(width, height)
             .min_inner_size(1_000.0, 640.0)
             .build()?;
+        // A13: no `auto_resize` (Tauri scales it by the window's size, title bar included); the
+        // app's page is laid out below the title bar here and on every resize.
         let ui = WebviewBuilder::new(
             ui_label(session_id),
             WebviewUrl::App(format!("index.html#/search/{session_id}/{photo_id}").into()),
-        )
-        .auto_resize();
+        );
         window.add_child(
             ui,
             LogicalPosition::new(0.0, 0.0),
             LogicalSize::new(width, height),
         )?;
         let page = page_webview(app, session_id);
-        // Off to the side until the app's page says where the browser area is.
+        // Hidden until the app's page says where the browser area is.
         let web = window.add_child(
             page,
             LogicalPosition::new(0.0, 0.0),
             LogicalSize::new(1.0, 1.0),
         )?;
         let _ = web.hide();
+        let laid_out = window.clone();
+        window.run_on_main_thread(move || lay_out(&laid_out, session_id))?;
         let handle = app.clone();
-        window.on_window_event(move |event| {
-            if matches!(event, tauri::WindowEvent::Destroyed) {
-                handle.state::<SearchWindows>().forget(session_id);
+        let resized = window.clone();
+        window.on_window_event(move |event| match event {
+            tauri::WindowEvent::Destroyed => handle.state::<SearchWindows>().forget(session_id),
+            tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                lay_out(&resized, session_id)
             }
+            _ => {}
         });
         tracing::info!(
             target: "psm::search",
@@ -440,12 +598,64 @@ pub mod window {
         Ok(())
     }
 
+    /// The content view's size and the title bar's height, in points (macOS, main thread only).
+    #[cfg(target_os = "macos")]
+    fn content_and_inset<R: Runtime>(window: &tauri::Window<R>) -> Option<(f64, f64, f64)> {
+        use objc2::{msg_send, runtime::AnyObject};
+        use objc2_core_foundation::CGRect;
+        let ns_window = window.ns_window().ok()? as *mut AnyObject;
+        if ns_window.is_null() {
+            return None;
+        }
+        // SAFETY: called on the main thread (window events and `run_on_main_thread`), on the
+        // window's own NSWindow; `contentView` is checked for nil before use.
+        unsafe {
+            let content: *mut AnyObject = msg_send![ns_window, contentView];
+            if content.is_null() {
+                return None;
+            }
+            let frame: CGRect = msg_send![content, frame];
+            // In window coordinates (origin bottom-left): the area below the title bar.
+            let layout: CGRect = msg_send![ns_window, contentLayoutRect];
+            let inset = frame.size.height - (layout.origin.y + layout.size.height);
+            Some((frame.size.width, frame.size.height, inset))
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn content_and_inset<R: Runtime>(window: &tauri::Window<R>) -> Option<(f64, f64, f64)> {
+        let scale = window.scale_factor().ok()?;
+        let size = window.inner_size().ok()?.to_logical::<f64>(scale);
+        Some((size.width, size.height, 0.0))
+    }
+
+    /// A13: puts the app's page below the title bar, filling the rest of the window, and keeps
+    /// its place for the page webview's (main thread).
+    fn lay_out<R: Runtime>(window: &tauri::Window<R>, session_id: i64) {
+        let Some((width, height, inset)) = content_and_inset(window) else {
+            return;
+        };
+        let ui = ui_bounds(width, height, inset);
+        let app = window.app_handle();
+        app.state::<SearchWindows>().set_layout(session_id, ui);
+        if let Some(page) = app.get_webview(&ui_label(session_id)) {
+            let _ = page.set_position(LogicalPosition::new(ui.x, ui.y));
+            let _ = page.set_size(LogicalSize::new(ui.width, ui.height));
+        }
+        tracing::debug!(
+            target: "psm::search",
+            "search_window.layout session={session_id} content={width:.0}x{height:.0} title_bar={inset:.0}"
+        );
+    }
+
     fn page_webview<R: Runtime>(app: &AppHandle<R>, session_id: i64) -> WebviewBuilder<R> {
         let blank = "about:blank".parse().expect("about:blank");
         let titles = app.clone();
         let loads = app.clone();
         let popups = app.clone();
         WebviewBuilder::new(web_label(session_id), WebviewUrl::External(blank))
+            // A13: Safari's identity, so Google serves its current pages and Lens results.
+            .user_agent(PAGE_USER_AGENT)
             .on_navigation(move |url| {
                 let allowed = allowed_navigation(url.as_str());
                 if !allowed {
@@ -494,13 +704,23 @@ pub mod window {
                 if loading {
                     return;
                 }
+                // A13: every loaded page's host and kind (never its path details, query or text).
+                if let Some((host, kind)) = nav_kind(&url) {
+                    tracing::info!(
+                        target: "psm::search",
+                        "search_window.navigation session={session_id} host={host} kind={}",
+                        kind.name()
+                    );
+                }
                 let windows = loads.state::<SearchWindows>();
                 let (phase, script) = windows.page_loaded(session_id, &url);
                 if let Some(script) = script {
                     let _ = webview.eval(script);
+                    let attempt = windows.posts(session_id);
+                    let step = if attempt > 1 { "photo_posted_again" } else { "photo_posted" };
                     tracing::info!(
                         target: "psm::search",
-                        "search_window.lens_route step=photo_posted session={session_id}"
+                        "search_window.lens_route step={step} attempt={attempt} session={session_id}"
                     );
                 }
                 if let Some(phase) = phase {
@@ -676,15 +896,167 @@ mod tests {
 
     #[test]
     fn a12_lens_route_falls_back_when_google_does_not_answer_with_results() {
-        let (phase, post) = lens_on_page(&LensPhase::Opening, "https://example.com/");
+        let (phase, post) = lens_on_page(&LensPhase::Opening, 0, "https://example.com/");
         assert!(matches!(phase, LensPhase::Failed { .. }));
         assert!(!post);
-        let (phase, _) = lens_on_page(&LensPhase::Uploading, "https://www.google.com/sorry/index");
+        let (phase, _) = lens_on_page(
+            &LensPhase::Uploading,
+            1,
+            "https://www.google.com/sorry/index",
+        );
         assert!(matches!(phase, LensPhase::Failed { .. }));
-        let (phase, _) = lens_on_page(&LensPhase::Uploading, "https://www.google.com/imghp");
+        // A13: Google's home page after the last allowed post: the route gives up.
+        let (phase, post) = lens_on_page(
+            &LensPhase::Uploading,
+            MAX_POSTS,
+            "https://www.google.com/imghp",
+        );
         assert!(matches!(phase, LensPhase::Failed { .. }));
+        assert!(!post);
         // Lens's own address in between is fine.
-        let (phase, _) = lens_on_page(&LensPhase::Uploading, "https://lens.google.com/v3/upload?x");
+        let (phase, _) = lens_on_page(
+            &LensPhase::Uploading,
+            1,
+            "https://lens.google.com/v3/upload?x",
+        );
         assert_eq!(phase, LensPhase::Uploading);
+    }
+
+    /// Runs a sequence of page loads through one window's route: the phases and the posts made.
+    fn walk(urls: &[&str]) -> (Vec<LensPhase>, usize, SearchWindows) {
+        let windows = SearchWindows::default();
+        windows.start(1, 2, "QUJD".into());
+        let mut posts = 0;
+        let mut phases = Vec::new();
+        for url in urls {
+            let (_, script) = windows.page_loaded(1, url);
+            posts += usize::from(script.is_some());
+            phases.push(windows.phase(1).unwrap());
+        }
+        (phases, posts, windows)
+    }
+
+    const START: &str = "https://www.google.com/imghp?hl=en";
+    const CONSENT: &str = "https://consent.google.com/ml?continue=https://www.google.com/imghp";
+    const HOME: &str = "https://www.google.com/?hl=en";
+    const UPLOAD: &str = "https://lens.google.com/v3/upload?hl=en&st=1";
+    const RESULTS: &str = "https://www.google.com/search?vsrid=x&udm=26&lns_mode=un&hl=en";
+
+    #[test]
+    fn a13_the_photo_is_posted_again_when_google_lost_it_after_the_cookie_choice() {
+        // The post went to the cookie page, which then went to Google's home page.
+        let (phases, posts, _) = walk(&[START, CONSENT, HOME, UPLOAD, RESULTS]);
+        assert_eq!(posts, 2);
+        assert_eq!(
+            phases.last(),
+            Some(&LensPhase::Results {
+                url: RESULTS.into()
+            })
+        );
+        let (phases, posts, _) = walk(&[START, UPLOAD, CONSENT, HOME, UPLOAD, RESULTS]);
+        assert_eq!(posts, 2);
+        assert!(matches!(phases.last(), Some(LensPhase::Results { .. })));
+        // Cookie choice before any post: one post is enough.
+        let (_, posts, _) = walk(&[CONSENT, START, UPLOAD, RESULTS]);
+        assert_eq!(posts, 1);
+    }
+
+    #[test]
+    fn a13_the_photo_is_posted_at_most_twice_then_the_window_shows_its_own_list() {
+        let (phases, posts, windows) = walk(&[START, HOME, HOME, HOME, HOME]);
+        assert_eq!(posts, usize::from(MAX_POSTS));
+        assert!(matches!(phases.last(), Some(LensPhase::Failed { .. })));
+        // Over: the photo is dropped and nothing is posted later on any Google page.
+        assert_eq!(windows.page_loaded(1, START), (None, None));
+        assert_eq!(windows.posts(1), MAX_POSTS);
+        // A plain search page without the photo's results counts as "no results".
+        let (phases, posts, _) = walk(&[START, "https://www.google.com/search?hl=en", HOME]);
+        assert_eq!(posts, 2);
+        assert!(matches!(phases.last(), Some(LensPhase::Failed { .. })));
+    }
+
+    #[test]
+    fn a13_navigations_are_named_by_host_and_kind_only() {
+        let kind = |u: &str| nav_kind(u).map(|(h, k)| (h, k.name()));
+        assert_eq!(
+            kind(RESULTS),
+            Some(("www.google.com".into(), "google_results"))
+        );
+        assert_eq!(
+            kind("https://www.google.com/search?q=teak+chair"),
+            Some(("www.google.com".into(), "google_other"))
+        );
+        assert_eq!(
+            kind(CONSENT),
+            Some(("consent.google.com".into(), "google_consent"))
+        );
+        assert_eq!(
+            kind(UPLOAD),
+            Some(("lens.google.com".into(), "lens_upload"))
+        );
+        assert_eq!(
+            kind("https://www.google.se/sorry/index?continue=x"),
+            Some(("www.google.se".into(), "google_sorry"))
+        );
+        assert_eq!(
+            kind("https://shop.example.se/products/teak?x=1"),
+            Some(("shop.example.se".into(), "other"))
+        );
+        assert_eq!(kind("about:blank"), None);
+    }
+
+    #[test]
+    fn a13_page_identity_is_safari_so_google_serves_its_current_pages() {
+        // Google serves its basic pages (no Lens results) to WebKit without these tokens.
+        assert!(PAGE_USER_AGENT.contains("AppleWebKit/"));
+        assert!(PAGE_USER_AGENT.contains(" Version/"));
+        assert!(PAGE_USER_AGENT.ends_with(" Safari/605.1.15"));
+        assert!(!PAGE_USER_AGENT.contains('\n') && !PAGE_USER_AGENT.contains("  "));
+    }
+
+    #[test]
+    fn a13_the_app_page_sits_below_the_title_bar_and_the_browser_in_its_area() {
+        // Probed on the dev Mac: content view 1440x900 pt, 32 pt of it under the title bar.
+        let ui = ui_bounds(1440.0, 900.0, 32.0);
+        assert_eq!(
+            ui,
+            Bounds {
+                x: 0.0,
+                y: 32.0,
+                width: 1440.0,
+                height: 868.0
+            }
+        );
+        // The browser area as the app's page measures it (CSS pixels = points, at any scale):
+        // right of the photo panel, under the toolbar, above the selection bar.
+        let area = Bounds {
+            x: 381.0,
+            y: 41.0,
+            width: 1059.0,
+            height: 767.0,
+        };
+        assert_eq!(
+            web_bounds(area, ui),
+            Bounds {
+                x: 381.0,
+                y: 73.0,
+                width: 1059.0,
+                height: 767.0
+            }
+        );
+        // Never outside the app's page, whatever the page reports.
+        let wild = Bounds {
+            x: -50.0,
+            y: 5000.0,
+            width: 9000.0,
+            height: f64::NAN,
+        };
+        let placed = web_bounds(wild, ui);
+        assert_eq!((placed.x, placed.y), (0.0, 32.0 + 868.0));
+        assert_eq!((placed.width, placed.height), (1440.0, 1.0));
+        // A misread title bar is ignored rather than pushing the page off screen.
+        assert_eq!(ui_bounds(1440.0, 900.0, 500.0).y, 0.0);
+        assert_eq!(ui_bounds(1440.0, 900.0, f64::NAN).y, 0.0);
+        assert_eq!(ui_bounds(1440.0, 900.0, -3.0).y, 0.0);
     }
 }

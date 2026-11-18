@@ -84,6 +84,28 @@ in place; downloads refused; `on_page_load` / title changes → events `search_w
 `search_page_remove`, `search_put_text`, `search_ask`); frontend wrapper `services/search.ts`. Saved pages:
 `saved_pages` (migration 018) through `crates/infra/src/sqlite/saved_pages.rs`.
 
+**A13 corrections to that window (owner's first live test).**
+- **Layout.** On macOS the window's content view runs under the title bar: probed, it is 900 pt tall with 32 pt
+  of it under the title bar. A webview at y = 0 therefore hid its top behind the title bar, and the page
+  webview covered the toolbar.
+  - The app's page is not `auto_resize`d (Tauri scales that by the whole content size). `window::lay_out` reads
+    the content view and `contentLayoutRect` natively (`objc2`, main thread) and places the page at
+    `ui_bounds(width, height, title_inset)`. It runs on open and on every `Resized` / `ScaleFactorChanged`, and
+    keeps the result in `SearchWindows.layout`.
+  - `search_web_place` gets the browser area in the app page's CSS pixels (logical points, whole numbers via
+    `browserBounds`) and places the page webview at `web_bounds(area, ui)`, offset and clamped inside the app's
+    page.
+  - The app's page watches every row of the browser column (`ResizeObserver`), so a bar appearing, growing or
+    going above the area moves the webview. It sends a place only when it changed.
+- **Browser identity.** The page webview sends `PAGE_USER_AGENT` (desktop Safari). With WebKit's default, which
+  lacks `Version/… Safari/…`, Google serves basic pages, and the Lens post lands on an empty search page without
+  `udm=26` (probed).
+- **Lens route.** The photo stays in `LensState.photo` until results or give-up, and is posted again when the
+  route, still waiting, lands on a Google page that isn't the results. That happens after the cookie page,
+  which swallows the first post on a fresh profile (seen live), or after Google's home page. At most
+  `MAX_POSTS` = 2 posts per search, then the window's own list. `nav_kind` names each loaded page by host and
+  kind only.
+
 ## Runtime flows (step lists with the files involved)
 ### Shooting templates (book `10G`; T1–T4; contract `docs/implementation/master_plan_templates.md` §5 P1–P10)
 - **Editor (T1).** Settings → Shooting templates (`features/settings/{SettingsNav.tsx, TemplatesSection.tsx,

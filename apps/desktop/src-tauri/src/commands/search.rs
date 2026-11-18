@@ -25,8 +25,8 @@ use crate::{
         items::{CommandError, CommandId},
     },
     search_window::{
-        GOOGLE_START, LensPhase, MAX_SELECTION_CHARS, SELECTION_SCRIPT, SearchWindows,
-        allowed_navigation, parse_selection_report, web_label,
+        Bounds, GOOGLE_START, LensPhase, MAX_SELECTION_CHARS, SELECTION_SCRIPT, SearchWindows,
+        allowed_navigation, parse_selection_report, web_bounds, web_label,
     },
     state::AppState,
 };
@@ -102,12 +102,15 @@ pub async fn search_window_open(
     .map_err(tauri_error)
 }
 
-/// Where the browser area is in the app's page (CSS pixels of the window), and whether the page
-/// webview shows (hidden while the window's own results list shows).
+/// Where the browser area is in the app's page (CSS pixels of the app's page, i.e. logical
+/// points), and whether the page webview shows (hidden while the window's own results list shows).
+/// A13: moved by where the app's page sits in the window (below the title bar).
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub async fn search_web_place(
     app: AppHandle,
+    windows: State<'_, SearchWindows>,
     session_id: CommandId,
     x: f64,
     y: f64,
@@ -116,9 +119,24 @@ pub async fn search_web_place(
     visible: bool,
 ) -> Result<(), CommandError> {
     let web = page(&app, session_id.0)?;
-    web.set_position(LogicalPosition::new(x.max(0.0), y.max(0.0)))
+    let ui = windows.layout(session_id.0).unwrap_or(Bounds {
+        x: 0.0,
+        y: 0.0,
+        width: f64::MAX,
+        height: f64::MAX,
+    });
+    let placed = web_bounds(
+        Bounds {
+            x,
+            y,
+            width,
+            height,
+        },
+        ui,
+    );
+    web.set_position(LogicalPosition::new(placed.x, placed.y))
         .map_err(tauri_error)?;
-    web.set_size(LogicalSize::new(width.max(1.0), height.max(1.0)))
+    web.set_size(LogicalSize::new(placed.width, placed.height))
         .map_err(tauri_error)?;
     if visible {
         web.show().map_err(tauri_error)?;
