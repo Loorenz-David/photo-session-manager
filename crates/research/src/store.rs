@@ -181,8 +181,26 @@ pub fn run(conn: &Connection, id: i64) -> Result<Option<RunRow>> {
     .map_err(db)
 }
 
-/// Every run, oldest first; `session` narrows to one session.
+/// Every research run, oldest first; `session` narrows to one session. Browse runs (A12: one
+/// call from the "Search this photo" window) are not research runs and are left out; see
+/// [`all_runs`].
 pub fn runs(conn: &Connection, session: Option<i64>) -> Result<Vec<RunRow>> {
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {RUN_COLUMNS} FROM research_runs WHERE (?1 IS NULL OR session_id=?1) \
+             AND trigger<>'browse' ORDER BY id"
+        ))
+        .map_err(db)?;
+    let rows = stmt
+        .query_map([session], run_row)
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    Ok(rows)
+}
+
+/// Every run, browse runs included (the export), oldest first.
+pub fn all_runs(conn: &Connection, session: Option<i64>) -> Result<Vec<RunRow>> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {RUN_COLUMNS} FROM research_runs WHERE (?1 IS NULL OR session_id=?1) ORDER BY id"

@@ -83,6 +83,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/015_photo_places.sql")),
             M::up(include_str!("migrations/016_container_labels.sql")),
             M::up(include_str!("migrations/017_session_changes.sql")),
+            M::up(include_str!("migrations/018_saved_pages.sql")),
         ]
     }
 

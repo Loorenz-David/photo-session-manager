@@ -148,6 +148,47 @@ export const commands = {
 	researchSiteRemove: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_remove", { site })),
 	researchSitesReorder: (sites: string[]) => typedError<string, CommandError>(__TAURI_INVOKE("research_sites_reorder", { sites })),
 	researchExport: (selection: ExportSelectionDto, dest: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_export", { selection, dest })),
+	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
+	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
+	/**
+	 *  Where the browser area is in the app's page (CSS pixels of the window), and whether the page
+	 *  webview shows (hidden while the window's own results list shows).
+	 */
+	searchWebPlace: (sessionId: CommandId, x: number | null, y: number | null, width: number | null, height: number | null, visible: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_place", { sessionId, x, y, width, height, visible })),
+	/**  Opens a web page in the window's browser. */
+	searchWebGo: (sessionId: CommandId, url: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_go", { sessionId, url })),
+	/**  Back, forward or reload in the window's browser. */
+	searchWebStep: (sessionId: CommandId, action: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_step", { sessionId, action })),
+	/**
+	 *  Searches the photo with Google Lens in the window's browser: Google's page opens and the photo
+	 *  is posted from it (`search_lens` events follow).
+	 */
+	searchLensStart: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_lens_start", { sessionId, photoId })),
+	/**
+	 *  The window gave up waiting for Google (no results in time): the route is over and the window
+	 *  shows its own list.
+	 */
+	searchLensGiveUp: (sessionId: CommandId, why: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_lens_give_up", { sessionId, why })),
+	/**  Back to Google's results page for the pinned photo. */
+	searchLensResults: (sessionId: CommandId) => typedError<boolean, CommandError>(__TAURI_INVOKE("search_lens_results", { sessionId })),
+	/**  Reads what is selected in the window's browser (the app's page asks; the answer is checked). */
+	searchWebSelection: (sessionId: CommandId) => typedError<SelectionAnswerDto_Serialize, CommandError>(__TAURI_INVOKE("search_web_selection", { sessionId })),
+	/**  The window's own results list: the matches research already found (no cost). */
+	searchMatches: (sessionId: CommandId) => typedError<VisualMatchDto_Serialize[], CommandError>(__TAURI_INVOKE("search_matches", { sessionId })),
+	/**  The window's own results list from one new visual search of the photo (a counted call). */
+	searchVisual: (sessionId: CommandId, photoId: CommandId) => typedError<VisualMatchDto_Serialize[], CommandError>(__TAURI_INVOKE("search_visual", { sessionId, photoId })),
+	/**  The item's saved pages, oldest first. */
+	searchPages: (itemId: CommandId) => typedError<SavedPageDto[], CommandError>(__TAURI_INVOKE("search_pages", { itemId })),
+	/**  Saves the page for the item (kept until removed). */
+	searchPageSave: (itemId: CommandId, url: string, title: string) => typedError<SavedPageDto, CommandError>(__TAURI_INVOKE("search_page_save", { itemId, url, title })),
+	searchPageRemove: (pageId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_page_remove", { pageId })),
+	/**  "Put in <field>": the selected text into a field, as a person's edit (one undo step). */
+	searchPutText: (sessionId: CommandId, key: string, text: string) => typedError<AttributeValueDto_Serialize, CommandError>(__TAURI_INVOKE("search_put_text", { sessionId, key, text })),
+	/**
+	 *  "Ask AI…": the selected text and the person's instruction to the model; the answer becomes AI
+	 *  suggestions in the form's AI review tab.
+	 */
+	searchAsk: (sessionId: CommandId, text: string, url: string, title: string, instruction: string) => typedError<AskAnswerDto, CommandError>(__TAURI_INVOKE("search_ask", { sessionId, text, url, title, instruction })),
 	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto_Serialize, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
 	publishConfirm: (sessionIds: CommandId[], summaryText: string, shown: ShownSuggestionsDto[]) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText, shown })),
 	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
@@ -267,6 +308,19 @@ export type ArrangeNextResponse_Deserialize = {
 export type ArrangeNextResponse_Serialize = {
 	next_session_id: number | null,
 	research_queued: boolean,
+};
+
+export type AskAnswerDto = {
+	suggested: AskSuggestionDto[],
+	/**  `[field label, why]` of the fields the answer named but that were not written. */
+	not_written: ([string, string])[],
+	cost_micro_usd: number,
+};
+
+export type AskSuggestionDto = {
+	key: string,
+	label: string,
+	value: string,
 };
 
 export type AttributeGroupDto = "details" | "condition" | "product";
@@ -1248,6 +1302,13 @@ export type RunViewDto_Serialize = {
 	error: string | null,
 };
 
+export type SavedPageDto = {
+	id: number,
+	url: string,
+	title: string,
+	saved_at: number,
+};
+
 export type SecretsInputDto = SecretsInputDto_Serialize | SecretsInputDto_Deserialize;
 
 export type SecretsInputDto_Deserialize = {
@@ -1266,6 +1327,27 @@ export type SecretsStateDto = {
 	model: boolean,
 	search: boolean,
 	reader: boolean,
+};
+
+/**  What is selected on the page: the selection, or why it was refused. */
+export type SelectionAnswerDto = SelectionAnswerDto_Serialize | SelectionAnswerDto_Deserialize;
+
+/**  What is selected on the page: the selection, or why it was refused. */
+export type SelectionAnswerDto_Deserialize = {
+	selection?: SelectionDto | null,
+	refused?: string | null,
+};
+
+/**  What is selected on the page: the selection, or why it was refused. */
+export type SelectionAnswerDto_Serialize = {
+	selection: SelectionDto | null,
+	refused: string | null,
+};
+
+export type SelectionDto = {
+	text: string,
+	url: string,
+	title: string,
 };
 
 export type SessionFilter = "open" | "published" | "all";
@@ -1736,6 +1818,22 @@ export type TestConnectionResponse_Serialize = {
 	holder: string | null,
 	programs: string[],
 	sentence: string | null,
+};
+
+export type VisualMatchDto = VisualMatchDto_Serialize | VisualMatchDto_Deserialize;
+
+export type VisualMatchDto_Deserialize = {
+	url: string,
+	title: string,
+	source: string,
+	thumbnail?: string | null,
+};
+
+export type VisualMatchDto_Serialize = {
+	url: string,
+	title: string,
+	source: string,
+	thumbnail: string | null,
 };
 
 /* Tauri Specta runtime */
