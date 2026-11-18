@@ -6,6 +6,7 @@ mod a10_arrival_and_published_changes;
 mod a16_switch_cost_and_filing_target;
 mod a17_delete_session;
 mod a20_switch_scripts;
+mod a21_photo_files;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

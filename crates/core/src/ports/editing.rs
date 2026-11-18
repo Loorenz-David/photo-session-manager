@@ -48,6 +48,12 @@ pub trait EditingProvider: Send + Sync {
     /// A20: the next `ensure` verifies everything again (what it may skip once verified in this
     /// editor run: recipes and hooks). Asked by the Health page's check.
     fn recheck_next(&self) {}
+    /// A21: the editor is rendering `raw` now (its file must not move).
+    fn rendering(&self, _raw: &str) -> bool {
+        false
+    }
+    /// A21: the RAW at `old` was moved to `new`: queued renders follow it.
+    fn raw_moved(&self, _old: &str, _new: &str) {}
     /// Changelog 45 (P65): asks the editor to look at `folder` for new files now.
     fn sync_folder(&self, _folder: &str) -> Result<()> {
         Ok(())

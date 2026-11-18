@@ -503,4 +503,10 @@ pub trait Store: Send + Sync {
     /// other session uses. Capture-ledger rows keep their history without a session; the filing
     /// target is cleared when it was this session. The Unassigned session is refused.
     fn delete_session_rows(&self, session_id: i64) -> Result<DeletedRows>;
+    /// A21: the RAW at `old` now lives at `new` (its files were moved into its session's folder):
+    /// in one transaction every row naming the RAW by path follows (photos, `raw_state` with its
+    /// path key, change reasons, jobs), and the photos' preview paths under each moved cache folder
+    /// `(old folder, new folder)` too. Fails (and changes nothing) when another RAW already has
+    /// `new`.
+    fn relocate_raw(&self, old: &str, new: &str, cache_dirs: &[(String, String)]) -> Result<()>;
 }

@@ -617,6 +617,75 @@ pub async fn session_delete(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
+/// A21: one photo the "Fix photo files location" action would leave where it is, and why.
+#[derive(Serialize, Type)]
+pub struct PhotoFileLeftResponse {
+    pub file: String,
+    pub reason: String,
+}
+
+/// A21: photos of the session whose files are in another folder.
+#[derive(Serialize, Type)]
+pub struct MisplacedFilesResponse {
+    #[specta(type = specta_typescript::Number)]
+    pub photos: i64,
+}
+
+/// A21: what "Fix photo files location" did.
+#[derive(Serialize, Type)]
+pub struct FilesFixedResponse {
+    #[specta(type = specta_typescript::Number)]
+    pub moved: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub sidecars: i64,
+    pub left: Vec<PhotoFileLeftResponse>,
+}
+
+/// A21 (owner 2026-11-18): how many of the session's photos have their files in another
+/// session's folder (the ⋯ menu shows "Fix photo files location" only when this is above 0).
+#[tauri::command]
+#[specta::specta]
+pub async fn session_files_misplaced(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<MisplacedFilesResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        psm_integrations::photo_files::misplaced(&app, session_id.0)
+            .map(|photos| MisplacedFilesResponse {
+                photos: photos.len() as i64,
+            })
+            .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// A21: moves the session's photo files (and Capture One's files of them) into its folder.
+#[tauri::command]
+#[specta::specta]
+pub async fn session_files_fix(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<FilesFixedResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        psm_integrations::photo_files::fix(&app, session_id.0)
+            .map(|placed| FilesFixedResponse {
+                moved: placed.moved as i64,
+                sidecars: placed.sidecars as i64,
+                left: placed
+                    .skipped
+                    .into_iter()
+                    .map(|(file, reason)| PhotoFileLeftResponse { file, reason })
+                    .collect(),
+            })
+            .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
 #[cfg(test)]
 mod list_tests {
     use super::*;

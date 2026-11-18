@@ -5,22 +5,60 @@ import { toast } from 'sonner';
 import { ActionButton } from '@/components/ui/action-button';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { deleteSession, sessionDeletePreview, type SessionDeletePreview } from '@/services/sessions';
+import { deleteSession, fixSessionFiles, sessionDeletePreview, sessionFilesMisplaced, type FilesFixed, type SessionDeletePreview } from '@/services/sessions';
+
+function fixedToast(done: FilesFixed) {
+  const left = done.left.length;
+  if (done.moved === 0 && left > 0) {
+    toast.error(`${photos(left)} could not be moved`, { description: done.left.map(l => `${l.file}: ${l.reason}`).join('\n') });
+    return;
+  }
+  toast.success(done.moved === 1 ? '1 photo moved into this session’s folder' : `${done.moved} photos moved into this session’s folder`, {
+    description: left > 0 ? `${photos(left)} left where they are: ${done.left.map(l => `${l.file}: ${l.reason}`).join('; ')}` : 'Capture One’s edits went with them.',
+  });
+}
 
 /**
  * Owner correction A17 (2026-11-18): "Delete session", for test items and mistakes. Session Manager only: the
  * session's files go to the macOS Trash and its records are removed; Shopify is not changed.
+ * A21: "Fix photo files location", shown only when some of the session's photos have their files in another
+ * session's folder (photos moved before files followed them): their files move into this session's folder.
  */
 export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu-button' }: { sessionId: number; onDeleted: () => void; className?: string }) {
   const [confirming, setConfirming] = useState(false);
+  const [misplaced, setMisplaced] = useState(0);
+  const [fixing, setFixing] = useState(false);
   return (
     <>
-      <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Root
+        modal={false}
+        onOpenChange={open => {
+          if (open) sessionFilesMisplaced(sessionId).then(setMisplaced, () => setMisplaced(0));
+        }}
+      >
         <DropdownMenu.Trigger className={className} aria-label="Session actions">
           <MoreHorizontal />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className="photo-menu" align="end" sideOffset={6}>
+            {misplaced > 0 && (
+              <DropdownMenu.Item
+                className="photo-menu-item"
+                disabled={fixing}
+                onSelect={() => {
+                  setFixing(true);
+                  fixSessionFiles(sessionId)
+                    .then(done => {
+                      fixedToast(done);
+                      setMisplaced(done.left.length);
+                    })
+                    .catch(e => toast.error((e as Error).message))
+                    .finally(() => setFixing(false));
+                }}
+              >
+                <span>Fix photo files location ({misplaced})</span>
+              </DropdownMenu.Item>
+            )}
             <DropdownMenu.Item className="photo-menu-item" data-danger onSelect={() => setConfirming(true)}>
               <span>Delete session…</span>
             </DropdownMenu.Item>

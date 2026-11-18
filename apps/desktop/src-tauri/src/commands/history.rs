@@ -47,6 +47,13 @@ impl From<HistoryOutcome> for HistoryOutcomeDto {
     }
 }
 
+/// A21: after an undo or redo (of a move, for one), the photos' files follow their sessions.
+fn follow_files(app: &psm_integrations::AppHandles, outcome: HistoryOutcome) -> HistoryOutcome {
+    let sessions: Vec<i64> = outcome.sessions.iter().map(|s| s.session.id).collect();
+    psm_integrations::photo_files::after_history(app, &sessions);
+    outcome
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn history_get(
@@ -74,6 +81,7 @@ pub async fn history_undo(
     tauri::async_runtime::spawn_blocking(move || {
         HistoryService::new(app.store.as_ref(), &SystemClock, app.history.as_ref())
             .undo(session_id.0)
+            .map(|outcome| follow_files(&app, outcome))
             .map(Into::into)
             .map_err(Into::into)
     })
@@ -90,6 +98,7 @@ pub async fn history_redo(
     tauri::async_runtime::spawn_blocking(move || {
         HistoryService::new(app.store.as_ref(), &SystemClock, app.history.as_ref())
             .redo(session_id.0)
+            .map(|outcome| follow_files(&app, outcome))
             .map(Into::into)
             .map_err(Into::into)
     })

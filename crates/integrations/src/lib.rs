@@ -2,6 +2,7 @@ pub mod arranged;
 pub mod camera;
 pub mod commerce;
 pub mod editing;
+pub mod photo_files;
 pub mod render_output;
 pub mod session_delete;
 

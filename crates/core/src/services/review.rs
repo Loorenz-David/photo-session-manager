@@ -391,19 +391,21 @@ impl<'a> ReviewService<'a> {
             seq_after = tx.session(target)?.change_seq;
             Ok(())
         })?;
-        // A10 (owner 2026-11-18): one line per moved or copied photo. Moving re-points the photo
-        // only: its RAW stays in its folder and no Capture One call is made (no folder or
-        // collection is created for the target session), which the line says.
+        // A10 (owner 2026-11-18): one line per moved or copied photo. This step re-points the rows;
+        // A21: the app's move then moves the RAW and Capture One's files into the target's
+        // folder (`psm_integrations::photo_files`, logged `photos.files_moved`); a copy shares the
+        // RAW, which stays.
         for (source, file, folder) in &moved_files {
             tracing::info!(
                 target: "psm::capture_one",
-                "photos.{} file={} from_session={} from_folder={} to_session={} to_folder={} raw_moved=no capture_one_calls=none",
+                "photos.{} file={} from_session={} from_folder={} to_session={} to_folder={} files={}",
                 if copy { "copied" } else { "moved" },
                 file,
                 source,
                 folder,
                 target,
                 target_folder,
+                if copy { "shared" } else { "follow" },
             );
         }
         if copy {
