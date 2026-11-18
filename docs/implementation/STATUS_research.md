@@ -70,6 +70,33 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
   Joined: PR #12 merged into `main` as `37edffe` (code `28a97ab`). Release build installed in /Applications (helper
   352928 bytes in the bundle). The A10 build and zip moved to the old folder as "(2026-11-18 A10)". New
   `~/Desktop/Session Manager.zip` 12,606,400 bytes. Not verified on screen (jsdom tests only).
+- **2026-11-18: owner correction A12** (changelog A12; 08A §7 amended). The owner's manual check (screenshot →
+  Google Lens → copy facts back) is now a **Search this photo** window. Clicking a photo in the form's media preview
+  opens it.
+  - **Layout:** one window per session through Tauri's multiwebview (`unstable` feature). The app's page is
+    `search-ui-*`, which renders `SearchWindow.tsx` from `#/search/<s>/<p>`. The web pages are in a separate child
+    webview, `search-web-*`, placed over the browser area.
+  - **Google route:** the photo (`browse::lens_image`: framed, 1600 px, no metadata) is posted from Google's image
+    page to `lens.google.com/v3/upload`. The route was probed on 2026-11-18 with an icon-derived image: 303 to
+    `www.google.com/search?…udm=26`, after Google's EU cookie page.
+  - **Fallback:** with no results within 30 s, the window lists the session's recorded visual matches, or runs one
+    visual search.
+  - **Saved pages:** stored per item in `saved_pages` (migration 018).
+  - **Selection actions:** Put in (a human edit with undo) and Ask AI (a `read`-stage call; `medium` suggestions
+    with the page as source, via `writes::suggest`).
+  - **`browse` runs:** `RunTrigger::Browse` gives each call a gateway record, cost, day limit and export entry.
+    `store::runs` leaves browse runs out; `store::all_runs` is used for the export.
+  - **Trust boundary:** `allowed_navigation` limits every frame to public http/https and never allows the app's
+    origins or local hosts. No remote capability exists. The selection is read by the app's page asking
+    (`SELECTION_SCRIPT`) and is checked by `parse_selection_report`.
+  - **Checks:** fmt and clippy clean. `cargo test --workspace` 1602 passed, 0 failed; new: engine `browse` 8, app
+    crate `a12_` 8. tsc passed. vitest 584/584 (new: `a12_search_window` 13). Frontend build passed. Key scan 0.
+    Break-the-fix: letting any http(s) host through `allowed_navigation` failed 3 tests; the rule was restored.
+  - **Joined:** PR #13 merged into `main` as `b0dd647` (code `1007af4`, WIP `1c16732`). The release build is
+    installed in /Applications (helper 352928 bytes in the bundle). The A11 build and zip moved to the old folder
+    as "(2026-11-18 A11)". New `~/Desktop/Session Manager.zip` 12,835,563 bytes.
+  - **Not verified on screen:** the window, the Google route inside WKWebView, real sites, and the selection read
+    on real pages. Next: the owner tries it, and logs `psm::search` lines if something is off.
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4
