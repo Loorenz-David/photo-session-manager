@@ -463,7 +463,10 @@ fn c1a_open_creates_all_domain_columns() {
             "session_changes",
             &["id", "session_id", "seq", "kind", "raw_path", "at"],
         ),
-        ("saved_pages", &["id", "item_id", "url", "title", "saved_at"]),
+        (
+            "saved_pages",
+            &["id", "item_id", "url", "title", "saved_at"],
+        ),
     ];
     let actual_tables: BTreeSet<String> = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__rusqlite_%'").unwrap().query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
     let expected_tables: BTreeSet<String> = expected

@@ -163,7 +163,11 @@ pub fn parse_selection_report(raw: &str) -> Result<Option<Selection>, Rejected> 
     }
     let value: serde_json::Value = serde_json::from_str(&inner).map_err(|_| Rejected::NotJson)?;
     let object = value.as_object().ok_or(Rejected::UnexpectedShape)?;
-    if object.len() != 3 || !["text", "url", "title"].iter().all(|k| object.contains_key(*k)) {
+    if object.len() != 3
+        || !["text", "url", "title"]
+            .iter()
+            .all(|k| object.contains_key(*k))
+    {
         return Err(Rejected::UnexpectedShape);
     }
     let text = object["text"].as_str().ok_or(Rejected::UnexpectedShape)?;
@@ -242,9 +246,12 @@ pub fn lens_on_page(phase: &LensPhase, url: &str) -> (LensPhase, bool) {
             },
             false,
         ),
-        LensPhase::Uploading if google && path.starts_with("/search") => {
-            (LensPhase::Results { url: url.to_owned() }, false)
-        }
+        LensPhase::Uploading if google && path.starts_with("/search") => (
+            LensPhase::Results {
+                url: url.to_owned(),
+            },
+            false,
+        ),
         LensPhase::Uploading if lens => (LensPhase::Uploading, false),
         LensPhase::Uploading => (
             LensPhase::Failed {
@@ -309,10 +316,7 @@ impl SearchWindows {
         } else {
             next
         };
-        (
-            (next != before || script.is_some()).then_some(next),
-            script,
-        )
+        ((next != before || script.is_some()).then_some(next), script)
     }
 
     pub fn start(&self, session_id: i64, photo_id: i64, jpeg_base64: String) {
@@ -588,7 +592,8 @@ mod tests {
         // Nothing selected.
         assert_eq!(parse_selection_report("").unwrap(), None);
         assert_eq!(parse_selection_report("\"\"").unwrap(), None);
-        let blank = report(serde_json::json!({"text": "   ", "url": "https://e1.example/", "title": ""}));
+        let blank =
+            report(serde_json::json!({"text": "   ", "url": "https://e1.example/", "title": ""}));
         assert_eq!(parse_selection_report(&blank).unwrap(), None);
         // Too long a selection.
         let long = report(serde_json::json!({
@@ -602,7 +607,9 @@ mod tests {
         assert_eq!(parse_selection_report(&huge), Err(Rejected::TooLarge));
         // Unexpected shapes: extra keys, missing keys, wrong types, not a string, not JSON.
         for bad in [
-            report(serde_json::json!({"text": "a", "url": "https://e1.example/", "title": "", "action": "put"})),
+            report(
+                serde_json::json!({"text": "a", "url": "https://e1.example/", "title": "", "action": "put"}),
+            ),
             report(serde_json::json!({"text": "a", "url": "https://e1.example/"})),
             report(serde_json::json!({"text": 1, "url": "https://e1.example/", "title": ""})),
             report(serde_json::json!(["a"])),
@@ -613,9 +620,17 @@ mod tests {
             assert!(parse_selection_report(&bad).is_err(), "{bad}");
         }
         // A page that is not a public web page.
-        for url in ["tauri://localhost/", "http://localhost:1420/", "about:blank"] {
+        for url in [
+            "tauri://localhost/",
+            "http://localhost:1420/",
+            "about:blank",
+        ] {
             let bad = report(serde_json::json!({"text": "a", "url": url, "title": ""}));
-            assert_eq!(parse_selection_report(&bad), Err(Rejected::NotAWebPage), "{url}");
+            assert_eq!(
+                parse_selection_report(&bad),
+                Err(Rejected::NotAWebPage),
+                "{url}"
+            );
         }
     }
 
@@ -637,13 +652,26 @@ mod tests {
         // The results page.
         let results = "https://www.google.com/search?vsrid=abc&udm=26&lns_mode=un";
         let (phase, script) = windows.page_loaded(5, results);
-        assert_eq!(phase, Some(LensPhase::Results { url: results.into() }));
+        assert_eq!(
+            phase,
+            Some(LensPhase::Results {
+                url: results.into()
+            })
+        );
         assert!(script.is_none());
         // Browsing on: nothing changes, nothing is posted again.
         assert_eq!(windows.page_loaded(5, "https://e1.example/p"), (None, None));
-        assert_eq!(windows.phase(5), Some(LensPhase::Results { url: results.into() }));
+        assert_eq!(
+            windows.phase(5),
+            Some(LensPhase::Results {
+                url: results.into()
+            })
+        );
         // Another session's window has no route.
-        assert_eq!(windows.page_loaded(6, "https://www.google.com/"), (None, None));
+        assert_eq!(
+            windows.page_loaded(6, "https://www.google.com/"),
+            (None, None)
+        );
     }
 
     #[test]

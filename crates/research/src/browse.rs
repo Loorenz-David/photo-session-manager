@@ -254,7 +254,9 @@ impl ResearchService {
     /// The day limit and the key of a port, checked before a browse call.
     fn browse_may_call(&self, account: &str, has_port: bool, what: &str) -> Result<()> {
         if !has_port || !self.key_set(account) {
-            return Err(invalid(format!("Add the {what} key in Settings → Research")));
+            return Err(invalid(format!(
+                "Add the {what} key in Settings → Research"
+            )));
         }
         if self.day_limit_reached(&self.settings())? {
             return Err(invalid("Day limit reached"));
@@ -410,9 +412,7 @@ impl ResearchService {
             images: Vec::new(),
             listing_images: Vec::new(),
         });
-        let called = self
-            .gateway
-            .call(run_id, Stage::Read, BROWSE_UNIT, call)?;
+        let called = self.gateway.call(run_id, Stage::Read, BROWSE_UNIT, call)?;
         let host_name = host(&page_url).unwrap_or_default();
         let mut read = crate::stages::step(
             Stage::Read,
@@ -454,7 +454,10 @@ impl ResearchService {
             let reason = if quote.trim().is_empty() {
                 format!("From the text you selected on {host_name}.")
             } else {
-                format!("From the text you selected on {host_name}: “{}”", quote.trim())
+                format!(
+                    "From the text you selected on {host_name}: “{}”",
+                    quote.trim()
+                )
             };
             let outcome = writes::suggest(
                 self.store.as_ref(),

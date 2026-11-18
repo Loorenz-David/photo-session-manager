@@ -66,6 +66,23 @@ Plugins: `tauri-plugin-dialog` (folder pickers) and `tauri-plugin-opener` (A6: w
 browser; `capabilities/default.json` allows `opener:allow-open-url` for `http://*` and `https://*` only). The
 webview ignores `<a target="_blank">`: every link to a web page is `components/ExternalLink.tsx`
 (`openExternal(url)`), never a bare `<a href>`.
+**Search this photo window (A12).** Tauri's multiwebview (`tauri` feature `unstable`): `src/search_window.rs`
+opens one window per session, `search-<session>`, holding two webviews: `search-ui-<session>` (the app's own
+bundle on `#/search/<session>/<photo>`; `src/main.tsx` renders `features/search/SearchWindow.tsx` there instead of
+`App`, so nothing of the main window runs in it; capability `capabilities/search.json`, local only) and
+`search-web-<session>` (web pages; placed by the app's page over its browser area with `search_web_place`, hidden
+while the window's own list shows). The page webview: `on_navigation` = `allowed_navigation` (every frame: public
+http/https only, never the app's origins, localhost, the local network, `file:`/`asset:`/`ipc:`); new windows open
+in place; downloads refused; `on_page_load` / title changes → events `search_web_page`, and the Google Lens route
+(`SearchWindows`, managed state; `lens_on_page`: Google's start page → consent → post the photo with
+`upload_script` (a same-site form post to `lens.google.com/v3/upload`, field `encoded_image`) → the results page
+`www.google.com/search?…`) → event `search_lens`. The selected text is read by the app's page asking
+(`search_web_selection`: `SELECTION_SCRIPT` evaluated in the page, the answer checked by
+`parse_selection_report`). Commands `src/commands/search.rs` (`search_window_open`, `search_web_place`,
+`search_web_go`, `search_web_step`, `search_lens_start`, `search_lens_give_up`, `search_lens_results`,
+`search_web_selection`, `search_matches`, `search_visual`, `search_pages`, `search_page_save`,
+`search_page_remove`, `search_put_text`, `search_ask`); frontend wrapper `services/search.ts`. Saved pages:
+`saved_pages` (migration 018) through `crates/infra/src/sqlite/saved_pages.rs`.
 
 ## Runtime flows (step lists with the files involved)
 ### Shooting templates (book `10G`; T1–T4; contract `docs/implementation/master_plan_templates.md` §5 P1–P10)
@@ -262,8 +279,8 @@ listed in the research master plan §5 "Seams".
 ### `crates/research` (psm-research; depends on `psm-core` and `psm-infra`, never on integrations or the desktop crate)
 | Module | Holds |
 |---|---|
-| `api.rs`, `api_impl.rs` | **ResearchApi** (the trait app code calls: `status`, `run`, `arranged`, `session_changed`, `settings_changed`, `settings_reset`, `validate_settings`, `secrets_set`, `secrets_state`, `site_add`, `site_remove`, `sites_reorder`, `export`, `purge_expired`) and its shapes (`ResearchStatus`, `RunView`, `StepView`, `Reason`, `SecretsInput`, `SecretsState`, `ExportSelection`); implemented for `ResearchService` |
-| `domain.rs` | `RunState`, `RunTrigger` (`Arranged`, `Manual`; `Auto`/`FollowUp` are only read from old rows), `Stage` (observe, find, read, compare, labels, condition, decide), `StepKind`, `CallState`, `SiteClass`, `Verdict`, `ErrorClass`, `FieldClass`, `Prerequisite`, `CallFailure` |
+| `api.rs`, `api_impl.rs` | **ResearchApi** (the trait app code calls: `status`, `run`, `arranged`, `session_changed`, `settings_changed`, `settings_reset`, `validate_settings`, `secrets_set`, `secrets_state`, `site_add`, `site_remove`, `sites_reorder`, `export`, `purge_expired`, A12 `browse_matches`, `browse_search`, `browse_ask`) and its shapes (`ResearchStatus`, `RunView`, `StepView`, `Reason`, `SecretsInput`, `SecretsState`, `ExportSelection`); implemented for `ResearchService` |
+| `domain.rs` | `RunState`, `RunTrigger` (`Arranged`, `Manual`; `Browse` (A12) holds one call of the search window and is never queued, started or listed by `store::runs`; `Auto`/`FollowUp` are only read from old rows), `Stage` (observe, find, read, compare, labels, condition, decide), `StepKind`, `CallState`, `SiteClass`, `Verdict`, `ErrorClass`, `FieldClass`, `Prerequisite`, `CallFailure` |
 | `config.rs` | **ResearchSettings** (the `research` slot of `settings.json`, read tolerantly by `from_slot`, checked by `validate`), **ResearchConfig** (the per-run snapshot, `from_settings` with the shop facts), the shipped defaults (stage models and efforts, prices, the detailed-condition table), `INSTRUCTIONS_VERSION`. With `adapters/`, the only place model and vendor names are literals (HA5) |
 | `ports.rs` | the three provider ports **ModelProvider** (`call(&ModelRequest)`), **VisualSearchProvider** (`search(&ResearchImage)`), **PageReader** (`read(url)`), their replies (each carries an `Exchange {request, response}` for the call record) and `Providers` (an `Option` per port) |
 | `adapters/` | `mod.rs::build` (adapters chosen by `research.providers.*`; default ids `openai`, `serpapi_lens`, `page_http`; keys read from the secrets port on every call), `http.rs` (the HTTP seam: `ReqwestResearchHttp` live, a fake in tests), `openai/` (Responses API, strict schemas), `visual_search/serpapi_lens.rs` (upload, then the Lens search), `page_reader/` (plain HTTP download, address guard, pacing of slow hosts, `extract.rs::product_extract`; A9: `Retry-After` waited only up to `SHORT_RETRY_AFTER_S` = 10 s, a 403/long 429 is `PageReply.blocked` and the run skips that host (`stages::read`); `shop.rs::ShopPageReader` wraps the reader in the app wiring and reads the connected shop's product pages through `CommerceAdapter::shop_product` (Shopify `productByIdentifier`), keeping the inner reader's id) |
@@ -272,6 +289,7 @@ listed in the research master plan §5 "Seams".
 | `stages.rs`, `decide.rs` | stages 1–6 as units (`execute` resumes at the first uncommitted unit) and the instructions each stage sends; stage 7 Decide (class, evidence, confidence, reasons, then the writes) |
 | `gateway.rs` | **CallGateway::call**, the one door for every provider call: eligibility re-read, stop rule, call record and outbound rows are committed **before** the request leaves; reply, usage and cost are recorded after; retries, error classes, redaction |
 | `writes.rs` | the one door for the form values research writes (MC-A1), inside the writing transaction; no undo step |
+| `browse.rs` (A12) | the search window's research parts: `lens_image` (the photo framed, reduced to 1600 px, no metadata; else the camera's original preview), `browse_matches` (the session's latest answered visual search, no call), `browse_search` (one visual search of the pinned photo), `browse_ask` (Ask AI: one `read`-stage model call on the selected text, unit `browse`, writes through `writes::suggest` at `medium` with the page as source). Each call is a finished `browse` run through the gateway (record, cost, day limit, export); `store::runs` leaves browse runs out, `store::all_runs` (the export) keeps them |
 | `images.rs`, `files.rs` | **ResearchImage** (no public constructor: `ResearchImages::render` makes one only from an eligible photo's adjusted preview through `Imaging::render_research`, so a RAW or a master can never reach a port, MC-A5); the file store `<data>/research/images/<sha[0..2]>/<sha>.jpg` |
 | `store.rs`, `schema.rs` | the engine's SQL and `schema::ensure` (§Storage below) |
 | `service.rs`, `job.rs` | **ResearchService** (gateway, renderer, snapshots; the Keychain account names) and **ResearchJob**, the `jobs` handler of kind `research` (target = run id; an offline call holds the job, back-off at most 60 s) |
