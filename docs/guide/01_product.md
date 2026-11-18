@@ -93,7 +93,10 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   searchable list inside the bar: type to filter, arrow keys, Return, Esc), **Ask AI** (a prompt inside the bar:
   Return sends, Esc cancels; "Asking AI…", then "*n* suggestions sent to AI review" with **Open AI review**,
   which brings the main window forward on that item's AI review tab) and ✕ to dismiss it until the next
-  selection; with nothing selected a small hint pill shows. "Put in" is confirmed by a toast with **Undo** (the
+  selection; with nothing selected a small hint pill shows. A15: the selection taken stays in the bar until another
+  selection, ✕ or another page (a #fragment change is the same page); leaving **Other field…** or **Ask AI**
+  without acting, a "Put in" and an AI answer all keep it, because the page's own selection goes as soon as
+  the owner clicks into the bar. "Put in" is confirmed by a toast with **Undo** (the
   field gets back what it held, or is emptied). Toasts show over the photo panel. The toolbar: Back / Forward /
   Reload grouped, Results, the address as a pill, Save page (Saved once the page is saved), search again; saved
   pages are pills in a "Saved" row, the one on show highlighted. Links and pop-ups a page opens in a new window

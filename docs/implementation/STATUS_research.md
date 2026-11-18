@@ -119,6 +119,32 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
   - **Not verified:** Google's matches rendering. From this Mac, Google answered the repeated test uploads with its
     "unusual traffic" page, which a person can solve in the window. The selection bar on real pages is also
     unverified. If the owner sees that page, it is Google's check, not the app.
+- **2026-11-18: owner correction A14** (changelog A14). The owner confirmed A13 works, and asked for two things:
+  a nicer selection bar, and for links in Google's AI Overview to open.
+  - **Selection bar:** `SelectionBar.tsx` is a floating bar in a fixed-height band under the page.
+    - It holds the snippet, Manufacturer/Designer, an inline searchable "Other field…" list, an inline Ask AI
+      prompt with "Open AI review", dismiss, and a hint pill when nothing is selected.
+    - "Open AI review" calls `search_open_review`, then `useReviewFromSearch` opens the main window on the AI
+      review tab.
+    - "Put in" shows a toast with Undo: `search_put_text` answers the previous value, and `search_put_back`
+      restores it.
+    - The toolbar and the saved-page pills were restyled.
+    - Nothing is drawn over the page webview: toasts go over the photo panel and tooltips are native titles.
+  - **Links:** an empty `window.open('')` followed by setting the address never reached the app, because Tauri
+    drops the `""` URL; `about:blank` would have blanked the page. This was probed in a wry 0.57.1 harness.
+    `page_popups.js` now runs in every frame and opens new-window links, forms and `window.open` in place,
+    http/https only, and reads and sends nothing.
+    - Not confirmed: that this is the pattern Google's AI Overview uses. Google shows "unusual traffic" to the
+      dev Mac.
+  - **Checks:** fmt and clippy clean.
+    - `cargo test --workspace`: 1611 passed, 0 failed (new: 4 `a14_`).
+    - tsc and the build pass. vitest: 598/598 (new: 12).
+    - Break-the-fix: the `window.open` override and the link retarget each fail their tests when removed.
+    - Key scan: 0.
+  - **Joined:** PR #15 is merged into `main` as `2f35a32` (code `61c3365`) and installed in /Applications
+    (helper 352928 bytes). The A13 build and zip moved to the old folder as "(2026-11-18 A13)". New
+    `~/Desktop/Session Manager.zip`: 12,868,382 bytes.
+  - **Not verified on screen:** the new bar and toolbar, and the AI Overview links on live Google.
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4

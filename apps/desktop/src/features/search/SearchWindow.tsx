@@ -37,6 +37,38 @@ import { SelectionBar, type AskOutcome, type Selected } from './SelectionBar';
 
 /** How often the window asks the page what is selected (ms). */
 export const SELECTION_POLL_MS = 700;
+
+function selectionKey(selection: Selected): string {
+  return `${selection.url}\n${selection.text}`;
+}
+
+/** Whether two addresses are the same page (only the #fragment may differ). */
+export function samePage(a: string, b: string): boolean {
+  return a.split('#')[0] === b.split('#')[0];
+}
+
+/**
+ * A15: the selection the bar keeps after one reading of the page. The selection taken stays until the owner selects
+ * something else, dismisses it, or the page changes: a reading with nothing selected never drops it (the page's
+ * selection goes as soon as the owner clicks into the app's own bar, e.g. to find a field or type for AI).
+ * A selection too long to take is something else selected, so it replaces the one kept and its reason shows.
+ */
+export function keptSelection(
+  current: Selected | null,
+  answer: { selection: Selected | null; refused: string | null },
+  dismissed: { current: string | null },
+): Selected | null {
+  if (answer.refused) return null;
+  const next = answer.selection;
+  if (!next) {
+    // Nothing selected on the page any more: selecting the dismissed text again shows it again.
+    dismissed.current = null;
+    return current;
+  }
+  const key = selectionKey(next);
+  if (key === dismissed.current) return current;
+  return current && selectionKey(current) === key ? current : next;
+}
 /** How long the window waits for Google's results before it shows its own list (ms). */
 export const LENS_WAIT_MS = 30_000;
 
@@ -121,6 +153,8 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
   const [pages, setPages] = useState<SavedPage[]>([]);
   const [selected, setSelected] = useState<Selected | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  // A15: the selection the owner dismissed with ✕, so the page still reporting it does not bring the bar back.
+  const dismissedKey = useRef<string | null>(null);
   const browserArea = useRef<HTMLDivElement>(null);
   const searchedPhotos = useRef(new Set<number>());
   const photoIdRef = useRef(photoId);
@@ -265,11 +299,7 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
         .then(answer => {
           if (!alive) return;
           setRefused(answer.refused);
-          setSelected(current => {
-            const next = answer.selection;
-            if (!next) return null;
-            return current && current.text === next.text && current.url === next.url ? current : next;
-          });
+          setSelected(current => keptSelection(current, answer, dismissedKey));
         })
         .catch(() => undefined);
     };
@@ -277,6 +307,18 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
     const timer = window.setInterval(ask, SELECTION_POLL_MS);
     return () => { alive = false; window.clearInterval(timer); };
   }, [sessionId, mode]);
+
+  // A15: another page drops the selection taken from the one before (a change of #fragment is the same page).
+  const pageUrl = page?.url;
+  useEffect(() => {
+    if (!pageUrl) return;
+    setSelected(current => (current && !samePage(current.url, pageUrl) ? null : current));
+  }, [pageUrl]);
+
+  function dismiss(selection: Selected) {
+    dismissedKey.current = selectionKey(selection);
+    setSelected(null);
+  }
 
   async function open(url: string) {
     setMode('web');
@@ -481,6 +523,7 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
           rest={rest}
           onPut={put}
           onAsk={ask}
+          onDismiss={dismiss}
           onOpenReview={() => void openAiReview(sessionId).catch(error => toast.error((error as Error).message))}
         />
       </main>

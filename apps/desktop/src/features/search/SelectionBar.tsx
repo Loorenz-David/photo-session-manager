@@ -36,17 +36,18 @@ const enter = { initial: { opacity: 0, y: 6 }, animate: { opacity: 1, y: 0 }, tr
  * native view over the browser area, so nothing of the app can be drawn over it: the bar, its field list and the
  * AI prompt all stay inside this band, which has the same height in every state so the page never jumps).
  */
-export function SelectionBar({ selected, refused, quick, rest, onPut, onAsk, onOpenReview }: {
+export function SelectionBar({ selected, refused, quick, rest, onPut, onAsk, onDismiss, onOpenReview }: {
   selected: Selected | null;
   refused: string | null;
   quick: FormField[];
   rest: FormField[];
   onPut: (field: FormField, selection: Selected) => Promise<void>;
   onAsk: (selection: Selected, instruction: string) => Promise<AskOutcome | null>;
+  /** ✕: the window lets go of the selection (A15: nothing else does, except another selection or another page). */
+  onDismiss: (selection: Selected) => void;
   onOpenReview: () => void;
 }) {
   const [mode, setMode] = useState<Mode>('actions');
-  const [dismissed, setDismissed] = useState<Selected | null>(null);
   // The selection the field list or the AI prompt works on: kept while the person types, even if the page's own
   // selection changes or goes meanwhile.
   const [held, setHeld] = useState<Selected | null>(null);
@@ -72,8 +73,7 @@ export function SelectionBar({ selected, refused, quick, rest, onPut, onAsk, onO
   }, [mode]);
 
   const fields = useMemo(() => matchingFields(rest, typed), [rest, typed]);
-  const isDismissed = selected !== null && dismissed !== null && dismissed.text === selected.text && dismissed.url === selected.url;
-  const showing = holding ? held !== null : selected !== null && !isDismissed;
+  const showing = holding ? held !== null : selected !== null;
 
   function hold(next: Mode) {
     setHeld(selected);
@@ -189,7 +189,7 @@ export function SelectionBar({ selected, refused, quick, rest, onPut, onAsk, onO
               <Button size="sm" className="bg-(--ai-muted) text-(--ai-foreground) hover:bg-[color-mix(in_oklch,var(--ai-muted),var(--ai)_18%)]" title="Ask AI about the selection" onClick={() => hold('ask')}>
                 <Sparkles /> Ask AI
               </Button>
-              <Button size="icon-sm" variant="ghost" aria-label="Dismiss selection" title="Dismiss" onClick={() => setDismissed(selected)}>
+              <Button size="icon-sm" variant="ghost" aria-label="Dismiss selection" title="Dismiss" onClick={() => onDismiss(selected)}>
                 <X />
               </Button>
             </>
