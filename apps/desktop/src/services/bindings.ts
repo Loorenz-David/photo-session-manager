@@ -183,8 +183,18 @@ export const commands = {
 	/**  Saves the page for the item (kept until removed). */
 	searchPageSave: (itemId: CommandId, url: string, title: string) => typedError<SavedPageDto, CommandError>(__TAURI_INVOKE("search_page_save", { itemId, url, title })),
 	searchPageRemove: (pageId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_page_remove", { pageId })),
-	/**  "Put in <field>": the selected text into a field, as a person's edit (one undo step). */
-	searchPutText: (sessionId: CommandId, key: string, text: string) => typedError<AttributeValueDto_Serialize, CommandError>(__TAURI_INVOKE("search_put_text", { sessionId, key, text })),
+	/**  "Put in <field>": the selected text into a field, as a person's edit. */
+	searchPutText: (sessionId: CommandId, key: string, text: string) => typedError<PutTextDto_Serialize, CommandError>(__TAURI_INVOKE("search_put_text", { sessionId, key, text })),
+	/**
+	 *  A14: Undo of "Put in <field>": the field gets back what it held (`previous`, the stored JSON
+	 *  text `search_put_text` answered), or is emptied when it was empty. A person's edit.
+	 */
+	searchPutBack: (sessionId: CommandId, key: string, previous: string | null) => typedError<null, CommandError>(__TAURI_INVOKE("search_put_back", { sessionId, key, previous })),
+	/**
+	 *  A14: "Open AI review" from the search window: the main window comes forward and opens the
+	 *  session's details on the AI review tab (event `search_open_review`).
+	 */
+	searchOpenReview: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_open_review", { sessionId })),
 	/**
 	 *  "Ask AI…": the selected text and the person's instruction to the model; the answer becomes AI
 	 *  suggestions in the form's AI review tab.
@@ -1109,6 +1119,30 @@ export type PublishedChangesResponse = {
 	editor_edits: number,
 	app_edits: boolean,
 	unrecorded: boolean,
+};
+
+/**
+ *  What "Put in <field>" did: the stored value, and what the field held before (its stored JSON
+ *  text; `None`: it was empty), so the window's toast can put it back (A14).
+ */
+export type PutTextDto = PutTextDto_Serialize | PutTextDto_Deserialize;
+
+/**
+ *  What "Put in <field>" did: the stored value, and what the field held before (its stored JSON
+ *  text; `None`: it was empty), so the window's toast can put it back (A14).
+ */
+export type PutTextDto_Deserialize = {
+	stored: AttributeValueDto_Deserialize,
+	previous?: string | null,
+};
+
+/**
+ *  What "Put in <field>" did: the stored value, and what the field held before (its stored JSON
+ *  text; `None`: it was empty), so the window's toast can put it back (A14).
+ */
+export type PutTextDto_Serialize = {
+	stored: AttributeValueDto_Serialize,
+	previous: string | null,
 };
 
 export type QueueViewDto = QueueViewDto_Serialize | QueueViewDto_Deserialize;

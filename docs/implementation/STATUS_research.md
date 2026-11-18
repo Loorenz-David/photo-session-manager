@@ -97,6 +97,28 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
     as "(2026-11-18 A11)". New `~/Desktop/Session Manager.zip` 12,835,563 bytes.
   - **Not verified on screen:** the window, the Google route inside WKWebView, real sites, and the selection read
     on real pages. Next: the owner tries it, and logs `psm::search` lines if something is off.
+- **2026-11-18: owner correction A13** (changelog A13). In the owner's first live test, Google looked old, the
+  route ended on an empty Google page after the cookie choice, and the toolbar was hidden. All three causes were
+  confirmed and fixed:
+  - **User agent:** WebKit's default UA got Google's basic pages, and the Lens post landed on `/search` without
+    `udm=26` (probed). The fix is `PAGE_USER_AGENT`, desktop Safari.
+  - **Lost post:** the cookie page swallowed the first post (seen live), and A12 never re-posted. The photo is now
+    kept and re-posted on a non-results Google page, at most `MAX_POSTS` = 2 times.
+  - **Hidden toolbar:** the window's content view includes the 32 pt title bar (probed natively), so both webviews
+    sat 32 pt high. The app's page is now laid out below `contentLayoutRect` on open and on every resize, with no
+    `auto_resize`. The browser is placed at area + offset, clamped, and re-placed when any column row changes.
+  - **Logs:** `search_window.navigation host= kind=` and `step=photo_posted_again`.
+  - **Checks:** fmt and clippy clean. `cargo test --workspace` 1607 passed, 0 failed (new: 5 `a13_`). tsc and
+    build passed. vitest 586/586 (new: `a13_search_placement` 2). Break-the-fix: the offset, the re-post and the
+    row watching each fail their tests when removed. Key scan 0.
+  - **Live, by a probe through the real `open()`:** the layout is exact before and after a resize. Post 2 reached
+    the `udm=26` results, and the cookie choice persisted.
+  - **Joined:** PR #14 merged into `main` as `39c17f9` (code `509fa4d`) and installed in /Applications (helper
+    352928 bytes). The A12 build and zip moved to the old folder as "(2026-11-18 A12)". New
+    `~/Desktop/Session Manager.zip` 12,839,012 bytes.
+  - **Not verified:** Google's matches rendering. From this Mac, Google answered the repeated test uploads with its
+    "unusual traffic" page, which a person can solve in the window. The selection bar on real pages is also
+    unverified. If the owner sees that page, it is Google's check, not the app.
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4

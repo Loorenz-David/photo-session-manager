@@ -1143,6 +1143,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::search::search_page_save,
         commands::search::search_page_remove,
         commands::search::search_put_text,
+        commands::search::search_put_back,
+        commands::search::search_open_review,
         commands::search::search_ask,
         commands::publish::publish_preview,
         commands::publish::publish_confirm,

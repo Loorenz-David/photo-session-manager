@@ -88,6 +88,17 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   research already found for the item, or one new visual search of the pinned photo (a research call, counted
   in the day's spend). Every Ask AI and visual search is a `browse` run in the research record and export, but
   never shows as the session's research run.
+  A14 (owner 2026-11-18): the selection bar is one floating bar under the page: the selected text as a quoted
+  one-line snippet (the whole text on hover), **Manufacturer** / **Designer** buttons, **Other field…** (a
+  searchable list inside the bar: type to filter, arrow keys, Return, Esc), **Ask AI** (a prompt inside the bar:
+  Return sends, Esc cancels; "Asking AI…", then "*n* suggestions sent to AI review" with **Open AI review**,
+  which brings the main window forward on that item's AI review tab) and ✕ to dismiss it until the next
+  selection; with nothing selected a small hint pill shows. "Put in" is confirmed by a toast with **Undo** (the
+  field gets back what it held, or is emptied). Toasts show over the photo panel. The toolbar: Back / Forward /
+  Reload grouped, Results, the address as a pill, Save page (Saved once the page is saved), search again; saved
+  pages are pills in a "Saved" row, the one on show highlighted. Links and pop-ups a page opens in a new window
+  (Google's AI Overview sources, `target=_blank`, `window.open`, an empty window pointed somewhere afterwards)
+  open in the same browser area.
 - **One at a time.** Research runs one session at a time app-wide (MC-A6). A queued session's panel
   says "Waiting — researching *name · SKU* first (*n*th in line)"; "Research this next" moves it to
   the front. The sessions list (beside "Arranged") and the session header show each session's research

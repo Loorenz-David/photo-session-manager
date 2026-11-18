@@ -81,7 +81,8 @@ in place; downloads refused; `on_page_load` / title changes → events `search_w
 `parse_selection_report`). Commands `src/commands/search.rs` (`search_window_open`, `search_web_place`,
 `search_web_go`, `search_web_step`, `search_lens_start`, `search_lens_give_up`, `search_lens_results`,
 `search_web_selection`, `search_matches`, `search_visual`, `search_pages`, `search_page_save`,
-`search_page_remove`, `search_put_text`, `search_ask`); frontend wrapper `services/search.ts`. Saved pages:
+`search_page_remove`, `search_put_text`, `search_ask`; A14 `search_put_back`, `search_open_review`); frontend
+wrapper `services/search.ts`. Saved pages:
 `saved_pages` (migration 018) through `crates/infra/src/sqlite/saved_pages.rs`.
 
 **A13 corrections to that window (owner's first live test).**
@@ -105,6 +106,27 @@ in place; downloads refused; `on_page_load` / title changes → events `search_w
   which swallows the first post on a fresh profile (seen live), or after Google's home page. At most
   `MAX_POSTS` = 2 posts per search, then the window's own list. `nav_kind` names each loaded page by host and
   kind only.
+
+**A14 corrections to that window.**
+- **New windows open in place.** WebKit hands a page's new-window request to `on_new_window` with its address,
+  but an empty one (`window.open('')`, then the address set on the returned window) arrives as `""`, which
+  Tauri cannot parse and denies before the app sees it; `about:blank` would have loaded a blank page over the
+  page (probed with wry 0.57.1 in a harness). Every frame of the page webview now runs
+  `src-tauri/src/page_popups.js` at document start (`initialization_script_for_all_frames(popup_script())`):
+  `window.open` with any target but `_self`/`_top`/`_parent` navigates the top page to the address (http/https
+  only) and returns a stand-in window whose `location` (set, `href`, `assign`, `replace`) does the same; links,
+  areas and forms aimed at a new window are re-aimed at `_top` in the capture phase. It reads and sends
+  nothing; `allowed_navigation` still decides. What still reaches `on_new_window` goes through `new_window`
+  (`OpenHere` for public web pages; `Ignore` for blank windows and anything else), logged by host.
+  `refusal_reason` names why a navigation was refused (`empty`, `local_address`, `not_a_web_page`).
+- **Selection bar** (`features/search/SelectionBar.tsx`). The page webview is a native view over the browser
+  area, so nothing of the app's page can be drawn over it: the bar, its field list and the AI prompt stay in a
+  fixed-height band under the area (no height change, so the page never jumps), tooltips are native `title`s
+  and toasts sit bottom-left over the photo panel. "Put in" answers what the field held (`search_put_text` →
+  `PutTextDto.previous`); the toast's Undo calls `search_put_back` (set it again, or clear). "Open AI review"
+  calls `search_open_review`: the main window comes forward and gets `search_open_review`, which
+  `features/search/useReviewFromSearch.ts` turns into the details on the AI review tab (opening that session
+  first when another is shown).
 
 ## Runtime flows (step lists with the files involved)
 ### Shooting templates (book `10G`; T1–T4; contract `docs/implementation/master_plan_templates.md` §5 P1–P10)
