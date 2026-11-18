@@ -1067,6 +1067,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::sessions::session_deactivate,
         commands::sessions::session_active,
         commands::sessions::session_arrange_next,
+        commands::sessions::session_delete_preview,
+        commands::sessions::session_delete,
         commands::camera::camera_status,
         commands::camera::camera_retry,
         commands::camera::camera_take_back_availability,

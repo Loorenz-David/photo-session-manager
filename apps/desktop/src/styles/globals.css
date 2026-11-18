@@ -232,7 +232,15 @@ button { font: inherit; }
 .unassigned-card > svg { width: 16px; height: 16px; color: var(--muted); }
 
 .session-table { margin-top: var(--space-6); }
-.list-labels, .session-row { display: grid; grid-template-columns: 40px minmax(240px, 1fr) 160px 220px 110px; gap: var(--space-3); align-items: center; }
+.list-labels, .session-row { display: grid; grid-template-columns: 40px minmax(240px, 1fr) 160px 220px 110px 32px; gap: var(--space-3); align-items: center; }
+/* A17: the row's ⋯ menu ("Delete session…"), shown on hover or focus. */
+.row-menu { display: grid; place-items: center; }
+.row-menu-button, .header-menu-button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; }
+.row-menu-button { opacity: 0; }
+.session-row:hover .row-menu-button, .row-menu-button:focus-visible, .row-menu-button[data-state="open"] { opacity: 1; }
+.row-menu-button:hover, .header-menu-button:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.row-menu-button svg, .header-menu-button svg { width: 16px; height: 16px; }
+.delete-session-facts { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: var(--text-sm); line-height: 1.45; }
 .list-labels { height: 34px; border-bottom: 1px solid var(--hair-strong); color: var(--muted); font-size: var(--text-xs); font-weight: var(--weight-heavy); letter-spacing: .1em; text-transform: uppercase; }
 .label-activity { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
 .label-activity svg { width: 12px; height: 12px; }
@@ -319,7 +327,7 @@ button.research-pill { cursor: pointer; }
 
 @media (max-width: 960px) {
   .sessions-page { padding: var(--space-6) var(--space-5) 100px; }
-  .list-labels, .session-row { grid-template-columns: 36px minmax(200px, 1fr) 130px 190px 80px; }
+  .list-labels, .session-row { grid-template-columns: 36px minmax(200px, 1fr) 130px 190px 80px 32px; }
 }
 /* Shared placeholder animation; the later visual pass only needs to change this block. */
 .skeleton-pulse { animation: skeleton-pulse 1.5s ease-in-out infinite; }

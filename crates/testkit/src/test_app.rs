@@ -4,6 +4,7 @@ use crate::fake_commerce::FakeCommerce;
 use crate::fake_processes::FakeProcessList;
 use crate::fake_secrets::FakeSecrets;
 use crate::fake_sleep::FakeSleepInhibitor;
+use crate::fake_trash::FakeTrash;
 use crate::ftp_client::FtpClient;
 use psm_core::Result;
 use psm_core::{
@@ -43,6 +44,8 @@ pub struct TestApp {
     pub fake_sleep: Arc<FakeSleepInhibitor>,
     /// R7·U1: the research fakes the app's engine calls (`with_research…` only).
     pub research: Option<ResearchFakes>,
+    /// A17: the Trash "Delete session" moves files to (a folder of the test's directory).
+    pub trash: Arc<FakeTrash>,
     next_hook: AtomicU64,
 }
 
@@ -602,6 +605,8 @@ impl TestApp {
                 },
             );
         }
+        let trash = Arc::new(FakeTrash::new(dir.path().join("Trash")));
+        psm_integrations::with_test_trash(&paths, trash.clone());
         let secrets = Arc::new(FakeSecrets::default());
         if !secret_cache_enabled {
             secrets.disable_cache();
@@ -648,6 +653,7 @@ impl TestApp {
             fake_processes,
             fake_sleep,
             research,
+            trash,
             next_hook: AtomicU64::new(1),
         })
     }

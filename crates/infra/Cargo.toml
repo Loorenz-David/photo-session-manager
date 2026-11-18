@@ -26,6 +26,10 @@ security-framework = "3"
 ipnet = "2"
 libc = "0.2"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# A17: "Delete session" moves files to the Trash (NSFileManager); already in the lock file.
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSError", "NSFileManager", "NSString", "NSURL"] }
+
 [dev-dependencies]
 tempfile = "3"
 

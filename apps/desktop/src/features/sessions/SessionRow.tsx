@@ -6,6 +6,7 @@ import type { SessionResearch } from '@/services/research';
 import { ResearchPill } from './ResearchPill';
 import { ChangedPill } from './ChangedPill';
 import { StatusPill } from './StatusPill';
+import { SessionActionsMenu } from './DeleteSession';
 
 type Row = SessionList['groups'][number]['rows'][number];
 
@@ -26,9 +27,11 @@ type SessionRowProps = {
   research?: SessionResearch;
   /** A10: after "Keep as published". */
   onChanged?: () => void;
+  /** A17: after "Delete session". */
+  onDeleted?: () => void;
 };
 
-export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged }: SessionRowProps) {
+export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged, onDeleted }: SessionRowProps) {
   const name = row.item_type || row.title;
   return (
     <div className="session-row" data-testid={`session-row-${row.id}`} data-selected={selected || undefined}>
@@ -63,6 +66,7 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
       <time className="row-time" dateTime={new Date(row.created_at).toISOString()}>
         {activityLabel(row.created_at, now)}
       </time>
+      <span className="row-menu">{onDeleted && <SessionActionsMenu sessionId={row.id} onDeleted={onDeleted} />}</span>
     </div>
   );
 }

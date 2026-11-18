@@ -23,6 +23,12 @@ export const commands = {
 	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
 	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
 	sessionArrangeNext: (sessionId: CommandId) => typedError<ArrangeNextResponse_Serialize, CommandError>(__TAURI_INVOKE("session_arrange_next", { sessionId })),
+	sessionDeletePreview: (sessionId: CommandId) => typedError<SessionDeletePreviewResponse, CommandError>(__TAURI_INVOKE("session_delete_preview", { sessionId })),
+	/**
+	 *  A17 (owner 2026-11-18): deletes the session in Session Manager only (files to the Trash,
+	 *  rows removed); Shopify is not touched.
+	 */
+	sessionDelete: (sessionId: CommandId) => typedError<SessionDeletedResponse, CommandError>(__TAURI_INVOKE("session_delete", { sessionId })),
 	cameraStatus: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_status")),
 	cameraRetry: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_retry")),
 	cameraTakeBackAvailability: () => typedError<TakeBackAvailability_Serialize, CommandError>(__TAURI_INVOKE("camera_take_back_availability")),
@@ -1383,6 +1389,27 @@ export type SelectionDto = {
 	text: string,
 	url: string,
 	title: string,
+};
+
+/**  A17: what the "Delete session" confirm dialog shows. */
+export type SessionDeletePreviewResponse = {
+	session_id: number,
+	sku: string,
+	title: string,
+	item_type: string,
+	photos: number,
+	published: boolean,
+	archived: boolean,
+	active: boolean,
+};
+
+/**  A17: what one "Delete session" did. */
+export type SessionDeletedResponse = {
+	sku: string,
+	photos: number,
+	files_trashed: number,
+	files_missing: number,
+	folder_trashed: boolean,
 };
 
 export type SessionFilter = "open" | "published" | "all";

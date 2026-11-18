@@ -3,6 +3,8 @@ import {
   commands,
   type CommandError,
   type PublishedChangesResponse,
+  type SessionDeletedResponse,
+  type SessionDeletePreviewResponse,
   type SessionFilter,
   type SessionListResponse_Serialize,
   type SessionResponse_Serialize,
@@ -54,6 +56,20 @@ export async function deactivateSession(): Promise<void> {
 /** Records the arranged mark and returns the next eligible session, if there is one. */
 export async function arrangeNext(sessionId: number): Promise<{ next_session_id: number | null; research_queued: boolean }> {
   return unwrap(await commands.sessionArrangeNext(sessionId));
+}
+
+/** A17: what the "Delete session" confirm dialog shows. */
+export type SessionDeletePreview = SessionDeletePreviewResponse;
+/** A17: what a "Delete session" did. */
+export type SessionDeleted = SessionDeletedResponse;
+
+export async function sessionDeletePreview(sessionId: number): Promise<SessionDeletePreview> {
+  return unwrap(await commands.sessionDeletePreview(sessionId));
+}
+
+/** A17: deletes the session in Session Manager only (files to the Trash); Shopify is not touched. */
+export async function deleteSession(sessionId: number): Promise<SessionDeleted> {
+  return unwrap(await commands.sessionDelete(sessionId));
 }
 
 /** URL the webview can load for a preview file on disk. */

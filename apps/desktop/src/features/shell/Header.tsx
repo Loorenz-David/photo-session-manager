@@ -17,6 +17,7 @@ import { HistoryButtons } from '@/features/history/HistoryButtons';
 import { DiskWarning } from '@/features/settings/StorageSection';
 import { ResearchPill, useResearchOverview } from '@/features/sessions/ResearchPill';
 import { ChangedPill } from '@/features/sessions/ChangedPill';
+import { SessionActionsMenu } from '@/features/sessions/DeleteSession';
 import { onSessionsChanged } from '@/services/events';
 import type { PublishedChanges } from '@/services/sessions';
 
@@ -227,6 +228,8 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
             )}
             {publish.label?.kind === 'publishing' && <PublishProgress value={publish.label.value} sessionId={sessionId} />}
             {typeof integration === 'string' && <div className="relative"><ActionButton action={async () => { setPublishOpen(true); }}><CloudUpload /> Publish</ActionButton>{publishOpen && <PublishPopover sessionIds={[sessionId]} onClose={() => { setPublishOpen(false); void publish.refresh(); }} />}</div>}
+            {/* A17: "Delete session…" (Session Manager only); afterwards the sessions list. */}
+            <SessionActionsMenu sessionId={sessionId} className="header-menu-button" onDeleted={() => { window.location.hash = '#/'; }} />
           </>
         )}
     </PageHeader>

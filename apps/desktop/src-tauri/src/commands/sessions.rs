@@ -540,6 +540,83 @@ pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), Comman
     .map_err(Into::into)
 }
 
+/// A17: what the "Delete session" confirm dialog shows.
+#[derive(Serialize, Type)]
+pub struct SessionDeletePreviewResponse {
+    #[specta(type = specta_typescript::Number)]
+    pub session_id: i64,
+    pub sku: String,
+    pub title: String,
+    pub item_type: String,
+    #[specta(type = specta_typescript::Number)]
+    pub photos: i64,
+    pub published: bool,
+    pub archived: bool,
+    pub active: bool,
+}
+
+/// A17: what one "Delete session" did.
+#[derive(Serialize, Type)]
+pub struct SessionDeletedResponse {
+    pub sku: String,
+    #[specta(type = specta_typescript::Number)]
+    pub photos: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub files_trashed: i64,
+    #[specta(type = specta_typescript::Number)]
+    pub files_missing: i64,
+    pub folder_trashed: bool,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn session_delete_preview(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<SessionDeletePreviewResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        psm_integrations::session_delete::preview(&app, session_id.0)
+            .map(|p| SessionDeletePreviewResponse {
+                session_id: p.session_id,
+                sku: p.sku,
+                title: p.title,
+                item_type: p.item_type,
+                photos: p.photos,
+                published: p.published,
+                archived: p.archived,
+                active: p.active,
+            })
+            .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// A17 (owner 2026-11-18): deletes the session in Session Manager only (files to the Trash,
+/// rows removed); Shopify is not touched.
+#[tauri::command]
+#[specta::specta]
+pub async fn session_delete(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<SessionDeletedResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        psm_integrations::session_delete::delete(&app, session_id.0)
+            .map(|d| SessionDeletedResponse {
+                sku: d.sku,
+                photos: d.photos,
+                files_trashed: d.files_trashed as i64,
+                files_missing: d.files_missing as i64,
+                folder_trashed: d.folder_trashed,
+            })
+            .map_err(CommandError::from)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
 #[cfg(test)]
 mod list_tests {
     use super::*;

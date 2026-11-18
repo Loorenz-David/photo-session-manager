@@ -3,6 +3,7 @@ pub mod camera;
 pub mod commerce;
 pub mod editing;
 pub mod render_output;
+pub mod session_delete;
 
 use psm_research::api::ResearchApi;
 
@@ -1054,7 +1055,9 @@ impl App {
                     settings.storage.retention_days_after_publish,
                 )
                 // P66: a denied photo's undo steps are dropped when its files go.
-                .with_history(history.clone()),
+                .with_history(history.clone())
+                // A17: "Delete session" moves the session's files to the macOS Trash.
+                .with_trash(trash_for(&paths)),
             )
         };
         // Changelog 47 (2), P69: masters prepared once a session is Ready, one at a time, only
@@ -1685,6 +1688,27 @@ pub fn with_test_research(paths: &AppPaths, seams: ResearchTestSeams) {
     if let Ok(mut all) = RESEARCH_TEST_SEAMS.get_or_init(Default::default).lock() {
         all.insert(paths.root.clone(), seams);
     }
+}
+
+static TRASH_TEST_SEAMS: std::sync::OnceLock<
+    std::sync::Mutex<
+        std::collections::HashMap<std::path::PathBuf, Arc<dyn psm_core::ports::trash::Trash>>,
+    >,
+> = std::sync::OnceLock::new();
+
+/// A17: the suite's stand-in for the macOS Trash for the app at `paths` (no test ever moves a
+/// file to the real Trash).
+pub fn with_test_trash(paths: &AppPaths, trash: Arc<dyn psm_core::ports::trash::Trash>) {
+    if let Ok(mut all) = TRASH_TEST_SEAMS.get_or_init(Default::default).lock() {
+        all.insert(paths.root.clone(), trash);
+    }
+}
+
+fn trash_for(paths: &AppPaths) -> Arc<dyn psm_core::ports::trash::Trash> {
+    TRASH_TEST_SEAMS
+        .get()
+        .and_then(|all| all.lock().ok()?.get(&paths.root).cloned())
+        .unwrap_or_else(|| Arc::new(psm_infra::trash::MacTrash))
 }
 
 fn research_test_seams(paths: &AppPaths) -> Option<ResearchTestSeams> {

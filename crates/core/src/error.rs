@@ -12,6 +12,9 @@ pub enum Error {
     /// Export research with a choice that matches no run (owner correction A8).
     #[error("No research runs match this choice.")]
     NothingToExport,
+    /// "Delete session" refused (owner correction A17): the sentence the owner reads.
+    #[error("{0}")]
+    DeleteRefused(String),
     #[error("composition_invalid: {reason}")]
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]
