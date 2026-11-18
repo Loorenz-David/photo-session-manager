@@ -3689,6 +3689,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "chrono-tz",
+ "flate2",
  "html5ever",
  "psm-core",
  "psm-infra",

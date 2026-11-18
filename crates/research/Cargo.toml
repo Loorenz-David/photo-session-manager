@@ -16,6 +16,8 @@ chrono = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 tracing.workspace = true
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# Inflates compressed PNG text for the export check (A8); already in the tree through `zip`.
+flate2 = "1"
 # R8·U1: the HTTP seam of the real adapters (the tool crate's set); base64 for image data URLs.
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 base64 = "0.23"

@@ -600,6 +600,123 @@ fn a7_a_value_in_an_images_header_or_a_non_jpeg_stops_the_export() {
     }
 }
 
+/// A WebP: RIFF header, one `VP8 ` chunk holding `pixels`, then the optional extra chunks.
+fn webp(pixels: &[u8], extra: &[(&[u8; 4], &[u8])]) -> Vec<u8> {
+    let mut body = Vec::new();
+    for (kind, data) in std::iter::once((b"VP8 ", pixels)).chain(extra.iter().copied()) {
+        body.extend_from_slice(kind);
+        body.extend_from_slice(&u32::try_from(data.len()).unwrap().to_le_bytes());
+        body.extend_from_slice(data);
+        if data.len() % 2 == 1 {
+            body.push(0);
+        }
+    }
+    let mut out = b"RIFF".to_vec();
+    out.extend_from_slice(&u32::try_from(body.len() + 4).unwrap().to_le_bytes());
+    out.extend_from_slice(b"WEBP");
+    out.extend(body);
+    out
+}
+
+/// A PNG with one `IDAT` chunk holding `pixels` and an optional `tEXt` chunk (CRCs not checked).
+fn png(pixels: &[u8], text: Option<&[u8]>) -> Vec<u8> {
+    fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
+        out.extend_from_slice(&u32::try_from(data.len()).unwrap().to_be_bytes());
+        out.extend_from_slice(kind);
+        out.extend_from_slice(data);
+        out.extend_from_slice(&[0; 4]);
+    }
+    let mut out = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    chunk(&mut out, b"IHDR", &[0; 13]);
+    if let Some(text) = text {
+        chunk(&mut out, b"tEXt", &[b"Comment\0".as_slice(), text].concat());
+    }
+    chunk(&mut out, b"IDAT", pixels);
+    chunk(&mut out, b"IEND", &[]);
+    out
+}
+
+#[test]
+fn a8_a_value_by_chance_in_a_webp_or_png_listing_image_does_not_stop_the_export() {
+    // Listing images are stored as the shop sent them, under a `.jpg` name.
+    let pixels = format!("\x12\x34{MODEL_KEY}\x56");
+    for bytes in [webp(pixels.as_bytes(), &[]), png(pixels.as_bytes(), None)] {
+        let f = four_calls();
+        let h = &f.h;
+        let sha = replace_sent_image(&f, &bytes);
+        let zip = h
+            .service
+            .export(ExportSelection::Items(vec![h.item_id]), &dest(h, "out"))
+            .unwrap();
+        let run_dir = format!("{}-{}/run-{}", h.item_id, folder_key(h, h.item_id), f.run);
+        let exported = folder_of(&zip)
+            .join(run_dir)
+            .join("images")
+            .join(format!("{sha}.jpg"));
+        assert_eq!(fs::read(exported).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn a8_a_value_in_a_webp_or_png_text_part_stops_the_export() {
+    for bytes in [
+        webp(b"\x01\x02", &[(b"XMP ", MODEL_KEY.as_bytes())]),
+        webp(b"\x01\x02", &[(b"EXIF", MODEL_KEY.as_bytes())]),
+        png(b"\x01\x02", Some(MODEL_KEY.as_bytes())),
+    ] {
+        let f = four_calls();
+        let h = &f.h;
+        let sha = replace_sent_image(&f, &bytes);
+        let out = dest(h, "out");
+        let error = h
+            .service
+            .export(ExportSelection::Items(vec![h.item_id]), &out)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.ends_with(&format!("images/{sha}.jpg contains a key")),
+            "{error}"
+        );
+        assert!(!error.contains(MODEL_KEY), "{error}");
+        assert_eq!(fs::read_dir(&out).unwrap().count(), 0, "something remained");
+    }
+}
+
+#[test]
+fn a8_a_choice_with_no_runs_writes_nothing_and_says_so() {
+    let h = Harness::new();
+    finished_run(&h, h.item_id, h.session_id, local_ms(2026, 11, 10, 12, 0));
+    let out = dest(&h, "out");
+    let error = h
+        .service
+        .export(
+            ExportSelection::Range {
+                from: 20261111,
+                to: 20261112,
+            },
+            &out,
+        )
+        .unwrap_err();
+    assert!(matches!(error, psm_core::Error::NothingToExport), "{error}");
+    assert_eq!(error.to_string(), "No research runs match this choice.");
+    assert_eq!(
+        fs::read_dir(&out).unwrap().count(),
+        0,
+        "something was written"
+    );
+    let (other_item, _) = h.new_session("A8-NO-RUNS");
+    assert!(matches!(
+        h.service
+            .export(ExportSelection::Items(vec![other_item]), &out),
+        Err(psm_core::Error::NothingToExport)
+    ));
+    assert_eq!(
+        fs::read_dir(&out).unwrap().count(),
+        0,
+        "something was written"
+    );
+}
+
 #[test]
 fn a21_c6a_only_json_and_jpg_never_a_raw() {
     let f = four_calls();

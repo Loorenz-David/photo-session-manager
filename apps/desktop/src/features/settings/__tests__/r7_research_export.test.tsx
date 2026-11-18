@@ -47,3 +47,14 @@ it('a21_c7a_export_research_with_a_range_and_a_folder_shows_the_returned_path', 
   expect(exportResearch).toHaveBeenCalledWith({ kind: 'range', from: 20261110, to: 20261111 }, '/Users/me/Desktop');
   expect(await screen.findByText(`Exported to ${zip}`)).toBeInTheDocument();
 });
+
+it('a8_a_choice_with_no_runs_says_so_and_shows_no_path', async () => {
+  vi.mocked(pickFolder).mockResolvedValue('/Users/me/Desktop');
+  vi.mocked(exportResearch).mockRejectedValue({ code: 'nothing_to_export', message: 'No research runs match this choice.', data: {} });
+  render(<ResearchSection research={research()} shopDomain={null} />);
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-11-18' } });
+  fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-11-18' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Export research' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(/^No research runs match this choice\.$/);
+  expect(screen.queryByText(/Exported to/)).toBeNull();
+});
