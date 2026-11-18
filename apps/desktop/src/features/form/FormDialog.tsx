@@ -35,9 +35,10 @@ import { ItemTypePicker, useItemTypes } from './ItemTypePicker';
 import { MediaColumn } from './MediaColumn';
 import { MetafieldInput, type FieldPresets } from './MetafieldInput';
 import type { ConflictActions } from './AiPopover';
+import { AiReviewTab, type ReviewEntry } from './AiReviewTab';
 import { ResearchPanel } from './ResearchPanel';
-import { ReviewList, type ReviewEntry } from './ReviewList';
-import { STEP_LABEL, StepTabs } from './StepTabs';
+import { ReviewList } from './ReviewList';
+import { REVIEW_LABEL, REVIEW_STEP, STEP_LABEL, StepTabs, type Step } from './StepTabs';
 import { StockFields } from './StockFields';
 import { isEmptyValue, storedValue, useFormState, type SaveState } from './useFormState';
 
@@ -49,7 +50,7 @@ const SAVE_LABEL: Record<SaveState, string> = { idle: '', saving: 'Saving…', s
 export const READ_FAILED = "Couldn't read this product from Shopify";
 
 /** P67 (changelog 46 (6)): where the photographer is in a form (step and scroll), carried to the next form of a batch. */
-export type FormPosition = { step: Group; scroll: number };
+export type FormPosition = { step: Step; scroll: number };
 
 function parseJson(text: string | null): unknown {
   if (text === null) return null;
@@ -148,7 +149,7 @@ type FormBodyProps = Omit<FormDialogProps, 'open' | 'onOpenChange'> & { close: (
 function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition, sessionId }: FormBodyProps) {
   const state = useFormState(item.id);
   const { form } = state;
-  const [step, setStep] = useState<Group>(position?.step ?? 'details');
+  const [step, setStep] = useState<Step>(position?.step ?? 'details');
   const linked = item.origin === 'linked';
   const [reading, setReading] = useState(linked);
   const [readFailed, setReadFailed] = useState(false);
@@ -247,7 +248,15 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const group = form?.groups.find(g => g.group === step);
   const filled = form?.groups.reduce((sum, g) => sum + g.filled, 0) ?? 0;
   const total = form?.groups.reduce((sum, g) => sum + g.total, 0) ?? 0;
-  const stepIndex = STEPS.indexOf(step);
+  const reviewing = step === REVIEW_STEP;
+  // AI review is not one of the steps: Back / Next are not shown on it.
+  const stepIndex = step === REVIEW_STEP ? -1 : STEPS.indexOf(step);
+  /** A11: goes to a field in its own step, scrolls to it and opens its AI popover (A6's reveal). */
+  const showField = (entry: ReviewEntry) => {
+    setCustomizing(false);
+    setStep(entry.group);
+    setReveal(current => ({ key: entry.field.definition.key, n: current.n + 1 }));
+  };
 
   const act = (action: () => Promise<unknown>, failure: string): Promise<unknown> => {
     const next = actionQueue.current.then(async () => {
@@ -359,22 +368,23 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
         </span>
         <div className="ml-auto flex items-center gap-2">
           <ReviewList
-            entries={reviewEntries}
-            acceptable={acceptable}
-            onChoose={entry => {
+            count={reviewEntries.length}
+            onOpen={() => {
               setCustomizing(false);
-              setStep(entry.group);
-              setReveal(current => ({ key: entry.field.definition.key, n: current.n + 1 }));
+              setStep(REVIEW_STEP);
             }}
-            onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}
-            onOpenResearch={() => openResearch(null)}
           />
           {(aiFields.length > 0 || researchState.status !== null) && (
             <Button variant="secondary" size="sm" className="text-(--ai-foreground)" onClick={() => (research.open ? setResearch({ open: false, focus: null }) : openResearch(null))}>
               <Sparkles /> Research
             </Button>
           )}
-          <Button variant={customizing ? 'secondary' : 'ghost'} size="sm" aria-pressed={customizing} onClick={() => (customizing ? finishCustomizing() : setCustomizing(true))}>
+          <Button variant={customizing ? 'secondary' : 'ghost'} size="sm" aria-pressed={customizing} onClick={() => {
+            if (customizing) return finishCustomizing();
+            // Fields are customized per step; from AI review, start on Details.
+            if (reviewing) setStep('details');
+            setCustomizing(true);
+          }}>
             <SlidersHorizontal /> Customize fields
           </Button>
           <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={() => void saveAndClose()}>
@@ -384,21 +394,39 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
       </header>
 
       {queueStrip}
-      {form && <StepTabs groups={form.groups} step={step} onStep={setStep} />}
+      {form && <StepTabs groups={form.groups} step={step} onStep={next => { if (next === REVIEW_STEP) setCustomizing(false); setStep(next); }} toReview={reviewEntries.length} />}
 
-      {customizing ? (
+      {customizing && step !== REVIEW_STEP ? (
         <CustomizeMode key={step} itemType={itemType} group={step} definitions={definitions} onDone={finishCustomizing} />
       ) : (
         <>
           <div className="flex min-h-0 flex-1">
-            <MediaColumn photos={photos} step={step} />
-            <section ref={fieldsSection} onScroll={event => onPosition?.({ step, scroll: event.currentTarget.scrollTop })} className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5" aria-label={`${STEP_LABEL[step]} fields`}>
+            <MediaColumn photos={photos} step={step === REVIEW_STEP ? 'details' : step} />
+            <section ref={fieldsSection} onScroll={event => onPosition?.({ step, scroll: event.currentTarget.scrollTop })} className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5" aria-label={step === REVIEW_STEP ? REVIEW_LABEL : `${STEP_LABEL[step]} fields`}>
               {readFailed && (
                 <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {READ_FAILED}
                 </p>
               )}
               {(!form || reading) && <SkeletonFields n={5} />}
+              {form && !reading && reviewing && (
+                <AiReviewTab
+                  entries={reviewEntries}
+                  acceptable={acceptable}
+                  status={researchState.status}
+                  anyAi={aiFields.length > 0}
+                  onLooksRight={f => act(() => acceptSuggestion(item.id, f.definition.key), 'Could not accept')}
+                  onClear={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
+                  conflictActions={entry => {
+                    const actions = conflictActions(entry.field);
+                    // Edit types the value in the field itself, on its own step.
+                    return actions && { ...actions, onEdit: () => { setStep(entry.group); actions.onEdit(); } };
+                  }}
+                  onSeeResearch={key => openResearch(key)}
+                  onShowField={showField}
+                  onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}
+                />
+              )}
               {!reading && group && group.fields.length === 0 && (
                 <p className="text-sm text-muted-foreground">No fields in this step. Use Customize fields to add some.</p>
               )}
@@ -476,7 +504,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   <ArrowLeft /> {STEP_LABEL[STEPS[stepIndex - 1]]}
                 </Button>
               )}
-              {stepIndex < STEPS.length - 1 && (
+              {stepIndex >= 0 && stepIndex < STEPS.length - 1 && (
                 <Button variant="outline" onClick={() => setStep(STEPS[stepIndex + 1])}>
                   {STEP_LABEL[STEPS[stepIndex + 1]]} <ArrowRight />
                 </Button>

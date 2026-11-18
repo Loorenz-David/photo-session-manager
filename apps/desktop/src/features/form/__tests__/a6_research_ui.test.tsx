@@ -96,17 +96,19 @@ function twoSteps(): Form {
 }
 const renderForm = () => render(<FormDialog open onOpenChange={() => undefined} item={ITEM} photos={[]} sessionId={4} onItemChanged={() => undefined} />);
 
+// A11: the chip opens the AI review tab, where the fields are listed (it replaced A6's popover list).
 it('a6_2_the_review_list_shows_each_field_with_value_confidence_and_conflict', async () => {
   vi.mocked(getForm).mockResolvedValue(twoSteps());
   renderForm();
   fireEvent.click(await screen.findByRole('button', { name: '3 to review' }));
-  const list = await screen.findByRole('list', { name: 'Fields to review' });
-  const rows = within(list).getAllByRole('button');
-  expect(rows.map(r => r.getAttribute('data-review-field'))).toEqual(['designer', 'maker', 'wear']);
-  expect(rows[0]).toHaveTextContent('Designer· DetailsHans J. WegnerHigh');
+  expect(await screen.findByRole('tab', { name: /AI review/ })).toHaveAttribute('aria-selected', 'true');
+  const list = await screen.findByRole('list', { name: 'Suggestions to confirm' });
+  const rows = within(list).getAllByRole('listitem').filter(row => row.hasAttribute('data-review-row'));
+  expect(rows.map(r => r.getAttribute('data-review-row'))).toEqual(['designer', 'maker', 'wear']);
+  expect(rows[0]).toHaveTextContent(/Designer· Details.*High confidence.*Hans J\. Wegner/);
   expect(within(rows[1]).getByText('Conflict')).toBeInTheDocument();
-  expect(rows[2]).toHaveTextContent('Wear· ConditionMinorLow · check');
-  // Accept all from the list takes only the high, non-conflict suggestion's count.
+  expect(rows[2]).toHaveTextContent(/Wear· Condition.*Low confidence · check.*Minor/);
+  // Accept all from the tab takes only the high, non-conflict suggestion's count.
   const acceptAll = screen.getByRole('button', { name: 'Accept all (1)' });
   fireEvent.click(acceptAll);
   await waitFor(() => expect(acceptAllSuggestions).toHaveBeenCalledWith(ITEM.id));
@@ -116,7 +118,8 @@ it('a6_2_choosing_a_field_goes_to_its_step_and_opens_its_ai_popover', async () =
   vi.mocked(getForm).mockResolvedValue(twoSteps());
   renderForm();
   fireEvent.click(await screen.findByRole('button', { name: '3 to review' }));
-  fireEvent.click(await screen.findByRole('button', { name: /^Wear/ }));
+  const wearRow = await screen.findByRole('listitem', { name: 'Wear' });
+  fireEvent.click(within(wearRow).getByRole('button', { name: /Show field/ }));
   expect(await screen.findByRole('region', { name: 'Condition fields' })).toBeInTheDocument();
   const popover = await screen.findByRole('dialog', { name: 'AI suggestion for Wear' });
   await new Promise(resolve => setTimeout(resolve, 50));
