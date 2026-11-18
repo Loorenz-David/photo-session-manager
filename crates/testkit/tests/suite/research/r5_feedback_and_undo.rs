@@ -150,6 +150,46 @@ fn a08_c1b_accept_all_skips_low_and_conflicts() {
 }
 
 #[test]
+fn a18_keep_previous_works_on_any_suggestion_with_a_prior_and_never_without_one() {
+    let f = fx(&["k", "e"]);
+    // A suggestion holding a prior whose value counts as the same (not a conflict).
+    f.a.store()
+        .transaction(&mut |tx| {
+            tx.put_attribute_value(&Value {
+                item_id: f.item,
+                key: "k".into(),
+                value: text("Teak"),
+                valid: true,
+                provenance: Provenance::Ai,
+                ai_confidence: Some(AiConfidence::Medium),
+                ai_status: Some(AiStatus::Suggested),
+                ai_reason: None,
+                ai_sources: None,
+                ai_prior: Some(AiPrior {
+                    value: text("Teak"),
+                    valid: true,
+                    provenance: Provenance::Integration,
+                }),
+                updated_at: 1,
+            })
+        })
+        .unwrap();
+    f.tick();
+    let kept = f.attrs().keep_previous(f.item, "k").unwrap();
+    assert_eq!(kept.provenance, Provenance::Integration);
+    assert_eq!(kept.ai_status, None);
+    assert_eq!(f.feedback("k")[0].action, FeedbackAction::KeptPrevious);
+    // A suggestion over an empty field has nothing to keep: refused, nothing written.
+    f.suggest("e", "Oak", AiConfidence::High);
+    let before = f.row("e").unwrap();
+    assert!(matches!(
+        f.attrs().keep_previous(f.item, "e"),
+        Err(Error::InvalidValue(_))
+    ));
+    assert_eq!(f.row("e").unwrap(), before);
+}
+
+#[test]
 fn a08_c1c_keep_previous_restores_prior_and_joins_cleared_set() {
     let f = fx(&["k"]);
     f.a.research_conflict(f.item, "k", "D", "A", AiConfidence::Medium)

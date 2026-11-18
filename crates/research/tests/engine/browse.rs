@@ -32,6 +32,7 @@ fn ask(
         page_title: "Kai K teak sideboard".to_owned(),
         text: text.to_owned(),
         instruction: instruction.to_owned(),
+        mode: Default::default(),
     })
 }
 
@@ -168,6 +169,7 @@ fn a12_ask_ai_refuses_empty_or_oversize_text_and_non_web_pages() {
         page_title: String::new(),
         text: "teak".into(),
         instruction: String::new(),
+        mode: Default::default(),
     });
     assert!(refused.is_err());
     assert!(h.model.requests().is_empty(), "nothing was sent");
@@ -303,4 +305,87 @@ fn a12_the_lens_picture_is_the_framed_photo_and_only_a_photo_of_the_session() {
     )
     .unwrap();
     assert_eq!(&bytes[..2], &[0xFF, 0xD8]);
+}
+
+fn ask_answer(
+    h: &Harness,
+    text: &str,
+    question: &str,
+) -> psm_core::Result<psm_research::browse::AskAnswer> {
+    h.service.browse_ask(&AskRequest {
+        session_id: h.session_id,
+        page_url: PAGE.to_owned(),
+        page_title: "Kai K teak sideboard".to_owned(),
+        text: text.to_owned(),
+        instruction: question.to_owned(),
+        mode: psm_research::browse::AskMode::Answer,
+    })
+}
+
+#[test]
+fn a18_ask_ai_answers_in_words_and_offers_values_without_writing_any() {
+    let h = Harness::new();
+    h.model.reply(
+        Stage::Read,
+        "browse",
+        json!({
+            "answer": "Kai Kristiansen is the designer; Feldballes Møbelfabrik is the manufacturer.",
+            "keys": {
+                MAKER: {"stated": "Feldballes Møbelfabrik", "value": "Feldballes Møbelfabrik"},
+                WOOD: {"stated": null, "value": null},
+            }
+        }),
+    );
+    let table = "Sideboard | Kai Kristiansen | Feldballes Møbelfabrik | 1960s";
+    let answer = ask_answer(
+        &h,
+        table,
+        "which is the designer and which the manufacturer?",
+    )
+    .unwrap();
+    assert_eq!(
+        answer.answer.as_deref(),
+        Some("Kai Kristiansen is the designer; Feldballes Møbelfabrik is the manufacturer.")
+    );
+    assert!(answer.suggested.is_empty());
+    assert_eq!(answer.found.len(), 1);
+    assert_eq!(answer.found[0].key, MAKER);
+    assert_eq!(answer.found[0].value, "Feldballes Møbelfabrik");
+    assert_eq!(
+        answer.found[0].value_json,
+        json!("Feldballes Møbelfabrik").to_string()
+    );
+    assert_eq!(answer.found[0].quote, "Feldballes Møbelfabrik");
+    // Nothing is written: the field stays as it was until the owner taps the value.
+    assert!(h.row(MAKER).is_none_or(|r| r.provenance != Provenance::Ai));
+    assert!(h.row(WOOD).is_none_or(|r| r.provenance != Provenance::Ai));
+    // The request asked for an answer, with the question and the whole selection.
+    let request = h.model.requests().pop().unwrap();
+    assert_eq!(request.input["answer"], json!(true));
+    assert_eq!(request.input["selected_text"], json!(table));
+    // Recorded and counted like any browse call (day limit, export), never a research run.
+    let all = h.query(|c| rstore::all_runs(c, Some(h.session_id)).unwrap());
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].trigger, RunTrigger::Browse);
+    assert!(all[0].cost_micro_usd > 0);
+    assert_eq!(answer.cost_micro_usd, all[0].cost_micro_usd);
+    assert!(h.runs(h.session_id).is_empty());
+}
+
+#[test]
+fn a18_answer_mode_needs_a_question_and_takes_a_whole_table() {
+    let h = Harness::new();
+    assert!(ask_answer(&h, "teak", "  ").is_err());
+    assert!(h.model.requests().is_empty());
+    // A18: a table of up to 6,000 characters is taken; one more is refused.
+    assert_eq!(MAX_SELECTION_CHARS, 6_000);
+    h.model.reply(
+        Stage::Read,
+        "browse",
+        json!({"answer": "It does not say.", "keys": {}}),
+    );
+    let table = "y".repeat(MAX_SELECTION_CHARS);
+    assert!(ask_answer(&h, &table, "who made it").is_ok());
+    let longer = "y".repeat(MAX_SELECTION_CHARS + 1);
+    assert!(ask_answer(&h, &longer, "who made it").is_err());
 }

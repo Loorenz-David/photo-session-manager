@@ -21,8 +21,11 @@ vi.mock('@/services/search', () => ({
   removePage: vi.fn(async () => undefined),
   putText: vi.fn(async () => ({ stored: {}, previous: null })),
   putBack: vi.fn(async () => undefined),
+  putValue: vi.fn(),
+  zoomPage: vi.fn(async () => 1),
+  closeTab: vi.fn(async () => undefined),
   openAiReview: vi.fn(async () => undefined),
-  askAi: vi.fn(async () => ({ suggested: [], not_written: [], cost_micro_usd: 0 })),
+  askAi: vi.fn(async () => ({ suggested: [], not_written: [], answer: null, found: [], cost_micro_usd: 0 })),
   onSearchEvents: vi.fn(),
 }));
 vi.mock('@/services/photos', async importOriginal => ({ ...(await importOriginal<typeof import('@/services/photos')>()), getSessionView: vi.fn() }));
@@ -97,7 +100,7 @@ it('a13_browser_bounds_are_whole_css_pixels_never_device_pixels', () => {
 it('a13_the_browser_is_placed_by_the_area_and_placed_again_only_when_it_moves', async () => {
   render(<SearchWindow sessionId={SESSION} initialPhotoId={21} />);
   await waitFor(() => expect(handlers).toBeDefined());
-  await waitFor(() => expect(search.placeBrowser).toHaveBeenCalledWith(SESSION, { x: 381, y: 41, width: 1059, height: 768 }, true));
+  await waitFor(() => expect(search.placeBrowser).toHaveBeenCalledWith(SESSION, 1, { x: 381, y: 41, width: 1059, height: 768 }, true));
   // Every row of the browser column is watched, so a bar appearing above the area moves it.
   const area = screen.getByTestId('browser-area');
   const column = area.parentElement!.parentElement!;
@@ -109,5 +112,5 @@ it('a13_the_browser_is_placed_by_the_area_and_placed_again_only_when_it_moves', 
   // A bar above appeared: the area moved down by its height (same size), and is placed again.
   areaRect = { ...areaRect, top: 69.2 };
   act(() => fire());
-  expect(search.placeBrowser).toHaveBeenLastCalledWith(SESSION, { x: 381, y: 69, width: 1059, height: 768 }, true);
+  expect(search.placeBrowser).toHaveBeenLastCalledWith(SESSION, 1, { x: 381, y: 69, width: 1059, height: 768 }, true);
 });

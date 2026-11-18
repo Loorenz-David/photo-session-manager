@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, Globe, LayoutGrid, Loader2, RotateCw, ScanSearch, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, Globe, LayoutGrid, Loader2, Minus, Plus, RotateCw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
@@ -10,6 +10,7 @@ import { previewUrl } from '@/services/sessions';
 import {
   askAi,
   browserStep,
+  closeTab,
   openAiReview,
   putBack,
   giveUpLens,
@@ -18,6 +19,7 @@ import {
   onSearchEvents,
   placeBrowser,
   putText,
+  putValue,
   readSelection,
   removePage,
   researchMatches,
@@ -25,18 +27,27 @@ import {
   savePage,
   startLens,
   visualSearch,
+  zoomPage,
+  type AskFound,
+  type AskMode,
   type LensEvent,
+  type PutText,
   type SavedPage,
   type VisualMatch,
+  type ZoomAction,
 } from '@/services/search';
 import { Thumb } from '@/features/workspace/PhotoTile';
 import { orientationTransform } from '@/features/workspace/StageImage';
 import { displayOrder } from '@/features/workspace/order';
 import { useTheme } from '@/features/shell/ThemeToggle';
 import { SelectionBar, type AskOutcome, type Selected } from './SelectionBar';
+import { AnswerCard, type TabAnswer } from './AnswerCard';
+import { ZoomablePhoto } from './ZoomablePhoto';
 
-/** How often the window asks the page what is selected (ms). */
+/** How often the window asks the current tab's page what is selected (ms). */
 export const SELECTION_POLL_MS = 700;
+/** A18: the most search tabs one window keeps open (the app refuses more too). */
+export const MAX_TABS = 8;
 
 function selectionKey(selection: Selected): string {
   return `${selection.url}\n${selection.text}`;
@@ -98,6 +109,41 @@ export function putFields(fields: FormField[]): FormField[] {
 
 type Mode = 'web' | 'list';
 type Page = { url: string; title: string; loading: boolean };
+type LensState = LensEvent['state'];
+
+/**
+ * A18: one search tab: the photo it searched, its own page, Google route, fallback list, page zoom and AI answer.
+ * Every tab is its own page webview in the app, so its history and scroll stay as they were while another shows.
+ */
+export type SearchTab = {
+  id: number;
+  photoId: number;
+  page: Page | null;
+  lens: LensState | null;
+  waiting: boolean;
+  mode: Mode;
+  matches: VisualMatch[] | null;
+  matchesOrigin: 'research' | 'search' | null;
+  searching: boolean;
+  zoom: number;
+  answer: TabAnswer | null;
+};
+
+function newTab(id: number, photoId: number): SearchTab {
+  return { id, photoId, page: null, lens: 'opening', waiting: true, mode: 'web', matches: null, matchesOrigin: null, searching: false, zoom: 1, answer: null };
+}
+
+/** A18: what a tab is called in the tab strip: the site it shows, or what it is doing. */
+export function tabLabel(tab: SearchTab): string {
+  if (tab.mode === 'list') return 'Matches';
+  if (tab.waiting || tab.lens === 'opening' || tab.lens === 'uploading') return 'Searching…';
+  if (tab.lens === 'consent') return 'Google';
+  if (tab.page && /^https?:/.test(tab.page.url)) {
+    const host = hostOf(tab.page.url);
+    return /(^|\.)google\./.test(host) ? 'Google results' : host;
+  }
+  return 'New search';
+}
 
 /**
  * A13: the browser area's place as sent to the app: the element's box in this page's CSS pixels,
@@ -127,29 +173,25 @@ function PinnedPhoto({ photo }: { photo: Photo }) {
   return <p className="text-xs text-muted-foreground">No preview yet</p>;
 }
 
-function lensNote(lens: LensEvent['state'] | null, waiting: boolean): string | null {
+function lensNote(lens: LensState | null, waiting: boolean): string | null {
   if (lens === 'consent') return 'Google asks about cookies. Make your choice in the page — the search starts right after.';
   if (waiting || lens === 'opening' || lens === 'uploading') return 'Searching Google for this photo…';
   return null;
 }
 
 /**
- * The "Search this photo" window (owner correction A12): the photo pinned on the left, a browser on the right with
- * Google's results for it, saved pages as tabs, and what is selected on the page with its actions. The page itself
- * is a separate webview placed over the browser area; this page never reads it except for the selected text.
+ * The "Search this photo" window (owner corrections A12–A18): the photo pinned on the left (zoomable; pinning another
+ * photo never searches by itself), and on the right search tabs, each a browser with Google's results for the photo
+ * it searched, saved pages, and what is selected on the page with its actions. Each tab's page is a separate webview
+ * placed over the browser area; this page never reads it except for the selected text of the current tab.
  */
 export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number; initialPhotoId: number }) {
   const [theme] = useTheme();
   const [view, setView] = useState<SessionView | null>(null);
   const [fields, setFields] = useState<FormField[]>([]);
-  const [photoId, setPhotoId] = useState(initialPhotoId);
-  const [mode, setMode] = useState<Mode>('web');
-  const [page, setPage] = useState<Page | null>(null);
-  const [lens, setLens] = useState<LensEvent['state'] | null>(null);
-  const [waiting, setWaiting] = useState(false);
-  const [matches, setMatches] = useState<VisualMatch[] | null>(null);
-  const [matchesOrigin, setMatchesOrigin] = useState<'research' | 'search' | null>(null);
-  const [searching, setSearching] = useState(false);
+  const [pinnedId, setPinnedId] = useState(initialPhotoId);
+  const [tabs, setTabs] = useState<SearchTab[]>([]);
+  const [activeId, setActiveId] = useState<number | null>(null);
   const [pages, setPages] = useState<SavedPage[]>([]);
   const [selected, setSelected] = useState<Selected | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
@@ -157,8 +199,12 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
   const dismissedKey = useRef<string | null>(null);
   const browserArea = useRef<HTMLDivElement>(null);
   const searchedPhotos = useRef(new Set<number>());
-  const photoIdRef = useRef(photoId);
-  photoIdRef.current = photoId;
+  const nextTabId = useRef(1);
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const activeRef = useRef(activeId);
+  activeRef.current = activeId;
+  const waitTimers = useRef(new Map<number, number>());
 
   const itemId = view?.item?.id;
   const photos = useMemo(() => {
@@ -166,10 +212,25 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
     const order = displayOrder(view.photos);
     return [...order.main, ...order.unreviewed, ...order.condition];
   }, [view]);
-  const pinned = photos.find(p => p.id === photoId) ?? view?.photos.find(p => p.id === photoId) ?? null;
+  const photoOf = useCallback((id: number) => photos.find(p => p.id === id) ?? view?.photos.find(p => p.id === id) ?? null, [photos, view]);
+  const pinned = photoOf(pinnedId);
+  const active = tabs.find(t => t.id === activeId) ?? null;
   const offered = useMemo(() => putFields(fields), [fields]);
   const quick = offered.filter(f => FIRST.test(f.definition.label)).slice(0, 3);
   const rest = offered.filter(f => !quick.includes(f));
+
+  const updateTab = useCallback((id: number, change: Partial<SearchTab> | ((tab: SearchTab) => Partial<SearchTab>)) => {
+    setTabs(current => current.map(tab => (tab.id === id ? { ...tab, ...(typeof change === 'function' ? change(tab) : change) } : tab)));
+  }, []);
+
+  const stopWaiting = useCallback((id: number) => {
+    window.clearTimeout(waitTimers.current.get(id));
+    waitTimers.current.delete(id);
+  }, []);
+  useEffect(() => {
+    const timers = waitTimers.current;
+    return () => timers.forEach(timer => window.clearTimeout(timer));
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -187,115 +248,141 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
     return () => { alive = false; };
   }, [sessionId]);
 
-  // The browser area's place, so the page webview sits exactly over it (hidden while the list shows).
-  // A13: CSS pixels of this page (logical points, never device pixels); the app adds where this
-  // page sits in the window. Sent only when the place changed.
+  // The browser area's place, so the current tab's page webview sits exactly over it (hidden while the list shows;
+  // every other tab's page is hidden by the app). A13: CSS pixels of this page (logical points, never device
+  // pixels); the app adds where this page sits in the window. Sent only when the place, tab or visibility changed.
   const lastPlace = useRef('');
+  const activeMode = active?.mode;
   const place = useCallback(() => {
     const area = browserArea.current;
-    if (!area) return;
+    if (!area || activeId === null) return;
     const bounds = browserBounds(area.getBoundingClientRect());
-    const visible = mode === 'web';
-    const key = JSON.stringify([bounds, visible]);
+    const visible = activeMode === 'web';
+    const key = JSON.stringify([activeId, bounds, visible]);
     if (key === lastPlace.current) return;
     lastPlace.current = key;
-    void placeBrowser(sessionId, bounds, visible).catch(() => { lastPlace.current = ''; });
-  }, [sessionId, mode]);
+    void placeBrowser(sessionId, activeId, bounds, visible).catch(() => { lastPlace.current = ''; });
+  }, [sessionId, activeId, activeMode]);
+  const note = active ? lensNote(active.lens, active.waiting) : null;
   useLayoutEffect(() => {
     place();
     const area = browserArea.current;
     if (!area || typeof ResizeObserver === 'undefined') return;
-    // The area moves when a bar above it appears, grows or goes (saved pages, the Google note,
-    // the selection bar): watch every row of the browser column, not only the area.
+    // The area moves when a bar above or below it appears, grows or goes (tabs, saved pages, the Google note, the
+    // AI answer, the selection bar): watch every row of the browser column, not only the area.
     const observer = new ResizeObserver(() => place());
     observer.observe(area);
     const column = area.parentElement?.parentElement;
     if (column) for (const row of Array.from(column.children)) observer.observe(row);
     window.addEventListener('resize', place);
     return () => { observer.disconnect(); window.removeEventListener('resize', place); };
-  }, [place, pages.length, lensNote(lens, waiting) !== null, selected !== null]);
+  }, [place, pages.length, note !== null, selected !== null, active?.answer != null, tabs.length]);
 
-  const showList = useCallback(async (forPhoto: number) => {
-    setMode('list');
-    setSearching(true);
+  const showList = useCallback(async (id: number, forPhoto: number) => {
+    updateTab(id, { mode: 'list', searching: true, waiting: false });
     try {
       const known = await researchMatches(sessionId).catch(() => [] as VisualMatch[]);
       if (known.length > 0) {
-        setMatches(known);
-        setMatchesOrigin('research');
+        updateTab(id, { matches: known, matchesOrigin: 'research' });
       } else if (!searchedPhotos.current.has(forPhoto)) {
         searchedPhotos.current.add(forPhoto);
-        setMatches(await visualSearch(sessionId, forPhoto));
-        setMatchesOrigin('search');
+        const found = await visualSearch(sessionId, forPhoto);
+        updateTab(id, { matches: found, matchesOrigin: 'search' });
       } else {
-        setMatches([]);
+        updateTab(id, { matches: [] });
       }
     } catch (error) {
-      setMatches([]);
+      updateTab(id, { matches: [] });
       toast.error(`Could not search: ${(error as Error).message}`);
     } finally {
-      setSearching(false);
+      updateTab(id, { searching: false });
     }
-  }, [sessionId]);
+  }, [sessionId, updateTab]);
 
-  const searchGoogle = useCallback(async (forPhoto: number) => {
-    setMode('web');
-    setLens('opening');
-    setWaiting(true);
+  /** Google Lens for `forPhoto` in tab `id` (the tab's own page; the wait for results is per tab). */
+  const runLens = useCallback(async (id: number, forPhoto: number) => {
+    updateTab(id, { mode: 'web', lens: 'opening', waiting: true, photoId: forPhoto });
+    stopWaiting(id);
+    waitTimers.current.set(id, window.setTimeout(() => {
+      waitTimers.current.delete(id);
+      if (!tabsRef.current.find(t => t.id === id)?.waiting) return;
+      void giveUpLens(sessionId, id, 'no results in 30 s').catch(() => undefined);
+      void showList(id, forPhoto);
+    }, LENS_WAIT_MS));
     try {
-      await startLens(sessionId, forPhoto);
+      await startLens(sessionId, id, forPhoto);
     } catch (error) {
-      setWaiting(false);
+      stopWaiting(id);
+      updateTab(id, { waiting: false });
       toast.error(`Could not open Google: ${(error as Error).message}`);
-      void showList(forPhoto);
+      void showList(id, forPhoto);
     }
-  }, [sessionId, showList]);
+  }, [sessionId, showList, stopWaiting, updateTab]);
 
-  // Google's route: events say where it stands; without results in time the window shows its own list.
+  /** A18: a search of `forPhoto` in a new tab; the tabs already open stay as they are. */
+  const searchInNewTab = useCallback((forPhoto: number) => {
+    if (tabsRef.current.length >= MAX_TABS) {
+      toast.error(`At most ${MAX_TABS} searches can be open — close one first`);
+      return;
+    }
+    const id = nextTabId.current++;
+    setTabs(current => [...current, newTab(id, forPhoto)]);
+    setActiveId(id);
+    void runLens(id, forPhoto);
+  }, [runLens]);
+
+  // The window opens with one search of the photo it was opened on.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    searchInNewTab(initialPhotoId);
+  }, [initialPhotoId, searchInNewTab]);
+
+  // The tabs' Google routes and pages: events name their tab. Without results in time a tab shows its own list.
   useEffect(() => {
     let off: (() => void) | undefined;
     let alive = true;
     onSearchEvents(sessionId, {
-      page: event => setPage(current => ({
-        url: event.url,
-        title: event.title ?? (current && current.url === event.url ? current.title : ''),
-        loading: event.loading,
+      page: event => updateTab(event.tab, tab => ({
+        page: {
+          url: event.url,
+          title: event.title ?? (tab.page && tab.page.url === event.url ? tab.page.title : ''),
+          loading: event.loading,
+        },
       })),
       lens: event => {
-        setLens(event.state);
-        if (event.state === 'results' || event.state === 'consent') setWaiting(false);
+        const tab = tabsRef.current.find(t => t.id === event.tab);
+        if (!tab) return;
+        updateTab(event.tab, { lens: event.state });
+        if (event.state === 'results' || event.state === 'consent') {
+          stopWaiting(event.tab);
+          updateTab(event.tab, { waiting: false });
+        }
         if (event.state === 'failed') {
-          setWaiting(false);
-          void showList(photoIdRef.current);
+          stopWaiting(event.tab);
+          void showList(event.tab, tab.photoId);
         }
       },
-      photo: next => setPhotoId(next),
+      // The main window searched another photo of this session: it is pinned and searched in a new tab.
+      photo: next => {
+        setPinnedId(next);
+        searchInNewTab(next);
+      },
+      zoom: action => { void zoomActive(action); },
     })
       .then(unlisten => { if (alive) off = unlisten; else unlisten(); })
       .catch(() => undefined);
     return () => { alive = false; off?.(); };
-  }, [sessionId, showList]);
+    // zoomActive reads the current tab through refs, so the first one is enough.
+  }, [sessionId, showList, searchInNewTab, stopWaiting, updateTab]);
 
+  // What is selected on the current tab's page, asked again and again while it shows (never the hidden tabs).
   useEffect(() => {
-    void searchGoogle(photoId);
-  }, [photoId, searchGoogle]);
-
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = window.setTimeout(() => {
-      setWaiting(false);
-      void giveUpLens(sessionId, 'no results in 30 s').catch(() => undefined);
-      void showList(photoIdRef.current);
-    }, LENS_WAIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [waiting, sessionId, showList]);
-
-  // What is selected on the page, asked again and again while the page shows.
-  useEffect(() => {
-    if (mode !== 'web') return;
+    if (activeId === null || activeMode !== 'web') return;
     let alive = true;
     const ask = () => {
-      readSelection(sessionId)
+      readSelection(sessionId, activeId)
         .then(answer => {
           if (!alive) return;
           setRefused(answer.refused);
@@ -306,39 +393,68 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
     ask();
     const timer = window.setInterval(ask, SELECTION_POLL_MS);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [sessionId, mode]);
+  }, [sessionId, activeId, activeMode]);
 
   // A15: another page drops the selection taken from the one before (a change of #fragment is the same page).
-  const pageUrl = page?.url;
+  // A18: so does another tab.
+  const pageUrl = active?.page?.url;
   useEffect(() => {
-    if (!pageUrl) return;
-    setSelected(current => (current && !samePage(current.url, pageUrl) ? null : current));
-  }, [pageUrl]);
+    setSelected(current => (current && (!pageUrl || !samePage(current.url, pageUrl)) ? null : current));
+  }, [pageUrl, activeId]);
 
   function dismiss(selection: Selected) {
     dismissedKey.current = selectionKey(selection);
     setSelected(null);
   }
 
-  async function open(url: string) {
-    setMode('web');
+  async function zoomActive(action: ZoomAction) {
+    const id = activeRef.current;
+    const tab = tabsRef.current.find(t => t.id === id);
+    if (id === null || !tab || tab.mode !== 'web') return;
     try {
-      await goTo(sessionId, url);
+      const zoom = await zoomPage(sessionId, id, tab.zoom, action);
+      updateTab(id, { zoom });
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+
+  function activate(id: number) {
+    setActiveId(id);
+  }
+
+  async function close(id: number) {
+    const index = tabsRef.current.findIndex(t => t.id === id);
+    if (index < 0 || tabsRef.current.length <= 1) return;
+    stopWaiting(id);
+    const remaining = tabsRef.current.filter(t => t.id !== id);
+    setTabs(remaining);
+    if (activeRef.current === id) setActiveId(remaining[Math.min(index, remaining.length - 1)].id);
+    await closeTab(sessionId, id).catch(() => undefined);
+  }
+
+  async function open(url: string) {
+    if (activeId === null) return;
+    updateTab(activeId, { mode: 'web' });
+    try {
+      await goTo(sessionId, activeId, url);
     } catch (error) {
       toast.error((error as Error).message);
     }
   }
 
   async function backToResults() {
-    if (await lensResults(sessionId).catch(() => false)) {
-      setMode('web');
+    if (!active) return;
+    if (await lensResults(sessionId, active.id).catch(() => false)) {
+      updateTab(active.id, { mode: 'web' });
       return;
     }
-    if (matches) setMode('list');
-    else void searchGoogle(photoId);
+    if (active.matches) updateTab(active.id, { mode: 'list' });
+    else void runLens(active.id, active.photoId);
   }
 
   async function saveCurrent() {
+    const page = active?.page;
     if (!page || itemId === undefined) return;
     try {
       const saved = await savePage(itemId, page.url, page.title);
@@ -358,41 +474,60 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
     }
   }
 
-  /** "Put in <field>", confirmed by a toast whose Undo gives the field back what it held. */
+  /** A "Put in" confirmed by a toast whose Undo gives the field back what it held. */
+  function confirmPut(key: string, label: string, shown: string, done: PutText) {
+    toast.success(`Put in ${label}`, {
+      description: shown.length > 80 ? `${shown.slice(0, 80)}…` : shown,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          putBack(sessionId, key, done.previous)
+            .then(() => toast.message(done.previous === null ? `${label} is empty again` : `${label} has its previous value again`))
+            .catch(error => toast.error(`Could not undo: ${(error as Error).message}`));
+        },
+      },
+    });
+  }
+
+  /** "Put in <field>": the selected text. */
   async function put(field: FormField, selection: Selected) {
     const { key, label } = field.definition;
     try {
-      const done = await putText(sessionId, key, selection.text);
-      toast.success(`Put in ${label}`, {
-        description: selection.text.length > 80 ? `${selection.text.slice(0, 80)}…` : selection.text,
-        action: {
-          label: 'Undo',
-          onClick: () => {
-            putBack(sessionId, key, done.previous)
-              .then(() => toast.message(done.previous === null ? `${label} is empty again` : `${label} has its previous value again`))
-              .catch(error => toast.error(`Could not undo: ${(error as Error).message}`));
-          },
-        },
-      });
+      confirmPut(key, label, selection.text, await putText(sessionId, key, selection.text));
     } catch (error) {
       toast.error((error as Error).message);
     }
   }
 
-  /** "Ask AI…": the answer for the bar to show (null when the call failed; a toast says why). */
-  async function ask(selection: Selected, instruction: string): Promise<AskOutcome | null> {
+  /** A18: "Put '<value>' in <field>" from an answer in words: the same write and Undo as "Put in". */
+  async function putFound(found: AskFound) {
     try {
-      const answer = await askAi(sessionId, selection, instruction);
-      return { suggested: answer.suggested, notWritten: answer.not_written };
+      confirmPut(found.key, found.label, found.value, await putValue(sessionId, found.key, found.value_json));
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+
+  /** "Ask AI…": the answer for the bar to show (null when the call failed; a toast says why). An answer in words is kept on its tab. */
+  async function ask(selection: Selected, instruction: string, mode: AskMode): Promise<AskOutcome | null> {
+    const tabId = activeId;
+    try {
+      const answer = await askAi(sessionId, selection, instruction, mode);
+      if (mode === 'answer' && tabId !== null) {
+        updateTab(tabId, { answer: { question: instruction, text: answer.answer, found: answer.found, host: hostOf(selection.url) } });
+      }
+      return { mode, suggested: answer.suggested, notWritten: answer.not_written };
     } catch (error) {
       toast.error(`Ask AI: ${(error as Error).message}`);
       return null;
     }
   }
 
-  const note = lensNote(lens, waiting);
+  const mode = active?.mode ?? 'web';
+  const page = active?.page ?? null;
   const current = page?.url;
   const currentSaved = mode === 'web' && current !== undefined && pages.some(p => p.url === current);
+  const canBrowse = active !== null && mode === 'web';
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
@@ -400,8 +535,12 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
         <div className="text-xs text-muted-foreground">
           {view?.item ? <><span className="font-semibold text-foreground">{view.item.item_type || view.item.title}</span> · {view.item.sku}</> : 'Loading…'}
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md bg-muted" data-testid="pinned-photo" data-photo-id={pinned?.id}>
-          {pinned ? <PinnedPhoto photo={pinned} /> : null}
+        <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-muted" data-testid="pinned-photo" data-photo-id={pinned?.id}>
+          {pinned ? (
+            <ZoomablePhoto photoKey={pinned.id} onSearch={() => searchInNewTab(pinned.id)}>
+              <PinnedPhoto photo={pinned} />
+            </ZoomablePhoto>
+          ) : null}
         </div>
         {photos.length > 1 && (
           <div className="flex shrink-0 gap-1.5 overflow-x-auto pb-1" aria-label="Other photos">
@@ -410,9 +549,10 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
                 key={photo.id}
                 type="button"
                 aria-label={`Pin photo ${photo.id}`}
-                aria-pressed={photo.id === photoId}
-                onClick={() => setPhotoId(photo.id)}
-                className={cn('size-14 shrink-0 overflow-hidden rounded border-2 bg-muted [&_img]:size-full [&_img]:object-cover', photo.id === photoId ? 'border-primary' : 'border-transparent')}
+                aria-pressed={photo.id === pinnedId}
+                title="Pin this photo to compare (Search this photo on it searches it in a new tab)"
+                onClick={() => setPinnedId(photo.id)}
+                className={cn('size-14 shrink-0 overflow-hidden rounded border-2 bg-muted [&_img]:size-full [&_img]:object-cover', photo.id === pinnedId ? 'border-primary' : 'border-transparent')}
               >
                 <Thumb photo={photo} />
               </button>
@@ -422,13 +562,55 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
+        <div className="flex h-10 shrink-0 items-end gap-1 overflow-x-auto border-b bg-muted/40 px-2 pt-1.5" role="tablist" aria-label="Searches">
+          {tabs.map(tab => {
+            const on = tab.id === activeId;
+            const photo = photoOf(tab.photoId);
+            const label = tabLabel(tab);
+            return (
+              <div
+                key={tab.id}
+                data-tab={tab.id}
+                className={cn(
+                  'group relative flex h-8 max-w-[220px] min-w-[120px] shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 pr-1 pl-1.5 text-xs transition-colors',
+                  on ? 'z-10 -mb-px border-border bg-background font-medium text-foreground' : 'border-transparent text-muted-foreground hover:bg-background/60 hover:text-foreground',
+                )}
+              >
+                <button type="button" role="tab" aria-selected={on} aria-label={`Search ${label}`} title={tab.page?.title || label} onClick={() => activate(tab.id)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+                  <span className="size-5 shrink-0 overflow-hidden rounded-[4px] bg-muted [&_img]:size-full [&_img]:object-cover" aria-hidden>
+                    {photo ? <Thumb photo={photo} /> : null}
+                  </span>
+                  {tab.waiting || tab.page?.loading ? <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden /> : null}
+                  <span className="truncate">{label}</span>
+                </button>
+                {tabs.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={`Close search ${label}`}
+                    title="Close this search"
+                    onClick={() => void close(tab.id)}
+                    className={cn('flex size-5 shrink-0 items-center justify-center rounded-md hover:bg-muted', on ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover:opacity-70')}
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {pinned && (
+            <Button variant="ghost" size="icon-sm" className="mb-0.5 shrink-0" aria-label="New search of the pinned photo" title="Search the pinned photo in a new tab" onClick={() => searchInNewTab(pinned.id)}>
+              <Plus />
+            </Button>
+          )}
+        </div>
+
         <div className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
           <div className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5">
-            <Button variant="ghost" size="icon-sm" aria-label="Back" title="Back" onClick={() => void browserStep(sessionId, 'back').catch(() => undefined)}><ArrowLeft /></Button>
-            <Button variant="ghost" size="icon-sm" aria-label="Forward" title="Forward" onClick={() => void browserStep(sessionId, 'forward').catch(() => undefined)}><ArrowRight /></Button>
-            <Button variant="ghost" size="icon-sm" aria-label="Reload" title="Reload" onClick={() => void browserStep(sessionId, 'reload').catch(() => undefined)}><RotateCw /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Back" title="Back" disabled={!active} onClick={() => active && void browserStep(sessionId, active.id, 'back').catch(() => undefined)}><ArrowLeft /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Forward" title="Forward" disabled={!active} onClick={() => active && void browserStep(sessionId, active.id, 'forward').catch(() => undefined)}><ArrowRight /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Reload" title="Reload" disabled={!active} onClick={() => active && void browserStep(sessionId, active.id, 'reload').catch(() => undefined)}><RotateCw /></Button>
           </div>
-          <Button variant="secondary" size="sm" title="Back to the results for the pinned photo" onClick={() => void backToResults()}><LayoutGrid /> Results</Button>
+          <Button variant="secondary" size="sm" title="Back to this tab's results" disabled={!active} onClick={() => void backToResults()}><LayoutGrid /> Results</Button>
           <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-full bg-muted/60 px-3 text-xs" title={current} data-testid="address">
             {page?.loading && mode === 'web' ? <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" /> : <Globe className="size-3.5 shrink-0 text-muted-foreground" />}
             <span className="min-w-0 truncate">
@@ -439,12 +621,26 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
                   : <span className="text-muted-foreground">…</span>}
             </span>
           </div>
+          <div className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5" role="group" aria-label="Page zoom">
+            <Button variant="ghost" size="icon-sm" aria-label="Zoom out" title="Zoom out (⌘−)" disabled={!canBrowse} onClick={() => void zoomActive('out')}><Minus /></Button>
+            <button
+              type="button"
+              className="h-7 min-w-12 rounded-md px-1 text-xs font-medium tabular-nums hover:bg-background disabled:opacity-50"
+              aria-label="Actual size"
+              title="Actual size (⌘0)"
+              disabled={!canBrowse}
+              onClick={() => void zoomActive('reset')}
+              data-testid="zoom-level"
+            >
+              {Math.round((active?.zoom ?? 1) * 100)}%
+            </button>
+            <Button variant="ghost" size="icon-sm" aria-label="Zoom in" title="Zoom in (⌘+)" disabled={!canBrowse} onClick={() => void zoomActive('in')}><Plus /></Button>
+          </div>
           {currentSaved ? (
             <Button variant="secondary" size="sm" disabled title="This page is saved"><BookmarkCheck /> Saved</Button>
           ) : (
-            <Button variant="outline" size="sm" title="Keep this page as a tab for this item" disabled={mode !== 'web' || !page || !/^https?:/.test(page.url)} onClick={() => void saveCurrent()}><Bookmark /> Save page</Button>
+            <Button variant="outline" size="sm" title="Keep this page for this item" disabled={mode !== 'web' || !page || !/^https?:/.test(page.url)} onClick={() => void saveCurrent()}><Bookmark /> Save page</Button>
           )}
-          <Button variant="ghost" size="icon-sm" aria-label="Search Google again" title="Search Google again for the pinned photo" onClick={() => void searchGoogle(photoId)}><ScanSearch /></Button>
         </div>
 
         {pages.length > 0 && (
@@ -482,27 +678,27 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
 
         {note && mode === 'web' && (
           <div className="flex h-9 shrink-0 items-center gap-2 border-b bg-(--ai-muted)/50 px-3 text-xs text-(--ai-foreground)" role="status">
-            {lens === 'consent' ? null : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+            {active?.lens === 'consent' ? null : <Loader2 className="size-3.5 shrink-0 animate-spin" />}
             {note}
           </div>
         )}
 
         <div className="relative min-h-0 flex-1">
-          {/* The page webview is placed exactly over this area. */}
+          {/* The current tab's page webview is placed exactly over this area. */}
           <div ref={browserArea} className="absolute inset-0" data-testid="browser-area" />
-          {mode === 'list' && (
+          {active && mode === 'list' && (
             <div className="absolute inset-0 overflow-y-auto p-4" data-testid="match-list">
-              {searching ? (
+              {active.searching ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Looking for matches…</p>
               ) : (
                 <>
                   <p className="mb-3 text-xs text-muted-foreground">
-                    {matchesOrigin === 'research' ? 'Google could not be used here. These are the matches research found for this item.' : 'Google could not be used here. These are visual matches for the pinned photo.'}{' '}
-                    <button type="button" className="underline" onClick={() => void searchGoogle(photoId)}>Try Google again</button>
+                    {active.matchesOrigin === 'research' ? 'Google could not be used here. These are the matches research found for this item.' : 'Google could not be used here. These are visual matches for the photo.'}{' '}
+                    <button type="button" className="underline" onClick={() => void runLens(active.id, active.photoId)}>Try Google again</button>
                   </p>
-                  {matches && matches.length === 0 && <p className="text-sm text-muted-foreground">No matches.</p>}
+                  {active.matches && active.matches.length === 0 && <p className="text-sm text-muted-foreground">No matches.</p>}
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-                    {(matches ?? []).map(match => (
+                    {(active.matches ?? []).map(match => (
                       <button key={match.url} type="button" onClick={() => void open(match.url)} className="flex flex-col gap-1 rounded-lg border p-2 text-left shadow-(--shadow-sm) transition-colors hover:bg-muted">
                         {match.thumbnail ? <img src={match.thumbnail} alt="" className="aspect-square w-full rounded-md object-cover" /> : <div className="aspect-square w-full rounded-md bg-muted" />}
                         <span className="line-clamp-2 text-xs font-semibold">{match.title || hostOf(match.url)}</span>
@@ -516,6 +712,11 @@ export function SearchWindow({ sessionId, initialPhotoId }: { sessionId: number;
           )}
         </div>
 
+        <div className="shrink-0 bg-(--stage)/40 pt-2 empty:hidden">
+          {active?.answer && (
+            <AnswerCard answer={active.answer} onPut={found => void putFound(found)} onDismiss={() => updateTab(active.id, { answer: null })} />
+          )}
+        </div>
         <SelectionBar
           selected={selected}
           refused={refused}

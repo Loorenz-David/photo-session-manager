@@ -417,6 +417,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   anyAi={aiFields.length > 0}
                   onLooksRight={f => act(() => acceptSuggestion(item.id, f.definition.key), 'Could not accept')}
                   onClear={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
+                  onKeepPrevious={f => act(() => resolveConflict(item.id, f.definition.key, 'keep_previous'), 'Could not keep the previous value')}
                   conflictActions={entry => {
                     const actions = conflictActions(entry.field);
                     // Edit types the value in the field itself, on its own step.

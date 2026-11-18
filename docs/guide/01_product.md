@@ -94,7 +94,12 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   searchable list inside the bar: type to filter, arrow keys, Return, Esc), **Ask AI** (a prompt inside the bar:
   Return sends, Esc cancels; "Asking AI…", then "*n* suggestions sent to AI review" with **Open AI review**,
   which brings the main window forward on that item's AI review tab) and ✕ to dismiss it until the next
-  selection; with nothing selected a small hint pill shows. A15: the selection taken stays in the bar until another
+  selection; with nothing selected a small hint pill shows. A18: every search is its own tab (photo thumbnail + the
+  site it shows; switch and close; the others keep their page); pinning another photo only changes the reference
+  picture, and "Search this photo" on it (hover) opens a new tab; page zoom (−/%/+, ⌘+ ⌘− ⌘0, kept per tab) and a
+  zoomable pinned photo; Ask AI has "Answer me" (a short answer in words with one-tap "Put '<value>' in <Field>"
+  chips, nothing written until tapped, kept on its tab until dismissed) and "Fill fields" (suggestions to AI
+  review); selections up to 6,000 characters. A15: the selection taken stays in the bar until another
   selection, ✕ or another page (a #fragment change is the same page); leaving **Other field…** or **Ask AI**
   without acting, a "Put in" and an AI answer all keep it, because the page's own selection goes as soon as
   the owner clicks into the bar. "Put in" is confirmed by a toast with **Undo** (the

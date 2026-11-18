@@ -21,8 +21,11 @@ vi.mock('@/services/search', () => ({
   removePage: vi.fn(async () => undefined),
   putText: vi.fn(async () => ({ stored: {}, previous: null })),
   putBack: vi.fn(async () => undefined),
+  putValue: vi.fn(),
+  zoomPage: vi.fn(async () => 1),
+  closeTab: vi.fn(async () => undefined),
   openAiReview: vi.fn(async () => undefined),
-  askAi: vi.fn(async () => ({ suggested: [], not_written: [], cost_micro_usd: 0 })),
+  askAi: vi.fn(async () => ({ suggested: [], not_written: [], answer: null, found: [], cost_micro_usd: 0 })),
   onSearchEvents: vi.fn(),
 }));
 vi.mock('@/services/photos', async importOriginal => ({ ...(await importOriginal<typeof import('@/services/photos')>()), getSessionView: vi.fn() }));
@@ -114,42 +117,47 @@ it('a12_route_names_the_session_and_photo', () => {
   expect(searchRoute('#/search/3')).toBeNull();
 });
 
-it('a12_pinned_photo_stays_and_another_photo_can_be_pinned_which_searches_again', async () => {
+it('a12_pinned_photo_stays_and_another_photo_can_be_pinned_without_searching_again', async () => {
   await renderWindow(11);
   expect(screen.getByTestId('pinned-photo')).toHaveAttribute('data-photo-id', '11');
   expect(within(screen.getByTestId('pinned-photo')).getByRole('img')).toHaveAttribute('src', 'asset:///previews/11.jpg');
-  await waitFor(() => expect(search.startLens).toHaveBeenCalledWith(SESSION, 11));
+  await waitFor(() => expect(search.startLens).toHaveBeenCalledWith(SESSION, 1, 11));
+  // A18: pinning another photo only changes the reference picture.
   fireEvent.click(screen.getByRole('button', { name: 'Pin photo 13' }));
   expect(screen.getByTestId('pinned-photo')).toHaveAttribute('data-photo-id', '13');
-  await waitFor(() => expect(search.startLens).toHaveBeenLastCalledWith(SESSION, 13));
-  // The main window opening the search on another photo pins it too.
+  await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+  expect(search.startLens).toHaveBeenCalledTimes(1);
+  expect(screen.getAllByRole('tab')).toHaveLength(1);
+  // The main window opening the search on another photo pins it and searches it in a new tab.
   act(() => handlers.photo(12));
   expect(screen.getByTestId('pinned-photo')).toHaveAttribute('data-photo-id', '12');
+  await waitFor(() => expect(search.startLens).toHaveBeenLastCalledWith(SESSION, 2, 12));
+  expect(screen.getAllByRole('tab')).toHaveLength(2);
 });
 
 it('a12_when_google_cannot_be_used_the_window_lists_matches_and_opens_them', async () => {
   vi.mocked(search.researchMatches).mockResolvedValue([{ url: 'https://e1.example/a', title: 'Teak sideboard by Kai K', source: 'E1', thumbnail: null }]);
   await renderWindow();
-  act(() => handlers.lens({ session_id: SESSION, state: 'failed', why: "Google's page did not open" }));
+  act(() => handlers.lens({ session_id: SESSION, tab: 1, state: 'failed', why: "Google's page did not open" }));
   const list = await screen.findByTestId('match-list');
   fireEvent.click(within(list).getByRole('button', { name: /Teak sideboard by Kai K/ }));
-  expect(search.goTo).toHaveBeenCalledWith(SESSION, 'https://e1.example/a');
+  expect(search.goTo).toHaveBeenCalledWith(SESSION, 1, 'https://e1.example/a');
   expect(search.visualSearch).not.toHaveBeenCalled();
 });
 
 it('a12_with_no_research_matches_one_new_search_of_the_pinned_photo_runs', async () => {
   vi.mocked(search.visualSearch).mockResolvedValue([{ url: 'https://e2.example/b', title: 'B', source: 'e2.example', thumbnail: null }]);
   await renderWindow(12);
-  act(() => handlers.lens({ session_id: SESSION, state: 'failed', why: 'x' }));
+  act(() => handlers.lens({ session_id: SESSION, tab: 1, state: 'failed', why: 'x' }));
   await within(await screen.findByTestId('match-list')).findByRole('button', { name: /e2\.example/ });
   expect(search.visualSearch).toHaveBeenCalledWith(SESSION, 12);
 });
 
 it('a12_consent_is_explained_and_results_stop_the_wait', async () => {
   await renderWindow();
-  act(() => handlers.lens({ session_id: SESSION, state: 'consent' }));
+  act(() => handlers.lens({ session_id: SESSION, tab: 1, state: 'consent' }));
   expect(screen.getByText(/Google asks about cookies/)).toBeInTheDocument();
-  act(() => handlers.lens({ session_id: SESSION, state: 'results', url: 'https://www.google.com/search?udm=26' }));
+  act(() => handlers.lens({ session_id: SESSION, tab: 1, state: 'results', url: 'https://www.google.com/search?udm=26' }));
   expect(screen.queryByText(/Google asks about cookies/)).not.toBeInTheDocument();
 });
 
@@ -159,12 +167,12 @@ it('a12_saved_pages_are_tabs_to_add_open_and_remove', async () => {
   await renderWindow();
   const tabs = await screen.findByLabelText('Saved pages');
   expect(within(tabs).getByText('e1.example')).toBeInTheDocument();
-  act(() => handlers.page({ session_id: SESSION, url: 'https://e2.example/b', title: 'Kai K sideboard', loading: false }));
+  act(() => handlers.page({ session_id: SESSION, tab: 1, url: 'https://e2.example/b', title: 'Kai K sideboard', loading: false }));
   fireEvent.click(screen.getByRole('button', { name: /Save page/ }));
   await waitFor(() => expect(search.savePage).toHaveBeenCalledWith(ITEM_ID, 'https://e2.example/b', 'Kai K sideboard'));
   await waitFor(() => expect(within(screen.getByLabelText('Saved pages')).getByText('e2.example')).toBeInTheDocument());
   fireEvent.click(within(screen.getByLabelText('Saved pages')).getByText('e1.example'));
-  expect(search.goTo).toHaveBeenCalledWith(SESSION, 'https://e1.example/a');
+  expect(search.goTo).toHaveBeenCalledWith(SESSION, 1, 'https://e1.example/a');
   fireEvent.click(screen.getByRole('button', { name: 'Remove saved page e1.example' }));
   await waitFor(() => expect(within(screen.getByLabelText('Saved pages')).queryByText('e1.example')).not.toBeInTheDocument());
   expect(search.removePage).toHaveBeenCalledWith(1);
@@ -174,12 +182,12 @@ it('a12_results_goes_back_to_googles_results', async () => {
   vi.mocked(search.lensResults).mockResolvedValue(true);
   await renderWindow();
   fireEvent.click(screen.getByRole('button', { name: /Results/ }));
-  await waitFor(() => expect(search.lensResults).toHaveBeenCalledWith(SESSION));
+  await waitFor(() => expect(search.lensResults).toHaveBeenCalledWith(SESSION, 1));
 });
 
 it('a12_selected_text_can_go_into_a_field_or_to_ai_from_the_apps_own_bar', async () => {
   vi.mocked(search.readSelection).mockResolvedValue({ selection: { text: 'designed by Kai Kristiansen', url: 'https://e1.example/a', title: 'A' }, refused: null });
-  vi.mocked(search.askAi).mockResolvedValue({ suggested: [{ key: 'custom.designer', label: 'Designer', value: 'Kai Kristiansen' }], not_written: [], cost_micro_usd: 300 });
+  vi.mocked(search.askAi).mockResolvedValue({ suggested: [{ key: 'custom.designer', label: 'Designer', value: 'Kai Kristiansen' }], not_written: [], answer: null, found: [], cost_micro_usd: 300 });
   await renderWindow();
   const bar = screen.getByLabelText('Selected text');
   await within(bar).findByText(/designed by Kai Kristiansen/);
@@ -197,7 +205,7 @@ it('a12_selected_text_can_go_into_a_field_or_to_ai_from_the_apps_own_bar', async
   fireEvent.click(within(bar).getByRole('button', { name: /Ask AI/ }));
   fireEvent.change(within(bar).getByLabelText('Instruction for AI'), { target: { value: 'who designed it' } });
   fireEvent.click(within(bar).getByRole('button', { name: 'Send to AI' }));
-  await waitFor(() => expect(search.askAi).toHaveBeenCalledWith(SESSION, { text: 'designed by Kai Kristiansen', url: 'https://e1.example/a', title: 'A' }, 'who designed it'));
+  await waitFor(() => expect(search.askAi).toHaveBeenCalledWith(SESSION, { text: 'designed by Kai Kristiansen', url: 'https://e1.example/a', title: 'A' }, 'who designed it', 'answer'));
 });
 
 it('a12_nothing_selected_or_a_refused_selection_offers_no_action', async () => {
@@ -211,9 +219,9 @@ it('a12_nothing_selected_or_a_refused_selection_offers_no_action', async () => {
 
 it('a12_the_page_is_placed_over_the_browser_area_and_hidden_while_the_list_shows', async () => {
   await renderWindow();
-  await waitFor(() => expect(search.placeBrowser).toHaveBeenCalledWith(SESSION, expect.any(Object), true));
-  act(() => handlers.lens({ session_id: SESSION, state: 'failed', why: 'x' }));
-  await waitFor(() => expect(search.placeBrowser).toHaveBeenLastCalledWith(SESSION, expect.any(Object), false));
+  await waitFor(() => expect(search.placeBrowser).toHaveBeenCalledWith(SESSION, 1, expect.any(Object), true));
+  act(() => handlers.lens({ session_id: SESSION, tab: 1, state: 'failed', why: 'x' }));
+  await waitFor(() => expect(search.placeBrowser).toHaveBeenLastCalledWith(SESSION, 1, expect.any(Object), false));
 });
 
 it('a12_put_fields_orders_and_filters', () => {
@@ -234,6 +242,6 @@ it('a12_without_results_in_time_the_window_gives_up_on_google_and_shows_its_list
   await act(async () => {
     vi.advanceTimersByTime(30_000);
   });
-  await waitFor(() => expect(search.giveUpLens).toHaveBeenCalledWith(SESSION, expect.any(String)));
+  await waitFor(() => expect(search.giveUpLens).toHaveBeenCalledWith(SESSION, 1, expect.any(String)));
   expect(await screen.findByTestId('match-list')).toBeInTheDocument();
 });

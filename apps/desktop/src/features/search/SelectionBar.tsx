@@ -1,14 +1,23 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, ArrowUp, Check, ChevronRight, Loader2, Quote, Search, Sparkles, TextSelect, TriangleAlert, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Check, ChevronRight, ListChecks, Loader2, MessageCircleQuestion, Quote, Search, Sparkles, TextSelect, TriangleAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { FormField } from '@/services/attributes';
+import type { AskMode } from '@/services/search';
 
 export type Selected = { text: string; url: string; title: string };
 
-/** What "Ask AI…" came back with, as the bar shows it. */
-export type AskOutcome = { suggested: { label: string; value: string }[]; notWritten: [string, string][] };
+/**
+ * What "Ask AI…" came back with, as the bar shows it. An answer in words (A18) is shown by the window's answer card,
+ * so the bar goes back to the selection's actions.
+ */
+export type AskOutcome = { mode: AskMode; suggested: { label: string; value: string }[]; notWritten: [string, string][] };
+
+const ASK_PLACEHOLDER: Record<AskMode, string> = {
+  answer: 'Ask about the selection, e.g. which name is the designer and which the manufacturer?',
+  suggest: 'What should AI fill from the selection? e.g. the production year',
+};
 
 type Mode = 'actions' | 'fields' | 'ask' | 'asking' | 'done';
 
@@ -42,7 +51,7 @@ export function SelectionBar({ selected, refused, quick, rest, onPut, onAsk, onD
   quick: FormField[];
   rest: FormField[];
   onPut: (field: FormField, selection: Selected) => Promise<void>;
-  onAsk: (selection: Selected, instruction: string) => Promise<AskOutcome | null>;
+  onAsk: (selection: Selected, instruction: string, mode: AskMode) => Promise<AskOutcome | null>;
   /** ✕: the window lets go of the selection (A15: nothing else does, except another selection or another page). */
   onDismiss: (selection: Selected) => void;
   onOpenReview: () => void;
@@ -52,6 +61,8 @@ export function SelectionBar({ selected, refused, quick, rest, onPut, onAsk, onD
   // selection changes or goes meanwhile.
   const [held, setHeld] = useState<Selected | null>(null);
   const [instruction, setInstruction] = useState('');
+  // A18: answer in words (the default: a quick answer to use) or fill fields as suggestions for AI review.
+  const [askMode, setAskMode] = useState<AskMode>('answer');
   const [typed, setTyped] = useState('');
   const [active, setActive] = useState(0);
   const [outcome, setOutcome] = useState<AskOutcome | null>(null);
@@ -91,8 +102,12 @@ export function SelectionBar({ selected, refused, quick, rest, onPut, onAsk, onD
   async function send() {
     if (!instruction.trim() || mode === 'asking' || !held) return;
     setMode('asking');
-    const answer = await onAsk(held, instruction.trim());
-    if (answer) {
+    const answer = await onAsk(held, instruction.trim(), askMode);
+    if (answer && answer.mode === 'answer') {
+      // The answer card above the bar shows it; the selection's actions come back.
+      setMode('actions');
+      setInstruction('');
+    } else if (answer) {
       setOutcome(answer);
       setMode('done');
       setInstruction('');
@@ -241,12 +256,32 @@ export function SelectionBar({ selected, refused, quick, rest, onPut, onAsk, onD
 
           {mode === 'ask' && (
             <>
-              <Sparkles className="size-4 shrink-0 text-(--ai)" aria-hidden />
+              <div role="radiogroup" aria-label="What AI does" className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5 text-xs">
+                {([
+                  ['answer', 'Answer me', MessageCircleQuestion, 'A quick answer in words, with values you can put in a field'],
+                  ['suggest', 'Fill fields', ListChecks, 'Values become suggestions in AI review'],
+                ] as const).map(([value, label, Icon, hint]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={askMode === value}
+                    title={hint}
+                    onClick={() => { setAskMode(value); promptRef.current?.focus(); }}
+                    className={cn(
+                      'flex h-7 items-center gap-1 rounded-md px-2 font-medium transition-colors',
+                      askMode === value ? 'bg-background text-(--ai-foreground) shadow-(--shadow-sm)' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <Icon className="size-3.5" aria-hidden /> {label}
+                  </button>
+                ))}
+              </div>
               <input
                 ref={promptRef}
                 aria-label="Instruction for AI"
                 maxLength={300}
-                placeholder="What should AI find in the selection? e.g. the production year"
+                placeholder={ASK_PLACEHOLDER[askMode]}
                 className="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 value={instruction}
                 onChange={event => setInstruction(event.target.value)}

@@ -119,7 +119,7 @@ it('a6_2_choosing_a_field_goes_to_its_step_and_opens_its_ai_popover', async () =
   renderForm();
   fireEvent.click(await screen.findByRole('button', { name: '3 to review' }));
   const wearRow = await screen.findByRole('listitem', { name: 'Wear' });
-  fireEvent.click(within(wearRow).getByRole('button', { name: /Show field/ }));
+  fireEvent.click(within(wearRow).getByRole('button', { name: 'Edit' }));
   expect(await screen.findByRole('region', { name: 'Condition fields' })).toBeInTheDocument();
   const popover = await screen.findByRole('dialog', { name: 'AI suggestion for Wear' });
   await new Promise(resolve => setTimeout(resolve, 50));

@@ -202,7 +202,7 @@ it('a18_c5a_header_to_review_lists_the_fields_opens_the_panel_and_hides_at_zero'
     field(def('model', 'Model'), ai('model', 'CH24', { ai_status: 'accepted' })),
   ]));
   vi.mocked(acceptSuggestion).mockResolvedValue(ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }));
-  fireEvent.click(within(list).getAllByRole('button', { name: 'Looks right' })[0]);
+  fireEvent.click(within(list).getAllByRole('button', { name: 'Accept' })[0]);
   await waitFor(() => expect(screen.queryByRole('button', { name: /to review$/ })).not.toBeInTheDocument());
 });
 

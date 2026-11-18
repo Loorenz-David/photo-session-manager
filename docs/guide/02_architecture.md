@@ -128,6 +128,30 @@ wrapper `services/search.ts`. Saved pages:
   `features/search/useReviewFromSearch.ts` turns into the details on the AI review tab (opening that session
   first when another is shown).
 
+**A18 corrections to that window.**
+- **Search tabs.** Each search runs in its own page webview, `search-web-<session>-<tab>` (`web_label(session,
+  tab)`; tab ids come from the app's page, at most `MAX_TABS` = 8, `window::ensure_tab` makes one on first use,
+  `window::close_tab` / `search_tab_close` closes it). `SearchWindows.lens` is keyed by `(session, tab)`, so each
+  tab has its own Lens route, posts and photo; `forget_tab` / `forget(session)`. Every command that touches a page
+  takes `tab` (`search_web_place` also hides every other tab of the session, so exactly one shows), and the events
+  `search_web_page` / `search_lens` carry it. The window opens with no page webview: its app page starts tab 1 on
+  the photo it was opened on; a later "Search this photo" from the main window (`search_photo`) pins that photo and
+  opens a new tab. Pinning another photo in the window only changes the reference picture; "Search this photo" on
+  the pinned photo (hover) or "+" opens a new tab. Only the current tab's selection is read.
+- **Zoom.** Page zoom per tab (`search_web_zoom(session, tab, current, action)` → `next_zoom` over `ZOOM_STEPS`
+  50–300 %, applied with `Webview::set_zoom`; the app's page keeps each tab's level). The View menu has Zoom In
+  (⌘+ as `CmdOrCtrl+NumpadAdd`, also ⌘=), Zoom Out (⌘−) and Actual Size (⌘0); `on_menu_event` sends `search_zoom`
+  to the focused search window's app page only (`session_of_window`), which applies it to its current tab: menu key
+  equivalents reach the app also while the page has the keyboard, and the page itself still talks to nothing. The
+  pinned photo zooms in the app's page (`features/search/ZoomablePhoto.tsx`: wheel/pinch, click, drag, double-click).
+- **Ask AI answers in words** (`AnswerCard.tsx`). `search_ask` takes `mode`: `suggest` (A12) or `answer`
+  (`browse::AskMode::Answer`: instructions `ASK_ANSWER`, input `answer: true`, the Read schema then requires
+  `answer` next to `keys`; nothing is written; `AskAnswer.answer` + `found` with each value's stored JSON). A found
+  value is written only from a tap, through `search_put_value`, the same path as `search_put_text` (`put`, a
+  person's edit with `previous` for Undo). The selection cap is 6,000 characters (`MAX_SELECTION_CHARS`; the page
+  script cuts at 6,001 and the answer limit `MAX_REPORT_BYTES` is 64 KiB); `search_window.ask_ai_sent` logs mode,
+  characters and the cap.
+
 ## Runtime flows (step lists with the files involved)
 ### Shooting templates (book `10G`; T1–T4; contract `docs/implementation/master_plan_templates.md` §5 P1–P10)
 - **Editor (T1).** Settings → Shooting templates (`features/settings/{SettingsNav.tsx, TemplatesSection.tsx,

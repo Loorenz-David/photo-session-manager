@@ -57,6 +57,7 @@ fn setup() -> Setup {
             commands::search::search_page_remove,
             commands::search::search_put_text,
             commands::search::search_put_back,
+            commands::search::search_put_value,
             commands::attributes::form_get,
             commands::history::history_undo,
         ])
@@ -284,6 +285,55 @@ fn a14_undo_of_put_in_gives_the_field_back_what_it_held() {
             json!({"sessionId": session, "key": "product.title", "previous": "not json"}),
         )
         .is_err()
+    );
+}
+
+#[test]
+fn a18_a_value_from_an_answer_in_words_is_put_like_selected_text() {
+    let s = setup();
+    let (w, item, session) = (&s.w, s.item, s.session);
+    let value_json = json!("Kai Kristiansen sideboard").to_string();
+    let put = call(
+        w,
+        "search_put_value",
+        json!({"sessionId": session, "key": "product.title", "valueJson": value_json}),
+    )
+    .unwrap();
+    assert_eq!(put["stored"]["provenance"], "human");
+    assert_eq!(put["previous"], json!(json!("Teak sideboard").to_string()));
+    assert_eq!(field_value(w, item, "product.title"), json!(value_json));
+    // The toast's Undo is the same.
+    call(
+        w,
+        "search_put_back",
+        json!({"sessionId": session, "key": "product.title", "previous": put["previous"]}),
+    )
+    .unwrap();
+    assert_eq!(
+        field_value(w, item, "product.title"),
+        json!(json!("Teak sideboard").to_string())
+    );
+    // Not a stored value: refused, nothing written. A remote page cannot call it.
+    assert!(
+        call(
+            w,
+            "search_put_value",
+            json!({"sessionId": session, "key": "product.title", "valueJson": "not json"}),
+        )
+        .is_err()
+    );
+    assert!(
+        call_from(
+            w,
+            "https://www.google.com/",
+            "search_put_value",
+            json!({"sessionId": session, "key": "product.title", "valueJson": value_json}),
+        )
+        .is_err()
+    );
+    assert_eq!(
+        field_value(w, item, "product.title"),
+        json!(json!("Teak sideboard").to_string())
     );
 }
 

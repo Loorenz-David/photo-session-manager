@@ -120,6 +120,11 @@ pub fn schema_for(request: &ModelRequest) -> Json {
         ]),
         Stage::Observe => object(vec![reads(), ("shows_marking".to_owned(), boolean())]),
         Stage::Condition => object(vec![reads()]),
+        // A18: "Ask AI…" answering in words also answers the owner's question in `answer`.
+        Stage::Read if request.input.get("answer").is_some() => object(vec![
+            ("answer".to_owned(), string()),
+            ("keys".to_owned(), per_field(request, statement)),
+        ]),
         // R12·U3: a Read request whose input carries the `piece` also answers whether the page
         // lists the same kind of piece (null: cannot tell) and the kind it lists.
         Stage::Read if request.input.get("piece").is_some() => object(vec![
@@ -205,4 +210,35 @@ fn check_at(schema: &Json, value: &Json, path: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn read_request(input: Json) -> ModelRequest {
+        ModelRequest {
+            stage: Stage::Read,
+            unit_key: "browse".into(),
+            model: "m".into(),
+            effort: "low".into(),
+            language: "English".into(),
+            instructions: String::new(),
+            input,
+            images: Vec::new(),
+            listing_images: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a18_an_answer_in_words_is_required_only_when_asked_for() {
+        let fields = json!([{"key": "maker", "core_type": "text", "choices": []}]);
+        let answering = schema_for(&read_request(json!({"fields": fields, "answer": true})));
+        let ok = json!({"answer": "Kai is the designer.", "keys": {"maker": {"stated": null, "value": null}}});
+        assert_eq!(check(&answering, &ok), Ok(()));
+        assert!(check(&answering, &json!({"keys": ok["keys"].clone()})).is_err());
+        let plain = schema_for(&read_request(json!({"fields": fields})));
+        assert_eq!(check(&plain, &json!({"keys": ok["keys"].clone()})), Ok(()));
+        assert!(check(&plain, &ok).is_err(), "no answer outside answer mode");
+    }
 }

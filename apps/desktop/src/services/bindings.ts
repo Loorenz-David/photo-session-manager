@@ -158,28 +158,39 @@ export const commands = {
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
 	 *  Where the browser area is in the app's page (CSS pixels of the app's page, i.e. logical
-	 *  points), and whether the page webview shows (hidden while the window's own results list shows).
-	 *  A13: moved by where the app's page sits in the window (below the title bar).
+	 *  points), and whether the current tab's page webview shows (hidden while the window's own
+	 *  results list shows). A13: moved by where the app's page sits in the window (below the title
+	 *  bar). A18: `tab` is the current tab; every other tab's page webview is hidden.
 	 */
-	searchWebPlace: (sessionId: CommandId, x: number | null, y: number | null, width: number | null, height: number | null, visible: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_place", { sessionId, x, y, width, height, visible })),
-	/**  Opens a web page in the window's browser. */
-	searchWebGo: (sessionId: CommandId, url: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_go", { sessionId, url })),
-	/**  Back, forward or reload in the window's browser. */
-	searchWebStep: (sessionId: CommandId, action: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_step", { sessionId, action })),
+	searchWebPlace: (sessionId: CommandId, tab: CommandId, x: number | null, y: number | null, width: number | null, height: number | null, visible: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_place", { sessionId, tab, x, y, width, height, visible })),
+	/**  Opens a web page in a tab of the window's browser. */
+	searchWebGo: (sessionId: CommandId, tab: CommandId, url: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_go", { sessionId, tab, url })),
+	/**  Back, forward or reload in a tab of the window's browser. */
+	searchWebStep: (sessionId: CommandId, tab: CommandId, action: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_web_step", { sessionId, tab, action })),
 	/**
-	 *  Searches the photo with Google Lens in the window's browser: Google's page opens and the photo
-	 *  is posted from it (`search_lens` events follow).
+	 *  A18: page zoom of a tab: the step after `action` (`in`, `out`, `reset`) from `current` (the
+	 *  zoom the app's page holds for the tab), applied to the tab's page; answers the new zoom.
 	 */
-	searchLensStart: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_lens_start", { sessionId, photoId })),
+	searchWebZoom: (sessionId: CommandId, tab: CommandId, current: number | null, action: string) => typedError<number | null, CommandError>(__TAURI_INVOKE("search_web_zoom", { sessionId, tab, current, action })),
+	/**  A18: closes a search tab (its page and its Google route). */
+	searchTabClose: (sessionId: CommandId, tab: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_tab_close", { sessionId, tab })),
+	/**
+	 *  Searches the photo with Google Lens in a search tab (A18: made when new): Google's page opens
+	 *  and the photo is posted from it (`search_lens` events follow).
+	 */
+	searchLensStart: (sessionId: CommandId, tab: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_lens_start", { sessionId, tab, photoId })),
 	/**
 	 *  The window gave up waiting for Google (no results in time): the route is over and the window
 	 *  shows its own list.
 	 */
-	searchLensGiveUp: (sessionId: CommandId, why: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_lens_give_up", { sessionId, why })),
-	/**  Back to Google's results page for the pinned photo. */
-	searchLensResults: (sessionId: CommandId) => typedError<boolean, CommandError>(__TAURI_INVOKE("search_lens_results", { sessionId })),
-	/**  Reads what is selected in the window's browser (the app's page asks; the answer is checked). */
-	searchWebSelection: (sessionId: CommandId) => typedError<SelectionAnswerDto_Serialize, CommandError>(__TAURI_INVOKE("search_web_selection", { sessionId })),
+	searchLensGiveUp: (sessionId: CommandId, tab: CommandId, why: string) => typedError<null, CommandError>(__TAURI_INVOKE("search_lens_give_up", { sessionId, tab, why })),
+	/**  Back to Google's results page of the tab's search. */
+	searchLensResults: (sessionId: CommandId, tab: CommandId) => typedError<boolean, CommandError>(__TAURI_INVOKE("search_lens_results", { sessionId, tab })),
+	/**
+	 *  Reads what is selected in a tab of the window's browser (the app's page asks, only of its
+	 *  current tab; the answer is checked).
+	 */
+	searchWebSelection: (sessionId: CommandId, tab: CommandId) => typedError<SelectionAnswerDto_Serialize, CommandError>(__TAURI_INVOKE("search_web_selection", { sessionId, tab })),
 	/**  The window's own results list: the matches research already found (no cost). */
 	searchMatches: (sessionId: CommandId) => typedError<VisualMatchDto_Serialize[], CommandError>(__TAURI_INVOKE("search_matches", { sessionId })),
 	/**  The window's own results list from one new visual search of the photo (a counted call). */
@@ -197,15 +208,22 @@ export const commands = {
 	 */
 	searchPutBack: (sessionId: CommandId, key: string, previous: string | null) => typedError<null, CommandError>(__TAURI_INVOKE("search_put_back", { sessionId, key, previous })),
 	/**
+	 *  A18: "Put '<value>' in <field>" from an answer in words: the value AI found (its stored JSON
+	 *  text, `AskFoundDto.value_json`) into the field, exactly as "Put in" writes selected text: a
+	 *  person's edit, with what the field held for the toast's Undo.
+	 */
+	searchPutValue: (sessionId: CommandId, key: string, valueJson: string) => typedError<PutTextDto_Serialize, CommandError>(__TAURI_INVOKE("search_put_value", { sessionId, key, valueJson })),
+	/**
 	 *  A14: "Open AI review" from the search window: the main window comes forward and opens the
 	 *  session's details on the AI review tab (event `search_open_review`).
 	 */
 	searchOpenReview: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_open_review", { sessionId })),
 	/**
-	 *  "Ask AI…": the selected text and the person's instruction to the model; the answer becomes AI
-	 *  suggestions in the form's AI review tab.
+	 *  "Ask AI…": the selected text and the person's instruction to the model. `mode` `suggest`: the
+	 *  answer becomes AI suggestions in the form's AI review tab; `answer` (A18): a short answer in
+	 *  words and the values found per field, nothing written.
 	 */
-	searchAsk: (sessionId: CommandId, text: string, url: string, title: string, instruction: string) => typedError<AskAnswerDto, CommandError>(__TAURI_INVOKE("search_ask", { sessionId, text, url, title, instruction })),
+	searchAsk: (sessionId: CommandId, text: string, url: string, title: string, instruction: string, mode: string) => typedError<AskAnswerDto_Serialize, CommandError>(__TAURI_INVOKE("search_ask", { sessionId, text, url, title, instruction, mode })),
 	publishPreview: (sessionIds: CommandId[]) => typedError<PreviewDto_Serialize, CommandError>(__TAURI_INVOKE("publish_preview", { sessionIds })),
 	publishConfirm: (sessionIds: CommandId[], summaryText: string, shown: ShownSuggestionsDto[]) => typedError<CommandId, CommandError>(__TAURI_INVOKE("publish_confirm", { sessionIds, summaryText, shown })),
 	publishRetry: (itemId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("publish_retry", { itemId })),
@@ -327,11 +345,37 @@ export type ArrangeNextResponse_Serialize = {
 	research_queued: boolean,
 };
 
-export type AskAnswerDto = {
+export type AskAnswerDto = AskAnswerDto_Serialize | AskAnswerDto_Deserialize;
+
+export type AskAnswerDto_Deserialize = {
 	suggested: AskSuggestionDto[],
 	/**  `[field label, why]` of the fields the answer named but that were not written. */
 	not_written: ([string, string])[],
+	/**  A18 answer mode: the answer in words. */
+	answer?: string | null,
+	/**  A18 answer mode: the values found per field. */
+	found: AskFoundDto[],
 	cost_micro_usd: number,
+};
+
+export type AskAnswerDto_Serialize = {
+	suggested: AskSuggestionDto[],
+	/**  `[field label, why]` of the fields the answer named but that were not written. */
+	not_written: ([string, string])[],
+	/**  A18 answer mode: the answer in words. */
+	answer: string | null,
+	/**  A18 answer mode: the values found per field. */
+	found: AskFoundDto[],
+	cost_micro_usd: number,
+};
+
+/**  A18: one value an answer in words found (offered as "Put in"; nothing written). */
+export type AskFoundDto = {
+	key: string,
+	label: string,
+	value: string,
+	value_json: string,
+	quote: string,
 };
 
 export type AskSuggestionDto = {

@@ -5,8 +5,10 @@
 //! - [`ResearchService::browse_matches`] / [`ResearchService::browse_search`]: the window's
 //!   fallback list when Google's own page cannot be used: the visual matches research already
 //!   paid for, or one new visual search of the pinned photo.
-//! - [`ResearchService::browse_ask`]: "Ask AI…" on text the owner selected on a page. The answer
-//!   becomes AI suggestions (never applied) with the page as their source.
+//! - [`ResearchService::browse_ask`]: "Ask AI…" on text the owner selected on a page. In
+//!   [`AskMode::Suggest`] the answer becomes AI suggestions (never applied) with the page as their
+//!   source; in [`AskMode::Answer`] (A18) the model answers in words and names the values it found
+//!   per field, and nothing is written (the window offers each value as a one-tap "Put in").
 //!
 //! Every provider call goes through the gateway on a `browse` run of the session (MC-A9 record,
 //! MC-A8 cost and the day limit), so it is in the export and counted in the day's spend, but it
@@ -42,8 +44,9 @@ use crate::{
 
 /// The unit key of every browse call.
 pub const BROWSE_UNIT: &str = "browse";
-/// The longest selected text "Ask AI…" sends (the window cuts what it reports to this).
-pub const MAX_SELECTION_CHARS: usize = 2_000;
+/// The longest selected text "Ask AI…" sends (the window cuts what it reports to this). A18: raised
+/// from 2,000 so a whole specification table fits.
+pub const MAX_SELECTION_CHARS: usize = 6_000;
 /// The longest instruction the owner can give "Ask AI…".
 pub const MAX_INSTRUCTION_CHARS: usize = 300;
 /// The long edge of the picture given to Google Lens.
@@ -56,6 +59,52 @@ pub const ASK: &str = "The owner is identifying the piece in their photos and se
     on a web page. Follow the owner's instruction. For each listed field, quote what the selected \
     text states for it and give the value in the field's terms, or null when the text names \
     nothing the field allows. Use only the selected text; do not guess.";
+
+/// A18: the instructions of an "Ask AI…" call that answers in words.
+pub const ASK_ANSWER: &str = "The owner is identifying the piece in their photos and selected this \
+    text on a web page. Answer the owner's question in `answer`: short, plain language, at most \
+    three sentences, in the given language, using only the selected text; say so when the text \
+    does not tell. For each listed field, quote what the selected text states for it and give the \
+    value in the field's terms, or null when the text names nothing the field allows (for example, \
+    when the question is which name is the designer and which the manufacturer, fill both). Do not \
+    guess.";
+
+/// The longest answer in words the window shows (characters).
+pub const MAX_ANSWER_CHARS: usize = 1_200;
+
+/// What "Ask AI…" does with the model's answer (A18).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AskMode {
+    /// The values become AI suggestions in the AI review tab (A12).
+    #[default]
+    Suggest,
+    /// A short answer in words plus the values found per field, offered as one-tap "Put in"
+    /// (nothing written by the call).
+    Answer,
+}
+
+impl AskMode {
+    pub fn name(self) -> &'static str {
+        match self {
+            AskMode::Suggest => "suggest",
+            AskMode::Answer => "answer",
+        }
+    }
+}
+
+/// One value an answer in words found for a field (A18): offered, never written by the call.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AskFound {
+    pub key: String,
+    pub label: String,
+    /// The value as the form shows it.
+    pub value: String,
+    /// The value in the field's stored form (JSON text), as "Put in" writes it.
+    pub value_json: String,
+    /// What the selected text states for it.
+    pub quote: String,
+}
 
 /// One visual match as the window lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +134,9 @@ pub struct AskRequest {
     pub page_title: String,
     pub text: String,
     pub instruction: String,
+    /// A18: suggestions (A12's behaviour) or an answer in words.
+    #[serde(default)]
+    pub mode: AskMode,
 }
 
 /// One field "Ask AI…" suggested.
@@ -103,6 +155,12 @@ pub struct AskAnswer {
     /// Fields the answer named but that were not written, with why (e.g. "already holds this
     /// value").
     pub not_written: Vec<(String, String)>,
+    /// A18 answer mode: the answer in words.
+    #[serde(default)]
+    pub answer: Option<String>,
+    /// A18 answer mode: the values found per field (nothing written).
+    #[serde(default)]
+    pub found: Vec<AskFound>,
     pub cost_micro_usd: i64,
 }
 
@@ -390,28 +448,44 @@ impl ResearchService {
         let run_id = self.browse_run(request.session_id, item_id, Some(&form_json))?;
         let settings = self.settings();
         let stage = settings.stage(Stage::Read);
+        let answering = request.mode == AskMode::Answer;
+        if answering && instruction.is_empty() {
+            return Err(invalid("type a question for AI first"));
+        }
         let instruction = if instruction.is_empty() {
             "Fill whatever fields the text states."
         } else {
             instruction
         };
+        let mut input = json!({
+            "fields": fields.iter().map(descriptor).collect::<Vec<_>>(),
+            "page": { "url": page_url, "title": request.page_title },
+            "selected_text": text,
+            "instruction": instruction,
+            "language": settings.language,
+        });
+        if answering {
+            // The schema asks for `answer` next to the per-field statements.
+            input["answer"] = json!(true);
+        }
         let call = CallRequest::Model(ModelRequest {
             stage: Stage::Read,
             unit_key: BROWSE_UNIT.to_owned(),
             model: stage.model,
             effort: stage.effort,
             language: settings.language.clone(),
-            instructions: ASK.to_owned(),
-            input: json!({
-                "fields": fields.iter().map(descriptor).collect::<Vec<_>>(),
-                "page": { "url": page_url, "title": request.page_title },
-                "selected_text": text,
-                "instruction": instruction,
-                "language": settings.language,
-            }),
+            instructions: if answering { ASK_ANSWER } else { ASK }.to_owned(),
+            input,
             images: Vec::new(),
             listing_images: Vec::new(),
         });
+        tracing::info!(
+            target: "psm::search",
+            "search_window.ask_ai_sent session={} mode={} chars={} cap={MAX_SELECTION_CHARS}",
+            request.session_id,
+            request.mode.name(),
+            text.chars().count()
+        );
         let called = self.gateway.call(run_id, Stage::Read, BROWSE_UNIT, call)?;
         let host_name = host(&page_url).unwrap_or_default();
         let mut read = crate::stages::step(
@@ -435,8 +509,65 @@ impl ResearchService {
         let mut answer = AskAnswer {
             suggested: Vec::new(),
             not_written: Vec::new(),
+            answer: None,
+            found: Vec::new(),
             cost_micro_usd: 0,
         };
+        if answering {
+            answer.answer = output
+                .get("answer")
+                .and_then(Json::as_str)
+                .map(|a| a.trim().chars().take(MAX_ANSWER_CHARS).collect::<String>())
+                .filter(|a| !a.is_empty());
+            for definition in &fields {
+                let Some(entry) = output.get("keys").and_then(|k| k.get(&definition.key)) else {
+                    continue;
+                };
+                let Some(Stated::Mapped(value)) = statement_of(definition, entry) else {
+                    continue;
+                };
+                answer.found.push(AskFound {
+                    key: definition.key.clone(),
+                    label: definition.label.clone(),
+                    value: display(&value),
+                    value_json: value.to_string(),
+                    quote: entry
+                        .get("stated")
+                        .and_then(Json::as_str)
+                        .unwrap_or("")
+                        .trim()
+                        .chars()
+                        .take(200)
+                        .collect(),
+                });
+            }
+            let mut answered = crate::stages::step(
+                Stage::Decide,
+                StepKind::Concluded,
+                format!(
+                    "Answered in words; found {} value{} (nothing written)",
+                    answer.found.len(),
+                    if answer.found.len() == 1 { "" } else { "s" }
+                ),
+            );
+            answered.field_keys = answer.found.iter().map(|f| f.key.clone()).collect();
+            answered.source_url = Some(page_url.clone());
+            answered.detail = answer.answer.clone().unwrap_or_default();
+            steps.push(answered);
+            self.end_browse_run(run_id, &steps, None)?;
+            answer.cost_micro_usd = self.run_cost(run_id)?;
+            self.log_ask(
+                request.session_id,
+                run_id,
+                &format!(
+                    "ok mode=answer answered={} found={}",
+                    answer.answer.is_some(),
+                    answer.found.len()
+                ),
+                answer.cost_micro_usd,
+            )?;
+            return Ok(answer);
+        }
         for definition in &fields {
             let Some(entry) = output.get("keys").and_then(|k| k.get(&definition.key)) else {
                 continue;
