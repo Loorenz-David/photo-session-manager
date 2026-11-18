@@ -389,6 +389,8 @@ pub struct PageScript {
     pub title: String,
     pub text: String,
     pub images: Vec<Vec<u8>>,
+    /// The site refuses automated reading (`PageReply::blocked`).
+    pub blocked: bool,
 }
 
 impl PageScript {
@@ -399,6 +401,7 @@ impl PageScript {
             title: title.to_owned(),
             text: format!("{title} — listing text"),
             images,
+            blocked: false,
         }
     }
 
@@ -409,6 +412,15 @@ impl PageScript {
             title: String::new(),
             text: String::new(),
             images: Vec::new(),
+            blocked: false,
+        }
+    }
+
+    /// A page whose site refuses automated reading (403, or 429 with a long `Retry-After`).
+    pub fn blocked() -> Self {
+        Self {
+            blocked: true,
+            ..Self::unobtainable()
         }
     }
 }
@@ -490,6 +502,8 @@ impl PageReader for FakePageReader {
             text: page.text,
             images: page.images,
             usage: None,
+            blocked: page.blocked,
+            note: None,
         })
     }
 }

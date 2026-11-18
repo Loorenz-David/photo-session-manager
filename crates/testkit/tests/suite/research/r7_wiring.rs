@@ -360,3 +360,44 @@ fn r7_u1_a_redo_that_releases_emits_the_event() {
         "{events:?}"
     );
 }
+
+/// A9 (owner correction 2026-11-18): the camera's passwords are not research secrets. A page
+/// title that happens to hold the generated FTP code (a short code of digits) is recorded as it
+/// is and the export goes through; before, the code was redacted from the record and stopped the
+/// export as "contains a key".
+#[test]
+fn a9_a_camera_password_in_a_record_neither_redacts_nor_stops_the_export() {
+    use psm_core::{domain::camera::secrets as camera, ports::secrets::SecretStore};
+    let a = research_app();
+    a.secrets.set(camera::FTP_PASSWORD, "4821").unwrap();
+    a.secrets
+        .set(camera::ACCESS_AUTH_PASSWORD, "camera-access-pw")
+        .unwrap();
+    a.research_fakes()
+        .search
+        .set_results(vec![psm_research::ports::SearchCandidate {
+            url: "https://dealer.example/item/4821".into(),
+            rank: 1,
+            title: "Teak sideboard, model 4821".into(),
+        }]);
+    let (s, item) = ready_session(&a, "A9-CAM", [40, 120, 200]);
+    a.tick(1_100).unwrap();
+    assert_eq!(runs(&a, Some(s)).pop().unwrap().state, RunState::Finished);
+    assert_eq!(
+        count(
+            &a,
+            "SELECT COUNT(*) FROM research_calls WHERE redaction_hit = 1"
+        ),
+        0
+    );
+    let dest = a.dir.path().join("exports");
+    fs::create_dir_all(&dest).unwrap();
+    let zip = a
+        .app
+        .research
+        .as_ref()
+        .unwrap()
+        .export(psm_research::api::ExportSelection::Items(vec![item]), &dest)
+        .expect("the export goes through");
+    assert!(zip.exists());
+}

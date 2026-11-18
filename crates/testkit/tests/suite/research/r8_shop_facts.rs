@@ -196,6 +196,38 @@ fn linked_session(a: &TestApp) -> i64 {
     s
 }
 
+/// The shop's answer to A9's `ShopProduct` for the other product (schema-grounded: the query was
+/// accepted by a 2026-10 shop on 2026-11-18; the values are made up).
+fn other_product() -> ShopReply {
+    ShopReply::new(
+        200,
+        json!({"data": {"productByIdentifier": {
+            "id": "gid://shopify/Product/2",
+            "title": "Teak sideboard",
+            "handle": "teak-sideboard-2",
+            "productType": "Sideboard",
+            "vendor": "Beyo Vintage",
+            "onlineStoreUrl": "https://beyovintage.se/products/teak-sideboard-2",
+            "descriptionHtml": "<p>A teak sideboard from the 1960s.</p>",
+            "metafields": {"nodes": [
+                {"namespace": "custom", "key": "designer", "type": "single_line_text_field",
+                 "value": "Gunnar Nilsson", "definition": {"name": "Designer"},
+                 "reference": null, "references": null},
+                {"namespace": "custom", "key": "woods", "type": "list.metaobject_reference",
+                 "value": "[\"gid://shopify/Metaobject/1\"]", "definition": {"name": "Wood"},
+                 "reference": null, "references": {"nodes": [{"displayName": "Teak"}]}},
+                {"namespace": "custom", "key": "width", "type": "dimension",
+                 "value": "{\"value\":180.0,\"unit\":\"CENTIMETERS\"}",
+                 "definition": null, "reference": null, "references": null},
+                {"namespace": "custom", "key": "damage_report", "type": "list.file_reference",
+                 "value": "[\"gid://shopify/MediaImage/9\"]", "definition": {"name": "Damage"},
+                 "reference": null, "references": {"nodes": [{}]}}
+            ]},
+            "media": {"nodes": []}
+        }}}),
+    )
+}
+
 #[test]
 fn a17_c6a_the_items_own_listing_is_no_evidence_in_the_wired_app() {
     let (fake, adapter) = shop();
@@ -204,6 +236,23 @@ fn a17_c6a_the_items_own_listing_is_no_evidence_in_the_wired_app() {
         "PublicListing",
         Some(&listing.variables()),
         ShopReply::new(listing.status, listing.body.clone()),
+    );
+    // A9: the reader asks the shop's hosts once, then reads the other product through the API.
+    fake.on_graphql_always(
+        "ShopHosts",
+        None,
+        ShopReply::new(
+            200,
+            json!({"data": {"shop": {
+                "primaryDomain": {"host": "beyovintage.se", "url": "https://beyovintage.se"},
+                "myshopifyDomain": "example.myshopify.com"
+            }}}),
+        ),
+    );
+    fake.on_graphql_always(
+        "ShopProduct",
+        Some(&json!({"handle": "teak-sideboard-2"})),
+        other_product(),
     );
     let model = Arc::new(FakeModel::default());
     let search = Arc::new(FakeVisualSearch::default());
@@ -234,7 +283,7 @@ fn a17_c6a_the_items_own_listing_is_no_evidence_in_the_wired_app() {
     let a = TestApp::with_research_using(
         Arc::new(adapter) as Arc<dyn CommerceAdapter>,
         Providers {
-            model: Some(model),
+            model: Some(model.clone()),
             search: Some(search),
             reader: Some(reader),
         },
@@ -259,9 +308,40 @@ fn a17_c6a_the_items_own_listing_is_no_evidence_in_the_wired_app() {
         .pop()
         .expect("a run");
     assert_eq!(run.state, RunState::Finished, "{:?}", run.error);
+    // A9: neither shop page went to the storefront: the own listing is set apart, the other
+    // product is read through the API.
     let read_urls: Vec<String> = http.requests().into_iter().map(|r| r.url).collect();
-    assert!(!read_urls.iter().any(|u| u == OWN), "{read_urls:?}");
-    assert_eq!(read_urls.first().map(String::as_str), Some(OTHER));
+    assert!(read_urls.is_empty(), "{read_urls:?}");
+    assert_eq!(
+        fake.graphql("ShopProduct")
+            .into_iter()
+            .map(|(_, vars)| vars)
+            .collect::<Vec<_>>(),
+        vec![json!({"handle": "teak-sideboard-2"})]
+    );
+    let page_text = model
+        .requests()
+        .into_iter()
+        .find(|c| c.stage == Some(psm_research::domain::Stage::Read))
+        .map(|c| {
+            c.input["page"]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        })
+        .expect("a read request");
+    for line in [
+        "Teak sideboard",
+        "Type: Sideboard",
+        "Vendor: Beyo Vintage",
+        "Designer: Gunnar Nilsson",
+        "Wood: Teak",
+        "custom.width: 180.0 centimeters",
+        "A teak sideboard from the 1960s.",
+    ] {
+        assert!(page_text.contains(line), "{line} in {page_text}");
+    }
+    assert!(!page_text.contains("Damage"), "{page_text}");
     let steps = a
         .app
         .store
@@ -288,4 +368,49 @@ fn a17_c6a_the_items_own_listing_is_no_evidence_in_the_wired_app() {
     assert_eq!(reads[0]["url"], json!(OTHER));
     assert_eq!(reads[0]["obtained"], json!(true));
     assert_eq!(reads[0]["site"]["class"], json!("shop"));
+}
+
+/// A9: a shop page whose handle the shop does not know is "could not be read", with the reason,
+/// and nothing is asked of the storefront.
+#[test]
+fn a9_a_shop_handle_the_shop_does_not_know_is_could_not_be_read() {
+    let (fake, adapter) = shop();
+    fake.on_graphql_always(
+        "ShopHosts",
+        None,
+        ShopReply::new(
+            200,
+            json!({"data": {"shop": {
+                "primaryDomain": {"host": "beyovintage.se", "url": "https://beyovintage.se"},
+                "myshopifyDomain": "example.myshopify.com"
+            }}}),
+        ),
+    );
+    fake.on_graphql_always(
+        "ShopProduct",
+        None,
+        ShopReply::new(200, json!({"data": {"productByIdentifier": null}})),
+    );
+    let http = Arc::new(FakeResearchHttp::default());
+    let inner = Arc::new(HttpPageReader::new(http.clone(), Arc::new(|_| {}), 60));
+    let reader = psm_research::adapters::page_reader::ShopPageReader::new(
+        inner,
+        Arc::new(adapter) as Arc<dyn CommerceAdapter>,
+    );
+    use psm_research::ports::PageReader;
+    let reply = reader
+        .read("https://beyovintage.se/fr/collections/x/products/gone-1")
+        .unwrap();
+    assert!(!reply.obtained && !reply.blocked);
+    assert!(reply.note.unwrap().contains("not found in your shop"));
+    assert!(http.requests().is_empty());
+    assert_eq!(
+        fake.graphql("ShopProduct")[0].1,
+        json!({"handle": "gone-1"})
+    );
+    // Another site's page still goes to the storefront reader.
+    let _ = reader
+        .read("https://dealer.example/products/gone-1")
+        .unwrap();
+    assert_eq!(http.requests().len(), 1);
 }

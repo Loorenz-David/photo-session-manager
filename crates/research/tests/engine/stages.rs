@@ -393,6 +393,53 @@ fn a12_c2b_page_limit_counts_obtained_pages() {
     assert_eq!(obtained, 2);
 }
 
+/// A9 (owner correction 2026-11-18): a site that refuses automated reading (403, or 429 without
+/// a short `Retry-After`) is asked once per run; its later pages are skipped at once with a step
+/// that says so, and other sites are still read.
+#[test]
+fn a9_a_blocking_site_is_asked_once_per_run() {
+    let h = Harness::chair();
+    h.add_main_photo_with_preview(h.session_id);
+    let blocked_1 = "https://www.blocks.example/products/a";
+    let blocked_2 = "https://www.blocks.example/products/b";
+    results(&h, &[blocked_1, blocked_2, P_UNTRUSTED]);
+    h.reader.set_page(blocked_1, PageScript::blocked());
+    let run = h.start_run(&h.stage_config());
+    h.execute(run);
+    assert_eq!(reader_urls(&h), vec![blocked_1, P_UNTRUSTED]);
+    let reads: Vec<_> = h
+        .steps(run)
+        .into_iter()
+        .filter(|s| s.kind == "read")
+        .collect();
+    assert_eq!(reads[0].summary, "could not be read");
+    assert!(
+        reads[0]
+            .detail
+            .starts_with("blocks.example is blocking automated reading"),
+        "{:?}",
+        reads[0].detail
+    );
+    assert_eq!(reads[1].summary, "could not be read");
+    assert_eq!(reads[1].source_url.as_deref(), Some(blocked_2));
+    assert_eq!(
+        reads[1].detail,
+        "Skipped: blocks.example is blocking automated reading"
+    );
+    assert_ne!(reads[2].summary, "could not be read");
+    // The skip is marked as such (its unit identity differs from a read's, so a later run
+    // never reuses it in place of reading the page).
+    let skipped = h
+        .outputs(run)
+        .into_iter()
+        .find(|o| o.stage == "read" && o.unit_key == u(blocked_2))
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Json>(&skipped.output).unwrap()["skipped"],
+        json!("blocked")
+    );
+}
+
 #[test]
 fn a12_c2c_own_listing_is_never_read_nor_evidence() {
     let h = Harness::chair();

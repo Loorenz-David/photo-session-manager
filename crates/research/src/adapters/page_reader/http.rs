@@ -10,7 +10,12 @@
 //!   (`blocked`) is "could not be read" too. Both apply to the page, every hop and every image.
 //! - **Slow hosts.** A host that answered with `powered-by: Shopify`, an `x-shopid` header or a
 //!   429 is paced: [`PACE_MS`] before every later request to it. A 429 with `Retry-After: n`,
-//!   `n` ≤ the call timeout, waits `n` s and sends that request once more (no pace added).
+//!   `n` ≤ [`SHORT_RETRY_AFTER_S`] (and ≤ the call timeout), waits `n` s and sends that request
+//!   once more (no pace added).
+//! - **Blocked sites** (owner correction A9, 2026-11-18): a page answered 403, or 429 without a
+//!   short `Retry-After` (or 429 again after the wait), is `blocked`: the site refuses automated
+//!   reading, and the run reads nothing more from it. Waiting a minute per page (Cloudflare in
+//!   front of Shopify shops answers `Retry-After: 60`) cost runs minutes for nothing.
 //! - **Text** (R9·U1 task 0): the body is decoded by the reply's `charset`, else the page's
 //!   `<meta>` charset (windows-1252 and ISO-8859-1 by the WHATWG table, else UTF-8). A reply whose
 //!   `content-type` is not HTML is "could not be read".
@@ -35,6 +40,8 @@ use crate::{
 pub const MAX_HOPS: usize = 5;
 /// The wait before every request to a paced host.
 pub const PACE_MS: u64 = 2_000;
+/// The longest `Retry-After` (s) a page read waits for; a longer one means the site is blocking.
+pub const SHORT_RETRY_AFTER_S: u64 = 10;
 /// Body limit of the page document.
 pub const PAGE_LIMIT_BYTES: u64 = 4 * 1024 * 1024;
 /// Image requests per page, at most.
@@ -245,7 +252,7 @@ impl HttpPageReader {
         let wait_s = reply
             .header("retry-after")
             .and_then(|v| v.trim().parse::<u64>().ok())
-            .filter(|s| *s <= self.retry_after_max_s);
+            .filter(|s| *s <= self.retry_after_max_s.min(SHORT_RETRY_AFTER_S));
         match wait_s {
             Some(seconds) => {
                 (self.wait)(seconds.saturating_mul(1_000));
@@ -282,16 +289,27 @@ impl HttpPageReader {
                 images,
                 usage,
                 exchange,
+                blocked: false,
+                note: None,
             },
-            None => PageReply {
-                obtained: false,
-                final_url: None,
-                title: String::new(),
-                text: String::new(),
-                images: Vec::new(),
-                usage,
-                exchange,
-            },
+            None => {
+                let status = exchange.response["status"].as_u64();
+                let blocked = matches!(status, Some(403 | 429));
+                PageReply {
+                    obtained: false,
+                    final_url: None,
+                    title: String::new(),
+                    text: String::new(),
+                    images: Vec::new(),
+                    usage,
+                    exchange,
+                    blocked,
+                    note: blocked.then(|| match status {
+                        Some(429) => "the site answered “too many requests” (429)".to_owned(),
+                        _ => "the site refused access (403)".to_owned(),
+                    }),
+                }
+            }
         }
     }
 

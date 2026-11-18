@@ -50,7 +50,7 @@ pub enum Answer {
     Model(ModelReply),
     Search(SearchReply),
     Page {
-        reply: PageReply,
+        reply: Box<PageReply>,
         image_sha256: Vec<String>,
     },
 }
@@ -474,7 +474,7 @@ impl CallGateway {
             },
             CallRequest::Read { url } => match &self.providers.reader {
                 Some(p) => p.read(url).map(|reply| Answer::Page {
-                    reply,
+                    reply: Box::new(reply),
                     image_sha256: Vec::new(),
                 }),
                 None => Err(missing("page reader")),

@@ -192,6 +192,25 @@ never fails a call, so one dead listing domain cannot hold a run; offline is det
 visual-search calls (changelog 11(d)). The trusted list, shop hosts and `max_pages` are part of the run's settings
 snapshot. Edits apply to runs that start later (08A §6).
 
+**Amended (owner correction A9, 2026-11-18), from the work Mac's records** (6 runs, 4–8 min each, 3–6 min of it
+waiting): the connected shop (behind Cloudflare) answered 21 of 23 automated page reads with 429 and
+`Retry-After: 60`, each costing a minute, and other shops answered 429 or 403.
+- **The shop's own product pages are read through the commerce API**, not the storefront: a candidate on a shop
+  host whose path names a product (`…/products/<handle>`, any locale or `/collections/<c>/` prefix) is read as that
+  product (`CommerceAdapter::shop_product`: title, type, vendor, the filled product fields by their definition
+  names, metaobject references by display name, the description, its JPEG images). A handle the shop does not know,
+  or a failed API call, is "could not be read" with the reason. The read unit's identity carries the route, so a
+  storefront read of an earlier run is not reused in its place.
+- **A blocking site costs seconds.** A page reader waits for `Retry-After` only up to 10 s (and the call timeout);
+  a 403, a 429 without such a short wait, or a second 429 after it, marks the page `blocked` ("<site> is blocking
+  automated reading"), and the run asks that host nothing more: its later candidates are "could not be read" with
+  "Skipped: <site> is blocking automated reading", at once. The skip is a unit of its own identity (never reused as
+  a read by a later run).
+- **One read per product, no listing pages.** Spellings of one product page on a host (locale prefixes such as
+  `/en/`, `/fr/`, `/sv-se/`; `/collections/<c>/products/<h>`) merge into one candidate, keeping the best rank; a page
+  that lists products (`/collections/<c>` with no product, `/category/…`, `/categories/…`, `/product-category/…`)
+  is not read.
+
 **Invariant (part of MA11).** Two pages count as different sites only if their site identities differ. A page on
 a subdomain of an entry counts as that entry. The item's own listing never counts.
 
@@ -494,6 +513,12 @@ secrets port. **Amended (owner correction A7, 2026-11-17):** the values are the 
 research keys, the camera's access and FTP passwords) and the shop's client secret; the camera's access **user
 name** is held there too but is a name, not a secret, and is not among them (a short everyday word was "found" in
 page text and image bytes).
+**Amended again (owner correction A9, 2026-11-18):** the values are only the secrets research can ever hold: the
+three research keys and the shop's client secret (the Shopify token is fetched with it inside the commerce adapter
+and never reaches a research record). The camera's passwords never reach research code. The generated FTP password
+is a short code of digits (owner 2026-11-16), which turned up by chance in a search result (the record was mangled
+to `<redacted>`) and in a listing image's 42 KB header (EXIF and Photoshop thumbnails, XMP), and kept stopping real
+exports after A7 and A8.
 
 ---
 
@@ -611,6 +636,10 @@ chunks; GIF its comment, plain-text and application extensions; AVIF/HEIF every 
 items inside `mdat` are not read: the app never writes into downloaded bytes, and the check guards the record the app
 wrote). Anything not recognised, or an image whose structure cannot be walked, is scanned whole. **A choice that
 matches no run** writes nothing and says "No research runs match this choice." (it used to write an empty zip).
+**Amended (owner correction A9, 2026-11-18):** A8's premise did not hold for the image that kept stopping the work
+Mac's export: the page reader keeps only JPEG listing images, and that one was a real JPEG whose header held 42 KB
+(EXIF and Photoshop thumbnails, XMP, an ICC profile). The cause was the short camera code on the secret list; the
+list is now the research secrets only (MC-A9). The per-format rules above stay.
 
 **Replay identity** (dev-Mac tool). The tool rebuilds the recorded request body, resolving images by SHA-256 from
 `images/`. It substitutes only the model, effort or instructions given on its command line, and every other byte

@@ -156,6 +156,12 @@ run's page limit or cost cap. Priority does not change the evidence table: every
 counts the same toward `medium`. Sites outside the list may be read after them and count only
 toward `low`. A change to the list applies to runs started after it.
 
+**Reading pages (owner correction A9, 2026-11-18).** The connected shop's own product pages are read through
+Shopify's API, not its web pages (the shop's web pages answer automated reading with "too many requests"). A site
+that refuses automated reading is asked once per run; its other pages are skipped with "Skipped: <site> is blocking
+automated reading". The same product in several languages or collections is read once, and pages that only list
+products (collections, categories) are not read.
+
 Other (visible) fields — wood, colour, upholstery (owner 2026-11-12):
 `medium` when the model reads it from the photos; `high` only when listing evidence that reaches
 medium under the table above states the same (R-IA11); `low` when the model marks itself
