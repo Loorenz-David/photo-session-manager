@@ -46,6 +46,9 @@ pub struct CaptureOneFollow {
     was_running: Mutex<Option<bool>>,
     /// Changelog 45 (P65): the folders whose collection Capture One is asked to synchronise.
     syncs: Mutex<HashMap<PathBuf, SyncState>>,
+    /// A16: a session switch reached Capture One; the next tick looks at the opened session's
+    /// previews (the switch itself never waits for that).
+    switched: Mutex<Option<Instant>>,
 }
 impl CaptureOneFollow {
     #[allow(clippy::too_many_arguments)]
@@ -71,6 +74,51 @@ impl CaptureOneFollow {
             style_lock: Mutex::new(()),
             was_running: Mutex::new(None),
             syncs: Mutex::new(HashMap::new()),
+            switched: Mutex::new(None),
+        }
+    }
+    /// A16: what follows a session switch, on the background loop: only the opened session's
+    /// photos are looked at again (cost: that session's photos, never the library). The
+    /// library-wide missing-file check stays at startup, window focus and Capture One reopening.
+    fn switch_follow_up(&self) {
+        let Some(asked) = self.switched.lock().ok().and_then(|mut s| s.take()) else {
+            return;
+        };
+        let started = Instant::now();
+        let session = self.store.active_session_id();
+        let result = match &session {
+            Ok(session) => self.previews.session_opened(*session),
+            Err(error) => Err(psm_core::Error::InvalidData(error.to_string())),
+        };
+        tracing::info!(
+            target: "psm::capture_one",
+            "capture_one.switch_follow_up session={} photos={} waited_ms={} ms={} result={}",
+            session
+                .ok()
+                .flatten()
+                .map_or("none".to_owned(), |id| id.to_string()),
+            result.as_ref().map_or(0, |n| *n),
+            started.saturating_duration_since(asked).as_millis(),
+            started.elapsed().as_millis(),
+            result
+                .as_ref()
+                .map_or_else(|e| format!("error: {e}"), |_| "ok".into()),
+        );
+    }
+    /// A16: the arrival's style eligibility and variant wait, recorded before anything can ask for
+    /// its first preview (A10 deferred them with the Capture One work, so the preview job could
+    /// run first and render the photo without its style).
+    fn note_arrival(&self, raw: &str) {
+        if let Err(error) = self.store.mark_style_eligible(raw) {
+            tracing::warn!(%error, raw, "style eligibility could not be recorded");
+        }
+        self.previews.wait_for_variant(raw);
+        let now = self.clock.mono();
+        if let Ok(mut waiting) = self.waiting.lock() {
+            waiting.entry(raw.into()).or_insert(WaitState {
+                since: now,
+                last_poll: now,
+            });
         }
     }
     /// Changelog 45 (P65): a photo was filed into `folder`; its collection is synchronised.
@@ -181,16 +229,39 @@ impl CaptureOneFollow {
         {
             return Ok(());
         }
-        match self.editing.apply_style(raw, &self.style_name)? {
-            StyleOutcome::Applied => {
+        // A16: every style decision is logged (`capture_one.style applied|skipped|failed`).
+        match self.editing.apply_style(raw, &self.style_name) {
+            Ok(StyleOutcome::Applied) => {
                 self.store.mark_style_applied(raw, self.clock.now_ms())?;
                 self.health.clear("style_not_found");
+                tracing::info!(
+                    target: "psm::capture_one",
+                    "capture_one.style applied raw={} style=\"{}\"",
+                    file_label(raw),
+                    self.style_name
+                );
             }
-            StyleOutcome::NotListed => self.health.set(
-                "style_not_found",
-                format!("Style '{}' not found in Capture One", self.style_name),
-            ),
-            StyleOutcome::NotRequested => {}
+            Ok(StyleOutcome::NotListed) => {
+                tracing::info!(
+                    target: "psm::capture_one",
+                    "capture_one.style skipped raw={} reason=style_not_listed",
+                    file_label(raw)
+                );
+                self.health.set(
+                    "style_not_found",
+                    format!("Style '{}' not found in Capture One", self.style_name),
+                )
+            }
+            Ok(StyleOutcome::NotRequested) => {}
+            Err(error) => {
+                tracing::info!(
+                    target: "psm::capture_one",
+                    "capture_one.style failed raw={} reason=\"{}\"",
+                    file_label(raw),
+                    error
+                );
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -221,6 +292,7 @@ impl CaptureOneFollow {
         if !running {
             return Ok(());
         }
+        self.switch_follow_up();
         self.run_syncs();
         let now = self.clock.mono();
         let due: Vec<_> = self
@@ -281,28 +353,20 @@ impl CaptureOneFollow {
     }
 }
 impl ArrivalFollow for CaptureOneFollow {
+    /// A16 (owner 2026-11-18): this used to check every photo's file and retry every photo's
+    /// preview inside the switch (8 minutes with 1,593 photos), holding the next switch back. It
+    /// now only notes the switch; `tick` does the opened session's follow-up.
     fn collection_switched(&self) -> Result<()> {
-        self.previews.check_missing_files()?;
-        for state in self.store.preview_states()? {
-            self.previews.retry_now(&state.raw_path)?;
+        if let Ok(mut switched) = self.switched.lock() {
+            switched.get_or_insert_with(Instant::now);
         }
         Ok(())
     }
+    fn arrival_noted(&self, raw: &str) {
+        self.note_arrival(raw);
+    }
     fn photo_arrived(&self, _session_id: i64, raw: &str, folder: &Path) {
-        if let Err(error) = self.store.mark_style_eligible(raw) {
-            tracing::warn!(%error, raw, "style eligibility could not be recorded");
-        }
-        self.previews.wait_for_variant(raw);
-        let now = self.clock.mono();
-        if let Ok(mut waiting) = self.waiting.lock() {
-            waiting.insert(
-                raw.into(),
-                WaitState {
-                    since: now,
-                    last_poll: now,
-                },
-            );
-        }
+        self.note_arrival(raw);
         self.request_sync(folder);
         if !self.running() {
             return;
@@ -345,10 +409,29 @@ impl ArrivalFollow for DeferredFollow {
     fn collection_switched(&self) -> Result<()> {
         self.inner.collection_switched()
     }
+    fn arrival_noted(&self, raw: &str) {
+        self.inner.arrival_noted(raw);
+    }
     fn photo_arrived(&self, session_id: i64, raw: &str, folder: &Path) {
+        // A16: the style eligibility and variant wait are recorded now, on the arrival thread,
+        // before the photo's preview job can run; only Capture One's work waits for the loop.
+        self.inner.arrival_noted(raw);
         if let Ok(mut queue) = self.queue.lock() {
             queue.push((session_id, raw.to_owned(), folder.to_path_buf()));
         }
+    }
+}
+
+/// A file's folder and name, for log lines (never the user's home folder).
+pub fn file_label(raw: &str) -> String {
+    let path = Path::new(raw);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    match path.parent() {
+        Some(parent) => format!("{}/{}", folder_label(parent), name),
+        None => name,
     }
 }
 
@@ -370,10 +453,25 @@ mod deferred_tests {
         fn photo_arrived(&self, session_id: i64, raw: &str, _folder: &Path) {
             self.0.lock().unwrap().push(format!("{session_id}:{raw}"));
         }
+        fn arrival_noted(&self, raw: &str) {
+            self.0.lock().unwrap().push(format!("noted:{raw}"));
+        }
         fn collection_switched(&self) -> Result<()> {
             self.0.lock().unwrap().push("switched".into());
             Ok(())
         }
+    }
+
+    /// A16: the arrival's style eligibility and variant wait are noted on the arrival thread, at
+    /// once; only the Capture One work waits for the loop.
+    #[test]
+    fn a16_an_arrival_is_noted_at_once_and_followed_by_the_loop() {
+        let recording = Arc::new(Recording::default());
+        let deferred = DeferredFollow::new(recording.clone());
+        deferred.photo_arrived(7, "a.ARW", Path::new("/c/K1"));
+        assert_eq!(*recording.0.lock().unwrap(), vec!["noted:a.ARW"]);
+        deferred.flush();
+        assert_eq!(*recording.0.lock().unwrap(), vec!["noted:a.ARW", "7:a.ARW"]);
     }
 
     /// A10: an arrival never waits for Capture One: its follow work is queued, then run in
@@ -384,10 +482,12 @@ mod deferred_tests {
         let deferred = DeferredFollow::new(recording.clone());
         deferred.photo_arrived(7, "a.ARW", Path::new("/c/K1"));
         deferred.photo_arrived(7, "b.ARW", Path::new("/c/K1"));
-        assert!(
-            recording.0.lock().unwrap().is_empty(),
-            "nothing runs on the arrival thread"
+        assert_eq!(
+            *recording.0.lock().unwrap(),
+            vec!["noted:a.ARW", "noted:b.ARW"],
+            "no Capture One work runs on the arrival thread (A16: only the noting)"
         );
+        recording.0.lock().unwrap().clear();
         deferred.flush();
         assert_eq!(*recording.0.lock().unwrap(), vec!["7:a.ARW", "7:b.ARW"]);
         deferred.flush();

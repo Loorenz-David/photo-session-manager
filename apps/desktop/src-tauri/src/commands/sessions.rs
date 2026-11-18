@@ -487,11 +487,18 @@ pub async fn session_activate(
     // A10: switches apply in the order they were asked for (the ticket is taken now).
     let ticket = CAPTURE_TARGET_ORDER.ticket();
     tauri::async_runtime::spawn_blocking(move || {
-        CAPTURE_TARGET_ORDER.run(ticket, &format!("open session {}", session_id.0), || {
+        let service = || {
             SessionsService::new(store.as_ref(), &SystemClock)
                 .with_editing(editing.as_ref(), health.as_ref(), &provision)
                 .with_camera(camera.as_ref())
                 .with_follow(follow.as_ref())
+        };
+        // A16: photos are filed to this session from now on, whatever Capture One is doing.
+        let claimed =
+            CAPTURE_TARGET_ORDER.claim(ticket, || service().claim_target(Some(session_id.0)))?;
+        CAPTURE_TARGET_ORDER.run(ticket, &format!("open session {}", session_id.0), || {
+            service()
+                .with_target_claimed(claimed)
                 .activate(session_id.0)
         })
     })
@@ -516,12 +523,16 @@ pub async fn session_deactivate(state: State<'_, AppState>) -> Result<(), Comman
     };
     let ticket = CAPTURE_TARGET_ORDER.ticket();
     tauri::async_runtime::spawn_blocking(move || {
-        CAPTURE_TARGET_ORDER.run(ticket, "leave session", || {
+        let service = || {
             SessionsService::new(store.as_ref(), &SystemClock)
                 .with_editing(editing.as_ref(), health.as_ref(), &provision)
                 .with_camera(camera.as_ref())
                 .with_follow(follow.as_ref())
-                .deactivate()
+        };
+        // A16: photos are filed to Unassigned from now on, whatever Capture One is doing.
+        let claimed = CAPTURE_TARGET_ORDER.claim(ticket, || service().claim_target(None))?;
+        CAPTURE_TARGET_ORDER.run(ticket, "leave session", || {
+            service().with_target_claimed(claimed).deactivate()
         })
     })
     .await

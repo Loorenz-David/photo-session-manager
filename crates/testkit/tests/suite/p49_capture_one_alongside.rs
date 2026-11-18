@@ -361,6 +361,9 @@ fn c3d_collection_switch_retries_immediately() {
     a.fake.add_image(&raw, &["v9"], false);
     a.fake.state.lock().unwrap().current_collection = other(&a);
     a.sessions().activate(s).unwrap();
+    // A16: the retry is the switch's follow-up, run by the background loop's next tick (the
+    // switch itself no longer waits for it).
+    a.app.follow.tick().unwrap();
     assert_eq!(a.fake.state.lock().unwrap().issued.last().unwrap().1, "v9");
 }
 #[test]

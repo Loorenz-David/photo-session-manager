@@ -61,7 +61,7 @@ Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yy
 |---|---|
 | `publish.timing item=<sku> masters_ms= outputs_ms= upload_ms= shopify_ms= total_ms= masters_reused=n/m` | one per finished publish item: wait for Capture One masters, the app's own render, upload, Shopify calls (P69) |
 | `capture_one.sync …` / `capture_one.variant_seen … after_ms=` | the app asked Capture One to look at the folder; how long until the variant existed (P65) |
-| `preview render deferred … attempts=n` / `variant poll deferred` | Capture One not ready yet; retrying with backoff |
+| `preview render deferred … attempts=n next_s=` / `variant poll deferred` | Capture One not ready yet; retrying with backoff. A16: logged on attempt 1, 2, 4, 8…; a photo Capture One does not list is asked again after up to 10 minutes |
 | `export failed` / `export stopped waiting for Capture One` | an export (or the export step of a publish) failed or gave up after the 10 min wait |
 | `master asked for in advance` / `master prepared in advance` | background master preparation (P69) |
 | `ftp.upload started|completed|filed|failed name=… reason=transfer|hash|delivery` (target `psm::camera`) | the FTP receiver's view of one camera upload |
@@ -72,6 +72,9 @@ Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yy
 | `capture_one.switch reason=open_session|leave_session|photo_arrived from= to= folder= ms= result=ok|error: …` (`psm::capture_one`, A10) | one Capture One collection switch (opening a session, back to the list, a photo arriving in another folder) and its outcome |
 | `capture_one.switch_step reason= to= folder= step=ensure|bring_document_to_front|inspect_document|set_capture_folder|set_current_collection|collection_switched ms= result=` (`psm::capture_one`, A10) | each Capture One call of a switch; the failing step and its error text |
 | `capture_one.switch_skipped request= reason=a_newer_request_follows` (`psm::capture_one`, A10) | a switch the person had already overtaken by opening another session; not applied |
+| `arrival.target session= folder= from=` (`psm::arrival`, A16) | where the camera's photos are filed changed (a session opened or left); written at the request, before Capture One switches |
+| `capture_one.switch_follow_up session= photos= waited_ms= ms= result=` (`psm::capture_one`, A16) | after a switch, the opened session's previews looked at again on the background loop: how many photos, how long after the switch, how long it took |
+| `capture_one.style applied\|skipped\|failed raw=<folder>/<file> style= reason=` (`psm::capture_one`, A16) | the Capture One Style for a new photo: applied, skipped (`style_not_listed`) or failed (the error) |
 | `photos.moved|copied file= from_session= from_folder= to_session= to_folder= raw_moved=no capture_one_calls=none` (`psm::capture_one`, A10) | one photo moved or copied between sessions: the RAW stays in its folder and Capture One is not told (no folder or collection is made for the target) |
 | `session.kept_as_published session= denied_late_photos=` (`psm::arrival`, A10) | "Keep as published" on a session that changed after publishing |
 | `search_window.opened session= photo=` (`psm::search`, A12) | the "Search this photo" window opened |

@@ -544,6 +544,62 @@ fn raw_preview_state(conn: &Connection, raw: &str) -> Result<Option<RawPreviewSt
     conn.query_row("SELECT r.raw_path,r.adjusted_gen,r.rendered_gen,r.retouch_gen,r.last_own_write_at,(SELECT adjusted_preview_path FROM photos WHERE raw_path=r.raw_path ORDER BY id LIMIT 1),r.settings_fingerprint FROM raw_state r WHERE r.raw_path=?1 AND EXISTS(SELECT 1 FROM photos WHERE raw_path=r.raw_path)", [raw], |r| Ok(RawPreviewState { raw_path:r.get(0)?, adjusted_gen:r.get(1)?, rendered_gen:r.get(2)?, retouch_gen:r.get(3)?, last_own_write_at:r.get(4)?, adjusted_preview_path:r.get(5)?, settings_fingerprint:r.get(6)? })).optional().map_err(db)
 }
 
+/// A16: which RAWs a preview-state read covers.
+#[derive(Clone, Copy)]
+enum PreviewScope {
+    /// Every RAW with a photo (startup, focus and Capture One reopen checks; masters).
+    All,
+    /// The RAWs the recurring work looks at: a photo that is not deleted, in a session that is
+    /// neither published (and unchanged since) nor cleared (owner 2026-11-18).
+    Live,
+    /// One session's photos that are not deleted (a session switch).
+    Session(i64),
+}
+
+/// A16: one query for every RAW's preview state (it was one query per RAW, so each recurring
+/// read grew with the library), in the same order as before: the active session's photos first
+/// (main, condition, unreviewed, then by position), then the rest by capture time.
+fn preview_states_where(conn: &Connection, scope: PreviewScope) -> Result<Vec<RawPreviewState>> {
+    let active: Option<i64> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key='active_session_id'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(db)?
+        .and_then(|v| v.parse().ok());
+    let (filter, session) = match scope {
+        PreviewScope::All => ("1=1", None),
+        PreviewScope::Live => (
+            "p.classification<>'deleted' AND NOT (s.published_at IS NOT NULL AND s.change_seq<=s.published_seq) AND NOT EXISTS (SELECT 1 FROM item_retention ir WHERE ir.item_id=s.item_id AND ir.cleared_at IS NOT NULL)",
+            None,
+        ),
+        PreviewScope::Session(id) => ("p.classification<>'deleted' AND p.session_id=?2", Some(id)),
+    };
+    let sql = format!(
+        "SELECT r.raw_path,r.adjusted_gen,r.rendered_gen,r.retouch_gen,r.last_own_write_at,(SELECT adjusted_preview_path FROM photos WHERE raw_path=r.raw_path ORDER BY id LIMIT 1),r.settings_fingerprint FROM raw_state r JOIN photos p ON p.raw_path=r.raw_path JOIN sessions s ON s.id=p.session_id WHERE {filter} GROUP BY r.raw_path ORDER BY MIN(CASE WHEN p.session_id=?1 THEN 0 ELSE 1 END), MIN(CASE WHEN p.session_id=?1 THEN CASE p.classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END ELSE 4 END), MIN(CASE WHEN p.session_id=?1 THEN COALESCE(p.position,9223372036854775807) ELSE 9223372036854775807 END), MIN(p.captured_at), MIN(p.id)"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(db)?;
+    let row = |r: &rusqlite::Row<'_>| {
+        Ok(RawPreviewState {
+            raw_path: r.get(0)?,
+            adjusted_gen: r.get(1)?,
+            rendered_gen: r.get(2)?,
+            retouch_gen: r.get(3)?,
+            last_own_write_at: r.get(4)?,
+            adjusted_preview_path: r.get(5)?,
+            settings_fingerprint: r.get(6)?,
+        })
+    };
+    let rows = match session {
+        Some(id) => stmt.query_map(params![active, id], row),
+        None => stmt.query_map(params![active], row),
+    }
+    .map_err(db)?;
+    rows.collect::<rusqlite::Result<_>>().map_err(db)
+}
+
 fn job(conn: &Connection, id: i64) -> Result<Job> {
     conn.query_row(
         "SELECT id,kind,target,payload,status,attempts,next_attempt_at,error FROM jobs WHERE id=?1",
@@ -1805,28 +1861,21 @@ impl Store for SqliteStore {
             .conn
             .lock()
             .map_err(|e| Error::InvalidData(e.to_string()))?;
-        let active: Option<i64> = conn
-            .query_row(
-                "SELECT value FROM settings WHERE key='active_session_id'",
-                [],
-                |r| r.get::<_, String>(0),
-            )
-            .optional()
-            .map_err(db)?
-            .and_then(|v| v.parse().ok());
-        let mut stmt = conn.prepare("SELECT p.raw_path FROM photos p GROUP BY p.raw_path ORDER BY MIN(CASE WHEN p.session_id=?1 THEN 0 ELSE 1 END), MIN(CASE WHEN p.session_id=?1 THEN CASE p.classification WHEN 'main' THEN 0 WHEN 'condition' THEN 1 WHEN 'unreviewed' THEN 2 ELSE 3 END ELSE 4 END), MIN(CASE WHEN p.session_id=?1 THEN COALESCE(p.position,9223372036854775807) ELSE 9223372036854775807 END), MIN(p.captured_at), MIN(p.id)").map_err(db)?;
-        let raws: Vec<String> = stmt
-            .query_map([active], |r| r.get(0))
-            .map_err(db)?
-            .collect::<rusqlite::Result<_>>()
-            .map_err(db)?;
-        raws.into_iter()
-            .filter_map(|raw| match raw_preview_state(&conn, &raw) {
-                Ok(Some(v)) => Some(Ok(v)),
-                Ok(None) => None,
-                Err(e) => Some(Err(e)),
-            })
-            .collect()
+        preview_states_where(&conn, PreviewScope::All)
+    }
+    fn preview_states_live(&self) -> Result<Vec<RawPreviewState>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        preview_states_where(&conn, PreviewScope::Live)
+    }
+    fn preview_states_in_session(&self, session_id: i64) -> Result<Vec<RawPreviewState>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| Error::InvalidData(e.to_string()))?;
+        preview_states_where(&conn, PreviewScope::Session(session_id))
     }
     fn preview_state(&self, raw: &str) -> Result<Option<RawPreviewState>> {
         let conn = self
