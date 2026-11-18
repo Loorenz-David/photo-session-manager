@@ -498,7 +498,9 @@ let captures = root;
 let currentCollection = 'Capture';
 const rootCollection = {id: () => '3', name: () => 'Capture', folder: () => ({toString: () => root})};
 const current = {id: () => 'capture', name: () => 'PSM_PROBE_B', folder: () => ({toString: () => captures})};
-const doc = {exists: () => true, id: () => id, kind: () => 'session', camera: () => null, captures: () => ({toString: () => captures}), collections: () => [rootCollection, current], set currentCollection(v) { currentCollection = v; }};
+// A20: document_info must not walk the collections (three Apple events each, one per session).
+let collectionReads = 0;
+const doc = {exists: () => true, id: () => id, kind: () => 'session', camera: () => null, captures: () => ({toString: () => captures}), collections: () => { collectionReads += 1; return [rootCollection, current]; }, set currentCollection(v) { currentCollection = v; }};
 const app = {running: () => true, documents: {byId: () => doc}};
 global.Application = () => app;
 global.Path = v => v;
@@ -508,7 +510,7 @@ eval(setSource);
 run([id, target]);
 eval(infoSource);
 const info = JSON.parse(run([id]));
-console.log(JSON.stringify({info, currentCollection}));
+console.log(JSON.stringify({info, currentCollection, collectionReads}));
 "#;
     let output = std::process::Command::new("node")
         .arg("-e")
@@ -531,14 +533,7 @@ console.log(JSON.stringify({info, currentCollection}));
         value["info"]["captures"],
         "/Users/davidloorenz/Pictures/session test 1/Capture/PSM_PROBE_B"
     );
-    assert_eq!(
-        value["info"]["collections"][0]["folder"],
-        "/Users/davidloorenz/Pictures/session test 1/Capture"
-    );
-    assert_eq!(value["info"]["collections"][1]["id"], "capture");
-    assert_eq!(
-        value["info"]["collections"][1]["folder"],
-        value["info"]["captures"]
-    );
+    assert!(value["info"].get("collections").is_none());
+    assert_eq!(value["collectionReads"], 0);
     assert_eq!(value["currentCollection"], "Capture");
 }

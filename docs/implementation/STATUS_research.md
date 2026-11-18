@@ -160,6 +160,29 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
     (helper 352928 bytes). The A14 build and zip moved to the old folder as "(2026-11-18 A14)". New
     `~/Desktop/Session Manager.zip`: 12,868,442 bytes.
   - **Not verified on screen:** the bar with real pages.
+- **2026-11-18: owner correction A18 and owner decisions A19** (changelog A18, A19).
+  - **A18:**
+    - Pinning another photo no longer searches. Each new search opens its own tab: one web view per tab, at most 8.
+    - Ask AI has an "Answer me" mode (the default): a short answer plus "Put … in …" chips that write only when
+      tapped, like "Put in". The selection limit is now 6,000 characters.
+    - Page zoom is per tab (toolbar and View-menu ⌘+/⌘−/⌘0). The pinned photo zooms and pans.
+    - AI review rows: Keep previous whenever a prior value exists (the backend now allows it outside conflicts),
+      Dismiss otherwise, and a calmer layout.
+  - **A19 (owner):**
+    - Research starts automatically at most once per session (queued, running, finished or stopped at the cap blocks
+      Arranged). Only Run again researches again. A failed or cancelled run can still be retried by arranging.
+    - Arranged — next goes to Sessions with New session focused.
+    - Review queue: "To review (n)", Details lands on AI review, "All checked ✓" leads to "Next to review", and the
+      header shows "Next to review (n left)".
+  - **Checks:**
+    - `cargo test`: 1,630. clippy and fmt: clean.
+    - vitest 629/629, tsc and the build: green.
+    - Break-the-fix: every deliberate break was caught.
+    - Key scan: 0.
+  - **Joined:** PR #19 is merged into `main` as `7640a4b` (code `7c1b359`, `fb430dd`).
+  - **Not installed yet:** it will be installed together with A20 (Capture One switch speed) and A21 (moving photos
+    moves their files; repair for T1-181126). Those are being built in an isolated worktree branched at `fed8796`.
+  - **Not verified on screen:** second-tab Lens, page zoom on Google, and ⌘+/⌘− while the page has the keyboard.
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4

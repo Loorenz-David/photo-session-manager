@@ -2,12 +2,13 @@ use psm_core::Result;
 use psm_core::domain::composition::EditorGeometry;
 use serde::{Deserialize, Serialize};
 
+/// What `document_info` reads: a fixed handful of Apple events, whatever the number of sessions
+/// (A20: the collection list it used to carry cost three events per collection and was unused).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentInfo {
     pub kind: String,
     pub id: String,
     pub captures: String,
-    pub collections: Vec<CollectionInfo>,
     pub camera: Option<String>,
 }
 
@@ -104,4 +105,14 @@ pub trait CaptureOneScripting: Send + Sync {
     /// Asks a running Capture One to quit (AppleScript `quit`; never a kill). Does nothing when it
     /// is not running, so it can never launch it (10E MC-34 R-I32 step 3, P48 L13).
     fn quit(&self) -> Result<()>;
+    /// A20: which Capture One process runs (its process id), read from the system's process list
+    /// like `is_running` (never an Apple event). `None` when it is not running or the source cannot
+    /// tell; the ensure then verifies everything again (a restart is never mistaken for the same run).
+    fn instance(&self) -> Result<Option<u32>> {
+        Ok(None)
+    }
+    /// A20: how many scripts this lane has sent so far (for the switch log). 0 when not counted.
+    fn calls(&self) -> u64 {
+        0
+    }
 }

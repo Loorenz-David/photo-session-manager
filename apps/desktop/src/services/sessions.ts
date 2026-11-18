@@ -2,6 +2,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import {
   commands,
   type CommandError,
+  type FilesFixedResponse,
   type PublishedChangesResponse,
   type SessionDeletedResponse,
   type SessionDeletePreviewResponse,
@@ -70,6 +71,18 @@ export async function sessionDeletePreview(sessionId: number): Promise<SessionDe
 /** A17: deletes the session in Session Manager only (files to the Trash); Shopify is not touched. */
 export async function deleteSession(sessionId: number): Promise<SessionDeleted> {
   return unwrap(await commands.sessionDelete(sessionId));
+}
+
+export type FilesFixed = FilesFixedResponse;
+
+/** A21: how many of the session's photos have their files in another session's folder. */
+export async function sessionFilesMisplaced(sessionId: number): Promise<number> {
+  return unwrap(await commands.sessionFilesMisplaced(sessionId)).photos;
+}
+
+/** A21: "Fix photo files location": the photos' files (with Capture One's) move into the session's folder. */
+export async function fixSessionFiles(sessionId: number): Promise<FilesFixed> {
+  return unwrap(await commands.sessionFilesFix(sessionId));
 }
 
 /** URL the webview can load for a preview file on disk. */

@@ -208,7 +208,7 @@ impl<'a> SessionsService<'a> {
         let provision = self.provision.ok_or(Error::DocumentNotOpen)?;
         let from = self.store.active_session_id()?;
         let to = format!("session {id}");
-        let log = SwitchLog::new("open_session", from, &to, &item.folder_key);
+        let log = SwitchLog::new("open_session", from, &to, &item.folder_key, editing);
         if self.camera_independent() {
             self.set_target(Some(id), &item.folder_key)?;
             let applied = (|| {
@@ -272,7 +272,7 @@ impl<'a> SessionsService<'a> {
         let editing = self.editing.ok_or(Error::DocumentNotOpen)?;
         let health = self.health.ok_or(Error::DocumentNotOpen)?;
         let from = self.store.active_session_id()?;
-        let log = SwitchLog::new("leave_session", from, "Unassigned", "_Unassigned");
+        let log = SwitchLog::new("leave_session", from, "Unassigned", "_Unassigned", editing);
         if self.camera_independent() {
             self.set_target(None, "_Unassigned")?;
             health.clear("document_not_front");
@@ -554,15 +554,26 @@ struct SwitchLog<'s> {
     to: &'s str,
     folder: &'s str,
     started: std::time::Instant,
+    /// A20: the editor whose scripts the switch counts, and its count at the start.
+    editing: &'s dyn EditingProvider,
+    calls_before: Option<u64>,
 }
 impl<'s> SwitchLog<'s> {
-    fn new(reason: &'static str, from: Option<i64>, to: &'s str, folder: &'s str) -> Self {
+    fn new(
+        reason: &'static str,
+        from: Option<i64>,
+        to: &'s str,
+        folder: &'s str,
+        editing: &'s dyn EditingProvider,
+    ) -> Self {
         Self {
             reason,
             from: from.map_or_else(|| "Unassigned".into(), |id| format!("session {id}")),
             to,
             folder,
             started: std::time::Instant::now(),
+            editing,
+            calls_before: editing.script_calls(),
         }
     }
     fn step<T>(&self, step: &str, run: impl FnOnce() -> Result<T>) -> Result<T> {
@@ -595,6 +606,16 @@ impl<'s> SwitchLog<'s> {
                 .as_ref()
                 .map_or_else(|e| format!("error: {e}"), |_| "ok".into()),
         );
+        // A20: how many scripts the switch sent to the editor (the cost per switch must stay flat).
+        if let (Some(before), Some(after)) = (self.calls_before, self.editing.script_calls()) {
+            tracing::info!(
+                target: "psm::capture_one",
+                "capture_one.switch_scripts reason={} to=\"{}\" scripts={}",
+                self.reason,
+                self.to,
+                after.saturating_sub(before),
+            );
+        }
     }
 }
 

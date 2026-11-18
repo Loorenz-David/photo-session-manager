@@ -6,7 +6,10 @@ use super::{
 };
 use crate::camera::direct::start_order::{StartOrder, StartReason};
 use psm_core::{Error, Result, ports::clock::Clock};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{
+    Arc, Condvar, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 
 #[derive(Clone, Copy)]
 pub enum Lane {
@@ -36,6 +39,8 @@ pub struct GatedScripting {
     launch_gate: Arc<LaunchGate>,
     start_order: Arc<StartOrder>,
     clock: Arc<dyn Clock>,
+    /// A20: scripts this lane ran (for the switch log).
+    calls: AtomicU64,
 }
 impl GatedScripting {
     pub fn pair(
@@ -53,6 +58,7 @@ impl GatedScripting {
                 launch_gate: launch_gate.clone(),
                 start_order: start_order.clone(),
                 clock: clock.clone(),
+                calls: AtomicU64::new(0),
             }),
             Arc::new(Self {
                 inner,
@@ -61,6 +67,7 @@ impl GatedScripting {
                 launch_gate,
                 start_order,
                 clock,
+                calls: AtomicU64::new(0),
             }),
         )
     }
@@ -130,6 +137,7 @@ impl GatedScripting {
         }
         let _release = Release(&self.gate);
         let _in_flight = self.launch_gate.enter();
+        self.calls.fetch_add(1, Ordering::Relaxed);
         f(self.inner.as_ref())
     }
 }
@@ -137,6 +145,13 @@ impl CaptureOneScripting for GatedScripting {
     /// No script: always answered, never waits for a lane.
     fn is_running(&self) -> Result<bool> {
         self.inner.is_running()
+    }
+    /// No script (the process list), like `is_running`: always answered.
+    fn instance(&self) -> Result<Option<u32>> {
+        self.inner.instance()
+    }
+    fn calls(&self) -> u64 {
+        self.calls.load(Ordering::Relaxed)
     }
     /// Only while Capture One runs (asking would launch it).
     fn list_styles(&self) -> Result<super::scripting::StyleList> {

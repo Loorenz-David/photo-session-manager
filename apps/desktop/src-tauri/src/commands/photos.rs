@@ -135,12 +135,14 @@ pub async fn photos_move(
 ) -> Result<ReviewResponse, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<ReviewResponse, CommandError> {
-        with_review(&app, |service| {
-            service.move_photos(
-                &photo_ids.into_iter().map(|id| id.0).collect::<Vec<_>>(),
-                target_session_id.0,
-            )
-        })
+        // A21: the RAWs and Capture One's files of them move into the target's folder.
+        psm_integrations::photo_files::move_photos(
+            &app,
+            &photo_ids.into_iter().map(|id| id.0).collect::<Vec<_>>(),
+            target_session_id.0,
+        )
+        .map(Into::into)
+        .map_err(Into::into)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -196,16 +198,10 @@ pub async fn photos_assign_unassigned(
 ) -> Result<ReviewResponse, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<ReviewResponse, CommandError> {
-        PhotosService {
-            arrival: app.arrival.as_ref(),
-            editing: app.editing.as_ref(),
-            store: app.store.as_ref(),
-            clock: &SystemClock,
-            history: app.history.as_ref(),
-        }
-        .assign_unassigned(item_id.0)
-        .map(Into::into)
-        .map_err(Into::into)
+        // A21: the photos' files follow them into the item's folder.
+        psm_integrations::photo_files::assign_unassigned(&app, item_id.0)
+            .map(Into::into)
+            .map_err(Into::into)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?

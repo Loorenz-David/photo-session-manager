@@ -209,29 +209,38 @@ impl CaptureOneAdapter {
         self.health.clear("document_not_session");
         fs::create_dir_all(folder.join("Capture"))?;
 
-        if self.user.document_info(&self.document_id).is_err() {
-            let open_error = self.user.open_document(&file.to_string_lossy()).err();
-            if matches!(open_error, Some(Error::EditorLaunchDeferred)) {
-                return Ok(ProvisionReport::deferred());
+        // A20: one `document_info` when the document is open (it was asked twice per switch).
+        let mut opened_now = created;
+        let info = match self.user.document_info(&self.document_id) {
+            Ok(info) => info,
+            Err(_) => {
+                opened_now = true;
+                let open_error = self.user.open_document(&file.to_string_lossy()).err();
+                if matches!(open_error, Some(Error::EditorLaunchDeferred)) {
+                    return Ok(ProvisionReport::deferred());
+                }
+                let started = Instant::now();
+                let mut opened = self.user.document_info(&self.document_id).ok();
+                while opened.is_none() && open_error.is_none() && started.elapsed() < inputs.wait {
+                    thread::sleep(editor_wait_poll(inputs.wait));
+                    opened = self.user.document_info(&self.document_id).ok();
+                }
+                match opened {
+                    Some(info) => info,
+                    None => {
+                        self.clear_after(3);
+                        let suffix = open_error.map(|e| format!(": {e}")).unwrap_or_default();
+                        self.health.set(
+                            "document_not_open",
+                            format!("Capture One could not open {}{suffix}", file.display()),
+                        );
+                        return Err(Error::DocumentNotOpen);
+                    }
+                }
             }
-            let started = Instant::now();
-            let mut opened = self.user.document_info(&self.document_id).is_ok();
-            while !opened && open_error.is_none() && started.elapsed() < inputs.wait {
-                thread::sleep(editor_wait_poll(inputs.wait));
-                opened = self.user.document_info(&self.document_id).is_ok();
-            }
-            if !opened {
-                self.clear_after(3);
-                let suffix = open_error.map(|e| format!(": {e}")).unwrap_or_default();
-                self.health.set(
-                    "document_not_open",
-                    format!("Capture One could not open {}{suffix}", file.display()),
-                );
-                return Err(Error::DocumentNotOpen);
-            }
-        }
+        };
         self.health.clear("document_not_open");
-        if self.user.document_info(&self.document_id)?.kind != "session" {
+        if info.kind != "session" {
             self.clear_after(3);
             self.health.set(
                 "document_not_session",
@@ -247,11 +256,33 @@ impl CaptureOneAdapter {
             ),
         );
 
+        // A20 (owner 2026-11-18, "delays when opening a session"): the recipes and the hooks are
+        // verified once per Capture One run, not on every switch (they took ~3 s of each switch on
+        // the work Mac). Verified again when Capture One is another process (restart), when this
+        // ensure opened or created the document, when the process cannot be told, and after any
+        // failed ensure (the mark is taken here and only put back on success). A recipe changed by
+        // hand meanwhile is still repaired before each render batch (10F §5, `repair_recipe`), and
+        // a failed repair drops the mark. The style is still checked on every switch: the
+        // photographer can change Next Capture Adjustments in Capture One at any time.
+        let instance = self.user.instance().ok().flatten();
+        let verified_before = self.take_verified();
+        let cached = !opened_now && instance.is_some() && verified_before == instance;
+        tracing::info!(
+            target: "psm::capture_one",
+            "capture_one.ensure checks={} instance={}",
+            if cached { "cached" } else { "full" },
+            instance.map_or("unknown".to_owned(), |pid| pid.to_string()),
+        );
         let mut recipes_created = Vec::new();
-        for (name, spec) in [
-            (&self.preview_recipe, RecipeSpec::PREVIEW),
-            (&self.master_recipe, RecipeSpec::MASTER),
-        ] {
+        let recipes: &[(&String, RecipeSpec)] = if cached {
+            &[]
+        } else {
+            &[
+                (&self.preview_recipe, RecipeSpec::PREVIEW),
+                (&self.master_recipe, RecipeSpec::MASTER),
+            ]
+        };
+        for &(name, spec) in recipes {
             let want = spec.props();
             let checked = self.user.ensure_recipe(&self.document_id, name, &want);
             match checked {
@@ -319,12 +350,13 @@ impl CaptureOneAdapter {
             }
         };
 
-        if let Err(e) = EditingProvider::install_hooks(self) {
+        if !cached && let Err(e) = EditingProvider::install_hooks(self) {
             self.health.clear("hooks");
             self.health.set("hooks_not_installed", e.to_string());
             return Err(e);
         }
         self.health.set_ok("hooks", "Installed");
+        self.mark_verified(instance);
         Ok(ProvisionReport {
             document_created: created,
             recipes_created,

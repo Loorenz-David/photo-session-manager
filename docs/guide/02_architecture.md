@@ -234,7 +234,13 @@ follow-up runs on the background loop (`CaptureOneFollow::tick` → `switch_foll
 `PreviewService::session_opened`) and looks only at **the opened session's photos**
 (`Store::preview_states_in_session`), logged as `capture_one.switch_follow_up`. Per-switch cost:
 the Capture One calls plus one query and one preview pass over that session's photos, never the
-library. The recurring preview pass (`schedule_due`) and the focus sidecar check read
+library. A20: the Capture One calls do not grow with the number of sessions either:
+`document_info.js` reads a fixed handful of properties (no collection list), `lib.js`
+`collectionForFolder` reads every collection's folder in one Apple event (`doc.collections.folder()`),
+and `ensure_provision` verifies the recipes and hooks once per Capture One process (pid from the
+process list, `CaptureOneScripting::instance`), again after a restart, a failed ensure, a failed
+render-time recipe repair, or the Health page's check (`EditingProvider::recheck_next`); the capture
+style is still checked on every switch. `capture_one.switch_scripts` logs the scripts per switch. The recurring preview pass (`schedule_due`) and the focus sidecar check read
 `preview_states_live` (no deleted photos, no published-and-unchanged or cleared sessions); the
 library-wide missing-file check (`check_missing_files`, a file-exists check per RAW) runs only at
 startup, window focus and Capture One reopening. Each preview-state read is one SQL query (it was one
@@ -368,6 +374,22 @@ path to the `ports::trash::Trash` (infra `MacTrash`: `NSFileManager trashItemAtU
 the capture folder when only Capture One's data is left, and only when every file moved calls
 `Store::delete_session_rows` (`infra/sqlite/session_delete.rs`, one transaction, research tables by name
 when they exist).
+
+**Photo files follow their session (A21, owner 2026-11-18).** `psm_integrations::photo_files` wraps every
+change of a photo's session: `photos_move` → `move_photos` (refused up front with `Error::FilesBusy` while
+an export or publish step of a session involved runs), `photos_assign_unassigned` → `assign_unassigned`,
+`history_undo`/`history_redo` → `after_history`; each then calls `StorageService::place_files`
+(`services/storage/photo_files.rs`, a child module like `session_delete`: under the clean-up lock, per
+misplaced photo it moves the RAW, `CaptureOne/Settings*/<name>.*` and `CaptureOne/Cache/**/<name>.*`
+through `StorageFs::rename` (never over an existing file; on failure what moved goes back), the app's
+path-keyed preview/master/output folders, then `Store::relocate_raw` (one transaction: photos with
+their preview paths, `raw_state` with its key, change reasons, jobs); the editor's queued renders follow
+(`EditingProvider::raw_moved`), a RAW it is rendering waits (`rendering`). Capture One is then asked to
+re-read both folders (`sync_folder`; the capture root's collection when the target has none yet). A RAW
+another session uses (a copy) or outside the capture root stays. Commands `session_files_misplaced` /
+`session_files_fix` back the ⋯ menu's **Fix photo files location** (shown only when needed). The adapter
+also asks Capture One to re-read a folder (once a minute at most) when a photo on disk is not in its list
+of that folder (`variant_background` → `resync_folder`).
 
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams
