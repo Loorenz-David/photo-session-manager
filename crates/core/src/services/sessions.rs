@@ -24,6 +24,9 @@ pub struct SessionsService<'a> {
     camera: Option<&'a dyn CameraProvider>,
     follow: Option<&'a dyn ArrivalFollow>,
     events: Option<&'a dyn EventSink>,
+    /// A16: the filing target was already claimed for this request (`claim_target`), so the
+    /// switch does not set it again (an older request finishing late must not take it back).
+    target_claimed: bool,
 }
 
 impl<'a> SessionsService<'a> {
@@ -38,7 +41,14 @@ impl<'a> SessionsService<'a> {
             camera: None,
             follow: None,
             events: None,
+            target_claimed: false,
         }
+    }
+
+    /// A16: the request's filing target was claimed before it waited for its turn.
+    pub fn with_target_claimed(mut self, claimed: bool) -> Self {
+        self.target_claimed = claimed;
+        self
     }
 
     /// The app's camera provider: when it does not depend on the editing provider (the direct
@@ -109,6 +119,52 @@ impl<'a> SessionsService<'a> {
             .is_some_and(|c| !c.capabilities().depends_on_editing_provider)
     }
 
+    /// A16 (owner 2026-11-18): where the camera's photos are filed follows the request at once,
+    /// before Capture One is asked for anything: a slow Capture One switch can never leave the
+    /// next session's photos in the previous session. Only with a camera that does not shoot
+    /// through Capture One (with a tethered one, Capture One's folder is where photos land).
+    /// `true` when the target was set here.
+    pub fn claim_target(&self, id: Option<i64>) -> Result<bool> {
+        if !self.camera_independent() {
+            return Ok(false);
+        }
+        let folder = match id {
+            Some(id) => {
+                let session = self.store.session(id)?;
+                let item = self
+                    .store
+                    .item(session.session.item_id.ok_or(Error::DocumentNotSession)?)?;
+                item.folder_key
+            }
+            None => "_Unassigned".to_owned(),
+        };
+        self.store_target(id, &folder)?;
+        Ok(true)
+    }
+
+    /// Stores the filing target, with one `arrival.target` line when it changes.
+    fn set_target(&self, id: Option<i64>, folder: &str) -> Result<()> {
+        if self.target_claimed {
+            return Ok(());
+        }
+        self.store_target(id, folder)
+    }
+
+    fn store_target(&self, id: Option<i64>, folder: &str) -> Result<()> {
+        let before = self.store.active_session_id()?;
+        self.store.set_active_session_id(id)?;
+        if before != id {
+            tracing::info!(
+                target: "psm::arrival",
+                "arrival.target session={} folder={} from={}",
+                id.map_or("none".to_owned(), |id| id.to_string()),
+                folder,
+                before.map_or("none".to_owned(), |id| id.to_string()),
+            );
+        }
+        Ok(())
+    }
+
     /// R-I33's follow-up after the session is stored: one health item says whether Capture One
     /// shows it (`editor_not_following`), never `capture_folder_not_set` (P48 L12).
     fn editor_follows(&self, health: &HealthService, applied: Result<()>) {
@@ -154,7 +210,7 @@ impl<'a> SessionsService<'a> {
         let to = format!("session {id}");
         let log = SwitchLog::new("open_session", from, &to, &item.folder_key);
         if self.camera_independent() {
-            self.store.set_active_session_id(Some(id))?;
+            self.set_target(Some(id), &item.folder_key)?;
             let applied = (|| {
                 if log.step("ensure", || editing.ensure(provision))?.deferred {
                     return Err(Error::EditorLaunchDeferred);
@@ -218,7 +274,7 @@ impl<'a> SessionsService<'a> {
         let from = self.store.active_session_id()?;
         let log = SwitchLog::new("leave_session", from, "Unassigned", "_Unassigned");
         if self.camera_independent() {
-            self.store.set_active_session_id(None)?;
+            self.set_target(None, "_Unassigned")?;
             health.clear("document_not_front");
             let applied = log
                 .step("inspect_document", || editing.inspect_document())
@@ -550,14 +606,28 @@ impl<'s> SwitchLog<'s> {
 /// that holds.
 pub struct SwitchOrder {
     lock: std::sync::Mutex<()>,
+    /// A16: the short lock the filing-target claims take (never held while Capture One works).
+    claim_lock: std::sync::Mutex<()>,
     latest: std::sync::atomic::AtomicU64,
 }
 impl SwitchOrder {
     pub const fn new() -> Self {
         Self {
             lock: std::sync::Mutex::new(()),
+            claim_lock: std::sync::Mutex::new(()),
             latest: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+    /// A16 (owner 2026-11-18, "the pictures I took for the next session arrive in the previous
+    /// one"): sets where photos are filed for this request at once, without waiting for the
+    /// Capture One switches before it (which held the lock for minutes). A claim a newer request
+    /// has overtaken is skipped, so the last request asked for holds here too.
+    pub fn claim(&self, ticket: u64, claim: impl FnOnce() -> Result<bool>) -> Result<bool> {
+        let _turn = self.claim_lock.lock().unwrap_or_else(|e| e.into_inner());
+        if self.latest.load(std::sync::atomic::Ordering::SeqCst) != ticket {
+            return Ok(false);
+        }
+        claim()
     }
     /// Taken when the request is made (before any waiting).
     pub fn ticket(&self) -> u64 {

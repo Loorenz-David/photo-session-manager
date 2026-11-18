@@ -37,6 +37,12 @@ pub trait ArrivalSource: Send + Sync {
 }
 pub trait ArrivalFollow: Send + Sync {
     fn photo_arrived(&self, session_id: i64, raw: &str, folder: &Path);
+    /// A16: the part of `photo_arrived` that must happen before the photo's first preview render
+    /// can leave (its style eligibility, the wait for Capture One to list it). Cheap, no editor
+    /// call; a follower that defers `photo_arrived` runs this at once.
+    fn arrival_noted(&self, _raw: &str) {}
+    /// A16: a session switch reached Capture One. Never blocks the switch: the follow-up work
+    /// (the opened session's previews) runs on the background loop.
     fn collection_switched(&self) -> Result<()>;
 }
 /// The names the FTP receiver lists (MC-32 R-I24): `(camera_filename, size, completed_at)` of the

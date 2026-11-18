@@ -5,7 +5,7 @@ use crate::{
     domain::photo::{Classification, Integrity},
     events::AppEvent,
     mechanisms::{
-        backoff::render_backoff,
+        backoff::{render_backoff, variant_backoff},
         canon::canon,
         missing::{
             MissingDecision, RenderEligibility, file_missing, missing_decision, render_eligibility,
@@ -17,7 +17,7 @@ use crate::{
         editing::{EditingProvider, RenderCompletion},
         events::EventSink,
         images::Imaging,
-        store::Store,
+        store::{RawPreviewState, Store},
     },
     services::{health::HealthService, integrity::IntegrityCheck},
 };
@@ -380,11 +380,18 @@ impl PreviewService {
                     attempts = 1;
                 }
             }
-            retry.insert(
-                raw.into(),
-                (attempts, self.clock.mono() + render_backoff(attempts)),
-            );
-            tracing::warn!(%error, raw, attempts, "preview render deferred");
+            // A16: Capture One that keeps not listing a photo is asked less and less often (up to
+            // every 10 minutes instead of every minute), and the refusal is logged on the 1st,
+            // 2nd, 4th, 8th… attempt instead of every time.
+            let wait = if matches!(error, crate::Error::VariantNotFound) {
+                variant_backoff(attempts)
+            } else {
+                render_backoff(attempts)
+            };
+            retry.insert(raw.into(), (attempts, self.clock.mono() + wait));
+            if attempts.is_power_of_two() {
+                tracing::warn!(%error, raw, attempts, next_s = wait.as_secs(), "preview render deferred");
+            }
         }
         Ok(())
     }
@@ -688,7 +695,33 @@ impl PreviewService {
         self.editing.set_render_focus(raw.as_deref());
         self.schedule_due(false)
     }
+    /// A16 (owner 2026-11-18): after a session switch only the opened session's photos are looked
+    /// at again: their backoff is dropped and the stale ones are asked for. The cost grows with
+    /// that session's photos, never with the library. Returns how many photos were looked at.
+    pub fn session_opened(&self, session_id: Option<i64>) -> Result<usize> {
+        let Some(session_id) = session_id else {
+            return Ok(0);
+        };
+        let states = self.store.preview_states_in_session(session_id)?;
+        {
+            let mut retry = self
+                .retry_after
+                .lock()
+                .map_err(|e| crate::Error::InvalidData(e.to_string()))?;
+            for state in &states {
+                retry.remove(&state.raw_path);
+            }
+        }
+        let looked_at = states.len();
+        self.schedule(states, false)?;
+        Ok(looked_at)
+    }
     fn schedule_due(&self, force: bool) -> Result<()> {
+        // A16: the recurring pass skips deleted photos and published or cleared sessions.
+        let states = self.store.preview_states_live()?;
+        self.schedule(states, force)
+    }
+    fn schedule(&self, states: Vec<RawPreviewState>, force: bool) -> Result<()> {
         let held = self.held();
         let now = self.clock.mono();
         let last = self
@@ -709,9 +742,7 @@ impl PreviewService {
             .map_err(|e| crate::Error::InvalidData(e.to_string()))?
             .clone();
         let mut disk_changed = false;
-        let due: Vec<_> = self
-            .store
-            .preview_states()?
+        let due: Vec<_> = states
             .into_iter()
             .filter(|state| {
                 // Only a stale RAW is looked at on disk. One deleted (or back) since the last check
@@ -768,7 +799,8 @@ impl PreviewService {
     /// app ordered, a document save) is never an edit; a RAW with no recorded fingerprint (before
     /// P56) adopts the current one.
     fn check_sidecars(&self) -> Result<()> {
-        for state in self.store.preview_states()? {
+        // A16: published (unchanged) and cleared sessions are left out of this recurring check.
+        for state in self.store.preview_states_live()? {
             if raw_missing(&state.raw_path) {
                 continue;
             }

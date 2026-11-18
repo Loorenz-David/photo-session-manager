@@ -6,6 +6,29 @@ pub fn render_backoff(attempts: u32) -> Duration {
     Duration::from_secs((1_u64 << exponent).min(60))
 }
 
+/// A16 (owner 2026-11-18): retry delay after Capture One said it does not list a photo: as
+/// `render_backoff` up to a minute, then doubling up to 10 minutes (a photo it will never list,
+/// such as one denied after publishing, was asked for every minute for days).
+pub fn variant_backoff(attempts: u32) -> Duration {
+    let exponent = attempts.saturating_sub(1).min(10);
+    Duration::from_secs((1_u64 << exponent).min(600))
+}
+
+#[cfg(test)]
+mod a16_tests {
+    use super::*;
+
+    #[test]
+    fn a16_variant_backoff_grows_to_ten_minutes() {
+        assert_eq!(variant_backoff(1), Duration::from_secs(1));
+        assert_eq!(variant_backoff(7), Duration::from_secs(64));
+        assert_eq!(variant_backoff(10), Duration::from_secs(512));
+        assert_eq!(variant_backoff(11), Duration::from_secs(600));
+        assert_eq!(variant_backoff(40), Duration::from_secs(600));
+        assert_eq!(render_backoff(40), Duration::from_secs(60));
+    }
+}
+
 /// Changelog 45 (P65): an export or publish render that meets an editor that is not ready waits at
 /// most this long before the run fails.
 pub const EDITOR_WAIT_MAX_MS: i64 = 10 * 60 * 1000;

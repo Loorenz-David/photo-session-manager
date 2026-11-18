@@ -242,6 +242,16 @@ pub trait Store: Send + Sync {
         at: i64,
     ) -> Result<Template>;
     fn preview_states(&self) -> Result<Vec<RawPreviewState>>;
+    /// A16 (owner 2026-11-18): the RAWs recurring preview work looks at: a photo that is not
+    /// deleted, in a session neither published (unchanged since) nor cleared.
+    fn preview_states_live(&self) -> Result<Vec<RawPreviewState>> {
+        self.preview_states()
+    }
+    /// A16: one session's photos that are not deleted (what a session switch looks at).
+    fn preview_states_in_session(&self, session_id: i64) -> Result<Vec<RawPreviewState>> {
+        let _ = session_id;
+        self.preview_states()
+    }
     fn preview_state(&self, raw: &str) -> Result<Option<RawPreviewState>>;
     fn ensure_initial_generation(&self, raw: &str) -> Result<Option<i64>>;
     fn adjusted_event(&self, raw: &str, retouch: bool) -> Result<Option<Vec<i64>>>;

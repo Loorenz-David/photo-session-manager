@@ -201,6 +201,21 @@ wrapper `services/search.ts`. Saved pages:
 has overtaken is skipped, so overlapping switches (opening sessions one after another) cannot end on
 a stale session. Each Capture One step logs `capture_one.switch_step`, each switch `capture_one.switch`.
 
+**A16 (owner 2026-11-18):** with a camera that does not shoot through Capture One, the request first
+**claims the filing target** (`SwitchOrder::claim` + `SessionsService::claim_target`, a short lock of
+its own, never behind a running Capture One switch; `arrival.target` logs every change), then waits for
+its turn for the Capture One steps (`with_target_claimed` keeps an older switch finishing late from
+taking the target back). The switch's last step, `collection_switched`, only notes the switch: the
+follow-up runs on the background loop (`CaptureOneFollow::tick` → `switch_follow_up` →
+`PreviewService::session_opened`) and looks only at **the opened session's photos**
+(`Store::preview_states_in_session`), logged as `capture_one.switch_follow_up`. Per-switch cost:
+the Capture One calls plus one query and one preview pass over that session's photos, never the
+library. The recurring preview pass (`schedule_due`) and the focus sidecar check read
+`preview_states_live` (no deleted photos, no published-and-unchanged or cleared sessions); the
+library-wide missing-file check (`check_missing_files`, a file-exists check per RAW) runs only at
+startup, window focus and Capture One reopening. Each preview-state read is one SQL query (it was one
+query per RAW).
+
 ### Arrival (book `06` §Arrival, `10A` MC-15/MC-19/MC-20, `10E` MC-32/MC-33)
 1. A RAW lands under the capture root `canon(<document folder>/Capture)`:
    - **Direct camera, Wi-Fi**: camera → `psm_infra::ftp` receiver (user `sessionmanager`, port 2121,
@@ -218,7 +233,9 @@ a stale session. Each Capture One step logs `capture_one.switch_step`, each swit
      (`App.arrival_background`), never behind Capture One work; stability counts looks
      (`STABILITY_CHECKS` = 120), not wall time. With the background loop running, the arrival's
      Capture One follow-up goes through `DeferredFollow` (`follow.rs`): queued, then run by the
-     loop (`flush` before `CaptureOneFollow::tick`); without it (tests) it stays inline.
+     loop (`flush` before `CaptureOneFollow::tick`); without it (tests) it stays inline. A16: the
+     cheap part (`ArrivalFollow::arrival_noted`: style eligibility, wait for the variant) runs at once
+     on the arrival thread, so the photo's `render_preview` job cannot render it before its Style.
 2. `ArrivalService` (`services/arrival.rs`): `is_candidate` (RAW extension, no dot-prefixed folder),
    `path_key`, attribute to the active session else Unassigned; inserts the photo **approved** (P66),
    a `capture_events` row, queues `original_preview` + `hash` jobs; emits `photo_added`.

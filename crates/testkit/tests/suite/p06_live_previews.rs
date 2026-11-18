@@ -419,9 +419,13 @@ fn c5b_own_tag_echo_is_stale_but_not_retouch() {
     a.clock.advance(10_000);
     adjusted(&a, &p.raw_path);
     a.tick(15_000).unwrap();
-    assert_eq!(state(&a, &p.raw_path).retouch_gen, 0);
+    let after = state(&a, &p.raw_path);
+    assert_eq!(after.retouch_gen, 0);
+    assert!(after.adjusted_gen > after.rendered_gen, "stale");
     assert!(!a.store().session(s).unwrap().dirty);
-    assert_eq!(process_ops(&a).len(), 1);
+    // A16 (owner 2026-11-18): a published session that has not changed is left out of the
+    // recurring preview pass, so its own-write echo is not rendered again.
+    assert_eq!(process_ops(&a).len(), 0);
 }
 #[test]
 fn c5c_retouch_dirties_both_copy_sessions() {
