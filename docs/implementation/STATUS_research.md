@@ -145,6 +145,21 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
     (helper 352928 bytes). The A13 build and zip moved to the old folder as "(2026-11-18 A13)". New
     `~/Desktop/Session Manager.zip`: 12,868,382 bytes.
   - **Not verified on screen:** the new bar and toolbar, and the AI Overview links on live Google.
+- **2026-11-18: owner correction A15** (changelog A15). The owner liked the A14 bar and found one bug: going back
+  from "Other field…" without picking a field lost the selection and its actions.
+  - **Cause (from the code):** the 0.7 s selection reading set the selection to `null` whenever the page answered
+    "nothing". The page's selection goes once focus moves into the app's bar, and the bar's own copy (`held`) only
+    covered the field list and the prompt, not the way back.
+  - **Fix:** `keptSelection()` / `samePage()` in `SearchWindow.tsx`. An empty reading never drops the selection
+    taken; it goes only on another selection, a refused one, ✕ (dismiss now lives in the window), or another page
+    (a #fragment change is the same page). "Put in" and an AI answer keep it for a second action.
+  - **Checks:** fmt and clippy clean. `cargo test --workspace`: 1611 passed, 0 failed (no Rust change). tsc and the
+    build pass. vitest: 605/605 (new: 7 in `a15_keep_selection.test.tsx`). Break-the-fix: an empty reading dropping
+    the selection again fails 5 of the 7. Key scan: 0.
+  - **Joined:** PR #16 is merged into `main` as `d6a807b` (code `c5dd481`) and installed in /Applications
+    (helper 352928 bytes). The A14 build and zip moved to the old folder as "(2026-11-18 A14)". New
+    `~/Desktop/Session Manager.zip`: 12,868,442 bytes.
+  - **Not verified on screen:** the bar with real pages.
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4
