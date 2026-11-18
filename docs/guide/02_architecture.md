@@ -210,7 +210,13 @@ follow-up runs on the background loop (`CaptureOneFollow::tick` → `switch_foll
 `PreviewService::session_opened`) and looks only at **the opened session's photos**
 (`Store::preview_states_in_session`), logged as `capture_one.switch_follow_up`. Per-switch cost:
 the Capture One calls plus one query and one preview pass over that session's photos, never the
-library. The recurring preview pass (`schedule_due`) and the focus sidecar check read
+library. A20: the Capture One calls do not grow with the number of sessions either:
+`document_info.js` reads a fixed handful of properties (no collection list), `lib.js`
+`collectionForFolder` reads every collection's folder in one Apple event (`doc.collections.folder()`),
+and `ensure_provision` verifies the recipes and hooks once per Capture One process (pid from the
+process list, `CaptureOneScripting::instance`), again after a restart, a failed ensure, a failed
+render-time recipe repair, or the Health page's check (`EditingProvider::recheck_next`); the capture
+style is still checked on every switch. `capture_one.switch_scripts` logs the scripts per switch. The recurring preview pass (`schedule_due`) and the focus sidecar check read
 `preview_states_live` (no deleted photos, no published-and-unchanged or cleared sessions); the
 library-wide missing-file check (`check_missing_files`, a file-exists check per RAW) runs only at
 startup, window focus and Capture One reopening. Each preview-state read is one SQL query (it was one

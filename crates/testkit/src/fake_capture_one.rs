@@ -58,6 +58,13 @@ pub struct FakeState {
     pub restart_after_quit: bool,
     /// The last `editor_info` was the first to report not-running after a quit.
     pub quit_seen: bool,
+    /// A20: the process id `instance` reports while running; bumped when the fake quits (and by a
+    /// test to model a restart outside the app).
+    pub instance: u32,
+    /// A20: `instance` reports `None` (the process cannot be told).
+    pub instance_unknown: bool,
+    /// A20: the fake was seen not running since `instance` last answered.
+    pub instance_was_down: bool,
     /// `save` fails (P48 C5(b)).
     pub fail_save: bool,
     pub open_documents: Vec<String>,
@@ -111,6 +118,10 @@ pub struct FakeState {
 /// One look at whether Capture One runs (`editor_info` or `is_running`): advances a quit or a
 /// launch in progress, as the dev Mac's Capture One does between two looks.
 fn poll_running(s: &mut FakeState) {
+    // A20: seen not running, so the next process is a new instance.
+    if !s.running {
+        s.instance_was_down = true;
+    }
     if std::mem::take(&mut s.quit_seen) && std::mem::take(&mut s.restart_after_quit) {
         s.running = true;
     }
@@ -121,6 +132,7 @@ fn poll_running(s: &mut FakeState) {
         if *polls == 0 {
             s.quitting = None;
             s.running = false;
+            s.instance_was_down = true;
             s.quit_seen = true;
         }
     }
@@ -177,6 +189,9 @@ impl FakeCaptureOneScripting {
                 quitting: None,
                 restart_after_quit: false,
                 quit_seen: false,
+                instance: 1,
+                instance_unknown: false,
+                instance_was_down: false,
                 fail_save: false,
                 fail_make_document: None,
                 fail_open_document: None,
@@ -668,7 +683,6 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
                 kind: "session".into(),
                 id: id.into(),
                 captures: format!("{id}/Capture"),
-                collections: Vec::new(),
                 camera: None,
             });
         }
@@ -676,7 +690,6 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
             kind: s.kind.clone(),
             id: s.document_id.clone(),
             captures: s.captures.clone(),
-            collections: s.collections.clone(),
             camera: s.camera.clone(),
         })
     }
@@ -947,12 +960,29 @@ impl CaptureOneScripting for FakeCaptureOneScripting {
         if s.running {
             s.launched = false;
             match s.quit_after_polls {
-                Some(0) => s.running = false,
+                Some(0) => {
+                    s.running = false;
+                    s.instance_was_down = true;
+                }
                 Some(n) => s.quitting = Some(n),
                 // Never quits (a dialog is open): a countdown that never reaches zero.
                 None => s.quitting = Some(u32::MAX),
             }
         }
         Ok(())
+    }
+    /// A20: the process list's answer: no op recorded (it is no script). Every start (any way the
+    /// fake comes to run after not running, a test's direct `running = false` included) is a new
+    /// process, as on macOS.
+    fn instance(&self) -> Result<Option<u32>> {
+        let mut s = self.state.lock().unwrap();
+        if !s.running {
+            s.instance_was_down = true;
+            return Ok(None);
+        }
+        if std::mem::take(&mut s.instance_was_down) {
+            s.instance += 1;
+        }
+        Ok((!s.instance_unknown).then_some(s.instance))
     }
 }

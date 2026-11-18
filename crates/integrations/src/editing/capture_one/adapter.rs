@@ -79,6 +79,9 @@ pub struct CaptureOneAdapter {
     /// The document was chosen in Settings (not the app's own): when it is missing it is reported,
     /// never recreated (P63 #27).
     pub(crate) document_configured: bool,
+    /// A20: the Capture One process (id) whose recipes and hooks the last successful ensure
+    /// verified; `None` until then and after any failure, so the next ensure verifies them again.
+    verified: Mutex<Option<u32>>,
 }
 impl CaptureOneAdapter {
     #[allow(clippy::too_many_arguments)]
@@ -104,6 +107,16 @@ impl CaptureOneAdapter {
             provision_lock: Mutex::new(()),
             disk: Arc::new(DiskSpace::default()),
             document_configured: false,
+            verified: Mutex::new(None),
+        }
+    }
+    /// A20: takes the verified mark (leaving none), so an ensure that fails part-way leaves it unset.
+    pub(crate) fn take_verified(&self) -> Option<u32> {
+        self.verified.lock().ok().and_then(|mut slot| slot.take())
+    }
+    pub(crate) fn mark_verified(&self, instance: Option<u32>) {
+        if let Ok(mut slot) = self.verified.lock() {
+            *slot = instance;
         }
     }
     pub fn with_disk(mut self, disk: Arc<DiskSpace>) -> Self {
@@ -287,6 +300,8 @@ impl CaptureOneAdapter {
             Err(Error::EditorLaunchDeferred) => return Err(Error::EditorLaunchDeferred),
             Err(error) => {
                 tracing::warn!(%error, recipe = name, "recipe not repaired");
+                // A20: the next switch verifies recipes and hooks in full again.
+                self.mark_verified(None);
                 return Err(Error::RecipeMissing { name: name.clone() });
             }
             Ok(checked) => checked,
@@ -297,6 +312,7 @@ impl CaptureOneAdapter {
         let mut got = checked.props;
         got.root_folder_type = None;
         if got != want {
+            self.mark_verified(None);
             return Err(Error::RecipeMissing { name: name.clone() });
         }
         Ok(())
@@ -398,6 +414,12 @@ pub fn tag_for(classification: Classification) -> i32 {
 impl EditingProvider for CaptureOneAdapter {
     fn ensure(&self, inputs: &ProvisionInputs) -> Result<ProvisionReport> {
         self.ensure_provision(inputs)
+    }
+    fn script_calls(&self) -> Option<u64> {
+        Some(self.user.calls())
+    }
+    fn recheck_next(&self) {
+        self.mark_verified(None);
     }
     fn bring_document_to_front(&self) -> Result<()> {
         self.front_provision_document()

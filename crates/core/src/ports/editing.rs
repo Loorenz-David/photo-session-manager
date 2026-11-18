@@ -40,6 +40,14 @@ pub trait EditingProvider: Send + Sync {
     fn inspect_document(&self) -> Result<DocumentState>;
     fn set_capture_folder(&self, target: &str) -> Result<()>;
     fn set_current_collection(&self, folder: &str) -> Result<()>;
+    /// A20: how many scripts the editor's interactive lane has sent so far, for the switch log
+    /// (`None`: not counted).
+    fn script_calls(&self) -> Option<u64> {
+        None
+    }
+    /// A20: the next `ensure` verifies everything again (what it may skip once verified in this
+    /// editor run: recipes and hooks). Asked by the Health page's check.
+    fn recheck_next(&self) {}
     /// Changelog 45 (P65): asks the editor to look at `folder` for new files now.
     fn sync_folder(&self, _folder: &str) -> Result<()> {
         Ok(())
