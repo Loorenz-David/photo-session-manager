@@ -132,8 +132,27 @@ impl CaptureOneFollow {
     fn switch(&self, folder: &Path) -> Result<()> {
         // The script compares against Capture One's live current collection, because the
         // photographer can browse away after the app last set it.
-        self.editing
-            .set_current_collection(&folder.to_string_lossy())?;
+        let started = Instant::now();
+        let from = self
+            .current
+            .lock()
+            .ok()
+            .and_then(|current| current.clone())
+            .map(|f| folder_label(&f))
+            .unwrap_or_else(|| "none".into());
+        let result = self
+            .editing
+            .set_current_collection(&folder.to_string_lossy());
+        // A10: every collection switch Capture One is asked for, with its outcome.
+        tracing::info!(
+            target: "psm::capture_one",
+            "capture_one.switch reason=photo_arrived from={} to={} step=set_current_collection ms={} result={}",
+            from,
+            folder_label(folder),
+            started.elapsed().as_millis(),
+            result.as_ref().map_or_else(|e| format!("error: {e}"), |_| "ok".into()),
+        );
+        result?;
         *self
             .current
             .lock()
@@ -294,5 +313,90 @@ impl ArrivalFollow for CaptureOneFollow {
                 .set("editor_not_following", EDITOR_NOT_FOLLOWING);
         }
         self.run_syncs();
+    }
+}
+
+/// Owner correction A10 (2026-11-18): the arrival thread hands a new photo's Capture One work
+/// (style mark, variant wait, folder sync, collection switch) to the background loop instead of
+/// doing it inline, so a busy Capture One can never hold the next photo's arrival up.
+pub struct DeferredFollow {
+    inner: Arc<dyn ArrivalFollow>,
+    queue: Mutex<Vec<(i64, String, PathBuf)>>,
+}
+impl DeferredFollow {
+    pub fn new(inner: Arc<dyn ArrivalFollow>) -> Self {
+        Self {
+            inner,
+            queue: Mutex::new(Vec::new()),
+        }
+    }
+    /// Runs the queued arrivals' Capture One work, in arrival order (the background loop).
+    pub fn flush(&self) {
+        let queued = match self.queue.lock() {
+            Ok(mut queue) => std::mem::take(&mut *queue),
+            Err(_) => return,
+        };
+        for (session_id, raw, folder) in queued {
+            self.inner.photo_arrived(session_id, &raw, &folder);
+        }
+    }
+}
+impl ArrivalFollow for DeferredFollow {
+    fn collection_switched(&self) -> Result<()> {
+        self.inner.collection_switched()
+    }
+    fn photo_arrived(&self, session_id: i64, raw: &str, folder: &Path) {
+        if let Ok(mut queue) = self.queue.lock() {
+            queue.push((session_id, raw.to_owned(), folder.to_path_buf()));
+        }
+    }
+}
+
+/// A folder's last component, for log lines (never the user's home folder).
+pub fn folder_label(folder: &Path) -> String {
+    folder
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "?".into())
+}
+
+#[cfg(test)]
+mod deferred_tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct Recording(Mutex<Vec<String>>);
+    impl ArrivalFollow for Recording {
+        fn photo_arrived(&self, session_id: i64, raw: &str, _folder: &Path) {
+            self.0.lock().unwrap().push(format!("{session_id}:{raw}"));
+        }
+        fn collection_switched(&self) -> Result<()> {
+            self.0.lock().unwrap().push("switched".into());
+            Ok(())
+        }
+    }
+
+    /// A10: an arrival never waits for Capture One: its follow work is queued, then run in
+    /// arrival order by the background loop.
+    #[test]
+    fn a10_arrival_follow_work_is_queued_and_run_in_order_by_the_loop() {
+        let recording = Arc::new(Recording::default());
+        let deferred = DeferredFollow::new(recording.clone());
+        deferred.photo_arrived(7, "a.ARW", Path::new("/c/K1"));
+        deferred.photo_arrived(7, "b.ARW", Path::new("/c/K1"));
+        assert!(
+            recording.0.lock().unwrap().is_empty(),
+            "nothing runs on the arrival thread"
+        );
+        deferred.flush();
+        assert_eq!(*recording.0.lock().unwrap(), vec!["7:a.ARW", "7:b.ARW"]);
+        deferred.flush();
+        assert_eq!(
+            recording.0.lock().unwrap().len(),
+            2,
+            "each arrival runs once"
+        );
+        deferred.collection_switched().unwrap();
+        assert_eq!(recording.0.lock().unwrap().last().unwrap(), "switched");
     }
 }

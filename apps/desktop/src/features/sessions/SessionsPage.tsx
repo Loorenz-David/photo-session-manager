@@ -157,6 +157,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
                   onOpen={() => navigate(row.id)}
                   onPublish={() => setPublishId(row.id)}
                   onRetry={row.publish?.item_id ? () => publishRetry(row.publish!.item_id).then(load) : undefined}
+                  onChanged={() => void load()}
                 />
               ))}
             </section>

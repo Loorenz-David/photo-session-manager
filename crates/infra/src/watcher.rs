@@ -6,6 +6,9 @@ use tokio::sync::mpsc;
 #[derive(Debug, Clone)]
 pub struct WatchEvent {
     pub path: PathBuf,
+    /// The system dropped or merged events under this path (FSEvents "must scan subdirs", or a
+    /// watcher error): what changed is unknown, so the folder must be scanned (A10).
+    pub rescan: bool,
 }
 
 pub struct FsWatcher {
@@ -18,7 +21,23 @@ fn event_handler(
     tx: mpsc::UnboundedSender<WatchEvent>,
 ) -> impl FnMut(notify::Result<notify::Event>) + Send {
     move |event| {
-        if let Ok(event) = event {
+        let event = match event {
+            Ok(event) => event,
+            Err(_) => {
+                let _ = tx.send(WatchEvent {
+                    path: returned_root.clone(),
+                    rescan: true,
+                });
+                return;
+            }
+        };
+        if event.need_rescan() {
+            let _ = tx.send(WatchEvent {
+                path: returned_root.clone(),
+                rescan: true,
+            });
+        }
+        {
             for path in event.paths {
                 let absolute = if path.is_absolute() {
                     path
@@ -30,6 +49,7 @@ fn event_handler(
                 {
                     let _ = tx.send(WatchEvent {
                         path: returned_root.join(relative),
+                        rescan: false,
                     });
                 }
             }

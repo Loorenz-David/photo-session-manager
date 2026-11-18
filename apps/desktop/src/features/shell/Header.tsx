@@ -16,6 +16,9 @@ import { PageHeader } from './PageHeader';
 import { HistoryButtons } from '@/features/history/HistoryButtons';
 import { DiskWarning } from '@/features/settings/StorageSection';
 import { ResearchPill, useResearchOverview } from '@/features/sessions/ResearchPill';
+import { ChangedPill } from '@/features/sessions/ChangedPill';
+import { onSessionsChanged } from '@/services/events';
+import type { PublishedChanges } from '@/services/sessions';
 
 type HeaderProps = {
   sessionId?: number;
@@ -27,26 +30,45 @@ type HeaderProps = {
   onDetails?: () => void;
 };
 
-type SessionIdentity = { name: string; sku: string; arranged: boolean; archived: boolean };
+type SessionIdentity = { name: string; sku: string; arranged: boolean; archived: boolean; changes: PublishedChanges | null };
 
 /** Item type (or title until a type is set) and SKU of the open session, read from the sessions list. */
-function useSessionIdentity(sessionId?: number): SessionIdentity | null {
+function useSessionIdentity(sessionId?: number): [SessionIdentity | null, () => void] {
   const [identity, setIdentity] = useState<SessionIdentity | null>(null);
+  const [version, setVersion] = useState(0);
   useEffect(() => {
     setIdentity(null);
+  }, [sessionId]);
+  useEffect(() => {
     if (!sessionId || sessionId === 1) return;
     let alive = true;
     listSessions({ filter: 'all', query: null })
       .then(list => {
         const row = list.groups.flatMap(group => group.rows).find(candidate => candidate.id === sessionId);
-        if (alive && row) setIdentity({ name: row.item_type || row.title, sku: row.sku, arranged: row.arranged, archived: row.label.kind === 'archived' });
+        if (alive && row) setIdentity({ name: row.item_type || row.title, sku: row.sku, arranged: row.arranged, archived: row.label.kind === 'archived', changes: row.changes ?? null });
       })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
+  }, [sessionId, version]);
+  // A10: "Changed after publishing" follows the session live (a late photo, an undo).
+  useEffect(() => {
+    if (!sessionId || sessionId === 1) return;
+    let unlisten: (() => void) | undefined;
+    let alive = true;
+    onSessionsChanged(() => setVersion(v => v + 1))
+      .then(stop => {
+        if (alive) unlisten = stop;
+        else stop();
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
   }, [sessionId]);
-  return identity;
+  return [identity, () => setVersion(v => v + 1)];
 }
 
 export const EXPORT_TOAST_ID = 'export';
@@ -128,7 +150,7 @@ function useExportToasts(): Set<number> {
 
 /** App header (COMPONENTS.md §App shell): Sessions page or session view. */
 export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssignProduct, onDetails }: HeaderProps) {
-  const identity = useSessionIdentity(sessionId);
+  const [identity, reloadIdentity] = useSessionIdentity(sessionId);
   // A6: the open session's research state beside its name; a tap opens Details (the form and its research).
   const research = useResearchOverview(sessionId !== undefined && sessionId !== 1 ? sessionId : undefined);
   const integration = useIntegration();
@@ -168,6 +190,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
             <span className="header-sku">{identity?.sku ?? ''}</span>
             <Info className="header-info" aria-hidden />
             <ResearchPill research={research.get(sessionId)} onClick={onDetails} />
+            <ChangedPill sessionId={sessionId} changes={identity?.changes} onKept={reloadIdentity} />
           </>
         )}
       </>}>

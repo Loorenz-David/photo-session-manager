@@ -89,6 +89,10 @@ pub trait StoreTx {
     fn photo_denied_at(&self, id: i64) -> Result<Option<i64>>;
     fn publish_confirmed_since(&self, session_id: i64, seq: i64) -> Result<bool>;
     fn touch_session(&mut self, session_id: i64, at: i64) -> Result<()>;
+    /// Counts a change made by a photo's arrival (A10: its reason is `arrival`, not an app edit).
+    fn touch_session_on_arrival(&mut self, session_id: i64, at: i64) -> Result<()>;
+    /// "Keep as published" (A10): the session's current changes count as published.
+    fn set_published_seq(&mut self, session_id: i64, seq: i64) -> Result<()>;
     fn items(&self) -> Result<Vec<Item>>;
     fn item(&self, id: i64) -> Result<Item>;
     fn insert_item(&mut self, item: NewItem<'_>) -> Result<i64>;

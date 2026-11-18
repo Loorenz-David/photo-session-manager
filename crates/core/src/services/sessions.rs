@@ -150,78 +150,119 @@ impl<'a> SessionsService<'a> {
             .store
             .item(session.session.item_id.ok_or(Error::DocumentNotSession)?)?;
         let provision = self.provision.ok_or(Error::DocumentNotOpen)?;
+        let from = self.store.active_session_id()?;
+        let to = format!("session {id}");
+        let log = SwitchLog::new("open_session", from, &to, &item.folder_key);
         if self.camera_independent() {
             self.store.set_active_session_id(Some(id))?;
             let applied = (|| {
-                if editing.ensure(provision)?.deferred {
+                if log.step("ensure", || editing.ensure(provision))?.deferred {
                     return Err(Error::EditorLaunchDeferred);
                 }
-                editing.bring_document_to_front()?;
-                let root = editing.inspect_document()?.capture_root;
+                log.step("bring_document_to_front", || {
+                    editing.bring_document_to_front()
+                })?;
+                let root = log
+                    .step("inspect_document", || editing.inspect_document())?
+                    .capture_root;
                 let target = format!("{}/{}", root, item.folder_key);
-                editing.set_capture_folder(&target)?;
-                editing.set_current_collection(&target).and_then(|_| {
+                log.step("set_capture_folder", || editing.set_capture_folder(&target))?;
+                log.step("set_current_collection", || {
+                    editing.set_current_collection(&target)
+                })?;
+                log.step("collection_switched", || {
                     self.follow
                         .map_or(Ok(()), |follow| follow.collection_switched())
                 })
             })();
+            log.done(&applied);
             self.editor_follows(health, applied);
             return Ok(());
         }
-        if editing.ensure(provision)?.deferred {
-            return Err(Error::EditorLaunchDeferred);
-        }
-        editing.bring_document_to_front()?;
-        let root = editing.inspect_document()?.capture_root;
-        let target = format!("{}/{}", root, item.folder_key);
-        if let Err(e) = editing
-            .set_capture_folder(&target)
-            .and_then(|_| editing.set_current_collection(&target))
-        {
-            health.set("capture_folder_not_set", e.to_string());
-            return Err(Error::CaptureFolderNotSet);
-        }
-        self.store.set_active_session_id(Some(id))?;
-        if let Some(follow) = self.follow {
-            follow.collection_switched()?;
-        }
-        health.clear("capture_folder_not_set");
-        Ok(())
+        let result = (|| {
+            if log.step("ensure", || editing.ensure(provision))?.deferred {
+                return Err(Error::EditorLaunchDeferred);
+            }
+            log.step("bring_document_to_front", || {
+                editing.bring_document_to_front()
+            })?;
+            let root = log
+                .step("inspect_document", || editing.inspect_document())?
+                .capture_root;
+            let target = format!("{}/{}", root, item.folder_key);
+            if let Err(e) = log
+                .step("set_capture_folder", || editing.set_capture_folder(&target))
+                .and_then(|_| {
+                    log.step("set_current_collection", || {
+                        editing.set_current_collection(&target)
+                    })
+                })
+            {
+                health.set("capture_folder_not_set", e.to_string());
+                return Err(Error::CaptureFolderNotSet);
+            }
+            self.store.set_active_session_id(Some(id))?;
+            if let Some(follow) = self.follow {
+                log.step("collection_switched", || follow.collection_switched())?;
+            }
+            health.clear("capture_folder_not_set");
+            Ok(())
+        })();
+        log.done(&result);
+        result
     }
 
     pub fn deactivate(&self) -> Result<()> {
         let editing = self.editing.ok_or(Error::DocumentNotOpen)?;
         let health = self.health.ok_or(Error::DocumentNotOpen)?;
+        let from = self.store.active_session_id()?;
+        let log = SwitchLog::new("leave_session", from, "Unassigned", "_Unassigned");
         if self.camera_independent() {
             self.store.set_active_session_id(None)?;
             health.clear("document_not_front");
-            let applied = editing.inspect_document().and_then(|doc| {
-                let target = format!("{}/_Unassigned", doc.capture_root);
-                editing.set_capture_folder(&target)?;
-                editing.set_current_collection(&target).and_then(|_| {
-                    self.follow
-                        .map_or(Ok(()), |follow| follow.collection_switched())
-                })
-            });
+            let applied = log
+                .step("inspect_document", || editing.inspect_document())
+                .and_then(|doc| {
+                    let target = format!("{}/_Unassigned", doc.capture_root);
+                    log.step("set_capture_folder", || editing.set_capture_folder(&target))?;
+                    log.step("set_current_collection", || {
+                        editing.set_current_collection(&target)
+                    })?;
+                    log.step("collection_switched", || {
+                        self.follow
+                            .map_or(Ok(()), |follow| follow.collection_switched())
+                    })
+                });
+            log.done(&applied);
             self.editor_follows(health, applied);
             return Ok(());
         }
-        let root = editing.inspect_document()?.capture_root;
-        let target = format!("{root}/_Unassigned");
-        if let Err(e) = editing
-            .set_capture_folder(&target)
-            .and_then(|_| editing.set_current_collection(&target))
-        {
-            health.set("capture_folder_not_set", e.to_string());
-            return Err(Error::CaptureFolderNotSet);
-        }
-        self.store.set_active_session_id(None)?;
-        if let Some(follow) = self.follow {
-            follow.collection_switched()?;
-        }
-        health.clear("document_not_front");
-        health.clear("capture_folder_not_set");
-        Ok(())
+        let result = (|| {
+            let root = log
+                .step("inspect_document", || editing.inspect_document())?
+                .capture_root;
+            let target = format!("{root}/_Unassigned");
+            if let Err(e) = log
+                .step("set_capture_folder", || editing.set_capture_folder(&target))
+                .and_then(|_| {
+                    log.step("set_current_collection", || {
+                        editing.set_current_collection(&target)
+                    })
+                })
+            {
+                health.set("capture_folder_not_set", e.to_string());
+                return Err(Error::CaptureFolderNotSet);
+            }
+            self.store.set_active_session_id(None)?;
+            if let Some(follow) = self.follow {
+                log.step("collection_switched", || follow.collection_switched())?;
+            }
+            health.clear("document_not_front");
+            health.clear("capture_folder_not_set");
+            Ok(())
+        })();
+        log.done(&result);
+        result
     }
 
     /// The session captures are currently routed to, if any (what `activate` last stored).
@@ -377,6 +418,7 @@ impl SessionsService<'_> {
                 arranged: dto.session.arranged_at.is_some(),
                 cover_preview_path: record.cover_preview_path,
                 publish: record.publish,
+                changes: dto.changes,
             });
         }
         // Changelog 46 (1): creation order, newest created on top, grouped by creation time;
@@ -446,3 +488,105 @@ pub fn ready_session_ids(store: &dyn Store) -> Result<Vec<i64>> {
     ready.sort_by(|a, b| b.cmp(a));
     Ok(ready.into_iter().map(|(_, id)| id).collect())
 }
+
+/// A10 (owner 2026-11-18): one log line per Capture One step of a capture-target switch (opening
+/// a session, going back to the list), and one for the whole switch, so the owner's logs show
+/// where "Capture One stops opening the session" fails. Folder names only, never full paths.
+struct SwitchLog<'s> {
+    reason: &'static str,
+    from: String,
+    to: &'s str,
+    folder: &'s str,
+    started: std::time::Instant,
+}
+impl<'s> SwitchLog<'s> {
+    fn new(reason: &'static str, from: Option<i64>, to: &'s str, folder: &'s str) -> Self {
+        Self {
+            reason,
+            from: from.map_or_else(|| "Unassigned".into(), |id| format!("session {id}")),
+            to,
+            folder,
+            started: std::time::Instant::now(),
+        }
+    }
+    fn step<T>(&self, step: &str, run: impl FnOnce() -> Result<T>) -> Result<T> {
+        let started = std::time::Instant::now();
+        let result = run();
+        tracing::info!(
+            target: "psm::capture_one",
+            "capture_one.switch_step reason={} to=\"{}\" folder={} step={} ms={} result={}",
+            self.reason,
+            self.to,
+            self.folder,
+            step,
+            started.elapsed().as_millis(),
+            result
+                .as_ref()
+                .map_or_else(|e| format!("error: {e}"), |_| "ok".into()),
+        );
+        result
+    }
+    fn done(&self, result: &Result<()>) {
+        tracing::info!(
+            target: "psm::capture_one",
+            "capture_one.switch reason={} from=\"{}\" to=\"{}\" folder={} ms={} result={}",
+            self.reason,
+            self.from,
+            self.to,
+            self.folder,
+            self.started.elapsed().as_millis(),
+            result
+                .as_ref()
+                .map_or_else(|e| format!("error: {e}"), |_| "ok".into()),
+        );
+    }
+}
+
+/// A10 (owner 2026-11-18, "Capture One sometimes stops opening the session"): opening sessions
+/// one after another sent overlapping switch requests (each on its own worker), and whichever
+/// finished last won, so Capture One and the capture target could end on a session the screen no
+/// longer showed. Requests now take a ticket in the order they are made and run one at a time; a
+/// request that a newer one has overtaken is skipped, so the last request asked for is the one
+/// that holds.
+pub struct SwitchOrder {
+    lock: std::sync::Mutex<()>,
+    latest: std::sync::atomic::AtomicU64,
+}
+impl SwitchOrder {
+    pub const fn new() -> Self {
+        Self {
+            lock: std::sync::Mutex::new(()),
+            latest: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+    /// Taken when the request is made (before any waiting).
+    pub fn ticket(&self) -> u64 {
+        self.latest
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1
+    }
+    /// Runs `switch` unless a newer request has been made since `ticket` was taken.
+    pub fn run(
+        &self,
+        ticket: u64,
+        request: &str,
+        switch: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        let _turn = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        if self.latest.load(std::sync::atomic::Ordering::SeqCst) != ticket {
+            tracing::info!(
+                target: "psm::capture_one",
+                "capture_one.switch_skipped request=\"{request}\" reason=a_newer_request_follows"
+            );
+            return Ok(());
+        }
+        switch()
+    }
+}
+impl Default for SwitchOrder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+/// The one order every capture-target switch of the app goes through.
+pub static CAPTURE_TARGET_ORDER: SwitchOrder = SwitchOrder::new();

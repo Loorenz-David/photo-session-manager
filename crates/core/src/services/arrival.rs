@@ -22,12 +22,20 @@ use std::{
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
+/// A file seen but not yet accepted. It is accepted at the first check that finds it unchanged
+/// since the previous one. Owner correction A10 (2026-11-18): the give-up counts *checks*, not
+/// wall time, so a background loop held up elsewhere can never drop a file that is complete
+/// (the work Mac lost three filed photos to a 120 s wall-clock limit while the loop was busy).
 struct Pending {
     first: (u64, std::time::SystemTime),
-    since: Instant,
+    checks: u32,
     next: Instant,
     event_ids: Vec<i64>,
 }
+
+/// Checks (about one a second) a file may keep changing, or stay missing, before it is given up
+/// as `stability_timeout`.
+pub const STABILITY_CHECKS: u32 = 120;
 
 pub struct ArrivalService {
     pub store: std::sync::Arc<dyn Store>,
@@ -170,7 +178,7 @@ impl ArrivalService {
                             path,
                             Pending {
                                 first: (meta.len(), meta.modified()?),
-                                since: now,
+                                checks: 0,
                                 next: now + Duration::from_secs(1),
                                 event_ids: vec![event_id],
                             },
@@ -205,7 +213,7 @@ impl ArrivalService {
                 canonical,
                 Pending {
                     first: (metadata.len(), metadata.modified()?),
-                    since: now,
+                    checks: 0,
                     next: now + Duration::from_secs(1),
                     event_ids: vec![event_id],
                 },
@@ -231,27 +239,30 @@ impl ArrivalService {
                 let Some(state) = pending.get_mut(&path) else {
                     continue;
                 };
-                if now.duration_since(state.since) >= Duration::from_secs(120) {
+                let current = fs::metadata(&path)
+                    .ok()
+                    .and_then(|meta| Some((meta.len(), meta.modified().ok()?)));
+                if current == Some(state.first) {
+                    // Unchanged since the last look: complete, however long ago it was seen.
+                    ready.push(path.clone());
+                    pending.remove(&path);
+                    continue;
+                }
+                state.checks += 1;
+                if state.checks >= STABILITY_CHECKS {
                     if let Some(expired) = pending.remove(&path) {
                         timed_out.extend(expired.event_ids);
                     }
                     continue;
                 }
-                if let Ok(meta) = fs::metadata(&path) {
-                    let current = (meta.len(), meta.modified()?);
-                    if current == state.first {
-                        ready.push(path.clone());
-                        pending.remove(&path);
-                    } else {
-                        state.first = current;
-                        state.next = now + Duration::from_secs(1);
-                    }
-                } else {
-                    state.next = now + Duration::from_secs(1);
+                if let Some(current) = current {
+                    state.first = current;
                 }
+                state.next = now + Duration::from_secs(1);
             }
         }
         for id in timed_out {
+            tracing::warn!(target: "psm::arrival", event_id = id, "arrival.given_up reason=stability_timeout");
             self.store
                 .set_capture_event_error(id, "stability_timeout")?;
         }
@@ -329,6 +340,23 @@ impl ArrivalService {
             Classification::Main,
         )?;
         if inserted {
+            // A10 (owner 2026-11-18): one line per photo, the arrival timeline's first half
+            // (`filed` = the file's last write; the preview half is `arrival.preview_ready`).
+            let filed_at = fs::metadata(&photo.raw_path)
+                .ok()
+                .and_then(|meta| meta.modified().ok())
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as i64);
+            tracing::info!(
+                target: "psm::arrival",
+                "arrival.photo_added file={} folder={} session={} photo={} source={} filed_to_row_ms={}",
+                file_name(&photo.raw_path),
+                folder_name(&photo.raw_path),
+                session_id,
+                photo.id,
+                source.as_str(),
+                filed_at.map_or("unknown".to_owned(), |at| (photo.created_at - at).max(0).to_string()),
+            );
             if let Err(error) = crate::services::template_placement::place_arrival(
                 self.store.as_ref(),
                 self.clock.as_ref(),
@@ -349,4 +377,20 @@ impl ArrivalService {
         }
         Ok(())
     }
+}
+
+/// The file name of a path, for log lines (never the user's home folder).
+pub fn file_name(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+/// The name of a path's folder (the session folder), for log lines.
+pub fn folder_name(path: &str) -> String {
+    Path::new(path)
+        .parent()
+        .and_then(Path::file_name)
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }

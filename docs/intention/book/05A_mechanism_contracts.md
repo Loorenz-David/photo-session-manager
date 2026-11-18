@@ -62,8 +62,15 @@ ignored without a `capture_events` row.
 
 **Stability.** A hook-delivered path is complete (Capture One calls the hook after writing). A
 watcher or scan candidate is processed only when two `stat` reads at least 1 s apart return the
-same size and mtime; otherwise it is re-checked every 1 s, giving up after 120 s with a
-`capture_events` error row.
+same size and mtime; otherwise it is re-checked every 1 s, giving up after 120 **checks** with a
+`capture_events` error row. **Owner correction A10 (2026-11-18):** the limit counts looks at the
+file, not wall time, and a file unchanged since the previous look is accepted however long ago it
+was seen: on the work Mac three filed photos were given up because the loop that looks was held up
+~2.7 min by Capture One work. Arrival (the capture folder watcher and these checks) runs on a thread
+of its own, and Capture One's follow-up for a new photo (style mark, variant wait, folder sync,
+collection switch) is queued to the background loop, so a filed file becomes a photo within about a
+second whatever Capture One is doing. Events the system drops (FSEvents "must scan subdirs", a
+watcher error) start a scan of the capture folders.
 
 **Session attribution (ratify R-I1).** The session is decided by the RAW's parent folder, not by
 the event's processing time, because the folder records which session was active when the

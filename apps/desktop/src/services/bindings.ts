@@ -56,6 +56,11 @@ export const commands = {
 	photosReorder: (photoId: CommandId, position: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_reorder", { photoId, position })),
 	photosDelete: (photoId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("photos_delete", { photoId })),
 	/**
+	 *  "Keep as published" (A10): a published session that changed since is marked published again
+	 *  as it is; photos that arrived after the publish are denied. One undo step.
+	 */
+	sessionKeepPublished: (sessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("session_keep_published", { sessionId })),
+	/**
 	 *  The photo on the stage or in the editor (`None`: none); its pending preview is the next one the
 	 *  editing provider renders (P58, book changelog 39).
 	 */
@@ -1043,6 +1048,14 @@ export type PublishActivityDto_Serialize = {
 	masters_ready?: string,
 };
 
+/**  A10: what changed in a published session since it was published. */
+export type PublishedChangesResponse = {
+	new_photos: number,
+	editor_edits: number,
+	app_edits: boolean,
+	unrecorded: boolean,
+};
+
 export type QueueViewDto = QueueViewDto_Serialize | QueueViewDto_Deserialize;
 
 export type QueueViewDto_Deserialize = {
@@ -1336,6 +1349,8 @@ export type SessionResponse_Deserialize = {
 	main_count: number,
 	condition_count: number,
 	publish?: LatestPublishResponse_Deserialize | null,
+	/**  A10: why a published session is open again (null unless it changed since publishing). */
+	changes?: PublishedChangesResponse | null,
 };
 
 export type SessionResponse_Serialize = {
@@ -1353,6 +1368,8 @@ export type SessionResponse_Serialize = {
 	main_count: number,
 	condition_count: number,
 	publish: LatestPublishResponse_Serialize | null,
+	/**  A10: why a published session is open again (null unless it changed since publishing). */
+	changes: PublishedChangesResponse | null,
 };
 
 export type SessionRowResponse = SessionRowResponse_Serialize | SessionRowResponse_Deserialize;
@@ -1374,6 +1391,8 @@ export type SessionRowResponse_Deserialize = {
 	arranged: boolean,
 	cover_preview_path?: string | null,
 	publish?: LatestPublishResponse_Deserialize | null,
+	/**  A10: why a published session is open again. */
+	changes?: PublishedChangesResponse | null,
 };
 
 export type SessionRowResponse_Serialize = {
@@ -1393,6 +1412,8 @@ export type SessionRowResponse_Serialize = {
 	arranged: boolean,
 	cover_preview_path: string | null,
 	publish: LatestPublishResponse_Serialize | null,
+	/**  A10: why a published session is open again. */
+	changes: PublishedChangesResponse | null,
 };
 
 export type SessionStatusResponse = "publishing" | "failed" | "published" | "ready" | "in_progress";

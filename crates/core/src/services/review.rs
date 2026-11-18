@@ -203,6 +203,78 @@ impl<'a> ReviewService<'a> {
         self.result(&[session_id], None)
     }
 
+    /// "Keep as published" (owner correction A10, 2026-11-18): a published session that changed
+    /// since (photos that arrived late, adjustments in Capture One, edits) is marked published
+    /// again as it is, without republishing. Photos that arrived after the publish are denied, so
+    /// a later publish never sends them. One undo step restores both.
+    pub fn keep_published(&self, session_id: i64) -> Result<ReviewResult> {
+        crate::services::retention::ensure_session_not_cleared(self.store, session_id)?;
+        let mut step = None;
+        let at = self.clock.now_ms();
+        self.store.transaction(&mut |tx| {
+            step = None;
+            let session = tx.session(session_id)?;
+            let Some(published_at) = session.published_at else {
+                return Err(Error::InvalidData("this session is not published".into()));
+            };
+            if session.change_seq <= session.published_seq {
+                return Ok(());
+            }
+            let late: Vec<Photo> = tx
+                .photos(session_id)?
+                .into_iter()
+                .filter(|p| {
+                    p.classification != Classification::Deleted && p.created_at > published_at
+                })
+                .collect();
+            let mut denied = Vec::new();
+            for photo in &late {
+                let photo = tx.photo(photo.id)?;
+                if photo.classification.is_ordered() {
+                    let old = group(tx, session_id, photo.classification)?;
+                    tx.set_positions(&position::remove_at(&old, photo.id))?;
+                }
+                tx.set_photo_review(photo.id, session_id, Classification::Deleted, None)?;
+                tx.photo_place_mark(photo.id, true, false, None)?;
+                tx.set_photo_denied(photo.id, at)?;
+                tx.enqueue_mirror_tag(&photo.raw_path, photo.id, at)?;
+                denied.push(PhotoPlace {
+                    photo_id: photo.id,
+                    before: photo_place(&photo),
+                    after: Place {
+                        classification: Classification::Deleted,
+                        position: None,
+                    },
+                });
+            }
+            if !denied.is_empty() {
+                crate::services::template_placement::renumber_main(tx, session_id)?;
+                tx.touch_session(session_id, at)?;
+            }
+            let seq_after = tx.session(session_id)?.change_seq;
+            tx.set_published_seq(session_id, seq_after)?;
+            tracing::info!(
+                target: "psm::arrival",
+                "session.kept_as_published session={session_id} denied_late_photos={}",
+                denied.len()
+            );
+            step = Some(Step {
+                label: "Keep as published".into(),
+                kind: StepKind::KeepPublished {
+                    session_id,
+                    photos: denied,
+                    seq_before: session.published_seq,
+                    seq_after,
+                },
+            });
+            Ok(())
+        })?;
+        if let Some(step) = step {
+            self.history.record(session_id, step);
+        }
+        self.result(&[session_id], None)
+    }
+
     pub fn move_photos(&self, ids: &[i64], target: i64) -> Result<ReviewResult> {
         self.transfer(ids, target, false)
     }
@@ -222,9 +294,16 @@ impl<'a> ReviewService<'a> {
         let mut copies: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
         let mut seq_after = 0;
         let mut target_name = String::new();
+        let mut moved_files: Vec<(i64, String, String)> = Vec::new();
+        let mut target_folder = String::new();
         let at = self.clock.now_ms();
         self.store.transaction(&mut |tx| {
+            moved_files.clear();
             let target_session = tx.session(target)?;
+            target_folder = match target_session.item_id {
+                Some(item_id) => tx.item(item_id)?.folder_key,
+                None => "_Unassigned".into(),
+            };
             target_name = if let Some(item_id) = target_session.item_id {
                 let item = tx.item(item_id)?;
                 if item.title.is_empty() {
@@ -269,6 +348,11 @@ impl<'a> ReviewService<'a> {
                 )
             });
             for photo in &photos {
+                moved_files.push((
+                    photo.session_id,
+                    crate::services::arrival::file_name(&photo.raw_path),
+                    crate::services::arrival::folder_name(&photo.raw_path),
+                ));
                 if !copy && photo.classification.is_ordered() {
                     let old = group(tx, photo.session_id, photo.classification)?;
                     tx.set_positions(&position::remove_at(&old, photo.id))?;
@@ -307,6 +391,21 @@ impl<'a> ReviewService<'a> {
             seq_after = tx.session(target)?.change_seq;
             Ok(())
         })?;
+        // A10 (owner 2026-11-18): one line per moved or copied photo. Moving re-points the photo
+        // only: its RAW stays in its folder and no Capture One call is made (no folder or
+        // collection is created for the target session), which the line says.
+        for (source, file, folder) in &moved_files {
+            tracing::info!(
+                target: "psm::capture_one",
+                "photos.{} file={} from_session={} from_folder={} to_session={} to_folder={} raw_moved=no capture_one_calls=none",
+                if copy { "copied" } else { "moved" },
+                file,
+                source,
+                folder,
+                target,
+                target_folder,
+            );
+        }
         if copy {
             for (source, pairs) in copies {
                 self.history.record(

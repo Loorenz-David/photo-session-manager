@@ -110,6 +110,22 @@ pub async fn photos_delete(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
+/// "Keep as published" (A10): a published session that changed since is marked published again
+/// as it is; photos that arrived after the publish are denied. One undo step.
+#[tauri::command]
+#[specta::specta]
+pub async fn session_keep_published(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+) -> Result<ReviewResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<ReviewResponse, CommandError> {
+        with_review(&app, |service| service.keep_published(session_id.0))
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn photos_move(

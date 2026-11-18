@@ -14,8 +14,12 @@ use commerce::shopify::{
     transport::ReqwestTransport,
 };
 use editing::capture_one::{
-    adapter::CaptureOneAdapter, follow::CaptureOneFollow, jxa::JxaScripting,
-    launch_gate::LaunchGate, mirror::MirrorTag, scripting::CaptureOneScripting,
+    adapter::CaptureOneAdapter,
+    follow::{CaptureOneFollow, DeferredFollow},
+    jxa::JxaScripting,
+    launch_gate::LaunchGate,
+    mirror::MirrorTag,
+    scripting::CaptureOneScripting,
 };
 use psm_core::{
     Result,
@@ -126,6 +130,8 @@ pub struct App {
     commerce_override: Option<Arc<dyn CommerceAdapter>>,
     stop: Arc<AtomicBool>,
     background: Option<thread::JoinHandle<()>>,
+    /// A10: the capture folder watcher and arrival ticks, apart from Capture One work.
+    arrival_background: Option<thread::JoinHandle<()>>,
     camera_background: Option<thread::JoinHandle<()>>,
     publish_background: Option<thread::JoinHandle<()>>,
     render_background: Option<thread::JoinHandle<()>>,
@@ -707,8 +713,17 @@ impl App {
             camera.clone(),
             events.clone(),
             clock.clone(),
-        )
-        .with_follow(follow.clone(), direct_camera);
+        );
+        // A10: the arrival thread queues Capture One's work for a new photo; the background loop
+        // runs it (`DeferredFollow::flush`), so a busy Capture One never holds arrivals up.
+        // Without the background loop (`run_startup` off: tests, tools) nothing would flush the
+        // queue, so the follow work stays inline there.
+        let deferred_follow = Arc::new(DeferredFollow::new(follow.clone()));
+        let arrival = if run_startup {
+            arrival.with_follow(deferred_follow.clone(), direct_camera)
+        } else {
+            arrival.with_follow(follow.clone(), direct_camera)
+        };
         // R-I28: the direct adapter's capture root is the receiver's document formula.
         let arrival = Arc::new(if direct_camera {
             let document = settings.effective_document_id(&paths);
@@ -886,28 +901,57 @@ impl App {
             })
         });
         let spool_dir = paths.spool();
+        // Owner correction A10 (2026-11-18): new files become photos on a thread of their own.
+        // They used to wait behind Capture One work (variant polls, syncs, renders) on the shared
+        // loop below; a 2–3 minute wait there made the 120 s stability limit drop filed photos.
+        let arrival_stop = stop.clone();
+        let arrival_thread = bg_arrival.clone();
+        let arrival_document = document_id.clone();
+        let arrival_background = run_startup.then(|| {
+            thread::spawn(move || {
+                let mut capture_watcher = arrival_thread
+                    .capture_root()
+                    .ok()
+                    .and_then(|root| FsWatcher::watch(&root).ok());
+                let mut last_capture_retry = std::time::Instant::now() - Duration::from_secs(5);
+                while !arrival_stop.load(Ordering::Relaxed) {
+                    if !arrival_document.is_empty()
+                        && capture_watcher.is_none()
+                        && last_capture_retry.elapsed() >= Duration::from_secs(5)
+                    {
+                        last_capture_retry = std::time::Instant::now();
+                        if let Ok(root) = arrival_thread.capture_root()
+                            && let Ok(watcher) = FsWatcher::watch(&root)
+                        {
+                            capture_watcher = Some(watcher);
+                            let _ = arrival_thread.scan();
+                        }
+                    }
+                    let mut rescan = false;
+                    if let Some((_, rx)) = capture_watcher.as_mut() {
+                        while let Ok(event) = rx.try_recv() {
+                            if event.rescan {
+                                rescan = true;
+                            } else {
+                                let _ = arrival_thread.watcher_event(&event.path);
+                            }
+                        }
+                    }
+                    if rescan {
+                        // The system dropped events: look at the folders instead (A10).
+                        tracing::info!(target: "psm::arrival", "arrival.rescan reason=watcher_dropped_events");
+                        let _ = arrival_thread.scan();
+                    }
+                    let _ = arrival_thread.tick();
+                    thread::sleep(Duration::from_millis(50));
+                }
+            })
+        });
+        let bg_deferred_follow = deferred_follow.clone();
         let background = thread::spawn(move || {
             let mut watcher = FsWatcher::watch(&spool_dir).ok();
-            let mut capture_watcher = bg_arrival
-                .capture_root()
-                .ok()
-                .and_then(|root| FsWatcher::watch(&root).ok());
             let mut last_drain = std::time::Instant::now();
-            let mut last_capture_retry = std::time::Instant::now() - Duration::from_secs(5);
             while !bg_stop.load(Ordering::Relaxed) {
-                if run_startup
-                    && !document_id.is_empty()
-                    && capture_watcher.is_none()
-                    && last_capture_retry.elapsed() >= Duration::from_secs(5)
-                {
-                    last_capture_retry = std::time::Instant::now();
-                    if let Ok(root) = bg_arrival.capture_root()
-                        && let Ok(watcher) = FsWatcher::watch(&root)
-                    {
-                        capture_watcher = Some(watcher);
-                        let _ = bg_arrival.scan();
-                    }
-                }
                 if watcher
                     .as_mut()
                     .is_some_and(|(_, rx)| rx.try_recv().is_ok())
@@ -917,12 +961,7 @@ impl App {
                     last_drain = std::time::Instant::now();
                 }
                 if run_startup {
-                    if let Some((_, rx)) = capture_watcher.as_mut() {
-                        while let Ok(event) = rx.try_recv() {
-                            let _ = bg_arrival.watcher_event(&event.path);
-                        }
-                    }
-                    let _ = bg_arrival.tick();
+                    bg_deferred_follow.flush();
                     let _ = bg_follow.tick();
                     let _ = bg_jobs.tick(bg_clock.now_ms());
                     let _ = bg_previews.tick();
@@ -1143,6 +1182,7 @@ impl App {
             commerce_override,
             stop,
             background: Some(background),
+            arrival_background,
             camera_background,
             publish_background,
             render_background,
@@ -1233,6 +1273,16 @@ impl App {
                 tracing::info!(
                     "background thread still starting its folder watcher; not waited for"
                 );
+            }
+        }
+        if let Some(bg) = self.arrival_background.take() {
+            // Like the loop above: starting the capture folder watcher can take a while.
+            let end = std::time::Instant::now() + BACKGROUND_JOIN_BOUND;
+            while !bg.is_finished() && std::time::Instant::now() < end {
+                thread::sleep(Duration::from_millis(5));
+            }
+            if bg.is_finished() {
+                let _ = bg.join();
             }
         }
         if let Some(bg) = self.camera_background.take() {

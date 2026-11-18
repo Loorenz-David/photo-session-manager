@@ -110,7 +110,7 @@ function view(photos: Photo[]): SessionView {
       unreviewed_count: photos.filter(p => p.classification === 'unreviewed').length,
       main_count: photos.filter(p => p.classification === 'main').length,
       condition_count: photos.filter(p => p.classification === 'condition').length,
-      publish: null,
+      publish: null, changes: null,
     },
     item: ITEM,
     photos,
@@ -174,7 +174,7 @@ function sessionRow(id: number, title: string, createdAt: number, lastActivityAt
     created_at: createdAt,
     cover_preview_path: null,
     arranged: false,
-    publish: null,
+    publish: null, changes: null,
   };
 }
 

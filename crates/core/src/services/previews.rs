@@ -472,6 +472,21 @@ impl PreviewService {
                 }
                 if first {
                     self.mirror_arrived(&commit.photos)?;
+                    // A10: the arrival timeline's second half, one line per photo.
+                    let now = self.clock.now_ms();
+                    for (photo_id, session_id) in &commit.photos {
+                        if let Ok(photo) = self.store.photo(*photo_id) {
+                            tracing::info!(
+                                target: "psm::arrival",
+                                "arrival.preview_ready file={} folder={} session={} photo={} row_to_preview_ms={}",
+                                crate::services::arrival::file_name(&photo.raw_path),
+                                crate::services::arrival::folder_name(&photo.raw_path),
+                                session_id,
+                                photo_id,
+                                (now - photo.created_at).max(0),
+                            );
+                        }
+                    }
                 }
                 for (photo_id, session_id) in commit.photos {
                     self.events.emit(AppEvent::PhotoChanged {

@@ -267,6 +267,12 @@ button.pill:disabled { cursor: default; }
 button.research-pill { cursor: pointer; }
 .research-pill[data-research-state="to_review"] { font-weight: var(--weight-bold); }
 .research-pill[data-research-state="blocked"], .research-pill[data-research-state="failed"] { background: transparent; border-color: var(--hair-strong); color: var(--muted); }
+/* A10: a published session that changed since publishing says why, with "Keep as published". */
+.changed-after-publish { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+.changed-pill { background: transparent; border-color: var(--danger); color: var(--danger-700); max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-status { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.row-status .changed-pill { max-width: 100%; }
+.changed-keep { white-space: nowrap; }
 .research-pill-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ai, currentColor); animation: research-pulse 1.2s ease-in-out infinite; }
 @keyframes research-pulse { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .research-pill-dot { animation: none; } }
