@@ -52,6 +52,7 @@ use crate::{
         events::EventSink,
         storage::{FileEntry, StorageFs},
         store::Store,
+        trash::Trash,
     },
     services::{
         export::ExportService,
@@ -69,6 +70,9 @@ use std::{
     },
     time::{Duration, Instant},
 };
+
+mod session_delete;
+pub use session_delete::{DeletePreview, SessionDeleted};
 
 /// At most this many files per batch (10F §6).
 pub const BATCH_FILES: usize = 20;
@@ -288,6 +292,8 @@ pub struct StorageService {
     retention: Option<RetentionConfig>,
     /// The undo history a denied photo's steps are dropped from when its files go (P66).
     history: Option<Arc<History>>,
+    /// A17: where "Delete session" sends the session's files (the macOS Trash).
+    trash: Option<Arc<dyn Trash>>,
     /// Set by [`StorageService::request_scan`] without waiting for a running scan.
     requested: AtomicBool,
     work: Mutex<Work>,
@@ -323,6 +329,7 @@ impl StorageService {
             retention_days: AtomicU32::new(4),
             retention: None,
             history: None,
+            trash: None,
             requested: AtomicBool::new(false),
             work: Mutex::new(Work::default()),
             report: Mutex::new(None),
@@ -341,6 +348,11 @@ impl StorageService {
     /// the photo's files are deleted.
     pub fn with_history(mut self, history: Arc<History>) -> Self {
         self.history = Some(history);
+        self
+    }
+    /// A17: the Trash "Delete session" moves the session's files to.
+    pub fn with_trash(mut self, trash: Arc<dyn Trash>) -> Self {
+        self.trash = Some(trash);
         self
     }
     pub fn retention_days(&self) -> u32 {
@@ -967,41 +979,50 @@ impl StorageService {
                 out.extend(self.fs.files_deep(&root.join(&key[..2]).join(&key), &[])?);
             }
         }
-        if !hashes.is_empty() {
-            let names: HashSet<String> = raws
-                .iter()
-                .filter_map(|r| Path::new(r).file_name())
-                .map(|n| n.to_string_lossy().into_owned())
-                .collect();
-            let known: HashMap<String, String> = self
-                .store
-                .deliveries()?
-                .into_iter()
-                .filter(|r| r.outcome == DeliveryOutcome::Duplicate)
-                .map(|r| (r.final_path, r.sha256))
-                .collect();
-            for file in self.fs.files(&self.duplicates_dir())? {
-                let key = file.path.to_string_lossy().into_owned();
-                let sha = match known.get(&key) {
-                    Some(sha) => sha.clone(),
-                    None => {
-                        let named = file
-                            .path
-                            .file_name()
-                            .is_some_and(|n| names.contains(n.to_string_lossy().as_ref()));
-                        if !named {
-                            continue;
-                        }
-                        self.fs.sha256(&file.path)?
-                    }
-                };
-                if hashes.contains(&sha) {
-                    out.push(file);
-                }
-            }
-        }
+        out.extend(self.duplicates_of(&raws, &hashes)?);
         out.sort_by(|a, b| a.path.cmp(&b.path));
         out.dedup_by(|a, b| a.path == b.path);
+        Ok(out)
+    }
+
+    /// The files in `.duplicates/` whose SHA-256 is one of `hashes` (the RAWs `raws`): the
+    /// ledger's hash when it knows the file, else the file's own when it carries a RAW's name.
+    fn duplicates_of(&self, raws: &[String], hashes: &HashSet<String>) -> Result<Vec<FileEntry>> {
+        let mut out = Vec::new();
+        if hashes.is_empty() {
+            return Ok(out);
+        }
+        let names: HashSet<String> = raws
+            .iter()
+            .filter_map(|r| Path::new(r).file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .collect();
+        let known: HashMap<String, String> = self
+            .store
+            .deliveries()?
+            .into_iter()
+            .filter(|r| r.outcome == DeliveryOutcome::Duplicate)
+            .map(|r| (r.final_path, r.sha256))
+            .collect();
+        for file in self.fs.files(&self.duplicates_dir())? {
+            let key = file.path.to_string_lossy().into_owned();
+            let sha = match known.get(&key) {
+                Some(sha) => sha.clone(),
+                None => {
+                    let named = file
+                        .path
+                        .file_name()
+                        .is_some_and(|n| names.contains(n.to_string_lossy().as_ref()));
+                    if !named {
+                        continue;
+                    }
+                    self.fs.sha256(&file.path)?
+                }
+            };
+            if hashes.contains(&sha) {
+                out.push(file);
+            }
+        }
         Ok(out)
     }
 

@@ -142,6 +142,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
             <span className="label-activity">
               Created <ArrowDown aria-hidden />
             </span>
+            <span aria-hidden />
           </div>
           {groups.map(group => (
             <section key={group.label} className="session-group" aria-label={group.label}>
@@ -158,6 +159,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
                   onPublish={() => setPublishId(row.id)}
                   onRetry={row.publish?.item_id ? () => publishRetry(row.publish!.item_id).then(load) : undefined}
                   onChanged={() => void load()}
+                  onDeleted={() => void load()}
                 />
               ))}
             </section>

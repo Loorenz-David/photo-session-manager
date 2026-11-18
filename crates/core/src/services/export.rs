@@ -871,6 +871,12 @@ impl ExportService {
         self.state().is_ok_and(|state| !state.runs.is_empty())
     }
 
+    /// Whether an export of the session is in flight (A17: "Delete session" waits for it).
+    pub fn running_for(&self, session_id: i64) -> bool {
+        self.state()
+            .is_ok_and(|state| state.runs.values().any(|run| run.session_id == session_id))
+    }
+
     fn in_use(state: &State) -> HashSet<&str> {
         state
             .runs

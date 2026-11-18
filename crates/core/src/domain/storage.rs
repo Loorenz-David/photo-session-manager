@@ -81,3 +81,14 @@ pub struct PhotoDenial {
     pub denied_at: i64,
     pub files_deleted_at: Option<i64>,
 }
+
+/// What "Delete session" removed from the database (owner correction A17).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletedRows {
+    /// The session's photo rows.
+    pub photos: i64,
+    /// The session's item row (an item has one session).
+    pub item: bool,
+    /// Research runs of the session (with their steps, calls, outbound and stage-output rows).
+    pub research_runs: i64,
+}

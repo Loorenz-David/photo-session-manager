@@ -9,3 +9,4 @@ pub mod secrets;
 pub mod storage;
 pub mod store;
 pub mod system;
+pub mod trash;

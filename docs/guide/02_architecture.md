@@ -24,7 +24,7 @@ are thin and run off the app lock (`spawn_blocking`); business logic never depen
 |---|---|
 | `domain/` | `item.rs`, `session.rs` (SessionStatus, PublishStep, RowLabel), `photo.rs` (Classification, Integrity), `attribute.rs`, `composition.rs` (10D values, Frame, Rect, EditorGeometry), `template.rs` (shooting templates, containers, presets), `output.rs` (OutputFormat), `publish.rs`, `camera.rs` (CameraStatus, Link, reasons, CameraSettings, Keychain account names, ledger constants), `editing.rs` (Job, ProvisionInputs, RecipeProps…), `storage.rs` (StorageSettings, ExportSettings) |
 | `mechanisms/` (pure, unit-testable; the only place plans allow unit tests) | `arrival.rs` (candidate filter, path_key), `canon.rs` (NFC canonical path), `hash.rs` (SHA-256), `position.rs`, `status.rs` (status derivation, progress %), `time.rs`, `naming.rs` (folder key, export names), `template.rs` (item type key, `expected` place, `zoomed`, `preset_values`), `shot_order.rs` (P4 shot order: slots, counter runs, holds), `values.rs` (MC-9 canonical attribute values, MC-14 selection), `attribute_write.rs` (MC-13 diff), `reconcile.rs` (MC-12 gallery diff), `publish.rs` (frozen_main, upload waves), `upload_name.rs`, `staleness.rs`, `backoff.rs` (render backoff; `editor_wait` = "Waiting for Capture One…", 10 min max), `missing.rs` (files deleted outside the app), `composition.rs` + `composition_cases.json` (shared with the TS editor), `capture_ledger.rs` (MC-33 rules), `camera_status.rs` (precedence, sentences), `secrets.rs` (FTP password), `cleanup.rs` + `retention.rs` (10F decisions), `hook_payload.rs` |
-| `ports/` | `store.rs` (Store/StoreTx; one impl: SQLite), `clock.rs`, `editing.rs`, `camera.rs` (CameraProvider, CaptureSink, ArrivalSource, ArrivalFollow, CompletedNames, DeliveryFs), `commerce.rs`, `images.rs`, `raw_previews.rs`, `secrets.rs`, `system.rs`, `storage.rs`, `events.rs` |
+| `ports/` | `store.rs` (Store/StoreTx; one impl: SQLite), `clock.rs`, `editing.rs`, `camera.rs` (CameraProvider, CaptureSink, ArrivalSource, ArrivalFollow, CompletedNames, DeliveryFs), `commerce.rs`, `images.rs`, `raw_previews.rs`, `secrets.rs`, `system.rs`, `storage.rs`, `trash.rs` (A17: the macOS Trash), `events.rs` |
 | `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `templates` (local editor, each action saved immediately), `template_placement` (placement on arrival, the session's `TemplateView`, drop onto a container / retake, Back to template, Shift the rest back), `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing, archived view) |
 | `events.rs` | `AppEvent` (below); `error.rs`: `Error` with snake_case codes carried to the UI as `{code, message, data}` |
 
@@ -332,6 +332,18 @@ take-back, export or publish runs; deletes at most a batch per tick; rules in `m
 `mechanisms/retention.rs` (items published-and-clean for `retention_days_after_publish` days, after
 `RetentionService` verified Shopify still holds every published image; `item_retention.keep_files` pin;
 `archived_images` for the read-only archived view). Every deletion logs `storage.cleared rule=… path=… bytes=…`.
+
+**Delete session (A17, owner 2026-11-18; Session Manager only, never Shopify).** Commands
+`session_delete_preview` / `session_delete` → `psm_integrations::session_delete` (when photos are filed
+into the session: `CAPTURE_TARGET_ORDER` claim + `deactivate`, so Capture One leaves it; failure only logged)
+→ `StorageService::delete_preview` / `delete_session` (`services/storage/session_delete.rs`, a child module
+of the storage service: it holds the clean-up worker's lock and drops the item's queued files). Under
+`History::retire_session` it checks the guards again, moves the filing target off the session, sends each
+path to the `ports::trash::Trash` (infra `MacTrash`: `NSFileManager trashItemAtURL`; the suite's
+`FakeTrash`, registered per app by `psm_integrations::with_test_trash`), then the item's export folder and
+the capture folder when only Capture One's data is left, and only when every file moved calls
+`Store::delete_session_rows` (`infra/sqlite/session_delete.rs`, one transaction, research tables by name
+when they exist).
 
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams

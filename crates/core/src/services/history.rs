@@ -121,6 +121,20 @@ impl Step {
             StepKind::Attribute { .. } => false,
         }
     }
+    /// Whether this step reads or writes the session `session_id` (A17).
+    fn names_session(&self, session_id: i64) -> bool {
+        match &self.kind {
+            StepKind::Classify { session_id: id, .. }
+            | StepKind::Reorder { session_id: id, .. }
+            | StepKind::Composition { session_id: id, .. }
+            | StepKind::Template { session_id: id, .. }
+            | StepKind::KeepPublished { session_id: id, .. }
+            | StepKind::Attribute { session_id: id, .. } => *id == session_id,
+            StepKind::Move { source, target, .. } | StepKind::Copy { source, target, .. } => {
+                *source == session_id || *target == session_id
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -279,6 +293,43 @@ impl History {
                 list.redo.retain(|step| !step.names_photo(photo_id));
                 if list.undo.len() + list.redo.len() != before {
                     changed.push(*session_id);
+                }
+            }
+        }
+        drop(op);
+        for session_id in changed {
+            self.emit(session_id);
+        }
+        Ok(retired)
+    }
+    /// Owner correction A17 ("Delete session"): runs `act` while no undo or redo can run; when it
+    /// returns `true` (the session was deleted), the session's own undo and redo lists go, and so
+    /// does every step of another session that names it or one of `photo_ids` (a move or copy
+    /// between the two): none of them can apply any more.
+    pub fn retire_session(
+        &self,
+        session_id: i64,
+        photo_ids: &[i64],
+        act: impl FnOnce() -> Result<bool>,
+    ) -> Result<bool> {
+        let op = self.operation.lock().unwrap();
+        let retired = act()?;
+        let mut changed = Vec::new();
+        if retired {
+            let mut all = self.store.lock().unwrap();
+            if all.remove(&session_id).is_some() {
+                changed.push(session_id);
+            }
+            for (other, list) in all.iter_mut() {
+                let before = list.undo.len() + list.redo.len();
+                let keep = |step: &Step| {
+                    !step.names_session(session_id)
+                        && !photo_ids.iter().any(|id| step.names_photo(*id))
+                };
+                list.undo.retain(keep);
+                list.redo.retain(keep);
+                if list.undo.len() + list.redo.len() != before {
+                    changed.push(*other);
                 }
             }
         }

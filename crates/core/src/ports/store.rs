@@ -8,7 +8,7 @@ use crate::domain::{
     photo::{Classification, Integrity, NewPhoto, Photo},
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{LatestPublish, Session, SessionDto, SessionListRecord},
-    storage::{ArchivedImage, ItemRetention, PhotoDenial},
+    storage::{ArchivedImage, DeletedRows, ItemRetention, PhotoDenial},
     template::{PlaceRow, Presets, ShotKey, Template, TemplateSummary},
 };
 
@@ -492,4 +492,15 @@ pub trait Store: Send + Sync {
     fn photo_denial(&self, photo_id: i64) -> Result<Option<PhotoDenial>>;
     /// The denied photo's files were deleted at `at`.
     fn mark_denial_files_deleted(&self, photo_id: i64, at: i64) -> Result<()>;
+    // Delete session (owner correction A17).
+    /// Whether a research run of the session is running now (its rows must not go under it).
+    fn session_research_running(&self, session_id: i64) -> Result<bool>;
+    /// Removes the session and every row that names it, in one transaction: its photos and their
+    /// compositions, places, denials and links; its item and the item's values, links, stock,
+    /// retention, archived images, saved pages and research feedback; its publish items (with
+    /// their stock rows and `publish_export:` settings), notifications, change reasons, research
+    /// runs (steps, calls, outbound, stage outputs) and jobs; the `raw_state` and jobs of RAWs no
+    /// other session uses. Capture-ledger rows keep their history without a session; the filing
+    /// target is cleared when it was this session. The Unassigned session is refused.
+    fn delete_session_rows(&self, session_id: i64) -> Result<DeletedRows>;
 }

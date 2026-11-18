@@ -3310,6 +3310,20 @@ impl Store for SqliteStore {
         .map_err(db)?;
         Ok(())
     }
+    fn session_research_running(&self, session_id: i64) -> Result<bool> {
+        let conn = self.locked()?;
+        super::session_delete::research_running(&conn, session_id)
+    }
+    fn delete_session_rows(
+        &self,
+        session_id: i64,
+    ) -> Result<psm_core::domain::storage::DeletedRows> {
+        let mut conn = self.locked()?;
+        let tx = conn.transaction().map_err(db)?;
+        let deleted = super::session_delete::delete_session_rows(&tx, session_id)?;
+        tx.commit().map_err(db)?;
+        Ok(deleted)
+    }
 }
 
 fn denial_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<psm_core::domain::storage::PhotoDenial> {

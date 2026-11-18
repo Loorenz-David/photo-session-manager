@@ -7,6 +7,7 @@ pub mod fake_processes;
 pub mod fake_secrets;
 pub mod fake_sleep;
 pub mod fake_transport;
+pub mod fake_trash;
 pub mod fixtures;
 pub mod ftp_client;
 pub mod isolation;

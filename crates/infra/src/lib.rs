@@ -20,4 +20,5 @@ pub mod sleep;
 pub mod spool;
 pub mod sqlite;
 pub mod storage_fs;
+pub mod trash;
 pub mod watcher;

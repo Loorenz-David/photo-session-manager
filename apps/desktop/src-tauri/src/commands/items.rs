@@ -44,6 +44,7 @@ impl From<Error> for CommandError {
             Error::NoTemplate => "no_template",
             Error::NothingToShift => "nothing_to_shift",
             Error::NothingToExport => "nothing_to_export",
+            Error::DeleteRefused(_) => "delete_refused",
             Error::CompositionInvalid { reason } => {
                 data.insert("reason".into(), reason.clone());
                 "composition_invalid"

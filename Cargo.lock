@@ -3649,6 +3649,7 @@ dependencies = [
  "kamadak-exif",
  "libc",
  "notify",
+ "objc2-foundation",
  "psm-core",
  "rusqlite",
  "rusqlite_migration",
