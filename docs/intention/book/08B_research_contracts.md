@@ -603,6 +603,14 @@ Any hit aborts the export, deletes the partial folder and names the file. **Amen
 2026-11-17):** a well-formed JPEG is scanned up to its first start-of-scan marker, that is its header segments
 (EXIF, XMP, comments: where any text lives), not its compressed pixel data, where a short value turned up by chance
 and stopped real exports; any other file, or a JPEG whose segments cannot be walked, is scanned whole.
+**Amended (owner correction A8, 2026-11-18):** listing images are stored as the bytes the shop's server sent,
+under the `.jpg` name, so many are PNG, WebP, GIF or AVIF/HEIF; those were scanned whole and stopped real exports the
+same way. An image is now recognised by its leading bytes and scanned only where text can live: JPEG its header;
+PNG its `tEXt`, `iTXt`, `zTXt` (inflated) and `eXIf` chunks and any bytes after `IEND`; WebP its `EXIF` and `XMP `
+chunks; GIF its comment, plain-text and application extensions; AVIF/HEIF every top-level box except `mdat` (metadata
+items inside `mdat` are not read: the app never writes into downloaded bytes, and the check guards the record the app
+wrote). Anything not recognised, or an image whose structure cannot be walked, is scanned whole. **A choice that
+matches no run** writes nothing and says "No research runs match this choice." (it used to write an empty zip).
 
 **Replay identity** (dev-Mac tool). The tool rebuilds the recorded request body, resolving images by SHA-256 from
 `images/`. It substitutes only the model, effort or instructions given on its command line, and every other byte

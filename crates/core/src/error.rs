@@ -9,6 +9,9 @@ pub enum Error {
     /// T4: Shift the rest back with no denied photo before a template-placed one.
     #[error("There is nothing to shift back")]
     NothingToShift,
+    /// Export research with a choice that matches no run (owner correction A8).
+    #[error("No research runs match this choice.")]
+    NothingToExport,
     #[error("composition_invalid: {reason}")]
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]
