@@ -7,6 +7,7 @@
 
 pub mod extract;
 pub mod http;
+pub mod shop;
 
 use std::cell::RefCell;
 
@@ -20,6 +21,7 @@ use html5ever::{
 use serde_json::Value as Json;
 
 pub use http::HttpPageReader;
+pub use shop::ShopPageReader;
 
 /// The page's text (the product extract) is cut to this many characters (it goes into a model
 /// request).

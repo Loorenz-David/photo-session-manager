@@ -73,6 +73,12 @@ pub struct PageReply {
     pub images: Vec<Vec<u8>>,
     pub usage: Option<Vec<(String, i64)>>,
     pub exchange: Exchange,
+    /// The site refused automated reading (HTTP 403, or 429 with no short `Retry-After`): the run
+    /// reads nothing more from that host (owner correction A9, 2026-11-18).
+    pub blocked: bool,
+    /// Why the page could not be read, in plain words, when the reader knows (shown under the
+    /// step); `None` for a read page.
+    pub note: Option<String>,
 }
 
 pub trait ModelProvider: Send + Sync {

@@ -31,6 +31,18 @@ predate the merge; `docs/guide/` notes where). Next for the owner: try it on the
   the bundle); the A6 build and zip moved to the old folder as "(2026-11-17 A6)"; new
   `~/Desktop/Session Manager.zip` 12,552,228 bytes. Still waiting on the owner's work-Mac files for "could not be
   read" on the owner's shop.
+- **2026-11-18: owner correction A8** (changelog A8; 08B MC-A11 amended). With A7 on the work Mac, Export research
+  still stopped on a listing image: those are stored as the shop sent them (PNG/WebP/GIF/AVIF under `.jpg`), and
+  only JPEGs were trimmed. `rules::image_text::scanned_parts` now recognises each format by its leading bytes and
+  reads only its text/metadata parts (JPEG header; PNG text chunks inflated, `eXIf`, bytes after `IEND`; WebP
+  `EXIF`/`XMP `; GIF comment/plain-text/application extensions; AVIF/HEIF all top-level boxes but `mdat`);
+  anything else or unwalkable is read whole. A choice with no run refuses with "No research runs match this
+  choice." (`Error::NothingToExport`) instead of an empty 22-byte zip (the owner's first try gave one). Listing
+  images keep the `.jpg` name (export layout fixed in master plan §6.7). Under load the full run had two failures
+  that passed when rerun: p33 C4(d) and `p50…c5a`, which shares the global log-redaction registry. Joined: PR #9
+  merged into `main` as `430f156`; release build installed in /Applications (helper 352928 bytes in the bundle);
+  the A7 build and zip moved to the old folder as "(2026-11-17 A7)"; new `~/Desktop/Session Manager.zip`
+  12,555,683 bytes. Next: the owner exports on the work Mac and sends the zip (the "could not be read" pages).
 - **Done:** `R2_research_foundation` APPROVED_WITH_NOTES 2026-11-12 (implemented by Codex, the runner's default, before the
   Opus preference below was applied; reviewed by Opus). Narrative relayed to the owner.
 - **Done:** `R3_research_rules` APPROVED_WITH_NOTES 2026-11-12 (Opus implementer). Notes folded: PriceMissing scope → R4

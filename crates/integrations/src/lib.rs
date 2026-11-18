@@ -1643,30 +1643,25 @@ fn research_test_seams(paths: &AppPaths) -> Option<ResearchTestSeams> {
         .and_then(|all| all.lock().ok()?.get(&paths.root).cloned())
 }
 
-/// Every secret the secrets port holds for the app (the research keys, the camera's passwords) and
-/// the integration's client secret: what the redaction scan and the export check look for
-/// (MC-A9, MC-A11). The camera's access user name is held there too but is a name, not a secret:
-/// it is left out, since a short everyday word would be "found" in page text and image bytes
-/// (owner correction A7, 2026-11-17).
+/// The secrets research can ever hold: the three research keys and the integration's client secret
+/// (the Shopify token is fetched with it inside the commerce adapter and never reaches a research
+/// record). This is what the redaction scan and the export check look for (MC-A9, MC-A11). The
+/// camera's user name and passwords never reach research code, so they are not looked for: the
+/// generated FTP password is a short code of digits, which turned up by chance in page text,
+/// search results and image bytes, mangling records and stopping real exports (owner corrections
+/// A7 2026-11-17, A9 2026-11-18).
 fn research_secret_values(
     secrets: Arc<dyn SecretStore>,
     client_secret: Option<String>,
 ) -> psm_research::gateway::SecretValues {
-    use psm_core::domain::camera::secrets as camera;
     use psm_research::service::{MODEL_ACCOUNT, READER_ACCOUNT, SEARCH_ACCOUNT};
     Arc::new(move || {
-        [
-            MODEL_ACCOUNT,
-            SEARCH_ACCOUNT,
-            READER_ACCOUNT,
-            camera::FTP_PASSWORD,
-            camera::ACCESS_AUTH_PASSWORD,
-        ]
-        .into_iter()
-        .filter_map(|account| secrets.get(account).ok().flatten())
-        .chain(client_secret.clone())
-        .filter(|value| !value.trim().is_empty())
-        .collect()
+        [MODEL_ACCOUNT, SEARCH_ACCOUNT, READER_ACCOUNT]
+            .into_iter()
+            .filter_map(|account| secrets.get(account).ok().flatten())
+            .chain(client_secret.clone())
+            .filter(|value| !value.trim().is_empty())
+            .collect()
     })
 }
 
@@ -1697,7 +1692,7 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
         Some(seams) => seams.wait.clone(),
         None => Arc::new(|ms| thread::sleep(Duration::from_millis(ms))),
     };
-    let providers = match &seams {
+    let mut providers = match &seams {
         Some(seams) => seams.providers.clone(),
         None => psm_research::adapters::build(
             &ResearchSettings::from_slot(parts.settings.research.as_ref()),
@@ -1706,6 +1701,14 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
             wait.clone(),
         ),
     };
+    // A9: the connected shop's own product pages are read through its API, not its storefront.
+    if let Some(shop) = parts.commerce.clone() {
+        providers.reader = providers.reader.map(|reader| {
+            Arc::new(psm_research::adapters::page_reader::ShopPageReader::new(
+                reader, shop,
+            )) as Arc<dyn psm_research::ports::PageReader>
+        });
+    }
     let settings_paths = parts.paths.clone();
     let service = Arc::new(ResearchService::new(ResearchDeps {
         store: parts.store.clone(),
@@ -1779,19 +1782,24 @@ mod research_secret_tests {
     }
 
     #[test]
-    fn a7_the_camera_user_name_is_not_a_secret_but_its_passwords_are() {
+    fn a9_research_looks_only_for_the_secrets_research_can_hold() {
         let store = Arc::new(Store::default());
         store.set(camera::ACCESS_AUTH_USER, "admin").unwrap();
         store
             .set(camera::ACCESS_AUTH_PASSWORD, "pw-access-1")
             .unwrap();
-        store.set(camera::FTP_PASSWORD, "pw-ftp-2").unwrap();
+        store.set(camera::FTP_PASSWORD, "4821").unwrap();
         store
             .set(psm_research::service::MODEL_ACCOUNT, "sk-model-3")
             .unwrap();
+        store
+            .set(psm_research::service::SEARCH_ACCOUNT, "serp-search-5")
+            .unwrap();
         let values = research_secret_values(store, Some("client-4".into()))();
-        assert!(!values.contains(&"admin".to_owned()), "{values:?}");
-        for expected in ["pw-access-1", "pw-ftp-2", "sk-model-3", "client-4"] {
+        for camera_value in ["admin", "pw-access-1", "4821"] {
+            assert!(!values.contains(&camera_value.to_owned()), "{values:?}");
+        }
+        for expected in ["sk-model-3", "serp-search-5", "client-4"] {
             assert!(values.contains(&expected.to_owned()), "{values:?}");
         }
     }

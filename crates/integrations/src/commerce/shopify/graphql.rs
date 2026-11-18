@@ -77,6 +77,11 @@ pub const INVENTORY_READBACK: &str = "query InventoryReadback($id: ID!, $locatio
 /// = No for now).
 pub const PUBLIC_LISTING: &str = "query PublicListing($id: ID!) { shop { primaryDomain { host url } myshopifyDomain } product(id: $id) { handle onlineStoreUrl } }";
 
+/// A9 (owner correction 2026-11-18): one product by its storefront handle, as research reads it in
+/// place of the storefront page (`productByIdentifier`; the query was accepted by a 2026-10 shop on
+/// 2026-11-18). Metaobject references come with their display names.
+pub const SHOP_PRODUCT: &str = "query ShopProduct($handle: String!) { productByIdentifier(identifier: {handle: $handle}) { id title handle productType vendor onlineStoreUrl descriptionHtml metafields(first: 100) { nodes { namespace key type value definition { name } reference { ... on Metaobject { displayName } } references(first: 10) { nodes { ... on Metaobject { displayName } } } } } media(first: 8) { nodes { ... on MediaImage { image { url } } } } } }";
+
 /// R8·U3: the shop's public hosts alone (an item that is not linked to a product).
 pub const SHOP_HOSTS: &str =
     "query ShopHosts { shop { primaryDomain { host url } myshopifyDomain } }";

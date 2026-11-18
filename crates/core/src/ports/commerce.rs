@@ -30,9 +30,32 @@ pub struct PublicListing {
     pub item_path_tail: String,
 }
 
+/// One product of the connected shop as research reads it, through the platform's API in place
+/// of its storefront page (owner correction A9, 2026-11-18: shops answer automated page reads
+/// with "too many requests").
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ShopProduct {
+    /// The product's storefront address, when it is published.
+    pub url: Option<String>,
+    pub title: String,
+    pub item_type: Option<String>,
+    pub vendor: Option<String>,
+    /// The description as plain paragraphs.
+    pub description: Option<String>,
+    /// `(label, value)` of each filled product field, as text; files and the condition photos are
+    /// left out.
+    pub fields: Vec<(String, String)>,
+    /// The product's image addresses, gallery order.
+    pub image_urls: Vec<String>,
+}
+
 pub trait CommerceAdapter: Send + Sync {
     fn public_listing(&self, _external_id: &str) -> Result<PublicListing> {
         Ok(PublicListing::default())
+    }
+    /// A9: the shop's product whose storefront handle is `handle`; `None` when there is none.
+    fn shop_product(&self, _handle: &str) -> Result<Option<ShopProduct>> {
+        Ok(None)
     }
     fn check_token(&self) -> Result<()>;
     fn capabilities(&self) -> Vec<&'static str>;

@@ -23,7 +23,7 @@ use psm_core::{
     mechanisms::{upload_name, values::canonical_decimal},
     ports::{
         clock::Clock,
-        commerce::{ALL_CAPABILITIES, CommerceAdapter, PublicListing},
+        commerce::{ALL_CAPABILITIES, CommerceAdapter, PublicListing, ShopProduct},
     },
 };
 use serde_json::{Value as Json, json};
@@ -218,6 +218,73 @@ pub fn description_html(paragraphs: &str) -> String {
 /// `descriptionHtml`, the inverse of [`description_html`] for the paragraphs it writes. Block tags
 /// (`p`, `div`, `li`, headings, lists, quotes) end a paragraph, `<br>` is a line break, other tags
 /// are dropped and entities decoded.
+/// A9: a product field's value as research reads it, as text: metaobject references by display
+/// name, lists joined, measurements as "value unit", money as "amount currency", rich text as its
+/// words; `None` for files and empty values.
+pub fn field_text(type_: &str, value: &str, names: &[String]) -> Option<String> {
+    if type_.contains("file_reference") {
+        return None;
+    }
+    if type_.contains("reference") {
+        return (!names.is_empty()).then(|| names.join(", "));
+    }
+    fn words(value: &Json, out: &mut Vec<String>) {
+        match value {
+            Json::Object(map) => {
+                if let Some(Json::String(text)) = map.get("value")
+                    && map.get("type").and_then(Json::as_str) == Some("text")
+                {
+                    out.push(text.clone());
+                }
+                for child in map.values() {
+                    words(child, out);
+                }
+            }
+            Json::Array(items) => items.iter().for_each(|i| words(i, out)),
+            _ => {}
+        }
+    }
+    fn one(item: &Json) -> Option<String> {
+        match item {
+            Json::String(text) => Some(text.clone()),
+            Json::Number(n) => Some(n.to_string()),
+            Json::Bool(b) => Some(if *b { "yes" } else { "no" }.to_owned()),
+            Json::Object(map) => {
+                let text = |key: &str| map.get(key).and_then(one);
+                if let (Some(v), Some(unit)) = (text("value"), text("unit")) {
+                    Some(format!("{v} {}", unit.to_lowercase()))
+                } else if let (Some(amount), Some(currency)) =
+                    (text("amount"), text("currency_code"))
+                {
+                    Some(format!("{amount} {currency}"))
+                } else if let (Some(v), Some(max)) = (text("value"), text("scale_max")) {
+                    Some(format!("{v} of {max}"))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let text = match serde_json::from_str::<Json>(value) {
+        Ok(json) if type_ == "rich_text_field" => {
+            let mut out = Vec::new();
+            words(&json, &mut out);
+            out.join(" ")
+        }
+        Ok(Json::Array(items)) => items.iter().filter_map(one).collect::<Vec<_>>().join(", "),
+        Ok(json @ Json::Object(_)) => one(&json).unwrap_or_else(|| value.to_owned()),
+        Ok(Json::Bool(b)) => if b { "yes" } else { "no" }.to_owned(),
+        _ => value.to_owned(),
+    };
+    let text = text.trim().to_owned();
+    (!text.is_empty()).then_some(text)
+}
+
 pub fn description_paragraphs(html: &str) -> String {
     const BREAK: char = '\u{1}';
     let mut text = String::with_capacity(html.len());
@@ -624,6 +691,78 @@ impl CommerceAdapter for ShopifyAdapter {
                 .map(|h| format!("products/{h}"))
                 .unwrap_or_default(),
         })
+    }
+
+    fn shop_product(&self, handle: &str) -> Result<Option<ShopProduct>> {
+        let data = self.call(graphql::SHOP_PRODUCT, json!({ "handle": handle }))?;
+        let product = match data.get("productByIdentifier") {
+            Some(Json::Null) | None => return Ok(None),
+            Some(product) => product,
+        };
+        let text = |key: &str| {
+            product[key]
+                .as_str()
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .map(str::to_owned)
+        };
+        let mut fields = Vec::new();
+        for m in product["metafields"]["nodes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let (namespace, key) = (
+                m["namespace"].as_str().unwrap_or_default(),
+                m["key"].as_str().unwrap_or_default(),
+            );
+            let full = format!("{namespace}.{key}");
+            if full == self.config.condition_photos_key {
+                continue;
+            }
+            let mut names: Vec<String> = m["reference"]["displayName"]
+                .as_str()
+                .map(|n| vec![n.to_owned()])
+                .unwrap_or_default();
+            names.extend(
+                m["references"]["nodes"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|n| n["displayName"].as_str().map(str::to_owned)),
+            );
+            let Some(value) = field_text(
+                m["type"].as_str().unwrap_or_default(),
+                m["value"].as_str().unwrap_or_default(),
+                &names,
+            ) else {
+                continue;
+            };
+            let label = m["definition"]["name"]
+                .as_str()
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .map(str::to_owned)
+                .unwrap_or(full);
+            fields.push((label, value));
+        }
+        Ok(Some(ShopProduct {
+            url: text("onlineStoreUrl"),
+            title: text("title").unwrap_or_default(),
+            item_type: text("productType"),
+            vendor: text("vendor"),
+            description: product["descriptionHtml"]
+                .as_str()
+                .map(description_paragraphs)
+                .filter(|d| !d.trim().is_empty()),
+            fields,
+            image_urls: product["media"]["nodes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|n| n["image"]["url"].as_str().map(str::to_owned))
+                .collect(),
+        }))
     }
 
     fn check_token(&self) -> Result<()> {

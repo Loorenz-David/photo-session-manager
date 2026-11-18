@@ -57,7 +57,10 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   the header's **"n to review"** opens the list of those fields (value, confidence, conflict); choosing
   one goes to its step and opens its popover (A6). The header's Research button opens the **research
   panel** (every step the run took, each kind with its own icon and look: conclusions stand out, a page
-  that could not be read is a muted "Could not read" (A7); "Finished · n fields filled · n to review", why research cannot
+  that could not be read is a muted "Could not read" (A7), with the reason underneath: a site blocking automated
+  reading is asked once per run and its other pages say "Skipped: <site> is blocking automated reading"; the shop's
+  own product pages are read through Shopify's API, not its web pages; one read per product, no collection or
+  category pages (A9); "Finished · n fields filled · n to review", why research cannot
   run, Research / Run again, **Accept all**, which skips `low` suggestions and conflicts). Source
   links open in the default browser. A checked value is never overwritten and a cleared value is
   never suggested again (HA1).

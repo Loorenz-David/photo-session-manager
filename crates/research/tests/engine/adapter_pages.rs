@@ -235,40 +235,66 @@ fn a17_c3a_full_run_skips_the_refused_page() {
     assert_eq!(h.run_row(run).state, RunState::Finished);
 }
 
+/// A9 (owner correction 2026-11-18) replaces A17·C3b's minute-long wait: a 429 with a short
+/// `Retry-After` waits once and reads; a long one (the captured shop's 60 s) or a second 429 or a
+/// 403 is `blocked` at once, without waiting.
 #[test]
-fn a17_c3b_throttled_shop_waits_once_then_reads() {
+fn a9_short_retry_after_waits_once_long_one_is_blocked_at_once() {
     let throttled = reply_from_capture(&capture("pages/shop_429_throttled.json"));
+    let mut short = throttled.clone();
+    for (name, value) in short.headers.iter_mut() {
+        if name.eq_ignore_ascii_case("retry-after") {
+            *value = "5".into();
+        }
+    }
     let http = Arc::new(FakeResearchHttp::default());
-    http.once("GET", SHOP_PAGE, Ok(throttled.clone()));
+    http.once("GET", SHOP_PAGE, Ok(short.clone()));
     http.once("GET", SHOP_PAGE, Ok(shop_page()));
     let (r, waits) = reader(&http, 60);
     let reply = r.read(SHOP_PAGE).unwrap();
-    assert!(reply.obtained);
+    assert!(reply.obtained && !reply.blocked);
     assert_eq!(reply.usage, page_fetch());
     let waits = waits.lock().unwrap().clone();
-    let requests = http.requests();
     assert_eq!(
-        waits.iter().filter(|w| w.0 == 60_000).collect::<Vec<_>>(),
-        vec![&(60_000, 1)],
-        "one 60 s wait, before the second page request"
+        waits.iter().filter(|w| w.0 == 5_000).collect::<Vec<_>>(),
+        vec![&(5_000, 1)],
+        "one 5 s wait, before the second page request"
     );
-    assert_eq!(requests[1].url, SHOP_PAGE);
-    for (ms, before) in waits.iter().filter(|w| w.0 != 60_000) {
-        assert_eq!(*ms, 2_000);
-        assert!(*before >= 2, "a pace before a page request");
-        assert_ne!(
-            requests[*before].url, SHOP_PAGE,
-            "a pace before a page request"
-        );
-    }
+    assert_eq!(http.requests()[1].url, SHOP_PAGE);
 
+    // The captured 429 says `Retry-After: 60`: no wait, one request, blocked.
     let http = Arc::new(FakeResearchHttp::default());
     http.once("GET", SHOP_PAGE, Ok(throttled.clone()));
-    http.once("GET", SHOP_PAGE, Ok(throttled));
     let (r, waits) = reader(&http, 60);
     let reply = r.read(SHOP_PAGE).unwrap();
-    assert!(!reply.obtained);
-    assert_eq!(*waits.lock().unwrap(), vec![(60_000, 1)]);
+    assert!(!reply.obtained && reply.blocked);
+    assert!(reply.note.as_deref().unwrap().contains("429"));
+    assert!(
+        waits.lock().unwrap().is_empty(),
+        "no wait for a long Retry-After"
+    );
+    assert_eq!(http.requests().len(), 1);
+
+    // A short wait answered by a second 429 is blocked too.
+    let http = Arc::new(FakeResearchHttp::default());
+    http.once("GET", SHOP_PAGE, Ok(short.clone()));
+    http.once("GET", SHOP_PAGE, Ok(short));
+    let (r, waits) = reader(&http, 60);
+    let reply = r.read(SHOP_PAGE).unwrap();
+    assert!(!reply.obtained && reply.blocked);
+    assert_eq!(*waits.lock().unwrap(), vec![(5_000, 1)]);
+
+    // 403: blocked; 404: could not be read, not blocked.
+    for (status, blocked) in [(403, true), (404, false)] {
+        let http = Arc::new(FakeResearchHttp::default());
+        let mut refused = throttled.clone();
+        refused.status = status;
+        http.once("GET", SHOP_PAGE, Ok(refused));
+        let (r, _) = reader(&http, 60);
+        let reply = r.read(SHOP_PAGE).unwrap();
+        assert!(!reply.obtained);
+        assert_eq!(reply.blocked, blocked, "{status}");
+    }
 }
 
 #[test]

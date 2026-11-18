@@ -220,6 +220,69 @@ pub fn page_identity(url: &str) -> Option<String> {
     Some(out)
 }
 
+/// A locale path segment as shops put it before their paths: `en`, `fr`, `sv-se`, `en_GB`.
+fn is_locale(segment: &str) -> bool {
+    let bytes = segment.as_bytes();
+    let letters = |part: &[u8]| part.len() == 2 && part.iter().all(u8::is_ascii_alphabetic);
+    match bytes.len() {
+        2 => letters(bytes),
+        5 => letters(&bytes[..2]) && matches!(bytes[2], b'-' | b'_') && letters(&bytes[3..]),
+        _ => false,
+    }
+}
+
+/// The path segments of a web URL with one leading locale segment dropped.
+fn segments_without_locale(url: &Url) -> Vec<String> {
+    let mut segments: Vec<String> = url
+        .path_segments()
+        .map(|s| s.filter(|seg| !seg.is_empty()).map(str::to_owned).collect())
+        .unwrap_or_default();
+    if segments.len() > 1 && is_locale(&segments[0]) {
+        segments.remove(0);
+    }
+    segments
+}
+
+/// The product handle of a shop's product page: the segment after `products`
+/// (`/products/<h>`, `/<locale>/products/<h>`, `/collections/<c>/products/<h>`); `None` for any
+/// other page (owner correction A9, 2026-11-18).
+pub fn product_handle(url: &str) -> Option<String> {
+    let parsed = web_url(url)?;
+    let segments = segments_without_locale(&parsed);
+    let at = segments.iter().position(|s| s == "products")?;
+    let handle = segments.get(at + 1)?.trim();
+    (!handle.is_empty()).then(|| handle.to_owned())
+}
+
+/// One product however a shop spells its page: `scheme://host/products/<handle>` for a product
+/// page, so its locale variants and collection paths are read once; `None` for any other page.
+pub fn product_identity(url: &str) -> Option<String> {
+    let parsed = web_url(url)?;
+    let handle = product_handle(url)?;
+    Some(format!(
+        "{}://{}/products/{handle}",
+        parsed.scheme(),
+        host_of(&parsed)?
+    ))
+}
+
+/// A page that lists products rather than describing one: a shop collection without a product
+/// (`/collections/<c>`), or a category path (`/category/…`, `/categories/…`,
+/// `/product-category/…`). Such pages are not read (owner correction A9, 2026-11-18).
+pub fn is_listing_page(url: &str) -> bool {
+    let Some(parsed) = web_url(url) else {
+        return false;
+    };
+    let segments = segments_without_locale(&parsed);
+    if segments.iter().any(|s| s == "products") {
+        return false;
+    }
+    matches!(
+        segments.first().map(String::as_str),
+        Some("collections" | "category" | "categories" | "product-category")
+    )
+}
+
 /// The item's own storefront listing, as the shop reports it. Empty when the item has none.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct OwnListing {
@@ -279,10 +342,14 @@ pub struct ReadingOrder {
     pub own_listing: Vec<Candidate>,
     /// Candidates without a valid absolute `http`/`https` URL.
     pub discarded: Vec<Candidate>,
+    /// Candidates that list products instead of describing one ([`is_listing_page`]): not read.
+    pub listings: Vec<Candidate>,
 }
 
 /// MC-A3 reading order: shop by rank; trusted by entry priority, then rank; untrusted by rank;
-/// ties by `U` ascending. Equal `U` merge, keeping the best rank.
+/// ties by `U` ascending. Equal `U` merge, keeping the best rank, and so do the spellings of one
+/// product page ([`product_identity`]: locale variants, collection paths). Listing pages are set
+/// apart, not read (owner correction A9, 2026-11-18).
 pub fn reading_order(
     candidates: &[Candidate],
     shop_hosts: &[String],
@@ -302,10 +369,20 @@ pub fn reading_order(
             order.own_listing.push(candidate.clone());
             continue;
         }
-        match order.pages.iter_mut().find(|p| p.identity == identity) {
+        if is_listing_page(&candidate.url) {
+            order.listings.push(candidate.clone());
+            continue;
+        }
+        let same = product_identity(&candidate.url).unwrap_or_else(|| identity.clone());
+        match order
+            .pages
+            .iter_mut()
+            .find(|p| product_identity(&p.url).unwrap_or_else(|| p.identity.clone()) == same)
+        {
             Some(page) if page.rank > candidate.rank => {
                 page.rank = candidate.rank;
                 page.url = candidate.url.clone();
+                page.identity = identity;
             }
             Some(_) => {}
             None => order.pages.push(Page {
@@ -701,5 +778,82 @@ mod tests {
             vec![c("https://beyo.example/products/oak-table", 1)]
         );
         assert_eq!(order.discarded, vec![c("not a url", 2)]);
+    }
+    #[test]
+    fn a9_locale_and_collection_spellings_of_one_product_are_read_once() {
+        let shop = s(&["shop.example"]);
+        let order = reading_order(
+            &[
+                c("https://shop.example/en/products/teak-table-4", 2),
+                c("https://shop.example/fr/products/teak-table-4", 1),
+                c(
+                    "https://shop.example/collections/tables/products/teak-table-4",
+                    3,
+                ),
+                c("https://other.example/en/products/teak-table-4", 4),
+            ],
+            &shop,
+            &TrustedSites::default(),
+            &OwnListing::default(),
+        );
+        let urls: Vec<&str> = order.pages.iter().map(|p| p.url.as_str()).collect();
+        assert_eq!(
+            urls,
+            [
+                "https://shop.example/fr/products/teak-table-4",
+                "https://other.example/en/products/teak-table-4"
+            ]
+        );
+        assert_eq!(
+            order.pages[0].identity,
+            "https://shop.example/fr/products/teak-table-4"
+        );
+    }
+
+    #[test]
+    fn a9_listing_pages_are_set_apart() {
+        for listing in [
+            "https://shop.example/en/collections/sideboards",
+            "https://shop.example/collections",
+            "https://dealer.example/product-category/chairs/",
+            "https://dealer.example/sv-se/category/teak",
+        ] {
+            assert!(is_listing_page(listing), "{listing}");
+        }
+        for page in [
+            "https://shop.example/collections/all-products/products/teak-table",
+            "https://shop.example/en/products/teak-table",
+            "https://auction.example/en/search?q=teak",
+            "https://dealer.example/item/123",
+        ] {
+            assert!(!is_listing_page(page), "{page}");
+        }
+        let order = reading_order(
+            &[
+                c("https://shop.example/en/collections/sideboards", 1),
+                c("https://shop.example/en/products/teak-sideboard", 2),
+            ],
+            &s(&["shop.example"]),
+            &TrustedSites::default(),
+            &OwnListing::default(),
+        );
+        assert_eq!(order.pages.len(), 1);
+        assert_eq!(order.listings.len(), 1);
+    }
+
+    #[test]
+    fn a9_product_handle_ignores_locale_and_collection() {
+        for url in [
+            "https://shop.example/products/bsh1-040826",
+            "https://shop.example/es/collections/bookshelves/products/bsh1-040826",
+            "https://shop.example/en/products/bsh1-040826?variant=1",
+        ] {
+            assert_eq!(product_handle(url).as_deref(), Some("bsh1-040826"), "{url}");
+        }
+        assert_eq!(
+            product_handle("https://shop.example/en/collections/x"),
+            None
+        );
+        assert_eq!(product_handle("https://shop.example/products/"), None);
     }
 }

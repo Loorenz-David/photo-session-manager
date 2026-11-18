@@ -548,14 +548,21 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
             &ctx.config.own_listing(),
         );
         let mut obtained = 0;
+        // A9: hosts that refused automated reading in this run; their later pages are skipped.
+        let mut blocked = std::collections::HashSet::new();
         for page in &order.pages {
             if obtained >= ctx.config.max_pages {
                 break;
             }
-            match flow!(read(&ctx, &page.url, &page.identity)?) {
+            match flow!(read(&ctx, &page.url, &page.identity, &blocked)?) {
                 Some(c) => {
                     if c.output["obtained"].as_bool() == Some(true) {
                         obtained += 1;
+                    }
+                    if c.output["blocked"].as_bool() == Some(true)
+                        && let Some(host) = crate::rules::sites::host(&page.url)
+                    {
+                        blocked.insert(host);
                     }
                     pages.push(c);
                 }
@@ -852,8 +859,41 @@ fn another_kind(read: &Json) -> bool {
     read["same_kind"].as_bool() == Some(false)
 }
 
-fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
+/// The site a step names: the host without a leading `www.`.
+fn site_name(url: &str) -> String {
+    let host = crate::rules::sites::host(url).unwrap_or_else(|| url.to_owned());
+    host.strip_prefix("www.").unwrap_or(&host).to_owned()
+}
+
+fn read(
+    ctx: &Ctx<'_>,
+    url: &str,
+    identity_u: &str,
+    blocked: &std::collections::HashSet<String>,
+) -> Result<Flow> {
     let stage = Stage::Read;
+    // A9: a site that refused automated reading earlier in this run is not asked again. The skip
+    // is a unit of its own identity, so a later run never reuses it in place of a read.
+    if crate::rules::sites::host(url).is_some_and(|host| blocked.contains(&host)) {
+        let identity = json!({ "page": identity_u, "skipped": "blocked" });
+        return ctx.unit(stage, identity_u, identity, |_| {
+            let mut skipped = step(stage, StepKind::Read, UNREAD);
+            skipped.source_url = Some(url.to_owned());
+            skipped.detail = format!("Skipped: {} is blocking automated reading", site_name(url));
+            Ok(Work::Commit {
+                output: json!({
+                    "url": url,
+                    "unit": identity_u,
+                    "obtained": false,
+                    "skipped": "blocked",
+                    "statements": {},
+                    "images": [],
+                    "files": [],
+                }),
+                steps: vec![skipped],
+            })
+        });
+    }
     let settings = ctx.config.stage(stage);
     let researched = fields_of(
         ctx,
@@ -870,6 +910,16 @@ fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
         .as_ref()
         .map(|p| p.id())
         .unwrap_or_default();
+    // A9: the shop's own product pages are read through its API; the route is part of the
+    // identity, so a storefront read of an earlier run (a 429) is not reused in its place.
+    let on_shop = ctx.config.shop_hosts.iter().any(|shop| {
+        crate::rules::sites::overlaps(shop, &crate::rules::sites::host(url).unwrap_or_default())
+    }) && crate::rules::sites::product_handle(url).is_some();
+    let route = if on_shop {
+        format!("{route}+shop_api")
+    } else {
+        route
+    };
     let identity = json!({
         "page": identity_u,
         "route": route,
@@ -912,7 +962,31 @@ fn read(ctx: &Ctx<'_>, url: &str, identity_u: &str) -> Result<Flow> {
             Asked::Work(work) => return Ok(work),
         };
         if !page.obtained {
-            return Ok(unread(read_step));
+            if page.blocked {
+                let why = page
+                    .note
+                    .as_deref()
+                    .map(|n| format!(" ({n})"))
+                    .unwrap_or_default();
+                read_step.detail = format!(
+                    "{} is blocking automated reading{why}; its other pages are skipped",
+                    site_name(url)
+                );
+            } else if let Some(note) = &page.note {
+                read_step.detail = note.clone();
+            }
+            return Ok(Work::Commit {
+                output: json!({
+                    "url": url,
+                    "unit": identity_u,
+                    "obtained": false,
+                    "blocked": page.blocked,
+                    "statements": {},
+                    "images": [],
+                    "files": [],
+                }),
+                steps: vec![read_step],
+            });
         }
         let read_url = page.final_url.clone().unwrap_or_else(|| url.to_owned());
         let trusted = crate::rules::sites::TrustedSites::new(ctx.config.trusted_sites.clone());
