@@ -118,6 +118,10 @@ it('a11_1_the_tab_lists_exactly_the_pending_suggestions_of_every_step_with_their
   expect(model).toHaveTextContent('· Product');
   expect(model).toHaveTextContent('Medium confidence');
   expect(model).toHaveTextContent('Replaces Chair · preset default');
+  // A18: a suggestion with a prior (not a conflict) offers Keep previous; one over an empty field, Dismiss.
+  expect(within(model).getByRole('button', { name: 'Keep previous' })).toBeInTheDocument();
+  expect(within(designer).getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+  expect(within(designer).queryByRole('button', { name: 'Keep previous' })).not.toBeInTheDocument();
   const maker = screen.getByRole('listitem', { name: 'Maker' });
   expect(within(maker).getByText('Conflict')).toBeInTheDocument();
   expect(maker).toHaveTextContent('Replaces Fritz Hansen · from Shopify');
@@ -136,16 +140,16 @@ it('a11_2_looks_right_and_clear_use_the_pill_commands_and_the_row_leaves_with_th
   const after = mixed();
   after.groups[0].fields[0] = field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }));
   vi.mocked(getForm).mockResolvedValue(after);
-  fireEvent.click(within(screen.getByRole('listitem', { name: 'Designer' })).getByRole('button', { name: 'Looks right' }));
+  fireEvent.click(within(screen.getByRole('listitem', { name: 'Designer' })).getByRole('button', { name: 'Accept' }));
   await waitFor(() => expect(acceptSuggestion).toHaveBeenCalledExactlyOnceWith(ITEM.id, 'designer'));
   await waitFor(() => expect(rowKeys()).toEqual(['maker', 'wear', 'model']));
   expect(count()).toBe('3');
 
-  // Deny: the pill's Clear.
+  // Deny over an empty field: Dismiss is the pill's Clear.
   const cleared = structuredClone(after);
   cleared.groups[1].fields[0] = field(def('wear', 'Wear', 'condition'));
   vi.mocked(getForm).mockResolvedValue(cleared);
-  fireEvent.click(within(screen.getByRole('listitem', { name: 'Wear' })).getByRole('button', { name: 'Clear' }));
+  fireEvent.click(within(screen.getByRole('listitem', { name: 'Wear' })).getByRole('button', { name: 'Dismiss' }));
   await waitFor(() => expect(clearAttribute).toHaveBeenCalledExactlyOnceWith(ITEM.id, 'wear'));
   await waitFor(() => expect(rowKeys()).toEqual(['maker', 'model']));
   expect(count()).toBe('2');
@@ -158,7 +162,7 @@ it('a11_2_a_conflict_offers_the_conflict_actions_and_edit_goes_to_the_field_in_e
   renderForm();
   await openReviewTab();
   const maker = await screen.findByRole('listitem', { name: 'Maker' });
-  expect(within(maker).queryByRole('button', { name: 'Looks right' })).not.toBeInTheDocument();
+  expect(within(maker).queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
   fireEvent.click(within(maker).getByRole('button', { name: 'Keep previous' }));
   await waitFor(() => expect(resolveConflict).toHaveBeenCalledExactlyOnceWith(ITEM.id, 'maker', 'keep_previous'));
   fireEvent.click(within(screen.getByRole('listitem', { name: 'Maker' })).getByRole('button', { name: 'Edit' }));
@@ -166,11 +170,11 @@ it('a11_2_a_conflict_offers_the_conflict_actions_and_edit_goes_to_the_field_in_e
   await waitFor(() => expect(document.activeElement?.id).toBe('field-maker'));
 });
 
-it('a11_2_show_field_goes_to_the_field_on_its_own_step', async () => {
+it('a11_2_edit_goes_to_the_field_on_its_own_step', async () => {
   vi.mocked(getForm).mockResolvedValue(mixed());
   renderForm();
   await openReviewTab();
-  fireEvent.click(within(await screen.findByRole('listitem', { name: 'Model' })).getByRole('button', { name: /Show field/ }));
+  fireEvent.click(within(await screen.findByRole('listitem', { name: 'Model' })).getByRole('button', { name: 'Edit' }));
   expect(await screen.findByRole('region', { name: 'Product fields' })).toBeInTheDocument();
   expect(await screen.findByRole('dialog', { name: 'AI suggestion for Model' })).toBeInTheDocument();
 });
@@ -204,4 +208,82 @@ it('a11_4_the_to_review_chip_and_an_opening_position_land_on_the_tab', async () 
   renderForm({ step: 'review', scroll: 0 });
   expect(await screen.findByRole('region', { name: 'AI review' })).toBeInTheDocument();
   await waitFor(() => expect(rowKeys()).toEqual(['designer', 'maker', 'wear', 'model']));
+});
+
+it('a18_keep_previous_and_accept_on_a_suggestion_with_a_prior_that_is_not_a_conflict', async () => {
+  vi.mocked(getForm).mockResolvedValue(mixed());
+  renderForm();
+  await openReviewTab();
+  const model = await screen.findByRole('listitem', { name: 'Model' });
+  fireEvent.click(within(model).getByRole('button', { name: 'Keep previous' }));
+  await waitFor(() => expect(resolveConflict).toHaveBeenCalledExactlyOnceWith(ITEM.id, 'model', 'keep_previous'));
+  fireEvent.click(within(screen.getByRole('listitem', { name: 'Model' })).getByRole('button', { name: 'Accept' }));
+  await waitFor(() => expect(acceptSuggestion).toHaveBeenCalledWith(ITEM.id, 'model'));
+  // A conflict's Accept is its Use suggestion.
+  fireEvent.click(within(screen.getByRole('listitem', { name: 'Maker' })).getByRole('button', { name: 'Accept' }));
+  await waitFor(() => expect(resolveConflict).toHaveBeenCalledWith(ITEM.id, 'maker', 'use_suggestion'));
+});
+
+it('a18_a_row_reads_as_before_arrow_after_with_confidence_in_words_and_sources_as_site_chips', async () => {
+  const long = 'Two dealers name him as the designer of this exact chair and both show the same carved back rail, paper cord seat and steam-bent top, and a third lists it under his name.';
+  const f = mixed();
+  f.groups[0].fields[0] = field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_reason: long, ai_sources: ['https://www.pamono.com/wegner-ch24', 'https://www.1stdibs.com/x'] }));
+  vi.mocked(getForm).mockResolvedValue(f);
+  renderForm();
+  await openReviewTab();
+  const designer = await screen.findByRole('listitem', { name: 'Designer' });
+  expect(within(designer).getByText('High confidence')).toBeInTheDocument();
+  expect(designer.querySelector('[data-change]')).toHaveTextContent('The field was empty');
+  expect(designer.querySelector('[data-suggested]')).toHaveTextContent('Hans J. Wegner');
+  const sources = within(designer).getByLabelText('Sources');
+  expect(within(sources).getAllByRole('link').map(a => a.textContent)).toEqual(['pamono.com', '1stdibs.com']);
+  // A long reason opens with More and closes with Less.
+  fireEvent.click(within(designer).getByRole('button', { name: 'More' }));
+  expect(within(designer).getByRole('button', { name: 'Less' })).toBeInTheDocument();
+  const maker = screen.getByRole('listitem', { name: 'Maker' });
+  expect(maker.querySelector('[data-change]')).toHaveTextContent('Fritz Hansen');
+  expect(maker.querySelector('[data-suggested]')).toHaveTextContent('Carl Hansen');
+});
+
+const renderDetails = (review?: { left: number; onNext: () => void }, onOpenChange: (open: boolean) => void = () => undefined) =>
+  render(<FormDialog open onOpenChange={onOpenChange} item={ITEM} photos={[]} sessionId={4} reviewFirst review={review} onItemChanged={() => undefined} />);
+
+it('a19_details_opens_on_ai_review_when_suggestions_wait_and_on_details_otherwise', async () => {
+  vi.mocked(getForm).mockResolvedValue(mixed());
+  renderDetails();
+  expect(await screen.findByRole('region', { name: 'AI review' })).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: /AI review/ })).toHaveAttribute('aria-selected', 'true');
+  cleanup();
+  vi.mocked(getForm).mockResolvedValue(form([field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }))]));
+  renderDetails();
+  expect(await screen.findByRole('region', { name: 'Details fields' })).toBeInTheDocument();
+  // Without reviewFirst (a publish batch's form) the form keeps opening on Details.
+  cleanup();
+  vi.mocked(getForm).mockResolvedValue(mixed());
+  renderForm();
+  expect(await screen.findByRole('region', { name: 'Details fields' })).toBeInTheDocument();
+});
+
+it('a19_the_last_suggestion_checked_offers_next_to_review', async () => {
+  vi.mocked(getForm).mockResolvedValue(form([field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner'))]));
+  const onNext = vi.fn();
+  const onOpenChange = vi.fn();
+  renderDetails({ left: 2, onNext }, onOpenChange);
+  const designer = await screen.findByRole('listitem', { name: 'Designer' });
+  vi.mocked(getForm).mockResolvedValue(form([field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }))]));
+  fireEvent.click(within(designer).getByRole('button', { name: 'Accept' }));
+  expect(await screen.findByText('All checked ✓')).toBeInTheDocument();
+  expect(screen.getByText('2 more sessions wait for review.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Next to review/ }));
+  expect(onNext).toHaveBeenCalledTimes(1);
+  expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+it('a19_with_no_other_session_waiting_it_goes_back_to_the_sessions', async () => {
+  vi.mocked(getForm).mockResolvedValue(form([field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }))]));
+  const onNext = vi.fn();
+  render(<FormDialog open onOpenChange={() => undefined} item={ITEM} photos={[]} sessionId={4} position={{ step: 'review', scroll: 0 }} review={{ left: 0, onNext }} onItemChanged={() => undefined} />);
+  expect(await screen.findByText('No other session waits for review.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Back to sessions/ }));
+  expect(onNext).toHaveBeenCalledTimes(1);
 });

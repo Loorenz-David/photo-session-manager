@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, ClipboardList, CloudUpload, FolderDown, Info, Settings, Tag } from 'lucide-react';
+import { ArrowRight, Bell, ClipboardList, CloudUpload, FolderDown, Info, Settings, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/tooltip';
@@ -18,6 +18,7 @@ import { DiskWarning } from '@/features/settings/StorageSection';
 import { ResearchPill, useResearchOverview } from '@/features/sessions/ResearchPill';
 import { ChangedPill } from '@/features/sessions/ChangedPill';
 import { SessionActionsMenu } from '@/features/sessions/DeleteSession';
+import { showsNextToReview } from '@/features/sessions/reviewQueue';
 import { onSessionsChanged } from '@/services/events';
 import type { PublishedChanges } from '@/services/sessions';
 
@@ -31,6 +32,8 @@ type HeaderProps = {
   onDetails?: () => void;
   /** A11: "AI · n to review" opens the details form on its AI review tab. */
   onReview?: () => void;
+  /** A19: the review queue: how many other sessions wait for review, and opening the next one. */
+  reviewQueue?: { left: number; onNext: () => void };
 };
 
 type SessionIdentity = { name: string; sku: string; arranged: boolean; archived: boolean; changes: PublishedChanges | null };
@@ -152,7 +155,7 @@ function useExportToasts(): Set<number> {
 }
 
 /** App header (COMPONENTS.md §App shell): Sessions page or session view. */
-export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssignProduct, onDetails, onReview }: HeaderProps) {
+export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssignProduct, onDetails, onReview, reviewQueue }: HeaderProps) {
   const [identity, reloadIdentity] = useSessionIdentity(sessionId);
   // A6: the open session's research state beside its name; a tap opens Details (the form and its research).
   const research = useResearchOverview(sessionId !== undefined && sessionId !== 1 ? sessionId : undefined);
@@ -210,17 +213,24 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
         ) : (
           <>
             <Hint text="Details (D)"><Button variant="outline" onClick={onDetails}><ClipboardList /> Details</Button></Hint>
-            {identity && !identity.archived && <ActionButton action={async () => {
-              try {
-                const next = await arrangeNext(sessionId);
-                if (next.next_session_id === null) {
+            {identity && !identity.archived && (reviewQueue && showsNextToReview(identity.arranged, research.get(sessionId), reviewQueue.left) ? (
+              // A19: reviewing — an arranged session whose research has finished, while others wait for review.
+              <Button onClick={reviewQueue.onNext} title="Open the next session whose AI suggestions wait for review">
+                Next to review ({reviewQueue.left} left) <ArrowRight />
+              </Button>
+            ) : (
+              <ActionButton action={async () => {
+                try {
+                  const done = await arrangeNext(sessionId);
+                  // A19 (owner 2026-11-18): back to the Sessions page, the New session field ready to type.
                   window.location.hash = '#/';
-                  toast.success('Every session is arranged');
-                } else window.location.hash = `#/session/${next.next_session_id}`;
-              } catch (error) {
-                toast.error((error as Error).message);
-              }
-            }}>{identity.arranged ? 'Arranged ✓ — next' : 'Arranged — next'}</ActionButton>}
+                  onNewSession();
+                  toast.success(done.research_queued ? 'Arranged · AI research queued' : 'Arranged');
+                } catch (error) {
+                  toast.error((error as Error).message);
+                }
+              }}>{identity.arranged ? 'Arranged ✓ — next' : 'Arranged — next'}</ActionButton>
+            ))}
             {integration === null && (
               <ActionButton action={() => runExport(sessionId)} onError={error => toast.error(exportFailureText(error), { id: EXPORT_TOAST_ID })} disabled={exporting.has(sessionId)} title="Export the main and condition photos to the export folder">
                 <FolderDown /> Export

@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{Prerequisite, RunTrigger};
+use crate::domain::{Prerequisite, RunState, RunTrigger};
 
 /// The photo-derived input identities a run started from (MC-A7 trigger set): the photos the one
 /// stage 1 unit looks at `(photo id, composition revision)` (R12·U1), the cover's, and the stage 6
@@ -113,18 +113,18 @@ pub fn start_order(queued: &[(RunTrigger, i64, i64)]) -> Vec<i64> {
     ordered.into_iter().map(|(_, _, id)| id).collect()
 }
 
-/// MC-A7 trigger set: a follow-up is needed iff the set of photos stage 1 looks at, the cover
-/// identity or the Condition identity differs between the latest run's snapshot and now. Order
-/// within the sets does not count.
-pub fn arranged_needed(latest: &InputSnapshot, now: &InputSnapshot) -> bool {
-    let set = |ids: &[(i64, i64)]| {
-        ids.iter()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>()
-    };
-    set(&latest.observe) != set(&now.observe)
-        || latest.cover != now.cover
-        || set(&latest.condition) != set(&now.condition)
+/// A19 (owner 2026-11-18): research starts by itself at most once per session. "Arranged — next"
+/// queues a run only when none of the session's runs (`states`, browse runs left out) is queued,
+/// running, finished or stopped at the cost limit. A failed or cancelled run produced nothing, so
+/// arranging again may retry it. After that the only way to research again is **Run again**
+/// (`run_again`); photo changes never queue a follow-up (replaces MC-A7's trigger set).
+pub fn arranged_queues(states: &[RunState]) -> bool {
+    !states.iter().any(|state| {
+        matches!(
+            state,
+            RunState::Queued | RunState::Running | RunState::Finished | RunState::StoppedAtCap
+        )
+    })
 }
 
 #[cfg(test)]
@@ -281,36 +281,15 @@ mod tests {
         assert_eq!(start_order(&queued), vec![3, 5, 2, 4, 1]);
     }
 
-    fn snapshot() -> InputSnapshot {
-        InputSnapshot {
-            observe: vec![(1, 1), (2, 1), (3, 2)],
-            cover: Some((1, 1)),
-            condition: vec![(7, 1), (8, 1)],
+    #[test]
+    fn a19_arranging_queues_only_while_no_run_produced_or_will_produce_anything() {
+        use RunState::*;
+        assert!(arranged_queues(&[]));
+        assert!(arranged_queues(&[Failed]));
+        assert!(arranged_queues(&[Cancelled, Failed]));
+        for state in [Queued, Running, Finished, StoppedAtCap] {
+            assert!(!arranged_queues(&[state]), "{state:?}");
+            assert!(!arranged_queues(&[Failed, state, Cancelled]), "{state:?}");
         }
-    }
-
-    #[test]
-    fn a14_c6b_order_of_identities_does_not_count() {
-        let mut now = snapshot();
-        now.observe.reverse();
-        now.condition.reverse();
-        assert!(!arranged_needed(&snapshot(), &now));
-    }
-
-    #[test]
-    fn arranged_needed_by_each_identity() {
-        let mut added = snapshot();
-        added.observe.push((4, 1));
-        assert!(arranged_needed(&snapshot(), &added));
-        let mut recomposed = snapshot();
-        recomposed.observe[2] = (3, 3);
-        assert!(arranged_needed(&snapshot(), &recomposed));
-        let mut cover = snapshot();
-        cover.cover = Some((2, 1));
-        assert!(arranged_needed(&snapshot(), &cover));
-        let mut condition = snapshot();
-        condition.condition.pop();
-        assert!(arranged_needed(&snapshot(), &condition));
-        assert!(!arranged_needed(&snapshot(), &snapshot()));
     }
 }

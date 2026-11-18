@@ -210,7 +210,10 @@ fn a26_c4a_a_new_condition_photo_reuses_the_observe_unit() {
     mains(&h, 2);
     let first = first_arranged_run(&h);
     h.add_photo_with_preview(h.session_id, Classification::Condition);
-    assert!(h.service.arranged(h.session_id).unwrap());
+    // A19: arranging queues nothing after a finished run; a queued automatic run (an older
+    // build's follow-up) still reuses the unchanged observe unit.
+    assert!(!h.service.arranged(h.session_id).unwrap());
+    h.queue_follow_up();
     h.tick(1_000);
     let second = h.runs(h.session_id).last().unwrap().id;
     assert_ne!(second, first);
@@ -231,7 +234,8 @@ fn a26_c4b_a_recomposed_photo_costs_one_observe_call_over_all() {
     let photos = mains(&h, 3);
     first_arranged_run(&h);
     h.recompose(photos[1]);
-    assert!(h.service.arranged(h.session_id).unwrap());
+    assert!(!h.service.arranged(h.session_id).unwrap());
+    h.queue_follow_up();
     h.tick(1_000);
     let second = h.runs(h.session_id).last().unwrap().id;
     assert_eq!(h.run_row(second).state, RunState::Finished);

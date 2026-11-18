@@ -769,6 +769,31 @@ impl Harness {
             .unwrap()
     }
 
+    /// A19: a queued automatic run as an older build left it (photo changes queued follow-ups
+    /// before A19). Arranging no longer queues one after a finished run; such a run still runs and
+    /// still reuses what is unchanged.
+    pub fn queue_follow_up(&self) -> i64 {
+        let now = self.now();
+        self.store()
+            .research_transaction(|tx| {
+                rstore::insert_run(
+                    tx.conn(),
+                    &NewRun {
+                        item_id: self.item_id,
+                        session_id: self.session_id,
+                        trigger: RunTrigger::Arranged,
+                        state: RunState::Queued,
+                        queued_at: now,
+                        started_at: None,
+                        settings_snapshot: None,
+                        form_snapshot: None,
+                        input_snapshot: None,
+                    },
+                )
+            })
+            .unwrap()
+    }
+
     /// The providers: the crate's three fakes.
     pub fn providers(&self) -> Providers {
         Providers {

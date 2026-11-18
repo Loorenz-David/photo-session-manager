@@ -21,6 +21,9 @@ vi.mock('@/services/search', () => ({
   removePage: vi.fn(async () => undefined),
   putText: vi.fn(),
   putBack: vi.fn(async () => undefined),
+  putValue: vi.fn(),
+  zoomPage: vi.fn(async () => 1),
+  closeTab: vi.fn(async () => undefined),
   openAiReview: vi.fn(async () => undefined),
   onOpenAiReview: vi.fn(),
   askAi: vi.fn(),
@@ -79,7 +82,7 @@ beforeEach(() => {
   vi.mocked(search.savedPages).mockResolvedValue([]);
   vi.mocked(search.readSelection).mockResolvedValue({ selection: { text: TEXT, url: PAGE_URL, title: 'Vattenflaska' }, refused: null });
   vi.mocked(search.putText).mockResolvedValue({ stored: {} as never, previous: '"Rusta"' });
-  vi.mocked(search.askAi).mockResolvedValue({ suggested: [{ key: 'custom.volume', label: 'Volume', value: '500 ml' }], not_written: [], cost_micro_usd: 200 });
+  vi.mocked(search.askAi).mockResolvedValue({ suggested: [{ key: 'custom.volume', label: 'Volume', value: '500 ml' }], not_written: [], answer: null, found: [], cost_micro_usd: 200 });
   vi.mocked(search.onSearchEvents).mockImplementation(async (_s, next) => {
     handlers = next;
     return () => undefined;
@@ -164,15 +167,17 @@ it('a14_ask_ai_opens_a_prompt_in_the_bar_return_sends_escape_cancels_and_the_ans
   let answer: (value: Awaited<ReturnType<typeof search.askAi>>) => void = () => undefined;
   vi.mocked(search.askAi).mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }));
   fireEvent.click(within(bar).getByRole('button', { name: /Ask AI/ }));
+  // A18: "Fill fields" sends suggestions to AI review (the default answers in words).
+  fireEvent.click(within(bar).getByRole('radio', { name: /Fill fields/ }));
   fireEvent.change(within(bar).getByLabelText('Instruction for AI'), { target: { value: 'the volume' } });
   // The page's selection goes meanwhile: the prompt keeps the selection it was opened on.
   vi.mocked(search.readSelection).mockResolvedValue({ selection: null, refused: null });
   await act(async () => { await new Promise(r => setTimeout(r, 800)); });
   fireEvent.keyDown(within(bar).getByLabelText('Instruction for AI'), { key: 'Enter' });
-  expect(search.askAi).toHaveBeenCalledWith(SESSION, { text: TEXT, url: PAGE_URL, title: 'Vattenflaska' }, 'the volume');
+  expect(search.askAi).toHaveBeenCalledWith(SESSION, { text: TEXT, url: PAGE_URL, title: 'Vattenflaska' }, 'the volume', 'suggest');
   expect(within(bar).getByTestId('selection-bar')).toHaveAttribute('data-mode', 'asking');
   expect(within(bar).getByText('Asking AI…')).toBeInTheDocument();
-  await act(async () => answer({ suggested: [{ key: 'custom.volume', label: 'Volume', value: '500 ml' }], not_written: [], cost_micro_usd: 200 }));
+  await act(async () => answer({ suggested: [{ key: 'custom.volume', label: 'Volume', value: '500 ml' }], not_written: [], answer: null, found: [], cost_micro_usd: 200 }));
   expect(within(bar).getByTestId('selection-bar')).toHaveAttribute('data-mode', 'done');
   expect(within(bar).getByText('1 suggestion sent to AI review')).toBeInTheDocument();
   fireEvent.click(within(bar).getByRole('button', { name: /Open AI review/ }));

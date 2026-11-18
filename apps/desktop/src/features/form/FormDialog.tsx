@@ -81,6 +81,10 @@ type FormDialogProps = {
   onPosition?: (position: FormPosition) => void;
   /** The item's session: its research status and runs (08A §1). Absent → no research state is read. */
   sessionId?: number;
+  /** A19: opened without a position (Details button, D), the form lands on AI review when suggestions wait. */
+  reviewFirst?: boolean;
+  /** A19: the review queue: "Next to review" on the AI review tab once every suggestion is checked. */
+  review?: { left: number; onNext: () => void };
 };
 
 /** "n to review" (08B MC-A10, derived): the form's fields holding a live `ai` + `suggested` value, at every confidence. */
@@ -146,7 +150,7 @@ export function FormDialog({ open, onOpenChange, ...rest }: FormDialogProps) {
 
 type FormBodyProps = Omit<FormDialogProps, 'open' | 'onOpenChange'> & { close: () => void; registerClose: (close: () => void) => void };
 
-function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition, sessionId }: FormBodyProps) {
+function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition, sessionId, reviewFirst = false, review }: FormBodyProps) {
   const state = useFormState(item.id);
   const { form } = state;
   const [step, setStep] = useState<Step>(position?.step ?? 'details');
@@ -240,6 +244,15 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const reviewEntries: ReviewEntry[] = (form?.groups ?? []).flatMap(g =>
     g.fields.filter(field => field.value?.provenance === 'ai' && field.value.ai_status === 'suggested').map(field => ({ field, group: g.group })));
   const acceptable = reviewEntries.filter(entry => entry.field.value!.ai_confidence !== 'low' && !entry.field.value!.conflict).length;
+  // A19: opened from Details or D (no position), the form lands on AI review when suggestions wait: once, on its
+  // first read, so moving between steps afterwards is the owner's.
+  const landed = useRef(!reviewFirst || Boolean(position));
+  const waitingSuggestions = reviewEntries.length;
+  useEffect(() => {
+    if (landed.current || !form) return;
+    landed.current = true;
+    if (waitingSuggestions > 0) setStep(REVIEW_STEP);
+  }, [form, waitingSuggestions]);
   /** Opens the research panel; it re-reads the status on open in case an event was missed. */
   const openResearch = (focus: string | null) => {
     setResearch({ open: true, focus });
@@ -417,6 +430,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   anyAi={aiFields.length > 0}
                   onLooksRight={f => act(() => acceptSuggestion(item.id, f.definition.key), 'Could not accept')}
                   onClear={f => act(() => clearAttribute(item.id, f.definition.key), 'Could not clear')}
+                  onKeepPrevious={f => act(() => resolveConflict(item.id, f.definition.key, 'keep_previous'), 'Could not keep the previous value')}
                   conflictActions={entry => {
                     const actions = conflictActions(entry.field);
                     // Edit types the value in the field itself, on its own step.
@@ -425,6 +439,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   onSeeResearch={key => openResearch(key)}
                   onShowField={showField}
                   onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}
+                  nextToReview={review && { left: review.left, onNext: () => { close(); review.onNext(); } }}
                 />
               )}
               {!reading && group && group.fields.length === 0 && (

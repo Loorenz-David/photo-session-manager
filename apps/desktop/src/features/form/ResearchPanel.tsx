@@ -168,6 +168,8 @@ export function ResearchPanel({ status, fields, focusKey, onFocus, onRun, onAcce
           {queued && status.queue?.manual && <p className="text-muted-foreground">You asked for it, so it goes before the sessions marked arranged.</p>}
           {showReason && <p className="text-muted-foreground">{reason!.sentence}</p>}
           {!run && !reason && status.can_run && <p className="text-muted-foreground">Research starts when you press Arranged — next.</p>}
+          {/* A19: research starts by itself once per session; afterwards only Run again researches it. */}
+          {run && DONE.has(run.state) && status.can_run && <p className="text-muted-foreground" data-run-again-hint>Research ran by itself once for this session. Use Run again to research it again, for example after new photos.</p>}
           {status.can_run && !(queued && status.queue?.manual) && (
             <ActionButton size="sm" variant="secondary" className="self-start" action={onRun}>
               {ended ? 'Run again' : queued ? 'Research this next' : 'Research'}

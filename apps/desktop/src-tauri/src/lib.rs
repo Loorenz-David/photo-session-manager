@@ -1135,6 +1135,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::search::search_web_place,
         commands::search::search_web_go,
         commands::search::search_web_step,
+        commands::search::search_web_zoom,
+        commands::search::search_tab_close,
         commands::search::search_lens_start,
         commands::search::search_lens_give_up,
         commands::search::search_lens_results,
@@ -1146,6 +1148,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::search::search_page_remove,
         commands::search::search_put_text,
         commands::search::search_put_back,
+        commands::search::search_put_value,
         commands::search::search_open_review,
         commands::search::search_ask,
         commands::publish::publish_preview,
@@ -1226,9 +1229,41 @@ pub fn run() {
             menu.remove_at(position)?;
             menu.insert(&edit, position)?;
             handle.manage(EditMenu { undo, redo });
+            // A18: page zoom of the search window's current tab (⌘+ / ⌘− / ⌘0). Menu key
+            // equivalents reach the app also while the web page has the keyboard, and the page
+            // itself never talks to the app.
+            if let Some(MenuItemKind::Submenu(view)) = menu.items()?.into_iter().find(|item| matches!(item, MenuItemKind::Submenu(sub) if sub.text().ok().as_deref() == Some("View"))) {
+                view.append_items(&[
+                    &PredefinedMenuItem::separator(handle)?,
+                    &MenuItem::with_id(handle, "view.zoom_in", "Zoom In", true, Some("CmdOrCtrl+NumpadAdd"))?,
+                    &MenuItem::with_id(handle, "view.zoom_in_eq", "Zoom In", true, Some("CmdOrCtrl+="))?,
+                    &MenuItem::with_id(handle, "view.zoom_out", "Zoom Out", true, Some("CmdOrCtrl+-"))?,
+                    &MenuItem::with_id(handle, "view.zoom_reset", "Actual Size", true, Some("CmdOrCtrl+0"))?,
+                ])?;
+            }
             Ok(menu)
         })
         .on_menu_event(|app, event| {
+            let zoom = match event.id().as_ref() {
+                "view.zoom_in" | "view.zoom_in_eq" => Some("in"),
+                "view.zoom_out" => Some("out"),
+                "view.zoom_reset" => Some("reset"),
+                _ => None,
+            };
+            if let Some(action) = zoom {
+                // Only a focused search window zooms (its app page applies it to the current tab).
+                let focused = app.windows().into_iter().find_map(|(label, window)| {
+                    search_window::session_of_window(&label).filter(|_| window.is_focused().unwrap_or(false))
+                });
+                if let Some(session_id) = focused {
+                    let _ = app.emit_to(
+                        search_window::ui_label(session_id).as_str(),
+                        "search_zoom",
+                        search_window::ZoomPayload { session_id, action },
+                    );
+                }
+                return;
+            }
             let action = match event.id().as_ref() {
                 "edit.undo" => "undo",
                 "edit.redo" => "redo",

@@ -1,10 +1,10 @@
 //! Owner correction A12 (2026-11-18): the "Search this photo" window.
 //!
-//! One window per session (`search-<session>`) holding two webviews (Tauri's multiwebview):
+//! One window per session (`search-<session>`) holding webviews (Tauri's multiwebview):
 //! - `search-ui-<session>`: the app's own page (trusted): the pinned photo, the browser controls,
-//!   the saved pages and the selection bar with its actions;
-//! - `search-web-<session>`: the web pages (untrusted), placed over the area the app's page
-//!   leaves for it.
+//!   the search tabs, the saved pages and the selection bar with its actions;
+//! - `search-web-<session>-<tab>` (A18: one per search tab): the web pages (untrusted). The app's
+//!   page places the current tab over the area it leaves for it; every other tab is hidden.
 //!
 //! Trust boundary (docs/guide/03 §A12): the page webview never reaches the app. Tauri refuses
 //! every command from a remote origin (no capability names a remote URL), and
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 /// The longest selected text the window takes (the same limit "Ask AI…" has).
 pub const MAX_SELECTION_CHARS: usize = psm_research::browse::MAX_SELECTION_CHARS;
 /// The longest raw answer the page may give to the selection question (bytes).
-pub const MAX_REPORT_BYTES: usize = 32 * 1024;
+pub const MAX_REPORT_BYTES: usize = 64 * 1024;
 const MAX_TITLE_CHARS: usize = 300;
 const MAX_URL_CHARS: usize = 2_048;
 
@@ -45,8 +45,41 @@ pub fn window_label(session_id: i64) -> String {
 pub fn ui_label(session_id: i64) -> String {
     format!("search-ui-{session_id}")
 }
-pub fn web_label(session_id: i64) -> String {
-    format!("search-web-{session_id}")
+/// A18: one page webview per search tab: `search-web-<session>-<tab>`.
+pub fn web_label(session_id: i64, tab: i64) -> String {
+    format!("search-web-{session_id}-{tab}")
+}
+/// The start every page webview label of a session's window has.
+pub fn web_prefix(session_id: i64) -> String {
+    format!("search-web-{session_id}-")
+}
+
+/// A18: the most search tabs one window keeps open (each is a web page process).
+pub const MAX_TABS: usize = 8;
+
+/// A18: the page zoom steps of the toolbar and ⌘+ / ⌘− / ⌘0.
+pub const ZOOM_STEPS: [f64; 13] = [
+    0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0,
+];
+
+/// A18: the zoom after `action` (`in`, `out`, `reset`) from `current`: the next step up or down,
+/// kept within the steps; anything unknown or not finite gives 100 %.
+pub fn next_zoom(current: f64, action: &str) -> f64 {
+    let current = if current.is_finite() { current } else { 1.0 };
+    match action {
+        "in" => ZOOM_STEPS
+            .iter()
+            .copied()
+            .find(|z| *z > current + 0.001)
+            .unwrap_or(ZOOM_STEPS[ZOOM_STEPS.len() - 1]),
+        "out" => ZOOM_STEPS
+            .iter()
+            .rev()
+            .copied()
+            .find(|z| *z < current - 0.001)
+            .unwrap_or(ZOOM_STEPS[0]),
+        _ => 1.0,
+    }
 }
 
 /// The host of an `http(s)` URL, lowercased, without a trailing dot.
@@ -168,7 +201,7 @@ pub fn new_window(url: &str) -> NewWindow {
 /// string (JSON text) or `""`, whatever the page has changed around it.
 pub const SELECTION_SCRIPT: &str = "(function(){try{\
 var s=window.getSelection?(''+window.getSelection()):'';\
-var o=JSON.stringify({text:(''+s).slice(0,2001),url:''+location.href,title:(''+document.title).slice(0,300)});\
+var o=JSON.stringify({text:(''+s).slice(0,6001),url:''+location.href,title:(''+document.title).slice(0,300)});\
 return typeof o==='string'?o:'';}catch(e){return '';}})()";
 
 /// What is selected on the page, as the app's page shows it.
@@ -192,7 +225,7 @@ pub enum Rejected {
 impl Rejected {
     pub fn sentence(&self) -> &'static str {
         match self {
-            Rejected::TooLong => "The selection is too long — select at most 2,000 characters",
+            Rejected::TooLong => "The selection is too long — select at most 6,000 characters",
             Rejected::NotAWebPage => "This page cannot be used",
             _ => "The page gave an answer the app does not accept",
         }
@@ -458,20 +491,26 @@ pub fn web_bounds(area: Bounds, ui: Bounds) -> Bounds {
     }
 }
 
-/// The windows' Lens routes and layouts, by session (managed by Tauri).
+/// The windows' Lens routes (by session and search tab) and layouts (by session), managed by
+/// Tauri. A18: every search tab has its own route, so a new search never disturbs another tab.
 #[derive(Default, Clone)]
 pub struct SearchWindows {
-    pub lens: Arc<Mutex<HashMap<i64, LensState>>>,
+    pub lens: Arc<Mutex<HashMap<(i64, i64), LensState>>>,
     /// Where each window's app page sits (see [`ui_bounds`]).
     pub layout: Arc<Mutex<HashMap<i64, Bounds>>>,
 }
 
 impl SearchWindows {
-    /// A page finished loading in `session`'s page webview: the next phase (when it changed or the
+    /// A page finished loading in a tab's page webview: the next phase (when it changed or the
     /// photo is posted), and the script to run in it (the photo post) when it is time.
-    pub fn page_loaded(&self, session_id: i64, url: &str) -> (Option<LensPhase>, Option<String>) {
+    pub fn page_loaded(
+        &self,
+        session_id: i64,
+        tab: i64,
+        url: &str,
+    ) -> (Option<LensPhase>, Option<String>) {
         let mut lens = self.lens.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(state) = lens.get_mut(&session_id) else {
+        let Some(state) = lens.get_mut(&(session_id, tab)) else {
             return (None, None);
         };
         let before = state.phase.clone();
@@ -500,9 +539,9 @@ impl SearchWindows {
         ((next != before || script.is_some()).then_some(next), script)
     }
 
-    pub fn start(&self, session_id: i64, photo_id: i64, jpeg_base64: String) {
+    pub fn start(&self, session_id: i64, tab: i64, photo_id: i64, jpeg_base64: String) {
         self.lens.lock().unwrap_or_else(|e| e.into_inner()).insert(
-            session_id,
+            (session_id, tab),
             LensState {
                 phase: LensPhase::Opening,
                 photo: Some(jpeg_base64),
@@ -512,29 +551,29 @@ impl SearchWindows {
         );
     }
 
-    pub fn phase(&self, session_id: i64) -> Option<LensPhase> {
+    pub fn phase(&self, session_id: i64, tab: i64) -> Option<LensPhase> {
         self.lens
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .get(&session_id)
+            .get(&(session_id, tab))
             .map(|s| s.phase.clone())
     }
 
-    /// How often the photo was posted in the current search.
-    pub fn posts(&self, session_id: i64) -> u8 {
+    /// How often the photo was posted in the tab's current search.
+    pub fn posts(&self, session_id: i64, tab: i64) -> u8 {
         self.lens
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .get(&session_id)
+            .get(&(session_id, tab))
             .map_or(0, |s| s.posts)
     }
 
-    pub fn fail(&self, session_id: i64, why: &str) {
+    pub fn fail(&self, session_id: i64, tab: i64, why: &str) {
         if let Some(state) = self
             .lens
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .get_mut(&session_id)
+            .get_mut(&(session_id, tab))
         {
             state.photo = None;
             state.phase = LensPhase::Failed { why: why.into() };
@@ -557,11 +596,20 @@ impl SearchWindows {
             .copied()
     }
 
+    /// A tab was closed: its route (and the photo it held) goes.
+    pub fn forget_tab(&self, session_id: i64, tab: i64) {
+        self.lens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&(session_id, tab));
+    }
+
+    /// The window was closed: every tab's route and its layout go.
     pub fn forget(&self, session_id: i64) {
         self.lens
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(&session_id);
+            .retain(|(session, _), _| *session != session_id);
         self.layout
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -569,26 +617,42 @@ impl SearchWindows {
     }
 }
 
-/// The page webview's page, for the app's page (event `search_web_page`).
+/// A tab's page, for the app's page (event `search_web_page`).
 #[derive(Debug, Clone, Serialize)]
 pub struct PagePayload {
     pub session_id: i64,
+    pub tab: i64,
     pub url: String,
     pub title: Option<String>,
     pub loading: bool,
 }
 
-/// The Lens route's phase, for the app's page (event `search_lens`).
+/// A tab's Lens route phase, for the app's page (event `search_lens`).
 #[derive(Debug, Clone, Serialize)]
 pub struct LensPayload {
     pub session_id: i64,
+    pub tab: i64,
     #[serde(flatten)]
     pub phase: LensPhase,
 }
 
+/// A18: a zoom key of the app's View menu (⌘+ / ⌘− / ⌘0), for the focused search window's own
+/// page (event `search_zoom`), which applies it to its current tab.
+#[derive(Debug, Clone, Serialize)]
+pub struct ZoomPayload {
+    pub session_id: i64,
+    pub action: &'static str,
+}
+
+/// The session of a search window's label (`search-<session>`), if it is one.
+pub fn session_of_window(label: &str) -> Option<i64> {
+    label.strip_prefix("search-")?.parse().ok()
+}
+
 #[cfg(desktop)]
 pub mod window {
-    //! Creating the window and its two webviews (macOS; not reachable from tests).
+    //! Creating the window, its app page and its tabs' page webviews (macOS; not reachable from
+    //! tests).
 
     use super::*;
     use tauri::{
@@ -596,8 +660,8 @@ pub mod window {
         webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder},
     };
 
-    /// Opens the session's search window on `photo_id`, or brings it forward and switches its
-    /// pinned photo when it is open.
+    /// Opens the session's search window on `photo_id`, or brings it forward; the app's page then
+    /// opens a search tab for the photo (A18: a new tab when the window was open already).
     pub fn open<R: Runtime>(
         app: &AppHandle<R>,
         session_id: i64,
@@ -631,14 +695,6 @@ pub mod window {
             LogicalPosition::new(0.0, 0.0),
             LogicalSize::new(width, height),
         )?;
-        let page = page_webview(app, session_id);
-        // Hidden until the app's page says where the browser area is.
-        let web = window.add_child(
-            page,
-            LogicalPosition::new(0.0, 0.0),
-            LogicalSize::new(1.0, 1.0),
-        )?;
-        let _ = web.hide();
         let laid_out = window.clone();
         window.run_on_main_thread(move || lay_out(&laid_out, session_id))?;
         let handle = app.clone();
@@ -655,6 +711,61 @@ pub mod window {
             "search_window.opened session={session_id} photo={photo_id}"
         );
         Ok(())
+    }
+
+    /// The page webviews of the session's window (every tab's).
+    pub fn tabs<R: Runtime>(app: &AppHandle<R>, session_id: i64) -> Vec<tauri::Webview<R>> {
+        let prefix = web_prefix(session_id);
+        app.webviews()
+            .into_iter()
+            .filter(|(label, _)| label.starts_with(&prefix))
+            .map(|(_, webview)| webview)
+            .collect()
+    }
+
+    /// A18: the tab's page webview, made (hidden) when the tab is new. At most [`MAX_TABS`].
+    pub fn ensure_tab<R: Runtime>(
+        app: &AppHandle<R>,
+        session_id: i64,
+        tab: i64,
+    ) -> Result<tauri::Webview<R>, String> {
+        if let Some(web) = app.get_webview(&web_label(session_id, tab)) {
+            return Ok(web);
+        }
+        if tabs(app, session_id).len() >= MAX_TABS {
+            return Err(format!(
+                "At most {MAX_TABS} searches can be open — close one first"
+            ));
+        }
+        let window = app
+            .get_window(&window_label(session_id))
+            .ok_or_else(|| "The search window is closed".to_owned())?;
+        let web = window
+            .add_child(
+                page_webview(app, session_id, tab),
+                LogicalPosition::new(0.0, 0.0),
+                LogicalSize::new(1.0, 1.0),
+            )
+            .map_err(|e| e.to_string())?;
+        // Hidden until the app's page places it as the current tab.
+        let _ = web.hide();
+        tracing::info!(
+            target: "psm::search",
+            "search_window.tab_opened session={session_id} tab={tab}"
+        );
+        Ok(web)
+    }
+
+    /// A18: closes a tab's page webview and forgets its route.
+    pub fn close_tab<R: Runtime>(app: &AppHandle<R>, session_id: i64, tab: i64) {
+        if let Some(web) = app.get_webview(&web_label(session_id, tab)) {
+            let _ = web.close();
+        }
+        app.state::<SearchWindows>().forget_tab(session_id, tab);
+        tracing::info!(
+            target: "psm::search",
+            "search_window.tab_closed session={session_id} tab={tab}"
+        );
     }
 
     /// The content view's size and the title bar's height, in points (macOS, main thread only).
@@ -689,7 +800,7 @@ pub mod window {
     }
 
     /// A13: puts the app's page below the title bar, filling the rest of the window, and keeps
-    /// its place for the page webview's (main thread).
+    /// its place for the page webviews' (main thread).
     fn lay_out<R: Runtime>(window: &tauri::Window<R>, session_id: i64) {
         let Some((width, height, inset)) = content_and_inset(window) else {
             return;
@@ -707,12 +818,16 @@ pub mod window {
         );
     }
 
-    fn page_webview<R: Runtime>(app: &AppHandle<R>, session_id: i64) -> WebviewBuilder<R> {
+    fn page_webview<R: Runtime>(
+        app: &AppHandle<R>,
+        session_id: i64,
+        tab: i64,
+    ) -> WebviewBuilder<R> {
         let blank = "about:blank".parse().expect("about:blank");
         let titles = app.clone();
         let loads = app.clone();
         let popups = app.clone();
-        WebviewBuilder::new(web_label(session_id), WebviewUrl::External(blank))
+        WebviewBuilder::new(web_label(session_id, tab), WebviewUrl::External(blank))
             // A13: Safari's identity, so Google serves its current pages and Lens results.
             .user_agent(PAGE_USER_AGENT)
             // A14: links and pop-ups aimed at a new window open in this page (every frame).
@@ -722,7 +837,7 @@ pub mod window {
                 if let Some(why) = refused {
                     tracing::info!(
                         target: "psm::search",
-                        "search_window.navigation_refused session={session_id} scheme={} host={} why={why}",
+                        "search_window.navigation_refused session={session_id} tab={tab} scheme={} host={} why={why}",
                         url.scheme(),
                         url.host_str().unwrap_or("-")
                     );
@@ -731,21 +846,21 @@ pub mod window {
             })
             .on_download(|_, _| false)
             .on_new_window(move |url, _| {
-                // A link that would open a new window opens here instead.
+                // A link that would open a new window opens here instead (in this tab).
                 let host = url.host_str().unwrap_or("-").to_owned();
                 match new_window(url.as_str()) {
                     NewWindow::OpenHere => {
-                        if let Some(web) = popups.get_webview(&web_label(session_id)) {
+                        if let Some(web) = popups.get_webview(&web_label(session_id, tab)) {
                             let _ = web.navigate(url);
                         }
                         tracing::info!(
                             target: "psm::search",
-                            "search_window.new_window session={session_id} host={host} result=opened_here"
+                            "search_window.new_window session={session_id} tab={tab} host={host} result=opened_here"
                         );
                     }
                     NewWindow::Ignore(why) => tracing::info!(
                         target: "psm::search",
-                        "search_window.new_window session={session_id} host={host} result=ignored why={why}"
+                        "search_window.new_window session={session_id} tab={tab} host={host} result=ignored why={why}"
                     ),
                 }
                 NewWindowResponse::Deny
@@ -756,6 +871,7 @@ pub mod window {
                     "search_web_page",
                     PagePayload {
                         session_id,
+                        tab,
                         url,
                         title: Some(title.chars().take(MAX_TITLE_CHARS).collect()),
                         loading: false,
@@ -769,6 +885,7 @@ pub mod window {
                     "search_web_page",
                     PagePayload {
                         session_id,
+                        tab,
                         url: url.clone(),
                         title: None,
                         loading,
@@ -781,29 +898,29 @@ pub mod window {
                 if let Some((host, kind)) = nav_kind(&url) {
                     tracing::info!(
                         target: "psm::search",
-                        "search_window.navigation session={session_id} host={host} kind={}",
+                        "search_window.navigation session={session_id} tab={tab} host={host} kind={}",
                         kind.name()
                     );
                 }
                 let windows = loads.state::<SearchWindows>();
-                let (phase, script) = windows.page_loaded(session_id, &url);
+                let (phase, script) = windows.page_loaded(session_id, tab, &url);
                 if let Some(script) = script {
                     let _ = webview.eval(script);
-                    let attempt = windows.posts(session_id);
+                    let attempt = windows.posts(session_id, tab);
                     let step = if attempt > 1 { "photo_posted_again" } else { "photo_posted" };
                     tracing::info!(
                         target: "psm::search",
-                        "search_window.lens_route step={step} attempt={attempt} session={session_id}"
+                        "search_window.lens_route step={step} attempt={attempt} session={session_id} tab={tab}"
                     );
                 }
                 if let Some(phase) = phase {
-                    log_phase(session_id, &phase);
-                    let _ = loads.emit("search_lens", LensPayload { session_id, phase });
+                    log_phase(session_id, tab, &phase);
+                    let _ = loads.emit("search_lens", LensPayload { session_id, tab, phase });
                 }
             })
     }
 
-    fn log_phase(session_id: i64, phase: &LensPhase) {
+    fn log_phase(session_id: i64, tab: i64, phase: &LensPhase) {
         let (state, why) = match phase {
             LensPhase::Idle => ("idle", ""),
             LensPhase::Opening => ("opening", ""),
@@ -814,7 +931,7 @@ pub mod window {
         };
         tracing::info!(
             target: "psm::search",
-            "search_window.lens_route result={state} session={session_id} why={why:?}"
+            "search_window.lens_route result={state} session={session_id} tab={tab} why={why:?}"
         );
     }
 }
@@ -930,13 +1047,13 @@ mod tests {
     #[test]
     fn a12_lens_route_posts_once_on_googles_page_and_finds_the_results() {
         let windows = SearchWindows::default();
-        windows.start(5, 9, "QUJD".into());
+        windows.start(5, 0, 9, "QUJD".into());
         // Consent first (EU): no post on the consent page.
-        let (phase, script) = windows.page_loaded(5, "https://consent.google.com/m?continue=x");
+        let (phase, script) = windows.page_loaded(5, 0, "https://consent.google.com/m?continue=x");
         assert_eq!(phase, Some(LensPhase::Consent));
         assert!(script.is_none());
         // Back on Google after the choice: the photo is posted, once.
-        let (phase, script) = windows.page_loaded(5, "https://www.google.com/imghp?hl=en");
+        let (phase, script) = windows.page_loaded(5, 0, "https://www.google.com/imghp?hl=en");
         assert_eq!(phase, Some(LensPhase::Uploading));
         let script = script.unwrap();
         assert!(script.contains("lens.google.com/v3/upload"));
@@ -944,7 +1061,7 @@ mod tests {
         assert!(script.contains("'QUJD'"));
         // The results page.
         let results = "https://www.google.com/search?vsrid=abc&udm=26&lns_mode=un";
-        let (phase, script) = windows.page_loaded(5, results);
+        let (phase, script) = windows.page_loaded(5, 0, results);
         assert_eq!(
             phase,
             Some(LensPhase::Results {
@@ -953,18 +1070,70 @@ mod tests {
         );
         assert!(script.is_none());
         // Browsing on: nothing changes, nothing is posted again.
-        assert_eq!(windows.page_loaded(5, "https://e1.example/p"), (None, None));
         assert_eq!(
-            windows.phase(5),
+            windows.page_loaded(5, 0, "https://e1.example/p"),
+            (None, None)
+        );
+        assert_eq!(
+            windows.phase(5, 0),
             Some(LensPhase::Results {
                 url: results.into()
             })
         );
         // Another session's window has no route.
         assert_eq!(
-            windows.page_loaded(6, "https://www.google.com/"),
+            windows.page_loaded(6, 0, "https://www.google.com/"),
             (None, None)
         );
+    }
+
+    #[test]
+    fn a18_each_search_tab_has_its_own_route_and_closing_one_leaves_the_others() {
+        let windows = SearchWindows::default();
+        windows.start(5, 1, 9, "QUJD".into());
+        windows.start(5, 2, 10, "RUZH".into());
+        // Tab 1 reaches its results; tab 2 is still on Google's start page and posts its own photo.
+        windows.page_loaded(5, 1, START);
+        windows.page_loaded(5, 1, RESULTS);
+        let (_, script) = windows.page_loaded(5, 2, START);
+        assert!(script.unwrap().contains("'RUZH'"));
+        assert_eq!(
+            windows.phase(5, 1),
+            Some(LensPhase::Results {
+                url: RESULTS.into()
+            })
+        );
+        assert_eq!(windows.phase(5, 2), Some(LensPhase::Uploading));
+        assert_eq!((windows.posts(5, 1), windows.posts(5, 2)), (1, 1));
+        // Closing tab 2 forgets only its route; another session's tab with the same number stays.
+        windows.start(6, 2, 11, "QUJD".into());
+        windows.forget_tab(5, 2);
+        assert_eq!(windows.phase(5, 2), None);
+        assert!(windows.phase(5, 1).is_some());
+        assert!(windows.phase(6, 2).is_some());
+        // Closing the window forgets every tab of that session only.
+        windows.forget(5);
+        assert_eq!(windows.phase(5, 1), None);
+        assert!(windows.phase(6, 2).is_some());
+        assert_eq!(web_label(5, 2), "search-web-5-2");
+        assert!(web_label(5, 2).starts_with(&web_prefix(5)));
+        assert!(!web_label(51, 2).starts_with(&web_prefix(5)));
+        assert_eq!(session_of_window("search-5"), Some(5));
+        assert_eq!(session_of_window("search-ui-5"), None);
+        assert_eq!(session_of_window("main"), None);
+    }
+
+    #[test]
+    fn a18_page_zoom_steps_up_and_down_and_resets() {
+        assert_eq!(next_zoom(1.0, "in"), 1.1);
+        assert_eq!(next_zoom(1.0, "out"), 0.9);
+        assert_eq!(next_zoom(1.3, "in"), 1.5);
+        assert_eq!(next_zoom(1.3, "out"), 1.25);
+        assert_eq!(next_zoom(3.0, "in"), 3.0);
+        assert_eq!(next_zoom(0.5, "out"), 0.5);
+        assert_eq!(next_zoom(2.0, "reset"), 1.0);
+        assert_eq!(next_zoom(f64::NAN, "in"), 1.1);
+        assert_eq!(next_zoom(99.0, "out"), 3.0);
     }
 
     #[test]
@@ -998,13 +1167,13 @@ mod tests {
     /// Runs a sequence of page loads through one window's route: the phases and the posts made.
     fn walk(urls: &[&str]) -> (Vec<LensPhase>, usize, SearchWindows) {
         let windows = SearchWindows::default();
-        windows.start(1, 2, "QUJD".into());
+        windows.start(1, 0, 2, "QUJD".into());
         let mut posts = 0;
         let mut phases = Vec::new();
         for url in urls {
-            let (_, script) = windows.page_loaded(1, url);
+            let (_, script) = windows.page_loaded(1, 0, url);
             posts += usize::from(script.is_some());
-            phases.push(windows.phase(1).unwrap());
+            phases.push(windows.phase(1, 0).unwrap());
         }
         (phases, posts, windows)
     }
@@ -1040,8 +1209,8 @@ mod tests {
         assert_eq!(posts, usize::from(MAX_POSTS));
         assert!(matches!(phases.last(), Some(LensPhase::Failed { .. })));
         // Over: the photo is dropped and nothing is posted later on any Google page.
-        assert_eq!(windows.page_loaded(1, START), (None, None));
-        assert_eq!(windows.posts(1), MAX_POSTS);
+        assert_eq!(windows.page_loaded(1, 0, START), (None, None));
+        assert_eq!(windows.posts(1, 0), MAX_POSTS);
         // A plain search page without the photo's results counts as "no results".
         let (phases, posts, _) = walk(&[START, "https://www.google.com/search?hl=en", HOME]);
         assert_eq!(posts, 2);

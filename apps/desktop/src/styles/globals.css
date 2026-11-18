@@ -272,6 +272,11 @@ button.pill:disabled { cursor: default; }
 /* A6: a session's research state beside "Arranged" (sessions list, session header). */
 .row-pills { display: flex; flex-wrap: wrap; gap: 4px; }
 .research-pill { background: var(--ai-muted); color: var(--ai-foreground); font-weight: var(--weight-medium, 500); }
+/* A19: "To review · n" on the Sessions page: the review queue as a filter. */
+.review-queue-toggle { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid transparent; cursor: pointer; font-size: 13px; }
+.review-queue-toggle svg { width: 14px; height: 14px; }
+.review-queue-toggle:hover { border-color: color-mix(in srgb, var(--ai) 35%, transparent); }
+.review-queue-toggle[aria-pressed="true"] { background: var(--ai); color: white; }
 button.research-pill { cursor: pointer; }
 .research-pill[data-research-state="to_review"] { font-weight: var(--weight-bold); }
 .research-pill[data-research-state="blocked"], .research-pill[data-research-state="failed"] { background: transparent; border-color: var(--hair-strong); color: var(--muted); }

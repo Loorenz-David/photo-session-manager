@@ -784,7 +784,9 @@ impl<'a> AttributesService<'a> {
 
     /// **Keep previous** on a conflict (MC-A12): the row becomes the prior's value, validity and
     /// provenance, the AI columns and `ai_prior` null; one `kept_previous` feedback row (its
-    /// suggestion joins the cleared set, MC-A1), one undo step. A row that is not a conflict is
+    /// suggestion joins the cleared set, MC-A1), one undo step. A18 (owner 2026-11-18): also on
+    /// any other suggestion that holds a prior (one whose value counts as the same), so the AI
+    /// review tab always offers "keep what I had". A row without a suggestion and a prior is
     /// refused with `invalid_value` and nothing is written.
     pub fn keep_previous(&self, item_id: i64, key: &str) -> Result<Value> {
         let mut result = None;
@@ -798,7 +800,12 @@ impl<'a> AttributesService<'a> {
                 .attribute_values(item_id)?
                 .into_iter()
                 .find(|v| v.key == key)
-                .filter(|v| is_conflict(&definition, v))
+                .filter(|v| {
+                    is_conflict(&definition, v)
+                        || (v.provenance == Provenance::Ai
+                            && v.ai_status == Some(AiStatus::Suggested)
+                            && v.ai_prior.is_some())
+                })
                 .ok_or_else(|| Error::InvalidValue(format!("{key} holds no conflict")))?;
             let Some(prior) = before.ai_prior.clone() else {
                 return Err(Error::InvalidValue(format!("{key} holds no conflict")));

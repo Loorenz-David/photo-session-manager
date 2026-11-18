@@ -21,6 +21,9 @@ vi.mock('@/services/search', () => ({
   removePage: vi.fn(async () => undefined),
   putText: vi.fn(),
   putBack: vi.fn(async () => undefined),
+  putValue: vi.fn(),
+  zoomPage: vi.fn(async () => 1),
+  closeTab: vi.fn(async () => undefined),
   openAiReview: vi.fn(async () => undefined),
   onOpenAiReview: vi.fn(),
   askAi: vi.fn(),
@@ -76,7 +79,7 @@ beforeEach(() => {
   vi.mocked(search.savedPages).mockResolvedValue([]);
   vi.mocked(search.readSelection).mockResolvedValue({ selection: { text: TEXT, url: PAGE_URL, title: 'Vattenflaska' }, refused: null });
   vi.mocked(search.putText).mockResolvedValue({ stored: {} as never, previous: '"Rusta"' });
-  vi.mocked(search.askAi).mockResolvedValue({ suggested: [{ key: 'custom.volume', label: 'Volume', value: '500 ml' }], not_written: [], cost_micro_usd: 200 });
+  vi.mocked(search.askAi).mockResolvedValue({ suggested: [{ key: 'custom.volume', label: 'Volume', value: '500 ml' }], not_written: [], answer: null, found: [], cost_micro_usd: 200 });
   vi.mocked(search.onSearchEvents).mockImplementation(async (_s, next) => {
     handlers = next;
     return () => undefined;
@@ -138,10 +141,19 @@ it('a15_escape_from_ask_ai_keeps_the_selection_and_after_an_answer_it_is_still_t
   expect(within(bar).getByTestId('selection-snippet')).toHaveTextContent(TEXT);
   // Ask, then close the answer: the selection is still offered.
   fireEvent.click(within(bar).getByRole('button', { name: /Ask AI/ }));
+  fireEvent.click(within(bar).getByRole('radio', { name: /Fill fields/ }));
   fireEvent.change(within(bar).getByLabelText('Instruction for AI'), { target: { value: 'the volume' } });
   fireEvent.keyDown(within(bar).getByLabelText('Instruction for AI'), { key: 'Enter' });
   await waitFor(() => expect(mode(bar)).toBe('done'));
   fireEvent.click(within(bar).getByRole('button', { name: 'Close' }));
+  expect(within(bar).getByTestId('selection-snippet')).toHaveTextContent(TEXT);
+  // A18: after an answer in words the bar is straight back on the selection's actions.
+  fireEvent.click(within(bar).getByRole('button', { name: /Ask AI/ }));
+  fireEvent.click(within(bar).getByRole('radio', { name: /Answer me/ }));
+  fireEvent.change(within(bar).getByLabelText('Instruction for AI'), { target: { value: 'which is the designer?' } });
+  fireEvent.keyDown(within(bar).getByLabelText('Instruction for AI'), { key: 'Enter' });
+  await waitFor(() => expect(search.askAi).toHaveBeenLastCalledWith(SESSION, expect.any(Object), 'which is the designer?', 'answer'));
+  await waitFor(() => expect(mode(bar)).toBe('actions'));
   expect(within(bar).getByTestId('selection-snippet')).toHaveTextContent(TEXT);
 });
 
@@ -165,9 +177,9 @@ it('a15_a_new_selection_replaces_the_kept_one_and_a_too_long_one_shows_why', asy
 it('a15_another_page_drops_the_selection_but_a_fragment_change_does_not', async () => {
   const bar = await renderBar();
   await pageSelectionGoes();
-  act(() => handlers.page({ url: `${PAGE_URL}#reviews`, title: 'Vattenflaska', loading: false } as PageEvent));
+  act(() => handlers.page({ tab: 1, url: `${PAGE_URL}#reviews`, title: 'Vattenflaska', loading: false } as PageEvent));
   expect(within(bar).getByTestId('selection-snippet')).toHaveTextContent(TEXT);
-  act(() => handlers.page({ url: 'https://www.rusta.com/sv/termos', title: 'Termos', loading: true } as PageEvent));
+  act(() => handlers.page({ tab: 1, url: 'https://www.rusta.com/sv/termos', title: 'Termos', loading: true } as PageEvent));
   await waitFor(() => expect(within(bar).queryByTestId('selection-bar')).not.toBeInTheDocument());
   expect(within(bar).getByRole('status')).toHaveTextContent('Select text on the page');
 });

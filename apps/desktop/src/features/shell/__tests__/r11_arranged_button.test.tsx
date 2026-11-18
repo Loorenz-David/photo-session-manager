@@ -18,27 +18,34 @@ import { Header } from '../Header';
 import { arrangeNext, listSessions } from '@/services/sessions';
 import { toast } from 'sonner';
 
+const onNewSession = vi.fn();
+
 function show(id = 5, arranged = false, archived = false) {
   vi.mocked(listSessions).mockResolvedValue({ groups: [{ label: 'Today', rows: [{ id, sku: 'SKU', item_type: 'Chair', title: 'Chair', arranged, label: { kind: archived ? 'archived' : 'ready' } }] }], counts: { open: 1, published: 0, all: 1 }, unassigned_count: 0 } as SessionList);
-  return render(<Header sessionId={id} theme="light" onThemeChange={() => undefined} onNewSession={() => undefined} />);
+  return render(<Header sessionId={id} theme="light" onThemeChange={() => undefined} onNewSession={onNewSession} />);
 }
 
 beforeEach(() => { window.location.hash = '#/session/5'; });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-it('a25_c24a_arrange_opens_the_next_session', async () => {
+// A19 (owner 2026-11-18): arranging goes back to the Sessions page with the New session field ready, never to the
+// next unarranged session.
+it('a19_c24a_arrange_goes_home_with_the_new_session_field_ready', async () => {
   vi.mocked(arrangeNext).mockResolvedValue({ next_session_id: 7, research_queued: true });
   show();
   fireEvent.click(await screen.findByRole('button', { name: 'Arranged — next' }));
   await waitFor(() => expect(arrangeNext).toHaveBeenCalledExactlyOnceWith(5));
-  expect(window.location.hash).toBe('#/session/7');
+  await waitFor(() => expect(window.location.hash).toBe('#/'));
+  expect(onNewSession).toHaveBeenCalledTimes(1);
+  expect(toast.success).toHaveBeenCalledWith('Arranged · AI research queued');
 });
 
-it('a25_c24b_no_next_goes_to_list_with_toast', async () => {
+it('a19_c24b_without_research_queued_it_still_goes_home', async () => {
   vi.mocked(arrangeNext).mockResolvedValue({ next_session_id: null, research_queued: false });
   show(); fireEvent.click(await screen.findByRole('button', { name: 'Arranged — next' }));
   await waitFor(() => expect(window.location.hash).toBe('#/'));
-  expect(toast.success).toHaveBeenCalledWith('Every session is arranged');
+  expect(onNewSession).toHaveBeenCalledTimes(1);
+  expect(toast.success).toHaveBeenCalledWith('Arranged');
 });
 
 it('a25_c24c_marked_session_button_says_arranged', async () => {

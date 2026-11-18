@@ -12,7 +12,7 @@ use psm_core::{
 };
 use psm_research::{
     api::ResearchApi,
-    browse::{AskRequest, VisualMatch},
+    browse::{AskMode, AskRequest, VisualMatch},
     rules::value_map::{Mapped, map_output},
 };
 use serde::Serialize;
@@ -26,7 +26,7 @@ use crate::{
     },
     search_window::{
         Bounds, GOOGLE_START, LensPhase, MAX_SELECTION_CHARS, SELECTION_SCRIPT, SearchWindows,
-        allowed_navigation, parse_selection_report, web_bounds, web_label,
+        allowed_navigation, next_zoom, parse_selection_report, web_bounds, web_label, window,
     },
     state::AppState,
 };
@@ -55,9 +55,15 @@ fn engine(state: &State<'_, AppState>) -> Result<Arc<dyn ResearchApi>, CommandEr
         .ok_or_else(|| refused("research_unavailable", "Research is not available"))
 }
 
-fn page(app: &AppHandle, session_id: i64) -> Result<tauri::Webview, CommandError> {
-    app.get_webview(&web_label(session_id))
-        .ok_or_else(|| refused("search_window_closed", "The search window is closed"))
+/// A search tab's page webview (A18: one per tab).
+fn page(app: &AppHandle, session_id: i64, tab: i64) -> Result<tauri::Webview, CommandError> {
+    app.get_webview(&web_label(session_id, tab))
+        .ok_or_else(|| refused("search_window_closed", "This search tab is closed"))
+}
+
+/// A search tab's page webview, made when the tab is new (A18).
+fn tab_page(app: &AppHandle, session_id: i64, tab: i64) -> Result<tauri::Webview, CommandError> {
+    window::ensure_tab(app, session_id, tab).map_err(|why| refused("search_tab_refused", why))
 }
 
 /// A web page address the page webview may open.
@@ -103,8 +109,9 @@ pub async fn search_window_open(
 }
 
 /// Where the browser area is in the app's page (CSS pixels of the app's page, i.e. logical
-/// points), and whether the page webview shows (hidden while the window's own results list shows).
-/// A13: moved by where the app's page sits in the window (below the title bar).
+/// points), and whether the current tab's page webview shows (hidden while the window's own
+/// results list shows). A13: moved by where the app's page sits in the window (below the title
+/// bar). A18: `tab` is the current tab; every other tab's page webview is hidden.
 #[tauri::command]
 #[specta::specta]
 #[allow(clippy::too_many_arguments)]
@@ -112,13 +119,20 @@ pub async fn search_web_place(
     app: AppHandle,
     windows: State<'_, SearchWindows>,
     session_id: CommandId,
+    tab: CommandId,
     x: f64,
     y: f64,
     width: f64,
     height: f64,
     visible: bool,
 ) -> Result<(), CommandError> {
-    let web = page(&app, session_id.0)?;
+    let web = tab_page(&app, session_id.0, tab.0)?;
+    let current = web_label(session_id.0, tab.0);
+    for other in window::tabs(&app, session_id.0) {
+        if other.label() != current {
+            let _ = other.hide();
+        }
+    }
     let ui = windows.layout(session_id.0).unwrap_or(Bounds {
         x: 0.0,
         y: 0.0,
@@ -146,27 +160,31 @@ pub async fn search_web_place(
     Ok(())
 }
 
-/// Opens a web page in the window's browser.
+/// Opens a web page in a tab of the window's browser.
 #[tauri::command]
 #[specta::specta]
 pub async fn search_web_go(
     app: AppHandle,
     session_id: CommandId,
+    tab: CommandId,
     url: String,
 ) -> Result<(), CommandError> {
     let url = web_url(&url)?;
-    page(&app, session_id.0)?.navigate(url).map_err(tauri_error)
+    tab_page(&app, session_id.0, tab.0)?
+        .navigate(url)
+        .map_err(tauri_error)
 }
 
-/// Back, forward or reload in the window's browser.
+/// Back, forward or reload in a tab of the window's browser.
 #[tauri::command]
 #[specta::specta]
 pub async fn search_web_step(
     app: AppHandle,
     session_id: CommandId,
+    tab: CommandId,
     action: String,
 ) -> Result<(), CommandError> {
-    let web = page(&app, session_id.0)?;
+    let web = page(&app, session_id.0, tab.0)?;
     match action.as_str() {
         "back" => web.eval("history.back()").map_err(tauri_error),
         "forward" => web.eval("history.forward()").map_err(tauri_error),
@@ -175,8 +193,44 @@ pub async fn search_web_step(
     }
 }
 
-/// Searches the photo with Google Lens in the window's browser: Google's page opens and the photo
-/// is posted from it (`search_lens` events follow).
+/// A18: page zoom of a tab: the step after `action` (`in`, `out`, `reset`) from `current` (the
+/// zoom the app's page holds for the tab), applied to the tab's page; answers the new zoom.
+#[tauri::command]
+#[specta::specta]
+pub async fn search_web_zoom(
+    app: AppHandle,
+    session_id: CommandId,
+    tab: CommandId,
+    current: f64,
+    action: String,
+) -> Result<f64, CommandError> {
+    let zoom = next_zoom(current, &action);
+    page(&app, session_id.0, tab.0)?
+        .set_zoom(zoom)
+        .map_err(tauri_error)?;
+    tracing::debug!(
+        target: "psm::search",
+        "search_window.zoom session={} tab={} zoom={zoom}",
+        session_id.0,
+        tab.0
+    );
+    Ok(zoom)
+}
+
+/// A18: closes a search tab (its page and its Google route).
+#[tauri::command]
+#[specta::specta]
+pub async fn search_tab_close(
+    app: AppHandle,
+    session_id: CommandId,
+    tab: CommandId,
+) -> Result<(), CommandError> {
+    window::close_tab(&app, session_id.0, tab.0);
+    Ok(())
+}
+
+/// Searches the photo with Google Lens in a search tab (A18: made when new): Google's page opens
+/// and the photo is posted from it (`search_lens` events follow).
 #[tauri::command]
 #[specta::specta]
 pub async fn search_lens_start(
@@ -184,6 +238,7 @@ pub async fn search_lens_start(
     state: State<'_, AppState>,
     windows: State<'_, SearchWindows>,
     session_id: CommandId,
+    tab: CommandId,
     photo_id: CommandId,
 ) -> Result<(), CommandError> {
     let handles = state.handles().map_err(CommandError::from)?;
@@ -200,15 +255,17 @@ pub async fn search_lens_start(
     .await
     .map_err(joined)?
     .map_err(CommandError::from)?;
-    let web = page(&app, sid)?;
+    let web = tab_page(&app, sid, tab.0)?;
     windows.start(
         sid,
+        tab.0,
         pid,
         base64::engine::general_purpose::STANDARD.encode(&jpeg),
     );
     tracing::info!(
         target: "psm::search",
-        "search_window.lens_route step=start session={sid} photo={pid} bytes={}",
+        "search_window.lens_route step=start session={sid} tab={} photo={pid} bytes={}",
+        tab.0,
         jpeg.len()
     );
     web.navigate(GOOGLE_START.parse().map_err(joined)?)
@@ -222,29 +279,32 @@ pub async fn search_lens_start(
 pub async fn search_lens_give_up(
     windows: State<'_, SearchWindows>,
     session_id: CommandId,
+    tab: CommandId,
     why: String,
 ) -> Result<(), CommandError> {
     let why: String = why.chars().take(120).collect();
-    windows.fail(session_id.0, &why);
+    windows.fail(session_id.0, tab.0, &why);
     tracing::info!(
         target: "psm::search",
-        "search_window.lens_route result=fallback session={} why={why:?}",
-        session_id.0
+        "search_window.lens_route result=fallback session={} tab={} why={why:?}",
+        session_id.0,
+        tab.0
     );
     Ok(())
 }
 
-/// Back to Google's results page for the pinned photo.
+/// Back to Google's results page of the tab's search.
 #[tauri::command]
 #[specta::specta]
 pub async fn search_lens_results(
     app: AppHandle,
     windows: State<'_, SearchWindows>,
     session_id: CommandId,
+    tab: CommandId,
 ) -> Result<bool, CommandError> {
-    match windows.phase(session_id.0) {
+    match windows.phase(session_id.0, tab.0) {
         Some(LensPhase::Results { url }) => {
-            page(&app, session_id.0)?
+            page(&app, session_id.0, tab.0)?
                 .navigate(web_url(&url)?)
                 .map_err(tauri_error)?;
             Ok(true)
@@ -267,14 +327,16 @@ pub struct SelectionAnswerDto {
     pub refused: Option<String>,
 }
 
-/// Reads what is selected in the window's browser (the app's page asks; the answer is checked).
+/// Reads what is selected in a tab of the window's browser (the app's page asks, only of its
+/// current tab; the answer is checked).
 #[tauri::command]
 #[specta::specta]
 pub async fn search_web_selection(
     app: AppHandle,
     session_id: CommandId,
+    tab: CommandId,
 ) -> Result<SelectionAnswerDto, CommandError> {
-    let web = page(&app, session_id.0)?;
+    let web = page(&app, session_id.0, tab.0)?;
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     web.eval_with_callback(SELECTION_SCRIPT, move |raw| {
         let _ = tx.send(raw);
@@ -470,6 +532,13 @@ fn session_item(app: &psm_integrations::AppHandles, sid: i64) -> Result<i64, Com
         .ok_or_else(|| refused("no_item", "This session has no item"))
 }
 
+/// What "Put in" writes: the selected text (mapped into the field's kind), or a value an answer in
+/// words found (A18; its stored JSON text).
+enum PutSource {
+    Text(String),
+    Value(String),
+}
+
 /// "Put in <field>": the selected text into a field, as a person's edit.
 #[tauri::command]
 #[specta::specta]
@@ -482,8 +551,33 @@ pub async fn search_put_text(
     if text.chars().count() > MAX_SELECTION_CHARS {
         return Err(refused("selection_too_long", "The selection is too long"));
     }
+    put(&state, session_id.0, key, PutSource::Text(text)).await
+}
+
+/// A18: "Put '<value>' in <field>" from an answer in words: the value AI found (its stored JSON
+/// text, `AskFoundDto.value_json`) into the field, exactly as "Put in" writes selected text: a
+/// person's edit, with what the field held for the toast's Undo.
+#[tauri::command]
+#[specta::specta]
+pub async fn search_put_value(
+    state: State<'_, AppState>,
+    session_id: CommandId,
+    key: String,
+    value_json: String,
+) -> Result<PutTextDto, CommandError> {
+    if value_json.chars().count() > MAX_SELECTION_CHARS {
+        return Err(refused("selection_too_long", "The value is too long"));
+    }
+    put(&state, session_id.0, key, PutSource::Value(value_json)).await
+}
+
+async fn put(
+    state: &State<'_, AppState>,
+    sid: i64,
+    key: String,
+    source: PutSource,
+) -> Result<PutTextDto, CommandError> {
     let handles = state.handles().map_err(CommandError::from)?;
-    let sid = session_id.0;
     let app = handles.clone();
     let put = tauri::async_runtime::spawn_blocking(move || -> Result<_, CommandError> {
         let item_id = session_item(&app, sid)?;
@@ -493,7 +587,17 @@ pub async fn search_put_text(
                 .iter()
                 .find(|d| d.key == key)
                 .ok_or_else(|| Error::NotFound(format!("field {key}")))?;
-            let value = value_from_text(definition, &text).map_err(Error::InvalidValue)?;
+            let (value, chars) = match &source {
+                PutSource::Text(text) => (
+                    value_from_text(definition, text).map_err(Error::InvalidValue)?,
+                    text.chars().count(),
+                ),
+                PutSource::Value(json) => (
+                    serde_json::from_str::<serde_json::Value>(json)
+                        .map_err(|_| Error::InvalidValue("not a value".into()))?,
+                    json.chars().count(),
+                ),
+            };
             // A14: what the field held as the form shows it (the title is the item's own), for the
             // toast's Undo.
             let previous = service
@@ -507,8 +611,11 @@ pub async fn search_put_text(
             let stored = service.set_value(item_id, &key, value, Provenance::Human)?;
             tracing::info!(
                 target: "psm::search",
-                "search_window.text_to_field session={sid} key={key} chars={}",
-                text.chars().count()
+                "search_window.text_to_field session={sid} key={key} chars={chars} from={}",
+                match source {
+                    PutSource::Text(_) => "selection",
+                    PutSource::Value(_) => "ai_answer",
+                }
             );
             Ok(PutTextDto {
                 stored: stored.into(),
@@ -590,19 +697,35 @@ pub struct AskSuggestionDto {
     pub value: String,
 }
 
+/// A18: one value an answer in words found (offered as "Put in"; nothing written).
+#[derive(Serialize, Type)]
+pub struct AskFoundDto {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+    pub value_json: String,
+    pub quote: String,
+}
+
 #[derive(Serialize, Type)]
 pub struct AskAnswerDto {
     pub suggested: Vec<AskSuggestionDto>,
     /// `[field label, why]` of the fields the answer named but that were not written.
     pub not_written: Vec<(String, String)>,
+    /// A18 answer mode: the answer in words.
+    pub answer: Option<String>,
+    /// A18 answer mode: the values found per field.
+    pub found: Vec<AskFoundDto>,
     #[specta(type = specta_typescript::Number)]
     pub cost_micro_usd: i64,
 }
 
-/// "Ask AI…": the selected text and the person's instruction to the model; the answer becomes AI
-/// suggestions in the form's AI review tab.
+/// "Ask AI…": the selected text and the person's instruction to the model. `mode` `suggest`: the
+/// answer becomes AI suggestions in the form's AI review tab; `answer` (A18): a short answer in
+/// words and the values found per field, nothing written.
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub async fn search_ask(
     state: State<'_, AppState>,
     session_id: CommandId,
@@ -610,14 +733,21 @@ pub async fn search_ask(
     url: String,
     title: String,
     instruction: String,
+    mode: String,
 ) -> Result<AskAnswerDto, CommandError> {
     let research = engine(&state)?;
+    let mode = match mode.as_str() {
+        "answer" => AskMode::Answer,
+        "suggest" => AskMode::Suggest,
+        _ => return Err(refused("unknown_mode", "Unknown Ask AI mode")),
+    };
     let request = AskRequest {
         session_id: session_id.0,
         page_url: url,
         page_title: title,
         text,
         instruction,
+        mode,
     };
     let answer = tauri::async_runtime::spawn_blocking(move || research.browse_ask(&request))
         .await
@@ -634,6 +764,18 @@ pub async fn search_ask(
             })
             .collect(),
         not_written: answer.not_written,
+        answer: answer.answer,
+        found: answer
+            .found
+            .into_iter()
+            .map(|f| AskFoundDto {
+                key: f.key,
+                label: f.label,
+                value: f.value,
+                value_json: f.value_json,
+                quote: f.quote,
+            })
+            .collect(),
         cost_micro_usd: answer.cost_micro_usd,
     })
 }

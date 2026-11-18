@@ -128,6 +128,30 @@ wrapper `services/search.ts`. Saved pages:
   `features/search/useReviewFromSearch.ts` turns into the details on the AI review tab (opening that session
   first when another is shown).
 
+**A18 corrections to that window.**
+- **Search tabs.** Each search runs in its own page webview, `search-web-<session>-<tab>` (`web_label(session,
+  tab)`; tab ids come from the app's page, at most `MAX_TABS` = 8, `window::ensure_tab` makes one on first use,
+  `window::close_tab` / `search_tab_close` closes it). `SearchWindows.lens` is keyed by `(session, tab)`, so each
+  tab has its own Lens route, posts and photo; `forget_tab` / `forget(session)`. Every command that touches a page
+  takes `tab` (`search_web_place` also hides every other tab of the session, so exactly one shows), and the events
+  `search_web_page` / `search_lens` carry it. The window opens with no page webview: its app page starts tab 1 on
+  the photo it was opened on; a later "Search this photo" from the main window (`search_photo`) pins that photo and
+  opens a new tab. Pinning another photo in the window only changes the reference picture; "Search this photo" on
+  the pinned photo (hover) or "+" opens a new tab. Only the current tab's selection is read.
+- **Zoom.** Page zoom per tab (`search_web_zoom(session, tab, current, action)` → `next_zoom` over `ZOOM_STEPS`
+  50–300 %, applied with `Webview::set_zoom`; the app's page keeps each tab's level). The View menu has Zoom In
+  (⌘+ as `CmdOrCtrl+NumpadAdd`, also ⌘=), Zoom Out (⌘−) and Actual Size (⌘0); `on_menu_event` sends `search_zoom`
+  to the focused search window's app page only (`session_of_window`), which applies it to its current tab: menu key
+  equivalents reach the app also while the page has the keyboard, and the page itself still talks to nothing. The
+  pinned photo zooms in the app's page (`features/search/ZoomablePhoto.tsx`: wheel/pinch, click, drag, double-click).
+- **Ask AI answers in words** (`AnswerCard.tsx`). `search_ask` takes `mode`: `suggest` (A12) or `answer`
+  (`browse::AskMode::Answer`: instructions `ASK_ANSWER`, input `answer: true`, the Read schema then requires
+  `answer` next to `keys`; nothing is written; `AskAnswer.answer` + `found` with each value's stored JSON). A found
+  value is written only from a tap, through `search_put_value`, the same path as `search_put_text` (`put`, a
+  person's edit with `previous` for Undo). The selection cap is 6,000 characters (`MAX_SELECTION_CHARS`; the page
+  script cuts at 6,001 and the answer limit `MAX_REPORT_BYTES` is 64 KiB); `search_window.ask_ai_sent` logs mode,
+  characters and the cap.
+
 ## Runtime flows (step lists with the files involved)
 ### Shooting templates (book `10G`; T1–T4; contract `docs/implementation/master_plan_templates.md` §5 P1–P10)
 - **Editor (T1).** Settings → Shooting templates (`features/settings/{SettingsNav.tsx, TemplatesSection.tsx,
@@ -357,7 +381,7 @@ listed in the research master plan §5 "Seams".
 | `config.rs` | **ResearchSettings** (the `research` slot of `settings.json`, read tolerantly by `from_slot`, checked by `validate`), **ResearchConfig** (the per-run snapshot, `from_settings` with the shop facts), the shipped defaults (stage models and efforts, prices, the detailed-condition table), `INSTRUCTIONS_VERSION`. With `adapters/`, the only place model and vendor names are literals (HA5) |
 | `ports.rs` | the three provider ports **ModelProvider** (`call(&ModelRequest)`), **VisualSearchProvider** (`search(&ResearchImage)`), **PageReader** (`read(url)`), their replies (each carries an `Exchange {request, response}` for the call record) and `Providers` (an `Option` per port) |
 | `adapters/` | `mod.rs::build` (adapters chosen by `research.providers.*`; default ids `openai`, `serpapi_lens`, `page_http`; keys read from the secrets port on every call), `http.rs` (the HTTP seam: `ReqwestResearchHttp` live, a fake in tests), `openai/` (Responses API, strict schemas), `visual_search/serpapi_lens.rs` (upload, then the Lens search), `page_reader/` (plain HTTP download, address guard, pacing of slow hosts, `extract.rs::product_extract`; A9: `Retry-After` waited only up to `SHORT_RETRY_AFTER_S` = 10 s, a 403/long 429 is `PageReply.blocked` and the run skips that host (`stages::read`); `shop.rs::ShopPageReader` wraps the reader in the app wiring and reads the connected shop's product pages through `CommerceAdapter::shop_product` (Shopify `productByIdentifier`), keeping the inner reader's id) |
-| `rules/` (pure, inline unit tests) | `value_map` (MC-A2), `sites` (MC-A3: hosts, trusted sites, reading order, own listing), `fingerprint` (MC-A7, `RESEARCH_FINGERPRINT_VERSION`), `confidence` (MC-A4: `field_class`, `decide_*`), `cost` (MC-A8, integer micro-USD), `calls` (MC-A9: classify, retry action, redact; `RESEARCH_CALL_ATTEMPTS`), `write_table` (MC-A1: `never_written`, `decide_write`), `run_rules` (MC-A6: `first_failing`, `may_start`, `start_order`, `arranged_needed`), `derived_condition` (`derive`), `photo_plan` (`look_at`), `image_text` (MC-A11 export check: `scanned_parts`) |
+| `rules/` (pure, inline unit tests) | `value_map` (MC-A2), `sites` (MC-A3: hosts, trusted sites, reading order, own listing), `fingerprint` (MC-A7, `RESEARCH_FINGERPRINT_VERSION`), `confidence` (MC-A4: `field_class`, `decide_*`), `cost` (MC-A8, integer micro-USD), `calls` (MC-A9: classify, retry action, redact; `RESEARCH_CALL_ATTEMPTS`), `write_table` (MC-A1: `never_written`, `decide_write`), `run_rules` (MC-A6: `first_failing`, `may_start`, `start_order`; A19 `arranged_queues`), `derived_condition` (`derive`), `photo_plan` (`look_at`), `image_text` (MC-A11 export check: `scanned_parts`) |
 | `runs.rs` | the life of a run around `execute`: when a run row is created (`arranged`, `run_again`), `tick` (start order), the start transaction, `status` for the panel |
 | `stages.rs`, `decide.rs` | stages 1–6 as units (`execute` resumes at the first uncommitted unit) and the instructions each stage sends; stage 7 Decide (class, evidence, confidence, reasons, then the writes) |
 | `gateway.rs` | **CallGateway::call**, the one door for every provider call: eligibility re-read, stop rule, call record and outbound rows are committed **before** the request leaves; reply, usage and cost are recorded after; retries, error classes, redaction |
@@ -373,9 +397,11 @@ listed in the research master plan §5 "Seams".
 1. **Trigger.** `session_arrange_next` (`commands/sessions.rs`) → `crates/integrations/src/arranged.rs`
    `arrange_and_next`: `SessionsService::arrange` sets `sessions.arranged_at` (first press only; no
    undo step, no `change_seq` bump), then `ResearchApi::arranged` queues a run (trigger `arranged`)
-   when no blocking prerequisite fails, the session has a Main photo, no run is already queued, and
-   the photo-derived input differs from the latest started run's snapshot
-   (`rules::run_rules::arranged_needed`). `publish_preview` marks unmarked sessions the same way
+   when no blocking prerequisite fails, the session has a Main photo, and none of its runs is queued,
+   running, finished or stopped at the cost limit (A19 `rules::run_rules::arranged_queues`: research
+   starts by itself at most once per session; a failed or cancelled run may be retried). The app
+   then goes to the Sessions page with the New session dialog open (`Header.tsx`; the command's
+   `next_session_id` is no longer followed). `publish_preview` marks unmarked sessions the same way
    (`arranged::preview_for_publish`) and reports `researching` per item. `research_run` (the panel's
    Research / Run again) queues a `manual` run. A photo change creates no run.
 2. **Prerequisites** (`rules::run_rules::first_failing`, first failing wins; the panel shows its
@@ -456,6 +482,15 @@ folder**: the panel and pills are in `features/form/` (`ResearchPanel.tsx`, `AiP
 `AiPill.tsx`), the settings in `features/settings/` (`ResearchSection.tsx`, `ShopFieldPicker.tsx`),
 conflicts in `features/publish/ConflictList.tsx`, the button in `features/shell/Header.tsx`, the
 "Arranged" pill in `features/sessions/SessionRow.tsx`.
+**Review queue (A19).** `features/sessions/reviewQueue.ts`: `useReviewQueue(current)` reads the sessions list's
+order (`listSessions({filter: 'all'})`) and every session's research state (`useResearchOverview(null)`); a session
+waits when its state is `to_review` (`waitingForReview`). `nextToReview(order, waiting, current)` is the first waiting
+session after the current one, wrapping round. `App.tsx` holds the queue and `goNextToReview` (closes Details, opens
+the next session's page, or the Sessions page with "All reviewed"), passed to `Header` (`reviewQueue`; the
+button rule is `showsNextToReview`: arranged, research `to_review` or `done`, others waiting) and through
+`WorkspacePage` (`reviewQueue`) to `FormDialog` (`reviewFirst`: opened without a position it lands on AI review once
+when suggestions wait; `review` → `AiReviewTab.nextToReview`, shown as "All checked ✓"). `SessionsPage` filters its
+rows with the "To review · n" toggle.
 
 ### The tool (`crates/research-tool`, package `psm-research-tool`, bin `psm-research`)
 A dev-Mac CLI over the same crate (one-way: nothing in the app depends on it). `accept` opens the
