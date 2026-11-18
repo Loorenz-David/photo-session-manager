@@ -33,4 +33,7 @@ pub trait StorageFs: Send + Sync {
     /// Deletes one file permanently (10F §Rules: never to the Trash). Gone already is fine.
     fn remove(&self, path: &Path) -> Result<()>;
     fn free(&self, path: &Path) -> Result<DiskFree>;
+    /// A21: moves a file or folder to `to` on the same disk, creating `to`'s parent folders.
+    /// Never overwrites: an existing `to` is an error and nothing moves.
+    fn rename(&self, from: &Path, to: &Path) -> Result<()>;
 }

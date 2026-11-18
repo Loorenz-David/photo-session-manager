@@ -3324,6 +3324,62 @@ impl Store for SqliteStore {
         tx.commit().map_err(db)?;
         Ok(deleted)
     }
+
+    fn relocate_raw(&self, old: &str, new: &str, cache_dirs: &[(String, String)]) -> Result<()> {
+        let mut conn = self.locked()?;
+        let tx = conn.transaction().map_err(db)?;
+        let taken: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM photos WHERE raw_path=?1)",
+                [new],
+                |r| r.get(0),
+            )
+            .map_err(db)?;
+        if taken {
+            return Err(Error::InvalidData(format!(
+                "{new} is already the file of another photo"
+            )));
+        }
+        // A leftover state row of a RAW no photo names any more must not block the key.
+        tx.execute("DELETE FROM raw_state WHERE raw_path=?1", [new])
+            .map_err(db)?;
+        tx.execute(
+            "UPDATE photos SET raw_path=?2 WHERE raw_path=?1",
+            params![old, new],
+        )
+        .map_err(db)?;
+        for (from, to) in cache_dirs {
+            let prefix = format!("{from}/");
+            for column in [
+                "original_preview_path",
+                "adjusted_preview_path",
+                "thumbnail_path",
+            ] {
+                tx.execute(
+                    &format!("UPDATE photos SET {column}=?3 || substr({column}, length(?2)) WHERE raw_path=?1 AND substr({column}, 1, length(?2))=?2"),
+                    params![new, prefix, to],
+                )
+                .map_err(db)?;
+            }
+        }
+        tx.execute(
+            "UPDATE raw_state SET raw_path=?2, path_key=?3 WHERE raw_path=?1",
+            params![old, new, psm_core::mechanisms::arrival::path_key(new)],
+        )
+        .map_err(db)?;
+        tx.execute(
+            "UPDATE session_changes SET raw_path=?2 WHERE raw_path=?1",
+            params![old, new],
+        )
+        .map_err(db)?;
+        tx.execute(
+            "UPDATE jobs SET target=?2 WHERE target=?1",
+            params![old, new],
+        )
+        .map_err(db)?;
+        tx.commit().map_err(db)?;
+        Ok(())
+    }
 }
 
 fn denial_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<psm_core::domain::storage::PhotoDenial> {

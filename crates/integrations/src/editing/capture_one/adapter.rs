@@ -79,6 +79,18 @@ pub struct CaptureOneAdapter {
     /// The document was chosen in Settings (not the app's own): when it is missing it is reported,
     /// never recreated (P63 #27).
     pub(crate) document_configured: bool,
+    /// A20: the Capture One process (id) whose recipes and hooks the last successful ensure
+    /// verified; `None` until then and after any failure, so the next ensure verifies them again.
+    verified: Mutex<Option<u32>>,
+    /// A21: when each folder was last re-read for a photo Capture One did not list.
+    resynced: Mutex<std::collections::HashMap<String, Instant>>,
+}
+
+/// A21: a folder is asked to re-read at most this often for photos Capture One does not list.
+const RESYNC_EVERY: Duration = Duration::from_secs(60);
+
+fn raw_on_disk(raw: &str) -> bool {
+    Path::new(raw).is_file()
 }
 impl CaptureOneAdapter {
     #[allow(clippy::too_many_arguments)]
@@ -104,6 +116,17 @@ impl CaptureOneAdapter {
             provision_lock: Mutex::new(()),
             disk: Arc::new(DiskSpace::default()),
             document_configured: false,
+            verified: Mutex::new(None),
+            resynced: Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+    /// A20: takes the verified mark (leaving none), so an ensure that fails part-way leaves it unset.
+    pub(crate) fn take_verified(&self) -> Option<u32> {
+        self.verified.lock().ok().and_then(|mut slot| slot.take())
+    }
+    pub(crate) fn mark_verified(&self, instance: Option<u32>) {
+        if let Ok(mut slot) = self.verified.lock() {
+            *slot = instance;
         }
     }
     pub fn with_disk(mut self, disk: Arc<DiskSpace>) -> Self {
@@ -151,9 +174,42 @@ impl CaptureOneAdapter {
             .parent()
             .ok_or(Error::VariantNotFound)?
             .to_string_lossy();
-        self.background
-            .find_image_in_folder(&self.document_id, &folder, raw)?
-            .ok_or(Error::VariantNotFound)
+        let found = self
+            .background
+            .find_image_in_folder(&self.document_id, &folder, raw)?;
+        if found.is_none() && raw_on_disk(raw) {
+            self.resync_folder(&folder);
+        }
+        found.ok_or(Error::VariantNotFound)
+    }
+    /// A21: Capture One answers lookups in a folder it is not showing from its own list of that
+    /// folder, refreshed only when it looks at the folder (dev Mac: 0 of 13 and 2 of 9 files listed
+    /// in two folders). A photo on disk but not listed asks Capture One to re-read its folder, at
+    /// most once a minute per folder; the caller's retry then finds it.
+    fn resync_folder(&self, folder: &str) {
+        let due = self.resynced.lock().is_ok_and(|mut seen| {
+            let now = Instant::now();
+            match seen.get(folder) {
+                Some(at) if now.duration_since(*at) < RESYNC_EVERY => false,
+                _ => {
+                    seen.insert(folder.to_owned(), now);
+                    true
+                }
+            }
+        });
+        if !due {
+            return;
+        }
+        let result = self.background.sync_folder(&self.document_id, folder);
+        tracing::info!(
+            target: "psm::capture_one",
+            "capture_one.folder_synced folder={} reason=photo_not_listed result={}",
+            Path::new(folder)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            result.map_or_else(|e| format!("error: {e}"), |_| "ok".into())
+        );
     }
     fn apply_folder(&self, target: &str) -> Result<()> {
         self.user.save(&self.document_id)?;
@@ -287,6 +343,8 @@ impl CaptureOneAdapter {
             Err(Error::EditorLaunchDeferred) => return Err(Error::EditorLaunchDeferred),
             Err(error) => {
                 tracing::warn!(%error, recipe = name, "recipe not repaired");
+                // A20: the next switch verifies recipes and hooks in full again.
+                self.mark_verified(None);
                 return Err(Error::RecipeMissing { name: name.clone() });
             }
             Ok(checked) => checked,
@@ -297,6 +355,7 @@ impl CaptureOneAdapter {
         let mut got = checked.props;
         got.root_folder_type = None;
         if got != want {
+            self.mark_verified(None);
             return Err(Error::RecipeMissing { name: name.clone() });
         }
         Ok(())
@@ -398,6 +457,30 @@ pub fn tag_for(classification: Classification) -> i32 {
 impl EditingProvider for CaptureOneAdapter {
     fn ensure(&self, inputs: &ProvisionInputs) -> Result<ProvisionReport> {
         self.ensure_provision(inputs)
+    }
+    fn script_calls(&self) -> Option<u64> {
+        Some(self.user.calls())
+    }
+    fn recheck_next(&self) {
+        self.mark_verified(None);
+    }
+    /// A21: a render of the RAW is with Capture One or being sent (renders are tracked by the
+    /// RAW's base name, so a same-named RAW elsewhere counts too: the move waits).
+    fn rendering(&self, raw: &str) -> bool {
+        self.renders.lock().is_ok_and(|state| {
+            state.jobs.values().any(|entry| entry.completion.raw == raw)
+                || state.busy.contains(&super::renders::base_name(raw))
+        })
+    }
+    fn raw_moved(&self, old: &str, new: &str) {
+        if let Ok(mut state) = self.renders.lock() {
+            for pending in state.pending.iter_mut().filter(|p| p.raw == old) {
+                pending.raw = new.to_owned();
+            }
+            if state.focused_raw.as_deref() == Some(old) {
+                state.focused_raw = Some(new.to_owned());
+            }
+        }
     }
     fn bring_document_to_front(&self) -> Result<()> {
         self.front_provision_document()

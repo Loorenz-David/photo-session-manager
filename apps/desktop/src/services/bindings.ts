@@ -29,6 +29,13 @@ export const commands = {
 	 *  rows removed); Shopify is not touched.
 	 */
 	sessionDelete: (sessionId: CommandId) => typedError<SessionDeletedResponse, CommandError>(__TAURI_INVOKE("session_delete", { sessionId })),
+	/**
+	 *  A21 (owner 2026-11-18): how many of the session's photos have their files in another
+	 *  session's folder (the ⋯ menu shows "Fix photo files location" only when this is above 0).
+	 */
+	sessionFilesMisplaced: (sessionId: CommandId) => typedError<MisplacedFilesResponse, CommandError>(__TAURI_INVOKE("session_files_misplaced", { sessionId })),
+	/**  A21: moves the session's photo files (and Capture One's files of them) into its folder. */
+	sessionFilesFix: (sessionId: CommandId) => typedError<FilesFixedResponse, CommandError>(__TAURI_INVOKE("session_files_fix", { sessionId })),
 	cameraStatus: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_status")),
 	cameraRetry: () => typedError<CameraStatusResponse_Serialize, CommandError>(__TAURI_INVOKE("camera_retry")),
 	cameraTakeBackAvailability: () => typedError<TakeBackAvailability_Serialize, CommandError>(__TAURI_INVOKE("camera_take_back_availability")),
@@ -646,6 +653,13 @@ export type ExportSettingsDto = {
 	prepare_masters: boolean,
 };
 
+/**  A21: what "Fix photo files location" did. */
+export type FilesFixedResponse = {
+	moved: number,
+	sidecars: number,
+	left: PhotoFileLeftResponse[],
+};
+
 /**  The fingerprint waiting for confirmation (P68: the box shows it when opened after the event). */
 export type FingerprintDto = {
 	fingerprint: string,
@@ -931,6 +945,11 @@ export type LatestPublishResponse_Serialize = {
 	total: number,
 };
 
+/**  A21: photos of the session whose files are in another folder. */
+export type MisplacedFilesResponse = {
+	photos: number,
+};
+
 export type NotificationDto = {
 	id: number,
 	item_id: number,
@@ -951,6 +970,12 @@ export type OutputFormatDto = {
 };
 
 export type PhotoClassification = "unreviewed" | "main" | "condition" | "deleted";
+
+/**  A21: one photo the "Fix photo files location" action would leave where it is, and why. */
+export type PhotoFileLeftResponse = {
+	file: string,
+	reason: string,
+};
 
 /**  One visible photo of the workspace (P08): what the stage, grid and strip need. */
 export type PhotoResponse = PhotoResponse_Serialize | PhotoResponse_Deserialize;

@@ -2,6 +2,7 @@ pub mod arranged;
 pub mod camera;
 pub mod commerce;
 pub mod editing;
+pub mod photo_files;
 pub mod render_output;
 pub mod session_delete;
 
@@ -301,6 +302,9 @@ impl SettingsSetContext {
 impl AppHandles {
     pub fn health_check(&self) -> Result<psm_core::domain::HealthReport> {
         {
+            // A20: the Health page checks recipes and hooks in full, even when this Capture One
+            // run already verified them (switches skip that).
+            self.editing.recheck_next();
             if let Err(error) = (EditingStartup {
                 provider: self.editing.as_ref(),
                 store: self.store.as_ref(),

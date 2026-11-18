@@ -183,6 +183,9 @@ impl CaptureOneScripting for JxaScripting {
         *cached = Some((Instant::now(), running));
         Ok(running)
     }
+    fn instance(&self) -> Result<Option<u32>> {
+        PsProcessList.pid(PROCESS_NAME)
+    }
     fn list_styles(&self) -> Result<StyleList> {
         let available: Vec<String> = self.call("list_styles", &[])?;
         Ok(split_styles(

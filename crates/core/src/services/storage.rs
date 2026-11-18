@@ -71,7 +71,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod photo_files;
 mod session_delete;
+pub use photo_files::{FilesPlaced, MisplacedPhoto};
 pub use session_delete::{DeletePreview, SessionDeleted};
 
 /// At most this many files per batch (10F §6).

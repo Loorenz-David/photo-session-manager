@@ -15,6 +15,9 @@ pub enum Error {
     /// "Delete session" refused (owner correction A17): the sentence the owner reads.
     #[error("{0}")]
     DeleteRefused(String),
+    /// Photo files cannot move now (owner correction A21): the sentence the owner reads.
+    #[error("{0}")]
+    FilesBusy(String),
     #[error("composition_invalid: {reason}")]
     CompositionInvalid { reason: String },
     #[error("frame_unknown")]

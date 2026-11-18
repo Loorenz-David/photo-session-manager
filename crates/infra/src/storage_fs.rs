@@ -114,4 +114,29 @@ impl StorageFs for LocalStorageFs {
             disk: free.disk,
         })
     }
+    /// A21: a file moves by a hard link then the old name's removal, so an existing target is
+    /// never replaced (the link fails); a folder moves by `rename` after checking the target is
+    /// free.
+    fn rename(&self, from: &Path, to: &Path) -> Result<()> {
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if fs::symlink_metadata(to).is_ok() {
+            return Err(std::io::Error::new(
+                ErrorKind::AlreadyExists,
+                format!("{} already exists", to.display()),
+            )
+            .into());
+        }
+        if fs::symlink_metadata(from)?.is_dir() {
+            fs::rename(from, to)?;
+        } else {
+            fs::hard_link(from, to)?;
+            if let Err(error) = fs::remove_file(from) {
+                let _ = fs::remove_file(to);
+                return Err(error.into());
+            }
+        }
+        Ok(())
+    }
 }
