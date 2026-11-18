@@ -381,7 +381,7 @@ listed in the research master plan §5 "Seams".
 | `config.rs` | **ResearchSettings** (the `research` slot of `settings.json`, read tolerantly by `from_slot`, checked by `validate`), **ResearchConfig** (the per-run snapshot, `from_settings` with the shop facts), the shipped defaults (stage models and efforts, prices, the detailed-condition table), `INSTRUCTIONS_VERSION`. With `adapters/`, the only place model and vendor names are literals (HA5) |
 | `ports.rs` | the three provider ports **ModelProvider** (`call(&ModelRequest)`), **VisualSearchProvider** (`search(&ResearchImage)`), **PageReader** (`read(url)`), their replies (each carries an `Exchange {request, response}` for the call record) and `Providers` (an `Option` per port) |
 | `adapters/` | `mod.rs::build` (adapters chosen by `research.providers.*`; default ids `openai`, `serpapi_lens`, `page_http`; keys read from the secrets port on every call), `http.rs` (the HTTP seam: `ReqwestResearchHttp` live, a fake in tests), `openai/` (Responses API, strict schemas), `visual_search/serpapi_lens.rs` (upload, then the Lens search), `page_reader/` (plain HTTP download, address guard, pacing of slow hosts, `extract.rs::product_extract`; A9: `Retry-After` waited only up to `SHORT_RETRY_AFTER_S` = 10 s, a 403/long 429 is `PageReply.blocked` and the run skips that host (`stages::read`); `shop.rs::ShopPageReader` wraps the reader in the app wiring and reads the connected shop's product pages through `CommerceAdapter::shop_product` (Shopify `productByIdentifier`), keeping the inner reader's id) |
-| `rules/` (pure, inline unit tests) | `value_map` (MC-A2), `sites` (MC-A3: hosts, trusted sites, reading order, own listing), `fingerprint` (MC-A7, `RESEARCH_FINGERPRINT_VERSION`), `confidence` (MC-A4: `field_class`, `decide_*`), `cost` (MC-A8, integer micro-USD), `calls` (MC-A9: classify, retry action, redact; `RESEARCH_CALL_ATTEMPTS`), `write_table` (MC-A1: `never_written`, `decide_write`), `run_rules` (MC-A6: `first_failing`, `may_start`, `start_order`, `arranged_needed`), `derived_condition` (`derive`), `photo_plan` (`look_at`), `image_text` (MC-A11 export check: `scanned_parts`) |
+| `rules/` (pure, inline unit tests) | `value_map` (MC-A2), `sites` (MC-A3: hosts, trusted sites, reading order, own listing), `fingerprint` (MC-A7, `RESEARCH_FINGERPRINT_VERSION`), `confidence` (MC-A4: `field_class`, `decide_*`), `cost` (MC-A8, integer micro-USD), `calls` (MC-A9: classify, retry action, redact; `RESEARCH_CALL_ATTEMPTS`), `write_table` (MC-A1: `never_written`, `decide_write`), `run_rules` (MC-A6: `first_failing`, `may_start`, `start_order`; A19 `arranged_queues`), `derived_condition` (`derive`), `photo_plan` (`look_at`), `image_text` (MC-A11 export check: `scanned_parts`) |
 | `runs.rs` | the life of a run around `execute`: when a run row is created (`arranged`, `run_again`), `tick` (start order), the start transaction, `status` for the panel |
 | `stages.rs`, `decide.rs` | stages 1–6 as units (`execute` resumes at the first uncommitted unit) and the instructions each stage sends; stage 7 Decide (class, evidence, confidence, reasons, then the writes) |
 | `gateway.rs` | **CallGateway::call**, the one door for every provider call: eligibility re-read, stop rule, call record and outbound rows are committed **before** the request leaves; reply, usage and cost are recorded after; retries, error classes, redaction |
@@ -397,9 +397,11 @@ listed in the research master plan §5 "Seams".
 1. **Trigger.** `session_arrange_next` (`commands/sessions.rs`) → `crates/integrations/src/arranged.rs`
    `arrange_and_next`: `SessionsService::arrange` sets `sessions.arranged_at` (first press only; no
    undo step, no `change_seq` bump), then `ResearchApi::arranged` queues a run (trigger `arranged`)
-   when no blocking prerequisite fails, the session has a Main photo, no run is already queued, and
-   the photo-derived input differs from the latest started run's snapshot
-   (`rules::run_rules::arranged_needed`). `publish_preview` marks unmarked sessions the same way
+   when no blocking prerequisite fails, the session has a Main photo, and none of its runs is queued,
+   running, finished or stopped at the cost limit (A19 `rules::run_rules::arranged_queues`: research
+   starts by itself at most once per session; a failed or cancelled run may be retried). The app
+   then goes to the Sessions page with the New session dialog open (`Header.tsx`; the command's
+   `next_session_id` is no longer followed). `publish_preview` marks unmarked sessions the same way
    (`arranged::preview_for_publish`) and reports `researching` per item. `research_run` (the panel's
    Research / Run again) queues a `manual` run. A photo change creates no run.
 2. **Prerequisites** (`rules::run_rules::first_failing`, first failing wins; the panel shows its
@@ -480,6 +482,15 @@ folder**: the panel and pills are in `features/form/` (`ResearchPanel.tsx`, `AiP
 `AiPill.tsx`), the settings in `features/settings/` (`ResearchSection.tsx`, `ShopFieldPicker.tsx`),
 conflicts in `features/publish/ConflictList.tsx`, the button in `features/shell/Header.tsx`, the
 "Arranged" pill in `features/sessions/SessionRow.tsx`.
+**Review queue (A19).** `features/sessions/reviewQueue.ts`: `useReviewQueue(current)` reads the sessions list's
+order (`listSessions({filter: 'all'})`) and every session's research state (`useResearchOverview(null)`); a session
+waits when its state is `to_review` (`waitingForReview`). `nextToReview(order, waiting, current)` is the first waiting
+session after the current one, wrapping round. `App.tsx` holds the queue and `goNextToReview` (closes Details, opens
+the next session's page, or the Sessions page with "All reviewed"), passed to `Header` (`reviewQueue`; the
+button rule is `showsNextToReview`: arranged, research `to_review` or `done`, others waiting) and through
+`WorkspacePage` (`reviewQueue`) to `FormDialog` (`reviewFirst`: opened without a position it lands on AI review once
+when suggestions wait; `review` → `AiReviewTab.nextToReview`, shown as "All checked ✓"). `SessionsPage` filters its
+rows with the "To review · n" toggle.
 
 ### The tool (`crates/research-tool`, package `psm-research-tool`, bin `psm-research`)
 A dev-Mac CLI over the same crate (one-way: nothing in the app depends on it). `accept` opens the

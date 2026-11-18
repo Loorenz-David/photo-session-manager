@@ -292,8 +292,17 @@ fn finished() -> (Harness, Script, i64) {
     (h, s, run)
 }
 
-/// The follow-up queued by the change, run to its end.
+/// The follow-up of the change, run to its end. A19: the change itself queues nothing any more;
+/// the follow-up is an automatic run queued as an older build queued it, which still reuses
+/// what is unchanged.
 fn follow_up(h: &Harness, first: i64) -> i64 {
+    assert!(
+        h.runs(h.session_id)
+            .iter()
+            .all(|r| r.state != RunState::Queued),
+        "A19: a photo change queues nothing"
+    );
+    h.queue_follow_up();
     let runs = h.runs(h.session_id);
     let follow = runs
         .iter()
@@ -521,8 +530,9 @@ fn queued_follow_ups(h: &Harness) -> usize {
 /// One photo change after the first run (the deleted photo's id is the last argument).
 type Change = fn(&Harness, &Script, i64);
 
+/// A19 (owner 2026-11-18): no photo change after a finished run queues research any more.
 #[test]
-fn a14_c5a_each_photo_derived_change_queues_one_follow_up() {
+fn a19_c5a_no_photo_derived_change_queues_a_follow_up() {
     let changes: Vec<(&str, Change)> = vec![
         ("main photo added", |h, _, _| {
             h.add_main_photo_with_preview(h.session_id);
@@ -548,8 +558,8 @@ fn a14_c5a_each_photo_derived_change_queues_one_follow_up() {
         let (h, s, _, deleted) = trigger_base();
         change(&h, &s, deleted);
         h.changed();
-        assert_eq!(queued_follow_ups(&h), 1, "{name}");
-        assert_eq!(h.runs(h.session_id).len(), 2, "{name}");
+        assert_eq!(queued_follow_ups(&h), 0, "{name}");
+        assert_eq!(h.runs(h.session_id).len(), 1, "{name}");
     }
 }
 
@@ -582,8 +592,9 @@ fn a14_c5b_retouch_settings_and_non_cover_swap_queue_nothing() {
     assert_eq!(h.runs(h.session_id).len(), runs_before, "swap");
 }
 
+/// A19: changes during a run queue nothing either; the run ends and stays the only one.
 #[test]
-fn a14_c6a_changes_during_a_run_queue_one_follow_up() {
+fn a19_c6a_changes_during_a_run_queue_nothing() {
     let h = Harness::chair();
     script(&h);
     h.app.clock.advance(1_000);
@@ -594,19 +605,10 @@ fn a14_c6a_changes_during_a_run_queue_one_follow_up() {
         h.add_main_photo_with_preview(h.session_id);
         h.changed();
     }
-    let last_change = h.now();
-    assert_eq!(queued_follow_ups(&h), 1);
+    assert_eq!(queued_follow_ups(&h), 0);
     h.run_jobs();
     assert_eq!(h.run_row(first).state, RunState::Finished);
-    let follow = h
-        .runs(h.session_id)
-        .into_iter()
-        .find(|r| r.trigger == RunTrigger::Arranged)
-        .unwrap()
-        .id;
     h.tick(0);
-    let row = h.run_row(follow);
-    assert_eq!(row.started_at, Some(last_change));
-    assert!(row.started_at.unwrap() >= h.run_row(first).finished_at.unwrap());
+    assert_eq!(h.runs(h.session_id).len(), 1);
     assert_eq!(queued_follow_ups(&h), 0);
 }

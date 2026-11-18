@@ -16,6 +16,7 @@ import { useKeyboard } from './lib/keyboard';
 export { parentRoute, routeLabel } from './lib/routes';
 import { activateSession, activeSession, deactivateSession } from './services/sessions';
 import { useReviewFromSearch } from './features/search/useReviewFromSearch';
+import { useReviewQueue } from './features/sessions/reviewQueue';
 
 /** Routes: `#/` sessions, `#/session/:id` session view, `#/health` health screen, `#/settings` settings (hash routing works for the bundled app's file URLs). */
 function routeSessionId(): number | undefined {
@@ -114,6 +115,19 @@ export default function App() {
 
   useKeyboard({ n: () => setNewSessionOpen(true) }, sessionId === undefined && !health && !settings && !newSessionOpen);
 
+  // A19: the review queue (sessions whose AI suggestions wait, in the sessions list's order).
+  const queue = useReviewQueue(sessionId);
+  const nextToReview = queue.next;
+  const goNextToReview = useCallback(() => {
+    changeDetailsOpen(false);
+    if (nextToReview !== null) {
+      navigate(nextToReview);
+    } else {
+      navigate(undefined);
+      toast.success('All reviewed');
+    }
+  }, [changeDetailsOpen, navigate, nextToReview]);
+
   // Health (ch12) and settings screens: plain pages reached from the header gear.
   if (health) return <HealthPage />;
   if (settings) return <><SettingsPage /><Toaster theme={theme} position="bottom-right" visibleToasts={3} closeButton /></>;
@@ -128,6 +142,7 @@ export default function App() {
         onAssignProduct={() => setAssignOpen(true)}
         onDetails={() => { setDetailsStep(null); setDetailsOpen(true); }}
         onReview={() => { setDetailsStep(REVIEW_STEP); setDetailsOpen(true); }}
+        reviewQueue={{ left: queue.left, onNext: goNextToReview }}
       />
       {sessionId === undefined ? (
         <SessionsPage navigate={navigate} />
@@ -141,6 +156,7 @@ export default function App() {
           onDetailsOpenChange={changeDetailsOpen}
           detailsStep={detailsStep}
           navigate={navigate}
+          reviewQueue={{ left: queue.left, onNext: goNextToReview }}
         />
       )}
       <ArrivalToasts sessionId={sessionId} navigate={navigate} />

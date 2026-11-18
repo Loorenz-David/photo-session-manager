@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, Search } from 'lucide-react';
+import { ArrowDown, Search, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SkeletonRows } from '@/components/pending/SkeletonRows';
@@ -17,6 +17,7 @@ import { Filters } from './Filters';
 import { GroupHeader } from './GroupHeader';
 import { SessionRow, isSelectable } from './SessionRow';
 import { useResearchOverview } from './ResearchPill';
+import { waitingForReview } from './reviewQueue';
 import { TimeFilter } from './TimeFilter';
 import { UnassignedCard } from './UnassignedCard';
 
@@ -33,6 +34,8 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [queueIds, setQueueIds] = useState<number[]>([]);
   const [publishId, setPublishId] = useState<number | null>(null);
+  // A19: only the sessions whose research finished with AI suggestions waiting (the review queue).
+  const [reviewOnly, setReviewOnly] = useState(false);
   const debouncedQuery = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
   const { data: list, loading, error, reload: load } = usePageData(() => listSessions({ filter, query: debouncedQuery || null }), [filter, debouncedQuery]);
   const research = useResearchOverview(null);
@@ -57,9 +60,13 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
     const at = Date.now();
     return (list?.groups ?? [])
       // Changelog 46 (1): the time filter, like the order and the groups, uses the creation time.
-      .map(group => ({ ...group, rows: group.rows.filter(row => withinRange(row.created_at, range, at)) }))
+      .map(group => ({ ...group, rows: group.rows.filter(row => withinRange(row.created_at, range, at) && (!reviewOnly || waitingForReview(research.get(row.id)))) }))
       .filter(group => group.rows.length > 0);
-  }, [list, range]);
+  }, [list, range, reviewOnly, research]);
+  const toReview = useMemo(
+    () => (list?.groups ?? []).flatMap(group => group.rows).filter(row => waitingForReview(research.get(row.id))).length,
+    [list, research],
+  );
   const selectable = useMemo(() => groups.flatMap(group => group.rows).filter(isSelectable).map(row => row.id), [groups]);
 
   // Keep the selection to rows still visible and selectable.
@@ -100,6 +107,18 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
           <TimeFilter value={range} onChange={setRange} />
         </label>
         <Filters value={filter} counts={list?.counts ?? null} onChange={setFilter} />
+        {(toReview > 0 || reviewOnly) && (
+          <button
+            type="button"
+            className="pill research-pill review-queue-toggle"
+            aria-pressed={reviewOnly}
+            title={reviewOnly ? 'Show every session again' : 'Show only the sessions whose AI suggestions wait for review'}
+            onClick={() => setReviewOnly(on => !on)}
+          >
+            <Sparkles aria-hidden /> To review · {toReview}
+            {reviewOnly && <X aria-hidden />}
+          </button>
+        )}
       </div>
 
       <UnassignedCard count={list?.unassigned_count ?? 0} onOpen={() => navigate(1)} />
@@ -110,6 +129,11 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
             <>
               <strong>No sessions match{debouncedQuery ? ` “${debouncedQuery}”` : ''}</strong>
               <p>Try another title or SKU, or widen the time filter.</p>
+            </>
+          ) : reviewOnly ? (
+            <>
+              <strong>Nothing waits for review</strong>
+              <p>Sessions appear here once AI research has suggestions for you to check.</p>
             </>
           ) : filter === 'published' ? (
             <>

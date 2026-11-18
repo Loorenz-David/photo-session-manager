@@ -244,3 +244,46 @@ it('a18_a_row_reads_as_before_arrow_after_with_confidence_in_words_and_sources_a
   expect(maker.querySelector('[data-change]')).toHaveTextContent('Fritz Hansen');
   expect(maker.querySelector('[data-suggested]')).toHaveTextContent('Carl Hansen');
 });
+
+const renderDetails = (review?: { left: number; onNext: () => void }, onOpenChange: (open: boolean) => void = () => undefined) =>
+  render(<FormDialog open onOpenChange={onOpenChange} item={ITEM} photos={[]} sessionId={4} reviewFirst review={review} onItemChanged={() => undefined} />);
+
+it('a19_details_opens_on_ai_review_when_suggestions_wait_and_on_details_otherwise', async () => {
+  vi.mocked(getForm).mockResolvedValue(mixed());
+  renderDetails();
+  expect(await screen.findByRole('region', { name: 'AI review' })).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: /AI review/ })).toHaveAttribute('aria-selected', 'true');
+  cleanup();
+  vi.mocked(getForm).mockResolvedValue(form([field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }))]));
+  renderDetails();
+  expect(await screen.findByRole('region', { name: 'Details fields' })).toBeInTheDocument();
+  // Without reviewFirst (a publish batch's form) the form keeps opening on Details.
+  cleanup();
+  vi.mocked(getForm).mockResolvedValue(mixed());
+  renderForm();
+  expect(await screen.findByRole('region', { name: 'Details fields' })).toBeInTheDocument();
+});
+
+it('a19_the_last_suggestion_checked_offers_next_to_review', async () => {
+  vi.mocked(getForm).mockResolvedValue(form([field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner'))]));
+  const onNext = vi.fn();
+  const onOpenChange = vi.fn();
+  renderDetails({ left: 2, onNext }, onOpenChange);
+  const designer = await screen.findByRole('listitem', { name: 'Designer' });
+  vi.mocked(getForm).mockResolvedValue(form([field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }))]));
+  fireEvent.click(within(designer).getByRole('button', { name: 'Accept' }));
+  expect(await screen.findByText('All checked ✓')).toBeInTheDocument();
+  expect(screen.getByText('2 more sessions wait for review.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Next to review/ }));
+  expect(onNext).toHaveBeenCalledTimes(1);
+  expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+it('a19_with_no_other_session_waiting_it_goes_back_to_the_sessions', async () => {
+  vi.mocked(getForm).mockResolvedValue(form([field(def('designer', 'Designer'), ai('designer', 'Hans J. Wegner', { ai_status: 'accepted' }))]));
+  const onNext = vi.fn();
+  render(<FormDialog open onOpenChange={() => undefined} item={ITEM} photos={[]} sessionId={4} position={{ step: 'review', scroll: 0 }} review={{ left: 0, onNext }} onItemChanged={() => undefined} />);
+  expect(await screen.findByText('No other session waits for review.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Back to sessions/ }));
+  expect(onNext).toHaveBeenCalledTimes(1);
+});

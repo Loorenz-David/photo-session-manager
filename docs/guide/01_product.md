@@ -39,11 +39,21 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   confidence (`low`, `medium`, `high`), a reason and the links it relied on. Models are OpenAI's, one
   model and effort per stage (Settings → Research → Stages).
 - **When it runs.** Only on an explicit request: the header button **"Arranged — next"** (marks the
-  open session arranged, queues its run, opens the next session not yet marked; shown as
-  "Arranged ✓ — next" once marked, and an "Arranged" pill in the sessions list), opening the publish
-  popover for a session not yet marked (it is marked first), or **Research / Run again** in the
-  research panel. Photos arriving start nothing (08B changelog 13). The Unassigned session is never
-  researched.
+  open session arranged, queues its run, then goes to the Sessions page with the New session dialog
+  open and its field focused (A19); shown as "Arranged ✓ — next" once marked, and an "Arranged" pill in
+  the sessions list), opening the publish popover for a session not yet marked (it is marked first), or
+  **Research / Run again** in the research panel. A19 (owner 2026-11-18): research starts by itself at
+  most **once per session**: arranging queues a run only while the session has no run queued, running,
+  finished or stopped at the cost limit (a failed or cancelled one may be retried); afterwards only
+  **Run again** researches it again, and photo changes never queue one. Photos arriving start nothing
+  (08B changelog 13). The Unassigned session is never researched.
+- **Review queue (A19).** The Sessions page has **"To review · *n*"** (only the sessions whose research
+  finished with suggestions waiting, in the list's order); opening one goes to its session page.
+  **Details** (button or D) opens on the AI review tab while suggestions wait. When the last one is
+  checked the tab shows **All checked ✓** with **Next to review →** (the next waiting session's page;
+  none left: the Sessions page and "All reviewed"). In the header, an arranged session whose research
+  has finished (suggestions waiting or all checked) shows **Next to review (*n* left)** in place of
+  "Arranged — next" while other sessions wait.
 - **Only chosen fields.** Settings → Research → **"Fields research fills"** (`research.fill_keys`)
   lists the shop fields research may suggest. It is **empty on a fresh install: research does
   nothing until the person ticks fields**, and a new shop field stays empty until it is added (08B

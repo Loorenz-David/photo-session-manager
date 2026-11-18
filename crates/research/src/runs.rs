@@ -20,7 +20,7 @@ use crate::{
         cost::{day_spend, parse_micro_usd},
         photo_plan::{PhotoCandidate, look_at},
         run_rules::{
-            InputSnapshot, MayStart, PrerequisiteInput, StartInput, arranged_needed, first_failing,
+            InputSnapshot, MayStart, PrerequisiteInput, StartInput, arranged_queues, first_failing,
             may_start, start_order,
         },
         write_table::never_written,
@@ -302,8 +302,11 @@ impl ResearchService {
         Ok(())
     }
 
-    /// A photographer has finished arranging this session. Queue only when its photo-derived
-    /// inputs have not already been researched by the latest started run.
+    /// A photographer has finished arranging this session. A19 (owner 2026-11-18): research
+    /// starts by itself at most once per session ([`arranged_queues`]): queued only when no run of
+    /// the session is queued, running, finished or stopped at the cost limit. A failed or
+    /// cancelled run produced nothing, so arranging again retries it. Afterwards only **Run
+    /// again** researches the session again; photo changes queue nothing.
     pub fn arranged(&self, session_id: i64) -> Result<bool> {
         let Some(item_id) = self.session_item(session_id)? else {
             return Err(Error::InvalidData(
@@ -326,25 +329,7 @@ impl ResearchService {
         let runs = self
             .store
             .research_transaction(|tx| store::runs(tx.conn(), Some(session_id)))?;
-        if runs.iter().any(|r| r.state == RunState::Queued) {
-            return Ok(false);
-        }
-        let needed = match runs.last() {
-            None => true,
-            Some(latest) if matches!(latest.state, RunState::Failed | RunState::Cancelled) => true,
-            Some(_) => {
-                let snapshot: InputSnapshot = runs
-                    .iter()
-                    .rev()
-                    .find_map(|r| r.input_snapshot.as_deref())
-                    .and_then(|s| serde_json::from_str(s).ok())
-                    .unwrap_or_default();
-                arranged_needed(
-                    &snapshot,
-                    &self.input_now(session_id, item_id, settings.observe_max_photos)?,
-                )
-            }
-        };
+        let needed = arranged_queues(&runs.iter().map(|r| r.state).collect::<Vec<_>>());
         if needed {
             self.insert_queued(item_id, session_id, RunTrigger::Arranged)?;
         }

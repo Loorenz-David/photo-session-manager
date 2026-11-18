@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Check, PencilLine, Sparkles, Undo2, X } from 'lucide-react';
+import { ArrowRight, Check, CheckCheck, PencilLine, Sparkles, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ActionButton } from '@/components/ui/action-button';
 import { ExternalLink } from '@/components/ExternalLink';
@@ -167,6 +167,8 @@ type AiReviewTabProps = {
   onSeeResearch: (key: string | null) => void;
   onShowField: (entry: ReviewEntry) => void;
   onAcceptAll: () => Promise<unknown>;
+  /** A19: the review queue: how many other sessions wait, and opening the next one (or the Sessions page). */
+  nextToReview?: { left: number; onNext: () => void };
 };
 
 /**
@@ -174,7 +176,31 @@ type AiReviewTabProps = {
  * and form order. Each row offers Accept, Keep previous (or Dismiss when the field was empty) and Edit, under the
  * pill's rules and undo. A row leaves the list once its suggestion is checked.
  */
-export function AiReviewTab({ entries, acceptable, status, anyAi, onLooksRight, onClear, onKeepPrevious, conflictActions, onSeeResearch, onShowField, onAcceptAll }: AiReviewTabProps) {
+export function AiReviewTab({ entries, acceptable, status, anyAi, onLooksRight, onClear, onKeepPrevious, conflictActions, onSeeResearch, onShowField, onAcceptAll, nextToReview }: AiReviewTabProps) {
+  const running = status?.run?.state === 'running' || status?.run?.state === 'queued';
+  if (entries.length === 0 && anyAi && !running && nextToReview) {
+    // A19: the last suggestion is checked: on to the next session waiting for review.
+    return (
+      <div className="flex flex-col items-center gap-3 py-12 text-center" data-review-empty data-all-checked>
+        <span className="flex size-11 items-center justify-center rounded-full bg-(--ai-muted) text-(--ai-foreground)" aria-hidden>
+          <CheckCheck className="size-5" />
+        </span>
+        <div>
+          <p className="text-base font-semibold">All checked ✓</p>
+          <p className="text-sm text-muted-foreground">
+            {nextToReview.left === 0
+              ? 'No other session waits for review.'
+              : nextToReview.left === 1
+                ? '1 more session waits for review.'
+                : `${nextToReview.left} more sessions wait for review.`}
+          </p>
+        </div>
+        <Button onClick={nextToReview.onNext}>
+          {nextToReview.left === 0 ? 'Back to sessions' : 'Next to review'} <ArrowRight />
+        </Button>
+      </div>
+    );
+  }
   if (entries.length === 0) {
     return (
       <div className="flex flex-col items-start gap-2 py-6" data-review-empty>

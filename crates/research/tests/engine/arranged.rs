@@ -97,34 +97,32 @@ fn a25_c1g_cancelled_run_can_be_retried() {
     );
 }
 
+/// A19 (owner 2026-11-18): research starts by itself at most once per session; a new photo
+/// after the run no longer queues one. Run again does.
 #[test]
-fn a25_c1h_new_main_after_finished_queues() {
+fn a19_c1h_new_main_after_finished_queues_nothing_run_again_does() {
     let h = ready();
     h.service.arranged(h.session_id).unwrap();
     h.tick(0);
     h.add_main_photo_with_preview(h.session_id);
-    assert!(h.service.arranged(h.session_id).unwrap());
+    h.recompose(h.add_main_photo_with_preview(h.session_id));
+    assert!(!h.service.arranged(h.session_id).unwrap());
+    assert_eq!(state(&h), vec![(RunState::Finished, RunTrigger::Arranged)]);
+    h.service.run_again(h.session_id).unwrap();
     assert_eq!(
         state(&h).last(),
-        Some(&(RunState::Queued, RunTrigger::Arranged))
+        Some(&(RunState::Queued, RunTrigger::Manual))
     );
 }
 
 #[test]
-fn a25_c1i_condition_change_during_run_queues_once() {
+fn a19_c1i_condition_change_during_run_queues_nothing() {
     let h = ready();
     h.service.arranged(h.session_id).unwrap();
     h.service.tick().unwrap();
     h.add_photo_with_preview(h.session_id, Classification::Condition);
-    assert!(h.service.arranged(h.session_id).unwrap());
     assert!(!h.service.arranged(h.session_id).unwrap());
-    assert_eq!(
-        state(&h),
-        vec![
-            (RunState::Running, RunTrigger::Arranged),
-            (RunState::Queued, RunTrigger::Arranged)
-        ]
-    );
+    assert_eq!(state(&h), vec![(RunState::Running, RunTrigger::Arranged)]);
 }
 
 #[test]
