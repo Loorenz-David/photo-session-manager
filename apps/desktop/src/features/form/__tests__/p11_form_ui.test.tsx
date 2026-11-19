@@ -247,7 +247,8 @@ describe('P11 product details form', () => {
     renderForm();
     fireEvent.click(await screen.findByRole('button', { name: 'Customize fields' }));
     const handle = await screen.findByRole('button', { name: 'Reorder K two' });
-    await waitFor(() => expect(screen.getByRole('option', { name: /Wood/ })).toBeInTheDocument());
+    // A25: the existing fields show straight away; the add list shows only while typing.
+    expect(screen.queryByRole('option', { name: /Wood/ })).toBeNull();
 
     layoutRows(['k1', 'k2', 'k3']);
     fireEvent.pointerDown(handle, { button: 0, isPrimary: true, clientX: 200, clientY: 85 });
@@ -259,7 +260,9 @@ describe('P11 product details form', () => {
     await act(() => new Promise(resolve => setTimeout(resolve, 80)));
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove K three' }));
-    fireEvent.click(screen.getByRole('option', { name: /Wood/ }));
+    fireEvent.change(screen.getByLabelText('Add a field'), { target: { value: 'Wood' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Wood/ }));
+    expect(screen.queryByRole('option', { name: /Wood/ })).toBeNull();
     const wood = await screen.findByRole('group', { name: 'Default value of Wood' });
     fireEvent.change(within(wood).getByRole('textbox'), { target: { value: 'Oak' } });
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));

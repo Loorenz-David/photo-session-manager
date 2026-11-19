@@ -78,6 +78,7 @@ type CustomizeModeProps = {
  */
 export function CustomizeMode({ itemType, group, definitions, onDone }: CustomizeModeProps) {
   const [layout, setLayout] = useState<PresetEntry[] | null>(null);
+  const [query, setQuery] = useState('');
   const dirty = useRef(false);
   const latest = useRef<PresetEntry[] | null>(null);
   latest.current = layout;
@@ -133,16 +134,20 @@ export function CustomizeMode({ itemType, group, definitions, onDone }: Customiz
           {STEP_LABEL[group]} fields for {itemType || 'this item type'}
         </h3>
         <p className="text-xs text-muted-foreground">Drag to reorder. Default values pre-fill every new {itemType || 'item of this type'}.</p>
-        <Command className="mt-4 rounded-lg border">
-          <CommandInput placeholder="Add a field" aria-label="Add a field" />
-          <CommandList className="max-h-48">
-            <CommandEmpty>No other fields.</CommandEmpty>
-            {addable.map(definition => (
-              <CommandItem key={definition.key} value={`${definition.label} ${definition.key}`} onSelect={() => change([...layout, { key: definition.key }])}>
-                <Plus className="size-3.5" /> {definition.label} <span className="text-[11px] text-muted-foreground">{definition.key}</span>
-              </CommandItem>
-            ))}
-          </CommandList>
+        {/* A25 (owner 2026-11-19): the box takes only its own height (the Command primitive is `size-full`, which
+            filled the whole step and hid the fields below it), and its matches show only while typing. */}
+        <Command className="mt-4 h-auto rounded-lg border">
+          <CommandInput placeholder="Add a field: type its name" aria-label="Add a field" value={query} onValueChange={setQuery} />
+          {query.trim() !== '' && (
+            <CommandList className="max-h-48">
+              <CommandEmpty>No other fields.</CommandEmpty>
+              {addable.map(definition => (
+                <CommandItem key={definition.key} value={`${definition.label} ${definition.key}`} onSelect={() => { change([...layout, { key: definition.key }]); setQuery(''); }}>
+                  <Plus className="size-3.5" /> {definition.label} <span className="text-[11px] text-muted-foreground">{definition.key}</span>
+                </CommandItem>
+              ))}
+            </CommandList>
+          )}
         </Command>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={layout.map(entry => entry.key)} strategy={verticalListSortingStrategy}>
