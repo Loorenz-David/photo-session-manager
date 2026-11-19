@@ -53,3 +53,13 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
   - **Next:** discard the partial edits (`git checkout -- <those 4 files>`) or let a fresh implementer continue from
     them, then re-run `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase W6_restoration_choices`.
   - After W6: release build plus install, then the PR into main.
+- **2026-11-19 13:52: W6 APPROVED** (restarted clean after the stop; the partial edits were saved as
+  `scratchpad/w6_partial.patch` and discarded). **All six milestones are approved.**
+  - Release build of `19fdc10` installed on the dev Mac (previous build kept as "2026-11-19 W4"); fresh zip on the
+    Desktop.
+  - PR #21 merged into main (`cf9ded6`).
+  - **Follow-ups offered to the owner, not built yet:**
+    - The default instruction should say "name each restoration step exactly" (today it says one sentence, so a
+      step may be missed and need a rewrite).
+    - Restoration words should match as whole words ("soiled" counts as "oiled" today).
+    - Open notes in `backlog_writer/W5`, `backlog_writer/W6`.
