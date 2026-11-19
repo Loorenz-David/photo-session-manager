@@ -8,7 +8,7 @@ blocked_on: U2 task 1 captures Shopify replies with the probe credentials of P12
 ---
 # W5 — Search title and search description
 
-**Tracker:** IMPLEMENTED (2026-11-19, opus, implement r1: 4 units checkpointed 3e0a878, 5586490, 2150e14, bbee5e1 + gate fix; 27 rows, each a boundary test (w5_seo_publish 16, p12 w5_ 4, w5_carried 5 + vitest 2) plus 7 core-mechanism unit tests; probe `seo` captured null/null, byte-identical read-back, 75-char title stored whole; gate green: suite 1033, clippy, fmt, typecheck, npm test 661)
+**Tracker:** APPROVED (2026-11-19, opus, review r1 APPROVED_WITH_NOTES: perimeter = the declared paths of 3e0a878, 5586490, 2150e14, bbee5e1, 3e7ef83; all 27 rows have a boundary test that fails on a wrong outcome; reviewer run: suite filter (w5_seo_publish, w5_carried, p12, p14, p10) 147/0, psm-integrations 40/0, clippy core/integrations/testkit/research, fmt, typecheck, vitest w5_carried 2/2 green; implementer's full-suite stamp stands; H1–H8 hold; no assumption contradicts 08C/WC8; 4 backlog notes)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -252,3 +252,21 @@ On scratch data with the dev store connected:
   `builtin_definitions().len()`). `import_definitions` now refuses a shop key equal to any built-in key (was: the three
   fixed ones). A red baseline per row was not captured before production edits; C11(a) and C14(a) were checked red by
   temporarily reverting their fixes (restored).
+- **2026-11-19, reviewer (Opus, r1): APPROVED_WITH_NOTES.** Gate: tracker IMPLEMENTED, the five checkpoints in the log.
+  Perimeter: each checkpoint's paths equal the handoff's Files changed (U1 9, U2 11, U3 5, U4 14, closing 2). Checks
+  run once, one at a time: `cargo test -p psm-testkit --test suite -- research::w5_seo_publish:: research::w5_carried::
+  p12_shopify_adapter:: p14_publish_update:: p10_attributes::` 147 passed / 0 failed; `cargo test -p psm-integrations`
+  40/0; `cargo clippy -p psm-core -p psm-integrations -p psm-testkit -p psm-research --all-targets -- -D warnings`
+  clean; `cargo fmt --all -- --check` clean; `npm run typecheck` exit 0; `npx vitest run …/w5_carried.test.tsx` 2/2.
+  The implementer's full-suite stamp (1033, one p13 count fixed and re-run) stands. **Verified by reading:**
+  `append_always_present` used by `layout_keys`, `form_get`, `presets_get` (C1); the remote read stores the search
+  texts exactly as the description (C2); one `seo_of` mapping for `product_values` and `product_seo` (C4);
+  `update_seo` sends both fields, none → null, through `mutate` with the confirmed run (C5, H1); the publish step reads
+  only when a frozen non-blank value exists, falls back to the remote value per key (a blank frozen value never
+  reaches `update_seo` as a change; nothing cleared, M20), compares trimmed, reads back only the changed keys and fails
+  with `AttributeVerification` naming them (C6–C8), and re-reads before writing so a resumed step writes nothing twice
+  (C9(a), M18, H4); withheld/conflict through the existing partition (C9(b), C9(c)); U4 matches the amended WC5.10(iii),
+  WC6 rule 2, WC1.7; no `"shopify"` literal in `crates/research/src/writer`. Fixtures carry `captured:` source lines,
+  no credentials; the evidence file records the API version, null/null for unset, the byte-identical read-back and the
+  75-character title stored whole; the probe's `seo` step is not in `all` and never calls `cleanup`. Each row's test
+  observes its outcome at the row's boundary and fails on a wrong one. Notes: `backlog_writer/W5_seo_publish.md` (4).
