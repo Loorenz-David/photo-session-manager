@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 answered A on 2026-11-19, see Review log)
 ---
 # W6 — Restoration as fixed choices
 
-**Tracker:** IMPLEMENTED (2026-11-19, codex, U1 done: "Restoration done" built-in Condition field, never published or researched, rule 11 in the post-check; 10 rows by 6 suite + 4 unit tests; closing gate green: suite 1039/0, engine 328/0, research lib 259/0, clippy, fmt, typecheck, npm 661/0)
+**Tracker:** APPROVED (2026-11-19, opus, review r1 APPROVED_WITH_NOTES: perimeter = the 12 declared paths of f988e5b; all 10 rows have a boundary test that fails on a wrong outcome; reviewer run: research lib `writer::postcheck rules::write_table` 46/0, suite filter (w6_restoration, p09, p10, p13) 81/0, clippy core/research/testkit, fmt green; implementer's full-suite stamp stands; H1–H8 hold; no assumption contradicts 08C §13 / WC8-R; 5 backlog notes)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there; the owner card above is a second gate.)
 
@@ -109,3 +109,24 @@ The reviewer runs, once: `cargo test -p psm-research --lib writer::postcheck rul
   `research/tests/engine/{w1_note.rs, w2_writer_run.rs}` and the built-in count in `p13_publish_runs.rs` (5 → 6);
   guide `02_architecture.md` gains item 7. The plan's unit commands with two filters in one `cargo test` are not valid
   cargo syntax; each filter was run separately.
+
+- **2026-11-19, reviewer (Opus, r1): APPROVED_WITH_NOTES.** Gate: tracker IMPLEMENTED, checkpoint `f988e5b` in the
+  log. Perimeter: `git show --stat f988e5b` = the handoff's 12 declared paths (the `writer/run.rs` addition disclosed
+  and necessary: the check context is built there). Checks run once, one at a time: `cargo test -p psm-research --lib
+  -- writer::postcheck rules::write_table` 46/0; `cargo test -p psm-testkit --test suite -- research::w6_restoration::
+  p09_local_export:: p10_attributes:: p13_publish_runs::` 81/0 (the six W6 tests listed); `cargo clippy -p psm-core -p
+  psm-research -p psm-testkit --all-targets -- -D warnings` clean; `cargo fmt --all -- --check` clean. The
+  implementer's full-suite stamp (suite 1039, engine 328, lib 259, npm 661) stands. **Verified by reading:**
+  `local.restoration` in `builtin_definitions()` (MultiChoice, "Restoration done", Condition, the 14 WC8-R choices in
+  order) and in `ALWAYS_PRESENT` so a stored Condition preset ends with it (C1(a)); `active_definitions` places
+  non-Product built-ins after the shop's fields (Product order unchanged); values stored by the existing MultiChoice
+  rule, provenance human (C1(b)); `write_set` walks only shop definitions, so a publish writes exactly the linked shop
+  key and reaches `done` (C2(a), H1); `item.json` carries the list (C2(b)); `never_written` names the key and only it
+  (C3(a)); a research run proposing Oiled writes no row and the last decide step says "Restoration done: not
+  researched" (C3(b), MA10); the writer input holds it `typed`, fact, "New foam" (C4(a), WC2); `RESTORATION_PHRASES` =
+  the WC8-R table verbatim, both languages; rule 11 runs on the condition report only, NFC-lowercased substring per
+  WC5's phrase rule, one hit per missing choice naming it (C5(a)–(c), owner card 1); `check_context` fills the choices
+  only when the field is in the input as a fact. Each row's test observes its outcome at the row's boundary and fails
+  on a wrong one. Updated expected lists in `w1_note`, `w2_writer_run`, `p13` keep their assertion strength. H1–H8
+  hold. Assumptions 1–4 consistent with WC8.1, WC1.1, WC2 and the Delegated choice. Notes:
+  `backlog_writer/W6_restoration_choices.md` (5).
