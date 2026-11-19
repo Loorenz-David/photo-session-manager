@@ -4,7 +4,7 @@ title: Restoration as fixed choices — a "Restoration done" field with fixed ch
 difficulty: medium
 projection: no
 depends_on: [W5_seo_publish]
-blocked_on: owner card 1 of `handoffs/reviewer/handoff_writer_plan_r1.md` (an app-local field, the default here, or a Shopify field the owner creates). Do not start until the orchestrator records the answer in this plan's Review log; an answer "Shopify field" replaces this plan before it starts
+blocked_on: none (owner card 1 answered A on 2026-11-19, see Review log)
 ---
 # W6 — Restoration as fixed choices
 
@@ -64,8 +64,8 @@ Boundary: `AttributesService` and `PublishService` through `TestApp` with the fa
 | W6·C3(a) | `never_written` | the `local.restoration` definition in the Condition step | true | WC8-R |
 | W6·C3(b) | a research run | `fill_keys` lists `local.restoration`; the fakes propose Oiled for it | no row written; the final step names it "not researched" | WC8-R, MA10 |
 | W6·C4(a) | a `write` run | `local.restoration` = {New foam} (human) | the input's `fields` hold it with decision `Typed`, fact true, value "New foam" | WC2 |
-| W6·C5(a) | `check` | English; restoration {Sanded, Oiled}; description "We sanded and oiled the frame." | no `Restoration` hit | WC5.11 |
-| W6·C5(b) | same | the same restoration; description and report mention sanding only | one `Restoration` hit naming "Oiled" | WC5.11 |
+| W6·C5(a) | `check` | English; restoration {Sanded, Oiled}; condition report "Very Good condition. Frame sanded and oiled. Stable."; description silent on it | no `Restoration` hit | WC5.11 |
+| W6·C5(b) | same | the same restoration; the report mentions sanding only, the description says "sanded and oiled" | one `Restoration` hit naming "Oiled" (the description does not count) | WC5.11 |
 | W6·C5(c) | same | Swedish; restoration {New fabric}; report "Mycket gott renoverat skick. Sits och rygg nyklädda. Stadig." | no hit | WC5.11 |
 
 ### Delegated choices
@@ -89,3 +89,5 @@ The reviewer runs, once: `cargo test -p psm-research --lib writer::postcheck rul
 3. Publish: Shopify's product has no new field; the export's `item.json` has the choices.
 
 ## Review log
+
+- **2026-11-19, orchestrator: owner card 1 answered A.** Owner: the restoration shown to customers lives in the condition report description. So `local.restoration` stays app-local (never sent to Shopify), the writer states each chosen step in the condition report, and rule 11 checks the condition report only (master plan §5 rule 11 amended; rows C5(a)/(b) amended).

@@ -341,7 +341,8 @@ substring match.
     tokens whose letters are a single W, D, H, B or L and except the line starting "Dimensions:" or "Mått:", must
     occur in `A` after removing spaces and hyphens and upper-casing.
 11. **Restoration** (`Restoration`, W6): each selected `local.restoration` choice must appear by one of its phrases
-    for `L` (WC8-R) in the description or the condition report.
+    for `L` (WC8-R) in the condition report (owner card 1, 2026-11-19: the customer reads the restoration in the
+    condition report description; the product description may mention it but does not count).
 **Regenerate once.** After the first call, hits → one more call (unit `retry`) asking to rewrite only the texts with
 hits, naming each hit; clean texts of the first call are kept. After the retry, every text with a hit is
 **flagged** (WC4.5). If the retry is not made (cost cap, WC7), each text with a hit is flagged with an added hit
@@ -410,7 +411,7 @@ spend includes writer calls; no writer request contains an image; every writer r
    `SEO {title: String, description: String}`; `ProductUpdateInput.seo: SEOInput {title: String, description:
    String}`. Values for an unset SEO field (null or "") and the handling of a title over 70 characters are captured by
    W5·U2 (fixture task; projection checks it).
-**WC8-R (Restoration, W6, owner card 1 default).** `local.restoration`: built-in MultiChoice, group Condition, always
+**WC8-R (Restoration, W6, owner card 1 answered A, 2026-11-19).** `local.restoration`: built-in MultiChoice, group Condition, always
 present; choices (canonical English) with phrases per language for the post-check: Cleaned (cleaned / rengjord,
 rengjorda) · Sanded (sanded / slipad, slipade, slipat) · Oiled (oiled / oljad, oljade, oljat) · Waxed (waxed /
 vaxad, vaxat) · Lacquered (lacquered / lackad, lackerad, lackat) · Joints re-glued (re-glued / limmad, limmade) ·

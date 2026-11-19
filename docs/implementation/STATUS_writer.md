@@ -29,3 +29,9 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
     test store per the 2026-10-26 answer), then restores it. Confirm with the owner that this file still points to
     the test store before W5.
   - **Chain W1→W4 started** in the background: `scratchpad/writer_chain.sh`, log `scratchpad/writer_chain.log`.
+- **2026-11-19: owner answers.**
+  - Card 1 = **A**: restoration choices stay in Session Manager; the customer reads them in the condition report
+    description. W6 unblocked; master plan rule 11 now checks the condition report only.
+  - The store in `~/.psm_shopify.env` is now the **real shop**. W5 U2 task 1 amended: the probe creates its own DRAFT
+    test product, probes it, deletes it, and touches no existing product.
+  - Chain: W1 done, W2 under review (10:36).
