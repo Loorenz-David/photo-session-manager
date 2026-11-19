@@ -24,7 +24,6 @@ use crate::{
 
 pub(crate) const REPORT: &str = "custom.condition_report_description";
 pub(crate) const TITLE: &str = "product.title";
-pub(crate) const SEO_TITLE: &str = "product.seo_title";
 
 /// The writer's default model, priced for the fake provider: USD 2 per million input tokens,
 /// USD 10 per million output tokens, USD 0.001 per call whose usage is unknown.
@@ -482,23 +481,19 @@ fn w2_c18i_the_shops_title_becomes_the_prior_of_the_suggestion() {
 
 #[test]
 fn w2_c19a_texts_that_were_not_requested_are_never_written() {
+    // W5 (WC8.1): the search texts are built-in and always present, so they are requested; the
+    // condition report without its field is the text that is not.
     let h = texts_harness(false);
-    let mut reply = clean();
-    reply["texts"]["seo_title"] =
-        json!({"text": "Danish Teak Chair", "facts": [], "reason": "Search."});
-    let run = run_with(&h, reply, None);
+    let run = run_with(&h, clean(), None);
     assert_eq!(h.row(REPORT), None);
-    assert_eq!(h.row(SEO_TITLE), None);
     let writes = result_of(&h, run)["writes"].clone();
-    for key in [REPORT, SEO_TITLE] {
-        assert!(
-            writes
-                .as_array()
-                .unwrap()
-                .contains(&json!({"key": key, "outcome": "not requested"})),
-            "{key}: {writes}"
-        );
-    }
+    assert!(
+        writes
+            .as_array()
+            .unwrap()
+            .contains(&json!({"key": REPORT, "outcome": "not requested"})),
+        "{writes}"
+    );
 }
 
 fn has_unit(store: &psm_infra::sqlite::store::SqliteStore, unit: &str) -> bool {
@@ -571,5 +566,9 @@ fn w2_c20b_the_same_texts_written_again_change_no_row() {
         .iter()
         .map(|w| w["outcome"].as_str().unwrap().to_owned())
         .collect();
-    assert_eq!(outcomes, ["unchanged", "unchanged", "unchanged"]);
+    // W5: the two search texts are requested too; this answer has none for them.
+    assert_eq!(
+        outcomes,
+        ["unchanged", "unchanged", "unchanged", "no text", "no text"]
+    );
 }

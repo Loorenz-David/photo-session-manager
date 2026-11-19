@@ -874,6 +874,8 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
         let mut texts_out = Map::new();
         let mut steps: Vec<NewStep> = Vec::new();
         let (mut written, mut flagged) = (0, 0);
+        // WC6 rule 2: the text keys written or unchanged by this run.
+        let mut written_keys: Vec<String> = Vec::new();
         for name in &requested {
             let key = key_of(name);
             let field = label(&key);
@@ -932,6 +934,7 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
             match outcome {
                 WriteOutcome::Written(_) | WriteOutcome::Unchanged => {
                     written += 1;
+                    written_keys.push(key.clone());
                     if !own.is_empty() {
                         flagged += 1;
                     }
@@ -971,6 +974,7 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
             },
             &candidates,
             &layout,
+            &written_keys,
             settings,
         )?;
         if !filtered.dropped_questions.is_empty() {
@@ -1126,6 +1130,7 @@ fn store_findings(
     target: &FindingsTarget,
     candidates: &[Candidate],
     layout: &[String],
+    written: &[String],
     settings: &WriterSettings,
 ) -> Result<Filtered> {
     let mut keys: Vec<String> = Vec::new();
@@ -1142,7 +1147,10 @@ fn store_findings(
     for key in keys {
         let row = rows.iter().find(|r| r.key == key);
         let title_base = if key == PRODUCT_TITLE && row.is_none() {
-            tx.item_title_base(target.item_id, "shopify")?
+            tx.item_title_base(
+                target.item_id,
+                psm_core::services::attributes::LINK_INTEGRATION,
+            )?
         } else {
             None
         };
@@ -1183,6 +1191,7 @@ fn store_findings(
             states: &states,
             resolved: &resolved,
             max_questions: settings.max_questions,
+            written,
         },
     );
     conn.execute(

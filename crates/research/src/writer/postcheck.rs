@@ -185,7 +185,26 @@ const GRADES_SV: [(&str, &str); 4] = [
     ("worn", "Slitet"),
 ];
 /// Single letters that are dimensions, never model numbers (WC5.10).
-const DIMENSION_LETTERS: [&str; 5] = ["W", "D", "H", "B", "L"];
+/// WC5.10 (iii): single letters that are never a model token's letters (dimension letters, and
+/// the English words "A" and "I", amended 2026-11-19).
+const DIMENSION_LETTERS: [&str; 7] = ["W", "D", "H", "B", "L", "A", "I"];
+
+/// WC5.10 (iii): whether a unit (`\s?(mm|cm|m|kg|%)\b`) follows position `at` of `c`.
+fn unit_follows(c: &[char], at: usize) -> bool {
+    let mut k = at;
+    if k < c.len() && c[k].is_whitespace() {
+        k += 1;
+    }
+    if c.get(k) == Some(&'%') {
+        return true;
+    }
+    ["mm", "cm", "kg", "m"].iter().any(|unit| {
+        let u: Vec<char> = unit.chars().collect();
+        c.len() >= k + u.len()
+            && c[k..k + u.len()] == u[..]
+            && c.get(k + u.len()).is_none_or(|next| !is_word(*next))
+    })
+}
 
 fn lower(text: &str) -> String {
     text.nfc().collect::<String>().to_lowercase()
@@ -474,7 +493,8 @@ fn four_digit_runs(text: &str) -> Vec<(String, bool)> {
 }
 
 /// The model-number tokens of one line (WC5.10 (iii)):
-/// `\b[A-Z]{1,4}[- ]?\d{1,4}[A-Z]?\b`, minus a single dimension letter.
+/// `\b[A-Z]{1,4}[- ]?\d{1,4}[A-Z]?\b`, minus a single W, D, H, B, L, A or I and minus a token
+/// followed by a unit.
 fn model_tokens(line: &str) -> Vec<String> {
     let c: Vec<char> = line.chars().collect();
     let n = c.len();
@@ -505,7 +525,9 @@ fn model_tokens(line: &str) -> Vec<String> {
                     end += 1;
                 }
                 let letters: String = c[i..j].iter().collect();
-                if (end == n || !is_word(c[end])) && !DIMENSION_LETTERS.contains(&letters.as_str())
+                if (end == n || !is_word(c[end]))
+                    && !DIMENSION_LETTERS.contains(&letters.as_str())
+                    && !unit_follows(&c, end)
                 {
                     out.push(c[i..end].iter().collect());
                 }
@@ -1122,6 +1144,21 @@ mod tests {
         assert_eq!(hits.len(), 1, "{hits:?}");
         assert_eq!(hits[0].code, Models);
         assert!(hits[0].detail.contains("GE 290"));
+    }
+
+    #[test]
+    fn w5_models_a_single_a_is_no_model_token() {
+        assert_eq!(codes(&one("title", "A 1 chip."), &ctx()), []);
+    }
+
+    #[test]
+    fn w5_models_a_single_i_is_no_model_token() {
+        assert_eq!(codes(&one("title", "I 2 chairs."), &ctx()), []);
+    }
+
+    #[test]
+    fn w5_models_a_token_followed_by_a_unit_is_no_model_token() {
+        assert_eq!(codes(&one("title", "PK 22 cm"), &ctx()), []);
     }
 
     #[test]

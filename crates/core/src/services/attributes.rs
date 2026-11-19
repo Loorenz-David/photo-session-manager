@@ -287,8 +287,9 @@ fn typed_title(item_id: i64, title: &str, at: i64) -> Value {
     }
 }
 
-/// The link integration of the linked product the form reads (the store keys links by it).
-const LINK_INTEGRATION: &str = "shopify";
+/// The link integration of the linked product the form reads (the store keys links by it). The
+/// writer uses it too (W5·U4: one constant for the title's link base).
+pub const LINK_INTEGRATION: &str = "shopify";
 
 /// No value: null, a blank string, an empty list or object.
 fn is_empty_json(value: &Json) -> bool {

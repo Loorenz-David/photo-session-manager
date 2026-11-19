@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageCircleQuestion, PenLine, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { ActionButton } from '@/components/ui/action-button';
 import { Input } from '@/components/ui/input';
 import { writerFindingAnswer, writerFindingDismiss, writerStatus, type WriterFinding, type WriterStatus } from '@/services/writer';
@@ -38,7 +39,9 @@ export function writing(status: WriterStatus | null): boolean {
 function Ask({ finding, onChanged }: { finding: WriterFinding; onChanged: () => Promise<unknown> }) {
   const [answer, setAnswer] = useState('');
   const send = async () => {
-    await writerFindingAnswer(finding.id, answer.trim());
+    const requested = await writerFindingAnswer(finding.id, answer.trim());
+    // W5·U4: the answer is kept but no writing was queued; say why (as Write texts does).
+    if (!requested.queued && requested.reason) toast.error(requested.reason.sentence);
     setAnswer('');
     await onChanged();
   };

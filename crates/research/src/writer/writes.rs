@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// The integration whose title base makes an item's title the shop's (the rule `form_get` uses).
-const TITLE_LINK_INTEGRATION: &str = "shopify";
+use psm_core::services::attributes::LINK_INTEGRATION as TITLE_LINK_INTEGRATION;
 
 /// WC4.3: the stored state of a text key. For any key but `product.title`: its row. For
 /// `product.title`: its attribute row if one exists; else none when the item's title is blank;

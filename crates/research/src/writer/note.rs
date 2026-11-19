@@ -33,7 +33,7 @@ use crate::{
 /// The built-in title key (its stored state is WC4.3's).
 pub const PRODUCT_TITLE: &str = "product.title";
 /// The integration whose link title base decides a title's provenance (the rule `form_get` uses).
-const TITLE_LINK_INTEGRATION: &str = "shopify";
+use psm_core::services::attributes::LINK_INTEGRATION as TITLE_LINK_INTEGRATION;
 /// How the panel marks a condition observation whose photo left the condition photos (WC1.6).
 pub const PHOTO_GONE: &str = "photo no longer in the condition photos";
 
@@ -149,14 +149,16 @@ pub struct Staleness {
     pub missing_main: bool,
 }
 
-/// WC1.7.
+/// WC1.7 (amended 2026-11-19, W5·U4: `stale_condition` needs a chosen Condition field, so no
+/// banner shows that Look again cannot clear).
 pub fn stale(input: &StaleInput) -> Staleness {
     Staleness {
         stale_main: input.main_same == Some(false),
-        stale_condition: match input.condition_same {
-            Some(same) => !same,
-            None => input.usable_condition && input.condition_chosen,
-        },
+        stale_condition: input.condition_chosen
+            && match input.condition_same {
+                Some(same) => !same,
+                None => input.usable_condition,
+            },
         missing_main: input.main_same.is_none() && input.usable_main,
     }
 }
@@ -874,6 +876,14 @@ mod tests {
             !stale(&StaleInput {
                 condition_chosen: false,
                 ..no_n6
+            })
+            .stale_condition
+        );
+        // W5·U4 (WC1.7 amended): an N6 whose photos changed, with no Condition field chosen.
+        assert!(
+            !stale(&StaleInput {
+                condition_chosen: false,
+                ..condition
             })
             .stale_condition
         );

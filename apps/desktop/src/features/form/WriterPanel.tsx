@@ -1,7 +1,11 @@
 import type { WriterStatus } from '@/services/writer';
 
-/** The research panel's money: USD with two decimals, from micro-dollars. */
+/**
+ * The research panel's money: USD with two decimals, from micro-dollars; an amount above zero and below one cent shows
+ * "< $0.01" (W5·U4: never "$0.00" for a real cost).
+ */
 export function money(microUsd: number): string {
+  if (microUsd > 0 && microUsd < 10_000) return '< $0.01';
   return `$${(microUsd / 1_000_000).toFixed(2)}`;
 }
 

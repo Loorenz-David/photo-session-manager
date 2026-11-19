@@ -140,6 +140,8 @@ pub struct FilterInput<'a> {
     /// The identities of the item's `answered` and `dismissed` findings.
     pub resolved: &'a [String],
     pub max_questions: u32,
+    /// The text keys this run wrote or found unchanged (write outcome `written` / `unchanged`).
+    pub written: &'a [String],
 }
 
 /// A finding or question to store, state `open`.
@@ -207,6 +209,14 @@ pub fn filter(candidates: &[Candidate], input: &FilterInput<'_>) -> Filtered {
             _ => keys.clone(),
         };
         if subject.iter().any(|k| state(k).is_some_and(|s| s.reviewed)) {
+            continue;
+        }
+        // 2 (amended 2026-11-19, W5·U4). A text finding about a text this run did not write
+        // (e.g. the owner's own text) is not raised.
+        if candidate.finding_type.is_some_and(|t| !t.about_fields())
+            && !candidate.text_field.is_empty()
+            && !input.written.contains(&candidate.text_field)
+        {
             continue;
         }
         if let Some(t) = candidate.finding_type {
@@ -338,8 +348,17 @@ mod tests {
                 states: &states,
                 resolved: &resolved,
                 max_questions,
+                written: &written(),
             },
         )
+    }
+
+    /// Every text key these tests' findings name, as written by the run.
+    fn written() -> Vec<String> {
+        [REPORT, "product.title", "product.description"]
+            .iter()
+            .map(|k| (*k).to_owned())
+            .collect()
     }
 
     fn kept(filtered: &Filtered) -> Vec<(String, Mode)> {
@@ -364,6 +383,34 @@ mod tests {
             3,
         );
         assert_eq!(out, Filtered::default());
+    }
+
+    #[test]
+    fn w5_rule2_a_text_finding_about_a_text_not_written_this_run_is_dropped() {
+        let states: BTreeMap<String, KeyState> = BTreeMap::new();
+        let candidates = [
+            finding(FindingType::TextVsFacts, &[], "product.description"),
+            finding(FindingType::TextVsFacts, &[], "product.title"),
+        ];
+        let written = vec!["product.title".to_owned()];
+        let out = filter(
+            &candidates,
+            &FilterInput {
+                modes: &SafeguardModes::default(),
+                layout: &layout(),
+                states: &states,
+                resolved: &[],
+                max_questions: 3,
+                written: &written,
+            },
+        );
+        assert_eq!(
+            out.stored
+                .iter()
+                .map(|s| s.text_field.as_str())
+                .collect::<Vec<_>>(),
+            ["product.title"]
+        );
     }
 
     #[test]

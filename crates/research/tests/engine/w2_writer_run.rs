@@ -317,9 +317,11 @@ fn w2_c4d_rejected_holds_the_dismissed_and_kept_previous_texts() {
 #[test]
 fn w2_c4e_without_the_report_field_only_title_and_description_are_requested() {
     let h = writer_harness();
+    // W5 (WC8.1): the two search texts are built-in and always present, so they are requested
+    // too; the condition report is still not.
     assert_eq!(
         build(&h, &WriterSettings::default())["texts"],
-        json!(["title", "description"])
+        json!(["title", "description", "seo_title", "seo_description"])
     );
 }
 
