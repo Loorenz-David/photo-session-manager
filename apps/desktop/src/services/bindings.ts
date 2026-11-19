@@ -165,6 +165,17 @@ export const commands = {
 	writerNote: (sessionId: CommandId) => typedError<NoteDto_Serialize, CommandError>(__TAURI_INVOKE("writer_note", { sessionId })),
 	/**  W1: **Look again**: the photo looks run again over the changed photos. */
 	writerLookAgain: (sessionId: CommandId) => typedError<RequestedDto_Serialize, CommandError>(__TAURI_INVOKE("writer_look_again", { sessionId })),
+	/**  W3: the writer's state for the session (the AI review tab's writer block, the research panel). */
+	writerStatus: (sessionId: CommandId) => typedError<WriterStatusDto_Serialize, CommandError>(__TAURI_INVOKE("writer_status", { sessionId })),
+	/**
+	 *  W3 (WC3): asks the writer to write the session's texts. `origin` is `next_to_review`,
+	 *  `all_checked` or `write_texts`.
+	 */
+	writerRequest: (sessionId: CommandId, origin: string) => typedError<RequestedDto_Serialize, CommandError>(__TAURI_INVOKE("writer_request", { sessionId, origin })),
+	/**  W3 (WC6): answers an open writer question or finding; the texts are written again. */
+	writerFindingAnswer: (findingId: CommandId, answer: string) => typedError<RequestedDto_Serialize, CommandError>(__TAURI_INVOKE("writer_finding_answer", { findingId, answer })),
+	/**  W3 (WC6): dismisses an open writer note or question; nothing is written again. */
+	writerFindingDismiss: (findingId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("writer_finding_dismiss", { findingId })),
 	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
@@ -2054,6 +2065,86 @@ export type VisualMatchDto_Serialize = {
 	title: string,
 	source: string,
 	thumbnail: string | null,
+};
+
+/**  The post-check of one call. */
+export type WriterAttemptDto = {
+	attempt: number,
+	hits: WriterHitDto[],
+};
+
+/**
+ *  An open writer finding (`kind` `finding`) or question (`kind` `question`); `mode` `ask` waits
+ *  for an answer, `note` can be dismissed.
+ */
+export type WriterFindingDto = {
+	id: number,
+	kind: string,
+	type: string,
+	keys: string[],
+	text_field: string,
+	text: string,
+	mode: string,
+};
+
+/**  One post-check hit. */
+export type WriterHitDto = {
+	text: string,
+	code: string,
+	detail: string,
+};
+
+/**  What the latest writer run received. */
+export type WriterInputsDto = {
+	fields: number,
+	note: number,
+	listings: string[],
+};
+
+/**  W3 (08C §11): the writer's state for a session. */
+export type WriterStatusDto = WriterStatusDto_Serialize | WriterStatusDto_Deserialize;
+
+/**  W3 (08C §11): the writer's state for a session. */
+export type WriterStatusDto_Deserialize = {
+	reason?: ReasonDto | null,
+	run?: RunViewDto_Deserialize | null,
+	texts: WriterTextDto[],
+	attempts: WriterAttemptDto[],
+	regenerated: string[],
+	findings: WriterFindingDto[],
+	steps: StepViewDto_Deserialize[],
+	cost_micro_usd: number,
+	inputs: WriterInputsDto,
+	stale_main: boolean,
+	stale_condition: boolean,
+	can_write: boolean,
+};
+
+/**  W3 (08C §11): the writer's state for a session. */
+export type WriterStatusDto_Serialize = {
+	reason: ReasonDto | null,
+	run: RunViewDto_Serialize | null,
+	texts: WriterTextDto[],
+	attempts: WriterAttemptDto[],
+	regenerated: string[],
+	findings: WriterFindingDto[],
+	steps: StepViewDto_Serialize[],
+	cost_micro_usd: number,
+	inputs: WriterInputsDto,
+	stale_main: boolean,
+	stale_condition: boolean,
+	can_write: boolean,
+};
+
+/**  One text of the latest writer run: its reason, facts and what the check found. */
+export type WriterTextDto = {
+	key: string,
+	label: string,
+	flagged: boolean,
+	hits: WriterHitDto[],
+	reason: string,
+	facts: string[],
+	outcome: string,
 };
 
 /* Tauri Specta runtime */

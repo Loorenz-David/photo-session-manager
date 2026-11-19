@@ -201,4 +201,8 @@ impl crate::writer::api::WriterApi for ResearchService {
     fn dismiss(&self, finding_id: i64) -> Result<()> {
         ResearchService::writer_dismiss(self, finding_id)
     }
+
+    fn status(&self, session_id: i64) -> Result<crate::writer::api::WriterStatus> {
+        ResearchService::writer_status(self, session_id)
+    }
 }

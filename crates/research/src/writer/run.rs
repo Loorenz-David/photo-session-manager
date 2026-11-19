@@ -116,7 +116,9 @@ impl WriterBlock {
                     .to_owned()
             }
             Self::NothingToWrite => "This item has no text the writer can write".to_owned(),
-            Self::ResearchBusy => "Research is still working on this session".to_owned(),
+            Self::ResearchBusy => {
+                "Research is still working on this session; write texts when it finishes".to_owned()
+            }
             Self::DayLimit => "Day limit reached".to_owned(),
             Self::Offline => "Offline".to_owned(),
         }

@@ -213,6 +213,8 @@ impl SettingsSetContext {
             current.commerce = on_disk.commerce;
             // R7·U1: the engine reads the `research` slot live from the file; it is the current.
             current.research = on_disk.research;
+            // W3: so does the writer's.
+            current.writer = on_disk.writer;
         }
         let previous = settings_value(&current)?;
         // R7·U1: a `research` patch passes the engine's validation first; its text is the refusal.
@@ -222,6 +224,11 @@ impl SettingsSetContext {
                 None => psm_research::config::validate(research)
                     .map_err(psm_core::Error::InvalidData)?,
             }
+        }
+        // W3: a `writer` patch passes the writer's validation first; its text is the refusal.
+        if let Some(writer) = patch.get("writer") {
+            psm_research::writer::config::WriterSettings::validate(writer)
+                .map_err(psm_core::Error::InvalidData)?;
         }
         let mut next = SettingsService::set(&previous, patch)?;
         if patch.get("research").is_some() {
@@ -253,7 +260,8 @@ impl SettingsSetContext {
         Settings::set(&self.paths, &settings)?;
         let mut a = previous;
         let mut b = next;
-        for key in ["theme", "output_format", "storage", "export"] {
+        // W3: the writer's slot is read live by the engine, like `theme` it never rebuilds.
+        for key in ["theme", "output_format", "storage", "export", "writer"] {
             a[key] = serde_json::Value::Null;
             b[key] = serde_json::Value::Null;
         }
@@ -1818,7 +1826,15 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
                 .ok()
                 .and_then(|settings| settings.research)
         }),
-        writer_settings: Arc::new(|| None),
+        // W3: the writer reads its slot live, as research reads its own.
+        writer_settings: {
+            let paths = parts.paths.clone();
+            Arc::new(move || {
+                Settings::open(&paths)
+                    .ok()
+                    .and_then(|settings| settings.writer)
+            })
+        },
         events: parts.events.clone(),
         wait,
     }));

@@ -1135,6 +1135,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::research::research_export,
         commands::writer::writer_note,
         commands::writer::writer_look_again,
+        commands::writer::writer_status,
+        commands::writer::writer_request,
+        commands::writer::writer_finding_answer,
+        commands::writer::writer_finding_dismiss,
         commands::search::search_window_open,
         commands::search::search_web_place,
         commands::search::search_web_go,
@@ -2516,6 +2520,66 @@ mod w1_writer_command_tests {
             "writerLookAgain",
             "writer_note",
             "writer_look_again",
+        ] {
+            assert!(bindings.contains(name), "binding missing {name}");
+        }
+    }
+
+    /// W3·C6(a) (HW7, MA7): without the research engine the four W3 writer commands answer
+    /// `research_unavailable`; the bindings carry all four.
+    #[test]
+    fn w3_c6a_writer_commands_without_the_engine_answer_research_unavailable() {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        let s = a
+            .items()
+            .create_local("CMD-W3", "Chair", "Chair", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let psm_testkit::TestApp {
+            dir: _dir, mut app, ..
+        } = a;
+        app.research = None;
+        app.writer = None;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::writer::writer_status,
+                commands::writer::writer_request,
+                commands::writer::writer_finding_answer,
+                commands::writer::writer_finding_dismiss,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        for (cmd, args) in [
+            ("writer_status", json!({"sessionId": s})),
+            (
+                "writer_request",
+                json!({"sessionId": s, "origin": "write_texts"}),
+            ),
+            (
+                "writer_finding_answer",
+                json!({"findingId": 1, "answer": "Teak"}),
+            ),
+            ("writer_finding_dismiss", json!({"findingId": 1})),
+        ] {
+            let error = call(&w, cmd, args).unwrap_err();
+            assert_eq!(error["code"], "research_unavailable", "{cmd}: {error}");
+        }
+        let bindings = include_str!("../../src/services/bindings.ts");
+        for name in [
+            "writerStatus",
+            "writerRequest",
+            "writerFindingAnswer",
+            "writerFindingDismiss",
+            "writer_status",
+            "writer_request",
+            "writer_finding_answer",
+            "writer_finding_dismiss",
         ] {
             assert!(bindings.contains(name), "binding missing {name}");
         }
