@@ -174,7 +174,18 @@ impl ResearchService {
                     store::steps(conn, run.id)?,
                     store::calls(conn, Some(run.id))?,
                     outbound,
-                    store::output(conn, run.id, Stage::Decide.as_str(), "decide")?,
+                    // W2 (WC7): a writer run's `writes.json` is its `result` unit; a look
+                    // run has neither (null).
+                    if run.trigger == crate::domain::RunTrigger::Write {
+                        store::output(
+                            conn,
+                            run.id,
+                            Stage::Write.as_str(),
+                            crate::writer::run::RESULT_UNIT,
+                        )?
+                    } else {
+                        store::output(conn, run.id, Stage::Decide.as_str(), "decide")?
+                    },
                     store::feedback_since(
                         conn,
                         run.item_id,

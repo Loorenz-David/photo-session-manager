@@ -20,4 +20,8 @@ pub trait WriterApi: Send + Sync {
     fn look_again(&self, session_id: i64) -> Result<Requested>;
     /// W2 (WC3): queue a writer run of the session, or say why not.
     fn request(&self, session_id: i64, origin: crate::writer::run::Origin) -> Result<Requested>;
+    /// W2 (WC6): answer an open writer question or finding; the texts are written again.
+    fn answer(&self, finding_id: i64, answer: &str) -> Result<Requested>;
+    /// W2 (WC6): dismiss an open writer question or finding.
+    fn dismiss(&self, finding_id: i64) -> Result<()>;
 }

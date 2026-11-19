@@ -317,6 +317,67 @@ fn a17_delete_removes_every_row_and_sends_the_files_to_the_trash() {
     );
 }
 
+/// W2·C25(a) (08C §10): a session's writer run and its writer findings go with the session;
+/// another session's findings stay, and no row names the deleted session afterwards.
+#[test]
+fn w2_c25a_delete_removes_the_sessions_writer_findings() {
+    let a = TestApp::with_research().unwrap();
+    let (keep, keep_item, _) = session(&a, "KEEP-2");
+    let (gone, item, _) = session(&a, "test-w2");
+    let conn = db(&a);
+    conn.execute(
+        "INSERT INTO research_runs(item_id,session_id,trigger,state,queued_at) VALUES (?1,?2,'write','finished',1)",
+        params![item, gone],
+    )
+    .unwrap();
+    let run = conn.last_insert_rowid();
+    for (session_id, item_id, identity) in [
+        (gone, item, "field_vs_field|custom.era|"),
+        (gone, item, "question|||who made it"),
+        (keep, keep_item, "field_vs_field|custom.era|"),
+    ] {
+        conn.execute(
+            "INSERT INTO writer_findings(item_id,session_id,run_id,kind,type,keys,identity,text,mode,state,created_at) \
+             VALUES (?1,?2,?3,'finding','field_vs_field','[]',?4,'t','note','open',1)",
+            params![item_id, session_id, run, identity],
+        )
+        .unwrap();
+    }
+    let deleted = session_delete::delete(&a.app.handles(), gone).unwrap();
+    assert_eq!(deleted.research_runs, 1);
+    assert_eq!(
+        count(
+            &conn,
+            "SELECT COUNT(*) FROM writer_findings WHERE session_id=?1",
+            gone
+        ),
+        0
+    );
+    assert_eq!(
+        count(
+            &conn,
+            "SELECT COUNT(*) FROM writer_findings WHERE session_id=?1",
+            keep
+        ),
+        1
+    );
+    let leftover = dangling(
+        &conn,
+        &Deleted {
+            session: gone,
+            item,
+            photos: Vec::new(),
+            raws: Vec::new(),
+            publish_items: Vec::new(),
+            runs: vec![run],
+        },
+    );
+    assert!(
+        leftover.is_empty(),
+        "rows still name the deleted session: {leftover:?}"
+    );
+}
+
 /// test-4-4: a published session whose files retention already cleared (the RAWs are gone) is
 /// deleted all the same, and Shopify is not asked anything (Session Manager only).
 #[test]

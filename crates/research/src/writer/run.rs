@@ -30,7 +30,11 @@ use crate::{
         config::{WriterSettings, WriterSnapshot},
         defaults,
         input::{requestable_texts, text_keys},
+        note::{PRODUCT_TITLE, decision, reviewed},
         postcheck::{CheckContext, Hit, HitCode, SeverityField, check},
+        safeguard::{
+            Candidate, FilterInput, Filtered, FindingState, FindingType, KeyState, Survivor, filter,
+        },
         schema,
         writes::{outcome_text, write_text},
     },
@@ -301,6 +305,99 @@ impl ResearchService {
             queued,
             reason: reason.map(|r| r.reason()),
         })
+    }
+}
+
+/// How often the photographer answered and dismissed one finding type (WC6 "Counts").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FindingCount {
+    #[serde(rename = "type")]
+    pub finding_type: String,
+    pub answered: i64,
+    pub dismissed: i64,
+}
+
+impl ResearchService {
+    /// Resolves an `open` finding or question; returns its session.
+    fn resolve_finding(
+        &self,
+        finding_id: i64,
+        state: FindingState,
+        answer: Option<&str>,
+    ) -> Result<i64> {
+        let now = self.clock.now_ms();
+        let session = self.store.research_transaction(|tx| {
+            use rusqlite::OptionalExtension;
+            let conn = tx.conn();
+            let session: Option<i64> = conn
+                .query_row(
+                    "SELECT session_id FROM writer_findings WHERE id=?1 AND state='open'",
+                    [finding_id],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(store::db)?;
+            let Some(session) = session else {
+                return Err(psm_core::Error::InvalidData(
+                    "this question is no longer open".into(),
+                ));
+            };
+            conn.execute(
+                "UPDATE writer_findings SET state=?1, answer=?2, resolved_at=?3 WHERE id=?4",
+                rusqlite::params![state.as_str(), answer, now, finding_id],
+            )
+            .map_err(store::db)?;
+            Ok(session)
+        })?;
+        self.changed(session);
+        Ok(session)
+    }
+
+    /// WC6 "Answer": the finding becomes `answered` with the answer, then the session's texts are
+    /// written again (`request(session, Answer)`), the answer among the writer's input.
+    pub fn writer_answer(&self, finding_id: i64, answer: &str) -> Result<Requested> {
+        let answer = answer.trim();
+        if answer.is_empty() {
+            return Err(psm_core::Error::InvalidData("write an answer first".into()));
+        }
+        let session = self.resolve_finding(finding_id, FindingState::Answered, Some(answer))?;
+        self.writer_request(session, Origin::Answer)
+    }
+
+    /// WC6 "Dismiss": the finding becomes `dismissed`; nothing is written again.
+    pub fn writer_dismiss(&self, finding_id: i64) -> Result<()> {
+        self.resolve_finding(finding_id, FindingState::Dismissed, None)
+            .map(|_| ())
+    }
+
+    /// WC6 "Counts": per finding type, how many were answered and how many dismissed.
+    pub fn writer_counts(&self) -> Result<Vec<FindingCount>> {
+        let rows: Vec<(String, String, i64)> = self.store.research_transaction(|tx| {
+            let mut stmt = tx
+                .conn()
+                .prepare(
+                    "SELECT type, state, COUNT(*) FROM writer_findings \
+                     WHERE state IN ('answered','dismissed') GROUP BY type, state",
+                )
+                .map_err(store::db)?;
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                .map_err(store::db)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(store::db)
+        })?;
+        let count = |t: &str, state: &str| {
+            rows.iter()
+                .find(|(rt, rs, _)| rt == t && rs == state)
+                .map_or(0, |(_, _, n)| *n)
+        };
+        Ok(FindingType::ALL
+            .iter()
+            .map(|t| FindingCount {
+                finding_type: t.as_str().to_owned(),
+                answered: count(t.as_str(), "answered"),
+                dismissed: count(t.as_str(), "dismissed"),
+            })
+            .collect())
     }
 }
 
@@ -681,8 +778,15 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
     let identity = json!({ "texts": texts, "hits": hits_json(&hits) });
     let fingerprint = fingerprint(Stage::Write.number(), &identity)
         .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-    let questions = first_answer["questions"].clone();
-    let (written, flagged) = ctx.svc.store.research_transaction(|tx| {
+    let candidates = candidates(&first_answer, &hits, &key_of("condition_report"), &allowed);
+    let layout: Vec<String> = ctx
+        .form
+        .fields
+        .iter()
+        .map(|f| f.definition.key.clone())
+        .collect();
+    let session_id = ctx.run.session_id;
+    let (written, flagged, findings, questions) = ctx.svc.store.research_transaction(|tx| {
         let mut writes: Vec<Json> = Vec::new();
         let mut texts_out = Map::new();
         let mut steps: Vec<NewStep> = Vec::new();
@@ -773,12 +877,41 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
         for name in &extra {
             writes.push(json!({ "key": key_of(name), "outcome": "not requested" }));
         }
+        // WC6: the filter reads the keys' states after this run's writes, in this transaction.
+        let filtered = store_findings(
+            tx,
+            &FindingsTarget {
+                item_id,
+                session_id,
+                run_id: ctx.run.id,
+                now,
+            },
+            &candidates,
+            &layout,
+            settings,
+        )?;
+        if !filtered.dropped_questions.is_empty() {
+            let mut capped = step(
+                Stage::Write,
+                StepKind::NotDetermined,
+                format!(
+                    "{} not asked (at most {} per write)",
+                    filtered.dropped_questions.len(),
+                    settings.max_questions
+                ),
+            );
+            capped.detail = filtered.dropped_questions.join("\n");
+            steps.push(capped);
+        }
+        let (stored_findings, stored_questions): (Vec<&Survivor>, Vec<&Survivor>) =
+            filtered.stored.iter().partition(|s| s.kind == "finding");
         let output = json!({
             "texts": texts_out,
             "hits": attempts,
             "writes": writes,
-            "findings": [],
-            "questions": questions,
+            "findings": stored_findings,
+            "questions": stored_questions,
+            "dropped_questions": filtered.dropped_questions,
             "regenerated": regenerated,
             "ending": ending.as_str(),
         });
@@ -799,7 +932,12 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
             store::insert_step(conn, ctx.run.id, s, now)?;
         }
         store::set_stage_reached(conn, ctx.run.id, Stage::Write.as_str())?;
-        Ok((written, flagged))
+        Ok((
+            written,
+            flagged,
+            stored_findings.len(),
+            stored_questions.len(),
+        ))
     })?;
     ctx.svc.changed(ctx.run.session_id);
     let cost = ctx
@@ -809,12 +947,188 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
         .map_or(0, |r| r.cost_micro_usd);
     tracing::info!(
         target: "psm::writer",
-        "writer.finished run={} written={written} flagged={flagged} regenerated={} findings=0 \
-         questions=0 cost_micro_usd={cost}",
+        "writer.finished run={} written={written} flagged={flagged} regenerated={} \
+         findings={findings} questions={questions} cost_micro_usd={cost}",
         ctx.run.id,
         regenerated.len()
     );
     finish(ctx, &json!({ "ending": ending.as_str() }))
+}
+
+/// The findings and questions of a run before the filter (WC5, WC6): the model's findings and
+/// questions of its first answer, and the post-check's damage and names hits that are left.
+fn candidates(answer: &Json, hits: &[Hit], report_key: &str, texts: &[String]) -> Vec<Candidate> {
+    let strings = |value: &Json| -> Vec<String> {
+        value
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|k| k.as_str().map(str::to_owned))
+            .collect()
+    };
+    let mut out = Vec::new();
+    for finding in answer["findings"].as_array().into_iter().flatten() {
+        let Some(finding_type) = finding["type"].as_str().and_then(FindingType::parse) else {
+            continue;
+        };
+        let keys = strings(&finding["keys"]);
+        let text_field = match finding_type {
+            FindingType::MissingInText => report_key.to_owned(),
+            FindingType::TextVsFacts => keys
+                .iter()
+                .find(|k| texts.contains(k))
+                .cloned()
+                .unwrap_or_default(),
+            _ => String::new(),
+        };
+        out.push(Candidate {
+            finding_type: Some(finding_type),
+            keys,
+            text_field,
+            text: finding["text"].as_str().unwrap_or_default().to_owned(),
+        });
+    }
+    let text_key = |name: &str| -> String {
+        match name {
+            "condition_report" => report_key.to_owned(),
+            other => text_keys(&WriterSettings::default())
+                .into_iter()
+                .find(|(n, _)| *n == other)
+                .map_or_else(|| other.to_owned(), |(_, k)| k),
+        }
+    };
+    for hit in hits {
+        let (finding_type, keys, text_field) = match hit.code {
+            HitCode::Damage => (
+                FindingType::MissingInText,
+                hit.key.clone().into_iter().collect(),
+                report_key.to_owned(),
+            ),
+            HitCode::Names | HitCode::Years | HitCode::Models => {
+                let key = text_key(&hit.text);
+                (FindingType::TextVsFacts, vec![key.clone()], key)
+            }
+            _ => continue,
+        };
+        out.push(Candidate {
+            finding_type: Some(finding_type),
+            keys,
+            text_field,
+            text: hit.detail.clone(),
+        });
+    }
+    for question in answer["questions"].as_array().into_iter().flatten() {
+        out.push(Candidate {
+            finding_type: None,
+            keys: strings(&question["keys"]),
+            text_field: String::new(),
+            text: question["text"].as_str().unwrap_or_default().to_owned(),
+        });
+    }
+    out
+}
+
+/// Where a run's findings are stored.
+struct FindingsTarget {
+    item_id: i64,
+    session_id: i64,
+    run_id: i64,
+    now: i64,
+}
+
+/// WC6 storage, inside the run's `result` transaction: the filter over the keys' states now,
+/// every earlier `open` row of the item `superseded`, one `open` row per survivor.
+fn store_findings(
+    tx: &mut psm_infra::sqlite::store::SqliteTx<'_>,
+    target: &FindingsTarget,
+    candidates: &[Candidate],
+    layout: &[String],
+    settings: &WriterSettings,
+) -> Result<Filtered> {
+    let mut keys: Vec<String> = Vec::new();
+    for candidate in candidates {
+        for key in candidate.keys.iter().chain([&candidate.text_field]) {
+            if !key.is_empty() && !keys.contains(key) {
+                keys.push(key.clone());
+            }
+        }
+    }
+    let rows = tx.attribute_values(target.item_id)?;
+    let item = tx.item(target.item_id)?;
+    let mut states = BTreeMap::new();
+    for key in keys {
+        let row = rows.iter().find(|r| r.key == key);
+        let title_base = if key == PRODUCT_TITLE && row.is_none() {
+            tx.item_title_base(target.item_id, "shopify")?
+        } else {
+            None
+        };
+        let stored = crate::writer::writes::stored_state(
+            row,
+            target.item_id,
+            &key,
+            &item.title,
+            title_base.as_deref(),
+        );
+        let feedback = tx.feedback_by_key(target.item_id, &key)?;
+        states.insert(
+            key,
+            KeyState {
+                reviewed: reviewed(stored.as_ref(), &feedback),
+                decision: decision(stored.as_ref(), &feedback),
+            },
+        );
+    }
+    let conn = tx.conn();
+    let resolved: Vec<String> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT identity FROM writer_findings WHERE item_id=?1 \
+                 AND state IN ('answered','dismissed')",
+            )
+            .map_err(store::db)?;
+        stmt.query_map([target.item_id], |r| r.get(0))
+            .map_err(store::db)?
+            .collect::<rusqlite::Result<Vec<String>>>()
+            .map_err(store::db)?
+    };
+    let filtered = filter(
+        candidates,
+        &FilterInput {
+            modes: &settings.safeguard,
+            layout,
+            states: &states,
+            resolved: &resolved,
+            max_questions: settings.max_questions,
+        },
+    );
+    conn.execute(
+        "UPDATE writer_findings SET state='superseded' WHERE item_id=?1 AND state='open'",
+        [target.item_id],
+    )
+    .map_err(store::db)?;
+    for survivor in &filtered.stored {
+        conn.execute(
+            "INSERT INTO writer_findings(item_id,session_id,run_id,kind,type,keys,text_field,\
+             identity,text,mode,state,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,'open',?11)",
+            rusqlite::params![
+                target.item_id,
+                target.session_id,
+                target.run_id,
+                survivor.kind,
+                survivor.finding_type,
+                serde_json::to_string(&survivor.keys)
+                    .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
+                survivor.text_field,
+                survivor.identity,
+                survivor.text,
+                survivor.mode.as_str(),
+                target.now,
+            ],
+        )
+        .map_err(store::db)?;
+    }
+    Ok(filtered)
 }
 
 fn log_post_check(run_id: i64, attempt: u32, hits: &[Hit]) {

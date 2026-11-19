@@ -12,5 +12,6 @@ pub mod input;
 pub mod note;
 pub mod postcheck;
 pub mod run;
+pub mod safeguard;
 pub mod schema;
 pub mod writes;

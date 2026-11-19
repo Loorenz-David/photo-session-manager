@@ -427,6 +427,28 @@ fn c1a_open_creates_all_domain_columns() {
                 "committed_at",
             ],
         ),
+        // W2 (`master_plan_writer.md` §4 Storage): the writer's findings and questions, created
+        // by `psm_research::schema::ensure` beside the engine's tables.
+        (
+            "writer_findings",
+            &[
+                "id",
+                "item_id",
+                "session_id",
+                "run_id",
+                "kind",
+                "type",
+                "keys",
+                "text_field",
+                "identity",
+                "text",
+                "mode",
+                "state",
+                "answer",
+                "created_at",
+                "resolved_at",
+            ],
+        ),
         (
             "shooting_templates",
             &["id", "item_type", "type_key", "created_at", "updated_at"],

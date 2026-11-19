@@ -413,7 +413,7 @@ listed in the research master plan §5 "Seams".
 | `store.rs`, `schema.rs` | the engine's SQL and `schema::ensure` (§Storage below) |
 | `service.rs`, `job.rs` | **ResearchService** (gateway, renderer, snapshots; the Keychain account names) and **ResearchJob**, the `jobs` handler of kind `research` (target = run id; an offline call holds the job, back-off at most 60 s) |
 | `shop.rs`, `export.rs`, `retention.rs` | shop facts through `CommerceAdapter::public_listing`; the export of the research record (folder, then zip; scanned for secrets, fail closed; an image only where text can live, by its leading bytes: JPEG header, PNG text chunks, WebP EXIF/XMP, GIF extensions, AVIF/HEIF boxes but `mdat`, `rules::image_text::scanned_parts`, A7/A8; no matching run → `Error::NothingToExport`, nothing written); deletion of call records and their images after `record_days` |
-| `writer/` (book 08C; W1) | `note.rs`: the product note research's stages 1 and 6 now store (`note` in their unit outputs, WC1), `decision` / `reviewed` (the owner's standing on a key, WC2), `assemble` (`NoteView`: observations with the owner's decisions replacing what research saw, `research_saw`, `stale_main` / `stale_condition` / `missing_main`, computed at read time), `look_again` (queues a `look` run); `api.rs`: **WriterApi** (`note`, `look_again`), implemented for `ResearchService` in `api_impl.rs` and handed by the wiring as `AppHandles::writer` |
+| `writer/` (book 08C; W1) | `note.rs`: the product note research's stages 1 and 6 now store (`note` in their unit outputs, WC1), `decision` / `reviewed` (the owner's standing on a key, WC2), `assemble` (`NoteView`: observations with the owner's decisions replacing what research saw, `research_saw`, `stale_main` / `stale_condition` / `missing_main`, computed at read time), `look_again` (queues a `look` run); `api.rs`: **WriterApi** (`note`, `look_again`; W2 `request`, `answer`, `dismiss`), implemented for `ResearchService` in `api_impl.rs` and handed by the wiring as `AppHandles::writer`. W2 (engine only, behind the fakes; nothing in the app runs it before W3): `config.rs` (`WriterSettings`, the `writer` slot, `ResearchDeps.writer_settings`), `defaults.rs` (the shipped guide and examples), `input.rs` (what the writer sees), `postcheck.rs` (the deterministic check of every text), `run.rs` (a `write` run: request, start order, `Stage::Write` call, one rewrite, writes, findings), `writes.rs` (the writer's write path over MC-A1's table), `safeguard.rs` (the never-re-raise filter), `schema.rs` |
 | `fakes.rs`, `fixtures/` | scripted stand-in providers for tests; sanitised provider captures written by R1 (`fixtures/<provider>/`), never by hand |
 
 ### A run, step by step
@@ -483,7 +483,9 @@ chosen** (key not in `fill_keys`; treated exactly as never-written) · **derived
   resolved_attributes, released_at}`, `sessions.arranged_at`, table `research_feedback`; and
   `psm_research::schema::ensure` (called by `build_research` in integrations `lib.rs`): tables
   `research_runs`, `research_steps`, `research_calls`, `research_outbound`,
-  `research_stage_outputs`. Columns: research master plan §6.4.
+  `research_stage_outputs`, and (W2) `writer_findings` (the writer's findings and questions per
+  item; `delete_session` removes a session's rows). Columns: research master plan §6.4, writer
+  master plan §4.
 - Settings: the `research` key of `settings.json` is an opaque JSON slot in `psm_infra`
   (`Settings.research`); its shape is `ResearchSettings`. The engine reads it live, so a save is a
   simple update; only a change of `research.providers` rebuilds the App.

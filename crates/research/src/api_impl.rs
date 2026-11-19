@@ -193,4 +193,12 @@ impl crate::writer::api::WriterApi for ResearchService {
     ) -> Result<crate::writer::api::Requested> {
         ResearchService::writer_request(self, session_id, origin)
     }
+
+    fn answer(&self, finding_id: i64, answer: &str) -> Result<crate::writer::api::Requested> {
+        ResearchService::writer_answer(self, finding_id, answer)
+    }
+
+    fn dismiss(&self, finding_id: i64) -> Result<()> {
+        ResearchService::writer_dismiss(self, finding_id)
+    }
 }

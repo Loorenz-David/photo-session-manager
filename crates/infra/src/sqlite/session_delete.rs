@@ -168,6 +168,14 @@ pub fn delete_session_rows(tx: &Transaction<'_>, session_id: i64) -> Result<Dele
         tx.execute("DELETE FROM research_feedback WHERE item_id=?1", [item_id])
             .map_err(db)?;
     }
+    // W2: the publication writer's findings and questions of the session.
+    if table_exists(tx, "writer_findings")? {
+        tx.execute(
+            "DELETE FROM writer_findings WHERE session_id=?1",
+            [session_id],
+        )
+        .map_err(db)?;
+    }
 
     // The photos and what hangs off them.
     for table in ["compositions", "photo_places", "photo_denials"] {
