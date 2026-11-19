@@ -161,6 +161,10 @@ export const commands = {
 	researchSiteRemove: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_remove", { site })),
 	researchSitesReorder: (sites: string[]) => typedError<string, CommandError>(__TAURI_INVOKE("research_sites_reorder", { sites })),
 	researchExport: (selection: ExportSelectionDto, dest: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_export", { selection, dest })),
+	/**  W1: the session's product note ("What research saw"). */
+	writerNote: (sessionId: CommandId) => typedError<NoteDto_Serialize, CommandError>(__TAURI_INVOKE("writer_note", { sessionId })),
+	/**  W1: **Look again**: the photo looks run again over the changed photos. */
+	writerLookAgain: (sessionId: CommandId) => typedError<RequestedDto_Serialize, CommandError>(__TAURI_INVOKE("writer_look_again", { sessionId })),
 	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
@@ -925,6 +929,15 @@ export type ItemStockDto_Serialize = {
 	choice: StockChoiceDto | null,
 };
 
+/**
+ *  One key of an observation and the owner's standing on it (`accepted`, `corrected`,
+ *  `kept_previous`, `dismissed`, `typed`, `unchecked`, `shop_default`, `imported`, `empty`).
+ */
+export type KeyDecisionDto = {
+	key: string,
+	decision: string,
+};
+
 export type LatestPublishResponse = LatestPublishResponse_Serialize | LatestPublishResponse_Deserialize;
 
 export type LatestPublishResponse_Deserialize = {
@@ -950,6 +963,27 @@ export type MisplacedFilesResponse = {
 	photos: number,
 };
 
+/**  What research saw on the session's photos, and whether the photos changed since. */
+export type NoteDto = NoteDto_Serialize | NoteDto_Deserialize;
+
+/**  What research saw on the session's photos, and whether the photos changed since. */
+export type NoteDto_Deserialize = {
+	observations: ObservationDto_Deserialize[],
+	research_saw: ResearchSawDto[],
+	stale_main: boolean,
+	stale_condition: boolean,
+	missing_main: boolean,
+};
+
+/**  What research saw on the session's photos, and whether the photos changed since. */
+export type NoteDto_Serialize = {
+	observations: ObservationDto_Serialize[],
+	research_saw: ResearchSawDto[],
+	stale_main: boolean,
+	stale_condition: boolean,
+	missing_main: boolean,
+};
+
 export type NotificationDto = {
 	id: number,
 	item_id: number,
@@ -958,6 +992,41 @@ export type NotificationDto = {
 	kind: string,
 	text: string,
 	created_at: number,
+};
+
+/**  One observation of the product note. */
+export type ObservationDto = ObservationDto_Serialize | ObservationDto_Deserialize;
+
+/**  One observation of the product note. */
+export type ObservationDto_Deserialize = {
+	/**  `p1.<i>` (main photos) or `c1.<i>` (condition photos). */
+	ref: string,
+	original: string,
+	/**  The text shown: the owner's decisions replace what research saw. */
+	text: string,
+	keys: string[],
+	/**  "condition photo n", or "photo no longer in the condition photos". */
+	photo?: string | null,
+	/**  The text states the owner's decision ("Your decision"). */
+	owner: boolean,
+	decisions: KeyDecisionDto[],
+	in_writer_input: boolean,
+};
+
+/**  One observation of the product note. */
+export type ObservationDto_Serialize = {
+	/**  `p1.<i>` (main photos) or `c1.<i>` (condition photos). */
+	ref: string,
+	original: string,
+	/**  The text shown: the owner's decisions replace what research saw. */
+	text: string,
+	keys: string[],
+	/**  "condition photo n", or "photo no longer in the condition photos". */
+	photo: string | null,
+	/**  The text states the owner's decision ("Your decision"). */
+	owner: boolean,
+	decisions: KeyDecisionDto[],
+	in_writer_input: boolean,
 };
 
 /**
@@ -1248,6 +1317,21 @@ export type RectDto = {
 	h: number | null,
 };
 
+/**  Whether a request queued a run, and why not. */
+export type RequestedDto = RequestedDto_Serialize | RequestedDto_Deserialize;
+
+/**  Whether a request queued a run, and why not. */
+export type RequestedDto_Deserialize = {
+	queued: boolean,
+	reason?: ReasonDto | null,
+};
+
+/**  Whether a request queued a run, and why not. */
+export type RequestedDto_Serialize = {
+	queued: boolean,
+	reason: ReasonDto | null,
+};
+
 /**  One price row of `research.prices`: decimal strings (MC-A8). */
 export type ResearchPriceDto = ResearchPriceDto_Serialize | ResearchPriceDto_Deserialize;
 
@@ -1273,6 +1357,11 @@ export type ResearchProvidersDto = {
 	model: string,
 	visual_search: string,
 	page_reader: string,
+};
+
+export type ResearchSawDto = {
+	key: string,
+	text: string,
 };
 
 /**

@@ -6,7 +6,7 @@ pub mod photo_files;
 pub mod render_output;
 pub mod session_delete;
 
-use psm_research::api::ResearchApi;
+use psm_research::{api::ResearchApi, writer::api::WriterApi};
 
 use camera::direct::StartOrder;
 use camera::runtime::{AppBinding, CameraRuntime};
@@ -107,6 +107,8 @@ pub struct App {
     pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub research: Option<Arc<dyn ResearchApi>>,
+    /// W1: the writer's surface, the same engine as `research` (`None` exactly when it is).
+    pub writer: Option<Arc<dyn WriterApi>>,
     /// R7·U1: the research runner (its own jobs, its own thread).
     pub research_runner: Option<Arc<ResearchWiring>>,
     pub jobs: Arc<JobRunner>,
@@ -155,6 +157,8 @@ pub struct AppHandles {
     pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub research: Option<Arc<dyn ResearchApi>>,
+    /// W1: the writer's surface (the same engine as `research`).
+    pub writer: Option<Arc<dyn WriterApi>>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
     pub follow: Arc<CaptureOneFollow>,
@@ -433,6 +437,7 @@ impl App {
             camera_runtime: self.camera_runtime.clone(),
             commerce: self.commerce.clone(),
             research: self.research.clone(),
+            writer: self.writer.clone(),
             arrival: self.arrival.clone(),
             previews: self.previews.clone(),
             follow: self.follow.clone(),
@@ -1168,6 +1173,9 @@ impl App {
             research: research_wiring
                 .as_ref()
                 .map(|wiring| wiring.service.clone() as Arc<dyn ResearchApi>),
+            writer: research_wiring
+                .as_ref()
+                .map(|wiring| wiring.service.clone() as Arc<dyn WriterApi>),
             research_runner: research_wiring,
             jobs,
             publish_jobs,

@@ -1133,6 +1133,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::research::research_site_remove,
         commands::research::research_sites_reorder,
         commands::research::research_export,
+        commands::writer::writer_note,
+        commands::writer::writer_look_again,
         commands::search::search_window_open,
         commands::search::search_web_place,
         commands::search::search_web_go,
@@ -2441,5 +2443,81 @@ mod p29_tests {
         assert_eq!(error["code"], "needs_review");
         assert_eq!(error["data"]["photos"], "Main 02");
         assert_eq!(error["message"], "Re-frame first: Main 02");
+    }
+}
+
+#[cfg(test)]
+mod w1_writer_command_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    /// W1·C13(c) (HW7, MA7): an app whose research engine could not be built answers
+    /// `research_unavailable` for both writer commands; the bindings carry both commands.
+    #[test]
+    fn w1_c13c_writer_commands_without_the_engine_answer_research_unavailable() {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        let s = a
+            .items()
+            .create_local("CMD-W1", "Chair", "Chair", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let psm_testkit::TestApp {
+            dir: _dir, mut app, ..
+        } = a;
+        // What `App::build` leaves when `build_research` fails.
+        app.research = None;
+        app.writer = None;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::writer::writer_note,
+                commands::writer::writer_look_again,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        for cmd in ["writer_note", "writer_look_again"] {
+            let error = call(&w, cmd, json!({"sessionId": s})).unwrap_err();
+            assert_eq!(error["code"], "research_unavailable", "{cmd}: {error}");
+        }
+        let bindings = include_str!("../../src/services/bindings.ts");
+        for name in [
+            "writerNote",
+            "writerLookAgain",
+            "writer_note",
+            "writer_look_again",
+        ] {
+            assert!(bindings.contains(name), "binding missing {name}");
+        }
     }
 }

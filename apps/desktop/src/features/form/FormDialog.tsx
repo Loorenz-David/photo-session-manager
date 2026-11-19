@@ -478,6 +478,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
             </section>
             {research.open && (
               <ResearchPanel
+                sessionId={sessionId}
                 status={researchState.status}
                 fields={state.fields}
                 onRun={async () => {

@@ -7,6 +7,7 @@ import { ExternalLink } from '@/components/ExternalLink';
 import { ordinal } from '@/features/sessions/ResearchPill';
 import type { FormField } from '@/services/attributes';
 import type { ResearchStatus, ResearchStep } from '@/services/research';
+import { ProductNote } from './ProductNote';
 
 /** The verb each step kind is shown with (08A §8). */
 export const STEP_VERB: Record<string, string> = {
@@ -69,6 +70,8 @@ export function waitingLine(queue: NonNullable<ResearchStatus['queue']>): string
 }
 
 type ResearchPanelProps = {
+  /** W1: the session whose product note ("What research saw") is shown under the steps; none: no note block. */
+  sessionId?: number;
   /** The session's research status (`research_status`); null while research is not available: no state line, no button. */
   status: ResearchStatus | null;
   /** The form's fields: labels for the focus chip, and Accept all's count. */
@@ -123,7 +126,7 @@ function Step({ step, dimmed }: { step: ResearchStep; dimmed: boolean }) {
  * The research panel (08A §1, §8; NOTES §Screens 7): the steps of the session's latest run in order, live while it
  * runs; its outcome when it ended; why research is not running when it cannot; Research / Run again; Accept all.
  */
-export function ResearchPanel({ status, fields, focusKey, onFocus, onRun, onAcceptAll, onClose }: ResearchPanelProps) {
+export function ResearchPanel({ sessionId, status, fields, focusKey, onFocus, onRun, onAcceptAll, onClose }: ResearchPanelProps) {
   // What Accept all accepts (MC-A12, R-IA1): suggestions that are neither low nor a conflict.
   const suggested = fields.filter(field => field.value?.provenance === 'ai' && field.value.ai_status === 'suggested' && field.value.ai_confidence !== 'low' && !field.value.conflict).length;
   // MC-A6: "Waiting for Capture One" is said once the run's wait for the previews has ended (the backend's end time).
@@ -183,6 +186,7 @@ export function ResearchPanel({ status, fields, focusKey, onFocus, onRun, onAcce
           <Step key={step.seq} step={step} dimmed={focusKey !== null && !step.field_keys.includes(focusKey)} />
         ))}
       </ol>
+      {sessionId !== undefined && <ProductNote sessionId={sessionId} refresh={status} />}
       <footer className="border-t px-4 py-3">
         <ActionButton className="w-full" disabled={suggested === 0} action={onAcceptAll}>
           Accept all{suggested > 0 ? ` (${suggested})` : ''}
