@@ -209,6 +209,10 @@ pub enum RunTrigger {
     /// call's record and cost, and is not one of the session's research runs (the panel, the
     /// "Arranged" check and reuse never see it). The export includes it.
     Browse,
+    /// W1 (WC1.8): **Look again**: stages 1 and 6 only, to renew the product note after the
+    /// photos changed. Not one of the session's research runs (WC1.9: the panel, the overview,
+    /// the "Arranged" check and a research run's reuse never see it); started like `manual`.
+    Look,
 }
 
 stored_names!(RunTrigger {
@@ -217,7 +221,18 @@ stored_names!(RunTrigger {
     FollowUp => "follow_up",
     Arranged => "arranged",
     Browse => "browse",
+    Look => "look",
 });
+
+impl RunTrigger {
+    /// W1 (WC1.5): the runs whose stage 1 and stage 6 outputs hold a product note.
+    pub fn looks_at_photos(self) -> bool {
+        matches!(
+            self,
+            Self::Arranged | Self::Manual | Self::Auto | Self::FollowUp | Self::Look
+        )
+    }
+}
 
 /// The kind of a trace step (08A §8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

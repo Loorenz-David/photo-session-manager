@@ -106,7 +106,7 @@ fn parsed(text: &str) -> Option<Json> {
 
 /// `C(item, key)`: the stored row's value when it is cleared, plus the suggested value of every
 /// feedback row of the field with action `cleared` or `kept_previous`.
-fn cleared_set(
+pub(crate) fn cleared_set(
     tx: &dyn StoreTx,
     stored: Option<&Value>,
     item_id: i64,

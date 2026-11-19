@@ -182,13 +182,13 @@ pub fn run(conn: &Connection, id: i64) -> Result<Option<RunRow>> {
 }
 
 /// Every research run, oldest first; `session` narrows to one session. Browse runs (A12: one
-/// call from the "Search this photo" window) are not research runs and are left out; see
-/// [`all_runs`].
+/// call from the "Search this photo" window), look runs (W1) and writer runs (W2) are not
+/// research runs and are left out; see [`all_runs`].
 pub fn runs(conn: &Connection, session: Option<i64>) -> Result<Vec<RunRow>> {
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {RUN_COLUMNS} FROM research_runs WHERE (?1 IS NULL OR session_id=?1) \
-             AND trigger<>'browse' ORDER BY id"
+             AND trigger NOT IN ('browse','look','write') ORDER BY id"
         ))
         .map_err(db)?;
     let rows = stmt

@@ -175,3 +175,14 @@ impl ResearchApi for ResearchService {
         ResearchService::browse_ask(self, request)
     }
 }
+
+/// W1: the writer's surface, on the same service (`master_plan_writer.md` §4 "API").
+impl crate::writer::api::WriterApi for ResearchService {
+    fn note(&self, session_id: i64) -> Result<crate::writer::note::NoteView> {
+        ResearchService::assemble(self, session_id)
+    }
+
+    fn look_again(&self, session_id: i64) -> Result<crate::writer::api::Requested> {
+        ResearchService::look_again(self, session_id)
+    }
+}

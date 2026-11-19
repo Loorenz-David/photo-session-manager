@@ -88,7 +88,8 @@ pub enum MayStart {
 /// MC-A6 start: one run app-wide; the day cap; readiness
 /// (an automatic run waits up to the source wait for missing sources; no source at all waits).
 pub fn may_start(input: &StartInput) -> MayStart {
-    let automatic = input.trigger != RunTrigger::Manual;
+    // W1 (WC1.8): a look run starts like a manual one.
+    let automatic = !matches!(input.trigger, RunTrigger::Manual | RunTrigger::Look);
     if input.blocked {
         MayStart::Blocked
     } else if input.any_running {
@@ -105,11 +106,17 @@ pub fn may_start(input: &StartInput) -> MayStart {
     }
 }
 
-/// MC-A6 start order over `(trigger, queued_at, id)`: `manual` first, then `queued_at`, then id.
+/// MC-A6 start order over `(trigger, queued_at, id)`: tier 0 `manual` and (W1, WC3 "Start")
+/// `look` first, then `queued_at`, then id.
 pub fn start_order(queued: &[(RunTrigger, i64, i64)]) -> Vec<i64> {
     let mut ordered = queued.to_vec();
-    ordered
-        .sort_by_key(|(trigger, queued_at, id)| (*trigger != RunTrigger::Manual, *queued_at, *id));
+    ordered.sort_by_key(|(trigger, queued_at, id)| {
+        (
+            !matches!(trigger, RunTrigger::Manual | RunTrigger::Look),
+            *queued_at,
+            *id,
+        )
+    });
     ordered.into_iter().map(|(_, _, id)| id).collect()
 }
 

@@ -15,7 +15,7 @@ use serde_json::{Map, Value as Json, json};
 
 use crate::{
     config::ResearchConfig,
-    domain::{FieldClass, RunState, Stage, StepKind},
+    domain::{FieldClass, RunState, RunTrigger, Stage, StepKind},
     gateway::{Answer, CallRequest, GatewayOutcome, PHOTO_REMOVED},
     images::{ResearchImage, eligible, source},
     ports::ModelRequest,
@@ -139,22 +139,62 @@ pub(crate) fn descriptor(definition: &Definition) -> Json {
 
 /// The layout fields of one class, in layout order.
 pub(crate) fn fields_of(ctx: &Ctx<'_>, classes: &[FieldClass]) -> Vec<Definition> {
-    ctx.form
-        .fields
+    fields_in(&ctx.config, &ctx.form, classes)
+}
+
+/// The layout fields of `form` of one class under `config`, in layout order.
+pub(crate) fn fields_in(
+    config: &ResearchConfig,
+    form: &FormSnapshot,
+    classes: &[FieldClass],
+) -> Vec<Definition> {
+    form.fields
         .iter()
-        .filter(|f| classes.contains(&class_of(ctx, &f.definition, f.step)))
+        .filter(|f| classes.contains(&class_in(config, &f.definition, f.step)))
         .map(|f| f.definition.clone())
         .collect()
 }
 
 pub(crate) fn class_of(ctx: &Ctx<'_>, definition: &Definition, step: AttributeGroup) -> FieldClass {
+    class_in(&ctx.config, definition, step)
+}
+
+fn class_in(config: &ResearchConfig, definition: &Definition, step: AttributeGroup) -> FieldClass {
     field_class(
         definition,
         never_written(definition, Some(step)),
-        &ctx.config.attribution_keys,
-        &ctx.config.fill_keys,
-        &ctx.config.detailed_condition.key,
+        &config.attribution_keys,
+        &config.fill_keys,
+        &config.detailed_condition.key,
     )
+}
+
+/// The MC-A7 identity of the one stage 1 unit over `plan` (W1·WC1.7 rebuilds it to compare).
+pub(crate) fn observe_identity(config: &ResearchConfig, plan: &PhotoPlan) -> Json {
+    let settings = config.stage(Stage::Observe);
+    json!({
+        "photos": plan
+            .chosen
+            .iter()
+            .map(|c| json!([c.id, c.revision, c.role.as_str()]))
+            .collect::<Vec<_>>(),
+        "long_edge": settings.image_long_edge,
+        "model": settings.model,
+        "effort": settings.effort,
+        "instructions_version": config.instructions_version,
+        "language": config.language,
+    })
+}
+
+/// The MC-A7 identity of the stage 6 unit over the Condition photos `(id, revision)` and the
+/// Condition fields `keys` (W1·WC1.7 rebuilds it to compare).
+pub(crate) fn condition_identity(photos: &[(i64, i64)], keys: &[Definition]) -> Json {
+    let mut identities = photos.to_vec();
+    identities.sort();
+    json!({
+        "photos": identities.iter().map(|(id, rev)| json!([id, rev])).collect::<Vec<_>>(),
+        "definitions": keys.iter().map(descriptor).collect::<Vec<_>>(),
+    })
 }
 
 /// `{"mapped": v}` or `{"unmapped": name key}`.
@@ -550,8 +590,19 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
         return Ok(ExecuteOutcome::NotRunning);
     }
     svc.gateway.close_open_calls(run.id)?;
+    // MC-A7 reuse source: the latest earlier research run (WC1.9: look and writer runs left
+    // out); a look run reuses from the latest earlier run that looks at photos (WC1.8).
+    let look = run.trigger == RunTrigger::Look;
     let earlier_run = svc.store.research_transaction(|tx| {
-        Ok(store::runs(tx.conn(), Some(run.session_id))?
+        let runs = if look {
+            store::all_runs(tx.conn(), Some(run.session_id))?
+                .into_iter()
+                .filter(|r| r.trigger.looks_at_photos())
+                .collect()
+        } else {
+            store::runs(tx.conn(), Some(run.session_id))?
+        };
+        Ok(runs
             .into_iter()
             .filter(|r| r.id < run.id)
             .map(|r| r.id)
@@ -564,6 +615,9 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
         svc,
         run,
     };
+    if look {
+        return look_again(&ctx);
+    }
     if let Some(done) = crate::decide::committed(&ctx)? {
         return crate::decide::finish(&ctx, done);
     }
@@ -693,6 +747,43 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
     crate::decide::decide(&ctx, &used, stopped)
 }
 
+/// W1 (WC1.8): a look run: stage 1 over the current photo plan, and stage 6 when usable
+/// Condition photos exist and a Condition field is chosen; nothing else (no stage 2–5 or 7, no
+/// attribute write). Ends `finished` (`stopped_at_cap` when the cost stop rule ended it).
+fn look_again(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
+    let photos = usable_photos(ctx.svc, &ctx.run)?;
+    let mut stopped = false;
+    let plan = photo_plan(&photos, ctx.config.observe_max_photos);
+    if !plan.chosen.is_empty() {
+        match observe(ctx, &plan)? {
+            Flow::Done(_) => {}
+            Flow::Skip => stopped = true,
+            Flow::Halt(outcome) => return Ok(outcome),
+        }
+    }
+    let condition_photos: Vec<&UsablePhoto> = photos
+        .iter()
+        .filter(|p| p.classification == Classification::Condition)
+        .collect();
+    if !stopped
+        && !condition_photos.is_empty()
+        && !fields_of(ctx, &[FieldClass::Condition]).is_empty()
+    {
+        match condition(ctx, &condition_photos)? {
+            Flow::Done(_) => {}
+            Flow::Skip => stopped = true,
+            Flow::Halt(outcome) => return Ok(outcome),
+        }
+    }
+    if stopped {
+        crate::decide::end(ctx, RunState::StoppedAtCap)?;
+        Ok(ExecuteOutcome::StoppedAtCap)
+    } else {
+        crate::decide::end(ctx, RunState::Finished)?;
+        Ok(ExecuteOutcome::Finished)
+    }
+}
+
 /// The photos stage 1 looks at (`rules::photo_plan::look_at`) out of the run's usable photos.
 pub(crate) fn photo_plan(photos: &[UsablePhoto], limit: u32) -> PhotoPlan {
     let candidates: Vec<PhotoCandidate> = photos
@@ -723,19 +814,7 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 /// left out of the call), so they are mapped to photo ids from the sent list.
 fn observe(ctx: &Ctx<'_>, plan: &PhotoPlan) -> Result<Flow> {
     let stage = Stage::Observe;
-    let settings = ctx.config.stage(stage);
-    let identity = json!({
-        "photos": plan
-            .chosen
-            .iter()
-            .map(|c| json!([c.id, c.revision, c.role.as_str()]))
-            .collect::<Vec<_>>(),
-        "long_edge": settings.image_long_edge,
-        "model": settings.model,
-        "effort": settings.effort,
-        "instructions_version": ctx.config.instructions_version,
-        "language": ctx.config.language,
-    });
+    let identity = observe_identity(&ctx.config, plan);
     let visible = fields_of(ctx, &[FieldClass::Visible]);
     let note_fields = note_fields(ctx, &[AttributeGroup::Details, AttributeGroup::Condition]);
     let note_keys = note_keys(&note_fields);
@@ -1284,12 +1363,8 @@ fn labels(ctx: &Ctx<'_>, photo: &UsablePhoto) -> Result<Flow> {
 fn condition(ctx: &Ctx<'_>, photos: &[&UsablePhoto]) -> Result<Flow> {
     let stage = Stage::Condition;
     let keys = fields_of(ctx, &[FieldClass::Condition]);
-    let mut identities: Vec<(i64, i64)> = photos.iter().map(|p| (p.id, p.revision)).collect();
-    identities.sort();
-    let identity = json!({
-        "photos": identities.iter().map(|(id, rev)| json!([id, rev])).collect::<Vec<_>>(),
-        "definitions": keys.iter().map(descriptor).collect::<Vec<_>>(),
-    });
+    let identities: Vec<(i64, i64)> = photos.iter().map(|p| (p.id, p.revision)).collect();
+    let identity = condition_identity(&identities, &keys);
     let note_fields = note_fields(ctx, &[AttributeGroup::Condition]);
     let note_keys = note_keys(&note_fields);
     ctx.unit(stage, "condition", identity, |ctx| {

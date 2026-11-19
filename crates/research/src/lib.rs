@@ -20,4 +20,5 @@ pub mod service;
 pub mod shop;
 pub mod stages;
 pub mod store;
+pub mod writer;
 pub mod writes;
