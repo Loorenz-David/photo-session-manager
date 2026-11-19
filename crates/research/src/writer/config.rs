@@ -141,7 +141,29 @@ pub struct WriterSettings {
     pub condition_report_key: String,
     /// `{<key>: {<language>: [term]}}` (WC5.7).
     pub damage_terms: BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    /// A23 (owner 2026-11-19): the condition report starts with the Detailed condition's grade
+    /// word, and post-check rule 8 checks it. Off: the grade word is never written.
+    pub grade_word: bool,
+    /// A23: the condition report ends with a stability sentence, and rule 9 checks it.
+    pub stability_sentence: bool,
+    /// A23: the built-in title formula is sent with the instruction.
+    pub title_formula: bool,
+    /// A23: the description ends with the dimensions line, whose format is sent.
+    pub dimensions_line: bool,
 }
+
+/// A23: the `kind` of an exported writer settings file.
+pub const EXPORT_KIND: &str = "session-manager-writer-settings";
+/// A23: the format version of an exported writer settings file.
+pub const EXPORT_VERSION: u32 = 1;
+
+/// A23: the four switches, by their stored names.
+pub const SWITCHES: [&str; 4] = [
+    "grade_word",
+    "stability_sentence",
+    "title_formula",
+    "dimensions_line",
+];
 
 impl Default for WriterSettings {
     fn default() -> Self {
@@ -160,6 +182,10 @@ impl Default for WriterSettings {
             shop_name: String::new(),
             condition_report_key: "custom.condition_report_description".to_owned(),
             damage_terms: BTreeMap::new(),
+            grade_word: false,
+            stability_sentence: false,
+            title_formula: false,
+            dimensions_line: false,
         }
     }
 }
@@ -378,7 +404,49 @@ impl WriterSettings {
         {
             return Err("condition_report_key must not be blank".to_owned());
         }
+        for switch in SWITCHES {
+            if let Some(value) = object.get(switch)
+                && !value.is_boolean()
+            {
+                return Err(format!("{switch} must be true or false"));
+            }
+        }
         Ok(())
+    }
+
+    /// A23 **Export…**: the file's content, `{kind, version, writer}`. `writer` is this slot
+    /// without the earlier instruction versions (they stay on the Mac that made them). Nothing
+    /// from another settings slot is ever part of it.
+    pub fn export_value(&self) -> Json {
+        let mut slot = self.clone();
+        for instruction in slot.instructions.values_mut() {
+            instruction.versions.clear();
+        }
+        serde_json::json!({
+            "kind": EXPORT_KIND,
+            "version": EXPORT_VERSION,
+            "writer": slot,
+        })
+    }
+
+    /// A23 **Import…**: the writer settings of an exported file, refused (naming the reason) when
+    /// the file is not one, or when its `writer` object fails [`Self::validate`] or does not read
+    /// as writer settings. Earlier versions in the file are ignored; the caller saves the result
+    /// over the stored slot with [`Self::saved_over`], which keeps the stored versions.
+    pub fn import_value(file: &Json) -> Result<WriterSettings, String> {
+        if file.get("kind").and_then(Json::as_str) != Some(EXPORT_KIND) {
+            return Err("this is not a Session Manager writer settings file".to_owned());
+        }
+        let Some(writer) = file.get("writer").filter(|w| w.is_object()) else {
+            return Err("the file holds no writer settings".to_owned());
+        };
+        Self::validate(writer)?;
+        let mut settings: WriterSettings = serde_json::from_value(writer.clone())
+            .map_err(|e| format!("the writer settings in the file cannot be read: {e}"))?;
+        for instruction in settings.instructions.values_mut() {
+            instruction.versions.clear();
+        }
+        Ok(settings)
     }
 
     /// The instruction sent for `language`: the saved text, or the shipped one (§9).
@@ -438,6 +506,10 @@ mod tests {
                 "shop_name": "",
                 "condition_report_key": "custom.condition_report_description",
                 "damage_terms": {},
+                "grade_word": false,
+                "stability_sentence": false,
+                "title_formula": false,
+                "dimensions_line": false,
             })
         );
     }
@@ -551,5 +623,77 @@ mod tests {
             WriterSettings::validate(&serde_json::to_value(WriterSettings::default()).unwrap()),
             Ok(())
         );
+    }
+
+    #[test]
+    fn a23_export_then_import_gives_the_same_settings_without_versions() {
+        let mut settings = WriterSettings {
+            shop_name: "Shop".into(),
+            title_formula: true,
+            banned_extra: vec!["sanded back".into()],
+            ..WriterSettings::default()
+        };
+        settings.instructions.insert(
+            "English".into(),
+            Instruction {
+                text: Some("Write plainly.".into()),
+                versions: vec![InstructionVersion {
+                    saved_at: 1,
+                    text: "Old".into(),
+                }],
+            },
+        );
+        let file = settings.export_value();
+        assert_eq!(file["kind"], json!(EXPORT_KIND));
+        assert_eq!(
+            file["writer"]["instructions"]["English"]["versions"],
+            json!([])
+        );
+        let imported = WriterSettings::import_value(&file).unwrap();
+        let mut expected = settings.clone();
+        expected
+            .instructions
+            .get_mut("English")
+            .unwrap()
+            .versions
+            .clear();
+        assert_eq!(imported, expected);
+    }
+
+    #[test]
+    fn a23_import_refuses_a_file_that_is_not_writer_settings() {
+        for (file, start) in [
+            (json!({"writer": {}}), "this is not"),
+            (json!({"kind": EXPORT_KIND}), "the file holds no"),
+            (
+                json!({"kind": EXPORT_KIND, "writer": {"language": "German"}}),
+                "language",
+            ),
+            (
+                json!({"kind": EXPORT_KIND, "writer": {"grade_word": "no"}}),
+                "grade_word",
+            ),
+            (
+                json!({"kind": EXPORT_KIND, "writer": {"instructions": 3}}),
+                "the writer settings in the file cannot be read",
+            ),
+        ] {
+            let error = WriterSettings::import_value(&file).expect_err(start);
+            assert!(error.starts_with(start), "{start}: {error}");
+        }
+    }
+
+    #[test]
+    fn a23_switches_default_off_and_must_be_booleans() {
+        let settings = WriterSettings::from_slot(Some(&json!({"language": "English"})));
+        assert!(!settings.grade_word);
+        assert!(!settings.stability_sentence);
+        assert!(!settings.title_formula);
+        assert!(!settings.dimensions_line);
+        for switch in SWITCHES {
+            let error = WriterSettings::validate(&json!({ switch: "yes" })).expect_err(switch);
+            assert!(error.starts_with(switch), "{switch}: {error}");
+            assert_eq!(WriterSettings::validate(&json!({ switch: true })), Ok(()));
+        }
     }
 }

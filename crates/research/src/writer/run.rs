@@ -414,11 +414,28 @@ pub const NOT_RECHECKED: &str = "not checked again: run cost limit";
 /// line and the examples (each "Example <name>" with its fields and texts).
 pub fn instructions_text(snapshot: &WriterSnapshot) -> String {
     let language = snapshot.settings.language.as_str();
-    let mut out = vec![
-        snapshot.instruction.clone(),
-        defaults::title_formula(language).to_owned(),
-        format!("Dimensions line: {}", defaults::dimensions_line(language)),
-    ];
+    let settings = &snapshot.settings;
+    // A23: the four switches decide which built-in parts are sent.
+    let mut out = vec![snapshot.instruction.clone()];
+    let grade = if settings.grade_word {
+        defaults::GRADE_ON
+    } else {
+        defaults::GRADE_OFF
+    };
+    out.push(defaults::switch_sentence(grade, language).to_owned());
+    if settings.stability_sentence {
+        out.push(defaults::switch_sentence(defaults::STABILITY_ON, language).to_owned());
+    }
+    if settings.title_formula {
+        out.push(defaults::title_formula(language).to_owned());
+    }
+    if settings.dimensions_line {
+        out.push(defaults::switch_sentence(defaults::DIMENSIONS_ON, language).to_owned());
+        out.push(format!(
+            "Dimensions line: {}",
+            defaults::dimensions_line(language)
+        ));
+    }
     for example in &snapshot.examples {
         out.push(format!(
             "Example {}\nFields: {}\nTitle: {}\nDescription:\n{}\nCondition report: {}\n\
@@ -444,6 +461,9 @@ pub fn request_of(snapshot: &WriterSnapshot, input: &Json) -> Preview {
         schema: schema::schema_for_write(&schema::requested(input)),
     }
 }
+
+/// A23: the preview's example item type and SKU.
+pub const PREVIEW_ITEM: (&str, &str) = ("Dining chairs", "Ch1-010126");
 
 /// The built-in example item of the preview: example A's fields line (§9.4) split into
 /// labelled fields, each a fact the owner typed.
@@ -492,6 +512,7 @@ pub fn preview_input(settings: &WriterSettings) -> Json {
                 .into_iter()
                 .map(|(name, _)| name.to_owned())
                 .collect(),
+            item: Some(json!({ "type": PREVIEW_ITEM.0, "sku": PREVIEW_ITEM.1 })),
             ..Default::default()
         },
         settings,
@@ -605,8 +626,10 @@ fn check_context(ctx: &Ctx<'_>, input: &Json, settings: &WriterSettings) -> Resu
         }
     }
     let detailed_key = &ctx.config.detailed_condition.key;
+    // A23: rule 8 only with the grade switch on (no `detailed` → no grade check).
     let detailed = fields
         .iter()
+        .filter(|_| settings.grade_word)
         .find(|f| !detailed_key.is_empty() && f["key"].as_str() == Some(detailed_key))
         .filter(|f| f["fact"].as_bool() == Some(true))
         .and_then(|f| f["value"].as_str().map(str::to_owned));
@@ -668,6 +691,7 @@ fn check_context(ctx: &Ctx<'_>, input: &Json, settings: &WriterSettings) -> Resu
         detailed,
         attribution_names,
         restoration,
+        stability: settings.stability_sentence,
     })
 }
 
@@ -1250,6 +1274,68 @@ fn log_post_check(run_id: i64, attempt: u32, hits: &[Hit]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sent(settings: WriterSettings) -> String {
+        instructions_text(&WriterSnapshot::resolve(&settings, "write_texts"))
+    }
+
+    #[test]
+    fn a23_switches_off_send_no_formula_no_dimensions_and_forbid_the_grade() {
+        for language in ["English", "Swedish"] {
+            let text = sent(WriterSettings {
+                language: language.into(),
+                ..WriterSettings::default()
+            });
+            assert!(!text.contains(defaults::title_formula(language)));
+            // (The shipped examples may hold a dimensions line; the format line is not sent.)
+            assert!(!text.contains("Dimensions line: "));
+            assert!(!text.contains(defaults::switch_sentence(defaults::DIMENSIONS_ON, language)));
+            assert!(!text.contains(defaults::switch_sentence(defaults::STABILITY_ON, language)));
+            assert!(!text.contains(defaults::switch_sentence(defaults::GRADE_ON, language)));
+            assert!(text.contains(defaults::switch_sentence(defaults::GRADE_OFF, language)));
+        }
+    }
+
+    #[test]
+    fn a23_switches_on_send_each_part() {
+        for language in ["English", "Swedish"] {
+            let text = sent(WriterSettings {
+                language: language.into(),
+                grade_word: true,
+                stability_sentence: true,
+                title_formula: true,
+                dimensions_line: true,
+                ..WriterSettings::default()
+            });
+            assert!(text.contains(defaults::title_formula(language)));
+            assert!(text.contains(defaults::dimensions_line(language)));
+            assert!(text.contains(defaults::switch_sentence(defaults::DIMENSIONS_ON, language)));
+            assert!(text.contains(defaults::switch_sentence(defaults::STABILITY_ON, language)));
+            assert!(text.contains(defaults::switch_sentence(defaults::GRADE_ON, language)));
+            assert!(!text.contains(defaults::switch_sentence(defaults::GRADE_OFF, language)));
+        }
+    }
+
+    #[test]
+    fn a23_the_shipped_instructions_no_longer_ask_for_grade_stability_or_dimensions() {
+        for text in [defaults::INSTRUCTION_EN, defaults::INSTRUCTION_SV] {
+            for gone in [
+                "grade word",
+                "skickordet",
+                "stability",
+                "stabiliteten",
+                "dimensions line",
+                "måttraden",
+                "short paragraphs",
+                "korta stycken",
+            ] {
+                assert!(
+                    !text.contains(gone),
+                    "{gone} still in the shipped instruction"
+                );
+            }
+        }
+    }
 
     fn input(origin: Origin) -> RequestInput {
         RequestInput {

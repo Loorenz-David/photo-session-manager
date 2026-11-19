@@ -137,6 +137,13 @@ The default modes are a starting point for the owner's experiments.
 
 ## 7. The writing guide (default, editable)
 
+> **Amended 2026-11-19 (A23, owner):** the grade word, the stability sentence, the title formula and
+> the dimensions line below are now **switches** in Settings → Writer, all **off** by default. With
+> the grade switch off the writer never writes the grade words; Detailed condition only shapes the
+> tone (owner: "yes we follow that for now", the company rule). The shipped instruction no longer asks
+> for short paragraphs. Restoration: Damage details and the Restoration notes are the normal source;
+> the "Restoration done" ticks stay as an optional extra (owner: "for now we use the damage details").
+
 The default guide is the evidence file's §7, adapted. In short:
 - **Instruction:** about 330 words. Plain catalogue register, only facts from fields and note,
   exact names, a fixed order, and what to write rather than what not to write. Evidence: few-shot
@@ -176,6 +183,13 @@ The default guide is the evidence file's §7, adapted. In short:
 - **Language:** English or Swedish, default English (owner 2026-11-18).
 - **Safeguard:** one off/note/ask switch per type (§6); `writer.max_questions` (default 3).
 - **Automatic writing** on "Next to review": on by default.
+- **Built-in parts** (A23, 2026-11-19): four switches, all off by default: start the condition
+  report with the grade word (post-check rule 8), always end it with a stability sentence (rule 9),
+  send the built-in title formula, end the description with a dimensions line.
+- **Export… / Import…** (A23): the writer settings (only the `writer` slot, without earlier
+  instruction versions) saved to a JSON file and read back on another Mac; an import is validated
+  as Save is and keeps the replaced instructions among the earlier versions.
+- **The item** (A23): the writer also receives the item's type (the Shopify product type) and SKU.
 
 ## 9. Fields the writer writes
 
@@ -276,3 +290,6 @@ the writer changing any non-text field.
    field. Decision 5 answered: at most one use sentence. No decisions are open, so the chapter is
    ready for ratification.
 4. 2026-11-19: RATIFIED by the owner.
+5. 2026-11-19 (A23): owner correction from the company's listing rules: grade word off (now a
+   switch), stability sentence, title formula and dimensions line switches; item type and SKU sent
+   to the writer; settings export and import; Damage details as the normal restoration source.

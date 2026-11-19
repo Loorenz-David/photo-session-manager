@@ -1,3 +1,4 @@
+import { open, save } from '@tauri-apps/plugin-dialog';
 import {
   commands,
   type NoteDto_Serialize,
@@ -59,6 +60,27 @@ export async function writerSettingsGet(): Promise<WriterSettings> {
 /** W4: saves the whole writer slot; an instruction whose text changes keeps the replaced text among the earlier versions. */
 export async function writerSettingsSave(value: WriterSettings): Promise<WriterSettings> {
   return unwrap(await commands.writerSettingsSave(value));
+}
+/**
+ * A23 **Export…**: asks where to save, then writes the saved writer settings there (only the writer settings, without
+ * earlier instruction versions). Resolves to false when the person cancels.
+ */
+export async function writerSettingsExport(): Promise<boolean> {
+  const path = await save({ title: 'Export writer settings', defaultPath: 'Writer settings.json',
+    filters: [{ name: 'Writer settings', extensions: ['json'] }] });
+  if (typeof path !== 'string') return false;
+  unwrap(await commands.writerSettingsExport(path));
+  return true;
+}
+/**
+ * A23 **Import…**: asks for an exported file, then saves its writer settings (each changed instruction keeps the
+ * replaced text among the earlier versions). Resolves to null when the person cancels.
+ */
+export async function writerSettingsImport(): Promise<WriterSettings | null> {
+  const path = await open({ multiple: false, directory: false, title: 'Import writer settings',
+    filters: [{ name: 'Writer settings', extensions: ['json'] }] });
+  if (typeof path !== 'string') return null;
+  return unwrap(await commands.writerSettingsImport(path));
 }
 /** W4: Reset to default — the language's instruction returns to the shipped one. */
 export async function writerInstructionReset(language: string): Promise<WriterSettings> {

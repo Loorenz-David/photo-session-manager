@@ -1141,6 +1141,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::writer::writer_finding_dismiss,
         commands::writer::writer_settings_get,
         commands::writer::writer_settings_save,
+        commands::writer::writer_settings_export,
+        commands::writer::writer_settings_import,
         commands::writer::writer_instruction_reset,
         commands::writer::writer_preview,
         commands::search::search_window_open,
@@ -1923,6 +1925,8 @@ mod w4_tests {
             .invoke_handler(tauri::generate_handler![
                 commands::writer::writer_settings_get,
                 commands::writer::writer_settings_save,
+                commands::writer::writer_settings_export,
+                commands::writer::writer_settings_import,
                 commands::writer::writer_instruction_reset,
                 commands::writer::writer_preview,
                 commands::writer::writer_request,
@@ -2013,6 +2017,58 @@ mod w4_tests {
     }
 
     #[test]
+    fn a23_export_then_import_restores_the_writer_settings_only() {
+        let (app, _) = wired(|_, _, _| {});
+        let mut first = with_english(app.get(), "First instruction.");
+        first["title_formula"] = json!(true);
+        first["shop_name"] = json!("Shop");
+        app.save(first).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("writer.json");
+        let path_text = path.to_string_lossy().to_string();
+        app.call("writer_settings_export", json!({ "path": path_text }))
+            .unwrap();
+        let file: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let mut top: Vec<&str> = file
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        top.sort_unstable();
+        assert_eq!(top, ["kind", "version", "writer"]);
+        assert!(file["writer"].get("research").is_none());
+        // Change the settings, then import the file back.
+        let mut second = with_english(app.get(), "Second instruction.");
+        second["title_formula"] = json!(false);
+        app.save(second).unwrap();
+        let imported = app
+            .call("writer_settings_import", json!({ "path": path_text }))
+            .unwrap();
+        assert_eq!(imported["title_formula"], json!(true));
+        assert_eq!(imported["shop_name"], json!("Shop"));
+        let english = &imported["instructions"]["English"];
+        assert_eq!(english["text"], json!("First instruction."));
+        assert_eq!(english["versions"][0]["text"], json!("Second instruction."));
+        // A file that is not writer settings is refused and saves nothing.
+        let bad = tmp.path().join("bad.json");
+        std::fs::write(
+            &bad,
+            r#"{"kind":"session-manager-writer-settings","writer":{"grade_word":"yes"}}"#,
+        )
+        .unwrap();
+        let before = app.slot();
+        let refused = app
+            .call(
+                "writer_settings_import",
+                json!({ "path": bad.to_string_lossy() }),
+            )
+            .unwrap_err();
+        assert!(refused.to_string().contains("grade_word"), "{refused}");
+        assert_eq!(app.slot(), before);
+    }
+
+    #[test]
     fn w4_c1a_without_a_writer_slot_every_field_shows_its_default() {
         let (app, _) = wired(|_, _, _| {});
         assert_eq!(app.slot(), None);
@@ -2067,6 +2123,10 @@ mod w4_tests {
                 "shop_name": "",
                 "condition_report_key": "custom.condition_report_description",
                 "damage_terms": {},
+                "grade_word": false,
+                "stability_sentence": false,
+                "title_formula": false,
+                "dimensions_line": false,
             })
         );
     }

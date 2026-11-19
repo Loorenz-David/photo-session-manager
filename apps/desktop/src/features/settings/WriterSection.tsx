@@ -7,7 +7,7 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { listDefinitions, type Definition } from '@/services/attributes';
 import type { ResearchSettings } from '@/services/settings';
-import { writerSettingsGet, writerSettingsSave, type WriterSettings } from '@/services/writer';
+import { writerSettingsExport, writerSettingsGet, writerSettingsImport, writerSettingsSave, type WriterSettings } from '@/services/writer';
 import { WriterExamples } from './WriterExamples';
 import { WriterInstruction } from './WriterInstruction';
 
@@ -32,6 +32,13 @@ const LENGTHS: { key: keyof WriterSettings['lengths']; label: string }[] = [
   { key: 'seo_title_max', label: 'Search title, at most (characters)' },
   { key: 'seo_description_min', label: 'Search description, at least (characters)' },
   { key: 'seo_description_max', label: 'Search description, at most (characters)' },
+];
+/** A23: the built-in parts the writer adds only when switched on (all off by default). */
+export const SWITCHES: { key: 'grade_word' | 'stability_sentence' | 'title_formula' | 'dimensions_line'; label: string }[] = [
+  { key: 'grade_word', label: 'Start the condition report with the grade word' },
+  { key: 'stability_sentence', label: 'Always end the condition report with a stability sentence' },
+  { key: 'title_formula', label: 'Send the built-in title formula' },
+  { key: 'dimensions_line', label: 'End the description with a dimensions line' },
 ];
 /** The texts the writer writes itself: never among the fields it may see (WC2). */
 const OWN_TEXTS = ['product.title', 'product.description', 'product.seo_title', 'product.seo_description'];
@@ -108,9 +115,44 @@ export function WriterSection({ research, active }: { research: ResearchSettings
     }
   };
 
+  const loaded = (next: WriterSettings) => {
+    setSettings(next);
+    setBanned(next.banned_extra.join('\n'));
+    setError(null);
+  };
+  const exportFile = async () => {
+    try {
+      if (await writerSettingsExport()) toast.success('Writer settings exported');
+    } catch (failure) {
+      setError(message(failure));
+    }
+  };
+  const importFile = async () => {
+    setBusy(true);
+    try {
+      const imported = await writerSettingsImport();
+      if (imported) {
+        loaded(imported);
+        toast.success('Writer settings imported and saved');
+      }
+    } catch (failure) {
+      setError(message(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="health-section flex max-w-xl flex-col gap-4" aria-label="Writer">
       <h2>Writer</h2>
+
+      <div role="group" aria-label="Export and import" className="flex flex-col gap-2">
+        <p className="health-detail">Move the writer settings to another Mac: Export saves them to a file; Import reads such a file and saves it here (your earlier instructions stay among the earlier versions). Only the writer settings are in the file.</p>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={() => void exportFile()}>Export…</Button>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => void importFile()}>Import…</Button>
+        </div>
+      </div>
 
       <div role="group" aria-label="Model and effort" className="flex flex-col gap-2">
         <h3>Model and effort</h3>
@@ -132,6 +174,17 @@ export function WriterSection({ research, active }: { research: ResearchSettings
         <Checkbox aria-label="Write texts automatically on Next to review" checked={settings.auto} onCheckedChange={value => edit({ auto: value === true })} />
         Write texts automatically on &quot;Next to review&quot;
       </label>
+
+      <div role="group" aria-label="Built-in parts" className="flex flex-col gap-2">
+        <h3>Built-in parts</h3>
+        <p className="health-detail">Each is added to the instruction, and checked, only when ticked. With the grade word off, the writer never writes the grade.</p>
+        {SWITCHES.map(item => (
+          <label key={item.key} className="flex items-center gap-2">
+            <Checkbox aria-label={item.label} checked={settings[item.key]} onCheckedChange={value => edit({ [item.key]: value === true })} />
+            {item.label}
+          </label>
+        ))}
+      </div>
 
       {instruction && <WriterInstruction language={language} instruction={instruction} onChange={editInstruction}
         onReset={saved => setSettings(current => (current ? { ...current, instructions: { ...current.instructions, [language]: saved.instructions[language] } } : current))} />}

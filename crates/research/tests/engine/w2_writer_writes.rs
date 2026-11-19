@@ -178,7 +178,8 @@ fn w2_c16a_one_request_with_the_guide_the_input_and_no_image() {
     let recorded: Json = serde_json::from_str(&call.request).unwrap();
     let instructions = recorded["instructions"].as_str().unwrap();
     assert!(instructions.starts_with(INSTRUCTION_EN));
-    assert!(instructions.contains(TITLE_FORMULA_EN));
+    // A23: the title formula is sent only with its switch on (default off).
+    assert!(!instructions.contains(TITLE_FORMULA_EN));
     assert!(instructions.contains("Example A"));
     let snapshot: Json =
         serde_json::from_str(h.run_row(run).input_snapshot.as_deref().unwrap()).unwrap();
@@ -186,6 +187,16 @@ fn w2_c16a_one_request_with_the_guide_the_input_and_no_image() {
     assert!(requests[0].images.is_empty());
     assert!(requests[0].listing_images.is_empty());
     assert_eq!(recorded["images"], json!([]));
+}
+
+#[test]
+fn a23_the_input_names_the_item_type_and_sku() {
+    let h = texts_harness(true);
+    let run = run_with(&h, clean(), None);
+    let snapshot: Json =
+        serde_json::from_str(h.run_row(run).input_snapshot.as_deref().unwrap()).unwrap();
+    assert_eq!(snapshot["item"], json!({"type": "Texts", "sku": "W2-4"}));
+    assert_eq!(write_requests(&h)[0].input["item"], snapshot["item"]);
 }
 
 #[test]
