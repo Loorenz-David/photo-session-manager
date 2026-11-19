@@ -17,7 +17,7 @@ use crate::{
 };
 
 /// The version of the instructions each stage sends (part of every unit identity, MC-A7).
-pub const INSTRUCTIONS_VERSION: u32 = 2;
+pub const INSTRUCTIONS_VERSION: u32 = 3;
 
 /// How many photos stage 1 looks at by default (R12·U1).
 pub const DEFAULT_OBSERVE_MAX_PHOTOS: u32 = 8;

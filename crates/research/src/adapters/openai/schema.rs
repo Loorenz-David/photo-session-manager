@@ -105,9 +105,25 @@ fn statement(field: &Json) -> Json {
     ])
 }
 
+/// W1 (WC1.2): the note of a photo look, an array of observations, each with its text and the
+/// `note_fields` keys it bears on; a Condition observation also names its photo by index.
+fn note(condition: bool) -> Json {
+    let mut properties = Vec::new();
+    if condition {
+        properties.push(("photo".to_owned(), json!({ "type": "integer" })));
+    }
+    properties.push(("text".to_owned(), string()));
+    properties.push((
+        "keys".to_owned(),
+        json!({ "type": "array", "items": string() }),
+    ));
+    json!({ "type": "array", "items": object(properties) })
+}
+
 /// The schema of the request's stage. An Observe request whose input carries `photos` (R12·U1:
-/// several photos in one call) answers the indexes of the marking photos; one without it (a
-/// replay of a run exported before R12) keeps the one-photo schema.
+/// several photos in one call) answers the indexes of the marking photos and (W1) the note; one
+/// without it (a replay of a run exported before R12) keeps the one-photo schema. A Condition
+/// request answers its reads and (W1) the note.
 pub fn schema_for(request: &ModelRequest) -> Json {
     let reads = || ("reads".to_owned(), per_field(request, photo_read));
     match request.stage {
@@ -117,9 +133,10 @@ pub fn schema_for(request: &ModelRequest) -> Json {
                 "marking_photos".to_owned(),
                 json!({ "type": "array", "items": { "type": "integer" } }),
             ),
+            ("note".to_owned(), note(false)),
         ]),
         Stage::Observe => object(vec![reads(), ("shows_marking".to_owned(), boolean())]),
-        Stage::Condition => object(vec![reads()]),
+        Stage::Condition => object(vec![reads(), ("note".to_owned(), note(true))]),
         // A18: "Ask AI…" answering in words also answers the owner's question in `answer`.
         Stage::Read if request.input.get("answer").is_some() => object(vec![
             ("answer".to_owned(), string()),
@@ -228,6 +245,86 @@ mod tests {
             images: Vec::new(),
             listing_images: Vec::new(),
         }
+    }
+
+    fn stage_request(stage: Stage, input: Json) -> ModelRequest {
+        ModelRequest {
+            stage,
+            ..read_request(input)
+        }
+    }
+
+    fn two_fields() -> Json {
+        json!([
+            {"key": "custom.wood", "core_type": "choice", "choices": ["Oak", "Teak"]},
+            {"key": "custom.maker", "core_type": "text", "choices": []},
+        ])
+    }
+
+    fn sorted_keys(schema: &Json) -> Vec<String> {
+        let mut keys: Vec<String> = schema["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort();
+        keys
+    }
+
+    fn sorted_required(schema: &Json) -> Vec<String> {
+        let mut keys: Vec<String> = schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|k| k.as_str().unwrap().to_owned())
+            .collect();
+        keys.sort();
+        keys
+    }
+
+    #[test]
+    fn w1_c1a_observe_with_photos_answers_a_note_of_texts_and_keys() {
+        let schema = schema_for(&stage_request(
+            Stage::Observe,
+            json!({"photos": [{"index": 1, "role": "wide"}], "fields": two_fields()}),
+        ));
+        assert_eq!(sorted_keys(&schema), ["marking_photos", "note", "reads"]);
+        assert_eq!(
+            sorted_required(&schema),
+            ["marking_photos", "note", "reads"]
+        );
+        assert_eq!(schema["properties"]["note"]["type"], json!("array"));
+        let item = &schema["properties"]["note"]["items"];
+        assert_eq!(item["type"], json!("object"));
+        assert_eq!(item["properties"]["text"], json!({"type": "string"}));
+        assert_eq!(
+            item["properties"]["keys"],
+            json!({"type": "array", "items": {"type": "string"}})
+        );
+        assert_eq!(sorted_keys(item), ["keys", "text"]);
+        assert_eq!(sorted_required(item), ["keys", "text"]);
+        assert_eq!(item["additionalProperties"], json!(false));
+    }
+
+    #[test]
+    fn w1_c1b_condition_answers_a_note_naming_its_photo() {
+        let schema = schema_for(&stage_request(
+            Stage::Condition,
+            json!({"fields": two_fields()}),
+        ));
+        assert_eq!(sorted_keys(&schema), ["note", "reads"]);
+        assert_eq!(sorted_required(&schema), ["note", "reads"]);
+        let item = &schema["properties"]["note"]["items"];
+        assert_eq!(item["properties"]["photo"], json!({"type": "integer"}));
+        assert_eq!(item["properties"]["text"], json!({"type": "string"}));
+        assert_eq!(
+            item["properties"]["keys"],
+            json!({"type": "array", "items": {"type": "string"}})
+        );
+        assert_eq!(sorted_keys(item), ["keys", "photo", "text"]);
+        assert_eq!(sorted_required(item), ["keys", "photo", "text"]);
+        assert_eq!(item["additionalProperties"], json!(false));
     }
 
     #[test]

@@ -263,7 +263,7 @@ fn a12_c1c_stage_outputs_one_per_unit_with_fingerprints() {
                 "long_edge": 1024,
                 "model": observe.model,
                 "effort": observe.effort,
-                "instructions_version": 2,
+                "instructions_version": 3,
                 "language": "English",
             })
         )

@@ -20,4 +20,5 @@ mod resume;
 mod same_kind;
 mod settings_r11;
 mod stages;
+mod w1_note;
 mod writes;

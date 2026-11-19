@@ -49,7 +49,9 @@ const OBSERVE: &str = "The photos show one piece. Each photo is listed in `photo
     is and how many there are; read wood, material, colour and surface from the closer photos. \
     Give one answer per listed field, from the photo that shows it best, with the field's own \
     choice string when one names the same thing, and mark it sure or unsure. List the indexes of \
-    the photos that show a label, stamp or marking.";
+    the photos that show a label, stamp or marking. Also write `note`: short factual observations \
+    of what the piece is, its form, construction, materials and visible details, each tagged with \
+    the keys from `note_fields` it bears on (none when it bears on no field).";
 /// The unit key of the one stage 1 unit.
 pub const OBSERVE_UNIT: &str = "photos";
 const READ: &str = "For each listed field, quote what this listing page states and give the value \
@@ -61,7 +63,8 @@ const COMPARE: &str = "Compare the piece in the photo with the listing's images:
 const LABELS: &str = "Transcribe the label, stamp or marking and give, per listed field, what it \
     states.";
 const CONDITION: &str = "For each listed condition field, read the wear the condition photos show. \
-    Mark each read sure or unsure.";
+    Mark each read sure or unsure. Also write `note`: per photo, by its index in `photos`, the wear \
+    it shows and where, tagged with the condition keys from `note_fields` it bears on.";
 pub(crate) const DECIDE: &str = "Write one short paragraph per decided field explaining the \
     decision from the evidence given.";
 
@@ -239,6 +242,72 @@ fn reads(definitions: &[Definition], answer: &Json) -> Map<String, Json> {
     out
 }
 
+/// The longest observation text kept, in characters (WC1.3).
+pub const NOTE_TEXT_MAX: usize = 300;
+/// The most observations kept per unit (WC1.3).
+pub const NOTE_MAX: usize = 20;
+
+/// The `note_fields` of a request (WC1.1): `{key, label}` of every layout field in `steps`, in
+/// layout order.
+fn note_fields(ctx: &Ctx<'_>, steps: &[AttributeGroup]) -> Vec<Json> {
+    ctx.form
+        .fields
+        .iter()
+        .filter(|f| steps.contains(&f.step))
+        .map(|f| json!({ "key": f.definition.key, "label": f.definition.label }))
+        .collect()
+}
+
+/// The keys of a request's `note_fields`.
+fn note_keys(fields: &[Json]) -> Vec<String> {
+    fields
+        .iter()
+        .filter_map(|f| f["key"].as_str().map(str::to_owned))
+        .collect()
+}
+
+/// The note of a stage 1 or stage 6 reply as it is stored (WC1.3): each text trimmed, blank ones
+/// dropped, cut at [`NOTE_TEXT_MAX`] characters; `keys` kept only when in `allowed`, duplicates
+/// removed, order kept; at most [`NOTE_MAX`] observations, in reply order. With `sent` (stage 6),
+/// each observation's `photo` index i becomes `photo_id` = the i-th photo sent, or null when out
+/// of range. A reply without `note` gives `[]`.
+pub(crate) fn parse_note(answer: &Json, allowed: &[String], sent: Option<&[i64]>) -> Json {
+    let mut out: Vec<Json> = Vec::new();
+    for entry in answer["note"].as_array().into_iter().flatten() {
+        if out.len() >= NOTE_MAX {
+            break;
+        }
+        let Some(text) = entry["text"].as_str().map(str::trim) else {
+            continue;
+        };
+        if text.is_empty() {
+            continue;
+        }
+        let text: String = text.chars().take(NOTE_TEXT_MAX).collect();
+        let mut keys: Vec<String> = Vec::new();
+        for key in entry["keys"].as_array().into_iter().flatten() {
+            if let Some(key) = key.as_str()
+                && allowed.iter().any(|a| a == key)
+                && !keys.iter().any(|k| k == key)
+            {
+                keys.push(key.to_owned());
+            }
+        }
+        let mut observation = json!({ "text": text, "keys": keys });
+        if let Some(sent) = sent {
+            let photo = entry["photo"]
+                .as_u64()
+                .and_then(|i| usize::try_from(i).ok())
+                .filter(|i| *i >= 1)
+                .and_then(|i| sent.get(i - 1))
+                .copied();
+            observation["photo_id"] = json!(photo);
+        }
+        out.push(observation);
+    }
+    Json::Array(out)
+}
+
 pub(crate) fn display(value: &Json) -> String {
     match value {
         Json::String(s) => s.clone(),
@@ -358,6 +427,11 @@ impl Ctx<'_> {
             return Ok(None);
         };
         let output: Json = serde_json::from_str(&found.output).unwrap_or(Json::Null);
+        // W1 (WC1.5): a photo look committed before the note existed carries no `note`; it is
+        // looked at again rather than copied, so the session gets its note.
+        if matches!(stage, Stage::Observe | Stage::Condition) && output.get("note").is_none() {
+            return Ok(None);
+        }
         let complete = output["files"]
             .as_array()
             .map(|files| {
@@ -663,6 +737,8 @@ fn observe(ctx: &Ctx<'_>, plan: &PhotoPlan) -> Result<Flow> {
         "language": ctx.config.language,
     });
     let visible = fields_of(ctx, &[FieldClass::Visible]);
+    let note_fields = note_fields(ctx, &[AttributeGroup::Details, AttributeGroup::Condition]);
+    let note_keys = note_keys(&note_fields);
     ctx.unit(stage, OBSERVE_UNIT, identity, |ctx| {
         let mut rendered: Vec<(ResearchImage, Role)> = Vec::new();
         let mut not_rendered: Vec<String> = Vec::new();
@@ -691,6 +767,7 @@ fn observe(ctx: &Ctx<'_>, plan: &PhotoPlan) -> Result<Flow> {
                     "photos": [],
                     "reads": {},
                     "marking_photo_ids": [],
+                    "note": [],
                     "not_determined": text,
                     "files": [],
                 }),
@@ -713,6 +790,7 @@ fn observe(ctx: &Ctx<'_>, plan: &PhotoPlan) -> Result<Flow> {
             json!({
                 "photos": input_photos,
                 "fields": visible.iter().map(descriptor).collect::<Vec<_>>(),
+                "note_fields": note_fields,
             }),
             rendered.iter().map(|(image, _)| image.clone()).collect(),
             Vec::new(),
@@ -731,6 +809,7 @@ fn observe(ctx: &Ctx<'_>, plan: &PhotoPlan) -> Result<Flow> {
             Asked::Work(work) => return Ok(work),
         };
         let reads = reads(&visible, &output);
+        let note = parse_note(&output, &note_keys, None);
         let mut marking: Vec<i64> = Vec::new();
         let mut ignored: Vec<String> = Vec::new();
         for index in output["marking_photos"].as_array().into_iter().flatten() {
@@ -777,6 +856,7 @@ fn observe(ctx: &Ctx<'_>, plan: &PhotoPlan) -> Result<Flow> {
                 "photos": sent_ids,
                 "reads": reads,
                 "marking_photo_ids": marking,
+                "note": note,
                 "files": files,
             }),
             steps: vec![looked],
@@ -1210,6 +1290,8 @@ fn condition(ctx: &Ctx<'_>, photos: &[&UsablePhoto]) -> Result<Flow> {
         "photos": identities.iter().map(|(id, rev)| json!([id, rev])).collect::<Vec<_>>(),
         "definitions": keys.iter().map(descriptor).collect::<Vec<_>>(),
     });
+    let note_fields = note_fields(ctx, &[AttributeGroup::Condition]);
+    let note_keys = note_keys(&note_fields);
     ctx.unit(stage, "condition", identity, |ctx| {
         let ids: Vec<i64> = photos.iter().map(|p| p.id).collect();
         let mut looked = step(stage, StepKind::Looked, "Looked at the condition photos");
@@ -1221,28 +1303,93 @@ fn condition(ctx: &Ctx<'_>, photos: &[&UsablePhoto]) -> Result<Flow> {
             }
         }
         let files: Vec<String> = images.iter().map(|i| i.sha256().to_owned()).collect();
+        let attached: Vec<i64> = images.iter().map(ResearchImage::photo_id).collect();
+        let input_photos: Vec<Json> = (1..=images.len())
+            .map(|index| json!({ "index": index }))
+            .collect();
         let request = ctx.model_request(
             stage,
             "condition",
             CONDITION,
-            json!({ "fields": keys.iter().map(descriptor).collect::<Vec<_>>() }),
+            json!({
+                "photos": input_photos,
+                "fields": keys.iter().map(descriptor).collect::<Vec<_>>(),
+                "note_fields": note_fields,
+            }),
             images,
             Vec::new(),
         );
-        let (asked, _) = ctx.ask(stage, "condition", request)?;
-        let read = match asked {
-            Asked::Answer(Answer::Model(reply)) => reads(&keys, &reply.output),
-            Asked::Answer(_) => Map::new(),
+        let (asked, dropped) = ctx.ask(stage, "condition", request)?;
+        // WC1.3: a note's `photo` is the index among the images the model received.
+        let sent: Vec<i64> = attached
+            .into_iter()
+            .filter(|id| !dropped.contains(id))
+            .collect();
+        let (read, note) = match asked {
+            Asked::Answer(Answer::Model(reply)) => (
+                reads(&keys, &reply.output),
+                parse_note(&reply.output, &note_keys, Some(&sent)),
+            ),
+            Asked::Answer(_) => (Map::new(), json!([])),
             Asked::NotDetermined(text) => {
                 looked.detail = text;
-                Map::new()
+                (Map::new(), json!([]))
             }
             Asked::Work(work) => return Ok(work),
         };
         looked.field_keys = read.keys().cloned().collect();
         Ok(Work::Commit {
-            output: json!({ "photos": ids, "reads": read, "files": files }),
+            output: json!({ "photos": ids, "reads": read, "note": note, "files": files }),
             steps: vec![looked],
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The note parser's rules in one table (W1·C3(a)–(d), C4(b)–(c) at the function).
+    #[test]
+    fn w1_parse_note_rules() {
+        let allowed = vec!["custom.wood".to_owned()];
+        let long = format!("{}ø{}", "a".repeat(299), "b".repeat(50));
+        let reply = json!({"note": [
+            {"text": "  Frame in teak ", "keys": ["custom.wood", "custom.unknown", "custom.wood"]},
+            {"text": "   ", "keys": []},
+            {"text": long, "keys": []},
+        ]});
+        assert_eq!(
+            parse_note(&reply, &allowed, None),
+            json!([
+                {"text": "Frame in teak", "keys": ["custom.wood"]},
+                {"text": format!("{}ø", "a".repeat(299)), "keys": []},
+            ])
+        );
+        let many: Vec<Json> = (1..=25)
+            .map(|i| json!({"text": format!("o{i}"), "keys": []}))
+            .collect();
+        let parsed = parse_note(&json!({ "note": many }), &allowed, None);
+        let texts: Vec<&str> = parsed
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|o| o["text"].as_str().unwrap())
+            .collect();
+        assert_eq!(texts, (1..=20).map(|i| format!("o{i}")).collect::<Vec<_>>());
+        assert_eq!(parse_note(&json!({"reads": {}}), &allowed, None), json!([]));
+        let condition = json!({"note": [
+            {"photo": 1, "text": "a", "keys": []},
+            {"photo": 2, "text": "b", "keys": []},
+            {"photo": 7, "text": "c", "keys": []},
+        ]});
+        assert_eq!(
+            parse_note(&condition, &allowed, Some(&[11, 33])),
+            json!([
+                {"text": "a", "keys": [], "photo_id": 11},
+                {"text": "b", "keys": [], "photo_id": 33},
+                {"text": "c", "keys": [], "photo_id": null},
+            ])
+        );
+    }
 }
