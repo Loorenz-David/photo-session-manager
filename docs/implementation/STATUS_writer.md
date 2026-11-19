@@ -19,6 +19,13 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
     - at most one use sentence
 - **2026-11-19:** RATIFIED (`84fae97`). The planner session started: master plan, `phases_writer.txt`, plans `W1…`,
   handoff `handoffs/reviewer/handoff_writer_plan_r1.md`.
-- **Next:** read the planner handoff, relay any owner cards, then run the milestones in order with
-  `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (in the background; no polling). Install after
-  milestones the owner can try.
+- **2026-11-19: plans written** (`1d9b985`; handoff `handoffs/reviewer/handoff_writer_plan_r1.md`).
+  - 6 milestones: W1 product note, W2 engine, W3 review, W4 settings, W5 SEO publish (projection), W6
+    restoration choices. 17 units, 73 criteria, 231 rows. Contracts WC1–WC8 in `master_plan_writer.md` §5
+    stand in for the inventory.
+  - **Owner card 1** (Restoration choices only in the app (A, recommended) or as a new Shopify field (B))
+    gates W6 only. Relayed.
+  - W5 U2 task 1 writes a test SEO title on the probe product `PSM-PROBE`, using `~/.psm_shopify.env` (the owner's
+    test store per the 2026-10-26 answer), then restores it. Confirm with the owner that this file still points to
+    the test store before W5.
+  - **Chain W1→W4 started** in the background: `scratchpad/writer_chain.sh`, log `scratchpad/writer_chain.log`.
