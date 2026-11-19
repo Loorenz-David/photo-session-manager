@@ -8,7 +8,7 @@ blocked_on: U2 task 1 captures Shopify replies with the probe credentials of P12
 ---
 # W5 — Search title and search description
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-19, opus, implement r1: 4 units checkpointed 3e0a878, 5586490, 2150e14, bbee5e1 + gate fix; 27 rows, each a boundary test (w5_seo_publish 16, p12 w5_ 4, w5_carried 5 + vitest 2) plus 7 core-mechanism unit tests; probe `seo` captured null/null, byte-identical read-back, 75-char title stored whole; gate green: suite 1033, clippy, fmt, typecheck, npm test 661)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -230,3 +230,25 @@ On scratch data with the dev store connected:
 - **2026-11-19, orchestrator: probe target changed.** Owner: the store in `~/.psm_shopify.env` is now the real shop; create a test product for the probe. U2 task 1 amended: create a DRAFT product, probe it, delete it; never touch an existing product.
 - **2026-11-19, orchestrator: U4 added** (carried fixes from the W1–W4 reviewer notes; master plan WC1.7, WC5.10(iii) and WC6 rule 2 amended the same day).
 - **2026-11-19, orchestrator: projection r0 amendments applied** (`handoffs/reviewer/handoff_W5_seo_publish_projection_r0.md` L1–L22): a 4th capture `seo_read_after_update.json`; the probe's product has a body and its values carry special characters, with BLOCKED on a fallback or a non-identical read-back; one shared seo mapping function; `FIXED_KEYS`; a pure core helper as the unit-tested mechanism; `--` before test filters; C3(b), C5(a), C8(a), C14(a) worded exactly; the U3 read delegation removed; the fake's fixed points; probe fences (ledger, not in `all`, no `cleanup`); C15 moved to a reading check, C12/C13 retraced `[rule]`; U4 commands reach the engine tests. Outcomes unchanged, so no new projection round.
+- **2026-11-19, implementer (Claude Opus, r1): built.** U1 `product.seo_title` / `product.seo_description` built-in
+  (Text / Textarea, Product), `ALWAYS_PRESENT` + the pure `append_always_present` applied in `layout_keys`, `form_get`,
+  `presets_get`; `RemoteValues.seo_*` read through one `adapter::seo_of`; `FIXED_KEYS`. U2 `PRODUCT_SEO_READ`,
+  `PRODUCT_UPDATE_SEO`, `CommerceAdapter::product_seo` / `update_seo` (port default refuses with
+  `SEO_UNSUPPORTED`), the fake's ops; probe step `seo` (own DRAFT product via `PRODUCT_SET`, ledgered, deleted; not in
+  `all`, no `cleanup`) run once on the store in `~/.psm_shopify.env`: unset `seo` fields are `null`, the read-back is
+  byte-identical, a 75-character title is stored whole (no `userErrors`); four fixtures, evidence `shopify_admin.md`
+  §SEO search texts. U3 `PublishService::update_seo` after the description, log `publish.seo item= written=`. U4 the
+  six carried fixes; `LINK_INTEGRATION` made `pub` in core and used by `writer/{writes,note,run}.rs` (no `"shopify"`
+  literal left there).
+  **Assumptions:** `Seo` lives in `domain/publish.rs` from U1 (U1's shared mapping returns it); `presets_get` reports an
+  appended key at the end with no default; the fake stores a cut title through a `seo_title_cut` knob (C8(a)) and
+  records `seo_writes`; `publish.seo item=` is the publish item id (as the other publish log lines), with
+  `verified=false` added on a failed read-back, and no line when nothing is frozen; frozen values are sent as frozen
+  (compared trimmed); WC6 rule 2 drops a text finding only when its `text_field` is non-empty and not written or
+  unchanged in the run; the Answer toast is `toast.error(reason.sentence)` only; `money` stays in `WriterPanel.tsx`.
+  **Deviations:** tests outside the U-file lists updated to the new built-in list (plan hazard): `p10_attributes::c6b`
+  (U1), engine `w2_writer_run::w2_c4e` and `w2_writer_writes::w2_c19a` / `w2_c20b` (the search texts are now
+  requested; C19a keeps the report as its not-requested text), `p13_publish_runs::c9b` (definition count from
+  `builtin_definitions().len()`). `import_definitions` now refuses a shop key equal to any built-in key (was: the three
+  fixed ones). A red baseline per row was not captured before production edits; C11(a) and C14(a) were checked red by
+  temporarily reverting their fixes (restored).
