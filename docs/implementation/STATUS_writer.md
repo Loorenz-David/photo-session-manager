@@ -41,3 +41,6 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
     texts never written, a silent answer, "$0.00" costs, the stuck condition banner, the guide rows and the
     "shopify" constant. Master plan WC1.7, WC5.10(iii) and WC6 rule 2 amended.
   - Chain W5→W6 started: `scratchpad/writer_chain2.sh`, log `scratchpad/writer_chain2.log`.
+- **2026-11-19 12:18: W5 projection r0 = AMENDMENTS_REQUIRED** (no owner decisions). The orchestrator applied L1–L22 to
+  the W5 plan (Review log entry), updated the master plan counts (18 units / 78 criteria / 238 rows), and set W5's
+  `projection:` to `done` so the runner goes straight to the implementer. Chain W5→W6 restarted (`writer_chain2.log`).
