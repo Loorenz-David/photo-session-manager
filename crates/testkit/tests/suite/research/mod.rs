@@ -8,3 +8,4 @@ pub mod r8_shop_facts;
 pub mod w1_note_seam;
 pub mod w3_title;
 pub mod w3_writer_wiring;
+pub mod w5_seo_publish;

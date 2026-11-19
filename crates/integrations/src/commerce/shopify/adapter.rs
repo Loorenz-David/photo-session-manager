@@ -17,8 +17,8 @@ use psm_core::{
     domain::attribute::{AttributeGroup, CoreType, Definition},
     domain::publish::{
         ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
-        RemoteMedia, RemoteMediaStatus, RemoteValues, StagedTarget, StockChoice, StockLocation,
-        StockLocations, StockOutcome, WriteValue,
+        RemoteMedia, RemoteMediaStatus, RemoteValues, Seo, StagedTarget, StockChoice,
+        StockLocation, StockLocations, StockOutcome, WriteValue,
     },
     mechanisms::{upload_name, values::canonical_decimal},
     ports::{
@@ -212,6 +212,22 @@ pub fn description_html(paragraphs: &str) -> String {
     }
     flush(&mut current, &mut out);
     out
+}
+
+/// WC8.2, WC8.6: a product's `seo` object as core reads it, the one mapping of the product read
+/// and of `product_seo`. A null, blank or missing field (or a missing `seo` object) is `None`; a
+/// value is kept as Shopify returned it.
+pub fn seo_of(product: &Json) -> Seo {
+    let field = |name: &str| {
+        product["seo"][name]
+            .as_str()
+            .filter(|text| !text.trim().is_empty())
+            .map(str::to_owned)
+    };
+    Seo {
+        title: field("title"),
+        description: field("description"),
+    }
 }
 
 /// P67: the form's description (blank-line-separated paragraphs) from a product's
@@ -918,6 +934,7 @@ impl CommerceAdapter for ShopifyAdapter {
                 _ => break,
             }
         }
+        let seo = seo_of(product);
         Ok(RemoteValues {
             title: product["title"].as_str().unwrap_or_default().to_owned(),
             item_type: product["productType"].as_str().map(str::to_owned),
@@ -926,6 +943,8 @@ impl CommerceAdapter for ShopifyAdapter {
                 .as_str()
                 .map(description_paragraphs)
                 .filter(|text| !text.is_empty()),
+            seo_title: seo.title,
+            seo_description: seo.description,
             attributes,
         })
     }

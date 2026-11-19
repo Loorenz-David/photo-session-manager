@@ -587,7 +587,17 @@ fn c6b_product_fields_never_removable() {
         .iter()
         .map(|f| f.definition.key.as_str())
         .collect();
-    assert_eq!(product, [PRODUCT_TITLE, PRODUCT_DESCRIPTION, PRODUCT_TAGS]);
+    // W5 (WC8.1): the two search texts are built-in too and follow the three fixed fields.
+    assert_eq!(
+        product,
+        [
+            PRODUCT_TITLE,
+            PRODUCT_DESCRIPTION,
+            PRODUCT_TAGS,
+            "product.seo_title",
+            "product.seo_description"
+        ]
+    );
 }
 
 #[test]

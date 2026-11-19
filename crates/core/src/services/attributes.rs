@@ -36,14 +36,44 @@ pub const CORE_INTEGRATION: &str = "core";
 pub const PRODUCT_TITLE: &str = "product.title";
 pub const PRODUCT_DESCRIPTION: &str = "product.description";
 pub const PRODUCT_TAGS: &str = "product.tags";
+pub const PRODUCT_SEO_TITLE: &str = "product.seo_title";
+pub const PRODUCT_SEO_DESCRIPTION: &str = "product.seo_description";
 const PRODUCT_FIELDS: [&str; 3] = [PRODUCT_TITLE, PRODUCT_DESCRIPTION, PRODUCT_TAGS];
 
-/// Title, description and tags: always present, never removable (ch08 §Groups and presets).
+/// WC8.1: built-in keys every step of their group shows even when a stored layout lacks them
+/// (appended at the end of the step, in this order). W6 adds `local.restoration` (Condition).
+const ALWAYS_PRESENT: [(AttributeGroup, &str); 2] = [
+    (AttributeGroup::Product, PRODUCT_SEO_TITLE),
+    (AttributeGroup::Product, PRODUCT_SEO_DESCRIPTION),
+];
+
+/// WC8.1: `layout` (one step of `group`) with every always-present key of `group` it lacks
+/// appended at its end, in [`ALWAYS_PRESENT`] order, without a default.
+fn append_always_present(group: AttributeGroup, mut layout: Vec<PresetField>) -> Vec<PresetField> {
+    for (always_group, key) in ALWAYS_PRESENT {
+        if always_group == group && !layout.iter().any(|f| f.key == key) {
+            layout.push(PresetField {
+                key: key.to_owned(),
+                default: None,
+            });
+        }
+    }
+    layout
+}
+
+/// Title, description and tags: always present, never removable (ch08 §Groups and presets); the
+/// two search texts (WC8.1) are always present too.
 pub fn builtin_definitions() -> Vec<Definition> {
     [
         (PRODUCT_TITLE, "Title", CoreType::Text),
         (PRODUCT_DESCRIPTION, "Description", CoreType::RichText),
         (PRODUCT_TAGS, "Tags", CoreType::Tags),
+        (PRODUCT_SEO_TITLE, "Search title", CoreType::Text),
+        (
+            PRODUCT_SEO_DESCRIPTION,
+            "Search description",
+            CoreType::Textarea,
+        ),
     ]
     .into_iter()
     .map(|(key, label, core_type)| Definition {
@@ -163,7 +193,11 @@ pub fn layout_keys(
     let mut out = std::collections::BTreeSet::new();
     for group in AttributeGroup::ALL {
         match resolve_preset(tx, item_type, group)? {
-            Some(preset) => out.extend(preset.layout.into_iter().map(|f| f.key)),
+            Some(preset) => out.extend(
+                append_always_present(group, preset.layout)
+                    .into_iter()
+                    .map(|f| f.key),
+            ),
             None => out.extend(
                 definitions
                     .iter()
@@ -514,7 +548,7 @@ impl<'a> AttributesService<'a> {
                 "the built-in definitions cannot be replaced".into(),
             ));
         }
-        let mut seen: HashSet<String> = PRODUCT_FIELDS.iter().map(|k| k.to_string()).collect();
+        let mut seen: HashSet<String> = builtin_definitions().into_iter().map(|d| d.key).collect();
         let mut prepared = Vec::with_capacity(definitions.len());
         for mut definition in definitions {
             if !seen.insert(definition.key.clone()) {
@@ -1065,7 +1099,10 @@ impl<'a> AttributesService<'a> {
         let mut out = None;
         self.store.transaction(&mut |tx| {
             out = Some(match resolve_preset(tx, item_type, group)? {
-                Some(preset) => preset,
+                Some(preset) => Preset {
+                    layout: append_always_present(group, preset.layout),
+                    ..preset
+                },
                 None => Preset {
                     item_type: item_type.to_owned(),
                     group,
@@ -1180,6 +1217,18 @@ impl<'a> AttributesService<'a> {
         incoming.insert(
             PRODUCT_DESCRIPTION.into(),
             remote.description.clone().map_or(Json::Null, Json::String),
+        );
+        // WC8.2: the search texts are stored exactly as the description is.
+        incoming.insert(
+            PRODUCT_SEO_TITLE.into(),
+            remote.seo_title.clone().map_or(Json::Null, Json::String),
+        );
+        incoming.insert(
+            PRODUCT_SEO_DESCRIPTION.into(),
+            remote
+                .seo_description
+                .clone()
+                .map_or(Json::Null, Json::String),
         );
         self.store.transaction(&mut |tx| {
             let item = tx.item(item_id)?;
@@ -1448,8 +1497,7 @@ impl<'a> AttributesService<'a> {
             for group in AttributeGroup::ALL {
                 let preset = resolve_preset(tx, &item.item_type, group)?;
                 let ordered: Vec<(&Definition, Option<Json>)> = match preset {
-                    Some(preset) => preset
-                        .layout
+                    Some(preset) => append_always_present(group, preset.layout)
                         .into_iter()
                         .filter_map(|f| {
                             definitions
@@ -1537,5 +1585,69 @@ impl<'a> AttributesService<'a> {
             groups,
             item_type_from_integration,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn keys(layout: &[PresetField]) -> Vec<&str> {
+        layout.iter().map(|f| f.key.as_str()).collect()
+    }
+
+    fn layout(keys: &[&str]) -> Vec<PresetField> {
+        keys.iter()
+            .map(|k| PresetField {
+                key: (*k).to_owned(),
+                default: None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn w5_append_always_present_adds_missing_product_keys_at_the_end_in_list_order() {
+        let out = append_always_present(
+            AttributeGroup::Product,
+            layout(&[PRODUCT_TITLE, PRODUCT_DESCRIPTION, PRODUCT_TAGS]),
+        );
+        assert_eq!(
+            keys(&out),
+            [
+                PRODUCT_TITLE,
+                PRODUCT_DESCRIPTION,
+                PRODUCT_TAGS,
+                PRODUCT_SEO_TITLE,
+                PRODUCT_SEO_DESCRIPTION
+            ]
+        );
+        assert!(out[3].default.is_none() && out[4].default.is_none());
+    }
+
+    #[test]
+    fn w5_append_always_present_keeps_a_listed_key_where_it_is() {
+        let given = [
+            PRODUCT_TITLE,
+            PRODUCT_SEO_DESCRIPTION,
+            PRODUCT_DESCRIPTION,
+            PRODUCT_TAGS,
+        ];
+        let out = append_always_present(AttributeGroup::Product, layout(&given));
+        assert_eq!(
+            keys(&out),
+            [
+                PRODUCT_TITLE,
+                PRODUCT_SEO_DESCRIPTION,
+                PRODUCT_DESCRIPTION,
+                PRODUCT_TAGS,
+                PRODUCT_SEO_TITLE
+            ]
+        );
+    }
+
+    #[test]
+    fn w5_append_always_present_leaves_other_steps_alone() {
+        let out = append_always_present(AttributeGroup::Details, layout(&["custom.material"]));
+        assert_eq!(keys(&out), ["custom.material"]);
     }
 }

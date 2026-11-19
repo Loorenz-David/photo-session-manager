@@ -27,7 +27,16 @@ export type PresetEntry = { key: string; default?: unknown };
 export const PRODUCT_TITLE = 'product.title';
 export const PRODUCT_DESCRIPTION = 'product.description';
 export const PRODUCT_TAGS = 'product.tags';
-export const FIXED_KEYS: readonly string[] = [PRODUCT_TITLE, PRODUCT_DESCRIPTION, PRODUCT_TAGS];
+/** WC8.1: the two search texts, always present in the Product step (never removable either). */
+export const PRODUCT_SEO_TITLE = 'product.seo_title';
+export const PRODUCT_SEO_DESCRIPTION = 'product.seo_description';
+export const FIXED_KEYS: readonly string[] = [
+  PRODUCT_TITLE,
+  PRODUCT_DESCRIPTION,
+  PRODUCT_TAGS,
+  PRODUCT_SEO_TITLE,
+  PRODUCT_SEO_DESCRIPTION,
+];
 
 /** The item's form: Details, Condition, Product with ordered fields, values and filled/total counts. */
 export async function getForm(itemId: number): Promise<Form> {

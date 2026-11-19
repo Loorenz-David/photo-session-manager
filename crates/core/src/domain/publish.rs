@@ -93,7 +93,18 @@ pub struct RemoteValues {
     pub item_type: Option<String>,
     pub tags: Vec<String>,
     pub description: Option<String>,
+    /// WC8.2: the product's search title and search description (blank → `None`).
+    pub seo_title: Option<String>,
+    pub seo_description: Option<String>,
     pub attributes: Vec<(String, serde_json::Value)>,
+}
+
+/// WC8: a product's search texts (Shopify `seo {title, description}`); `None` = unset (the
+/// platform's null or blank).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Seo {
+    pub title: Option<String>,
+    pub description: Option<String>,
 }
 
 /// Identity of a remote item's default variant, as read back after a write (05B MC-22).
