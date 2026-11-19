@@ -311,7 +311,11 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
    item, with stock if chosen; export = masters + outputs) → `upload` (`staged_uploads_create_many`,
    4 uploads at a time, `product_create_media_many`, `file_create_many` for condition files, poll) →
    `update` (gallery reconcile MC-12, metafields MC-13, damage report MC-14, title/type/tags/
-   description/inventory read-back) → `done` (`published_at`, backup). Each step is idempotent and
+   description/inventory read-back, then the search texts: `update_seo` in `services/publish.rs`,
+   writer master plan WC8.4 — only when a frozen `product.seo_title` / `product.seo_description` is
+   non-blank; reads `product_seo`, writes both fields in one `update_seo` only when one differs
+   (trimmed), never clears a field without a frozen value, reads back and fails with
+   `attribute_verification` naming the key) → `done` (`published_at`, backup). Each step is idempotent and
    resumes after a crash (H4); `photo_links` rows track per-photo upload state and remote ids.
 3. Waiting: a Capture One "not ready" error (`mechanisms/backoff.rs::editor_wait`) requeues with
    backoff 1/2/4/8 s then 15 s, label "Waiting for Capture One…", gives up after 10 min with a plain
@@ -319,7 +323,21 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
 4. Shopify specifics: `ShopifyAdapter` over `graphql.rs` documents; token from `auth.rs`
    (client credentials, memory only); `api_version` from settings (default `2026-10`); files found by
    name (`FILES_BY_NAME`), inventory via `LOCATIONS`/`PRODUCT_SET`/`INVENTORY_READBACK`.
-5. Log line at the end: `publish.timing item=<sku> masters_ms= outputs_ms= upload_ms= shopify_ms= total_ms= masters_reused=n/m`.
+5. Log line at the end: `publish.timing item=<sku> masters_ms= outputs_ms= upload_ms= shopify_ms= total_ms= masters_reused=n/m`;
+   the SEO step logs `publish.seo item=<publish item id> written=<bool>` (W5).
+6. Search texts (W5): `product.seo_title` (Text) and `product.seo_description` (Textarea) are built-in
+   Product fields, **always present** (`ALWAYS_PRESENT` + `append_always_present` in
+   `services/attributes.rs`, applied by `layout_keys`, `form_get`, `presets_get`); read from the linked
+   product as `integration` rows like the description (`RemoteValues.seo_*`, Shopify `seo` through
+   `adapter::seo_of`); `CommerceAdapter::product_seo` / `update_seo` (`PRODUCT_SEO_READ`,
+   `PRODUCT_UPDATE_SEO`; evidence `shopify_admin.md` §SEO search texts).
+7. Restoration done (W6, writer master plan WC8-R): `local.restoration` (MultiChoice, 14 fixed choices
+   `RESTORATION_CHOICES`) is a built-in **Condition** field, always present at the end of the Condition
+   step (`ALWAYS_PRESENT`; with no stored preset, `active_definitions` lists non-Product built-ins after
+   the shop's fields). App-local: never published (`write_set` only walks the shop's definitions), never
+   researched (`rules::write_table::never_written`), in `item.json`. The writer sees it as a field and
+   post-check rule 11 (`HitCode::Restoration`, phrases `writer::defaults::RESTORATION_PHRASES`) requires
+   each chosen step in the condition report.
 
 ### Camera runtime, sidecar protocol, FTP receiver (book `10E` MC-31…MC-33; `native/camera-sidecar/README.md`)
 - **One `CameraRuntime` per process** (`camera/runtime.rs`), created in `App::open_with_adapter_bind`
@@ -399,7 +417,7 @@ listed in the research master plan §5 "Seams".
 | Module | Holds |
 |---|---|
 | `api.rs`, `api_impl.rs` | **ResearchApi** (the trait app code calls: `status`, `run`, `arranged`, `session_changed`, `settings_changed`, `settings_reset`, `validate_settings`, `secrets_set`, `secrets_state`, `site_add`, `site_remove`, `sites_reorder`, `export`, `purge_expired`, A12 `browse_matches`, `browse_search`, `browse_ask`) and its shapes (`ResearchStatus`, `RunView`, `StepView`, `Reason`, `SecretsInput`, `SecretsState`, `ExportSelection`); implemented for `ResearchService` |
-| `domain.rs` | `RunState`, `RunTrigger` (`Arranged`, `Manual`; `Browse` (A12) holds one call of the search window and is never queued, started or listed by `store::runs`; `Auto`/`FollowUp` are only read from old rows), `Stage` (observe, find, read, compare, labels, condition, decide), `StepKind`, `CallState`, `SiteClass`, `Verdict`, `ErrorClass`, `FieldClass`, `Prerequisite`, `CallFailure` |
+| `domain.rs` | `RunState`, `RunTrigger` (`Arranged`, `Manual`; `Browse` (A12) holds one call of the search window and is never queued, started or listed by `store::runs`; `Auto`/`FollowUp` are only read from old rows; W1 `Look` (**Look again**: stages 1 and 6 only, no write; left out of `store::runs`, the overview, `status` and a research run's reuse; tier 0 of the start order beside `manual`)), `Stage` (observe, find, read, compare, labels, condition, decide), `StepKind`, `CallState`, `SiteClass`, `Verdict`, `ErrorClass`, `FieldClass`, `Prerequisite`, `CallFailure` |
 | `config.rs` | **ResearchSettings** (the `research` slot of `settings.json`, read tolerantly by `from_slot`, checked by `validate`), **ResearchConfig** (the per-run snapshot, `from_settings` with the shop facts), the shipped defaults (stage models and efforts, prices, the detailed-condition table), `INSTRUCTIONS_VERSION`. With `adapters/`, the only place model and vendor names are literals (HA5) |
 | `ports.rs` | the three provider ports **ModelProvider** (`call(&ModelRequest)`), **VisualSearchProvider** (`search(&ResearchImage)`), **PageReader** (`read(url)`), their replies (each carries an `Exchange {request, response}` for the call record) and `Providers` (an `Option` per port) |
 | `adapters/` | `mod.rs::build` (adapters chosen by `research.providers.*`; default ids `openai`, `serpapi_lens`, `page_http`; keys read from the secrets port on every call), `http.rs` (the HTTP seam: `ReqwestResearchHttp` live, a fake in tests), `openai/` (Responses API, strict schemas), `visual_search/serpapi_lens.rs` (upload, then the Lens search), `page_reader/` (plain HTTP download, address guard, pacing of slow hosts, `extract.rs::product_extract`; A9: `Retry-After` waited only up to `SHORT_RETRY_AFTER_S` = 10 s, a 403/long 429 is `PageReply.blocked` and the run skips that host (`stages::read`); `shop.rs::ShopPageReader` wraps the reader in the app wiring and reads the connected shop's product pages through `CommerceAdapter::shop_product` (Shopify `productByIdentifier`), keeping the inner reader's id) |
@@ -413,6 +431,7 @@ listed in the research master plan §5 "Seams".
 | `store.rs`, `schema.rs` | the engine's SQL and `schema::ensure` (§Storage below) |
 | `service.rs`, `job.rs` | **ResearchService** (gateway, renderer, snapshots; the Keychain account names) and **ResearchJob**, the `jobs` handler of kind `research` (target = run id; an offline call holds the job, back-off at most 60 s) |
 | `shop.rs`, `export.rs`, `retention.rs` | shop facts through `CommerceAdapter::public_listing`; the export of the research record (folder, then zip; scanned for secrets, fail closed; an image only where text can live, by its leading bytes: JPEG header, PNG text chunks, WebP EXIF/XMP, GIF extensions, AVIF/HEIF boxes but `mdat`, `rules::image_text::scanned_parts`, A7/A8; no matching run → `Error::NothingToExport`, nothing written); deletion of call records and their images after `record_days` |
+| `writer/` (book 08C; W1) | `note.rs`: the product note research's stages 1 and 6 now store (`note` in their unit outputs, WC1), `decision` / `reviewed` (the owner's standing on a key, WC2), `assemble` (`NoteView`: observations with the owner's decisions replacing what research saw, `research_saw`, `stale_main` / `stale_condition` / `missing_main`, computed at read time), `look_again` (queues a `look` run); `api.rs`: **WriterApi** (`note`, `look_again`; W2 `request`, `answer`, `dismiss`), implemented for `ResearchService` in `api_impl.rs` and handed by the wiring as `AppHandles::writer`. W2 (engine only, behind the fakes; nothing in the app runs it before W3): `config.rs` (`WriterSettings`, the `writer` slot, `ResearchDeps.writer_settings`), `defaults.rs` (the shipped guide and examples), `input.rs` (what the writer sees), `postcheck.rs` (the deterministic check of every text), `run.rs` (a `write` run: request, start order, `Stage::Write` call, one rewrite, writes, findings), `writes.rs` (the writer's write path over MC-A1's table), `safeguard.rs` (the never-re-raise filter), `schema.rs`. W3 (in the app): `api.rs` adds `status` (`WriterStatus`: the latest `write` run, its texts with hits, attempts, rewrites, the item's open findings, steps, cost, inputs, staleness, why Write texts would refuse); `ResearchDeps.writer_settings` reads the live `writer` slot of `settings.json` (`build_research`) |
 | `fakes.rs`, `fixtures/` | scripted stand-in providers for tests; sanitised provider captures written by R1 (`fixtures/<provider>/`), never by hand |
 
 ### A run, step by step
@@ -482,10 +501,15 @@ chosen** (key not in `fill_keys`; treated exactly as never-written) · **derived
   resolved_attributes, released_at}`, `sessions.arranged_at`, table `research_feedback`; and
   `psm_research::schema::ensure` (called by `build_research` in integrations `lib.rs`): tables
   `research_runs`, `research_steps`, `research_calls`, `research_outbound`,
-  `research_stage_outputs`. Columns: research master plan §6.4.
+  `research_stage_outputs`, and (W2) `writer_findings` (the writer's findings and questions per
+  item; `delete_session` removes a session's rows). Columns: research master plan §6.4, writer
+  master plan §4.
 - Settings: the `research` key of `settings.json` is an opaque JSON slot in `psm_infra`
   (`Settings.research`); its shape is `ResearchSettings`. The engine reads it live, so a save is a
   simple update; only a change of `research.providers` rebuilds the App.
+- W3: the `writer` key of `settings.json` is the writer's opaque slot (`Settings.writer`, shape `WriterSettings`),
+  validated by `WriterSettings::validate` in `SettingsSetContext::prepare`, merged field by field like `research`,
+  read live by the engine; nulled in the rebuild comparison, so a save never rebuilds the App.
 - Keys: Keychain only, under the app's one service, accounts `research-model-key`,
   `research-search-key`, `research-reader-key` (`crates/research/src/service.rs`).
 
@@ -497,9 +521,21 @@ publish_partition.rs}`, `PublishStep::Held`, `RowLabel::WaitingForYou`, `AppEven
 (`research_status`, `research_run`, `research_settings_reset`, `research_secrets_set`,
 `research_secrets_state`, `research_site_add`, `research_site_remove`, `research_sites_reorder`,
 `research_export`; each answers `research_unavailable` when the engine could not be built, and the
-rest of the app works: HA4), `session_arrange_next` in `commands/sessions.rs`, `ResearchSettingsDto`
+rest of the app works: HA4), `commands/writer.rs` (W1 `writer_note`, `writer_look_again`; W3 `writer_status`, `writer_request(session_id, origin)` with origins `next_to_review` / `all_checked` / `write_texts`, `writer_finding_answer`, `writer_finding_dismiss`; W4 `writer_settings_get`, `writer_settings_save(value)` (the whole slot; the versions rule `WriterSettings::saved_over` / `push_version`), `writer_instruction_reset(language)`, `writer_preview(language)` (built by `writer::run::request_of`, the function a run's call uses, over `writer::input::assemble`); same refusal), `session_arrange_next` in `commands/sessions.rs`, `ResearchSettingsDto`
 in `commands/settings.rs`, `researching` / `n_withheld` / `conflicts` in `commands/publish.rs`.
-Frontend: wrapper `apps/desktop/src/services/research.ts`. There is **no `features/research`
+Frontend: wrapper `apps/desktop/src/services/research.ts` (W1: `services/writer.ts`; the note block
+`features/form/ProductNote.tsx` under the panel's steps, re-read with the panel's status; W3: `features/form/WriterBlock.tsx`
+(`useWriterStatus`, re-read with the form's research status, and the block at the top of `AiReviewTab`),
+`features/form/WriterPanel.tsx` (the panel's Writer block), the **Write texts** button in `FormDialog`'s Product step,
+and `requestTexts` in `features/sessions/reviewQueue.ts`, which `AiReviewTab`'s "Next to review →", `Header`'s "Next to
+review" and `FormDialog` (closing Details or unmounting while AI review shows "All checked ✓") call fire-and-forget). W4: `features/settings/WriterSection.tsx` (with `WriterInstruction.tsx`, `WriterExamples.tsx`; loaded when first opened, saved whole by **Save writer settings**) and the nav entry "Writer" after "Research".
+**Title suggestion and publish (W3, writer master plan WC4.7–8).** The writer writes `product.title` as an
+attribute row; `form_get` shows it in place of `items.title` while it is `ai` + `suggested` (or `accepted` and equal to
+`items.title`). `accept` / `accept_all` also set `items.title` in the same undo step; `keep_previous` deletes the row;
+`clear` on a shown suggestion clears the row only; a human title edit deletes the row (feedback `edited`). Undo and
+redo restore the row and `items.title` together (`history.rs` checks the title beside its row). `partition` skips
+every `product.title` row and `partition_in` passes the built-in definitions too, so a description with a prior is a
+real conflict (held). There is **no `features/research`
 folder**: the panel and pills are in `features/form/` (`ResearchPanel.tsx`, `AiPopover.tsx`,
 `AiPill.tsx`), the settings in `features/settings/` (`ResearchSection.tsx`, `ShopFieldPicker.tsx`),
 conflicts in `features/publish/ConflictList.tsx`, the button in `features/shell/Header.tsx`, the

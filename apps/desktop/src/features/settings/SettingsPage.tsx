@@ -15,6 +15,7 @@ import { cameraSecretsSet } from '@/services/camera';
 import { StorageSection } from './StorageSection';
 import { StockSection } from './StockSection';
 import { ResearchSection } from './ResearchSection';
+import { WriterSection } from './WriterSection';
 import { SettingsNav, type SettingsSection } from './SettingsNav';
 import { TemplatesSection } from './TemplatesSection';
 
@@ -239,6 +240,7 @@ export function SettingsPage() {
     </Dialog>
     <section data-section="storage" data-active={section === 'storage'}><StorageSection /></section>
     {saved?.research && <section data-section="research" data-active={section === 'research'}><ResearchSection research={saved.research} shopDomain={saved.integration?.shop_domain || null} /></section>}
+    {saved?.research && <section data-section="writer" data-active={section === 'writer'}><WriterSection research={saved.research} active={section === 'writer'} /></section>}
     <section data-section="shooting-templates" data-active={section === 'shooting-templates'}><TemplatesSection active={section === 'shooting-templates'} /></section>
     </div>
   </main></>;

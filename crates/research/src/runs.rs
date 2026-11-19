@@ -30,6 +30,9 @@ use crate::{
     store::{self, NewRun, RunRow},
 };
 
+/// The error of a queued look or writer run cancelled by Research / Run again (WC1.9).
+pub const STARTED_AGAIN: &str = "research started again";
+
 /// The instant of each session's last change, used for the missing-source wait.
 #[derive(Debug, Default)]
 pub struct LiveState {
@@ -53,7 +56,7 @@ impl ResearchService {
     }
 
     /// The item of a session (`None`: the Unassigned session).
-    fn session_item(&self, session_id: i64) -> Result<Option<i64>> {
+    pub(crate) fn session_item(&self, session_id: i64) -> Result<Option<i64>> {
         self.store
             .research_transaction(|tx| Ok(tx.session(session_id)?.item_id))
     }
@@ -237,7 +240,12 @@ impl ResearchService {
         Ok(first_failing(&self.prerequisite_input(item_id, &settings)?))
     }
 
-    fn insert_queued(&self, item_id: i64, session_id: i64, trigger: RunTrigger) -> Result<i64> {
+    pub(crate) fn insert_queued(
+        &self,
+        item_id: i64,
+        session_id: i64,
+        trigger: RunTrigger,
+    ) -> Result<i64> {
         let now = self.clock.now_ms();
         let id = self.store.research_transaction(|tx| {
             store::insert_run(
@@ -331,9 +339,47 @@ impl ResearchService {
             .research_transaction(|tx| store::runs(tx.conn(), Some(session_id)))?;
         let needed = arranged_queues(&runs.iter().map(|r| r.state).collect::<Vec<_>>());
         if needed {
-            self.insert_queued(item_id, session_id, RunTrigger::Arranged)?;
+            self.queue_research(item_id, session_id, RunTrigger::Arranged)?;
         }
         Ok(needed)
+    }
+
+    /// Queues a research run. W1 (WC1.9): a queued look or writer run of the session (the
+    /// per-session queued index allows one queued run) becomes `cancelled` with
+    /// [`STARTED_AGAIN`], in the same transaction.
+    fn queue_research(&self, item_id: i64, session_id: i64, trigger: RunTrigger) -> Result<i64> {
+        let now = self.clock.now_ms();
+        let id = self.store.research_transaction(|tx| {
+            let conn = tx.conn();
+            for run in store::all_runs(conn, Some(session_id))? {
+                if run.state == RunState::Queued && matches!(run.trigger.as_str(), "look" | "write")
+                {
+                    store::set_run_state(
+                        conn,
+                        run.id,
+                        RunState::Cancelled,
+                        Some(STARTED_AGAIN),
+                        Some(now),
+                    )?;
+                }
+            }
+            store::insert_run(
+                conn,
+                &NewRun {
+                    item_id,
+                    session_id,
+                    trigger,
+                    state: RunState::Queued,
+                    queued_at: now,
+                    started_at: None,
+                    settings_snapshot: None,
+                    form_snapshot: None,
+                    input_snapshot: None,
+                },
+            )
+        })?;
+        self.changed(session_id);
+        Ok(id)
     }
 
     /// **Run again** (MC-A6): a queued run becomes `manual`; otherwise one `manual` run is
@@ -365,7 +411,7 @@ impl ResearchService {
                 }
             }
             None => {
-                self.insert_queued(item_id, session_id, RunTrigger::Manual)?;
+                self.queue_research(item_id, session_id, RunTrigger::Manual)?;
             }
         }
         Ok(())
@@ -392,6 +438,16 @@ impl ResearchService {
 
     fn may_start_run(&self, run: &RunRow, settings: &ResearchSettings) -> Result<MayStart> {
         let input = self.prerequisite_input(run.item_id, settings)?;
+        // W1: a look run needs only what its two photo looks call (WC1.8); W2: a writer run
+        // what its call needs (WC3 "Start").
+        let blocked = if run.trigger == RunTrigger::Look {
+            self.look_block(settings).is_some()
+        } else if run.trigger == RunTrigger::Write {
+            self.writer_block(run.item_id, settings, &self.writer_settings())?
+                .is_some()
+        } else {
+            first_failing(&input).is_some_and(|p| p.blocks_creation())
+        };
         let any_running = !self
             .store
             .research_transaction(|tx| store::runs_in_state(tx.conn(), RunState::Running))?
@@ -399,7 +455,7 @@ impl ResearchService {
         let photos = self.session_photos(run.session_id, run.item_id)?;
         Ok(may_start(&StartInput {
             trigger: run.trigger,
-            blocked: first_failing(&input).is_some_and(|p| p.blocks_creation()),
+            blocked,
             any_running,
             day_limit_reached: input.day_limit_reached,
             since_change_ms: self.since_change_ms(run.session_id)?,
@@ -447,21 +503,52 @@ impl ResearchService {
             Some(shop) => shop.facts(self.external_id(run.item_id)?.as_deref())?,
             None => ShopFacts::default(),
         };
-        let config = ResearchConfig::from_settings(settings, &facts);
+        let mut config = ResearchConfig::from_settings(settings, &facts);
         let form = form_snapshot(
             &self.store,
             self.clock.as_ref(),
             self.integration.as_deref(),
             run.item_id,
         )?;
-        let input = self.input_now(run.session_id, run.item_id, settings.observe_max_photos)?;
         let text = |value: serde_json::Result<String>| {
             value.map_err(|e| Error::InvalidData(e.to_string()))
         };
-        let (config, form, input) = (
+        let input = if run.trigger == RunTrigger::Write {
+            // W2 (WC7): the writer's settings, the instruction and examples actually sent, the
+            // origin; `stages.write`; the input the call carries (WC2).
+            let writer = self.writer_settings();
+            let origin = run
+                .settings_snapshot
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+                .and_then(|s| {
+                    s[crate::writer::run::ORIGIN_KEY]
+                        .as_str()
+                        .map(str::to_owned)
+                })
+                .unwrap_or_default();
+            config.stages.insert(
+                Stage::Write.as_str().to_owned(),
+                crate::config::StageConfig {
+                    model: writer.model.clone(),
+                    effort: writer.effort.clone(),
+                    image_long_edge: 0,
+                },
+            );
+            // W4: resolved by the function the preview uses.
+            config.writer = Some(crate::writer::config::WriterSnapshot::resolve(
+                &writer, &origin,
+            ));
+            text(serde_json::to_string(
+                &self.writer_input(run.session_id, &writer)?,
+            ))?
+        } else {
+            let input = self.input_now(run.session_id, run.item_id, settings.observe_max_photos)?;
+            text(serde_json::to_string(&input))?
+        };
+        let (config, form) = (
             text(serde_json::to_string(&config))?,
             text(serde_json::to_string(&form))?,
-            text(serde_json::to_string(&input))?,
         );
         let now = self.clock.now_ms();
         let started = self.store.research_transaction(|tx| {
@@ -479,6 +566,14 @@ impl ResearchService {
         })?;
         if started {
             self.changed(run.session_id);
+            if run.trigger == RunTrigger::Write {
+                tracing::info!(
+                    target: "psm::writer",
+                    "writer.started run={} session={}",
+                    run.id,
+                    run.session_id
+                );
+            }
         }
         Ok(started)
     }
@@ -653,7 +748,7 @@ impl ResearchService {
                         "SELECT r.session_id, r.item_id, r.state FROM research_runs r \
                          JOIN sessions s ON s.id=r.session_id \
                          WHERE r.id=(SELECT MAX(id) FROM research_runs WHERE session_id=r.session_id \
-                         AND trigger<>'browse') \
+                         AND trigger NOT IN ('browse','look','write')) \
                          AND s.published_at IS NULL AND (?1 IS NULL OR r.session_id=?1) \
                          ORDER BY r.session_id",
                     )
@@ -679,7 +774,7 @@ impl ResearchService {
                         "SELECT s.id, s.item_id FROM sessions s WHERE s.arranged_at IS NOT NULL \
                          AND s.item_id IS NOT NULL AND s.published_at IS NULL \
                          AND NOT EXISTS (SELECT 1 FROM research_runs r WHERE r.session_id=s.id \
-                         AND r.trigger<>'browse') \
+                         AND r.trigger NOT IN ('browse','look','write')) \
                          AND (?1 IS NULL OR s.id=?1) ORDER BY s.id",
                     )
                     .map_err(store::db)?;

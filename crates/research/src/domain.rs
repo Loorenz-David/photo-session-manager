@@ -57,7 +57,8 @@ pub struct PhotoRead {
     pub sure: bool,
 }
 
-/// The seven stages of a run, numbered 1–7 (MC-A7).
+/// The seven stages of a run, numbered 1–7 (MC-A7), and (W2) the writer's one stage, number 8,
+/// which is not one of the research stages ([`Stage::ALL`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Stage {
@@ -68,9 +69,12 @@ pub enum Stage {
     Labels,
     Condition,
     Decide,
+    /// W2 (WC7): the writer's call, units `texts` and `retry`, and its `result` unit.
+    Write,
 }
 
 impl Stage {
+    /// The seven research stages (never [`Stage::Write`]).
     pub const ALL: [Stage; 7] = [
         Self::Observe,
         Self::Find,
@@ -90,6 +94,7 @@ impl Stage {
             Self::Labels => 5,
             Self::Condition => 6,
             Self::Decide => 7,
+            Self::Write => 8,
         }
     }
 }
@@ -147,11 +152,17 @@ impl Stage {
             Self::Labels => "labels",
             Self::Condition => "condition",
             Self::Decide => "decide",
+            Self::Write => "write",
         }
     }
 
+    /// Every stage by its storage name, the writer's included (so a replay can rebuild a writer
+    /// call, WC7).
     pub fn parse(text: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|s| s.as_str() == text)
+        Self::ALL
+            .into_iter()
+            .chain([Self::Write])
+            .find(|s| s.as_str() == text)
     }
 }
 
@@ -209,6 +220,13 @@ pub enum RunTrigger {
     /// call's record and cost, and is not one of the session's research runs (the panel, the
     /// "Arranged" check and reuse never see it). The export includes it.
     Browse,
+    /// W1 (WC1.8): **Look again**: stages 1 and 6 only, to renew the product note after the
+    /// photos changed. Not one of the session's research runs (WC1.9: the panel, the overview,
+    /// the "Arranged" check and a research run's reuse never see it); started like `manual`.
+    Look,
+    /// W2 (WC3): a **writer** run: one text call (two with a rewrite), no photo. Not one of the
+    /// session's research runs (WC1.9); started like `manual`, without the source wait.
+    Write,
 }
 
 stored_names!(RunTrigger {
@@ -217,7 +235,19 @@ stored_names!(RunTrigger {
     FollowUp => "follow_up",
     Arranged => "arranged",
     Browse => "browse",
+    Look => "look",
+    Write => "write",
 });
+
+impl RunTrigger {
+    /// W1 (WC1.5): the runs whose stage 1 and stage 6 outputs hold a product note.
+    pub fn looks_at_photos(self) -> bool {
+        matches!(
+            self,
+            Self::Arranged | Self::Manual | Self::Auto | Self::FollowUp | Self::Look
+        )
+    }
+}
 
 /// The kind of a trace step (08A §8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

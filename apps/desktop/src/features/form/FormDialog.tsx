@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, ClipboardList, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ClipboardList, PenLine, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ActionButton } from '@/components/ui/action-button';
@@ -28,6 +28,8 @@ import { setItemType, type Item } from '@/services/items';
 import type { Photo } from '@/services/photos';
 import { onResearchChanged } from '@/services/events';
 import { researchStatus, runResearch, type ResearchStatus } from '@/services/research';
+import { writerRequest } from '@/services/writer';
+import { requestTexts } from '@/features/sessions/reviewQueue';
 import { displayOrder } from '@/features/workspace/order';
 import { CustomizeMode } from './CustomizeMode';
 import { IdentityEditor } from './IdentityEditor';
@@ -40,6 +42,7 @@ import { ResearchPanel } from './ResearchPanel';
 import { ReviewList } from './ReviewList';
 import { REVIEW_LABEL, REVIEW_STEP, STEP_LABEL, StepTabs, type Step } from './StepTabs';
 import { StockFields } from './StockFields';
+import { useWriterStatus } from './WriterBlock';
 import { isEmptyValue, storedValue, useFormState, type SaveState } from './useFormState';
 
 const STEPS: Group[] = ['details', 'condition', 'product'];
@@ -166,6 +169,8 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [research, setResearch] = useState<{ open: boolean; focus: string | null }>({ open: false, focus: null });
   const researchState = useResearchStatus(sessionId, () => void state.reload());
+  // W3: the writer's state, re-read with the research status (every writer change emits `research_changed`).
+  const writer = useWriterStatus(sessionId, researchState.status);
   /** A6: the field chosen in the "to review" list; `n` changes on every choice so the same field opens again. */
   const [reveal, setReveal] = useState<{ key: string | null; n: number }>({ key: null, n: 0 });
   const actionQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -248,6 +253,20 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   // first read, so moving between steps afterwards is the owner's.
   const landed = useRef(!reviewFirst || Boolean(position));
   const waitingSuggestions = reviewEntries.length;
+  // W3 (WC3): AI review shows "All checked ✓" (every AI suggestion checked, research not running); closing Details or
+  // leaving the session page then asks the writer for the texts, once, without a word to the owner.
+  const researchRunning = researchState.status?.run?.state === 'running' || researchState.status?.run?.state === 'queued';
+  const allChecked = !!form && reviewEntries.length === 0 && aiFields.length > 0 && !researchRunning;
+  const allCheckedRef = useRef(allChecked);
+  allCheckedRef.current = allChecked;
+  const writerAsked = useRef(false);
+  const askWhenAllChecked = useRef(() => {});
+  askWhenAllChecked.current = () => {
+    if (writerAsked.current || !allCheckedRef.current || sessionId === undefined) return;
+    writerAsked.current = true;
+    requestTexts(sessionId, 'all_checked');
+  };
+  useEffect(() => () => askWhenAllChecked.current(), []);
   useEffect(() => {
     if (landed.current || !form) return;
     landed.current = true;
@@ -309,6 +328,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
   async function saveAndClose() {
     if (closing.current) return;
     closing.current = true;
+    askWhenAllChecked.current();
     const titleEdited = state.isEdited(PRODUCT_TITLE);
     await Promise.all(state.fields.filter(field => field.definition.key in conflictDraftsRef.current).map(commitConflict));
     await state.flush();
@@ -439,8 +459,28 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                   onSeeResearch={key => openResearch(key)}
                   onShowField={showField}
                   onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}
-                  nextToReview={review && { left: review.left, onNext: () => { close(); review.onNext(); } }}
+                  nextToReview={review && { left: review.left, onNext: () => { writerAsked.current = true; close(); review.onNext(); } }}
+                  sessionId={sessionId}
+                  writer={sessionId !== undefined ? writer : undefined}
                 />
+              )}
+              {form && !reading && step === 'product' && sessionId !== undefined && (
+                // W3 (WC3): the writer drafts the title, description and condition report again, whenever the owner likes.
+                <div className="flex items-center gap-3 rounded-lg border border-dashed px-3 py-2" data-write-texts>
+                  <p className="mr-auto text-xs text-muted-foreground">The writer drafts the title, description and condition report from the fields you checked. They arrive in AI review.</p>
+                  <ActionButton size="sm" variant="secondary" className="text-(--ai-foreground)" action={async () => {
+                    try {
+                      const answer = await writerRequest(sessionId, 'write_texts');
+                      if (answer.queued) toast.success('Writing texts. They arrive in AI review.');
+                      else if (answer.reason) toast.error(answer.reason.sentence);
+                    } catch (error) {
+                      toast.error(`Could not write texts: ${(error as Error).message}`);
+                    }
+                    await writer.reload();
+                  }}>
+                    <PenLine /> Write texts
+                  </ActionButton>
+                </div>
               )}
               {!reading && group && group.fields.length === 0 && (
                 <p className="text-sm text-muted-foreground">No fields in this step. Use Customize fields to add some.</p>
@@ -478,6 +518,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
             </section>
             {research.open && (
               <ResearchPanel
+                sessionId={sessionId}
                 status={researchState.status}
                 fields={state.fields}
                 onRun={async () => {
@@ -493,6 +534,7 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
                 onFocus={focus => setResearch(current => ({ ...current, focus }))}
                 onAcceptAll={() => act(() => acceptAllSuggestions(item.id), 'Could not accept')}
                 onClose={() => setResearch({ open: false, focus: null })}
+                writer={writer.status}
               />
             )}
           </div>

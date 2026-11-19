@@ -141,6 +141,41 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   `docs/implementation/plans/R11_research_on_arranged.md`, `R12_research_cost.md` and
   `R13_research_chosen_fields.md`**; the later entry wins (rows in the table at the end of this file).
 
+## Publication writer (book `08C`; the code is `crates/research/src/writer`, `docs/implementation/master_plan_writer.md`)
+What the person sees (W1–W4; the search texts come in W5).
+- **What it does.** A second kind of run in the research engine drafts the item's **title**, **description** and
+  **condition report** (`custom.condition_report_description` by default) from the fields the writer may see (Details
+  and Condition, no prices), research's photo note with the owner's decisions over it, and the titles of matching
+  listings. One text call, no images (HW4); a deterministic post-check (banned words and patterns, lengths, damage
+  named, grade word, stability, names and years only from fields) with one rewrite; a text that still fails arrives
+  `low` with a "Check: …" line.
+- **When it runs.** By itself when the owner presses **Next to review** (AI review tab or header) or closes Details
+  / leaves the session while AI review shows **All checked ✓**: once per session (a failed or cancelled run may
+  be retried), never beside research of the session, never with a toast. **Write texts** in the Product step writes
+  again whenever the owner likes and shows why when it cannot ("Research is still working on this session; write
+  texts when it finishes", "Add the model key in Settings → Research", …).
+- **In AI review.** The texts arrive as suggestions like research's (a long text shows the previous text and the
+  suggestion as paragraphs; Accept / Keep previous or Dismiss / Edit). The writer's **questions** sit above them with
+  an answer box (answering writes the texts again, without photos; the answer is kept for the item) and its
+  **notes** with Dismiss (a dismissed note never comes back; HW3: what the owner decided is never questioned again).
+  While it writes the tab says "Writing texts…".
+- **The title.** A title suggestion changes the item's title only when the owner accepts it (undo brings the old
+  one back); until then the shop keeps the old title, even at publish. Typing a title removes the suggestion.
+- **At publish.** A writer description that replaces the shop's description is a conflict: the item waits until the
+  owner chooses (as research's conflicts do). Clean texts are `medium`, flagged ones `low` (withheld at publish).
+- **Research panel.** Its own **Writer** block: what the latest write used (fields, observations, listing titles),
+  each text's reason and facts, the post-check per attempt and "Rewritten once", findings and questions, cost.
+- **Settings → Writer (W4).** Next to Settings → Research (shown when research is): model (those priced in Settings →
+  Research; a saved model without a price stays, marked "no price") and effort, language (English, Swedish), automatic
+  writing on "Next to review", the instruction of the chosen language (**Preview what is sent** shows the exact request
+  for a built-in example item under the *saved* settings; **Earlier versions**, the last 20 per language, with **Use
+  this**; **Reset to default**), the fields the writer may see (Details and Condition, prices unticked by default),
+  style examples per language, extra banned words, target lengths, one off / note / ask mode per safeguard type with
+  how often each was answered and dismissed, questions per write, the shop name for search titles. **Save** sends the
+  whole `writer` slot (validated, never rebuilds the App); the writer reads it at its next run. A changed instruction
+  keeps the text it replaced as an earlier version; an instruction or example list equal to the shipped one is stored
+  as the shipped default, so later builds' improvements reach it.
+
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |
 |---|---|

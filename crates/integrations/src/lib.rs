@@ -6,7 +6,7 @@ pub mod photo_files;
 pub mod render_output;
 pub mod session_delete;
 
-use psm_research::api::ResearchApi;
+use psm_research::{api::ResearchApi, writer::api::WriterApi};
 
 use camera::direct::StartOrder;
 use camera::runtime::{AppBinding, CameraRuntime};
@@ -107,6 +107,8 @@ pub struct App {
     pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub research: Option<Arc<dyn ResearchApi>>,
+    /// W1: the writer's surface, the same engine as `research` (`None` exactly when it is).
+    pub writer: Option<Arc<dyn WriterApi>>,
     /// R7·U1: the research runner (its own jobs, its own thread).
     pub research_runner: Option<Arc<ResearchWiring>>,
     pub jobs: Arc<JobRunner>,
@@ -155,6 +157,8 @@ pub struct AppHandles {
     pub camera_runtime: Arc<CameraRuntime>,
     pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub research: Option<Arc<dyn ResearchApi>>,
+    /// W1: the writer's surface (the same engine as `research`).
+    pub writer: Option<Arc<dyn WriterApi>>,
     pub arrival: Arc<ArrivalService>,
     pub previews: Arc<PreviewService>,
     pub follow: Arc<CaptureOneFollow>,
@@ -209,6 +213,8 @@ impl SettingsSetContext {
             current.commerce = on_disk.commerce;
             // R7·U1: the engine reads the `research` slot live from the file; it is the current.
             current.research = on_disk.research;
+            // W3: so does the writer's.
+            current.writer = on_disk.writer;
         }
         let previous = settings_value(&current)?;
         // R7·U1: a `research` patch passes the engine's validation first; its text is the refusal.
@@ -218,6 +224,11 @@ impl SettingsSetContext {
                 None => psm_research::config::validate(research)
                     .map_err(psm_core::Error::InvalidData)?,
             }
+        }
+        // W3: a `writer` patch passes the writer's validation first; its text is the refusal.
+        if let Some(writer) = patch.get("writer") {
+            psm_research::writer::config::WriterSettings::validate(writer)
+                .map_err(psm_core::Error::InvalidData)?;
         }
         let mut next = SettingsService::set(&previous, patch)?;
         if patch.get("research").is_some() {
@@ -249,7 +260,8 @@ impl SettingsSetContext {
         Settings::set(&self.paths, &settings)?;
         let mut a = previous;
         let mut b = next;
-        for key in ["theme", "output_format", "storage", "export"] {
+        // W3: the writer's slot is read live by the engine, like `theme` it never rebuilds.
+        for key in ["theme", "output_format", "storage", "export", "writer"] {
             a[key] = serde_json::Value::Null;
             b[key] = serde_json::Value::Null;
         }
@@ -433,6 +445,7 @@ impl App {
             camera_runtime: self.camera_runtime.clone(),
             commerce: self.commerce.clone(),
             research: self.research.clone(),
+            writer: self.writer.clone(),
             arrival: self.arrival.clone(),
             previews: self.previews.clone(),
             follow: self.follow.clone(),
@@ -1168,6 +1181,9 @@ impl App {
             research: research_wiring
                 .as_ref()
                 .map(|wiring| wiring.service.clone() as Arc<dyn ResearchApi>),
+            writer: research_wiring
+                .as_ref()
+                .map(|wiring| wiring.service.clone() as Arc<dyn WriterApi>),
             research_runner: research_wiring,
             jobs,
             publish_jobs,
@@ -1810,6 +1826,15 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
                 .ok()
                 .and_then(|settings| settings.research)
         }),
+        // W3: the writer reads its slot live, as research reads its own.
+        writer_settings: {
+            let paths = parts.paths.clone();
+            Arc::new(move || {
+                Settings::open(&paths)
+                    .ok()
+                    .and_then(|settings| settings.writer)
+            })
+        },
         events: parts.events.clone(),
         wait,
     }));

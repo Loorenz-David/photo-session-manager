@@ -1104,6 +1104,10 @@ fn c9a_settings_build_shopify_adapter_with_default_condition_key_or_none() {
 #[test]
 fn c9b_schema_refresh_replaces_definitions_and_links_atomically() {
     let mut a = app();
+    // The built-in definitions (six since W6: title, description, tags, search title, search
+    // description, restoration done) besides the shop's.
+    let builtin = psm_core::services::attributes::builtin_definitions().len();
+    assert_eq!(builtin, 6);
     a.fake_shop().state.lock().unwrap().definitions = vec![
         definition("a", CoreType::Text),
         definition("b", CoreType::Integer),
@@ -1116,7 +1120,7 @@ fn c9b_schema_refresh_replaces_definitions_and_links_atomically() {
             .definitions(Some("shopify"))
             .unwrap()
             .len(),
-        6
+        builtin + 3
     );
     a.fake_shop().state.lock().unwrap().definitions = vec![
         definition("a", CoreType::Text),
@@ -1129,7 +1133,7 @@ fn c9b_schema_refresh_replaces_definitions_and_links_atomically() {
             .definitions(Some("shopify"))
             .unwrap()
             .len(),
-        5
+        builtin + 2
     );
     a.fake_shop().state.lock().unwrap().schema_error = true;
     a.restart_with_startup().unwrap();
@@ -1139,7 +1143,7 @@ fn c9b_schema_refresh_replaces_definitions_and_links_atomically() {
             .definitions(Some("shopify"))
             .unwrap()
             .len(),
-        5
+        builtin + 2
     );
     assert_eq!(a.store().definition_links("shopify").unwrap().len(), 2);
 }

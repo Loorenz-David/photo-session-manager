@@ -175,3 +175,46 @@ impl ResearchApi for ResearchService {
         ResearchService::browse_ask(self, request)
     }
 }
+
+/// W1: the writer's surface, on the same service (`master_plan_writer.md` §4 "API").
+impl crate::writer::api::WriterApi for ResearchService {
+    fn note(&self, session_id: i64) -> Result<crate::writer::note::NoteView> {
+        ResearchService::assemble(self, session_id)
+    }
+
+    fn look_again(&self, session_id: i64) -> Result<crate::writer::api::Requested> {
+        ResearchService::look_again(self, session_id)
+    }
+
+    fn request(
+        &self,
+        session_id: i64,
+        origin: crate::writer::run::Origin,
+    ) -> Result<crate::writer::api::Requested> {
+        ResearchService::writer_request(self, session_id, origin)
+    }
+
+    fn answer(&self, finding_id: i64, answer: &str) -> Result<crate::writer::api::Requested> {
+        ResearchService::writer_answer(self, finding_id, answer)
+    }
+
+    fn dismiss(&self, finding_id: i64) -> Result<()> {
+        ResearchService::writer_dismiss(self, finding_id)
+    }
+
+    fn status(&self, session_id: i64) -> Result<crate::writer::api::WriterStatus> {
+        ResearchService::writer_status(self, session_id)
+    }
+
+    fn counts(&self) -> Result<Vec<crate::writer::run::FindingCount>> {
+        ResearchService::writer_counts(self)
+    }
+
+    fn preview(
+        &self,
+        settings: &serde_json::Value,
+        language: &str,
+    ) -> Result<crate::writer::api::Preview> {
+        ResearchService::writer_preview(self, settings, language)
+    }
+}

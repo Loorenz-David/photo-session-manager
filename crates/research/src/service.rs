@@ -45,6 +45,9 @@ pub struct ResearchDeps {
     /// The integration whose definitions the form uses.
     pub integration: Option<String>,
     pub settings: SettingsSource,
+    /// W2: reads the live `writer` settings slot (W3 wires it to the settings file; until then
+    /// the app passes `Arc::new(|| None)`, the defaults).
+    pub writer_settings: SettingsSource,
     pub events: Arc<dyn EventSink>,
     pub wait: Waiter,
 }
@@ -115,6 +118,7 @@ pub struct ResearchService {
     pub(crate) shop: Option<Arc<CommerceShopFacts>>,
     pub(crate) integration: Option<String>,
     pub(crate) settings: SettingsSource,
+    pub(crate) writer_settings: SettingsSource,
     pub(crate) events: Arc<dyn EventSink>,
     /// The launch instant: the last change of every session until one is seen (MC-A6).
     pub(crate) launched: Instant,
@@ -145,6 +149,7 @@ impl ResearchService {
             shop: deps.shop,
             integration: deps.integration,
             settings: deps.settings,
+            writer_settings: deps.writer_settings,
             events: deps.events,
             state: std::sync::Mutex::new(crate::runs::LiveState::default()),
         };
@@ -152,6 +157,11 @@ impl ResearchService {
             tracing::warn!(%error, "research: could not cancel queued runs from an earlier build");
         }
         service
+    }
+
+    /// The live `writer` settings (W2).
+    pub fn writer_settings(&self) -> crate::writer::config::WriterSettings {
+        crate::writer::config::WriterSettings::from_slot((self.writer_settings)().as_ref())
     }
 
     pub fn gateway(&self) -> &CallGateway {

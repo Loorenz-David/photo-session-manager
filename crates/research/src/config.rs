@@ -17,7 +17,7 @@ use crate::{
 };
 
 /// The version of the instructions each stage sends (part of every unit identity, MC-A7).
-pub const INSTRUCTIONS_VERSION: u32 = 2;
+pub const INSTRUCTIONS_VERSION: u32 = 3;
 
 /// How many photos stage 1 looks at by default (R12·U1).
 pub const DEFAULT_OBSERVE_MAX_PHOTOS: u32 = 8;
@@ -131,6 +131,8 @@ pub struct ResearchConfig {
     pub normalise_version: u32,
     pub fingerprint_version: u32,
     pub instructions_version: u32,
+    /// W2 (WC7): a writer run's settings, instruction and examples; `None` for every other run.
+    pub writer: Option<crate::writer::config::WriterSnapshot>,
 }
 
 impl Default for ResearchConfig {
@@ -171,6 +173,7 @@ impl Default for ResearchConfig {
             normalise_version: psm_core::mechanisms::name_key::RESEARCH_NORMALISE_VERSION,
             fingerprint_version: crate::rules::fingerprint::RESEARCH_FINGERPRINT_VERSION,
             instructions_version: INSTRUCTIONS_VERSION,
+            writer: None,
         }
     }
 }

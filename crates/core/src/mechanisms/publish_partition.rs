@@ -7,6 +7,9 @@ use serde_json::Value as Json;
 use crate::domain::attribute::{AiConfidence, AiStatus, Definition, Provenance, Value};
 use crate::mechanisms::sameness::same;
 
+/// The built-in title field (its home is `items.title`, ch05).
+const PRODUCT_TITLE: &str = "product.title";
+
 fn parsed(text: &str) -> Json {
     serde_json::from_str(text).unwrap_or_else(|_| Json::String(text.to_owned()))
 }
@@ -52,14 +55,19 @@ fn origin(class: &str, row: &Value) -> Json {
 /// - left out entirely: a conflict whose key is not in the layout, and any `ai` + `suggested`
 ///   row with an `ai_prior` whose key has no definition (no type for `S`: fail closed);
 /// - frozen: every other live, valid row (a prior that is not a conflict freezes at any
-///   confidence; a row with no definition is frozen as before).
+///   confidence; a row with no definition is frozen as before);
+/// - skipped: every `product.title` row (WC4.8): the title sent is the item's title frozen at
+///   confirmation, so a title suggestion is never frozen, withheld or pending.
 pub fn partition(
     values: &[Value],
     definitions: &[Definition],
     layout: &BTreeSet<String>,
 ) -> Partition {
     let mut out = Partition::default();
-    for row in values.iter().filter(|v| v.is_live()) {
+    for row in values
+        .iter()
+        .filter(|v| v.is_live() && v.key != PRODUCT_TITLE)
+    {
         let suggested =
             row.provenance == Provenance::Ai && row.ai_status == Some(AiStatus::Suggested);
         let definition = definitions.iter().find(|d| d.key == row.key);
@@ -215,5 +223,46 @@ mod tests {
         assert_eq!(p.withheld, vec!["gone_low"]);
         assert_eq!(p.frozen.keys().cloned().collect::<Vec<_>>(), vec!["plain"]);
         assert!(!p.origin.contains_key("out") && !p.origin.contains_key("gone"));
+    }
+
+    #[test]
+    fn w3_partition_skips_every_product_title_row() {
+        let defs = vec![def("product.title"), def("k")];
+        let accepted = Value {
+            ai_status: Some(AiStatus::Accepted),
+            ..ai(
+                "product.title",
+                "Accepted title",
+                AiConfidence::Medium,
+                None,
+            )
+        };
+        let all = keys(&["product.title", "k"]);
+        for title in [
+            ai("product.title", "Low title", AiConfidence::Low, None),
+            ai("product.title", "Medium title", AiConfidence::Medium, None),
+            ai(
+                "product.title",
+                "New title",
+                AiConfidence::High,
+                Some("Shop chair"),
+            ),
+            accepted,
+            row("product.title", "Typed", Provenance::Human),
+        ] {
+            let p = partition(
+                &[title.clone(), row("k", "Oak", Provenance::Human)],
+                &defs,
+                &all,
+            );
+            assert_eq!(keys_of(&p.frozen), vec!["k"], "{title:?}");
+            assert!(p.withheld.is_empty(), "{title:?}");
+            assert!(p.pending.is_empty(), "{title:?}");
+            assert_eq!(keys_of(&p.origin), vec!["k"], "{title:?}");
+        }
+    }
+
+    fn keys_of<T>(map: &BTreeMap<String, T>) -> Vec<String> {
+        map.keys().cloned().collect()
     }
 }

@@ -6,8 +6,8 @@ use psm_core::{
     Error,
     domain::attribute::{AttributeGroup, CoreType, Definition},
     domain::publish::{
-        ConfirmedRun, DefinitionLink, RemoteIdentity, RemoteMedia, RemoteMediaStatus, StagedTarget,
-        WriteValue,
+        ConfirmedRun, DefinitionLink, RemoteIdentity, RemoteMedia, RemoteMediaStatus, Seo,
+        StagedTarget, WriteValue,
     },
     mechanisms::values::{SEVERITY_SET, canonicalize},
     ports::commerce::CommerceAdapter,
@@ -15,6 +15,7 @@ use psm_core::{
 use psm_integrations::commerce::shopify::{
     PollConfig, ShopifyAdapter, ShopifyConfig,
     adapter::description_html,
+    graphql,
     transport::HttpReply,
     type_map::{self, DIMENSION_UNITS, VOLUME_UNITS, WEIGHT_UNITS},
 };
@@ -1349,4 +1350,164 @@ fn c9g_secret_and_tokens_never_leave_the_token_request() {
     }
     let config_debug = format!("{:?}", bare_shop("custom.damage_report").adapter.config());
     assert!(clean(&config_debug), "{config_debug}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// W5·U2 (rows W5·C4–C5): the search texts, replayed from the W5 probe captures (WC8.6).
+
+/// The W5 probe's own DRAFT test product (deleted after the capture).
+const SEO_PRODUCT: &str = "gid://shopify/Product/15530896752793";
+
+struct LogBytes(Arc<std::sync::Mutex<Vec<u8>>>);
+impl std::io::Write for LogBytes {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Every log line `f` produces, through the production log writer (as p16 reads them).
+fn capture_log(f: impl FnOnce()) -> String {
+    let buffer = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let output = LogBytes(buffer.clone());
+    psm_testkit::logs::keep_log_sites_interested();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .with_writer(psm_infra::logging::redacting(move || output.clone()))
+        .without_time()
+        .with_ansi(false)
+        .finish();
+    tracing::subscriber::with_default(subscriber, f);
+    String::from_utf8(buffer.lock().unwrap().clone()).unwrap()
+}
+
+impl Clone for LogBytes {
+    fn clone(&self) -> Self {
+        LogBytes(self.0.clone())
+    }
+}
+
+#[test]
+fn w5_c4a_unset_search_texts_are_none_in_both_reads() {
+    let captured = fixture("seo_read_unset");
+    assert!(
+        captured.source.starts_with("captured:"),
+        "{}",
+        captured.source
+    );
+    let shop = shop();
+    shop.fake.replay(&captured);
+    assert_eq!(
+        shop.adapter.product_seo(SEO_PRODUCT).unwrap(),
+        Seo {
+            title: None,
+            description: None
+        }
+    );
+    // source: a declared synthetic edit of `seo_read_unset` (captured): the captured product
+    // object with the other `ProductValues` fields added; its `seo` object is unchanged.
+    let mut body = captured.body.clone();
+    let product = &mut body["data"]["product"];
+    product["title"] = json!("PSM-PROBE (test, do not publish)");
+    product["productType"] = json!("");
+    product["tags"] = json!([]);
+    product["descriptionHtml"] = json!("<p>A plain sentence describing the probe product.</p>");
+    product["metafields"] =
+        json!({"pageInfo": {"hasNextPage": false, "endCursor": null}, "nodes": []});
+    shop.fake
+        .on_graphql("ProductValues", None, vec![HttpReply::new(200, body)]);
+    let values = shop.adapter.product_values(SEO_PRODUCT).unwrap();
+    assert_eq!(values.seo_title, None);
+    assert_eq!(values.seo_description, None);
+}
+
+#[test]
+fn w5_c4b_search_texts_read_back_byte_identical_to_what_was_sent() {
+    let sent = fixture("seo_update").variables()["product"]["seo"].clone();
+    let title = sent["title"].as_str().unwrap();
+    let description = sent["description"].as_str().unwrap();
+    assert_eq!(title.chars().count(), 40);
+    assert_eq!(description.chars().count(), 140);
+    let shop = shop();
+    shop.fake.replay(&fixture("seo_read_after_update"));
+    assert_eq!(
+        shop.adapter.product_seo(SEO_PRODUCT).unwrap(),
+        Seo {
+            title: Some(title.to_owned()),
+            description: Some(description.to_owned()),
+        }
+    );
+}
+
+#[test]
+fn w5_c5a_update_seo_sends_both_fields_with_null_and_logs_the_run() {
+    let shop = shop();
+    let (_app, run) = run();
+    shop.fake.replay_any(&fixture("seo_update"));
+    let log = capture_log(|| {
+        shop.adapter
+            .update_seo(
+                &run,
+                PRODUCT,
+                &Seo {
+                    title: Some("T".into()),
+                    description: None,
+                },
+            )
+            .unwrap();
+    });
+    let sent: Vec<(String, Json)> = shop
+        .fake
+        .requests()
+        .into_iter()
+        .filter_map(|r| match r {
+            Recorded::Graphql {
+                query, variables, ..
+            } => Some((query, variables)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0].0, graphql::PRODUCT_UPDATE_SEO);
+    assert_eq!(
+        sent[0].1["product"],
+        json!({"id": PRODUCT, "seo": {"title": "T", "description": null}})
+    );
+    let line = log
+        .lines()
+        .find(|l| l.contains("shopify mutation"))
+        .unwrap_or_else(|| panic!("{log}"));
+    assert!(line.contains(&format!("run_id={}", run.run_id())), "{line}");
+    assert!(line.contains("op=\"update_seo\""), "{line}");
+}
+
+#[test]
+fn w5_c5b_a_refused_search_title_is_the_provider_error_naming_update_seo() {
+    // The capture shows Shopify stored the 75-character title whole (no userErrors), so the
+    // refusal is a declared synthetic edit of `seo_update_long_title`: its envelope with the one
+    // `userErrors` array changed.
+    let mut refused = fixture("seo_update_long_title");
+    refused.body["data"]["productUpdate"]["userErrors"] =
+        json!([{"field": ["seo", "title"], "message": "Title is too long"}]);
+    let shop = shop();
+    let (_app, run) = run();
+    shop.fake.replay_any(&refused);
+    let error = shop
+        .adapter
+        .update_seo(
+            &run,
+            SEO_PRODUCT,
+            &Seo {
+                title: Some("a".repeat(75)),
+                description: None,
+            },
+        )
+        .unwrap_err();
+    match error {
+        Error::Provider(message) => assert_eq!(message, "shopify update_seo: Title is too long"),
+        other => panic!("expected the provider error, got {other:?}"),
+    }
 }

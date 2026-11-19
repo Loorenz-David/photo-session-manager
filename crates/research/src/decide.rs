@@ -53,7 +53,7 @@ pub(crate) fn finish(ctx: &Ctx<'_>, output: Json) -> Result<ExecuteOutcome> {
     Ok(outcome)
 }
 
-fn end(ctx: &Ctx<'_>, state: RunState) -> Result<()> {
+pub(crate) fn end(ctx: &Ctx<'_>, state: RunState) -> Result<()> {
     let now = ctx.svc.clock.now_ms();
     ctx.svc.store.research_transaction(|tx| {
         store::set_run_state(tx.conn(), ctx.run.id, state, None, Some(now))

@@ -1133,6 +1133,16 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::research::research_site_remove,
         commands::research::research_sites_reorder,
         commands::research::research_export,
+        commands::writer::writer_note,
+        commands::writer::writer_look_again,
+        commands::writer::writer_status,
+        commands::writer::writer_request,
+        commands::writer::writer_finding_answer,
+        commands::writer::writer_finding_dismiss,
+        commands::writer::writer_settings_get,
+        commands::writer::writer_settings_save,
+        commands::writer::writer_instruction_reset,
+        commands::writer::writer_preview,
         commands::search::search_window_open,
         commands::search::search_web_place,
         commands::search::search_web_go,
@@ -1826,6 +1836,460 @@ mod p54_tests {
     }
 }
 
+/// W4·U1 (rows W4·C1–C5): Settings → Writer's commands. Boundary: the wired app (`TestApp` with
+/// the research fakes) through the Tauri command layer; outcomes are the answers, the saved
+/// settings file, the run and call rows and the fake model's requests.
+#[cfg(test)]
+mod w4_tests {
+    use super::*;
+    use psm_core::ports::clock::Clock;
+    use psm_research::{
+        domain::{RunTrigger, Stage},
+        fakes::FakeModel,
+        store::{self as rstore, RunRow},
+        writer::defaults::INSTRUCTION_EN,
+    };
+    use serde_json::{Value, json};
+    use std::sync::Arc;
+    use tauri::test::{
+        INVOKE_KEY, MockRuntime, get_ipc_response, mock_builder, mock_context, noop_assets,
+    };
+    use tauri::{
+        App as TauriApp, WebviewWindow,
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        webview::InvokeRequest,
+    };
+
+    const NOW_MS: i64 = 1_763_570_000_000;
+    const DESIGNER: &str = "custom.designer";
+
+    struct Wired {
+        _dir: tempfile::TempDir,
+        tauri: TauriApp<MockRuntime>,
+        w: WebviewWindow<MockRuntime>,
+        clock: Arc<psm_testkit::clock::ManualClock>,
+        model: Arc<FakeModel>,
+        store: Arc<psm_infra::sqlite::store::SqliteStore>,
+        paths: psm_infra::paths::AppPaths,
+    }
+
+    fn call(w: &WebviewWindow<MockRuntime>, cmd: &str, args: Value) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    /// The wired research app, the writer's models priced for the fake provider; `prepare` runs
+    /// on the test app before it is handed to the command layer. Returns the app and the session.
+    fn wired(prepare: impl FnOnce(&psm_testkit::TestApp, i64, i64)) -> (Wired, i64) {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        a.clock.advance(NOW_MS);
+        let mut research = psm_testkit::research_test_settings();
+        for model in ["gpt-6.1-sol", "gpt-6.1-terra"] {
+            research["prices"].as_array_mut().unwrap().push(json!({
+                "provider": FakeModel::ID, "model": model, "unit": "input_token",
+                "usd_per_million": "2", "fallback_call_usd": "0.001"
+            }));
+        }
+        a.set_research_settings(research).unwrap();
+        let (item, session) = a.items().create_local("W4-1", "", "Chair", None).unwrap();
+        let s = session.session.id;
+        let photo = a.add_photo(s, "w4-1.ARW").unwrap();
+        a.review()
+            .classify(photo.id, psm_core::domain::photo::Classification::Main)
+            .unwrap();
+        prepare(&a, s, item.id);
+        let store = a.app.store.clone();
+        let paths = a.app.paths.clone();
+        let model = a.research_fakes().model.clone();
+        let psm_testkit::TestApp {
+            dir, app, clock, ..
+        } = a;
+        let tauri = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::writer::writer_settings_get,
+                commands::writer::writer_settings_save,
+                commands::writer::writer_instruction_reset,
+                commands::writer::writer_preview,
+                commands::writer::writer_request,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri, "main", Default::default())
+            .build()
+            .unwrap();
+        (
+            Wired {
+                _dir: dir,
+                tauri,
+                w,
+                clock,
+                model,
+                store,
+                paths,
+            },
+            s,
+        )
+    }
+
+    impl Wired {
+        fn call(&self, cmd: &str, args: Value) -> Result<Value, Value> {
+            call(&self.w, cmd, args)
+        }
+        fn get(&self) -> Value {
+            self.call("writer_settings_get", json!({})).unwrap()
+        }
+        fn save(&self, value: Value) -> Result<Value, Value> {
+            self.call("writer_settings_save", json!({ "value": value }))
+        }
+        fn slot(&self) -> Option<Value> {
+            psm_infra::settings_file::Settings::open(&self.paths)
+                .unwrap()
+                .writer
+        }
+        fn runs(&self) -> Vec<RunRow> {
+            self.store
+                .research_transaction(|tx| rstore::all_runs(tx.conn(), None))
+                .unwrap()
+        }
+        fn calls(&self) -> Vec<rstore::CallRow> {
+            self.store
+                .research_transaction(|tx| rstore::calls(tx.conn(), None))
+                .unwrap()
+        }
+        /// "Write texts", then the research runner's turns until the run ends.
+        fn write(&self, s: i64) -> RunRow {
+            let requested = self
+                .call(
+                    "writer_request",
+                    json!({"sessionId": s, "origin": "write_texts"}),
+                )
+                .unwrap();
+            assert_eq!(requested["queued"], json!(true), "{requested}");
+            let state = self.tauri.state::<AppState>();
+            for _ in 0..3 {
+                self.clock.advance(1_100);
+                let now = self.clock.now_ms();
+                state.mutate(|app| app.research_tick(now)).unwrap();
+            }
+            let run = self
+                .runs()
+                .into_iter()
+                .rfind(|r| r.trigger == RunTrigger::Write)
+                .unwrap();
+            assert_eq!(run.state.as_str(), "finished", "{:?}", run.error);
+            run
+        }
+    }
+
+    /// The stored English instruction text (`null` when it is the shipped one).
+    fn with_english(mut value: Value, text: &str) -> Value {
+        value["instructions"]["English"]["text"] = json!(text);
+        value
+    }
+
+    fn reply(questions: Value) -> Value {
+        json!({
+            "texts": {
+                "title": {"text": "Danish Beech Dining Chair", "facts": [], "reason": "Fields."},
+            },
+            "findings": [],
+            "questions": questions,
+        })
+    }
+
+    #[test]
+    fn w4_c1a_without_a_writer_slot_every_field_shows_its_default() {
+        let (app, _) = wired(|_, _, _| {});
+        assert_eq!(app.slot(), None);
+        let got = app.get();
+        let english = &got["instructions"]["English"];
+        assert_eq!(english["effective_instruction"], json!(INSTRUCTION_EN));
+        assert_eq!(english["is_default"], json!(true));
+        assert_eq!(english["text"], Value::Null);
+        assert_eq!(english["versions"], json!([]));
+        assert_eq!(got["instructions"]["Swedish"]["is_default"], json!(true));
+        let zero = json!({"answered": 0, "dismissed": 0});
+        assert_eq!(
+            got["counts"],
+            json!({
+                "field_vs_photos": zero, "field_vs_field": zero, "field_vs_listings": zero,
+                "missing_in_text": zero, "text_vs_facts": zero,
+            })
+        );
+        let names = |language: &str| -> Vec<Value> {
+            got["examples"][language]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|e| e["name"].clone())
+                .collect()
+        };
+        assert_eq!(names("English"), [json!("A"), json!("B"), json!("C")]);
+        assert_eq!(names("Swedish"), [json!("D")]);
+        let mut rest = got.as_object().unwrap().clone();
+        for key in ["instructions", "examples", "counts"] {
+            rest.remove(key);
+        }
+        assert_eq!(
+            Value::Object(rest),
+            json!({
+                "auto": true,
+                "language": "English",
+                "model": "gpt-6.1-sol",
+                "effort": "medium",
+                "banned_extra": [],
+                "lengths": {
+                    "title_max": 70, "description_min_words": 60, "description_max_words": 120,
+                    "condition_max_words": 45, "seo_title_max": 60, "seo_description_min": 120,
+                    "seo_description_max": 155,
+                },
+                "visible_keys": null,
+                "safeguard": {
+                    "field_vs_photos": "ask", "field_vs_field": "note",
+                    "field_vs_listings": "note", "missing_in_text": "ask", "text_vs_facts": "ask",
+                },
+                "max_questions": 3,
+                "shop_name": "",
+                "condition_report_key": "custom.condition_report_description",
+                "damage_terms": {},
+            })
+        );
+    }
+
+    #[test]
+    fn w4_c1b_the_counts_are_the_answered_and_dismissed_findings_per_type() {
+        let (app, _) = wired(|a, s, item| {
+            a.app
+                .store
+                .research_transaction(|tx| {
+                    for (n, state) in ["answered", "answered", "dismissed", "open"]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        tx.conn()
+                            .execute(
+                                "INSERT INTO writer_findings (item_id, session_id, run_id, kind, \
+                                 type, keys, text_field, identity, text, mode, state, created_at) \
+                                 VALUES (?1, ?2, 0, 'finding', 'field_vs_field', '[]', '', ?3, \
+                                 'The era does not fit', 'note', ?4, ?5)",
+                                rusqlite::params![item, s, format!("id-{n}"), state, NOW_MS],
+                            )
+                            .unwrap();
+                    }
+                    Ok(())
+                })
+                .unwrap();
+        });
+        let counts = &app.get()["counts"];
+        assert_eq!(
+            counts["field_vs_field"],
+            json!({"answered": 2, "dismissed": 1})
+        );
+        let zero = json!({"answered": 0, "dismissed": 0});
+        for other in [
+            "field_vs_photos",
+            "field_vs_listings",
+            "missing_in_text",
+            "text_vs_facts",
+        ] {
+            assert_eq!(counts[other], zero, "{other}");
+        }
+    }
+
+    #[test]
+    fn w4_c2a_a_changed_instruction_keeps_the_text_it_replaced_with_its_time() {
+        let (app, _) = wired(|_, _, _| {});
+        app.save(with_english(app.get(), "Guide 1")).unwrap();
+        app.clock.advance(60_000);
+        let at = app.clock.now_ms();
+        let saved = app.save(with_english(app.get(), "Guide 2")).unwrap();
+        let english = &saved["instructions"]["English"];
+        assert_eq!(english["text"], json!("Guide 2"));
+        assert_eq!(english["is_default"], json!(false));
+        assert_eq!(
+            english["versions"][0],
+            json!({"saved_at": at, "text": "Guide 1"})
+        );
+        let slot = app.slot().unwrap();
+        assert_eq!(slot["instructions"]["English"]["text"], json!("Guide 2"));
+        assert_eq!(
+            slot["instructions"]["English"]["versions"][0],
+            json!({"saved_at": at, "text": "Guide 1"})
+        );
+    }
+
+    #[test]
+    fn w4_c2c_an_unchanged_text_keeps_no_version_and_an_invalid_value_saves_nothing() {
+        let (app, _) = wired(|_, _, _| {});
+        app.save(with_english(app.get(), "Guide 1")).unwrap();
+        let versions = app.get()["instructions"]["English"]["versions"].clone();
+        let again = app.save(with_english(app.get(), "Guide 1")).unwrap();
+        assert_eq!(again["instructions"]["English"]["versions"], versions);
+        let before = std::fs::read(app.paths.settings()).unwrap();
+        let mut german = app.get();
+        german["language"] = json!("German");
+        let error = app.save(german).unwrap_err();
+        assert!(
+            error["message"].as_str().unwrap().contains("language"),
+            "{error}"
+        );
+        assert_eq!(std::fs::read(app.paths.settings()).unwrap(), before);
+    }
+
+    #[test]
+    fn w4_c3a_reset_returns_to_the_shipped_instruction_keeping_the_saved_text() {
+        let (app, _) = wired(|_, _, _| {});
+        app.save(with_english(app.get(), "Guide 2")).unwrap();
+        let reset = app
+            .call("writer_instruction_reset", json!({"language": "English"}))
+            .unwrap();
+        let english = &reset["instructions"]["English"];
+        assert_eq!(english["text"], Value::Null);
+        assert_eq!(english["effective_instruction"], json!(INSTRUCTION_EN));
+        assert_eq!(english["is_default"], json!(true));
+        assert_eq!(english["versions"][0]["text"], json!("Guide 2"));
+        assert_eq!(
+            app.slot().unwrap()["instructions"]["English"]["text"],
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn w4_c4a_the_preview_is_the_request_for_the_example_item_under_the_saved_settings() {
+        let (app, _) = wired(|_, _, _| {});
+        let mut value = with_english(app.get(), "Guide 2");
+        value["shop_name"] = json!("Beyo Vintage");
+        app.save(value).unwrap();
+        let preview = app
+            .call("writer_preview", json!({"language": "English"}))
+            .unwrap();
+        let instructions = preview["instructions"].as_str().unwrap();
+        assert!(instructions.starts_with("Guide 2"), "{instructions}");
+        assert!(instructions.contains("Example A"), "{instructions}");
+        let input: Value = serde_json::from_str(preview["input"].as_str().unwrap()).unwrap();
+        assert!(input["texts"].as_array().is_some_and(|t| !t.is_empty()));
+        let values: Vec<&str> = input["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["value"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            values,
+            [
+                "dining chair",
+                "Børge Mogensen",
+                "FDB Møbler",
+                "J39",
+                "1960s",
+                "Denmark",
+                "solid beech, papercord",
+                "W 49 D 46 H 78, seat 45",
+                "light scratches",
+                "stable",
+                "sanded, oiled, seat rewoven",
+                "photo 4 shows scratch",
+            ]
+        );
+        assert_eq!(input["shop_name"], json!("Beyo Vintage"));
+        let schema: Value = serde_json::from_str(preview["schema"].as_str().unwrap()).unwrap();
+        for key in ["texts", "findings", "questions"] {
+            assert!(schema["properties"].get(key).is_some(), "{key}: {schema}");
+        }
+    }
+
+    #[test]
+    fn w4_c4b_the_preview_makes_no_run_no_call_and_no_model_request() {
+        let (app, _) = wired(|_, _, _| {});
+        app.save(with_english(app.get(), "Guide 2")).unwrap();
+        app.model.clear_requests();
+        app.call("writer_preview", json!({"language": "English"}))
+            .unwrap();
+        assert!(app.runs().is_empty());
+        assert!(app.calls().is_empty());
+        assert!(app.model.requests().is_empty());
+    }
+
+    #[test]
+    fn w4_c5a_the_run_sees_only_the_saved_fields_and_asks_at_most_the_saved_number() {
+        let (app, s) = wired(|_, _, _| {});
+        let mut value = app.get();
+        value["visible_keys"] = json!([DESIGNER]);
+        value["max_questions"] = json!(1);
+        app.save(value).unwrap();
+        app.model.reply(
+            Stage::Write,
+            "texts",
+            reply(json!([
+                {"keys": [DESIGNER], "text": "Who designed it?"},
+                {"keys": [DESIGNER], "text": "Is there a maker's mark?"},
+                {"keys": [DESIGNER], "text": "Which year was it made?"},
+            ])),
+        );
+        let run = app.write(s);
+        let input: Value = serde_json::from_str(run.input_snapshot.as_deref().unwrap()).unwrap();
+        let keys: Vec<&str> = input["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["key"].as_str().unwrap())
+            .collect();
+        assert_eq!(keys, [DESIGNER]);
+        let asks: i64 = app
+            .store
+            .research_transaction(|tx| {
+                Ok(tx
+                    .conn()
+                    .query_row(
+                        "SELECT COUNT(*) FROM writer_findings WHERE run_id=?1 AND mode='ask'",
+                        [run.id],
+                        |r| r.get(0),
+                    )
+                    .unwrap())
+            })
+            .unwrap();
+        assert_eq!(asks, 1);
+    }
+
+    #[test]
+    fn w4_c5b_the_run_calls_the_saved_model_and_effort() {
+        let (app, s) = wired(|_, _, _| {});
+        let mut value = app.get();
+        value["model"] = json!("gpt-6.1-terra");
+        value["effort"] = json!("low");
+        app.save(value).unwrap();
+        app.model.reply(Stage::Write, "texts", reply(json!([])));
+        let run = app.write(s);
+        let calls: Vec<_> = app
+            .calls()
+            .into_iter()
+            .filter(|c| c.run_id == run.id)
+            .collect();
+        assert!(!calls.is_empty());
+        for c in calls {
+            assert_eq!(
+                (c.model.as_str(), c.effort.as_str()),
+                ("gpt-6.1-terra", "low")
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -2441,5 +2905,141 @@ mod p29_tests {
         assert_eq!(error["code"], "needs_review");
         assert_eq!(error["data"]["photos"], "Main 02");
         assert_eq!(error["message"], "Re-frame first: Main 02");
+    }
+}
+
+#[cfg(test)]
+mod w1_writer_command_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    /// W1·C13(c) (HW7, MA7): an app whose research engine could not be built answers
+    /// `research_unavailable` for both writer commands; the bindings carry both commands.
+    #[test]
+    fn w1_c13c_writer_commands_without_the_engine_answer_research_unavailable() {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        let s = a
+            .items()
+            .create_local("CMD-W1", "Chair", "Chair", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let psm_testkit::TestApp {
+            dir: _dir, mut app, ..
+        } = a;
+        // What `App::build` leaves when `build_research` fails.
+        app.research = None;
+        app.writer = None;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::writer::writer_note,
+                commands::writer::writer_look_again,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        for cmd in ["writer_note", "writer_look_again"] {
+            let error = call(&w, cmd, json!({"sessionId": s})).unwrap_err();
+            assert_eq!(error["code"], "research_unavailable", "{cmd}: {error}");
+        }
+        let bindings = include_str!("../../src/services/bindings.ts");
+        for name in [
+            "writerNote",
+            "writerLookAgain",
+            "writer_note",
+            "writer_look_again",
+        ] {
+            assert!(bindings.contains(name), "binding missing {name}");
+        }
+    }
+
+    /// W3·C6(a) (HW7, MA7): without the research engine the four W3 writer commands answer
+    /// `research_unavailable`; the bindings carry all four.
+    #[test]
+    fn w3_c6a_writer_commands_without_the_engine_answer_research_unavailable() {
+        let a = psm_testkit::TestApp::with_research().unwrap();
+        let s = a
+            .items()
+            .create_local("CMD-W3", "Chair", "Chair", None)
+            .unwrap()
+            .1
+            .session
+            .id;
+        let psm_testkit::TestApp {
+            dir: _dir, mut app, ..
+        } = a;
+        app.research = None;
+        app.writer = None;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::writer::writer_status,
+                commands::writer::writer_request,
+                commands::writer::writer_finding_answer,
+                commands::writer::writer_finding_dismiss,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        for (cmd, args) in [
+            ("writer_status", json!({"sessionId": s})),
+            (
+                "writer_request",
+                json!({"sessionId": s, "origin": "write_texts"}),
+            ),
+            (
+                "writer_finding_answer",
+                json!({"findingId": 1, "answer": "Teak"}),
+            ),
+            ("writer_finding_dismiss", json!({"findingId": 1})),
+        ] {
+            let error = call(&w, cmd, args).unwrap_err();
+            assert_eq!(error["code"], "research_unavailable", "{cmd}: {error}");
+        }
+        let bindings = include_str!("../../src/services/bindings.ts");
+        for name in [
+            "writerStatus",
+            "writerRequest",
+            "writerFindingAnswer",
+            "writerFindingDismiss",
+            "writer_status",
+            "writer_request",
+            "writer_finding_answer",
+            "writer_finding_dismiss",
+        ] {
+            assert!(bindings.contains(name), "binding missing {name}");
+        }
     }
 }

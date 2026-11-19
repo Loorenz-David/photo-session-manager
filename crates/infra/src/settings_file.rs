@@ -36,6 +36,10 @@ pub struct Settings {
     pub integration: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub research: Option<serde_json::Value>,
+    /// W3 (`master_plan_writer.md` §4 Settings): the writer's opaque slot, read live by the
+    /// research engine (`psm_research::writer::config::WriterSettings::from_slot`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub writer: Option<serde_json::Value>,
     /// 10F §4: the minimum free space (Settings → Storage; default 20 GB).
     pub storage: StorageSettings,
     /// Changelog 47 (P69): `export.prepare_masters` — masters prepared once a session is Ready.
@@ -90,6 +94,7 @@ impl Default for Settings {
             sku_prefix: None,
             integration: None,
             research: None,
+            writer: None,
             storage: StorageSettings::default(),
             export: ExportSettings::default(),
             commerce: CommerceSettings::default(),

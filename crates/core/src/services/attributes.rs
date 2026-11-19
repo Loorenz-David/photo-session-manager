@@ -36,14 +36,65 @@ pub const CORE_INTEGRATION: &str = "core";
 pub const PRODUCT_TITLE: &str = "product.title";
 pub const PRODUCT_DESCRIPTION: &str = "product.description";
 pub const PRODUCT_TAGS: &str = "product.tags";
+pub const PRODUCT_SEO_TITLE: &str = "product.seo_title";
+pub const PRODUCT_SEO_DESCRIPTION: &str = "product.seo_description";
+/// WC8-R: the workshop's restoration steps, app-local (never published, never researched).
+pub const LOCAL_RESTORATION: &str = "local.restoration";
+/// WC8-R: the choices of [`LOCAL_RESTORATION`], canonical English, in this order.
+pub const RESTORATION_CHOICES: [&str; 14] = [
+    "Cleaned",
+    "Sanded",
+    "Oiled",
+    "Waxed",
+    "Lacquered",
+    "Joints re-glued",
+    "Veneer repaired",
+    "New foam",
+    "New webbing",
+    "New springs",
+    "New papercord",
+    "New fabric",
+    "New leather",
+    "Rewired",
+];
 const PRODUCT_FIELDS: [&str; 3] = [PRODUCT_TITLE, PRODUCT_DESCRIPTION, PRODUCT_TAGS];
 
-/// Title, description and tags: always present, never removable (ch08 §Groups and presets).
+/// WC8.1: built-in keys every step of their group shows even when a stored layout lacks them
+/// (appended at the end of the step, in this order). W6: `local.restoration` (Condition, WC8-R).
+const ALWAYS_PRESENT: [(AttributeGroup, &str); 3] = [
+    (AttributeGroup::Product, PRODUCT_SEO_TITLE),
+    (AttributeGroup::Product, PRODUCT_SEO_DESCRIPTION),
+    (AttributeGroup::Condition, LOCAL_RESTORATION),
+];
+
+/// WC8.1: `layout` (one step of `group`) with every always-present key of `group` it lacks
+/// appended at its end, in [`ALWAYS_PRESENT`] order, without a default.
+fn append_always_present(group: AttributeGroup, mut layout: Vec<PresetField>) -> Vec<PresetField> {
+    for (always_group, key) in ALWAYS_PRESENT {
+        if always_group == group && !layout.iter().any(|f| f.key == key) {
+            layout.push(PresetField {
+                key: key.to_owned(),
+                default: None,
+            });
+        }
+    }
+    layout
+}
+
+/// Title, description and tags: always present, never removable (ch08 §Groups and presets); the
+/// two search texts (WC8.1) are always present too; so is "Restoration done" in the Condition
+/// step (WC8-R).
 pub fn builtin_definitions() -> Vec<Definition> {
-    [
+    let mut all: Vec<Definition> = [
         (PRODUCT_TITLE, "Title", CoreType::Text),
         (PRODUCT_DESCRIPTION, "Description", CoreType::RichText),
         (PRODUCT_TAGS, "Tags", CoreType::Tags),
+        (PRODUCT_SEO_TITLE, "Search title", CoreType::Text),
+        (
+            PRODUCT_SEO_DESCRIPTION,
+            "Search description",
+            CoreType::Textarea,
+        ),
     ]
     .into_iter()
     .map(|(key, label, core_type)| Definition {
@@ -57,14 +108,34 @@ pub fn builtin_definitions() -> Vec<Definition> {
         description: None,
         writable: true,
     })
-    .collect()
+    .collect();
+    all.push(Definition {
+        integration: CORE_INTEGRATION.into(),
+        key: LOCAL_RESTORATION.into(),
+        label: "Restoration done".into(),
+        core_type: CoreType::MultiChoice,
+        choices: RESTORATION_CHOICES
+            .iter()
+            .map(|c| (*c).to_owned())
+            .collect(),
+        validations: serde_json::json!({}),
+        group: AttributeGroup::Condition,
+        description: None,
+        writable: true,
+    });
+    all
 }
 
+/// The built-in Product fields, the integration's definitions, then the built-in fields of the
+/// other steps (so a step without a stored preset ends with them, as WC8.1 places them).
 fn active_definitions(tx: &dyn StoreTx, integration: Option<&str>) -> Result<Vec<Definition>> {
-    let mut all = builtin_definitions();
+    let (mut all, rest): (Vec<_>, Vec<_>) = builtin_definitions()
+        .into_iter()
+        .partition(|d| d.group == AttributeGroup::Product);
     if let Some(integration) = integration {
         all.extend(tx.attribute_definitions(integration)?);
     }
+    all.extend(rest);
     Ok(all)
 }
 
@@ -163,7 +234,11 @@ pub fn layout_keys(
     let mut out = std::collections::BTreeSet::new();
     for group in AttributeGroup::ALL {
         match resolve_preset(tx, item_type, group)? {
-            Some(preset) => out.extend(preset.layout.into_iter().map(|f| f.key)),
+            Some(preset) => out.extend(
+                append_always_present(group, preset.layout)
+                    .into_iter()
+                    .map(|f| f.key),
+            ),
             None => out.extend(
                 definitions
                     .iter()
@@ -193,8 +268,69 @@ fn title_value(item: &Item) -> Option<Value> {
     })
 }
 
-/// The link integration of the linked product the form reads (the store keys links by it).
-const LINK_INTEGRATION: &str = "shopify";
+/// The text of a `product.title` row's value (a canonical JSON string), `None` when it is not one.
+fn title_text(row: &Value) -> Option<String> {
+    row.json().and_then(|j| j.as_str().map(str::to_owned))
+}
+
+/// WC4.7: the `product.title` row the form shows in place of `items.title`: a live `ai` row that
+/// is `suggested`, or `accepted` with the value equal to `items.title`.
+fn shown_title_row<'v>(row: Option<&'v Value>, item: &Item) -> Option<&'v Value> {
+    row.filter(|r| {
+        r.is_live()
+            && r.provenance == Provenance::Ai
+            && match r.ai_status {
+                Some(AiStatus::Suggested) => true,
+                Some(AiStatus::Accepted) => title_text(r).as_deref() == Some(item.title.as_str()),
+                _ => false,
+            }
+    })
+}
+
+/// WC4.7: an accepted `product.title` suggestion becomes the item's title in the same
+/// transaction and the same undo step as the row (undo restores both).
+fn title_follows(
+    tx: &mut dyn StoreTx,
+    act: &mut Act,
+    item_id: i64,
+    accepted: &Value,
+    now: i64,
+) -> Result<()> {
+    let Some(text) = title_text(accepted) else {
+        return Ok(());
+    };
+    let before = tx.item(item_id)?.title;
+    if before != text {
+        tx.update_item_title(item_id, &text, now)?;
+        act.fields.push(FieldChange {
+            key: PRODUCT_TITLE.into(),
+            before: FieldState::Title(before),
+            after: FieldState::Title(text),
+        });
+    }
+    Ok(())
+}
+
+/// The item's title as a `human` value row (not stored): what a title action leaves.
+fn typed_title(item_id: i64, title: &str, at: i64) -> Value {
+    Value {
+        item_id,
+        key: PRODUCT_TITLE.to_owned(),
+        value: canonical_json(&Json::String(title.to_owned())),
+        valid: true,
+        provenance: Provenance::Human,
+        ai_confidence: None,
+        ai_status: None,
+        ai_reason: None,
+        ai_sources: None,
+        ai_prior: None,
+        updated_at: at,
+    }
+}
+
+/// The link integration of the linked product the form reads (the store keys links by it). The
+/// writer uses it too (W5·U4: one constant for the title's link base).
+pub const LINK_INTEGRATION: &str = "shopify";
 
 /// No value: null, a blank string, an empty list or object.
 fn is_empty_json(value: &Json) -> bool {
@@ -454,7 +590,7 @@ impl<'a> AttributesService<'a> {
                 "the built-in definitions cannot be replaced".into(),
             ));
         }
-        let mut seen: HashSet<String> = PRODUCT_FIELDS.iter().map(|k| k.to_string()).collect();
+        let mut seen: HashSet<String> = builtin_definitions().into_iter().map(|d| d.key).collect();
         let mut prepared = Vec::with_capacity(definitions.len());
         for mut definition in definitions {
             if !seen.insert(definition.key.clone()) {
@@ -542,40 +678,65 @@ impl<'a> AttributesService<'a> {
         Ok(result)
     }
 
-    /// Sets the item's title, the single home of `product.title` (ch05): `items.title`, not a value
-    /// row. `None` empties it. A title equal to the stored one is not written (H4); a write sets the
-    /// item's sessions' activity and leaves `change_seq` alone (MC-4, MC-6).
+    /// Sets the item's title, the single home of `product.title` (ch05): `items.title`. `None`
+    /// empties it. A title equal to the stored one is not written (H4); a write sets the item's
+    /// sessions' activity and leaves `change_seq` alone (MC-4, MC-6). WC4.7: a human title edit
+    /// deletes the item's `product.title` row (a writer suggestion) in the same transaction and
+    /// undo step, with an `edited` feedback row when it was an `ai` suggestion or acceptance.
     fn write_title(&self, item_id: i64, title: Option<String>, action: &str) -> Result<Value> {
         let title = title.unwrap_or_default();
         let mut result = None;
         self.act(item_id, &mut |tx, ctx, act| {
             let now = ctx.now;
             let item = tx.item(item_id)?;
+            let row = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .find(|v| v.key == PRODUCT_TITLE);
+            let mut wrote_feedback = false;
+            if let Some(row) = &row {
+                tx.delete_attribute_value(item_id, PRODUCT_TITLE)?;
+                wrote_feedback = note_action(
+                    tx,
+                    ctx,
+                    act,
+                    item_id,
+                    PRODUCT_TITLE,
+                    Some(row),
+                    &typed_title(item_id, &title, now),
+                    FeedbackAction::Edited,
+                )?;
+                act.fields.push(FieldChange {
+                    key: PRODUCT_TITLE.into(),
+                    before: FieldState::Row(Some(row.clone())),
+                    after: FieldState::Row(None),
+                });
+            }
             if item.title != title {
                 tx.update_item_title(item_id, &title, now)?;
-                tx.set_item_activity(item_id, now)?;
-                act.label = format!("{action} Title");
-                act.merge = action == "Edit" && ctx.merges(item_id, PRODUCT_TITLE);
                 act.fields.push(FieldChange {
                     key: PRODUCT_TITLE.into(),
                     before: FieldState::Title(item.title.clone()),
                     after: FieldState::Title(title.clone()),
                 });
             }
+            if !act.fields.is_empty() {
+                tx.set_item_activity(item_id, now)?;
+                act.label = format!("{action} Title");
+                act.merge = action == "Edit"
+                    && row.is_none()
+                    && !wrote_feedback
+                    && ctx.merges(item_id, PRODUCT_TITLE);
+                if act.merge {
+                    ctx.update_edited_feedback(
+                        tx,
+                        PRODUCT_TITLE,
+                        &typed_title(item_id, &title, now),
+                    )?;
+                }
+            }
             let stored = tx.item(item_id)?;
-            result = Some(Value {
-                item_id,
-                key: PRODUCT_TITLE.to_owned(),
-                value: canonical_json(&Json::String(stored.title)),
-                valid: true,
-                provenance: Provenance::Human,
-                ai_confidence: None,
-                ai_status: None,
-                ai_reason: None,
-                ai_sources: None,
-                ai_prior: None,
-                updated_at: stored.updated_at,
-            });
+            result = Some(typed_title(item_id, &stored.title, stored.updated_at));
             Ok(())
         })?;
         result.ok_or_else(|| Error::InvalidData("title not stored".into()))
@@ -690,6 +851,7 @@ impl<'a> AttributesService<'a> {
     pub fn accept_all(&self, item_id: i64) -> Result<usize> {
         let mut count = 0;
         self.act(item_id, &mut |tx, ctx, act| {
+            count = 0;
             tx.item(item_id)?;
             let definitions = active_definitions(tx, self.integration)?;
             for before in tx.attribute_values(item_id)? {
@@ -720,17 +882,21 @@ impl<'a> AttributesService<'a> {
                     &after,
                     FeedbackAction::Accepted,
                 )?;
+                let title = (before.key == PRODUCT_TITLE).then(|| after.clone());
                 act.fields.push(FieldChange {
                     key: before.key.clone(),
                     before: FieldState::Row(Some(before)),
                     after: FieldState::Row(Some(after)),
                 });
+                count += 1;
+                if let Some(title) = title {
+                    title_follows(tx, act, item_id, &title, ctx.now)?;
+                }
             }
             if !act.fields.is_empty() {
                 tx.set_item_activity(item_id, ctx.now)?;
                 act.label = "Accept all suggestions".into();
             }
-            count = act.fields.len();
             Ok(())
         })?;
         Ok(count)
@@ -776,6 +942,9 @@ impl<'a> AttributesService<'a> {
                 before: FieldState::Row(Some(before)),
                 after: FieldState::Row(Some(after.clone())),
             });
+            if key == PRODUCT_TITLE {
+                title_follows(tx, act, item_id, &after, ctx.now)?;
+            }
             result = Some(after);
             Ok(())
         })?;
@@ -810,6 +979,31 @@ impl<'a> AttributesService<'a> {
             let Some(prior) = before.ai_prior.clone() else {
                 return Err(Error::InvalidValue(format!("{key} holds no conflict")));
             };
+            if key == PRODUCT_TITLE {
+                // WC4.7: the title's prior lives in `items.title`; the suggestion row is deleted.
+                let title = tx.item(item_id)?.title;
+                tx.delete_attribute_value(item_id, key)?;
+                tx.set_item_activity(item_id, ctx.now)?;
+                let kept = typed_title(item_id, &title, ctx.now);
+                note_action(
+                    tx,
+                    ctx,
+                    act,
+                    item_id,
+                    key,
+                    Some(&before),
+                    &kept,
+                    FeedbackAction::KeptPrevious,
+                )?;
+                act.label = format!("Keep previous {}", definition.label);
+                act.fields.push(FieldChange {
+                    key: key.into(),
+                    before: FieldState::Row(Some(before)),
+                    after: FieldState::Row(None),
+                });
+                result = Some(kept);
+                return Ok(());
+            }
             let after = Value {
                 item_id,
                 key: key.to_owned(),
@@ -852,8 +1046,7 @@ impl<'a> AttributesService<'a> {
     /// nothing.
     pub fn clear(&self, item_id: i64, key: &str) -> Result<()> {
         if key == PRODUCT_TITLE {
-            self.write_title(item_id, None, "Clear")?;
-            return Ok(());
+            return self.clear_title(item_id);
         }
         self.write(
             item_id,
@@ -870,6 +1063,61 @@ impl<'a> AttributesService<'a> {
             },
         )?;
         Ok(())
+    }
+
+    /// Clear on the title (WC4.7). A writer suggestion on display is dismissed: its row becomes
+    /// `cleared` (feedback `cleared`) and `items.title` is left as it is. Otherwise the item's
+    /// title is emptied, and a live `product.title` row (an accepted suggestion) is cleared with
+    /// it, in one undo step.
+    fn clear_title(&self, item_id: i64) -> Result<()> {
+        self.act(item_id, &mut |tx, ctx, act| {
+            let item = tx.item(item_id)?;
+            let row = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .find(|v| v.key == PRODUCT_TITLE)
+                .filter(Value::is_live);
+            let suggested = row.as_ref().is_some_and(|r| {
+                r.provenance == Provenance::Ai && r.ai_status == Some(AiStatus::Suggested)
+            });
+            if let Some(before) = &row {
+                let after = Value {
+                    ai_status: Some(AiStatus::Cleared),
+                    ai_prior: None,
+                    updated_at: ctx.now,
+                    ..before.clone()
+                };
+                tx.put_attribute_value(&after)?;
+                note_action(
+                    tx,
+                    ctx,
+                    act,
+                    item_id,
+                    PRODUCT_TITLE,
+                    Some(before),
+                    &after,
+                    FeedbackAction::Cleared,
+                )?;
+                act.fields.push(FieldChange {
+                    key: PRODUCT_TITLE.into(),
+                    before: FieldState::Row(Some(before.clone())),
+                    after: FieldState::Row(Some(after)),
+                });
+            }
+            if !suggested && !item.title.is_empty() {
+                tx.update_item_title(item_id, "", ctx.now)?;
+                act.fields.push(FieldChange {
+                    key: PRODUCT_TITLE.into(),
+                    before: FieldState::Title(item.title.clone()),
+                    after: FieldState::Title(String::new()),
+                });
+            }
+            if !act.fields.is_empty() {
+                tx.set_item_activity(item_id, ctx.now)?;
+                act.label = "Clear Title".into();
+            }
+            Ok(())
+        })
     }
 
     /// The item's values (cleared ones excluded), valid or not, ordered by key.
@@ -893,7 +1141,10 @@ impl<'a> AttributesService<'a> {
         let mut out = None;
         self.store.transaction(&mut |tx| {
             out = Some(match resolve_preset(tx, item_type, group)? {
-                Some(preset) => preset,
+                Some(preset) => Preset {
+                    layout: append_always_present(group, preset.layout),
+                    ..preset
+                },
                 None => Preset {
                     item_type: item_type.to_owned(),
                     group,
@@ -1008,6 +1259,18 @@ impl<'a> AttributesService<'a> {
         incoming.insert(
             PRODUCT_DESCRIPTION.into(),
             remote.description.clone().map_or(Json::Null, Json::String),
+        );
+        // WC8.2: the search texts are stored exactly as the description is.
+        incoming.insert(
+            PRODUCT_SEO_TITLE.into(),
+            remote.seo_title.clone().map_or(Json::Null, Json::String),
+        );
+        incoming.insert(
+            PRODUCT_SEO_DESCRIPTION.into(),
+            remote
+                .seo_description
+                .clone()
+                .map_or(Json::Null, Json::String),
         );
         self.store.transaction(&mut |tx| {
             let item = tx.item(item_id)?;
@@ -1276,8 +1539,7 @@ impl<'a> AttributesService<'a> {
             for group in AttributeGroup::ALL {
                 let preset = resolve_preset(tx, &item.item_type, group)?;
                 let ordered: Vec<(&Definition, Option<Json>)> = match preset {
-                    Some(preset) => preset
-                        .layout
+                    Some(preset) => append_always_present(group, preset.layout)
                         .into_iter()
                         .filter_map(|f| {
                             definitions
@@ -1308,7 +1570,14 @@ impl<'a> AttributesService<'a> {
                     .into_iter()
                     .map(|(definition, default, saved)| {
                         let value = if definition.key == PRODUCT_TITLE {
-                            title_value(&item).map(|mut value| {
+                            match shown_title_row(values.get(PRODUCT_TITLE), &item) {
+                                Some(row) => Some(row.clone()),
+                                None => title_value(&item),
+                            }
+                            .map(|mut value| {
+                                if value.provenance == Provenance::Ai {
+                                    return value;
+                                }
                                 if title_from_integration {
                                     value.provenance = Provenance::Integration;
                                 }
@@ -1358,5 +1627,69 @@ impl<'a> AttributesService<'a> {
             groups,
             item_type_from_integration,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn keys(layout: &[PresetField]) -> Vec<&str> {
+        layout.iter().map(|f| f.key.as_str()).collect()
+    }
+
+    fn layout(keys: &[&str]) -> Vec<PresetField> {
+        keys.iter()
+            .map(|k| PresetField {
+                key: (*k).to_owned(),
+                default: None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn w5_append_always_present_adds_missing_product_keys_at_the_end_in_list_order() {
+        let out = append_always_present(
+            AttributeGroup::Product,
+            layout(&[PRODUCT_TITLE, PRODUCT_DESCRIPTION, PRODUCT_TAGS]),
+        );
+        assert_eq!(
+            keys(&out),
+            [
+                PRODUCT_TITLE,
+                PRODUCT_DESCRIPTION,
+                PRODUCT_TAGS,
+                PRODUCT_SEO_TITLE,
+                PRODUCT_SEO_DESCRIPTION
+            ]
+        );
+        assert!(out[3].default.is_none() && out[4].default.is_none());
+    }
+
+    #[test]
+    fn w5_append_always_present_keeps_a_listed_key_where_it_is() {
+        let given = [
+            PRODUCT_TITLE,
+            PRODUCT_SEO_DESCRIPTION,
+            PRODUCT_DESCRIPTION,
+            PRODUCT_TAGS,
+        ];
+        let out = append_always_present(AttributeGroup::Product, layout(&given));
+        assert_eq!(
+            keys(&out),
+            [
+                PRODUCT_TITLE,
+                PRODUCT_SEO_DESCRIPTION,
+                PRODUCT_DESCRIPTION,
+                PRODUCT_TAGS,
+                PRODUCT_SEO_TITLE
+            ]
+        );
+    }
+
+    #[test]
+    fn w5_append_always_present_leaves_other_steps_alone() {
+        let out = append_always_present(AttributeGroup::Details, layout(&["custom.material"]));
+        assert_eq!(keys(&out), ["custom.material"]);
     }
 }

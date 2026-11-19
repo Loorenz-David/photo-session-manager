@@ -369,7 +369,7 @@ fn a15_c4b_instructions_model_effort_and_schema_per_stage() {
         (Stage::Read, vec!["keys"]),
         (Stage::Compare, vec!["verdict"]),
         (Stage::Labels, vec!["labels", "text"]),
-        (Stage::Condition, vec!["reads"]),
+        (Stage::Condition, vec!["note", "reads"]),
         (Stage::Decide, vec!["reasons"]),
     ];
     for (stage, top) in cases {
@@ -520,8 +520,9 @@ fn a15_c6a_full_run_with_the_openai_adapter() {
         // R12·U1: one observe call over both main photos.
         (
             OBSERVE_LUNA,
-            json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "marking_photos": []})
-                .to_string(),
+            json!({"reads": {WOODS: {"value": ["Teak"], "sure": true}}, "marking_photos": [],
+                   "note": []})
+            .to_string(),
         ),
         (
             "openai/stage_read_gpt-6-luna.json",
@@ -543,7 +544,7 @@ fn a15_c6a_full_run_with_the_openai_adapter() {
         ),
         (
             "openai/stage_condition_gpt-6-luna.json",
-            json!({"reads": {SCRATCHES: {"value": "Minor", "sure": true}}}).to_string(),
+            json!({"reads": {SCRATCHES: {"value": "Minor", "sure": true}}, "note": []}).to_string(),
         ),
         (
             "openai/image_strict_schema_gpt-6-luna.json",

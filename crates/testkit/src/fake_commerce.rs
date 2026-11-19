@@ -4,8 +4,8 @@ use psm_core::{
         attribute::Definition,
         publish::{
             ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
-            RemoteMedia, RemoteMediaStatus, RemoteValues, StagedTarget, StockChoice, StockLocation,
-            StockLocations, StockOutcome, WriteValue,
+            RemoteMedia, RemoteMediaStatus, RemoteValues, Seo, StagedTarget, StockChoice,
+            StockLocation, StockLocations, StockOutcome, WriteValue,
         },
     },
     ports::{
@@ -60,6 +60,12 @@ pub struct FakeShop {
     pub uploaded_sha: HashMap<String, String>,
     pub tags: HashMap<String, Vec<String>>,
     pub descriptions: HashMap<String, String>,
+    /// WC8: product id → its search texts (Shopify `seo`); a missing entry is unset.
+    pub seo: HashMap<String, Seo>,
+    /// WC8: every `update_seo` call's search texts, in order.
+    pub seo_writes: Vec<Seo>,
+    /// W5·C8(a): the shop stores a sent search title cut to this many characters.
+    pub seo_title_cut: Option<usize>,
     pub readback_override: Option<(String, Json)>,
     pub identity_override: Option<RemoteIdentity>,
     /// Every `fetch_image` call: (URL, long edge asked for) (P62).
@@ -75,6 +81,16 @@ pub struct FakeShop {
     pub stock: HashMap<String, StockChoice>,
     /// P65: how many times the locations were read.
     pub location_reads: usize,
+}
+
+/// WC8.2: the product's search texts as the platform answers them (blank → `None`).
+fn shop_seo(s: &FakeShop, id: &str) -> Seo {
+    let seo = s.seo.get(id).cloned().unwrap_or_default();
+    let set = |v: Option<String>| v.filter(|t| !t.trim().is_empty());
+    Seo {
+        title: set(seo.title),
+        description: set(seo.description),
+    }
 }
 
 /// The made-up CDN URL the fake shop gives a media or file id (P62; never a real host).
@@ -193,6 +209,20 @@ impl FakeCommerce {
             media: Vec::new(),
         });
         id
+    }
+    /// WC8: sets the product's search texts as the shop holds them (`None` = unset).
+    pub fn set_seo(&self, id: &str, title: Option<&str>, description: Option<&str>) {
+        self.state.lock().unwrap().seo.insert(
+            id.into(),
+            Seo {
+                title: title.map(Into::into),
+                description: description.map(Into::into),
+            },
+        );
+    }
+    /// WC8: the product's search texts as the shop holds them now.
+    pub fn seo_of(&self, id: &str) -> Seo {
+        shop_seo(&self.state.lock().unwrap(), id)
     }
     pub fn fail_after_effect(&self, op: &str) {
         self.state.lock().unwrap().fail_after = Some(op.into());
@@ -350,6 +380,7 @@ impl CommerceAdapter for FakeCommerce {
             .ok_or_else(|| Error::NotFound(id.into()))?;
         let mut attributes = s.values.get(id).cloned().unwrap_or_default();
         attributes.retain(|(key, _)| key != &self.condition_key);
+        let seo = shop_seo(&s, id);
         Ok(RemoteValues {
             title: product.title.clone(),
             item_type: product.item_type.clone(),
@@ -361,6 +392,8 @@ impl CommerceAdapter for FakeCommerce {
                     psm_integrations::commerce::shopify::adapter::description_paragraphs(html)
                 })
                 .filter(|text| !text.is_empty()),
+            seo_title: seo.title,
+            seo_description: seo.description,
             attributes,
         })
     }
@@ -815,6 +848,28 @@ impl CommerceAdapter for FakeCommerce {
             psm_integrations::commerce::shopify::adapter::description_html(paragraphs),
         );
         self.effect(run, "update_description")
+    }
+    /// WC8: one read op `product_seo`.
+    fn product_seo(&self, id: &str) -> Result<Seo> {
+        self.read("product_seo")?;
+        Ok(shop_seo(&self.state.lock().unwrap(), id))
+    }
+    /// WC8.4: stores the search texts (a title cut when `seo_title_cut` is set), then the effect
+    /// (so `fail_after_effect("update_seo")` leaves the write applied).
+    fn update_seo(&self, run: &ConfirmedRun, id: &str, seo: &Seo) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        s.seo_writes.push(seo.clone());
+        let cut = s.seo_title_cut;
+        let stored = Seo {
+            title: seo
+                .title
+                .as_ref()
+                .map(|t| cut.map_or(t.clone(), |n| t.chars().take(n).collect())),
+            description: seo.description.clone(),
+        };
+        s.seo.insert(id.into(), stored);
+        drop(s);
+        self.effect(run, "update_seo")
     }
     fn update_tags(&self, run: &ConfirmedRun, id: &str, tags: &[String]) -> Result<()> {
         self.state

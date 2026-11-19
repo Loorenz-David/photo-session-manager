@@ -1,0 +1,11 @@
+# Publication writer (book 08C, branch feature/agentic), single-track order. One runner phase each (flow.md §10; master_plan_writer.md §3).
+# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>`.
+# Each needs the one before it approved (the Tracker line of its plan file). Projection only for W5 (`projection: yes`).
+# W5 U2 needs the Shopify probe credentials of P12 (~/.psm_shopify.env) to capture the `seo` replies.
+# W6 is gated on owner card 1 (handoffs/reviewer/handoff_writer_plan_r1.md): do not start it until the answer is in its Review log.
+W1_product_note
+W2_writer_engine
+W3_writer_review
+W4_writer_settings
+W5_seo_publish
+W6_restoration_choices

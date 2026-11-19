@@ -39,7 +39,7 @@ research build has written. A scratch folder stays the sensible choice for try-o
 | Research engine, one test file | `cargo test -p psm-research --test engine <stem>::` (stems = files in `crates/research/tests/engine/`, e.g. `chosen_fields::`, `stages::`, `resume::`) |
 | Whole research crate | `cargo test -p psm-research` |
 | Research tool crate | `cargo test -p psm-research-tool` (one file: `… <stem>::`, e.g. `u4_accept::`; stems in `crates/research-tool/tests/tool/`) |
-| Research app seams | `cargo test -p psm-testkit --test suite research::<stem>::` (stems in `crates/testkit/tests/suite/research/`, e.g. `research::r11_arranged::`); harness `TestApp::with_research()` + `research_test_settings()` |
+| Research app seams | `cargo test -p psm-testkit --test suite research::<stem>::` (stems in `crates/testkit/tests/suite/research/`, e.g. `research::r11_arranged::`); harness `TestApp::with_research()` + `research_test_settings()`; W3 writer seams `research::w3_title::`, `research::w3_writer_wiring::` (the writer's default model `gpt-6.1-sol` needs a price for `FakeModel::ID` added to the research settings) |
 | Research UI | `npx vitest run src/features/form/__tests__/r6_research_panel.test.tsx` · `src/features/settings/__tests__/r13_research_fills.test.tsx` · `src/features/publish/__tests__/r6_research_publish.test.tsx` (from `apps/desktop`) |
 | Research-only lint | `cargo clippy -p psm-research --all-targets -- -D warnings` (same with `-p psm-research-tool`) · `cargo check --workspace` |
 | Sidecar (C++) | `tools/sidecar/build.sh --stub --test` (ctest; build dir `target/camera-sidecar/stub`) |
@@ -60,6 +60,7 @@ Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yy
 | Line | Meaning |
 |---|---|
 | `publish.timing item=<sku> masters_ms= outputs_ms= upload_ms= shopify_ms= total_ms= masters_reused=n/m` | one per finished publish item: wait for Capture One masters, the app's own render, upload, Shopify calls (P69) |
+| `publish.seo item=<publish item id> written=<bool>` | the publish's search-texts step (W5): `written=false` when the shop already held the frozen texts (or none were frozen, then no line); `verified=false` added when the read-back differed |
 | `capture_one.sync …` / `capture_one.variant_seen … after_ms=` | the app asked Capture One to look at the folder; how long until the variant existed (P65) |
 | `preview render deferred … attempts=n next_s=` / `variant poll deferred` | Capture One not ready yet; retrying with backoff. A16: logged on attempt 1, 2, 4, 8…; a photo Capture One does not list is asked again after up to 10 minutes |
 | `export failed` / `export stopped waiting for Capture One` | an export (or the export step of a publish) failed or gave up after the 10 min wait |
@@ -93,6 +94,8 @@ Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yy
 | `search_window.text_to_field_undone session= key=` (`psm::search`, A14) | the toast's Undo after "Put in" gave the field back what it held |
 | `search_window.page_saved item= host=` / `search_window.text_to_field session= key= chars=` (`psm::search`, A12) | a page saved; selected text put in a field (no text in the log) |
 | `search_window.ask_ai session= run= result=ok suggested=n\|failed cost_micro_usd=` / `search_window.serpapi_search …` (`psm::search`, A12) | Ask AI on selected text, or the window's own visual search, with its cost; the call itself is in the research record (`browse` run) |
+| `writer.requested session= origin=next_to_review\|all_checked\|write_texts\|answer queued= reason=` (`psm::writer`, W2/W3) | a request for the session's texts and whether it queued a `write` run (reason = the `WriterBlock` code when refused; empty when an automatic origin did nothing) |
+| `writer.started run= session=` / `writer.post_check run= attempt= hits=` / `writer.finished run= written= flagged= regenerated= findings= questions= cost_micro_usd=` (`psm::writer`) | one writer run: its start, each post-check, its end with what it wrote and what it cost |
 | `camera.event <name> {fields}` | every sidecar event, redacted |
 | `camera helper restarted for the new Capture One session` / `camera helper waits: the Capture One session is missing` | P63 document handling |
 | `storage.cleared rule=<rule> path=… bytes=…` / `storage.item_cleared item=<sku> …` / `storage.not_cleared item=<sku> missing=n` | 10F clean-up, retention clearing, Shopify verification failure |

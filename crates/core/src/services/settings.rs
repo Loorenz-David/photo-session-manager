@@ -51,6 +51,7 @@ impl SettingsService {
                 "storage",
                 "export",
                 "research",
+                "writer",
             ]
             .contains(&key.as_str())
             {
@@ -80,13 +81,14 @@ impl SettingsService {
                 next[key] = Value::Object(storage);
                 continue;
             }
-            if key == "research" {
+            if key == "research" || key == "writer" {
                 // R7·U1: the top-level fields given replace those stored; the others are kept.
-                // The research engine validates the patch before this runs.
+                // The research engine validates the patch before this runs (W3: the writer's
+                // slot likewise).
                 let Some(fields) = value.as_object() else {
-                    return Err(Error::InvalidValue("research".into()));
+                    return Err(Error::InvalidValue(key.clone()));
                 };
-                let mut research = match current.get("research") {
+                let mut research = match current.get(key.as_str()) {
                     Some(Value::Object(stored)) => stored.clone(),
                     _ => serde_json::Map::new(),
                 };

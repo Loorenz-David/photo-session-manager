@@ -60,6 +60,19 @@ Each rule names its source. When a rule here and the source disagree, the source
 | Research tests: rules as inline unit tests in `crates/research/src/rules/`; engine behaviour in `crates/research/tests/engine/<stem>.rs` and tool behaviour in `crates/research-tool/tests/tool/<stem>.rs` (**both `autotests = false`: a file needs its `mod` line in that folder's `main.rs`**); app-seam behaviour in `crates/testkit/tests/suite/research/<stem>.rs` (listed in `research/mod.rs`). Tests are named after their criterion row (`a07_c1a_<slug>`) | research master plan §0, §6.1; flow §10 | — |
 | Research track documents stay apart: `STATUS_research.md`, `backlog_research/<milestone>.md`, `phases_research.txt`, the Tracker line in each `plans/R*.md`. No `implementer: fable`; projection only where a plan says so | research master plan §0, §3; flow §10 | — |
 
+## Writer hard rules (book `08C` §2 HW1–HW7, same standing as H1–H8; `docs/implementation/master_plan_writer.md` §5 WC1–WC8)
+| Rule | Source | Where it bites in code |
+|---|---|---|
+| The writer never overwrites a `human` or accepted `ai` text and never re-suggests a text the owner cleared or kept the previous over; it writes only its requestable text keys (research still refuses all of them) | HW1, WC4 | `crates/research/src/writer/writes.rs::write_text` over `rules/write_table.rs::decide_write` |
+| `items.title` changes only by the owner's action: a title suggestion is an attribute row until accepted; the publish partition never freezes a `product.title` row (the title sent is `items.title` frozen at confirmation) | WC4.7, WC4.8 | `crates/core/src/services/attributes.rs` (`accept`, `accept_all`, `keep_previous`, `clear_title`, `write_title`), `mechanisms/publish_partition.rs::partition` |
+| Every claim comes from a `fact` field or the note; the post-check flags names, years and models absent from them | HW2, WC2, WC5 | `writer/input.rs::build`, `writer/postcheck.rs::check` |
+| What the owner decided is never questioned again; a dismissed or answered finding never comes back | HW3, WC6 | `writer/safeguard.rs::filter`, `writer/note.rs::reviewed` |
+| A writer request carries no image | HW4, WC7 | `writer/run.rs::call` (`images` empty) |
+| Texts never mention AI, the writing process or the shop's values | HW5 | the shipped instruction (`writer/defaults.rs`) |
+| Writer calls are recorded, costed and day-capped like research calls, and exported | HW6, WC7 | `gateway.rs` with `Stage::Write`, `export.rs` |
+| Without a key, network or integration the writer says why and everything else works; an automatic request ("Next to review", "All checked") never shows a toast and never holds up the owner | HW7, WC3, A19 | `writer/run.rs::writer_block`, commands answer `research_unavailable`, `requestTexts` in `features/sessions/reviewQueue.ts` |
+| At most one `write` run queued per session; none while research or a look runs on the session; automatic origins create at most one per session | WC3 | `writer/run.rs::request_decision` |
+
 ## Stack and boundaries (`CLAUDE.md`; book `11`; master plan §6.1)
 - Rust is the backend. **No Python in the product** (`11` §Processes: a Python sidecar only for a
   demonstrated need; none exists). `python3` is used only by the pipeline runner's template rendering

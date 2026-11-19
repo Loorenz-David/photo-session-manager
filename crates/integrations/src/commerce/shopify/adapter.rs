@@ -17,8 +17,8 @@ use psm_core::{
     domain::attribute::{AttributeGroup, CoreType, Definition},
     domain::publish::{
         ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
-        RemoteMedia, RemoteMediaStatus, RemoteValues, StagedTarget, StockChoice, StockLocation,
-        StockLocations, StockOutcome, WriteValue,
+        RemoteMedia, RemoteMediaStatus, RemoteValues, Seo, StagedTarget, StockChoice,
+        StockLocation, StockLocations, StockOutcome, WriteValue,
     },
     mechanisms::{upload_name, values::canonical_decimal},
     ports::{
@@ -212,6 +212,22 @@ pub fn description_html(paragraphs: &str) -> String {
     }
     flush(&mut current, &mut out);
     out
+}
+
+/// WC8.2, WC8.6: a product's `seo` object as core reads it, the one mapping of the product read
+/// and of `product_seo`. A null, blank or missing field (or a missing `seo` object) is `None`; a
+/// value is kept as Shopify returned it.
+pub fn seo_of(product: &Json) -> Seo {
+    let field = |name: &str| {
+        product["seo"][name]
+            .as_str()
+            .filter(|text| !text.trim().is_empty())
+            .map(str::to_owned)
+    };
+    Seo {
+        title: field("title"),
+        description: field("description"),
+    }
 }
 
 /// P67: the form's description (blank-line-separated paragraphs) from a product's
@@ -918,6 +934,7 @@ impl CommerceAdapter for ShopifyAdapter {
                 _ => break,
             }
         }
+        let seo = seo_of(product);
         Ok(RemoteValues {
             title: product["title"].as_str().unwrap_or_default().to_owned(),
             item_type: product["productType"].as_str().map(str::to_owned),
@@ -926,6 +943,8 @@ impl CommerceAdapter for ShopifyAdapter {
                 .as_str()
                 .map(description_paragraphs)
                 .filter(|text| !text.is_empty()),
+            seo_title: seo.title,
+            seo_description: seo.description,
             attributes,
         })
     }
@@ -1814,6 +1833,34 @@ impl CommerceAdapter for ShopifyAdapter {
             "update_tags",
             json!({ "id": external_id, "tags": tags }),
         )
+    }
+
+    /// WC8.6: `product { seo { title description } }` through [`seo_of`] (null and blank → none).
+    fn product_seo(&self, external_id: &str) -> Result<Seo> {
+        let data = self.call(graphql::PRODUCT_SEO_READ, json!({ "id": external_id }))?;
+        match data.get("product") {
+            Some(Json::Null) | None => Err(Error::NotFound(format!("product {external_id}"))),
+            Some(product) => Ok(seo_of(product)),
+        }
+    }
+
+    /// WC8.4: one `productUpdate {id, seo: {title, description}}` with both fields (a `None`
+    /// field is sent as null); `userErrors` are the provider error naming `update_seo`.
+    fn update_seo(&self, run: &ConfirmedRun, external_id: &str, seo: &Seo) -> Result<()> {
+        let op = "update_seo";
+        let data = self.mutate(
+            run,
+            op,
+            graphql::PRODUCT_UPDATE_SEO,
+            json!({ "product": {
+                "id": external_id,
+                "seo": { "title": seo.title, "description": seo.description },
+            } }),
+        )?;
+        match errors::user_errors(&data["productUpdate"]) {
+            Some(message) => Err(errors::provider(op, message)),
+            None => Ok(()),
+        }
     }
 }
 

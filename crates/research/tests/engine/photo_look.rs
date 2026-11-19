@@ -381,7 +381,7 @@ fn a26_c6b_units_of_version_1_are_not_reused() {
     assert_eq!(h.run_row(run.id).state, RunState::Finished);
     let snapshot: Json = serde_json::from_str(run.settings_snapshot.as_deref().unwrap()).unwrap();
     assert_eq!(snapshot["fingerprint_version"], json!(2));
-    assert_eq!(snapshot["instructions_version"], json!(2));
+    assert_eq!(snapshot["instructions_version"], json!(3));
     assert!(
         h.outputs(run.id)
             .iter()
@@ -467,7 +467,8 @@ fn a26_c7a_three_photos_in_one_request_with_marking_photos() {
         }),
         images.clone(),
     );
-    let answer = json!({"reads": {WOOD: {"value": "Teak", "sure": true}}, "marking_photos": [2]});
+    let answer = json!({"reads": {WOOD: {"value": "Teak", "sure": true}}, "marking_photos": [2],
+                        "note": []});
     let http = Arc::new(FakeResearchHttp::default());
     http.once(
         "POST",
@@ -493,13 +494,13 @@ fn a26_c7a_three_photos_in_one_request_with_marking_photos() {
         );
         assert_eq!(part["image_url"], json!(expected));
     }
-    assert_eq!(schema_keys(&body), vec!["marking_photos", "reads"]);
+    assert_eq!(schema_keys(&body), vec!["marking_photos", "note", "reads"]);
     let schema = &body["text"]["format"]["schema"];
     assert_eq!(
         schema["properties"]["marking_photos"],
         json!({"type": "array", "items": {"type": "integer"}})
     );
-    assert_eq!(schema["required"].as_array().unwrap().len(), 2);
+    assert_eq!(schema["required"].as_array().unwrap().len(), 3);
     assert_eq!(body["text"]["format"]["strict"], json!(true));
     assert_eq!(reply.output["marking_photos"], json!([2]));
 }

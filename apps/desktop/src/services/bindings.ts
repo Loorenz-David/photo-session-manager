@@ -161,6 +161,38 @@ export const commands = {
 	researchSiteRemove: (site: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_site_remove", { site })),
 	researchSitesReorder: (sites: string[]) => typedError<string, CommandError>(__TAURI_INVOKE("research_sites_reorder", { sites })),
 	researchExport: (selection: ExportSelectionDto, dest: string) => typedError<string, CommandError>(__TAURI_INVOKE("research_export", { selection, dest })),
+	/**  W1: the session's product note ("What research saw"). */
+	writerNote: (sessionId: CommandId) => typedError<NoteDto_Serialize, CommandError>(__TAURI_INVOKE("writer_note", { sessionId })),
+	/**  W1: **Look again**: the photo looks run again over the changed photos. */
+	writerLookAgain: (sessionId: CommandId) => typedError<RequestedDto_Serialize, CommandError>(__TAURI_INVOKE("writer_look_again", { sessionId })),
+	/**  W3: the writer's state for the session (the AI review tab's writer block, the research panel). */
+	writerStatus: (sessionId: CommandId) => typedError<WriterStatusDto_Serialize, CommandError>(__TAURI_INVOKE("writer_status", { sessionId })),
+	/**
+	 *  W3 (WC3): asks the writer to write the session's texts. `origin` is `next_to_review`,
+	 *  `all_checked` or `write_texts`.
+	 */
+	writerRequest: (sessionId: CommandId, origin: string) => typedError<RequestedDto_Serialize, CommandError>(__TAURI_INVOKE("writer_request", { sessionId, origin })),
+	/**  W3 (WC6): answers an open writer question or finding; the texts are written again. */
+	writerFindingAnswer: (findingId: CommandId, answer: string) => typedError<RequestedDto_Serialize, CommandError>(__TAURI_INVOKE("writer_finding_answer", { findingId, answer })),
+	/**  W3 (WC6): dismisses an open writer note or question; nothing is written again. */
+	writerFindingDismiss: (findingId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("writer_finding_dismiss", { findingId })),
+	/**  W4: Settings → Writer as saved, every field present, with the safeguard counts. */
+	writerSettingsGet: () => typedError<WriterSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("writer_settings_get")),
+	/**
+	 *  W4: saves Settings → Writer whole. An instruction whose text changes keeps the text it
+	 *  replaces among the earlier versions; a refused value names its field and saves nothing.
+	 */
+	writerSettingsSave: (value: WriterSettingsDto_Deserialize) => typedError<WriterSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("writer_settings_save", { value })),
+	/**
+	 *  W4: **Reset to default**: the language's instruction returns to the shipped one; the saved
+	 *  text is kept among the earlier versions.
+	 */
+	writerInstructionReset: (language: string) => typedError<WriterSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("writer_instruction_reset", { language })),
+	/**
+	 *  W4: **Preview what is sent**: the request a write would send now in `language`, for the
+	 *  built-in example item, under the saved settings. Nothing is sent and no run is made.
+	 */
+	writerPreview: (language: string) => typedError<WriterPreviewDto, CommandError>(__TAURI_INVOKE("writer_preview", { language })),
 	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
@@ -832,6 +864,12 @@ export type HistoryStateDto_Serialize = {
 	redo: string | null,
 };
 
+/**  An earlier instruction text, newest first. */
+export type InstructionVersionDto = {
+	saved_at: number,
+	text: string,
+};
+
 /**
  *  The `integration` block as shown and as patched (09A MC-23/MC-24). On read the client
  *  secret is masked (`••••` + last 4); sending the masked value back keeps the stored secret.
@@ -925,6 +963,15 @@ export type ItemStockDto_Serialize = {
 	choice: StockChoiceDto | null,
 };
 
+/**
+ *  One key of an observation and the owner's standing on it (`accepted`, `corrected`,
+ *  `kept_previous`, `dismissed`, `typed`, `unchecked`, `shop_default`, `imported`, `empty`).
+ */
+export type KeyDecisionDto = {
+	key: string,
+	decision: string,
+};
+
 export type LatestPublishResponse = LatestPublishResponse_Serialize | LatestPublishResponse_Deserialize;
 
 export type LatestPublishResponse_Deserialize = {
@@ -950,6 +997,27 @@ export type MisplacedFilesResponse = {
 	photos: number,
 };
 
+/**  What research saw on the session's photos, and whether the photos changed since. */
+export type NoteDto = NoteDto_Serialize | NoteDto_Deserialize;
+
+/**  What research saw on the session's photos, and whether the photos changed since. */
+export type NoteDto_Deserialize = {
+	observations: ObservationDto_Deserialize[],
+	research_saw: ResearchSawDto[],
+	stale_main: boolean,
+	stale_condition: boolean,
+	missing_main: boolean,
+};
+
+/**  What research saw on the session's photos, and whether the photos changed since. */
+export type NoteDto_Serialize = {
+	observations: ObservationDto_Serialize[],
+	research_saw: ResearchSawDto[],
+	stale_main: boolean,
+	stale_condition: boolean,
+	missing_main: boolean,
+};
+
 export type NotificationDto = {
 	id: number,
 	item_id: number,
@@ -958,6 +1026,41 @@ export type NotificationDto = {
 	kind: string,
 	text: string,
 	created_at: number,
+};
+
+/**  One observation of the product note. */
+export type ObservationDto = ObservationDto_Serialize | ObservationDto_Deserialize;
+
+/**  One observation of the product note. */
+export type ObservationDto_Deserialize = {
+	/**  `p1.<i>` (main photos) or `c1.<i>` (condition photos). */
+	ref: string,
+	original: string,
+	/**  The text shown: the owner's decisions replace what research saw. */
+	text: string,
+	keys: string[],
+	/**  "condition photo n", or "photo no longer in the condition photos". */
+	photo?: string | null,
+	/**  The text states the owner's decision ("Your decision"). */
+	owner: boolean,
+	decisions: KeyDecisionDto[],
+	in_writer_input: boolean,
+};
+
+/**  One observation of the product note. */
+export type ObservationDto_Serialize = {
+	/**  `p1.<i>` (main photos) or `c1.<i>` (condition photos). */
+	ref: string,
+	original: string,
+	/**  The text shown: the owner's decisions replace what research saw. */
+	text: string,
+	keys: string[],
+	/**  "condition photo n", or "photo no longer in the condition photos". */
+	photo: string | null,
+	/**  The text states the owner's decision ("Your decision"). */
+	owner: boolean,
+	decisions: KeyDecisionDto[],
+	in_writer_input: boolean,
 };
 
 /**
@@ -1248,6 +1351,21 @@ export type RectDto = {
 	h: number | null,
 };
 
+/**  Whether a request queued a run, and why not. */
+export type RequestedDto = RequestedDto_Serialize | RequestedDto_Deserialize;
+
+/**  Whether a request queued a run, and why not. */
+export type RequestedDto_Deserialize = {
+	queued: boolean,
+	reason?: ReasonDto | null,
+};
+
+/**  Whether a request queued a run, and why not. */
+export type RequestedDto_Serialize = {
+	queued: boolean,
+	reason: ReasonDto | null,
+};
+
 /**  One price row of `research.prices`: decimal strings (MC-A8). */
 export type ResearchPriceDto = ResearchPriceDto_Serialize | ResearchPriceDto_Deserialize;
 
@@ -1273,6 +1391,11 @@ export type ResearchProvidersDto = {
 	model: string,
 	visual_search: string,
 	page_reader: string,
+};
+
+export type ResearchSawDto = {
+	key: string,
+	text: string,
 };
 
 /**
@@ -1965,6 +2088,219 @@ export type VisualMatchDto_Serialize = {
 	title: string,
 	source: string,
 	thumbnail: string | null,
+};
+
+/**  The post-check of one call. */
+export type WriterAttemptDto = {
+	attempt: number,
+	hits: WriterHitDto[],
+};
+
+/**  How often the photographer answered and dismissed one finding type. */
+export type WriterCountDto = {
+	answered: number,
+	dismissed: number,
+};
+
+/**  One style example (never copied by the writer). */
+export type WriterExampleDto = {
+	name: string,
+	fields: string,
+	title: string,
+	description: string,
+	condition_report: string,
+	seo_title: string,
+	seo_description: string,
+};
+
+/**
+ *  An open writer finding (`kind` `finding`) or question (`kind` `question`); `mode` `ask` waits
+ *  for an answer, `note` can be dismissed.
+ */
+export type WriterFindingDto = {
+	id: number,
+	kind: string,
+	type: string,
+	keys: string[],
+	text_field: string,
+	text: string,
+	mode: string,
+};
+
+/**  One post-check hit. */
+export type WriterHitDto = {
+	text: string,
+	code: string,
+	detail: string,
+};
+
+/**  What the latest writer run received. */
+export type WriterInputsDto = {
+	fields: number,
+	note: number,
+	listings: string[],
+};
+
+/**
+ *  One language's instruction: the saved text (`null` = the shipped one), the text the writer
+ *  sends, whether that is the shipped one, and the earlier texts (at most 20, newest first).
+ *  On save only `text` is read: the earlier texts are the stored ones.
+ */
+export type WriterInstructionDto = WriterInstructionDto_Serialize | WriterInstructionDto_Deserialize;
+
+/**
+ *  One language's instruction: the saved text (`null` = the shipped one), the text the writer
+ *  sends, whether that is the shipped one, and the earlier texts (at most 20, newest first).
+ *  On save only `text` is read: the earlier texts are the stored ones.
+ */
+export type WriterInstructionDto_Deserialize = {
+	text?: string | null,
+	effective_instruction: string,
+	is_default: boolean,
+	versions: InstructionVersionDto[],
+};
+
+/**
+ *  One language's instruction: the saved text (`null` = the shipped one), the text the writer
+ *  sends, whether that is the shipped one, and the earlier texts (at most 20, newest first).
+ *  On save only `text` is read: the earlier texts are the stored ones.
+ */
+export type WriterInstructionDto_Serialize = {
+	text: string | null,
+	effective_instruction: string,
+	is_default: boolean,
+	versions: InstructionVersionDto[],
+};
+
+export type WriterLengthsDto = {
+	title_max: number,
+	description_min_words: number,
+	description_max_words: number,
+	condition_max_words: number,
+	seo_title_max: number,
+	seo_description_min: number,
+	seo_description_max: number,
+};
+
+/**
+ *  The exact request a write would send (instructions, input and schema; the last two as JSON
+ *  text).
+ */
+export type WriterPreviewDto = {
+	instructions: string,
+	input: string,
+	schema: string,
+};
+
+/**  One mode (`off`, `note` or `ask`) per safeguard type. */
+export type WriterSafeguardDto = {
+	field_vs_photos: string,
+	field_vs_field: string,
+	field_vs_listings: string,
+	missing_in_text: string,
+	text_vs_facts: string,
+};
+
+/**
+ *  W4: Settings → Writer, every field present (`master_plan_writer.md` §4 "Settings"). Saved
+ *  whole: the save replaces the `writer` slot (`counts`, `effective_instruction`, `is_default`
+ *  and `versions` are read-only and ignored on save). `examples` holds each language's list as
+ *  the writer sends it; a list equal to the shipped one is stored as the shipped default.
+ */
+export type WriterSettingsDto = WriterSettingsDto_Serialize | WriterSettingsDto_Deserialize;
+
+/**
+ *  W4: Settings → Writer, every field present (`master_plan_writer.md` §4 "Settings"). Saved
+ *  whole: the save replaces the `writer` slot (`counts`, `effective_instruction`, `is_default`
+ *  and `versions` are read-only and ignored on save). `examples` holds each language's list as
+ *  the writer sends it; a list equal to the shipped one is stored as the shipped default.
+ */
+export type WriterSettingsDto_Deserialize = {
+	auto: boolean,
+	language: string,
+	model: string,
+	effort: string,
+	instructions: { [key in string]: WriterInstructionDto_Deserialize },
+	examples: { [key in string]: WriterExampleDto[] },
+	banned_extra: string[],
+	lengths: WriterLengthsDto,
+	visible_keys?: string[] | null,
+	safeguard: WriterSafeguardDto,
+	max_questions: number,
+	shop_name: string,
+	condition_report_key: string,
+	damage_terms: { [key in string]: { [key in string]: string[] } },
+	counts: { [key in string]: WriterCountDto },
+};
+
+/**
+ *  W4: Settings → Writer, every field present (`master_plan_writer.md` §4 "Settings"). Saved
+ *  whole: the save replaces the `writer` slot (`counts`, `effective_instruction`, `is_default`
+ *  and `versions` are read-only and ignored on save). `examples` holds each language's list as
+ *  the writer sends it; a list equal to the shipped one is stored as the shipped default.
+ */
+export type WriterSettingsDto_Serialize = {
+	auto: boolean,
+	language: string,
+	model: string,
+	effort: string,
+	instructions: { [key in string]: WriterInstructionDto_Serialize },
+	examples: { [key in string]: WriterExampleDto[] },
+	banned_extra: string[],
+	lengths: WriterLengthsDto,
+	visible_keys: string[] | null,
+	safeguard: WriterSafeguardDto,
+	max_questions: number,
+	shop_name: string,
+	condition_report_key: string,
+	damage_terms: { [key in string]: { [key in string]: string[] } },
+	counts: { [key in string]: WriterCountDto },
+};
+
+/**  W3 (08C §11): the writer's state for a session. */
+export type WriterStatusDto = WriterStatusDto_Serialize | WriterStatusDto_Deserialize;
+
+/**  W3 (08C §11): the writer's state for a session. */
+export type WriterStatusDto_Deserialize = {
+	reason?: ReasonDto | null,
+	run?: RunViewDto_Deserialize | null,
+	texts: WriterTextDto[],
+	attempts: WriterAttemptDto[],
+	regenerated: string[],
+	findings: WriterFindingDto[],
+	steps: StepViewDto_Deserialize[],
+	cost_micro_usd: number,
+	inputs: WriterInputsDto,
+	stale_main: boolean,
+	stale_condition: boolean,
+	can_write: boolean,
+};
+
+/**  W3 (08C §11): the writer's state for a session. */
+export type WriterStatusDto_Serialize = {
+	reason: ReasonDto | null,
+	run: RunViewDto_Serialize | null,
+	texts: WriterTextDto[],
+	attempts: WriterAttemptDto[],
+	regenerated: string[],
+	findings: WriterFindingDto[],
+	steps: StepViewDto_Serialize[],
+	cost_micro_usd: number,
+	inputs: WriterInputsDto,
+	stale_main: boolean,
+	stale_condition: boolean,
+	can_write: boolean,
+};
+
+/**  One text of the latest writer run: its reason, facts and what the check found. */
+export type WriterTextDto = {
+	key: string,
+	label: string,
+	flagged: boolean,
+	hits: WriterHitDto[],
+	reason: string,
+	facts: string[],
+	outcome: string,
 };
 
 /* Tauri Specta runtime */
