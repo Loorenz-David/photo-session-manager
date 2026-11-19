@@ -2,7 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { onSessionsChanged } from '@/services/events';
 import type { SessionResearch } from '@/services/research';
 import { listSessions } from '@/services/sessions';
+import { writerRequest, type WriterOrigin } from '@/services/writer';
 import { useResearchOverview } from './ResearchPill';
+
+/**
+ * W3 (WC3, A19): asks the writer for the session's texts from an automatic origin ("Next to review", "All checked").
+ * Fire and forget: a refusal or a failure is never shown and never holds up the owner's next step.
+ */
+export function requestTexts(sessionId: number, origin: Exclude<WriterOrigin, 'write_texts'>): void {
+  try {
+    void Promise.resolve(writerRequest(sessionId, origin)).catch(() => undefined);
+  } catch {
+    // Never shown, never in the way.
+  }
+}
 
 /** A19: whether a session's research finished with AI suggestions waiting (the research pill's "n to review"). */
 export function waitingForReview(research: SessionResearch | undefined): boolean {

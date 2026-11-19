@@ -6,16 +6,21 @@ import { ExternalLink } from '@/components/ExternalLink';
 import { cn } from '@/lib/utils';
 import type { FormField, Group } from '@/services/attributes';
 import type { ResearchStatus } from '@/services/research';
+import type { WriterStatus } from '@/services/writer';
+import { requestTexts } from '@/features/sessions/reviewQueue';
 import { CONFIDENCE_LABEL, displayValue, jsonText, priorOrigin, type ConflictActions } from './AiPopover';
 import { STEP_LABEL } from './StepTabs';
+import { WriterBlock, writing } from './WriterBlock';
 
 /** A field holding an AI suggestion to confirm, and the step it is on. */
 export type ReviewEntry = { field: FormField; group: Group };
 
 /** Why the AI review tab is empty (A11): nothing pending, said in the words of the research state. */
-export function emptyReason(status: ResearchStatus | null, anyAi: boolean): string {
+export function emptyReason(status: ResearchStatus | null, anyAi: boolean, writer: WriterStatus | null = null): string {
   const run = status?.run ?? null;
   if (run && (run.state === 'running' || run.state === 'queued')) return 'Research is running. Its suggestions appear here as they come in.';
+  // W3: the writer is drafting the texts; they arrive here as suggestions.
+  if (writing(writer)) return 'The writer is writing the texts. They appear here when they are ready.';
   if (anyAi) return 'Every AI suggestion on this item has been checked.';
   if (!run) {
     if (status?.reason?.sentence) return `Research hasn't run for this item yet. ${status.reason.sentence}`;
@@ -31,6 +36,28 @@ function siteOf(url: string): string {
   } catch {
     return url;
   }
+}
+
+/** W3: a text written as paragraphs (description, condition report): shown as paragraphs, not on one line. */
+function isLongText(entry: ReviewEntry): boolean {
+  const type = entry.field.definition.core_type;
+  return type === 'rich_text' || type === 'textarea' || displayValue(entry.field.value!).includes('\n');
+}
+
+function Paragraphs({ text, className }: { text: string; className?: string }) {
+  const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  return (
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      {paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+    </div>
+  );
+}
+
+/** W3 (WC4.5): the writer's reason ends with "Check: …" when its post-check still found something: shown on its own. */
+function splitCheck(reason: string): { reason: string; check: string | null } {
+  const lines = reason.split('\n');
+  const check = lines.find(line => line.startsWith('Check:')) ?? null;
+  return { reason: lines.filter(line => !line.startsWith('Check:')).join('\n').trim(), check };
 }
 
 /** Reasons longer than this show their first lines with "More". */
@@ -62,8 +89,9 @@ function ReviewRow({ entry, conflict, actions }: { entry: ReviewEntry; conflict:
   const value = entry.field.value!;
   const prior = value.ai_prior;
   const [more, setMore] = useState(false);
-  const reason = value.ai_reason?.trim() ?? '';
-  const long = reason.length > LONG_REASON;
+  const { reason, check } = splitCheck(value.ai_reason?.trim() ?? '');
+  const long = isLongText(entry);
+  const longReason = reason.length > LONG_REASON;
   const confidence = value.ai_confidence ?? '';
   const sources = value.ai_sources ?? [];
   return (
@@ -83,30 +111,56 @@ function ReviewRow({ entry, conflict, actions }: { entry: ReviewEntry; conflict:
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-sm" data-change>
-        {prior ? (
-          <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground" data-conflict-prior title={`Replaces ${jsonText(prior.value)} · ${priorOrigin(prior.provenance)}`}>
-            <span className="truncate line-through decoration-muted-foreground/50">{jsonText(prior.value)}</span>
-            <span className="sr-only">Replaces {jsonText(prior.value)} · {priorOrigin(prior.provenance)}</span>
-            <span className="shrink-0 text-[11px]">({priorOrigin(prior.provenance)})</span>
+      {long ? (
+        // W3: a long text shows what it held and the suggestion as paragraphs.
+        <div className="flex flex-col gap-2 text-sm" data-change data-long-text>
+          {prior ? (
+            <div className="flex flex-col gap-1 text-muted-foreground" data-conflict-prior>
+              <span className="text-[11px]">Previous text ({priorOrigin(prior.provenance)})</span>
+              <Paragraphs text={jsonText(prior.value)} className="line-through decoration-muted-foreground/40" />
+            </div>
+          ) : (
+            <span className="text-muted-foreground italic" data-prior-empty>
+              The field was empty
+            </span>
+          )}
+          <div className="flex flex-col gap-1" data-suggested>
+            <span className="text-[11px] text-muted-foreground">Suggested</span>
+            <Paragraphs text={displayValue(value)} className="rounded-md bg-(--ai-muted)/60 px-2 py-1.5 text-foreground" />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-sm" data-change>
+          {prior ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground" data-conflict-prior title={`Replaces ${jsonText(prior.value)} · ${priorOrigin(prior.provenance)}`}>
+              <span className="truncate line-through decoration-muted-foreground/50">{jsonText(prior.value)}</span>
+              <span className="sr-only">Replaces {jsonText(prior.value)} · {priorOrigin(prior.provenance)}</span>
+              <span className="shrink-0 text-[11px]">({priorOrigin(prior.provenance)})</span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground italic" data-prior-empty>
+              The field was empty
+            </span>
+          )}
+          <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 rounded-md bg-(--ai-muted)/60 px-2 py-0.5 font-semibold text-foreground" data-suggested>
+            {displayValue(value)}
           </span>
-        ) : (
-          <span className="text-muted-foreground italic" data-prior-empty>
-            The field was empty
-          </span>
-        )}
-        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0 rounded-md bg-(--ai-muted)/60 px-2 py-0.5 font-semibold text-foreground" data-suggested>
-          {displayValue(value)}
-        </span>
-      </div>
+        </div>
+      )}
+
+      {check && (
+        <p className="text-[13px] font-medium text-[color-mix(in_oklch,var(--warn),var(--color-text)_45%)]" data-check>
+          {check}
+        </p>
+      )}
 
       {(reason || sources.length > 0) && (
         <div className="flex flex-col gap-1.5">
           {reason && (
             <p className="text-[13px] leading-relaxed text-muted-foreground">
-              <span className={cn(long && !more && 'line-clamp-2')}>{reason}</span>
-              {long && (
+              <span className={cn('whitespace-pre-line', longReason && !more && 'line-clamp-2')}>{reason}</span>
+              {longReason && (
                 <button type="button" className="ml-1 text-xs font-medium text-foreground underline-offset-2 hover:underline" onClick={() => setMore(m => !m)}>
                   {more ? 'Less' : 'More'}
                 </button>
@@ -169,6 +223,10 @@ type AiReviewTabProps = {
   onAcceptAll: () => Promise<unknown>;
   /** A19: the review queue: how many other sessions wait, and opening the next one (or the Sessions page). */
   nextToReview?: { left: number; onNext: () => void };
+  /** W3: the item's session ("Next to review →" asks the writer for its texts). */
+  sessionId?: number;
+  /** W3: the writer's status (its block at the top of the tab) and a re-read after an answer or a dismissal. */
+  writer?: { status: WriterStatus | null; reload: () => Promise<unknown> };
 };
 
 /**
@@ -176,7 +234,17 @@ type AiReviewTabProps = {
  * and form order. Each row offers Accept, Keep previous (or Dismiss when the field was empty) and Edit, under the
  * pill's rules and undo. A row leaves the list once its suggestion is checked.
  */
-export function AiReviewTab({ entries, acceptable, status, anyAi, onLooksRight, onClear, onKeepPrevious, conflictActions, onSeeResearch, onShowField, onAcceptAll, nextToReview }: AiReviewTabProps) {
+export function AiReviewTab(props: AiReviewTabProps) {
+  const block = props.writer ? <WriterBlock status={props.writer.status} onChanged={props.writer.reload} /> : null;
+  return (
+    <>
+      {block}
+      <ReviewBody {...props} />
+    </>
+  );
+}
+
+function ReviewBody({ entries, acceptable, status, anyAi, onLooksRight, onClear, onKeepPrevious, conflictActions, onSeeResearch, onShowField, onAcceptAll, nextToReview, sessionId, writer }: AiReviewTabProps) {
   const running = status?.run?.state === 'running' || status?.run?.state === 'queued';
   if (entries.length === 0 && anyAi && !running && nextToReview) {
     // A19: the last suggestion is checked: on to the next session waiting for review.
@@ -195,7 +263,13 @@ export function AiReviewTab({ entries, acceptable, status, anyAi, onLooksRight, 
                 : `${nextToReview.left} more sessions wait for review.`}
           </p>
         </div>
-        <Button onClick={nextToReview.onNext}>
+        <Button
+          onClick={() => {
+            // W3 (WC3, A19): the writer drafts the texts in the background; moving on never waits for it.
+            if (sessionId !== undefined) requestTexts(sessionId, 'next_to_review');
+            nextToReview.onNext();
+          }}
+        >
           {nextToReview.left === 0 ? 'Back to sessions' : 'Next to review'} <ArrowRight />
         </Button>
       </div>
@@ -205,7 +279,7 @@ export function AiReviewTab({ entries, acceptable, status, anyAi, onLooksRight, 
     return (
       <div className="flex flex-col items-start gap-2 py-6" data-review-empty>
         <p className="text-sm font-semibold">Nothing to confirm</p>
-        <p className="text-sm text-muted-foreground">{emptyReason(status, anyAi)}</p>
+        <p className="text-sm text-muted-foreground">{emptyReason(status, anyAi, writer?.status ?? null)}</p>
         <Button size="sm" variant="ghost" className="text-(--ai-foreground)" onClick={() => onSeeResearch(null)}>
           <Sparkles /> See research
         </Button>
@@ -231,8 +305,11 @@ export function AiReviewTab({ entries, acceptable, status, anyAi, onLooksRight, 
           const field = entry.field;
           const conflict = conflictActions(entry);
           const hasPrior = field.value?.ai_prior != null;
+          // W3: the writer's texts (Product step, long texts) take the plain Accept, the same backend action as Use
+          // suggestion; research's conflicts keep Use suggestion.
+          const writerText = entry.group === 'product' || isLongText(entry);
           const actions: RowActions = {
-            onAccept: conflict ? conflict.onUseSuggestion : () => onLooksRight(field),
+            onAccept: conflict && !writerText ? conflict.onUseSuggestion : () => onLooksRight(field),
             onKeepPrevious: conflict ? conflict.onKeepPrevious : hasPrior ? () => onKeepPrevious(field) : undefined,
             onDismiss: hasPrior ? undefined : () => onClear(field),
             onEdit: conflict ? conflict.onEdit : () => onShowField(entry),

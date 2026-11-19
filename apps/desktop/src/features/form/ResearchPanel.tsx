@@ -8,6 +8,8 @@ import { ordinal } from '@/features/sessions/ResearchPill';
 import type { FormField } from '@/services/attributes';
 import type { ResearchStatus, ResearchStep } from '@/services/research';
 import { ProductNote } from './ProductNote';
+import { WriterPanel } from './WriterPanel';
+import type { WriterStatus } from '@/services/writer';
 
 /** The verb each step kind is shown with (08A §8). */
 export const STEP_VERB: Record<string, string> = {
@@ -83,6 +85,8 @@ type ResearchPanelProps = {
   onRun: () => Promise<unknown>;
   onAcceptAll: () => Promise<unknown>;
   onClose: () => void;
+  /** W3: the writer's status; its latest run has its own block under the note. */
+  writer?: WriterStatus | null;
 };
 
 /** Re-renders at `at` (ms since the epoch) so a time-dependent line appears on its own. */
@@ -126,7 +130,7 @@ function Step({ step, dimmed }: { step: ResearchStep; dimmed: boolean }) {
  * The research panel (08A §1, §8; NOTES §Screens 7): the steps of the session's latest run in order, live while it
  * runs; its outcome when it ended; why research is not running when it cannot; Research / Run again; Accept all.
  */
-export function ResearchPanel({ sessionId, status, fields, focusKey, onFocus, onRun, onAcceptAll, onClose }: ResearchPanelProps) {
+export function ResearchPanel({ sessionId, status, fields, focusKey, onFocus, onRun, onAcceptAll, onClose, writer = null }: ResearchPanelProps) {
   // What Accept all accepts (MC-A12, R-IA1): suggestions that are neither low nor a conflict.
   const suggested = fields.filter(field => field.value?.provenance === 'ai' && field.value.ai_status === 'suggested' && field.value.ai_confidence !== 'low' && !field.value.conflict).length;
   // MC-A6: "Waiting for Capture One" is said once the run's wait for the previews has ended (the backend's end time).
@@ -187,6 +191,7 @@ export function ResearchPanel({ sessionId, status, fields, focusKey, onFocus, on
         ))}
       </ol>
       {sessionId !== undefined && <ProductNote sessionId={sessionId} refresh={status} />}
+      <WriterPanel status={writer} />
       <footer className="border-t px-4 py-3">
         <ActionButton className="w-full" disabled={suggested === 0} action={onAcceptAll}>
           Accept all{suggested > 0 ? ` (${suggested})` : ''}

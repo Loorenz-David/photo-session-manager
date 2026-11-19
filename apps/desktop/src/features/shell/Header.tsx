@@ -18,7 +18,7 @@ import { DiskWarning } from '@/features/settings/StorageSection';
 import { ResearchPill, useResearchOverview } from '@/features/sessions/ResearchPill';
 import { ChangedPill } from '@/features/sessions/ChangedPill';
 import { SessionActionsMenu } from '@/features/sessions/DeleteSession';
-import { showsNextToReview } from '@/features/sessions/reviewQueue';
+import { requestTexts, showsNextToReview } from '@/features/sessions/reviewQueue';
 import { onSessionsChanged } from '@/services/events';
 import type { PublishedChanges } from '@/services/sessions';
 
@@ -215,7 +215,8 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
             <Hint text="Details (D)"><Button variant="outline" onClick={onDetails}><ClipboardList /> Details</Button></Hint>
             {identity && !identity.archived && (reviewQueue && showsNextToReview(identity.arranged, research.get(sessionId), reviewQueue.left) ? (
               // A19: reviewing — an arranged session whose research has finished, while others wait for review.
-              <Button onClick={reviewQueue.onNext} title="Open the next session whose AI suggestions wait for review">
+              // W3 (WC3): the writer drafts this session's texts while the owner moves on.
+              <Button onClick={() => { requestTexts(sessionId, 'next_to_review'); reviewQueue.onNext(); }} title="Open the next session whose AI suggestions wait for review">
                 Next to review ({reviewQueue.left} left) <ArrowRight />
               </Button>
             ) : (
