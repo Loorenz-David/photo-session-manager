@@ -11,8 +11,10 @@ use crate::{
     service::ResearchService,
     store,
     writer::{
+        config::WriterSettings,
+        defaults,
         note::NoteView,
-        run::{RESULT_UNIT, WriterBlock},
+        run::{FindingCount, RESULT_UNIT, WriterBlock},
     },
 };
 
@@ -114,6 +116,27 @@ pub trait WriterApi: Send + Sync {
     fn dismiss(&self, finding_id: i64) -> Result<()>;
     /// W3 (08C §11): the latest writer run of the session, its texts, checks, findings and cost.
     fn status(&self, session_id: i64) -> Result<WriterStatus>;
+    /// W4: refuses a `writer` settings value the writer cannot run with; the text names the field.
+    fn settings_validate(&self, settings: &Json) -> Result<()> {
+        WriterSettings::validate(settings).map_err(psm_core::Error::InvalidData)
+    }
+    /// W4: the shipped instruction of `language` (§9).
+    fn instruction_default(&self, language: &str) -> String {
+        defaults::instruction(language).to_owned()
+    }
+    /// W4 (08C §8 "Preview what is sent"): the exact request a write would send under the
+    /// settings value for `language`, for the built-in example item; no provider call, no run.
+    fn preview(&self, settings: &Json, language: &str) -> Result<Preview>;
+    /// W4 (WC6 "Counts"): per finding type, how often it was answered and dismissed.
+    fn counts(&self) -> Result<Vec<FindingCount>>;
+}
+
+/// A writer request as it is sent (W4 `preview`; built by `writer::run::request_of`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Preview {
+    pub instructions: String,
+    pub input: Json,
+    pub schema: Json,
 }
 
 /// The text names in the order the writer writes them (`master_plan_writer.md` §4 Text keys).

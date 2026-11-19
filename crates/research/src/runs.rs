@@ -535,12 +535,10 @@ impl ResearchService {
                     image_long_edge: 0,
                 },
             );
-            config.writer = Some(crate::writer::config::WriterSnapshot {
-                origin,
-                instruction: writer.resolved_instruction(&writer.language),
-                examples: writer.resolved_examples(&writer.language),
-                settings: writer.clone(),
-            });
+            // W4: resolved by the function the preview uses.
+            config.writer = Some(crate::writer::config::WriterSnapshot::resolve(
+                &writer, &origin,
+            ));
             text(serde_json::to_string(
                 &self.writer_input(run.session_id, &writer)?,
             ))?

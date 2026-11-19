@@ -26,7 +26,7 @@ use crate::{
     stages::{Asked, Ctx, ExecuteOutcome, Flow, Work, display, step},
     store::{self, NewRun, NewStep, OutputRow},
     writer::{
-        api::Requested,
+        api::{Preview, Requested},
         config::{WriterSettings, WriterSnapshot},
         defaults,
         input::{requestable_texts, text_keys},
@@ -435,6 +435,86 @@ pub fn instructions_text(snapshot: &WriterSnapshot) -> String {
     out.join("\n\n")
 }
 
+/// A writer request as it is sent (WC7; 08C §8 "Preview what is sent"): the instructions, the
+/// input and the strict output schema. A run's call and the preview are both built here.
+pub fn request_of(snapshot: &WriterSnapshot, input: &Json) -> Preview {
+    Preview {
+        instructions: instructions_text(snapshot),
+        input: input.clone(),
+        schema: schema::schema_for_write(&schema::requested(input)),
+    }
+}
+
+/// The built-in example item of the preview: example A's fields line (§9.4) split into
+/// labelled fields, each a fact the owner typed.
+pub const PREVIEW_FIELDS: [(&str, &str, &str); 12] = [
+    ("example.type", "Type", "dining chair"),
+    ("example.designer", "Designer", "Børge Mogensen"),
+    ("example.manufacturer", "Manufacturer", "FDB Møbler"),
+    ("example.model", "Model", "J39"),
+    ("example.era", "Era", "1960s"),
+    ("example.country", "Country", "Denmark"),
+    ("example.materials", "Materials", "solid beech, papercord"),
+    (
+        "example.dimensions",
+        "Dimensions",
+        "W 49 D 46 H 78, seat 45",
+    ),
+    ("example.condition", "Condition", "light scratches"),
+    ("example.stability", "Stability", "stable"),
+    (
+        "example.restoration",
+        "Restoration",
+        "sanded, oiled, seat rewoven",
+    ),
+    ("example.photo_note", "Photo note", "photo 4 shows scratch"),
+];
+
+/// The preview's input for `settings` (W4 task 4): the example item's fields, nothing else read
+/// from storage, every text the writer can write requested.
+pub fn preview_input(settings: &WriterSettings) -> Json {
+    let fields = PREVIEW_FIELDS
+        .iter()
+        .map(|(key, label, value)| {
+            json!({
+                "key": key,
+                "label": label,
+                "value": value,
+                "decision": crate::writer::note::Decision::Typed.code(),
+                "fact": true,
+            })
+        })
+        .collect();
+    crate::writer::input::assemble(
+        crate::writer::input::InputParts {
+            fields,
+            texts: text_keys(settings)
+                .into_iter()
+                .map(|(name, _)| name.to_owned())
+                .collect(),
+            ..Default::default()
+        },
+        settings,
+    )
+}
+
+impl ResearchService {
+    /// W4 `WriterApi::preview`: the exact request a write would send under the settings `slot`
+    /// for `language`, for the built-in example item. No provider call, no run row.
+    pub fn writer_preview(&self, slot: &Json, language: &str) -> Result<Preview> {
+        WriterSettings::validate(slot).map_err(psm_core::Error::InvalidData)?;
+        let mut settings = WriterSettings::from_slot(Some(slot));
+        if !crate::writer::config::LANGUAGES.contains(&language) {
+            return Err(psm_core::Error::InvalidData(
+                "language must be English or Swedish".to_owned(),
+            ));
+        }
+        language.clone_into(&mut settings.language);
+        let snapshot = WriterSnapshot::resolve(&settings, "preview");
+        Ok(request_of(&snapshot, &preview_input(&settings)))
+    }
+}
+
 /// One text of an answer: its value (the description's paragraphs joined by a blank line), the
 /// facts it says it used and its reason.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -664,7 +744,8 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
         .and_then(|t| serde_json::from_str(t).ok())
         .unwrap_or(Json::Null);
     let requested = schema::requested(&input);
-    let instructions = instructions_text(&snapshot);
+    // W4: the request is built by the function the preview uses.
+    let instructions = request_of(&snapshot, &input).instructions;
     let stage = ctx.config.stage(Stage::Write);
     let language = settings.language.clone();
     let identity = json!({

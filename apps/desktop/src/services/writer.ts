@@ -3,6 +3,8 @@ import {
   type NoteDto_Serialize,
   type ObservationDto_Serialize,
   type RequestedDto_Serialize,
+  type WriterPreviewDto,
+  type WriterSettingsDto_Serialize,
   type WriterStatusDto_Serialize,
 } from './bindings';
 import { unwrap } from './sessions';
@@ -41,4 +43,28 @@ export async function writerFindingAnswer(findingId: number, answer: string): Pr
 /** W3: dismisses an open writer note or question. */
 export async function writerFindingDismiss(findingId: number): Promise<void> {
   unwrap(await commands.writerFindingDismiss(findingId));
+}
+
+/** W4: Settings → Writer, every field present, with the safeguard counts per finding type. */
+export type WriterSettings = WriterSettingsDto_Serialize;
+export type WriterInstruction = WriterSettings['instructions'][string];
+export type WriterExample = WriterSettings['examples'][string][number];
+/** W4: the exact request a write would send (`input` and `schema` as JSON text). */
+export type WriterPreview = WriterPreviewDto;
+
+/** W4: Settings → Writer as saved. */
+export async function writerSettingsGet(): Promise<WriterSettings> {
+  return unwrap(await commands.writerSettingsGet());
+}
+/** W4: saves the whole writer slot; an instruction whose text changes keeps the replaced text among the earlier versions. */
+export async function writerSettingsSave(value: WriterSettings): Promise<WriterSettings> {
+  return unwrap(await commands.writerSettingsSave(value));
+}
+/** W4: Reset to default — the language's instruction returns to the shipped one. */
+export async function writerInstructionReset(language: string): Promise<WriterSettings> {
+  return unwrap(await commands.writerInstructionReset(language));
+}
+/** W4: Preview what is sent — the request for the built-in example item under the saved settings. */
+export async function writerPreview(language: string): Promise<WriterPreview> {
+  return unwrap(await commands.writerPreview(language));
 }

@@ -24,6 +24,8 @@ pub const FINDING_TYPES: [&str; 5] = [
 pub const MODES: [&str; 3] = ["off", "note", "ask"];
 /// The most questions a write may ask.
 pub const MAX_QUESTIONS_LIMIT: u32 = 10;
+/// The most earlier instruction texts kept per language (`master_plan_writer.md` §4).
+pub const VERSIONS_MAX: usize = 20;
 
 /// An earlier saved instruction text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,7 +177,97 @@ pub struct WriterSnapshot {
     pub examples: Vec<Example>,
 }
 
+impl WriterSnapshot {
+    /// What a writer request is built from under `settings`: the instruction and the examples of
+    /// its language. The run's start and the preview both resolve it here.
+    pub fn resolve(settings: &WriterSettings, origin: &str) -> Self {
+        Self {
+            origin: origin.to_owned(),
+            instruction: settings.resolved_instruction(&settings.language),
+            examples: settings.resolved_examples(&settings.language),
+            settings: settings.clone(),
+        }
+    }
+}
+
 impl WriterSettings {
+    /// The versions rule (08C §8): when `next` differs from `replaced`, `replaced` becomes the
+    /// newest earlier version of `language` with time `saved_at`; at most [`VERSIONS_MAX`] are
+    /// kept, the oldest dropped. Returns whether a version was kept.
+    pub fn push_version(
+        &mut self,
+        language: &str,
+        replaced: &str,
+        next: &str,
+        saved_at: i64,
+    ) -> bool {
+        if replaced == next {
+            return false;
+        }
+        let versions = &mut self
+            .instructions
+            .entry(language.to_owned())
+            .or_default()
+            .versions;
+        versions.insert(
+            0,
+            InstructionVersion {
+                saved_at,
+                text: replaced.to_owned(),
+            },
+        );
+        versions.truncate(VERSIONS_MAX);
+        true
+    }
+
+    /// The slot to store when `incoming` is saved over `self` (the stored slot) at `now`: the
+    /// earlier versions are the stored ones (never the caller's); for each language whose
+    /// instruction text changes, the stored text it replaces is kept as a version; a text equal
+    /// to the shipped one is stored as the shipped default (`None`), and so is an example list
+    /// equal to the shipped list.
+    pub fn saved_over(&self, mut incoming: WriterSettings, now: i64) -> WriterSettings {
+        let mut languages: Vec<String> = LANGUAGES.iter().map(|l| (*l).to_owned()).collect();
+        for language in self.instructions.keys().chain(incoming.instructions.keys()) {
+            if !languages.contains(language) {
+                languages.push(language.clone());
+            }
+        }
+        for language in &languages {
+            let replaced = self.resolved_instruction(language);
+            let next = incoming.resolved_instruction(language);
+            let shipped = defaults::instruction(language);
+            let text = (next != shipped).then(|| next.clone());
+            let versions = self
+                .instructions
+                .get(language)
+                .map(|i| i.versions.clone())
+                .unwrap_or_default();
+            incoming
+                .instructions
+                .insert(language.clone(), Instruction { text, versions });
+            incoming.push_version(language, &replaced, &next, now);
+        }
+        for (language, list) in incoming.examples.iter_mut() {
+            if list.as_ref() == Some(&defaults::examples(language)) {
+                *list = None;
+            }
+        }
+        incoming
+    }
+
+    /// **Reset to default** (08C §8): the saved text of `language`, if any, is kept as the newest
+    /// earlier version and the instruction returns to the shipped one.
+    pub fn reset_instruction(&mut self, language: &str, now: i64) {
+        let saved = self.instructions.get(language).and_then(|i| i.text.clone());
+        if let Some(saved) = saved {
+            self.push_version(language, &saved, defaults::instruction(language), now);
+        }
+        self.instructions
+            .entry(language.to_owned())
+            .or_default()
+            .text = None;
+    }
+
     /// Reads the slot tolerantly (as `ResearchSettings::from_slot`): a missing slot or field takes
     /// its default, and a field held in another shape is ignored with a warning.
     pub fn from_slot(slot: Option<&Json>) -> Self {
@@ -391,6 +483,48 @@ mod tests {
                 shop_name: "Beyo".into(),
                 ..WriterSettings::default()
             }
+        );
+    }
+
+    #[test]
+    fn w4_c2b_push_version_keeps_twenty_newest_first_dropping_the_oldest() {
+        let mut settings = WriterSettings::default();
+        let stored: Vec<InstructionVersion> = (1..=20)
+            .map(|n| InstructionVersion {
+                saved_at: 1_000 - n,
+                text: format!("V{n}"),
+            })
+            .collect();
+        settings.instructions.insert(
+            "English".into(),
+            Instruction {
+                text: Some("Current".into()),
+                versions: stored.clone(),
+            },
+        );
+        assert!(settings.push_version("English", "Current", "New", 5_000));
+        let versions = &settings.instructions["English"].versions;
+        assert_eq!(versions.len(), 20);
+        assert_eq!(
+            versions[0],
+            InstructionVersion {
+                saved_at: 5_000,
+                text: "Current".into()
+            }
+        );
+        assert_eq!(versions[1..], stored[..19]);
+        assert!(!versions.iter().any(|v| v.text == "V20"));
+    }
+
+    #[test]
+    fn w4_c2b_push_version_keeps_nothing_when_the_text_is_unchanged() {
+        let mut settings = WriterSettings::default();
+        assert!(!settings.push_version("English", "Same", "Same", 5_000));
+        assert!(
+            settings
+                .instructions
+                .get("English")
+                .is_none_or(|i| i.versions.is_empty())
         );
     }
 

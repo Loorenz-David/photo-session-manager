@@ -284,27 +284,58 @@ impl ResearchService {
                 })
             })
             .collect();
-        let mut input = Map::new();
-        input.insert("fields".into(), Json::Array(fields));
-        input.insert("note".into(), Json::Array(observations));
-        input.insert("research_saw".into(), Json::Array(research_saw));
-        input.insert("listings".into(), Json::Array(listings));
-        input.insert("answers".into(), Json::Array(answers));
-        input.insert("rejected".into(), Json::Array(rejected));
-        input.insert(
-            "texts".into(),
-            Json::Array(texts.iter().map(|(n, _)| json!(n)).collect()),
-        );
-        input.insert("language".into(), json!(settings.language));
-        input.insert(
-            "lengths".into(),
-            serde_json::to_value(&settings.lengths).unwrap_or(Json::Null),
-        );
-        if !settings.shop_name.trim().is_empty() {
-            input.insert("shop_name".into(), json!(settings.shop_name));
-        }
-        Ok(Json::Object(input))
+        Ok(assemble(
+            InputParts {
+                fields,
+                note: observations,
+                research_saw,
+                listings,
+                answers,
+                rejected,
+                texts: texts.into_iter().map(|(n, _)| n).collect(),
+            },
+            settings,
+        ))
     }
+}
+
+/// The parts of a writer input read from an item (or, for the preview, from the built-in
+/// example item).
+#[derive(Debug, Clone, Default)]
+pub struct InputParts {
+    pub fields: Vec<Json>,
+    pub note: Vec<Json>,
+    pub research_saw: Vec<Json>,
+    pub listings: Vec<Json>,
+    pub answers: Vec<Json>,
+    pub rejected: Vec<Json>,
+    /// The requested output names.
+    pub texts: Vec<String>,
+}
+
+/// The writer input (WC2 "Input") from its parts and the settings: a run's input and the
+/// preview's are both assembled here.
+pub fn assemble(parts: InputParts, settings: &WriterSettings) -> Json {
+    let mut input = Map::new();
+    input.insert("fields".into(), Json::Array(parts.fields));
+    input.insert("note".into(), Json::Array(parts.note));
+    input.insert("research_saw".into(), Json::Array(parts.research_saw));
+    input.insert("listings".into(), Json::Array(parts.listings));
+    input.insert("answers".into(), Json::Array(parts.answers));
+    input.insert("rejected".into(), Json::Array(parts.rejected));
+    input.insert(
+        "texts".into(),
+        Json::Array(parts.texts.iter().map(|n| json!(n)).collect()),
+    );
+    input.insert("language".into(), json!(settings.language));
+    input.insert(
+        "lengths".into(),
+        serde_json::to_value(&settings.lengths).unwrap_or(Json::Null),
+    );
+    if !settings.shop_name.trim().is_empty() {
+        input.insert("shop_name".into(), json!(settings.shop_name));
+    }
+    Json::Object(input)
 }
 
 #[cfg(test)]

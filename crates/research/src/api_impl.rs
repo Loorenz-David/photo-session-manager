@@ -205,4 +205,16 @@ impl crate::writer::api::WriterApi for ResearchService {
     fn status(&self, session_id: i64) -> Result<crate::writer::api::WriterStatus> {
         ResearchService::writer_status(self, session_id)
     }
+
+    fn counts(&self) -> Result<Vec<crate::writer::run::FindingCount>> {
+        ResearchService::writer_counts(self)
+    }
+
+    fn preview(
+        &self,
+        settings: &serde_json::Value,
+        language: &str,
+    ) -> Result<crate::writer::api::Preview> {
+        ResearchService::writer_preview(self, settings, language)
+    }
 }

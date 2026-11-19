@@ -176,6 +176,23 @@ export const commands = {
 	writerFindingAnswer: (findingId: CommandId, answer: string) => typedError<RequestedDto_Serialize, CommandError>(__TAURI_INVOKE("writer_finding_answer", { findingId, answer })),
 	/**  W3 (WC6): dismisses an open writer note or question; nothing is written again. */
 	writerFindingDismiss: (findingId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("writer_finding_dismiss", { findingId })),
+	/**  W4: Settings → Writer as saved, every field present, with the safeguard counts. */
+	writerSettingsGet: () => typedError<WriterSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("writer_settings_get")),
+	/**
+	 *  W4: saves Settings → Writer whole. An instruction whose text changes keeps the text it
+	 *  replaces among the earlier versions; a refused value names its field and saves nothing.
+	 */
+	writerSettingsSave: (value: WriterSettingsDto_Deserialize) => typedError<WriterSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("writer_settings_save", { value })),
+	/**
+	 *  W4: **Reset to default**: the language's instruction returns to the shipped one; the saved
+	 *  text is kept among the earlier versions.
+	 */
+	writerInstructionReset: (language: string) => typedError<WriterSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("writer_instruction_reset", { language })),
+	/**
+	 *  W4: **Preview what is sent**: the request a write would send now in `language`, for the
+	 *  built-in example item, under the saved settings. Nothing is sent and no run is made.
+	 */
+	writerPreview: (language: string) => typedError<WriterPreviewDto, CommandError>(__TAURI_INVOKE("writer_preview", { language })),
 	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
@@ -845,6 +862,12 @@ export type HistoryStateDto_Deserialize = {
 export type HistoryStateDto_Serialize = {
 	undo: string | null,
 	redo: string | null,
+};
+
+/**  An earlier instruction text, newest first. */
+export type InstructionVersionDto = {
+	saved_at: number,
+	text: string,
 };
 
 /**
@@ -2073,6 +2096,23 @@ export type WriterAttemptDto = {
 	hits: WriterHitDto[],
 };
 
+/**  How often the photographer answered and dismissed one finding type. */
+export type WriterCountDto = {
+	answered: number,
+	dismissed: number,
+};
+
+/**  One style example (never copied by the writer). */
+export type WriterExampleDto = {
+	name: string,
+	fields: string,
+	title: string,
+	description: string,
+	condition_report: string,
+	seo_title: string,
+	seo_description: string,
+};
+
 /**
  *  An open writer finding (`kind` `finding`) or question (`kind` `question`); `mode` `ask` waits
  *  for an answer, `note` can be dismissed.
@@ -2099,6 +2139,122 @@ export type WriterInputsDto = {
 	fields: number,
 	note: number,
 	listings: string[],
+};
+
+/**
+ *  One language's instruction: the saved text (`null` = the shipped one), the text the writer
+ *  sends, whether that is the shipped one, and the earlier texts (at most 20, newest first).
+ *  On save only `text` is read: the earlier texts are the stored ones.
+ */
+export type WriterInstructionDto = WriterInstructionDto_Serialize | WriterInstructionDto_Deserialize;
+
+/**
+ *  One language's instruction: the saved text (`null` = the shipped one), the text the writer
+ *  sends, whether that is the shipped one, and the earlier texts (at most 20, newest first).
+ *  On save only `text` is read: the earlier texts are the stored ones.
+ */
+export type WriterInstructionDto_Deserialize = {
+	text?: string | null,
+	effective_instruction: string,
+	is_default: boolean,
+	versions: InstructionVersionDto[],
+};
+
+/**
+ *  One language's instruction: the saved text (`null` = the shipped one), the text the writer
+ *  sends, whether that is the shipped one, and the earlier texts (at most 20, newest first).
+ *  On save only `text` is read: the earlier texts are the stored ones.
+ */
+export type WriterInstructionDto_Serialize = {
+	text: string | null,
+	effective_instruction: string,
+	is_default: boolean,
+	versions: InstructionVersionDto[],
+};
+
+export type WriterLengthsDto = {
+	title_max: number,
+	description_min_words: number,
+	description_max_words: number,
+	condition_max_words: number,
+	seo_title_max: number,
+	seo_description_min: number,
+	seo_description_max: number,
+};
+
+/**
+ *  The exact request a write would send (instructions, input and schema; the last two as JSON
+ *  text).
+ */
+export type WriterPreviewDto = {
+	instructions: string,
+	input: string,
+	schema: string,
+};
+
+/**  One mode (`off`, `note` or `ask`) per safeguard type. */
+export type WriterSafeguardDto = {
+	field_vs_photos: string,
+	field_vs_field: string,
+	field_vs_listings: string,
+	missing_in_text: string,
+	text_vs_facts: string,
+};
+
+/**
+ *  W4: Settings → Writer, every field present (`master_plan_writer.md` §4 "Settings"). Saved
+ *  whole: the save replaces the `writer` slot (`counts`, `effective_instruction`, `is_default`
+ *  and `versions` are read-only and ignored on save). `examples` holds each language's list as
+ *  the writer sends it; a list equal to the shipped one is stored as the shipped default.
+ */
+export type WriterSettingsDto = WriterSettingsDto_Serialize | WriterSettingsDto_Deserialize;
+
+/**
+ *  W4: Settings → Writer, every field present (`master_plan_writer.md` §4 "Settings"). Saved
+ *  whole: the save replaces the `writer` slot (`counts`, `effective_instruction`, `is_default`
+ *  and `versions` are read-only and ignored on save). `examples` holds each language's list as
+ *  the writer sends it; a list equal to the shipped one is stored as the shipped default.
+ */
+export type WriterSettingsDto_Deserialize = {
+	auto: boolean,
+	language: string,
+	model: string,
+	effort: string,
+	instructions: { [key in string]: WriterInstructionDto_Deserialize },
+	examples: { [key in string]: WriterExampleDto[] },
+	banned_extra: string[],
+	lengths: WriterLengthsDto,
+	visible_keys?: string[] | null,
+	safeguard: WriterSafeguardDto,
+	max_questions: number,
+	shop_name: string,
+	condition_report_key: string,
+	damage_terms: { [key in string]: { [key in string]: string[] } },
+	counts: { [key in string]: WriterCountDto },
+};
+
+/**
+ *  W4: Settings → Writer, every field present (`master_plan_writer.md` §4 "Settings"). Saved
+ *  whole: the save replaces the `writer` slot (`counts`, `effective_instruction`, `is_default`
+ *  and `versions` are read-only and ignored on save). `examples` holds each language's list as
+ *  the writer sends it; a list equal to the shipped one is stored as the shipped default.
+ */
+export type WriterSettingsDto_Serialize = {
+	auto: boolean,
+	language: string,
+	model: string,
+	effort: string,
+	instructions: { [key in string]: WriterInstructionDto_Serialize },
+	examples: { [key in string]: WriterExampleDto[] },
+	banned_extra: string[],
+	lengths: WriterLengthsDto,
+	visible_keys: string[] | null,
+	safeguard: WriterSafeguardDto,
+	max_questions: number,
+	shop_name: string,
+	condition_report_key: string,
+	damage_terms: { [key in string]: { [key in string]: string[] } },
+	counts: { [key in string]: WriterCountDto },
 };
 
 /**  W3 (08C §11): the writer's state for a session. */
