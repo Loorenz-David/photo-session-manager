@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # W4 — Settings → Writer
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-19, claude opus (`pipeline-implementer`), implement r1: 2 units, checkpoints 23a9668 · 82da541; 21 rows → 9 command tests + 2 `push_version` unit tests + 11 UI tests; closing gate green: `cargo test --workspace` 1829 passed, clippy, fmt, typecheck, `npm test` 659 passed)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -141,3 +141,32 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-researc
 4. Set "Field vs field" to off; uncheck a field you do not want used; save and write again.
 
 ## Review log
+
+### 2026-11-19 · implement r1 (claude opus, `pipeline-implementer`)
+**Built.** U1 (`23a9668`): `WriterSettings::push_version` (newest first, at most 20, only when the text changes),
+`saved_over` (the stored versions stay authoritative; a changed instruction keeps the text it replaced, with the save
+time; a text or example list equal to the shipped one is stored as the shipped default) and `reset_instruction`;
+`WriterSnapshot::resolve` (used by a run's start and by the preview); `writer::input::assemble` (the input object, used
+by a run's input and the preview's); `writer::run::request_of` (instructions, input, schema: a run's call and the
+preview are built by it) and `preview_input` (example A's fields line as twelve labelled `typed` facts, every text
+requested); `WriterApi::{settings_validate, instruction_default, preview, counts}`; the commands
+`writer_settings_get`, `writer_settings_save(value)`, `writer_instruction_reset(language)`, `writer_preview(language)`
+over a typed `WriterSettingsDto` (every field, both languages' instructions resolved, examples resolved, counts per
+type); bindings and `services/writer.ts`. U2 (`82da541`): `WriterSection` (loaded when first opened), `WriterInstruction`
+(editor with word count, Preview dialog, Earlier versions with Use this, Reset to default merged into the unsaved
+form), `WriterExamples` (both languages, add / edit / remove), the "Writer" nav entry after "Research" (shown with it);
+the guide (01, 02).
+
+**Assumptions.** Preview uses the saved settings (task 4), so an unsaved edit shows after Save · the preview requests
+all five texts (no item, so no layout) · the example item's keys are `example.<name>` · examples are shown for both
+languages at once, the instruction for the chosen language · effort is a text field (as in Settings → Research) ·
+extra banned words are one per line · a saved model without a price is offered as "<model> (no price)" · Reset saves
+at once and replaces only that language's instruction in the form, other unsaved edits stay.
+
+**Deviations.** Files outside the U1 list, each needed by the plan's own tasks: `crates/research/src/writer/input.rs`
+(the shared `assemble`), `crates/research/src/runs.rs` (one call to `WriterSnapshot::resolve`),
+`crates/research/src/api_impl.rs` (the trait methods). `WriterApi::counts` added beside the three named methods (the
+get needs the counts through the handle). U1 tests are desktop command tests in `apps/desktop/src-tauri/src/lib.rs`
+(`w4_tests`, the command layer itself), not a testkit stem. U2 also edited `__tests__/t1_settings_drawer.test.tsx` (its
+section list gains "Writer") and `docs/guide/{01_product,02_architecture}.md`.
+
