@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # W3 — Texts in AI review
 
-**Tracker:** IMPLEMENTED (2026-11-19, claude opus (`pipeline-implementer`), implement r1: 3 units, checkpoints 79eb78f · e4f7e3e · f2e18ac; 30 rows → 18 seam/command tests + 1 partition unit test + 12 UI tests; closing gate green: `cargo test --workspace` 1818 passed, clippy, fmt, typecheck, `npm test` 648 passed)
+**Tracker:** APPROVED (2026-11-19, opus, review r1 APPROVED_WITH_NOTES: perimeter = the 32 declared paths over 79eb78f^..f2e18ac (+ closing c5a833e); Review-mode checks green on 43c17cc: `research::` 99 passed, `mechanisms::publish_partition` 4, `psm-desktop` 52, vitest form/sessions/shell 181, clippy, fmt, typecheck; all 30 rows have a boundary test that fails on a wrong outcome; H1–H8 and HW1/HW7 hold; `items.title` changes only by the owner's action; 7 notes in `backlog_writer/W3_writer_review.md`)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -248,3 +248,57 @@ writer request was deferred until after the navigation (C7(a), C7(d) need it fir
 suite 1008 in 506 s) · `cargo clippy --workspace --all-targets -- -D warnings` exit 0 · `cargo fmt --all -- --check`
 exit 0 · `cd apps/desktop && npm run typecheck` exit 0 · `npm test` exit 0 (104 files, 648 tests). No pre-existing
 failure.
+
+### 2026-11-19 · review r1 (opus, `pipeline-reviewer`) — APPROVED_WITH_NOTES
+**Gate.** Tracker IMPLEMENTED; checkpoints `79eb78f`, `e4f7e3e`, `f2e18ac`, closing `c5a833e` in `git log`. **Perimeter:**
+`git diff --stat 79eb78f^ f2e18ac` = 32 paths, equal to the handoff's Files changed (the three declared deviations
+`core/services/settings.rs`, `research/writer/run.rs`, `research/api_impl.rs` included; `App.tsx` listed and unchanged).
+**Checks (once, Review mode, tree `43c17cc`):** `cargo test -p psm-testkit --test suite research::` 99 passed ·
+`cargo test -p psm-core mechanisms::publish_partition` 4 passed · `cargo test -p psm-desktop` 52 passed · `npx vitest run
+src/features/form src/features/sessions src/features/shell` 181 passed · clippy (core, infra, integrations, research,
+desktop, testkit; `-D warnings`) · `cargo fmt --all -- --check` · `npm run typecheck`: all green. Implementer's
+full-suite stamp (1818 / 648 on `f2e18ac`) stands.
+
+**Verified correct (by reading the code each row exercises, then its test).**
+- U1 (C1–C3): `form_get` shows a live `product.title` `ai` row while `suggested` or `accepted` = `items.title`
+  (`shown_title_row`); `accept` (also Use suggestion: the command maps it to `accept`) and `accept_all` push the row
+  change and the `FieldState::Title` change into the same `Act` (`title_follows`); `history::apply` checks the title
+  beside its row, so undo/redo move both or neither (C2(a) asserts title, row status, prior and feedback after accept,
+  undo and redo). `keep_previous` on the title deletes the row and writes `kept_previous`; C2(b) proves the cleared set
+  with a real writer run whose description is written and whose identical title is not (without the cleared set the
+  synthetic `integration` stored state would let it through). `clear_title` on a shown suggestion clears only the row.
+  `write_title` deletes the row with `edited` feedback. `partition` filters every `product.title` row before any rule;
+  `partition_in` adds `builtin_definitions()`; C3(a) fails without the built-ins (the description would be left out,
+  not a conflict), C3(b)/(c) observe the fake shop's `update_title` count and remote title.
+- Review-mode reads: `update_item_title` has exactly four callers: `title_follows` (accept / accept_all), `write_title`
+  (owner typing), `clear_title` (owner clear), `read_integration_values` (the shop's own title), plus `history` undo/redo.
+  The writer writes only the `product.title` row (WC4.5). No path sets `items.title` from a suggestion except the
+  owner's accept. The partition cannot freeze a title row. `requestTexts` is synchronous fire-and-forget with both a
+  sync `try` and a `.catch`, and "Next to review" calls `onNext` right after it, unconditionally (C7(a) proves it with
+  a rejecting mock).
+- U2 (C4–C6): `writer` is in the patch allowlist, validated by `WriterSettings::validate` before merge, merged per
+  field, and nulled in the rebuild comparison (C4(a) asserts `PreparedSettings::Simple`, the file, and an automatic
+  request that queues nothing; C4(b) asserts the error names `max_questions` and the file bytes are equal).
+  `writer_settings` reads the live slot. `writer_status` reads the latest `write` run's snapshot, `result` unit, steps
+  and cost, plus the item's open findings; C5(c) checks each against the run row. The four commands are thin, and
+  without the engine they answer `research_unavailable` (C6(a), real Tauri mock invoke).
+- U3 (C7–C10): the trigger calls happen before the navigation (invocation order asserted). `FormDialog` asks
+  `all_checked` once on close/unmount, and not with a suggestion left. Write texts toasts the refusal sentence.
+  `WriterBlock` shows asks above the suggestion list (DOM order asserted), and Answer sends once (`type="button"`).
+  Dismiss re-reads. "Writing texts…" shows while queued or running. Long-text rows render prior and suggestion as
+  paragraphs, with the "Check:" line split out. `WriterPanel` renders inputs, reasons, facts, attempt hits, "Rewritten
+  once", findings and the cost. Every UI test asserts exact text or calls and would fail on a wrong outcome.
+- Assumptions 1–10 read against 08C §5–§6 and WC3/WC4.7: none contradicts the intention (Assumption 8 changes no
+  backend action: Use suggestion and Accept both call `accept`). Hard constraints H1–H8: H1 holds (a title suggestion
+  never reaches the shop unaccepted). H7: only the existing built-in `product.title` key appears in core. H8: the
+  commands are thin. No live service or secret in any test. Guide 01–05 updated for the changed areas (flow §7A).
+
+**Findings.** None blocking (B1–B4).
+
+**Notes** (7, in `docs/implementation/backlog_writer/W3_writer_review.md`): an answer refused `ResearchBusy` shows no
+reason (carried from W2) → W4; C5(a) observes two of three texts → none; sub-cent costs show "$0.00" → W4; guide row
+on the research runs list still stale → W4; "shopify" literal in three writer places → W5/tidy; `answer`-origin
+refusal untested at the command → none; batch "Confirm & next" also fires `all_checked` (harmless by WC3.4) → none.
+
+**Mutation probes:** none (flow §4). Files touched by the review: this plan (Tracker line, this entry),
+`backlog_writer/W3_writer_review.md` (new), `narratives/W3_writer_review.md` (new), the review handoff.
