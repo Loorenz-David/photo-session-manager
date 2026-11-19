@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 answered A on 2026-11-19, see Review log)
 ---
 # W6 — Restoration as fixed choices
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-19, codex, U1 done: "Restoration done" built-in Condition field, never published or researched, rule 11 in the post-check; 10 rows by 6 suite + 4 unit tests; closing gate green: suite 1039/0, engine 328/0, research lib 259/0, clippy, fmt, typecheck, npm 661/0)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there; the owner card above is a second gate.)
 
@@ -91,3 +91,21 @@ The reviewer runs, once: `cargo test -p psm-research --lib writer::postcheck rul
 ## Review log
 
 - **2026-11-19, orchestrator: owner card 1 answered A.** Owner: the restoration shown to customers lives in the condition report description. So `local.restoration` stays app-local (never sent to Shopify), the writer states each chosen step in the condition report, and rule 11 checks the condition report only (master plan §5 rule 11 amended; rows C5(a)/(b) amended).
+
+- **2026-11-19, implementer (claude, opus) r1: U1 implemented.** Built: `local.restoration` ("Restoration done",
+  MultiChoice, group Condition, the 14 WC8-R choices in order, `RESTORATION_CHOICES`) in `builtin_definitions()` and
+  in `ALWAYS_PRESENT` (end of the Condition step); `never_written` names it; `writer::defaults::RESTORATION_PHRASES`
+  (WC8-R phrases per language) and post-check rule 11 (`HitCode::Restoration`, condition report only, per owner card
+  1); `CheckContext.restoration` filled in `writer::run::check_context` from the field when it is visible and a fact.
+  Tests: `research::w6_restoration` (C1(a), C1(b), C2(a), C2(b), C3(b), C4(a)); unit tests
+  `write_table::w6_c3a_*`, `postcheck::w6_c5a/b/c_*`. Assumptions: (1) with **no stored preset**, non-Product
+  built-ins are listed after the shop's fields (`active_definitions`), so the field is still last in the Condition
+  step (WC8.1 places always-present keys at the end; Product order unchanged because no shop field is in the Product
+  group); (2) a choice with no phrase row is looked up by its own name (cannot happen with the fixed list); (3) the
+  form renders the 14 choices with the existing multi-choice control (multiselect), no UI change; (4) the photo
+  note's `note_fields` and the writer's visible fields now include the field, as WC1.1 and WC2 define them (every
+  Details/Condition layout key). Deviations: `crates/research/src/writer/run.rs` edited (not in the Files list; the
+  check context is built there, rule 11 needs the chosen steps); expected lists updated (strength unchanged) in
+  `research/tests/engine/{w1_note.rs, w2_writer_run.rs}` and the built-in count in `p13_publish_runs.rs` (5 → 6);
+  guide `02_architecture.md` gains item 7. The plan's unit commands with two filters in one `cargo test` are not valid
+  cargo syntax; each filter was run separately.

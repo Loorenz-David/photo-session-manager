@@ -115,6 +115,8 @@ fn w2_c4a_fields_carry_their_decision_and_whether_they_are_facts() {
              "decision": "accepted", "fact": true},
             {"key": ERA, "label": "Era", "value": "1950s", "decision": "unchecked", "fact": false},
             {"key": WOOD, "label": WOOD, "value": "Oak", "decision": "shop_default", "fact": true},
+            {"key": "local.restoration", "label": "Restoration done", "value": null,
+             "decision": "empty", "fact": false},
         ])
     );
 }

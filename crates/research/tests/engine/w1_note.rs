@@ -168,6 +168,7 @@ fn w1_c2a_stage_1_asks_for_a_note_over_the_details_and_condition_fields() {
             {"key": WOOD, "label": WOOD},
             {"key": SHAPE, "label": "Shape"},
             {"key": CONDITION_SCRATCH, "label": "Scratches"},
+            {"key": "local.restoration", "label": "Restoration done"},
         ])
     );
     let fields: Vec<&str> = observe[0].input["fields"]
@@ -312,7 +313,10 @@ fn w1_c4a_stage_6_numbers_its_photos_and_asks_over_the_condition_fields() {
     assert_eq!(received, attached);
     assert_eq!(
         condition[0].input["note_fields"],
-        json!([{"key": SCRATCHES, "label": SCRATCHES}])
+        json!([
+            {"key": SCRATCHES, "label": SCRATCHES},
+            {"key": "local.restoration", "label": "Restoration done"},
+        ])
     );
 }
 

@@ -38,13 +38,33 @@ pub const PRODUCT_DESCRIPTION: &str = "product.description";
 pub const PRODUCT_TAGS: &str = "product.tags";
 pub const PRODUCT_SEO_TITLE: &str = "product.seo_title";
 pub const PRODUCT_SEO_DESCRIPTION: &str = "product.seo_description";
+/// WC8-R: the workshop's restoration steps, app-local (never published, never researched).
+pub const LOCAL_RESTORATION: &str = "local.restoration";
+/// WC8-R: the choices of [`LOCAL_RESTORATION`], canonical English, in this order.
+pub const RESTORATION_CHOICES: [&str; 14] = [
+    "Cleaned",
+    "Sanded",
+    "Oiled",
+    "Waxed",
+    "Lacquered",
+    "Joints re-glued",
+    "Veneer repaired",
+    "New foam",
+    "New webbing",
+    "New springs",
+    "New papercord",
+    "New fabric",
+    "New leather",
+    "Rewired",
+];
 const PRODUCT_FIELDS: [&str; 3] = [PRODUCT_TITLE, PRODUCT_DESCRIPTION, PRODUCT_TAGS];
 
 /// WC8.1: built-in keys every step of their group shows even when a stored layout lacks them
-/// (appended at the end of the step, in this order). W6 adds `local.restoration` (Condition).
-const ALWAYS_PRESENT: [(AttributeGroup, &str); 2] = [
+/// (appended at the end of the step, in this order). W6: `local.restoration` (Condition, WC8-R).
+const ALWAYS_PRESENT: [(AttributeGroup, &str); 3] = [
     (AttributeGroup::Product, PRODUCT_SEO_TITLE),
     (AttributeGroup::Product, PRODUCT_SEO_DESCRIPTION),
+    (AttributeGroup::Condition, LOCAL_RESTORATION),
 ];
 
 /// WC8.1: `layout` (one step of `group`) with every always-present key of `group` it lacks
@@ -62,9 +82,10 @@ fn append_always_present(group: AttributeGroup, mut layout: Vec<PresetField>) ->
 }
 
 /// Title, description and tags: always present, never removable (ch08 §Groups and presets); the
-/// two search texts (WC8.1) are always present too.
+/// two search texts (WC8.1) are always present too; so is "Restoration done" in the Condition
+/// step (WC8-R).
 pub fn builtin_definitions() -> Vec<Definition> {
-    [
+    let mut all: Vec<Definition> = [
         (PRODUCT_TITLE, "Title", CoreType::Text),
         (PRODUCT_DESCRIPTION, "Description", CoreType::RichText),
         (PRODUCT_TAGS, "Tags", CoreType::Tags),
@@ -87,14 +108,34 @@ pub fn builtin_definitions() -> Vec<Definition> {
         description: None,
         writable: true,
     })
-    .collect()
+    .collect();
+    all.push(Definition {
+        integration: CORE_INTEGRATION.into(),
+        key: LOCAL_RESTORATION.into(),
+        label: "Restoration done".into(),
+        core_type: CoreType::MultiChoice,
+        choices: RESTORATION_CHOICES
+            .iter()
+            .map(|c| (*c).to_owned())
+            .collect(),
+        validations: serde_json::json!({}),
+        group: AttributeGroup::Condition,
+        description: None,
+        writable: true,
+    });
+    all
 }
 
+/// The built-in Product fields, the integration's definitions, then the built-in fields of the
+/// other steps (so a step without a stored preset ends with them, as WC8.1 places them).
 fn active_definitions(tx: &dyn StoreTx, integration: Option<&str>) -> Result<Vec<Definition>> {
-    let mut all = builtin_definitions();
+    let (mut all, rest): (Vec<_>, Vec<_>) = builtin_definitions()
+        .into_iter()
+        .partition(|d| d.group == AttributeGroup::Product);
     if let Some(integration) = integration {
         all.extend(tx.attribute_definitions(integration)?);
     }
+    all.extend(rest);
     Ok(all)
 }
 

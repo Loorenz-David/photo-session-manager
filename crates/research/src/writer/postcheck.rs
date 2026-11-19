@@ -1,9 +1,9 @@
-//! W2·U2: the deterministic post-check (`master_plan_writer.md` §5 WC5 items 1–10; book 08C
+//! W2·U2: the deterministic post-check (`master_plan_writer.md` §5 WC5 items 1–11; book 08C
 //! §5.4, §7; evidence §7.4, §7.5). Pure: the same texts and context give the same hits.
 //!
 //! "Contains" is case-insensitive on NFC text; a word match uses Unicode word boundaries (a word
 //! character is a letter, a digit or `_`); a phrase match is a substring match. Item 11
-//! (Restoration) is W6.
+//! (Restoration) is W6 (WC8-R).
 
 use std::collections::BTreeMap;
 
@@ -11,7 +11,7 @@ use psm_core::mechanisms::name_key::name_key;
 use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
 
-use crate::writer::config::Lengths;
+use crate::writer::{config::Lengths, defaults::restoration_phrases};
 
 /// What a hit is about (`master_plan_writer.md` §4 "Enums").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -72,6 +72,10 @@ pub struct CheckContext {
     pub detailed: Option<String>,
     /// The choices of the attribution definitions and the values of those keys on any item.
     pub attribution_names: Vec<String>,
+    /// The selected "Restoration done" choices when that field is visible and holds a fact
+    /// (WC5.11, WC8-R).
+    #[serde(default)]
+    pub restoration: Vec<String>,
 }
 
 const BANNED_WORDS: [&str; 33] = [
@@ -615,7 +619,7 @@ fn names_only_from_fields(name: &str, text: &str, ctx: &CheckContext, out: &mut 
     }
 }
 
-/// WC5 items 1–10 over `texts` (`(output name, text)`), each trimmed.
+/// WC5 items 1–11 over `texts` (`(output name, text)`), each trimmed.
 pub fn check(texts: &[(String, String)], ctx: &CheckContext) -> Vec<Hit> {
     let mut out = Vec::new();
     for (name, text) in texts {
@@ -707,6 +711,21 @@ pub fn check(texts: &[(String, String)], ctx: &CheckContext) -> Vec<Hit> {
                     HitCode::Stability,
                     "says nothing about stability".into(),
                 ));
+            }
+            for choice in &ctx.restoration {
+                let phrases = restoration_phrases(choice, &ctx.language);
+                let stated = if phrases.is_empty() {
+                    report.contains(&lower(choice))
+                } else {
+                    phrases.iter().any(|p| report.contains(&lower(p)))
+                };
+                if !stated {
+                    out.push(hit(
+                        name,
+                        HitCode::Restoration,
+                        format!("the restoration step \"{choice}\" is not in the condition report"),
+                    ));
+                }
             }
         }
         names_only_from_fields(name, text, ctx, &mut out);
@@ -1178,6 +1197,55 @@ mod tests {
             ..ctx()
         };
         assert_eq!(codes(&one("title", "France & Søn FD 164 Chair"), &c), []);
+    }
+
+    fn restored(language: &str, choices: &[&str]) -> CheckContext {
+        CheckContext {
+            language: language.into(),
+            restoration: choices.iter().map(|c| (*c).to_owned()).collect(),
+            ..CheckContext::default()
+        }
+    }
+
+    fn report_and_description(report_text: &str, description: &str) -> Vec<(String, String)> {
+        vec![
+            ("description".to_owned(), description.to_owned()),
+            ("condition_report".to_owned(), report_text.to_owned()),
+        ]
+    }
+
+    #[test]
+    fn w6_c5a_every_chosen_step_in_the_report_is_no_hit() {
+        let texts = report_and_description(
+            "Very Good condition. Frame sanded and oiled. Stable.",
+            &filler(70),
+        );
+        let hits = check(&texts, &restored("English", &["Sanded", "Oiled"]));
+        assert!(!hits.iter().any(|h| h.code == Restoration), "{hits:?}");
+    }
+
+    #[test]
+    fn w6_c5b_a_step_only_the_description_states_is_one_hit_naming_it() {
+        let texts = report_and_description(
+            "Very Good condition. Frame sanded. Stable.",
+            &format!("The frame was sanded and oiled. {}", filler(64)),
+        );
+        let hits: Vec<Hit> = check(&texts, &restored("English", &["Sanded", "Oiled"]))
+            .into_iter()
+            .filter(|h| h.code == Restoration)
+            .collect();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].text, "condition_report");
+        assert!(hits[0].detail.contains("\"Oiled\""), "{}", hits[0].detail);
+    }
+
+    #[test]
+    fn w6_c5c_a_swedish_phrase_states_the_step() {
+        let hits = check(
+            &report("Mycket gott renoverat skick. Sits och rygg nyklädda. Stadig."),
+            &restored("Swedish", &["New fabric"]),
+        );
+        assert!(!hits.iter().any(|h| h.code == Restoration), "{hits:?}");
     }
 
     fn example_texts(e: &ShippedExample) -> Vec<(String, String)> {

@@ -610,6 +610,21 @@ fn check_context(ctx: &Ctx<'_>, input: &Json, settings: &WriterSettings) -> Resu
         .find(|f| !detailed_key.is_empty() && f["key"].as_str() == Some(detailed_key))
         .filter(|f| f["fact"].as_bool() == Some(true))
         .and_then(|f| f["value"].as_str().map(str::to_owned));
+    // WC5.11: the chosen restoration steps, when the field is visible and its value a fact.
+    let restoration_key = psm_core::services::attributes::LOCAL_RESTORATION;
+    let restoration: Vec<String> = fields
+        .iter()
+        .find(|f| f["key"].as_str() == Some(restoration_key))
+        .filter(|f| f["fact"].as_bool() == Some(true))
+        .and_then(|_| {
+            ctx.form
+                .fields
+                .iter()
+                .find(|f| f.definition.key == restoration_key)
+        })
+        .and_then(|f| f.value.as_deref())
+        .and_then(|v| serde_json::from_str::<Vec<String>>(v).ok())
+        .unwrap_or_default();
     let keys = ctx.config.attribution_keys.clone();
     let integration = ctx.svc.integration.clone();
     let attribution_names = ctx.svc.store.research_transaction(|tx| {
@@ -652,6 +667,7 @@ fn check_context(ctx: &Ctx<'_>, input: &Json, settings: &WriterSettings) -> Resu
         damage_terms: settings.damage_terms.clone(),
         detailed,
         attribution_names,
+        restoration,
     })
 }
 

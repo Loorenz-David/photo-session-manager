@@ -10,3 +10,4 @@ pub mod w3_title;
 pub mod w3_writer_wiring;
 pub mod w5_carried;
 pub mod w5_seo_publish;
+pub mod w6_restoration;

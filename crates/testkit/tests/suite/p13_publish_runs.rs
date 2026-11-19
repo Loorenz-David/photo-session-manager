@@ -1104,10 +1104,10 @@ fn c9a_settings_build_shopify_adapter_with_default_condition_key_or_none() {
 #[test]
 fn c9b_schema_refresh_replaces_definitions_and_links_atomically() {
     let mut a = app();
-    // The built-in definitions (five since W5: title, description, tags, search title, search
-    // description) come before the shop's.
+    // The built-in definitions (six since W6: title, description, tags, search title, search
+    // description, restoration done) besides the shop's.
     let builtin = psm_core::services::attributes::builtin_definitions().len();
-    assert_eq!(builtin, 5);
+    assert_eq!(builtin, 6);
     a.fake_shop().state.lock().unwrap().definitions = vec![
         definition("a", CoreType::Text),
         definition("b", CoreType::Integer),

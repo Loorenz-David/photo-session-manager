@@ -234,6 +234,50 @@ pub const EXAMPLES_SV: [ShippedExample; 1] = [ShippedExample {
         gräddvit ullbouclé. Mycket gott renoverat skick. Sitthöjd 42 cm.",
 }];
 
+/// WC8-R: each "Restoration done" choice with the phrases that state it, English then Swedish
+/// (the post-check's rule 11 looks for one of them in the condition report).
+pub const RESTORATION_PHRASES: [(&str, &[&str], &[&str]); 14] = [
+    ("Cleaned", &["cleaned"], &["rengjord", "rengjorda"]),
+    ("Sanded", &["sanded"], &["slipad", "slipade", "slipat"]),
+    ("Oiled", &["oiled"], &["oljad", "oljade", "oljat"]),
+    ("Waxed", &["waxed"], &["vaxad", "vaxat"]),
+    (
+        "Lacquered",
+        &["lacquered"],
+        &["lackad", "lackerad", "lackat"],
+    ),
+    ("Joints re-glued", &["re-glued"], &["limmad", "limmade"]),
+    (
+        "Veneer repaired",
+        &["veneer repaired", "repaired the veneer"],
+        &["lagad fanér", "fanéren lagad"],
+    ),
+    ("New foam", &["new foam"], &["ny stoppning"]),
+    ("New webbing", &["new webbing"], &["nya gjordar"]),
+    ("New springs", &["new springs"], &["nya fjädrar"]),
+    (
+        "New papercord",
+        &["new papercord", "rewove"],
+        &["nytt pappersgarn", "nyflätad"],
+    ),
+    (
+        "New fabric",
+        &["new fabric", "reupholstered"],
+        &["nyklädd", "nytt tyg"],
+    ),
+    ("New leather", &["new leather"], &["nytt läder"]),
+    ("Rewired", &["rewired"], &["nya elkablar", "omdragen el"]),
+];
+
+/// The phrases of a restoration choice in a language (English for any other); empty for a choice
+/// the table does not list.
+pub fn restoration_phrases(choice: &str, language: &str) -> &'static [&'static str] {
+    RESTORATION_PHRASES
+        .iter()
+        .find(|(c, _, _)| *c == choice)
+        .map_or(&[], |(_, en, sv)| if swedish(language) { sv } else { en })
+}
+
 fn swedish(language: &str) -> bool {
     language == "Swedish"
 }

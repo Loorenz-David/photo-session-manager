@@ -331,6 +331,13 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
    product as `integration` rows like the description (`RemoteValues.seo_*`, Shopify `seo` through
    `adapter::seo_of`); `CommerceAdapter::product_seo` / `update_seo` (`PRODUCT_SEO_READ`,
    `PRODUCT_UPDATE_SEO`; evidence `shopify_admin.md` §SEO search texts).
+7. Restoration done (W6, writer master plan WC8-R): `local.restoration` (MultiChoice, 14 fixed choices
+   `RESTORATION_CHOICES`) is a built-in **Condition** field, always present at the end of the Condition
+   step (`ALWAYS_PRESENT`; with no stored preset, `active_definitions` lists non-Product built-ins after
+   the shop's fields). App-local: never published (`write_set` only walks the shop's definitions), never
+   researched (`rules::write_table::never_written`), in `item.json`. The writer sees it as a field and
+   post-check rule 11 (`HitCode::Restoration`, phrases `writer::defaults::RESTORATION_PHRASES`) requires
+   each chosen step in the condition report.
 
 ### Camera runtime, sidecar protocol, FTP receiver (book `10E` MC-31…MC-33; `native/camera-sidecar/README.md`)
 - **One `CameraRuntime` per process** (`camera/runtime.rs`), created in `App::open_with_adapter_bind`

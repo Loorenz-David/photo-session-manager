@@ -5,6 +5,7 @@ use psm_core::domain::attribute::{
     AiPrior, AiStatus, AttributeGroup, CoreType, Definition, Provenance, Value,
 };
 use psm_core::mechanisms::sameness::same;
+use psm_core::services::attributes::LOCAL_RESTORATION;
 use serde_json::Value as Json;
 
 /// The built-in title field: the item's own title, never researched.
@@ -26,6 +27,7 @@ pub fn never_written(definition: &Definition, step: Option<AttributeGroup>) -> b
         )
         || !definition.writable
         || definition.key == PRODUCT_TITLE
+        || definition.key == LOCAL_RESTORATION
 }
 
 /// What the write table allows for one proposed value.
@@ -131,6 +133,18 @@ mod tests {
             ai_prior: None,
             updated_at: 0,
         }
+    }
+
+    #[test]
+    fn w6_c3a_restoration_done_is_never_written() {
+        let restoration = psm_core::services::attributes::builtin_definitions()
+            .into_iter()
+            .find(|d| d.key == "local.restoration")
+            .expect("the built-in Restoration done field");
+        assert!(never_written(&restoration, Some(AttributeGroup::Condition)));
+        let mut other = restoration.clone();
+        other.key = "custom.restoration_steps".into();
+        assert!(!never_written(&other, Some(AttributeGroup::Condition)));
     }
 
     #[test]
