@@ -162,6 +162,19 @@ impl Default for WriterSettings {
     }
 }
 
+/// What a writer run executes from (WC7): the settings as they were at its start, the
+/// instruction text and the examples actually sent, and the origin that queued it. Part of the
+/// run's settings snapshot (`ResearchConfig::writer`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WriterSnapshot {
+    /// `next_to_review`, `all_checked`, `write_texts` or `answer`.
+    pub origin: String,
+    pub settings: WriterSettings,
+    pub instruction: String,
+    pub examples: Vec<Example>,
+}
+
 impl WriterSettings {
     /// Reads the slot tolerantly (as `ResearchSettings::from_slot`): a missing slot or field takes
     /// its default, and a field held in another shape is ignored with a warning.

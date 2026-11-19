@@ -131,6 +131,8 @@ pub struct ResearchConfig {
     pub normalise_version: u32,
     pub fingerprint_version: u32,
     pub instructions_version: u32,
+    /// W2 (WC7): a writer run's settings, instruction and examples; `None` for every other run.
+    pub writer: Option<crate::writer::config::WriterSnapshot>,
 }
 
 impl Default for ResearchConfig {
@@ -171,6 +173,7 @@ impl Default for ResearchConfig {
             normalise_version: psm_core::mechanisms::name_key::RESEARCH_NORMALISE_VERSION,
             fingerprint_version: crate::rules::fingerprint::RESEARCH_FINGERPRINT_VERSION,
             instructions_version: INSTRUCTIONS_VERSION,
+            writer: None,
         }
     }
 }

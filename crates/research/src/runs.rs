@@ -438,9 +438,13 @@ impl ResearchService {
 
     fn may_start_run(&self, run: &RunRow, settings: &ResearchSettings) -> Result<MayStart> {
         let input = self.prerequisite_input(run.item_id, settings)?;
-        // W1: a look run needs only what its two photo looks call (WC1.8).
+        // W1: a look run needs only what its two photo looks call (WC1.8); W2: a writer run
+        // what its call needs (WC3 "Start").
         let blocked = if run.trigger == RunTrigger::Look {
             self.look_block(settings).is_some()
+        } else if run.trigger == RunTrigger::Write {
+            self.writer_block(run.item_id, settings, &self.writer_settings())?
+                .is_some()
         } else {
             first_failing(&input).is_some_and(|p| p.blocks_creation())
         };
@@ -499,21 +503,54 @@ impl ResearchService {
             Some(shop) => shop.facts(self.external_id(run.item_id)?.as_deref())?,
             None => ShopFacts::default(),
         };
-        let config = ResearchConfig::from_settings(settings, &facts);
+        let mut config = ResearchConfig::from_settings(settings, &facts);
         let form = form_snapshot(
             &self.store,
             self.clock.as_ref(),
             self.integration.as_deref(),
             run.item_id,
         )?;
-        let input = self.input_now(run.session_id, run.item_id, settings.observe_max_photos)?;
         let text = |value: serde_json::Result<String>| {
             value.map_err(|e| Error::InvalidData(e.to_string()))
         };
-        let (config, form, input) = (
+        let input = if run.trigger == RunTrigger::Write {
+            // W2 (WC7): the writer's settings, the instruction and examples actually sent, the
+            // origin; `stages.write`; the input the call carries (WC2).
+            let writer = self.writer_settings();
+            let origin = run
+                .settings_snapshot
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+                .and_then(|s| {
+                    s[crate::writer::run::ORIGIN_KEY]
+                        .as_str()
+                        .map(str::to_owned)
+                })
+                .unwrap_or_default();
+            config.stages.insert(
+                Stage::Write.as_str().to_owned(),
+                crate::config::StageConfig {
+                    model: writer.model.clone(),
+                    effort: writer.effort.clone(),
+                    image_long_edge: 0,
+                },
+            );
+            config.writer = Some(crate::writer::config::WriterSnapshot {
+                origin,
+                instruction: writer.resolved_instruction(&writer.language),
+                examples: writer.resolved_examples(&writer.language),
+                settings: writer.clone(),
+            });
+            text(serde_json::to_string(
+                &self.writer_input(run.session_id, &writer)?,
+            ))?
+        } else {
+            let input = self.input_now(run.session_id, run.item_id, settings.observe_max_photos)?;
+            text(serde_json::to_string(&input))?
+        };
+        let (config, form) = (
             text(serde_json::to_string(&config))?,
             text(serde_json::to_string(&form))?,
-            text(serde_json::to_string(&input))?,
         );
         let now = self.clock.now_ms();
         let started = self.store.research_transaction(|tx| {
@@ -531,6 +568,14 @@ impl ResearchService {
         })?;
         if started {
             self.changed(run.session_id);
+            if run.trigger == RunTrigger::Write {
+                tracing::info!(
+                    target: "psm::writer",
+                    "writer.started run={} session={}",
+                    run.id,
+                    run.session_id
+                );
+            }
         }
         Ok(started)
     }

@@ -18,4 +18,6 @@ pub trait WriterApi: Send + Sync {
     fn note(&self, session_id: i64) -> Result<NoteView>;
     /// W1 (WC1.8): **Look again**: queue a `look` run when the photos changed.
     fn look_again(&self, session_id: i64) -> Result<Requested>;
+    /// W2 (WC3): queue a writer run of the session, or say why not.
+    fn request(&self, session_id: i64, origin: crate::writer::run::Origin) -> Result<Requested>;
 }

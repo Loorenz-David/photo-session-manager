@@ -89,13 +89,19 @@ pub enum MayStart {
 /// (an automatic run waits up to the source wait for missing sources; no source at all waits).
 pub fn may_start(input: &StartInput) -> MayStart {
     // W1 (WC1.8): a look run starts like a manual one.
-    let automatic = !matches!(input.trigger, RunTrigger::Manual | RunTrigger::Look);
+    let automatic = !matches!(
+        input.trigger,
+        RunTrigger::Manual | RunTrigger::Look | RunTrigger::Write
+    );
     if input.blocked {
         MayStart::Blocked
     } else if input.any_running {
         MayStart::OtherRunning
     } else if input.day_limit_reached {
         MayStart::DayLimit
+    } else if input.trigger == RunTrigger::Write {
+        // W2 (WC3 "Start"): a writer run sends no photo: no quiet period, no source wait.
+        MayStart::Yes
     } else if input.with_source == 0 {
         MayStart::WaitingForEditor
     } else if automatic && input.without_source > 0 && input.since_change_ms < input.source_wait_ms
@@ -106,13 +112,16 @@ pub fn may_start(input: &StartInput) -> MayStart {
     }
 }
 
-/// MC-A6 start order over `(trigger, queued_at, id)`: tier 0 `manual` and (W1, WC3 "Start")
-/// `look` first, then `queued_at`, then id.
+/// MC-A6 start order over `(trigger, queued_at, id)`: tier 0 `manual`, (W2, WC3 "Start")
+/// `write` and (W1) `look` first, then `queued_at`, then id.
 pub fn start_order(queued: &[(RunTrigger, i64, i64)]) -> Vec<i64> {
     let mut ordered = queued.to_vec();
     ordered.sort_by_key(|(trigger, queued_at, id)| {
         (
-            !matches!(trigger, RunTrigger::Manual | RunTrigger::Look),
+            !matches!(
+                trigger,
+                RunTrigger::Manual | RunTrigger::Write | RunTrigger::Look
+            ),
             *queued_at,
             *id,
         )
@@ -286,6 +295,28 @@ mod tests {
             (RunTrigger::Manual, 200, 5),
         ];
         assert_eq!(start_order(&queued), vec![3, 5, 2, 4, 1]);
+    }
+
+    #[test]
+    fn w2_c13a_write_and_look_go_with_manual_ahead_of_arranged() {
+        let queued = vec![
+            (RunTrigger::Arranged, 1, 1),
+            (RunTrigger::Write, 5, 2),
+            (RunTrigger::Manual, 7, 3),
+            (RunTrigger::Look, 6, 4),
+        ];
+        assert_eq!(start_order(&queued), vec![2, 4, 3, 1]);
+    }
+
+    #[test]
+    fn w2_a_writer_run_waits_for_no_photo_source() {
+        let mut input = ready(RunTrigger::Write);
+        input.with_source = 0;
+        input.without_source = 3;
+        input.since_change_ms = 0;
+        assert_eq!(may_start(&input), MayStart::Yes);
+        input.day_limit_reached = true;
+        assert_eq!(may_start(&input), MayStart::DayLimit);
     }
 
     #[test]

@@ -163,6 +163,10 @@ pub fn schema_for(request: &ModelRequest) -> Json {
             per_field(request, |_| string()),
         )]),
         Stage::Find => object(Vec::new()),
+        // W2 (WC4.1): exactly the requested texts, the findings and the questions.
+        Stage::Write => crate::writer::schema::schema_for_write(&crate::writer::schema::requested(
+            &request.input,
+        )),
     }
 }
 
@@ -325,6 +329,42 @@ mod tests {
         assert_eq!(sorted_keys(item), ["keys", "photo", "text"]);
         assert_eq!(sorted_required(item), ["keys", "photo", "text"]);
         assert_eq!(item["additionalProperties"], json!(false));
+    }
+
+    #[test]
+    fn w2_c14b_a_write_request_answers_exactly_its_texts_findings_and_questions() {
+        let schema = schema_for(&stage_request(
+            Stage::Write,
+            json!({"texts": ["title", "description"]}),
+        ));
+        assert_eq!(sorted_keys(&schema), ["findings", "questions", "texts"]);
+        assert_eq!(sorted_required(&schema), ["findings", "questions", "texts"]);
+        let texts = &schema["properties"]["texts"];
+        assert_eq!(sorted_keys(texts), ["description", "title"]);
+        assert_eq!(texts["additionalProperties"], json!(false));
+        let title = &texts["properties"]["title"];
+        assert_eq!(sorted_keys(title), ["facts", "reason", "text"]);
+        assert_eq!(sorted_required(title), ["facts", "reason", "text"]);
+        let description = &texts["properties"]["description"];
+        assert_eq!(sorted_keys(description), ["facts", "paragraphs", "reason"]);
+        assert_eq!(
+            description["properties"]["paragraphs"],
+            json!({"type": "array", "items": {"type": "string"}})
+        );
+        let finding = &schema["properties"]["findings"]["items"];
+        assert_eq!(
+            finding["properties"]["type"]["enum"],
+            json!([
+                "field_vs_photos",
+                "field_vs_field",
+                "field_vs_listings",
+                "missing_in_text",
+                "text_vs_facts"
+            ])
+        );
+        assert_eq!(sorted_keys(finding), ["keys", "text", "type"]);
+        let question = &schema["properties"]["questions"]["items"];
+        assert_eq!(sorted_keys(question), ["keys", "text"]);
     }
 
     #[test]

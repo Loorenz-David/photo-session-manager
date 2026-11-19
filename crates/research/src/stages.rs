@@ -590,6 +590,17 @@ pub(crate) fn execute(svc: &ResearchService, run_id: i64) -> Result<ExecuteOutco
         return Ok(ExecuteOutcome::NotRunning);
     }
     svc.gateway.close_open_calls(run.id)?;
+    // W2: a writer run has one call (two with a rewrite) and reuses nothing.
+    if run.trigger == RunTrigger::Write {
+        let ctx = Ctx {
+            earlier_run: None,
+            config: ResearchConfig::from_snapshot(run.settings_snapshot.as_deref())?,
+            form: FormSnapshot::from_text(run.form_snapshot.as_deref())?,
+            svc,
+            run,
+        };
+        return crate::writer::run::execute(&ctx);
+    }
     // MC-A7 reuse source: the latest earlier research run (WC1.9: look and writer runs left
     // out); a look run reuses from the latest earlier run that looks at photos (WC1.8).
     let look = run.trigger == RunTrigger::Look;

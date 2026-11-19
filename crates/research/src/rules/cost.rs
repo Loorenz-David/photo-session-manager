@@ -102,10 +102,10 @@ pub enum NextCall {
     EndAtCap,
 }
 
-/// MC-A8 stop rule: stages 1–6 call iff `run_cost + reserve < cap`; Decide calls iff
-/// `run_cost < cap`.
+/// MC-A8 stop rule: stages 1–6 call iff `run_cost + reserve < cap`; Decide (and, W2·WC7, the
+/// writer's stage) calls iff `run_cost < cap`.
 pub fn next_call(run_cost: i64, cap: i64, reserve: i64, stage: Stage) -> NextCall {
-    if stage == Stage::Decide {
+    if matches!(stage, Stage::Decide | Stage::Write) {
         if run_cost < cap {
             NextCall::Call
         } else {
@@ -255,6 +255,18 @@ mod tests {
         );
         assert_eq!(
             next_call(500_000, 500_000, 20_000, Stage::Decide),
+            NextCall::EndAtCap
+        );
+    }
+
+    #[test]
+    fn w2_c14c_the_writer_stage_calls_while_below_the_cap() {
+        assert_eq!(
+            next_call(499_999, 500_000, 50_000, Stage::Write),
+            NextCall::Call
+        );
+        assert_eq!(
+            next_call(500_000, 500_000, 50_000, Stage::Write),
             NextCall::EndAtCap
         );
     }

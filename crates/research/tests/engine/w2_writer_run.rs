@@ -7,10 +7,18 @@ use psm_core::domain::{
     attribute::{AiConfidence, AiStatus, AttributeGroup, CoreType, Provenance, Value},
     research::FeedbackAction,
 };
+use psm_core::ports::secrets::SecretStore;
 use psm_research::{
+    config::{ResearchConfig, ResearchSettings},
     domain::{RunState, RunTrigger, Stage},
+    service::ResearchService,
     store::{self as rstore, NewRun, OutputRow},
-    writer::{config::WriterSettings, input},
+    writer::{
+        api::{Requested, WriterApi},
+        config::WriterSettings,
+        input,
+        run::Origin,
+    },
 };
 use serde_json::{Value as Json, json};
 
@@ -328,4 +336,349 @@ fn w2_c4f_the_shop_name_is_sent_only_when_set() {
         },
     );
     assert_eq!(named["shop_name"], json!("Beyo Vintage"));
+}
+
+// ---- Unit 3: the run's life ----
+
+/// Writer settings under which every prerequisite passes on the harness (model `m1`, whose price
+/// the test settings carry).
+pub(crate) fn writer_ok() -> Json {
+    json!({"model": "m1", "effort": "low"})
+}
+
+fn request(h: &Harness, session: i64, origin: Origin) -> Requested {
+    WriterApi::request(h.service.as_ref(), session, origin).unwrap()
+}
+
+fn reason_code(answer: &Requested) -> Option<String> {
+    answer.reason.as_ref().map(|r| r.code.clone())
+}
+
+/// Inserts a run of `session` with the given trigger and state.
+pub(crate) fn run_of(
+    h: &Harness,
+    item: i64,
+    session: i64,
+    trigger: RunTrigger,
+    state: RunState,
+) -> i64 {
+    let now = h.now();
+    h.query(|c| {
+        rstore::insert_run(
+            c,
+            &NewRun {
+                item_id: item,
+                session_id: session,
+                trigger,
+                state,
+                queued_at: now,
+                started_at: (state != RunState::Queued).then_some(now),
+                settings_snapshot: None,
+                form_snapshot: None,
+                input_snapshot: None,
+            },
+        )
+        .unwrap()
+    })
+}
+
+/// The `write` runs of a session, oldest first.
+pub(crate) fn write_runs(h: &Harness, session: i64) -> Vec<rstore::RunRow> {
+    h.query(|c| rstore::all_runs(c, Some(session)).unwrap())
+        .into_iter()
+        .filter(|r| r.trigger == RunTrigger::Write)
+        .collect()
+}
+
+fn jobs_of(h: &Harness, run: i64) -> i64 {
+    h.query(|c| {
+        c.query_row(
+            "SELECT COUNT(*) FROM jobs WHERE kind='research' AND target=?1",
+            [run.to_string()],
+            |r| r.get(0),
+        )
+        .unwrap()
+    })
+}
+
+fn ready() -> Harness {
+    let h = writer_harness();
+    h.set_writer_settings(writer_ok());
+    h
+}
+
+#[test]
+fn w2_c12a_a_queued_research_run_refuses_writing() {
+    let h = ready();
+    run_of(
+        &h,
+        h.item_id,
+        h.session_id,
+        RunTrigger::Manual,
+        RunState::Queued,
+    );
+    let answer = request(&h, h.session_id, Origin::WriteTexts);
+    assert!(!answer.queued);
+    assert_eq!(reason_code(&answer).as_deref(), Some("ResearchBusy"));
+    assert!(write_runs(&h, h.session_id).is_empty());
+}
+
+#[test]
+fn w2_c12b_a_running_look_run_refuses_writing() {
+    let h = ready();
+    run_of(
+        &h,
+        h.item_id,
+        h.session_id,
+        RunTrigger::Look,
+        RunState::Running,
+    );
+    let answer = request(&h, h.session_id, Origin::WriteTexts);
+    assert!(!answer.queued);
+    assert_eq!(reason_code(&answer).as_deref(), Some("ResearchBusy"));
+    assert!(write_runs(&h, h.session_id).is_empty());
+}
+
+#[test]
+fn w2_c12c_the_prerequisites_in_order() {
+    let h = writer_harness();
+    h.app.secrets.delete("research-model-key").unwrap();
+    let ask =
+        |svc: &ResearchService| WriterApi::request(svc, h.session_id, Origin::WriteTexts).unwrap();
+    let neither = h.service_with(|d| d.shop = None);
+    let answer = ask(&neither);
+    assert!(!answer.queued);
+    assert_eq!(reason_code(&answer).as_deref(), Some("NoIntegration"));
+    let answer = ask(&h.service);
+    assert_eq!(reason_code(&answer).as_deref(), Some("NoModelKey"));
+    h.app
+        .secrets
+        .set("research-model-key", "sk-test-key")
+        .unwrap();
+    let answer = ask(&h.service);
+    assert!(!answer.queued);
+    let reason = answer.reason.unwrap();
+    assert_eq!(reason.code, "PriceMissing");
+    assert_eq!(
+        reason.sentence,
+        "No price is set for fake-model gpt-6.1-sol"
+    );
+    assert!(write_runs(&h, h.session_id).is_empty());
+}
+
+#[test]
+fn w2_c12h_the_unassigned_session_has_nothing_to_write() {
+    let h = ready();
+    run_of(
+        &h,
+        h.item_id,
+        h.session_id,
+        RunTrigger::Manual,
+        RunState::Queued,
+    );
+    let unassigned: i64 = h.query(|c| {
+        c.query_row("SELECT id FROM sessions WHERE item_id IS NULL", [], |r| {
+            r.get(0)
+        })
+        .unwrap()
+    });
+    let answer = request(&h, unassigned, Origin::WriteTexts);
+    assert!(!answer.queued);
+    assert_eq!(reason_code(&answer).as_deref(), Some("NothingToWrite"));
+    assert!(write_runs(&h, unassigned).is_empty());
+}
+
+#[test]
+fn w2_c12d_automatic_writing_off_writes_only_on_request() {
+    let h = writer_harness();
+    h.set_writer_settings(json!({"model": "m1", "effort": "low", "auto": false}));
+    let answer = request(&h, h.session_id, Origin::NextToReview);
+    assert_eq!(
+        answer,
+        Requested {
+            queued: false,
+            reason: None
+        }
+    );
+    assert!(write_runs(&h, h.session_id).is_empty());
+    let answer = request(&h, h.session_id, Origin::WriteTexts);
+    assert!(answer.queued);
+    let runs = write_runs(&h, h.session_id);
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].state, RunState::Queued);
+}
+
+#[test]
+fn w2_c12e_automatic_writing_happens_once_unless_it_failed() {
+    let h = ready();
+    run_of(
+        &h,
+        h.item_id,
+        h.session_id,
+        RunTrigger::Write,
+        RunState::Finished,
+    );
+    let answer = request(&h, h.session_id, Origin::AllChecked);
+    assert_eq!(answer.reason, None);
+    assert_eq!(write_runs(&h, h.session_id).len(), 1);
+    let (item, session) = h.new_session("W2-2");
+    run_of(&h, item, session, RunTrigger::Write, RunState::Failed);
+    let answer = request(&h, session, Origin::AllChecked);
+    assert!(answer.queued);
+    let states: Vec<RunState> = write_runs(&h, session).iter().map(|r| r.state).collect();
+    assert_eq!(states, [RunState::Failed, RunState::Queued]);
+}
+
+#[test]
+fn w2_c12f_repeat_presses_keep_one_queued_writer_run() {
+    let h = ready();
+    run_of(
+        &h,
+        h.item_id,
+        h.session_id,
+        RunTrigger::Write,
+        RunState::Queued,
+    );
+    for _ in 0..2 {
+        let answer = request(&h, h.session_id, Origin::WriteTexts);
+        assert_eq!(
+            answer,
+            Requested {
+                queued: true,
+                reason: None
+            }
+        );
+    }
+    assert_eq!(write_runs(&h, h.session_id).len(), 1);
+}
+
+#[test]
+fn w2_c12g_while_texts_are_written_one_more_run_waits() {
+    let h = ready();
+    run_of(
+        &h,
+        h.item_id,
+        h.session_id,
+        RunTrigger::Write,
+        RunState::Running,
+    );
+    let states = |h: &Harness| -> Vec<RunState> {
+        write_runs(h, h.session_id)
+            .iter()
+            .map(|r| r.state)
+            .collect()
+    };
+    assert!(request(&h, h.session_id, Origin::WriteTexts).queued);
+    assert_eq!(states(&h), [RunState::Running, RunState::Queued]);
+    assert!(request(&h, h.session_id, Origin::WriteTexts).queued);
+    assert_eq!(states(&h), [RunState::Running, RunState::Queued]);
+}
+
+#[test]
+fn w2_c13b_a_writer_run_starts_without_waiting_for_photos() {
+    let h = ready();
+    assert!(request(&h, h.session_id, Origin::WriteTexts).queued);
+    h.service.session_changed(h.session_id);
+    let run = write_runs(&h, h.session_id)[0].id;
+    assert_eq!(h.service.tick().unwrap(), Some(run));
+    assert_eq!(h.run_row(run).state, RunState::Running);
+    assert_eq!(jobs_of(&h, run), 1);
+}
+
+#[test]
+fn w2_c13c_the_day_cap_holds_a_writer_run() {
+    let h = ready();
+    h.patch_settings(json!({"max_cost_per_day": "0.001"}));
+    let earlier = run_of(
+        &h,
+        h.item_id,
+        h.session_id,
+        RunTrigger::Manual,
+        RunState::Finished,
+    );
+    let now = h.now();
+    h.query(|c| {
+        c.execute(
+            "INSERT INTO research_calls(run_id,stage,unit_key,attempt,provider,model,effort,state,\
+             request,started_at,cost_micro_usd) \
+             VALUES (?1,'decide','decide',1,'fake-model','m1','low','answered','{}',?2,1000)",
+            rusqlite::params![earlier, now],
+        )
+        .unwrap()
+    });
+    assert!(request(&h, h.session_id, Origin::WriteTexts).queued);
+    let run = write_runs(&h, h.session_id)[0].id;
+    assert_eq!(h.service.tick().unwrap(), None);
+    assert_eq!(h.run_row(run).state, RunState::Queued);
+    assert_eq!(jobs_of(&h, run), 0);
+}
+
+#[test]
+fn w2_c14a_the_writer_stage_is_number_8_and_not_a_research_stage() {
+    assert_eq!(Stage::parse("write"), Some(Stage::Write));
+    assert_eq!(Stage::Write.number(), 8);
+    assert_eq!(Stage::ALL.len(), 7);
+    assert!(!Stage::ALL.contains(&Stage::Write));
+    let stages: Vec<String> = ResearchSettings::default().stages.into_keys().collect();
+    let mut research: Vec<String> = Stage::ALL.iter().map(|s| s.as_str().to_owned()).collect();
+    research.sort();
+    assert_eq!(stages, research);
+}
+
+/// C15's harness: an English instruction "My guide", model `gpt-6.1-terra` at effort `low`, whose
+/// price the research settings carry.
+fn my_guide() -> Harness {
+    let h = writer_harness();
+    let mut prices = h.research_settings().unwrap()["prices"].clone();
+    prices.as_array_mut().unwrap().push(json!({
+        "provider": "fake-model", "model": "gpt-6.1-terra", "fallback_call_usd": "0.001"
+    }));
+    h.patch_settings(json!({ "prices": prices }));
+    h.set_writer_settings(json!({
+        "model": "gpt-6.1-terra",
+        "effort": "low",
+        "instructions": {"English": {"text": "My guide", "versions": []}},
+    }));
+    h
+}
+
+fn snapshot(h: &Harness, run: i64) -> ResearchConfig {
+    ResearchConfig::from_snapshot(h.run_row(run).settings_snapshot.as_deref()).unwrap()
+}
+
+#[test]
+fn w2_c15a_the_start_snapshots_the_writer_settings_and_the_input() {
+    let h = my_guide();
+    assert!(request(&h, h.session_id, Origin::WriteTexts).queued);
+    let run = write_runs(&h, h.session_id)[0].id;
+    assert_eq!(h.service.tick().unwrap(), Some(run));
+    let config = snapshot(&h, run);
+    let writer = config.writer.clone().unwrap();
+    assert_eq!(writer.instruction, "My guide");
+    assert_eq!(writer.origin, "write_texts");
+    let names: Vec<&str> = writer.examples.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["A", "B", "C"]);
+    let stage = config.stage(Stage::Write);
+    assert_eq!(
+        (stage.model.as_str(), stage.effort.as_str()),
+        ("gpt-6.1-terra", "low")
+    );
+    let stored: Json =
+        serde_json::from_str(h.run_row(run).input_snapshot.as_deref().unwrap()).unwrap();
+    assert_eq!(stored, build(&h, &h.service.writer_settings()));
+}
+
+#[test]
+fn w2_c15b_a_later_instruction_change_does_not_reach_a_started_run() {
+    let h = my_guide();
+    assert!(request(&h, h.session_id, Origin::WriteTexts).queued);
+    let run = write_runs(&h, h.session_id)[0].id;
+    h.service.tick().unwrap();
+    h.set_writer_settings(json!({
+        "model": "gpt-6.1-terra",
+        "effort": "low",
+        "instructions": {"English": {"text": "Another guide", "versions": []}},
+    }));
+    h.run_jobs();
+    assert_eq!(snapshot(&h, run).writer.unwrap().instruction, "My guide");
 }

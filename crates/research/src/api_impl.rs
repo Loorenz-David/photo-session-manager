@@ -185,4 +185,12 @@ impl crate::writer::api::WriterApi for ResearchService {
     fn look_again(&self, session_id: i64) -> Result<crate::writer::api::Requested> {
         ResearchService::look_again(self, session_id)
     }
+
+    fn request(
+        &self,
+        session_id: i64,
+        origin: crate::writer::run::Origin,
+    ) -> Result<crate::writer::api::Requested> {
+        ResearchService::writer_request(self, session_id, origin)
+    }
 }
