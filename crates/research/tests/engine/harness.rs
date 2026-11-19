@@ -73,13 +73,18 @@ pub fn save_research(paths: &psm_infra::paths::AppPaths, value: Json) {
     Settings::set(paths, &settings).unwrap();
 }
 
+/// The harness's live `writer` settings slot (W2; the app wires the settings file in W3).
+pub type WriterSlot = Arc<std::sync::Mutex<Option<Json>>>;
+
 fn build_service(
     app: &TestApp,
     model: &Arc<FakeModel>,
     search: &Arc<FakeVisualSearch>,
     reader: &Arc<FakePageReader>,
+    writer: &WriterSlot,
     edit: impl FnOnce(&mut ResearchDeps),
 ) -> ResearchService {
+    let writer = writer.clone();
     let secrets = app.secrets.clone();
     let paths = app.app.paths.clone();
     let clock = app.clock.clone();
@@ -105,6 +110,7 @@ fn build_service(
             .map(|c| Arc::new(CommerceShopFacts::new(c as Arc<dyn CommerceAdapter>))),
         integration: Some(INTEGRATION.to_owned()),
         settings: Arc::new(move || Settings::open(&paths).ok().and_then(|s| s.research)),
+        writer_settings: Arc::new(move || writer.lock().unwrap().clone()),
         events: app.events.clone(),
         wait: Arc::new(move |ms| clock.advance(i64::try_from(ms).unwrap())),
     };
@@ -183,6 +189,8 @@ pub struct Harness {
     pub service: Arc<ResearchService>,
     pub runner: JobRunner,
     pub kill: Arc<KillSwitch>,
+    /// The live `writer` settings slot (`None`: the defaults).
+    pub writer: WriterSlot,
     next_colour: AtomicU8,
 }
 
@@ -342,9 +350,15 @@ impl Harness {
             when: std::sync::Mutex::new(None),
         });
         let switch = kill.clone();
-        let service = Arc::new(build_service(&app, &model, &search, &reader, |deps| {
-            deps.events = switch
-        }));
+        let writer: WriterSlot = Arc::new(std::sync::Mutex::new(None));
+        let service = Arc::new(build_service(
+            &app,
+            &model,
+            &search,
+            &reader,
+            &writer,
+            |deps| deps.events = switch,
+        ));
         let runner = runner_for(&app, &service);
         Harness {
             item_id: item.id,
@@ -357,6 +371,7 @@ impl Harness {
             service,
             runner,
             kill,
+            writer,
             next_colour: AtomicU8::new(0),
         }
     }
@@ -382,6 +397,7 @@ impl Harness {
             &self.model,
             &self.search,
             &self.reader,
+            &self.writer,
             |deps| deps.events = switch,
         ));
         self.runner = runner_for(&self.app, &self.service);
@@ -455,13 +471,25 @@ impl Harness {
 
     /// Another service over the same app with some deps changed.
     pub fn service_with(&self, edit: impl FnOnce(&mut ResearchDeps)) -> ResearchService {
-        build_service(&self.app, &self.model, &self.search, &self.reader, edit)
+        build_service(
+            &self.app,
+            &self.model,
+            &self.search,
+            &self.reader,
+            &self.writer,
+            edit,
+        )
     }
 
     /// The call the app makes after a photo change in the session.
     pub fn changed(&self) {
         self.service.session_changed(self.session_id);
         self.service.arranged(self.session_id).unwrap();
+    }
+
+    /// Saves the live `writer` settings slot (W2).
+    pub fn set_writer_settings(&self, value: Json) {
+        *self.writer.lock().unwrap() = Some(value);
     }
 
     /// Updates the live research settings with `patch` (top-level keys), as a settings save does.

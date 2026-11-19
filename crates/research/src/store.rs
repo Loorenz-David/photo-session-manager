@@ -10,7 +10,8 @@ pub(crate) fn db(error: rusqlite::Error) -> Error {
     Error::InvalidData(error.to_string())
 }
 
-/// The engine's five tables and the two partial unique indexes (idempotent).
+/// The engine's five tables and the two partial unique indexes, and (W2, `master_plan_writer.md`
+/// §4 Storage) the writer's findings (idempotent).
 pub const TABLES: &str = "
 CREATE TABLE IF NOT EXISTS research_runs (
     id INTEGER PRIMARY KEY,
@@ -88,6 +89,24 @@ CREATE TABLE IF NOT EXISTS research_stage_outputs (
     committed_at INTEGER NOT NULL,
     UNIQUE(run_id, stage, unit_key)
 );
+CREATE TABLE IF NOT EXISTS writer_findings (
+    id INTEGER PRIMARY KEY,
+    item_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    run_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    type TEXT NOT NULL,
+    keys TEXT NOT NULL,
+    text_field TEXT NOT NULL DEFAULT '',
+    identity TEXT NOT NULL,
+    text TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    state TEXT NOT NULL,
+    answer TEXT,
+    created_at INTEGER NOT NULL,
+    resolved_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS writer_findings_item ON writer_findings(item_id, identity);
 ";
 
 pub fn create_tables(conn: &Connection) -> Result<()> {

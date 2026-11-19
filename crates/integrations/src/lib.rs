@@ -1818,6 +1818,7 @@ fn build_research(parts: ResearchParts<'_>) -> Result<Arc<ResearchWiring>> {
                 .ok()
                 .and_then(|settings| settings.research)
         }),
+        writer_settings: Arc::new(|| None),
         events: parts.events.clone(),
         wait,
     }));
