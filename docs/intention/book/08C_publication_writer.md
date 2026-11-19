@@ -1,7 +1,7 @@
 # 08C — Publication writer (titles, descriptions, condition report, search texts)
 
-**Status: DRAFT, shaping** (owner David Loorenz; shaper Claude; 2026-11-18). Not ratified: nothing
-here may be planned or built until the owner ratifies it (§13). Branch `feature/agentic`.
+**Status: RATIFIED** (owner David Loorenz, 2026-11-19: "we can implement it"; chapter 16 entry A22).
+Shaper Claude. Branch `feature/agentic`.
 This is the "publication assistant" that 08A §12 deferred to its own chapter. Evidence for the
 writing rules: `docs/intention/evidence/publication_writer_research.md` (research 2026-11-18,
 sources cited there).
@@ -275,3 +275,4 @@ the writer changing any non-text field.
 3. 2026-11-19: decision 1 answered: the grade word comes from the existing Detailed condition
    field. Decision 5 answered: at most one use sentence. No decisions are open, so the chapter is
    ready for ratification.
+4. 2026-11-19: RATIFIED by the owner.
