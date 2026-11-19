@@ -147,11 +147,14 @@ The default guide is the evidence file's §7, adapted. In short:
   1. identity
   2. form and materials
   3. what the workshop did
-  4. at most one use sentence
+  4. at most one use sentence (owner 2026-11-19; may be removed later in the instruction)
   5. the dimensions line with seat height
 - **Condition report:**
   - at most 45 words
-  - opens with a grade word, then the restoration
+  - opens with the grade word of the item's **Detailed condition** (`custom.detailed_condition`:
+    Excellent / Very Good / Good / Worn; Swedish Utmärkt / Mycket gott / Gott / Slitet skick).
+    Research already derives this field from the condition fields (08A, `rules/derived_condition.rs`)
+    and the photographer confirms it in review, so no new field is needed. Then the restoration
   - each flaw with location, size and photo number
   - always states stability
 - **Search title** ≤60 characters. **Search description** 120–155 characters.
@@ -233,7 +236,7 @@ cost. It is exported with Export research.
 **Non-goals:** fine-tuning; AI-text detectors or "humanizer" rewrites (evidence §4: unsupported);
 the writer changing any non-text field.
 
-## 13. ⚠ OWNER DECISIONS REQUIRED (2 open)
+## 13. ⚠ OWNER DECISIONS REQUIRED (0 open)
 
 **Answered 2026-11-19:**
 - **"Attributed to"** is allowed when the designer field marks the attribution as uncertain.
@@ -248,13 +251,10 @@ the writer changing any non-text field.
 - **Provider:** the same provider as research, one key. Models and effort are tested for the best
   result.
 
-**Open:**
-1. **Grade word:** should each condition report open with one overall word (Excellent / Very good
-   / Good / Fair), and where does it come from? The proposal is a new "Overall condition" choice
-   that research suggests from the condition fields and photos and the photographer confirms in
-   review.
-2. **Use sentence:** keep at most one sentence per description on where the piece fits (e.g.
-   "it suits a desk or reading corner"), or leave it out?
+- **Grade word:** yes. It comes from the existing Detailed condition field (owner 2026-11-19), so
+  there is no new field.
+- **Use sentence:** at most one per description. The owner may remove it later through the
+  instruction.
 
 ## Shaping changelog
 
@@ -272,3 +272,6 @@ the writer changing any non-text field.
    Research: `evidence/publication_writer_research.md`.
 2. 2026-11-19: owner answers to §13 decisions 2, 3, 4, 6, 7 and 8. Decisions 1 (grade word) and 5
    (use sentence) were re-explained and are still open.
+3. 2026-11-19: decision 1 answered: the grade word comes from the existing Detailed condition
+   field. Decision 5 answered: at most one use sentence. No decisions are open, so the chapter is
+   ready for ratification.
