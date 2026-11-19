@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # W3 — Texts in AI review
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-19, claude opus (`pipeline-implementer`), implement r1: 3 units, checkpoints 79eb78f · e4f7e3e · f2e18ac; 30 rows → 18 seam/command tests + 1 partition unit test + 12 UI tests; closing gate green: `cargo test --workspace` 1818 passed, clippy, fmt, typecheck, `npm test` 648 passed)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -193,3 +193,58 @@ On scratch data with research keys and chosen fields:
 6. Open the research panel: the writer's block shows what it used, its reasons, any check it failed and the cost.
 
 ## Review log
+### 2026-11-19 · implement r1 (claude opus, `pipeline-implementer`)
+**Built.** U1 (`79eb78f`): the title suggestion in core: `form_get` shows a live `product.title` `ai` row while it is
+`suggested` (or `accepted` and equal to `items.title`); `accept` / `accept_all` set `items.title` in the same undo step
+(`title_follows`); `keep_previous` on the title deletes the row (feedback `kept_previous`, so the writer never writes
+that text again); `clear` on a shown suggestion clears only the row (`clear_title`); a human title edit deletes the
+row (feedback `edited`); `history.rs` checks the item's title beside its row on undo/redo and lets typing merge into
+an edit that removed a suggestion. `partition` skips every `product.title` row; `partition_in` passes the built-in
+definitions with the shop's. U2 (`e4f7e3e`): `Settings.writer`, validated in `prepare`, merged like `research`, nulled
+in the rebuild comparison; `ResearchDeps.writer_settings` reads the live slot; `WriterApi::status` (`WriterStatus`:
+reason, run, texts with hits, attempts, regenerated, open findings, steps, cost, inputs, staleness, can_write); the
+commands `writer_status`, `writer_request`, `writer_finding_answer`, `writer_finding_dismiss`; bindings and
+`services/writer.ts`. U3 (`f2e18ac`): `requestTexts` (fire and forget) called by AI review's "Next to review →", the
+header's "Next to review" and `FormDialog` (closing Details or unmounting while "All checked ✓"); **Write texts** in
+the Product step (refusal as a toast); `WriterBlock` (Writing texts…, asks with Answer, notes with Dismiss) at the top
+of the AI review tab and the writer as the empty reason; long-text rows as paragraphs with a "Check:" line;
+`WriterPanel` in the research panel; the guide (01–05).
+
+**Assumptions** (smallest option consistent with 08C and WC3–WC6):
+1. `clear` on the title: a shown suggestion → only the row is cleared (items.title kept); otherwise the item's title
+   is emptied and a live accepted row is cleared with it (one step).
+2. Accept all keeps skipping a title suggestion that has a prior (it is an MC-A1 conflict like any other); C2(d) has
+   none.
+3. A title edit removing a suggestion is one undo step; further typing merges into it and updates the `edited`
+   feedback's final value.
+4. Undo/redo of a step holding a `product.title` row and the title refuses ("that title was changed") when the item's
+   title is no longer the one the step left; plain title edits restore unconditionally as before.
+5. `status` reads the latest `write` run (delegated choice); findings are the item's `open` ones; `reason` is what a
+   "Write texts" press would meet now (Unassigned → NothingToWrite, ResearchBusy, then `writer_block`).
+6. `writer_request` refuses an unknown origin and `answer` (internal) with `invalid_value`.
+7. "Leaving the session page" = the Details dialog unmounting while AI review shows "All checked ✓" (the AI review
+   tab exists only inside Details); "All checked" = no suggestion left, some AI value, research not queued/running.
+8. On the writer's texts (Product step, long texts), Accept calls the plain accept (`attribute_ai_accept`, the same
+   backend `accept` as Use suggestion); research's conflicts keep Use suggestion (A11 test unchanged). Row C9(a)'s
+   description with a prior is a backend conflict, so without this the row could not hold.
+9. Money format: no helper existed in the research panel; `WriterPanel::money` shows USD with two decimals.
+10. The Write texts button sits at the top of the Product step's fields with one explaining line; a queued answer
+    shows "Writing texts. They arrive in AI review.".
+
+**Deviations** (files outside the plan's lists, each the smallest change a row needed):
+- `crates/core/src/services/settings.rs`: `writer` added to the patch allowlist (merged like `research`); without
+  it `settings_set({"writer": …})` is refused before validation (C4(a)).
+- `crates/research/src/writer/run.rs`: `WriterBlock::ResearchBusy`'s sentence gains "; write texts when it
+  finishes" (C5(b), C7(c) name the full sentence).
+- `crates/research/src/api_impl.rs`: the `status` delegation of `impl WriterApi for ResearchService`.
+- `App.tsx` was not changed: the calls live in the components the rows name (`AiReviewTab`, `Header`, `FormDialog`).
+
+**Observations.** No red baseline was captured before the production edits (tests were written alongside the code;
+flow §4 has no mutation regime). The Rust seam tests passed on their first run. The UI tests found two real defects,
+fixed before the checkpoint: Answer sent the answer twice (the button also submitted its form), and the automatic
+writer request was deferred until after the navigation (C7(a), C7(d) need it first).
+
+**Stamp** (once, on tree `f2e18ac`, all units committed): `cargo test --workspace` exit 0 (1818 passed, 0 failed;
+suite 1008 in 506 s) · `cargo clippy --workspace --all-targets -- -D warnings` exit 0 · `cargo fmt --all -- --check`
+exit 0 · `cd apps/desktop && npm run typecheck` exit 0 · `npm test` exit 0 (104 files, 648 tests). No pre-existing
+failure.
