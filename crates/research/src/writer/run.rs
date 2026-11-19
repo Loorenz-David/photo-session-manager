@@ -4,17 +4,37 @@
 //! and what stops it from being created ([`WriterBlock`]). Unit 4: what it does once started
 //! ([`execute`]).
 
-use psm_core::Result;
-use serde_json::json;
+use std::collections::BTreeMap;
+
+use psm_core::{
+    Result,
+    domain::attribute::{AiConfidence, AttributeGroup, CoreType},
+    mechanisms::values::is_severity_set,
+    ports::store::StoreTx,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value as Json, json};
 
 use crate::{
     api::Reason,
     config::ResearchSettings,
-    domain::{RunState, RunTrigger},
+    domain::{RunState, RunTrigger, Stage, StepKind},
+    gateway::{Answer, CallRequest},
+    ports::ModelRequest,
+    rules::fingerprint::fingerprint,
     service::{MODEL_ACCOUNT, ResearchService, form_snapshot},
-    stages::{Ctx, ExecuteOutcome},
-    store::{self, NewRun},
-    writer::{api::Requested, config::WriterSettings, input::requestable_texts},
+    stages::{Asked, Ctx, ExecuteOutcome, Flow, Work, display, step},
+    store::{self, NewRun, NewStep, OutputRow},
+    writer::{
+        api::Requested,
+        config::{WriterSettings, WriterSnapshot},
+        defaults,
+        input::{requestable_texts, text_keys},
+        postcheck::{CheckContext, Hit, HitCode, SeverityField, check},
+        schema,
+        writes::{outcome_text, write_text},
+    },
+    writes::WriteOutcome,
 };
 
 /// Why a writer run was asked for (`master_plan_writer.md` §4).
@@ -284,10 +304,525 @@ impl ResearchService {
     }
 }
 
-/// Runs a started `write` run (WC4–WC7).
+/// The unit keys of a writer run (`master_plan_writer.md` §4 Storage).
+pub const TEXTS_UNIT: &str = "texts";
+pub const RETRY_UNIT: &str = "retry";
+pub const RESULT_UNIT: &str = "result";
+/// The hit added to a text whose rewrite the run cost limit stopped (WC5, WC7).
+pub const NOT_RECHECKED: &str = "not checked again: run cost limit";
+
+/// The instructions a writer call sends: the instruction text, the title formula, the dimensions
+/// line and the examples (each "Example <name>" with its fields and texts).
+pub fn instructions_text(snapshot: &WriterSnapshot) -> String {
+    let language = snapshot.settings.language.as_str();
+    let mut out = vec![
+        snapshot.instruction.clone(),
+        defaults::title_formula(language).to_owned(),
+        format!("Dimensions line: {}", defaults::dimensions_line(language)),
+    ];
+    for example in &snapshot.examples {
+        out.push(format!(
+            "Example {}\nFields: {}\nTitle: {}\nDescription:\n{}\nCondition report: {}\n\
+             Search title: {}\nSearch description: {}",
+            example.name,
+            example.fields,
+            example.title,
+            example.description,
+            example.condition_report,
+            example.seo_title,
+            example.seo_description,
+        ));
+    }
+    out.join("\n\n")
+}
+
+/// One text of an answer: its value (the description's paragraphs joined by a blank line), the
+/// facts it says it used and its reason.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Drafted {
+    pub value: String,
+    pub facts: Vec<String>,
+    pub reason: String,
+}
+
+/// The requested texts an answer holds, and the names it holds that were not requested.
+fn texts_of(answer: &Json, requested: &[String]) -> (BTreeMap<String, Drafted>, Vec<String>) {
+    let mut texts = BTreeMap::new();
+    let mut extra = Vec::new();
+    for (name, entry) in answer["texts"].as_object().into_iter().flatten() {
+        if !requested.contains(name) {
+            extra.push(name.clone());
+            continue;
+        }
+        let value = match entry["paragraphs"].as_array() {
+            Some(paragraphs) => paragraphs
+                .iter()
+                .filter_map(Json::as_str)
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+            None => entry["text"].as_str().unwrap_or_default().trim().to_owned(),
+        };
+        texts.insert(
+            name.clone(),
+            Drafted {
+                value,
+                facts: entry["facts"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|f| f.as_str().map(str::to_owned))
+                    .collect(),
+                reason: entry["reason"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned(),
+            },
+        );
+    }
+    (texts, extra)
+}
+
+fn check_list(requested: &[String], texts: &BTreeMap<String, Drafted>) -> Vec<(String, String)> {
+    requested
+        .iter()
+        .filter_map(|n| texts.get(n).map(|d| (n.clone(), d.value.clone())))
+        .collect()
+}
+
+/// What the post-check of a writer run is read from (WC5): the input the call carried, the
+/// form snapshot, the run's settings and the attribution names stored now.
+fn check_context(ctx: &Ctx<'_>, input: &Json, settings: &WriterSettings) -> Result<CheckContext> {
+    let fields: Vec<&Json> = input["fields"].as_array().into_iter().flatten().collect();
+    let facts: Vec<String> = fields
+        .iter()
+        .filter(|f| f["fact"].as_bool() == Some(true))
+        .filter_map(|f| f["value"].as_str().map(str::to_owned))
+        .collect();
+    let notes: Vec<String> = input["note"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|o| o["text"].as_str().map(str::to_owned))
+        .collect();
+    let mut severity = Vec::new();
+    for field in &fields {
+        let key = field["key"].as_str().unwrap_or_default();
+        let Some(snapshot) = ctx.form.fields.iter().find(|f| f.definition.key == key) else {
+            continue;
+        };
+        if snapshot.step == AttributeGroup::Condition
+            && snapshot.definition.core_type == CoreType::Choice
+            && is_severity_set(&snapshot.definition.choices)
+        {
+            severity.push(SeverityField {
+                key: key.to_owned(),
+                label: snapshot.definition.label.clone(),
+                value: field["value"].as_str().unwrap_or_default().to_owned(),
+                fact: field["fact"].as_bool() == Some(true),
+            });
+        }
+    }
+    let detailed_key = &ctx.config.detailed_condition.key;
+    let detailed = fields
+        .iter()
+        .find(|f| !detailed_key.is_empty() && f["key"].as_str() == Some(detailed_key))
+        .filter(|f| f["fact"].as_bool() == Some(true))
+        .and_then(|f| f["value"].as_str().map(str::to_owned));
+    let keys = ctx.config.attribution_keys.clone();
+    let integration = ctx.svc.integration.clone();
+    let attribution_names = ctx.svc.store.research_transaction(|tx| {
+        let mut names: Vec<String> = Vec::new();
+        let mut definitions = psm_core::services::attributes::builtin_definitions();
+        if let Some(integration) = &integration {
+            definitions.extend(tx.attribute_definitions(integration)?);
+        }
+        for definition in definitions.iter().filter(|d| keys.contains(&d.key)) {
+            names.extend(definition.choices.iter().cloned());
+        }
+        for key in &keys {
+            let mut stmt = tx
+                .conn()
+                .prepare("SELECT value FROM attribute_values WHERE key=?1")
+                .map_err(store::db)?;
+            let values = stmt
+                .query_map([key], |r| r.get::<_, String>(0))
+                .map_err(store::db)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(store::db)?;
+            for value in values {
+                if let Ok(json) = serde_json::from_str::<Json>(&value) {
+                    match json {
+                        Json::Array(items) => names.extend(items.iter().map(display)),
+                        other => names.push(display(&other)),
+                    }
+                }
+            }
+        }
+        Ok(names)
+    })?;
+    Ok(CheckContext {
+        language: settings.language.clone(),
+        lengths: settings.lengths.clone(),
+        banned_extra: settings.banned_extra.clone(),
+        facts,
+        notes,
+        severity,
+        damage_terms: settings.damage_terms.clone(),
+        detailed,
+        attribution_names,
+    })
+}
+
+/// One writer call as a unit's work: the answer committed as the unit's output.
+fn call(
+    ctx: &Ctx<'_>,
+    unit_key: &str,
+    instructions: &str,
+    input: &Json,
+    language: &str,
+) -> Result<Work> {
+    let stage = ctx.config.stage(Stage::Write);
+    // HW4: a writer request never carries an image.
+    let request = CallRequest::Model(ModelRequest {
+        stage: Stage::Write,
+        unit_key: unit_key.to_owned(),
+        model: stage.model,
+        effort: stage.effort,
+        language: language.to_owned(),
+        instructions: instructions.to_owned(),
+        input: input.clone(),
+        images: Vec::new(),
+        listing_images: Vec::new(),
+    });
+    let (asked, _) = ctx.ask(Stage::Write, unit_key, request)?;
+    Ok(match asked {
+        Asked::Answer(Answer::Model(reply)) => Work::Commit {
+            output: json!({ "answer": reply.output }),
+            steps: Vec::new(),
+        },
+        Asked::Answer(_) => Work::Commit {
+            output: json!({ "answer": null }),
+            steps: Vec::new(),
+        },
+        Asked::NotDetermined(text) => Work::Commit {
+            output: json!({ "answer": null, "refusal": text }),
+            steps: Vec::new(),
+        },
+        Asked::Work(work) => work,
+    })
+}
+
+fn hits_json(hits: &[Hit]) -> Json {
+    serde_json::to_value(hits).unwrap_or(Json::Null)
+}
+
+/// The run's end after its `result` unit committed.
+fn finish(ctx: &Ctx<'_>, output: &Json) -> Result<ExecuteOutcome> {
+    let (state, outcome) = if output["ending"].as_str() == Some(RunState::StoppedAtCap.as_str()) {
+        (RunState::StoppedAtCap, ExecuteOutcome::StoppedAtCap)
+    } else {
+        (RunState::Finished, ExecuteOutcome::Finished)
+    };
+    crate::decide::end(ctx, state)?;
+    Ok(outcome)
+}
+
+/// Runs a started `write` run (WC4–WC7): unit `texts` (the call), unit `retry` (the rewrite of
+/// the texts with post-check hits, at most once), unit `result` (the writes, one step per text,
+/// the findings and the output, in one transaction). A committed unit never runs again.
 pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
-    crate::decide::end(ctx, RunState::Finished)?;
-    Ok(ExecuteOutcome::Finished)
+    let committed = ctx.svc.store.research_transaction(|tx| {
+        store::output(tx.conn(), ctx.run.id, Stage::Write.as_str(), RESULT_UNIT)
+    })?;
+    if let Some(row) = committed {
+        return finish(
+            ctx,
+            &serde_json::from_str(&row.output).unwrap_or(Json::Null),
+        );
+    }
+    let Some(snapshot) = ctx.config.writer.clone() else {
+        let now = ctx.svc.clock.now_ms();
+        ctx.svc.store.research_transaction(|tx| {
+            store::set_run_state(
+                tx.conn(),
+                ctx.run.id,
+                RunState::Failed,
+                Some("the run has no writer settings"),
+                Some(now),
+            )
+        })?;
+        ctx.svc.changed(ctx.run.session_id);
+        return Ok(ExecuteOutcome::Failed);
+    };
+    let settings = &snapshot.settings;
+    let input: Json = ctx
+        .run
+        .input_snapshot
+        .as_deref()
+        .and_then(|t| serde_json::from_str(t).ok())
+        .unwrap_or(Json::Null);
+    let requested = schema::requested(&input);
+    let instructions = instructions_text(&snapshot);
+    let stage = ctx.config.stage(Stage::Write);
+    let language = settings.language.clone();
+    let identity = json!({
+        "input": input,
+        "instructions": instructions,
+        "model": stage.model,
+        "effort": stage.effort,
+    });
+    let first = match ctx.unit(Stage::Write, TEXTS_UNIT, identity, |ctx| {
+        call(ctx, TEXTS_UNIT, &instructions, &input, &language)
+    })? {
+        Flow::Done(done) => done.output,
+        Flow::Skip => {
+            crate::decide::end(ctx, RunState::StoppedAtCap)?;
+            return Ok(ExecuteOutcome::StoppedAtCap);
+        }
+        Flow::Halt(outcome) => return Ok(outcome),
+    };
+    let first_answer = first["answer"].clone();
+    let (mut texts, extra) = texts_of(&first_answer, &requested);
+    let check_ctx = check_context(ctx, &input, settings)?;
+    let first_hits = check(&check_list(&requested, &texts), &check_ctx);
+    log_post_check(ctx.run.id, 1, &first_hits);
+    let mut attempts = vec![json!({ "attempt": 1, "hits": hits_json(&first_hits) })];
+    let mut hits = first_hits.clone();
+    let mut regenerated: Vec<String> = Vec::new();
+    let mut stopped = false;
+    if !first_hits.is_empty() {
+        let rewrite: Vec<String> = requested
+            .iter()
+            .filter(|n| first_hits.iter().any(|h| &h.text == *n))
+            .cloned()
+            .collect();
+        let mut retry_input = input.clone();
+        retry_input["texts"] = json!(rewrite);
+        retry_input["previous"] = Json::Object(
+            rewrite
+                .iter()
+                .filter_map(|n| texts.get(n).map(|d| (n.clone(), json!(d.value))))
+                .collect(),
+        );
+        retry_input["hits"] = hits_json(&first_hits);
+        let named: Vec<String> = first_hits
+            .iter()
+            .map(|h| format!("{}: {}", h.text, h.detail))
+            .collect();
+        let retry_instructions = format!(
+            "{instructions}\n\nRewrite only the texts listed in `texts`. The earlier versions are \
+             in `previous` and failed these checks: {}.",
+            named.join("; ")
+        );
+        let identity = json!({
+            "input": retry_input,
+            "instructions": retry_instructions,
+            "model": stage.model,
+            "effort": stage.effort,
+        });
+        match ctx.unit(Stage::Write, RETRY_UNIT, identity, |ctx| {
+            call(
+                ctx,
+                RETRY_UNIT,
+                &retry_instructions,
+                &retry_input,
+                &language,
+            )
+        })? {
+            Flow::Done(done) => {
+                let (rewritten, _) = texts_of(&done.output["answer"], &rewrite);
+                for (name, drafted) in rewritten {
+                    regenerated.push(name.clone());
+                    texts.insert(name, drafted);
+                }
+                hits = check(&check_list(&requested, &texts), &check_ctx);
+                log_post_check(ctx.run.id, 2, &hits);
+                attempts.push(json!({ "attempt": 2, "hits": hits_json(&hits) }));
+            }
+            Flow::Skip => {
+                stopped = true;
+                for name in &rewrite {
+                    hits.push(Hit {
+                        text: name.clone(),
+                        code: HitCode::NotRechecked,
+                        detail: NOT_RECHECKED.to_owned(),
+                        key: None,
+                    });
+                }
+            }
+            Flow::Halt(outcome) => return Ok(outcome),
+        }
+    }
+    let keys = text_keys(settings);
+    let key_of = |name: &str| {
+        keys.iter()
+            .find(|(n, _)| *n == name)
+            .map_or_else(|| name.to_owned(), |(_, k)| k.clone())
+    };
+    let label = |key: &str| {
+        ctx.form
+            .fields
+            .iter()
+            .find(|f| f.definition.key == key)
+            .map_or_else(|| key.to_owned(), |f| f.definition.label.clone())
+    };
+    let allowed: Vec<String> = requested.iter().map(|n| key_of(n)).collect();
+    let ending = if stopped {
+        RunState::StoppedAtCap
+    } else {
+        RunState::Finished
+    };
+    let now = ctx.svc.clock.now_ms();
+    let integration = ctx.svc.integration.clone();
+    let item_id = ctx.run.item_id;
+    let identity = json!({ "texts": texts, "hits": hits_json(&hits) });
+    let fingerprint = fingerprint(Stage::Write.number(), &identity)
+        .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
+    let questions = first_answer["questions"].clone();
+    let (written, flagged) = ctx.svc.store.research_transaction(|tx| {
+        let mut writes: Vec<Json> = Vec::new();
+        let mut texts_out = Map::new();
+        let mut steps: Vec<NewStep> = Vec::new();
+        let (mut written, mut flagged) = (0, 0);
+        for name in &requested {
+            let key = key_of(name);
+            let field = label(&key);
+            let Some(drafted) = texts.get(name).filter(|d| !d.value.is_empty()) else {
+                let mut nd = step(
+                    Stage::Write,
+                    StepKind::NotDetermined,
+                    format!("{field}: no text"),
+                );
+                nd.detail = "the writer gave no text".to_owned();
+                nd.field_keys = vec![key.clone()];
+                steps.push(nd);
+                writes.push(json!({ "key": key, "outcome": "no text" }));
+                continue;
+            };
+            let own: Vec<&Hit> = hits.iter().filter(|h| &h.text == name).collect();
+            let facts: Vec<String> = drafted.facts.iter().map(|f| label(f)).collect();
+            let mut reason = format!("{}\nFacts: {}", drafted.reason, facts.join(", "));
+            if !own.is_empty() {
+                reason.push_str(&format!(
+                    "\nCheck: {}",
+                    own.iter()
+                        .map(|h| h.detail.as_str())
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                ));
+            }
+            let confidence = if own.is_empty() {
+                AiConfidence::Medium
+            } else {
+                AiConfidence::Low
+            };
+            let outcome = write_text(
+                tx,
+                now,
+                integration.as_deref(),
+                item_id,
+                &key,
+                &json!(drafted.value),
+                confidence,
+                &reason,
+                &allowed,
+            )?;
+            texts_out.insert(
+                name.clone(),
+                json!({
+                    "key": key,
+                    "value": drafted.value,
+                    "facts": drafted.facts,
+                    "reason": reason,
+                    "confidence": confidence.as_str(),
+                    "hits": own,
+                }),
+            );
+            writes.push(json!({ "key": key, "outcome": outcome_text(&outcome) }));
+            match outcome {
+                WriteOutcome::Written(_) | WriteOutcome::Unchanged => {
+                    written += 1;
+                    if !own.is_empty() {
+                        flagged += 1;
+                    }
+                    let mut concluded = step(
+                        Stage::Write,
+                        StepKind::Concluded,
+                        format!("{field}: written ({})", confidence.as_str()),
+                    );
+                    concluded.detail = reason.clone();
+                    concluded.field_keys = vec![key.clone()];
+                    steps.push(concluded);
+                }
+                other => {
+                    let text = outcome_text(&other);
+                    let mut nd = step(
+                        Stage::Write,
+                        StepKind::NotDetermined,
+                        format!("{field}: {text}"),
+                    );
+                    nd.detail = text;
+                    nd.field_keys = vec![key.clone()];
+                    steps.push(nd);
+                }
+            }
+        }
+        for name in &extra {
+            writes.push(json!({ "key": key_of(name), "outcome": "not requested" }));
+        }
+        let output = json!({
+            "texts": texts_out,
+            "hits": attempts,
+            "writes": writes,
+            "findings": [],
+            "questions": questions,
+            "regenerated": regenerated,
+            "ending": ending.as_str(),
+        });
+        let conn = tx.conn();
+        store::insert_output(
+            conn,
+            &OutputRow {
+                run_id: ctx.run.id,
+                stage: Stage::Write.as_str().to_owned(),
+                unit_key: RESULT_UNIT.to_owned(),
+                fingerprint: fingerprint.clone(),
+                output: output.to_string(),
+                reused_from_run_id: None,
+                committed_at: now,
+            },
+        )?;
+        for s in &steps {
+            store::insert_step(conn, ctx.run.id, s, now)?;
+        }
+        store::set_stage_reached(conn, ctx.run.id, Stage::Write.as_str())?;
+        Ok((written, flagged))
+    })?;
+    ctx.svc.changed(ctx.run.session_id);
+    let cost = ctx
+        .svc
+        .store
+        .research_transaction(|tx| store::run(tx.conn(), ctx.run.id))?
+        .map_or(0, |r| r.cost_micro_usd);
+    tracing::info!(
+        target: "psm::writer",
+        "writer.finished run={} written={written} flagged={flagged} regenerated={} findings=0 \
+         questions=0 cost_micro_usd={cost}",
+        ctx.run.id,
+        regenerated.len()
+    );
+    finish(ctx, &json!({ "ending": ending.as_str() }))
+}
+
+fn log_post_check(run_id: i64, attempt: u32, hits: &[Hit]) {
+    tracing::info!(
+        target: "psm::writer",
+        "writer.post_check run={run_id} attempt={attempt} hits={}",
+        hits.len()
+    );
 }
 
 #[cfg(test)]

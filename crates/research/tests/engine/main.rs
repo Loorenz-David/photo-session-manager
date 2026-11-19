@@ -22,4 +22,5 @@ mod settings_r11;
 mod stages;
 mod w1_note;
 mod w2_writer_run;
+mod w2_writer_writes;
 mod writes;
