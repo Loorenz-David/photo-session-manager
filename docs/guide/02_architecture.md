@@ -311,7 +311,11 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
    item, with stock if chosen; export = masters + outputs) → `upload` (`staged_uploads_create_many`,
    4 uploads at a time, `product_create_media_many`, `file_create_many` for condition files, poll) →
    `update` (gallery reconcile MC-12, metafields MC-13, damage report MC-14, title/type/tags/
-   description/inventory read-back) → `done` (`published_at`, backup). Each step is idempotent and
+   description/inventory read-back, then the search texts: `update_seo` in `services/publish.rs`,
+   writer master plan WC8.4 — only when a frozen `product.seo_title` / `product.seo_description` is
+   non-blank; reads `product_seo`, writes both fields in one `update_seo` only when one differs
+   (trimmed), never clears a field without a frozen value, reads back and fails with
+   `attribute_verification` naming the key) → `done` (`published_at`, backup). Each step is idempotent and
    resumes after a crash (H4); `photo_links` rows track per-photo upload state and remote ids.
 3. Waiting: a Capture One "not ready" error (`mechanisms/backoff.rs::editor_wait`) requeues with
    backoff 1/2/4/8 s then 15 s, label "Waiting for Capture One…", gives up after 10 min with a plain
@@ -319,7 +323,14 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
 4. Shopify specifics: `ShopifyAdapter` over `graphql.rs` documents; token from `auth.rs`
    (client credentials, memory only); `api_version` from settings (default `2026-10`); files found by
    name (`FILES_BY_NAME`), inventory via `LOCATIONS`/`PRODUCT_SET`/`INVENTORY_READBACK`.
-5. Log line at the end: `publish.timing item=<sku> masters_ms= outputs_ms= upload_ms= shopify_ms= total_ms= masters_reused=n/m`.
+5. Log line at the end: `publish.timing item=<sku> masters_ms= outputs_ms= upload_ms= shopify_ms= total_ms= masters_reused=n/m`;
+   the SEO step logs `publish.seo item=<publish item id> written=<bool>` (W5).
+6. Search texts (W5): `product.seo_title` (Text) and `product.seo_description` (Textarea) are built-in
+   Product fields, **always present** (`ALWAYS_PRESENT` + `append_always_present` in
+   `services/attributes.rs`, applied by `layout_keys`, `form_get`, `presets_get`); read from the linked
+   product as `integration` rows like the description (`RemoteValues.seo_*`, Shopify `seo` through
+   `adapter::seo_of`); `CommerceAdapter::product_seo` / `update_seo` (`PRODUCT_SEO_READ`,
+   `PRODUCT_UPDATE_SEO`; evidence `shopify_admin.md` §SEO search texts).
 
 ### Camera runtime, sidecar protocol, FTP receiver (book `10E` MC-31…MC-33; `native/camera-sidecar/README.md`)
 - **One `CameraRuntime` per process** (`camera/runtime.rs`), created in `App::open_with_adapter_bind`

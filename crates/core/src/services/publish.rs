@@ -8,7 +8,7 @@ use crate::{
         photo::{Classification, Integrity},
         publish::{
             ConfirmedRun, Notification, PhotoLink, PreviewConflict, PublishActivity, PublishItem,
-            PublishPreview, PublishPreviewItem, ShownSuggestions, StockChoice, StockLocations,
+            PublishPreview, PublishPreviewItem, Seo, ShownSuggestions, StockChoice, StockLocations,
             StockOutcome,
         },
         research::FeedbackAction,
@@ -33,7 +33,11 @@ use crate::{
         events::EventSink,
         store::{Store, StoreTx},
     },
-    services::{attributes::layout_keys, export::ExportService, integrity::IntegrityCheck},
+    services::{
+        attributes::{PRODUCT_SEO_DESCRIPTION, PRODUCT_SEO_TITLE, layout_keys},
+        export::ExportService,
+        integrity::IntegrityCheck,
+    },
 };
 use serde_json::Value as Json;
 use std::{
@@ -1971,6 +1975,7 @@ impl PublishService {
             self.commerce
                 .update_description(run, &external, description)?;
         }
+        self.update_seo(item, run, &external, &attributes)?;
         let local_tags = attributes
             .get("product.tags")
             .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok());
@@ -2010,6 +2015,61 @@ impl PublishService {
             }
         }
         Ok(true)
+    }
+}
+
+impl PublishService {
+    /// WC8.4–5: the search texts, after the description. Only frozen non-blank values are sent;
+    /// a key without one keeps the remote value as read (never cleared, M20). The remote is read
+    /// before writing, so a resumed step whose earlier write landed sends nothing again (M18).
+    fn update_seo(
+        &self,
+        item: &PublishItem,
+        run: &ConfirmedRun,
+        external: &str,
+        attributes: &BTreeMap<String, Json>,
+    ) -> Result<()> {
+        let frozen = |key: &str| {
+            attributes
+                .get(key)
+                .and_then(Json::as_str)
+                .filter(|text| !text.trim().is_empty())
+                .map(str::to_owned)
+        };
+        let (title, description) = (frozen(PRODUCT_SEO_TITLE), frozen(PRODUCT_SEO_DESCRIPTION));
+        if title.is_none() && description.is_none() {
+            return Ok(());
+        }
+        let remote = self.commerce.product_seo(external)?;
+        let same = |a: &Option<String>, b: &Option<String>| {
+            a.as_deref().map(str::trim).filter(|t| !t.is_empty())
+                == b.as_deref().map(str::trim).filter(|t| !t.is_empty())
+        };
+        let desired = Seo {
+            title: title.or_else(|| remote.title.clone()),
+            description: description.or_else(|| remote.description.clone()),
+        };
+        let title_changed = !same(&desired.title, &remote.title);
+        let description_changed = !same(&desired.description, &remote.description);
+        let written = title_changed || description_changed;
+        if written {
+            self.set_text(item.id, "Writing the search texts");
+            self.commerce.update_seo(run, external, &desired)?;
+            let back = self.commerce.product_seo(external)?;
+            let mut failed = Vec::new();
+            if title_changed && !same(&back.title, &desired.title) {
+                failed.push(PRODUCT_SEO_TITLE.to_owned());
+            }
+            if description_changed && !same(&back.description, &desired.description) {
+                failed.push(PRODUCT_SEO_DESCRIPTION.to_owned());
+            }
+            if !failed.is_empty() {
+                tracing::info!("publish.seo item={} written=true verified=false", item.id);
+                return Err(Error::AttributeVerification { keys: failed });
+            }
+        }
+        tracing::info!("publish.seo item={} written={written}", item.id);
+        Ok(())
     }
 }
 

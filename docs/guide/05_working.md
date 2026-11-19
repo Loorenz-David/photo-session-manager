@@ -60,6 +60,7 @@ Log file: `~/Library/Application Support/com.loorenz.sessionmanager/logs/psm.<yy
 | Line | Meaning |
 |---|---|
 | `publish.timing item=<sku> masters_ms= outputs_ms= upload_ms= shopify_ms= total_ms= masters_reused=n/m` | one per finished publish item: wait for Capture One masters, the app's own render, upload, Shopify calls (P69) |
+| `publish.seo item=<publish item id> written=<bool>` | the publish's search-texts step (W5): `written=false` when the shop already held the frozen texts (or none were frozen, then no line); `verified=false` added when the read-back differed |
 | `capture_one.sync …` / `capture_one.variant_seen … after_ms=` | the app asked Capture One to look at the folder; how long until the variant existed (P65) |
 | `preview render deferred … attempts=n next_s=` / `variant poll deferred` | Capture One not ready yet; retrying with backoff. A16: logged on attempt 1, 2, 4, 8…; a photo Capture One does not list is asked again after up to 10 minutes |
 | `export failed` / `export stopped waiting for Capture One` | an export (or the export step of a publish) failed or gave up after the 10 min wait |

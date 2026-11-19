@@ -4,7 +4,10 @@
 //! with the research fakes). U3: the publish step (`PublishService` through `TestApp` with the
 //! fake commerce adapter).
 
-use std::fs;
+use std::{
+    fs,
+    sync::{Arc, Mutex},
+};
 
 use psm_core::{
     domain::{
@@ -12,6 +15,8 @@ use psm_core::{
             AiConfidence, AiPrior, AiStatus, AttributeGroup, Preset, PresetField, Provenance,
         },
         photo::{Classification as C, NewPhoto, PhotoSource},
+        publish::{PublishItem, Seo},
+        session::PublishStep,
     },
     mechanisms::hash::sha256_file,
     services::attributes::{AttributesService, RemoteRead, layout_keys},
@@ -381,4 +386,279 @@ fn w5_c3c_a_shop_search_title_becomes_the_suggestions_prior() {
             provenance: Provenance::Integration,
         })
     );
+}
+
+// ---------------------------------------------------------------- U3: the publish step
+
+const PUBLISH_NOW_MS: i64 = 1_763_580_000_000;
+
+fn publish_app() -> TestApp {
+    let a = TestApp::with_fake_shop().unwrap();
+    a.clock.advance(PUBLISH_NOW_MS);
+    a
+}
+
+/// A local item with one session and one Main photo, linked to a fake product:
+/// `(session, item, product id)`.
+fn linked_session(a: &TestApp, sku: &str) -> (i64, i64, String) {
+    let (item, session) = a.items().create_local(sku, "Oak", "Chair", None).unwrap();
+    let s = session.session.id;
+    let dir = a.dir.path().join("Capture/raws");
+    fs::create_dir_all(&dir).unwrap();
+    let raw = dir.join(format!("{sku}.ARW"));
+    fs::write(&raw, format!("raw bytes of {sku}")).unwrap();
+    let photo = a
+        .store()
+        .photo_insert_or_get(NewPhoto {
+            session_id: s,
+            raw_path: raw.to_string_lossy().into_owned(),
+            raw_hash: Some(sha256_file(&raw).unwrap()),
+            captured_at: Some(PUBLISH_NOW_MS),
+            source: PhotoSource::Capture,
+            created_at: PUBLISH_NOW_MS,
+        })
+        .unwrap();
+    a.store().upsert_raw_state(&photo.raw_path, None).unwrap();
+    a.review().classify(photo.id, C::Main).unwrap();
+    a.fake
+        .add_image(&photo.raw_path, &[&format!("v{}", photo.id)], false);
+    let id = a.fake_shop().add_product(sku, "Oak", None);
+    a.items().link(item.id, "shopify", &id, None).unwrap();
+    (s, item.id, id)
+}
+
+fn human(a: &TestApp, item: i64, key: &str, text: &str) {
+    a.attributes(Some("shopify"))
+        .set_value(item, key, json!(text), Provenance::Human)
+        .unwrap();
+}
+
+/// An `ai` + `suggested` row stored as the writer leaves one.
+fn suggestion(
+    a: &TestApp,
+    item: i64,
+    key: &str,
+    text: &str,
+    confidence: AiConfidence,
+    prior: Option<&str>,
+) {
+    a.store()
+        .transaction(&mut |tx| {
+            tx.put_attribute_value(&psm_core::domain::attribute::Value {
+                item_id: item,
+                key: key.into(),
+                value: json!(text).to_string(),
+                valid: true,
+                provenance: Provenance::Ai,
+                ai_confidence: Some(confidence),
+                ai_status: Some(AiStatus::Suggested),
+                ai_reason: Some("For search.".into()),
+                ai_sources: Some(Vec::new()),
+                ai_prior: prior.map(|p| AiPrior {
+                    value: json!(p).to_string(),
+                    valid: true,
+                    provenance: Provenance::Integration,
+                }),
+                updated_at: PUBLISH_NOW_MS,
+            })
+        })
+        .unwrap();
+}
+
+fn drain(a: &TestApp) {
+    for _ in 0..15 {
+        a.tick(1_100).unwrap();
+        a.complete_all_renders().unwrap();
+    }
+}
+
+fn latest(a: &TestApp, s: i64) -> PublishItem {
+    a.store()
+        .publish_item(a.store().latest_publish(s).unwrap().unwrap().item_id)
+        .unwrap()
+}
+
+fn seo_writes(a: &TestApp) -> Vec<Seo> {
+    a.fake_shop().state.lock().unwrap().seo_writes.clone()
+}
+
+fn seo_reads(a: &TestApp) -> usize {
+    a.fake_shop()
+        .state
+        .lock()
+        .unwrap()
+        .reads
+        .iter()
+        .filter(|op| *op == "product_seo")
+        .count()
+}
+
+fn seo(title: Option<&str>, description: Option<&str>) -> Seo {
+    Seo {
+        title: title.map(Into::into),
+        description: description.map(Into::into),
+    }
+}
+
+#[test]
+fn w5_c6a_a_frozen_search_title_is_written_with_the_remote_description_kept() {
+    let a = publish_app();
+    let (s, item, id) = linked_session(&a, "W5-C6A");
+    human(&a, item, SEO_TITLE, "Teak chair, 1960s");
+    a.fake_shop().set_seo(&id, None, Some("Shop meta"));
+    // At each `product_seo` read: how many `update_seo` calls the shop had received.
+    let writes_at_read = Arc::new(Mutex::new(Vec::new()));
+    let seen = writes_at_read.clone();
+    let shop = a.commerce.clone().unwrap();
+    a.fake_shop().set_hook(Some(Box::new(move |op| {
+        if op == "product_seo" {
+            let writes = shop.state.lock().unwrap().seo_writes.len();
+            seen.lock().unwrap().push(writes);
+        }
+    })));
+    a.confirm_as_shown(&[s], "Publish").unwrap();
+    drain(&a);
+    a.fake_shop().set_hook(None);
+    assert_eq!(
+        seo_writes(&a),
+        [seo(Some("Teak chair, 1960s"), Some("Shop meta"))]
+    );
+    assert_eq!(*writes_at_read.lock().unwrap(), [0, 1]);
+    assert_eq!(latest(&a, s).step, PublishStep::Done);
+}
+
+#[test]
+fn w5_c6b_search_texts_equal_after_trimming_are_not_written() {
+    let a = publish_app();
+    let (s, item, id) = linked_session(&a, "W5-C6B");
+    human(&a, item, SEO_TITLE, "Teak chair, 1960s");
+    human(&a, item, SEO_DESCRIPTION, "Shop meta");
+    a.fake_shop()
+        .set_seo(&id, Some("  Teak chair, 1960s "), Some("Shop meta\n"));
+    a.confirm_as_shown(&[s], "Publish").unwrap();
+    drain(&a);
+    assert!(seo_writes(&a).is_empty());
+    assert!(
+        !a.fake_shop()
+            .mutation_ops()
+            .contains(&"update_seo".to_owned())
+    );
+    assert_eq!(latest(&a, s).step, PublishStep::Done);
+}
+
+#[test]
+fn w5_c6c_no_frozen_search_text_reads_and_writes_nothing() {
+    let a = publish_app();
+    let (s, _, id) = linked_session(&a, "W5-C6C");
+    a.fake_shop()
+        .set_seo(&id, Some("Shop title"), Some("Shop meta"));
+    a.confirm_as_shown(&[s], "Publish").unwrap();
+    drain(&a);
+    assert_eq!(latest(&a, s).step, PublishStep::Done);
+    assert_eq!(seo_reads(&a), 0);
+    assert!(seo_writes(&a).is_empty());
+}
+
+#[test]
+fn w5_c7a_a_frozen_description_alone_sends_the_unset_title_as_null() {
+    let a = publish_app();
+    let (s, item, _) = linked_session(&a, "W5-C7A");
+    human(&a, item, SEO_DESCRIPTION, CLEAN_SEO_DESCRIPTION);
+    a.confirm_as_shown(&[s], "Publish").unwrap();
+    drain(&a);
+    assert_eq!(seo_writes(&a), [seo(None, Some(CLEAN_SEO_DESCRIPTION))]);
+    assert_eq!(latest(&a, s).step, PublishStep::Done);
+}
+
+#[test]
+fn w5_c8a_a_search_title_read_back_different_fails_the_update_naming_it() {
+    let a = publish_app();
+    let (s, item, _) = linked_session(&a, "W5-C8A");
+    let title = "Danish Teak Lounge Chair with a New Papercord Seat and an Oiled Frame 1960s";
+    assert_eq!(title.chars().count(), 75);
+    human(&a, item, SEO_TITLE, title);
+    a.fake_shop().state.lock().unwrap().seo_title_cut = Some(70);
+    a.confirm_as_shown(&[s], "Publish").unwrap();
+    drain(&a);
+    let p = latest(&a, s);
+    assert_eq!(p.step, PublishStep::Failed);
+    assert_eq!(p.failed_step, Some(PublishStep::Update));
+    let error = p.error.unwrap();
+    assert!(error.contains(SEO_TITLE), "{error}");
+    assert!(!error.contains(SEO_DESCRIPTION), "{error}");
+}
+
+#[test]
+fn w5_c9a_a_kill_after_the_search_write_resumes_without_writing_again() {
+    let mut a = publish_app();
+    let (s, item, id) = linked_session(&a, "W5-C9A");
+    human(&a, item, SEO_TITLE, "Teak chair, 1960s");
+    human(&a, item, SEO_DESCRIPTION, CLEAN_SEO_DESCRIPTION);
+    a.confirm_as_shown(&[s], "Publish").unwrap();
+    a.fake_shop().fail_after_effect("update_seo");
+    let killed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drain(&a)));
+    assert!(killed.is_err(), "the process was not killed at update_seo");
+    assert_eq!(seo_writes(&a).len(), 1);
+    a.kill_and_restart().unwrap();
+    drain(&a);
+    assert_eq!(seo_writes(&a).len(), 1, "a second update_seo after resume");
+    assert_eq!(latest(&a, s).step, PublishStep::Done);
+    assert_eq!(
+        a.fake_shop().seo_of(&id),
+        seo(Some("Teak chair, 1960s"), Some(CLEAN_SEO_DESCRIPTION))
+    );
+}
+
+#[test]
+fn w5_c9b_a_low_search_title_without_prior_is_withheld_and_not_sent() {
+    let a = publish_app();
+    let (s, item, _) = linked_session(&a, "W5-C9B");
+    suggestion(
+        &a,
+        item,
+        SEO_TITLE,
+        CLEAN_SEO_TITLE,
+        AiConfidence::Low,
+        None,
+    );
+    let preview = a.app.publish.as_ref().unwrap().preview(&[s]).unwrap();
+    assert_eq!(preview.items[0].n_withheld, 1);
+    a.confirm_as_shown(&[s], "Publish").unwrap();
+    drain(&a);
+    let p = latest(&a, s);
+    assert_eq!(p.frozen_attribute_origin[SEO_TITLE]["class"], "withheld");
+    assert_eq!(p.step, PublishStep::Done);
+    assert!(seo_writes(&a).is_empty());
+}
+
+#[test]
+fn w5_c9c_a_search_description_with_a_prior_holds_until_use_suggestion() {
+    let a = publish_app();
+    let (s, item, id) = linked_session(&a, "W5-C9C");
+    a.fake_shop().set_seo(&id, None, Some("Shop meta"));
+    suggestion(
+        &a,
+        item,
+        SEO_DESCRIPTION,
+        CLEAN_SEO_DESCRIPTION,
+        AiConfidence::Medium,
+        Some("Shop meta"),
+    );
+    let preview = a.app.publish.as_ref().unwrap().preview(&[s]).unwrap();
+    let conflicts: Vec<&str> = preview.items[0]
+        .conflicts
+        .iter()
+        .map(|c| c.key.as_str())
+        .collect();
+    assert_eq!(conflicts, [SEO_DESCRIPTION]);
+    a.confirm_as_shown(&[s], "Publish").unwrap();
+    assert_eq!(latest(&a, s).step, PublishStep::Held);
+    drain(&a);
+    assert!(seo_writes(&a).is_empty());
+    a.attributes(Some("shopify"))
+        .accept(item, SEO_DESCRIPTION)
+        .unwrap();
+    drain(&a);
+    assert_eq!(latest(&a, s).step, PublishStep::Done);
+    assert_eq!(seo_writes(&a), [seo(None, Some(CLEAN_SEO_DESCRIPTION))]);
 }
