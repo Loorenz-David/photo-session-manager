@@ -11,7 +11,7 @@ use psm_core::{
 use rusqlite::params;
 
 use crate::{
-    api::{QueueView, Reason, ResearchStatus, RunView, SessionResearch, StepView},
+    api::{QueueView, Reason, ResearchStatus, RunView, SessionResearch, StepView, WriterOverview},
     config::{ResearchConfig, ResearchSettings},
     domain::{Prerequisite, RunState, RunTrigger, Stage},
     images::{eligible, source},
@@ -785,6 +785,49 @@ impl ResearchService {
                     .map_err(store::db)?;
                 Ok((latest, suggested, unrun))
             })?;
+        // A24: each session's latest writer run, as its state and its item's SKU.
+        let writers: HashMap<i64, WriterOverview> = self.store.research_transaction(|tx| {
+            let mut stmt = tx
+                .conn()
+                .prepare(
+                    "SELECT r.session_id, r.state, i.sku FROM research_runs r \
+                     JOIN sessions s ON s.id=r.session_id JOIN items i ON i.id=r.item_id \
+                     WHERE r.id=(SELECT MAX(id) FROM research_runs WHERE session_id=r.session_id \
+                     AND trigger='write') \
+                     AND s.published_at IS NULL AND (?1 IS NULL OR r.session_id=?1)",
+                )
+                .map_err(store::db)?;
+            let rows = stmt
+                .query_map([session], |r| {
+                    Ok((
+                        r.get::<_, i64>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                    ))
+                })
+                .map_err(store::db)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(store::db)?;
+            Ok(rows
+                .into_iter()
+                .filter_map(|(session_id, state, sku)| {
+                    let state = match state.as_str() {
+                        "queued" | "running" => "writing",
+                        "finished" => "done",
+                        "stopped_at_cap" => "stopped",
+                        "failed" => "failed",
+                        _ => return None,
+                    };
+                    Some((
+                        session_id,
+                        WriterOverview {
+                            state: state.to_owned(),
+                            sku,
+                        },
+                    ))
+                })
+                .collect())
+        })?;
         let (line, _) = self.line()?;
         let mut out = Vec::new();
         for (session_id, item_id, state) in latest {
@@ -811,6 +854,7 @@ impl ResearchService {
                 position: if state == "waiting" { position } else { None },
                 to_review,
                 reason: None,
+                writer: None,
             });
         }
         if !unrun.is_empty() {
@@ -828,9 +872,24 @@ impl ResearchService {
                             code: blocking.code().to_owned(),
                             sentence: blocking.sentence(),
                         }),
+                        writer: None,
                     });
                 }
             }
+        }
+        let mut writers = writers;
+        for row in &mut out {
+            row.writer = writers.remove(&row.session_id);
+        }
+        for (session_id, writer) in writers {
+            out.push(SessionResearch {
+                session_id,
+                state: "none".to_owned(),
+                position: None,
+                to_review: 0,
+                reason: None,
+                writer: Some(writer),
+            });
         }
         out.sort_by_key(|s| s.session_id);
         Ok(out)

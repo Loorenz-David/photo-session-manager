@@ -25,7 +25,7 @@ function status(): WriterStatus {
   return {
     reason: null, run: { id: 9, state: 'finished', trigger: 'write', stage_reached: 'write', error: null }, texts: [], attempts: [], regenerated: [],
     findings: [{ id: 11, kind: 'question', type: 'question', keys: ['wood'], text_field: '', text: QUESTION, mode: 'ask' }],
-    steps: [], cost_micro_usd: 0, inputs: { fields: 0, note: 0, listings: [] }, stale_main: false, stale_condition: false, can_write: true,
+    steps: [], cost_micro_usd: 0, inputs: { fields: 0, note: 0, listings: [] }, stale_main: false, stale_condition: false, can_write: true, finished_at: null, not_offered: [],
   };
 }
 

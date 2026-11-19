@@ -28,7 +28,7 @@ analysed once per item.
 
 | # | Constraint | Why |
 |---|---|---|
-| HW1 | The writer never overwrites a text that holds a `human` value or an accepted `ai` value, and never re-suggests a text the photographer cleared. The rules are 08B MC-A1's write table, applied to the writer's fields. | A checked text must stay checked. |
+| HW1 | The writer never overwrites a text that holds a `human` value or an accepted `ai` value, and never re-suggests a text the photographer cleared. The rules are 08B MC-A1's write table, applied to the writer's fields. **A24 (owner 2026-11-19):** on a deliberate request ("Write texts", an answer) the writer offers a new suggestion over such a text; the checked text is kept whole as its previous value until the photographer chooses (Accept, or Keep previous, which restores it exactly; §5, A24 amendment). | A checked text must stay checked. |
 | HW2 | Every claim in a written text comes from a field the writer may see (§8) or from the product note (§4). A designer, model, maker, year or material absent from both is never written. | A false claim to a buyer. |
 | HW3 | What the photographer decided in the research review is final. The writer and its safeguard never question it again (§6). | Owner 2026-11-18: "otherwise the user is denying twice". |
 | HW4 | The writer sends no image to any provider by default. | Photos are analysed once (owner 2026-11-18). |
@@ -110,6 +110,16 @@ condition photos), the writer shows "photos changed since they were looked at" a
    them.
 6. **Answers:** answering a question or a finding re-runs the write (text only, no photos), and the
    answer is kept as an owner decision on the item.
+
+> **Amended 2026-11-19 (A24, owner: "perfect, we can build that"):** a **deliberate** request
+> ("Write texts", or an answer) offers a new suggestion for every text it writes, even over a text the
+> photographer accepted, typed or cleared. An accepted or typed text becomes the suggestion's
+> previous value, kept whole, so **Keep previous** restores it exactly (still accepted, same reason
+> and sources). A cleared field has no value to keep: the new text is a plain suggestion and
+> **Clear** empties the field again. The same text as the current one is not offered, and the texts
+> dismissed before are not consulted (the photographer is asking again). **Automatic** requests
+> (step 1's "Next to review" and "All checked") keep HW1's refusals unchanged. A deliberate request
+> that finds an automatic run still queued makes that run deliberate.
 
 ## 6. The safeguard (contradiction checker)
 
@@ -223,6 +233,16 @@ The writer's run appears in the research panel as its own block: inputs used (fi
 listing titles), the reasoning per text, post-check hits and regenerations, findings, questions,
 cost. It is exported with Export research.
 
+A24 (2026-11-19, owner: "it is hard to tell if the publisher is working on it"):
+- the session's row and the session header show "Writing texts…" while a writer run waits or
+  writes, and "Writing failed" after a failed one;
+- a toast when a run the app saw writing ends: "Texts ready for <SKU> — see AI review", or the
+  failure (never for a run already over when the app opened);
+- AI review: a failed run says why, with **Try again**; a finished run lists each requested text it
+  did not offer and why, in plain words;
+- the research panel's Writer block opens with "Last written: <time> · finished / failed /
+  stopped".
+
 ## 12. Scope ladder
 
 **Must ship:**
@@ -293,3 +313,6 @@ the writer changing any non-text field.
 5. 2026-11-19 (A23): owner correction from the company's listing rules: grade word off (now a
    switch), stability sentence, title formula and dimensions line switches; item type and SKU sent
    to the writer; settings export and import; Damage details as the normal restoration source.
+6. 2026-11-19 (A24): owner correction: deliberate requests offer new texts over reviewed ones
+   (Keep previous restores them exactly); the writer's state shows on the session, in toasts, in AI
+   review and in the research panel.

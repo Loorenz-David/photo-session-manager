@@ -136,10 +136,15 @@ fn answer() -> Json {
 
 /// Scripts both writer calls, presses Write texts and lets the run finish.
 fn write(a: &TestApp, s: i64) {
+    write_as(a, s, Origin::WriteTexts);
+}
+
+/// As [`write`], asked for by `origin` (A24: an automatic origin keeps MC-A1's refusals).
+fn write_as(a: &TestApp, s: i64, origin: Origin) {
     let model = &a.research_fakes().model;
     model.reply(Stage::Write, "texts", answer());
     model.reply(Stage::Write, "retry", answer());
-    assert!(writer(a).request(s, Origin::WriteTexts).unwrap().queued);
+    assert!(writer(a).request(s, origin).unwrap().queued);
     for _ in 0..3 {
         a.tick(1_100).unwrap();
     }
@@ -211,7 +216,8 @@ fn w5_c11a_no_text_finding_about_the_owners_own_description() {
     a.store()
         .transaction(&mut |tx| tx.put_attribute_value(&own))
         .unwrap();
-    write(&a, s);
+    // A24: an automatic run (a deliberate Write texts offers a new description over it).
+    write_as(&a, s, Origin::NextToReview);
     let about_description: Vec<_> = findings(&a, item)
         .into_iter()
         .filter(|(t, tf, _)| t == "text_vs_facts" && tf == DESCRIPTION)

@@ -15,7 +15,7 @@ import { usePublish } from '@/features/publish/usePublish';
 import { PageHeader } from './PageHeader';
 import { HistoryButtons } from '@/features/history/HistoryButtons';
 import { DiskWarning } from '@/features/settings/StorageSection';
-import { ResearchPill, useResearchOverview } from '@/features/sessions/ResearchPill';
+import { ResearchPill, WriterPill, useResearchOverview } from '@/features/sessions/ResearchPill';
 import { ChangedPill } from '@/features/sessions/ChangedPill';
 import { SessionActionsMenu } from '@/features/sessions/DeleteSession';
 import { requestTexts, showsNextToReview } from '@/features/sessions/reviewQueue';
@@ -196,6 +196,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
             <span className="header-sku">{identity?.sku ?? ''}</span>
             <Info className="header-info" aria-hidden />
             <ResearchPill research={research.get(sessionId)} onClick={research.get(sessionId)?.state === 'to_review' && onReview ? onReview : onDetails} />
+            <WriterPill research={research.get(sessionId)} />
             <ChangedPill sessionId={sessionId} changes={identity?.changes} onKept={reloadIdentity} />
           </>
         )}

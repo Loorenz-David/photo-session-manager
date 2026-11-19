@@ -240,6 +240,20 @@ pub struct WriterStatusDto {
     pub stale_main: bool,
     pub stale_condition: bool,
     pub can_write: bool,
+    /// A24: when the latest run ended (UTC ms).
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub finished_at: Option<i64>,
+    /// A24: the requested texts the latest run did not offer, and why.
+    pub not_offered: Vec<WriterNotOfferedDto>,
+}
+
+/// A24: a requested text the latest writer run did not put in the form (`outcome` in the
+/// trace's words).
+#[derive(Serialize, Type)]
+pub struct WriterNotOfferedDto {
+    pub key: String,
+    pub label: String,
+    pub outcome: String,
 }
 
 fn count(n: usize) -> u32 {
@@ -320,6 +334,16 @@ impl From<WriterStatus> for WriterStatusDto {
             stale_main: s.stale_main,
             stale_condition: s.stale_condition,
             can_write: s.can_write,
+            finished_at: s.finished_at,
+            not_offered: s
+                .not_offered
+                .into_iter()
+                .map(|n| WriterNotOfferedDto {
+                    key: n.key,
+                    label: n.label,
+                    outcome: n.outcome,
+                })
+                .collect(),
         }
     }
 }

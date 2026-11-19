@@ -63,6 +63,14 @@ pub struct SessionResearchDto {
     pub position: Option<u32>,
     pub to_review: u32,
     pub reason: Option<ReasonDto>,
+    /// A24: the session's latest writer run (`writing` · `done` · `stopped` · `failed`).
+    pub writer: Option<WriterOverviewDto>,
+}
+/// A24: the writer's state of a session in the overview, and its item's SKU.
+#[derive(Serialize, Type)]
+pub struct WriterOverviewDto {
+    pub state: String,
+    pub sku: String,
 }
 fn count(n: usize) -> u32 {
     n.try_into().unwrap_or(u32::MAX)
@@ -77,6 +85,10 @@ impl From<SessionResearch> for SessionResearchDto {
             reason: s.reason.map(|r| ReasonDto {
                 code: r.code,
                 sentence: r.sentence,
+            }),
+            writer: s.writer.map(|w| WriterOverviewDto {
+                state: w.state,
+                sku: w.sku,
             }),
         }
     }

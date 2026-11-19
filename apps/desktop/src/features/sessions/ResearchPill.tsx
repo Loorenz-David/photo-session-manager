@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { onSessionsChanged } from '@/services/events';
 import { researchOverview, type SessionResearch } from '@/services/research';
 
@@ -46,7 +47,8 @@ export function researchLabel(research: SessionResearch): string {
  * researching, waiting (place in line), n to review, done, stopped, or why it cannot run.
  */
 export function ResearchPill({ research, onClick }: { research: SessionResearch | undefined; onClick?: () => void }) {
-  if (!research) return null;
+  // A24: a session listed only for its writer (no research run) has no research words.
+  if (!research || research.state === 'none') return null;
   const label = researchLabel(research);
   const title = research.state === 'blocked' ? research.reason?.sentence : research.state === 'waiting' ? 'Research runs one session at a time' : undefined;
   const content = (
@@ -68,6 +70,59 @@ export function ResearchPill({ research, onClick }: { research: SessionResearch 
       {content}
     </span>
   );
+}
+
+/**
+ * A24 (owner 2026-11-19): the writer at work or stopped on a failure, beside the research state in the sessions list and
+ * the session header. Nothing once the texts are written (they wait in AI review).
+ */
+export function WriterPill({ research }: { research: SessionResearch | undefined }) {
+  const state = research?.writer?.state;
+  if (state === 'writing') {
+    return (
+      <span className="pill research-pill" data-writer-state="writing" title="The writer is drafting the texts. They arrive in AI review.">
+        <span className="research-pill-dot" aria-hidden />
+        Writing texts…
+      </span>
+    );
+  }
+  if (state === 'failed') {
+    return (
+      <span className="pill research-pill" data-writer-state="failed" title="Open AI review to see why and try again.">
+        Writing failed
+      </span>
+    );
+  }
+  return null;
+}
+
+/** A24: what a finished or failed writer run of `sku` says, once, when the app saw it writing. */
+export function writerToast(state: string | undefined, sku: string): { kind: 'success' | 'error'; text: string } | null {
+  if (state === 'done' || state === 'stopped') return { kind: 'success', text: `Texts ready for ${sku} — see AI review` };
+  if (state === 'failed') return { kind: 'error', text: `Writing texts failed for ${sku} — open AI review to try again` };
+  return null;
+}
+
+/**
+ * A24: one toast when a writer run the app saw writing ends (texts ready, or failed). Reads the same overview the
+ * sessions list reads, re-read on the existing change events; never toasts what was already over on load.
+ */
+export function WriterToasts() {
+  const rows = useResearchOverview(null);
+  const seen = useRef(new Map<number, string>());
+  useEffect(() => {
+    for (const row of rows.values()) {
+      const now = row.writer?.state;
+      const before = seen.current.get(row.session_id);
+      if (before === 'writing' && now && now !== 'writing') {
+        const said = writerToast(now, row.writer?.sku ?? '');
+        if (said?.kind === 'success') toast.success(said.text);
+        else if (said) toast.error(said.text);
+      }
+      if (now) seen.current.set(row.session_id, now);
+    }
+  }, [rows]);
+  return null;
 }
 
 /**

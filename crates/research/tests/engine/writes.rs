@@ -39,6 +39,7 @@ fn prior(value: Json, valid: bool, provenance: Provenance) -> Option<AiPrior> {
         value: value.to_string(),
         valid,
         provenance,
+        review: None,
     })
 }
 

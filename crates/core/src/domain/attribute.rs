@@ -225,6 +225,38 @@ pub struct AiPrior {
     pub value: String,
     pub valid: bool,
     pub provenance: Provenance,
+    /// A24: the reviewed state the prior had (an accepted suggestion, or a typed value), kept so
+    /// **Keep previous** restores the row exactly. Absent on every prior written before A24 and
+    /// on the priors MC-A1's table keeps (a default or shop value has no review).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<PriorReview>,
+}
+
+/// A24: the AI columns of a reviewed row that became a prior (see [`AiPrior::review`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PriorReview {
+    pub ai_confidence: Option<AiConfidence>,
+    pub ai_status: Option<AiStatus>,
+    pub ai_reason: Option<String>,
+    pub ai_sources: Option<Vec<String>>,
+}
+
+impl AiPrior {
+    /// A24: the whole row as a prior (value, validity, provenance and its AI columns), so that
+    /// restoring it gives back exactly that row.
+    pub fn of(row: &Value) -> Self {
+        Self {
+            value: row.value.clone(),
+            valid: row.valid,
+            provenance: row.provenance,
+            review: Some(PriorReview {
+                ai_confidence: row.ai_confidence,
+                ai_status: row.ai_status,
+                ai_reason: row.ai_reason.clone(),
+                ai_sources: row.ai_sources.clone(),
+            }),
+        }
+    }
 }
 
 impl Value {

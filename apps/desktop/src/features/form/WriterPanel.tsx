@@ -9,6 +9,16 @@ export function money(microUsd: number): string {
   return `$${(microUsd / 1_000_000).toFixed(2)}`;
 }
 
+/** A24: the words of a writer run's end state. */
+const ENDED: Record<string, string> = { finished: 'finished', failed: 'failed', stopped_at_cap: 'stopped', cancelled: 'cancelled' };
+
+/** A24: "Writing now…" while the run waits or writes; else "Last written: <local time> · finished / failed / stopped". */
+export function lastWritten(state: string, finishedAt: number | null): string {
+  if (state === 'queued' || state === 'running') return 'Writing now…';
+  const when = finishedAt === null ? '' : new Date(finishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return `Last written: ${[when, ENDED[state] ?? state].filter(Boolean).join(' · ')}`;
+}
+
 function plural(n: number, one: string, many: string): string {
   return n === 1 ? `1 ${one}` : `${n} ${many}`;
 }
@@ -26,6 +36,7 @@ export function WriterPanel({ status }: { status: WriterStatus | null }) {
   return (
     <section aria-label="Writer" data-writer-panel className="flex flex-col gap-2 border-t px-4 py-3 text-xs">
       <h4 className="font-semibold">Writer</h4>
+      <p data-writer-last>{lastWritten(run.state, status.finished_at)}</p>
       <p className="text-muted-foreground" data-writer-inputs>
         Used {plural(inputs.fields, 'field', 'fields')} · {plural(inputs.note, 'observation', 'observations')} · {plural(inputs.listings.length, 'listing title', 'listing titles')}
       </p>

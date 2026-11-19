@@ -12,7 +12,7 @@ afterEach(() => cleanup());
 function status(extra: Partial<WriterStatus> = {}): WriterStatus {
   return {
     reason: null, run: null, texts: [], attempts: [], regenerated: [], findings: [], steps: [], cost_micro_usd: 0,
-    inputs: { fields: 0, note: 0, listings: [] }, stale_main: false, stale_condition: false, can_write: true,
+    inputs: { fields: 0, note: 0, listings: [] }, stale_main: false, stale_condition: false, can_write: true, finished_at: null, not_offered: [],
     ...extra,
   };
 }

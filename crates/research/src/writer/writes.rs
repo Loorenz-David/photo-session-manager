@@ -14,7 +14,7 @@ use psm_core::{
 use serde_json::Value as Json;
 
 use crate::{
-    rules::write_table::{WriteDecision, decide_write},
+    rules::write_table::{WriteDecision, decide_deliberate, decide_write},
     writer::note::PRODUCT_TITLE,
     writes::{WriteOutcome, cleared_set, same_content},
 };
@@ -78,6 +78,9 @@ fn definitions(tx: &dyn StoreTx, integration: Option<&str>) -> Result<Vec<Defini
 
 /// Writes one text through MC-A1's table inside the caller's transaction (WC4.4, WC4.5).
 /// `allowed` is the run's requestable text keys; any other key is not written (fail closed).
+/// A24: `deliberate` (the run's origin is "Write texts" or an answer) writes through
+/// [`decide_deliberate`] instead, so a reviewed text gets a new suggestion with the reviewed row
+/// as its prior.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn write_text(
     tx: &mut dyn StoreTx,
@@ -89,6 +92,7 @@ pub(crate) fn write_text(
     confidence: AiConfidence,
     reason: &str,
     allowed: &[String],
+    deliberate: bool,
 ) -> Result<WriteOutcome> {
     if !allowed.iter().any(|k| k == key) {
         return Ok(WriteOutcome::NotResearched);
@@ -114,8 +118,13 @@ pub(crate) fn write_text(
         &item.title,
         title_base.as_deref(),
     );
-    let cleared = cleared_set(tx, stored.as_ref(), item_id, key)?;
-    let ai_prior = match decide_write(definition, stored.as_ref(), value, &cleared) {
+    let decision = if deliberate {
+        decide_deliberate(definition, stored.as_ref(), value)
+    } else {
+        let cleared = cleared_set(tx, stored.as_ref(), item_id, key)?;
+        decide_write(definition, stored.as_ref(), value, &cleared)
+    };
+    let ai_prior = match decision {
         WriteDecision::Write { ai_prior } => ai_prior,
         WriteDecision::MatchesCleared => return Ok(WriteOutcome::MatchesCleared),
         WriteDecision::AlreadyHolds => return Ok(WriteOutcome::AlreadyHolds),

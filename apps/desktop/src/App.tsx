@@ -8,6 +8,7 @@ import { SettingsPage } from './features/settings/SettingsPage';
 import { NewSessionDialog } from './features/sessions/NewSessionDialog';
 import { SessionsPage } from './features/sessions/SessionsPage';
 import { ArrivalToasts } from './features/shell/ArrivalToasts';
+import { WriterToasts } from './features/sessions/ResearchPill';
 import { WorkspacePage } from './features/workspace/WorkspacePage';
 import { REVIEW_STEP, type Step } from './features/form/StepTabs';
 import { useHistory } from './features/history/useHistory';
@@ -160,6 +161,7 @@ export default function App() {
         />
       )}
       <ArrivalToasts sessionId={sessionId} navigate={navigate} />
+      <WriterToasts />
       <NewSessionDialog
         open={newSessionOpen}
         onOpenChange={setNewSessionOpen}

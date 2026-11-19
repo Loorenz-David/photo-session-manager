@@ -69,3 +69,8 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
   file on the owner's Desktop (`Beyovintage writer settings.json`), deliberately **not** in the public repo.
   Damage details + Restoration are the normal restoration source; the Restoration done ticks stay optional.
 
+- **2026-11-19 16:55: A23 installed** (`dc0e19e`; previous build kept as "2026-11-19 W6"); PR #22 merged into main.
+  - The Beyovintage writer settings live **outside the repo**, in `~/Desktop/Beyovintage writer settings.json`
+    (generator `scratchpad/beyo/make_beyo.py`). The owner imports it with Settings → Writer → Import… on each Mac.
+  - The orchestrator removed "This piece" from that file's banned list: the company rule is only "don't start with
+    it", and the instruction already says so.

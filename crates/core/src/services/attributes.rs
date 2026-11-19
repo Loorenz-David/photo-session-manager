@@ -8,7 +8,7 @@ use crate::{
     domain::{
         attribute::{
             AiConfidence, AiStatus, AttributeGroup, CoreType, Definition, Form, FormField,
-            FormGroup, Preset, PresetField, Provenance, Value,
+            FormGroup, Preset, PresetField, PriorReview, Provenance, Value,
         },
         item::Item,
         photo::Classification,
@@ -979,7 +979,10 @@ impl<'a> AttributesService<'a> {
             let Some(prior) = before.ai_prior.clone() else {
                 return Err(Error::InvalidValue(format!("{key} holds no conflict")));
             };
-            if key == PRODUCT_TITLE {
+            // A24: a prior with a review (an accepted title the writer offered over on a
+            // deliberate request) is a stored row: it comes back as it was.
+            let reviewed_row = prior.review.as_ref().is_some_and(|r| r.ai_status.is_some());
+            if key == PRODUCT_TITLE && !reviewed_row {
                 // WC4.7: the title's prior lives in `items.title`; the suggestion row is deleted.
                 let title = tx.item(item_id)?.title;
                 tx.delete_attribute_value(item_id, key)?;
@@ -1004,16 +1007,24 @@ impl<'a> AttributesService<'a> {
                 result = Some(kept);
                 return Ok(());
             }
+            // A24: a prior with a review gets its AI columns back (an accepted suggestion stays
+            // accepted); every other prior comes back as before, its AI columns empty.
+            let review = prior.review.unwrap_or(PriorReview {
+                ai_confidence: None,
+                ai_status: None,
+                ai_reason: None,
+                ai_sources: None,
+            });
             let after = Value {
                 item_id,
                 key: key.to_owned(),
                 value: prior.value,
                 valid: prior.valid,
                 provenance: prior.provenance,
-                ai_confidence: None,
-                ai_status: None,
-                ai_reason: None,
-                ai_sources: None,
+                ai_confidence: review.ai_confidence,
+                ai_status: review.ai_status,
+                ai_reason: review.ai_reason,
+                ai_sources: review.ai_sources,
                 ai_prior: None,
                 updated_at: ctx.now,
             };

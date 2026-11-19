@@ -384,6 +384,7 @@ fn w5_c3c_a_shop_search_title_becomes_the_suggestions_prior() {
             value: json!(SHOP_SEO_TITLE).to_string(),
             valid: true,
             provenance: Provenance::Integration,
+            review: None,
         })
     );
 }
@@ -458,6 +459,7 @@ fn suggestion(
                     value: json!(p).to_string(),
                     valid: true,
                     provenance: Provenance::Integration,
+                    review: None,
                 }),
                 updated_at: PUBLISH_NOW_MS,
             })
