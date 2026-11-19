@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # W4 — Settings → Writer
 
-**Tracker:** IMPLEMENTED (2026-11-19, claude opus (`pipeline-implementer`), implement r1: 2 units, checkpoints 23a9668 · 82da541; 21 rows → 9 command tests + 2 `push_version` unit tests + 11 UI tests; closing gate green: `cargo test --workspace` 1829 passed, clippy, fmt, typecheck, `npm test` 659 passed)
+**Tracker:** APPROVED (2026-11-19, opus, review r1 APPROVED_WITH_NOTES: perimeter = the 21 declared paths over 23a9668^..0effd5b; Review-mode checks green on 0855e6c: `psm-research --lib writer::` 72, `research::w3_writer_wiring::` 8, `psm-desktop` 61 (w4_tests 9/9, bindings unchanged), vitest settings 96, clippy research+desktop, fmt, typecheck; all 21 rows have a boundary test that fails on a wrong outcome; preview and run share `request_of`/`assemble`/`WriterSnapshot::resolve`; the save always sends the whole slot; H1–H8 hold; 6 notes in `backlog_writer/W4_writer_settings.md`)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -170,3 +170,47 @@ get needs the counts through the handle). U1 tests are desktop command tests in 
 (`w4_tests`, the command layer itself), not a testkit stem. U2 also edited `__tests__/t1_settings_drawer.test.tsx` (its
 section list gains "Writer") and `docs/guide/{01_product,02_architecture}.md`.
 
+
+### 2026-11-19 · review r1 (opus, `pipeline-reviewer`) — APPROVED_WITH_NOTES
+**Gate.** Tracker IMPLEMENTED; checkpoints `23a9668` (U1), `82da541` (U2), closing `0effd5b` in `git log`. **Perimeter:**
+`git diff --stat 23a9668^ 0effd5b` = 21 paths, equal to the handoff's Files changed (the declared deviations
+`writer/input.rs`, `research/runs.rs`, `research/api_impl.rs`, `t1_settings_drawer.test.tsx`, `docs/guide/{01,02}`
+included). **Checks (once, Review mode, tree `0855e6c`):** `cargo test -p psm-research --lib writer::` 72 passed ·
+`cargo test -p psm-testkit --test suite research::w3_writer_wiring::` 8 passed · `cargo test -p psm-desktop` 61 passed
+(`w4_tests` 9/9; `bindings.ts` regenerated with no diff) · `npx vitest run src/features/settings` 19 files, 96 passed ·
+`cargo clippy -p psm-research -p psm-desktop --all-targets -- -D warnings` · `cargo fmt --all -- --check` · `npm run
+typecheck`: all green. The implementer's full-suite stamp (1829 Rust / 659 UI) stands.
+
+**Verified correct (by reading the code each row exercises, then its test).**
+- U1 C1: `settings_dto` fills every field from `WriterSettings::from_slot`, resolves each language's instruction
+  (`text` or the shipped one, `is_default` = no saved text) and examples, and reads `writer_counts` (answered and
+  dismissed per `FindingType::ALL`; `open` rows ignored). C1(a) pins every default; C1(b) seeds an `open` row too.
+- C2: `saved_over` keeps the stored versions (never the caller's), pushes the stored effective text when the resolved
+  text changes, stores a text or example list equal to the shipped one as `None`; `push_version` inserts first,
+  truncates to 20, and does nothing on equal text. C2(c) refuses `language` "German" before any write (file bytes
+  compared). C3: `reset_instruction` pushes the saved text, sets `text` none.
+- C4: `writer_preview` reads the saved slot, overrides the language, resolves the snapshot with
+  `WriterSnapshot::resolve` and builds the request with `request_of` (instructions by `instructions_text`, input by
+  `input::assemble`, schema by `schema_for_write(requested(input))`). A run uses the same three: `runs.rs` resolves its
+  snapshot with `resolve`, `writer_input` ends in `assemble`, `execute` takes its instructions from `request_of`, and
+  the OpenAI adapter builds the write schema with the same two functions. C4(b): no run row, no call row, no model
+  request.
+- C5: the save is what the run reads (`visible_keys` → input `fields` = [designer]; `max_questions` 1 → one ask from
+  three; model/effort on the call rows).
+- **Whole slot.** `save_slot` serialises the full `WriterSettings` (no `skip_serializing_if`, so `null`s are written)
+  and `SettingsService::set` replaces the `writer` slot's top-level fields; the UI's Save sends `{...settings,
+  banned_extra}`, the whole DTO. C6(b) asserts the full value.
+- U2 C6–C10: nav entry after Research (shown with it); priced models of the research model provider, a saved model
+  without a price kept as "(no price)"; the editor shows `text ?? effective_instruction`; Use this edits the form only;
+  Reset calls the command and merges that language's instruction; the checklist's default = WC2's rule (Details and
+  Condition, not `money`/`media_list`/`reference`, own texts and the condition report key left out), and stays `null`
+  until a box is touched; examples per language with add/edit/remove; safeguard select and "answered n · dismissed m".
+  Each test asserts the exact saved value or shown text.
+- Assumptions 1–9: none contradicts 08C §8 or WC2/WC6; reported to the owner in the narrative.
+- H1–H8: no external write (H1); no Shopify/device concept added to core (H7); the versions rule lives in the research
+  crate, the commands only read, call and save (H8).
+
+**Notes** (6, `docs/implementation/backlog_writer/W4_writer_settings.md`): preview shows saved settings only, while the
+try-out reads as previewing an unsaved edit; Reset drops an unsaved edit of the same instruction; the "no price" hazard
+is untested; save is read-then-write outside the settings lock; guide row 27 misses the settings readers; three W3
+notes still open.
