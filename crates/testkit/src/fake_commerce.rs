@@ -62,6 +62,10 @@ pub struct FakeShop {
     pub descriptions: HashMap<String, String>,
     /// WC8: product id → its search texts (Shopify `seo`); a missing entry is unset.
     pub seo: HashMap<String, Seo>,
+    /// WC8: every `update_seo` call's search texts, in order.
+    pub seo_writes: Vec<Seo>,
+    /// W5·C8(a): the shop stores a sent search title cut to this many characters.
+    pub seo_title_cut: Option<usize>,
     pub readback_override: Option<(String, Json)>,
     pub identity_override: Option<RemoteIdentity>,
     /// Every `fetch_image` call: (URL, long edge asked for) (P62).
@@ -844,6 +848,28 @@ impl CommerceAdapter for FakeCommerce {
             psm_integrations::commerce::shopify::adapter::description_html(paragraphs),
         );
         self.effect(run, "update_description")
+    }
+    /// WC8: one read op `product_seo`.
+    fn product_seo(&self, id: &str) -> Result<Seo> {
+        self.read("product_seo")?;
+        Ok(shop_seo(&self.state.lock().unwrap(), id))
+    }
+    /// WC8.4: stores the search texts (a title cut when `seo_title_cut` is set), then the effect
+    /// (so `fail_after_effect("update_seo")` leaves the write applied).
+    fn update_seo(&self, run: &ConfirmedRun, id: &str, seo: &Seo) -> Result<()> {
+        let mut s = self.state.lock().unwrap();
+        s.seo_writes.push(seo.clone());
+        let cut = s.seo_title_cut;
+        let stored = Seo {
+            title: seo
+                .title
+                .as_ref()
+                .map(|t| cut.map_or(t.clone(), |n| t.chars().take(n).collect())),
+            description: seo.description.clone(),
+        };
+        s.seo.insert(id.into(), stored);
+        drop(s);
+        self.effect(run, "update_seo")
     }
     fn update_tags(&self, run: &ConfirmedRun, id: &str, tags: &[String]) -> Result<()> {
         self.state

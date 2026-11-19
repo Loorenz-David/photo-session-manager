@@ -85,3 +85,10 @@ pub const SHOP_PRODUCT: &str = "query ShopProduct($handle: String!) { productByI
 /// R8·U3: the shop's public hosts alone (an item that is not linked to a product).
 pub const SHOP_HOSTS: &str =
     "query ShopHosts { shop { primaryDomain { host url } myshopifyDomain } }";
+
+/// W5·U2 (WC8.6): one product's search texts (`Product.seo: SEO!`, `SEO {title, description}`).
+pub const PRODUCT_SEO_READ: &str =
+    "query ProductSeoRead($id: ID!) { product(id: $id) { id seo { title description } } }";
+
+/// W5·U2 (WC8.4): writes both search texts (`ProductUpdateInput.seo: SEOInput`) and returns them.
+pub const PRODUCT_UPDATE_SEO: &str = "mutation ProductUpdateSeo($product: ProductUpdateInput!) { productUpdate(product: $product) { product { id seo { title description } } userErrors { field message } } }";

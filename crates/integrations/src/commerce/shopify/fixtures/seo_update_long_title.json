@@ -1,0 +1,43 @@
+{
+  "source": "captured: W5·U2 probe step seo capture seo_update_long_title (store from ~/.psm_shopify.env, own DRAFT test product, API 2026-10, 2026-11-19), sanitized",
+  "request": {
+    "query": "mutation ProductUpdateSeo($product: ProductUpdateInput!) { productUpdate(product: $product) { product { id seo { title description } } userErrors { field message } } }",
+    "variables": {
+      "product": {
+        "id": "gid://shopify/Product/15530896752793",
+        "seo": {
+          "description": "Teak & \"oak\" chair <1960s> | made by a Swedish snickeri, with å ö ø in the maker's name. Cleaned, oiled and checked; the seats were rewoven.",
+          "title": "Teak & \"Oak\" Lounge Chair <1960s> | Swedish Snickeri å ö ø, with Papercords"
+        }
+      }
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "productUpdate": {
+          "product": {
+            "id": "gid://shopify/Product/15530896752793",
+            "seo": {
+              "description": "Teak & \"oak\" chair <1960s> | made by a Swedish snickeri, with å ö ø in the maker's name. Cleaned, oiled and checked; the seats were rewoven.",
+              "title": "Teak & \"Oak\" Lounge Chair <1960s> | Swedish Snickeri å ö ø, with Papercords"
+            }
+          },
+          "userErrors": []
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 11,
+          "requestedQueryCost": 11,
+          "throttleStatus": {
+            "currentlyAvailable": 1989,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

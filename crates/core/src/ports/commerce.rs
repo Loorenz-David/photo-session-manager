@@ -6,7 +6,7 @@ use crate::Result;
 use crate::domain::attribute::Definition;
 use crate::domain::publish::{
     ConfirmedRun, DefinitionLink, MediaReadback, RemoteIdentity, RemoteItem, RemoteMedia,
-    RemoteValues, StagedTarget, StockChoice, StockLocations, StockOutcome, WriteValue,
+    RemoteValues, Seo, StagedTarget, StockChoice, StockLocations, StockOutcome, WriteValue,
 };
 use serde_json::Value as Json;
 
@@ -243,7 +243,20 @@ pub trait CommerceAdapter: Send + Sync {
     ) -> Result<()>;
     /// Sends exactly `tags` (the three-way merge is the caller's, P14).
     fn update_tags(&self, run: &ConfirmedRun, external_id: &str, tags: &[String]) -> Result<()>;
+    /// WC8: the item's search texts (search title, search description); the platform's null and
+    /// blank are `None`. A platform without search texts is never asked (publish asks only when
+    /// frozen values exist), so the default refuses.
+    fn product_seo(&self, _external_id: &str) -> Result<Seo> {
+        Err(crate::Error::Provider(SEO_UNSUPPORTED.into()))
+    }
+    /// WC8.4: sends both search texts (`None` sends the platform's null).
+    fn update_seo(&self, _run: &ConfirmedRun, _external_id: &str, _seo: &Seo) -> Result<()> {
+        Err(crate::Error::Provider(SEO_UNSUPPORTED.into()))
+    }
 }
+
+/// The refusal of the port's default `product_seo` / `update_seo`.
+pub const SEO_UNSUPPORTED: &str = "search texts are not supported by this platform";
 
 /// Changelog 45 (P65): the remembered stock default for new items (Settings → Shopify): the
 /// location and quantity of the last successful create.

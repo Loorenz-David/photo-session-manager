@@ -1834,6 +1834,34 @@ impl CommerceAdapter for ShopifyAdapter {
             json!({ "id": external_id, "tags": tags }),
         )
     }
+
+    /// WC8.6: `product { seo { title description } }` through [`seo_of`] (null and blank → none).
+    fn product_seo(&self, external_id: &str) -> Result<Seo> {
+        let data = self.call(graphql::PRODUCT_SEO_READ, json!({ "id": external_id }))?;
+        match data.get("product") {
+            Some(Json::Null) | None => Err(Error::NotFound(format!("product {external_id}"))),
+            Some(product) => Ok(seo_of(product)),
+        }
+    }
+
+    /// WC8.4: one `productUpdate {id, seo: {title, description}}` with both fields (a `None`
+    /// field is sent as null); `userErrors` are the provider error naming `update_seo`.
+    fn update_seo(&self, run: &ConfirmedRun, external_id: &str, seo: &Seo) -> Result<()> {
+        let op = "update_seo";
+        let data = self.mutate(
+            run,
+            op,
+            graphql::PRODUCT_UPDATE_SEO,
+            json!({ "product": {
+                "id": external_id,
+                "seo": { "title": seo.title, "description": seo.description },
+            } }),
+        )?;
+        match errors::user_errors(&data["productUpdate"]) {
+            Some(message) => Err(errors::provider(op, message)),
+            None => Ok(()),
+        }
+    }
 }
 
 /// The read-back of `MEDIA_READBACK`'s `product`: gallery media in order (image URL, else the

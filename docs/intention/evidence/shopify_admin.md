@@ -305,3 +305,27 @@ returned 0, but SV-3 shows that this search lags, so the ledger's confirmed `fil
 `ACCESS_DENIED` (it belongs to Shopify's Search & Discovery app). It has no values, and the owner may delete it in
 Settings → Custom data → Products or leave it. The other auto-created standard definition, `reviews.rating`, was
 deleted. After cleanup the store has 67 product definitions: the original 66 plus this one.
+
+## SEO search texts (W5·U2, WC8.6; captured 2026-11-19)
+
+`shopify_probe seo` ran once with `~/.psm_shopify.env`, which since 2026-11-19 names the **real store** (owner: a test
+product is allowed). API version **2026-10**. The step is not part of `all` and never calls `cleanup`.
+- **Create document:** `PRODUCT_SET` (`productSet(synchronous: true)`, the sv7 shape without SKU or barcode), title
+  `PSM-PROBE (test, do not publish)`, `status: DRAFT`, `descriptionHtml` one plain sentence, no media, no sales-channel
+  publication. Ledgered right after the create (`gid://shopify/Product/15530896752793`).
+- **Unset (`seo_read_unset`, `PRODUCT_SEO_READ`):** `seo.title` = **`null`**, `seo.description` = **`null`**. No
+  fallback to the product title or the body, so WC8.2's "null or blank → none" tells unset from set.
+- **Write (`seo_update`, `PRODUCT_UPDATE_SEO`):** a 40-character title and a 140-character description, both with
+  `&`, `"`, `<`, `|` and `å ö ø`; `userErrors` empty; the payload echoed both values.
+- **Read-back (`seo_read_after_update`):** **byte-identical** to what was sent (no entity encoding, no trimming
+  needed), unlike `descriptionHtml` (see "Product field writes").
+- **The 70-character question (`seo_update_long_title`):** a 75-character title was **stored whole**: no
+  `userErrors`, and a further read (`seo_read_after_long_title`, kept in `target/`, not a fixture) returned all 75
+  characters. Shopify does not cut or refuse a long search title through the Admin API; the writer's own limit
+  (`seo_title_max`, 60) is the only guard, and a longer text the owner keeps is published as written.
+- **Delete:** `PRODUCT_DELETE` on that one id returned `deletedProductId`; the ledger entry is closed. No other product
+  was read or written.
+
+Fixtures (sanitized with the probe's `Redactor`, each with a `source` line): `seo_read_unset.json`, `seo_update.json`,
+`seo_read_after_update.json`, `seo_update_long_title.json`. The `userErrors` refusal used by W5·C5(b) is a declared
+synthetic edit of `seo_update_long_title` (only the `userErrors` array changed), since Shopify did not refuse.

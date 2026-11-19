@@ -1,0 +1,34 @@
+{
+  "source": "captured: W5·U2 probe step seo capture seo_read_unset (store from ~/.psm_shopify.env, own DRAFT test product, API 2026-10, 2026-11-19), sanitized",
+  "request": {
+    "query": "query ProductSeoRead($id: ID!) { product(id: $id) { id seo { title description } } }",
+    "variables": {
+      "id": "gid://shopify/Product/15530896752793"
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "product": {
+          "id": "gid://shopify/Product/15530896752793",
+          "seo": {
+            "description": null,
+            "title": null
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 2,
+          "requestedQueryCost": 2,
+          "throttleStatus": {
+            "currentlyAvailable": 1998,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

@@ -8,7 +8,8 @@
 //! Created ids go to the cleanup ledger (`target/shopify_probe/ledger.json`) before the next step.
 //!
 //! Usage: `cargo run -p psm-integrations --example shopify_probe -- <step>` where step is one of
-//! `all`, `sv0`, `sv1`, `sv7`, `sv6`, `sv2`, `sv3`, `sv4`, `sv5`, `cleanup`, `gql <file>`.
+//! `all`, `sv0`, `sv1`, `sv7`, `sv6`, `sv2`, `sv3`, `sv4`, `sv5`, `cleanup`, `gql <file>`, `seo`
+//! (W5·U2: its own DRAFT test product, created and deleted by the step; not part of `all`).
 
 use psm_integrations::commerce::shopify::transport::{HttpReply, HttpTransport, ReqwestTransport};
 use serde_json::{Value as Json, json};
@@ -408,8 +409,10 @@ mod steps {
     use psm_integrations::commerce::shopify::graphql::PRODUCT_DELETE_MEDIA as DETACH;
     use psm_integrations::commerce::shopify::graphql::PRODUCT_READ;
     use psm_integrations::commerce::shopify::graphql::PRODUCT_REORDER_MEDIA as REORDER;
+    use psm_integrations::commerce::shopify::graphql::PRODUCT_SEO_READ;
     use psm_integrations::commerce::shopify::graphql::PRODUCT_SET;
     use psm_integrations::commerce::shopify::graphql::PRODUCT_UPDATE as TAGS;
+    use psm_integrations::commerce::shopify::graphql::PRODUCT_UPDATE_SEO;
     use psm_integrations::commerce::shopify::graphql::STAGED_UPLOADS_CREATE as STAGED;
     use psm_integrations::commerce::shopify::graphql::VARIANT_SEARCH;
 
@@ -446,6 +449,9 @@ mod steps {
             "tags" => tags(probe),
             "cleanup" => cleanup(probe),
             "adapter_smoke" => adapter_smoke(probe),
+            // W5·U2: never in `all`, never followed by `cleanup` (the env may name the real
+            // store; `cleanup` deletes every ledger product there).
+            "seo" => seo(probe),
             other => panic!("unknown step {other}"),
         }
     }
@@ -1284,6 +1290,111 @@ mod steps {
             json!({"product": {"id": id, "tags": ["a", "b"]}}),
         );
         probe.gql(Some("description_update"), TAGS, json!({"product": {"id": id, "descriptionHtml": "<p>a &amp; b</p><p>c &lt; d &quot;q&quot;</p>"}}));
+    }
+
+    /// W5·U2 (WC8.6): what Shopify returns for unset search texts, what it stores for texts with
+    /// special characters, and what it does with a 75-character search title. Creates its own
+    /// DRAFT test product (owner 2026-11-19: the env names the real store), touches no other
+    /// product, deletes the test product at the end (left as DRAFT if the delete fails).
+    fn seo(probe: &Probe) {
+        const TITLE: &str = "PSM-PROBE (test, do not publish)";
+        const BODY: &str = "<p>A plain sentence describing the probe product.</p>";
+        const SEO_TITLE_40: &str = "Teak & \"Oak\" <Chair> | Snickeri å ö ø AB";
+        const SEO_DESCRIPTION_140: &str = "Teak & \"oak\" chair <1960s> | made by a Swedish \
+             snickeri, with å ö ø in the maker's name. Cleaned, oiled and checked; the seats were \
+             rewoven.";
+        const SEO_TITLE_75: &str =
+            "Teak & \"Oak\" Lounge Chair <1960s> | Swedish Snickeri å ö ø, with Papercords";
+        assert_eq!(SEO_TITLE_40.chars().count(), 40);
+        assert_eq!(SEO_DESCRIPTION_140.chars().count(), 140);
+        assert_eq!(SEO_TITLE_75.chars().count(), 75);
+        probe.say("W5 seo: create a DRAFT test product (productSet), read, write, read, long title, delete");
+        let input = json!({
+            "title": TITLE,
+            "status": "DRAFT",
+            "descriptionHtml": BODY,
+            "productOptions": [{"name": "Title", "values": [{"name": "Default Title"}]}],
+            "variants": [{"optionValues": [{"optionName": "Title", "name": "Default Title"}]}],
+        });
+        let body = probe.gql(Some("seo_create"), PRODUCT_SET, json!({"input": input}));
+        let Some(id) = body["data"]["productSet"]["product"]["id"]
+            .as_str()
+            .map(str::to_owned)
+        else {
+            panic!("create failed: {}", probe.red.json(&body));
+        };
+        probe.ledger_add("products", &id);
+
+        let unset = probe.gql(Some("seo_read_unset"), PRODUCT_SEO_READ, json!({"id": id}));
+        let update = probe.gql(
+            Some("seo_update"),
+            PRODUCT_UPDATE_SEO,
+            json!({"product": {"id": id, "seo": {"title": SEO_TITLE_40, "description": SEO_DESCRIPTION_140}}}),
+        );
+        let after = probe.gql(
+            Some("seo_read_after_update"),
+            PRODUCT_SEO_READ,
+            json!({"id": id}),
+        );
+        let long = probe.gql(
+            Some("seo_update_long_title"),
+            PRODUCT_UPDATE_SEO,
+            json!({"product": {"id": id, "seo": {"title": SEO_TITLE_75, "description": SEO_DESCRIPTION_140}}}),
+        );
+        let long_read = probe.gql(
+            Some("seo_read_after_long_title"),
+            PRODUCT_SEO_READ,
+            json!({"id": id}),
+        );
+
+        let deleted = probe.gql(
+            Some("seo_product_delete"),
+            PRODUCT_DELETE,
+            json!({"id": id}),
+        );
+        let delete_ok = deleted["data"]["productDelete"]["deletedProductId"].is_string();
+        if delete_ok {
+            probe.ledger_done("products", &id);
+        }
+
+        let kind = |value: &Json| match value {
+            Json::Null => "null".to_owned(),
+            Json::String(s) if s.is_empty() => "\"\"".to_owned(),
+            Json::String(s) if s == TITLE => {
+                format!("fallback (equal to the product title: {s:?})")
+            }
+            Json::String(s) => format!("a value: {s:?} (fallback if it is an excerpt of the body)"),
+            other => format!("unexpected {other}"),
+        };
+        let seo = &unset["data"]["product"]["seo"];
+        let back = &after["data"]["product"]["seo"];
+        let trimmed = |v: &Json| v.as_str().map(str::trim).map(str::to_owned);
+        let identical = trimmed(&back["title"]).as_deref() == Some(SEO_TITLE_40)
+            && trimmed(&back["description"]).as_deref() == Some(SEO_DESCRIPTION_140);
+        let long_title = &long_read["data"]["product"]["seo"]["title"];
+        let long_outcome = match long["data"]["productUpdate"]["userErrors"].as_array() {
+            Some(errors) if !errors.is_empty() => {
+                format!("refused: {}", Json::from(errors.clone()))
+            }
+            _ if long_title.as_str() == Some(SEO_TITLE_75) => "stored whole".to_owned(),
+            _ => format!("cut or changed: {long_title}"),
+        };
+        let summary = json!({
+            "api_version": probe.version,
+            "create_document": "PRODUCT_SET (productSet synchronous, as sv7)",
+            "unset_title": kind(&seo["title"]),
+            "unset_description": kind(&seo["description"]),
+            "update_user_errors": update["data"]["productUpdate"]["userErrors"],
+            "read_back_identical_after_trim": identical,
+            "read_back": back,
+            "long_title": long_outcome,
+            "deleted": delete_ok,
+        });
+        probe.write_note("seo_summary", summary.clone());
+        probe.say(&format!(
+            "W5 seo summary: {}",
+            serde_json::to_string_pretty(&summary).unwrap()
+        ));
     }
 
     fn cleanup(probe: &Probe) {
