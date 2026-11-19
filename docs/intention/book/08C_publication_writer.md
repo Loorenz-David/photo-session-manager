@@ -233,22 +233,28 @@ cost. It is exported with Export research.
 **Non-goals:** fine-tuning; AI-text detectors or "humanizer" rewrites (evidence §4: unsupported);
 the writer changing any non-text field.
 
-## 13. ⚠ OWNER DECISIONS REQUIRED
+## 13. ⚠ OWNER DECISIONS REQUIRED (2 open)
 
-1. **Grade scale:** the condition report opens with Excellent / Very good / Good / Fair (Swedish:
-   Utmärkt / Mycket gott / Gott / Godtagbart skick). Adopt it? It could be a new condition choice
-   field or derived from the existing condition fields.
-2. **"Attributed to":** allowed when the designer field is marked attributed, or never?
-3. **Era:** production decade, design year, or both when known?
-4. **Restoration:** keep the free text (Restoration field), or add fixed choices (sanded, oiled,
-   lacquered, new foam, webbing, papercord, fabric) so the writer states them exactly?
-5. **Use sentence** ("suits a desk or reading corner"): keep, at most one, or drop?
-6. **Search texts:** add the shop name to search titles when it fits? "Ships from Sweden" in search
-   descriptions?
-7. **Style examples:** start from the evidence file's four invented examples plus 3 of your
-   published listings that the writer rewrites to the guide for your approval?
-8. **Provider:** the same OpenAI provider as research (one key), or also allow a second provider
-   for writing?
+**Answered 2026-11-19:**
+- **"Attributed to"** is allowed when the designer field marks the attribution as uncertain.
+- **Era:** the writer uses the item's era field as it stands.
+- **Restoration** becomes fixed choices: sanded, oiled, lacquered, new foam, webbing, papercord,
+  fabric, and others to be listed in planning. The writer states them exactly. The free-text
+  Restoration field stays for anything extra.
+- **Search texts:** yes to the shop name in the search title when it fits within 60 characters,
+  and yes to "Ships from Sweden" in the search description when it fits.
+- **Style examples:** start from the evidence file's examples. The owner tunes them once the
+  writer runs and compares the results with the manager.
+- **Provider:** the same provider as research, one key. Models and effort are tested for the best
+  result.
+
+**Open:**
+1. **Grade word:** should each condition report open with one overall word (Excellent / Very good
+   / Good / Fair), and where does it come from? The proposal is a new "Overall condition" choice
+   that research suggests from the condition fields and photos and the photographer confirms in
+   review.
+2. **Use sentence:** keep at most one sentence per description on where the piece fits (e.g.
+   "it suits a desk or reading corner"), or leave it out?
 
 ## Shaping changelog
 
@@ -264,3 +270,5 @@ the writer changing any non-text field.
    - review decisions final (HW3); learning from edits deferred
 
    Research: `evidence/publication_writer_research.md`.
+2. 2026-11-19: owner answers to §13 decisions 2, 3, 4, 6, 7 and 8. Decisions 1 (grade word) and 5
+   (use sentence) were re-explained and are still open.
