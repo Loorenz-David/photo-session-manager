@@ -142,7 +142,7 @@ What the person sees; the mechanics are in `02_architecture.md` §Research.
   `R13_research_chosen_fields.md`**; the later entry wins (rows in the table at the end of this file).
 
 ## Publication writer (book `08C`; the code is `crates/research/src/writer`, `docs/implementation/master_plan_writer.md`)
-What the person sees (W1–W3; Settings → Writer comes in W4, the search texts in W5).
+What the person sees (W1–W4; the search texts come in W5).
 - **What it does.** A second kind of run in the research engine drafts the item's **title**, **description** and
   **condition report** (`custom.condition_report_description` by default) from the fields the writer may see (Details
   and Condition, no prices), research's photo note with the owner's decisions over it, and the titles of matching
@@ -165,8 +165,16 @@ What the person sees (W1–W3; Settings → Writer comes in W4, the search texts
   owner chooses (as research's conflicts do). Clean texts are `medium`, flagged ones `low` (withheld at publish).
 - **Research panel.** Its own **Writer** block: what the latest write used (fields, observations, listing titles),
   each text's reason and facts, the post-check per attempt and "Rewritten once", findings and questions, cost.
-- **Settings.** Until Settings → Writer exists (W4) the writer runs on its shipped defaults; a hand-edited `writer`
-  slot in `settings.json` is honoured (validated on save, never rebuilds the App).
+- **Settings → Writer (W4).** Next to Settings → Research (shown when research is): model (those priced in Settings →
+  Research; a saved model without a price stays, marked "no price") and effort, language (English, Swedish), automatic
+  writing on "Next to review", the instruction of the chosen language (**Preview what is sent** shows the exact request
+  for a built-in example item under the *saved* settings; **Earlier versions**, the last 20 per language, with **Use
+  this**; **Reset to default**), the fields the writer may see (Details and Condition, prices unticked by default),
+  style examples per language, extra banned words, target lengths, one off / note / ask mode per safeguard type with
+  how often each was answered and dismissed, questions per write, the shop name for search titles. **Save** sends the
+  whole `writer` slot (validated, never rebuilds the App); the writer reads it at its next run. A changed instruction
+  keeps the text it replaced as an earlier version; an instruction or example list equal to the shipped one is stored
+  as the shipped default, so later builds' improvements reach it.
 
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |

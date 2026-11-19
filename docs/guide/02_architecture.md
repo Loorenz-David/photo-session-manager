@@ -503,14 +503,14 @@ publish_partition.rs}`, `PublishStep::Held`, `RowLabel::WaitingForYou`, `AppEven
 (`research_status`, `research_run`, `research_settings_reset`, `research_secrets_set`,
 `research_secrets_state`, `research_site_add`, `research_site_remove`, `research_sites_reorder`,
 `research_export`; each answers `research_unavailable` when the engine could not be built, and the
-rest of the app works: HA4), `commands/writer.rs` (W1 `writer_note`, `writer_look_again`; W3 `writer_status`, `writer_request(session_id, origin)` with origins `next_to_review` / `all_checked` / `write_texts`, `writer_finding_answer`, `writer_finding_dismiss`; same refusal), `session_arrange_next` in `commands/sessions.rs`, `ResearchSettingsDto`
+rest of the app works: HA4), `commands/writer.rs` (W1 `writer_note`, `writer_look_again`; W3 `writer_status`, `writer_request(session_id, origin)` with origins `next_to_review` / `all_checked` / `write_texts`, `writer_finding_answer`, `writer_finding_dismiss`; W4 `writer_settings_get`, `writer_settings_save(value)` (the whole slot; the versions rule `WriterSettings::saved_over` / `push_version`), `writer_instruction_reset(language)`, `writer_preview(language)` (built by `writer::run::request_of`, the function a run's call uses, over `writer::input::assemble`); same refusal), `session_arrange_next` in `commands/sessions.rs`, `ResearchSettingsDto`
 in `commands/settings.rs`, `researching` / `n_withheld` / `conflicts` in `commands/publish.rs`.
 Frontend: wrapper `apps/desktop/src/services/research.ts` (W1: `services/writer.ts`; the note block
 `features/form/ProductNote.tsx` under the panel's steps, re-read with the panel's status; W3: `features/form/WriterBlock.tsx`
 (`useWriterStatus`, re-read with the form's research status, and the block at the top of `AiReviewTab`),
 `features/form/WriterPanel.tsx` (the panel's Writer block), the **Write texts** button in `FormDialog`'s Product step,
 and `requestTexts` in `features/sessions/reviewQueue.ts`, which `AiReviewTab`'s "Next to review →", `Header`'s "Next to
-review" and `FormDialog` (closing Details or unmounting while AI review shows "All checked ✓") call fire-and-forget).
+review" and `FormDialog` (closing Details or unmounting while AI review shows "All checked ✓") call fire-and-forget). W4: `features/settings/WriterSection.tsx` (with `WriterInstruction.tsx`, `WriterExamples.tsx`; loaded when first opened, saved whole by **Save writer settings**) and the nav entry "Writer" after "Research".
 **Title suggestion and publish (W3, writer master plan WC4.7–8).** The writer writes `product.title` as an
 attribute row; `form_get` shows it in place of `items.title` while it is `ai` + `suggested` (or `accepted` and equal to
 `items.title`). `accept` / `accept_all` also set `items.title` in the same undo step; `keep_previous` deletes the row;
