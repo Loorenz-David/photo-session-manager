@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # W1 — The product note
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-19, claude-opus-5.5 implementer: 3 units, 54 rows → 54 row tests + 2 core-mechanism tables; suite 1696 passed / 0 failed, clippy, fmt, typecheck, npm test 636 green)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. `master_plan.md` §4 and `STATUS.md` are not used or edited by writer milestones.)
 
@@ -215,3 +215,42 @@ On scratch data (`PSM_DATA_DIR=$HOME/psm-research-dev`), with the research keys 
 4. Recompose a Main photo: the banner "Photos changed since they were looked at" appears. Press **Look again**: only the photo looks run (the cost line grows by a few cents at most), no new suggestions appear, and the banner goes.
 
 ## Review log
+- **2026-11-19 · implement r1 (Claude Opus 5.5, `pipeline-implementer`).** Built the three units in order, one
+  checkpoint each: U1 `853cf91`, U2 `c6279fb`, U3 `06463ae`. **U1:** stage 1 sends `note_fields` (every Details and
+  Condition layout key with its label), stage 6 sends `photos: [{index}]` and the Condition-step `note_fields`; the
+  §9.3 sentences end `OBSERVE` and `CONDITION`; `INSTRUCTIONS_VERSION = 3`; `schema_for` adds `note` to the Observe
+  (photos form) and Condition schemas; `stages::parse_note` stores the note per WC1.3 (`photo_id` mapped over the
+  images actually sent). **U2:** `RunTrigger::Look`; `store::runs` and the two overview queries leave out `browse`,
+  `look`, `write` (`tick`/`runs_in_state` and the export keep them); start order tier 0 = `manual`, `look`;
+  `writer::note::{decision, reviewed, stale}` (pure, unit-tested) and `ResearchService::assemble` (the `NoteView`),
+  `look_again` and the `look` run (`stages::look_again`: stage 1 over the current plan, stage 6 when usable Condition
+  photos and a chosen Condition field exist, reuse from the latest earlier photo-looking run, ends `finished`, no
+  stage 2–5/7, no write path); Run again / Arranged cancel a queued `look`/`write` run ("research started again") in
+  the inserting transaction; `WriterApi {note, look_again}` in `api_impl.rs`. **U3:** `App`/`AppHandles::writer`
+  (same service as `research`, default build path), `commands/writer.rs` (`writer_note`, `writer_look_again`,
+  `research_unavailable` without the engine), bindings regenerated, `services/writer.ts`, `ProductNote.tsx` under
+  the panel's steps; guide `02_architecture.md` updated (flow §7A).
+  **Judgment calls:** (1) a stage 1/6 output without `note` (pre-W1) is never reused, so the stage 6 unit (whose
+  identity has no instructions version) is looked at again once and Look again cannot loop on a note-less copy;
+  (2) not-determined photo looks store `note: []`; (3) `research_saw` = keys whose decision is not Accepted,
+  Corrected, KeptPrevious or Dismissed (Typed and Empty included; C8(e) needs Empty); (4) a stage 6 observation with
+  `photo_id: null` is shown without a photo and kept in the writer input; (5) the selected condition photos are the
+  first media-list field's `selected` in the form (the damage report), else every Condition photo by (position, id);
+  (6) staleness rebuilds the note unit's MC-A7 identity with the current photos under that run's own settings/form
+  snapshot and compares fingerprints (the identity is not stored), photo limit from live settings; (7) Look again
+  checks in WC1.8's order: Busy, NotStale, NoIntegration, NoModelKey, PriceMissing (the Unassigned session is an
+  error, as for Run again); (8) a queued look run is blocked only by its own prerequisites and has no source wait
+  (it starts like `manual`); (9) "Arranged" cancels a queued look/write run like Run again (one queued run per
+  session); (10) a look run stopped by the cost rule ends `stopped_at_cap`; (11) `product.title`'s WC4.3 stored
+  state is read in `note.rs` (no note key can be the title in W1; W2 moves it to `writes::stored_state`);
+  (12) the note block re-reads with the panel's research status (one `research_changed` listener), is not
+  collapsible.
+  **Deviations (files outside the unit lists):** `decide.rs` (`end` → `pub(crate)`) and `writes.rs` (`cleared_set`
+  → `pub(crate)`), visibility only; engine tests `adapter_openai.rs`, `photo_look.rs`, `stages.rs` follow the new
+  schema (`note` required) and version 3; `FormDialog.tsx` passes `sessionId` to the panel (one prop; without it the
+  note never shows in the app, rule 10); `docs/guide/02_architecture.md`; `commands/writer.rs` carries its own
+  `unavailable()` rather than editing `commands/research.rs`; `state.rs` unchanged. The closing suite ran detached
+  (the tool's 10-minute foreground limit), one run.
+  **Test count:** 54 rows → 54 row tests (one each, named after the row), plus two unit tables on core
+  mechanisms: `writer::note::tests::w1_c10_stale_rules` (`stale`, behind C10) and `stages::tests::w1_parse_note_rules`
+  (the note parser, behind C3/C4).
