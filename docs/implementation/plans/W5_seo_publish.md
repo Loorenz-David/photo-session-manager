@@ -16,14 +16,15 @@ blocked_on: U2 task 1 captures Shopify replies with the probe credentials of P12
 Book `08C` §9 by WC8 of `master_plan_writer.md` §5 (items 1–6). (U1) The two built-in fields, always present in the Product step, read from the shop, requested by the writer. (U2) The Shopify adapter: read and write `seo`, grounded in captured replies. (U3) The publish step. **Not here:** Restoration (W6, which reuses U1's always-present mechanism); Google Merchant Center (deferred, 08C §12).
 
 ## How to work this plan (flow.md §10, master_plan_writer.md §3)
-One runner phase of 3 units, in order; after each, its **Unit test commands**, then a `CHECKPOINT (not approved):` commit of that unit's paths. Projection runs before the implementer (`projection: yes`): it checks U2's capture task and every row whose fixture is a Shopify shape (rule 17). Row ids `W5·C<n>(<row>)`; tests named after their row. Open details: the smallest option consistent with 07A MC-11, MC-13 and WC8, recorded under **Assumptions**. Reviewer notes: `docs/implementation/backlog_writer/W5_seo_publish.md`.
+One runner phase of 4 units, in order; after each, its **Unit test commands**, then a `CHECKPOINT (not approved):` commit of that unit's paths. Projection runs before the implementer (`projection: yes`): it checks U2's capture task and every row whose fixture is a Shopify shape (rule 17). Row ids `W5·C<n>(<row>)`; tests named after their row. Open details: the smallest option consistent with 07A MC-11, MC-13 and WC8, recorded under **Assumptions**. Reviewer notes: `docs/implementation/backlog_writer/W5_seo_publish.md`.
 
 | Unit | What it builds | Criteria | Rows | Changes app files |
 |---|---|---|---|---|
 | U1 | The two fields, always present, read from the shop, written by the writer | 3 | 8 | **yes** |
 | U2 | Shopify adapter: read and write `seo` | 2 | 4 | **yes** |
 | U3 | The publish step | 4 | 8 | **yes** |
-| **Total** | | **9** | **20** | |
+| U4 | Carried fixes from W1–W4 reviews (orchestrator, 2026-11-19) | 6 | 8 | **yes** |
+| **Total** | | **15** | **28** | |
 
 ## Read first (whole milestone)
 `docs/process/flow.md` (§4, §4A, §10) · `master_plan_writer.md` §4, **§5 WC4.8, WC8** · book `08C` §9 · `07A` MC-10, MC-11, MC-13 · `08B` MC-A10 · `09A` · `docs/guide/02_architecture.md` §Publish · `docs/guide/05_working.md` §Debugging recipes (publish) · `crates/integrations/examples/shopify_probe.rs` (how P12 captured fixtures).
@@ -158,6 +159,48 @@ Whether the SEO read reuses `product_fields` (one query) or `product_seo` · the
 ### Unit test commands
 `cargo test -p psm-testkit --test suite research::w5_seo_publish:: p14_publish_update:: research::r5_publish_hold::` · `cargo clippy -p psm-core --all-targets -- -D warnings`
 
+## Unit 4 — Carried fixes from the W1–W4 reviews
+
+**Unit id:** `W5·U4` · **Rows:** W5·C10–C15 · **Changes app files:** yes · Added by the orchestrator 2026-11-19 from `docs/implementation/backlog_writer/W1…W4`; each fix is small and has a stated rule.
+
+### Goal
+Six rough edges the owner would meet on the first real runs: a normal condition sentence read as a model number; questions about a draft the owner never saw; an answer that silently queues nothing; "$0.00" costs; a "Photos changed" banner Look again cannot clear; stale guide rows and a triplicated constant.
+
+### Read first
+Master plan §5 **WC1.7, WC5.10(iii), WC6 rule 2** (amended 2026-11-19) · the four backlog files above · `crates/research/src/writer/{postcheck.rs, run.rs (candidates, store_findings), safeguard.rs, writes.rs, note.rs}` · `crates/research/src/writer/note.rs` or wherever `stale_condition` is computed · `apps/desktop/src/features/form/{WriterBlock.tsx, WriterPanel.tsx}`, `apps/desktop/src/features/settings/WriterSection.tsx` · `crates/core/src/services/attributes.rs` (`LINK_INTEGRATION`).
+
+### Files
+Edited: the files above; `docs/guide/04_change_impact.md` (row "The research runs list (`research::store::runs`)…": the views leave out `browse`, `look` and `write`; row "A writer command or `WriterStatus` field": add `WriterSection.tsx`, `WriterInstruction.tsx` and `npx vitest run src/features/settings`). New: `crates/testkit/tests/suite/research/w5_carried.rs` (its `mod` line), `apps/desktop/src/features/form/__tests__/w5_carried.test.tsx`.
+
+### Core mechanisms
+`writer::postcheck::check` (Models rule) · `writer::safeguard::filter` (rule 2) · the `stale_condition` function · `money`.
+
+### Ordered tasks
+1. WC5.10(iii) as amended: single-letter A and I are not model tokens; a token followed by a unit is not one.
+2. WC6 rule 2 as amended: drop `missing_in_text` / `text_vs_facts` for a text whose write outcome in the run is not `written` or `unchanged`.
+3. `WriterBlock` Answer: when the returned `Requested.queued` is false, show `reason.sentence` as a toast (Sonner, as the Write texts button does).
+4. `money`: below one cent (10 000 µUSD) and above zero show "< $0.01"; zero shows "$0.00"; otherwise unchanged. Use the same function wherever the writer shows money (panel and Settings → Writer).
+5. WC1.7 as amended.
+6. One constant: `writer/writes.rs`, `writer/note.rs` and `run.rs` use core's `LINK_INTEGRATION` (or one re-export of it); the two guide rows.
+
+### Criteria (6 criteria, 8 rows)
+| Row | Boundary | Input | Exact outcome | Trace |
+|---|---|---|---|---|
+| W5·C10(a) | `check` | English; condition report "Very Good condition. A 1 cm veneer chip on the front edge (photo 3). Stable." with the damage field holding that chip | no `Models` hit | WC5.10(iii) |
+| W5·C10(b) | same | description "Model PK 22 lounge chair." with no "PK22" in the fields or note | one `Models` hit naming "PK 22" | WC5.10(iii) |
+| W5·C11(a) | a `write` run (wired app, fakes) | `product.description` `human` (no feedback); the fake model's description says "made in 1958", no 1958 in the fields | no `writer_findings` row of type `text_vs_facts` for `product.description`; the human row unchanged | WC6 rule 2 |
+| W5·C11(b) | same | `product.description` empty; the same answer twice | the description written `low` (flagged) and one open `text_vs_facts` finding for it | WC6 rule 2, WC5 |
+| W5·C12(a) | `WriterBlock` (vitest) | an open question; `writer_finding_answer` resolves `{queued: false, reason: {sentence: "Research is running on this session."}}` | a toast with that sentence | W3 backlog |
+| W5·C13(a) | `money` (vitest) | 4 000; 0; 21 000 | "< $0.01"; "$0.00"; "$0.02" | W3 backlog |
+| W5·C14(a) | the research panel status | an N6 exists; no Condition field in `fill_keys`; a condition photo changed | `stale_condition` false (no banner) | WC1.7 |
+| W5·C15(a) | `grep` (review reads) | `crates/research/src/writer` | no string literal `"shopify"` | W2/W3 backlog |
+
+### Delegated choices
+The toast's wording beyond the returned sentence · whether `money` moves to a shared util.
+
+### Unit test commands
+`cargo test -p psm-testkit --test suite research::w5_carried:: research::w2_ research::w1_` · `cargo test -p psm-research writer::` · `cd apps/desktop && npx vitest run src/features/form src/features/settings`
+
 ## Closing gate (once, after the last unit; replaces the template's closing gate)
 `cargo test --workspace` · `cargo clippy --workspace --all-targets -- -D warnings` · `cargo fmt --all -- --check` · `cd apps/desktop && npm run typecheck` · `npm test`. One cargo command at a time.
 
@@ -174,3 +217,4 @@ On scratch data with the dev store connected:
 ## Review log
 
 - **2026-11-19, orchestrator: probe target changed.** Owner: the store in `~/.psm_shopify.env` is now the real shop; create a test product for the probe. U2 task 1 amended: create a DRAFT product, probe it, delete it; never touch an existing product.
+- **2026-11-19, orchestrator: U4 added** (carried fixes from the W1–W4 reviewer notes; master plan WC1.7, WC5.10(iii) and WC6 rule 2 amended the same day).

@@ -169,8 +169,8 @@ Notation: `C(item, k)` the cleared set of 08B MC-A1; `S` its sameness; `N` 08B M
    "photo no longer in the condition photos").
 7. **Staleness** (computed at read time, never stored). `stale_main` ⇔ `N1` exists and `photo_plan(usable photos now,
    observe_max_photos).chosen` as `[id, revision, role]` ≠ the `photos` list of `N1`'s unit identity. `stale_condition`
-   ⇔ (`N6` exists and the sorted `(id, revision)` of the usable Condition photos now ≠ `N6`'s identity `photos`) or
-   (no `N6`, usable Condition photos exist, and a Condition field is in `research.fill_keys`). `missing_main` ⇔ no `N1`
+   ⇔ a Condition field is in `research.fill_keys` ∧ ((`N6` exists and the sorted `(id, revision)` of the usable Condition photos now ≠ `N6`'s identity `photos`) or
+   (no `N6` and usable Condition photos exist)) (amended 2026-11-19, W5·U4: no banner Look again cannot clear). `missing_main` ⇔ no `N1`
    and a usable Main photo exists. "Usable" is `stages::usable_photos` (eligible and with a source).
 8. **Look again** (`look_again`). Queued (trigger `look`) iff: the session has an item; no run of the session with
    trigger ≠ `browse` is `queued` or `running` (else `Busy`); `stale_main ∨ stale_condition ∨ missing_main` (else
@@ -338,7 +338,7 @@ substring match.
     whose key is in `research.attribution_keys`, and every value of those keys stored on any item, that the text
     contains (by `N` substring) must be an `N` substring of `A`. (ii) `Years`: every `\b(18|19|20)\d\d\b` in the text
     must occur as a 4-digit number in `A`. (iii) `Models`: every token `\b[A-Z]{1,4}[- ]?\d{1,4}[A-Z]?\b`, except
-    tokens whose letters are a single W, D, H, B or L and except the line starting "Dimensions:" or "Mått:", must
+    tokens whose letters are a single W, D, H, B, L, A or I, tokens followed by a unit (`\s?(mm|cm|m|kg|%)\b`), and except the line starting "Dimensions:" or "Mått:", must
     occur in `A` after removing spaces and hyphens and upper-casing.
 11. **Restoration** (`Restoration`, W6): each selected `local.restoration` choice must appear by one of its phrases
     for `L` (WC8-R) in the condition report (owner card 1, 2026-11-19: the customer reads the restoration in the
@@ -359,7 +359,9 @@ ask, `text_vs_facts` ask. Model findings arrive in the call's `findings: [{type,
 (layout keys only; others removed), text key `tf`):
 1. `mode(t) = off` → dropped.
 2. Subject: `K` for `field_vs_*` and questions; `{tf}` for `missing_in_text` and `text_vs_facts`. Any subject key
-   `reviewed` (WC2) → dropped.
+   `reviewed` (WC2) → dropped. A `missing_in_text` or `text_vs_facts` finding whose text `tf` was not written or
+   unchanged in this run (write outcome other than `written` / `unchanged`, e.g. the owner's own text) → dropped
+   (amended 2026-11-19, W5·U4).
 3. `field_vs_photos`: dropped unless every key of `K` is undecided (WC2) and holds a value.
 4. `field_vs_*` with `K` empty → dropped.
 5. `identity(f)` = `t|<K sorted, comma-joined>|tf`, and for questions `question|<K>||<N(text)>`. Equal to the identity

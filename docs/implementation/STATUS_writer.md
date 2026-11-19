@@ -35,3 +35,9 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
   - The store in `~/.psm_shopify.env` is now the **real shop**. W5 U2 task 1 amended: the probe creates its own DRAFT
     test product, probes it, deletes it, and touches no existing product.
   - Chain: W1 done, W2 under review (10:36).
+- **2026-11-19 12:02: W1–W4 APPROVED** (all APPROVED_WITH_NOTES; narratives in `narratives/W1…W4`). Release build of
+  `143369f` installed on the dev Mac (previous build kept as "2026-11-18 A21"); fresh zip on the Desktop.
+  - W5 gains **U4, carried fixes** from the W1–W4 reviewer notes: "A 1 cm" read as a model number, findings about
+    texts never written, a silent answer, "$0.00" costs, the stuck condition banner, the guide rows and the
+    "shopify" constant. Master plan WC1.7, WC5.10(iii) and WC6 rule 2 amended.
+  - Chain W5→W6 started: `scratchpad/writer_chain2.sh`, log `scratchpad/writer_chain2.log`.
