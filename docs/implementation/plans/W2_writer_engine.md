@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # W2 — The writer engine
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-19, codex (Claude Opus implementer) r1: 5 units, 96 rows tested at their boundaries; closing gate green; checkpoints e7481f3, 66ac61b, 7a2724a, c796d2b, 5c6067c)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -331,3 +331,10 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-researc
 Nothing in the app runs the writer yet. The narrative says so and lists what is proven: the shipped writing guide and examples, the check of every text, the once-per-session rule, the never-ask-again rule, and that the writer's cost and calls sit in research's record and export. The owner can read the shipped guide in `master_plan_writer.md` §9.
 
 ## Review log
+
+### 2026-11-19 — implement r1 (Claude Opus, `pipeline-implementer`)
+**Built.** U1 `writer::config` (`WriterSettings`, `from_slot`, `validate`, `WriterSnapshot`), `writer::defaults` (§9 verbatim: both instructions, title formulas, dimensions lines, examples A–D with §9.4's changes), `writer::input` (`visible_keys`, `requestable_texts`, `build`), `ResearchDeps.writer_settings` (the app passes `Arc::new(|| None)`). U2 `writer::postcheck::check` (WC5 1–10). U3 `RunTrigger::Write`, `Stage::Write` (8, not in `ALL`, `parse` resolves it), `next_call` treats it like Decide, start tier 0 and no source wait for `write`, `writer::run::{request_decision, writer_request}` (WC3), the start transaction's writer snapshot and input, `writer::schema::schema_for_write`, `WriterApi::request`. U4 `writer::run::execute` (units `texts`, `retry`, `result`; one rewrite; flagged texts `low`; `NotRechecked` at the run cost limit), `writer::writes` (`stored_state`, `write_text` over MC-A1's unchanged table; never `items.title`). U5 `writer::safeguard::filter` (WC6 1–6), storage and superseding in the `result` transaction, `WriterApi::{answer, dismiss}`, `writer_counts`, `writes.json` for writer runs, session delete removes `writer_findings`, p01 lists the table, guide `02_architecture.md` updated.
+**Assumptions** (handoff lists all): findings and questions come from the first answer only; a run whose rewrite the cost limit stopped ends `stopped_at_cap`; the origin waits in the queued run's settings snapshot until the start moves it into `writer.origin`; a model `text_vs_facts` finding's text field is the first requested text key among its keys.
+**Deviations.** C18(f): the row's input "old" against a dismissed "Old" cannot match under WC4.4 / 08B MC-A1 (the built-in description is `rich_text`, whose sameness is canonical equality, not `N`); the contract is implemented as written and the test uses a canonically equal "Old". The `writer_findings` table is created from U1 (C4(c) reads it) in `store::TABLES`, which `schema::ensure` runs. The writer run is dispatched in `stages::execute`, not `job.rs`.
+**Stamp.** `cargo test --workspace` (exit 0, 0 failed) · `cargo clippy --workspace --all-targets -- -D warnings` (exit 0) · `cargo fmt --all -- --check` (exit 0).
+
