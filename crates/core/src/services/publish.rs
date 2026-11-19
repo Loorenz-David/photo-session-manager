@@ -119,11 +119,13 @@ fn active(step: PublishStep) -> bool {
     )
 }
 
-/// MC-A10 at confirmation, read in `tx`: the item's rows split against the integration's
-/// definitions and the item's current layout.
+/// MC-A10 at confirmation, read in `tx`: the item's rows split against the built-in definitions
+/// and the integration's (WC4.8: a description with a prior is a real conflict) and the item's
+/// current layout.
 fn partition_in(tx: &dyn StoreTx, item_id: i64) -> Result<(Partition, Vec<Definition>)> {
     let item = tx.item(item_id)?;
-    let definitions = tx.attribute_definitions(INTEGRATION)?;
+    let mut definitions = crate::services::attributes::builtin_definitions();
+    definitions.extend(tx.attribute_definitions(INTEGRATION)?);
     let layout = layout_keys(tx, &item.item_type, Some(INTEGRATION))?;
     let values = tx.attribute_values(item_id)?;
     Ok((partition(&values, &definitions, &layout), definitions))

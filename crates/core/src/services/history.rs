@@ -373,12 +373,13 @@ pub(crate) fn coalesces_into(last: &Step, item_id: i64, key: &str) -> bool {
     else {
         return false;
     };
-    // MC-A10 (N1): a step that recorded a resolution is never merged into.
+    // MC-A10 (N1): a step that recorded a resolution is never merged into. A title edit that
+    // removed a title suggestion is two changes of the one key (WC4.7); typing on merges into it.
     resolutions.is_empty()
         && last.label.starts_with("Edit ")
         && *old_item == item_id
-        && fields.len() == 1
-        && fields[0].key == key
+        && !fields.is_empty()
+        && fields.iter().all(|f| f.key == key)
 }
 fn coalesces(last: &Step, next: &Step) -> bool {
     let StepKind::Attribute {
@@ -400,7 +401,16 @@ fn coalesce_attribute(last: &mut Step, next: &Step) -> bool {
     else {
         return false;
     };
-    old[0].after = new[0].after.clone();
+    let same_kind = |a: &FieldState, b: &FieldState| {
+        matches!(
+            (a, b),
+            (FieldState::Row(_), FieldState::Row(_)) | (FieldState::Title(_), FieldState::Title(_))
+        )
+    };
+    let Some(target) = old.iter_mut().find(|f| same_kind(&f.after, &new[0].after)) else {
+        return false;
+    };
+    target.after = new[0].after.clone();
     true
 }
 
@@ -969,18 +979,31 @@ fn apply(
             })?;
             let undo = direction == Direction::Undone;
             // MC-A12 (R-IA21): every field must still hold the row the step left (undo) or found
-            // (redo); otherwise the whole step cannot apply. Title fields restore as before.
+            // (redo); otherwise the whole step cannot apply. A title field restores as before,
+            // except beside its `product.title` row (WC4.7: a title suggestion's accept, keep or
+            // edit), where the item's title must also still be the one the step left or found.
             let stored = tx.attribute_values(item_id)?;
+            let title_now = tx.item(item_id)?.title;
             for field in &fields {
                 let expected = if undo { &field.after } else { &field.before };
-                if let FieldState::Row(expected) = expected {
-                    let current = stored.iter().find(|v| v.key == field.key);
-                    if !same_row(current, expected.as_ref()) {
-                        return Err(cannot(
-                            step,
-                            direction,
-                            "that field was changed by research",
-                        ));
+                match expected {
+                    FieldState::Row(expected) => {
+                        let current = stored.iter().find(|v| v.key == field.key);
+                        if !same_row(current, expected.as_ref()) {
+                            return Err(cannot(
+                                step,
+                                direction,
+                                "that field was changed by research",
+                            ));
+                        }
+                    }
+                    FieldState::Title(expected) => {
+                        let beside_row = fields
+                            .iter()
+                            .any(|f| f.key == field.key && matches!(f.before, FieldState::Row(_)));
+                        if beside_row && title_now != *expected {
+                            return Err(cannot(step, direction, "that title was changed"));
+                        }
                     }
                 }
             }

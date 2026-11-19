@@ -6,3 +6,4 @@ pub mod r7_export_schedule;
 pub mod r7_wiring;
 pub mod r8_shop_facts;
 pub mod w1_note_seam;
+pub mod w3_title;

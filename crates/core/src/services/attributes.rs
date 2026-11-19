@@ -193,6 +193,66 @@ fn title_value(item: &Item) -> Option<Value> {
     })
 }
 
+/// The text of a `product.title` row's value (a canonical JSON string), `None` when it is not one.
+fn title_text(row: &Value) -> Option<String> {
+    row.json().and_then(|j| j.as_str().map(str::to_owned))
+}
+
+/// WC4.7: the `product.title` row the form shows in place of `items.title`: a live `ai` row that
+/// is `suggested`, or `accepted` with the value equal to `items.title`.
+fn shown_title_row<'v>(row: Option<&'v Value>, item: &Item) -> Option<&'v Value> {
+    row.filter(|r| {
+        r.is_live()
+            && r.provenance == Provenance::Ai
+            && match r.ai_status {
+                Some(AiStatus::Suggested) => true,
+                Some(AiStatus::Accepted) => title_text(r).as_deref() == Some(item.title.as_str()),
+                _ => false,
+            }
+    })
+}
+
+/// WC4.7: an accepted `product.title` suggestion becomes the item's title in the same
+/// transaction and the same undo step as the row (undo restores both).
+fn title_follows(
+    tx: &mut dyn StoreTx,
+    act: &mut Act,
+    item_id: i64,
+    accepted: &Value,
+    now: i64,
+) -> Result<()> {
+    let Some(text) = title_text(accepted) else {
+        return Ok(());
+    };
+    let before = tx.item(item_id)?.title;
+    if before != text {
+        tx.update_item_title(item_id, &text, now)?;
+        act.fields.push(FieldChange {
+            key: PRODUCT_TITLE.into(),
+            before: FieldState::Title(before),
+            after: FieldState::Title(text),
+        });
+    }
+    Ok(())
+}
+
+/// The item's title as a `human` value row (not stored): what a title action leaves.
+fn typed_title(item_id: i64, title: &str, at: i64) -> Value {
+    Value {
+        item_id,
+        key: PRODUCT_TITLE.to_owned(),
+        value: canonical_json(&Json::String(title.to_owned())),
+        valid: true,
+        provenance: Provenance::Human,
+        ai_confidence: None,
+        ai_status: None,
+        ai_reason: None,
+        ai_sources: None,
+        ai_prior: None,
+        updated_at: at,
+    }
+}
+
 /// The link integration of the linked product the form reads (the store keys links by it).
 const LINK_INTEGRATION: &str = "shopify";
 
@@ -542,40 +602,65 @@ impl<'a> AttributesService<'a> {
         Ok(result)
     }
 
-    /// Sets the item's title, the single home of `product.title` (ch05): `items.title`, not a value
-    /// row. `None` empties it. A title equal to the stored one is not written (H4); a write sets the
-    /// item's sessions' activity and leaves `change_seq` alone (MC-4, MC-6).
+    /// Sets the item's title, the single home of `product.title` (ch05): `items.title`. `None`
+    /// empties it. A title equal to the stored one is not written (H4); a write sets the item's
+    /// sessions' activity and leaves `change_seq` alone (MC-4, MC-6). WC4.7: a human title edit
+    /// deletes the item's `product.title` row (a writer suggestion) in the same transaction and
+    /// undo step, with an `edited` feedback row when it was an `ai` suggestion or acceptance.
     fn write_title(&self, item_id: i64, title: Option<String>, action: &str) -> Result<Value> {
         let title = title.unwrap_or_default();
         let mut result = None;
         self.act(item_id, &mut |tx, ctx, act| {
             let now = ctx.now;
             let item = tx.item(item_id)?;
+            let row = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .find(|v| v.key == PRODUCT_TITLE);
+            let mut wrote_feedback = false;
+            if let Some(row) = &row {
+                tx.delete_attribute_value(item_id, PRODUCT_TITLE)?;
+                wrote_feedback = note_action(
+                    tx,
+                    ctx,
+                    act,
+                    item_id,
+                    PRODUCT_TITLE,
+                    Some(row),
+                    &typed_title(item_id, &title, now),
+                    FeedbackAction::Edited,
+                )?;
+                act.fields.push(FieldChange {
+                    key: PRODUCT_TITLE.into(),
+                    before: FieldState::Row(Some(row.clone())),
+                    after: FieldState::Row(None),
+                });
+            }
             if item.title != title {
                 tx.update_item_title(item_id, &title, now)?;
-                tx.set_item_activity(item_id, now)?;
-                act.label = format!("{action} Title");
-                act.merge = action == "Edit" && ctx.merges(item_id, PRODUCT_TITLE);
                 act.fields.push(FieldChange {
                     key: PRODUCT_TITLE.into(),
                     before: FieldState::Title(item.title.clone()),
                     after: FieldState::Title(title.clone()),
                 });
             }
+            if !act.fields.is_empty() {
+                tx.set_item_activity(item_id, now)?;
+                act.label = format!("{action} Title");
+                act.merge = action == "Edit"
+                    && row.is_none()
+                    && !wrote_feedback
+                    && ctx.merges(item_id, PRODUCT_TITLE);
+                if act.merge {
+                    ctx.update_edited_feedback(
+                        tx,
+                        PRODUCT_TITLE,
+                        &typed_title(item_id, &title, now),
+                    )?;
+                }
+            }
             let stored = tx.item(item_id)?;
-            result = Some(Value {
-                item_id,
-                key: PRODUCT_TITLE.to_owned(),
-                value: canonical_json(&Json::String(stored.title)),
-                valid: true,
-                provenance: Provenance::Human,
-                ai_confidence: None,
-                ai_status: None,
-                ai_reason: None,
-                ai_sources: None,
-                ai_prior: None,
-                updated_at: stored.updated_at,
-            });
+            result = Some(typed_title(item_id, &stored.title, stored.updated_at));
             Ok(())
         })?;
         result.ok_or_else(|| Error::InvalidData("title not stored".into()))
@@ -690,6 +775,7 @@ impl<'a> AttributesService<'a> {
     pub fn accept_all(&self, item_id: i64) -> Result<usize> {
         let mut count = 0;
         self.act(item_id, &mut |tx, ctx, act| {
+            count = 0;
             tx.item(item_id)?;
             let definitions = active_definitions(tx, self.integration)?;
             for before in tx.attribute_values(item_id)? {
@@ -720,17 +806,21 @@ impl<'a> AttributesService<'a> {
                     &after,
                     FeedbackAction::Accepted,
                 )?;
+                let title = (before.key == PRODUCT_TITLE).then(|| after.clone());
                 act.fields.push(FieldChange {
                     key: before.key.clone(),
                     before: FieldState::Row(Some(before)),
                     after: FieldState::Row(Some(after)),
                 });
+                count += 1;
+                if let Some(title) = title {
+                    title_follows(tx, act, item_id, &title, ctx.now)?;
+                }
             }
             if !act.fields.is_empty() {
                 tx.set_item_activity(item_id, ctx.now)?;
                 act.label = "Accept all suggestions".into();
             }
-            count = act.fields.len();
             Ok(())
         })?;
         Ok(count)
@@ -776,6 +866,9 @@ impl<'a> AttributesService<'a> {
                 before: FieldState::Row(Some(before)),
                 after: FieldState::Row(Some(after.clone())),
             });
+            if key == PRODUCT_TITLE {
+                title_follows(tx, act, item_id, &after, ctx.now)?;
+            }
             result = Some(after);
             Ok(())
         })?;
@@ -810,6 +903,31 @@ impl<'a> AttributesService<'a> {
             let Some(prior) = before.ai_prior.clone() else {
                 return Err(Error::InvalidValue(format!("{key} holds no conflict")));
             };
+            if key == PRODUCT_TITLE {
+                // WC4.7: the title's prior lives in `items.title`; the suggestion row is deleted.
+                let title = tx.item(item_id)?.title;
+                tx.delete_attribute_value(item_id, key)?;
+                tx.set_item_activity(item_id, ctx.now)?;
+                let kept = typed_title(item_id, &title, ctx.now);
+                note_action(
+                    tx,
+                    ctx,
+                    act,
+                    item_id,
+                    key,
+                    Some(&before),
+                    &kept,
+                    FeedbackAction::KeptPrevious,
+                )?;
+                act.label = format!("Keep previous {}", definition.label);
+                act.fields.push(FieldChange {
+                    key: key.into(),
+                    before: FieldState::Row(Some(before)),
+                    after: FieldState::Row(None),
+                });
+                result = Some(kept);
+                return Ok(());
+            }
             let after = Value {
                 item_id,
                 key: key.to_owned(),
@@ -852,8 +970,7 @@ impl<'a> AttributesService<'a> {
     /// nothing.
     pub fn clear(&self, item_id: i64, key: &str) -> Result<()> {
         if key == PRODUCT_TITLE {
-            self.write_title(item_id, None, "Clear")?;
-            return Ok(());
+            return self.clear_title(item_id);
         }
         self.write(
             item_id,
@@ -870,6 +987,61 @@ impl<'a> AttributesService<'a> {
             },
         )?;
         Ok(())
+    }
+
+    /// Clear on the title (WC4.7). A writer suggestion on display is dismissed: its row becomes
+    /// `cleared` (feedback `cleared`) and `items.title` is left as it is. Otherwise the item's
+    /// title is emptied, and a live `product.title` row (an accepted suggestion) is cleared with
+    /// it, in one undo step.
+    fn clear_title(&self, item_id: i64) -> Result<()> {
+        self.act(item_id, &mut |tx, ctx, act| {
+            let item = tx.item(item_id)?;
+            let row = tx
+                .attribute_values(item_id)?
+                .into_iter()
+                .find(|v| v.key == PRODUCT_TITLE)
+                .filter(Value::is_live);
+            let suggested = row.as_ref().is_some_and(|r| {
+                r.provenance == Provenance::Ai && r.ai_status == Some(AiStatus::Suggested)
+            });
+            if let Some(before) = &row {
+                let after = Value {
+                    ai_status: Some(AiStatus::Cleared),
+                    ai_prior: None,
+                    updated_at: ctx.now,
+                    ..before.clone()
+                };
+                tx.put_attribute_value(&after)?;
+                note_action(
+                    tx,
+                    ctx,
+                    act,
+                    item_id,
+                    PRODUCT_TITLE,
+                    Some(before),
+                    &after,
+                    FeedbackAction::Cleared,
+                )?;
+                act.fields.push(FieldChange {
+                    key: PRODUCT_TITLE.into(),
+                    before: FieldState::Row(Some(before.clone())),
+                    after: FieldState::Row(Some(after)),
+                });
+            }
+            if !suggested && !item.title.is_empty() {
+                tx.update_item_title(item_id, "", ctx.now)?;
+                act.fields.push(FieldChange {
+                    key: PRODUCT_TITLE.into(),
+                    before: FieldState::Title(item.title.clone()),
+                    after: FieldState::Title(String::new()),
+                });
+            }
+            if !act.fields.is_empty() {
+                tx.set_item_activity(item_id, ctx.now)?;
+                act.label = "Clear Title".into();
+            }
+            Ok(())
+        })
     }
 
     /// The item's values (cleared ones excluded), valid or not, ordered by key.
@@ -1308,7 +1480,14 @@ impl<'a> AttributesService<'a> {
                     .into_iter()
                     .map(|(definition, default, saved)| {
                         let value = if definition.key == PRODUCT_TITLE {
-                            title_value(&item).map(|mut value| {
+                            match shown_title_row(values.get(PRODUCT_TITLE), &item) {
+                                Some(row) => Some(row.clone()),
+                                None => title_value(&item),
+                            }
+                            .map(|mut value| {
+                                if value.provenance == Provenance::Ai {
+                                    return value;
+                                }
                                 if title_from_integration {
                                     value.provenance = Provenance::Integration;
                                 }
