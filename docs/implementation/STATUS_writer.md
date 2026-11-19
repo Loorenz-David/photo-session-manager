@@ -74,3 +74,15 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
     (generator `scratchpad/beyo/make_beyo.py`). The owner imports it with Settings → Writer → Import… on each Mac.
   - The orchestrator removed "This piece" from that file's banned list: the company rule is only "don't start with
     it", and the instruction already says so.
+
+- **2026-11-19: A24 + A25 owner corrections, installed** (`6332967`; previous build kept as "2026-11-19 A23");
+  PR #23 merged into main (`3bf5553`).
+  - Work-Mac log (Sdt1-191126, run 32): the writer drafted every text, but description ("the photographer cleared
+    this field") and condition report ("…accepted this value") were refused by MC-A1, silently. The run did follow
+    the imported Beyovintage settings.
+  - A24: Write texts / answers are deliberate requests and offer new suggestions over accepted, typed or cleared
+    texts (prior kept whole; Keep previous restores). Automatic requests unchanged. The writer's state shows: session
+    marker, end toast, failed-run reason with Try again, texts not offered with reasons, "Last written".
+  - A25: Customize fields: the Add-a-field box filled the step and hid the field list; it now takes its own height
+    and lists matches only while typing.
+  - Not yet seen on screen by the orchestrator: the new writer display and the Customize fix in the installed app.
