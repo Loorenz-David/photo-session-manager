@@ -11,6 +11,8 @@ vi.mock('@/services/writer', () => ({
   writerSettingsSave: vi.fn(),
   writerInstructionReset: vi.fn(),
   writerPreview: vi.fn(),
+  writerSettingsExport: vi.fn(),
+  writerSettingsImport: vi.fn(),
 }));
 vi.mock('@/services/attributes', () => ({ listDefinitions: vi.fn() }));
 vi.mock('@/services/settings', () => ({}));
@@ -19,7 +21,8 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { SettingsNav } from '@/features/settings/SettingsNav';
 import { WriterSection } from '@/features/settings/WriterSection';
 import { listDefinitions } from '@/services/attributes';
-import { writerInstructionReset, writerPreview, writerSettingsGet, writerSettingsSave } from '@/services/writer';
+import { toast } from 'sonner';
+import { writerInstructionReset, writerPreview, writerSettingsExport, writerSettingsGet, writerSettingsImport, writerSettingsSave } from '@/services/writer';
 
 const SHIPPED_EN = 'You write product texts for a small Swedish shop.';
 const SHIPPED_SV = 'Du skriver produkttexter för en liten svensk butik.';
@@ -42,6 +45,7 @@ function defaults(extra: Partial<WriterSettings> = {}): WriterSettings {
     visible_keys: null,
     safeguard: { field_vs_photos: 'ask', field_vs_field: 'note', field_vs_listings: 'note', missing_in_text: 'ask', text_vs_facts: 'ask' },
     max_questions: 3, shop_name: '', condition_report_key: 'custom.condition_report_description', damage_terms: {},
+    grade_word: false, stability_sentence: false, title_formula: false, dimensions_line: false,
     counts: { field_vs_photos: ZERO, field_vs_field: ZERO, field_vs_listings: ZERO, missing_in_text: ZERO, text_vs_facts: ZERO },
     ...extra,
   };
@@ -192,4 +196,36 @@ it('w4_c10b_mode_off_questions_and_shop_name_are_saved', async () => {
   expect(value.safeguard.field_vs_field).toBe('off');
   expect(value.max_questions).toBe(2);
   expect(value.shop_name).toBe('Beyo Vintage');
+});
+
+it('a23_the_four_switches_start_off_and_are_saved', async () => {
+  await open();
+  const labels = ['Start the condition report with the grade word', 'Always end the condition report with a stability sentence',
+    'Send the built-in title formula', 'End the description with a dimensions line'];
+  for (const label of labels) expect(screen.getByRole('checkbox', { name: label })).not.toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Send the built-in title formula' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Start the condition report with the grade word' }));
+  const value = await saved();
+  expect([value.grade_word, value.stability_sentence, value.title_formula, value.dimensions_line]).toEqual([true, false, true, false]);
+});
+
+it('a23_export_and_import_buttons', async () => {
+  vi.mocked(writerSettingsExport).mockResolvedValue(true);
+  vi.mocked(writerSettingsImport).mockResolvedValue(defaults({ shop_name: 'Imported shop', banned_extra: ['sanded back'] }));
+  await open();
+  fireEvent.click(screen.getByRole('button', { name: 'Export…' }));
+  await waitFor(() => expect(writerSettingsExport).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Writer settings exported'));
+  fireEvent.click(screen.getByRole('button', { name: 'Import…' }));
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Shop name for search titles' })).toHaveValue('Imported shop'));
+  expect(screen.getByRole('textbox', { name: /Words and phrases never to use/ })).toHaveValue('sanded back');
+  expect(toast.success).toHaveBeenCalledWith('Writer settings imported and saved');
+  expect(writerSettingsSave).not.toHaveBeenCalled();
+});
+
+it('a23_a_refused_import_shows_the_reason', async () => {
+  vi.mocked(writerSettingsImport).mockRejectedValue(new Error('this is not a Session Manager writer settings file'));
+  await open();
+  fireEvent.click(screen.getByRole('button', { name: 'Import…' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('this is not a Session Manager writer settings file');
 });

@@ -462,6 +462,11 @@ pub struct WriterSettingsDto {
     pub shop_name: String,
     pub condition_report_key: String,
     pub damage_terms: BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    /// A23: the four switches (default off).
+    pub grade_word: bool,
+    pub stability_sentence: bool,
+    pub title_formula: bool,
+    pub dimensions_line: bool,
     pub counts: BTreeMap<String, WriterCountDto>,
 }
 
@@ -585,6 +590,10 @@ fn settings_dto(
         shop_name: settings.shop_name,
         condition_report_key: settings.condition_report_key,
         damage_terms: settings.damage_terms,
+        grade_word: settings.grade_word,
+        stability_sentence: settings.stability_sentence,
+        title_formula: settings.title_formula,
+        dimensions_line: settings.dimensions_line,
         counts,
     })
 }
@@ -638,6 +647,10 @@ fn settings_of(dto: WriterSettingsDto) -> WriterSettings {
         shop_name: dto.shop_name,
         condition_report_key: dto.condition_report_key,
         damage_terms: dto.damage_terms,
+        grade_word: dto.grade_word,
+        stability_sentence: dto.stability_sentence,
+        title_formula: dto.title_formula,
+        dimensions_line: dto.dimensions_line,
     }
 }
 
@@ -709,6 +722,42 @@ pub async fn writer_instruction_reset(
     }
     let mut next = stored(&state)?;
     next.reset_instruction(&language, now_ms(&state)?);
+    save_slot(&state, engine.as_ref(), &next)
+}
+
+/// A23 **Export…**: writes the saved writer settings (only the `writer` slot, without earlier
+/// instruction versions) to `path` as JSON. Never any other settings slot.
+#[tauri::command]
+#[specta::specta]
+pub async fn writer_settings_export(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<(), CommandError> {
+    let file = stored(&state)?.export_value();
+    let text = serde_json::to_string_pretty(&file).map_err(invalid)?;
+    std::fs::write(&path, text + "\n")
+        .map_err(|e| invalid(format!("cannot write the file: {e}")))?;
+    tracing::info!(target: "writer", "writer.settings_exported");
+    Ok(())
+}
+
+/// A23 **Import…**: reads an exported file at `path`, validates it as Save does, and saves it as
+/// the writer settings; each instruction it changes keeps the replaced text among the earlier
+/// versions. A refused file names the reason and saves nothing.
+#[tauri::command]
+#[specta::specta]
+pub async fn writer_settings_import(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<WriterSettingsDto, CommandError> {
+    let engine = engine(&state)?;
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| invalid(format!("cannot read the file: {e}")))?;
+    let file: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|_| invalid("this is not a Session Manager writer settings file"))?;
+    let incoming = WriterSettings::import_value(&file).map_err(invalid)?;
+    let next = stored(&state)?.saved_over(incoming, now_ms(&state)?);
+    tracing::info!(target: "writer", "writer.settings_imported");
     save_slot(&state, engine.as_ref(), &next)
 }
 

@@ -567,3 +567,5 @@ fields line gains "raka ben"; description's second paragraph begins "Stommen är
 raka ben."; search title "Dansk teakfåtölj i ullbouclé, 1960-tal". Measured by the planner against WC5's lengths
 (words: A 65/29, B 74/36, C 67/45, D 60/25; search characters: A 51/148, B 43/142, C 47/149, D 38/136): every
 example passes the post-check.
+- **A23, 2026-11-19 (orchestrator, owner correction).** `WriterSettings` gains `grade_word`, `stability_sentence`, `title_formula`, `dimensions_line` (default false). WC5 rule 8 runs only with `grade_word` (the run leaves `CheckContext.detailed` unset otherwise); rule 9 only with `stability_sentence` (`CheckContext.stability`). `instructions_text` sends the title formula and the dimensions line only with their switches, plus one sentence per switch (with `grade_word` off: a sentence forbidding the grade words). The writer input gains `item {type, sku}` (WC2). `writer_settings_export` / `writer_settings_import` (`WriterSettings::export_value` / `import_value`, `kind = session-manager-writer-settings`, version 1). §9.1/§9.2 amended as in `writer/defaults.rs`.
+

@@ -184,6 +184,17 @@ export const commands = {
 	 */
 	writerSettingsSave: (value: WriterSettingsDto_Deserialize) => typedError<WriterSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("writer_settings_save", { value })),
 	/**
+	 *  A23 **Export…**: writes the saved writer settings (only the `writer` slot, without earlier
+	 *  instruction versions) to `path` as JSON. Never any other settings slot.
+	 */
+	writerSettingsExport: (path: string) => typedError<null, CommandError>(__TAURI_INVOKE("writer_settings_export", { path })),
+	/**
+	 *  A23 **Import…**: reads an exported file at `path`, validates it as Save does, and saves it as
+	 *  the writer settings; each instruction it changes keeps the replaced text among the earlier
+	 *  versions. A refused file names the reason and saves nothing.
+	 */
+	writerSettingsImport: (path: string) => typedError<WriterSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("writer_settings_import", { path })),
+	/**
 	 *  W4: **Reset to default**: the language's instruction returns to the shipped one; the saved
 	 *  text is kept among the earlier versions.
 	 */
@@ -2230,6 +2241,11 @@ export type WriterSettingsDto_Deserialize = {
 	shop_name: string,
 	condition_report_key: string,
 	damage_terms: { [key in string]: { [key in string]: string[] } },
+	/**  A23: the four switches (default off). */
+	grade_word: boolean,
+	stability_sentence: boolean,
+	title_formula: boolean,
+	dimensions_line: boolean,
 	counts: { [key in string]: WriterCountDto },
 };
 
@@ -2254,6 +2270,11 @@ export type WriterSettingsDto_Serialize = {
 	shop_name: string,
 	condition_report_key: string,
 	damage_terms: { [key in string]: { [key in string]: string[] } },
+	/**  A23: the four switches (default off). */
+	grade_word: boolean,
+	stability_sentence: boolean,
+	title_formula: boolean,
+	dimensions_line: boolean,
 	counts: { [key in string]: WriterCountDto },
 };
 

@@ -224,48 +224,50 @@ impl ResearchService {
                 .map(|f| f.definition.label.clone())
                 .unwrap_or_else(|| key.to_owned())
         };
-        let (fields, rejected, listings, answers) = self.store.research_transaction(|tx| {
-            let rows = tx.attribute_values(item_id)?;
-            let mut fields: Vec<Json> = Vec::new();
-            for key in &visible {
-                let row = rows.iter().find(|r| &r.key == key);
-                let feedback = tx.feedback_by_key(item_id, key)?;
-                let decided = decision(row, &feedback);
-                let value = match decided {
-                    Decision::Empty | Decision::Dismissed => Json::Null,
-                    _ => row
-                        .and_then(|r| r.json())
-                        .map(|v| Json::String(display(&v)))
-                        .unwrap_or(Json::Null),
-                };
-                fields.push(json!({
-                    "key": key,
-                    "label": label(key),
-                    "value": value,
-                    "decision": decided.code(),
-                    "fact": is_fact(decided),
-                }));
-            }
-            let mut rejected: Vec<Json> = Vec::new();
-            for (name, key) in &texts {
-                let row = rows.iter().find(|r| &r.key == key);
-                let mut seen: Vec<String> = Vec::new();
-                for value in crate::writes::cleared_set(tx, row, item_id, key)? {
-                    let canonical = canonical_json(&value);
-                    if seen.contains(&canonical) {
-                        continue;
-                    }
-                    seen.push(canonical);
-                    rejected.push(json!({ "text": name, "value": display(&value) }));
+        let (fields, rejected, listings, answers, item) =
+            self.store.research_transaction(|tx| {
+                let rows = tx.attribute_values(item_id)?;
+                let mut fields: Vec<Json> = Vec::new();
+                for key in &visible {
+                    let row = rows.iter().find(|r| &r.key == key);
+                    let feedback = tx.feedback_by_key(item_id, key)?;
+                    let decided = decision(row, &feedback);
+                    let value = match decided {
+                        Decision::Empty | Decision::Dismissed => Json::Null,
+                        _ => row
+                            .and_then(|r| r.json())
+                            .map(|v| Json::String(display(&v)))
+                            .unwrap_or(Json::Null),
+                    };
+                    fields.push(json!({
+                        "key": key,
+                        "label": label(key),
+                        "value": value,
+                        "decision": decided.code(),
+                        "fact": is_fact(decided),
+                    }));
                 }
-            }
-            Ok((
-                fields,
-                rejected,
-                listings(tx.conn(), session_id)?,
-                answered(tx.conn(), item_id)?,
-            ))
-        })?;
+                let mut rejected: Vec<Json> = Vec::new();
+                for (name, key) in &texts {
+                    let row = rows.iter().find(|r| &r.key == key);
+                    let mut seen: Vec<String> = Vec::new();
+                    for value in crate::writes::cleared_set(tx, row, item_id, key)? {
+                        let canonical = canonical_json(&value);
+                        if seen.contains(&canonical) {
+                            continue;
+                        }
+                        seen.push(canonical);
+                        rejected.push(json!({ "text": name, "value": display(&value) }));
+                    }
+                }
+                Ok((
+                    fields,
+                    rejected,
+                    listings(tx.conn(), session_id)?,
+                    answered(tx.conn(), item_id)?,
+                    item_of(tx.conn(), item_id)?,
+                ))
+            })?;
         let mut research_saw: Vec<Json> = Vec::new();
         for saw in &note.research_saw {
             research_saw.push(json!({ "key": saw.key, "text": saw.text }));
@@ -293,10 +295,29 @@ impl ResearchService {
                 answers,
                 rejected,
                 texts: texts.into_iter().map(|(n, _)| n).collect(),
+                item,
             },
             settings,
         ))
     }
+}
+
+/// A23: what the writer knows of the item itself: its type (the Shopify product type the item
+/// type follows, e.g. "Dining chairs") and its SKU (its prefix tells chairs from furniture).
+pub(crate) fn item_of(conn: &rusqlite::Connection, item_id: i64) -> Result<Option<Json>> {
+    use rusqlite::OptionalExtension;
+    conn.query_row(
+        "SELECT item_type, sku FROM items WHERE id=?1",
+        [item_id],
+        |r| {
+            Ok(json!({
+                "type": r.get::<_, String>(0)?,
+                "sku": r.get::<_, String>(1)?,
+            }))
+        },
+    )
+    .optional()
+    .map_err(store::db)
 }
 
 /// The parts of a writer input read from an item (or, for the preview, from the built-in
@@ -311,12 +332,17 @@ pub struct InputParts {
     pub rejected: Vec<Json>,
     /// The requested output names.
     pub texts: Vec<String>,
+    /// A23: `{type, sku}` of the item (`None`: left out of the input).
+    pub item: Option<Json>,
 }
 
 /// The writer input (WC2 "Input") from its parts and the settings: a run's input and the
 /// preview's are both assembled here.
 pub fn assemble(parts: InputParts, settings: &WriterSettings) -> Json {
     let mut input = Map::new();
+    if let Some(item) = parts.item {
+        input.insert("item".into(), item);
+    }
     input.insert("fields".into(), Json::Array(parts.fields));
     input.insert("note".into(), Json::Array(parts.note));
     input.insert("research_saw".into(), Json::Array(parts.research_saw));

@@ -63,3 +63,9 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
       step may be missed and need a rewrite).
     - Restoration words should match as whole words ("soiled" counts as "oiled" today).
     - Open notes in `backlog_writer/W5`, `backlog_writer/W6`.
+- **2026-11-19: A23 owner correction (company listing rules).** Grade word off and three more switches (stability
+  sentence, title formula, dimensions line), all off by default; `item {type, sku}` in the writer input; Settings →
+  Writer **Export… / Import…**. The company's instruction, example, banned words and lengths are in an importable
+  file on the owner's Desktop (`Beyovintage writer settings.json`), deliberately **not** in the public repo.
+  Damage details + Restoration are the normal restoration source; the Restoration done ticks stay optional.
+

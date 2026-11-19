@@ -5,7 +5,8 @@
 
 use crate::writer::config::Example;
 
-/// §9.1, verbatim.
+/// §9.1, amended by A23 (2026-11-19): the grade word, the stability sentence, the dimensions
+/// line and the short paragraphs moved to the four switches of [`crate::writer::config::WriterSettings`].
 pub const INSTRUCTION_EN: &str = concat!(
     "You write product texts for a small Swedish shop that sells restored Scandinavian ",
     "mid-century furniture. You receive the item's fields, a short note of what the photos show, ",
@@ -29,21 +30,19 @@ pub const INSTRUCTION_EN: &str = concat!(
     "\n\n",
     "Title: follow the title formula. Commas only, no words of praise, at most 70 characters.",
     "\n\n",
-    "Description: 60 to 120 words in short paragraphs, in this order. First, what it is, who made ",
+    "Description: 60 to 120 words, in this order. First, what it is, who made ",
     "it, when and where. Second, one or two sentences on form and materials. Third, what our ",
     "workshop did, naming each restoration step exactly as the fields give it. Fourth, at most one ",
-    "sentence on where it can be used. End with the dimensions line in the given format, with the ",
-    "seat height for seating.",
+    "sentence on where it can be used.",
     "\n\n",
-    "Condition report: at most 45 words. Begin with the grade word of the Detailed condition ",
-    "field. Then the restoration in one sentence. Then each remaining flaw with its location and ",
-    "approximate size, citing the condition photo number if given. End with a sentence on ",
-    "stability. Never soften a flaw and never omit one the condition fields list.",
+    "Condition report: at most 45 words. Begin with the restoration in one sentence. Then each ",
+    "remaining flaw with its location and approximate size, citing the condition photo number if ",
+    "given. Never soften a flaw and never omit one the condition fields list.",
     "\n\n",
     "Search title: at most 60 characters, with the designer or the country, the type, the ",
     "material and the decade; add \" | \" and the shop name only if it still fits. Search ",
     "description: 120 to 155 characters, one or two sentences with what it is, the main ",
-    "restoration fact and the condition grade; end with \"Ships from Sweden.\" if it fits.",
+    "restoration fact; end with \"Ships from Sweden.\" if it fits.",
     "\n\n",
     "Use commas and full stops. No dashes as punctuation, no exclamation marks or questions, no ",
     "strings of three adjectives. Do not mention AI, the writing process or the shop's values.",
@@ -53,7 +52,7 @@ pub const INSTRUCTION_EN: &str = concat!(
     "missing or unclear.",
 );
 
-/// §9.2, verbatim.
+/// §9.2, amended by A23 as §9.1.
 pub const INSTRUCTION_SV: &str = concat!(
     "Du skriver produkttexter för en liten svensk butik som säljer renoverade skandinaviska ",
     "möbler från mitten av 1900-talet. Du får föremålets fält, en kort anteckning om vad bilderna ",
@@ -79,21 +78,18 @@ pub const INSTRUCTION_SV: &str = concat!(
     "Rubrik: följ rubrikformeln. Bara kommatecken, inga berömmande ord, högst 70 tecken, versal ",
     "bara i början och i namn.",
     "\n\n",
-    "Beskrivning: 60 till 120 ord i korta stycken, i denna ordning. Först vad det är, vem som ",
+    "Beskrivning: 60 till 120 ord, i denna ordning. Först vad det är, vem som ",
     "tillverkade den, när och var. Sedan en eller två meningar om form och material. Sedan vad vår ",
     "verkstad har gjort, med varje renoveringssteg exakt som fälten anger det. Sedan högst en ",
-    "mening om var den kan användas. Avsluta med måttraden i angivet format, med sitthöjd för ",
-    "sittmöbler.",
+    "mening om var den kan användas.",
     "\n\n",
-    "Skickrapport: högst 45 ord. Börja med skickordet från fältet Detailed condition (Utmärkt, ",
-    "Mycket gott, Gott eller Slitet skick). Sedan renoveringen i en mening. Sedan varje ",
-    "kvarvarande skada med plats och ungefärlig storlek, med bildnumret om det finns. Avsluta med ",
-    "en mening om stabiliteten. Förminska aldrig en skada och utelämna aldrig en som skickfälten ",
-    "anger.",
+    "Skickrapport: högst 45 ord. Börja med renoveringen i en mening. Sedan varje kvarvarande ",
+    "skada med plats och ungefärlig storlek, med bildnumret om det finns. Förminska aldrig en ",
+    "skada och utelämna aldrig en som skickfälten anger.",
     "\n\n",
     "Sökrubrik: högst 60 tecken, med formgivaren eller landet, typen, materialet och decenniet; ",
     "lägg till \" | \" och butikens namn bara om det ryms. Sökbeskrivning: 120 till 155 tecken, en ",
-    "eller två meningar med vad det är, den viktigaste renoveringen och skicket; avsluta med ",
+    "eller två meningar med vad det är och den viktigaste renoveringen; avsluta med ",
     "\"Skickas från Sverige.\" om det ryms.",
     "\n\n",
     "Använd kommatecken och punkt. Inga tankstreck, inga utropstecken eller frågor, inga rader med ",
@@ -306,6 +302,39 @@ pub fn dimensions_line(language: &str) -> &'static str {
         DIMENSIONS_SV
     } else {
         DIMENSIONS_EN
+    }
+}
+
+/// A23: the sentence a writer switch adds to the instructions, per language: `(english, swedish)`.
+pub const GRADE_ON: (&str, &str) = (
+    "Condition report: begin with the grade word of the Detailed condition field (Excellent, \
+     Very Good, Good or Worn).",
+    "Skickrapport: börja med skickordet från fältet Detailed condition (Utmärkt, Mycket gott, \
+     Gott eller Slitet skick).",
+);
+/// A23 (owner 2026-11-19): with the grade switch off, the grade only shapes the tone.
+pub const GRADE_OFF: (&str, &str) = (
+    "Never write the grade words of the Detailed condition field (Excellent, Very Good, Good, \
+     Worn) in any text; let the grade shape the tone only.",
+    "Skriv aldrig skickorden från fältet Detailed condition (Utmärkt, Mycket gott, Gott, Slitet \
+     skick) i någon text; låt skicket bara styra tonen.",
+);
+pub const STABILITY_ON: (&str, &str) = (
+    "End the condition report with a sentence on stability.",
+    "Avsluta skickrapporten med en mening om stabiliteten.",
+);
+pub const DIMENSIONS_ON: (&str, &str) = (
+    "End the description with the dimensions line in the given format, with the seat height \
+     for seating.",
+    "Avsluta beskrivningen med måttraden i angivet format, med sitthöjd för sittmöbler.",
+);
+
+/// The language's half of a switch sentence.
+pub fn switch_sentence(sentence: (&'static str, &'static str), language: &str) -> &'static str {
+    if swedish(language) {
+        sentence.1
+    } else {
+        sentence.0
     }
 }
 

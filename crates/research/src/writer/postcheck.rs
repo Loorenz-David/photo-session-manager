@@ -76,6 +76,10 @@ pub struct CheckContext {
     /// (WC5.11, WC8-R).
     #[serde(default)]
     pub restoration: Vec<String>,
+    /// A23: rule 9 (stability) runs only when the writer's `stability_sentence` switch is on.
+    /// (Rule 8 runs only when `detailed` is set, which the run does only with `grade_word` on.)
+    #[serde(default)]
+    pub stability: bool,
 }
 
 const BANNED_WORDS: [&str; 33] = [
@@ -705,7 +709,7 @@ pub fn check(texts: &[(String, String)], ctx: &CheckContext) -> Vec<Hit> {
             } else {
                 &STABILITY_EN
             };
-            if !words.iter().any(|w| report.contains(w)) {
+            if ctx.stability && !words.iter().any(|w| report.contains(w)) {
                 out.push(hit(
                     name,
                     HitCode::Stability,
@@ -1091,13 +1095,28 @@ mod tests {
     }
 
     #[test]
-    fn w2_c9e_stability_is_always_stated() {
+    fn w2_c9e_stability_is_stated_when_the_switch_is_on() {
+        let on = CheckContext {
+            stability: true,
+            ..ctx()
+        };
         assert_eq!(
-            codes(&report("Good. Light wear on the top."), &ctx()),
+            codes(&report("Good. Light wear on the top."), &on),
             [Stability]
         );
         assert_eq!(
-            codes(&report("Good. Light wear. All three stand firm."), &ctx()),
+            codes(&report("Good. Light wear. All three stand firm."), &on),
+            []
+        );
+    }
+
+    #[test]
+    fn a23_no_stability_check_when_the_switch_is_off() {
+        assert_eq!(
+            codes(
+                &report("Restored and refinished, ready to use. Light wear on the top."),
+                &ctx()
+            ),
             []
         );
     }
