@@ -1665,6 +1665,8 @@ export type SessionResearchDto_Deserialize = {
 	position?: number | null,
 	to_review: number,
 	reason?: ReasonDto | null,
+	/**  A24: the session's latest writer run (`writing` · `done` · `stopped` · `failed`). */
+	writer?: WriterOverviewDto | null,
 };
 
 /**
@@ -1677,6 +1679,8 @@ export type SessionResearchDto_Serialize = {
 	position: number | null,
 	to_review: number,
 	reason: ReasonDto | null,
+	/**  A24: the session's latest writer run (`writing` · `done` · `stopped` · `failed`). */
+	writer: WriterOverviewDto | null,
 };
 
 export type SessionResponse = SessionResponse_Serialize | SessionResponse_Deserialize;
@@ -2194,6 +2198,22 @@ export type WriterLengthsDto = {
 };
 
 /**
+ *  A24: a requested text the latest writer run did not put in the form (`outcome` in the
+ *  trace's words).
+ */
+export type WriterNotOfferedDto = {
+	key: string,
+	label: string,
+	outcome: string,
+};
+
+/**  A24: the writer's state of a session in the overview, and its item's SKU. */
+export type WriterOverviewDto = {
+	state: string,
+	sku: string,
+};
+
+/**
  *  The exact request a write would send (instructions, input and schema; the last two as JSON
  *  text).
  */
@@ -2295,6 +2315,10 @@ export type WriterStatusDto_Deserialize = {
 	stale_main: boolean,
 	stale_condition: boolean,
 	can_write: boolean,
+	/**  A24: when the latest run ended (UTC ms). */
+	finished_at?: number | null,
+	/**  A24: the requested texts the latest run did not offer, and why. */
+	not_offered: WriterNotOfferedDto[],
 };
 
 /**  W3 (08C §11): the writer's state for a session. */
@@ -2311,6 +2335,10 @@ export type WriterStatusDto_Serialize = {
 	stale_main: boolean,
 	stale_condition: boolean,
 	can_write: boolean,
+	/**  A24: when the latest run ended (UTC ms). */
+	finished_at: number | null,
+	/**  A24: the requested texts the latest run did not offer, and why. */
+	not_offered: WriterNotOfferedDto[],
 };
 
 /**  One text of the latest writer run: its reason, facts and what the check found. */

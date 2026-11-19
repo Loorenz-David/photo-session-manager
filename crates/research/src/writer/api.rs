@@ -101,6 +101,19 @@ pub struct WriterStatus {
     pub stale_main: bool,
     pub stale_condition: bool,
     pub can_write: bool,
+    /// A24: when the latest run ended (UTC ms; none while it waits or writes).
+    pub finished_at: Option<i64>,
+    /// A24: the requested texts the latest run did not offer, and why (`outcome`, in the trace's
+    /// words: `the photographer cleared this field`, `no text`, …), in the order written.
+    pub not_offered: Vec<NotOfferedView>,
+}
+
+/// A24: one requested text the latest writer run did not put in the form.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotOfferedView {
+    pub key: String,
+    pub label: String,
+    pub outcome: String,
 }
 
 pub trait WriterApi: Send + Sync {
@@ -211,6 +224,8 @@ impl ResearchService {
             inputs: InputsView::default(),
             stale_main,
             stale_condition,
+            finished_at: None,
+            not_offered: Vec::new(),
         };
         if let Some(item_id) = item {
             status.findings = self.open_findings(item_id)?;
@@ -287,6 +302,19 @@ impl ResearchService {
             })
             .collect();
         status.regenerated = strings(&result["regenerated"]);
+        status.not_offered = writes
+            .iter()
+            .filter_map(|w| {
+                let key = w["key"].as_str()?;
+                let outcome = w["outcome"].as_str()?;
+                (!matches!(outcome, "written" | "unchanged")).then(|| NotOfferedView {
+                    key: key.to_owned(),
+                    label: label(key),
+                    outcome: outcome.to_owned(),
+                })
+            })
+            .collect();
+        status.finished_at = run.finished_at;
         status.steps = steps
             .into_iter()
             .map(|s| StepView {

@@ -138,6 +138,7 @@ mod tests {
                 value: Json::String(p.into()).to_string(),
                 valid: true,
                 provenance: Provenance::Default,
+                review: None,
             }),
             ..row(key, value, Provenance::Ai)
         }

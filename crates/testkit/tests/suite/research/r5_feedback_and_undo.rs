@@ -169,6 +169,7 @@ fn a18_keep_previous_works_on_any_suggestion_with_a_prior_and_never_without_one(
                     value: text("Teak"),
                     valid: true,
                     provenance: Provenance::Integration,
+                    review: None,
                 }),
                 updated_at: 1,
             })
@@ -249,6 +250,7 @@ fn a08_c1d_clear_suggested_and_accepted_rows() {
                     value: text("B"),
                     valid: true,
                     provenance: Provenance::Default,
+                    review: None,
                 }),
                 updated_at: 1,
             })

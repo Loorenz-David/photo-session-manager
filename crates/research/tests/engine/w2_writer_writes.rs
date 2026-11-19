@@ -129,6 +129,24 @@ pub(crate) fn run_with(h: &Harness, first: Json, retry: Option<Json>) -> i64 {
     write(h)
 }
 
+/// A24: as [`run_with`], asked for automatically ("Next to review →"). Earlier writer runs of the
+/// session are marked cancelled first, so the automatic request is not "already used".
+pub(crate) fn run_auto_with(h: &Harness, first: Json) -> i64 {
+    let session = h.session_id;
+    h.query(|c| {
+        c.execute(
+            "UPDATE research_runs SET state='cancelled' WHERE session_id=?1 AND trigger='write'",
+            [session],
+        )
+        .unwrap()
+    });
+    h.model.reply(Stage::Write, "texts", first);
+    let answer = WriterApi::request(h.service.as_ref(), session, Origin::NextToReview).unwrap();
+    assert!(answer.queued, "{answer:?}");
+    h.tick(0);
+    write_runs(h, session).last().unwrap().id
+}
+
 pub(crate) fn write_requests(h: &Harness) -> Vec<psm_research::fakes::FakeCall> {
     h.model
         .requests()
@@ -303,12 +321,30 @@ fn w2_c17c_at_the_run_cost_limit_the_text_is_flagged_not_rechecked() {
     assert_eq!(h.run_row(run).state, RunState::StoppedAtCap);
 }
 
-/// One writer run of the clean answer over a description stored as given.
+/// One writer run ("Write texts") of the clean answer over a description stored as given.
 fn over_description(
     value: &str,
     provenance: Provenance,
     status: Option<AiStatus>,
 ) -> (Harness, i64) {
+    let h = description_as(value, provenance, status);
+    let run = run_with(&h, clean(), None);
+    (h, run)
+}
+
+/// A24: one automatic writer run ("Next to review →") of the clean answer over a description
+/// stored as given.
+fn auto_over_description(
+    value: &str,
+    provenance: Provenance,
+    status: Option<AiStatus>,
+) -> (Harness, i64) {
+    let h = description_as(value, provenance, status);
+    let run = run_auto_with(&h, clean());
+    (h, run)
+}
+
+fn description_as(value: &str, provenance: Provenance, status: Option<AiStatus>) -> Harness {
     let h = texts_harness(true);
     put(
         &h,
@@ -318,8 +354,7 @@ fn over_description(
         status,
         status.map(|_| AiConfidence::Medium),
     );
-    let run = run_with(&h, clean(), None);
-    (h, run)
+    h
 }
 
 #[test]
@@ -340,13 +375,14 @@ fn w2_c18b_the_shops_description_is_kept_as_the_prior() {
             value: json!("Shop text").to_string(),
             valid: true,
             provenance: Provenance::Integration,
+            review: None,
         })
     );
 }
 
 #[test]
-fn w2_c18c_a_typed_description_is_never_overwritten() {
-    let (h, run) = over_description("My text", Provenance::Human, None);
+fn w2_c18c_a_typed_description_is_never_overwritten_automatically() {
+    let (h, run) = auto_over_description("My text", Provenance::Human, None);
     let row = h.row(DESCRIPTION).unwrap();
     assert_eq!(
         (row.provenance, text_of(&h, DESCRIPTION).as_str()),
@@ -362,8 +398,8 @@ fn w2_c18c_a_typed_description_is_never_overwritten() {
 }
 
 #[test]
-fn w2_c18d_an_accepted_description_is_never_overwritten() {
-    let (h, run) = over_description("Accepted text", Provenance::Ai, Some(AiStatus::Accepted));
+fn w2_c18d_an_accepted_description_is_never_overwritten_automatically() {
+    let (h, run) = auto_over_description("Accepted text", Provenance::Ai, Some(AiStatus::Accepted));
     let row = h.row(DESCRIPTION).unwrap();
     assert_eq!(row.ai_status, Some(AiStatus::Accepted));
     assert_eq!(text_of(&h, DESCRIPTION), "Accepted text");
@@ -381,6 +417,7 @@ fn w2_c18e_an_earlier_writer_text_is_replaced_and_its_prior_kept() {
         value: json!("Shop text").to_string(),
         valid: true,
         provenance: Provenance::Integration,
+        review: None,
     };
     let mut row = psm_core::domain::attribute::Value {
         item_id: h.item_id,
@@ -415,7 +452,8 @@ fn w2_c18f_a_dismissed_text_is_not_suggested_again_but_a_new_one_is() {
         Some(AiStatus::Cleared),
         Some(AiConfidence::Medium),
     );
-    let first = run_with(&h, answer(CLEAN_TITLE, &["Old"], CLEAN_REPORT), None);
+    // A24: automatic runs only; a deliberate "Write texts" does not consult the cleared set.
+    let first = run_auto_with(&h, answer(CLEAN_TITLE, &["Old"], CLEAN_REPORT));
     let row = h.row(DESCRIPTION).unwrap();
     assert_eq!(row.ai_status, Some(AiStatus::Cleared));
     assert_eq!(text_of(&h, DESCRIPTION), "Old");
@@ -424,7 +462,7 @@ fn w2_c18f_a_dismissed_text_is_not_suggested_again_but_a_new_one_is() {
         steps[0].1.contains("matches a text you dismissed"),
         "{steps:?}"
     );
-    run_with(&h, answer(CLEAN_TITLE, &["New text"], CLEAN_REPORT), None);
+    run_auto_with(&h, answer(CLEAN_TITLE, &["New text"], CLEAN_REPORT));
     let row = h.row(DESCRIPTION).unwrap();
     assert_eq!(row.ai_status, Some(AiStatus::Suggested));
     assert_eq!(text_of(&h, DESCRIPTION), "New text");
@@ -455,10 +493,10 @@ fn set_title(h: &Harness, title: &str) {
 }
 
 #[test]
-fn w2_c18h_a_typed_title_is_never_suggested_over() {
+fn w2_c18h_a_typed_title_is_never_suggested_over_automatically() {
     let h = texts_harness(true);
     set_title(&h, "Chair");
-    let run = run_with(&h, clean(), None);
+    let run = run_auto_with(&h, clean());
     assert_eq!(h.row(TITLE), None);
     let steps = steps_of(&h, run, TITLE);
     assert!(
@@ -485,6 +523,7 @@ fn w2_c18i_the_shops_title_becomes_the_prior_of_the_suggestion() {
             value: json!("Shop chair").to_string(),
             valid: true,
             provenance: Provenance::Integration,
+            review: None,
         })
     );
     assert_eq!(item_title(&h), "Shop chair");

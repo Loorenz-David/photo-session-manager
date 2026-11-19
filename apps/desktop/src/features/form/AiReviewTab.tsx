@@ -235,7 +235,7 @@ type AiReviewTabProps = {
  * pill's rules and undo. A row leaves the list once its suggestion is checked.
  */
 export function AiReviewTab(props: AiReviewTabProps) {
-  const block = props.writer ? <WriterBlock status={props.writer.status} onChanged={props.writer.reload} /> : null;
+  const block = props.writer ? <WriterBlock status={props.writer.status} onChanged={props.writer.reload} sessionId={props.sessionId} /> : null;
   return (
     <>
       {block}

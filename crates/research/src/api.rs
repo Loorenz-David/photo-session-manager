@@ -76,6 +76,18 @@ pub struct SessionResearch {
     pub to_review: usize,
     /// With `blocked`: why research cannot run (the first failing prerequisite).
     pub reason: Option<Reason>,
+    /// A24: the session's latest writer run, when it waits or writes (`writing`) or ended
+    /// `failed`, `done` or `stopped`. A session with a writer run and no research run is listed
+    /// with state `none`.
+    pub writer: Option<WriterOverview>,
+}
+
+/// A24: the writer's state of one session in the overview, and its item's SKU (for the toast).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WriterOverview {
+    /// `writing` · `done` · `stopped` · `failed`.
+    pub state: String,
+    pub sku: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

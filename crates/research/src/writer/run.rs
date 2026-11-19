@@ -284,7 +284,22 @@ impl ResearchService {
                     )?;
                     true
                 }
-                RequestDecision::AlreadyQueued => true,
+                RequestDecision::AlreadyQueued => {
+                    // A24: a deliberate request finding an automatic run still queued makes that
+                    // run deliberate (it has not started, so its snapshot holds only the origin).
+                    if !origin.automatic() {
+                        conn.execute(
+                            "UPDATE research_runs SET settings_snapshot=?1 WHERE session_id=?2 \
+                             AND trigger='write' AND state='queued'",
+                            rusqlite::params![
+                                json!({ ORIGIN_KEY: origin.as_str() }).to_string(),
+                                session_id
+                            ],
+                        )
+                        .map_err(store::db)?;
+                    }
+                    true
+                }
                 RequestDecision::Nothing => queued_before,
                 RequestDecision::Refused(_) => false,
             };
@@ -890,6 +905,8 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
             .map_or_else(|| key.to_owned(), |f| f.definition.label.clone())
     };
     let allowed: Vec<String> = requested.iter().map(|n| key_of(n)).collect();
+    // A24: "Write texts" and answers are the photographer asking for new texts on purpose.
+    let deliberate = Origin::parse(&snapshot.origin).is_some_and(|o| !o.automatic());
     let ending = if stopped {
         RunState::StoppedAtCap
     } else {
@@ -958,6 +975,7 @@ pub(crate) fn execute(ctx: &Ctx<'_>) -> Result<ExecuteOutcome> {
                 confidence,
                 &reason,
                 &allowed,
+                deliberate,
             )?;
             texts_out.insert(
                 name.clone(),

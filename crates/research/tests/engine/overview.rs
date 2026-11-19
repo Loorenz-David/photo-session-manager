@@ -21,6 +21,7 @@ fn row(session_id: i64, state: &str, position: Option<usize>, to_review: usize) 
         position,
         to_review,
         reason: None,
+        writer: None,
     }
 }
 

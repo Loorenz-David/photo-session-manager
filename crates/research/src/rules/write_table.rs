@@ -64,6 +64,7 @@ pub fn decide_write(
             value: s.value.clone(),
             valid: s.valid,
             provenance: s.provenance,
+            review: None,
         }),
         Some((Ai, Some(Suggested))) => stored.and_then(|s| s.ai_prior.clone()),
         Some((Ai | Default | Integration, Some(Cleared))) => None,
@@ -87,6 +88,45 @@ pub fn decide_write(
         return WriteDecision::AlreadyHolds;
     }
     WriteDecision::Write { ai_prior }
+}
+
+/// A24 (owner 2026-11-19): the write table of a **deliberate** writer request ("Write texts", or
+/// an answer to a writer question) for one of the writer's own text keys. The photographer asked
+/// for new texts, so a reviewed row no longer refuses them:
+/// - no row: a plain suggestion;
+/// - a cleared row (any provenance): a plain suggestion, no prior. The field holds no value, so
+///   there is nothing to keep; **Clear** empties it again. The cleared set is not consulted: the
+///   request itself is the photographer asking again;
+/// - an open suggestion: MC-A1's table, without the cleared set (it keeps its own prior);
+/// - a live default or shop value with no review: MC-A1's table, without the cleared set;
+/// - any other live row (an accepted suggestion, a typed value): the same text is
+///   [`WriteDecision::AlreadyHolds`]; another text is a suggestion whose prior is the whole row
+///   ([`AiPrior::of`]), so **Keep previous** restores it exactly.
+///
+/// Automatic requests never come here: they keep [`decide_write`] with its refusals.
+pub fn decide_deliberate(
+    definition: &Definition,
+    stored: Option<&Value>,
+    proposed: &Json,
+) -> WriteDecision {
+    let Some(s) = stored else {
+        return WriteDecision::Write { ai_prior: None };
+    };
+    if !s.is_live() {
+        return WriteDecision::Write { ai_prior: None };
+    }
+    let open = s.provenance == Provenance::Ai && s.ai_status == Some(AiStatus::Suggested);
+    let unreviewed = matches!(s.provenance, Provenance::Default | Provenance::Integration)
+        && s.ai_status.is_none();
+    if open || unreviewed {
+        return decide_write(definition, Some(s), proposed, &[]);
+    }
+    if same(definition, &parsed(&s.value), proposed) {
+        return WriteDecision::AlreadyHolds;
+    }
+    WriteDecision::Write {
+        ai_prior: Some(AiPrior::of(s)),
+    }
 }
 
 /// A conflict: `ai` + `suggested`, with a prior, and the value not the same as the prior's (the
@@ -185,7 +225,8 @@ mod tests {
                 ai_prior: Some(AiPrior {
                     value: "\"D\"".into(),
                     valid: true,
-                    provenance: Provenance::Default
+                    provenance: Provenance::Default,
+                    review: None,
                 })
             }
         );
@@ -233,9 +274,71 @@ mod tests {
             value: "\"D\"".into(),
             valid: true,
             provenance: Provenance::Default,
+            review: None,
         });
         assert!(is_conflict(&d, &r));
         r.value = "\"d\"".into();
         assert!(!is_conflict(&d, &r));
+    }
+
+    #[test]
+    fn a24_a_deliberate_request_offers_over_reviewed_rows() {
+        let d = text();
+        let a = json!("A");
+        let accepted = row("B", Provenance::Ai, Some(AiStatus::Accepted));
+        assert_eq!(
+            decide_deliberate(&d, Some(&accepted), &a),
+            WriteDecision::Write {
+                ai_prior: Some(AiPrior::of(&accepted))
+            }
+        );
+        let typed = row("B", Provenance::Human, None);
+        assert_eq!(
+            decide_deliberate(&d, Some(&typed), &a),
+            WriteDecision::Write {
+                ai_prior: Some(AiPrior::of(&typed))
+            }
+        );
+        // The same text as the reviewed one: nothing new to offer.
+        assert_eq!(
+            decide_deliberate(&d, Some(&row("a", Provenance::Human, None)), &a),
+            WriteDecision::AlreadyHolds
+        );
+        // A cleared field holds no value: a plain suggestion, even of the cleared text.
+        for provenance in [Provenance::Human, Provenance::Ai] {
+            let cleared = row("A", provenance, Some(AiStatus::Cleared));
+            assert_eq!(
+                decide_deliberate(&d, Some(&cleared), &a),
+                WriteDecision::Write { ai_prior: None }
+            );
+        }
+        assert_eq!(
+            decide_deliberate(&d, None, &a),
+            WriteDecision::Write { ai_prior: None }
+        );
+        // An open suggestion keeps its own prior (MC-A1 unchanged).
+        let mut open = row("B", Provenance::Ai, Some(AiStatus::Suggested));
+        open.ai_prior = Some(AiPrior::of(&accepted));
+        assert_eq!(
+            decide_deliberate(&d, Some(&open), &a),
+            WriteDecision::Write {
+                ai_prior: open.ai_prior.clone()
+            }
+        );
+        // A shop value with no review: MC-A1's table (its prior carries no review).
+        let shop = row("S", Provenance::Integration, None);
+        assert_eq!(
+            decide_deliberate(&d, Some(&shop), &a),
+            decide_write(&d, Some(&shop), &a, &[])
+        );
+        // Automatic requests keep the refusals.
+        assert!(matches!(
+            decide_write(&d, Some(&accepted), &a, &[]),
+            WriteDecision::Refused(_)
+        ));
+        assert!(matches!(
+            decide_write(&d, Some(&typed), &a, &[]),
+            WriteDecision::Refused(_)
+        ));
     }
 }

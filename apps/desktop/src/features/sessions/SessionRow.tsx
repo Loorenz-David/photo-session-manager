@@ -3,7 +3,7 @@ import { activityLabel, photoSummary } from '@/lib/format';
 import type { SessionList } from '@/services/sessions';
 import { HoverPreview, Thumb } from './HoverPreview';
 import type { SessionResearch } from '@/services/research';
-import { ResearchPill } from './ResearchPill';
+import { ResearchPill, WriterPill } from './ResearchPill';
 import { ChangedPill } from './ChangedPill';
 import { StatusPill } from './StatusPill';
 import { SessionActionsMenu } from './DeleteSession';
@@ -48,6 +48,7 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
               <span className="row-pills">
                 {row.arranged && <span className="pill">Arranged</span>}
                 <ResearchPill research={research} />
+                <WriterPill research={research} />
               </span>
             )}
           </span>

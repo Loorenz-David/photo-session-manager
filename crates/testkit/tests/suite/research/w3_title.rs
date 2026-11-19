@@ -105,6 +105,7 @@ fn suggestion(
                     value: text(value),
                     valid: true,
                     provenance,
+                    review: None,
                 }),
                 updated_at: NOW_MS,
             })
@@ -302,8 +303,9 @@ fn w3_c2b_keep_previous_deletes_the_suggestion_and_the_writer_never_writes_it_ag
     assert_eq!(rows[0].suggested_value, text(SUGGESTION));
     assert_eq!(form_title(&a, item).unwrap().value, text(SHOP_TITLE));
 
-    // A later writer run proposes the same title: not written (it is in the cleared set), while
-    // its description is.
+    // A later automatic writer run proposes the same title: not written (it is in the cleared
+    // set), while its description is. (A24: a deliberate Write texts does not consult the
+    // cleared set.)
     let fakes = a.research_fakes();
     fakes
         .model
@@ -316,7 +318,7 @@ fn w3_c2b_keep_previous_deletes_the_suggestion_and_the_writer_never_writes_it_ag
         .handles()
         .writer
         .expect("the wired app hands the writer");
-    let answer = writer.request(s, Origin::WriteTexts).unwrap();
+    let answer = writer.request(s, Origin::NextToReview).unwrap();
     assert!(answer.queued, "{answer:?}");
     for _ in 0..3 {
         a.tick(1_100).unwrap();

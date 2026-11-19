@@ -151,7 +151,7 @@ it('a6_4_a_run_asked_for_by_hand_says_it_goes_first_and_offers_no_button', () =>
 
 // 3. Research status on the list and the session page.
 it('a6_3_every_state_has_its_words', () => {
-  const row = (state: string, extra = {}) => ({ session_id: 1, state, position: null, to_review: 0, reason: null, ...extra });
+  const row = (state: string, extra = {}) => ({ session_id: 1, state, position: null, to_review: 0, reason: null, writer: null, ...extra });
   expect(researchLabel(row('researching'))).toBe('AI researching…');
   expect(researchLabel(row('waiting', { position: 3 }))).toBe('AI waiting · 3rd in line');
   expect(researchLabel(row('to_review', { to_review: 2 }))).toBe('AI · 2 to review');
@@ -169,8 +169,8 @@ function Overview({ id }: { id: number | null | undefined }) {
 
 it('a6_3_the_list_reads_every_session_in_one_call_and_a_header_reads_only_its_own', async () => {
   vi.mocked(researchOverview).mockResolvedValue([
-    { session_id: 4, state: 'researching', position: null, to_review: 0, reason: null },
-    { session_id: 5, state: 'waiting', position: 1, to_review: 0, reason: null },
+    { session_id: 4, state: 'researching', position: null, to_review: 0, reason: null, writer: null },
+    { session_id: 5, state: 'waiting', position: 1, to_review: 0, reason: null, writer: null },
   ]);
   render(<Overview id={null} />);
   expect(await screen.findByText('5:waiting')).toBeInTheDocument();
