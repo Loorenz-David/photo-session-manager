@@ -135,7 +135,7 @@ The pre-existing navigation and leave-guard tests pass unchanged: `p19_navigatio
 ## Checkpoint SHA
 1. U1: `816fdc4` — CHECKPOINT (not approved): C4·U1 the visit, the bar, Back, Shoot here instead
 2. U2: `4955b51` — CHECKPOINT (not approved): C4·U2 the quote chip jump
-3. Close: STAMP_CLOSE_SHA (the tracker, the Review log and this handoff)
+3. Close: `1385000` (this commit; the line naming it was filled in after the commit) (the tracker, the Review log and this handoff)
 
 ## Stamp
 Tree: `4955b51` (U2 checkpoint), plus the close commit's documents only. Run once, one command after the other:
