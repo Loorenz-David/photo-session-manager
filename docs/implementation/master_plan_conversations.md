@@ -1,4 +1,4 @@
-# Conversations with Pricing — master plan (v1.3, 2026-11-20)
+# Conversations with Pricing — master plan (v1.4, 2026-11-20)
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, registry §6, environment
 §7) and wins over it on a name listed here. Process: `docs/process/flow.md` §10 (milestones of units), with the deltas
@@ -21,8 +21,8 @@ differ, 09B wins and this file is amended; where the package and this file diffe
 | `C1_connection_and_sync` | the conversations port and vocabulary in core, the Beyo Pricing adapter and the fake Pricing server, Settings → Pricing (key in the Keychain, store match, Test connection), the local copy, the first connection, the 10-second pull, read marks, error states | 4 | 21 | 112 | yes | **yes** | — | the Mac keeps an exact local copy of the photographer's conversations; Settings says whether it is connected; nothing shows them yet |
 | `C2_header_panel_notifications` | the list, counts and badges behind commands; the header icon with its count and dot, the panel list with Open / Resolved, the sessions-list badges; toast, chime, Mac banner, mute | 3 | 19 | 66 | yes | no | C1 | the photographer sees which products have questions and is told when one arrives |
 | `C3_conversation_and_answering` | the outbox and send with `clientMutationId`, retry, Mark answered, attachable photos; the conversation view (bubbles, quote, photos, reply line, edited); the composer and photo picker | 3 | 21 | 75 | yes | **yes** | C2 | the photographer reads a question and answers it in Session Manager |
-| `C4_visit_and_quote_jump` | the visit (Open session without moving the capture folder), the bar, Back, Shoot here instead; the quote chip that opens the form at its field | 2 | 12 | 44 | yes | **yes** | C3 | the photographer checks the product a question is about and returns to the shoot |
-Totals (computed from the plan files): 4 milestones, 12 units, 73 criteria, 297 rows (C1·C11(h) added by the C1 projection, C1·C10(d) by the orchestrator, C3·C6(c) and C3·C7(e) by the C3 projection, 2026-11-20); every unit has at most 8 criteria.
+| `C4_visit_and_quote_jump` | the visit (Open session without moving the capture folder), the bar, Back, Shoot here instead; the quote chip that opens the form at its field | 2 | 12 | 46 | yes | **yes** | C3 | the photographer checks the product a question is about and returns to the shoot |
+Totals (computed from the plan files): 4 milestones, 12 units, 73 criteria, 299 rows (C1·C11(h) added by the C1 projection, C1·C10(d) by the orchestrator, C3·C6(c) and C3·C7(e) by the C3 projection, C4·C3(d) and C4·C12(c) by the C4 projection, 2026-11-20); every unit has at most 8 criteria.
 Each milestone needs the one before approved (its `depends_on`), gate = the **Tracker** line of that plan file.
 Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list.
@@ -105,7 +105,10 @@ quote_field: &str) -> Option<String>` (pure). `ConversationStore` is implemented
 the transactions §5 names (each "one transaction" of §5 is one method), plus one read of C3 (projection C3 L2): for a
 session, its item's photo links, each with the linked photo's `session_id`, `classification`, `position`,
 `captured_at` and preview paths (implemented in `crates/infra/src/sqlite/conversations.rs`; the service holds no
-`Store`; filtering and ordering of the attachable photos stay in core). `ConversationSettingsSlot: Send + Sync`
+`Store`; filtering and ordering of the attachable photos stay in core), plus one read of C4 (projection C4 L3):
+`form_keys(session_id, integration)` = the field keys of the form of the session's item for that integration (empty
+without an item), implemented in the same file by calling core's `services::attributes::form_keys` (= `layout_keys`
+restricted to active definitions, `form_get` semantics) in one read transaction. `ConversationSettingsSlot: Send + Sync`
 (projection C1 L1(b)): `read(&self) -> Option<Json>` (the `conversations` slot of `settings.json`) and `write(&self,
 ConversationSettings) -> psm_core::Result<()>`; implemented in `psm-integrations` over `psm_infra::Settings` (see
 **Settings**).
@@ -141,7 +144,8 @@ adapter's `beyo_pricing::DEFAULT_SERVER = "https://pricing.beyoworkaroundthecloc
 `server` when set: trimmed, one trailing `/` removed, must start with `https://`, have a host, and no path, query,
 fragment or user info; anything else is refused naming `server`. The connected shop is
 `settings.integration.shop_domain` (09A), handed to the service at build as `shop: Option<String>` (an integration
-change already rebuilds the App).
+change already rebuilds the App); from C4 the same block's `kind` is handed to it as `integration: Option<String>`
+(the form's integration definitions depend on it; projection C4 L3).
 **Where the rules live (projection C1 L1(b), L6, L25).** `beyo_pricing::checked_server` and `DEFAULT_SERVER` are in the
 adapter crate; core never sees the URL. The `ConversationSettingsSlot` implementation (`psm-integrations`) does the
 normalisation: `write` refuses a `server` that fails `checked_server` (`invalid_value` naming `server`, nothing
@@ -168,8 +172,8 @@ Result<Tick {more: bool}>`, `connection()`, `test_connection()`, `key_set(Option
 **Seams and lifetime (projection C1 L1, L4, L5, L12).**
 - Constructor: `ConversationsService::new(store: Arc<dyn ConversationStore>, provider: Arc<dyn
   ConversationsProvider>, secrets: Arc<dyn SecretStore>` (the redaction-registering decorator of **Secret**)`, slot:
-  Arc<dyn ConversationSettingsSlot>, shop: Option<String>, clock: Arc<dyn Clock>, events, lane)`. Sentences come only
-  from `provider.describe(&error, shop)`; settings only through `slot`.
+  Arc<dyn ConversationSettingsSlot>, shop: Option<String>, integration: Option<String>` (C4)`, clock: Arc<dyn Clock>,
+  events, lane)`. Sentences come only from `provider.describe(&error, shop)`; settings only through `slot`.
 - Return types: `test_connection() -> Result<Connection, ProviderError>` and `key_set(Option<&str>) ->
   Result<Connection, ProviderError>` (`Ok` = the connection after MC-C1.3, also for `Refused`, which is a state;
   `Err` = `Unreachable`/`BadReply` of `stores()`, state unchanged). Other storage errors stay `psm_core::Error` as
@@ -195,7 +199,9 @@ ignored). Fixtures (`fixtures/`, the package's examples): `stores.json`, `cases_
 `conversations_key_set(key)` (empty = remove), `conversations_test` · C2 `conversations_list(scope, tab)`,
 `conversations_counts(session_id)`, `conversations_session_badges` · C3 `conversation_get(id)`,
 `conversation_mark_read(id)`, `conversation_reply(input)`, `conversation_retry(client_mutation_id)`,
-`conversation_discard(client_mutation_id)`, `conversation_mark_answered(id)`, `conversation_attachable(id)`.
+`conversation_discard(client_mutation_id)`, `conversation_mark_answered(id)`, `conversation_attachable(id)` · C4 adds
+`quote.jump_key` to `conversation_get`'s message DTO, mapped from the view-only `ConversationView.jump_keys` (computed in
+`view`, never stored; projection C4 L4).
 Error codes (`CommandError.code`): `conversation_resolved`, `conversations_off` (`data.reason` = the
 `ConnectionState`), `invalid_value` (existing), `not_found` (existing).
 
@@ -402,7 +408,10 @@ The frontend holds route and visit in **one** state, changed only by the pure fu
    The existing effect of `useCaptureTarget` (activate on a session other than Unassigned, deactivate when leaving one)
    is unchanged and keyed on this value, so it issues a call only when the value changes.
 3. **Actions.**
-   - `open-session(B)` (the panel's **Open session**): the route is already session `B` → unchanged; no visit →
+   - `open-session(B)` (the panel's **Open session**; it is dispatched only after the leave guard of `lib/routes.ts`
+     agrees: the guard receives the continuation with the target, and a Settings page with unsaved changes runs it from
+     its Discard / Save, so the jump stays a visit and never becomes a hash navigation; projection C4 L1): the route is
+     already session `B` → unchanged; no visit →
      `visit = {origin: route, capture: route's session id, visited: B}`, `route = session B`; a visit exists and `B =
      visit.capture` (the session being shot, which is then the origin) → as `back`; a visit exists otherwise →
      `visit.visited = B`, origin and capture kept, `route = session B`.
@@ -412,15 +421,19 @@ The frontend holds route and visit in **one** state, changed only by the pure fu
    - `route-changed(r)` (a `hashchange` not caused by the actions above: the Sessions list, the breadcrumb, review
      navigation, the notifications drawer, "Arranged — next", Back keys): `r` is session `visit.visited` → unchanged;
      anything else → `route = r`, `visit = null`.
-4. **One step, one render.** Each action produces its new route and visit together; the hash is written from the new
-   state after the step (a `hashchange` that only confirms the state's route is ignored). There is no render in which
-   the route is a visited session while `visit` is null, or the reverse.
+4. **One step, one render.** Each action produces its new route and visit together. A step computes the new state from
+   a ref of the current one, writes its hash, then dispatches, so `window.location.hash` already equals the new route
+   when it renders (`PageHeader` reads the hash during render; projection C4 L2); the `hashchange` handler reads
+   `window.location.hash` when it runs, and a `hashchange` that only confirms the state's route is ignored. There is no
+   render in which the route is a visited session while `visit` is null, or the reverse.
 5. **The bar** is shown iff `visit ≠ null`: `Visiting <SKU of visited>: new photos still go to <SKU of the session
-   the backend reports active, or "Unassigned">.` with `← Back to <origin label>` (the origin session's SKU, or
-   `Sessions`, `Settings`, `Health`) and `Shoot here instead`. The capture session's SKU is read from `activeSession()`
-   (the backend's truth), not from `visit.capture`.
-6. **The panel** (open state, selected conversation, scope) lives in `App.tsx` state outside the route, so it stays
-   open on the same conversation through `open-session` and `back`.
+   the backend reports active, or "Unassigned">.` with `← Back to <origin label>` (the origin session's SKU, `Unassigned`
+   for the Unassigned workspace, or `Sessions`, `Settings`, `Health`) and `Shoot here instead`. The capture session is
+   the id `activeSession()` reports (the backend's truth), not `visit.capture`; its SKU comes from the sessions-list row
+   with that id (`SessionResponse` has no SKU; projection C4 L8, L9).
+6. **The panel** (open state, selected conversation) lives in `App.tsx` state outside the route, so it stays open on
+   the same conversation through `open-session` and `back`. The list scope keeps following the session on screen, as
+   in C2 (projection C4 L10).
 **Invariant MC-C3.** From `open-session` until `shoot-here` or a `route-changed` that ends the visit, the frontend
 calls neither `session_activate` nor `session_deactivate`; `back` calls neither; `shoot-here` calls
 `session_activate(visited)` exactly once; with no visit, the calls are those of today for the same navigation.
@@ -493,3 +506,11 @@ change takes it first, use the next number (never renumber an applied file).
   `conversations_off`, nothing written; in `refused` / `store_gone` the state's sentence = `describe` of its error =
   `S.last_error`, L5; MC-C2.7 other errors under code `provider`, L6). Rows C3·C6(c) and C3·C7(e). C3 now 75 rows;
   totals 297.
+- **v1.4 (2026-11-20, orchestrator):** C4 projection r0 (`handoffs/reviewer/handoff_C4_visit_and_quote_jump_projection_r0.md`,
+  AMENDMENTS_REQUIRED, 0 owner cards) amendments applied: §4 Ports (one `ConversationStore` read of C4, `form_keys`
+  of a session's item for an integration, over core's `form_keys` = `layout_keys` restricted to active definitions, L3);
+  §4 Settings and Service constructor (`integration: Option<String>` from `settings.integration.kind`, L3); §4 Commands
+  (`quote.jump_key` view-only, never stored, L4); §5 MC-C3.3 (`open-session` only after the leave guard, which
+  receives the continuation, L1), .4 (hash written before the dispatch, read when the handler runs, L2), .5 (capture
+  SKU from the list row of `activeSession()`'s id; `Unassigned` origin label, L8, L9), .6 (scope follows the session
+  on screen, L10). Rows C4·C3(d) and C4·C12(c). C4 now 46 rows; totals 299.
