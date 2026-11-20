@@ -1,0 +1,9 @@
+# Conversations with Pricing (book 09B, branch feature/agentic), single-track order. One runner phase each (flow.md §10; master_plan_conversations.md §3).
+# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>`.
+# Each needs the one before it approved (the Tracker line of its plan file). Projection for C1, C3 and C4 (`projection: yes`); not for C2.
+# No session calls Pricing or Shopify and no session launches the built app (master_plan_conversations.md §3); tests run against the fake Pricing server.
+# The live check against the real Pricing server is the orchestrator's, after C4, with a test question the owner creates.
+C1_connection_and_sync
+C2_header_panel_notifications
+C3_conversation_and_answering
+C4_visit_and_quote_jump
