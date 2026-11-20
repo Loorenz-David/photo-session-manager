@@ -1339,7 +1339,7 @@ export type MessageDto_Deserialize = {
 	id: string,
 	author: AuthorDto,
 	text: string,
-	quote?: QuoteDto | null,
+	quote?: QuoteDto_Deserialize | null,
 	reply_to?: ReplyRefDto | null,
 	attachments: AttachmentDto_Deserialize[],
 	created_at: number,
@@ -1350,7 +1350,7 @@ export type MessageDto_Serialize = {
 	id: string,
 	author: AuthorDto,
 	text: string,
-	quote: QuoteDto | null,
+	quote: QuoteDto_Serialize | null,
 	reply_to: ReplyRefDto | null,
 	attachments: AttachmentDto_Serialize[],
 	created_at: number,
@@ -1744,11 +1744,34 @@ export type QueueViewDto_Serialize = {
 	manual: boolean,
 };
 
-/**  The quoted field of a message (`field_label` is shown as the chip). */
-export type QuoteDto = {
+/**
+ *  The quoted field of a message (`field_label` is shown as the chip). C4: `jump_key` = the form
+ *  field the chip opens, when this Mac's form of the conversation's session has it (view-only).
+ */
+export type QuoteDto = QuoteDto_Serialize | QuoteDto_Deserialize;
+
+/**
+ *  The quoted field of a message (`field_label` is shown as the chip). C4: `jump_key` = the form
+ *  field the chip opens, when this Mac's form of the conversation's session has it (view-only).
+ */
+export type QuoteDto_Deserialize = {
 	field: string,
 	field_label: string,
 	text: string,
+	/**  Absent when the chip opens nothing (as P69's `masters_ready`). */
+	jump_key?: string | null,
+};
+
+/**
+ *  The quoted field of a message (`field_label` is shown as the chip). C4: `jump_key` = the form
+ *  field the chip opens, when this Mac's form of the conversation's session has it (view-only).
+ */
+export type QuoteDto_Serialize = {
+	field: string,
+	field_label: string,
+	text: string,
+	/**  Absent when the chip opens nothing (as P69's `masters_ready`). */
+	jump_key?: string,
 };
 
 export type ReasonDto = {

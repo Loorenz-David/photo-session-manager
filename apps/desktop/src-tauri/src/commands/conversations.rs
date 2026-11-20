@@ -377,12 +377,16 @@ pub struct ReplyRefDto {
     pub excerpt: String,
 }
 
-/// The quoted field of a message (`field_label` is shown as the chip).
+/// The quoted field of a message (`field_label` is shown as the chip). C4: `jump_key` = the form
+/// field the chip opens, when this Mac's form of the conversation's session has it (view-only).
 #[derive(Debug, Serialize, Type)]
 pub struct QuoteDto {
     pub field: String,
     pub field_label: String,
     pub text: String,
+    /// Absent when the chip opens nothing (as P69's `masters_ready`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jump_key: Option<String>,
 }
 
 /// A photo of a message; both addresses null = "Photo not recorded".
@@ -514,6 +518,7 @@ impl From<Message> for MessageDto {
                 field: q.field,
                 field_label: q.field_label,
                 text: q.text,
+                jump_key: None,
             }),
             reply_to: m.reply_to.map(Into::into),
             attachments: m
@@ -563,7 +568,18 @@ impl From<ConversationView> for ConversationViewDto {
             status: v.status.as_str().to_owned(),
             resolved_by: v.resolved_by.map(|r| r.as_str().to_owned()),
             session_id: v.session_id,
-            messages: v.messages.into_iter().map(Into::into).collect(),
+            messages: v
+                .messages
+                .into_iter()
+                .map(|m| {
+                    let jump_key = v.jump_keys.get(&m.id).cloned();
+                    let mut dto = MessageDto::from(m);
+                    if let Some(quote) = dto.quote.as_mut() {
+                        quote.jump_key = jump_key;
+                    }
+                    dto
+                })
+                .collect(),
             pending: v.pending.into_iter().map(Into::into).collect(),
             can_send: v.can_send,
             off_reason: v.off_reason,

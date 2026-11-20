@@ -54,6 +54,8 @@ export const READ_FAILED = "Couldn't read this product from Shopify";
 
 /** P67 (changelog 46 (6)): where the photographer is in a form (step and scroll), carried to the next form of a batch. */
 export type FormPosition = { step: Step; scroll: number };
+/** C4 (09B §7 quote chip jump): a field to open the form at; `n` changes on every request, so each one jumps. */
+export type FormFieldJump = { key: string; n: number };
 
 function parseJson(text: string | null): unknown {
   if (text === null) return null;
@@ -88,6 +90,8 @@ type FormDialogProps = {
   reviewFirst?: boolean;
   /** A19: the review queue: "Next to review" on the AI review tab once every suggestion is checked. */
   review?: { left: number; onNext: () => void };
+  /** C4: go to the step holding this field and reveal it, on open and on every new request; a key the form does not have is ignored. */
+  field?: FormFieldJump | null;
 };
 
 /** "n to review" (08B MC-A10, derived): the form's fields holding a live `ai` + `suggested` value, at every confidence. */
@@ -153,7 +157,7 @@ export function FormDialog({ open, onOpenChange, ...rest }: FormDialogProps) {
 
 type FormBodyProps = Omit<FormDialogProps, 'open' | 'onOpenChange'> & { close: () => void; registerClose: (close: () => void) => void };
 
-function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition, sessionId, reviewFirst = false, review }: FormBodyProps) {
+function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueConfirm, close, registerClose, remoteRead, position, onPosition, sessionId, reviewFirst = false, review, field = null }: FormBodyProps) {
   const state = useFormState(item.id);
   const { form } = state;
   const [step, setStep] = useState<Step>(position?.step ?? 'details');
@@ -267,11 +271,26 @@ function FormBody({ item, photos, onItemChanged, publishSlot, queueStrip, queueC
     requestTexts(sessionId, 'all_checked');
   };
   useEffect(() => () => askWhenAllChecked.current(), []);
+  // C4: the step holding a requested field (none when the form does not have it).
+  const stepOf = (key: string) => form?.groups.find(g => g.fields.some(f => f.definition.key === key))?.group;
   useEffect(() => {
     if (landed.current || !form) return;
     landed.current = true;
+    // C4 (projection L5): a field the form has counts as a position: the form opens there, not on AI review.
+    if (field && stepOf(field.key)) return;
     if (waitingSuggestions > 0) setStep(REVIEW_STEP);
   }, [form, waitingSuggestions]);
+  // C4: each new field request (its `n`) goes to the field's step and reveals it, as A11's "show field" does.
+  const jumped = useRef<number | null>(null);
+  useEffect(() => {
+    if (!form || !field || jumped.current === field.n) return;
+    jumped.current = field.n;
+    const target = stepOf(field.key);
+    if (!target) return;
+    setCustomizing(false);
+    setStep(target);
+    setReveal(current => ({ key: field.key, n: current.n + 1 }));
+  }, [form, field?.key, field?.n]);
   /** Opens the research panel; it re-reads the status on open in case an event was missed. */
   const openResearch = (focus: string | null) => {
     setResearch({ open: true, focus });

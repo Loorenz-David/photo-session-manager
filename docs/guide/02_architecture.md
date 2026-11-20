@@ -411,9 +411,18 @@ of that folder (`variant_background` → `resync_folder`).
 
 ### Conversations with Pricing (book `09B`; contract MC-C1 in `docs/implementation/master_plan_conversations.md` §5; C1)
 - **Port and vocabulary:** `crates/core/src/ports/conversations.rs` (`ConversationsProvider`: `stores`, `unresolved`,
-  `conversation`, `events_after`, `post_message`, `mark_answered`, pure `describe`; `ConversationStore`, one
-  transaction per method; `ConversationSettingsSlot`), `domain/conversation.rs`, `mechanisms/conversation_rules.rs`
+  `conversation`, `events_after`, `post_message`, `mark_answered`, pure `describe`, pure `attribute_key` (C4: a quote's
+  field name → the form's key; the mapping lives in `BeyoPricingAdapter::attribute_key`, H7); `ConversationStore`, one
+  transaction per method, with C4's read `form_keys(session_id, integration)` = the form's field keys of the session's
+  item, over core's `services::attributes::form_keys` (`layout_keys` restricted to active definitions, as `form_get`
+  shows them); `ConversationSettingsSlot`), `domain/conversation.rs`, `mechanisms/conversation_rules.rs`
   (`check_backoff`, `unread`/`has_news`, `entering_read_mark`, `notice_lines`).
+- **Quote chip jump (C4):** `ConversationsService::view` fills the view-only `ConversationView.jump_keys` (message id →
+  key) when the conversation's session is on this Mac and `form_keys(session, integration)` has the key `attribute_key`
+  gives (`integration` = `settings.integration.kind`, handed to the service at build); never stored. The command maps
+  it into `quote.jump_key`; `QuoteBlock` makes the chip a button only when the conversation's session is on screen, and
+  its click (`openField` in the conversations context) opens Details at that field (`FormDialog` `field`, a counter so
+  every click jumps; a field the form has wins over the A19 AI-review landing).
 - **Adapter:** `crates/integrations/src/conversations/beyo_pricing/` — `BeyoPricingAdapter` over `PricingHttp`
   (`transport.rs`; `ReqwestPricing`: own worker thread and runtime, connect 10 s / total 20 s, the key only in
   `Authorization: Bearer`), wire types `types.rs` (camelCase, unknown fields ignored), fixtures `fixtures/*.json` (the

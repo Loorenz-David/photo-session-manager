@@ -12,8 +12,9 @@ use crate::{
             ConnectionState, Conversation, ConversationCounts, ConversationList,
             ConversationNotice, ConversationRow, ConversationScope, ConversationSettings,
             ConversationStatus, ConversationTab, ConversationView, EventKind, EventPage,
-            KEY_ACCOUNT, NewMessage, NoticeKind, OutboxMessage, OutboxState, PendingAttachment,
-            PendingView, ProviderError, ReplyRef, ResolvedBy, SessionBadge, Tick,
+            KEY_ACCOUNT, Message, NewMessage, NoticeKind, OutboxMessage, OutboxState,
+            PendingAttachment, PendingView, ProviderError, ReplyRef, ResolvedBy, SessionBadge,
+            Tick,
         },
         photo::Classification,
     },
@@ -34,7 +35,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex, MutexGuard},
 };
 
@@ -239,6 +240,8 @@ pub struct ConversationsService {
     secrets: Arc<dyn SecretStore>,
     slot: Arc<dyn ConversationSettingsSlot>,
     shop: Option<String>,
+    /// C4: the connected integration's kind (the form's integration definitions depend on it).
+    integration: Option<String>,
     clock: Arc<dyn Clock>,
     events: Arc<dyn EventSink>,
     lane: Arc<ConversationsLane>,
@@ -282,6 +285,7 @@ impl ConversationsService {
         secrets: Arc<dyn SecretStore>,
         slot: Arc<dyn ConversationSettingsSlot>,
         shop: Option<String>,
+        integration: Option<String>,
         clock: Arc<dyn Clock>,
         events: Arc<dyn EventSink>,
         lane: Arc<ConversationsLane>,
@@ -292,6 +296,7 @@ impl ConversationsService {
             secrets,
             slot,
             shop: shop.filter(|s| !s.trim().is_empty()),
+            integration,
             clock,
             events,
             lane,
@@ -1239,6 +1244,7 @@ impl ConversationsService {
             .filter(|r| r.conversation_id == c.id && r.state != OutboxState::Sent)
             .map(|r| Self::pending_view(r, &previews))
             .collect();
+        let jump_keys = self.jump_keys(&c.messages, session_id)?;
         Ok(ConversationView {
             id: c.id,
             sku: c.sku,
@@ -1252,7 +1258,39 @@ impl ConversationsService {
             pending,
             can_send: state == ConnectionState::Ready,
             off_reason: self.state_sentence(state, &s),
+            jump_keys,
         })
+    }
+
+    /// C4 (09B §7 quote chip jump; projection L4): per quoted message, the attribute key its
+    /// quote's field names (`provider.attribute_key`), kept only when the conversation's session
+    /// is on this Mac and that key is a field of the session's form. Nothing is stored.
+    fn jump_keys(
+        &self,
+        messages: &[Message],
+        session_id: Option<i64>,
+    ) -> Result<BTreeMap<String, String>> {
+        let Some(session_id) = session_id else {
+            return Ok(BTreeMap::new());
+        };
+        let quoted: Vec<(&Message, String)> = messages
+            .iter()
+            .filter_map(|m| {
+                let quote = m.quote.as_ref()?;
+                Some((m, self.provider.attribute_key(&quote.field)?))
+            })
+            .collect();
+        if quoted.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+        let form = self
+            .store
+            .form_keys(session_id, self.integration.as_deref())?;
+        Ok(quoted
+            .into_iter()
+            .filter(|(_, key)| form.contains(key))
+            .map(|(m, key)| (m.id.clone(), key))
+            .collect())
     }
 
     /// MC-C2.1 Accept: one transaction, no request. Idempotent on `client_mutation_id`: a row

@@ -430,6 +430,7 @@ button.research-pill { cursor: pointer; }
 .quote-block { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-left: 3px solid var(--color-accent); border-radius: 6px; background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
 .quote-chip { align-self: flex-start; padding: 1px 6px; border-radius: var(--r-pill); background: color-mix(in srgb, currentColor 16%, transparent); font-size: 10px; font-weight: var(--weight-bold); letter-spacing: 0.04em; }
 .quote-text { font-style: italic; }
+.quote-chip-link { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .message-action { font-size: var(--text-xs); color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
 .conversation-mark-answered { margin-left: auto; }
 /* C4 (09B §7.2): "Open session" in the header line, and the slim visit bar under the app header. */

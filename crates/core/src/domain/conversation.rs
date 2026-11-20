@@ -449,6 +449,11 @@ pub struct ConversationView {
     pub pending: Vec<PendingView>,
     pub can_send: bool,
     pub off_reason: Option<String>,
+    /// C4 (09B §7 quote chip jump; projection L4): message id → the form field its quote names,
+    /// only for messages whose quote names a field the form of this Mac's session has. Computed by
+    /// `view`, never stored (the persisted `Quote` is unchanged).
+    #[serde(default)]
+    pub jump_keys: std::collections::BTreeMap<String, String>,
 }
 
 /// The two kinds of published photo a reply may carry (09B §8).

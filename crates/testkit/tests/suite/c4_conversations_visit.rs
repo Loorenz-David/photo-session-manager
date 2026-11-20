@@ -1,12 +1,14 @@
 //! C4 (`docs/implementation/plans/C4_visit_and_quote_jump.md`). U1 C4·C8: the reads a visit makes
 //! (the session view, the conversation view, its attachable photos) leave the active session and
 //! the capture folder alone (CR4, MC-C3 invariant), on `TestApp::with_pricing()` after a first
-//! connection.
+//! connection. U2 C4·C10: the quote's `jump_key` in `ConversationsService::view` (computed, never
+//! stored).
 
 use psm_core::{
     mechanisms::canon::canon,
     ports::{clock::Clock, conversations::ConversationStore},
 };
+use psm_integrations::conversations::beyo_pricing::types::Quote;
 use psm_testkit::{TestApp, fake_pricing::FakePricing, test_app::PRICING_KEY};
 use rusqlite::Connection;
 use std::fs;
@@ -93,4 +95,79 @@ fn c4_c8b_after_the_reads_of_a_visit_a_capture_lands_in_the_active_session() {
         )
         .unwrap();
     assert_eq!(owner, session_a);
+}
+
+/// The pricer asks on `sku` with the first message quoting `field`; the next check brings it in.
+fn asked_quoting(a: &TestApp, sku: &str, field: &str) -> String {
+    let store_id = a.app.store.sync().unwrap().store.unwrap().id;
+    let case = pricing(a).ask(&store_id, Some(sku), "Details");
+    pricing(a).change_silently(&case, |c| {
+        c.messages[0].quote = Some(Quote {
+            field: field.into(),
+            field_label: "Field".into(),
+            text: "Is this right?".into(),
+        });
+    });
+    a.clock.advance(10_000);
+    run_check(a);
+    case
+}
+
+/// `custom.designer` imported for `shopify` in the Details step, then the item of `BEYO-1880`.
+fn with_designer_field() -> TestApp {
+    let a = connected();
+    a.research_fields(&["custom.designer"]).unwrap();
+    session(&a, "BEYO-1880");
+    a
+}
+
+/// The `jump_key` of the view's first message.
+fn first_jump_key(a: &TestApp, case: &str) -> Option<String> {
+    let view = a.app.conversations.view(case).unwrap();
+    let first = &view.messages[0];
+    assert!(first.quote.is_some(), "the first message quotes a field");
+    view.jump_keys.get(&first.id).cloned()
+}
+
+#[test]
+fn c4_c10a_a_quoted_metafield_the_form_has_gets_its_jump_key() {
+    let a = with_designer_field();
+    let case = asked_quoting(&a, "BEYO-1880", "mf:custom.designer");
+    assert_eq!(
+        first_jump_key(&a, &case).as_deref(),
+        Some("custom.designer")
+    );
+    // Never stored: the local copy's quote is the provider's, unchanged.
+    let stored = a.app.store.conversation(&case).unwrap().unwrap();
+    let quote: String = Connection::open(a.app.paths.db())
+        .unwrap()
+        .query_row(
+            "SELECT quote FROM conversation_messages WHERE id = ?1",
+            [&stored.messages[0].id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(!quote.contains("jump"), "{quote}");
+}
+
+#[test]
+fn c4_c10b_a_quoted_field_the_form_does_not_have_gets_none() {
+    let a = with_designer_field();
+    let case = asked_quoting(&a, "BEYO-1880", "mf:custom.unknown_field");
+    assert_eq!(first_jump_key(&a, &case), None);
+}
+
+#[test]
+fn c4_c10c_a_conversation_not_on_this_mac_gets_none() {
+    let a = with_designer_field();
+    let case = asked_quoting(&a, "BEYO-ELSEWHERE", "mf:custom.designer");
+    assert_eq!(a.app.conversations.view(&case).unwrap().session_id, None);
+    assert_eq!(first_jump_key(&a, &case), None);
+}
+
+#[test]
+fn c4_c10d_a_quoted_title_names_the_product_title() {
+    let a = with_designer_field();
+    let case = asked_quoting(&a, "BEYO-1880", "title");
+    assert_eq!(first_jump_key(&a, &case).as_deref(), Some("product.title"));
 }

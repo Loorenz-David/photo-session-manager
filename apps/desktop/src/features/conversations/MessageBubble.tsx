@@ -60,18 +60,21 @@ export function MessageBubble({
   message,
   now,
   onReply,
+  sessionId = null,
 }: {
   message: ConversationMessage;
   now?: number;
   /** Makes this message the reply target of the composer. */
   onReply?: () => void;
+  /** C4: the conversation's session (null = not on this Mac): the quote chip jumps only when it is on screen. */
+  sessionId?: number | null;
 }) {
   const sent = message.author.kind === 'me';
   return (
     <div className="message" data-side={sent ? 'sent' : 'received'} data-testid={`message-${message.id}`}>
       <div className="message-bubble">
         {message.reply_to && <ReplyLine authorName={message.reply_to.author_name} excerpt={message.reply_to.excerpt} />}
-        {message.quote && <QuoteBlock quote={message.quote} />}
+        {message.quote && <QuoteBlock quote={message.quote} sessionId={sessionId} />}
         <Attachments attachments={message.attachments} />
         <p className="message-text">{message.text}</p>
       </div>

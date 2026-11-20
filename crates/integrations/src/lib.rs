@@ -1181,6 +1181,7 @@ impl App {
             store: store.clone(),
             secrets: camera_runtime.secret_store(),
             shop: integration.as_ref().map(|i| i.shop_domain.clone()),
+            integration: integration.as_ref().map(|i| i.kind.clone()),
             clock: clock.clone(),
             events: events.clone(),
             lane: lanes.conversations.clone(),

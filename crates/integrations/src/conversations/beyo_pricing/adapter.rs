@@ -374,6 +374,22 @@ impl ConversationsProvider for BeyoPricingAdapter {
             }
         }
     }
+
+    /// 09B §7 (quote chip jump): Pricing's quote field names → the form's keys. `title`,
+    /// `description` and `condition` name fixed fields; `mf:<namespace>.<key>` names a metafield
+    /// definition (a non-empty namespace without a dot, a dot, a non-empty key); anything else
+    /// names no field.
+    fn attribute_key(&self, quote_field: &str) -> Option<String> {
+        match quote_field {
+            "title" => Some("product.title".into()),
+            "description" => Some("product.description".into()),
+            "condition" => Some("custom.condition_report_description".into()),
+            _ => {
+                let (namespace, key) = quote_field.strip_prefix("mf:")?.split_once('.')?;
+                (!namespace.is_empty() && !key.is_empty()).then(|| format!("{namespace}.{key}"))
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1014,5 +1030,50 @@ mod tests {
             adapter.mark_answered(STORE, CASE_ID),
             Err(ProviderError::Resolved)
         );
+    }
+
+    #[test]
+    fn c4_c9a_title_names_the_product_title() {
+        assert_eq!(
+            adapter().1.attribute_key("title").as_deref(),
+            Some("product.title")
+        );
+    }
+
+    #[test]
+    fn c4_c9b_description_names_the_product_description() {
+        assert_eq!(
+            adapter().1.attribute_key("description").as_deref(),
+            Some("product.description")
+        );
+    }
+
+    #[test]
+    fn c4_c9c_condition_names_the_condition_report_text() {
+        assert_eq!(
+            adapter().1.attribute_key("condition").as_deref(),
+            Some("custom.condition_report_description")
+        );
+    }
+
+    #[test]
+    fn c4_c9d_a_metafield_names_its_definition() {
+        let (_, a) = adapter();
+        assert_eq!(
+            a.attribute_key("mf:beyo.designer").as_deref(),
+            Some("beyo.designer")
+        );
+        assert_eq!(
+            a.attribute_key("mf:beyo_pricing.material").as_deref(),
+            Some("beyo_pricing.material")
+        );
+    }
+
+    #[test]
+    fn c4_c9e_anything_else_names_no_field() {
+        let (_, a) = adapter();
+        for field in ["mf:designer", "mf:.x", "mf:beyo.", "price", ""] {
+            assert_eq!(a.attribute_key(field), None, "{field:?}");
+        }
     }
 }

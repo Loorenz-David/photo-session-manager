@@ -178,6 +178,8 @@ pub struct ServiceParts {
     pub store: Arc<SqliteStore>,
     pub secrets: Arc<dyn SecretStore>,
     pub shop: Option<String>,
+    /// C4: the connected integration's kind (`settings.integration.kind`), for the form's keys.
+    pub integration: Option<String>,
     pub clock: Arc<dyn Clock>,
     pub events: Arc<dyn EventSink>,
     pub lane: Arc<ConversationsLane>,
@@ -212,6 +214,7 @@ pub fn build_service(parts: ServiceParts) -> Arc<ConversationsService> {
         Arc::new(RedactingSecrets::new(parts.secrets)),
         slot,
         parts.shop,
+        parts.integration,
         parts.clock,
         parts.events,
         parts.lane,

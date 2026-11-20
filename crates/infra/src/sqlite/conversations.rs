@@ -744,4 +744,29 @@ impl ConversationStore for SqliteStore {
                 .collect())
         })
     }
+
+    fn form_keys(
+        &self,
+        session_id: i64,
+        integration: Option<&str>,
+    ) -> Result<std::collections::BTreeSet<String>> {
+        self.research_transaction(|tx| {
+            let item_type: Option<String> = tx
+                .conn()
+                .query_row(
+                    "SELECT i.item_type FROM sessions s JOIN items i ON i.id=s.item_id \
+                     WHERE s.id=?1",
+                    [session_id],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(db)?;
+            match item_type {
+                Some(item_type) => {
+                    psm_core::services::attributes::form_keys(&*tx, &item_type, integration)
+                }
+                None => Ok(std::collections::BTreeSet::new()),
+            }
+        })
+    }
 }

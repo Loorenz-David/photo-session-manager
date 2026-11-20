@@ -32,6 +32,9 @@ pub trait ConversationsProvider: Send + Sync {
     fn mark_answered(&self, store_id: &str, conversation_id: &str) -> ProviderResult<Conversation>;
     /// The sentence shown for `error` (pure, no request); `shop` fills the store-gone sentence.
     fn describe(&self, error: &ProviderError, shop: Option<&str>) -> String;
+    /// C4 (09B §7 quote chip jump): the attribute key a quote's field names, or none (pure, no
+    /// request). The provider's field names stay in the adapter (H7).
+    fn attribute_key(&self, quote_field: &str) -> Option<String>;
 }
 
 /// The `conversation_sync` row (`S` of MC-C1).
@@ -134,6 +137,13 @@ pub trait ConversationStore: Send + Sync {
     /// Each item's SKU with the session of that item (the item's latest session, as
     /// `Store::session_for_item`); items without a session are left out (09B §3).
     fn item_sessions(&self) -> Result<Vec<(String, i64)>>;
+    /// C4 (projection L3): the field keys of the form of the item of `session_id` for
+    /// `integration` (`services::attributes::form_keys`); empty when the session has no item.
+    fn form_keys(
+        &self,
+        session_id: i64,
+        integration: Option<&str>,
+    ) -> Result<std::collections::BTreeSet<String>>;
 }
 
 /// The `conversations` slot of the settings file (master plan §4 Settings): `read` hands back the

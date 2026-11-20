@@ -173,6 +173,7 @@ export function ConversationView({ id, onBack }: { id: string; onBack: () => voi
           <MessageBubble
             key={m.id}
             message={m}
+            sessionId={view.session_id}
             onReply={() => setReplyTarget({ message_id: m.id, author_name: m.author.name, excerpt: replyExcerpt(m.text) })}
           />
         ))}

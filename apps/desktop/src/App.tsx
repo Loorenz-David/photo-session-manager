@@ -11,6 +11,7 @@ import { ArrivalToasts } from './features/shell/ArrivalToasts';
 import { WriterToasts } from './features/sessions/ResearchPill';
 import { WorkspacePage } from './features/workspace/WorkspacePage';
 import { REVIEW_STEP, type Step } from './features/form/StepTabs';
+import type { FormFieldJump } from './features/form/FormDialog';
 import { useHistory } from './features/history/useHistory';
 import { useHistoryKeys } from './features/history/useHistoryKeys';
 import { useKeyboard } from './lib/keyboard';
@@ -142,9 +143,18 @@ export default function App() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   // A11: the tab the details form opens on; reset whenever the form closes.
   const [detailsStep, setDetailsStep] = useState<Step | null>(null);
+  // C4 (09B §7 quote chip jump): the field the details form opens at; `n` counts the requests so each one jumps.
+  const [detailsField, setDetailsField] = useState<FormFieldJump | null>(null);
   const changeDetailsOpen = useCallback((open: boolean) => {
     setDetailsOpen(open);
-    if (!open) setDetailsStep(null);
+    if (!open) {
+      setDetailsStep(null);
+      setDetailsField(null);
+    }
+  }, []);
+  const openField = useCallback((key: string) => {
+    setDetailsField(current => ({ key, n: (current?.n ?? 0) + 1 }));
+    setDetailsOpen(true);
   }, []);
   useEffect(() => { changeDetailsOpen(false); }, [sessionId, changeDetailsOpen]);
   // A14: "Open AI review" in a search window (declared after the reset above, so it opens after it).
@@ -154,7 +164,7 @@ export default function App() {
   useHistory(sessionId);
   useHistoryKeys(sessionId);
   // C2 (09B §6, §7, §9): one conversations state for every route (header icon, panel, toasts).
-  const conversations = useConversations(sessionId, { visit: nav.visit, openSession, visitBack, shootHere });
+  const conversations = useConversations(sessionId, { visit: nav.visit, openSession, visitBack, shootHere, openField });
   const withConversations = (page: ReactNode) => (
     <ConversationsContext.Provider value={conversations}>
       {page}
@@ -206,6 +216,7 @@ export default function App() {
           detailsOpen={detailsOpen}
           onDetailsOpenChange={changeDetailsOpen}
           detailsStep={detailsStep}
+          detailsField={detailsField}
           navigate={navigate}
           reviewQueue={{ left: queue.left, onNext: goNextToReview }}
         />

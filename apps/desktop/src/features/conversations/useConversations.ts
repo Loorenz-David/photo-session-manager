@@ -31,7 +31,7 @@ export type ConversationsState = {
 } & Jump;
 
 /**
- * C4 (09B §7, MC-C3): the jump and the way back, offered by `App.tsx` (which owns route and visit). `visitBack` is the
+ * C4 (09B §7, MC-C3): the jump and the way back, and the quote chip's jump to a field, offered by `App.tsx` (which owns route and visit). `visitBack` is the
  * visit's "← Back" (`back` above already means "back to the list").
  */
 export type Jump = {
@@ -41,9 +41,17 @@ export type Jump = {
   openSession: (sessionId: number) => void;
   visitBack: () => void;
   shootHere: () => void;
+  /** The quote chip: opens the details form of the session on screen at that field. */
+  openField: (key: string) => void;
 };
 
-const NO_JUMP: Jump = { visit: null, openSession: () => undefined, visitBack: () => undefined, shootHere: () => undefined };
+const NO_JUMP: Jump = {
+  visit: null,
+  openSession: () => undefined,
+  visitBack: () => undefined,
+  shootHere: () => undefined,
+  openField: () => undefined,
+};
 
 /** `null` = no provider (a component rendered alone reads nothing and shows nothing). */
 export const ConversationsContext = createContext<ConversationsState | null>(null);
