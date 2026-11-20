@@ -1,4 +1,4 @@
-# Conversations with Pricing — master plan (v1.1, 2026-11-20)
+# Conversations with Pricing — master plan (v1.3, 2026-11-20)
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, registry §6, environment
 §7) and wins over it on a name listed here. Process: `docs/process/flow.md` §10 (milestones of units), with the deltas
@@ -20,9 +20,9 @@ differ, 09B wins and this file is amended; where the package and this file diffe
 |---|---|---|---|---|---|---|---|---|
 | `C1_connection_and_sync` | the conversations port and vocabulary in core, the Beyo Pricing adapter and the fake Pricing server, Settings → Pricing (key in the Keychain, store match, Test connection), the local copy, the first connection, the 10-second pull, read marks, error states | 4 | 21 | 112 | yes | **yes** | — | the Mac keeps an exact local copy of the photographer's conversations; Settings says whether it is connected; nothing shows them yet |
 | `C2_header_panel_notifications` | the list, counts and badges behind commands; the header icon with its count and dot, the panel list with Open / Resolved, the sessions-list badges; toast, chime, Mac banner, mute | 3 | 19 | 66 | yes | no | C1 | the photographer sees which products have questions and is told when one arrives |
-| `C3_conversation_and_answering` | the outbox and send with `clientMutationId`, retry, Mark answered, attachable photos; the conversation view (bubbles, quote, photos, reply line, edited); the composer and photo picker | 3 | 21 | 73 | yes | **yes** | C2 | the photographer reads a question and answers it in Session Manager |
+| `C3_conversation_and_answering` | the outbox and send with `clientMutationId`, retry, Mark answered, attachable photos; the conversation view (bubbles, quote, photos, reply line, edited); the composer and photo picker | 3 | 21 | 75 | yes | **yes** | C2 | the photographer reads a question and answers it in Session Manager |
 | `C4_visit_and_quote_jump` | the visit (Open session without moving the capture folder), the bar, Back, Shoot here instead; the quote chip that opens the form at its field | 2 | 12 | 44 | yes | **yes** | C3 | the photographer checks the product a question is about and returns to the shoot |
-Totals (computed from the plan files): 4 milestones, 12 units, 73 criteria, 295 rows (C1·C11(h) added by the C1 projection, C1·C10(d) by the orchestrator, 2026-11-20); every unit has at most 8 criteria.
+Totals (computed from the plan files): 4 milestones, 12 units, 73 criteria, 297 rows (C1·C11(h) added by the C1 projection, C1·C10(d) by the orchestrator, C3·C6(c) and C3·C7(e) by the C3 projection, 2026-11-20); every unit has at most 8 criteria.
 Each milestone needs the one before approved (its `depends_on`), gate = the **Tracker** line of that plan file.
 Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list.
@@ -102,7 +102,10 @@ Conversation`, each `-> std::result::Result<_, ProviderError>`; plus, from C1, `
 &ProviderError, shop: Option<&str>) -> String` (pure, no request: the error's sentence of **Words**, `shop` filling
 the `StoreGone` sentence; the only way core obtains a sentence, projection C1 L1(a)); C4 adds `attribute_key(&self,
 quote_field: &str) -> Option<String>` (pure). `ConversationStore` is implemented for `SqliteStore`; its methods are
-the transactions §5 names (each "one transaction" of §5 is one method). `ConversationSettingsSlot: Send + Sync`
+the transactions §5 names (each "one transaction" of §5 is one method), plus one read of C3 (projection C3 L2): for a
+session, its item's photo links, each with the linked photo's `session_id`, `classification`, `position`,
+`captured_at` and preview paths (implemented in `crates/infra/src/sqlite/conversations.rs`; the service holds no
+`Store`; filtering and ordering of the attachable photos stay in core). `ConversationSettingsSlot: Send + Sync`
 (projection C1 L1(b)): `read(&self) -> Option<Json>` (the `conversations` slot of `settings.json`) and `write(&self,
 ConversationSettings) -> psm_core::Result<()>`; implemented in `psm-integrations` over `psm_infra::Settings` (see
 **Settings**).
@@ -202,8 +205,8 @@ event `conversations_changed {toasts: [{conversation_id, text}], more}` (listene
 three lines, in order, `New question · <SKU> — <topic>` for `Question` and `New reply · <SKU>` for `Reply` (the
 product title in place of a missing SKU), `more` = the number left out. The window's toasts and the Mac banners use
 these same lines.
-Emitted when a check completes or stops on an error, when the outbox or a read mark changes, and when the connection
-state changes.
+Emitted when a check completes or stops on an error, when the outbox or a read mark changes, when Mark answered
+changes the copy (projection C3 L6), and when the connection state changes.
 
 **Words** (exact; shown by Settings and the panel): `Connected to <store name> (<shop>)` · `This Pricing key isn't
 tied to <shop>. It can see: <names joined by ", ">.` · `This Pricing key isn't tied to <shop>. Press Test connection.`
@@ -344,6 +347,11 @@ produced by the first connection or by a message of kind `Me`.
    already exists → nothing is written and that row is returned (idempotent). Otherwise insert `state = sending` — or
    `state = failed` with the state's sentence when calls are not allowed (MC-C1.1). Refusals are `invalid_value`
    naming the field, or `not_found`.
+   **Hidden and refused states** (projection C3 L5; also for rules 3, 6, 7): in `no_key`, `no_shop` and
+   `store_unmatched` (the copy is hidden, 09B §4: the panel shows only `Connect Pricing in Settings → Pricing`),
+   `view`, `reply`, `retry`, `attachable` and `mark_answered` return `conversations_off` (`data.reason` = the state)
+   and write nothing. In `refused` / `store_gone`, "the state's sentence" is `describe` of that state's error
+   (= `S.last_error`, written by MC-C1.8 or the connect path of rule 3). Core holds no Pricing-naming sentence (H7).
 2. **Flush** (start of every `tick` when calls are allowed): the `sending` rows oldest first; for each, in the lane,
    `post_message` with exactly the stored `client_mutation_id`, text, reply target and media ids, then one
    transaction:
@@ -357,8 +365,8 @@ produced by the first connection or by a message of kind `Me`.
    - `Refused` → `failed` with the refused sentence, and MC-C1.8 (`state = refused`); `StoreGone` likewise.
    A `failed` row is never sent by a `tick`. A `sending` row found at launch is sent by the first `tick` (same id).
 3. **Retry** (`retry(id)`): a `failed` row → `sending`, failure cleared (or `failed` again at once with the state's
-   sentence when calls are not allowed); any other state → unchanged. **Discard** (`discard(id)`): a `failed` row is
-   deleted (local only, no request); any other state → refused `invalid_value`.
+   sentence in `refused` / `store_gone`; `conversations_off` in the hidden states, rule 1); any other state →
+   unchanged. **Discard** (`discard(id)`): a `failed` row is deleted (local only, no request); any other state → refused `invalid_value`.
 4. **Echo.** The provider's event for the app's own message is a `MessageCreated {by_asker: false}`: MC-C1.6 re-reads
    the conversation and rule 4 replaces its messages; the message is identified by its id, so it exists once, and it
    marks nothing (no notice).
@@ -367,11 +375,14 @@ produced by the first connection or by a message of kind `Me`.
    photographer retries (the provider answers with the same message, its id is already in the copy, the row becomes
    `sent`) or discards it. Never an automatic resend of a `failed` row.
 6. **View.** `view(c)` = the copy's messages in order, then the outbox rows of `c` in states `sending` and `failed`,
-   oldest first; `sent` rows are not shown (their message is in the copy).
-7. **Mark answered** (`mark_answered(c)`, in the lane): calls not allowed → `conversations_off`; `mark_answered` →
-   `Ok(conv)` → rule MC-C1.4 replace; `Resolved` → `conversation(store, c)` is read and applied, and the error
+   oldest first; `sent` rows are not shown (their message is in the copy). In the hidden states `view` and
+   `attachable` return `conversations_off` (rule 1); in `refused` / `store_gone` the view says `can_send` false with the state's sentence.
+7. **Mark answered** (`mark_answered(c)`, in the lane): calls not allowed → `conversations_off` (`data.reason` = the
+   state; message = the state's sentence in `refused` / `store_gone`, empty in the hidden states), no request;
+   `mark_answered` → `Ok(conv)` → rule MC-C1.4 replace; `Resolved` → `conversation(store, c)` is read and applied, and the error
    `conversation_resolved` is returned; other errors → the copy is unchanged and the error's sentence is returned
-   (`Refused`/`StoreGone` also set the state).
+   (`Refused`/`StoreGone` also set the state) under the existing command code `provider` with `describe(&e)` as
+   message (projection C3 L6).
 8. **Nothing else is ever written to the provider** (CR1): the port has two writing methods and the adapter issues
    only `POST …/messages` and `PATCH … {"status":"answered"}`.
 **Invariant MC-C2.** Every `post_message` the app issues for one press of send carries the same `client_mutation_id`,
@@ -475,3 +486,10 @@ change takes it first, use the next number (never renumber an applied file).
 - **v1.2 (2026-11-20, orchestrator):** the server-change rule (L7) is persisted: `conversation_sync.server` holds the
   effective server of the last successful connect, so a restart between changing the address and Test connection
   cannot send the old store id and cursor to the new server. Row C1·C10(d). C1 now 112 rows; totals 295.
+- **v1.3 (2026-11-20, orchestrator):** C3 projection r0 (`handoffs/reviewer/handoff_C3_conversation_and_answering_projection_r0.md`,
+  AMENDMENTS_REQUIRED, 0 owner cards) amendments applied: §4 Ports (one `ConversationStore` read of a session's item's
+  links with each photo's session, classification, position, captured time and previews, L2); §4 Event (Mark answered
+  that changes the copy emits, L6); §5 MC-C2.1, .3, .6, .7 (hidden states `no_key` / `no_shop` / `store_unmatched` →
+  `conversations_off`, nothing written; in `refused` / `store_gone` the state's sentence = `describe` of its error =
+  `S.last_error`, L5; MC-C2.7 other errors under code `provider`, L6). Rows C3·C6(c) and C3·C7(e). C3 now 75 rows;
+  totals 297.
