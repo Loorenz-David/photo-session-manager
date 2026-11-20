@@ -86,3 +86,19 @@ with the deltas of `master_plan_writer.md` once written. Implementer Claude Opus
   - A25: Customize fields: the Add-a-field box filled the step and hid the field list; it now takes its own height
     and lists matches only while typing.
   - Not yet seen on screen by the orchestrator: the new writer display and the Customize fix in the installed app.
+
+- **2026-11-20: A29 owner correction** (owner's correction brief from the test run of 10 products, `173ab12`).
+  - Cause: the texts followed the shipped default rules (pasted restoration words, photo numbers and sizes, the
+    " | shop name" suffix, four paragraphs), so the Mac that wrote them was almost certainly not using the
+    imported Beyovintage settings.
+  - Code: the description is one `text`; the defaults follow the brief's generic rules; a SKU title is a
+    placeholder (Ch1 kept its SKU because `adopt` set no title base); the publish title update also moves a
+    SKU-derived handle to one made from the title, with a 301 redirect.
+  - Company file (outside the repo, `~/Desktop/Beyovintage writer settings.json`, generator
+    `scratchpad/beyo/make_beyo_v2.py`; the 2026-11-19 file is kept in "Session Manager old (2026-11-12)"):
+    - The brief's rules are added.
+    - Five examples: four approved texts from the brief, plus the chest of drawers.
+    - Safeguard `field_vs_field` is `ask`; `seo_title_max` is 75.
+    - More banned phrases.
+  - Next: the owner re-imports the file on the work Mac. The 10 test products in the real shop keep the old
+    texts until rewritten, and Ch3's manufacturer is still "Soro".
