@@ -24,3 +24,7 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
   two trace additions to the C1 plan (Review log entry) and the master plan (v1.1), updated the counts (C1 4 units / 21
   criteria / 111 rows; totals 12 / 73 / 294), and set C1's `projection:` to `done` so the runner goes straight to the
   implementer.
+- **2026-11-20: C1 projection amendments applied** (`0cf826b`), plus the server-change rule persisted (row C1·C10(d)).
+- **2026-11-20 11:07: C1 APPROVED**, **11:51: C2 APPROVED** (both APPROVED_WITH_NOTES; narratives in `narratives/C1…C2`).
+- **2026-11-20 11:59: C3 projection r0 = AMENDMENTS_REQUIRED** (0 owner cards). L1–L16 applied (`18391ba`; master plan
+  v1.3; totals 12 units / 73 criteria / 297 rows). Chain restarted at C3 (`scratchpad/conv_chain_c3.sh`, same log).
