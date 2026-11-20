@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # C3 — Conversation view and answering
 
-**Tracker:** IMPLEMENTED (2026-11-20, claude opus implementer; 3 units, checkpoints 56f95bb · 3877fd6 · 9076272; rows: rules 4 unit tests (C1), suite c3 31/0, desktop c3_tests 1/0, UI c3 39/0; closing gate green: workspace 2071/0, clippy, fmt, typecheck, npm test 748/0)
+**Tracker:** CHANGES_REQUESTED (2026-11-20, opus reviewer r1; 1 blocking finding B2-1: the C3·C16(b) test cannot fail when Shift+Enter sends — test-only fix in `c3_composer.test.tsx`; production verified correct on all 75 rows; 4 backlog notes)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -282,3 +282,26 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
   OS handed it a random port inside its own passive range 50000–50009 (pre-existing flaky test, not touched; it passed
   alone and in the closing gate). No test, session or tool called Pricing or Shopify; the app was never launched.
 
+- **2026-11-20, reviewer (opus), review r1: CHANGES_REQUESTED** (`handoffs/reviewer/handoff_C3_conversation_and_answering_review_r1.md`).
+  Tree: HEAD `75599e5`, clean; code tree = `9076272`. Perimeter `git diff --stat 56f95bb^ 9076272` = the handoff's 25
+  declared paths exactly (`useConversations.ts` disclosed unchanged). Review-mode runs, once each, all green:
+  `conversation_rules` 21/0 · `c3_conversations_answer::` 31/0 · `psm-desktop` 80/0 · vitest `src/features/conversations`
+  67/0 · clippy (core, infra, desktop, testkit) · fmt · typecheck. Implementer's workspace stamp (2071/0, npm 748/0) stands.
+  **Verified correct by reading:** `checked_reply` / `reply_excerpt` against MC-C2.1 and L9; `reply` idempotent through
+  `outbox_accept` (one transaction), `failed` with `S.last_error` in `refused`/`store_gone`, `Off` in the hidden states
+  before any write; the flush after `calls_allowed` and before the due test (L15), each `post_message` in `in_lane` with a
+  re-check that the row is still `sending`, the outcome table of MC-C2.2 (only `Refused`/`StoreGone` touch `S`); `retry`
+  keeps the id, `discard` only `failed`; `view` = messages then `sending`/`failed` rows; `mark_answered` = `Off` unless
+  `ready`, lane re-check, 409 → re-read + `Resolved`, other → `Provider`; `attachable` filter (external id, `ready`,
+  role, photo in session and not deleted), order (group, position, captured, id, slot) and preview (adjusted, else
+  original). One `client_mutation_id` per press (`crypto.randomUUID()` in `Composer.send`), never regenerated in the
+  backend or on Retry (`conversationRetry(p.client_mutation_id)`); no path sends a `failed` row without `retry`; the only
+  provider writes are the port's `post_message` (flush) and `mark_answered`; `reply`/`retry`/`discard`/`view` call only
+  the pure `describe`. Commands thin (DTO mapping only), all seven in `specta_builder`. H1–H8, secrets, no live services:
+  hold. No assumption contradicts 09B or MC-C2. 74 of 75 rows have a boundary test that fails on a wrong outcome
+  (changed-input probes in a scratch test file, deleted after: C3·C16(c) and C3·C14(b) shapes go red on the wrong case).
+  **B2-1 (route: production, test-only):** `c3_c16b_shift_enter_is_a_new_line` asserts "no call" synchronously while
+  `Composer.send` calls `conversationReply` in a microtask, and re-types the box before asserting its value; the same
+  test shape with plain Enter (which sends) passes. Fix: flush a microtask after the Shift+Enter (as C3·C16(c) does),
+  then assert no call **and** the box still holds `a` before typing `a\nb`. Files: `apps/desktop/src/features/conversations/__tests__/c3_composer.test.tsx` only.
+  Notes: 4 in `docs/implementation/backlog_conversations/C3_conversation_and_answering.md`.
