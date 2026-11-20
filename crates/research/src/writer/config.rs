@@ -73,9 +73,10 @@ impl Default for Lengths {
     fn default() -> Self {
         Self {
             title_max: 70,
-            description_min_words: 60,
-            description_max_words: 120,
-            condition_max_words: 45,
+            // A29 (owner 2026-11-20): one short paragraph and a one-or-two-sentence report.
+            description_min_words: 40,
+            description_max_words: 100,
+            condition_max_words: 35,
             seo_title_max: 60,
             seo_description_min: 120,
             seo_description_max: 155,
@@ -487,9 +488,9 @@ mod tests {
                 "banned_extra": [],
                 "lengths": {
                     "title_max": 70,
-                    "description_min_words": 60,
-                    "description_max_words": 120,
-                    "condition_max_words": 45,
+                    "description_min_words": 40,
+                    "description_max_words": 100,
+                    "condition_max_words": 35,
                     "seo_title_max": 60,
                     "seo_description_min": 120,
                     "seo_description_max": 155,

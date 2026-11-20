@@ -91,4 +91,9 @@ pub const PRODUCT_SEO_READ: &str =
     "query ProductSeoRead($id: ID!) { product(id: $id) { id seo { title description } } }";
 
 /// W5·U2 (WC8.4): writes both search texts (`ProductUpdateInput.seo: SEOInput`) and returns them.
+/// A29: the product's URL handle and its first variant's SKU (whether the handle is still the one
+/// Shopify made from the SKU).
+pub const PRODUCT_HANDLE_READ: &str = "query ProductHandle($id: ID!) { product(id: $id) { id handle variants(first: 1) { nodes { sku } } } }";
+/// A29: the title update, with the new handle and its redirect when the handle moves.
+pub const PRODUCT_UPDATE_TITLE: &str = "mutation ProductUpdateTitle($product: ProductUpdateInput!) { productUpdate(product: $product) { product { id title handle } userErrors { field message } } }";
 pub const PRODUCT_UPDATE_SEO: &str = "mutation ProductUpdateSeo($product: ProductUpdateInput!) { productUpdate(product: $product) { product { id seo { title description } } userErrors { field message } } }";

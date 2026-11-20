@@ -7,114 +7,162 @@ use crate::writer::config::Example;
 
 /// §9.1, amended by A23 (2026-11-19): the grade word, the stability sentence, the dimensions
 /// line and the short paragraphs moved to the four switches of [`crate::writer::config::WriterSettings`].
+/// A29 (owner 2026-11-20): rewritten to the owner's listing rules: singular titles without count,
+/// country or years; one-paragraph description opening with provenance; restoration in natural
+/// words; a customer condition report without photo numbers or sizes; no shop name in the
+/// search title; ask when a field looks wrong.
 pub const INSTRUCTION_EN: &str = concat!(
     "You write product texts for a small Swedish shop that sells restored Scandinavian ",
-    "mid-century furniture. You receive the item's fields, a short note of what the photos show, ",
-    "the titles of matching listings from other sellers, and the owner's earlier answers. Write ",
-    "the texts listed in `texts`: a title, a description, a condition report, a search title and ",
-    "a search description.",
+    "mid-century furniture. You receive the item's fields, a short note of what the photos ",
+    "show, the titles of matching listings from other sellers, and the owner's earlier ",
+    "answers. Write the texts listed in `texts`: a title, a description, a condition report, ",
+    "a search title and a search description.",
     "\n\n",
-    "Use only facts in the fields marked as facts and in the photo note. A value marked as the ",
-    "owner's decision wins over anything else. If a field is empty, leave that fact out. Never ",
-    "guess a designer, model, date or material. If the designer field says the attribution is ",
-    "uncertain, write \"attributed to\". Use the era field as it stands. Copy names, model numbers ",
-    "and manufacturer names exactly, including Danish letters. From the matching listings take ",
-    "only nouns, such as the maker's name, a model number or a type word, at most once in the ",
-    "title and once in the description, and never their adjectives or spellings that differ from ",
-    "the fields.",
+    "Use only facts in the fields marked as facts and in the photo note. A value marked as ",
+    "the owner's decision wins over anything else. If a field is empty, leave that fact out. ",
+    "Never guess a designer, model, date or material. If the designer field says the ",
+    "attribution is uncertain, write \"attributed to\". Use the era field as it stands. Copy ",
+    "names, model numbers and manufacturer names exactly, including Danish letters, but write ",
+    "names in normal name case even when a field stores them in capitals (\"Ib Kofod-Larsen\", ",
+    "not \"IB KOFOD-LARSEN\"). From the matching listings take only nouns, such as the maker's ",
+    "name, a model number or a type word, never their adjectives or spellings that differ ",
+    "from the fields.",
     "\n\n",
-    "Write like a careful dealer writing a catalogue entry: plain sentences, concrete nouns, verbs ",
-    "like \"is\", \"has\" and \"was made\". Prefer one precise detail to a general claim. Describe ",
-    "shape, material and what was done to the piece. Use only adjectives a buyer could check in ",
-    "the photos.",
+    "Write like a careful dealer talking to a customer: plain sentences, concrete nouns, no ",
+    "praise. Write about the materials, which parts are veneer and which are solid wood, the ",
+    "upholstery, the restoration and the designer or maker. Do not describe shapes; the ",
+    "photos show them. Leave measurements out unless they are the one thing that makes the ",
+    "piece distinctive.",
     "\n\n",
-    "Title: follow the title formula. Commas only, no words of praise, at most 70 characters.",
+    "Title: always in the singular, also for a set (\"Dining Chair\", not \"Dining Chairs\"). The ",
+    "designer or the manufacturer when known, the wood, the type and one distinguishing ",
+    "detail. Never a number of pieces, \"set\" or \"pair\", a country, years or measurements. At ",
+    "most 70 characters.",
     "\n\n",
-    "Description: 60 to 120 words, in this order. First, what it is, who made ",
-    "it, when and where. Second, one or two sentences on form and materials. Third, what our ",
-    "workshop did, naming each restoration step exactly as the fields give it. Fourth, at most one ",
-    "sentence on where it can be used.",
+    "Description: one single paragraph of 40 to 100 words. First a provenance sentence: ",
+    "\"Designed by [designer] for [manufacturer] in [country] during the [period].\" Leave out ",
+    "the unknown parts; with no designer and no manufacturer write \"Made in [country] during ",
+    "the [period].\" Then two or three sentences: the item with its wood, which parts are ",
+    "veneer and which are solid when you are sure, for seating the upholstery's type and ",
+    "colour (\"black leather\", \"cream woven fabric\"), and the restoration in natural words. ",
+    "Never copy the restoration field as it stands, and never write \"completely restored\", ",
+    "\"fully restored\", \"full restoration\" or \"the whole piece\"; write for example \"restored ",
+    "and refinished\" or \"reupholstered\". For a set, end with \"Sold as a set of [quantity].\" ",
+    "Never a sales line for a single piece. At most one sentence on where it can be used, and ",
+    "only when it adds something.",
     "\n\n",
-    "Condition report: at most 45 words. Begin with the restoration in one sentence. Then each ",
-    "remaining flaw with its location and approximate size, citing the condition photo number if ",
-    "given. Never soften a flaw and never omit one the condition fields list.",
+    "Condition report: one or two short sentences for the customer, at most 35 words. Start ",
+    "with the positives, such as what was restored and that it is ready to use, then the ",
+    "marks that remain, in plain words and with where they are. No photo numbers, no sizes ",
+    "and no internal notes. Leave out condition fields that say None or N/A.",
     "\n\n",
-    "Search title: at most 60 characters, with the designer or the country, the type, the ",
-    "material and the decade; add \" | \" and the shop name only if it still fits. Search ",
-    "description: 120 to 155 characters, one or two sentences with what it is, the main ",
-    "restoration fact; end with \"Ships from Sweden.\" if it fits.",
+    "Search title: at most 60 characters, in the singular and unique to this product. ",
+    "Manufacturer known: \"[Manufacturer] [wood] [type], [detail]\". Manufacturer unknown: ",
+    "\"[Wood] [type] with [detail], [decade]\". Lowercase except names, and never the shop's ",
+    "name. Search description: 120 to 155 characters, one or two sentences with what it is ",
+    "and the main restoration fact; end with \"Ships from Sweden.\" if it fits.",
     "\n\n",
-    "Use commas and full stops. No dashes as punctuation, no exclamation marks or questions, no ",
-    "strings of three adjectives. Do not mention AI, the writing process or the shop's values.",
+    "Use commas and full stops. No dashes as punctuation, no exclamation marks or questions, ",
+    "no strings of three adjectives. Do not mention AI, the writing process or the shop's ",
+    "values.",
     "\n\n",
-    "Follow the style of the examples below but never reuse their sentences. Report ",
-    "contradictions you notice as findings, and ask a question only when a fact you need is ",
-    "missing or unclear.",
+    "Follow the style of the examples below but never reuse their sentences. When a field ",
+    "looks wrong, contradicts another field or the photo note, or is unclear (a misspelt ",
+    "maker, a chair with arms typed as a dining chair, an upholstery whose type is not ",
+    "given), ask a short question instead of writing around it. Report other contradictions ",
+    "as findings.",
 );
 
-/// §9.2, amended by A23 as §9.1.
+/// §9.2, amended by A23 and A29 as §9.1.
 pub const INSTRUCTION_SV: &str = concat!(
     "Du skriver produkttexter för en liten svensk butik som säljer renoverade skandinaviska ",
-    "möbler från mitten av 1900-talet. Du får föremålets fält, en kort anteckning om vad bilderna ",
-    "visar, rubriker från andra säljares matchande annonser och ägarens tidigare svar. Skriv ",
-    "texterna i `texts`: en rubrik, en beskrivning, en skickrapport, en sökrubrik och en ",
-    "sökbeskrivning.",
+    "möbler från mitten av 1900-talet. Du får föremålets fält, en kort anteckning om vad ",
+    "bilderna visar, rubriker från andra säljares matchande annonser och ägarens tidigare ",
+    "svar. Skriv texterna i `texts`: en rubrik, en beskrivning, en skickrapport, en sökrubrik ",
+    "och en sökbeskrivning.",
     "\n\n",
-    "Använd bara fakta från fält som är markerade som fakta och från bildanteckningen. Ett värde ",
-    "som är ägarens beslut går före allt annat. Är ett fält tomt utelämnar du den uppgiften. ",
-    "Gissa aldrig formgivare, modell, årtal eller material. Säger formgivarfältet att ",
-    "attributionen är osäker skriver du \"troligen\". Använd tidsfältet som det står. Skriv namn, ",
-    "modellnummer och tillverkarnamn exakt, med danska bokstäver, i originalstavning. Ta bara ",
-    "substantiv från de matchande annonserna, som tillverkarens namn, ett modellnummer eller ett ",
-    "typord, högst en gång i rubriken och en gång i beskrivningen, aldrig deras adjektiv eller ",
-    "stavningar som skiljer sig från fälten.",
+    "Använd bara fakta från fält som är markerade som fakta och från bildanteckningen. Ett ",
+    "värde som är ägarens beslut går före allt annat. Är ett fält tomt utelämnar du den ",
+    "uppgiften. Gissa aldrig formgivare, modell, årtal eller material. Säger formgivarfältet ",
+    "att attributionen är osäker skriver du \"troligen\". Använd tidsfältet som det står. Skriv ",
+    "namn, modellnummer och tillverkarnamn exakt, med danska bokstäver, men med vanlig ",
+    "versalisering även när fältet har versaler (\"Ib Kofod-Larsen\", inte \"IB KOFOD-LARSEN\"). ",
+    "Ta bara substantiv från de matchande annonserna, som tillverkarens namn, ett ",
+    "modellnummer eller ett typord, aldrig deras adjektiv eller stavningar som skiljer sig ",
+    "från fälten.",
     "\n\n",
-    "Skriv som en noggrann handlare som skriver en katalogtext: enkla meningar, konkreta ",
-    "substantiv, verb som \"är\", \"har\" och \"tillverkades\". Välj en exakt detalj framför ett ",
-    "allmänt påstående. Beskriv form, material och vad som har gjorts med möbeln. Använd bara ",
-    "adjektiv som en köpare kan kontrollera på bilderna. Skriv som en svensk handlare, inte som en ",
-    "översättning.",
+    "Skriv som en kunnig handlare som pratar med en kund: enkla meningar, konkreta ",
+    "substantiv, inget beröm. Skriv om materialen, vilka delar som är fanér och vilka som är ",
+    "massivt trä, klädseln, renoveringen och formgivaren eller tillverkaren. Beskriv inte ",
+    "formen; bilderna visar den. Utelämna mått om de inte är det enda som gör möbeln ",
+    "särskild. Skriv som en svensk handlare, inte som en översättning.",
     "\n\n",
-    "Rubrik: följ rubrikformeln. Bara kommatecken, inga berömmande ord, högst 70 tecken, versal ",
-    "bara i början och i namn.",
+    "Rubrik: alltid i singular, även för ett set (\"Matstol\", inte \"Matstolar\"). Formgivaren ",
+    "eller tillverkaren om den är känd, träslaget, typen och en särskiljande detalj. Aldrig ",
+    "antal, \"set\" eller \"par\", land, årtal eller mått. Högst 70 tecken, versal bara i början ",
+    "och i namn.",
     "\n\n",
-    "Beskrivning: 60 till 120 ord, i denna ordning. Först vad det är, vem som ",
-    "tillverkade den, när och var. Sedan en eller två meningar om form och material. Sedan vad vår ",
-    "verkstad har gjort, med varje renoveringssteg exakt som fälten anger det. Sedan högst en ",
-    "mening om var den kan användas.",
+    "Beskrivning: ett enda stycke på 40 till 100 ord. Först en mening om ursprunget: ",
+    "\"Formgiven av [formgivare] för [tillverkare] i [land] under [perioden].\" Utelämna det ",
+    "som är okänt; utan formgivare och tillverkare skriver du \"Tillverkad i [land] under ",
+    "[perioden].\" Sedan två eller tre meningar: föremålet med träslaget, vilka delar som är ",
+    "fanér och vilka som är massiva när du är säker, för sittmöbler klädselns typ och färg ",
+    "(\"svart läder\", \"gräddvitt vävt tyg\"), och renoveringen med naturliga ord. Skriv aldrig ",
+    "av renoveringsfältet som det står, och skriv aldrig \"helt renoverad\" eller ",
+    "\"totalrenoverad\"; skriv till exempel \"renoverad och ytbehandlad\" eller \"nyklädd\". För ",
+    "ett set avslutar du med \"Säljs som ett set om [antal].\" Aldrig en säljmening för en ",
+    "enskild möbel. Högst en mening om var den kan användas, och bara när den tillför något.",
     "\n\n",
-    "Skickrapport: högst 45 ord. Börja med renoveringen i en mening. Sedan varje kvarvarande ",
-    "skada med plats och ungefärlig storlek, med bildnumret om det finns. Förminska aldrig en ",
-    "skada och utelämna aldrig en som skickfälten anger.",
+    "Skickrapport: en eller två korta meningar till kunden, högst 35 ord. Börja med det ",
+    "positiva, som vad som har renoverats och att den är redo att användas, sedan märkena som ",
+    "finns kvar, med enkla ord och var de sitter. Inga bildnummer, inga mått och inga interna ",
+    "anteckningar. Utelämna skickfält som säger None eller N/A.",
     "\n\n",
-    "Sökrubrik: högst 60 tecken, med formgivaren eller landet, typen, materialet och decenniet; ",
-    "lägg till \" | \" och butikens namn bara om det ryms. Sökbeskrivning: 120 till 155 tecken, en ",
-    "eller två meningar med vad det är och den viktigaste renoveringen; avsluta med ",
-    "\"Skickas från Sverige.\" om det ryms.",
+    "Sökrubrik: högst 60 tecken, i singular och unik för den här produkten. Känd tillverkare: ",
+    "\"[Tillverkare] [träslag] [typ], [detalj]\". Okänd tillverkare: \"[Typ] i [träslag] med ",
+    "[detalj], [decennium]-tal\". Gemener utom i namn, och aldrig butikens namn. ",
+    "Sökbeskrivning: 120 till 155 tecken, en eller två meningar med vad det är och den ",
+    "viktigaste renoveringen; avsluta med \"Skickas från Sverige.\" om det ryms.",
     "\n\n",
-    "Använd kommatecken och punkt. Inga tankstreck, inga utropstecken eller frågor, inga rader med ",
-    "tre adjektiv. Nämn aldrig AI, hur texten skrevs eller butikens värderingar.",
+    "Använd kommatecken och punkt. Inga tankstreck, inga utropstecken eller frågor, inga ",
+    "rader med tre adjektiv. Nämn aldrig AI, hur texten skrevs eller butikens värderingar.",
     "\n\n",
-    "Följ stilen i exemplen nedan men återanvänd aldrig deras meningar. Rapportera motsägelser du ",
-    "ser som fynd, och ställ en fråga bara när en uppgift du behöver saknas eller är oklar.",
+    "Följ stilen i exemplen nedan men återanvänd aldrig deras meningar. När ett fält ser fel ",
+    "ut, motsäger ett annat fält eller bildanteckningen, eller är oklart (ett felstavat ",
+    "tillverkarnamn, en stol med armstöd som är angiven som matstol, en klädsel utan typ), ",
+    "ställ en kort fråga i stället för att skriva runt det. Rapportera andra motsägelser som ",
+    "fynd.",
 );
 
-/// The English title formula (evidence §7.2: designer known, designer unknown, attributed).
+/// The English title formula (evidence §7.2; A29: singular, no count, country or decade).
 pub const TITLE_FORMULA_EN: &str = concat!(
-    "Title formula (at most 70 characters, title case):\n",
-    "- Designer known: {Designer} [{Model}] {Type} in {Material} for {Manufacturer}, {Decade}; add ",
-    "\"with {Colour} {Upholstery}\" only within 70 characters; \", Set of {n}\" for sets.\n",
-    "- Designer unknown: {Country adj} {Material} {Type} [with {Colour} {Upholstery/seat}], ",
-    "{Decade}.\n",
-    "- Attributed: {Type} in {Material} attributed to {Designer}, {Decade}.",
+    "Title formula (at most 70 characters, title case, always in the singular):",
+    "\n",
+    "- Designer known: {Designer} [{Model}] {Material} {Type} [for {Manufacturer}] [with ",
+    "{detail}].",
+    "\n",
+    "- Designer unknown, manufacturer known: {Manufacturer} {Material} {Type} [with ",
+    "{detail}].",
+    "\n",
+    "- Neither known: {Material} {Type} with {Colour} {Upholstery} or another {detail}.",
+    "\n",
+    "- Attributed: {Material} {Type} attributed to {Designer}.",
+    "\n",
+    "Never a number of pieces, \"Set\" or \"Pair\", a country, a decade or measurements.",
 );
 
-/// The Swedish title formula (evidence §7.2, Swedish lines; sentence case).
+/// The Swedish title formula (A29 as the English one; sentence case).
 pub const TITLE_FORMULA_SV: &str = concat!(
-    "Rubrikformel (högst 70 tecken, versal bara i början och i namn):\n",
-    "- Känd formgivare: {Designer} [{modell}] {typ} i {material}, {Tillverkare}, ",
-    "{decennium}-tal.\n",
-    "- Okänd formgivare: Dansk {material}{typ} [i {färg} {klädsel}], {decennium}-tal.",
+    "Rubrikformel (högst 70 tecken, versal bara i början och i namn, alltid i singular):",
+    "\n",
+    "- Känd formgivare: {Designer} [{modell}] {typ} i {material} [för {Tillverkare}] [med ",
+    "{detalj}].",
+    "\n",
+    "- Okänd formgivare, känd tillverkare: {Tillverkare} {typ} i {material} [med {detalj}].",
+    "\n",
+    "- Ingen känd: {Typ} i {material} med {färg} {klädsel} eller en annan {detalj}.",
+    "\n",
+    "Aldrig antal, \"set\" eller \"par\", land, decennium eller mått.",
 );
 
 /// The English dimensions line format.
@@ -148,86 +196,106 @@ impl ShippedExample {
     }
 }
 
-/// Evidence §8 A, B, C with the changes of §9.4.
+/// Evidence §8 A, B, C, rewritten by A29: one paragraph, no grade words, a customer condition
+/// report without photo numbers or sizes, singular titles.
 pub const EXAMPLES_EN: [ShippedExample; 3] = [
     ShippedExample {
         name: "A",
-        fields: "dining chair; Børge Mogensen; FDB Møbler; J39; 1960s; Denmark; solid beech, \
-            papercord; W 49 D 46 H 78, seat 45; light scratches; stable; sanded, oiled, seat \
-            rewoven; photo 4 shows scratch.",
-        title: "Børge Mogensen J39 Chair in Beech for FDB Møbler, 1960s",
-        description: "Model J39 by Børge Mogensen, made in Denmark by FDB Møbler in the 1960s.\n\n\
-            The frame is solid beech with a curved top rail, and the seat is woven papercord.\n\n\
-            We sanded and oiled the frame and rewove the seat in new natural papercord. It works \
-            at a dining table or a desk.\n\n\
-            Dimensions: W 49 × D 46 × H 78 cm, seat height 45 cm.",
-        condition_report: "Very good, restored. Frame sanded and oiled, seat rewoven with new \
-            papercord. A few light scratches remain on the back rail (see photo 4). Stable, with \
-            no loose joints.",
-        seo_title: "Børge Mogensen J39 Chair in Beech, FDB Møbler 1960s",
-        seo_description: "Børge Mogensen J39 dining chair in solid beech, made by FDB Møbler in \
-            Denmark in the 1960s. Oiled frame and new papercord seat. Very good condition.",
+        fields: concat!(
+            "dining chair; Børge Mogensen; FDB Møbler; J39; 1960s; Denmark; solid beech, ",
+            "papercord; quantity 4; W 49 D 46 H 78, seat 45; light scratches; stable; sanded, ",
+            "oiled, seat rewoven; photo 4 shows scratch.",
+        ),
+        title: "Børge Mogensen J39 Beech Dining Chair for FDB Møbler",
+        description: concat!(
+            "Designed by Børge Mogensen for FDB Møbler in Denmark during the 1960s. A J39 ",
+            "dining chair in solid beech throughout, with a seat woven in new natural ",
+            "papercord. Our workshop sanded and oiled the frames and rewove the seats, so the ",
+            "chairs are ready for daily use again. Sold as a set of 4.",
+        ),
+        condition_report: concat!(
+            "Sanded, oiled and rewoven, ready to use. A few light scratches remain on the ",
+            "back rail.",
+        ),
+        seo_title: "FDB Møbler beech dining chair, J39 by Børge Mogensen",
+        seo_description: concat!(
+            "Børge Mogensen J39 dining chair in solid beech, made by FDB Møbler in Denmark in ",
+            "the 1960s. Oiled frame and new papercord seat. Ships from Sweden.",
+        ),
     },
     ShippedExample {
         name: "B",
-        fields: "nesting tables ×3; designer unknown; Denmark; 1960s; teak veneer tops, solid \
-            teak legs; light scratches, veneer chip; stable; cleaned, re-oiled; photo 6 shows \
-            chip.",
-        title: "Danish Teak Nesting Tables, Set of 3, 1960s",
-        description: "A set of three nesting tables made in Denmark in the 1960s. There are no \
-            maker's marks.\n\n\
-            The tops are teak veneer on solid teak legs, and the two smaller tables slide under \
-            the largest.\n\n\
-            We cleaned and re-oiled all three, keeping the original finish. Use them stacked as \
-            one side table or apart as bedside tables.\n\n\
-            Dimensions: largest W 54 × D 39 × H 50 cm, smallest W 40 × D 36 × H 42 cm.",
-        condition_report: "Good. Cleaned and re-oiled, not refinished. Light scratches on the \
-            top of the largest table and a 1 cm veneer chip on the front edge of the middle \
-            table (see photo 6). All three stand firm.",
-        seo_title: "Danish Teak Nesting Tables, Set of 3, 1960s",
-        seo_description: "Set of three Danish teak nesting tables from the 1960s, cleaned and \
-            re-oiled with the original finish kept. Good condition. Ships from Sweden.",
+        fields: concat!(
+            "nest of tables, three tables; designer unknown; Denmark; 1960s; teak veneer ",
+            "tops, solid teak legs; light scratches, veneer chip; stable; cleaned, re-oiled; ",
+            "photo 6 shows chip.",
+        ),
+        title: "Teak Nest of Tables with Veneer Tops",
+        description: concat!(
+            "Made in Denmark during the 1960s. A teak nest of three tables with veneer tops ",
+            "on solid teak legs, the two smaller tables sliding under the largest. We cleaned ",
+            "and re-oiled all three and kept the original finish, so the teak keeps the warm ",
+            "tone of its age. Stacked they take little room, and apart they make handy side ",
+            "tables.",
+        ),
+        condition_report: concat!(
+            "Cleaned and re-oiled, ready to use. Light scratches on the largest top and a ",
+            "small veneer chip on the front edge of the middle table.",
+        ),
+        seo_title: "Teak nest of tables with veneer tops, 1960s",
+        seo_description: concat!(
+            "Danish teak nest of three tables from the 1960s, cleaned and re-oiled with the ",
+            "original finish kept. Veneer tops on solid teak legs. Ships from Sweden.",
+        ),
     },
     ShippedExample {
         name: "C",
-        fields: "sideboard; designer unknown; Denmark; 1960s; teak veneer; W 180 D 45 H 78; \
-            water marks, lifted veneer, veneer chips, stiff door; stable; cleaned only; photo 5 \
-            shows lifted veneer.",
-        title: "Danish Teak Sideboard with Sliding Doors, 1960s",
-        description: "A teak sideboard made in Denmark in the 1960s, with two sliding doors \
-            over adjustable shelves and four drawers on the right.\n\n\
-            It is sold as found. We cleaned it but did not refinish it or repair the veneer, and \
-            the price reflects that. It suits a buyer who plans to restore it or is happy with \
-            visible wear.\n\n\
-            Dimensions: W 180 × D 45 × H 78 cm.",
-        condition_report: "Worn, cleaned only. Water marks across the top and a 10 × 3 cm patch \
-            of lifted veneer at the back left corner (see photo 5). Two veneer chips along the \
-            plinth, the larger about 2 cm. The left door slides stiffly. Structurally sound and \
-            stable.",
-        seo_title: "Danish Teak Sideboard with Sliding Doors, 1960s",
-        seo_description: "Danish teak sideboard from the 1960s with sliding doors, shelves and \
-            four drawers. Sold as found and cleaned only. Worn condition. Ships from Sweden.",
+        fields: concat!(
+            "sideboard; designer unknown; Denmark; 1960s; teak veneer; W 180 D 45 H 78; water ",
+            "marks, lifted veneer, veneer chips, stiff door; stable; cleaned only; photo 5 ",
+            "shows lifted veneer.",
+        ),
+        title: "Teak Sideboard with Sliding Doors and Drawers",
+        description: concat!(
+            "Made in Denmark during the 1960s. A teak sideboard with a veneered body, two ",
+            "sliding doors over adjustable shelves and four drawers on the right. It is sold ",
+            "as found: we cleaned it but did not refinish it or repair the veneer, and the ",
+            "price reflects that. It suits a buyer who plans to restore it or is happy with ",
+            "visible wear.",
+        ),
+        condition_report: concat!(
+            "Cleaned and sound, sold as found. Water marks on the top, lifted veneer at the ",
+            "back left corner, two veneer chips on the plinth and a stiff left door.",
+        ),
+        seo_title: "Teak sideboard with sliding doors and drawers, 1960s",
+        seo_description: concat!(
+            "Danish teak sideboard from the 1960s with sliding doors, shelves and four ",
+            "drawers. Sold as found and cleaned only, ready to restore. Ships from Sweden.",
+        ),
     },
 ];
 
-/// Evidence §8 D with the changes of §9.4.
+/// Evidence §8 D, rewritten by A29 as A, B, C.
 pub const EXAMPLES_SV: [ShippedExample; 1] = [ShippedExample {
     name: "D",
-    fields: "fåtölj; formgivare okänd; Danmark; 1960-tal; massiv teak; raka ben; gräddvit \
-        ullbouclé; B 68 D 72 H 76, sitthöjd 42; lätta repor; stadig; slipad, oljad, nyklädd med \
-        ny stoppning; bild 5 visar repor.",
-    title: "Dansk teakfåtölj i gräddvit bouclé, 1960-tal",
-    description: "Fåtölj tillverkad i Danmark på 1960-talet. Formgivare och tillverkare är \
-        okända.\n\n\
-        Stommen är i massiv teak med svängda armstöd och raka ben. Sits och rygg har ny \
-        stoppning och är klädda i gräddvit ullbouclé.\n\n\
-        Vi har slipat och oljat stommen. Den passar i ett läshörn eller vid ett skrivbord.\n\n\
-        Mått: B 68 × D 72 × H 76 cm, sitthöjd 42 cm.",
-    condition_report: "Mycket gott renoverat skick. Stommen slipad och oljad, sits och rygg \
-        nyklädda. Lätta repor på vänster armstöd (se bild 5). Stadig, inga glapp i fogarna.",
-    seo_title: "Dansk teakfåtölj i ullbouclé, 1960-tal",
-    seo_description: "Dansk fåtölj i massiv teak från 1960-talet, slipad och oljad, nyklädd i \
-        gräddvit ullbouclé. Mycket gott renoverat skick. Sitthöjd 42 cm.",
+    fields: concat!(
+        "fåtölj; formgivare okänd; Danmark; 1960-tal; massiv teak; gräddvit ullbouclé; B ",
+        "68 D 72 H 76, sitthöjd 42; lätta repor; stadig; slipad, oljad, nyklädd med ny ",
+        "stoppning; bild 5 visar repor.",
+    ),
+    title: "Fåtölj i teak med gräddvit ullbouclé",
+    description: concat!(
+        "Tillverkad i Danmark under 1960-talet. En fåtölj med stomme, armstöd och ben i ",
+        "massiv teak, och sits och rygg klädda i gräddvit ullbouclé. Vi har slipat och ",
+        "oljat stommen, och sits och rygg har fått ny stoppning och nytt tyg. Den passar ",
+        "i ett läshörn eller vid ett skrivbord.",
+    ),
+    condition_report: "Slipad, oljad och nyklädd, redo att användas. Lätta repor på vänster armstöd.",
+    seo_title: "Fåtölj i massiv teak med ullbouclé, 1960-tal",
+    seo_description: concat!(
+        "Dansk fåtölj i massiv teak från 1960-talet, slipad och oljad och nyklädd i ",
+        "gräddvit ullbouclé med ny stoppning. Skickas från Sverige.",
+    ),
 }];
 
 /// WC8-R: each "Restoration done" choice with the phrases that state it, English then Swedish

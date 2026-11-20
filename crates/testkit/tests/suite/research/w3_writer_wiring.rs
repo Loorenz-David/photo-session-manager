@@ -176,7 +176,7 @@ fn answer(description: &[&str], questions: Json) -> Json {
     json!({
         "texts": {
             "title": {"text": CLEAN_TITLE, "facts": [], "reason": "From the fields."},
-            "description": {"paragraphs": description, "facts": [DESIGNER], "reason": "From the note."},
+            "description": {"text": description.join(" "), "facts": [DESIGNER], "reason": "From the note."},
         },
         "findings": [],
         "questions": questions,
@@ -305,7 +305,7 @@ fn w3_c5a_write_texts_queues_a_run_whose_texts_reach_the_form() {
     let description = form_value(&a, item, "product.description").unwrap();
     assert_eq!(
         description.json().unwrap(),
-        json!(CLEAN_PARAGRAPHS.join("\n\n"))
+        json!(CLEAN_PARAGRAPHS.join(" "))
     );
     assert_eq!(description.ai_status.map(|s| s.as_str()), Some("suggested"));
     let events = a.events.0.lock().unwrap();

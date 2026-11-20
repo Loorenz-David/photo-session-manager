@@ -619,6 +619,65 @@ impl ShopifyAdapter {
     }
 }
 
+/// A29: a product URL handle made from a text the way Shopify makes one: lowercase letters and
+/// digits, Nordic letters spelled out (æ → ae, ø → o, å → a, ä → a, ö → o), accents dropped, and
+/// one hyphen for every run of anything else.
+pub fn handleize(text: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    let mut out = String::new();
+    let mut gap = false;
+    for ch in text.to_lowercase().chars() {
+        let spelled: String = match ch {
+            'æ' => "ae".into(),
+            'ø' => "o".into(),
+            'ß' => "ss".into(),
+            other => other
+                .to_string()
+                .nfd()
+                .filter(char::is_ascii_alphanumeric)
+                .collect(),
+        };
+        if spelled.is_empty() {
+            gap = !out.is_empty();
+            continue;
+        }
+        if gap {
+            out.push('-');
+            gap = false;
+        }
+        out.push_str(&spelled);
+    }
+    out
+}
+
+/// A29: the handle is still the one Shopify made from the SKU: the SKU's handle, or it with the
+/// numeric suffix Shopify adds to keep handles unique (`ch1-201126-1`).
+pub fn sku_handle(handle: &str, sku: &str) -> bool {
+    let base = handleize(sku);
+    if base.is_empty() || handle.is_empty() {
+        return false;
+    }
+    handle == base
+        || handle
+            .strip_prefix(&base)
+            .and_then(|rest| rest.strip_prefix('-'))
+            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// A29: a `productUpdate` user error about the handle (the handle is taken).
+fn handle_error(payload: &Json) -> bool {
+    payload["userErrors"].as_array().is_some_and(|errors| {
+        errors.iter().any(|e| {
+            e["field"]
+                .as_array()
+                .is_some_and(|f| f.iter().any(|p| p.as_str() == Some("handle")))
+                || e["message"]
+                    .as_str()
+                    .is_some_and(|m| m.to_lowercase().contains("handle"))
+        })
+    })
+}
+
 /// The GraphQL operation's name for the log (`mutation productCreate(…)` → `productCreate`),
 /// or its kind when unnamed.
 fn operation_name(document: &str) -> String {
@@ -1793,12 +1852,53 @@ impl CommerceAdapter for ShopifyAdapter {
         })
     }
 
+    /// A29 (owner 2026-11-20): the title, and the URL handle with it while the handle is still
+    /// the one Shopify made from the SKU ([`sku_handle`]): the new handle is the title's
+    /// ([`handleize`]) with `redirectNewHandle` (a 301 from the old address). A handle Shopify
+    /// reports as taken is tried once more with `-<sku>` appended. A customised handle is never
+    /// changed.
     fn update_title(&self, run: &ConfirmedRun, external_id: &str, title: &str) -> Result<()> {
-        self.update_product(
-            run,
-            "update_title",
-            json!({ "id": external_id, "title": title }),
-        )
+        let op = "update_title";
+        let data = self.call(graphql::PRODUCT_HANDLE_READ, json!({ "id": external_id }))?;
+        let product = &data["product"];
+        let handle = product["handle"].as_str().unwrap_or_default();
+        let sku = product["variants"]["nodes"][0]["sku"]
+            .as_str()
+            .unwrap_or_default();
+        let new_handle = handleize(title);
+        let moves = sku_handle(handle, sku) && !new_handle.is_empty() && new_handle != handle;
+        let send = |handle: Option<&str>| -> Result<Json> {
+            let mut product = json!({ "id": external_id, "title": title });
+            if let Some(handle) = handle {
+                product["handle"] = json!(handle);
+                product["redirectNewHandle"] = json!(true);
+            }
+            let data = self.mutate(
+                run,
+                op,
+                graphql::PRODUCT_UPDATE_TITLE,
+                json!({ "product": product }),
+            )?;
+            Ok(data["productUpdate"].clone())
+        };
+        if !moves {
+            return match errors::user_errors(&send(None)?) {
+                Some(message) => Err(errors::provider(op, message)),
+                None => Ok(()),
+            };
+        }
+        let first = send(Some(&new_handle))?;
+        let Some(message) = errors::user_errors(&first) else {
+            return Ok(());
+        };
+        if !handle_error(&first) {
+            return Err(errors::provider(op, message));
+        }
+        let unique = format!("{new_handle}-{}", handleize(sku));
+        match errors::user_errors(&send(Some(&unique))?) {
+            Some(message) => Err(errors::provider(op, message)),
+            None => Ok(()),
+        }
     }
 
     fn update_item_type(
