@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # C3 — Conversation view and answering
 
-**Tracker:** CHANGES_REQUESTED (2026-11-20, opus reviewer r1; 1 blocking finding B2-1: the C3·C16(b) test cannot fail when Shift+Enter sends — test-only fix in `c3_composer.test.tsx`; production verified correct on all 75 rows; 4 backlog notes)
+**Tracker:** IMPLEMENTED (2026-11-20, fix 1 by claude sonnet; B2-1 resolved: `c3_c16b_shift_enter_is_a_new_line` now flushes a microtask, asserts no call and the box still `a`; test-only; vitest `src/features/conversations` 67/0, typecheck green)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -305,3 +305,11 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
   test shape with plain Enter (which sends) passes. Fix: flush a microtask after the Shift+Enter (as C3·C16(c) does),
   then assert no call **and** the box still holds `a` before typing `a\nb`. Files: `apps/desktop/src/features/conversations/__tests__/c3_composer.test.tsx` only.
   Notes: 4 in `docs/implementation/backlog_conversations/C3_conversation_and_answering.md`.
+
+- **2026-11-20, fix 1 (claude sonnet), round 2** (`handoffs/implementer/handoff_C3_conversation_and_answering_fix_r2.md`).
+  B2-1 resolved as the correction reads: in `c3_c16b_shift_enter_is_a_new_line`, after `enter(true)` the test awaits
+  `Promise.resolve()`, asserts `conversationReply` not called **and** `box().value === 'a'`, then types `a\nb` and asserts
+  the value. Checked with a changed input in the same file (temporarily `enter(false)`, restored): the test goes red with
+  "expected vi.fn() to not be called at all, but actually been called 1 times". Only `c3_composer.test.tsx` changed; no
+  production file. Runs: vitest `src/features/conversations` 5 files, 67/0; `npm run typecheck` exit 0. No Rust file
+  changed, so no cargo command was run.

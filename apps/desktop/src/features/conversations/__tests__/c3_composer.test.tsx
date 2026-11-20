@@ -166,8 +166,10 @@ it('c3_c16b_shift_enter_is_a_new_line', async () => {
   await shown();
   type('a');
   enter(true);
-  type('a\nb');
+  await Promise.resolve();
   expect(vi.mocked(conversationReply)).not.toHaveBeenCalled();
+  expect(box().value).toBe('a');
+  type('a\nb');
   expect(box().value).toBe('a\nb');
 });
 
