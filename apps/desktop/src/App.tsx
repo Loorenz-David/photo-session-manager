@@ -20,6 +20,7 @@ import { useReviewFromSearch } from './features/search/useReviewFromSearch';
 import { useReviewQueue } from './features/sessions/reviewQueue';
 import { ConversationsContext, useConversations } from './features/conversations/useConversations';
 import { ConversationsPanel } from './features/conversations/ConversationsPanel';
+import { ConversationToasts } from './features/conversations/ConversationToasts';
 
 /** Routes: `#/` sessions, `#/session/:id` session view, `#/health` health screen, `#/settings` settings (hash routing works for the bundled app's file URLs). */
 function routeSessionId(): number | undefined {
@@ -115,12 +116,13 @@ export default function App() {
   useCaptureTarget(sessionId);
   useHistory(sessionId);
   useHistoryKeys(sessionId);
-  // C2 (09B §6, §7): one conversations state for every route (header icon, panel).
+  // C2 (09B §6, §7, §9): one conversations state for every route (header icon, panel, toasts).
   const conversations = useConversations(sessionId);
   const withConversations = (page: ReactNode) => (
     <ConversationsContext.Provider value={conversations}>
       {page}
       <ConversationsPanel />
+      <ConversationToasts />
     </ConversationsContext.Provider>
   );
 
@@ -140,7 +142,7 @@ export default function App() {
   }, [changeDetailsOpen, navigate, nextToReview]);
 
   // Health (ch12) and settings screens: plain pages reached from the header gear.
-  if (health) return withConversations(<HealthPage />);
+  if (health) return withConversations(<><HealthPage /><Toaster theme={theme} position="bottom-right" visibleToasts={3} closeButton /></>);
   if (settings) return withConversations(<><SettingsPage /><Toaster theme={theme} position="bottom-right" visibleToasts={3} closeButton /></>);
 
   return withConversations(

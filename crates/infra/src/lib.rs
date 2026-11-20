@@ -1,5 +1,6 @@
 pub mod backup;
 pub mod camera_files;
+pub mod chime;
 pub mod disk;
 pub mod export_fs;
 pub mod ftp;

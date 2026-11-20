@@ -19,6 +19,7 @@ psm-integrations = { path = "../../../crates/integrations" }
 psm-research = { path = "../../../crates/research" }
 tauri = { version = "2", features = ["specta", "protocol-asset", "unstable"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
 tauri-plugin-opener = "=2.7.2"
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta = { version = "=2.0.0-rc.26", features = ["derive"] }

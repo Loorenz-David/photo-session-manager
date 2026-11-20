@@ -436,7 +436,24 @@ of that folder (`variant_background` → `resync_folder`).
 - **Commands:** `apps/desktop/src-tauri/src/commands/conversations.rs` (`conversations_settings_get`,
   `conversations_settings_save`, `conversations_key_set`, `conversations_test`; `Unreachable`/`BadReply` →
   `CommandError` code `provider` in the adapter's words); UI `features/settings/PricingSection.tsx`, wrapper
-  `services/conversations.ts`.
+  `services/conversations.ts`. C2 adds `conversations_list(scope, tab)`, `conversations_counts(session_id)`,
+  `conversations_session_badges` over `ConversationsService::{list, counts, session_badges}`: read from the copy only
+  (never the lane, never a request); a conversation's session = the session of the item whose SKU is exactly its SKU
+  (`ConversationStore::item_sessions`), none = "Not on this Mac"; hidden in `no_key`, `no_shop`, `store_unmatched`.
+- **Panel and icon (C2):** `apps/desktop/src/features/conversations/` — `useConversations` (one instance in `App.tsx`,
+  provided through `ConversationsContext` to every route: panel open, selected conversation, scope, header counts),
+  `ConversationsButton` (header icon on Sessions, a session, Settings, Health), `ConversationsPanel` (Open / Resolved,
+  mute button = the `sound` setting), `ConversationRow`, `SessionBadge` (+ `useSessionBadges`, Sessions list),
+  `ConversationToasts` (sonner toasts with Open; 8 s, or until the next window focus + 10 s when in the background).
+  Everything re-reads on `conversations_changed`.
+- **Chime and banner (C2, the alerts seam):** `apps/desktop/src-tauri/src/alerts.rs` (`trait Alerts {chime, banner}`,
+  `SystemAlerts`, `banners(lines, more)`); `TauriEvents` holds an `Arc<dyn Alerts>` and a focus reader (an `AtomicBool`
+  kept by the main window's `Focused` events). On `ConversationsChanged`: forward `conversations_changed`; `chime` →
+  one `alerts.chime()`; `banner` and the window not focused → one banner per line (title "Session Manager").
+  The chime is `psm_infra::chime::wav()` (generated, no sound file in the repo), written as `chime.wav` into the data
+  folder when absent or different and played with `/usr/bin/afplay` on a thread of its own (never blocks the bridge).
+  Banners go through `tauri-plugin-notification` (registered in `run()`, used from Rust only: no capability entry, no
+  npm package); macOS asks once to allow them and never tells the app a refusal.
 
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams
@@ -601,7 +618,7 @@ recorded stage of one run, optionally with another model, effort or instructions
 `psm_core::events::AppEvent` → `EventHub` (integrations `lib.rs`) → `TauriEvents::emit` (desktop
 `lib.rs`) → Tauri event names: `session_changed`, `photo_added`, `photo_changed`, `publish_progress`,
 `export_progress`, `health_changed`, `camera_status_changed` (payload `CameraStatusResponse`),
-`camera_fingerprint_pending`, `history_changed`, `research_changed`, `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`); plus `edit_menu` emitted by the menu handler. The UI
+`camera_fingerprint_pending`, `history_changed`, `research_changed`, `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); plus `edit_menu` emitted by the menu handler. The UI
 subscribes in `apps/desktop/src/services/events.ts` (and `history.ts`). Events are **not** in the
 specta builder: adding one means a new `AppEvent` variant, a new match arm in `TauriEvents`, and a
 listener in `events.ts`.

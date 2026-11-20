@@ -143,6 +143,7 @@ export function PricingSection() {
       onChange={sound => void run(() => conversationsSettingsSave({ sound }))} />
     <Switch id="pricing-banner" label="Mac banner when Session Manager is in the background" on={settings.banner} disabled={busy}
       onChange={banner => void run(() => conversationsSettingsSave({ banner }))} />
+    <p className="health-detail">If no banner appears, allow notifications for Session Manager in System Settings → Notifications.</p>
     {checked && <p className="health-detail" data-testid="pricing-last-checked">Last checked: {checked}</p>}
     {error && <p role="alert">{error}</p>}
   </section>;
