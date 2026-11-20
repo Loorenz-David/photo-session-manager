@@ -394,23 +394,25 @@ fn c5d_startup_keychain_read_restarts_after_usb_session_lost() {
 #[test]
 fn c5a_camera_credentials_are_keychain_only_and_redacted() {
     let a = TestApp::with_camera().unwrap();
-    setting_secrets(&a, "u2", "p2");
+    // Distinctive values: the settings file holds random temp-folder names, which a two-letter
+    // value like "p2" can occur in by chance (seen once in a full run, 2026-11-20).
+    setting_secrets(&a, "cam-user-c5a", "cam-pass-c5a");
     assert_eq!(
         a.secrets.get(secrets::ACCESS_AUTH_USER).unwrap().as_deref(),
-        Some("u2")
+        Some("cam-user-c5a")
     );
     assert_eq!(
         a.secrets
             .get(secrets::ACCESS_AUTH_PASSWORD)
             .unwrap()
             .as_deref(),
-        Some("p2")
+        Some("cam-pass-c5a")
     );
     let settings = fs::read_to_string(a.app.paths.settings()).unwrap();
-    assert!(!settings.contains("u2"));
-    assert!(!settings.contains("p2"));
+    assert!(!settings.contains("cam-user-c5a"));
+    assert!(!settings.contains("cam-pass-c5a"));
     assert_eq!(
-        psm_infra::logging::redact_registered("x p2 y"),
+        psm_infra::logging::redact_registered("x cam-pass-c5a y"),
         "x [REDACTED] y"
     );
 }
