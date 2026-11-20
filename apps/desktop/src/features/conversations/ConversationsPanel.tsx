@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Bell, BellOff, X } from 'lucide-react';
+import { Bell, BellOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   conversationsList,
@@ -9,6 +9,7 @@ import {
   type ConversationTab,
 } from '@/services/conversations';
 import { ConversationRow } from './ConversationRow';
+import { ConversationView } from './ConversationView';
 import { useConversationsChanged, useConversationsContext, type ConversationsState } from './useConversations';
 
 /** The states in which the copy is hidden and the panel asks to connect (09B §4). */
@@ -71,29 +72,9 @@ function useList(state: ConversationsState, tab: ConversationTab): ConversationL
   return list;
 }
 
-function Placeholder({ state, list }: { state: ConversationsState; list: ConversationList | null }) {
-  const selected = state.selected!;
-  const row = selected.row ?? list?.rows.find(candidate => candidate.id === selected.id);
-  return (
-    <div className="conversation-placeholder">
-      <Button variant="ghost" className="conversation-back" aria-label="Back to conversations" onClick={state.back}>
-        <ArrowLeft />
-      </Button>
-      {row && (
-        <div className="conversation-placeholder-head">
-          {row.sku && <strong>{row.sku}</strong>}
-          <span>{row.product_title}</span>
-          <span className="conversation-topic">{row.topic}</span>
-        </div>
-      )}
-      <p className="conversation-note">Opening conversations arrives with the next step</p>
-    </div>
-  );
-}
-
 function Body({ state, tab, setTab }: { state: ConversationsState; tab: ConversationTab; setTab: (tab: ConversationTab) => void }) {
   const list = useList(state, tab);
-  if (state.selected) return <Placeholder state={state} list={list} />;
+  if (state.selected) return <ConversationView key={state.selected.id} id={state.selected.id} onBack={state.back} />;
   if (list && HIDDEN.has(list.state)) {
     return (
       <div className="conversations-connect">

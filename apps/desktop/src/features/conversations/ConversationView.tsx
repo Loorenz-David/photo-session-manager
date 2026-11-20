@@ -1,0 +1,106 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { conversationGet, conversationMarkRead, type ConversationView as View } from '@/services/conversations';
+import { ServiceError } from '@/services/sessions';
+import { MessageBubble, PendingBubble } from './MessageBubble';
+import { useConversationsChanged } from './useConversations';
+
+const STATUS_WORDS: Record<string, string> = { open: 'Open', answered: 'Answered' };
+
+/** 09B §7, §8: the status in words; who resolved it when this Mac saw it happen. */
+export function statusWords(view: Pick<View, 'status' | 'resolved_by'>): string {
+  if (view.status !== 'resolved') return STATUS_WORDS[view.status] ?? view.status;
+  if (view.resolved_by === 'asker') return 'Resolved by the pricer';
+  if (view.resolved_by === 'activation') return 'Resolved when the product was activated';
+  return 'Resolved';
+}
+
+/** The conversation, re-read on `conversations_changed`; `conversations_off` (the copy is hidden) leaves it. */
+function useView(id: string, onOff: () => void) {
+  const [view, setView] = useState<View | null>(null);
+  const latest = useRef(0);
+  const off = useRef(onOff);
+  off.current = onOff;
+  const load = useCallback(() => {
+    const mine = ++latest.current;
+    Promise.resolve()
+      .then(() => conversationGet(id))
+      .then(next => {
+        if (mine === latest.current) setView(next);
+      })
+      .catch(error => {
+        if (mine === latest.current && error instanceof ServiceError && error.code === 'conversations_off') off.current();
+      });
+  }, [id]);
+  useEffect(load, [load]);
+  useConversationsChanged(load);
+  return { view, reload: load };
+}
+
+/**
+ * 09B §6: the conversation counts as read while it is on screen and the window is focused: marked when it opens and
+ * whenever a re-read brings a newer message; when the window is not focused, at the next `focus`.
+ */
+function useReadMark(id: string, view: View | null) {
+  const marked = useRef<number | null>(null);
+  useEffect(() => {
+    marked.current = null;
+  }, [id]);
+  useEffect(() => {
+    if (!view) return;
+    const newest = view.messages.reduce((max, m) => Math.max(max, m.created_at), 0);
+    const mark = () => {
+      if (marked.current !== null && newest <= marked.current) return;
+      marked.current = newest;
+      Promise.resolve()
+        .then(() => conversationMarkRead(id))
+        .catch(() => undefined);
+    };
+    if (document.hasFocus()) mark();
+    window.addEventListener('focus', mark);
+    return () => window.removeEventListener('focus', mark);
+  }, [id, view]);
+}
+
+/** The header line: status dot, topic, "· Blocking", the status in words, "Not on this Mac". */
+function HeaderLine({ view }: { view: View }) {
+  return (
+    <div className="conversation-header-line">
+      <span className="conversation-status-dot" data-status={view.status} aria-hidden="true" />
+      <span className="conversation-header-topic">{view.topic}</span>
+      {view.blocking && <span className="conversation-header-blocking">· Blocking</span>}
+      <span className="conversation-header-status">{statusWords(view)}</span>
+      {view.session_id === null && <span className="conversation-elsewhere">Not on this Mac</span>}
+    </div>
+  );
+}
+
+/**
+ * C3 (09B §7 Conversation): the conversation as in Pricing: the header line, the messages in order (the pricer's dark
+ * on the left, the photographer's light on the right), then the replies not yet confirmed.
+ */
+export function ConversationView({ id, onBack }: { id: string; onBack: () => void }) {
+  const { view } = useView(id, onBack);
+  useReadMark(id, view);
+  return (
+    <div className="conversation-view" data-testid="conversation-view">
+      <div className="conversation-view-head">
+        <Button variant="ghost" size="icon" aria-label="Back to conversations" onClick={onBack}>
+          <ArrowLeft />
+        </Button>
+        {view && (
+          <div className="conversation-view-product">
+            {view.sku && <strong>{view.sku}</strong>}
+            <span className="conversation-title">{view.product_title}</span>
+          </div>
+        )}
+      </div>
+      {view && <HeaderLine view={view} />}
+      <div className="conversation-thread">
+        {view?.messages.map(m => <MessageBubble key={m.id} message={m} />)}
+        {view?.pending.map(p => <PendingBubble key={p.client_mutation_id} pending={p} />)}
+      </div>
+    </div>
+  );
+}

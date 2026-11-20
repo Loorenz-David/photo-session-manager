@@ -11,6 +11,8 @@ vi.mock('@/services/conversations', () => ({
   conversationsList: vi.fn(),
   conversationsSettingsGet: vi.fn(),
   conversationsSettingsSave: vi.fn(),
+  conversationGet: vi.fn(),
+  conversationMarkRead: vi.fn(async () => undefined),
 }));
 vi.mock('@/services/events', () => ({
   onConversationsChanged: vi.fn(async (handler: (event: ConversationsChanged) => void) => {
@@ -23,7 +25,13 @@ import { ConversationsContext, useConversations } from '../useConversations';
 import { ConversationsButton } from '../ConversationsButton';
 import { ConversationsPanel } from '../ConversationsPanel';
 import { ConversationRow } from '../ConversationRow';
-import { conversationsList, conversationsSettingsGet, conversationsSettingsSave } from '@/services/conversations';
+import {
+  conversationGet,
+  conversationsList,
+  conversationsSettingsGet,
+  conversationsSettingsSave,
+  type ConversationView,
+} from '@/services/conversations';
 
 function row(extra: Partial<ConversationListRow> = {}): ConversationListRow {
   return {
@@ -225,15 +233,29 @@ it('c2_c15a_conversations_changed_adds_the_new_row_to_the_open_panel', async () 
   expect(screen.getByRole('dialog', { name: 'Conversations' })).toBe(panel);
 });
 
-it('c2_c15c_a_row_opens_its_placeholder_and_the_back_arrow_returns', async () => {
+it('c2_c15c_a_row_opens_its_conversation_and_the_back_arrow_returns', async () => {
   vi.mocked(conversationsList).mockResolvedValue(list({ rows: [row({ id: 'a', sku: 'BEYO-1', topic: 'Dimensions' })] }));
+  vi.mocked(conversationGet).mockResolvedValue({
+    id: 'a',
+    sku: 'BEYO-1',
+    product_title: 'Vintage Brass Wall Mirror, Round',
+    topic: 'Dimensions',
+    blocking: false,
+    status: 'open',
+    resolved_by: null,
+    session_id: 7,
+    messages: [],
+    pending: [],
+    can_send: true,
+    off_reason: null,
+  } satisfies ConversationView);
   const panel = await openPanel();
   fireEvent.click(await within(panel).findByTestId('conversation-row-a'));
-  expect(within(panel).getByRole('button', { name: 'Back to conversations' })).toBeInTheDocument();
+  expect(within(panel).getByTestId('conversation-view')).toBeInTheDocument();
+  expect(await within(panel).findByText('Dimensions')).toBeInTheDocument();
   expect(within(panel).getByText('BEYO-1')).toBeInTheDocument();
-  expect(within(panel).getByText('Dimensions')).toBeInTheDocument();
-  expect(within(panel).getByText('Opening conversations arrives with the next step')).toBeInTheDocument();
+  expect(vi.mocked(conversationGet)).toHaveBeenCalledWith('a');
   fireEvent.click(within(panel).getByRole('button', { name: 'Back to conversations' }));
   expect(within(panel).getByTestId('conversation-row-a')).toBeInTheDocument();
-  expect(within(panel).queryByText('Opening conversations arrives with the next step')).toBeNull();
+  expect(within(panel).queryByTestId('conversation-view')).toBeNull();
 });
