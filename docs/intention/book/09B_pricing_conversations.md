@@ -64,14 +64,19 @@ photographer and lets the photographer answer:
 - **Test connection**: lists the account's stores and picks the one whose `shopDomain` equals the connected
   Shopify shop's domain (case-insensitive). Result shown in words: "Connected to <store name> (<shop>)". No match:
   "This Pricing key isn't tied to <shop>. It can see: <names>." and conversations stay off. No Shopify connection:
-  "Connect Shopify first; conversations are matched to its products." The chosen store id is saved.
+  "Connect Shopify first; conversations are matched to its products." The chosen store id is saved. Every press
+  answers visibly (A28): the button reads "Checking…" while it runs, then the words above (or why Pricing could not
+  be reached) and "Checked at HH:MM:SS", also when the words did not change.
 - **Sound for new questions and replies**: on by default. The mute button in the conversations panel is the same
   setting.
 - **Mac banner when Session Manager is in the background**: on by default (owner decision 4).
 - **Last checked**: the time of the last successful check, or the last error in words.
 
 Without a key, or with the store unmatched, Session Manager makes **no** Pricing calls; the header icon stays and
-its panel says "Connect Pricing in Settings → Pricing".
+its panel says why, in the same words as Settings ("This Pricing key isn't tied to <shop>. It can see: <names>.",
+"Connect Shopify first; …"; "Connect Pricing in Settings → Pricing" only when there is no key), with **Open Settings →
+Pricing**, which opens Settings on the Pricing section (A28). A refused key or a store that is gone shows its sentence
+above the list with the same button.
 
 ## 5. Keeping up to date (contract MC-C1)
 

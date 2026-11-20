@@ -33,3 +33,8 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
 - **2026-11-20 13:55: C4 APPROVED** (APPROVED_WITH_NOTES). **All four milestones approved.** Full gates + release
   build running (`scratchpad/conv_gates_build.sh`, log `conv_gates_build.log`); then install (previous build kept as
   "2026-11-19 A24"), PR into main, and the live check with the owner's Pricing key and test question.
+- **2026-11-20: installed** (`292ced1`; previous build kept as "2026-11-19 A24"; fresh zip on the Desktop); PR #24
+  merged into main (`a572a22`). Full gates green (784 vitest). One flake fixed on the way: p50 c5a's "p2" matched a
+  random temp-folder name in settings.json (distinctive values now).
+  - **Next:** the live check on the dev Mac with the owner's Pricing key (pasted by the owner) and a test question
+    the owner creates; the first real reply only after the owner confirms. Banners: judge on the installed app only.

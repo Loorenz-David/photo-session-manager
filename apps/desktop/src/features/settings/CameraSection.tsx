@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cameraFtpAddress, cameraFtpPasswordGenerate, cameraFtpPasswordGet, cameraSupportGet, cameraSupportInstall, cameraTestConnection } from '@/services/camera';
+import { cameraFtpAddress, cameraFtpPasswordGenerate, cameraFtpPasswordGet, cameraStatus, cameraSupportGet, cameraSupportInstall, cameraTestConnection, type CameraStatus } from '@/services/camera';
+import { cameraCheckLine } from '@/features/shell/CameraDot';
+import { clock } from '@/features/conversations/connectionLine';
 import type { CameraSettingsDto, CameraSupportDto, TestConnectionResponse } from '@/services/bindings';
 import { pickArchive } from '@/services/settings';
 import * as cameraSteps from './cameraSteps';
@@ -29,7 +31,9 @@ export function CameraSection({ ports, onPortsChange, login: givenLogin, onLogin
   const login = givenLogin ?? ownLogin;
   const setLogin = onLoginChange ?? setOwnLogin;
   const [address, setAddress] = useState<string | null>(null);
-  const [check, setCheck] = useState<TestConnectionResponse | null>(null);
+  // A28: the check says the camera's state first, then what holds or could take it, then when it was checked.
+  const [check, setCheck] = useState<{ status: CameraStatus; holders: TestConnectionResponse; at: number } | null>(null);
+  const [testing, setTesting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<'password' | 'address' | null>(null);
   useEffect(() => {
@@ -88,7 +92,15 @@ export function CameraSection({ ports, onPortsChange, login: givenLogin, onLogin
       <FingerprintBox />
     </>}
     <h3>Check</h3>
-    <Button type="button" disabled={busy} onClick={() => void run(async () => setCheck(await cameraTestConnection()))}>Test camera connection</Button>
-    {check && <div role="status"><p>{check.holder ? `${check.holder} is holding the camera` : check.programs.length ? `These programs could take the camera: ${check.programs.join(', ')}` : 'Nothing is holding the camera'}</p>{check.holder && check.sentence && <p>{check.sentence}</p>}</div>}
+    <Button type="button" disabled={busy} onClick={() => { setTesting(true); setCheck(null); void run(async () => { const [status, holders] = await Promise.all([cameraStatus(), cameraTestConnection()]); setCheck({ status, holders, at: Date.now() }); }).finally(() => setTesting(false)); }}>{testing ? 'Checking…' : 'Test camera connection'}</Button>
+    {check && <div role="status" data-testid="camera-check">
+      <p>{cameraCheckLine(check.status)}</p>
+      {/* The status line already names a holder the camera needs back; the holder report then adds nothing. */}
+      {!(check.status.kind === 'needs_action' && check.status.holder) && <>
+        {check.holders.holder ? <p>{check.holders.holder} is holding the camera</p> : check.holders.programs.length > 0 && <p>These programs could take the camera: {check.holders.programs.join(', ')}</p>}
+        {check.holders.holder && check.holders.sentence && <p>{check.holders.sentence}</p>}
+      </>}
+      <p className="health-detail">Checked at {clock(check.at)}</p>
+    </div>}
   </section>;
 }

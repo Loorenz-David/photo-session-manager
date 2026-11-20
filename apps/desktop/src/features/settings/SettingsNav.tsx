@@ -1,4 +1,27 @@
+import { goTo } from '@/lib/routes';
+
 export type SettingsSection = 'capture-one' | 'camera' | 'export-and-previews' | 'shopify' | 'pricing' | 'storage' | 'research' | 'writer' | 'shooting-templates';
+
+/** A28: another page can open Settings on one section (the conversations panel → Pricing). */
+export const SETTINGS_SECTION_EVENT = 'psm:settings-section';
+let requested: SettingsSection | null = null;
+
+/** The section asked for before Settings opened, taken once (Settings starts on it). */
+export function takeRequestedSection(): SettingsSection | null {
+  const section = requested;
+  requested = null;
+  return section;
+}
+
+/** Opens Settings on `section`: switches section when Settings is on screen, else goes there (through the leave guard). */
+export function openSettingsSection(section: SettingsSection): void {
+  if (window.location.hash === '#/settings') {
+    window.dispatchEvent(new CustomEvent<SettingsSection>(SETTINGS_SECTION_EVENT, { detail: section }));
+    return;
+  }
+  requested = section;
+  goTo('#/settings');
+}
 
 const sections: { id: SettingsSection; label: string }[] = [
   { id: 'capture-one', label: 'Capture One' },

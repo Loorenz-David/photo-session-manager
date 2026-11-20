@@ -176,7 +176,7 @@ it('c2_c12a_without_a_key_the_panel_asks_to_connect', async () => {
   const panel = await openPanel();
   expect(await within(panel).findByText('Connect Pricing in Settings → Pricing')).toBeInTheDocument();
   expect(within(panel).queryByRole('tab')).toBeNull();
-  fireEvent.click(within(panel).getByRole('button', { name: 'Open Settings' }));
+  fireEvent.click(within(panel).getByRole('button', { name: 'Open Settings → Pricing' }));
   expect(window.location.hash).toBe('#/settings');
 });
 
