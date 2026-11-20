@@ -28,3 +28,8 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
 - **2026-11-20 11:07: C1 APPROVED**, **11:51: C2 APPROVED** (both APPROVED_WITH_NOTES; narratives in `narratives/C1…C2`).
 - **2026-11-20 11:59: C3 projection r0 = AMENDMENTS_REQUIRED** (0 owner cards). L1–L16 applied (`18391ba`; master plan
   v1.3; totals 12 units / 73 criteria / 297 rows). Chain restarted at C3 (`scratchpad/conv_chain_c3.sh`, same log).
+- **2026-11-20 12:56: C3 APPROVED** (review r2, APPROVED_WITH_NOTES). **C4 projection r0 = AMENDMENTS_REQUIRED** (0 owner
+  cards); L1–L13 applied (`8c70ff9`, master plan v1.4; totals 12 units / 73 criteria / 299 rows).
+- **2026-11-20 13:55: C4 APPROVED** (APPROVED_WITH_NOTES). **All four milestones approved.** Full gates + release
+  build running (`scratchpad/conv_gates_build.sh`, log `conv_gates_build.log`); then install (previous build kept as
+  "2026-11-19 A24"), PR into main, and the live check with the owner's Pricing key and test question.
