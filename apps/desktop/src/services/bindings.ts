@@ -208,6 +208,12 @@ export const commands = {
 	conversationsSettingsSave: (patch: ConversationsSettingsPatchDto_Deserialize) => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_settings_save", { patch })),
 	conversationsKeySet: (key: string) => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_key_set", { key })),
 	conversationsTest: () => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_test")),
+	/**  The panel's rows from the local copy (never waits on the network). */
+	conversationsList: (scope: ConversationScopeDto, tab: ConversationTabDto) => typedError<ConversationListDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_list", { scope, tab })),
+	/**  The header count for the session on screen (`session_id` null = all). */
+	conversationsCounts: (sessionId: CommandId | null) => typedError<ConversationCountsDto, CommandError>(__TAURI_INVOKE("conversations_counts", { sessionId })),
+	/**  One badge per session with an unresolved conversation. */
+	conversationsSessionBadges: () => typedError<SessionBadgeDto[], CommandError>(__TAURI_INVOKE("conversations_session_badges")),
 	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
@@ -672,6 +678,88 @@ export type ContainerDto_Serialize = {
 	name: string | null,
 	description: string | null,
 };
+
+/**  The header count: conversations with news here and in other sessions. */
+export type ConversationCountsDto = {
+	here: number,
+	elsewhere: number,
+};
+
+/**
+ *  The panel's list: the connection `state`, its `problem` sentence when the key is refused or the
+ *  store is gone, the rows, and the conversations with news outside the scope.
+ */
+export type ConversationListDto = ConversationListDto_Serialize | ConversationListDto_Deserialize;
+
+/**
+ *  The panel's list: the connection `state`, its `problem` sentence when the key is refused or the
+ *  store is gone, the rows, and the conversations with news outside the scope.
+ */
+export type ConversationListDto_Deserialize = {
+	state: string,
+	problem?: string | null,
+	rows: ConversationRowDto_Deserialize[],
+	news_elsewhere: number,
+};
+
+/**
+ *  The panel's list: the connection `state`, its `problem` sentence when the key is refused or the
+ *  store is gone, the rows, and the conversations with news outside the scope.
+ */
+export type ConversationListDto_Serialize = {
+	state: string,
+	problem: string | null,
+	rows: ConversationRowDto_Serialize[],
+	news_elsewhere: number,
+};
+
+/**
+ *  One row of the panel (`status` = `open`, `answered` or `resolved`; `session_id` null = "Not on
+ *  this Mac").
+ */
+export type ConversationRowDto = ConversationRowDto_Serialize | ConversationRowDto_Deserialize;
+
+/**
+ *  One row of the panel (`status` = `open`, `answered` or `resolved`; `session_id` null = "Not on
+ *  this Mac").
+ */
+export type ConversationRowDto_Deserialize = {
+	id: string,
+	sku?: string | null,
+	product_title: string,
+	topic: string,
+	status: string,
+	blocking: boolean,
+	waiting: boolean,
+	last_line?: string | null,
+	last_activity_at: number,
+	has_news: boolean,
+	session_id?: number | null,
+};
+
+/**
+ *  One row of the panel (`status` = `open`, `answered` or `resolved`; `session_id` null = "Not on
+ *  this Mac").
+ */
+export type ConversationRowDto_Serialize = {
+	id: string,
+	sku: string | null,
+	product_title: string,
+	topic: string,
+	status: string,
+	blocking: boolean,
+	waiting: boolean,
+	last_line: string | null,
+	last_activity_at: number,
+	has_news: boolean,
+	session_id: number | null,
+};
+
+/**  Which conversations to list: `{kind: "all"}` or `{kind: "session", session_id}`. */
+export type ConversationScopeDto = { kind: "all" } | { kind: "session"; session_id: number };
+
+/**  The panel's tab: `open` (unresolved) or `resolved` (the last 30 days). */
+export type ConversationTabDto = "open" | "resolved";
 
 /**  Settings → Pricing. `key_saved` only: the key itself never leaves the Keychain. */
 export type ConversationsSettingsDto = ConversationsSettingsDto_Serialize | ConversationsSettingsDto_Deserialize;
@@ -1672,6 +1760,13 @@ export type SelectionDto = {
 	text: string,
 	url: string,
 	title: string,
+};
+
+/**  The sessions-list badge: "N open", or "Pricing is waiting" when `waiting`. */
+export type SessionBadgeDto = {
+	session_id: number,
+	open: number,
+	waiting: boolean,
 };
 
 /**  A17: what the "Delete session" confirm dialog shows. */

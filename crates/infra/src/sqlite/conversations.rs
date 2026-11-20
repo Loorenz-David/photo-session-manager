@@ -553,4 +553,27 @@ impl ConversationStore for SqliteStore {
                 .collect()
         })
     }
+
+    fn item_sessions(&self) -> Result<Vec<(String, i64)>> {
+        self.research_transaction(|tx| {
+            let mut stmt = tx
+                .conn()
+                .prepare(
+                    "SELECT i.sku, (SELECT s.id FROM sessions s WHERE s.item_id=i.id \
+                     ORDER BY s.id DESC LIMIT 1) FROM items i ORDER BY i.id",
+                )
+                .map_err(db)?;
+            let rows = stmt
+                .query_map([], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, Option<i64>>(1)?))
+                })
+                .map_err(db)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(db)?;
+            Ok(rows
+                .into_iter()
+                .filter_map(|(sku, session)| session.map(|s| (sku, s)))
+                .collect())
+        })
+    }
 }

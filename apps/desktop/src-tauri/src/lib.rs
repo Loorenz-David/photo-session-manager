@@ -701,6 +701,229 @@ mod c1_tests {
 }
 
 #[cfg(test)]
+mod c2_tests {
+    //! C2·U1 (`docs/implementation/plans/C2_header_panel_notifications.md` C2·C7): the list,
+    //! counts and badges commands over the wired app with the fake Pricing server.
+    use super::*;
+    use psm_core::domain::conversation::{ConversationScope, ConversationTab};
+    use psm_core::ports::clock::Clock;
+    use psm_testkit::test_app::PRICING_KEY;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    struct Wired {
+        _dir: tempfile::TempDir,
+        _app: tauri::App<tauri::test::MockRuntime>,
+        window: tauri::WebviewWindow<tauri::test::MockRuntime>,
+        pricing: Arc<psm_testkit::fake_pricing::FakePricing>,
+    }
+
+    /// A connected app (key saved, store matched) whose copy was brought in by a first check.
+    fn connected() -> psm_testkit::TestApp {
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        a.app.conversations.key_set(Some(PRICING_KEY)).unwrap();
+        a
+    }
+
+    fn store_id(a: &psm_testkit::TestApp) -> String {
+        use psm_core::ports::conversations::ConversationStore;
+        a.app.store.sync().unwrap().store.unwrap().id
+    }
+
+    fn run_check(a: &psm_testkit::TestApp) {
+        while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+    }
+
+    fn wired(a: psm_testkit::TestApp) -> Wired {
+        let pricing = a.pricing.clone().unwrap();
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::conversations::conversations_list,
+                commands::conversations::conversations_counts,
+                commands::conversations::conversations_session_badges,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        Wired {
+            _dir: dir,
+            _app: tauri_app,
+            window,
+            pricing,
+        }
+    }
+
+    fn list(w: &Wired, scope: Value, tab: &str) -> Value {
+        call(
+            &w.window,
+            "conversations_list",
+            json!({"scope": scope, "tab": tab}),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn c2_c7a_no_key_lists_nothing() {
+        let a = connected();
+        a.fake_pricing()
+            .ask(&store_id(&a), Some("BEYO-1"), "Condition");
+        run_check(&a);
+        a.app.conversations.key_set(None).unwrap();
+        let w = wired(a);
+        let got = list(&w, json!({"kind": "all"}), "open");
+        assert_eq!(got["state"], json!("no_key"));
+        assert_eq!(got["rows"], json!([]));
+    }
+
+    #[test]
+    fn c2_c7b_a_refused_key_lists_the_copy_with_its_problem() {
+        let a = connected();
+        let s = store_id(&a);
+        let one = a.fake_pricing().ask(&s, Some("BEYO-1"), "Condition");
+        let two = a.fake_pricing().ask(&s, Some("BEYO-2"), "Condition");
+        run_check(&a);
+        a.fake_pricing().fail_matching("/events", 1, 401);
+        a.clock.advance(10_000);
+        run_check(&a);
+        let w = wired(a);
+        let got = list(&w, json!({"kind": "all"}), "open");
+        assert_eq!(got["state"], json!("refused"));
+        assert_eq!(
+            got["problem"],
+            json!("Pricing refused the key: check Settings → Pricing")
+        );
+        let mut ids: Vec<&str> = got["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect();
+        ids.sort();
+        let mut want = [one.as_str(), two.as_str()];
+        want.sort();
+        assert_eq!(ids, want);
+    }
+
+    #[test]
+    fn c2_c7c_an_unmatched_store_counts_nothing_and_shows_no_badge() {
+        let a = connected();
+        a.items()
+            .create_local("BEYO-1", "BEYO-1", "object", None)
+            .unwrap();
+        a.fake_pricing()
+            .ask(&store_id(&a), Some("BEYO-1"), "Condition");
+        run_check(&a);
+        assert_eq!(a.app.conversations.counts(None).unwrap().here, 1);
+        a.fake_pricing().clear_stores();
+        a.fake_pricing().add_store("Other", "other.myshopify.com");
+        a.app.conversations.test_connection().unwrap();
+        let w = wired(a);
+        let counts = call(
+            &w.window,
+            "conversations_counts",
+            json!({"sessionId": null}),
+        )
+        .unwrap();
+        assert_eq!(counts, json!({"here": 0, "elsewhere": 0}));
+        let badges = call(&w.window, "conversations_session_badges", json!({})).unwrap();
+        assert_eq!(badges, json!([]));
+    }
+
+    #[test]
+    fn c2_c7d_a_session_scope_and_the_resolved_tab_reach_the_service() {
+        let a = connected();
+        let (_, session) = a
+            .items()
+            .create_local("BEYO-1", "BEYO-1", "object", None)
+            .unwrap();
+        let session_id = session.session.id;
+        let s = store_id(&a);
+        let resolved = a.fake_pricing().ask(&s, Some("BEYO-1"), "Condition");
+        a.fake_pricing().resolve(&resolved);
+        a.fake_pricing().ask(&s, Some("BEYO-1"), "Other");
+        a.fake_pricing().ask(&s, Some("BEYO-2"), "Other");
+        run_check(&a);
+        let want: Vec<String> = a
+            .app
+            .conversations
+            .list(
+                ConversationScope::Session(session_id),
+                ConversationTab::Resolved,
+                a.clock.now_ms(),
+            )
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(want, std::slice::from_ref(&resolved));
+        let w = wired(a);
+        let got = list(
+            &w,
+            json!({"kind": "session", "session_id": session_id}),
+            "resolved",
+        );
+        let ids: Vec<&str> = got["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, want);
+        assert_eq!(got["rows"][0]["session_id"], json!(session_id));
+        assert_eq!(got["rows"][0]["status"], json!("resolved"));
+    }
+
+    #[test]
+    fn c2_c7e_the_three_commands_never_reach_pricing() {
+        let a = connected();
+        a.items()
+            .create_local("BEYO-1", "BEYO-1", "object", None)
+            .unwrap();
+        a.fake_pricing()
+            .ask(&store_id(&a), Some("BEYO-1"), "Condition");
+        run_check(&a);
+        let w = wired(a);
+        w.pricing.clear_requests();
+        list(&w, json!({"kind": "all"}), "open");
+        list(&w, json!({"kind": "all"}), "resolved");
+        call(&w.window, "conversations_counts", json!({"sessionId": 2})).unwrap();
+        call(&w.window, "conversations_session_badges", json!({})).unwrap();
+        assert!(w.pricing.request_lines().is_empty());
+    }
+}
+
+#[cfg(test)]
 mod r6_command_tests {
     use super::*;
     use psm_core::domain::attribute::AiConfidence;
@@ -1365,6 +1588,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::conversations::conversations_settings_save,
         commands::conversations::conversations_key_set,
         commands::conversations::conversations_test,
+        commands::conversations::conversations_list,
+        commands::conversations::conversations_counts,
+        commands::conversations::conversations_session_badges,
         commands::search::search_window_open,
         commands::search::search_web_place,
         commands::search::search_web_go,

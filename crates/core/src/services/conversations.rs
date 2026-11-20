@@ -6,12 +6,15 @@
 use crate::{
     Error, Result,
     domain::conversation::{
-        Connection, ConnectionState, Conversation, ConversationNotice, ConversationSettings,
-        ConversationStatus, EventKind, EventPage, KEY_ACCOUNT, NoticeKind, ProviderError,
-        ResolvedBy, Tick,
+        Connection, ConnectionState, Conversation, ConversationCounts, ConversationList,
+        ConversationNotice, ConversationRow, ConversationScope, ConversationSettings,
+        ConversationStatus, ConversationTab, EventKind, EventPage, KEY_ACCOUNT, NoticeKind,
+        ProviderError, ResolvedBy, SessionBadge, Tick,
     },
     events::AppEvent,
-    mechanisms::conversation_rules::{check_backoff, entering_read_mark},
+    mechanisms::conversation_rules::{
+        check_backoff, entering_read_mark, first_line, has_news, list_order, resolved_recent,
+    },
     ports::{
         clock::Clock,
         conversations::{
@@ -138,6 +141,30 @@ pub struct ConversationsService {
     events: Arc<dyn EventSink>,
     lane: Arc<ConversationsLane>,
     memory: Mutex<Memory>,
+}
+
+/// A conversation of the copy with its session (none = "Not on this Mac").
+type Placed = (Conversation, Option<i64>);
+
+/// One list row of `c` (09B §7): `waiting` = blocking and not resolved; `last_line` = the first
+/// line of the newest message; `last_activity_at` = that message's time, or `updated_at`.
+fn row_of(c: &Conversation, session_id: Option<i64>) -> ConversationRow {
+    let newest = c.messages.iter().max_by_key(|m| m.created_at);
+    ConversationRow {
+        id: c.id.clone(),
+        sku: c.sku.clone(),
+        product_title: c.product_title.clone(),
+        topic: c.topic.clone(),
+        status: c.status,
+        blocking: c.blocking,
+        waiting: c.blocking && c.status != ConversationStatus::Resolved,
+        last_line: newest
+            .map(|m| first_line(&m.text))
+            .filter(|l| !l.is_empty()),
+        last_activity_at: newest.map_or(c.updated_at, |m| m.created_at),
+        has_news: has_news(c),
+        session_id,
+    }
 }
 
 /// `≈` of MC-C1: equal after trimming, ignoring ASCII case.
@@ -742,6 +769,131 @@ impl ConversationsService {
             self.emit(vec![]);
         }
         Ok(())
+    }
+
+    /// The copy as the panel sees it: each conversation with its session (09B §3: the session of
+    /// the item whose SKU is exactly the conversation's), or none when the state hides the copy
+    /// (`no_key`, `no_shop`, `store_unmatched`). Never takes the lane, never asks the provider.
+    fn visible(&self) -> Result<(Connection, Option<Vec<Placed>>)> {
+        let connection = self.connection()?;
+        if matches!(
+            connection.state,
+            ConnectionState::NoKey | ConnectionState::NoShop | ConnectionState::StoreUnmatched
+        ) {
+            return Ok((connection, None));
+        }
+        let sessions: HashMap<String, i64> = self.store.item_sessions()?.into_iter().collect();
+        let copy = self
+            .store
+            .conversations()?
+            .into_iter()
+            .map(|c| {
+                let session = c.sku.as_ref().and_then(|sku| sessions.get(sku).copied());
+                (c, session)
+            })
+            .collect();
+        Ok((connection, Some(copy)))
+    }
+
+    /// C2 (09B §7 List): the panel's rows for `scope` and `tab` at `now`.
+    pub fn list(
+        &self,
+        scope: ConversationScope,
+        tab: ConversationTab,
+        now_ms: i64,
+    ) -> Result<ConversationList> {
+        let (connection, copy) = self.visible()?;
+        let problem = matches!(
+            connection.state,
+            ConnectionState::Refused | ConnectionState::StoreGone
+        )
+        .then(|| connection.last_error.clone())
+        .flatten();
+        let Some(copy) = copy else {
+            return Ok(ConversationList {
+                state: connection.state,
+                problem,
+                rows: vec![],
+                news_elsewhere: 0,
+            });
+        };
+        let in_scope = |session: Option<i64>| match scope {
+            ConversationScope::All => true,
+            ConversationScope::Session(id) => session == Some(id),
+        };
+        let news_elsewhere = copy
+            .iter()
+            .filter(|(c, session)| !in_scope(*session) && has_news(c))
+            .count() as i64;
+        let mut rows: Vec<ConversationRow> = copy
+            .into_iter()
+            .filter(|(_, session)| in_scope(*session))
+            .filter(|(c, _)| match tab {
+                ConversationTab::Open => c.status != ConversationStatus::Resolved,
+                ConversationTab::Resolved => {
+                    c.status == ConversationStatus::Resolved
+                        && resolved_recent(c.updated_at, now_ms)
+                }
+            })
+            .map(|(c, session)| row_of(&c, session))
+            .collect();
+        match tab {
+            ConversationTab::Open => rows.sort_by(list_order),
+            ConversationTab::Resolved => rows.sort_by(|a, b| {
+                b.last_activity_at
+                    .cmp(&a.last_activity_at)
+                    .then(a.id.cmp(&b.id))
+            }),
+        }
+        Ok(ConversationList {
+            state: connection.state,
+            problem,
+            rows,
+            news_elsewhere,
+        })
+    }
+
+    /// C2 (09B §6): conversations with news (any status) of `session_id` and of all the others;
+    /// without a session, `here` = all.
+    pub fn counts(&self, session_id: Option<i64>) -> Result<ConversationCounts> {
+        let (_, copy) = self.visible()?;
+        let Some(copy) = copy else {
+            return Ok(ConversationCounts::default());
+        };
+        let mut counts = ConversationCounts::default();
+        for (_, session) in copy.iter().filter(|(c, _)| has_news(c)) {
+            match session_id {
+                Some(id) if *session != Some(id) => counts.elsewhere += 1,
+                _ => counts.here += 1,
+            }
+        }
+        Ok(counts)
+    }
+
+    /// C2 (09B §6): one badge per session with an unresolved conversation; `waiting` when one of
+    /// them is blocking.
+    pub fn session_badges(&self) -> Result<Vec<SessionBadge>> {
+        let (_, copy) = self.visible()?;
+        let mut badges: Vec<SessionBadge> = Vec::new();
+        for (c, session) in copy.unwrap_or_default() {
+            let Some(session_id) = session else { continue };
+            if c.status == ConversationStatus::Resolved {
+                continue;
+            }
+            match badges.iter_mut().find(|b| b.session_id == session_id) {
+                Some(badge) => {
+                    badge.open += 1;
+                    badge.waiting |= c.blocking;
+                }
+                None => badges.push(SessionBadge {
+                    session_id,
+                    open: 1,
+                    waiting: c.blocking,
+                }),
+            }
+        }
+        badges.sort_by_key(|b| b.session_id);
+        Ok(badges)
     }
 
     /// Saves the fields given over the stored settings (the slot validates the server).

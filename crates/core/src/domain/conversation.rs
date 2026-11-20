@@ -349,6 +349,65 @@ impl ProviderError {
     }
 }
 
+/// Which conversations a list shows (09B §7): all, or those of one session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationScope {
+    All,
+    Session(i64),
+}
+
+/// The panel's tabs (09B §7): Open = unresolved; Resolved = resolved in the last 30 days.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationTab {
+    Open,
+    Resolved,
+}
+
+/// One row of the panel's list (09B §7). `session_id` none = "Not on this Mac".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationRow {
+    pub id: String,
+    pub sku: Option<String>,
+    pub product_title: String,
+    pub topic: String,
+    pub status: ConversationStatus,
+    pub blocking: bool,
+    /// Blocking and not resolved ("Pricing is waiting").
+    pub waiting: bool,
+    /// The first line of the newest message.
+    pub last_line: Option<String>,
+    pub last_activity_at: i64,
+    pub has_news: bool,
+    pub session_id: Option<i64>,
+}
+
+/// The panel's list (09B §7): the connection state, its problem sentence when refused or gone,
+/// the rows, and the conversations with news outside the scope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationList {
+    pub state: ConnectionState,
+    pub problem: Option<String>,
+    pub rows: Vec<ConversationRow>,
+    pub news_elsewhere: i64,
+}
+
+/// The header count (09B §6): conversations with news in the scope and outside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ConversationCounts {
+    pub here: i64,
+    pub elsewhere: i64,
+}
+
+/// The sessions-list badge (09B §6): "N open", or "Pricing is waiting" when one is blocking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionBadge {
+    pub session_id: i64,
+    pub open: i64,
+    pub waiting: bool,
+}
+
 /// The result of one `tick` of the conversations service: `more` = the next page is due at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Tick {

@@ -88,6 +88,9 @@ pub trait ConversationStore: Send + Sync {
     fn outbox_insert(&self, message: &OutboxMessage, now: i64) -> Result<()>;
     /// Every outbox row, oldest first.
     fn outbox(&self) -> Result<Vec<OutboxMessage>>;
+    /// Each item's SKU with the session of that item (the item's latest session, as
+    /// `Store::session_for_item`); items without a session are left out (09B §3).
+    fn item_sessions(&self) -> Result<Vec<(String, i64)>>;
 }
 
 /// The `conversations` slot of the settings file (master plan §4 Settings): `read` hands back the

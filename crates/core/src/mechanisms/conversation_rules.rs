@@ -1,9 +1,10 @@
 //! The pure rules of conversations sync (`master_plan_conversations.md` §5 MC-C1, §4 Event).
 
 use crate::domain::conversation::{
-    AuthorKind, Conversation, ConversationNotice, ConversationStatus, Message, NoticeKind,
+    AuthorKind, Conversation, ConversationNotice, ConversationRow, ConversationStatus, Message,
+    NoticeKind,
 };
-use std::time::Duration;
+use std::{cmp::Ordering, time::Duration};
 
 /// MC-C1.7: the wait after `failures` consecutive failed checks (≥ 1): 10 s doubling, at most 5 min.
 pub fn check_backoff(failures: u32) -> Duration {
@@ -33,6 +34,41 @@ pub fn entering_read_mark(conversation: &Conversation) -> Option<i64> {
     } else {
         conversation.messages.iter().map(|m| m.created_at).max()
     }
+}
+
+/// The Resolved tab's window (09B §7): 30 days in milliseconds.
+pub const RESOLVED_WINDOW_MS: i64 = 30 * 86_400_000;
+/// The longest `first_line`, in characters (the `…` included).
+const FIRST_LINE_MAX: usize = 120;
+
+/// 09B §7 list order: news first, then blocking, then latest activity, then id.
+pub fn list_order(a: &ConversationRow, b: &ConversationRow) -> Ordering {
+    b.has_news
+        .cmp(&a.has_news)
+        .then(b.blocking.cmp(&a.blocking))
+        .then(b.last_activity_at.cmp(&a.last_activity_at))
+        .then(a.id.cmp(&b.id))
+}
+
+/// 09B §7 Resolved tab: the conversation's last update is at most 30 days before `now`.
+pub fn resolved_recent(updated_at: i64, now: i64) -> bool {
+    now.saturating_sub(updated_at) <= RESOLVED_WINDOW_MS
+}
+
+/// 09B §7: the first non-empty line, trimmed, at most 120 characters (cut on a character boundary
+/// with `…`). Empty when the text has no non-empty line.
+pub fn first_line(text: &str) -> String {
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+    if line.chars().count() <= FIRST_LINE_MAX {
+        return line.to_owned();
+    }
+    let mut cut: String = line.chars().take(FIRST_LINE_MAX - 1).collect();
+    cut.push('…');
+    cut
 }
 
 /// The words of one notice (09B §9): `New question · <SKU> — <topic>` or `New reply · <SKU>`,
@@ -194,6 +230,73 @@ mod tests {
         assert!(has_news(&c));
         c.read_mark = Some(100);
         assert!(!has_news(&c));
+    }
+
+    fn row(id: &str, has_news: bool, blocking: bool, last_activity_at: i64) -> ConversationRow {
+        ConversationRow {
+            id: id.into(),
+            sku: None,
+            product_title: "t".into(),
+            topic: "Condition".into(),
+            status: ConversationStatus::Open,
+            blocking,
+            waiting: blocking,
+            last_line: None,
+            last_activity_at,
+            has_news,
+            session_id: None,
+        }
+    }
+
+    #[test]
+    fn c2_c2a_news_comes_before_blocking() {
+        let a = row("a", true, false, 100);
+        let b = row("b", false, true, 200);
+        assert_eq!(list_order(&a, &b), Ordering::Less);
+        assert_eq!(list_order(&b, &a), Ordering::Greater);
+    }
+
+    #[test]
+    fn c2_c2b_then_blocking_before_newer() {
+        let a = row("a", false, true, 100);
+        let b = row("b", false, false, 200);
+        assert_eq!(list_order(&a, &b), Ordering::Less);
+    }
+
+    #[test]
+    fn c2_c2c_then_latest_activity_first() {
+        let a = row("a", false, false, 200);
+        let b = row("b", false, false, 100);
+        assert_eq!(list_order(&a, &b), Ordering::Less);
+    }
+
+    #[test]
+    fn c2_c2d_both_with_news_blocking_first() {
+        let a = row("a", true, false, 200);
+        let b = row("b", true, true, 100);
+        assert_eq!(list_order(&b, &a), Ordering::Less);
+    }
+
+    #[test]
+    fn c2_c3a_resolved_recent_is_thirty_days_inclusive() {
+        let now = 10_000_000_000;
+        let day = 86_400_000;
+        assert!(resolved_recent(now - 29 * day, now));
+        assert!(resolved_recent(now - 30 * day, now));
+        assert!(!resolved_recent(now - 30 * day - 1, now));
+    }
+
+    #[test]
+    fn c2_c4a_first_line() {
+        assert_eq!(
+            first_line("Is the glass original?\nSecond line"),
+            "Is the glass original?"
+        );
+        assert_eq!(first_line("\n  Send a close-up  \n"), "Send a close-up");
+        let long = "é".repeat(200);
+        let cut = first_line(&long);
+        assert_eq!(cut, format!("{}…", "é".repeat(119)));
+        assert_eq!(cut.chars().count(), 120);
     }
 
     #[test]
