@@ -2840,8 +2840,8 @@ mod w4_tests {
                 "effort": "medium",
                 "banned_extra": [],
                 "lengths": {
-                    "title_max": 70, "description_min_words": 60, "description_max_words": 120,
-                    "condition_max_words": 45, "seo_title_max": 60, "seo_description_min": 120,
+                    "title_max": 70, "description_min_words": 40, "description_max_words": 100,
+                    "condition_max_words": 35, "seo_title_max": 60, "seo_description_min": 120,
                     "seo_description_max": 155,
                 },
                 "visible_keys": null,

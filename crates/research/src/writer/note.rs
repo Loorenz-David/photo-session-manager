@@ -309,44 +309,32 @@ fn same_unit(stage: Stage, identity: &Json, unit: &OutputRow) -> bool {
     fingerprint(stage.number(), identity).is_ok_and(|f| f == unit.fingerprint)
 }
 
-/// WC4.3 (read here for W1): the stored state of `key`. For `product.title`: its attribute row
-/// if any; else none when the item's title is blank; else a live row holding the title, from the
-/// shop when the item's link title base equals it, otherwise typed.
+/// WC4.3 (read here for W1): the stored state of `key`, as the writer's door reads it
+/// ([`crate::writer::writes::stored_state`], A29: a title that is the SKU is none).
 fn stored_state(
     tx: &dyn StoreTx,
     item_id: i64,
     rows: &[Value],
     key: &str,
 ) -> Result<Option<Value>> {
-    let row = rows.iter().find(|r| r.key == key).cloned();
-    if key != PRODUCT_TITLE || row.is_some() {
-        return Ok(row);
+    let row = rows.iter().find(|r| r.key == key);
+    if key != PRODUCT_TITLE {
+        return Ok(row.cloned());
     }
     let item = tx.item(item_id)?;
-    if item.title.trim().is_empty() {
-        return Ok(None);
-    }
-    let from_shop = tx
-        .item_title_base(item_id, TITLE_LINK_INTEGRATION)?
-        .as_deref()
-        == Some(item.title.as_str());
-    Ok(Some(Value {
+    let title_base = if row.is_none() {
+        tx.item_title_base(item_id, TITLE_LINK_INTEGRATION)?
+    } else {
+        None
+    };
+    Ok(crate::writer::writes::stored_state(
+        row,
         item_id,
-        key: key.to_owned(),
-        value: Json::String(item.title.clone()).to_string(),
-        valid: true,
-        provenance: if from_shop {
-            Provenance::Integration
-        } else {
-            Provenance::Human
-        },
-        ai_confidence: None,
-        ai_status: None,
-        ai_reason: None,
-        ai_sources: None,
-        ai_prior: None,
-        updated_at: 0,
-    }))
+        key,
+        &item.title,
+        title_base.as_deref(),
+        &item.sku,
+    ))
 }
 
 /// One key's decision and what the replaced text says for it.

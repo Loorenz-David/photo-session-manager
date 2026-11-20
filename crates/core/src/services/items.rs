@@ -187,7 +187,13 @@ impl<'a> ItemsService<'a> {
                 origin: "linked",
                 at,
             })?;
-            tx.insert_item_link(id, "shopify", external_id, None)
+            tx.insert_item_link(id, "shopify", external_id, None)?;
+            // A29: the title came from the shop, so it is the shop's (its title base), not one
+            // the photographer typed; a form refresh would record the same base.
+            if !hit.title.trim().is_empty() {
+                tx.set_item_title_base(id, "shopify", &hit.title)?;
+            }
+            Ok(())
         })?;
         if let Some(item_type) = hit.item_type.as_deref() {
             self.store.set_item_type_base(id, "shopify", item_type)?;

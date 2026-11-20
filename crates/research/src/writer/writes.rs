@@ -22,21 +22,37 @@ use crate::{
 /// The integration whose title base makes an item's title the shop's (the rule `form_get` uses).
 use psm_core::services::attributes::LINK_INTEGRATION as TITLE_LINK_INTEGRATION;
 
+/// A29 (owner 2026-11-20): a title that is only the item's SKU is a placeholder, not a title
+/// (a product adopted from the shop or created with its SKU as its name). Trimmed, ignoring case.
+pub fn sku_placeholder(title: &str, sku: &str) -> bool {
+    let title = title.trim();
+    !title.is_empty() && title.to_lowercase() == sku.trim().to_lowercase()
+}
+
 /// WC4.3: the stored state of a text key. For any key but `product.title`: its row. For
 /// `product.title`: its attribute row if one exists; else none when the item's title is blank;
 /// else a live row holding the title, from the shop (`integration`) when the item's link title
-/// base equals the title, otherwise typed (`human`).
+/// base equals the title, otherwise typed (`human`). A29: a title that is the item's `sku`
+/// ([`sku_placeholder`]), as the item's title or as a title row not written by the writer, is
+/// no stored state, so the writer offers a title as a plain suggestion.
 pub fn stored_state(
     row: Option<&Value>,
     item_id: i64,
     key: &str,
     item_title: &str,
     title_base: Option<&str>,
+    sku: &str,
 ) -> Option<Value> {
-    if key != PRODUCT_TITLE || row.is_some() {
+    if key != PRODUCT_TITLE {
         return row.cloned();
     }
-    if item_title.trim().is_empty() {
+    if let Some(row) = row {
+        let placeholder = row.provenance != Provenance::Ai
+            && serde_json::from_str::<String>(&row.value)
+                .is_ok_and(|title| sku_placeholder(&title, sku));
+        return if placeholder { None } else { Some(row.clone()) };
+    }
+    if item_title.trim().is_empty() || sku_placeholder(item_title, sku) {
         return None;
     }
     Some(Value {
@@ -117,6 +133,7 @@ pub(crate) fn write_text(
         key,
         &item.title,
         title_base.as_deref(),
+        &item.sku,
     );
     let decision = if deliberate {
         decide_deliberate(definition, stored.as_ref(), value)
@@ -185,12 +202,13 @@ mod tests {
                 1,
                 "product.description",
                 "Chair",
-                Some("Chair")
+                Some("Chair"),
+                "SKU-1"
             ),
             Some(stored)
         );
         assert_eq!(
-            stored_state(None, 1, "product.description", "Chair", None),
+            stored_state(None, 1, "product.description", "Chair", None, "SKU-1"),
             None
         );
     }
@@ -199,26 +217,69 @@ mod tests {
     fn wc4_3_a_title_row_wins_over_the_items_title() {
         let stored = row(PRODUCT_TITLE, Provenance::Ai);
         assert_eq!(
-            stored_state(Some(&stored), 1, PRODUCT_TITLE, "Chair", None),
+            stored_state(Some(&stored), 1, PRODUCT_TITLE, "Chair", None, "SKU-1"),
             Some(stored)
         );
     }
 
     #[test]
     fn wc4_3_a_blank_title_is_no_stored_state() {
-        assert_eq!(stored_state(None, 1, PRODUCT_TITLE, "  ", Some("  ")), None);
+        assert_eq!(
+            stored_state(None, 1, PRODUCT_TITLE, "  ", Some("  "), "SKU-1"),
+            None
+        );
     }
 
     #[test]
     fn wc4_3_the_title_is_the_shops_when_it_equals_the_link_title_base_else_typed() {
-        let from_shop =
-            stored_state(None, 1, PRODUCT_TITLE, "Shop chair", Some("Shop chair")).unwrap();
+        let from_shop = stored_state(
+            None,
+            1,
+            PRODUCT_TITLE,
+            "Shop chair",
+            Some("Shop chair"),
+            "SKU-1",
+        )
+        .unwrap();
         assert_eq!(from_shop.provenance, Provenance::Integration);
         assert_eq!(from_shop.value, "\"Shop chair\"");
         assert!(from_shop.valid && from_shop.is_live());
-        let typed = stored_state(None, 1, PRODUCT_TITLE, "Chair", Some("Shop chair")).unwrap();
+        let typed =
+            stored_state(None, 1, PRODUCT_TITLE, "Chair", Some("Shop chair"), "SKU-1").unwrap();
         assert_eq!(typed.provenance, Provenance::Human);
-        let unlinked = stored_state(None, 1, PRODUCT_TITLE, "Chair", None).unwrap();
+        let unlinked = stored_state(None, 1, PRODUCT_TITLE, "Chair", None, "SKU-1").unwrap();
         assert_eq!(unlinked.provenance, Provenance::Human);
+    }
+
+    #[test]
+    fn a29_a_title_that_is_the_sku_is_no_stored_state() {
+        for title in ["Ch1-201126", " ch1-201126 ", "CH1-201126"] {
+            assert_eq!(
+                stored_state(None, 1, PRODUCT_TITLE, title, None, "Ch1-201126"),
+                None,
+                "{title}"
+            );
+            assert_eq!(
+                stored_state(None, 1, PRODUCT_TITLE, title, Some(title), "Ch1-201126"),
+                None,
+                "{title}"
+            );
+        }
+        let mut typed = row(PRODUCT_TITLE, Provenance::Human);
+        typed.value = "\"Ch1-201126\"".into();
+        assert_eq!(
+            stored_state(Some(&typed), 1, PRODUCT_TITLE, "", None, "Ch1-201126"),
+            None
+        );
+        // A writer's own row, and a real title, stay.
+        let mut written = typed.clone();
+        written.provenance = Provenance::Ai;
+        assert_eq!(
+            stored_state(Some(&written), 1, PRODUCT_TITLE, "", None, "Ch1-201126"),
+            Some(written)
+        );
+        assert!(
+            stored_state(None, 1, PRODUCT_TITLE, "Teak Chair Ch1", None, "Ch1-201126").is_some()
+        );
     }
 }

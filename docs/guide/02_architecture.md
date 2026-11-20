@@ -616,7 +616,11 @@ attribute row; `form_get` shows it in place of `items.title` while it is `ai` + 
 `clear` on a shown suggestion clears the row only; a human title edit deletes the row (feedback `edited`). Undo and
 redo restore the row and `items.title` together (`history.rs` checks the title beside its row). `partition` skips
 every `product.title` row and `partition_in` passes the built-in definitions too, so a description with a prior is a
-real conflict (held). There is **no `features/research`
+real conflict (held). A29: a title that is only the item's SKU is no stored state for the writer
+(`writer/writes.rs::sku_placeholder`), and `ItemsService::adopt` records the shop title as the link's title base. On
+publish, the Shopify adapter's `update_title` reads the product's handle (`ProductHandle`) and, while it is still the
+SKU's (`adapter::sku_handle`), sends the title's handle (`adapter::handleize`) with `redirectNewHandle: true` in the
+same `productUpdate`; once more with `-<sku>` when Shopify says the handle is taken. There is **no `features/research`
 folder**: the panel and pills are in `features/form/` (`ResearchPanel.tsx`, `AiPopover.tsx`,
 `AiPill.tsx`), the settings in `features/settings/` (`ResearchSection.tsx`, `ShopFieldPicker.tsx`),
 conflicts in `features/publish/ConflictList.tsx`, the button in `features/shell/Header.tsx`, the

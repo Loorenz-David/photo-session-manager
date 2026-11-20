@@ -154,7 +154,26 @@ The default modes are a starting point for the owner's experiments.
 > for short paragraphs. Restoration: Damage details and the Restoration notes are the normal source;
 > the "Restoration done" ticks stay as an optional extra (owner: "for now we use the damage details").
 
-The default guide is the evidence file's §7, adapted. In short:
+> **Amended 2026-11-20 (A29, owner correction brief of the 20 Nov test run):** the shipped guide
+> now follows the owner's listing rules where they are not company-specific. **Title:** always singular
+> (also for sets), designer or manufacturer + wood + type + one distinguishing detail; never a count,
+> "set" or "pair", a country, years or measurements; names in normal name case even when a field stores
+> them in capitals. **Description:** one single paragraph (the call returns it as one string, no longer
+> as paragraphs), 40–100 words: a provenance sentence ("Designed by X for Y in Z during the W.", unknown
+> parts left out, else "Made in Z during the W."), then materials with veneer and solid parts, the
+> upholstery's type and colour for seating, and the restoration in natural words (never the field
+> pasted; "completely restored", "fully restored", "full restoration" and "the whole piece" are banned
+> words of the post-check); sets end with "Sold as a set of N."; no shapes, measurements rarely, at most
+> one use sentence. **Condition report:** one or two customer sentences, at most 35 words, positives
+> first, then the remaining marks in plain words; no photo numbers, sizes or internal notes; None and
+> N/A fields left out. **Search title:** singular, unique, lowercase except names, never the shop's
+> name. **Questions:** a field that looks wrong, contradicts another or is unclear is asked about
+> rather than written around. The shipped examples are rewritten to match. The company's own wording
+> (category keywords, price tiers, "price per set") stays in its importable settings file.
+> **A title that is only the item's SKU** is a placeholder: the writer offers a title over it, also
+> from an automatic request, and adopting a shop product records its title as the shop's.
+
+The default guide (before A29) was the evidence file's §7, adapted. In short:
 - **Instruction:** about 330 words. Plain catalogue register, only facts from fields and note,
   exact names, a fixed order, and what to write rather than what not to write. Evidence: few-shot
   examples and structure are the reliable levers; a ban list in the prompt alone is unproven.
@@ -205,7 +224,7 @@ The default guide is the evidence file's §7, adapted. In short:
 
 | Field | Shop target |
 |---|---|
-| `product.title` | product title |
+| `product.title` | product title (A29: and the URL handle, see below) |
 | `product.description` | product body (HTML from paragraphs) |
 | `custom.condition_report_description` | the existing metafield |
 | `product.seo_title` (new) | Shopify product SEO title |
@@ -213,6 +232,13 @@ The default guide is the evidence file's §7, adapted. In short:
 
 The two SEO fields are new built-in Product fields and need a publish step that writes Shopify's
 `seo` input (owner 2026-11-18: yes). Every other field stays research's or the photographer's.
+
+> **Amended 2026-11-20 (A29):** when the publisher changes a product's title and the product's URL
+> handle is still the one Shopify made from the SKU (`ch2-201126`, or it with Shopify's `-N` suffix),
+> the same `productUpdate` sets the handle made from the new title (`handle`, with
+> `redirectNewHandle: true`, so the old address answers with a 301 redirect). A handle Shopify reports
+> as taken is tried once more with `-<sku>` appended. A handle the owner customised is never changed,
+> and nothing about handles happens on delete.
 
 ## 10. Where it lives
 

@@ -117,7 +117,14 @@ const BANNED_WORDS: [&str; 33] = [
     "otrolig",
     "unik",
 ];
-const BANNED_PHRASES: [&str; 12] = [
+/// A29 (owner 2026-11-20): the restoration overstatements are banned too.
+const BANNED_PHRASES: [&str; 18] = [
+    "completely restored",
+    "fully restored",
+    "full restoration",
+    "the whole piece",
+    "helt renoverad",
+    "totalrenoverad",
     "statement piece",
     "perfect for",
     "adds a touch of",
@@ -807,17 +814,19 @@ mod tests {
     #[test]
     fn w2_c5b_description_length_in_words() {
         let at = |n: usize| codes(&one("description", &filler(n)), &ctx());
-        assert_eq!(at(59), [Length]);
-        assert_eq!(at(60), []);
-        assert_eq!(at(120), []);
-        assert_eq!(at(121), [Length]);
+        // A29 defaults: 40 to 100 words.
+        assert_eq!(at(39), [Length]);
+        assert_eq!(at(40), []);
+        assert_eq!(at(100), []);
+        assert_eq!(at(101), [Length]);
     }
 
     #[test]
     fn w2_c5c_condition_report_length_in_words() {
         let at = |n: usize| codes(&report(&format!("Good. {} Stable.", filler(n - 2))), &ctx());
-        assert_eq!(at(45), []);
-        assert_eq!(at(46), [Length]);
+        // A29 default: at most 35 words.
+        assert_eq!(at(35), []);
+        assert_eq!(at(36), [Length]);
     }
 
     #[test]
@@ -1305,5 +1314,45 @@ mod tests {
             ..CheckContext::default()
         };
         assert_eq!(codes(&report(&report_text), &c), [Grade]);
+    }
+
+    #[test]
+    fn a29_a_name_in_normal_case_matches_a_field_in_capitals() {
+        let c = CheckContext {
+            language: "English".into(),
+            facts: vec!["IB KOFOD-LARSEN".into()],
+            attribution_names: vec!["IB KOFOD-LARSEN".into()],
+            ..CheckContext::default()
+        };
+        assert_eq!(
+            codes(&one("title", "Ib Kofod-Larsen Teak Dining Chair"), &c),
+            []
+        );
+    }
+
+    #[test]
+    fn a29_restoration_overstatements_are_banned() {
+        for phrase in [
+            "completely restored",
+            "Fully restored",
+            "a full restoration",
+            "the whole piece",
+        ] {
+            assert_eq!(
+                codes(
+                    &description_with(&format!("The chair was {phrase} here.")),
+                    &ctx()
+                ),
+                [Banned],
+                "{phrase}"
+            );
+        }
+        assert_eq!(
+            codes(
+                &description_with("The chair was restored and refinished."),
+                &ctx()
+            ),
+            []
+        );
     }
 }

@@ -83,12 +83,13 @@ pub(crate) const CLEAN_PARAGRAPHS: [&str; 4] = [
 ];
 pub(crate) const CLEAN_REPORT: &str = "Good. The frame was cleaned and oiled. Light wear on the seat rails. Stable, with no loose joints.";
 
-/// An answer with the three texts (the description as paragraphs), each naming its facts.
+/// An answer with the three texts, each naming its facts. A29: the description is one `text`
+/// (the paragraphs given here joined into one paragraph).
 pub(crate) fn answer(title: &str, paragraphs: &[&str], report: &str) -> Json {
     json!({
         "texts": {
             "title": {"text": title, "facts": [DESIGNER, ERA], "reason": "From the fields."},
-            "description": {"paragraphs": paragraphs, "facts": [WOOD], "reason": "From the note."},
+            "description": {"text": joined(paragraphs), "facts": [WOOD], "reason": "From the note."},
             "condition_report": {"text": report, "facts": [], "reason": "From the condition."},
         },
         "findings": [],
@@ -108,8 +109,9 @@ fn stunning() -> Vec<&'static str> {
     paragraphs
 }
 
+/// A29: the description as the writer stores it: one paragraph.
 pub(crate) fn joined(paragraphs: &[&str]) -> String {
-    paragraphs.join("\n\n")
+    paragraphs.join(" ")
 }
 
 /// Asks for texts, then starts the run and runs its job; returns the run.
@@ -621,4 +623,35 @@ fn w2_c20b_the_same_texts_written_again_change_no_row() {
         outcomes,
         ["unchanged", "unchanged", "unchanged", "no text", "no text"]
     );
+}
+
+/// A29 (owner 2026-11-20): an item whose title is only its SKU (Ch1-201126 kept its SKU as its
+/// title) gets the writer's title as a plain suggestion, also from an automatic request.
+#[test]
+fn a29_a_title_that_is_the_sku_gets_a_title_suggestion() {
+    let h = texts_harness(true);
+    let item = h.item_id;
+    h.query(|c| {
+        c.execute("UPDATE items SET title='w2-4' WHERE id=?1", [item])
+            .unwrap()
+    });
+    run_auto_with(&h, clean());
+    let row = h.row(TITLE).unwrap();
+    assert_eq!(text_of(&h, TITLE), CLEAN_TITLE);
+    assert_eq!(row.provenance, Provenance::Ai);
+    assert_eq!(row.ai_status, Some(AiStatus::Suggested));
+    assert_eq!(row.ai_prior, None);
+}
+
+/// A29: a real typed title is still the photographer's: an automatic request leaves it.
+#[test]
+fn a29_a_typed_title_is_still_kept_by_an_automatic_request() {
+    let h = texts_harness(true);
+    let item = h.item_id;
+    h.query(|c| {
+        c.execute("UPDATE items SET title='Teak chair' WHERE id=?1", [item])
+            .unwrap()
+    });
+    run_auto_with(&h, clean());
+    assert!(h.row(TITLE).is_none());
 }

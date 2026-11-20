@@ -346,11 +346,9 @@ mod tests {
         assert_eq!(sorted_keys(title), ["facts", "reason", "text"]);
         assert_eq!(sorted_required(title), ["facts", "reason", "text"]);
         let description = &texts["properties"]["description"];
-        assert_eq!(sorted_keys(description), ["facts", "paragraphs", "reason"]);
-        assert_eq!(
-            description["properties"]["paragraphs"],
-            json!({"type": "array", "items": {"type": "string"}})
-        );
+        // A29: the description is one string, like every other text (one paragraph).
+        assert_eq!(sorted_keys(description), ["facts", "reason", "text"]);
+        assert_eq!(description["properties"]["text"], json!({"type": "string"}));
         let finding = &schema["properties"]["findings"]["items"];
         assert_eq!(
             finding["properties"]["type"]["enum"],

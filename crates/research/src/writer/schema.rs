@@ -1,6 +1,6 @@
 //! W2·U3: the writer call's strict output schema (`master_plan_writer.md` §5 WC4.1, WC6): exactly
-//! the requested texts (the description as paragraphs, every other text as one string), each with
-//! the facts it used and a reason; the safeguard findings; the questions. Every property is
+//! the requested texts (each one string; A29: the description too, so it is written as one
+//! paragraph), each with the facts it used and a reason; the safeguard findings; the questions. Every property is
 //! required and `additionalProperties` is false at every level.
 
 use serde_json::{Map, Value as Json, json};
@@ -29,15 +29,10 @@ fn strings() -> Json {
 pub fn schema_for_write(texts: &[String]) -> Json {
     let mut by_name: Vec<(&str, Json)> = Vec::new();
     for name in texts {
-        let body = if name == "description" {
-            ("paragraphs", strings())
-        } else {
-            ("text", json!({ "type": "string" }))
-        };
         by_name.push((
             name.as_str(),
             object(vec![
-                body,
+                ("text", json!({ "type": "string" })),
                 ("facts", strings()),
                 ("reason", json!({ "type": "string" })),
             ]),

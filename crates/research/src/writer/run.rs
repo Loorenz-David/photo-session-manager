@@ -551,8 +551,9 @@ impl ResearchService {
     }
 }
 
-/// One text of an answer: its value (the description's paragraphs joined by a blank line), the
-/// facts it says it used and its reason.
+/// One text of an answer: its value, the facts it says it used and its reason. A29: every text,
+/// the description too, is one `text` string; an older answer's description `paragraphs` are
+/// joined into one paragraph.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Drafted {
     pub value: String,
@@ -576,7 +577,7 @@ fn texts_of(answer: &Json, requested: &[String]) -> (BTreeMap<String, Drafted>, 
                 .map(str::trim)
                 .filter(|p| !p.is_empty())
                 .collect::<Vec<_>>()
-                .join("\n\n"),
+                .join(" "),
             None => entry["text"].as_str().unwrap_or_default().trim().to_owned(),
         };
         texts.insert(
@@ -1218,6 +1219,7 @@ fn store_findings(
             &key,
             &item.title,
             title_base.as_deref(),
+            &item.sku,
         );
         let feedback = tx.feedback_by_key(target.item_id, &key)?;
         states.insert(
