@@ -432,6 +432,11 @@ button.research-pill { cursor: pointer; }
 .quote-text { font-style: italic; }
 .message-action { font-size: var(--text-xs); color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
 .conversation-mark-answered { margin-left: auto; }
+/* C4 (09B §7.2): "Open session" in the header line, and the slim visit bar under the app header. */
+.conversation-open-session { margin-left: auto; }
+.conversation-open-session + .conversation-mark-answered { margin-left: 0; }
+.visit-bar { position: sticky; top: 56px; z-index: 19; display: flex; align-items: center; gap: var(--space-3); min-height: 36px; padding: 2px var(--space-4); border-bottom: 1px solid var(--hair); background: color-mix(in srgb, var(--warn) 14%, var(--color-bg)); font-size: var(--text-sm); }
+.visit-bar-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* C3 (09B §8; CHAT_UX §4): the composer, Pricing's rounded box with a round send button. */
 .composer { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid var(--hair); }
 .composer-off { font-size: var(--text-sm); color: var(--danger-700); }

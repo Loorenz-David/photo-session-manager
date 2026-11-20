@@ -461,6 +461,17 @@ of that folder (`variant_background` → `resync_folder`).
   mute button = the `sound` setting), `ConversationRow`, `SessionBadge` (+ `useSessionBadges`, Sessions list),
   `ConversationToasts` (sonner toasts with Open; 8 s, or until the next window focus + 10 s when in the background).
   Everything re-reads on `conversations_changed`.
+- **The visit (C4, MC-C3):** `features/conversations/visit.ts` holds route and visit as **one** state
+  (`{route, visit: {origin, capture, visited} | null}`), changed only by the pure `visitStep(state, action)` (actions
+  `open-session`, `back`, `shoot-here`, `route-changed`). `App.tsx`'s `useNav` keeps it in one `useReducer`: a step
+  computes the next state from a ref, writes the hash, then dispatches (so `PageHeader`, which reads the hash during
+  render, already sees the new route); a `hashchange` that only confirms the route does nothing, any other is an
+  ordinary navigation (`route-changed`, which ends a visit). `useCaptureTarget` receives `captureTarget(state)` (the
+  visit's `capture` while visiting, else the route's session) and is the only caller of `activateSession` /
+  `deactivateSession`. `openSession`, `visitBack`, `shootHere` and `visit` reach the panel through
+  `ConversationsContext`; **Open session** runs through `lib/routes.ts` `leaveThen(target, proceed)`, so a dirty
+  Settings page (whose guard receives the continuation) runs the jump itself from Discard / Save. `VisitBar.tsx` is the
+  bar (capture SKU from `activeSession()` and the sessions list).
 - **Chime and banner (C2, the alerts seam):** `apps/desktop/src-tauri/src/alerts.rs` (`trait Alerts {chime, banner}`,
   `SystemAlerts`, `banners(lines, more)`); `TauriEvents` holds an `Arc<dyn Alerts>` and a focus reader (an `AtomicBool`
   kept by the main window's `Focused` events). On `ConversationsChanged`: forward `conversations_changed`; `chime` →

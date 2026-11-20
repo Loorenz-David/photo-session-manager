@@ -176,7 +176,7 @@ What the person sees (W1–W4; the search texts come in W5).
   keeps the text it replaced as an earlier version; an instruction or example list equal to the shipped one is stored
   as the shipped default, so later builds' improvements reach it.
 
-## Conversations with Pricing (book `09B`; `docs/implementation/master_plan_conversations.md`; C1–C3 built, C4 to come)
+## Conversations with Pricing (book `09B`; `docs/implementation/master_plan_conversations.md`; C1–C4 built)
 Beyo Pricing is the owner's second app, where a **pricer** prices one product at a time from what Session Manager
 published. The pricer asks the photographer questions about a product there; Session Manager keeps an exact **local
 copy** of the questions addressed to the photographer and (from C2) shows them, notifies and lets the photographer answer.
@@ -199,6 +199,13 @@ once as "Sending…"; it leaves within a quarter of a second (also after a resta
 reused by Retry), and a failure shows "Couldn't send" (or Pricing's words) with **Retry** and **Remove**; a failed
 reply is never resent by itself. **Mark answered** (open conversations only) tells Pricing the fix was made in the
 data; replying to a resolved conversation re-opens it as answered. The only writes to Pricing are these two.
+C4 (the jump): **Open session** in a conversation of another session opens that session as a **visit**: the panel stays
+open on the same conversation and the camera's new photos keep going where they went (the session being shot, or
+Unassigned from the Sessions page or Settings). A slim bar under the header says `Visiting <SKU>: new photos still go to
+<SKU or Unassigned>.` (the session the backend reports active) with **← Back to <origin>** (where the photographer was
+before the first jump, also after several jumps) and **Shoot here instead** (activates the visited session, as a normal
+opening does). Any ordinary navigation ends the visit and behaves as before; a visit does not survive a restart. From
+Settings with unsaved changes, Open session asks "Save your changes?" first.
 
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |

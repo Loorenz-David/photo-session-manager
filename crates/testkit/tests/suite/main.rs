@@ -11,6 +11,7 @@ mod c1_conversations_connection;
 mod c1_conversations_sync;
 mod c2_conversations_lists;
 mod c3_conversations_answer;
+mod c4_conversations_visit;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

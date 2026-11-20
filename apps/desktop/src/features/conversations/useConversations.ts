@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { onConversationsChanged } from '@/services/events';
+import type { Visit } from './visit';
 import {
   conversationsCounts,
   type ConversationCounts,
@@ -27,7 +28,22 @@ export type ConversationsState = {
   back: () => void;
   /** The footer's "All conversations": the list switches to every session. */
   showAll: () => void;
+} & Jump;
+
+/**
+ * C4 (09B §7, MC-C3): the jump and the way back, offered by `App.tsx` (which owns route and visit). `visitBack` is the
+ * visit's "← Back" (`back` above already means "back to the list").
+ */
+export type Jump = {
+  /** The visit on screen, or null. */
+  visit: Visit | null;
+  /** "Open session": that session as a visit (the capture folder does not move). */
+  openSession: (sessionId: number) => void;
+  visitBack: () => void;
+  shootHere: () => void;
 };
+
+const NO_JUMP: Jump = { visit: null, openSession: () => undefined, visitBack: () => undefined, shootHere: () => undefined };
 
 /** `null` = no provider (a component rendered alone reads nothing and shows nothing). */
 export const ConversationsContext = createContext<ConversationsState | null>(null);
@@ -83,7 +99,7 @@ function useCounts(sessionId: number | undefined): ConversationCounts {
   return counts;
 }
 
-export function useConversations(sessionId: number | undefined): ConversationsState {
+export function useConversations(sessionId: number | undefined, jump: Jump = NO_JUMP): ConversationsState {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<SelectedConversation | null>(null);
   const [scope, setScope] = useState<ConversationScope>(() => routeScope(sessionId));
@@ -105,5 +121,5 @@ export function useConversations(sessionId: number | undefined): ConversationsSt
   const select = useCallback((row: ConversationListRow) => setSelected({ id: row.id, row }), []);
   const back = useCallback(() => setSelected(null), []);
   const showAll = useCallback(() => setScope({ kind: 'all' }), []);
-  return { sessionId, open, selected, scope, counts, openPanel, close, select, back, showAll };
+  return { sessionId, open, selected, scope, counts, openPanel, close, select, back, showAll, ...jump };
 }

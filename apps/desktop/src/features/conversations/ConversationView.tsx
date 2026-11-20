@@ -15,7 +15,7 @@ import {
 import { ServiceError } from '@/services/sessions';
 import { Composer, replyExcerpt, type ReplyTarget } from './Composer';
 import { MessageBubble, PendingBubble } from './MessageBubble';
-import { useConversationsChanged } from './useConversations';
+import { useConversationsChanged, useConversationsContext } from './useConversations';
 
 const STATUS_WORDS: Record<string, string> = { open: 'Open', answered: 'Answered' };
 
@@ -97,9 +97,13 @@ function failureMessage(error: unknown): string {
 
 /**
  * The header line: status dot, topic, "· Blocking", the status in words, "Not on this Mac"; Mark answered on an open
- * conversation.
+ * conversation. C4 (09B §7.1): "Open session" when the conversation's session is not the one on screen; it opens that
+ * session as a visit (the panel stays open on this conversation).
  */
 function HeaderLine({ view, onMarkAnswered }: { view: View; onMarkAnswered: () => void }) {
+  const state = useConversationsContext();
+  const sessionId = view.session_id;
+  const canOpen = state !== null && sessionId !== null && sessionId !== state.sessionId;
   return (
     <div className="conversation-header-line">
       <span className="conversation-status-dot" data-status={view.status} aria-hidden="true" />
@@ -107,6 +111,11 @@ function HeaderLine({ view, onMarkAnswered }: { view: View; onMarkAnswered: () =
       {view.blocking && <span className="conversation-header-blocking">· Blocking</span>}
       <span className="conversation-header-status">{statusWords(view)}</span>
       {view.session_id === null && <span className="conversation-elsewhere">Not on this Mac</span>}
+      {canOpen && (
+        <Button variant="outline" size="sm" className="conversation-open-session" onClick={() => state.openSession(sessionId)}>
+          Open session
+        </Button>
+      )}
       {view.status === 'open' && (
         <Button variant="outline" size="sm" className="conversation-mark-answered" onClick={onMarkAnswered}>
           Mark answered

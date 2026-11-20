@@ -66,7 +66,8 @@ export function SettingsPage() {
   const loadedSecret = useRef('');
   // The settings as last loaded or saved: anything else in the form is an unsaved change (P63).
   const [saved, setSaved] = useState<Settings | null>(null);
-  const [leaving, setLeaving] = useState<string | null>(null);
+  // The way out the user asked for while the form had unsaved changes: run by Discard or Save (C4: never a hash write here).
+  const [leaving, setLeaving] = useState<{ target: string; proceed: () => void } | null>(null);
   const [styles, setStyles] = useState<EditorStyles | null | undefined>(undefined);
   // P68: the camera login typed here is saved by Save settings (to the Keychain, never settings.json).
   const [login, setLogin] = useState<CameraLogin>(EMPTY_LOGIN);
@@ -79,9 +80,9 @@ export function SettingsPage() {
   const loginTyped = login.user !== '' || login.password !== '';
   const dirty = loginTyped || (settings !== null && saved !== null && JSON.stringify(settings) !== JSON.stringify(saved));
   useEffect(() => {
-    setLeaveGuard(target => {
+    setLeaveGuard((target, proceed) => {
       if (!dirty) return true;
-      setLeaving(target);
+      setLeaving({ target, proceed });
       return false;
     });
     return () => setLeaveGuard(null);
@@ -224,18 +225,18 @@ export function SettingsPage() {
         <DialogFooter>
           <Button variant="outline" onClick={() => setLeaving(null)}>Cancel</Button>
           <Button variant="outline" onClick={() => {
-            const target = leaving;
+            const way = leaving;
             setLeaving(null);
             setSettings(saved);
             setLogin(EMPTY_LOGIN);
             setLeaveGuard(null);
-            if (target) window.location.hash = target;
+            way?.proceed();
           }}>Discard</Button>
           <Button disabled={save.busy} onClick={() => {
-            const target = leaving;
+            const way = leaving;
             void save.run().then(done => {
               setLeaving(null);
-              if (done && target) { setLeaveGuard(null); window.location.hash = target; }
+              if (done && way) { setLeaveGuard(null); way.proceed(); }
             });
           }}>Save</Button>
         </DialogFooter>
