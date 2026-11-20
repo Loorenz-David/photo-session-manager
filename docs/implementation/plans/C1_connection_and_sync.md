@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # C1 — Connection and sync
 
-**Tracker:** NOT_STARTED (2026-11-20, planner)
+**Tracker:** IMPLEMENTED (2026-11-20, opus, implement r1: 4 units checkpointed 502b501, bbaf423, f7553a9, 0868835; 112 rows, 116 tests (adapter 28, rules 11, suite 19 + 44, desktop c1_tests 6, UI 8); closing gate green: workspace 1998/0, clippy, fmt, typecheck, npm test 679/0)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. `master_plan.md` §4 and `STATUS.md` are not used or edited by conversations milestones.)
 
@@ -334,3 +334,22 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
 
 - **2026-11-20, orchestrator: projection r0 amendments applied** (`handoffs/reviewer/handoff_C1_connection_and_sync_projection_r0.md`, AMENDMENTS_REQUIRED, 0 owner cards; master plan v1.1). L1 seams named: (a) pure port method `describe(&ProviderError, shop)` (U1 tasks 1–2, C1·C6(b)), (b) `ConversationSettingsSlot` port implemented in integrations over `psm_infra::Settings`, `checked_server` and default normalisation there (U2 task 2), (c) redaction-registering `SecretStore` decorator built in `App::build` (U2 task 3), (d) constructor signature (U2 task 3). L2 MC-C1.5(a): an id whose last event is `deleted: true` is forgotten. L3 derived `no_shop`/`no_key`/shop-mismatch `store_unmatched` in memory only (MC-C1.2, U2 task 4). L4 key read once per build and on `key_set`, held in memory. L5 lane process-wide, carried through rebuilds like `Lanes`; shutdown joins with `BACKGROUND_JOIN_BOUND` (U2 task 3, U3 task 5). L6 `prepare` validates a `conversations` patch with `checked_server`, an invalid stored `server` reads as none, `SettingsService::set` merges `conversations` fields like `research`/`writer`. L7 a different effective `server` gives in-memory `store_unmatched` "Press Test connection" (MC-C1.3; a new point under "Points recorded by planning"). L8 the first connection is a complete check (MC-C1.5(d)). L9 `Refused`/`StoreGone` set `last_error` (MC-C1.8). L10 "applied" = changed the copy (MC-C1.9; C1·C12(g)/(h) assert no `ConversationsChanged`). L11 `resolved_by` scoped to this conversation (MC-C1.6). L12 `test_connection`/`key_set -> Result<Connection, ProviderError>`, commands return `ConversationsSettingsDto`, `Unreachable`/`BadReply` → `CommandError` `provider`, shown in the connection line until the next refresh (U2 task 4, U4 tasks 1–2). L13 C1·C6(b) in `c1_conversations_connection.rs`, created in U1 with its `mod` line, raw capture, U1 command added. L14 fixture provenance per file (U1 task 6). L15 C1·C7(a) undecidable clause dropped. L16 U3 counting window and ticks until `more` is false. L17 C1·C15(h) two-sided bounds. L18 key trimmed, empty = remove. L19–L23 written delegations under U1, L24 delegation removed (JSON kept), L25 delegation under U2. Reality notes: `TestApp::with_pricing()` writes a full `integration` block (U2 task 3); C1·C18(d) uses `psm_integrations::session_delete::delete`. Trace gaps: row **C1·C11(h)** added (`next_cursor ≤ after` with events present → `BadReply`, `FakePricing.stale_cursor_next()`), and "the background thread is actually spawned when `run_startup` is on" added to the Review mode's reading checklist. Counts: U3 8 criteria / 51 rows; total 21 / 111. Outcomes otherwise unchanged, so no new projection round (`projection: done`).
 - **2026-11-20, orchestrator:** the L7 server-change rule is persisted (`conversation_sync.server`, master plan v1.2) so a restart cannot lose it; row **C1·C10(d)** added (U2 4 criteria / 17 rows; total 21 / 112). Outcomes otherwise unchanged; no new projection round.
+- **2026-11-20, implementer (opus), implement r1.** Built the four units in order (checkpoints U1 `502b501`, U2
+  `bbaf423`, U3 `f7553a9`, U4 `0868835`; closing commit with tracker, this entry, handoff). What: core vocabulary and
+  ports (`ConversationsProvider` with pure `describe`, `ConversationStore`, `ConversationSettingsSlot`), the Beyo
+  Pricing adapter over `PricingHttp` with the seven fixtures, `FakePricing`, migration 019 and its store, the
+  `conversations` settings slot (validated and normalised in `prepare` and in `SettingsFileSlot`, never rebuilds),
+  `RedactingSecrets`, `ConversationsService` (MC-C1.1–10: derived states, key once per build, connect/store match,
+  server-change rule persisted, first connection, pull, backoff, errors, notices, `mark_read`), the process-wide lane
+  in `Lanes`, `conversations_background` (only with `run_startup`, bounded join), `AppEvent::ConversationsChanged` and
+  its `TauriEvents` arm, the four commands, `services/conversations.ts`, `onConversationsChanged`, `PricingSection`
+  and its nav entry, the guide. Assumptions (handoff §Assumptions): `ConnectError` enum as the error of
+  `test_connection`/`key_set`; a key refused before any store was saved reports `refused` (C1·C9(f)); refused at
+  connect writes `last_error`; first connection (c) reads the named ids the list did not return and drops removed
+  ones from a left-over copy (keeps the MC-C1 invariant); server compared on its stored form (default = none); a
+  completed check also emits when it cleared a stored error; each lane section re-checks store and cursor; the
+  Pricing section re-reads every 10 s (a quiet check emits nothing, yet the try-out expects "Last checked" to move);
+  "body exactly" (C1·C5(a)/(d)) asserted as JSON-object equality. Deviations: U2 added a gate-only `tick` (U2 rows
+  need "a later tick makes no request"), U2 added `outbox_insert`/`outbox` to the store port for C1·C10(c), U4 added
+  `key_saved()`/`describe()` to the core service (outside U4's file list). Followed tests: `p01_storage_identity`
+  (tables), `t1_settings_drawer` (sections). No owner card.

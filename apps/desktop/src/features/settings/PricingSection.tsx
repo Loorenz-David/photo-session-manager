@@ -11,6 +11,9 @@ import {
 } from '@/services/conversations';
 import { onConversationsChanged } from '@/services/events';
 
+/** How often the section re-reads the connection while it is open (the checks run every 10 s). */
+const REFRESH_MS = 10_000;
+
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -58,8 +61,8 @@ function Switch({ id, label, on, disabled, onChange }: { id: string; label: stri
 
 /**
  * C1 Settings → Pricing (09B §4): the server address, the API key (kept in the Keychain, never shown again), Test connection,
- * the connection in words, the sound and banner switches and "Last checked". Every control saves by itself, so the section is
- * outside the Settings page's unsaved-changes guard (like the research keys).
+ * the connection in words, the sound and banner switches and "Last checked" (re-read every 10 s and on `conversations_changed`).
+ * Every control saves by itself, so the section is outside the Settings page's unsaved-changes guard (like the research keys).
  */
 export function PricingSection() {
   const [settings, setSettings] = useState<ConversationsSettings | null>(null);
@@ -80,7 +83,9 @@ export function PricingSection() {
     Promise.resolve().then(() => onConversationsChanged(() => load()))
       .then(stop => { if (alive) unlisten = stop; else stop(); })
       .catch(() => undefined);
-    return () => { alive = false; unlisten?.(); };
+    // A quiet check emits nothing (MC-C1.9); "Last checked" is re-read as often as the checks run.
+    const timer = setInterval(load, REFRESH_MS);
+    return () => { alive = false; unlisten?.(); clearInterval(timer); };
   }, [load]);
 
   /** Runs one save; a `provider` failure (Pricing unreachable or answering oddly) is shown in the connection line. */
