@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # C2 — Header icon, panel list, counts, notifications
 
-**Tracker:** IMPLEMENTED (2026-11-20, opus, implement r1: 3 units checkpointed 89809fe, e3fd424, 2076b3d; 66 rows, 66 tests at their boundaries (rules 6, suite 17, desktop c2_tests 10 + alerts 1, chime 3, UI 29); closing gate green: workspace 2035/0, clippy, fmt, typecheck, npm test 709/0)
+**Tracker:** APPROVED (2026-11-20, opus, review r1: APPROVED_WITH_NOTES, 0 blocking, 6 notes in `backlog_conversations/C2_header_panel_notifications.md`; perimeter = declared paths for all 3 units; review-mode checks green: rules 17/0, suite c2 17/0, chime 3/0, desktop 79/0, UI 224/0, clippy, fmt, typecheck)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -255,3 +255,22 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
   `store.items()` + `session_for_item`, the service has no `Store`; Unassigned counted as a session route; a toast's
   Open switches the list scope to all; a `blocking` field added to the row; tracker actor `opus`, not `codex`). No
   owner card.
+- **2026-11-20, reviewer (opus), review r1: APPROVED_WITH_NOTES.** Gate: tracker IMPLEMENTED, checkpoints `89809fe`,
+  `e3fd424`, `2076b3d` in `git log`. Perimeter: `git show --stat` of each unit = its declared files (11 / 15 / 12
+  paths), no extra or missing path. Review mode run once, one cargo command at a time: rules 17/0, suite
+  `c2_conversations_lists::` 17/0, `psm-infra` chime 3/0, `psm-desktop` 79/0 (c2_tests 10 + alerts 1), clippy on the
+  four crates, fmt, vitest (conversations, sessions, shell, settings) 224/0, typecheck; all green. The implementer's
+  full-suite stamp stands. Verified by reading: all 66 rows have one test at the row's boundary, and each test fails on
+  a wrong outcome (for example C2·C3(b): the 40-day row's activity lies between the two kept ones; C2·C7(a): `key_set(None)`
+  keeps the copy, so "no rows" really comes from the hidden state; C2·C6(c)/(d) assert the copy holds the conversation
+  before asserting no badge). The list, count and badge calls read only `connection()` (the sync record) and the store.
+  No lane, no provider call, and C2·C7(e) proves it at the command layer. Session match: exact SKU, the item's latest
+  session, the same rule as `session_for_item`. SKUs are unique and required, and session delete removes the rows, so
+  there is no Trash state to filter. One `useConversations` in `App.tsx` above the early returns; the provider, panel and
+  toasts sit in all three route branches. Chime: generated WAV, `afplay` spawned and reaped on its own thread. The
+  plugin's `show()` hands off to a background task, so the bridge never waits. No sound file in the repo. Mute = the
+  `sound` setting that C1's `chime` flag already reads. H1–H8 hold (no Pricing write; the core logic lives in the
+  service; commands only map DTOs). Assumptions: none contradicts 09B; told to the owner in the narrative. Notes (6, backlog): H7
+  wording in two core doc comments; fold `item_sessions` into the names registry; Unassigned page count is always 0
+  (owner choice offered); waiting toasts lost on a route change; `c2_c10d` tied to markup nesting; plugin `on_action`
+  to check live. Manual try-out (real chime, banner, focus) not run: sessions never launch the built app.
