@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # C3 — Conversation view and answering
 
-**Tracker:** IMPLEMENTED (2026-11-20, fix 1 by claude sonnet; B2-1 resolved: `c3_c16b_shift_enter_is_a_new_line` now flushes a microtask, asserts no call and the box still `a`; test-only; vitest `src/features/conversations` 67/0, typecheck green)
+**Tracker:** APPROVED (2026-11-20, opus reviewer r2; APPROVED_WITH_NOTES: B2-1 resolved as corrected, perimeter = the one test file; 0 blocking left; 4 r1 notes carried in `backlog_conversations/C3_conversation_and_answering.md`)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -313,3 +313,14 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
   "expected vi.fn() to not be called at all, but actually been called 1 times". Only `c3_composer.test.tsx` changed; no
   production file. Runs: vitest `src/features/conversations` 5 files, 67/0; `npm run typecheck` exit 0. No Rust file
   changed, so no cargo command was run.
+
+- **2026-11-20, reviewer (opus), re-review r2: APPROVED_WITH_NOTES** (`handoffs/reviewer/handoff_C3_conversation_and_answering_review_r2.md`).
+  Perimeter: `git show --stat a717be1` = `c3_composer.test.tsx` (+3/−1) and this plan file; `git diff --stat 9076272 HEAD`
+  outside `docs/` = that test file only, so the Rust tree is the r1-reviewed one. B2-1 resolved as its correction said:
+  after `enter(true)` the test awaits one microtask (enough: `Composer.send` queues `conversationReply` with
+  `Promise.resolve().then`, which runs before the test's continuation) and asserts no call **and** `box().value === 'a'`
+  (the second assertion bites on its own, because `send` calls `setText('')` synchronously inside the act-wrapped keyDown).
+  Two independent causes of red on a sending Shift+Enter; the fix's changed-input run (`enter(false)` → red) agrees.
+  Runs on HEAD `5589416`, clean: vitest `c3_composer.test.tsx` 19/0; `npm run typecheck` exit 0; `cargo fmt --all -- --check`
+  exit 0; clippy on psm-core/infra/desktop/testkit `-D warnings` clean (cached, Rust tree unchanged). No blocking item
+  remains; triage empty. The four r1 notes stay in `backlog_conversations/C3_conversation_and_answering.md`.
