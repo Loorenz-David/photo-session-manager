@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # C2 — Header icon, panel list, counts, notifications
 
-**Tracker:** NOT_STARTED (2026-11-20, planner)
+**Tracker:** IMPLEMENTED (2026-11-20, opus, implement r1: 3 units checkpointed 89809fe, e3fd424, 2076b3d; 66 rows, 66 tests at their boundaries (rules 6, suite 17, desktop c2_tests 10 + alerts 1, chime 3, UI 29); closing gate green: workspace 2035/0, clippy, fmt, typecheck, npm test 709/0)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -237,3 +237,21 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
 4. Press the mute button in the panel and ask again: no chime; the toast still appears.
 
 ## Review log
+- **2026-11-20, implementer (opus), implement r1.** Built the three units in order (checkpoints U1 `89809fe`, U2
+  `e3fd424`, U3 `2076b3d`; closing commit with tracker, this entry, handoff). U1: `conversation_rules::{list_order,
+  resolved_recent, first_line}` with unit tests; `ConversationsService::{list, counts, session_badges}` over the copy
+  (never the lane, never a request); a new store method `ConversationStore::item_sessions` (each item's SKU with its
+  latest session, the `session_for_item` rule) gives the exact SKU match; domain `ConversationScope/Tab/Row/List/
+  Counts/SessionBadge`; commands `conversations_list`, `conversations_counts`, `conversations_session_badges`,
+  bindings, wrappers. U2: `useConversations` (one instance in `App.tsx`, `ConversationsContext` in all three route
+  branches), `ConversationsButton` (Header both branches, Health, Settings), `ConversationsPanel` (tabs, footer,
+  hidden-state line, problem, empty lines, mute button, placeholder on select), `ConversationRow`, `SessionBadge` +
+  `useSessionBadges` in `SessionsPage`/`SessionRow`, styles. U3: `psm_infra::chime::{wav, play}` (generated tone,
+  `afplay` reaped on its own thread), `alerts.rs` (`Alerts`, `SystemAlerts`, `banners`), `TauriEvents` now a struct
+  with alerts and a focus reader (an `AtomicBool` kept by the main window's `Focused` events), the
+  `ConversationsChanged` arm chimes once and banners per line when unfocused; `tauri-plugin-notification` 2.8.1
+  registered in `run()`; `ConversationToasts`; Health branch got its own `Toaster`; PricingSection hint; guide rows.
+  Assumptions and deviations: handoff §Assumptions/§Deviations (session match by a store query instead of
+  `store.items()` + `session_for_item`, the service has no `Store`; Unassigned counted as a session route; a toast's
+  Open switches the list scope to all; a `blocking` field added to the row; tracker actor `opus`, not `codex`). No
+  owner card.
