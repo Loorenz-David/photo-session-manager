@@ -1,10 +1,11 @@
-export type SettingsSection = 'capture-one' | 'camera' | 'export-and-previews' | 'shopify' | 'storage' | 'research' | 'writer' | 'shooting-templates';
+export type SettingsSection = 'capture-one' | 'camera' | 'export-and-previews' | 'shopify' | 'pricing' | 'storage' | 'research' | 'writer' | 'shooting-templates';
 
 const sections: { id: SettingsSection; label: string }[] = [
   { id: 'capture-one', label: 'Capture One' },
   { id: 'camera', label: 'Camera' },
   { id: 'export-and-previews', label: 'Export and previews' },
   { id: 'shopify', label: 'Shopify' },
+  { id: 'pricing', label: 'Pricing' },
   { id: 'storage', label: 'Storage' },
   { id: 'research', label: 'Research' },
   { id: 'writer', label: 'Writer' },

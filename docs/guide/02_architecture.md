@@ -409,6 +409,87 @@ another session uses (a copy) or outside the capture root stays. Commands `sessi
 also asks Capture One to re-read a folder (once a minute at most) when a photo on disk is not in its list
 of that folder (`variant_background` → `resync_folder`).
 
+### Conversations with Pricing (book `09B`; contract MC-C1 in `docs/implementation/master_plan_conversations.md` §5; C1)
+- **Port and vocabulary:** `crates/core/src/ports/conversations.rs` (`ConversationsProvider`: `stores`, `unresolved`,
+  `conversation`, `events_after`, `post_message`, `mark_answered`, pure `describe`, pure `attribute_key` (C4: a quote's
+  field name → the form's key; the mapping lives in `BeyoPricingAdapter::attribute_key`, H7); `ConversationStore`, one
+  transaction per method, with C4's read `form_keys(session_id, integration)` = the form's field keys of the session's
+  item, over core's `services::attributes::form_keys` (`layout_keys` restricted to active definitions, as `form_get`
+  shows them); `ConversationSettingsSlot`), `domain/conversation.rs`, `mechanisms/conversation_rules.rs`
+  (`check_backoff`, `unread`/`has_news`, `entering_read_mark`, `notice_lines`).
+- **Quote chip jump (C4):** `ConversationsService::view` fills the view-only `ConversationView.jump_keys` (message id →
+  key) when the conversation's session is on this Mac and `form_keys(session, integration)` has the key `attribute_key`
+  gives (`integration` = `settings.integration.kind`, handed to the service at build); never stored. The command maps
+  it into `quote.jump_key`; `QuoteBlock` makes the chip a button only when the conversation's session is on screen, and
+  its click (`openField` in the conversations context) opens Details at that field (`FormDialog` `field`, a counter so
+  every click jumps; a field the form has wins over the A19 AI-review landing).
+- **Adapter:** `crates/integrations/src/conversations/beyo_pricing/` — `BeyoPricingAdapter` over `PricingHttp`
+  (`transport.rs`; `ReqwestPricing`: own worker thread and runtime, connect 10 s / total 20 s, the key only in
+  `Authorization: Bearer`), wire types `types.rs` (camelCase, unknown fields ignored), fixtures `fixtures/*.json` (the
+  package's examples), `checked_server`, `DEFAULT_SERVER`, every sentence that names Pricing (`describe`).
+  `conversations/mod.rs`: the slot over `settings.json` (`SettingsFileSlot`), the redaction-registering secret store
+  (`RedactingSecrets`), the test seam `with_test_conversations(paths, transport)`, `build_service`.
+- **Service:** `crates/core/src/services/conversations.rs` (`ConversationsService`, `App.conversations`, also in
+  `AppHandles`; always present). State derived at read (`no_shop` / `no_key` / shop- or server-mismatch
+  `store_unmatched` are memory-only; only connect and check outcomes are written to `conversation_sync`). The key is
+  read from the Keychain once per App build (first `tick` or `connection()`, on a worker thread) and held in memory.
+  `test_connection` / `key_set` call `stores()` only; `tick` checks iff the state is `ready` and the check is due:
+  first connection (page the log from 0, list unresolved, read the named rest, save the cursor), then one events
+  page per `tick`, each event's change and the cursor in one transaction. One process-wide **lane**
+  (`ConversationsLane`, carried in `Lanes` through rebuilds) is held for one request and its apply; `connection()`
+  never takes it.
+- **Thread:** `conversations_background` in `App::build` (only when `run_startup`): `tick` every 250 ms, at once while
+  `more`; joined in `shutdown` within `BACKGROUND_JOIN_BOUND` (a request in flight is not waited for).
+  `TestApp` runs without it; tests call `tick` with `ManualClock` on `TestApp::with_pricing()` (`FakePricing`,
+  `crates/testkit/src/fake_pricing.rs`).
+- **Commands:** `apps/desktop/src-tauri/src/commands/conversations.rs` (`conversations_settings_get`,
+  `conversations_settings_save`, `conversations_key_set`, `conversations_test`; `Unreachable`/`BadReply` →
+  `CommandError` code `provider` in the adapter's words); UI `features/settings/PricingSection.tsx`, wrapper
+  `services/conversations.ts`. C2 adds `conversations_list(scope, tab)`, `conversations_counts(session_id)`,
+  `conversations_session_badges` over `ConversationsService::{list, counts, session_badges}`: read from the copy only
+  (never the lane, never a request); a conversation's session = the session of the item whose SKU is exactly its SKU
+  (`ConversationStore::item_sessions`), none = "Not on this Mac"; hidden in `no_key`, `no_shop`, `store_unmatched`.
+- **Replies: the outbox and the lane (C3, MC-C2).** `ConversationsService::reply` checks the reply
+  (`conversation_rules::checked_reply`) and writes one `conversation_outbox` row keyed by the frontend's
+  `client_mutation_id` (`sending`, or `failed` with the state's sentence when refused / store gone); the same id again
+  returns that row. `tick` **flushes** the `sending` rows first (after the `ready` test, before the due test), oldest
+  first, each `post_message` and its outcome in one lane turn: sent → row `sent` + the message appended once + status
+  `answered`; time-out / odd answer → `Couldn't send` for it and every later row of the flush without a request; 400 →
+  the provider's words; 404 → "no longer exists"; 401 / store gone → MC-C1.8. A `failed` row leaves only by `retry`
+  (same id) or `discard`. `view`, `reply`, `retry`, `discard` and `attachable` are local (never the lane, never a
+  request); `mark_answered` takes the lane (`PATCH`; 409 re-reads the conversation). Every outbox change emits
+  `ConversationsChanged` without notices. Attachable photos come from `ConversationStore::session_links` (the
+  session's item's links with each photo's place and previews), filtered and ordered in the service. Commands
+  `conversation_get`, `conversation_mark_read`, `conversation_reply`, `conversation_retry`, `conversation_discard`,
+  `conversation_mark_answered`, `conversation_attachable`; `ConversationError` → codes `conversations_off`
+  (`data.reason` = the state; every C3 call in `no_key` / `no_shop` / `store_unmatched`, and Mark answered when not
+  `ready`), `conversation_resolved`, `provider`.
+- **Panel and icon (C2):** `apps/desktop/src/features/conversations/` — `useConversations` (one instance in `App.tsx`,
+  provided through `ConversationsContext` to every route: panel open, selected conversation, scope, header counts),
+  `ConversationsButton` (header icon on Sessions, a session, Settings, Health), `ConversationsPanel` (Open / Resolved,
+  mute button = the `sound` setting), `ConversationRow`, `SessionBadge` (+ `useSessionBadges`, Sessions list),
+  `ConversationToasts` (sonner toasts with Open; 8 s, or until the next window focus + 10 s when in the background).
+  Everything re-reads on `conversations_changed`.
+- **The visit (C4, MC-C3):** `features/conversations/visit.ts` holds route and visit as **one** state
+  (`{route, visit: {origin, capture, visited} | null}`), changed only by the pure `visitStep(state, action)` (actions
+  `open-session`, `back`, `shoot-here`, `route-changed`). `App.tsx`'s `useNav` keeps it in one `useReducer`: a step
+  computes the next state from a ref, writes the hash, then dispatches (so `PageHeader`, which reads the hash during
+  render, already sees the new route); a `hashchange` that only confirms the route does nothing, any other is an
+  ordinary navigation (`route-changed`, which ends a visit). `useCaptureTarget` receives `captureTarget(state)` (the
+  visit's `capture` while visiting, else the route's session) and is the only caller of `activateSession` /
+  `deactivateSession`. `openSession`, `visitBack`, `shootHere` and `visit` reach the panel through
+  `ConversationsContext`; **Open session** runs through `lib/routes.ts` `leaveThen(target, proceed)`, so a dirty
+  Settings page (whose guard receives the continuation) runs the jump itself from Discard / Save. `VisitBar.tsx` is the
+  bar (capture SKU from `activeSession()` and the sessions list).
+- **Chime and banner (C2, the alerts seam):** `apps/desktop/src-tauri/src/alerts.rs` (`trait Alerts {chime, banner}`,
+  `SystemAlerts`, `banners(lines, more)`); `TauriEvents` holds an `Arc<dyn Alerts>` and a focus reader (an `AtomicBool`
+  kept by the main window's `Focused` events). On `ConversationsChanged`: forward `conversations_changed`; `chime` →
+  one `alerts.chime()`; `banner` and the window not focused → one banner per line (title "Session Manager").
+  The chime is `psm_infra::chime::wav()` (generated, no sound file in the repo), written as `chime.wav` into the data
+  folder when absent or different and played with `/usr/bin/afplay` on a thread of its own (never blocks the bridge).
+  Banners go through `tauri-plugin-notification` (registered in `run()`, used from Rust only: no capability entry, no
+  npm package); macOS asks once to allow them and never tells the app a refusal.
+
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams
 listed in the research master plan §5 "Seams".
@@ -563,16 +644,16 @@ recorded stage of one run, optionally with another model, effort or instructions
 |---|---|
 | `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) · `templates/<template id>/<uuid>.jpg` (shooting-template examples) |
 | Under the capture root (`<document folder>/Capture`) | item folders by `folder_key`; `.incoming/` (FTP parts, `sdk-<run>/`); `.duplicates/`; Capture One's own `CaptureOne/` and `Output/_session_manager/` |
-| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 015_photo_places.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`, 016 container labels, 017 `session_changes` (A10: one row per counted change with its `kind` arrival/editor/app/auto and the `seq` it produced; read by `published_changes` for "Changed after publishing", pruned when a publish completes); 014, 015 and 017 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
-| `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research). A file that does not parse never stops the app (health `settings_invalid`) |
-| Keychain (`infra/keychain.rs`; names in `domain/camera.rs::secrets`) | service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`, and the three `research-*-key` accounts (§Research). What research redacts and the export looks for (`integrations::research_secret_values`): the three `research-*-key` accounts plus the client secret, nothing of the camera's (A9: the short FTP code turned up by chance in records and image headers). Shopify client id/secret: `settings.json` only; access token: memory only |
+| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 019_conversations.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`, 016 container labels, 017 `session_changes` (A10: one row per counted change with its `kind` arrival/editor/app/auto and the `seq` it produced; read by `published_changes` for "Changed after publishing", pruned when a publish completes), 018 `saved_pages`, 019 `conversation_sync`/`conversations`/`conversation_messages`/`conversation_outbox` (C1; no session, item or photo column, so Delete session never touches them); 014, 015, 017 and 019 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
+| `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research), `conversations {server, sound, banner}` (C1; read live through `ConversationSettingsSlot`, the default server stored as none, never rebuilds the App). A file that does not parse never stops the app (health `settings_invalid`) |
+| Keychain (`infra/keychain.rs`; names in `domain/camera.rs::secrets`) | service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`, the three `research-*-key` accounts (§Research), and `conversations-api-key` (C1: the Pricing key, registered for log redaction on `set` and on the first read). What research redacts and the export looks for (`integrations::research_secret_values`): the three `research-*-key` accounts plus the client secret, nothing of the camera's (A9: the short FTP code turned up by chance in records and image headers). Shopify client id/secret: `settings.json` only; access token: memory only |
 | `settings` table | app state, not user config (`mechanisms_version`, `active_session_id`, spool dedupe keys) |
 
 ## Events: Rust → UI
 `psm_core::events::AppEvent` → `EventHub` (integrations `lib.rs`) → `TauriEvents::emit` (desktop
 `lib.rs`) → Tauri event names: `session_changed`, `photo_added`, `photo_changed`, `publish_progress`,
 `export_progress`, `health_changed`, `camera_status_changed` (payload `CameraStatusResponse`),
-`camera_fingerprint_pending`, `history_changed`, `research_changed`; plus `edit_menu` emitted by the menu handler. The UI
+`camera_fingerprint_pending`, `history_changed`, `research_changed`, `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); plus `edit_menu` emitted by the menu handler. The UI
 subscribes in `apps/desktop/src/services/events.ts` (and `history.ts`). Events are **not** in the
 specta builder: adding one means a new `AppEvent` variant, a new match arm in `TauriEvents`, and a
 listener in `events.ts`.

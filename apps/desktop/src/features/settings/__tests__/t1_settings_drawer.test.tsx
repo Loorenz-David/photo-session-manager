@@ -9,6 +9,7 @@ vi.mock('@/services/styles', () => ({ listStyles: vi.fn().mockResolvedValue({ us
 vi.mock('../CameraSection', () => ({ CameraSection: () => <h2>Camera</h2> }));
 vi.mock('../StockSection', () => ({ StockSection: () => <p>Stock for new products</p> }));
 vi.mock('../StorageSection', () => ({ StorageSection: () => <h2>Storage</h2> }));
+vi.mock('../PricingSection', () => ({ PricingSection: () => <h2>Pricing</h2> }));
 vi.mock('../ResearchSection', () => ({ ResearchSection: () => <h2>Research</h2> }));
 vi.mock('../WriterSection', () => ({ WriterSection: () => <h2>Writer</h2> }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -36,7 +37,7 @@ it('t1_c5a_lists_sections_in_order_and_opens_capture_one', async () => {
   render(<SettingsPage />);
   await screen.findByLabelText('Preview recipe');
   expect(within(nav()).getAllByRole('button').map(button => button.textContent)).toEqual([
-    'Capture One', 'Camera', 'Export and previews', 'Shopify', 'Storage', 'Research', 'Writer', 'Shooting templates',
+    'Capture One', 'Camera', 'Export and previews', 'Shopify', 'Pricing', 'Storage', 'Research', 'Writer', 'Shooting templates',
   ]);
   expect(within(nav()).getByRole('button', { name: 'Capture One' })).toHaveAttribute('aria-current', 'page');
   for (const name of ['capture-one','camera','export-and-previews','shopify','storage','research','writer','shooting-templates']) {

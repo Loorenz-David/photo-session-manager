@@ -1,0 +1,6 @@
+{ "events": [
+    { "id": 1843, "type": "workflow.updated", "storeId": "e8f6b61a-40a4-4504-8090-d9ea5b62a069", "productId": null,
+      "caseId": null, "actorId": null, "data": {}, "at": "2026-11-20T08:13:00.000Z" },
+    { "id": 1844, "type": "inbox.updated", "storeId": "e8f6b61a-40a4-4504-8090-d9ea5b62a069", "productId": null,
+      "caseId": null, "actorId": null, "data": {}, "at": "2026-11-20T08:14:00.000Z" } ],
+  "nextCursor": 1844 }

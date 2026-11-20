@@ -1,6 +1,7 @@
 pub mod attributes;
 pub mod camera;
 pub mod compositions;
+pub mod conversations;
 pub mod export;
 pub mod health;
 pub mod history;

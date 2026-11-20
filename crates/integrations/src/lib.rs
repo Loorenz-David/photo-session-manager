@@ -1,6 +1,7 @@
 pub mod arranged;
 pub mod camera;
 pub mod commerce;
+pub mod conversations;
 pub mod editing;
 pub mod photo_files;
 pub mod render_output;
@@ -47,6 +48,7 @@ use psm_core::{
         attributes::AttributesService,
         camera::CameraService,
         composition::CompositionService,
+        conversations::{ConversationsLane, ConversationsService},
         editing_events::EditingEventsDispatcher,
         editing_startup::EditingStartup,
         export::{ExportRender, ExportService},
@@ -90,6 +92,8 @@ use std::{
 pub const EDITOR_WAIT: Duration = Duration::from_secs(45);
 /// How often the research runner looks for work (R7·U1).
 const RESEARCH_WAKE: Duration = Duration::from_millis(250);
+/// How often the conversations pull looks for work (C1, MC-C1.7).
+const CONVERSATIONS_WAKE: Duration = Duration::from_millis(250);
 /// How long shutdown waits for the spool/arrival thread (P63).
 const BACKGROUND_JOIN_BOUND: Duration = Duration::from_secs(1);
 
@@ -128,6 +132,8 @@ pub struct App {
     pub storage: Arc<StorageService>,
     /// Changelog 47 (2), P69: masters of Ready sessions prepared in the background.
     pub prepare_masters: Arc<PrepareMastersService>,
+    /// C1 (09B): conversations with Pricing; always present (H6: silent without a key or shop).
+    pub conversations: Arc<ConversationsService>,
     scripting: Arc<dyn CaptureOneScripting>,
     lanes: Lanes,
     run_startup: bool,
@@ -142,6 +148,8 @@ pub struct App {
     storage_background: Option<thread::JoinHandle<()>>,
     prepare_background: Option<thread::JoinHandle<()>>,
     research_background: Option<thread::JoinHandle<()>>,
+    /// C1: the conversations pull (`ConversationsService::tick` every 250 ms).
+    conversations_background: Option<thread::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
@@ -168,6 +176,8 @@ pub struct AppHandles {
     pub events: Arc<EventHub>,
     pub history: Arc<History>,
     pub storage: Arc<StorageService>,
+    /// C1: conversations with Pricing.
+    pub conversations: Arc<ConversationsService>,
     pub hooks_compiled: bool,
     pub nudge_running: bool,
 }
@@ -183,6 +193,8 @@ pub struct Lanes {
     pub start_order: Arc<StartOrder>,
     /// The master-render disk guard's free-space source (P56 C3(d)).
     pub disk: Arc<editing::capture_one::adapter::DiskSpace>,
+    /// C1 (MC-C1 "lane"): one provider request and its apply at a time, across rebuilds.
+    pub conversations: Arc<ConversationsLane>,
 }
 
 pub struct SettingsSetContext {
@@ -215,6 +227,8 @@ impl SettingsSetContext {
             current.research = on_disk.research;
             // W3: so does the writer's.
             current.writer = on_disk.writer;
+            // C1: and the conversations slot (written by its own commands).
+            current.conversations = on_disk.conversations;
         }
         let previous = settings_value(&current)?;
         // R7·U1: a `research` patch passes the engine's validation first; its text is the refusal.
@@ -230,7 +244,14 @@ impl SettingsSetContext {
             psm_research::writer::config::WriterSettings::validate(writer)
                 .map_err(psm_core::Error::InvalidData)?;
         }
+        // C1: a `conversations` patch is validated first (an invalid server names `server`).
+        if let Some(conversations) = patch.get("conversations") {
+            conversations::validate_patch(conversations)?;
+        }
         let mut next = SettingsService::set(&previous, patch)?;
+        if patch.get("conversations").is_some() {
+            next["conversations"] = conversations::normalised_slot(next.get("conversations"));
+        }
         if patch.get("research").is_some() {
             next["research"] = serde_json::to_value(
                 psm_research::config::ResearchSettings::from_slot(next.get("research")),
@@ -261,7 +282,15 @@ impl SettingsSetContext {
         let mut a = previous;
         let mut b = next;
         // W3: the writer's slot is read live by the engine, like `theme` it never rebuilds.
-        for key in ["theme", "output_format", "storage", "export", "writer"] {
+        // C1: so is the conversations slot (read live through its slot port).
+        for key in [
+            "theme",
+            "output_format",
+            "storage",
+            "export",
+            "writer",
+            "conversations",
+        ] {
             a[key] = serde_json::Value::Null;
             b[key] = serde_json::Value::Null;
         }
@@ -455,6 +484,7 @@ impl App {
             events: self.events.clone(),
             history: self.history.clone(),
             storage: self.storage.clone(),
+            conversations: self.conversations.clone(),
             hooks_compiled: self.hooks_compiled,
             nudge_running: self.nudge_port() != 0,
         }
@@ -536,6 +566,7 @@ impl App {
                 gate,
                 start_order,
                 disk: Arc::new(editing::capture_one::adapter::DiskSpace::default()),
+                conversations: Arc::new(ConversationsLane::new()),
             },
             clock,
             run_startup,
@@ -1143,6 +1174,35 @@ impl App {
         } else {
             None
         };
+        // C1: the conversations service (no request and no Keychain read here: the key is read at
+        // the first `tick` or `connection()`, on a worker thread).
+        let conversations = conversations::build_service(conversations::ServiceParts {
+            paths: paths.clone(),
+            store: store.clone(),
+            secrets: camera_runtime.secret_store(),
+            shop: integration.as_ref().map(|i| i.shop_domain.clone()),
+            integration: integration.as_ref().map(|i| i.kind.clone()),
+            clock: clock.clone(),
+            events: events.clone(),
+            lane: lanes.conversations.clone(),
+        });
+        // C1 (MC-C1.7): the pull, every 250 ms and again at once while a check has more pages;
+        // only with the startup work, like the storage clean-up.
+        let conversations_background = run_startup.then(|| {
+            let worker_stop = stop.clone();
+            let worker = conversations.clone();
+            let worker_clock = clock.clone();
+            thread::spawn(move || {
+                while !worker_stop.load(Ordering::Relaxed) {
+                    match worker.tick(worker_clock.now_ms()) {
+                        Ok(tick) if tick.more => continue,
+                        Ok(_) => {}
+                        Err(error) => tracing::warn!(%error, "conversations check deferred"),
+                    }
+                    thread::sleep(CONVERSATIONS_WAKE);
+                }
+            })
+        });
         camera_runtime.bind(AppBinding {
             store: store.clone(),
             events: events.clone(),
@@ -1199,6 +1259,7 @@ impl App {
             clock,
             storage,
             prepare_masters,
+            conversations,
             scripting,
             lanes,
             run_startup,
@@ -1212,6 +1273,7 @@ impl App {
             storage_background,
             prepare_background,
             research_background,
+            conversations_background,
         })
     }
     /// One turn of the research runner (what its thread does; `false` while a turn is running).
@@ -1322,6 +1384,18 @@ impl App {
         }
         if let Some(bg) = self.prepare_background.take() {
             let _ = bg.join();
+        }
+        if let Some(bg) = self.conversations_background.take() {
+            // C1 (master plan §4 Service): a thread inside a request (up to 20 s) is not waited
+            // for; it leaves after its apply, and the lane keeps it from interleaving with the
+            // next App's thread.
+            let end = std::time::Instant::now() + BACKGROUND_JOIN_BOUND;
+            while !bg.is_finished() && std::time::Instant::now() < end {
+                thread::sleep(Duration::from_millis(5));
+            }
+            if bg.is_finished() {
+                let _ = bg.join();
+            }
         }
         if let Some(bg) = self.research_background.take() {
             // MC-A6 Quit: a run inside a provider call is not waited for; it stays `running` and

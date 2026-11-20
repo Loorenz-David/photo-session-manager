@@ -20,6 +20,7 @@ import { ChangedPill } from '@/features/sessions/ChangedPill';
 import { SessionActionsMenu } from '@/features/sessions/DeleteSession';
 import { requestTexts, showsNextToReview } from '@/features/sessions/reviewQueue';
 import { onSessionsChanged } from '@/services/events';
+import { ConversationsButton } from '@/features/conversations/ConversationsButton';
 import type { PublishedChanges } from '@/services/sessions';
 
 type HeaderProps = {
@@ -173,6 +174,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
       <PageHeader title={<h1 className="app-title">Session Manager</h1>}>
           <DiskWarning />
           <CameraDot />
+          <ConversationsButton />
           {bell}{drawer}
           <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => { window.location.hash = '#/settings'; }}><Settings /></Button>
           <ThemeToggle theme={theme} onChange={onThemeChange} />
@@ -205,7 +207,8 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
         <CameraDot />
         <span className="header-divider" aria-hidden />
         <HistoryButtons sessionId={sessionId} />
-        {bell}{drawer}
+        <ConversationsButton />
+          {bell}{drawer}
         <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => { window.location.hash = '#/settings'; }}><Settings /></Button>
         {sessionId === 1 ? (
           <ActionButton action={async () => { onAssignProduct?.(); }}>

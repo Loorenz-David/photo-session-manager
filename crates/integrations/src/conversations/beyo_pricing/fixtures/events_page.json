@@ -1,0 +1,6 @@
+{ "events": [ { "id": 1842, "type": "message.created", "storeId": "e8f6b61a-40a4-4504-8090-d9ea5b62a069", "productId": "15531808096409",
+                "caseId": "3b1f8c52-1c2e-4c35-9a0e-8a1f2b3c4d5e", "actorId": "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d",
+                "data": { "caseId": "3b1f8c52-1c2e-4c35-9a0e-8a1f2b3c4d5e", "sku": "BEYO-1880", "recipient": "photographer", "status": "open",
+                          "blocking": true, "messageId": "9c2d4e6f-1a3b-4c5d-8e7f-0a1b2c3d4e5f", "authorKind": "user" },
+                "at": "2026-11-20T08:12:03.530Z" } ],
+  "nextCursor": 1842 }

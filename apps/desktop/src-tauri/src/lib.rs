@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod a12_tests;
+mod alerts;
 mod commands;
 pub mod search_window;
 mod state;
@@ -13,7 +14,31 @@ use tauri::{
     menu::{Menu, MenuItem, MenuItemKind, PredefinedMenuItem, Submenu},
 };
 
-struct TauriEvents<R: tauri::Runtime>(tauri::AppHandle<R>);
+/// The bridge from core events to the window (and, for conversations, to the chime and the Mac
+/// banner: C2, `alerts`). `focused` reads whether the main window has the focus.
+struct TauriEvents<R: tauri::Runtime> {
+    app: tauri::AppHandle<R>,
+    alerts: Arc<dyn alerts::Alerts>,
+    focused: Arc<dyn Fn() -> bool + Send + Sync>,
+}
+impl<R: tauri::Runtime> TauriEvents<R> {
+    fn new(
+        app: tauri::AppHandle<R>,
+        alerts: Arc<dyn alerts::Alerts>,
+        focused: Arc<dyn Fn() -> bool + Send + Sync>,
+    ) -> Self {
+        Self {
+            app,
+            alerts,
+            focused,
+        }
+    }
+    /// A bridge without alerts (tests that only look at the window events).
+    #[cfg(test)]
+    fn silent(app: tauri::AppHandle<R>) -> Self {
+        Self::new(app, Arc::new(alerts::NoAlerts), Arc::new(|| true))
+    }
+}
 #[derive(serde::Serialize, Clone)]
 struct PhotoAddedPayload {
     photo_id: i64,
@@ -282,7 +307,7 @@ mod p50_tests {
                 .push(serde_json::from_str(event.payload()).unwrap())
         });
         EventSink::emit(
-            &TauriEvents(tauri_app.handle().clone()),
+            &TauriEvents::silent(tauri_app.handle().clone()),
             AppEvent::FingerprintPending {
                 fingerprint: "ab:cd:ef".into(),
                 replace: true,
@@ -514,6 +539,635 @@ mod r5_command_tests {
             error.message,
             "AI suggestions changed while you were confirming"
         );
+    }
+}
+
+#[cfg(test)]
+mod c1_tests {
+    //! C1·U4 (`docs/implementation/plans/C1_connection_and_sync.md` C1·C19): the Settings →
+    //! Pricing commands over the wired app with the fake Pricing server, and the event bridge.
+    use super::*;
+    use psm_core::{
+        domain::conversation::{ConversationNotice, KEY_ACCOUNT, NoticeKind},
+        ports::secrets::SecretStore,
+    };
+    use psm_integrations::conversations::beyo_pricing::DEFAULT_SERVER;
+    use psm_testkit::test_app::PRICING_KEY;
+    use serde_json::{Value, json};
+    use tauri::Listener;
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    struct Wired {
+        _dir: tempfile::TempDir,
+        _app: tauri::App<tauri::test::MockRuntime>,
+        window: tauri::WebviewWindow<tauri::test::MockRuntime>,
+        pricing: Arc<psm_testkit::fake_pricing::FakePricing>,
+        secrets: Arc<psm_testkit::fake_secrets::FakeSecrets>,
+    }
+
+    fn wired() -> Wired {
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        let pricing = a.pricing.clone().unwrap();
+        let secrets = a.secrets.clone();
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::conversations::conversations_settings_get,
+                commands::conversations::conversations_settings_save,
+                commands::conversations::conversations_key_set,
+                commands::conversations::conversations_test,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        Wired {
+            _dir: dir,
+            _app: tauri_app,
+            window,
+            pricing,
+            secrets,
+        }
+    }
+
+    #[test]
+    fn c1_c19a_settings_get_on_a_fresh_folder() {
+        let w = wired();
+        let got = call(&w.window, "conversations_settings_get", json!({})).unwrap();
+        assert_eq!(got["server"], json!(DEFAULT_SERVER));
+        assert_eq!(got["server_default"], json!(DEFAULT_SERVER));
+        assert_eq!(got["key_saved"], json!(false));
+        assert_eq!(got["sound"], json!(true));
+        assert_eq!(got["banner"], json!(true));
+        assert_eq!(got["connection"]["state"], json!("no_key"));
+    }
+
+    #[test]
+    fn c1_c19b_saving_the_key_connects_and_never_returns_it() {
+        let w = wired();
+        let saved = call(
+            &w.window,
+            "conversations_key_set",
+            json!({"key": PRICING_KEY}),
+        )
+        .unwrap();
+        let got = call(&w.window, "conversations_settings_get", json!({})).unwrap();
+        for answer in [&saved, &got] {
+            assert_eq!(answer["key_saved"], json!(true));
+            assert_eq!(answer["connection"]["state"], json!("ready"));
+            assert_eq!(answer["connection"]["store_name"], json!("Dev store"));
+            assert_eq!(answer["connection"]["shop"], json!("shop-a.myshopify.com"));
+            assert!(!answer.to_string().contains(PRICING_KEY), "{answer}");
+        }
+    }
+
+    #[test]
+    fn c1_c19c_an_empty_key_removes_it() {
+        let w = wired();
+        call(
+            &w.window,
+            "conversations_key_set",
+            json!({"key": PRICING_KEY}),
+        )
+        .unwrap();
+        let removed = call(&w.window, "conversations_key_set", json!({"key": ""})).unwrap();
+        assert_eq!(removed["key_saved"], json!(false));
+        assert_eq!(removed["connection"]["state"], json!("no_key"));
+        assert_eq!(w.secrets.get(KEY_ACCOUNT).unwrap(), None);
+    }
+
+    #[test]
+    fn c1_c19d_test_connection_lists_the_visible_stores() {
+        let w = wired();
+        w.pricing.clear_stores();
+        w.pricing.add_store("One", "one.myshopify.com");
+        w.pricing.add_store("Two", "two.myshopify.com");
+        w.secrets.set(KEY_ACCOUNT, PRICING_KEY).unwrap();
+        let got = call(&w.window, "conversations_test", json!({})).unwrap();
+        assert_eq!(got["connection"]["state"], json!("store_unmatched"));
+        assert_eq!(got["connection"]["visible_stores"], json!(["One", "Two"]));
+    }
+
+    #[test]
+    fn c1_c19e_an_http_server_is_refused_naming_server() {
+        let w = wired();
+        let error = call(
+            &w.window,
+            "conversations_settings_save",
+            json!({"patch": {"server": "http://x.example"}}),
+        )
+        .unwrap_err();
+        assert_eq!(error["code"], json!("invalid_value"));
+        assert!(
+            error["message"].as_str().unwrap().contains("server"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn c1_c19f_the_bridge_forwards_the_toast_words() {
+        let tauri_app = mock_builder().build(mock_context(noop_assets())).unwrap();
+        let payloads = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+        let seen = payloads.clone();
+        tauri_app.listen_any("conversations_changed", move |event| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(event.payload()).unwrap())
+        });
+        EventSink::emit(
+            &TauriEvents::silent(tauri_app.handle().clone()),
+            AppEvent::ConversationsChanged {
+                notices: vec![ConversationNotice {
+                    conversation_id: "c1".into(),
+                    sku: Some("BEYO-1880".into()),
+                    product_title: "Vintage Brass Wall Mirror, Round".into(),
+                    topic: "Condition".into(),
+                    kind: NoticeKind::Question,
+                }],
+                chime: true,
+                banner: true,
+            },
+        );
+        assert_eq!(
+            *payloads.lock().unwrap(),
+            vec![json!({
+                "toasts": [{"conversation_id": "c1", "text": "New question · BEYO-1880 — Condition"}],
+                "more": 0
+            })]
+        );
+    }
+}
+
+#[cfg(test)]
+mod c2_tests {
+    //! C2·U1 (`docs/implementation/plans/C2_header_panel_notifications.md` C2·C7): the list,
+    //! counts and badges commands over the wired app with the fake Pricing server.
+    use super::*;
+    use psm_core::domain::conversation::{ConversationScope, ConversationTab};
+    use psm_core::ports::clock::Clock;
+    use psm_testkit::test_app::PRICING_KEY;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    struct Wired {
+        _dir: tempfile::TempDir,
+        _app: tauri::App<tauri::test::MockRuntime>,
+        window: tauri::WebviewWindow<tauri::test::MockRuntime>,
+        pricing: Arc<psm_testkit::fake_pricing::FakePricing>,
+    }
+
+    /// A connected app (key saved, store matched) whose copy was brought in by a first check.
+    fn connected() -> psm_testkit::TestApp {
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        a.app.conversations.key_set(Some(PRICING_KEY)).unwrap();
+        a
+    }
+
+    fn store_id(a: &psm_testkit::TestApp) -> String {
+        use psm_core::ports::conversations::ConversationStore;
+        a.app.store.sync().unwrap().store.unwrap().id
+    }
+
+    fn run_check(a: &psm_testkit::TestApp) {
+        while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+    }
+
+    fn wired(a: psm_testkit::TestApp) -> Wired {
+        let pricing = a.pricing.clone().unwrap();
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::conversations::conversations_list,
+                commands::conversations::conversations_counts,
+                commands::conversations::conversations_session_badges,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        Wired {
+            _dir: dir,
+            _app: tauri_app,
+            window,
+            pricing,
+        }
+    }
+
+    fn list(w: &Wired, scope: Value, tab: &str) -> Value {
+        call(
+            &w.window,
+            "conversations_list",
+            json!({"scope": scope, "tab": tab}),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn c2_c7a_no_key_lists_nothing() {
+        let a = connected();
+        a.fake_pricing()
+            .ask(&store_id(&a), Some("BEYO-1"), "Condition");
+        run_check(&a);
+        a.app.conversations.key_set(None).unwrap();
+        let w = wired(a);
+        let got = list(&w, json!({"kind": "all"}), "open");
+        assert_eq!(got["state"], json!("no_key"));
+        assert_eq!(got["rows"], json!([]));
+    }
+
+    #[test]
+    fn c2_c7b_a_refused_key_lists_the_copy_with_its_problem() {
+        let a = connected();
+        let s = store_id(&a);
+        let one = a.fake_pricing().ask(&s, Some("BEYO-1"), "Condition");
+        let two = a.fake_pricing().ask(&s, Some("BEYO-2"), "Condition");
+        run_check(&a);
+        a.fake_pricing().fail_matching("/events", 1, 401);
+        a.clock.advance(10_000);
+        run_check(&a);
+        let w = wired(a);
+        let got = list(&w, json!({"kind": "all"}), "open");
+        assert_eq!(got["state"], json!("refused"));
+        assert_eq!(
+            got["problem"],
+            json!("Pricing refused the key: check Settings → Pricing")
+        );
+        let mut ids: Vec<&str> = got["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect();
+        ids.sort();
+        let mut want = [one.as_str(), two.as_str()];
+        want.sort();
+        assert_eq!(ids, want);
+    }
+
+    #[test]
+    fn c2_c7c_an_unmatched_store_counts_nothing_and_shows_no_badge() {
+        let a = connected();
+        a.items()
+            .create_local("BEYO-1", "BEYO-1", "object", None)
+            .unwrap();
+        a.fake_pricing()
+            .ask(&store_id(&a), Some("BEYO-1"), "Condition");
+        run_check(&a);
+        assert_eq!(a.app.conversations.counts(None).unwrap().here, 1);
+        a.fake_pricing().clear_stores();
+        a.fake_pricing().add_store("Other", "other.myshopify.com");
+        a.app.conversations.test_connection().unwrap();
+        let w = wired(a);
+        let counts = call(
+            &w.window,
+            "conversations_counts",
+            json!({"sessionId": null}),
+        )
+        .unwrap();
+        assert_eq!(counts, json!({"here": 0, "elsewhere": 0}));
+        let badges = call(&w.window, "conversations_session_badges", json!({})).unwrap();
+        assert_eq!(badges, json!([]));
+    }
+
+    #[test]
+    fn c2_c7d_a_session_scope_and_the_resolved_tab_reach_the_service() {
+        let a = connected();
+        let (_, session) = a
+            .items()
+            .create_local("BEYO-1", "BEYO-1", "object", None)
+            .unwrap();
+        let session_id = session.session.id;
+        let s = store_id(&a);
+        let resolved = a.fake_pricing().ask(&s, Some("BEYO-1"), "Condition");
+        a.fake_pricing().resolve(&resolved);
+        a.fake_pricing().ask(&s, Some("BEYO-1"), "Other");
+        a.fake_pricing().ask(&s, Some("BEYO-2"), "Other");
+        run_check(&a);
+        let want: Vec<String> = a
+            .app
+            .conversations
+            .list(
+                ConversationScope::Session(session_id),
+                ConversationTab::Resolved,
+                a.clock.now_ms(),
+            )
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(want, std::slice::from_ref(&resolved));
+        let w = wired(a);
+        let got = list(
+            &w,
+            json!({"kind": "session", "session_id": session_id}),
+            "resolved",
+        );
+        let ids: Vec<&str> = got["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, want);
+        assert_eq!(got["rows"][0]["session_id"], json!(session_id));
+        assert_eq!(got["rows"][0]["status"], json!("resolved"));
+    }
+
+    // ---------- C2·C18, C2·C19 the bridge: chime and banner ----------
+
+    use psm_core::domain::conversation::{ConversationNotice, NoticeKind};
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use tauri::Listener;
+
+    #[derive(Default)]
+    struct Recorded {
+        chimes: Mutex<usize>,
+        banners: Mutex<Vec<(String, String)>>,
+    }
+    impl alerts::Alerts for Recorded {
+        fn chime(&self) {
+            *self.chimes.lock().unwrap() += 1;
+        }
+        fn banner(&self, title: &str, body: &str) {
+            self.banners
+                .lock()
+                .unwrap()
+                .push((title.to_owned(), body.to_owned()));
+        }
+    }
+
+    struct Bridge {
+        _app: tauri::App<tauri::test::MockRuntime>,
+        events: TauriEvents<tauri::test::MockRuntime>,
+        alerts: Arc<Recorded>,
+        window: Arc<Mutex<Vec<Value>>>,
+    }
+
+    fn bridge(focused: bool) -> Bridge {
+        let tauri_app = mock_builder().build(mock_context(noop_assets())).unwrap();
+        let window = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let seen = window.clone();
+        tauri_app.listen_any("conversations_changed", move |event| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(event.payload()).unwrap())
+        });
+        let alerts = Arc::new(Recorded::default());
+        let flag = Arc::new(AtomicBool::new(focused));
+        let events = TauriEvents::new(
+            tauri_app.handle().clone(),
+            alerts.clone(),
+            Arc::new(move || flag.load(Ordering::Relaxed)),
+        );
+        Bridge {
+            _app: tauri_app,
+            events,
+            alerts,
+            window,
+        }
+    }
+
+    fn notice(sku: &str) -> ConversationNotice {
+        ConversationNotice {
+            conversation_id: format!("c-{sku}"),
+            sku: Some(sku.into()),
+            product_title: "Vintage Brass Wall Mirror, Round".into(),
+            topic: "Condition".into(),
+            kind: NoticeKind::Question,
+        }
+    }
+
+    fn send(b: &Bridge, notices: Vec<ConversationNotice>, chime: bool, banner: bool) {
+        EventSink::emit(
+            &b.events,
+            AppEvent::ConversationsChanged {
+                notices,
+                chime,
+                banner,
+            },
+        );
+    }
+
+    #[test]
+    fn c2_c18a_a_notice_with_chime_chimes_once_and_reaches_the_window() {
+        let b = bridge(false);
+        send(&b, vec![notice("BEYO-1880")], true, false);
+        assert_eq!(*b.alerts.chimes.lock().unwrap(), 1);
+        assert!(b.alerts.banners.lock().unwrap().is_empty());
+        let window = b.window.lock().unwrap();
+        assert_eq!(window.len(), 1);
+        assert_eq!(window[0]["toasts"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn c2_c18b_three_notices_make_one_chime() {
+        let b = bridge(true);
+        send(
+            &b,
+            vec![notice("BEYO-1"), notice("BEYO-2"), notice("BEYO-3")],
+            true,
+            false,
+        );
+        assert_eq!(*b.alerts.chimes.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn c2_c18c_muted_means_no_chime_but_the_window_still_hears() {
+        let b = bridge(false);
+        send(&b, vec![notice("BEYO-1880")], false, false);
+        assert_eq!(*b.alerts.chimes.lock().unwrap(), 0);
+        assert!(b.alerts.banners.lock().unwrap().is_empty());
+        assert_eq!(b.window.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn c2_c19a_an_unfocused_window_gets_a_banner_with_the_toast_words() {
+        let b = bridge(false);
+        send(&b, vec![notice("BEYO-1880")], false, true);
+        assert_eq!(
+            *b.alerts.banners.lock().unwrap(),
+            [(
+                "Session Manager".to_owned(),
+                "New question · BEYO-1880 — Condition".to_owned()
+            )]
+        );
+    }
+
+    #[test]
+    fn c2_c19b_a_focused_window_gets_no_banner() {
+        let b = bridge(true);
+        send(&b, vec![notice("BEYO-1880")], false, true);
+        assert!(b.alerts.banners.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn c2_c7e_the_three_commands_never_reach_pricing() {
+        let a = connected();
+        a.items()
+            .create_local("BEYO-1", "BEYO-1", "object", None)
+            .unwrap();
+        a.fake_pricing()
+            .ask(&store_id(&a), Some("BEYO-1"), "Condition");
+        run_check(&a);
+        let w = wired(a);
+        w.pricing.clear_requests();
+        list(&w, json!({"kind": "all"}), "open");
+        list(&w, json!({"kind": "all"}), "resolved");
+        call(&w.window, "conversations_counts", json!({"sessionId": 2})).unwrap();
+        call(&w.window, "conversations_session_badges", json!({})).unwrap();
+        assert!(w.pricing.request_lines().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod c3_tests {
+    //! C3·U1 (`docs/implementation/plans/C3_conversation_and_answering.md` C3·C8(e)): a text reply
+    //! to a conversation that is not on this Mac, through `conversation_reply` over the wired app.
+    use super::*;
+    use psm_core::ports::clock::Clock;
+    use psm_testkit::test_app::PRICING_KEY;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    #[test]
+    fn c3_c8e_a_text_reply_works_for_a_conversation_not_on_this_mac() {
+        use psm_core::ports::conversations::ConversationStore;
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        a.app.conversations.key_set(Some(PRICING_KEY)).unwrap();
+        let store = a.app.store.sync().unwrap().store.unwrap().id;
+        let case = a.fake_pricing().ask(&store, Some("BEYO-9999"), "Condition");
+        while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+        let pricing = a.pricing.clone().unwrap();
+        let service = a.app.conversations.clone();
+        let sqlite = a.app.store.clone();
+        let clock = a.clock.clone();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::conversations::conversation_reply
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        pricing.clear_requests();
+        let pending = call(
+            &window,
+            "conversation_reply",
+            json!({"input": {
+                "conversation_id": case,
+                "client_mutation_id": "u-1",
+                "text": "Answered from elsewhere.",
+                "reply_to_message_id": null,
+                "attachment_media_ids": [],
+            }}),
+        )
+        .unwrap();
+        assert_eq!(pending["client_mutation_id"], json!("u-1"));
+        assert_eq!(pending["state"], json!("sending"));
+        service.tick(clock.now_ms()).unwrap();
+        let posts: Vec<_> = pricing
+            .requests()
+            .into_iter()
+            .filter(|r| r.method == "POST")
+            .collect();
+        assert_eq!(posts.len(), 1);
+        assert_eq!(
+            posts[0].body.as_ref().unwrap()["clientMutationId"],
+            json!("u-1")
+        );
+        let row = sqlite
+            .outbox()
+            .unwrap()
+            .into_iter()
+            .find(|r| r.client_mutation_id == "u-1")
+            .unwrap();
+        assert_eq!(row.state, psm_core::domain::conversation::OutboxState::Sent);
     }
 }
 
@@ -755,7 +1409,7 @@ mod p39_tests {
         let handles = tauri_app.state::<AppState>().handles().unwrap();
         handles
             .events
-            .set_target(Arc::new(TauriEvents(tauri_app.handle().clone())));
+            .set_target(Arc::new(TauriEvents::silent(tauri_app.handle().clone())));
         let payloads = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
         let seen = payloads.clone();
         tauri_app.listen_any("history_changed", move |event| {
@@ -909,6 +1563,32 @@ mod p40_tests {
         );
     }
 }
+/// C1 (`master_plan_conversations.md` §4 Event): `conversations_changed {toasts, more}`.
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+struct ConversationToast {
+    conversation_id: String,
+    text: String,
+}
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+struct ConversationsChangedPayload {
+    toasts: Vec<ConversationToast>,
+    more: usize,
+}
+impl ConversationsChangedPayload {
+    fn from_notices(notices: &[psm_core::domain::conversation::ConversationNotice]) -> Self {
+        let (lines, more) = psm_core::mechanisms::conversation_rules::notice_lines(notices);
+        Self {
+            toasts: lines
+                .into_iter()
+                .map(|(conversation_id, text)| ConversationToast {
+                    conversation_id,
+                    text,
+                })
+                .collect(),
+            more,
+        }
+    }
+}
 #[derive(serde::Serialize, Clone)]
 struct SessionChangedPayload {
     session_id: i64,
@@ -939,16 +1619,16 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
         match event {
             AppEvent::ResearchChanged { session_id } => {
                 let _ = self
-                    .0
+                    .app
                     .emit("research_changed", SessionChangedPayload { session_id });
             }
             AppEvent::CameraStatusChanged { status } => {
                 let link = self
-                    .0
+                    .app
                     .try_state::<AppState>()
                     .and_then(|state| state.handles().ok())
                     .and_then(|handles| handles.camera_runtime.direct_adapter().current_link());
-                let _ = self.0.emit(
+                let _ = self.app.emit(
                     "camera_status_changed",
                     commands::camera::CameraStatusResponse::from(status).with_link(link),
                 );
@@ -957,7 +1637,7 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                 fingerprint,
                 replace,
             } => {
-                let _ = self.0.emit(
+                let _ = self.app.emit(
                     "camera_fingerprint_pending",
                     serde_json::json!({"fingerprint": fingerprint, "replace": replace}),
                 );
@@ -967,7 +1647,7 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                 undo,
                 redo,
             } => {
-                let _ = self.0.emit(
+                let _ = self.app.emit(
                     "history_changed",
                     HistoryChangedPayload {
                         session_id,
@@ -980,7 +1660,7 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                 photo_id,
                 session_id,
             } => {
-                let _ = self.0.emit(
+                let _ = self.app.emit(
                     "photo_added",
                     PhotoAddedPayload {
                         photo_id,
@@ -992,7 +1672,7 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                 photo_id,
                 session_id,
             } => {
-                let _ = self.0.emit(
+                let _ = self.app.emit(
                     "photo_changed",
                     PhotoAddedPayload {
                         photo_id,
@@ -1002,7 +1682,7 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
             }
             AppEvent::SessionChanged { session_id } => {
                 let _ = self
-                    .0
+                    .app
                     .emit("session_changed", SessionChangedPayload { session_id });
             }
             AppEvent::ExportProgress {
@@ -1011,7 +1691,7 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                 total,
                 state,
             } => {
-                let _ = self.0.emit(
+                let _ = self.app.emit(
                     "export_progress",
                     ExportProgressPayload {
                         session_id,
@@ -1028,7 +1708,7 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                 uploaded,
                 total,
             } => {
-                let _ = self.0.emit(
+                let _ = self.app.emit(
                     "publish_progress",
                     PublishProgressPayload {
                         session_id,
@@ -1040,7 +1720,27 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                 );
             }
             AppEvent::HealthChanged => {
-                let _ = self.0.emit("health_changed", ());
+                let _ = self.app.emit("health_changed", ());
+            }
+            // C1: the toasts' words; C2: one chime, and a Mac banner per line while the main
+            // window does not have the focus (09B §9).
+            AppEvent::ConversationsChanged {
+                notices,
+                chime,
+                banner,
+            } => {
+                let payload = ConversationsChangedPayload::from_notices(&notices);
+                let _ = self.app.emit("conversations_changed", payload.clone());
+                if chime {
+                    self.alerts.chime();
+                }
+                if banner && !(self.focused)() {
+                    let lines: Vec<String> =
+                        payload.toasts.iter().map(|t| t.text.clone()).collect();
+                    for body in alerts::banners(&lines, payload.more) {
+                        self.alerts.banner(alerts::BANNER_TITLE, &body);
+                    }
+                }
             }
         }
     }
@@ -1145,6 +1845,20 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::writer::writer_settings_import,
         commands::writer::writer_instruction_reset,
         commands::writer::writer_preview,
+        commands::conversations::conversations_settings_get,
+        commands::conversations::conversations_settings_save,
+        commands::conversations::conversations_key_set,
+        commands::conversations::conversations_test,
+        commands::conversations::conversations_list,
+        commands::conversations::conversations_counts,
+        commands::conversations::conversations_session_badges,
+        commands::conversations::conversation_get,
+        commands::conversations::conversation_mark_read,
+        commands::conversations::conversation_reply,
+        commands::conversations::conversation_retry,
+        commands::conversations::conversation_discard,
+        commands::conversations::conversation_mark_answered,
+        commands::conversations::conversation_attachable,
         commands::search::search_window_open,
         commands::search::search_web_place,
         commands::search::search_web_go,
@@ -1223,6 +1937,8 @@ pub fn run() {
     let builder = specta_builder();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // C2: the Mac banners for conversations (used from Rust only).
+        .plugin(tauri_plugin_notification::init())
         // A6: research sources open in the default browser (capability limited to http/https).
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::new(app))
@@ -1287,10 +2003,21 @@ pub fn run() {
         })
         .setup(|handle| {
             let state = handle.state::<AppState>();
+            // C2: whether the main window has the focus, kept by its focus events (the banner rule).
+            let focused = Arc::new(std::sync::atomic::AtomicBool::new(
+                handle
+                    .get_webview_window("main")
+                    .and_then(|window| window.is_focused().ok())
+                    .unwrap_or(true),
+            ));
             let (previews, templates) = {
                 let app = state.handles().expect("app state");
-                app.events
-                    .set_target(Arc::new(TauriEvents(handle.handle().clone())));
+                let reader = focused.clone();
+                app.events.set_target(Arc::new(TauriEvents::new(
+                    handle.handle().clone(),
+                    Arc::new(alerts::SystemAlerts::new(handle.handle().clone(), app.paths.root.clone())),
+                    Arc::new(move || reader.load(std::sync::atomic::Ordering::Relaxed)),
+                )));
                 (app.paths.root.join("previews"), app.paths.root.join("templates"))
             };
             // The workspace loads preview files through the asset protocol; only the previews folder is readable.
@@ -1301,6 +2028,9 @@ pub fn run() {
             if let Some(window) = handle.get_webview_window("main") {
                 let app_handle = handle.handle().clone();
                 window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(now) = event {
+                        focused.store(*now, std::sync::atomic::Ordering::Relaxed);
+                    }
                     if matches!(event, tauri::WindowEvent::Focused(true)) {
                         let state = app_handle.state::<AppState>();
                         if let Ok(handles) = state.handles() {
@@ -1368,7 +2098,7 @@ mod p42_tests {
         let handles = tauri_app.state::<AppState>().handles().unwrap();
         handles
             .events
-            .set_target(Arc::new(TauriEvents(tauri_app.handle().clone())));
+            .set_target(Arc::new(TauriEvents::silent(tauri_app.handle().clone())));
         let payloads = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
         let seen = payloads.clone();
         tauri_app.listen_any("camera_status_changed", move |event| {

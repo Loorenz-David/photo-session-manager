@@ -8,12 +8,14 @@ import { ChoiceSelect, SELECT_NONE, Select, SelectContent, SelectGroup, SelectIt
 import { useAction, usePageData } from '@/lib/pending';
 import { getSettings, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
+import { ConversationsButton } from '@/features/conversations/ConversationsButton';
 import { goTo, setLeaveGuard } from '@/lib/routes';
 import { listStyles, type EditorStyles } from '@/services/styles';
 import { CameraSection, type CameraLogin } from './CameraSection';
 import { cameraSecretsSet } from '@/services/camera';
 import { StorageSection } from './StorageSection';
 import { StockSection } from './StockSection';
+import { PricingSection } from './PricingSection';
 import { ResearchSection } from './ResearchSection';
 import { WriterSection } from './WriterSection';
 import { SettingsNav, type SettingsSection } from './SettingsNav';
@@ -64,7 +66,8 @@ export function SettingsPage() {
   const loadedSecret = useRef('');
   // The settings as last loaded or saved: anything else in the form is an unsaved change (P63).
   const [saved, setSaved] = useState<Settings | null>(null);
-  const [leaving, setLeaving] = useState<string | null>(null);
+  // The way out the user asked for while the form had unsaved changes: run by Discard or Save (C4: never a hash write here).
+  const [leaving, setLeaving] = useState<{ target: string; proceed: () => void } | null>(null);
   const [styles, setStyles] = useState<EditorStyles | null | undefined>(undefined);
   // P68: the camera login typed here is saved by Save settings (to the Keychain, never settings.json).
   const [login, setLogin] = useState<CameraLogin>(EMPTY_LOGIN);
@@ -77,9 +80,9 @@ export function SettingsPage() {
   const loginTyped = login.user !== '' || login.password !== '';
   const dirty = loginTyped || (settings !== null && saved !== null && JSON.stringify(settings) !== JSON.stringify(saved));
   useEffect(() => {
-    setLeaveGuard(target => {
+    setLeaveGuard((target, proceed) => {
       if (!dirty) return true;
-      setLeaving(target);
+      setLeaving({ target, proceed });
       return false;
     });
     return () => setLeaveGuard(null);
@@ -129,6 +132,7 @@ export function SettingsPage() {
   }, e => setError((e as {code?: string}).code === 'invalid_value' ? 'Ports must be 1024–65535, the passive range at least 2 ports and not containing the receiver port' : e instanceof Error ? e.message : (e as {message?: string}).message ?? String(e)));
 
   const header = <PageHeader title={<h1 className="health-title">Settings</h1>} escapeGoesBack>
+    <ConversationsButton />
     <Button variant="outline" onClick={() => goTo('#/health')}>Health</Button>
   </PageHeader>;
   if (!settings) return <>{header}<main className="health-shell">{error || page.error ? <p role="alert">{error ?? String(page.error)}</p> : <SkeletonFields n={6} />}</main></>;
@@ -221,23 +225,25 @@ export function SettingsPage() {
         <DialogFooter>
           <Button variant="outline" onClick={() => setLeaving(null)}>Cancel</Button>
           <Button variant="outline" onClick={() => {
-            const target = leaving;
+            const way = leaving;
             setLeaving(null);
             setSettings(saved);
             setLogin(EMPTY_LOGIN);
             setLeaveGuard(null);
-            if (target) window.location.hash = target;
+            way?.proceed();
           }}>Discard</Button>
           <Button disabled={save.busy} onClick={() => {
-            const target = leaving;
+            const way = leaving;
             void save.run().then(done => {
               setLeaving(null);
-              if (done && target) { setLeaveGuard(null); window.location.hash = target; }
+              if (done && way) { setLeaveGuard(null); way.proceed(); }
             });
           }}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {/* C1: saves by itself, outside the unsaved-changes guard (like the research keys). */}
+    <section data-section="pricing" data-active={section === 'pricing'}><PricingSection /></section>
     <section data-section="storage" data-active={section === 'storage'}><StorageSection /></section>
     {saved?.research && <section data-section="research" data-active={section === 'research'}><ResearchSection research={saved.research} shopDomain={saved.integration?.shop_domain || null} /></section>}
     {saved?.research && <section data-section="writer" data-active={section === 'writer'}><WriterSection research={saved.research} active={section === 'writer'} /></section>}

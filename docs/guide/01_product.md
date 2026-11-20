@@ -176,6 +176,37 @@ What the person sees (W1–W4; the search texts come in W5).
   keeps the text it replaced as an earlier version; an instruction or example list equal to the shipped one is stored
   as the shipped default, so later builds' improvements reach it.
 
+## Conversations with Pricing (book `09B`; `docs/implementation/master_plan_conversations.md`; C1–C4 built)
+Beyo Pricing is the owner's second app, where a **pricer** prices one product at a time from what Session Manager
+published. The pricer asks the photographer questions about a product there; Session Manager keeps an exact **local
+copy** of the questions addressed to the photographer and (from C2) shows them, notifies and lets the photographer answer.
+C1 (done): **Settings → Pricing** takes the server address (https only, default
+`https://pricing.beyoworkaroundtheclock.com`) and the API key (macOS Keychain only, never shown again), matches the
+key's store to the connected Shopify shop (case-insensitive domain) and says in words whether it is connected; a
+different server or shop asks for **Test connection** again before any call. Then the app pulls Pricing's event log
+every 10 s (at once at launch, on waking and after the key changes; backing off 10 s → 5 min while Pricing cannot be
+reached), re-reads each named conversation and replaces it in the copy; a refused key or a store that is gone stops
+the pull until the key is replaced. The first connection is silent. Nothing is written to Pricing in C1. Read marks are
+per Mac; an open conversation enters unread. Notices (`New question · <SKU> — <topic>`, `New reply · <SKU>`) are made
+for questions and pricer messages, never for the app's own replies or the first connection.
+C3 (answering): opening a conversation from the panel shows it as in Pricing (the pricer's dark bubbles on the left,
+the photographer's light ones on the right, the quote block with its field chip, photos that open large, the reply
+line, "· edited"); it counts as read while on screen with the window focused. The photographer answers with text
+(Enter sends, Shift+Enter is a new line, at most 4000 characters), a reply to one message and up to ten **published**
+photos of that product (gallery order, then condition; both halves of a split; "Publish first to attach photos"; none
+for a conversation "Not on this Mac", where text still works). A reply is saved on this Mac at the press and shows at
+once as "Sending…"; it leaves within a quarter of a second (also after a restart), never twice (one id per press,
+reused by Retry), and a failure shows "Couldn't send" (or Pricing's words) with **Retry** and **Remove**; a failed
+reply is never resent by itself. **Mark answered** (open conversations only) tells Pricing the fix was made in the
+data; replying to a resolved conversation re-opens it as answered. The only writes to Pricing are these two.
+C4 (the jump): **Open session** in a conversation of another session opens that session as a **visit**: the panel stays
+open on the same conversation and the camera's new photos keep going where they went (the session being shot, or
+Unassigned from the Sessions page or Settings). A slim bar under the header says `Visiting <SKU>: new photos still go to
+<SKU or Unassigned>.` (the session the backend reports active) with **← Back to <origin>** (where the photographer was
+before the first jump, also after several jumps) and **Shoot here instead** (activates the visited session, as a normal
+opening does). Any ordinary navigation ends the visit and behaves as before; a visit does not survive a restart. From
+Settings with unsaved changes, Open session asks "Save your changes?" first.
+
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |
 |---|---|
@@ -189,6 +220,8 @@ What the person sees (W1–W4; the search texts come in W5).
 | **Publish run / item** | `publish_runs` (confirmation, H1) and `publish_items` (per session: frozen main/condition lists, frozen attributes, step, failed step, progress). |
 | **Jobs** | `jobs` table: `kind` (`original_preview`, `hash`, `render_preview`, `render_master`, `render_output`, `mirror_tag`, `publish_step`, `verify_hash`, …), status, attempts, backoff; three runners (general, publish, render). |
 | **Health item** | `{code, ok, detail}` shown on the Health page and as the header dots; codes registered in master plan §6.6. |
+| **Conversation / message** (book `09B` §3; `domain/conversation.rs`) | One question thread about one product (Pricing calls it a *case*): `topic`, `blocking`, `status` open → answered → resolved (`resolved_by` asker or activation, known only when this Mac saw the event), `sku`, its messages (author `asker` = the pricer, `me` = this app's service account, `other`), optional quote (`field`, label, text), reply-to, attachments, `edited_at`. Core says *conversation, message, provider, store, asker, me*; no Pricing word in core (H7). Only conversations addressed to the photographer are kept. |
+| **Read mark** | Per conversation, per Mac: a message is unread when the asker wrote it after the mark; a conversation *has news* when it has an unread message (`mechanisms/conversation_rules.rs`). |
 | **Camera status** | `connected{name, link} · connecting{link} · busy{reason} · needs_action{reason, holder, message} · disconnected`; precedence in `10E` §Port changes. |
 
 ## The owner's standing product decisions (book `15`, `16_changelog.md`, `CLAUDE.md`)

@@ -6,6 +6,7 @@ pub mod canon;
 pub mod capture_ledger;
 pub mod cleanup;
 pub mod composition;
+pub mod conversation_rules;
 pub mod hash;
 pub mod hook_payload;
 pub mod missing;

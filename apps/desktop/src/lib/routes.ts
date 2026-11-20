@@ -12,17 +12,27 @@ export function routeLabel(hash: string): string {
   return 'Sessions';
 }
 
-/** A page that must be asked before it is left (Settings with unsaved changes, P63): returns false to stay. */
-export type LeaveGuard = (target: string) => boolean;
+/**
+ * A page that must be asked before it is left (Settings with unsaved changes, P63): returns true to let the user go
+ * now, or false to stay; on false the page keeps `proceed` and calls it later if the user still leaves (C4: the
+ * continuation may be a visit's jump rather than a hash write, so the page never writes the hash itself).
+ */
+export type LeaveGuard = (target: string, proceed: () => void) => boolean;
 let leaveGuard: LeaveGuard | null = null;
 
-/** Installs (or with null removes) the guard asked by `goTo`. */
+/** Installs (or with null removes) the guard asked by `leaveThen`. */
 export function setLeaveGuard(guard: LeaveGuard | null): void {
   leaveGuard = guard;
 }
 
+/** Runs `proceed` now unless the current page's leave guard keeps the user there (it then holds `proceed`). */
+export function leaveThen(target: string, proceed: () => void): void {
+  if (!leaveGuard || leaveGuard(target, proceed)) proceed();
+}
+
 /** Navigates to `hash` unless the current page's leave guard keeps the user there. */
 export function goTo(hash: string): void {
-  if (leaveGuard && !leaveGuard(hash)) return;
-  window.location.hash = hash;
+  leaveThen(hash, () => {
+    window.location.hash = hash;
+  });
 }

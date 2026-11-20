@@ -1,6 +1,7 @@
 use crate::clock::ManualClock;
 use crate::fake_capture_one::FakeCaptureOneScripting;
 use crate::fake_commerce::FakeCommerce;
+use crate::fake_pricing::FakePricing;
 use crate::fake_processes::FakeProcessList;
 use crate::fake_secrets::FakeSecrets;
 use crate::fake_sleep::FakeSleepInhibitor;
@@ -46,8 +47,17 @@ pub struct TestApp {
     pub research: Option<ResearchFakes>,
     /// A17: the Trash "Delete session" moves files to (a folder of the test's directory).
     pub trash: Arc<FakeTrash>,
+    /// C1: the fake Pricing server behind the conversations adapter (`with_pricing…` only).
+    pub pricing: Option<Arc<FakePricing>>,
     next_hook: AtomicU64,
 }
+
+/// C1: the connected shop of [`TestApp::with_pricing`] (a fake domain).
+pub const PRICING_SHOP: &str = "shop-a.myshopify.com";
+/// C1: the key the fake Pricing server accepts by default (a made-up value).
+pub const PRICING_KEY: &str = "k-secret-9";
+/// C1: the name of the fake Pricing store whose domain matches [`PRICING_SHOP`].
+pub const PRICING_STORE_NAME: &str = "Dev store";
 
 /// The research crate's fakes, registered as the app's research providers (R7·U1).
 #[derive(Clone, Default)]
@@ -339,6 +349,7 @@ impl TestApp {
             0,
             None,
             Some((commerce, providers)),
+            None,
         )?;
         use psm_core::ports::secrets::SecretStore;
         app.secrets
@@ -456,6 +467,7 @@ impl TestApp {
             clock_start,
             research,
             None,
+            None,
         )
     }
     /// `custom` (R8·U3): a commerce adapter opened in place of `FakeCommerce` and the providers
@@ -472,6 +484,7 @@ impl TestApp {
             Arc<dyn psm_core::ports::commerce::CommerceAdapter>,
             psm_research::ports::Providers,
         )>,
+        pricing: Option<Arc<FakePricing>>,
     ) -> Result<Self> {
         let dir = tempfile::tempdir()?;
         let mut paths = AppPaths::for_dir(dir.path());
@@ -575,6 +588,21 @@ impl TestApp {
                     .map_err(|e| psm_core::Error::InvalidData(e.to_string()))?,
             )?;
         }
+        if let Some(pricing) = &pricing {
+            // C1: the conversations adapter talks to the fake; with a shop, the integration block
+            // names the connected shop (`with_fake_shop` writes none, so the shop would be none).
+            psm_integrations::conversations::with_test_conversations(&paths, pricing.clone());
+            if configure_shop {
+                let mut settings = psm_infra::settings_file::Settings::open(&paths)?;
+                settings.integration = Some(serde_json::json!({
+                    "kind": "shopify",
+                    "shop_domain": PRICING_SHOP,
+                    "client_id": "fake-client-id",
+                    "client_secret": "fake-client-secret-c1",
+                }));
+                psm_infra::settings_file::Settings::set(&paths, &settings)?;
+            }
+        }
         let fake = Arc::new(FakeCaptureOneScripting::new(document_id, capture_root));
         {
             let mut state = fake.state.lock().unwrap();
@@ -654,8 +682,47 @@ impl TestApp {
             fake_sleep,
             research,
             trash,
+            pricing,
             next_hook: AtomicU64::new(1),
         })
+    }
+    /// C1: the wired app with a fake shop on [`PRICING_SHOP`] and the fake Pricing server, which
+    /// accepts [`PRICING_KEY`] and has one store, [`PRICING_STORE_NAME`] on `Shop-A.myshopify.com`
+    /// (≈ the shop). No key is saved.
+    pub fn with_pricing() -> Result<Self> {
+        Self::create_inner(
+            true,
+            true,
+            "custom.damage_report",
+            None,
+            0,
+            None,
+            None,
+            Some(Self::fake_pricing_server()),
+        )
+    }
+    /// C1: [`Self::with_pricing`] without a commerce integration (the connected shop is none).
+    pub fn with_pricing_no_shop() -> Result<Self> {
+        Self::create_inner(
+            true,
+            false,
+            "custom.damage_report",
+            None,
+            0,
+            None,
+            None,
+            Some(Self::fake_pricing_server()),
+        )
+    }
+    fn fake_pricing_server() -> Arc<FakePricing> {
+        let pricing = Arc::new(FakePricing::new());
+        pricing.accept_key(PRICING_KEY);
+        pricing.add_store(PRICING_STORE_NAME, "Shop-A.myshopify.com");
+        pricing
+    }
+    /// C1: the fake Pricing server (`with_pricing…` apps only).
+    pub fn fake_pricing(&self) -> &FakePricing {
+        self.pricing.as_deref().expect("fake Pricing configured")
     }
     pub fn fake_shop(&self) -> &FakeCommerce {
         self.commerce.as_deref().expect("fake commerce configured")

@@ -371,3 +371,93 @@ button.research-pill { cursor: pointer; }
 .research-step[data-look="unread"] .research-step-verb { color: var(--muted); }
 .research-step[data-look="unread"] a { color: var(--muted); }
 .research-step[data-look="undetermined"] { border-left-style: dashed; }
+
+/* C2 (09B §6, §7): the conversations icon, panel and badges. Pricing's inbox is the reference. */
+.conversations-dot { position: absolute; bottom: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 2px var(--background); }
+.conversations-panel { position: fixed; top: 0; right: 0; z-index: 50; display: flex; flex-direction: column; width: 380px; height: 100vh; border-left: 1px solid var(--hair); background: var(--background); box-shadow: var(--shadow-lg, 0 10px 30px rgb(0 0 0 / 0.18)); }
+.conversations-head { display: flex; align-items: center; gap: 4px; padding: 12px 12px 8px 16px; border-bottom: 1px solid var(--hair); }
+.conversations-head h2 { flex: 1; font-weight: var(--weight-bold); }
+.conversations-tabs { display: flex; gap: 4px; padding: 8px 16px; }
+.conversations-tabs [role="tab"] { height: 28px; padding: 0 12px; border-radius: var(--r-pill); font-size: var(--text-sm); color: var(--muted); }
+.conversations-tabs [role="tab"][aria-selected="true"] { background: var(--accent-tint); color: var(--color-text); font-weight: var(--weight-bold); }
+.conversations-problem { margin: 0 16px 8px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger-700); font-size: var(--text-sm); }
+.conversations-list { flex: 1; overflow-y: auto; }
+.conversations-empty, .conversations-connect { padding: 24px 16px; color: var(--muted); }
+.conversations-connect { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.conversations-footer { padding: 12px 16px; border-top: 1px solid var(--hair); text-align: left; font-size: var(--text-sm); color: var(--color-accent); }
+.conversation-row { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px 16px; border-bottom: 1px solid var(--hair); text-align: left; }
+.conversation-row:hover { background: var(--accent-tint); }
+.conversation-row-top, .conversation-row-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.conversation-product { display: flex; gap: 6px; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.conversation-title { overflow: hidden; text-overflow: ellipsis; }
+.conversation-status-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.conversation-status-dot[data-status="answered"] { background: var(--color-accent); }
+.conversation-status-dot[data-status="resolved"] { background: var(--ok); }
+.conversation-unread { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.conversation-row-meta { font-size: var(--text-xs); color: var(--muted); }
+.conversation-time { margin-left: auto; }
+.conversation-last-line { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--text-sm); color: var(--muted); }
+.conversation-waiting { background: color-mix(in srgb, var(--warn) 22%, transparent); border-color: var(--warn); }
+.conversation-badge { background: transparent; border-color: var(--hair-strong); }
+/* C3 (09B §7, §8; CHAT_UX §2–§5): the conversation view. Received = dark on the left, sent = light on the right,
+   in both themes (mirrored from Pricing, where the pricer is "You"). */
+.conversation-view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.conversation-view-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px 4px; }
+.conversation-view-product { display: flex; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.conversation-header-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 16px 10px; border-bottom: 1px solid var(--hair); font-size: var(--text-sm); }
+.conversation-header-topic { font-weight: var(--weight-bold); }
+.conversation-header-blocking { color: var(--warn); font-weight: var(--weight-bold); }
+.conversation-header-status { color: var(--muted); }
+.conversation-thread { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px; }
+.message { display: flex; flex-direction: column; gap: 4px; max-width: 85%; }
+.message[data-side="received"] { align-self: flex-start; align-items: flex-start; }
+.message[data-side="sent"] { align-self: flex-end; align-items: flex-end; }
+.message-bubble { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 16px; font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.message[data-side="received"] .message-bubble { background: #1f2023; color: #f4f4f5; border-bottom-left-radius: 4px; }
+.message[data-side="sent"] .message-bubble { background: #eef0f3; color: #18181b; border-bottom-right-radius: 4px; }
+.message-pending { opacity: 0.6; }
+.message-pending[data-state="failed"] { opacity: 1; }
+.message-pending[data-state="failed"] .message-bubble { opacity: 0.6; }
+.message-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); }
+.message-author { font-weight: var(--weight-bold); }
+.message-failure { color: var(--danger-700); }
+.message-reply-line { padding-left: 8px; border-left: 2px solid currentColor; opacity: 0.75; font-size: var(--text-xs); }
+.message-photos { display: flex; flex-wrap: wrap; gap: 6px; }
+.message-thumb { display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; overflow: hidden; border-radius: 10px; background: color-mix(in srgb, currentColor 12%, transparent); font-size: var(--text-xs); text-align: center; }
+.message-thumb img, img.message-thumb { width: 72px; height: 72px; object-fit: cover; }
+.message-photo-dialog { max-width: min(90vw, 1000px); }
+.message-photo-large { max-width: 100%; max-height: 80vh; margin: 0 auto; object-fit: contain; }
+.quote-block { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-left: 3px solid var(--color-accent); border-radius: 6px; background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.quote-chip { align-self: flex-start; padding: 1px 6px; border-radius: var(--r-pill); background: color-mix(in srgb, currentColor 16%, transparent); font-size: 10px; font-weight: var(--weight-bold); letter-spacing: 0.04em; }
+.quote-text { font-style: italic; }
+.quote-chip-link { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.message-action { font-size: var(--text-xs); color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+.conversation-mark-answered { margin-left: auto; }
+/* C4 (09B §7.2): "Open session" in the header line, and the slim visit bar under the app header. */
+.conversation-open-session { margin-left: auto; }
+.conversation-open-session + .conversation-mark-answered { margin-left: 0; }
+.visit-bar { position: sticky; top: 56px; z-index: 19; display: flex; align-items: center; gap: var(--space-3); min-height: 36px; padding: 2px var(--space-4); border-bottom: 1px solid var(--hair); background: color-mix(in srgb, var(--warn) 14%, var(--color-bg)); font-size: var(--text-sm); }
+.visit-bar-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* C3 (09B §8; CHAT_UX §4): the composer, Pricing's rounded box with a round send button. */
+.composer { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid var(--hair); }
+.composer-off { font-size: var(--text-sm); color: var(--danger-700); }
+.composer-reply { display: flex; align-items: center; gap: 4px; font-size: var(--text-sm); color: var(--muted); }
+.composer-reply .message-reply-line { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.composer-chosen { display: flex; flex-wrap: wrap; gap: 6px; }
+.composer-chosen-item { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; overflow: hidden; border-radius: 8px; background: var(--accent-tint); font-size: 10px; }
+.composer-chosen-item img { width: 48px; height: 48px; object-fit: cover; }
+.composer-chosen-item button { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: rgb(0 0 0 / 0.6); color: #fff; font-size: 10px; line-height: 16px; }
+.composer-box { display: flex; align-items: flex-end; gap: 4px; padding: 4px; border: 1px solid var(--hair-strong); border-radius: 20px; }
+.composer-text { flex: 1; min-height: 32px; max-height: 160px; padding: 6px 4px; resize: none; background: transparent; font-size: var(--text-sm); outline: none; field-sizing: content; }
+.composer-text:disabled { cursor: not-allowed; opacity: 0.6; }
+.composer-send { border-radius: 50%; }
+.composer-counter { align-self: flex-end; font-size: var(--text-xs); color: var(--muted); }
+.composer-counter[data-over="true"] { color: var(--danger-700); }
+.photo-picker { display: flex; flex-direction: column; gap: 6px; max-height: 240px; padding: 8px; overflow-y: auto; border: 1px solid var(--hair); border-radius: 12px; }
+.photo-picker-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--text-sm); font-weight: var(--weight-bold); }
+.photo-picker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.photo-picker-item { position: relative; display: block; aspect-ratio: 1; overflow: hidden; border-radius: 8px; border: 2px solid transparent; cursor: pointer; }
+.photo-picker-item[data-ticked="true"] { border-color: var(--color-accent); }
+.photo-picker-item input { position: absolute; top: 4px; left: 4px; }
+.photo-picker-item img { width: 100%; height: 100%; object-fit: cover; }
+.photo-picker-missing { display: flex; align-items: center; justify-content: center; height: 100%; font-size: var(--text-xs); color: var(--muted); }

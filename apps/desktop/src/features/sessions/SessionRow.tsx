@@ -7,6 +7,8 @@ import { ResearchPill, WriterPill } from './ResearchPill';
 import { ChangedPill } from './ChangedPill';
 import { StatusPill } from './StatusPill';
 import { SessionActionsMenu } from './DeleteSession';
+import { SessionBadge } from '@/features/conversations/SessionBadge';
+import type { ConversationSessionBadge } from '@/services/conversations';
 
 type Row = SessionList['groups'][number]['rows'][number];
 
@@ -29,9 +31,11 @@ type SessionRowProps = {
   onChanged?: () => void;
   /** A17: after "Delete session". */
   onDeleted?: () => void;
+  /** C2 (09B §6): the session's conversations badge (absent: no unresolved conversation). */
+  conversations?: ConversationSessionBadge;
 };
 
-export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged, onDeleted }: SessionRowProps) {
+export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged, onDeleted, conversations }: SessionRowProps) {
   const name = row.item_type || row.title;
   return (
     <div className="session-row" data-testid={`session-row-${row.id}`} data-selected={selected || undefined}>
@@ -44,11 +48,12 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
           <span className="row-name">
             <strong>{name}</strong>
             <small>{row.sku}</small>
-            {(row.arranged || research) && (
+            {(row.arranged || research || conversations) && (
               <span className="row-pills">
                 {row.arranged && <span className="pill">Arranged</span>}
                 <ResearchPill research={research} />
                 <WriterPill research={research} />
+                <SessionBadge badge={conversations} />
               </span>
             )}
           </span>

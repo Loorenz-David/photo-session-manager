@@ -250,6 +250,24 @@ pub fn layout_keys(
     Ok(out)
 }
 
+/// C4 (projection L3): the keys of the fields `form_get` shows for `item_type` over all three
+/// steps: the keys of `layout_keys` that have an active definition (a preset key without one is
+/// not shown). One copy of the layout rules: callers outside core go through this.
+pub fn form_keys(
+    tx: &dyn StoreTx,
+    item_type: &str,
+    integration: Option<&str>,
+) -> Result<std::collections::BTreeSet<String>> {
+    let active: HashSet<String> = active_definitions(tx, integration)?
+        .into_iter()
+        .map(|d| d.key)
+        .collect();
+    Ok(layout_keys(tx, item_type, integration)?
+        .into_iter()
+        .filter(|key| active.contains(key))
+        .collect())
+}
+
 /// The item's title presented as the value of `product.title`: the title has one home, `items.title`
 /// (ch05), so this is the single source of the field. An empty title is no value.
 fn title_value(item: &Item) -> Option<Value> {

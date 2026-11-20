@@ -5,6 +5,7 @@ import { SkeletonRows } from '@/components/pending/SkeletonRows';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePageData } from '@/lib/pending';
 import { PageHeader } from '@/features/shell/PageHeader';
+import { ConversationsButton } from '@/features/conversations/ConversationsButton';
 import { cameraFilesNotReceivedDismiss, cameraTakeBack, cameraTakeBackAvailability } from '@/services/camera';
 import { HelperLog } from './HelperLog';
 import { toast } from 'sonner';
@@ -47,7 +48,7 @@ export function HealthPage() {
   const refresh = async () => { await reload(); };
   const takeBack = async () => { try { const result = await cameraTakeBack(); toast.success(result.camera_held ? 'Camera back on the cable' : 'Capture One reopened; the camera is still held'); await reload(); } catch (e) { toast.error(takeBackError(e)); } };
 
-  return <><PageHeader title={<h1 className="health-title">Health</h1>} escapeGoesBack><ActionButton variant="outline" action={refresh}>Retry checks</ActionButton></PageHeader><main className="health-shell">
+  return <><PageHeader title={<h1 className="health-title">Health</h1>} escapeGoesBack><ConversationsButton /><ActionButton variant="outline" action={refresh}>Retry checks</ActionButton></PageHeader><main className="health-shell">
     <section className="health-section" aria-label="System status"><h2>System status</h2>
       {loading ? <SkeletonRows n={4} /> : error ? <p role="alert">{String(error)}</p> : <div className="health-list">{health?.items.map((item, index) => <div className="health-row" key={`${item.code}-${index}`} data-ok={item.ok}>
         <div className="health-label"><span className="health-dot" data-ok={item.ok} />{names[item.code] ?? item.code}</div><div className="health-detail">{item.detail}{item.code.startsWith('document') && checkedAt && <span className="health-checked"> · checked {checkedAt}</span>}</div>

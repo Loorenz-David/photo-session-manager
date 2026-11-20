@@ -8,7 +8,6 @@ import { ChoicePills } from './inputs/ChoicePills';
 import { ColorInput } from './inputs/ColorInput';
 import { DateInput } from './inputs/DateInput';
 import { DecimalInput } from './inputs/DecimalInput';
-import { DescriptionInput } from './inputs/DescriptionInput';
 import { DimensionInput } from './inputs/DimensionInput';
 import { FilesPicker } from './inputs/FilesPicker';
 import { IntInput } from './inputs/IntInput';
@@ -152,7 +151,7 @@ export function MetafieldInput({ field, value, edited, onChange, onBlur, placeho
   }, [reveal]);
   const stored = field.value;
   const kind = definition.writable ? kindOf(definition) : 'unsupported';
-  const Input = definition.key === PRODUCT_DESCRIPTION ? DescriptionInput : INPUTS[kind];
+  const Input = definition.key === PRODUCT_DESCRIPTION ? TextareaInput : INPUTS[kind];
   const id = `field-${definition.key}`;
   const showAi = !edited && stored?.provenance === 'ai';
   const invalid = !edited && stored !== null && !stored.valid;

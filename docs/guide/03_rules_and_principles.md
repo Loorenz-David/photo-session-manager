@@ -14,6 +14,17 @@ Each rule names its source. When a rule here and the source disagree, the source
 | H7 | Device-, app- and platform-specific concepts never appear in core modules or core tables; they live in adapters and link tables | `item_links`, `photo_links`, `attribute_definition_links`; known debts listed in `backlog.md` ("H7 family": `"shopify"` literals, Capture One error-number heuristics, Sony sentences in core) — do not add more |
 | H8 | Business logic is independent of Tauri, of any HTTP server and of the UI; commands and events are thin | `psm-core` has no Tauri dependency; commands call services inside `spawn_blocking`; the phone remote (post-MVP) reuses the services |
 
+## Conversations rules CR1–CR6 (book `09B` §10 rules 1–6; `docs/implementation/master_plan_conversations.md` §3)
+| # | Rule | Where it bites in code |
+|---|---|---|
+| CR1 | Session Manager writes to Pricing only the photographer's replies and "Mark answered" | the port has two writing methods (`post_message`, `mark_answered`); the adapter issues only `POST …/messages` and `PATCH … {"status":"answered"}`; `post_message` is called only by the flush inside `tick`, `mark_answered` only by `ConversationsService::mark_answered`; `reply`, `retry`, `discard`, `view` and `attachable` never call the provider |
+| CR2 | The API key lives only in the Keychain; never printed, logged, exported, or sent anywhere but the configured server | `KEY_ACCOUNT` through `SecretStore`; `RedactingSecrets` registers it with `add_secret`; DTOs carry `key_saved` only; `PricingRequest`'s `Debug` hides the bearer; `FakePricing` records `authorized`, never the value |
+| CR3 | Deleting a session never touches Pricing nor the local copy (conversations are keyed by SKU) | migration 019 has no session/item/photo column; `session_delete` makes no provider call |
+| CR4 | Opening a conversation never moves the capture folder (C4) | `features/conversations/visit.ts`: route and visit are one state changed only by `visitStep`; `App.tsx` hands `useCaptureTarget` (the only caller of `activateSession` / `deactivateSession`) `captureTarget(state)` = the visit's capture while visiting; no backend read of a visit (`session_get`, `conversation_get`, `conversation_attachable`) touches the active session (`c4_conversations_visit::c4_c8*`) |
+| CR5 | Pricing down or the key missing never blocks or slows another screen | the pull runs on `conversations_background`; `connection()` never takes the lane; commands run in `spawn_blocking`; no request without `ready` (MC-C1.1) |
+| CR6 | No duplicate replies: every send carries its `clientMutationId`, every retry reuses it (C3) | the composer makes the id once per press (`crypto.randomUUID()`); it is the `conversation_outbox` primary key and nothing in the backend makes another; `checked_reply` (1–80 characters) and `reply` (same id → the stored row, nothing written); the flush sends exactly the stored id; a `failed` row is sent again only through `retry`, with the same id, never by a `tick` |
+| — | No test, session or tool ever calls Pricing or Shopify; sessions never launch the built app in C1–C4 | the adapter is tested over a recording `PricingHttp` and `FakePricing` |
+
 ## Public repository: what must never be committed (`CLAUDE.md`; master plan §3 "Camera hard rules" and "Secrets"; `native/camera-sidecar/README.md` §Never commit; `.gitignore`)
 - Any Sony SDK file: headers, `*.dylib`, `CrAdapter/`, the `CrSDK_*` archive or folder, the lab's
   hand-written `sdk_shim` headers. The SDK lives only on the build machine, outside the repo.
