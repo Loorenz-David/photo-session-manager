@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { conversationGet, conversationMarkRead, type ConversationView as View } from '@/services/conversations';
+import {
+  conversationAttachable,
+  conversationDiscard,
+  conversationGet,
+  conversationMarkAnswered,
+  conversationMarkRead,
+  conversationRetry,
+  type ConversationAttachable,
+  type ConversationView as View,
+} from '@/services/conversations';
 import { ServiceError } from '@/services/sessions';
+import { Composer, replyExcerpt, type ReplyTarget } from './Composer';
 import { MessageBubble, PendingBubble } from './MessageBubble';
 import { useConversationsChanged } from './useConversations';
 
@@ -63,8 +74,32 @@ function useReadMark(id: string, view: View | null) {
   }, [id, view]);
 }
 
-/** The header line: status dot, topic, "· Blocking", the status in words, "Not on this Mac". */
-function HeaderLine({ view }: { view: View }) {
+/** The photos a reply may attach, read when the view opens and again with every re-read of the view. */
+function useAttachable(id: string, view: View | null): ConversationAttachable | null {
+  const [attachable, setAttachable] = useState<ConversationAttachable | null>(null);
+  const latest = useRef(0);
+  useEffect(() => {
+    if (!view) return;
+    const mine = ++latest.current;
+    Promise.resolve()
+      .then(() => conversationAttachable(id))
+      .then(next => {
+        if (mine === latest.current) setAttachable(next);
+      })
+      .catch(() => undefined);
+  }, [id, view]);
+  return attachable;
+}
+
+function failureMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The header line: status dot, topic, "· Blocking", the status in words, "Not on this Mac"; Mark answered on an open
+ * conversation.
+ */
+function HeaderLine({ view, onMarkAnswered }: { view: View; onMarkAnswered: () => void }) {
   return (
     <div className="conversation-header-line">
       <span className="conversation-status-dot" data-status={view.status} aria-hidden="true" />
@@ -72,6 +107,11 @@ function HeaderLine({ view }: { view: View }) {
       {view.blocking && <span className="conversation-header-blocking">· Blocking</span>}
       <span className="conversation-header-status">{statusWords(view)}</span>
       {view.session_id === null && <span className="conversation-elsewhere">Not on this Mac</span>}
+      {view.status === 'open' && (
+        <Button variant="outline" size="sm" className="conversation-mark-answered" onClick={onMarkAnswered}>
+          Mark answered
+        </Button>
+      )}
     </div>
   );
 }
@@ -81,8 +121,30 @@ function HeaderLine({ view }: { view: View }) {
  * on the left, the photographer's light on the right), then the replies not yet confirmed.
  */
 export function ConversationView({ id, onBack }: { id: string; onBack: () => void }) {
-  const { view } = useView(id, onBack);
+  const { view, reload } = useView(id, onBack);
+  const attachable = useAttachable(id, view);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   useReadMark(id, view);
+
+  const act = (work: () => Promise<unknown>) => {
+    Promise.resolve()
+      .then(work)
+      .catch(error => toast(failureMessage(error)))
+      .finally(reload);
+  };
+  const markAnswered = () => {
+    Promise.resolve()
+      .then(() => conversationMarkAnswered(id))
+      .catch(error => {
+        if (error instanceof ServiceError && error.code === 'conversation_resolved') {
+          toast('Pricing has already resolved this');
+        } else {
+          toast(failureMessage(error));
+        }
+      })
+      .finally(reload);
+  };
+
   return (
     <div className="conversation-view" data-testid="conversation-view">
       <div className="conversation-view-head">
@@ -96,11 +158,41 @@ export function ConversationView({ id, onBack }: { id: string; onBack: () => voi
           </div>
         )}
       </div>
-      {view && <HeaderLine view={view} />}
+      {view && <HeaderLine view={view} onMarkAnswered={markAnswered} />}
       <div className="conversation-thread">
-        {view?.messages.map(m => <MessageBubble key={m.id} message={m} />)}
-        {view?.pending.map(p => <PendingBubble key={p.client_mutation_id} pending={p} />)}
+        {view?.messages.map(m => (
+          <MessageBubble
+            key={m.id}
+            message={m}
+            onReply={() => setReplyTarget({ message_id: m.id, author_name: m.author.name, excerpt: replyExcerpt(m.text) })}
+          />
+        ))}
+        {view?.pending.map(p => (
+          <PendingBubble
+            key={p.client_mutation_id}
+            pending={p}
+            actions={
+              <>
+                <button type="button" className="message-action" onClick={() => act(() => conversationRetry(p.client_mutation_id))}>
+                  Retry
+                </button>
+                <button type="button" className="message-action" onClick={() => act(() => conversationDiscard(p.client_mutation_id))}>
+                  Remove
+                </button>
+              </>
+            }
+          />
+        ))}
       </div>
+      {view && (
+        <Composer
+          view={view}
+          attachable={attachable}
+          replyTarget={replyTarget}
+          onClearReply={() => setReplyTarget(null)}
+          onSent={reload}
+        />
+      )}
     </div>
   );
 }

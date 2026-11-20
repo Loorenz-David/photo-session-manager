@@ -176,7 +176,7 @@ What the person sees (W1–W4; the search texts come in W5).
   keeps the text it replaced as an earlier version; an instruction or example list equal to the shipped one is stored
   as the shipped default, so later builds' improvements reach it.
 
-## Conversations with Pricing (book `09B`; `docs/implementation/master_plan_conversations.md`; C1 built, C2–C4 to come)
+## Conversations with Pricing (book `09B`; `docs/implementation/master_plan_conversations.md`; C1–C3 built, C4 to come)
 Beyo Pricing is the owner's second app, where a **pricer** prices one product at a time from what Session Manager
 published. The pricer asks the photographer questions about a product there; Session Manager keeps an exact **local
 copy** of the questions addressed to the photographer and (from C2) shows them, notifies and lets the photographer answer.
@@ -189,6 +189,16 @@ reached), re-reads each named conversation and replaces it in the copy; a refuse
 the pull until the key is replaced. The first connection is silent. Nothing is written to Pricing in C1. Read marks are
 per Mac; an open conversation enters unread. Notices (`New question · <SKU> — <topic>`, `New reply · <SKU>`) are made
 for questions and pricer messages, never for the app's own replies or the first connection.
+C3 (answering): opening a conversation from the panel shows it as in Pricing (the pricer's dark bubbles on the left,
+the photographer's light ones on the right, the quote block with its field chip, photos that open large, the reply
+line, "· edited"); it counts as read while on screen with the window focused. The photographer answers with text
+(Enter sends, Shift+Enter is a new line, at most 4000 characters), a reply to one message and up to ten **published**
+photos of that product (gallery order, then condition; both halves of a split; "Publish first to attach photos"; none
+for a conversation "Not on this Mac", where text still works). A reply is saved on this Mac at the press and shows at
+once as "Sending…"; it leaves within a quarter of a second (also after a restart), never twice (one id per press,
+reused by Retry), and a failure shows "Couldn't send" (or Pricing's words) with **Retry** and **Remove**; a failed
+reply is never resent by itself. **Mark answered** (open conversations only) tells Pricing the fix was made in the
+data; replying to a resolved conversation re-opens it as answered. The only writes to Pricing are these two.
 
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |

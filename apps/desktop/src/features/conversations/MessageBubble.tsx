@@ -56,7 +56,16 @@ export function ReplyLine({ authorName, excerpt }: { authorName: string; excerpt
  * bubble on the left with the author's name and the time under it; this app's own (`me`) are sent: a light bubble on
  * the right labelled "You". Mirrored from Pricing, where the pricer is "You".
  */
-export function MessageBubble({ message, now }: { message: ConversationMessage; now?: number }) {
+export function MessageBubble({
+  message,
+  now,
+  onReply,
+}: {
+  message: ConversationMessage;
+  now?: number;
+  /** Makes this message the reply target of the composer. */
+  onReply?: () => void;
+}) {
   const sent = message.author.kind === 'me';
   return (
     <div className="message" data-side={sent ? 'sent' : 'received'} data-testid={`message-${message.id}`}>
@@ -70,6 +79,11 @@ export function MessageBubble({ message, now }: { message: ConversationMessage; 
         <span className="message-author">{sent ? 'You' : message.author.name}</span>
         <time dateTime={new Date(message.created_at).toISOString()}>{activityLabel(message.created_at, now)}</time>
         {message.edited_at !== null && <span className="message-edited">· edited</span>}
+        {onReply && (
+          <button type="button" className="message-action" onClick={onReply}>
+            Reply
+          </button>
+        )}
       </div>
     </div>
   );

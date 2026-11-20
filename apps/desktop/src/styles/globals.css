@@ -430,3 +430,28 @@ button.research-pill { cursor: pointer; }
 .quote-block { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-left: 3px solid var(--color-accent); border-radius: 6px; background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
 .quote-chip { align-self: flex-start; padding: 1px 6px; border-radius: var(--r-pill); background: color-mix(in srgb, currentColor 16%, transparent); font-size: 10px; font-weight: var(--weight-bold); letter-spacing: 0.04em; }
 .quote-text { font-style: italic; }
+.message-action { font-size: var(--text-xs); color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+.conversation-mark-answered { margin-left: auto; }
+/* C3 (09B §8; CHAT_UX §4): the composer, Pricing's rounded box with a round send button. */
+.composer { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 12px; border-top: 1px solid var(--hair); }
+.composer-off { font-size: var(--text-sm); color: var(--danger-700); }
+.composer-reply { display: flex; align-items: center; gap: 4px; font-size: var(--text-sm); color: var(--muted); }
+.composer-reply .message-reply-line { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.composer-chosen { display: flex; flex-wrap: wrap; gap: 6px; }
+.composer-chosen-item { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; overflow: hidden; border-radius: 8px; background: var(--accent-tint); font-size: 10px; }
+.composer-chosen-item img { width: 48px; height: 48px; object-fit: cover; }
+.composer-chosen-item button { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: rgb(0 0 0 / 0.6); color: #fff; font-size: 10px; line-height: 16px; }
+.composer-box { display: flex; align-items: flex-end; gap: 4px; padding: 4px; border: 1px solid var(--hair-strong); border-radius: 20px; }
+.composer-text { flex: 1; min-height: 32px; max-height: 160px; padding: 6px 4px; resize: none; background: transparent; font-size: var(--text-sm); outline: none; field-sizing: content; }
+.composer-text:disabled { cursor: not-allowed; opacity: 0.6; }
+.composer-send { border-radius: 50%; }
+.composer-counter { align-self: flex-end; font-size: var(--text-xs); color: var(--muted); }
+.composer-counter[data-over="true"] { color: var(--danger-700); }
+.photo-picker { display: flex; flex-direction: column; gap: 6px; max-height: 240px; padding: 8px; overflow-y: auto; border: 1px solid var(--hair); border-radius: 12px; }
+.photo-picker-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--text-sm); font-weight: var(--weight-bold); }
+.photo-picker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.photo-picker-item { position: relative; display: block; aspect-ratio: 1; overflow: hidden; border-radius: 8px; border: 2px solid transparent; cursor: pointer; }
+.photo-picker-item[data-ticked="true"] { border-color: var(--color-accent); }
+.photo-picker-item input { position: absolute; top: 4px; left: 4px; }
+.photo-picker-item img { width: 100%; height: 100%; object-fit: cover; }
+.photo-picker-missing { display: flex; align-items: center; justify-content: center; height: 100%; font-size: var(--text-xs); color: var(--muted); }
