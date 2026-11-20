@@ -20,3 +20,7 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
   planner's refinements (event paging before listing, Remove for a failed reply, banner click limits).
   - **Chain C1→C4 started** in the background: `scratchpad/conv_chain.sh`, log `scratchpad/conv_chain.log`. It
     stops at the first milestone that does not approve (exit 10 = orchestrator must look).
+- **2026-11-20: C1 projection r0 = AMENDMENTS_REQUIRED** (no owner decisions). The orchestrator applied L1–L25 and the
+  two trace additions to the C1 plan (Review log entry) and the master plan (v1.1), updated the counts (C1 4 units / 21
+  criteria / 111 rows; totals 12 / 73 / 294), and set C1's `projection:` to `done` so the runner goes straight to the
+  implementer.
