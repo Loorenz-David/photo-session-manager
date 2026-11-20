@@ -38,3 +38,10 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
   random temp-folder name in settings.json (distinctive values now).
   - **Next:** the live check on the dev Mac with the owner's Pricing key (pasted by the owner) and a test question
     the owner creates; the first real reply only after the owner confirms. Banners: judge on the installed app only.
+- **2026-11-20: live connection works.** The first key saw only "Dev store"; with a key for the real store the app
+  connected to "Beyo Viintage" (68c5b4-6a.myshopify.com), first sync done, checks every 10 s confirmed; the real
+  store had no question events yet. Owner: "perfect, now it works".
+- **2026-11-20: A28 installed** (`62b1559`; previous build kept as "2026-11-20 conversations"); PR #25 merged
+  (`7da4b6e`). Test buttons answer every press (Pricing and Camera); the panel says why it cannot connect.
+  - Open: the owner's first live question and reply (confirm before the first reply), banners on the installed app,
+    the visit-and-back check with a real capture.
