@@ -83,9 +83,10 @@ Webhook registration is not used.
    the saved event cursor, and per-conversation **read marks**. The copy is what the UI reads; screens never
    wait on the network.
 2. **First connection** (no saved cursor), silently (no sound, no banner, no toast):
-   (a) list the store's unresolved photographer conversations (`GET …/cases?recipient=photographer&status=unresolved`)
-   into the copy; (b) page the event log from `after=0` to its end (limit 500) only to reach the newest cursor,
-   fetching any photographer conversation it names that is not yet in the copy; (c) save the cursor.
+   (a) page the event log from `after=0` to its end (limit 500) only to reach the newest cursor; (b) list the
+   store's unresolved photographer conversations (`GET …/cases?recipient=photographer&status=unresolved`) into the
+   copy, and fetch any photographer conversation the paged events named that is not yet in it; (c) save the cursor.
+   Paging first means a change made while listing is caught by the next check (planning, 2026-11-20).
    Read marks after the first connection: an **open** conversation counts as unread (it needs an answer); answered
    and resolved ones count as read.
 3. **Every 10 seconds** while the app runs (focused or not), and at once on launch, on waking, and after the key
@@ -160,7 +161,8 @@ Webhook registration is not used.
 - **Sending feels instant and never lies** (CHAT_UX §5): the message shows at once, dimmed, "Sending…". Each send
   gets a UUID `clientMutationId` when the photographer presses send, stored with the pending message, so a retry
   (including after a restart) cannot duplicate it. Success → the message becomes the server's message (and the
-  echoed event is recognised by its id). Failure → it stays with "Couldn't send · Retry" (same id). A pending
+  echoed event is recognised by its id). Failure → it stays with "Couldn't send · Retry" (same id), or
+  **Remove** (deletes the local pending message, sends nothing; for a reply Pricing refuses for good). A pending
   message survives a restart.
 - **Mark answered** (header of an open conversation): `PATCH status=answered` without a message, for when the fix
   was made in the data. 409 `case_resolved` → refresh and say "Pricing has already resolved this".
@@ -175,7 +177,9 @@ Webhook registration is not used.
   conversation).
 - **Sound**: one short, soft chime built into the app (no third-party sound file), when the sound setting is on.
 - **Mac banner** (when on and the window is not focused): same words; clicking it brings Session Manager forward
-  with the panel on that conversation where the platform allows.
+  (macOS does not tell the app which banner was clicked, so the toast with **Open** stays until the window is
+  focused again). macOS asks once to allow banners; the chime is played by the app, not the page, so it also
+  sounds right after launch.
 - Nothing notifies for the photographer's own replies or during the first connection.
 
 ## 10. Rules that must never break
