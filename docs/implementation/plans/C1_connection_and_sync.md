@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # C1 — Connection and sync
 
-**Tracker:** IMPLEMENTED (2026-11-20, opus, implement r1: 4 units checkpointed 502b501, bbaf423, f7553a9, 0868835; 112 rows, 116 tests (adapter 28, rules 11, suite 19 + 44, desktop c1_tests 6, UI 8); closing gate green: workspace 1998/0, clippy, fmt, typecheck, npm test 679/0)
+**Tracker:** APPROVED (2026-11-20, opus, review r1: APPROVED_WITH_NOTES, 0 blocking, 5 notes in `backlog_conversations/C1_connection_and_sync.md`; review-mode checks green)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file: state, date, actor, one-line note. `master_plan.md` §4 and `STATUS.md` are not used or edited by conversations milestones.)
 
@@ -353,3 +353,19 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
   need "a later tick makes no request"), U2 added `outbox_insert`/`outbox` to the store port for C1·C10(c), U4 added
   `key_saved()`/`describe()` to the core service (outside U4's file list). Followed tests: `p01_storage_identity`
   (tables), `t1_settings_drawer` (sections). No owner card.
+- **2026-11-20, reviewer (opus), review r1: APPROVED_WITH_NOTES** (`handoffs/reviewer/handoff_C1_connection_and_sync_review_r1.md`).
+  Gate: tracker IMPLEMENTED, checkpoints 502b501…0868835 and close 9b3ac95 present; the committed paths equal the
+  handoff's declared perimeter. Review-mode checks, run once each: rules 11/0, adapter `conversations::` 28/0, suite
+  `c1_conversations_connection::` 19/0 and `c1_conversations_sync::` 44/0, `psm-desktop` 68/0, vitest
+  `src/features/settings` 107/0, clippy (core, infra, integrations, testkit, desktop), fmt, typecheck green; the
+  full-suite stamp stands. Verified by reading: all 112 rows have a test at their boundary that asserts the exact
+  outcome and would fail on a wrong one; the cursor is written in the same transaction as the change it follows at
+  every pull site (`apply`, `delete_conversation`, `set_cursor`, `finish_first_sync`); no provider request when MC-C1.1
+  is false (`calls_allowed` re-checked inside the lane before every request; `connect` only calls `stores()`); the key
+  is in no DTO (`key_saved` only), log call, error text or request record (`PricingRequest` Debug redacts it; the
+  redaction registry is fed by `RedactingSecrets`); every fixture matches its package example or schema; no real host
+  in the tree (the live transport is reached only without a test seam, and never without a key); no Pricing word, URL
+  or `photographer` in `crates/core` production code; `conversations_background` is spawned in `App::build` under
+  `run_startup` and joined within `BACKGROUND_JOIN_BOUND`; H1–H8 hold (the two write methods have no production
+  caller). Assumptions: none contradicts 09B; three are contract folds (backlog). 5 notes in
+  `backlog_conversations/C1_connection_and_sync.md`. Narrative written.
