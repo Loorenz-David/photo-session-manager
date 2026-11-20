@@ -43,6 +43,13 @@ pub enum AppEvent {
         uploaded: i64,
         total: i64,
     },
+    /// C1 (`master_plan_conversations.md` §4 Event): the copy, a read mark or the connection
+    /// changed; `notices` = the conversations a completed check found news in.
+    ConversationsChanged {
+        notices: Vec<crate::domain::conversation::ConversationNotice>,
+        chime: bool,
+        banner: bool,
+    },
 }
 
 /// `export_progress.state` (master plan §6.7).

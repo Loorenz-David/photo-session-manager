@@ -8,6 +8,7 @@ mod a17_delete_session;
 mod a20_switch_scripts;
 mod a21_photo_files;
 mod c1_conversations_connection;
+mod c1_conversations_sync;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

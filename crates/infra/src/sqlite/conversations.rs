@@ -215,7 +215,7 @@ fn conversation_from(conn: &Connection, row: ConversationRow) -> Result<Conversa
     })
 }
 
-pub(crate) fn conversation_read(conn: &Connection, id: &str) -> Result<Option<Conversation>> {
+fn conversation_read(conn: &Connection, id: &str) -> Result<Option<Conversation>> {
     let row = conn
         .query_row(
             &format!("SELECT {CONVERSATION_COLUMNS} FROM conversations WHERE id=?1"),
@@ -401,6 +401,65 @@ impl ConversationStore for SqliteStore {
             set_cursor(conn, cursor)?;
             Ok(changed)
         })
+    }
+
+    fn delete_conversation(&self, id: &str, cursor: Option<i64>) -> Result<bool> {
+        self.research_transaction(|tx| {
+            let conn = tx.conn();
+            let removed = conn
+                .execute("DELETE FROM conversations WHERE id=?1", [id])
+                .map_err(db)?;
+            conn.execute(
+                "DELETE FROM conversation_messages WHERE conversation_id=?1",
+                [id],
+            )
+            .map_err(db)?;
+            let outbox = conn
+                .execute(
+                    "DELETE FROM conversation_outbox WHERE conversation_id=?1 AND state<>'sent'",
+                    [id],
+                )
+                .map_err(db)?;
+            set_cursor(conn, cursor)?;
+            Ok(removed + outbox > 0)
+        })
+    }
+
+    fn complete_check(&self, now: i64) -> Result<()> {
+        self.research_transaction(|tx| {
+            let conn = tx.conn();
+            ensure_sync_row(conn)?;
+            conn.execute(
+                "UPDATE conversation_sync SET last_ok_at=?1, last_error=NULL, last_error_at=NULL \
+                 WHERE id=1",
+                [now],
+            )
+            .map_err(db)?;
+            Ok(())
+        })
+    }
+
+    fn mark_read(&self, id: &str) -> Result<bool> {
+        self.research_transaction(|tx| {
+            let conn = tx.conn();
+            let Some(stored) = conversation_read(conn, id)? else {
+                return Ok(false);
+            };
+            let newest = stored.messages.iter().map(|m| m.created_at).max();
+            if newest.is_none() || newest == stored.read_mark {
+                return Ok(false);
+            }
+            conn.execute(
+                "UPDATE conversations SET read_mark=?1 WHERE id=?2",
+                params![newest, id],
+            )
+            .map_err(db)?;
+            Ok(true)
+        })
+    }
+
+    fn conversation(&self, id: &str) -> Result<Option<Conversation>> {
+        self.research_transaction(|tx| conversation_read(tx.conn(), id))
     }
 
     fn conversations(&self) -> Result<Vec<Conversation>> {

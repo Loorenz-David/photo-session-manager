@@ -6,8 +6,12 @@
 use crate::{
     Error, Result,
     domain::conversation::{
-        Connection, ConnectionState, ConversationSettings, KEY_ACCOUNT, ProviderError, Tick,
+        Connection, ConnectionState, Conversation, ConversationNotice, ConversationSettings,
+        ConversationStatus, EventKind, EventPage, KEY_ACCOUNT, NoticeKind, ProviderError,
+        ResolvedBy, Tick,
     },
+    events::AppEvent,
+    mechanisms::conversation_rules::{check_backoff, entering_read_mark},
     ports::{
         clock::Clock,
         conversations::{
@@ -18,7 +22,17 @@ use crate::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex, MutexGuard},
+};
+
+/// Events asked per page (the package's maximum).
+const PAGE: u32 = 500;
+/// MC-C1.7: the wait after a complete check.
+const CHECK_EVERY_MS: i64 = 10_000;
+/// The package's maximum number of cases in one list (a first connection logs `truncated`).
+const LIST_MAX: usize = 200;
 
 /// The process-wide lane (MC-C1 notation): held for one provider request and the transaction that
 /// applies its answer, so requests and applies never interleave, not even across an old and a new
@@ -62,9 +76,56 @@ enum HeldKey {
     Read(Option<String>),
 }
 
+/// A conversation a running check found news in (MC-C1.6 Notices).
+struct Mark {
+    conversation_id: String,
+    kind: NoticeKind,
+    event_id: i64,
+}
+
+/// What the service keeps in memory (MC-C1.7: `next_check_at`, `failures`; the running check's
+/// marks and whether it changed the copy).
 #[derive(Default)]
 struct Memory {
     key: HeldKey,
+    /// Wall clock; 0 at build = "now".
+    next_check_at: i64,
+    failures: u32,
+    more: bool,
+    marks: Vec<Mark>,
+    applied: bool,
+    events: usize,
+}
+
+impl Memory {
+    fn fresh_check(&mut self, next_check_at: i64) {
+        self.next_check_at = next_check_at;
+        self.failures = 0;
+        self.more = false;
+        self.marks.clear();
+        self.applied = false;
+        self.events = 0;
+    }
+}
+
+/// Why a check stopped early.
+enum Stop {
+    Provider(ProviderError),
+    Storage(Error),
+    /// The connection or the cursor changed under the check (another connect or service).
+    Changed,
+}
+
+impl From<ProviderError> for Stop {
+    fn from(error: ProviderError) -> Self {
+        Self::Provider(error)
+    }
+}
+
+impl From<Error> for Stop {
+    fn from(error: Error) -> Self {
+        Self::Storage(error)
+    }
 }
 
 pub struct ConversationsService {
@@ -74,7 +135,6 @@ pub struct ConversationsService {
     slot: Arc<dyn ConversationSettingsSlot>,
     shop: Option<String>,
     clock: Arc<dyn Clock>,
-    #[allow(dead_code)]
     events: Arc<dyn EventSink>,
     lane: Arc<ConversationsLane>,
     memory: Mutex<Memory>,
@@ -203,22 +263,49 @@ impl ConversationsService {
 
     /// MC-C1.3 Connect: Test connection.
     pub fn test_connection(&self) -> std::result::Result<Connection, ConnectError> {
-        self.connect()
+        let before = self.connection()?.state;
+        let after = self.connect()?;
+        self.emit_if_changed(before, after.state);
+        Ok(after)
     }
 
     /// MC-C1.3: stores the key (trimmed; empty = remove), holds it in memory, then connects.
     pub fn key_set(&self, key: Option<&str>) -> std::result::Result<Connection, ConnectError> {
-        match key.map(str::trim).filter(|k| !k.is_empty()) {
+        let before = self.connection()?.state;
+        let after = match key.map(str::trim).filter(|k| !k.is_empty()) {
             None => {
                 self.secrets.delete(KEY_ACCOUNT)?;
                 self.memory().key = HeldKey::Read(None);
-                Ok(self.connection()?)
+                self.connection()?
             }
             Some(key) => {
                 self.secrets.set(KEY_ACCOUNT, key)?;
-                self.memory().key = HeldKey::Read(Some(key.to_owned()));
-                self.connect()
+                {
+                    let mut memory = self.memory();
+                    memory.key = HeldKey::Read(Some(key.to_owned()));
+                    memory.next_check_at = self.clock.now_ms();
+                }
+                self.connect()?
             }
+        };
+        self.emit_if_changed(before, after.state);
+        Ok(after)
+    }
+
+    fn emit(&self, notices: Vec<ConversationNotice>) {
+        let settings = self.settings();
+        let any = !notices.is_empty();
+        self.events.emit(AppEvent::ConversationsChanged {
+            notices,
+            chime: settings.sound && any,
+            banner: settings.banner && any,
+        });
+    }
+
+    /// MC-C1 §4 Event: emitted without notices when the connection state changes.
+    fn emit_if_changed(&self, before: ConnectionState, after: ConnectionState) {
+        if before != after {
+            self.emit(vec![]);
         }
     }
 
@@ -250,6 +337,8 @@ impl ConversationsService {
                         let reset = saved.store.as_ref().map(|s| s.id.as_str()) != Some(&found.id);
                         self.store
                             .connect_store(found, settings.server.as_deref(), reset)?;
+                        // MC-C1.7: the next `tick` checks at once.
+                        self.memory().fresh_check(now);
                     }
                 },
             }
@@ -273,12 +362,376 @@ impl ConversationsService {
         Ok((state == ConnectionState::Ready).then_some(s))
     }
 
-    /// One turn of the background loop (MC-C1.1, .5–.9).
-    pub fn tick(&self, _now_ms: i64) -> Result<Tick> {
-        if self.calls_allowed()?.is_none() {
+    /// One turn of the background loop (MC-C1.1, .5–.9): a check runs iff calls are allowed and
+    /// the next page is due at once or `next_check_at` has passed. `more` = the next page is due.
+    pub fn tick(&self, now_ms: i64) -> Result<Tick> {
+        let Some(s) = self.calls_allowed()? else {
+            return Ok(Tick::default());
+        };
+        {
+            let memory = self.memory();
+            if !(memory.more || now_ms >= memory.next_check_at) {
+                return Ok(Tick::default());
+            }
+        }
+        let Some(store) = s.store else {
+            return Ok(Tick::default());
+        };
+        let outcome = if s.first_sync_done {
+            self.pull(&store.id, now_ms)
+        } else {
+            self.first_connection(&store.id, now_ms)
+                .map(|()| Tick::default())
+        };
+        match outcome {
+            Ok(tick) => Ok(tick),
+            Err(Stop::Provider(error)) => {
+                self.check_failed(error, now_ms)?;
+                Ok(Tick::default())
+            }
+            Err(Stop::Storage(error)) => Err(error),
+            Err(Stop::Changed) => {
+                self.memory().more = false;
+                Ok(Tick::default())
+            }
+        }
+    }
+
+    /// One provider request (or a transaction) and its apply inside the lane, after checking that
+    /// calls are still allowed for `store_id` and, when given, that the cursor is still `cursor`
+    /// (MC-C1 lane: the cursor of each request is read from `S` inside the lane).
+    fn in_lane<T>(
+        &self,
+        store_id: &str,
+        cursor: Option<Option<i64>>,
+        work: impl FnOnce(&SyncRecord) -> std::result::Result<T, Stop>,
+    ) -> std::result::Result<T, Stop> {
+        let _lane = self.lane.enter();
+        let s = self.calls_allowed()?.ok_or(Stop::Changed)?;
+        if s.store.as_ref().map(|st| st.id.as_str()) != Some(store_id) {
+            return Err(Stop::Changed);
+        }
+        if let Some(expected) = cursor
+            && s.cursor != expected
+        {
+            return Err(Stop::Changed);
+        }
+        work(&s)
+    }
+
+    /// MC-C1.5: the first connection, silent.
+    fn first_connection(&self, store_id: &str, now: i64) -> std::result::Result<(), Stop> {
+        // (a) page the log to its end, remembering the conversations it names.
+        let mut after = 0;
+        let mut named: Vec<String> = Vec::new();
+        let mut last_deleted: HashMap<String, bool> = HashMap::new();
+        loop {
+            let page = self.in_lane(store_id, None, |s| {
+                if s.first_sync_done {
+                    return Err(Stop::Changed);
+                }
+                Ok(self.provider.events_after(store_id, after, PAGE)?)
+            })?;
+            if page.events.is_empty() {
+                break;
+            }
+            if page.next_cursor <= after {
+                return Err(Stop::Provider(ProviderError::BadReply(
+                    "the event cursor did not advance".into(),
+                )));
+            }
+            for event in &page.events {
+                if let (true, Some(id)) = (event.for_us, &event.conversation_id) {
+                    if !named.contains(id) {
+                        named.push(id.clone());
+                    }
+                    let deleted = matches!(
+                        event.kind,
+                        EventKind::ConversationUpdated { deleted: true, .. }
+                    );
+                    last_deleted.insert(id.clone(), deleted);
+                }
+            }
+            after = page.next_cursor;
+        }
+        // (b) the unresolved conversations.
+        let listed = self.in_lane(store_id, None, |_| {
+            let list = self.provider.unresolved(store_id)?;
+            for conversation in &list {
+                self.store
+                    .apply(conversation, entering_read_mark(conversation), None)?;
+            }
+            Ok(list.into_iter().map(|c| c.id).collect::<Vec<_>>())
+        })?;
+        let truncated = listed.len() >= LIST_MAX;
+        let listed: HashSet<String> = listed.into_iter().collect();
+        // (c) the conversations the log names that the list did not hold; one whose last event
+        // removed it is forgotten (and dropped from a copy an earlier attempt left).
+        for id in &named {
+            if last_deleted.get(id) == Some(&true) {
+                self.in_lane(store_id, None, |_| {
+                    Ok(self.store.delete_conversation(id, None)?)
+                })?;
+                continue;
+            }
+            if listed.contains(id) {
+                continue;
+            }
+            self.in_lane(store_id, None, |_| {
+                match self.provider.conversation(store_id, id)? {
+                    Some(conversation) => {
+                        self.store
+                            .apply(&conversation, entering_read_mark(&conversation), None)?;
+                    }
+                    None => {
+                        self.store.delete_conversation(id, None)?;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        // (d) the cursor; the first connection is a complete check.
+        self.in_lane(store_id, None, |_| {
+            Ok(self.store.finish_first_sync(after, now)?)
+        })?;
+        self.memory().fresh_check(now + CHECK_EVERY_MS);
+        let count = self.store.conversations()?.len();
+        tracing::info!(
+            target: "psm::conversations",
+            "conversations.first_sync conversations={count} cursor={after} truncated={truncated}"
+        );
+        self.emit(vec![]);
+        Ok(())
+    }
+
+    /// MC-C1.6 `resolved_by` of a re-read conversation.
+    fn resolved_by(
+        conversation: &Conversation,
+        page: &EventPage,
+        stored: Option<ResolvedBy>,
+    ) -> Option<ResolvedBy> {
+        if conversation.status != ConversationStatus::Resolved {
+            return None;
+        }
+        let updates: Vec<&Option<ResolvedBy>> = page
+            .events
+            .iter()
+            .filter(|e| e.conversation_id.as_deref() == Some(&conversation.id))
+            .filter_map(|e| match &e.kind {
+                EventKind::ConversationUpdated { resolved_by, .. } => Some(resolved_by),
+                _ => None,
+            })
+            .collect();
+        updates
+            .iter()
+            .rev()
+            .find_map(|r| **r)
+            .or(stored)
+            .or_else(|| (!updates.is_empty()).then_some(ResolvedBy::Asker))
+    }
+
+    /// MC-C1.6 Notices: what one processed event marks.
+    fn mark(&self, kind: &EventKind, conversation_id: &str, event_id: i64) {
+        let mut memory = self.memory();
+        let existing = memory
+            .marks
+            .iter()
+            .position(|m| m.conversation_id == conversation_id);
+        match (kind, existing) {
+            (EventKind::ConversationCreated, Some(i)) => {
+                memory.marks[i].kind = NoticeKind::Question
+            }
+            (EventKind::ConversationCreated, None) => memory.marks.push(Mark {
+                conversation_id: conversation_id.to_owned(),
+                kind: NoticeKind::Question,
+                event_id,
+            }),
+            (EventKind::MessageCreated { by_asker: true }, None) => memory.marks.push(Mark {
+                conversation_id: conversation_id.to_owned(),
+                kind: NoticeKind::Reply,
+                event_id,
+            }),
+            _ => {}
+        }
+    }
+
+    fn unmark(&self, conversation_id: &str) {
+        self.memory()
+            .marks
+            .retain(|m| m.conversation_id != conversation_id);
+    }
+
+    /// MC-C1.6: one page of the pull.
+    fn pull(&self, store_id: &str, now: i64) -> std::result::Result<Tick, Stop> {
+        let (page, mut cursor) = self.in_lane(store_id, None, |s| {
+            let cursor = s.cursor.unwrap_or(0);
+            Ok((
+                self.provider.events_after(store_id, cursor, PAGE)?,
+                s.cursor,
+            ))
+        })?;
+        if page.events.is_empty() {
+            self.complete_check(now, cursor.unwrap_or(0))?;
             return Ok(Tick::default());
         }
-        Ok(Tick::default())
+        self.memory().events += page.events.len();
+        for (index, event) in page.events.iter().enumerate() {
+            if event.id <= cursor.unwrap_or(0) {
+                continue;
+            }
+            let expected = Some(cursor);
+            let target = match (&event.conversation_id, event.for_us) {
+                (Some(id), true) => id,
+                _ => {
+                    self.in_lane(store_id, expected, |_| {
+                        Ok(self.store.set_cursor(event.id)?)
+                    })?;
+                    cursor = Some(event.id);
+                    continue;
+                }
+            };
+            if let EventKind::ConversationUpdated { deleted: true, .. } = event.kind {
+                let changed = self.in_lane(store_id, expected, |_| {
+                    Ok(self.store.delete_conversation(target, Some(event.id))?)
+                })?;
+                self.memory().applied |= changed;
+                self.unmark(target);
+                cursor = Some(event.id);
+                continue;
+            }
+            let read_later = page.events[index + 1..]
+                .iter()
+                .any(|later| later.conversation_id.as_deref() == Some(target.as_str()));
+            if read_later {
+                self.in_lane(store_id, expected, |_| {
+                    Ok(self.store.set_cursor(event.id)?)
+                })?;
+                self.mark(&event.kind, target, event.id);
+                cursor = Some(event.id);
+                continue;
+            }
+            let found = self.in_lane(store_id, expected, |_| {
+                match self.provider.conversation(store_id, target)? {
+                    Some(mut conversation) => {
+                        let stored = self.store.conversation(target)?.and_then(|c| c.resolved_by);
+                        conversation.resolved_by = Self::resolved_by(&conversation, &page, stored);
+                        let changed = self.store.apply(
+                            &conversation,
+                            entering_read_mark(&conversation),
+                            Some(event.id),
+                        )?;
+                        Ok((true, changed))
+                    }
+                    None => Ok((
+                        false,
+                        self.store.delete_conversation(target, Some(event.id))?,
+                    )),
+                }
+            })?;
+            self.memory().applied |= found.1;
+            if found.0 {
+                self.mark(&event.kind, target, event.id);
+            } else {
+                self.unmark(target);
+            }
+            cursor = Some(event.id);
+        }
+        if page.next_cursor > cursor.unwrap_or(0) {
+            let next = page.next_cursor;
+            self.in_lane(store_id, Some(cursor), |_| {
+                Ok(self.store.set_cursor(next)?)
+            })?;
+        }
+        self.memory().more = true;
+        Ok(Tick { more: true })
+    }
+
+    /// The marked conversations still in the copy, in the order of the event that first marked
+    /// them (MC-C1.9); the marks are cleared.
+    fn take_notices(&self) -> Result<Vec<ConversationNotice>> {
+        let mut marks = std::mem::take(&mut self.memory().marks);
+        marks.sort_by_key(|m| m.event_id);
+        let mut notices = Vec::new();
+        for mark in marks {
+            if let Some(c) = self.store.conversation(&mark.conversation_id)? {
+                notices.push(ConversationNotice {
+                    conversation_id: c.id,
+                    sku: c.sku,
+                    product_title: c.product_title,
+                    topic: c.topic,
+                    kind: mark.kind,
+                });
+            }
+        }
+        Ok(notices)
+    }
+
+    /// MC-C1.9: a check completed (an empty page).
+    fn complete_check(&self, now: i64, cursor: i64) -> Result<()> {
+        let had_error = self.store.sync()?.last_error.is_some();
+        self.store.complete_check(now)?;
+        let (applied, events) = {
+            let mut memory = self.memory();
+            let applied = memory.applied;
+            let events = memory.events;
+            memory.next_check_at = now + CHECK_EVERY_MS;
+            memory.failures = 0;
+            memory.more = false;
+            memory.applied = false;
+            memory.events = 0;
+            (applied, events)
+        };
+        let notices = self.take_notices()?;
+        tracing::info!(
+            target: "psm::conversations",
+            "conversations.sync cursor={cursor} events={events} applied={applied} notices={}",
+            notices.len()
+        );
+        if applied || had_error || !notices.is_empty() {
+            self.emit(notices);
+        }
+        Ok(())
+    }
+
+    /// MC-C1.8: a check or a first connection stopped on `error`.
+    fn check_failed(&self, error: ProviderError, now: i64) -> Result<()> {
+        let sentence = self.provider.describe(&error, self.shop.as_deref());
+        let (state, failures, next_s) = {
+            let mut memory = self.memory();
+            memory.more = false;
+            memory.applied = false;
+            memory.events = 0;
+            match error {
+                ProviderError::Refused => (ConnectionState::Refused, memory.failures, 0),
+                ProviderError::StoreGone => (ConnectionState::StoreGone, memory.failures, 0),
+                _ => {
+                    memory.failures += 1;
+                    let wait = check_backoff(memory.failures).as_millis() as i64;
+                    memory.next_check_at = now + wait;
+                    (ConnectionState::Ready, memory.failures, wait / 1000)
+                }
+            }
+        };
+        {
+            let _lane = self.lane.enter();
+            self.store.record_error(state, &sentence, now)?;
+        }
+        tracing::info!(
+            target: "psm::conversations",
+            "conversations.sync_failed kind={} failures={failures} next_s={next_s}",
+            error.kind()
+        );
+        let notices = self.take_notices()?;
+        self.emit(notices);
+        Ok(())
+    }
+
+    /// MC-C1.10: the read mark moves to the newest message (no change → no event).
+    pub fn mark_read(&self, conversation_id: &str) -> Result<()> {
+        if self.store.mark_read(conversation_id)? {
+            self.emit(vec![]);
+        }
+        Ok(())
     }
 
     /// Saves the fields given over the stored settings (the slot validates the server).
@@ -294,7 +747,9 @@ impl ConversationsService {
         if let Some(banner) = patch.banner {
             next.banner = banner;
         }
+        let before = self.connection()?.state;
         self.slot.write(next)?;
+        self.emit_if_changed(before, self.connection()?.state);
         Ok(self.settings())
     }
 }

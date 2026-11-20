@@ -909,6 +909,32 @@ mod p40_tests {
         );
     }
 }
+/// C1 (`master_plan_conversations.md` §4 Event): `conversations_changed {toasts, more}`.
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+struct ConversationToast {
+    conversation_id: String,
+    text: String,
+}
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+struct ConversationsChangedPayload {
+    toasts: Vec<ConversationToast>,
+    more: usize,
+}
+impl ConversationsChangedPayload {
+    fn from_notices(notices: &[psm_core::domain::conversation::ConversationNotice]) -> Self {
+        let (lines, more) = psm_core::mechanisms::conversation_rules::notice_lines(notices);
+        Self {
+            toasts: lines
+                .into_iter()
+                .map(|(conversation_id, text)| ConversationToast {
+                    conversation_id,
+                    text,
+                })
+                .collect(),
+            more,
+        }
+    }
+}
 #[derive(serde::Serialize, Clone)]
 struct SessionChangedPayload {
     session_id: i64,
@@ -1041,6 +1067,13 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
             }
             AppEvent::HealthChanged => {
                 let _ = self.0.emit("health_changed", ());
+            }
+            // C1: the toasts' words; the chime and the Mac banner are C2's.
+            AppEvent::ConversationsChanged { notices, .. } => {
+                let _ = self.0.emit(
+                    "conversations_changed",
+                    ConversationsChangedPayload::from_notices(&notices),
+                );
             }
         }
     }

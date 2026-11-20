@@ -92,6 +92,8 @@ use std::{
 pub const EDITOR_WAIT: Duration = Duration::from_secs(45);
 /// How often the research runner looks for work (R7·U1).
 const RESEARCH_WAKE: Duration = Duration::from_millis(250);
+/// How often the conversations pull looks for work (C1, MC-C1.7).
+const CONVERSATIONS_WAKE: Duration = Duration::from_millis(250);
 /// How long shutdown waits for the spool/arrival thread (P63).
 const BACKGROUND_JOIN_BOUND: Duration = Duration::from_secs(1);
 
@@ -146,6 +148,8 @@ pub struct App {
     storage_background: Option<thread::JoinHandle<()>>,
     prepare_background: Option<thread::JoinHandle<()>>,
     research_background: Option<thread::JoinHandle<()>>,
+    /// C1: the conversations pull (`ConversationsService::tick` every 250 ms).
+    conversations_background: Option<thread::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
@@ -1181,6 +1185,23 @@ impl App {
             events: events.clone(),
             lane: lanes.conversations.clone(),
         });
+        // C1 (MC-C1.7): the pull, every 250 ms and again at once while a check has more pages;
+        // only with the startup work, like the storage clean-up.
+        let conversations_background = run_startup.then(|| {
+            let worker_stop = stop.clone();
+            let worker = conversations.clone();
+            let worker_clock = clock.clone();
+            thread::spawn(move || {
+                while !worker_stop.load(Ordering::Relaxed) {
+                    match worker.tick(worker_clock.now_ms()) {
+                        Ok(tick) if tick.more => continue,
+                        Ok(_) => {}
+                        Err(error) => tracing::warn!(%error, "conversations check deferred"),
+                    }
+                    thread::sleep(CONVERSATIONS_WAKE);
+                }
+            })
+        });
         camera_runtime.bind(AppBinding {
             store: store.clone(),
             events: events.clone(),
@@ -1251,6 +1272,7 @@ impl App {
             storage_background,
             prepare_background,
             research_background,
+            conversations_background,
         })
     }
     /// One turn of the research runner (what its thread does; `false` while a turn is running).
@@ -1361,6 +1383,18 @@ impl App {
         }
         if let Some(bg) = self.prepare_background.take() {
             let _ = bg.join();
+        }
+        if let Some(bg) = self.conversations_background.take() {
+            // C1 (master plan §4 Service): a thread inside a request (up to 20 s) is not waited
+            // for; it leaves after its apply, and the lane keeps it from interleaving with the
+            // next App's thread.
+            let end = std::time::Instant::now() + BACKGROUND_JOIN_BOUND;
+            while !bg.is_finished() && std::time::Instant::now() < end {
+                thread::sleep(Duration::from_millis(5));
+            }
+            if bg.is_finished() {
+                let _ = bg.join();
+            }
         }
         if let Some(bg) = self.research_background.take() {
             // MC-A6 Quit: a run inside a provider call is not waited for; it stays `running` and

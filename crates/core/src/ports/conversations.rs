@@ -73,6 +73,15 @@ pub trait ConversationStore: Send + Sync {
         entering_read_mark: Option<i64>,
         cursor: Option<i64>,
     ) -> Result<bool>;
+    /// MC-C1.6: removes the conversation, its messages and its outbox rows not `sent`; `cursor`
+    /// (when given) in the same transaction. `true` when the copy changed.
+    fn delete_conversation(&self, id: &str, cursor: Option<i64>) -> Result<bool>;
+    /// MC-C1.9: a check completed: `last_ok_at = now`, the error cleared.
+    fn complete_check(&self, now: i64) -> Result<()>;
+    /// MC-C1.10: the read mark moves to the newest message; `true` when it changed.
+    fn mark_read(&self, id: &str) -> Result<bool>;
+    /// One conversation of the copy.
+    fn conversation(&self, id: &str) -> Result<Option<Conversation>>;
     /// The copy, with messages in order.
     fn conversations(&self) -> Result<Vec<Conversation>>;
     /// Adds an outbox row (C3 accepts replies through it).
