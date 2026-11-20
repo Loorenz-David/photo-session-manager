@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod clock;
 pub mod commerce;
+pub mod conversations;
 pub mod editing;
 pub mod events;
 pub mod images;

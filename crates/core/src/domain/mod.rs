@@ -4,6 +4,7 @@ pub const MECHANISMS_VERSION: &str = "1";
 pub mod attribute;
 pub mod camera;
 pub mod composition;
+pub mod conversation;
 pub mod editing;
 pub mod item;
 pub mod output;

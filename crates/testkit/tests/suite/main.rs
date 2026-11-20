@@ -7,6 +7,7 @@ mod a16_switch_cost_and_filing_target;
 mod a17_delete_session;
 mod a20_switch_scripts;
 mod a21_photo_files;
+mod c1_conversations_connection;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

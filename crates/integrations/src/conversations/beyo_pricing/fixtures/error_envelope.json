@@ -1,0 +1,2 @@
+{ "error": { "code": "sku_not_found", "message": "No product with SKU 'X' in this store.", "details": null },
+  "correlationId": "4f1c0e7a9b2d4c1e8f3a5b6c7d8e9f01" }

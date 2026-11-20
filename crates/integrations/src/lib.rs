@@ -1,6 +1,7 @@
 pub mod arranged;
 pub mod camera;
 pub mod commerce;
+pub mod conversations;
 pub mod editing;
 pub mod photo_files;
 pub mod render_output;
