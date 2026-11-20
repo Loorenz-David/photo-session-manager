@@ -18,7 +18,7 @@ import { StockSection } from './StockSection';
 import { PricingSection } from './PricingSection';
 import { ResearchSection } from './ResearchSection';
 import { WriterSection } from './WriterSection';
-import { SettingsNav, type SettingsSection } from './SettingsNav';
+import { SETTINGS_SECTION_EVENT, SettingsNav, takeRequestedSection, type SettingsSection } from './SettingsNav';
 import { TemplatesSection } from './TemplatesSection';
 
 const emptyIntegration: IntegrationSettings = {
@@ -59,7 +59,12 @@ type IntegrationKey = 'shop_domain' | 'client_id' | 'client_secret' | 'condition
 
 /** ch12 §Settings: a plain form over `settings.json` (undesigned in the handoff). The theme stays on the header toggle. */
 export function SettingsPage() {
-  const [section, setSection] = useState<SettingsSection>('capture-one');
+  const [section, setSection] = useState<SettingsSection>(() => takeRequestedSection() ?? 'capture-one');
+  useEffect(() => {
+    const follow = (event: Event) => setSection((event as CustomEvent<SettingsSection>).detail);
+    window.addEventListener(SETTINGS_SECTION_EVENT, follow);
+    return () => window.removeEventListener(SETTINGS_SECTION_EVENT, follow);
+  }, []);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const page = usePageData(getSettings);

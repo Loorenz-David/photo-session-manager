@@ -8,6 +8,8 @@ import {
   type ConversationList,
   type ConversationTab,
 } from '@/services/conversations';
+import { openSettingsSection } from '@/features/settings/SettingsNav';
+import { CONNECT_PRICING, connectionLine } from './connectionLine';
 import { ConversationRow } from './ConversationRow';
 import { ConversationView } from './ConversationView';
 import { useConversationsChanged, useConversationsContext, type ConversationsState } from './useConversations';
@@ -72,17 +74,39 @@ function useList(state: ConversationsState, tab: ConversationTab): ConversationL
   return list;
 }
 
+/** A28: the way to Settings → Pricing (switches section when Settings is already on screen). */
+function OpenPricingSettings() {
+  return <Button variant="outline" onClick={() => openSettingsSection('pricing')}>Open Settings → Pricing</Button>;
+}
+
+/**
+ * A28 (09B §4): why the panel cannot show conversations, in the same words as Settings → Pricing (the key's store does
+ * not match the shop, no Shopify connection); "Connect Pricing in Settings → Pricing" only when there is no key.
+ */
+function ConnectHint({ state }: { state: string }) {
+  const [line, setLine] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve()
+      .then(() => conversationsSettingsGet())
+      .then(settings => alive && setLine(connectionLine(settings.connection)))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [state]);
+  return (
+    <div className="conversations-connect">
+      <p role="status">{line ?? CONNECT_PRICING}</p>
+      <OpenPricingSettings />
+    </div>
+  );
+}
+
 function Body({ state, tab, setTab }: { state: ConversationsState; tab: ConversationTab; setTab: (tab: ConversationTab) => void }) {
   const list = useList(state, tab);
   if (state.selected) return <ConversationView key={state.selected.id} id={state.selected.id} onBack={state.back} />;
-  if (list && HIDDEN.has(list.state)) {
-    return (
-      <div className="conversations-connect">
-        <p>Connect Pricing in Settings → Pricing</p>
-        <Button variant="outline" onClick={() => { window.location.hash = '#/settings'; }}>Open Settings</Button>
-      </div>
-    );
-  }
+  if (list && HIDDEN.has(list.state)) return <ConnectHint state={list.state} />;
   const elsewhere = state.scope.kind === 'session' ? list?.news_elsewhere ?? 0 : 0;
   return (
     <>
@@ -90,7 +114,12 @@ function Body({ state, tab, setTab }: { state: ConversationsState; tab: Conversa
         <button type="button" role="tab" aria-selected={tab === 'open'} onClick={() => setTab('open')}>Open</button>
         <button type="button" role="tab" aria-selected={tab === 'resolved'} onClick={() => setTab('resolved')}>Resolved</button>
       </div>
-      {list?.problem && <p role="alert" className="conversations-problem">{list.problem}</p>}
+      {list?.problem && (
+        <div className="conversations-problem">
+          <p role="alert">{list.problem}</p>
+          <OpenPricingSettings />
+        </div>
+      )}
       <div className="conversations-list">
         {list && list.rows.length === 0 && (
           <p className="conversations-empty">{tab === 'open' ? 'No open conversations' : 'No resolved conversations'}</p>

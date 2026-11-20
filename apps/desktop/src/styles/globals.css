@@ -381,6 +381,8 @@ button.research-pill { cursor: pointer; }
 .conversations-tabs [role="tab"] { height: 28px; padding: 0 12px; border-radius: var(--r-pill); font-size: var(--text-sm); color: var(--muted); }
 .conversations-tabs [role="tab"][aria-selected="true"] { background: var(--accent-tint); color: var(--color-text); font-weight: var(--weight-bold); }
 .conversations-problem { margin: 0 16px 8px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger-700); font-size: var(--text-sm); }
+.conversations-problem { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.conversations-problem p { margin: 0; }
 .conversations-list { flex: 1; overflow-y: auto; }
 .conversations-empty, .conversations-connect { padding: 24px 16px; color: var(--muted); }
 .conversations-connect { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
