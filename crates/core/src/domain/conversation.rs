@@ -408,6 +408,82 @@ pub struct SessionBadge {
     pub waiting: bool,
 }
 
+/// The failure of a reply whose request may or may not have reached the provider (MC-C2.2).
+pub const COULD_NOT_SEND: &str = "Couldn't send";
+
+/// A photo attached to a reply not yet confirmed: its media id and, when this Mac has the photo,
+/// its preview (MC-C2.6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingAttachment {
+    pub media_id: String,
+    pub preview_path: Option<String>,
+}
+
+/// A reply of the outbox as the conversation shows it (MC-C2.6): `sending` or `failed` (a `sent`
+/// row is shown through its message, but `reply` and `retry` may still answer one).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingView {
+    pub client_mutation_id: String,
+    pub text: String,
+    pub reply_to: Option<ReplyRef>,
+    pub attachments: Vec<PendingAttachment>,
+    pub state: OutboxState,
+    pub failure: Option<String>,
+    pub created_at: i64,
+}
+
+/// One conversation as the view shows it (09B §7, MC-C2.6): the copy's messages in order, then
+/// the replies not yet confirmed. `session_id` none = "Not on this Mac"; `can_send` false with
+/// `off_reason` when the key is refused or the store is gone.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationView {
+    pub id: String,
+    pub sku: Option<String>,
+    pub product_title: String,
+    pub topic: String,
+    pub blocking: bool,
+    pub status: ConversationStatus,
+    pub resolved_by: Option<ResolvedBy>,
+    pub session_id: Option<i64>,
+    pub messages: Vec<Message>,
+    pub pending: Vec<PendingView>,
+    pub can_send: bool,
+    pub off_reason: Option<String>,
+}
+
+/// The two kinds of published photo a reply may carry (09B §8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttachRole {
+    Gallery,
+    Condition,
+}
+
+/// A published photo of the conversation's product that a reply may attach (09B §8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttachablePhoto {
+    pub media_id: String,
+    pub photo_id: i64,
+    pub slot: crate::domain::composition::OutputSlot,
+    pub role: AttachRole,
+    pub preview_path: Option<String>,
+}
+
+/// Why a conversation offers no photo (09B §8, CV-7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttachReason {
+    NotOnThisMac,
+    NothingPublished,
+}
+
+/// The photos a reply may attach, in gallery order then condition order, or the reason none is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attachable {
+    pub photos: Vec<AttachablePhoto>,
+    pub reason: Option<AttachReason>,
+}
+
 /// The result of one `tick` of the conversations service: `more` = the next page is due at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Tick {

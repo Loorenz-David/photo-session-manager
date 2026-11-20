@@ -3,10 +3,12 @@
 //! address, a wire word or a sentence that names the provider except through `describe`.
 
 use crate::Result;
+use crate::domain::composition::OutputSlot;
 use crate::domain::conversation::{
     ConnectionState, Conversation, ConversationSettings, EventPage, Message, NewMessage,
-    OutboxMessage, ProviderError, ProviderStore,
+    OutboxMessage, OutboxState, ProviderError, ProviderStore,
 };
+use crate::domain::photo::Classification;
 
 pub type ProviderResult<T> = std::result::Result<T, ProviderError>;
 
@@ -48,6 +50,23 @@ pub struct SyncRecord {
     pub last_error_at: Option<i64>,
 }
 
+/// One photo link of a session's item with the linked photo's place (C3 attachable photos).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionLink {
+    pub photo_id: i64,
+    pub role: String,
+    pub slot: OutputSlot,
+    pub external_id: Option<String>,
+    pub upload_state: String,
+    /// The session the photo is in now.
+    pub photo_session_id: i64,
+    pub classification: Classification,
+    pub position: Option<i64>,
+    pub captured_at: Option<i64>,
+    pub adjusted_preview_path: Option<String>,
+    pub original_preview_path: Option<String>,
+}
+
 /// The local copy and the sync state (MC-C1). Each method is one transaction.
 pub trait ConversationStore: Send + Sync {
     fn sync(&self) -> Result<SyncRecord>;
@@ -84,10 +103,34 @@ pub trait ConversationStore: Send + Sync {
     fn conversation(&self, id: &str) -> Result<Option<Conversation>>;
     /// The copy, with messages in order.
     fn conversations(&self) -> Result<Vec<Conversation>>;
-    /// Adds an outbox row (C3 accepts replies through it).
+    /// Adds an outbox row.
     fn outbox_insert(&self, message: &OutboxMessage, now: i64) -> Result<()>;
     /// Every outbox row, oldest first.
     fn outbox(&self) -> Result<Vec<OutboxMessage>>;
+    /// MC-C2.1 Accept: the row with `message.client_mutation_id` when one exists (nothing is
+    /// written), otherwise `message` inserted; `true` when it was inserted.
+    fn outbox_accept(&self, message: &OutboxMessage, now: i64) -> Result<(OutboxMessage, bool)>;
+    /// One outbox row.
+    fn outbox_row(&self, client_mutation_id: &str) -> Result<Option<OutboxMessage>>;
+    /// MC-C2.2 `Ok(m)`: the row `sent` with `m.id`; `m` appended to its conversation unless a
+    /// message with that id is there; the conversation `answered`, `resolved_by` null,
+    /// `last_activity_at = m.created_at`.
+    fn outbox_sent(&self, client_mutation_id: &str, message: &Message, now: i64) -> Result<()>;
+    /// MC-C2.2, .3: each row named that is in state `from` moves to `to` with `failure`; the
+    /// number of rows changed.
+    fn outbox_move(
+        &self,
+        client_mutation_ids: &[String],
+        from: OutboxState,
+        to: OutboxState,
+        failure: Option<&str>,
+        now: i64,
+    ) -> Result<usize>;
+    /// MC-C2.3 Discard: the row is deleted when it is `failed`; `true` when it was.
+    fn outbox_discard(&self, client_mutation_id: &str) -> Result<bool>;
+    /// C3 (projection L2): the photo links of the item of `session_id`, each with its photo's
+    /// session, classification, position, captured time and previews. Unfiltered.
+    fn session_links(&self, session_id: i64) -> Result<Vec<SessionLink>>;
     /// Each item's SKU with the session of that item (the item's latest session, as
     /// `Store::session_for_item`); items without a session are left out (09B §3).
     fn item_sessions(&self) -> Result<Vec<(String, i64)>>;

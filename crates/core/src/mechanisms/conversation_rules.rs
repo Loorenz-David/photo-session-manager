@@ -1,10 +1,14 @@
-//! The pure rules of conversations sync (`master_plan_conversations.md` §5 MC-C1, §4 Event).
+//! The pure rules of conversations sync and replies (`master_plan_conversations.md` §5 MC-C1,
+//! MC-C2.1, §4 Event).
 
-use crate::domain::conversation::{
-    AuthorKind, Conversation, ConversationNotice, ConversationRow, ConversationStatus, Message,
-    NoticeKind,
+use crate::{
+    Error, Result,
+    domain::conversation::{
+        AuthorKind, Conversation, ConversationNotice, ConversationRow, ConversationStatus, Message,
+        NewMessage, NoticeKind,
+    },
 };
-use std::{cmp::Ordering, time::Duration};
+use std::{cmp::Ordering, collections::HashSet, time::Duration};
 
 /// MC-C1.7: the wait after `failures` consecutive failed checks (≥ 1): 10 s doubling, at most 5 min.
 pub fn check_backoff(failures: u32) -> Duration {
@@ -91,10 +95,129 @@ pub fn notice_lines(notices: &[ConversationNotice]) -> (Vec<(String, String)>, u
     (lines, notices.len().saturating_sub(3))
 }
 
+/// The longest reply, in Unicode scalar values (the package's `maxLength`).
+pub const REPLY_MAX: usize = 4000;
+/// The longest `client_mutation_id` (openapi `clientMutationId`).
+pub const CLIENT_ID_MAX: usize = 80;
+/// The most photos one reply carries.
+pub const ATTACHMENTS_MAX: usize = 10;
+/// The longest reply excerpt, in Unicode scalar values.
+const EXCERPT_MAX: usize = 80;
+
+/// MC-C2.1 Accept, the pure part: the text trimmed and 1–4000 Unicode scalar values, the
+/// `client_mutation_id` 1–80 characters, at most 10 media ids and none repeated. A refusal is
+/// `invalid_value` naming the field. Whether a media id is acceptable is the provider's (H7).
+pub fn checked_reply(input: NewMessage) -> Result<NewMessage> {
+    let text = input.text.trim().to_owned();
+    if text.is_empty() || text.chars().count() > REPLY_MAX {
+        return Err(Error::InvalidValue("text".into()));
+    }
+    let id_length = input.client_mutation_id.chars().count();
+    if id_length == 0 || id_length > CLIENT_ID_MAX {
+        return Err(Error::InvalidValue("client_mutation_id".into()));
+    }
+    let ids = &input.attachment_media_ids;
+    let distinct: HashSet<&String> = ids.iter().collect();
+    if ids.len() > ATTACHMENTS_MAX || distinct.len() != ids.len() {
+        return Err(Error::InvalidValue("attachment_media_ids".into()));
+    }
+    Ok(NewMessage { text, ..input })
+}
+
+/// The excerpt a reply shows of its target (projection L9): the target's first line (up to the
+/// first `\n`), at most 80 Unicode scalar values.
+pub fn reply_excerpt(text: &str) -> String {
+    let line = text.split('\n').next().unwrap_or("");
+    line.chars().take(EXCERPT_MAX).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::conversation::Author;
+
+    fn new_message(cmid: &str, text: &str, media: &[&str]) -> NewMessage {
+        NewMessage {
+            client_mutation_id: cmid.into(),
+            text: text.into(),
+            reply_to_message_id: None,
+            attachment_media_ids: media.iter().map(|m| (*m).to_owned()).collect(),
+        }
+    }
+
+    fn refused_field(result: Result<NewMessage>) -> String {
+        match result {
+            Err(Error::InvalidValue(field)) => field,
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c3_c1a_the_text_is_trimmed() {
+        let checked = checked_reply(new_message("m-1", "  Original glass.  ", &[])).unwrap();
+        assert_eq!(checked.text, "Original glass.");
+    }
+
+    #[test]
+    fn c3_c1b_the_text_is_1_to_4000_scalar_values() {
+        assert_eq!(
+            refused_field(checked_reply(new_message("m-1", "   ", &[]))),
+            "text"
+        );
+        let full = "é".repeat(4000);
+        assert_eq!(
+            checked_reply(new_message("m-1", &full, &[])).unwrap().text,
+            full
+        );
+        let over = "é".repeat(4001);
+        assert_eq!(
+            refused_field(checked_reply(new_message("m-1", &over, &[]))),
+            "text"
+        );
+    }
+
+    #[test]
+    fn c3_c1c_the_client_id_is_1_to_80_characters() {
+        assert_eq!(
+            refused_field(checked_reply(new_message("", "t", &[]))),
+            "client_mutation_id"
+        );
+        assert_eq!(
+            refused_field(checked_reply(new_message(&"a".repeat(81), "t", &[]))),
+            "client_mutation_id"
+        );
+        let eighty = "a".repeat(80);
+        assert_eq!(
+            checked_reply(new_message(&eighty, "t", &[]))
+                .unwrap()
+                .client_mutation_id,
+            eighty
+        );
+    }
+
+    #[test]
+    fn c3_c1d_at_most_ten_distinct_media_ids() {
+        let ids: Vec<String> = (1..=11).map(|n| format!("media-{n}")).collect();
+        let eleven: Vec<&str> = ids.iter().map(String::as_str).collect();
+        assert_eq!(
+            refused_field(checked_reply(new_message("m-1", "t", &eleven))),
+            "attachment_media_ids"
+        );
+        assert_eq!(
+            checked_reply(new_message("m-1", "t", &eleven[..10]))
+                .unwrap()
+                .attachment_media_ids,
+            ids[..10].to_vec()
+        );
+        assert_eq!(
+            refused_field(checked_reply(new_message(
+                "m-1",
+                "t",
+                &["media-1", "media-1"]
+            ))),
+            "attachment_media_ids"
+        );
+    }
 
     fn message(kind: AuthorKind, at: i64) -> Message {
         Message {

@@ -214,6 +214,23 @@ export const commands = {
 	conversationsCounts: (sessionId: CommandId | null) => typedError<ConversationCountsDto, CommandError>(__TAURI_INVOKE("conversations_counts", { sessionId })),
 	/**  One badge per session with an unresolved conversation. */
 	conversationsSessionBadges: () => typedError<SessionBadgeDto[], CommandError>(__TAURI_INVOKE("conversations_session_badges")),
+	/**  One conversation from the local copy (never waits on the network). */
+	conversationGet: (id: string) => typedError<ConversationViewDto_Serialize, CommandError>(__TAURI_INVOKE("conversation_get", { id })),
+	/**  The conversation was seen: its read mark moves to its newest message. */
+	conversationMarkRead: (id: string) => typedError<null, CommandError>(__TAURI_INVOKE("conversation_mark_read", { id })),
+	/**
+	 *  Saves a reply on this Mac and answers it as `sending` (it leaves at the next quarter
+	 *  second); the same `client_mutation_id` again answers the saved reply, nothing is added.
+	 */
+	conversationReply: (input: ConversationReplyDto_Deserialize) => typedError<PendingViewDto_Serialize, CommandError>(__TAURI_INVOKE("conversation_reply", { input })),
+	/**  Sends a failed reply again, with the same `client_mutation_id`. */
+	conversationRetry: (clientMutationId: string) => typedError<PendingViewDto_Serialize, CommandError>(__TAURI_INVOKE("conversation_retry", { clientMutationId })),
+	/**  Removes a failed reply from this Mac (no request). */
+	conversationDiscard: (clientMutationId: string) => typedError<null, CommandError>(__TAURI_INVOKE("conversation_discard", { clientMutationId })),
+	/**  Marks the conversation answered in Pricing without a message. */
+	conversationMarkAnswered: (id: string) => typedError<null, CommandError>(__TAURI_INVOKE("conversation_mark_answered", { id })),
+	/**  The published photos of the conversation's product a reply may attach. */
+	conversationAttachable: (id: string) => typedError<AttachableDto_Serialize, CommandError>(__TAURI_INVOKE("conversation_attachable", { id })),
 	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
@@ -444,6 +461,77 @@ export type AskSuggestionDto = {
 	value: string,
 };
 
+/**
+ *  The photos a reply may attach, or why none is: `reason` = `not_on_this_mac` or
+ *  `nothing_published`.
+ */
+export type AttachableDto = AttachableDto_Serialize | AttachableDto_Deserialize;
+
+/**
+ *  The photos a reply may attach, or why none is: `reason` = `not_on_this_mac` or
+ *  `nothing_published`.
+ */
+export type AttachableDto_Deserialize = {
+	photos: AttachablePhotoDto_Deserialize[],
+	reason?: string | null,
+};
+
+/**
+ *  The photos a reply may attach, or why none is: `reason` = `not_on_this_mac` or
+ *  `nothing_published`.
+ */
+export type AttachableDto_Serialize = {
+	photos: AttachablePhotoDto_Serialize[],
+	reason: string | null,
+};
+
+/**
+ *  A published photo a reply may attach: `slot` = `single`, `left` or `right`; `role` =
+ *  `gallery` or `condition`.
+ */
+export type AttachablePhotoDto = AttachablePhotoDto_Serialize | AttachablePhotoDto_Deserialize;
+
+/**
+ *  A published photo a reply may attach: `slot` = `single`, `left` or `right`; `role` =
+ *  `gallery` or `condition`.
+ */
+export type AttachablePhotoDto_Deserialize = {
+	media_id: string,
+	photo_id: number,
+	slot: string,
+	role: string,
+	preview_path?: string | null,
+};
+
+/**
+ *  A published photo a reply may attach: `slot` = `single`, `left` or `right`; `role` =
+ *  `gallery` or `condition`.
+ */
+export type AttachablePhotoDto_Serialize = {
+	media_id: string,
+	photo_id: number,
+	slot: string,
+	role: string,
+	preview_path: string | null,
+};
+
+/**  A photo of a message; both addresses null = "Photo not recorded". */
+export type AttachmentDto = AttachmentDto_Serialize | AttachmentDto_Deserialize;
+
+/**  A photo of a message; both addresses null = "Photo not recorded". */
+export type AttachmentDto_Deserialize = {
+	media_id: string,
+	thumb_url?: string | null,
+	url?: string | null,
+};
+
+/**  A photo of a message; both addresses null = "Photo not recorded". */
+export type AttachmentDto_Serialize = {
+	media_id: string,
+	thumb_url: string | null,
+	url: string | null,
+};
+
 export type AttributeGroupDto = "details" | "condition" | "product";
 
 /**
@@ -502,6 +590,12 @@ export type AttributeValueDto_Serialize = {
 	 *  Use suggestion / Edit exactly when this is true.
 	 */
 	conflict: boolean,
+};
+
+/**  `kind` = `asker` (the pricer), `me` (this app) or `other`. */
+export type AuthorDto = {
+	kind: string,
+	name: string,
 };
 
 export type CameraSettingsDto = CameraSettingsDto_Serialize | CameraSettingsDto_Deserialize;
@@ -713,6 +807,27 @@ export type ConversationListDto_Serialize = {
 	news_elsewhere: number,
 };
 
+/**  A reply: `client_mutation_id` is made once by the composer when send is pressed. */
+export type ConversationReplyDto = ConversationReplyDto_Serialize | ConversationReplyDto_Deserialize;
+
+/**  A reply: `client_mutation_id` is made once by the composer when send is pressed. */
+export type ConversationReplyDto_Deserialize = {
+	conversation_id: string,
+	client_mutation_id: string,
+	text: string,
+	reply_to_message_id?: string | null,
+	attachment_media_ids: string[],
+};
+
+/**  A reply: `client_mutation_id` is made once by the composer when send is pressed. */
+export type ConversationReplyDto_Serialize = {
+	conversation_id: string,
+	client_mutation_id: string,
+	text: string,
+	reply_to_message_id: string | null,
+	attachment_media_ids: string[],
+};
+
 /**
  *  One row of the panel (`status` = `open`, `answered` or `resolved`; `session_id` null = "Not on
  *  this Mac").
@@ -760,6 +875,53 @@ export type ConversationScopeDto = { kind: "all" } | { kind: "session"; session_
 
 /**  The panel's tab: `open` (unresolved) or `resolved` (the last 30 days). */
 export type ConversationTabDto = "open" | "resolved";
+
+/**
+ *  One conversation: `status` = `open`, `answered` or `resolved`; `resolved_by` = `asker`,
+ *  `activation` or null; `session_id` null = "Not on this Mac"; `can_send` false with
+ *  `off_reason` when the key is refused or the store is gone.
+ */
+export type ConversationViewDto = ConversationViewDto_Serialize | ConversationViewDto_Deserialize;
+
+/**
+ *  One conversation: `status` = `open`, `answered` or `resolved`; `resolved_by` = `asker`,
+ *  `activation` or null; `session_id` null = "Not on this Mac"; `can_send` false with
+ *  `off_reason` when the key is refused or the store is gone.
+ */
+export type ConversationViewDto_Deserialize = {
+	id: string,
+	sku?: string | null,
+	product_title: string,
+	topic: string,
+	blocking: boolean,
+	status: string,
+	resolved_by?: string | null,
+	session_id?: number | null,
+	messages: MessageDto_Deserialize[],
+	pending: PendingViewDto_Deserialize[],
+	can_send: boolean,
+	off_reason?: string | null,
+};
+
+/**
+ *  One conversation: `status` = `open`, `answered` or `resolved`; `resolved_by` = `asker`,
+ *  `activation` or null; `session_id` null = "Not on this Mac"; `can_send` false with
+ *  `off_reason` when the key is refused or the store is gone.
+ */
+export type ConversationViewDto_Serialize = {
+	id: string,
+	sku: string | null,
+	product_title: string,
+	topic: string,
+	blocking: boolean,
+	status: string,
+	resolved_by: string | null,
+	session_id: number | null,
+	messages: MessageDto_Serialize[],
+	pending: PendingViewDto_Serialize[],
+	can_send: boolean,
+	off_reason: string | null,
+};
 
 /**  Settings → Pricing. `key_saved` only: the key itself never leaves the Keychain. */
 export type ConversationsSettingsDto = ConversationsSettingsDto_Serialize | ConversationsSettingsDto_Deserialize;
@@ -1171,6 +1333,30 @@ export type LatestPublishResponse_Serialize = {
 	total: number,
 };
 
+export type MessageDto = MessageDto_Serialize | MessageDto_Deserialize;
+
+export type MessageDto_Deserialize = {
+	id: string,
+	author: AuthorDto,
+	text: string,
+	quote?: QuoteDto | null,
+	reply_to?: ReplyRefDto | null,
+	attachments: AttachmentDto_Deserialize[],
+	created_at: number,
+	edited_at?: number | null,
+};
+
+export type MessageDto_Serialize = {
+	id: string,
+	author: AuthorDto,
+	text: string,
+	quote: QuoteDto | null,
+	reply_to: ReplyRefDto | null,
+	attachments: AttachmentDto_Serialize[],
+	created_at: number,
+	edited_at: number | null,
+};
+
 /**  A21: photos of the session whose files are in another folder. */
 export type MisplacedFilesResponse = {
 	photos: number,
@@ -1249,6 +1435,46 @@ export type ObservationDto_Serialize = {
 export type OutputFormatDto = {
 	long_edge: number,
 	quality: number,
+};
+
+/**  A photo of a reply not yet confirmed; `preview_path` when this Mac has the photo. */
+export type PendingAttachmentDto = PendingAttachmentDto_Serialize | PendingAttachmentDto_Deserialize;
+
+/**  A photo of a reply not yet confirmed; `preview_path` when this Mac has the photo. */
+export type PendingAttachmentDto_Deserialize = {
+	media_id: string,
+	preview_path?: string | null,
+};
+
+/**  A photo of a reply not yet confirmed; `preview_path` when this Mac has the photo. */
+export type PendingAttachmentDto_Serialize = {
+	media_id: string,
+	preview_path: string | null,
+};
+
+/**  A reply not yet confirmed: `state` = `sending`, `failed` (with `failure`) or `sent`. */
+export type PendingViewDto = PendingViewDto_Serialize | PendingViewDto_Deserialize;
+
+/**  A reply not yet confirmed: `state` = `sending`, `failed` (with `failure`) or `sent`. */
+export type PendingViewDto_Deserialize = {
+	client_mutation_id: string,
+	text: string,
+	reply_to?: ReplyRefDto | null,
+	attachments: PendingAttachmentDto_Deserialize[],
+	state: string,
+	failure?: string | null,
+	created_at: number,
+};
+
+/**  A reply not yet confirmed: `state` = `sending`, `failed` (with `failure`) or `sent`. */
+export type PendingViewDto_Serialize = {
+	client_mutation_id: string,
+	text: string,
+	reply_to: ReplyRefDto | null,
+	attachments: PendingAttachmentDto_Serialize[],
+	state: string,
+	failure: string | null,
+	created_at: number,
 };
 
 export type PhotoClassification = "unreviewed" | "main" | "condition" | "deleted";
@@ -1518,6 +1744,13 @@ export type QueueViewDto_Serialize = {
 	manual: boolean,
 };
 
+/**  The quoted field of a message (`field_label` is shown as the chip). */
+export type QuoteDto = {
+	field: string,
+	field_label: string,
+	text: string,
+};
+
 export type ReasonDto = {
 	code: string,
 	sentence: string,
@@ -1528,6 +1761,13 @@ export type RectDto = {
 	y: number | null,
 	w: number | null,
 	h: number | null,
+};
+
+/**  The message a reply answers: its author and the target's first line (at most 80 characters). */
+export type ReplyRefDto = {
+	message_id: string,
+	author_name: string,
+	excerpt: string,
 };
 
 /**  Whether a request queued a run, and why not. */

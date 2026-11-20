@@ -1077,6 +1077,101 @@ mod c2_tests {
 }
 
 #[cfg(test)]
+mod c3_tests {
+    //! C3·U1 (`docs/implementation/plans/C3_conversation_and_answering.md` C3·C8(e)): a text reply
+    //! to a conversation that is not on this Mac, through `conversation_reply` over the wired app.
+    use super::*;
+    use psm_core::ports::clock::Clock;
+    use psm_testkit::test_app::PRICING_KEY;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    #[test]
+    fn c3_c8e_a_text_reply_works_for_a_conversation_not_on_this_mac() {
+        use psm_core::ports::conversations::ConversationStore;
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        a.app.conversations.key_set(Some(PRICING_KEY)).unwrap();
+        let store = a.app.store.sync().unwrap().store.unwrap().id;
+        let case = a.fake_pricing().ask(&store, Some("BEYO-9999"), "Condition");
+        while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+        let pricing = a.pricing.clone().unwrap();
+        let service = a.app.conversations.clone();
+        let sqlite = a.app.store.clone();
+        let clock = a.clock.clone();
+        let psm_testkit::TestApp { dir: _dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::conversations::conversation_reply
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        pricing.clear_requests();
+        let pending = call(
+            &window,
+            "conversation_reply",
+            json!({"input": {
+                "conversation_id": case,
+                "client_mutation_id": "u-1",
+                "text": "Answered from elsewhere.",
+                "reply_to_message_id": null,
+                "attachment_media_ids": [],
+            }}),
+        )
+        .unwrap();
+        assert_eq!(pending["client_mutation_id"], json!("u-1"));
+        assert_eq!(pending["state"], json!("sending"));
+        service.tick(clock.now_ms()).unwrap();
+        let posts: Vec<_> = pricing
+            .requests()
+            .into_iter()
+            .filter(|r| r.method == "POST")
+            .collect();
+        assert_eq!(posts.len(), 1);
+        assert_eq!(
+            posts[0].body.as_ref().unwrap()["clientMutationId"],
+            json!("u-1")
+        );
+        let row = sqlite
+            .outbox()
+            .unwrap()
+            .into_iter()
+            .find(|r| r.client_mutation_id == "u-1")
+            .unwrap();
+        assert_eq!(row.state, psm_core::domain::conversation::OutboxState::Sent);
+    }
+}
+
+#[cfg(test)]
 mod r6_command_tests {
     use super::*;
     use psm_core::domain::attribute::AiConfidence;
@@ -1757,6 +1852,13 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::conversations::conversations_list,
         commands::conversations::conversations_counts,
         commands::conversations::conversations_session_badges,
+        commands::conversations::conversation_get,
+        commands::conversations::conversation_mark_read,
+        commands::conversations::conversation_reply,
+        commands::conversations::conversation_retry,
+        commands::conversations::conversation_discard,
+        commands::conversations::conversation_mark_answered,
+        commands::conversations::conversation_attachable,
         commands::search::search_window_open,
         commands::search::search_web_place,
         commands::search::search_web_go,

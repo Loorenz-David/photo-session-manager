@@ -440,6 +440,21 @@ of that folder (`variant_background` → `resync_folder`).
   `conversations_session_badges` over `ConversationsService::{list, counts, session_badges}`: read from the copy only
   (never the lane, never a request); a conversation's session = the session of the item whose SKU is exactly its SKU
   (`ConversationStore::item_sessions`), none = "Not on this Mac"; hidden in `no_key`, `no_shop`, `store_unmatched`.
+- **Replies: the outbox and the lane (C3, MC-C2).** `ConversationsService::reply` checks the reply
+  (`conversation_rules::checked_reply`) and writes one `conversation_outbox` row keyed by the frontend's
+  `client_mutation_id` (`sending`, or `failed` with the state's sentence when refused / store gone); the same id again
+  returns that row. `tick` **flushes** the `sending` rows first (after the `ready` test, before the due test), oldest
+  first, each `post_message` and its outcome in one lane turn: sent → row `sent` + the message appended once + status
+  `answered`; time-out / odd answer → `Couldn't send` for it and every later row of the flush without a request; 400 →
+  the provider's words; 404 → "no longer exists"; 401 / store gone → MC-C1.8. A `failed` row leaves only by `retry`
+  (same id) or `discard`. `view`, `reply`, `retry`, `discard` and `attachable` are local (never the lane, never a
+  request); `mark_answered` takes the lane (`PATCH`; 409 re-reads the conversation). Every outbox change emits
+  `ConversationsChanged` without notices. Attachable photos come from `ConversationStore::session_links` (the
+  session's item's links with each photo's place and previews), filtered and ordered in the service. Commands
+  `conversation_get`, `conversation_mark_read`, `conversation_reply`, `conversation_retry`, `conversation_discard`,
+  `conversation_mark_answered`, `conversation_attachable`; `ConversationError` → codes `conversations_off`
+  (`data.reason` = the state; every C3 call in `no_key` / `no_shop` / `store_unmatched`, and Mark answered when not
+  `ready`), `conversation_resolved`, `provider`.
 - **Panel and icon (C2):** `apps/desktop/src/features/conversations/` — `useConversations` (one instance in `App.tsx`,
   provided through `ConversationsContext` to every route: panel open, selected conversation, scope, header counts),
   `ConversationsButton` (header icon on Sessions, a session, Settings, Health), `ConversationsPanel` (Open / Resolved,

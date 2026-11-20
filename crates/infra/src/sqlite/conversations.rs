@@ -4,11 +4,15 @@
 
 use psm_core::{
     Error, Result,
-    domain::conversation::{
-        Attachment, Author, AuthorKind, ConnectionState, Conversation, ConversationStatus, Message,
-        OutboxMessage, OutboxState, ProviderStore, Quote, ReplyRef, ResolvedBy,
+    domain::{
+        composition::OutputSlot,
+        conversation::{
+            Attachment, Author, AuthorKind, ConnectionState, Conversation, ConversationStatus,
+            Message, OutboxMessage, OutboxState, ProviderStore, Quote, ReplyRef, ResolvedBy,
+        },
+        photo::Classification,
     },
-    ports::conversations::{ConversationStore, SyncRecord},
+    ports::conversations::{ConversationStore, SessionLink, SyncRecord},
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -301,6 +305,74 @@ fn outbox_state_text(state: OutboxState) -> &'static str {
     }
 }
 
+fn outbox_write(conn: &Connection, m: &OutboxMessage, now: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO conversation_outbox(client_mutation_id,conversation_id,text,\
+         reply_to,attachment_media_ids,state,failure,server_message_id,created_at,\
+         updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+        params![
+            m.client_mutation_id,
+            m.conversation_id,
+            m.text,
+            m.reply_to.as_ref().map(json_text).transpose()?,
+            json_text(&m.attachment_media_ids)?,
+            outbox_state_text(m.state),
+            m.failure,
+            m.server_message_id,
+            m.created_at,
+            now,
+        ],
+    )
+    .map_err(db)?;
+    Ok(())
+}
+
+/// The outbox rows (or the one named), oldest first; rows of the same millisecond in the order
+/// they were accepted.
+fn outbox_read(conn: &Connection, only: Option<&str>) -> Result<Vec<OutboxMessage>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT client_mutation_id,conversation_id,text,reply_to,attachment_media_ids,\
+             state,failure,server_message_id,created_at FROM conversation_outbox \
+             WHERE ?1 IS NULL OR client_mutation_id=?1 ORDER BY created_at, rowid",
+        )
+        .map_err(db)?;
+    let rows = stmt
+        .query_map([only], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, Option<String>>(6)?,
+                r.get::<_, Option<String>>(7)?,
+                r.get::<_, i64>(8)?,
+            ))
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)?;
+    rows.into_iter()
+        .map(
+            |(cmid, conversation_id, text, reply_to, media, state, failure, server, at)| {
+                Ok(OutboxMessage {
+                    client_mutation_id: cmid,
+                    conversation_id,
+                    text,
+                    reply_to: reply_to.as_deref().map(from_json::<ReplyRef>).transpose()?,
+                    attachment_media_ids: from_json(&media)?,
+                    state: outbox_state(&state),
+                    failure,
+                    server_message_id: server,
+                    created_at: at,
+                })
+            },
+        )
+        .collect()
+}
+
 impl ConversationStore for SqliteStore {
     fn sync(&self) -> Result<SyncRecord> {
         self.research_transaction(|tx| sync_read(tx.conn()))
@@ -483,74 +555,170 @@ impl ConversationStore for SqliteStore {
     }
 
     fn outbox_insert(&self, m: &OutboxMessage, now: i64) -> Result<()> {
+        self.research_transaction(|tx| outbox_write(tx.conn(), m, now))
+    }
+
+    fn outbox(&self) -> Result<Vec<OutboxMessage>> {
+        self.research_transaction(|tx| outbox_read(tx.conn(), None))
+    }
+
+    fn outbox_accept(&self, m: &OutboxMessage, now: i64) -> Result<(OutboxMessage, bool)> {
         self.research_transaction(|tx| {
-            tx.conn()
-                .execute(
-                    "INSERT INTO conversation_outbox(client_mutation_id,conversation_id,text,\
-                     reply_to,attachment_media_ids,state,failure,server_message_id,created_at,\
-                     updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
-                    params![
-                        m.client_mutation_id,
-                        m.conversation_id,
-                        m.text,
-                        m.reply_to.as_ref().map(json_text).transpose()?,
-                        json_text(&m.attachment_media_ids)?,
-                        outbox_state_text(m.state),
-                        m.failure,
-                        m.server_message_id,
-                        m.created_at,
-                        now,
-                    ],
+            let conn = tx.conn();
+            if let Some(existing) = outbox_read(conn, Some(&m.client_mutation_id))?.pop() {
+                return Ok((existing, false));
+            }
+            outbox_write(conn, m, now)?;
+            Ok((m.clone(), true))
+        })
+    }
+
+    fn outbox_row(&self, client_mutation_id: &str) -> Result<Option<OutboxMessage>> {
+        self.research_transaction(|tx| Ok(outbox_read(tx.conn(), Some(client_mutation_id))?.pop()))
+    }
+
+    fn outbox_sent(&self, client_mutation_id: &str, message: &Message, now: i64) -> Result<()> {
+        self.research_transaction(|tx| {
+            let conn = tx.conn();
+            conn.execute(
+                "UPDATE conversation_outbox SET state='sent', failure=NULL, server_message_id=?1, \
+                 updated_at=?2 WHERE client_mutation_id=?3",
+                params![message.id, now, client_mutation_id],
+            )
+            .map_err(db)?;
+            if let Some(mut c) = conversation_read(conn, &message.conversation_id)? {
+                if !c.messages.iter().any(|m| m.id == message.id) {
+                    c.messages.push(message.clone());
+                }
+                c.status = ConversationStatus::Answered;
+                c.resolved_by = None;
+                conversation_write(conn, &c)?;
+                conn.execute(
+                    "UPDATE conversations SET last_activity_at=?1 WHERE id=?2",
+                    params![message.created_at, c.id],
                 )
                 .map_err(db)?;
+            }
             Ok(())
         })
     }
 
-    fn outbox(&self) -> Result<Vec<OutboxMessage>> {
+    fn outbox_move(
+        &self,
+        client_mutation_ids: &[String],
+        from: OutboxState,
+        to: OutboxState,
+        failure: Option<&str>,
+        now: i64,
+    ) -> Result<usize> {
+        self.research_transaction(|tx| {
+            let conn = tx.conn();
+            let mut moved = 0;
+            for id in client_mutation_ids {
+                moved += conn
+                    .execute(
+                        "UPDATE conversation_outbox SET state=?1, failure=?2, updated_at=?3 \
+                         WHERE client_mutation_id=?4 AND state=?5",
+                        params![
+                            outbox_state_text(to),
+                            failure,
+                            now,
+                            id,
+                            outbox_state_text(from)
+                        ],
+                    )
+                    .map_err(db)?;
+            }
+            Ok(moved)
+        })
+    }
+
+    fn outbox_discard(&self, client_mutation_id: &str) -> Result<bool> {
+        self.research_transaction(|tx| {
+            Ok(tx
+                .conn()
+                .execute(
+                    "DELETE FROM conversation_outbox WHERE client_mutation_id=?1 AND state='failed'",
+                    [client_mutation_id],
+                )
+                .map_err(db)?
+                > 0)
+        })
+    }
+
+    fn session_links(&self, session_id: i64) -> Result<Vec<SessionLink>> {
         self.research_transaction(|tx| {
             let mut stmt = tx
                 .conn()
                 .prepare(
-                    "SELECT client_mutation_id,conversation_id,text,reply_to,attachment_media_ids,\
-                     state,failure,server_message_id,created_at FROM conversation_outbox \
-                     ORDER BY created_at, client_mutation_id",
+                    "SELECT l.photo_id,l.role,l.slot,l.external_id,COALESCE(l.upload_state,''),\
+                     p.session_id,p.classification,p.position,p.captured_at,\
+                     p.adjusted_preview_path,p.original_preview_path \
+                     FROM photo_links l JOIN photos p ON p.id=l.photo_id \
+                     WHERE l.integration='shopify' \
+                     AND l.item_id=(SELECT item_id FROM sessions WHERE id=?1) ORDER BY l.id",
                 )
                 .map_err(db)?;
             let rows = stmt
-                .query_map([], |r| {
+                .query_map([session_id], |r| {
                     Ok((
-                        r.get::<_, String>(0)?,
+                        r.get::<_, i64>(0)?,
                         r.get::<_, String>(1)?,
                         r.get::<_, String>(2)?,
                         r.get::<_, Option<String>>(3)?,
                         r.get::<_, String>(4)?,
-                        r.get::<_, String>(5)?,
-                        r.get::<_, Option<String>>(6)?,
-                        r.get::<_, Option<String>>(7)?,
-                        r.get::<_, i64>(8)?,
+                        r.get::<_, i64>(5)?,
+                        r.get::<_, String>(6)?,
+                        r.get::<_, Option<i64>>(7)?,
+                        r.get::<_, Option<i64>>(8)?,
+                        r.get::<_, Option<String>>(9)?,
+                        r.get::<_, Option<String>>(10)?,
                     ))
                 })
                 .map_err(db)?
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .map_err(db)?;
-            rows.into_iter()
+            Ok(rows
+                .into_iter()
                 .map(
-                    |(cmid, conversation_id, text, reply_to, media, state, failure, server, at)| {
-                        Ok(OutboxMessage {
-                            client_mutation_id: cmid,
-                            conversation_id,
-                            text,
-                            reply_to: reply_to.as_deref().map(from_json::<ReplyRef>).transpose()?,
-                            attachment_media_ids: from_json(&media)?,
-                            state: outbox_state(&state),
-                            failure,
-                            server_message_id: server,
-                            created_at: at,
-                        })
+                    |(
+                        photo_id,
+                        role,
+                        slot,
+                        external_id,
+                        upload_state,
+                        photo_session_id,
+                        class,
+                        position,
+                        captured_at,
+                        adjusted,
+                        original,
+                    )| {
+                        SessionLink {
+                            photo_id,
+                            role,
+                            slot: match slot.as_str() {
+                                "left" => OutputSlot::Left,
+                                "right" => OutputSlot::Right,
+                                _ => OutputSlot::Single,
+                            },
+                            external_id,
+                            upload_state,
+                            photo_session_id,
+                            classification: match class.as_str() {
+                                "main" => Classification::Main,
+                                "condition" => Classification::Condition,
+                                "deleted" => Classification::Deleted,
+                                _ => Classification::Unreviewed,
+                            },
+                            position,
+                            captured_at,
+                            adjusted_preview_path: adjusted,
+                            original_preview_path: original,
+                        }
                     },
                 )
-                .collect()
+                .collect())
         })
     }
 

@@ -1,6 +1,10 @@
 import {
   commands,
+  type AttachableDto_Serialize,
   type ConversationCountsDto,
+  type ConversationReplyDto_Deserialize,
+  type ConversationViewDto_Serialize,
+  type PendingViewDto_Serialize,
   type ConversationListDto_Serialize,
   type ConversationScopeDto,
   type ConversationTabDto,
@@ -61,4 +65,50 @@ export async function conversationsCounts(sessionId: number | null): Promise<Con
 /** One badge per session with an unresolved conversation. */
 export async function conversationsSessionBadges(): Promise<ConversationSessionBadge[]> {
   return unwrap(await commands.conversationsSessionBadges());
+}
+
+/**
+ * C3 (09B §7): one conversation. `status` `open` | `answered` | `resolved`; `resolved_by` `asker` | `activation` | null;
+ * `session_id` null = "Not on this Mac"; `can_send` false with `off_reason` when the key is refused or the store is gone.
+ * In the hidden states (no key, no shop, store unmatched) every C3 call fails with code `conversations_off`
+ * (`data.reason` = the state).
+ */
+export type ConversationView = ConversationViewDto_Serialize;
+/** A message: `author.kind` `asker` (the pricer) | `me` | `other`. */
+export type ConversationMessage = ConversationView['messages'][number];
+/** A reply not yet confirmed: `state` `sending` | `failed` (with `failure`) | `sent`. */
+export type PendingReply = PendingViewDto_Serialize;
+/** A reply to send: `client_mutation_id` is made once, when send is pressed. */
+export type ConversationReplyInput = ConversationReplyDto_Deserialize;
+/** The photos a reply may attach; `reason` `not_on_this_mac` | `nothing_published` when there are none. */
+export type ConversationAttachable = AttachableDto_Serialize;
+export type AttachablePhoto = ConversationAttachable['photos'][number];
+
+/** One conversation from the local copy (never waits on the network). */
+export async function conversationGet(id: string): Promise<ConversationView> {
+  return unwrap(await commands.conversationGet(id));
+}
+/** The conversation was seen while the window was focused. */
+export async function conversationMarkRead(id: string): Promise<void> {
+  unwrap(await commands.conversationMarkRead(id));
+}
+/** Saves the reply on this Mac (it leaves within a quarter of a second); the same id again adds nothing. */
+export async function conversationReply(input: ConversationReplyInput): Promise<PendingReply> {
+  return unwrap(await commands.conversationReply(input));
+}
+/** Sends a failed reply again with its own id. */
+export async function conversationRetry(clientMutationId: string): Promise<PendingReply> {
+  return unwrap(await commands.conversationRetry(clientMutationId));
+}
+/** Removes a failed reply from this Mac. */
+export async function conversationDiscard(clientMutationId: string): Promise<void> {
+  unwrap(await commands.conversationDiscard(clientMutationId));
+}
+/** Marks the conversation answered in Pricing; code `conversation_resolved` when Pricing has already resolved it. */
+export async function conversationMarkAnswered(id: string): Promise<void> {
+  unwrap(await commands.conversationMarkAnswered(id));
+}
+/** The published photos of the conversation's product a reply may attach. */
+export async function conversationAttachable(id: string): Promise<ConversationAttachable> {
+  return unwrap(await commands.conversationAttachable(id));
 }

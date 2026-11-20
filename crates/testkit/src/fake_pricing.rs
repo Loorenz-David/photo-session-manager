@@ -58,6 +58,8 @@ struct Scripted {
     path_part: String,
     remaining: usize,
     status: u16,
+    /// The envelope's `code` and `message` (none = the status's default code, "Scripted failure.").
+    envelope: Option<(String, String)>,
 }
 
 #[derive(Default)]
@@ -472,6 +474,25 @@ impl FakePricing {
             path_part: path_part.into(),
             remaining: n,
             status,
+            envelope: None,
+        });
+    }
+
+    /// The next `n` requests whose path contains `path_part` answer `status` with the package
+    /// envelope carrying `code` and `message`.
+    pub fn fail_matching_with(
+        &self,
+        path_part: &str,
+        n: usize,
+        status: u16,
+        code: &str,
+        message: &str,
+    ) {
+        self.state().scripted.push(Scripted {
+            path_part: path_part.into(),
+            remaining: n,
+            status,
+            envelope: Some((code.into(), message.into())),
         });
     }
 
@@ -797,7 +818,10 @@ impl PricingHttp for FakePricing {
         {
             rule.remaining -= 1;
             let status = rule.status;
-            return Ok(envelope(status, code_for(status), "Scripted failure."));
+            return Ok(match &rule.envelope {
+                Some((code, message)) => envelope(status, code, message),
+                None => envelope(status, code_for(status), "Scripted failure."),
+            });
         }
         let reply = if authorized {
             Self::route(
