@@ -20,6 +20,7 @@ import { useResearchOverview } from './ResearchPill';
 import { waitingForReview } from './reviewQueue';
 import { TimeFilter } from './TimeFilter';
 import { UnassignedCard } from './UnassignedCard';
+import { useSessionBadges } from '@/features/conversations/SessionBadge';
 
 export const SEARCH_DEBOUNCE_MS = 250;
 
@@ -39,6 +40,8 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   const debouncedQuery = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
   const { data: list, loading, error, reload: load } = usePageData(() => listSessions({ filter, query: debouncedQuery || null }), [filter, debouncedQuery]);
   const research = useResearchOverview(null);
+  // C2 (09B §6): "N open" / "Pricing is waiting" per session.
+  const conversationBadges = useSessionBadges();
   useEffect(() => { if (error) toast.error(`Could not load sessions: ${(error as Error).message}`); }, [error]);
 
   const latestLoad = useRef(load);
@@ -177,6 +180,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
                   row={row}
                   now={now}
                   research={research.get(row.id)}
+                  conversations={conversationBadges.get(row.id)}
                   selected={selected.has(row.id)}
                   onToggle={() => toggle(row.id)}
                   onOpen={() => navigate(row.id)}

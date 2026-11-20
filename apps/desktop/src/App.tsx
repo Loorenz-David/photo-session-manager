@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Toaster } from './components/ui/sonner';
 import { Header } from './features/shell/Header';
@@ -18,6 +18,8 @@ export { parentRoute, routeLabel } from './lib/routes';
 import { activateSession, activeSession, deactivateSession } from './services/sessions';
 import { useReviewFromSearch } from './features/search/useReviewFromSearch';
 import { useReviewQueue } from './features/sessions/reviewQueue';
+import { ConversationsContext, useConversations } from './features/conversations/useConversations';
+import { ConversationsPanel } from './features/conversations/ConversationsPanel';
 
 /** Routes: `#/` sessions, `#/session/:id` session view, `#/health` health screen, `#/settings` settings (hash routing works for the bundled app's file URLs). */
 function routeSessionId(): number | undefined {
@@ -113,6 +115,14 @@ export default function App() {
   useCaptureTarget(sessionId);
   useHistory(sessionId);
   useHistoryKeys(sessionId);
+  // C2 (09B §6, §7): one conversations state for every route (header icon, panel).
+  const conversations = useConversations(sessionId);
+  const withConversations = (page: ReactNode) => (
+    <ConversationsContext.Provider value={conversations}>
+      {page}
+      <ConversationsPanel />
+    </ConversationsContext.Provider>
+  );
 
   useKeyboard({ n: () => setNewSessionOpen(true) }, sessionId === undefined && !health && !settings && !newSessionOpen);
 
@@ -130,10 +140,10 @@ export default function App() {
   }, [changeDetailsOpen, navigate, nextToReview]);
 
   // Health (ch12) and settings screens: plain pages reached from the header gear.
-  if (health) return <HealthPage />;
-  if (settings) return <><SettingsPage /><Toaster theme={theme} position="bottom-right" visibleToasts={3} closeButton /></>;
+  if (health) return withConversations(<HealthPage />);
+  if (settings) return withConversations(<><SettingsPage /><Toaster theme={theme} position="bottom-right" visibleToasts={3} closeButton /></>);
 
-  return (
+  return withConversations(
     <>
       <Header
         sessionId={sessionId}

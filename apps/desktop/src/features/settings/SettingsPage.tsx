@@ -8,6 +8,7 @@ import { ChoiceSelect, SELECT_NONE, Select, SelectContent, SelectGroup, SelectIt
 import { useAction, usePageData } from '@/lib/pending';
 import { getSettings, pickFolder, pickSessionFile, saveSettings, type IntegrationSettings, type Settings } from '@/services/settings';
 import { PageHeader } from '@/features/shell/PageHeader';
+import { ConversationsButton } from '@/features/conversations/ConversationsButton';
 import { goTo, setLeaveGuard } from '@/lib/routes';
 import { listStyles, type EditorStyles } from '@/services/styles';
 import { CameraSection, type CameraLogin } from './CameraSection';
@@ -130,6 +131,7 @@ export function SettingsPage() {
   }, e => setError((e as {code?: string}).code === 'invalid_value' ? 'Ports must be 1024–65535, the passive range at least 2 ports and not containing the receiver port' : e instanceof Error ? e.message : (e as {message?: string}).message ?? String(e)));
 
   const header = <PageHeader title={<h1 className="health-title">Settings</h1>} escapeGoesBack>
+    <ConversationsButton />
     <Button variant="outline" onClick={() => goTo('#/health')}>Health</Button>
   </PageHeader>;
   if (!settings) return <>{header}<main className="health-shell">{error || page.error ? <p role="alert">{error ?? String(page.error)}</p> : <SkeletonFields n={6} />}</main></>;
