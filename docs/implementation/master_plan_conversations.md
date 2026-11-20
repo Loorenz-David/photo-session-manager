@@ -18,11 +18,11 @@ differ, 09B wins and this file is amended; where the package and this file diffe
 ## 2. Milestones (one runner phase each; order in `docs/implementation/phases_conversations.txt`)
 | Id | Builds | Units | Criteria | Rows | Changes app files | Projection | depends_on | Useful on its own |
 |---|---|---|---|---|---|---|---|---|
-| `C1_connection_and_sync` | the conversations port and vocabulary in core, the Beyo Pricing adapter and the fake Pricing server, Settings → Pricing (key in the Keychain, store match, Test connection), the local copy, the first connection, the 10-second pull, read marks, error states | 4 | 21 | 111 | yes | **yes** | — | the Mac keeps an exact local copy of the photographer's conversations; Settings says whether it is connected; nothing shows them yet |
+| `C1_connection_and_sync` | the conversations port and vocabulary in core, the Beyo Pricing adapter and the fake Pricing server, Settings → Pricing (key in the Keychain, store match, Test connection), the local copy, the first connection, the 10-second pull, read marks, error states | 4 | 21 | 112 | yes | **yes** | — | the Mac keeps an exact local copy of the photographer's conversations; Settings says whether it is connected; nothing shows them yet |
 | `C2_header_panel_notifications` | the list, counts and badges behind commands; the header icon with its count and dot, the panel list with Open / Resolved, the sessions-list badges; toast, chime, Mac banner, mute | 3 | 19 | 66 | yes | no | C1 | the photographer sees which products have questions and is told when one arrives |
 | `C3_conversation_and_answering` | the outbox and send with `clientMutationId`, retry, Mark answered, attachable photos; the conversation view (bubbles, quote, photos, reply line, edited); the composer and photo picker | 3 | 21 | 73 | yes | **yes** | C2 | the photographer reads a question and answers it in Session Manager |
 | `C4_visit_and_quote_jump` | the visit (Open session without moving the capture folder), the bar, Back, Shoot here instead; the quote chip that opens the form at its field | 2 | 12 | 44 | yes | **yes** | C3 | the photographer checks the product a question is about and returns to the shoot |
-Totals (computed from the plan files): 4 milestones, 12 units, 73 criteria, 294 rows (C1·C11(h) added by the C1 projection, 2026-11-20); every unit has at most 8 criteria.
+Totals (computed from the plan files): 4 milestones, 12 units, 73 criteria, 295 rows (C1·C11(h) added by the C1 projection, C1·C10(d) by the orchestrator, 2026-11-20); every unit has at most 8 criteria.
 Each milestone needs the one before approved (its `depends_on`), gate = the **Tracker** line of that plan file.
 Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list.
@@ -110,7 +110,7 @@ ConversationSettings) -> psm_core::Result<()>`; implemented in `psm-integrations
 **Storage** (migration `019_conversations.sql`; no table names a session, an item or a photo, so "Delete session" and
 `relocate_raw` are untouched, CR3):
 `conversation_sync(id INTEGER PRIMARY KEY CHECK (id = 1), state TEXT NOT NULL DEFAULT 'no_key', store_id TEXT,
-store_name TEXT, shop_domain TEXT, visible_stores TEXT NOT NULL DEFAULT '[]', cursor INTEGER, first_sync_done INTEGER
+store_name TEXT, shop_domain TEXT, server TEXT, visible_stores TEXT NOT NULL DEFAULT '[]', cursor INTEGER, first_sync_done INTEGER
 NOT NULL DEFAULT 0, last_ok_at INTEGER, last_error TEXT, last_error_at INTEGER)` ·
 `conversations(id TEXT PRIMARY KEY, store_id TEXT NOT NULL, product_id TEXT NOT NULL, sku TEXT, product_title TEXT NOT
 NULL, topic TEXT NOT NULL, blocking INTEGER NOT NULL, status TEXT NOT NULL, resolved_by TEXT, created_at INTEGER NOT
@@ -263,8 +263,10 @@ through App rebuilds, §4 Service) held for one provider request **and** the tra
    null, `first_sync_done` 0; then save the store, `state = ready`, clear `last_error`, and the next `tick` checks at
    once. One transaction per outcome. The copy is kept in every other state (it is only hidden by the UI when
    `no_key`, `no_shop` or `store_unmatched`).
-   **Server change** (projection C1 L7): the service holds in memory the effective server of the last successful
-   connect (initialised at build from the slot). When the live effective server differs from it (a `settings_save`,
+   **Server change** (projection C1 L7; persisted by the orchestrator 2026-11-20 so a restart cannot lose it): a
+   successful connect writes the effective server it used to `S.server` in the same transaction as the store. When
+   the live effective server differs from `S.server` (an absent `S.server` with a saved store counts as the default
+   server) (a `settings_save`,
    or a `conversations` patch through `settings_set`; compared in `settings_save` and before every provider request),
    the state is `store_unmatched` *(memory)* with `visible_stores` empty (the line "Press Test connection"), no call is
    made, and the old store id and cursor are never sent to the new server; the next `test_connection` or
@@ -470,3 +472,6 @@ change takes it first, use the next number (never renumber an applied file).
   .3 (trim, server change, `Err` return), .5(a) (last event deleted → forgotten), .5(d) (first connection = complete
   check), .6 (`resolved_by` scope), .8 (`last_error` for `Refused`/`StoreGone`), .9 ("applied" = changed the copy);
   §6 server-change choice; §7 `url`. C1 now 111 rows (C1·C11(h)); totals 294.
+- **v1.2 (2026-11-20, orchestrator):** the server-change rule (L7) is persisted: `conversation_sync.server` holds the
+  effective server of the last successful connect, so a restart between changing the address and Test connection
+  cannot send the old store id and cursor to the new server. Row C1·C10(d). C1 now 112 rows; totals 295.
