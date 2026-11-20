@@ -15,3 +15,8 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
   `78869e5`. Planner session started (master plan, `phases_conversations.txt`, plans C1–C4).
   - Live check after C4 is the orchestrator's, with a test question the owner creates in Pricing (writes to Pricing
     are outward-facing; ask first). The owner pastes the Pricing API key in Settings → Pricing themselves.
+- **2026-11-20: plans written** (`a0f74a9`; handoff `handoffs/reviewer/handoff_conversations_plan_r1.md`, no owner
+  cards). 4 milestones, 12 units, 73 criteria, 293 rows; projection on C1, C3, C4. 09B amended `2e4058b` with the
+  planner's refinements (event paging before listing, Remove for a failed reply, banner click limits).
+  - **Chain C1→C4 started** in the background: `scratchpad/conv_chain.sh`, log `scratchpad/conv_chain.log`. It
+    stops at the first milestone that does not approve (exit 10 = orchestrator must look).
