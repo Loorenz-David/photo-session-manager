@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # C3 — Conversation view and answering
 
-**Tracker:** NOT_STARTED (2026-11-20, planner)
+**Tracker:** IMPLEMENTED (2026-11-20, claude opus implementer; 3 units, checkpoints 56f95bb · 3877fd6 · 9076272; rows: rules 4 unit tests (C1), suite c3 31/0, desktop c3_tests 1/0, UI c3 39/0; closing gate green: workspace 2071/0, clippy, fmt, typecheck, npm test 748/0)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -254,3 +254,31 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
 ## Review log
 
 - **2026-11-20, orchestrator: projection r0 amendments applied** (`handoffs/reviewer/handoff_C3_conversation_and_answering_projection_r0.md`, AMENDMENTS_REQUIRED, 0 owner cards; master plan v1.3). L1 `crates/testkit/src/fake_pricing.rs` added to U1 Files and the scripted helper `fail_matching_with(path_part, n, status, code, message)` answering the package envelope (U1 task 7); C3·C4(d) uses it. L2 road (a): one new `ConversationStore` read in `crates/infra/src/sqlite/conversations.rs` (a session's item's links with each photo's session, classification, position, captured time, previews), filtering and ordering in core (U1 task 4; master plan §4 Ports). L3 gallery = `role == "gallery"`, condition = `role` starting with `"attribute:"`; Read-first citation fixed to `crates/core/src/services/publish.rs` (:1201, :1467), `mechanisms/publish.rs` kept for `ready` (:48). L4 `preview_path: Option<String>` = adjusted, else original; split halves share the preview; order `(position, captured_at, photo id)` then `left` before `right`; C3·C8(a) asserts the adjusted path wins. L5 hidden states `no_key` / `no_shop` / `store_unmatched` → `conversations_off` (`data.reason`), nothing written; `refused` / `store_gone` sentence = `describe` of the state's error = `S.last_error` (U1 task 1; master plan MC-C2.1, .3, .6, .7); U2 task 1 returns to the list on `conversations_off`; row **C3·C6(c)** added. L6 Mark answered's error cases `Off(state)` → `conversations_off`, `Resolved` → `conversation_resolved`, other → `provider` with `describe` (U1 tasks 3, 5); C3·C7(c) names the code; row **C3·C7(e)** added; master plan §4 Event names Mark answered. L7 delegated: `reply` returns `PendingView`. L8 C3·C2(a) "the fake recorded no `POST`". L9 excerpt = the target's first line, at most 80 scalar values, in core and the composer (U1 task 1, U3 task 2); C3·C19(a) asserts "↩ Elin Lindqvist: Is the glass original?". L10 composer counts `[...text.trim()].length` (U3 task 1). L11 delegated: `activityLabel(created_at)` (U2; C3·C10(a)). L12 `conversationAttachable` read with the view; the photo button follows its `reason` (U3 task 3; C3·C20(d)). L13 C3·C1(c), (d) name the field in every refusal. L14 delegated: `not_found` throughout. L15 the flush runs after `calls_allowed` and before the due test; non-`Refused`/`StoreGone` `post_message` errors change only outbox rows (U1 Notes). L16 delegated: trimming in the composer. Counts: U1 8 criteria / 36 rows; total 21 / 75 (recounted from the four plan files: 12 units, 73 criteria, 297 rows). Outcomes otherwise unchanged, so no new projection round (`projection: done`).
+- **2026-11-20, implementer (claude opus), implement r1.** Built the three units in order with a checkpoint after each
+  (U1 `56f95bb`, U2 `3877fd6`, U3 `9076272`); closing gate run once, green. **U1:** `conversation_rules::{checked_reply,
+  reply_excerpt}`; `ConversationsService::{view, reply, retry, discard, mark_answered, attachable}` and the flush at the
+  start of `tick` (after the `ready` test, before the due test); `ConversationError {Off {state, message}, Resolved,
+  Provider, Storage}`; `ConversationStore::{outbox_accept, outbox_row, outbox_sent, outbox_move, outbox_discard,
+  session_links}`; the seven commands with DTOs and wrappers; `FakePricing::fail_matching_with`; guide 02 and 03.
+  **U2:** `ConversationView`, `MessageBubble` (+ `PendingBubble`, `ReplyLine`), `QuoteBlock`, the read mark; C2·C15(c)
+  now expects the view. **U3:** `Composer`, `PhotoPicker`, Reply / Retry / Remove, Mark answered; guide 01.
+  **Assumptions** (smallest option, 09B §7–§8, MC-C2): (1) a `Refused` / `StoreGone` answer to a send fails that row
+  **and the later `sending` rows of the same flush** with the state's sentence, without a request (MC-C2.2 names only
+  the row; the rows after it cannot be sent in that state, and MC-C2.1 makes new replies `failed` there too);
+  (2) `discard` is allowed in every state (MC-C2.1 does not list it among the `conversations_off` methods; it is local);
+  (3) `reply` validates first, then returns an existing row for the same id before checking the conversation;
+  (4) the attachable filter and order live in the service (not a `conversation_rules` function, so no extra unit
+  tests); a missing position or capture time sorts last in its group; `session_links` reads only `shopify` links like
+  `photo_links_for_item`; (5) the outbox is ordered by `created_at` then insertion order (`rowid`), so two replies of
+  the same millisecond leave in the order they were pressed (was `client_mutation_id`); (6) `mark_answered` on a 409
+  keeps the stored `resolved_by` (the next pull fills it); a re-read that answers 404 deletes the conversation;
+  (7) `retry` returns the row as a `PendingView`; `conversation_mark_answered` and `conversation_discard` return
+  nothing; DTO `reason` / `role` / `slot` / `state` are snake_case strings (`not_on_this_mac`, `nothing_published`);
+  (8) the composer trims the text before the call and clears the box at the press (the call follows); a failed call
+  shows a toast; Reply is offered on every message; the photo button opens the picker, which says "Publish first to
+  attach photos" when nothing is published; the photo button is disabled when `can_send` is false. **Deviations:**
+  none from the rows. `useConversations.ts` (listed as edited in U2) needed no change. **Observations:** the inline
+  desktop test `p50_tests::c8a_support_and_secret_commands_have_their_wire_shapes` failed once during U1 because the
+  OS handed it a random port inside its own passive range 50000–50009 (pre-existing flaky test, not touched; it passed
+  alone and in the closing gate). No test, session or tool called Pricing or Shopify; the app was never launched.
+
