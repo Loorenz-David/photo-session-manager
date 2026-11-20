@@ -324,6 +324,11 @@ impl FakePricing {
         id
     }
 
+    /// Empties the key's store list.
+    pub fn clear_stores(&self) {
+        self.state().stores.clear();
+    }
+
     /// Removes a store from the key's list (its cases and events stay addressable by id).
     pub fn remove_store(&self, store_id: &str) {
         self.state().stores.retain(|s| s.id != store_id);

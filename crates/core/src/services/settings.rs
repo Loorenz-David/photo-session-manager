@@ -52,6 +52,7 @@ impl SettingsService {
                 "export",
                 "research",
                 "writer",
+                "conversations",
             ]
             .contains(&key.as_str())
             {
@@ -81,10 +82,10 @@ impl SettingsService {
                 next[key] = Value::Object(storage);
                 continue;
             }
-            if key == "research" || key == "writer" {
+            if key == "research" || key == "writer" || key == "conversations" {
                 // R7·U1: the top-level fields given replace those stored; the others are kept.
                 // The research engine validates the patch before this runs (W3: the writer's
-                // slot likewise).
+                // slot likewise; C1: the conversations slot, validated by the caller first).
                 let Some(fields) = value.as_object() else {
                     return Err(Error::InvalidValue(key.clone()));
                 };

@@ -3,6 +3,7 @@ pub mod attributes;
 pub mod camera;
 pub mod camera_ledger;
 pub mod composition;
+pub mod conversations;
 pub mod editing_events;
 pub mod editing_startup;
 pub mod export;

@@ -48,6 +48,7 @@ use psm_core::{
         attributes::AttributesService,
         camera::CameraService,
         composition::CompositionService,
+        conversations::{ConversationsLane, ConversationsService},
         editing_events::EditingEventsDispatcher,
         editing_startup::EditingStartup,
         export::{ExportRender, ExportService},
@@ -129,6 +130,8 @@ pub struct App {
     pub storage: Arc<StorageService>,
     /// Changelog 47 (2), P69: masters of Ready sessions prepared in the background.
     pub prepare_masters: Arc<PrepareMastersService>,
+    /// C1 (09B): conversations with Pricing; always present (H6: silent without a key or shop).
+    pub conversations: Arc<ConversationsService>,
     scripting: Arc<dyn CaptureOneScripting>,
     lanes: Lanes,
     run_startup: bool,
@@ -169,6 +172,8 @@ pub struct AppHandles {
     pub events: Arc<EventHub>,
     pub history: Arc<History>,
     pub storage: Arc<StorageService>,
+    /// C1: conversations with Pricing.
+    pub conversations: Arc<ConversationsService>,
     pub hooks_compiled: bool,
     pub nudge_running: bool,
 }
@@ -184,6 +189,8 @@ pub struct Lanes {
     pub start_order: Arc<StartOrder>,
     /// The master-render disk guard's free-space source (P56 C3(d)).
     pub disk: Arc<editing::capture_one::adapter::DiskSpace>,
+    /// C1 (MC-C1 "lane"): one provider request and its apply at a time, across rebuilds.
+    pub conversations: Arc<ConversationsLane>,
 }
 
 pub struct SettingsSetContext {
@@ -216,6 +223,8 @@ impl SettingsSetContext {
             current.research = on_disk.research;
             // W3: so does the writer's.
             current.writer = on_disk.writer;
+            // C1: and the conversations slot (written by its own commands).
+            current.conversations = on_disk.conversations;
         }
         let previous = settings_value(&current)?;
         // R7·U1: a `research` patch passes the engine's validation first; its text is the refusal.
@@ -231,7 +240,14 @@ impl SettingsSetContext {
             psm_research::writer::config::WriterSettings::validate(writer)
                 .map_err(psm_core::Error::InvalidData)?;
         }
+        // C1: a `conversations` patch is validated first (an invalid server names `server`).
+        if let Some(conversations) = patch.get("conversations") {
+            conversations::validate_patch(conversations)?;
+        }
         let mut next = SettingsService::set(&previous, patch)?;
+        if patch.get("conversations").is_some() {
+            next["conversations"] = conversations::normalised_slot(next.get("conversations"));
+        }
         if patch.get("research").is_some() {
             next["research"] = serde_json::to_value(
                 psm_research::config::ResearchSettings::from_slot(next.get("research")),
@@ -262,7 +278,15 @@ impl SettingsSetContext {
         let mut a = previous;
         let mut b = next;
         // W3: the writer's slot is read live by the engine, like `theme` it never rebuilds.
-        for key in ["theme", "output_format", "storage", "export", "writer"] {
+        // C1: so is the conversations slot (read live through its slot port).
+        for key in [
+            "theme",
+            "output_format",
+            "storage",
+            "export",
+            "writer",
+            "conversations",
+        ] {
             a[key] = serde_json::Value::Null;
             b[key] = serde_json::Value::Null;
         }
@@ -456,6 +480,7 @@ impl App {
             events: self.events.clone(),
             history: self.history.clone(),
             storage: self.storage.clone(),
+            conversations: self.conversations.clone(),
             hooks_compiled: self.hooks_compiled,
             nudge_running: self.nudge_port() != 0,
         }
@@ -537,6 +562,7 @@ impl App {
                 gate,
                 start_order,
                 disk: Arc::new(editing::capture_one::adapter::DiskSpace::default()),
+                conversations: Arc::new(ConversationsLane::new()),
             },
             clock,
             run_startup,
@@ -1144,6 +1170,17 @@ impl App {
         } else {
             None
         };
+        // C1: the conversations service (no request and no Keychain read here: the key is read at
+        // the first `tick` or `connection()`, on a worker thread).
+        let conversations = conversations::build_service(conversations::ServiceParts {
+            paths: paths.clone(),
+            store: store.clone(),
+            secrets: camera_runtime.secret_store(),
+            shop: integration.as_ref().map(|i| i.shop_domain.clone()),
+            clock: clock.clone(),
+            events: events.clone(),
+            lane: lanes.conversations.clone(),
+        });
         camera_runtime.bind(AppBinding {
             store: store.clone(),
             events: events.clone(),
@@ -1200,6 +1237,7 @@ impl App {
             clock,
             storage,
             prepare_masters,
+            conversations,
             scripting,
             lanes,
             run_startup,
