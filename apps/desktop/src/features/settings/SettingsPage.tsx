@@ -14,6 +14,7 @@ import { CameraSection, type CameraLogin } from './CameraSection';
 import { cameraSecretsSet } from '@/services/camera';
 import { StorageSection } from './StorageSection';
 import { StockSection } from './StockSection';
+import { PricingSection } from './PricingSection';
 import { ResearchSection } from './ResearchSection';
 import { WriterSection } from './WriterSection';
 import { SettingsNav, type SettingsSection } from './SettingsNav';
@@ -238,6 +239,8 @@ export function SettingsPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {/* C1: saves by itself, outside the unsaved-changes guard (like the research keys). */}
+    <section data-section="pricing" data-active={section === 'pricing'}><PricingSection /></section>
     <section data-section="storage" data-active={section === 'storage'}><StorageSection /></section>
     {saved?.research && <section data-section="research" data-active={section === 'research'}><ResearchSection research={saved.research} shopDomain={saved.integration?.shop_domain || null} /></section>}
     {saved?.research && <section data-section="writer" data-active={section === 'writer'}><WriterSection research={saved.research} active={section === 'writer'} /></section>}

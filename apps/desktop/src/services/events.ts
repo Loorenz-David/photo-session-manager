@@ -55,3 +55,9 @@ export async function onFileDrop(handler: (event: FileDropEvent) => void): Promi
     else handler({ type: payload.type });
   });
 }
+
+/** C1: `conversations_changed {toasts, more}`: the conversations copy, a read mark or the Pricing connection changed. */
+export type ConversationsChanged = { toasts: { conversation_id: string; text: string }[]; more: number };
+export async function onConversationsChanged(handler: (event: ConversationsChanged) => void): Promise<UnlistenFn> {
+  return listen<ConversationsChanged>('conversations_changed', event => handler(event.payload));
+}

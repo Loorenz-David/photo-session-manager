@@ -204,6 +204,16 @@ impl ConversationsService {
         }
     }
 
+    /// Whether a key is saved (reads the Keychain at most once per build).
+    pub fn key_saved(&self) -> bool {
+        self.key().is_some()
+    }
+
+    /// The sentence shown for a provider error (the provider's words, the connected shop).
+    pub fn describe(&self, error: &ProviderError) -> String {
+        self.provider.describe(error, self.shop.as_deref())
+    }
+
     /// The settings as stored (live, through the slot).
     pub fn settings(&self) -> ConversationSettings {
         ConversationSettings::from_slot(self.slot.read().as_ref())

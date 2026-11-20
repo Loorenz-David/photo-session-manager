@@ -79,6 +79,14 @@ at P70 (§Research: after R13); add a row whenever a phase creates a new couplin
 | A mutation that needs a new scope (inventory needs `read_locations` + `write_inventory`; `adapter.rs` names them in `STOCK_ACCESS_MISSING`) | the owner must add the scope to the custom app; the adapter's fallback and message (`item_create_stocked` → untracked create) | `ACCESS_DENIED` on the live store, silently degraded behaviour | the narrative's "Needs you"/"Try it" steps |
 | The condition-photos metafield key (`condition_photos_key`, `custom.damage_report`) or type map (`type_map.rs`) | `09A` MC-24, `mechanisms/values.rs`, `attribute_write.rs` | `condition_field_missing` health, attribute verification failures | `p10_attributes::`, `p14_publish_update::` |
 
+## Conversations with Pricing (C1; names in `docs/implementation/master_plan_conversations.md` §4)
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| A Pricing reply shape or endpoint (the package `openapi-integration.json`, `API.md`) | `conversations/beyo_pricing/types.rs`, the fixture in `beyo_pricing/fixtures/` (the package's example or schema), the mapping in `adapter.rs`, `FakePricing` (`crates/testkit/src/fake_pricing.rs`, which serialises through `types.rs`) | the fake proves a shape Pricing does not send; the copy silently misses fields | `cargo test -p psm-integrations --lib conversations::`; `cargo test -p psm-testkit --test suite c1_conversations_sync::` |
+| A `conversations` settings field (`ConversationSettings`) | `ConversationSettings::from_slot` (tolerant), the slot normalisation in `conversations/mod.rs` (`SettingsFileSlot`, `validate_patch`, `normalised_slot`), `ConversationSettingsPatch`, the DTOs in `commands/conversations.rs` + bindings, `PricingSection.tsx` | the field is dropped on the next save, or a save through `settings_set` rebuilds the App | `c1_conversations_connection::c1_c7*`; `npx vitest run src/features/settings/__tests__/c1_pricing_settings.test.tsx` |
+| The `ConversationsChanged` payload or `notice_lines` | `TauriEvents` arm and `ConversationsChangedPayload` (desktop `lib.rs`), `onConversationsChanged` in `services/events.ts`, C2's toasts and banners | the window shows other words than the banner | `cargo test -p psm-desktop c1_tests`; `cargo test -p psm-core --lib mechanisms::conversation_rules` |
+| The sync rules (MC-C1: what a `tick` asks, the cursor, the lane) | `services/conversations.rs` and the store transactions in `crates/infra/src/sqlite/conversations.rs` (the cursor in the same transaction as the change it follows) | a change is lost or applied twice after an interruption | `c1_conversations_sync::` |
+
 ## Research (verified after R13; names in `docs/implementation/master_plan_research.md` §6)
 | If you change… | You must also change… | Otherwise… | Check |
 |---|---|---|---|

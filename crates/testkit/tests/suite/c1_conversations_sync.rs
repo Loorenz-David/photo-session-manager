@@ -879,3 +879,28 @@ fn c1_c18d_deleting_a_session_keeps_its_conversations_and_asks_nothing() {
     assert_eq!(copy_ids(&a), [case]);
     assert!(lines(&a).is_empty());
 }
+
+// ---------- C1·C21 Pricing never holds up a screen ----------
+
+#[test]
+fn c1_c21a_screens_answer_while_a_request_is_held() {
+    let a = connected();
+    a.items().create_local(SKU, SKU, "object", None).unwrap();
+    pricing(&a).hold();
+    let service = a.app.conversations.clone();
+    let now = a.clock.now_ms();
+    let ticking = std::thread::spawn(move || service.tick(now).map(|t| t.more));
+    assert!(pricing(&a).wait_until_held(), "the tick reached Pricing");
+    let sessions = a
+        .sessions()
+        .list(psm_core::domain::session::ListFilter::Open, None)
+        .unwrap();
+    let rows: usize = sessions.groups.iter().map(|g| g.rows.len()).sum();
+    assert_eq!(rows, 1);
+    let connection = a.app.conversations.connection().unwrap();
+    assert_eq!(connection.state, ConnectionState::Ready);
+    assert!(!ticking.is_finished(), "the tick is still held");
+    pricing(&a).release();
+    ticking.join().unwrap().unwrap();
+    assert!(a.app.store.sync().unwrap().first_sync_done);
+}

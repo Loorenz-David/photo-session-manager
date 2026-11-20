@@ -204,6 +204,10 @@ export const commands = {
 	 *  built-in example item, under the saved settings. Nothing is sent and no run is made.
 	 */
 	writerPreview: (language: string) => typedError<WriterPreviewDto, CommandError>(__TAURI_INVOKE("writer_preview", { language })),
+	conversationsSettingsGet: () => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_settings_get")),
+	conversationsSettingsSave: (patch: ConversationsSettingsPatchDto_Deserialize) => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_settings_save", { patch })),
+	conversationsKeySet: (key: string) => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_key_set", { key })),
+	conversationsTest: () => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_test")),
 	/**  Opens the session's search window pinned on `photo_id` (or brings it forward on that photo). */
 	searchWindowOpen: (sessionId: CommandId, photoId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("search_window_open", { sessionId, photoId })),
 	/**
@@ -611,6 +615,40 @@ export type ConditionLevelDto_Serialize = {
 /**  The three actions on a conflict (MC-A10, MC-A12). */
 export type ConflictActionDto = "keep_previous" | "use_suggestion" | "edit";
 
+/**
+ *  The connection as Settings shows it (`state` = `no_key`, `no_shop`, `store_unmatched`, `ready`,
+ *  `refused` or `store_gone`).
+ */
+export type ConnectionDto = ConnectionDto_Serialize | ConnectionDto_Deserialize;
+
+/**
+ *  The connection as Settings shows it (`state` = `no_key`, `no_shop`, `store_unmatched`, `ready`,
+ *  `refused` or `store_gone`).
+ */
+export type ConnectionDto_Deserialize = {
+	state: string,
+	store_name?: string | null,
+	shop?: string | null,
+	visible_stores: string[],
+	last_ok_at?: number | null,
+	last_error?: string | null,
+	last_error_at?: number | null,
+};
+
+/**
+ *  The connection as Settings shows it (`state` = `no_key`, `no_shop`, `store_unmatched`, `ready`,
+ *  `refused` or `store_gone`).
+ */
+export type ConnectionDto_Serialize = {
+	state: string,
+	store_name: string | null,
+	shop: string | null,
+	visible_stores: string[],
+	last_ok_at: number | null,
+	last_error: string | null,
+	last_error_at: number | null,
+};
+
 export type ContainerDto = ContainerDto_Serialize | ContainerDto_Deserialize;
 
 export type ContainerDto_Deserialize = {
@@ -633,6 +671,48 @@ export type ContainerDto_Serialize = {
 	presets: PresetsDto_Serialize,
 	name: string | null,
 	description: string | null,
+};
+
+/**  Settings → Pricing. `key_saved` only: the key itself never leaves the Keychain. */
+export type ConversationsSettingsDto = ConversationsSettingsDto_Serialize | ConversationsSettingsDto_Deserialize;
+
+/**  Settings → Pricing. `key_saved` only: the key itself never leaves the Keychain. */
+export type ConversationsSettingsDto_Deserialize = {
+	/**  The effective server address. */
+	server: string,
+	server_default: string,
+	key_saved: boolean,
+	sound: boolean,
+	banner: boolean,
+	connection: ConnectionDto_Deserialize,
+};
+
+/**  Settings → Pricing. `key_saved` only: the key itself never leaves the Keychain. */
+export type ConversationsSettingsDto_Serialize = {
+	/**  The effective server address. */
+	server: string,
+	server_default: string,
+	key_saved: boolean,
+	sound: boolean,
+	banner: boolean,
+	connection: ConnectionDto_Serialize,
+};
+
+/**  The fields to save; the others are kept. `server: ""` returns to the default address. */
+export type ConversationsSettingsPatchDto = ConversationsSettingsPatchDto_Serialize | ConversationsSettingsPatchDto_Deserialize;
+
+/**  The fields to save; the others are kept. `server: ""` returns to the default address. */
+export type ConversationsSettingsPatchDto_Deserialize = {
+	server?: string | null,
+	sound?: boolean | null,
+	banner?: boolean | null,
+};
+
+/**  The fields to save; the others are kept. `server: ""` returns to the default address. */
+export type ConversationsSettingsPatchDto_Serialize = {
+	server: string | null,
+	sound: boolean | null,
+	banner: boolean | null,
 };
 
 /**  One definition. `core_type` is one of the 18 core types (ch08); `validations` is JSON text. */

@@ -518,6 +518,189 @@ mod r5_command_tests {
 }
 
 #[cfg(test)]
+mod c1_tests {
+    //! C1·U4 (`docs/implementation/plans/C1_connection_and_sync.md` C1·C19): the Settings →
+    //! Pricing commands over the wired app with the fake Pricing server, and the event bridge.
+    use super::*;
+    use psm_core::{
+        domain::conversation::{ConversationNotice, KEY_ACCOUNT, NoticeKind},
+        ports::secrets::SecretStore,
+    };
+    use psm_integrations::conversations::beyo_pricing::DEFAULT_SERVER;
+    use psm_testkit::test_app::PRICING_KEY;
+    use serde_json::{Value, json};
+    use tauri::Listener;
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    struct Wired {
+        _dir: tempfile::TempDir,
+        _app: tauri::App<tauri::test::MockRuntime>,
+        window: tauri::WebviewWindow<tauri::test::MockRuntime>,
+        pricing: Arc<psm_testkit::fake_pricing::FakePricing>,
+        secrets: Arc<psm_testkit::fake_secrets::FakeSecrets>,
+    }
+
+    fn wired() -> Wired {
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        let pricing = a.pricing.clone().unwrap();
+        let secrets = a.secrets.clone();
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::conversations::conversations_settings_get,
+                commands::conversations::conversations_settings_save,
+                commands::conversations::conversations_key_set,
+                commands::conversations::conversations_test,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        Wired {
+            _dir: dir,
+            _app: tauri_app,
+            window,
+            pricing,
+            secrets,
+        }
+    }
+
+    #[test]
+    fn c1_c19a_settings_get_on_a_fresh_folder() {
+        let w = wired();
+        let got = call(&w.window, "conversations_settings_get", json!({})).unwrap();
+        assert_eq!(got["server"], json!(DEFAULT_SERVER));
+        assert_eq!(got["server_default"], json!(DEFAULT_SERVER));
+        assert_eq!(got["key_saved"], json!(false));
+        assert_eq!(got["sound"], json!(true));
+        assert_eq!(got["banner"], json!(true));
+        assert_eq!(got["connection"]["state"], json!("no_key"));
+    }
+
+    #[test]
+    fn c1_c19b_saving_the_key_connects_and_never_returns_it() {
+        let w = wired();
+        let saved = call(
+            &w.window,
+            "conversations_key_set",
+            json!({"key": PRICING_KEY}),
+        )
+        .unwrap();
+        let got = call(&w.window, "conversations_settings_get", json!({})).unwrap();
+        for answer in [&saved, &got] {
+            assert_eq!(answer["key_saved"], json!(true));
+            assert_eq!(answer["connection"]["state"], json!("ready"));
+            assert_eq!(answer["connection"]["store_name"], json!("Dev store"));
+            assert_eq!(answer["connection"]["shop"], json!("shop-a.myshopify.com"));
+            assert!(!answer.to_string().contains(PRICING_KEY), "{answer}");
+        }
+    }
+
+    #[test]
+    fn c1_c19c_an_empty_key_removes_it() {
+        let w = wired();
+        call(
+            &w.window,
+            "conversations_key_set",
+            json!({"key": PRICING_KEY}),
+        )
+        .unwrap();
+        let removed = call(&w.window, "conversations_key_set", json!({"key": ""})).unwrap();
+        assert_eq!(removed["key_saved"], json!(false));
+        assert_eq!(removed["connection"]["state"], json!("no_key"));
+        assert_eq!(w.secrets.get(KEY_ACCOUNT).unwrap(), None);
+    }
+
+    #[test]
+    fn c1_c19d_test_connection_lists_the_visible_stores() {
+        let w = wired();
+        w.pricing.clear_stores();
+        w.pricing.add_store("One", "one.myshopify.com");
+        w.pricing.add_store("Two", "two.myshopify.com");
+        w.secrets.set(KEY_ACCOUNT, PRICING_KEY).unwrap();
+        let got = call(&w.window, "conversations_test", json!({})).unwrap();
+        assert_eq!(got["connection"]["state"], json!("store_unmatched"));
+        assert_eq!(got["connection"]["visible_stores"], json!(["One", "Two"]));
+    }
+
+    #[test]
+    fn c1_c19e_an_http_server_is_refused_naming_server() {
+        let w = wired();
+        let error = call(
+            &w.window,
+            "conversations_settings_save",
+            json!({"patch": {"server": "http://x.example"}}),
+        )
+        .unwrap_err();
+        assert_eq!(error["code"], json!("invalid_value"));
+        assert!(
+            error["message"].as_str().unwrap().contains("server"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn c1_c19f_the_bridge_forwards_the_toast_words() {
+        let tauri_app = mock_builder().build(mock_context(noop_assets())).unwrap();
+        let payloads = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+        let seen = payloads.clone();
+        tauri_app.listen_any("conversations_changed", move |event| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(event.payload()).unwrap())
+        });
+        EventSink::emit(
+            &TauriEvents(tauri_app.handle().clone()),
+            AppEvent::ConversationsChanged {
+                notices: vec![ConversationNotice {
+                    conversation_id: "c1".into(),
+                    sku: Some("BEYO-1880".into()),
+                    product_title: "Vintage Brass Wall Mirror, Round".into(),
+                    topic: "Condition".into(),
+                    kind: NoticeKind::Question,
+                }],
+                chime: true,
+                banner: true,
+            },
+        );
+        assert_eq!(
+            *payloads.lock().unwrap(),
+            vec![json!({
+                "toasts": [{"conversation_id": "c1", "text": "New question · BEYO-1880 — Condition"}],
+                "more": 0
+            })]
+        );
+    }
+}
+
+#[cfg(test)]
 mod r6_command_tests {
     use super::*;
     use psm_core::domain::attribute::AiConfidence;
@@ -1178,6 +1361,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::writer::writer_settings_import,
         commands::writer::writer_instruction_reset,
         commands::writer::writer_preview,
+        commands::conversations::conversations_settings_get,
+        commands::conversations::conversations_settings_save,
+        commands::conversations::conversations_key_set,
+        commands::conversations::conversations_test,
         commands::search::search_window_open,
         commands::search::search_web_place,
         commands::search::search_web_go,

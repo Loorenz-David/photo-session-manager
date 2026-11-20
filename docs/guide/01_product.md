@@ -176,6 +176,20 @@ What the person sees (W1–W4; the search texts come in W5).
   keeps the text it replaced as an earlier version; an instruction or example list equal to the shipped one is stored
   as the shipped default, so later builds' improvements reach it.
 
+## Conversations with Pricing (book `09B`; `docs/implementation/master_plan_conversations.md`; C1 built, C2–C4 to come)
+Beyo Pricing is the owner's second app, where a **pricer** prices one product at a time from what Session Manager
+published. The pricer asks the photographer questions about a product there; Session Manager keeps an exact **local
+copy** of the questions addressed to the photographer and (from C2) shows them, notifies and lets the photographer answer.
+C1 (done): **Settings → Pricing** takes the server address (https only, default
+`https://pricing.beyoworkaroundtheclock.com`) and the API key (macOS Keychain only, never shown again), matches the
+key's store to the connected Shopify shop (case-insensitive domain) and says in words whether it is connected; a
+different server or shop asks for **Test connection** again before any call. Then the app pulls Pricing's event log
+every 10 s (at once at launch, on waking and after the key changes; backing off 10 s → 5 min while Pricing cannot be
+reached), re-reads each named conversation and replaces it in the copy; a refused key or a store that is gone stops
+the pull until the key is replaced. The first connection is silent. Nothing is written to Pricing in C1. Read marks are
+per Mac; an open conversation enters unread. Notices (`New question · <SKU> — <topic>`, `New reply · <SKU>`) are made
+for questions and pricer messages, never for the app's own replies or the first connection.
+
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |
 |---|---|
@@ -189,6 +203,8 @@ What the person sees (W1–W4; the search texts come in W5).
 | **Publish run / item** | `publish_runs` (confirmation, H1) and `publish_items` (per session: frozen main/condition lists, frozen attributes, step, failed step, progress). |
 | **Jobs** | `jobs` table: `kind` (`original_preview`, `hash`, `render_preview`, `render_master`, `render_output`, `mirror_tag`, `publish_step`, `verify_hash`, …), status, attempts, backoff; three runners (general, publish, render). |
 | **Health item** | `{code, ok, detail}` shown on the Health page and as the header dots; codes registered in master plan §6.6. |
+| **Conversation / message** (book `09B` §3; `domain/conversation.rs`) | One question thread about one product (Pricing calls it a *case*): `topic`, `blocking`, `status` open → answered → resolved (`resolved_by` asker or activation, known only when this Mac saw the event), `sku`, its messages (author `asker` = the pricer, `me` = this app's service account, `other`), optional quote (`field`, label, text), reply-to, attachments, `edited_at`. Core says *conversation, message, provider, store, asker, me*; no Pricing word in core (H7). Only conversations addressed to the photographer are kept. |
+| **Read mark** | Per conversation, per Mac: a message is unread when the asker wrote it after the mark; a conversation *has news* when it has an unread message (`mechanisms/conversation_rules.rs`). |
 | **Camera status** | `connected{name, link} · connecting{link} · busy{reason} · needs_action{reason, holder, message} · disconnected`; precedence in `10E` §Port changes. |
 
 ## The owner's standing product decisions (book `15`, `16_changelog.md`, `CLAUDE.md`)
