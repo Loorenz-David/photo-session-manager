@@ -56,3 +56,5 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
     - Session badges are unchanged (they count questions).
     - The fake Pricing now gives a product's questions one product id.
   - Not yet seen in the running app.
+
+- **2026-11-22: A30 installed** (`d3cfce1`; previous build kept as "2026-11-20 A29"); PR #27 merged into main (`4ef74c8`). Not yet seen in the running app by the orchestrator.
