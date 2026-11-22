@@ -438,6 +438,19 @@ button.research-pill { cursor: pointer; }
 /* C4 (09B §7.2): "Open session" in the header line, and the slim visit bar under the app header. */
 .conversation-open-session { margin-left: auto; }
 .conversation-open-session + .conversation-mark-answered { margin-left: 0; }
+/* A30 (09B §7 Thread): the product is the container; its questions stacked, each opened by its header line
+   (centred, as in Pricing's "Questions" panel); resolved ones quieter; the composer's "Answering" choice. */
+.conversation-view-label { color: var(--muted); }
+.conversation-questions { font-weight: var(--weight-bold); }
+.conversation-product-line { display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; border-bottom: 1px solid var(--hair); font-size: var(--text-sm); }
+.conversation-question { display: flex; flex-direction: column; gap: 12px; }
+.conversation-question + .conversation-question { padding-top: 8px; border-top: 1px solid var(--hair); }
+.conversation-question[data-status="resolved"] { opacity: 0.7; }
+.conversation-question .conversation-header-line { justify-content: center; padding: 4px 0; border-bottom: none; }
+.conversation-question .conversation-mark-answered { margin-left: 8px; }
+.conversation-question[data-target="true"] .conversation-header-topic { text-decoration: underline; text-underline-offset: 3px; }
+.composer-target { display: flex; align-items: center; gap: 8px; padding: 6px 16px 0; font-size: var(--text-xs); color: var(--muted); }
+.composer-target select { flex: 1; min-width: 0; padding: 4px 6px; border: 1px solid var(--hair-strong); border-radius: 6px; background: transparent; color: var(--fg, inherit); font-size: var(--text-xs); }
 .visit-bar { position: sticky; top: 56px; z-index: 19; display: flex; align-items: center; gap: var(--space-3); min-height: 36px; padding: 2px var(--space-4); border-bottom: 1px solid var(--hair); background: color-mix(in srgb, var(--warn) 14%, var(--color-bg)); font-size: var(--text-sm); }
 .visit-bar-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* C3 (09B §8; CHAT_UX §4): the composer, Pricing's rounded box with a round send button. */

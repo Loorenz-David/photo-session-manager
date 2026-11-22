@@ -116,23 +116,34 @@ Webhook registration is not used.
   Opening a conversation on screen while the window is focused moves its read mark to its newest message. Read
   marks are per Mac.
 - A conversation **has news** when it has an unread message.
-- **Header count** = conversations with news: on the Sessions page (and Settings, Health) across all sessions;
-  inside a session only that session's, plus a small dot on the icon when other sessions have news.
-- **Sessions list**: a session with unresolved conversations shows a small badge "N open"; amber "Pricing is
-  waiting" when one of them is blocking. A blocking conversation stays blocking until the pricer resolves it,
+- **Header count** = products with news (A30: a product with several questions counts once): on the Sessions
+  page (and Settings, Health) across all sessions; inside a session only that session's, plus a small dot on the
+  icon when other sessions have news.
+- **Sessions list**: a session with unresolved conversations shows a small badge "N open" (N = its unresolved
+  **questions**, unchanged by A30); amber "Pricing is waiting" when one of them is blocking. A blocking conversation stays blocking until the pricer resolves it,
   even after the photographer answered (CHAT_UX §7 rule 2).
 
 ## 7. The conversations panel and the jump (contract MC-C3)
 
 **Panel**: the header icon opens a right-side panel.
-- **List**: tabs **Open** (unresolved) and **Resolved** (resolved in the last 30 days). Rows sorted: news first,
-  then blocking, then latest activity. A row shows the SKU and product title, the topic, a status dot, "Pricing is
-  waiting" (amber) for blocking unresolved ones, the last message's first line, its time, and an unread dot.
-  Inside a session the list shows that session's conversations and a footer "N new in other sessions → All
-  conversations", which switches the list to all.
-- **Conversation**: a back arrow to the list; a header line with the status dot, topic, "· Blocking", the status
-  in words, and **Open session** (when it belongs to a session other than the one on screen), or "Not on this
-  Mac". Messages as in Pricing, mirrored to the viewer (CHAT_UX §2): the pricer's messages in **dark bubbles on the
+
+**The product is the container (A30, owner 2026-11-22).** As in Pricing's "Questions · <SKU>" panel, a product
+holds its conversation, and each Pricing case is one **question** inside it. The panel lists products, and the
+thread shows all of a product's questions together. The product of a question is its Pricing product id (else its
+SKU).
+- **List**: one row per product. Tabs **Open** (a product with any unresolved question) and **Resolved** (every
+  question resolved, the last update in the last 30 days). Rows sorted: news first, then blocking, then latest
+  activity. A row shows the SKU and product title, the topic of the question it opens, "N questions" when there is
+  more than one, a status dot (open when any question is open, else answered, else resolved), "Pricing is waiting"
+  (amber) when an unresolved question blocks, the newest message's first line over all its questions, its time,
+  and an unread dot when any question has news. A row opens the thread on its newest unresolved question (else its
+  newest). Inside a session the list shows that session's products and a footer "N new in other sessions → All
+  conversations" (N = products), which switches the list to all.
+- **Thread**: a back arrow to the list; "Questions", the SKU and product title; **Open session** (when the product
+  belongs to a session other than the one on screen), or "Not on this Mac". Then every question of the product,
+  oldest first, each opened by its own centred header line: the status dot, topic, "· Blocking", the status in
+  words, and **Mark answered** on an open question. Resolved questions stay in the thread, quieter. Each
+  question's messages follow its header line. Messages as in Pricing, mirrored to the viewer (CHAT_UX §2): the pricer's messages in **dark bubbles on the
   left** with name and time, the photographer's own in **light bubbles on the right** ("You"); "· edited" after the
   time when edited; photos as rounded thumbnails above the text (click opens the large image); the reply-to line
   ("↩ Elin: …"); and the **quote** as its own block (accent bar, contrasting fill, uppercase field chip, the
@@ -157,6 +168,11 @@ Webhook registration is not used.
 
 ## 8. Answering (contract MC-C2)
 
+- **One composer per thread (A30).** It answers one question: the one the thread was opened on (a row opens the
+  newest unresolved question, else the newest; a notification its own question, scrolled into view). With more
+  than one question, an **Answering** choice above the box names it (topic and the first line of its first
+  message) and changes it; **Reply** on any message answers that message's question. Changing the question drops a
+  reply-to of another question. Opening the thread marks every question read.
 - **Composer** at the bottom of a conversation: a text box (1–4000 characters after trimming), **Enter sends**,
   Shift+Enter is a new line; **Reply** on a message sets the reply-to (shown above the box with ✕); a **photo
   button** offers the photos of *this* conversation's session that already have a Shopify media id (published
@@ -169,10 +185,11 @@ Webhook registration is not used.
   echoed event is recognised by its id). Failure → it stays with "Couldn't send · Retry" (same id), or
   **Remove** (deletes the local pending message, sends nothing; for a reply Pricing refuses for good). A pending
   message survives a restart.
-- **Mark answered** (header of an open conversation): `PATCH status=answered` without a message, for when the fix
+- **Mark answered** (A30: in the header line of each open question, for that question only): `PATCH status=answered` without a message, for when the fix
   was made in the data. 409 `case_resolved` → refresh and say "Pricing has already resolved this".
 - **Resolved conversations**: the panel says "Resolved by the pricer" (or "Resolved when the product was
-  activated"); the composer stays, with the note "Replying re-opens it as answered" (API.md, POST messages).
+  activated"); the composer stays, with the note "Replying re-opens it as answered" when the question it answers
+  is resolved (API.md, POST messages).
 - Session Manager **never resolves**, never sets topic or blocking, never starts a question, never edits or
   deletes messages (not in the API).
 

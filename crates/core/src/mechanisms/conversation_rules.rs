@@ -358,6 +358,7 @@ mod tests {
     fn row(id: &str, has_news: bool, blocking: bool, last_activity_at: i64) -> ConversationRow {
         ConversationRow {
             id: id.into(),
+            product_id: format!("p-{id}"),
             sku: None,
             product_title: "t".into(),
             topic: "Condition".into(),
@@ -368,6 +369,7 @@ mod tests {
             last_activity_at,
             has_news,
             session_id: None,
+            questions: 1,
         }
     }
 

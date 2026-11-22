@@ -8,6 +8,7 @@ import {
   type ConversationListDto_Serialize,
   type ConversationScopeDto,
   type ConversationTabDto,
+  type ConversationThreadDto_Serialize,
   type ConversationsSettingsDto_Serialize,
   type SessionBadgeDto,
 } from './bindings';
@@ -47,7 +48,10 @@ export type ConversationTab = ConversationTabDto;
  * is gone; `news_elsewhere` = conversations with news outside the scope.
  */
 export type ConversationList = ConversationListDto_Serialize;
-/** One row: `status` `open` | `answered` | `resolved`; `waiting` = "Pricing is waiting"; `session_id` null = "Not on this Mac". */
+/**
+ * One row per product (A30): `id` = the question it opens, `questions` = how many the product has; `status` `open` |
+ * `answered` | `resolved` over its questions; `waiting` = "Pricing is waiting"; `session_id` null = "Not on this Mac".
+ */
 export type ConversationListRow = ConversationList['rows'][number];
 /** C2 (09B §6): conversations with news here (all, off a session) and in other sessions. */
 export type ConversationCounts = ConversationCountsDto;
@@ -87,6 +91,16 @@ export type AttachablePhoto = ConversationAttachable['photos'][number];
 /** One conversation from the local copy (never waits on the network). */
 export async function conversationGet(id: string): Promise<ConversationView> {
   return unwrap(await commands.conversationGet(id));
+}
+
+/**
+ * A30 (09B §7 Thread): the product is the container. The product of conversation `id` with all its questions, oldest
+ * first, each as `conversationGet` shows it; `session_id` null = "Not on this Mac".
+ */
+export type ConversationThread = ConversationThreadDto_Serialize;
+/** The product of a conversation with all its questions, from the local copy (never waits on the network). */
+export async function conversationThread(id: string): Promise<ConversationThread> {
+  return unwrap(await commands.conversationThread(id));
 }
 /** The conversation was seen while the window was focused. */
 export async function conversationMarkRead(id: string): Promise<void> {

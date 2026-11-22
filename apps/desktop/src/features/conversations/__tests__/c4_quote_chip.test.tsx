@@ -7,6 +7,11 @@ vi.mock('@/services/conversations', () => ({
   conversationsCounts: vi.fn(async () => ({ here: 0, elsewhere: 0 })),
   conversationsList: vi.fn(),
   conversationGet: vi.fn(),
+  // A30: one question per product unless a test says otherwise: the thread wraps conversationGet.
+  conversationThread: vi.fn(async (id: string) => {
+    const view = await (await import("@/services/conversations")).conversationGet(id);
+    return { product_id: "p", sku: view.sku, product_title: view.product_title, session_id: view.session_id, questions: [view] };
+  }),
   conversationMarkRead: vi.fn(async () => undefined),
   conversationAttachable: vi.fn(async () => ({ photos: [], reason: 'nothing_published' })),
   conversationReply: vi.fn(),

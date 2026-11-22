@@ -216,6 +216,8 @@ export const commands = {
 	conversationsSessionBadges: () => typedError<SessionBadgeDto[], CommandError>(__TAURI_INVOKE("conversations_session_badges")),
 	/**  One conversation from the local copy (never waits on the network). */
 	conversationGet: (id: string) => typedError<ConversationViewDto_Serialize, CommandError>(__TAURI_INVOKE("conversation_get", { id })),
+	/**  A30: the product of a conversation with all its questions, oldest first, from the local copy. */
+	conversationThread: (id: string) => typedError<ConversationThreadDto_Serialize, CommandError>(__TAURI_INVOKE("conversation_thread", { id })),
 	/**  The conversation was seen: its read mark moves to its newest message. */
 	conversationMarkRead: (id: string) => typedError<null, CommandError>(__TAURI_INVOKE("conversation_mark_read", { id })),
 	/**
@@ -829,17 +831,21 @@ export type ConversationReplyDto_Serialize = {
 };
 
 /**
- *  One row of the panel (`status` = `open`, `answered` or `resolved`; `session_id` null = "Not on
- *  this Mac").
+ *  One row of the panel, one per product (A30): `id` = the question it opens, `questions` = how
+ *  many questions the product has; `status` = `open`, `answered` or `resolved` over its questions;
+ *  `session_id` null = "Not on this Mac".
  */
 export type ConversationRowDto = ConversationRowDto_Serialize | ConversationRowDto_Deserialize;
 
 /**
- *  One row of the panel (`status` = `open`, `answered` or `resolved`; `session_id` null = "Not on
- *  this Mac").
+ *  One row of the panel, one per product (A30): `id` = the question it opens, `questions` = how
+ *  many questions the product has; `status` = `open`, `answered` or `resolved` over its questions;
+ *  `session_id` null = "Not on this Mac".
  */
 export type ConversationRowDto_Deserialize = {
 	id: string,
+	product_id: string,
+	questions: number,
 	sku?: string | null,
 	product_title: string,
 	topic: string,
@@ -853,11 +859,14 @@ export type ConversationRowDto_Deserialize = {
 };
 
 /**
- *  One row of the panel (`status` = `open`, `answered` or `resolved`; `session_id` null = "Not on
- *  this Mac").
+ *  One row of the panel, one per product (A30): `id` = the question it opens, `questions` = how
+ *  many questions the product has; `status` = `open`, `answered` or `resolved` over its questions;
+ *  `session_id` null = "Not on this Mac".
  */
 export type ConversationRowDto_Serialize = {
 	id: string,
+	product_id: string,
+	questions: number,
 	sku: string | null,
 	product_title: string,
 	topic: string,
@@ -875,6 +884,27 @@ export type ConversationScopeDto = { kind: "all" } | { kind: "session"; session_
 
 /**  The panel's tab: `open` (unresolved) or `resolved` (the last 30 days). */
 export type ConversationTabDto = "open" | "resolved";
+
+/**  A30: a product's questions together, oldest first (`session_id` null = "Not on this Mac"). */
+export type ConversationThreadDto = ConversationThreadDto_Serialize | ConversationThreadDto_Deserialize;
+
+/**  A30: a product's questions together, oldest first (`session_id` null = "Not on this Mac"). */
+export type ConversationThreadDto_Deserialize = {
+	product_id: string,
+	sku?: string | null,
+	product_title: string,
+	session_id?: number | null,
+	questions: ConversationViewDto_Deserialize[],
+};
+
+/**  A30: a product's questions together, oldest first (`session_id` null = "Not on this Mac"). */
+export type ConversationThreadDto_Serialize = {
+	product_id: string,
+	sku: string | null,
+	product_title: string,
+	session_id: number | null,
+	questions: ConversationViewDto_Serialize[],
+};
 
 /**
  *  One conversation: `status` = `open`, `answered` or `resolved`; `resolved_by` = `asker`,

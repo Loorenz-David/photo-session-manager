@@ -45,3 +45,14 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
   (`7da4b6e`). Test buttons answer every press (Pricing and Camera); the panel says why it cannot connect.
   - Open: the owner's first live question and reply (confirm before the first reply), banners on the installed app,
     the visit-and-back check with a real capture.
+- **2026-11-22: A30 owner correction (product = container).** First live questions arrived on this Mac (Ch1-201126
+  ×3, Sdt1-191126 ×1; "Not on this Mac", the sessions are on the work Mac); the owner's replies went out. Three
+  Pricing cases on one product showed as three rows.
+  - **Built:**
+    - Core `list` groups by product (product id, else SKU), and `counts` counts products.
+    - New `ConversationsService::thread` and the `conversation_thread` command.
+    - The panel shows one row per product with "N questions".
+    - The thread stacks the product's questions with an "Answering" choice for the one composer.
+    - Session badges are unchanged (they count questions).
+    - The fake Pricing now gives a product's questions one product id.
+  - Not yet seen in the running app.

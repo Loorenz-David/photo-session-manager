@@ -375,3 +375,126 @@ fn c2_c6d_a_conversation_not_on_this_mac_gives_no_badge() {
     assert_eq!(a.app.store.conversations().unwrap().len(), 1);
     assert!(a.app.conversations.session_badges().unwrap().is_empty());
 }
+
+// ---------- A30 the product is the container ----------
+
+/// Three questions on one product (topics Title, Other, Other) and one question on another.
+fn three_on_one(a: &TestApp) -> (String, String, String, String) {
+    let first = pricing(a).ask(&store_id(a), Some("Ch1-201126"), "Title");
+    let second = pricing(a).ask(&store_id(a), Some("Ch1-201126"), "Other");
+    let third = pricing(a).ask(&store_id(a), Some("Ch1-201126"), "Other");
+    let other = ask(a, Some("Sdt1-191126"));
+    (first, second, third, other)
+}
+
+fn ch1(a: &TestApp, tab: ConversationTab) -> Option<ConversationRow> {
+    list(a, ConversationScope::All, tab)
+        .rows
+        .into_iter()
+        .find(|r| r.sku.as_deref() == Some("Ch1-201126"))
+}
+
+#[test]
+fn a30_c1_a_products_questions_are_one_row() {
+    let a = connected();
+    let (first, second, third, other) = three_on_one(&a);
+    pricing(&a).own_reply(&first, "so im not in work pc");
+    pricing(&a).own_reply(&second, "because");
+    run_check(&a);
+    let rows = open_all(&a);
+    assert_eq!(rows.len(), 2);
+    let got = ch1(&a, ConversationTab::Open).unwrap();
+    assert_eq!(got.questions, 3);
+    // The row opens the newest unresolved question; one open question makes the product open.
+    assert_eq!(got.id, third);
+    assert_eq!(got.status.as_str(), "open");
+    assert_eq!(row(&rows, &other).questions, 1);
+}
+
+#[test]
+fn a30_c2_open_while_any_question_is_unresolved_then_resolved() {
+    let a = connected();
+    let (first, second, third, _other) = three_on_one(&a);
+    pricing(&a).resolve(&first);
+    pricing(&a).resolve(&second);
+    run_check(&a);
+    assert!(ch1(&a, ConversationTab::Open).is_some());
+    assert!(ch1(&a, ConversationTab::Resolved).is_none());
+    pricing(&a).resolve(&third);
+    next_check(&a);
+    assert!(ch1(&a, ConversationTab::Open).is_none());
+    let got = ch1(&a, ConversationTab::Resolved).unwrap();
+    assert_eq!(got.questions, 3);
+    assert_eq!(
+        got.id, third,
+        "all resolved: the row opens the newest question"
+    );
+}
+
+#[test]
+fn a30_c3_one_blocking_unresolved_question_makes_the_product_wait() {
+    let a = connected();
+    let (first, second, third, _other) = three_on_one(&a);
+    not_blocking(&a, &first);
+    not_blocking(&a, &third);
+    run_check(&a);
+    assert!(ch1(&a, ConversationTab::Open).unwrap().waiting);
+    pricing(&a).resolve(&second);
+    next_check(&a);
+    assert!(
+        !ch1(&a, ConversationTab::Open).unwrap().waiting,
+        "the blocking question is resolved"
+    );
+}
+
+#[test]
+fn a30_c4_the_header_counts_products_with_news() {
+    let a = connected();
+    let (_first, _second, _third, other) = three_on_one(&a);
+    run_check(&a);
+    read(&a, &other);
+    assert_eq!(
+        a.app.conversations.counts(None).unwrap(),
+        ConversationCounts {
+            here: 1,
+            elsewhere: 0
+        }
+    );
+}
+
+#[test]
+fn a30_c5_the_thread_holds_every_question_of_the_product_oldest_first() {
+    let a = connected();
+    let (first, second, third, other) = three_on_one(&a);
+    pricing(&a).resolve(&first);
+    run_check(&a);
+    for opened in [&first, &second, &third] {
+        let thread = a.app.conversations.thread(opened).unwrap();
+        assert_eq!(thread.sku.as_deref(), Some("Ch1-201126"));
+        let ids: Vec<&str> = thread.questions.iter().map(|q| q.id.as_str()).collect();
+        assert_eq!(ids, [first.as_str(), second.as_str(), third.as_str()]);
+        let topics: Vec<&str> = thread.questions.iter().map(|q| q.topic.as_str()).collect();
+        assert_eq!(topics, ["Title", "Other", "Other"]);
+        assert_eq!(thread.questions[0].status.as_str(), "resolved");
+    }
+    assert_eq!(
+        a.app.conversations.thread(&other).unwrap().questions.len(),
+        1
+    );
+}
+
+#[test]
+fn a30_c6_reading_every_question_clears_the_products_news() {
+    let a = connected();
+    let (first, second, third, other) = three_on_one(&a);
+    run_check(&a);
+    read(&a, &other);
+    read(&a, &first);
+    read(&a, &second);
+    assert!(
+        ch1(&a, ConversationTab::Open).unwrap().has_news,
+        "one question still unread"
+    );
+    read(&a, &third);
+    assert!(!ch1(&a, ConversationTab::Open).unwrap().has_news);
+}

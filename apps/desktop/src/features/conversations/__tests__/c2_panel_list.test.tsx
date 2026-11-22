@@ -12,6 +12,11 @@ vi.mock('@/services/conversations', () => ({
   conversationsSettingsGet: vi.fn(),
   conversationsSettingsSave: vi.fn(),
   conversationGet: vi.fn(),
+  // A30: one question per product unless a test says otherwise: the thread wraps conversationGet.
+  conversationThread: vi.fn(async (id: string) => {
+    const view = await (await import("@/services/conversations")).conversationGet(id);
+    return { product_id: "p", sku: view.sku, product_title: view.product_title, session_id: view.session_id, questions: [view] };
+  }),
   conversationMarkRead: vi.fn(async () => undefined),
 }));
 vi.mock('@/services/events', () => ({
@@ -36,6 +41,8 @@ import {
 function row(extra: Partial<ConversationListRow> = {}): ConversationListRow {
   return {
     id: 'c1',
+    product_id: 'p1',
+    questions: 1,
     sku: 'BEYO-1880',
     product_title: 'Vintage Brass Wall Mirror, Round',
     topic: 'Condition',

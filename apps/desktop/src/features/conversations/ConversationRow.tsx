@@ -4,8 +4,9 @@ import type { ConversationListRow } from '@/services/conversations';
 const STATUS_WORDS: Record<string, string> = { open: 'Open', answered: 'Answered', resolved: 'Resolved' };
 
 /**
- * C2 (09B §7 List): one conversation: SKU and product title, topic, a status dot, amber "Pricing is waiting" for a
- * blocking unresolved one, the last message's first line and its time, an unread dot, "Not on this Mac".
+ * C2 (09B §7 List; A30: one row per product): SKU and product title, the topic of the question it opens, "N questions"
+ * when the product has more than one, a status dot over its questions, amber "Pricing is waiting" when an unresolved
+ * one blocks, the newest message's first line and its time, an unread dot, "Not on this Mac".
  */
 export function ConversationRow({ row, onSelect, now = Date.now() }: { row: ConversationListRow; onSelect: () => void; now?: number }) {
   const status = STATUS_WORDS[row.status] ?? row.status;
@@ -21,6 +22,7 @@ export function ConversationRow({ row, onSelect, now = Date.now() }: { row: Conv
       </span>
       <span className="conversation-row-meta">
         <span className="conversation-topic">{row.topic}</span>
+        {row.questions > 1 && <span className="conversation-questions">{row.questions} questions</span>}
         {row.waiting && <span className="pill conversation-waiting">Pricing is waiting</span>}
         {row.session_id === null && <span className="conversation-elsewhere">Not on this Mac</span>}
         <time className="conversation-time" dateTime={new Date(row.last_activity_at).toISOString()}>
