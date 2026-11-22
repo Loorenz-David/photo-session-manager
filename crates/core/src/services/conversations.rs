@@ -11,8 +11,8 @@ use crate::{
             AttachReason, AttachRole, Attachable, AttachablePhoto, COULD_NOT_SEND, Connection,
             ConnectionState, Conversation, ConversationCounts, ConversationList,
             ConversationNotice, ConversationRow, ConversationScope, ConversationSettings,
-            ConversationStatus, ConversationTab, ConversationView, EventKind, EventPage,
-            KEY_ACCOUNT, Message, NewMessage, NoticeKind, OutboxMessage, OutboxState,
+            ConversationStatus, ConversationTab, ConversationThread, ConversationView, EventKind,
+            EventPage, KEY_ACCOUNT, Message, NewMessage, NoticeKind, OutboxMessage, OutboxState,
             PendingAttachment, PendingView, ProviderError, ReplyRef, ResolvedBy, SessionBadge,
             Tick,
         },
@@ -251,24 +251,92 @@ pub struct ConversationsService {
 /// A conversation of the copy with its session (none = "Not on this Mac").
 type Placed = (Conversation, Option<i64>);
 
-/// One list row of `c` (09B §7): `waiting` = blocking and not resolved; `last_line` = the first
-/// line of the newest message; `last_activity_at` = that message's time, or `updated_at`.
-fn row_of(c: &Conversation, session_id: Option<i64>) -> ConversationRow {
-    let newest = c.messages.iter().max_by_key(|m| m.created_at);
+/// A30: the product a conversation belongs to: its product id, else its SKU, else itself (a
+/// question without either is a product of its own).
+fn product_key(c: &Conversation) -> String {
+    if !c.product_id.trim().is_empty() {
+        return format!("p:{}", c.product_id);
+    }
+    match &c.sku {
+        Some(sku) if !sku.trim().is_empty() => format!("s:{sku}"),
+        _ => format!("c:{}", c.id),
+    }
+}
+
+/// A30: the copy grouped by product, each group's questions oldest first (creation, then id),
+/// the groups in the order their first question appears.
+fn by_product(copy: Vec<Placed>) -> Vec<Vec<Placed>> {
+    let mut groups: Vec<(String, Vec<Placed>)> = Vec::new();
+    for placed in copy {
+        let key = product_key(&placed.0);
+        match groups.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, group)) => group.push(placed),
+            None => groups.push((key, vec![placed])),
+        }
+    }
+    groups
+        .into_iter()
+        .map(|(_, mut group)| {
+            group.sort_by(|(a, _), (b, _)| a.created_at.cmp(&b.created_at).then(a.id.cmp(&b.id)));
+            group
+        })
+        .collect()
+}
+
+/// A30: a product group is unresolved when any of its questions is.
+fn unresolved(group: &[Placed]) -> bool {
+    group
+        .iter()
+        .any(|(c, _)| c.status != ConversationStatus::Resolved)
+}
+
+/// One list row of a product group (09B §7, A30; see [`ConversationRow`]): `waiting` = an
+/// unresolved question blocks; `last_line` = the first line of the newest message of all its
+/// questions; `last_activity_at` = that message's time, or the newest `updated_at`.
+fn row_of(group: &[Placed]) -> ConversationRow {
+    let open: Vec<&Conversation> = group
+        .iter()
+        .map(|(c, _)| c)
+        .filter(|c| c.status != ConversationStatus::Resolved)
+        .collect();
+    let shown = open
+        .last()
+        .copied()
+        .unwrap_or_else(|| &group[group.len() - 1].0);
+    let status = if open.iter().any(|c| c.status == ConversationStatus::Open) {
+        ConversationStatus::Open
+    } else if open.is_empty() {
+        ConversationStatus::Resolved
+    } else {
+        ConversationStatus::Answered
+    };
+    let waiting = open.iter().any(|c| c.blocking);
+    let blocking = if open.is_empty() {
+        group.iter().any(|(c, _)| c.blocking)
+    } else {
+        waiting
+    };
+    let newest = group
+        .iter()
+        .flat_map(|(c, _)| c.messages.iter())
+        .max_by_key(|m| m.created_at);
+    let updated = group.iter().map(|(c, _)| c.updated_at).max().unwrap_or(0);
     ConversationRow {
-        id: c.id.clone(),
-        sku: c.sku.clone(),
-        product_title: c.product_title.clone(),
-        topic: c.topic.clone(),
-        status: c.status,
-        blocking: c.blocking,
-        waiting: c.blocking && c.status != ConversationStatus::Resolved,
+        id: shown.id.clone(),
+        product_id: shown.product_id.clone(),
+        sku: shown.sku.clone(),
+        product_title: shown.product_title.clone(),
+        topic: shown.topic.clone(),
+        status,
+        blocking,
+        waiting,
         last_line: newest
             .map(|m| first_line(&m.text))
             .filter(|l| !l.is_empty()),
-        last_activity_at: newest.map_or(c.updated_at, |m| m.created_at),
-        has_news: has_news(c),
-        session_id,
+        last_activity_at: newest.map_or(updated, |m| m.created_at),
+        has_news: group.iter().any(|(c, _)| has_news(c)),
+        session_id: group.iter().find_map(|(_, s)| *s),
+        questions: group.len() as i64,
     }
 }
 
@@ -933,21 +1001,28 @@ impl ConversationsService {
             ConversationScope::All => true,
             ConversationScope::Session(id) => session == Some(id),
         };
-        let news_elsewhere = copy
+        let groups = by_product(copy);
+        let group_session = |group: &[Placed]| group.iter().find_map(|(_, s)| *s);
+        let news_elsewhere = groups
             .iter()
-            .filter(|(c, session)| !in_scope(*session) && has_news(c))
+            .filter(|g| !in_scope(group_session(g)) && g.iter().any(|(c, _)| has_news(c)))
             .count() as i64;
-        let mut rows: Vec<ConversationRow> = copy
-            .into_iter()
-            .filter(|(_, session)| in_scope(*session))
-            .filter(|(c, _)| match tab {
-                ConversationTab::Open => c.status != ConversationStatus::Resolved,
+        // A30: Open = a product with any unresolved question; Resolved = every question resolved,
+        // the last update within 30 days.
+        let mut rows: Vec<ConversationRow> = groups
+            .iter()
+            .filter(|g| in_scope(group_session(g)))
+            .filter(|g| match tab {
+                ConversationTab::Open => unresolved(g),
                 ConversationTab::Resolved => {
-                    c.status == ConversationStatus::Resolved
-                        && resolved_recent(c.updated_at, now_ms)
+                    !unresolved(g)
+                        && resolved_recent(
+                            g.iter().map(|(c, _)| c.updated_at).max().unwrap_or(0),
+                            now_ms,
+                        )
                 }
             })
-            .map(|(c, session)| row_of(&c, session))
+            .map(|g| row_of(g))
             .collect();
         match tab {
             ConversationTab::Open => rows.sort_by(list_order),
@@ -965,7 +1040,7 @@ impl ConversationsService {
         })
     }
 
-    /// C2 (09B §6): conversations with news (any status) of `session_id` and of all the others;
+    /// C2 (09B §6; A30): products with news (any status) of `session_id` and of all the others;
     /// without a session, `here` = all.
     pub fn counts(&self, session_id: Option<i64>) -> Result<ConversationCounts> {
         let (_, copy) = self.visible()?;
@@ -973,9 +1048,13 @@ impl ConversationsService {
             return Ok(ConversationCounts::default());
         };
         let mut counts = ConversationCounts::default();
-        for (_, session) in copy.iter().filter(|(c, _)| has_news(c)) {
+        for group in by_product(copy)
+            .iter()
+            .filter(|g| g.iter().any(|(c, _)| has_news(c)))
+        {
+            let session = group.iter().find_map(|(_, s)| *s);
             match session_id {
-                Some(id) if *session != Some(id) => counts.elsewhere += 1,
+                Some(id) if session != Some(id) => counts.elsewhere += 1,
                 _ => counts.here += 1,
             }
         }
@@ -1259,6 +1338,37 @@ impl ConversationsService {
             can_send: state == ConnectionState::Ready,
             off_reason: self.state_sentence(state, &s),
             jump_keys,
+        })
+    }
+
+    /// A30 (09B §7 Thread): the product of `conversation_id` with all its questions, oldest
+    /// first, each as [`Self::view`] shows it. Local only, like `view`.
+    pub fn thread(
+        &self,
+        conversation_id: &str,
+    ) -> std::result::Result<ConversationThread, ConversationError> {
+        self.shown_state()?;
+        let target = self.copy_conversation(conversation_id)?;
+        let key = product_key(&target);
+        let mut ids: Vec<(i64, String)> = self
+            .store
+            .conversations()?
+            .into_iter()
+            .filter(|c| product_key(c) == key)
+            .map(|c| (c.created_at, c.id))
+            .collect();
+        ids.sort();
+        let questions = ids
+            .iter()
+            .map(|(_, id)| self.view(id))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let session_id = questions.iter().find_map(|q| q.session_id);
+        Ok(ConversationThread {
+            product_id: target.product_id,
+            sku: target.sku,
+            product_title: target.product_title,
+            session_id,
+            questions,
         })
     }
 

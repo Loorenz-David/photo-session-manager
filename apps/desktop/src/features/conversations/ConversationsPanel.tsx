@@ -124,7 +124,7 @@ function Body({ state, tab, setTab }: { state: ConversationsState; tab: Conversa
         {list && list.rows.length === 0 && (
           <p className="conversations-empty">{tab === 'open' ? 'No open conversations' : 'No resolved conversations'}</p>
         )}
-        {list?.rows.map(row => <ConversationRow key={row.id} row={row} onSelect={() => state.select(row)} />)}
+        {list?.rows.map(row => <ConversationRow key={row.product_id || row.id} row={row} onSelect={() => state.select(row)} />)}
       </div>
       {elsewhere > 0 && (
         <button type="button" className="conversations-footer" onClick={state.showAll}>

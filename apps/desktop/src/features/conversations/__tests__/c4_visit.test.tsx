@@ -13,6 +13,11 @@ vi.mock('@/services/conversations', () => ({
   conversationsSettingsSave: vi.fn(),
   conversationsSessionBadges: vi.fn(async () => []),
   conversationGet: vi.fn(),
+  // A30: one question per product unless a test says otherwise: the thread wraps conversationGet.
+  conversationThread: vi.fn(async (id: string) => {
+    const view = await (await import("@/services/conversations")).conversationGet(id);
+    return { product_id: "p", sku: view.sku, product_title: view.product_title, session_id: view.session_id, questions: [view] };
+  }),
   conversationMarkRead: vi.fn(async () => undefined),
   conversationAttachable: vi.fn(async () => ({ photos: [], reason: 'nothing_published' })),
   conversationReply: vi.fn(),
@@ -105,6 +110,7 @@ const LIST: SessionList = {
 
 function conversationRow(id: string, sessionId: number): ConversationListRow {
   return {
+    product_id: `p-${sessionId}`, questions: 1,
     id, sku: `BEYO-${sessionId}`, product_title: `Product ${sessionId}`, topic: `Topic ${sessionId}`, status: 'open', blocking: false, waiting: false,
     last_line: 'Is the glass original?', last_activity_at: 1_795_176_000_000, has_news: true, session_id: sessionId,
   };

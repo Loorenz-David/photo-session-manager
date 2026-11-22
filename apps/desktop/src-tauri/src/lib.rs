@@ -895,7 +895,8 @@ mod c2_tests {
         let s = store_id(&a);
         let resolved = a.fake_pricing().ask(&s, Some("BEYO-1"), "Condition");
         a.fake_pricing().resolve(&resolved);
-        a.fake_pricing().ask(&s, Some("BEYO-1"), "Other");
+        // A30: a product with an open question is on the Open tab, so the open one is another product.
+        a.fake_pricing().ask(&s, Some("BEYO-3"), "Other");
         a.fake_pricing().ask(&s, Some("BEYO-2"), "Other");
         run_check(&a);
         let want: Vec<String> = a
@@ -1853,6 +1854,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::conversations::conversations_counts,
         commands::conversations::conversations_session_badges,
         commands::conversations::conversation_get,
+        commands::conversations::conversation_thread,
         commands::conversations::conversation_mark_read,
         commands::conversations::conversation_reply,
         commands::conversations::conversation_retry,

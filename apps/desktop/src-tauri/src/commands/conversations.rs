@@ -5,8 +5,8 @@
 use psm_core::{
     domain::conversation::{
         Attachable, Connection, ConversationList, ConversationRow, ConversationScope,
-        ConversationTab, ConversationView, Message, NewMessage, PendingView, ProviderError,
-        ReplyRef,
+        ConversationTab, ConversationThread, ConversationView, Message, NewMessage, PendingView,
+        ProviderError, ReplyRef,
     },
     services::conversations::{ConnectError, ConversationError, ConversationSettingsPatch},
 };
@@ -186,11 +186,15 @@ pub enum ConversationTabDto {
     Resolved,
 }
 
-/// One row of the panel (`status` = `open`, `answered` or `resolved`; `session_id` null = "Not on
-/// this Mac").
+/// One row of the panel, one per product (A30): `id` = the question it opens, `questions` = how
+/// many questions the product has; `status` = `open`, `answered` or `resolved` over its questions;
+/// `session_id` null = "Not on this Mac".
 #[derive(Debug, Serialize, Type)]
 pub struct ConversationRowDto {
     pub id: String,
+    pub product_id: String,
+    #[specta(type = specta_typescript::Number)]
+    pub questions: i64,
     pub sku: Option<String>,
     pub product_title: String,
     pub topic: String,
@@ -257,6 +261,8 @@ impl From<ConversationRow> for ConversationRowDto {
     fn from(r: ConversationRow) -> Self {
         Self {
             id: r.id,
+            product_id: r.product_id,
+            questions: r.questions,
             sku: r.sku,
             product_title: r.product_title,
             topic: r.topic,
@@ -458,6 +464,29 @@ pub struct ConversationViewDto {
     pub off_reason: Option<String>,
 }
 
+/// A30: a product's questions together, oldest first (`session_id` null = "Not on this Mac").
+#[derive(Debug, Serialize, Type)]
+pub struct ConversationThreadDto {
+    pub product_id: String,
+    pub sku: Option<String>,
+    pub product_title: String,
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub session_id: Option<i64>,
+    pub questions: Vec<ConversationViewDto>,
+}
+
+impl From<ConversationThread> for ConversationThreadDto {
+    fn from(t: ConversationThread) -> Self {
+        Self {
+            product_id: t.product_id,
+            sku: t.sku,
+            product_title: t.product_title,
+            session_id: t.session_id,
+            questions: t.questions.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 /// A published photo a reply may attach: `slot` = `single`, `left` or `right`; `role` =
 /// `gallery` or `condition`.
 #[derive(Debug, Serialize, Type)]
@@ -617,6 +646,23 @@ pub async fn conversation_get(
         Ok(app
             .conversations
             .view(&id)
+            .map_err(|e| conversation_error(app, e))?
+            .into())
+    })
+    .await
+}
+
+/// A30: the product of a conversation with all its questions, oldest first, from the local copy.
+#[tauri::command]
+#[specta::specta]
+pub async fn conversation_thread(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<ConversationThreadDto, CommandError> {
+    blocking(state, move |app| {
+        Ok(app
+            .conversations
+            .thread(&id)
             .map_err(|e| conversation_error(app, e))?
             .into())
     })

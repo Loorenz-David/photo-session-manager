@@ -240,7 +240,15 @@ impl State {
         recipient: &str,
     ) -> String {
         let case_id = self.id("case");
-        let product_id = self.id("product").replace("product-", "15531808");
+        // A30: as in Pricing, a product's questions share its product id (same store, same SKU).
+        let existing = sku.and_then(|sku| {
+            self.cases
+                .iter()
+                .find(|c| c.store_id == store_id && c.case.sku.as_deref() == Some(sku))
+                .map(|c| c.case.product_id.clone())
+        });
+        let product_id =
+            existing.unwrap_or_else(|| self.id("product").replace("product-", "15531808"));
         let created = self.now();
         let mut message = self.new_message(&case_id, pricer(), &format!("Question on {case_id}"));
         message.quote = Some(Quote {

@@ -365,10 +365,17 @@ pub enum ConversationTab {
     Resolved,
 }
 
-/// One row of the panel's list (09B §7). `session_id` none = "Not on this Mac".
+/// One row of the panel's list (09B §7; A30: one row per **product**, its questions inside).
+/// `id` = the question the row opens (the newest unresolved one, else the newest); `topic` is
+/// that question's. `status` = open when any question is open, else answered when any is
+/// answered, else resolved; `blocking` = any unresolved question blocks (any question when all
+/// are resolved); `last_line`/`last_activity_at` = the newest message of all its questions;
+/// `has_news` = any question has news; `questions` = how many questions the product has.
+/// `session_id` none = "Not on this Mac".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConversationRow {
     pub id: String,
+    pub product_id: String,
     pub sku: Option<String>,
     pub product_title: String,
     pub topic: String,
@@ -381,10 +388,23 @@ pub struct ConversationRow {
     pub last_activity_at: i64,
     pub has_news: bool,
     pub session_id: Option<i64>,
+    pub questions: i64,
+}
+
+/// A30 (09B §7): a product's questions together, as the thread shows them: every question of
+/// the product in the copy, oldest first (by creation, then id). `session_id` none = "Not on
+/// this Mac".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationThread {
+    pub product_id: String,
+    pub sku: Option<String>,
+    pub product_title: String,
+    pub session_id: Option<i64>,
+    pub questions: Vec<ConversationView>,
 }
 
 /// The panel's list (09B §7): the connection state, its problem sentence when refused or gone,
-/// the rows, and the conversations with news outside the scope.
+/// the rows (one per product, A30), and the products with news outside the scope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConversationList {
     pub state: ConnectionState,
@@ -393,7 +413,7 @@ pub struct ConversationList {
     pub news_elsewhere: i64,
 }
 
-/// The header count (09B §6): conversations with news in the scope and outside it.
+/// The header count (09B §6; A30): products with news in the scope and outside it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ConversationCounts {
     pub here: i64,
