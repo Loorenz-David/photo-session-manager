@@ -9,13 +9,16 @@ use crate::{
     Error, Result,
     domain::{
         publish::MediaImage,
-        remote::{BringBackProgress, CallBudget, PictureTarget, RemoteState},
-        storage::ArchivedImage,
+        remote::{
+            BringBackProgress, CallBudget, PictureTarget, RemotePictureView, RemoteState,
+            RemoteView,
+        },
+        storage::{ArchivedImage, ItemRetention},
     },
     events::AppEvent,
     mechanisms::remote::{
         COVER_EDGE, PARALLEL_DOWNLOADS, REFRESH_COOLDOWN_MS, RemoteCover, SEARCH_EDGE,
-        URL_REFRESH_CHUNK, cover_name, evict, must_wait, remote_state, search_name,
+        URL_REFRESH_CHUNK, cover_name, estimate_bytes, evict, must_wait, remote_state, search_name,
     },
     ports::{
         clock::Clock, commerce::CommerceAdapter, editing::EditingProvider, events::EventSink,
@@ -24,7 +27,9 @@ use crate::{
     services::{
         health::HealthService,
         history::History,
-        retention::{INTEGRATION, ROLE_CONDITION, ROLE_GALLERY, archived_file_name},
+        retention::{
+            ARCHIVED_IMAGE_EDGE, INTEGRATION, ROLE_CONDITION, ROLE_GALLERY, archived_file_name,
+        },
     },
 };
 use std::{
@@ -71,6 +76,14 @@ enum DownloadKind {
     },
     /// A shop search result's picture (MC-H2.5).
     Search { external_id: String },
+    /// One picture of a remote item's view (MC-H3.5), cached at `ARCHIVED_IMAGE_EDGE`.
+    View {
+        session_id: i64,
+        item_id: i64,
+        media_id: String,
+        role: String,
+        position: i64,
+    },
 }
 
 impl Download {
@@ -81,18 +94,49 @@ impl Download {
                 item_id, media_id, ..
             } => cover_path(previews_root, *item_id, media_id),
             DownloadKind::Search { .. } => search_dir(previews_root).join(search_name(&self.url)),
+            DownloadKind::View {
+                item_id,
+                media_id,
+                role,
+                position,
+                ..
+            } => view_path(previews_root, *item_id, role, *position, media_id),
         }
     }
 
-    /// The item and media id of a cover download (the only kind whose address is refreshed).
+    /// The item and media id of a download whose address is refreshed when it answers "gone"
+    /// (MC-H1.4): a cover or a view picture (a search picture is dropped, MC-H2.5).
     fn cover_media(&self) -> Option<(i64, &str)> {
         match &self.kind {
             DownloadKind::Cover {
+                item_id, media_id, ..
+            }
+            | DownloadKind::View {
                 item_id, media_id, ..
             } => Some((*item_id, media_id.as_str())),
             DownloadKind::Search { .. } => None,
         }
     }
+}
+
+/// MC-H3.5: `<previews>/archived/<item_id>/<role>-<NN>-<12 hex>.jpg` (P62's cache name).
+fn view_path(
+    previews_root: &Path,
+    item_id: i64,
+    role: &str,
+    position: i64,
+    media_id: &str,
+) -> PathBuf {
+    previews_root
+        .join("archived")
+        .join(item_id.to_string())
+        .join(archived_file_name(&ArchivedImage {
+            role: role.to_owned(),
+            position,
+            media_id: media_id.to_owned(),
+            url: String::new(),
+            bytes: None,
+        }))
 }
 
 /// MC-H2.5: `<previews>/remote/search/` (one flat folder; item folders are numeric).
@@ -110,6 +154,9 @@ struct Queue {
     search: Vec<Download>,
     /// Not-started shop search pictures (MC-H2.5).
     search_pictures: Vec<Download>,
+    /// Not-started view pictures (MC-H3.5); a new view of a session replaces only that
+    /// session's.
+    view: Vec<Download>,
     /// Covers whose address answered "gone", waiting for the address refresh the budget held
     /// back (MC-H5.3).
     stale: Vec<Download>,
@@ -243,6 +290,8 @@ pub struct RemoteItems {
     refreshed: Mutex<HashMap<String, Instant>>,
     /// MC-H1.5: items with gone pictures: item id → (SKU, the gone media ids).
     gone: Mutex<BTreeMap<i64, (String, BTreeSet<String>)>>,
+    /// MC-H3.2: the sessions whose last first-open read failed (cleared by a successful read).
+    check_failed: Mutex<HashSet<i64>>,
 }
 
 impl RemoteItems {
@@ -277,6 +326,7 @@ impl RemoteItems {
             waiting: AtomicBool::new(false),
             refreshed: Mutex::new(HashMap::new()),
             gone: Mutex::new(BTreeMap::new()),
+            check_failed: Mutex::new(HashSet::new()),
         }
     }
 
@@ -422,7 +472,103 @@ impl RemoteItems {
         if state != RemoteState::Unknown {
             return Ok(state);
         }
-        self.read_record(commerce.as_ref(), session_id)
+        let read = self.read_record(commerce.as_ref(), session_id);
+        self.note_check(session_id, read.is_err());
+        read
+    }
+
+    /// MC-H3.2: records whether the session's last first-open read failed; `true` when it turned
+    /// from "not failed" to "failed".
+    fn note_check(&self, session_id: i64, failed: bool) -> bool {
+        let mut set = self.check_failed.lock().unwrap_or_else(|e| e.into_inner());
+        if failed {
+            set.insert(session_id)
+        } else {
+            set.remove(&session_id);
+            false
+        }
+    }
+
+    fn checked_failed(&self, session_id: i64) -> bool {
+        self.check_failed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(&session_id)
+    }
+
+    /// MC-H3.5, what the workspace is given for a session's item: `None` without an item; a
+    /// `Local` item has no pictures; an `Unknown` one has none and its first-open read is queued;
+    /// a `Remote(_)` one has its record's pictures, each with its cache file when on this Mac,
+    /// the missing files queued for the background (a new view of this session replaces its
+    /// not-started downloads). A read plus a queue push: never downloads, never asks the shop.
+    pub fn view(&self, session_id: i64) -> Result<Option<RemoteView>> {
+        let Some(item_id) = self.store.session(session_id)?.session.item_id else {
+            return Ok(None);
+        };
+        let keep_files = self.store.item_retention(item_id)?.keep_files;
+        let state = self.state(session_id)?;
+        let mut pictures = Vec::new();
+        let mut bring_back_bytes = 0;
+        match state {
+            RemoteState::Local => {}
+            RemoteState::Unknown => self.queue_record(session_id)?,
+            RemoteState::Remote(_) => {
+                let record = self.store.archived_images(item_id)?;
+                bring_back_bytes = estimate_bytes(&record);
+                let mut missing = Vec::new();
+                for image in record {
+                    let gone = image.url.is_empty();
+                    let path = view_path(
+                        &self.previews_root,
+                        item_id,
+                        &image.role,
+                        image.position,
+                        &image.media_id,
+                    );
+                    let present = path.is_file();
+                    if !present && !gone {
+                        missing.push(Download {
+                            kind: DownloadKind::View {
+                                session_id,
+                                item_id,
+                                media_id: image.media_id.clone(),
+                                role: image.role.clone(),
+                                position: image.position,
+                            },
+                            url: image.url.clone(),
+                        });
+                    }
+                    pictures.push(RemotePictureView {
+                        role: image.role,
+                        position: image.position,
+                        media_id: image.media_id,
+                        path: present.then_some(path),
+                        gone,
+                    });
+                }
+                let mut queue = self.lock_queue()?;
+                queue.view.retain(|download| {
+                    !matches!(download.kind, DownloadKind::View { session_id: s, .. } if s == session_id)
+                });
+                queue.view.extend(missing);
+            }
+        }
+        Ok(Some(RemoteView {
+            item_id,
+            state,
+            keep_files,
+            pictures,
+            bring_back_bytes,
+            check_failed: self.checked_failed(session_id),
+            bring_back: self.bring_back_progress(session_id),
+        }))
+    }
+
+    /// 10F Q2: "Keep files on this Mac" exempts the item from retention and the budget.
+    pub fn set_keep_files(&self, item_id: i64, keep: bool) -> Result<ItemRetention> {
+        self.store.item(item_id)?;
+        self.store.set_item_keep_files(item_id, keep)?;
+        self.store.item_retention(item_id)
     }
 
     /// MC-H3.3, Refresh from the shop (a press: never waits for the budget, MC-H5.4): for a
@@ -467,6 +613,7 @@ impl RemoteItems {
             for download in std::mem::take(&mut queue.search)
                 .into_iter()
                 .chain(std::mem::take(&mut queue.search_pictures))
+                .chain(std::mem::take(&mut queue.view))
             {
                 if !batch.contains(&download) {
                     batch.push(download);
@@ -515,8 +662,14 @@ impl RemoteItems {
             self.waiting.store(false, Ordering::Relaxed);
             let session_id = queued.remove(0);
             worked = true;
+            let failed_before = self.checked_failed(session_id);
             if let Err(error) = self.ensure_record(session_id) {
                 tracing::warn!(%error, session = session_id, "remote.record not read");
+                // MC-H3.2 (H4 projection r0, L3): the screen reloads on `SessionChanged` and its
+                // view queues the read again, so only the change to "failed" is announced.
+                if !failed_before && self.checked_failed(session_id) {
+                    self.events.emit(AppEvent::SessionChanged { session_id });
+                }
             }
         }
         Ok(if held && !worked {
@@ -564,6 +717,11 @@ impl RemoteItems {
     /// One download: written to `<name>.part`, renamed, then (a cover) the item's other covers
     /// deleted (MC-H1.2), then `PictureReady`.
     fn download(&self, commerce: &dyn CommerceAdapter, download: &Download) -> Result<()> {
+        let path = download.path(&self.previews_root);
+        // H4 projection r0, L19: a picture written since it was queued is not fetched again.
+        if path.is_file() {
+            return Ok(());
+        }
         let (edge, target) = match &download.kind {
             DownloadKind::Cover { session_id, .. } => (
                 COVER_EDGE,
@@ -577,9 +735,21 @@ impl RemoteItems {
                     external_id: external_id.clone(),
                 },
             ),
+            DownloadKind::View {
+                session_id,
+                role,
+                position,
+                ..
+            } => (
+                ARCHIVED_IMAGE_EDGE,
+                PictureTarget::Remote {
+                    session_id: *session_id,
+                    role: role.clone(),
+                    position: *position,
+                },
+            ),
         };
         let bytes = commerce.fetch_image(&download.url, edge)?;
-        let path = download.path(&self.previews_root);
         let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
             return Err(Error::InvalidData("picture cache path".into()));
         };
@@ -593,6 +763,7 @@ impl RemoteItems {
                 other != name && other.starts_with("cover-") && other.ends_with(".jpg")
             }),
             DownloadKind::Search { .. } => self.evict_search(&path),
+            DownloadKind::View { .. } => {}
         }
         self.log_download(download, "written");
         self.events.emit(AppEvent::PictureReady {
@@ -609,6 +780,9 @@ impl RemoteItems {
             }
             DownloadKind::Search { .. } => {
                 tracing::info!("remote.search_picture outcome={outcome}");
+            }
+            DownloadKind::View { item_id, .. } => {
+                tracing::info!("remote.view_picture item={item_id} outcome={outcome}");
             }
         }
     }

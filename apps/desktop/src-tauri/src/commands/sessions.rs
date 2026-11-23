@@ -567,7 +567,7 @@ pub async fn session_activate(
     state: State<'_, AppState>,
     session_id: CommandId,
 ) -> Result<(), CommandError> {
-    let (store, editing, health, provision, camera, follow) = {
+    let (store, editing, health, provision, camera, follow, remote) = {
         let app = state.handles().map_err(CommandError::from)?;
         (
             app.store.clone(),
@@ -576,16 +576,19 @@ pub async fn session_activate(
             app.provision.clone(),
             app.camera.clone(),
             app.follow.clone(),
+            app.remote.clone(),
         )
     };
     // A10: switches apply in the order they were asked for (the ticket is taken now).
     let ticket = CAPTURE_TARGET_ORDER.ticket();
     tauri::async_runtime::spawn_blocking(move || {
+        // MC-H3.4: both the filing-target claim and the switch read the item's remote state.
         let service = || {
             SessionsService::new(store.as_ref(), &SystemClock)
                 .with_editing(editing.as_ref(), health.as_ref(), &provision)
                 .with_camera(camera.as_ref())
                 .with_follow(follow.as_ref())
+                .with_remote(remote.as_ref())
         };
         // A16: photos are filed to this session from now on, whatever Capture One is doing.
         let claimed =

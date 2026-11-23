@@ -100,11 +100,14 @@ fn hidden(state: ConnectionState) -> bool {
     )
 }
 
-/// The preview of a linked photo (the session-cover precedent): adjusted, else original.
+/// The preview of a linked photo (the session-cover precedent): adjusted, else original, only
+/// when its file exists (M-H4, MC-H3.5; H4 projection r0, L22).
 fn link_preview(link: &SessionLink) -> Option<String> {
-    link.adjusted_preview_path
-        .clone()
-        .or_else(|| link.original_preview_path.clone())
+    crate::services::remote::local_picture(
+        link.adjusted_preview_path.as_deref(),
+        link.original_preview_path.as_deref(),
+    )
+    .map(|path| path.to_string_lossy().into_owned())
 }
 
 /// The role of a link a reply may attach (publish writes only `gallery` and

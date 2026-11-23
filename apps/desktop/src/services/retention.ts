@@ -13,9 +13,10 @@ export async function getItemArchive(sessionId: number): Promise<ItemArchive | n
   return unwrap(await commands.itemArchiveGet(sessionId));
 }
 
-/** "Keep files on this Mac": the item is never cleared by retention or by the storage budget. */
+/** "Keep files on this Mac": the item is never cleared by retention or by the storage budget. Answers the retention state read again. */
 export async function setKeepFiles(sessionId: number, keep: boolean): Promise<ItemArchive | null> {
-  return unwrap(await commands.itemKeepFilesSet(sessionId, keep));
+  unwrap(await commands.itemKeepFilesSet(sessionId, keep));
+  return getItemArchive(sessionId);
 }
 
 /** Days a published, clean item keeps its local files (Settings → Storage). */

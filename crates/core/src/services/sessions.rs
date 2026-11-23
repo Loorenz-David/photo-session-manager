@@ -138,6 +138,8 @@ impl<'a> SessionsService<'a> {
             return Ok(false);
         }
         let folder = match id {
+            // MC-H3.4 (H4 projection r0, L1): a remote item is never the filing target.
+            Some(id) if self.is_remote(id)? => return Ok(false),
             Some(id) => {
                 let session = self.store.session(id)?;
                 let item = self
@@ -207,7 +209,37 @@ impl<'a> SessionsService<'a> {
         self
     }
 
+    /// MC-H3.1: whether the session's item is `Remote(_)`: from `with_remote` when attached,
+    /// else from the store when the service has a commerce integration, else never (H6).
+    fn remote_state(&self, id: i64) -> Result<crate::domain::remote::RemoteState> {
+        if let Some(remote) = self.remote {
+            return remote.state(id);
+        }
+        if self.commerce.is_some() {
+            return Ok(crate::mechanisms::remote::remote_state(
+                self.store.remote_input(id)?,
+            ));
+        }
+        Ok(crate::domain::remote::RemoteState::Local)
+    }
+
+    fn is_remote(&self, id: i64) -> Result<bool> {
+        Ok(matches!(
+            self.remote_state(id)?,
+            crate::domain::remote::RemoteState::Remote(_)
+        ))
+    }
+
     pub fn activate(&self, id: i64) -> Result<()> {
+        // MC-H3.4: opening a remote item never moves the camera's capture folder: no editing
+        // call, no camera target change, the active session unchanged.
+        if self.is_remote(id)? {
+            tracing::info!(
+                target: "psm::capture_one",
+                "capture_one.switch_skipped request=\"open session {id}\" reason=remote_item"
+            );
+            return Ok(());
+        }
         let editing = self.editing.ok_or(Error::DocumentNotOpen)?;
         let health = self.health.ok_or(Error::DocumentNotOpen)?;
         let session = self.store.session(id)?;
@@ -360,10 +392,14 @@ impl<'a> SessionsService<'a> {
             Some(item_id) => Some(self.store.item(item_id)?),
             None => None,
         };
+        // MC-H3.5 (M-H4): a remote item's photo rows never reach the screen (an archived item's
+        // cleared rows name deleted previews); its pictures come from `RemoteItems::view`.
+        let remote = self.is_remote(id)?;
         let photos: Vec<_> = self
             .store
             .photos_in_session(id)?
             .into_iter()
+            .filter(|_| !remote)
             .filter(|photo| {
                 photo.classification != crate::domain::photo::Classification::Deleted
                     && photo.integrity != crate::domain::photo::Integrity::RawMissing

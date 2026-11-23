@@ -19,6 +19,7 @@ mod h2_row_pictures;
 mod h3_bring_back;
 mod h3_jpeg_photos;
 mod h3_publish_after_bring_back;
+mod h4_remote_workspace;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

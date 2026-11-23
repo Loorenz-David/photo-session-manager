@@ -397,8 +397,8 @@ pub async fn item_adopt(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
-/// One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
-/// small cached copy the workspace shows.
+/// One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, its
+/// cached copy. (Kept for `item_archive_get` until H4·U3 removes it with its last caller.)
 #[derive(Serialize, Type)]
 pub struct ArchivedPictureDto {
     pub role: String,
@@ -409,7 +409,7 @@ pub struct ArchivedPictureDto {
 }
 
 /// An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
-/// were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
+/// were cleared after publishing and, if so, its photos from Shopify.
 #[derive(Serialize, Type)]
 pub struct ItemArchiveDto {
     #[specta(type = specta_typescript::Number)]
@@ -419,30 +419,8 @@ pub struct ItemArchiveDto {
     pub pictures: Vec<ArchivedPictureDto>,
 }
 
-fn archive_dto(view: psm_core::services::retention::ArchiveView) -> ItemArchiveDto {
-    ItemArchiveDto {
-        item_id: view.item_id,
-        keep_files: view.retention.keep_files,
-        cleared: view.retention.cleared_at.is_some(),
-        pictures: view
-            .pictures
-            .into_iter()
-            .map(|p| ArchivedPictureDto {
-                role: p.role,
-                position: p.position,
-                url: p.url,
-                path: p.path.map(|path| path.to_string_lossy().into_owned()),
-            })
-            .collect(),
-    }
-}
-
-fn archive_cache(app: &psm_integrations::AppHandles) -> std::path::PathBuf {
-    app.paths.root.join("previews").join("archived")
-}
-
-/// The session's item retention state; a cleared item's photos are downloaded from Shopify on
-/// demand (preview size) and cached. `null` for the Unassigned session.
+/// The session's item retention state, answered from `RemoteItems::view` (cached files only;
+/// missing ones are queued for the background, MC-H3.5). `null` for the Unassigned session.
 #[tauri::command]
 #[specta::specta]
 pub async fn item_archive_get(
@@ -451,51 +429,60 @@ pub async fn item_archive_get(
 ) -> Result<Option<ItemArchiveDto>, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<Option<ItemArchiveDto>, CommandError> {
-        let cache = archive_cache(&app);
-        psm_core::services::retention::ArchiveService::new(
-            app.store.as_ref(),
-            app.commerce.as_deref(),
-            &cache,
-        )
-        .view(session_id.0)
-        .map(|view| view.map(archive_dto))
-        .map_err(Into::into)
+        let Some(view) = app.remote.view(session_id.0)? else {
+            return Ok(None);
+        };
+        let store: &dyn psm_core::ports::store::Store = app.store.as_ref();
+        let cleared = store.item_retention(view.item_id)?.cleared_at.is_some();
+        let record = store.archived_images(view.item_id)?;
+        Ok(Some(ItemArchiveDto {
+            item_id: view.item_id,
+            keep_files: view.keep_files,
+            cleared,
+            pictures: view
+                .pictures
+                .into_iter()
+                .map(|p| ArchivedPictureDto {
+                    url: record
+                        .iter()
+                        .find(|image| image.media_id == p.media_id)
+                        .map(|image| image.url.clone())
+                        .unwrap_or_default(),
+                    role: p.role,
+                    position: p.position,
+                    path: p.path.map(|path| path.to_string_lossy().into_owned()),
+                })
+                .collect(),
+        }))
     })
     .await
     .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
 }
 
 /// "Keep files on this Mac" (10F Q2): the pinned item is never cleared by retention or by the
-/// storage budget.
+/// storage budget. Answers the session's remote view (`null` for the Unassigned session).
 #[tauri::command]
 #[specta::specta]
 pub async fn item_keep_files_set(
     state: State<'_, AppState>,
     session_id: CommandId,
     keep: bool,
-) -> Result<Option<ItemArchiveDto>, CommandError> {
+) -> Result<Option<crate::commands::remote::RemoteViewDto>, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
-    tauri::async_runtime::spawn_blocking(move || -> Result<Option<ItemArchiveDto>, CommandError> {
-        let cache = archive_cache(&app);
-        let service = psm_core::services::retention::ArchiveService::new(
-            app.store.as_ref(),
-            app.commerce.as_deref(),
-            &cache,
-        );
-        let Some(item_id) =
-            psm_core::ports::store::Store::session(app.store.as_ref(), session_id.0)?
-                .session
-                .item_id
-        else {
-            return Ok(None);
-        };
-        service.set_keep_files(item_id, keep)?;
-        app.storage.request_scan();
-        service
-            .view(session_id.0)
-            .map(|view| view.map(archive_dto))
-            .map_err(Into::into)
-    })
+    tauri::async_runtime::spawn_blocking(
+        move || -> Result<Option<crate::commands::remote::RemoteViewDto>, CommandError> {
+            let Some(item_id) =
+                psm_core::ports::store::Store::session(app.store.as_ref(), session_id.0)?
+                    .session
+                    .item_id
+            else {
+                return Ok(None);
+            };
+            app.remote.set_keep_files(item_id, keep)?;
+            app.storage.request_scan();
+            Ok(app.remote.view(session_id.0)?.map(Into::into))
+        },
+    )
     .await
     .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
 }

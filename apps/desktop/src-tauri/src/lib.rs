@@ -1653,6 +1653,224 @@ mod h2_tests {
     }
 }
 
+/// H4 (`plans/H4_remote_workspace.md`): the command rows H4·C2(c) and H4·C4, through Tauri's IPC.
+#[cfg(test)]
+mod h4_tests {
+    use super::*;
+    use psm_core::{
+        domain::{
+            publish::{RemoteMedia, RemoteMediaStatus},
+            storage::ArchivedImage,
+        },
+        ports::store::Store,
+        services::items::ItemsService,
+    };
+    use psm_testkit::fake_commerce::fake_image_url;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    type Window = tauri::WebviewWindow<tauri::test::MockRuntime>;
+
+    fn result(w: &Window, cmd: &str, args: Value) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    fn call(w: &Window, cmd: &str, args: Value) -> Value {
+        result(w, cmd, args).unwrap_or_else(|error| panic!("{cmd}: {error}"))
+    }
+
+    fn wired(
+        a: psm_testkit::TestApp,
+    ) -> (
+        tempfile::TempDir,
+        tauri::App<tauri::test::MockRuntime>,
+        Window,
+    ) {
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::sessions::session_activate,
+                commands::remote::session_remote_get,
+                commands::remote::session_remote_refresh,
+                commands::remote::session_bring_back,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        (dir, tauri_app, w)
+    }
+
+    fn image(role: &str, position: i64, media_id: &str) -> ArchivedImage {
+        ArchivedImage {
+            role: role.into(),
+            position,
+            media_id: media_id.into(),
+            url: fake_image_url(media_id),
+            bytes: None,
+        }
+    }
+
+    /// A local item whose files were cleared with a record of 3 gallery and 2 condition pictures
+    /// whose sizes are not known. (session id)
+    fn archived(a: &psm_testkit::TestApp, sku: &str) -> i64 {
+        let (item, session) = a
+            .items()
+            .create_local(sku, &format!("{sku} title"), "Sideboard", None)
+            .unwrap();
+        let images = [
+            image("gallery", 1, &format!("{sku}-g1")),
+            image("gallery", 2, &format!("{sku}-g2")),
+            image("gallery", 3, &format!("{sku}-g3")),
+            image("condition", 1, &format!("{sku}-c1")),
+            image("condition", 2, &format!("{sku}-c2")),
+        ];
+        a.store()
+            .mark_item_cleared(item.id, 1_000, &images)
+            .unwrap();
+        session.session.id
+    }
+
+    #[test]
+    fn h4_c2c_session_activate_of_an_archived_item_keeps_the_filing_target() {
+        let a = psm_testkit::TestApp::with_camera_and_shop().unwrap();
+        let (_, b) = a
+            .items()
+            .create_local("B-CAM", "Chair", "Chair", None)
+            .unwrap();
+        let b = b.session.id;
+        let archived = archived(&a, "A-CAM");
+        let fake = a.fake.clone();
+        let store = a.app.store.clone();
+        let (_dir, _app, w) = wired(a);
+        call(&w, "session_activate", json!({"sessionId": b}));
+        assert_eq!(store.active_session_id().unwrap(), Some(b));
+        let before = fake.state.lock().unwrap().ops.len();
+        assert_eq!(
+            call(&w, "session_activate", json!({"sessionId": archived})),
+            Value::Null
+        );
+        assert_eq!(store.active_session_id().unwrap(), Some(b));
+        assert_eq!(
+            fake.state.lock().unwrap().ops[before..].to_vec(),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn h4_c4a_session_remote_get_answers_the_view() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        let session = archived(&a, "GET-A");
+        let (_dir, _app, w) = wired(a);
+        let view = call(&w, "session_remote_get", json!({"sessionId": session}));
+        assert_eq!(view["state"], json!("archived"));
+        assert_eq!(view["pictures"].as_array().unwrap().len(), 5);
+        assert_eq!(view["bring_back_bytes"], json!(7_500_000));
+        assert_eq!(view["check_failed"], json!(false));
+        assert_eq!(view["bring_back"], Value::Null);
+        assert_eq!(
+            call(&w, "session_remote_get", json!({"sessionId": 1})),
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn h4_c4b_session_bring_back_of_a_local_session_is_not_remote() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        let (_, local) = a
+            .items()
+            .create_local("LOC-B", "Lamp", "Lamp", None)
+            .unwrap();
+        let (_dir, _app, w) = wired(a);
+        let error = result(
+            &w,
+            "session_bring_back",
+            json!({"sessionId": local.session.id}),
+        )
+        .unwrap_err();
+        assert_eq!(error["code"], json!("not_remote"));
+    }
+
+    #[test]
+    fn h4_c4c_session_remote_refresh_answers_the_new_order() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        let product = a.fake_shop().add_product("REF-C", "Cabinet", None);
+        let set_gallery = |ids: &[&str]| {
+            let mut s = a.fake_shop().state.lock().unwrap();
+            let p = s
+                .products
+                .iter_mut()
+                .find(|p| p.external_id == product)
+                .unwrap();
+            p.media = ids
+                .iter()
+                .enumerate()
+                .map(|(i, id)| RemoteMedia {
+                    id: (*id).into(),
+                    filename: Some(format!("{id}.jpg")),
+                    status: RemoteMediaStatus::Ready,
+                    position: i as i64 + 1,
+                })
+                .collect();
+        };
+        set_gallery(&["r-m1", "r-m2", "r-m3"]);
+        let item = ItemsService::new(a.store(), a.clock.as_ref())
+            .with_commerce(Some(a.fake_shop()))
+            .adopt(&product)
+            .unwrap();
+        let session = a.sessions().create(item.id).unwrap().session.id;
+        a.store()
+            .mark_item_cleared(
+                item.id,
+                1_000,
+                &[
+                    image("gallery", 1, "r-m1"),
+                    image("gallery", 2, "r-m2"),
+                    image("gallery", 3, "r-m3"),
+                ],
+            )
+            .unwrap();
+        // Reordered in the shop's admin.
+        set_gallery(&["r-m3", "r-m1", "r-m2"]);
+        let (_dir, _app, w) = wired(a);
+        let view = call(&w, "session_remote_refresh", json!({"sessionId": session}));
+        let gallery: Vec<(Value, Value)> = view["pictures"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|p| p["role"] == "gallery")
+            .map(|p| (p["position"].clone(), p["media_id"].clone()))
+            .collect();
+        assert_eq!(
+            gallery,
+            vec![
+                (json!(1), json!("r-m3")),
+                (json!(2), json!("r-m1")),
+                (json!(3), json!("r-m2")),
+            ]
+        );
+    }
+}
+
 #[cfg(test)]
 mod p39_tests {
     use super::*;
@@ -1967,8 +2185,8 @@ struct PublishProgressPayload {
     uploaded: i64,
     total: i64,
 }
-/// H2 (master plan archive §4 Events): `picture_ready {kind: 'cover' | 'search', session_id?,
-/// external_id?, path}`.
+/// H2, H4 (master plan archive §4 Events): `picture_ready {kind: 'cover' | 'search' | 'remote',
+/// session_id?, external_id?, role?, position?, path}`.
 #[derive(serde::Serialize, Clone, Debug, PartialEq)]
 struct PictureReadyPayload {
     #[serde(flatten)]
@@ -2295,6 +2513,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::settings::storage_retention_set,
         commands::items::item_archive_get,
         commands::items::item_keep_files_set,
+        commands::remote::session_remote_get,
+        commands::remote::session_remote_refresh,
+        commands::remote::session_bring_back,
         commands::templates::templates_list,
         commands::templates::template_get,
         commands::templates::template_create,

@@ -538,6 +538,24 @@ impl<'a> AttributesService<'a> {
             history: None,
         }
     }
+    /// MC-H3.8 (H4 projection r0, L20): the item's state from its session when the service has
+    /// a commerce integration, else `Local` (H6); a cleared item counts as remote either way.
+    fn item_is_remote(&self, item_id: i64) -> Result<bool> {
+        if self.store.item_retention(item_id)?.cleared_at.is_some() {
+            return Ok(true);
+        }
+        if self.integration.is_none() {
+            return Ok(false);
+        }
+        let Some(session_id) = self.store.session_for_item(item_id)? else {
+            return Ok(false);
+        };
+        Ok(matches!(
+            crate::mechanisms::remote::remote_state(self.store.remote_input(session_id)?),
+            crate::domain::remote::RemoteState::Remote(_)
+        ))
+    }
+
     pub fn with_history(mut self, history: &'a History) -> Self {
         self.history = Some(history);
         self
@@ -788,9 +806,9 @@ impl<'a> AttributesService<'a> {
             return self.write_title(item_id, Some(title), "Edit");
         }
         let mut raw = Some(raw);
-        // 10F Q3: a cleared item keeps only the attributes that need no images (read before the
-        // write's transaction holds the store).
-        let cleared = self.store.item_retention(item_id)?.cleared_at.is_some();
+        // 10F Q3, MC-H3.8: a remote item (archived or shop-only) keeps only the attributes that
+        // need no images (read before the write's transaction holds the store).
+        let cleared = self.item_is_remote(item_id)?;
         let feedback = (provenance == Provenance::Human).then_some(FeedbackAction::Edited);
         self.write(
             item_id,

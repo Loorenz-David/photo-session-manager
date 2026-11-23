@@ -11,13 +11,48 @@ pub struct CallBudget {
     pub maximum: f64,
 }
 
-/// What a downloaded picture is for (master plan archive §4 Events): a row's cover, or a shop
-/// search result's picture.
+/// What a downloaded picture is for (master plan archive §4 Events): a row's cover, a shop
+/// search result's picture, or one picture of a remote item's view (H4, MC-H3.5).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PictureTarget {
-    Cover { session_id: i64 },
-    Search { external_id: String },
+    Cover {
+        session_id: i64,
+    },
+    Search {
+        external_id: String,
+    },
+    Remote {
+        session_id: i64,
+        role: String,
+        position: i64,
+    },
+}
+
+/// One remote picture as the workspace shows it (MC-H3.5): its role (`gallery` / `condition`),
+/// its position in that role, its media id, its 1600 px cache file when on this Mac, and whether
+/// the shop no longer has it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemotePictureView {
+    pub role: String,
+    pub position: i64,
+    pub media_id: String,
+    pub path: Option<std::path::PathBuf>,
+    pub gone: bool,
+}
+
+/// What the workspace is given for a session's item (MC-H3.5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RemoteView {
+    pub item_id: i64,
+    pub state: RemoteState,
+    pub keep_files: bool,
+    pub pictures: Vec<RemotePictureView>,
+    pub bring_back_bytes: i64,
+    /// The last first-open read of this item failed (MC-H3.2).
+    pub check_failed: bool,
+    /// The running bring back's progress (H3), if one runs.
+    pub bring_back: Option<BringBackProgress>,
 }
 
 /// The two kinds of remote item (10H §3): files cleared on this Mac (`Archived`), or a shop

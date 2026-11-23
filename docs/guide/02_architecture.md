@@ -25,7 +25,7 @@ are thin and run off the app lock (`spawn_blocking`); business logic never depen
 | `domain/` | `item.rs`, `session.rs` (SessionStatus, PublishStep, RowLabel), `photo.rs` (Classification, Integrity), `attribute.rs`, `composition.rs` (10D values, Frame, Rect, EditorGeometry), `template.rs` (shooting templates, containers, presets), `output.rs` (OutputFormat), `publish.rs`, `camera.rs` (CameraStatus, Link, reasons, CameraSettings, Keychain account names, ledger constants), `editing.rs` (Job, ProvisionInputs, RecipeProps…), `storage.rs` (StorageSettings, ExportSettings) |
 | `mechanisms/` (pure, unit-testable; the only place plans allow unit tests) | `arrival.rs` (candidate filter, path_key), `canon.rs` (NFC canonical path), `hash.rs` (SHA-256), `position.rs`, `status.rs` (status derivation, progress %), `time.rs`, `naming.rs` (folder key, export names), `template.rs` (item type key, `expected` place, `zoomed`, `preset_values`), `shot_order.rs` (P4 shot order: slots, counter runs, holds), `values.rs` (MC-9 canonical attribute values, MC-14 selection), `attribute_write.rs` (MC-13 diff), `reconcile.rs` (MC-12 gallery diff), `publish.rs` (frozen_main, upload waves), `upload_name.rs`, `staleness.rs`, `backoff.rs` (render backoff; `editor_wait` = "Waiting for Capture One…", 10 min max), `missing.rs` (files deleted outside the app), `composition.rs` + `composition_cases.json` (shared with the TS editor), `capture_ledger.rs` (MC-33 rules), `camera_status.rs` (precedence, sentences), `secrets.rs` (FTP password), `cleanup.rs` + `retention.rs` (10F decisions), `hook_payload.rs` |
 | `ports/` | `store.rs` (Store/StoreTx; one impl: SQLite), `clock.rs`, `editing.rs`, `camera.rs` (CameraProvider, CaptureSink, ArrivalSource, ArrivalFollow, CompletedNames, DeliveryFs), `commerce.rs`, `images.rs`, `raw_previews.rs`, `secrets.rs`, `system.rs`, `storage.rs`, `trash.rs` (A17: the macOS Trash), `events.rs` |
-| `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `templates` (local editor, each action saved immediately), `template_placement` (placement on arrival, the session's `TemplateView`, drop onto a container / retake, Back to template, Shift the rest back), `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing, archived view) |
+| `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `templates` (local editor, each action saved immediately), `template_placement` (placement on arrival, the session's `TemplateView`, drop onto a container / retake, Back to template, Shift the rest back), `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing and its guards; the archived view is `RemoteItems::view`, H4) |
 | `events.rs` | `AppEvent` (below); `error.rs`: `Error` with snake_case codes carried to the UI as `{code, message, data}` |
 
 ### `crates/infra` (psm-infra)
@@ -385,7 +385,7 @@ take-back, export or publish runs; deletes at most a batch per tick; rules in `m
 (duplicates ≥ 24 h, copied preview exports, unneeded masters, budget `storage.min_free_gb`) and
 `mechanisms/retention.rs` (items published-and-clean for `retention_days_after_publish` days, after
 `RetentionService` verified Shopify still holds every published image; `item_retention.keep_files` pin;
-`archived_images` for the read-only archived view). Every deletion logs `storage.cleared rule=… path=… bytes=…`.
+`archived_images`, the record a remote item is shown from, H4). Every deletion logs `storage.cleared rule=… path=… bytes=…`.
 H1 (10H): retention never clears a shop-only item, nor an item brought back after its last completed publish
 (`RetentionInput.shop_only`, `restored_at`); the verification records each picture's size (`archived_images.bytes`)
 and is not started for further items of a scan while the call budget is low (`must_wait`, scan requested again).
@@ -456,6 +456,26 @@ session main *k* placed by hand in container *k*), one `ready` link per photo (r
 `attribute:<condition key>`, the stored `raw_state.retouch_gen`, revision 0), `item_retention` `cleared_at` null and
 `restored_at` now; **`change_seq` untouched**; (5) `editing.sync_folder(folder)` (failure → `synced = false`),
 `BringBack {Done}`, `SessionChanged`. No style, no colour tag, no shop write (M-H1), no editor delete (M-H2).
+
+**The remote view and activation (H4, MC-H3.2–5, .8; replaces P62's archived view).** `RemoteItems::view(session_id)`
+(command `session_remote_get`, `commands/remote.rs`) is a read plus a queue push, never a download and never a shop
+call: `None` without an item; `Local` → no pictures; `Unknown` → no pictures and the first-open read queued; `Remote(_)`
+→ the record's pictures, each with `previews/archived/<item>/<role>-<NN>-<12 hex>.jpg` when that file exists (`gone`
+when its URL is empty), `bring_back_bytes = estimate_bytes(record)`, `check_failed` (the last first-open read failed;
+in memory, cleared by a successful read) and the running bring back's progress. Missing files are queued as `View`
+downloads (a new view of a session replaces only that session's not-started ones) and run in `run_pending`'s batch
+like covers: `fetch_image(url, ARCHIVED_IMAGE_EDGE 1600)`, 4 at a time, the same stale rule, `PictureReady {Remote
+{session_id, role, position}, path}`; a queued download whose file already exists is skipped. A failed queued
+first-open read emits `SessionChanged` only when `check_failed` turns true (the screen reloads on it and its view
+queues the read again). `session_remote_refresh` = `refresh` then `view`; `session_bring_back` = `bring_back`.
+`item_keep_files_set` answers the remote view (`RemoteItems::set_keep_files`). **Activation:**
+`SessionsService::activate` and `claim_target(Some(id))` read the state first (`with_remote`, else the store when the
+service has a commerce integration) and, for `Remote(_)`, answer at once (`Ok` / `false`) with no editing call, no
+camera target and no change of the active session; `session_activate` attaches `with_remote(app.remote)`. Every other
+state activates as before. **Other readers (M-H4):** `SessionsService::view` answers no photos (nor compositions or
+upload states) for a remote session; the conversations' attachable photos carry a preview path only when its file
+exists (`remote::local_picture`); a media-list attribute write is refused with `FilesCleared` for a remote item
+(`AttributesService` reads the state from the item's session when an integration is set).
 
 **Delete session (A17, owner 2026-11-18; Session Manager only, never Shopify).** Commands
 `session_delete_preview` / `session_delete` → `psm_integrations::session_delete` (when photos are filed

@@ -21,7 +21,7 @@ use psm_core::{
     services::{
         attributes::AttributesService,
         photos::PhotosService,
-        retention::{ARCHIVED_IMAGE_EDGE, ArchiveService},
+        retention::ARCHIVED_IMAGE_EDGE,
         storage::{Cleared, RETENTION_NOT_CLEARED},
     },
 };
@@ -519,9 +519,7 @@ fn c1b_dirty_unpublished_pinned_or_without_integration_nothing_is_deleted() {
     assert!(a.store().session(dirty.session).unwrap().dirty);
     let unpublished = item(&a, "NEW", 1, 0);
     let pinned = published(&a, "PIN", 1, 0);
-    ArchiveService::new(a.store(), None, a.dir.path())
-        .set_keep_files(pinned.item, true)
-        .unwrap();
+    a.remote().set_keep_files(pinned.item, true).unwrap();
     let before: Vec<BTreeSet<PathBuf>> = [&dirty, &unpublished, &pinned]
         .iter()
         .map(|it| files_of(&a, it))
@@ -627,15 +625,14 @@ fn c3a_a_cleared_item_shows_its_photos_from_shopify_cached_and_is_archived_in_th
     assert!(cleared_at(&a, &it).is_some());
 
     let cache = a.app.paths.root.join("previews/archived");
-    let shop: &dyn CommerceAdapter = a.fake_shop();
-    let view = ArchiveService::new(a.store(), Some(shop), &cache)
-        .view(it.session)
-        .unwrap()
-        .unwrap();
+    // H4 (MC-H3.5): the view never downloads; the background step does.
+    a.remote().view(it.session).unwrap().unwrap();
+    a.remote().run_pending().unwrap();
+    let view = a.remote().view(it.session).unwrap().unwrap();
     let shown: Vec<(String, i64, String)> = view
         .pictures
         .iter()
-        .map(|p| (p.role.clone(), p.position, p.url.clone()))
+        .map(|p| (p.role.clone(), p.position, fake_image_url(&p.media_id)))
         .collect();
     assert_eq!(
         shown,
@@ -648,21 +645,22 @@ fn c3a_a_cleared_item_shows_its_photos_from_shopify_cached_and_is_archived_in_th
     for p in &view.pictures {
         let path = p.path.as_ref().expect("downloaded");
         assert!(path.starts_with(&cache));
-        assert_eq!(fs::read(path).unwrap(), fake_image_bytes(&p.url));
+        assert_eq!(
+            fs::read(path).unwrap(),
+            fake_image_bytes(&fake_image_url(&p.media_id))
+        );
     }
-    let fetches = a.fake_shop().state.lock().unwrap().image_fetches.clone();
-    assert_eq!(
-        fetches,
-        shown
-            .iter()
-            .map(|(_, _, url)| (url.clone(), ARCHIVED_IMAGE_EDGE))
-            .collect::<Vec<_>>()
-    );
+    let mut fetches = a.fake_shop().state.lock().unwrap().image_fetches.clone();
+    fetches.sort();
+    let mut expected: Vec<(String, u32)> = shown
+        .iter()
+        .map(|(_, _, url)| (url.clone(), ARCHIVED_IMAGE_EDGE))
+        .collect();
+    expected.sort();
+    assert_eq!(fetches, expected);
     // Opened again: served from the cache, nothing downloaded.
-    let again = ArchiveService::new(a.store(), Some(shop), &cache)
-        .view(it.session)
-        .unwrap()
-        .unwrap();
+    let again = a.remote().view(it.session).unwrap().unwrap();
+    a.remote().run_pending().unwrap();
     assert_eq!(again.pictures, view.pictures);
     assert_eq!(a.fake_shop().state.lock().unwrap().image_fetches.len(), 3);
 
@@ -747,9 +745,7 @@ fn c4a_a_pinned_item_is_never_cleared_by_retention_or_by_the_budget() {
     let free_item = published(&a, "FREE", 1, 0);
     let pinned_files = files_of(&a, &pinned);
     let free_files = files_of(&a, &free_item);
-    ArchiveService::new(a.store(), None, a.dir.path())
-        .set_keep_files(pinned.item, true)
-        .unwrap();
+    a.remote().set_keep_files(pinned.item, true).unwrap();
     a.clock.advance(60 * DAY);
     disk_free(&a, 0);
     let cleared = clear_all(&a);

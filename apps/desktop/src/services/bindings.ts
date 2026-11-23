@@ -337,15 +337,24 @@ export const commands = {
 	/**  Saves the retention period in days; the background clean-up applies it at its next tick. */
 	storageRetentionSet: (days: number) => typedError<number, CommandError>(__TAURI_INVOKE("storage_retention_set", { days })),
 	/**
-	 *  The session's item retention state; a cleared item's photos are downloaded from Shopify on
-	 *  demand (preview size) and cached. `null` for the Unassigned session.
+	 *  The session's item retention state, answered from `RemoteItems::view` (cached files only;
+	 *  missing ones are queued for the background, MC-H3.5). `null` for the Unassigned session.
 	 */
 	itemArchiveGet: (sessionId: CommandId) => typedError<ItemArchiveDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_archive_get", { sessionId })),
 	/**
 	 *  "Keep files on this Mac" (10F Q2): the pinned item is never cleared by retention or by the
-	 *  storage budget.
+	 *  storage budget. Answers the session's remote view (`null` for the Unassigned session).
 	 */
-	itemKeepFilesSet: (sessionId: CommandId, keep: boolean) => typedError<ItemArchiveDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_keep_files_set", { sessionId, keep })),
+	itemKeepFilesSet: (sessionId: CommandId, keep: boolean) => typedError<RemoteViewDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_keep_files_set", { sessionId, keep })),
+	/**
+	 *  MC-H3.5: the session's remote view (`null` for the Unassigned session). Missing picture
+	 *  files are queued for the background; nothing is downloaded here.
+	 */
+	sessionRemoteGet: (sessionId: CommandId) => typedError<RemoteViewDto_Serialize | null, CommandError>(__TAURI_INVOKE("session_remote_get", { sessionId })),
+	/**  MC-H3.3, Refresh from Shopify (a press): the record re-read, then the view. */
+	sessionRemoteRefresh: (sessionId: CommandId) => typedError<RemoteViewDto_Serialize, CommandError>(__TAURI_INVOKE("session_remote_refresh", { sessionId })),
+	/**  MC-H4, Bring back: the item's pictures downloaded at full size and made the session's photos. */
+	sessionBringBack: (sessionId: CommandId) => typedError<BringBackOutcomeDto, CommandError>(__TAURI_INVOKE("session_bring_back", { sessionId })),
 	templatesList: () => typedError<TemplateSummaryDto[], CommandError>(__TAURI_INVOKE("templates_list")),
 	templateGet: (itemType: string) => typedError<TemplateDto_Serialize | null, CommandError>(__TAURI_INVOKE("template_get", { itemType })),
 	templateCreate: (itemType: string) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_create", { itemType })),
@@ -390,14 +399,14 @@ export type ApplyResultDto = {
 };
 
 /**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
- *  small cached copy the workspace shows.
+ *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, its
+ *  cached copy. (Kept for `item_archive_get` until H4·U3 removes it with its last caller.)
  */
 export type ArchivedPictureDto = ArchivedPictureDto_Serialize | ArchivedPictureDto_Deserialize;
 
 /**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
- *  small cached copy the workspace shows.
+ *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, its
+ *  cached copy. (Kept for `item_archive_get` until H4·U3 removes it with its last caller.)
  */
 export type ArchivedPictureDto_Deserialize = {
 	role: string,
@@ -407,8 +416,8 @@ export type ArchivedPictureDto_Deserialize = {
 };
 
 /**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
- *  small cached copy the workspace shows.
+ *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, its
+ *  cached copy. (Kept for `item_archive_get` until H4·U3 removes it with its last caller.)
  */
 export type ArchivedPictureDto_Serialize = {
 	role: string,
@@ -603,6 +612,18 @@ export type AttributeValueDto_Serialize = {
 export type AuthorDto = {
 	kind: string,
 	name: string,
+};
+
+/**  What a finished bring back did: the new photos, and whether Capture One listed the folder. */
+export type BringBackOutcomeDto = {
+	photo_ids: number[],
+	synced: boolean,
+};
+
+/**  A running bring back's progress. */
+export type BringBackProgressDto = {
+	done: number,
+	total: number,
 };
 
 export type CameraSettingsDto = CameraSettingsDto_Serialize | CameraSettingsDto_Deserialize;
@@ -1261,13 +1282,13 @@ export type IntegrationSettingsDto = {
 
 /**
  *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
+ *  were cleared after publishing and, if so, its photos from Shopify.
  */
 export type ItemArchiveDto = ItemArchiveDto_Serialize | ItemArchiveDto_Deserialize;
 
 /**
  *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
+ *  were cleared after publishing and, if so, its photos from Shopify.
  */
 export type ItemArchiveDto_Deserialize = {
 	item_id: number,
@@ -1278,7 +1299,7 @@ export type ItemArchiveDto_Deserialize = {
 
 /**
  *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
+ *  were cleared after publishing and, if so, its photos from Shopify.
  */
 export type ItemArchiveDto_Serialize = {
 	item_id: number,
@@ -1839,6 +1860,73 @@ export type RectDto = {
 	y: number | null,
 	w: number | null,
 	h: number | null,
+};
+
+/**
+ *  One remote picture: its role (`gallery` / `condition`), its position in that role, its media
+ *  id, its cached file on this Mac (`null` until downloaded) and whether the shop no longer has it.
+ */
+export type RemotePictureDto = RemotePictureDto_Serialize | RemotePictureDto_Deserialize;
+
+/**
+ *  One remote picture: its role (`gallery` / `condition`), its position in that role, its media
+ *  id, its cached file on this Mac (`null` until downloaded) and whether the shop no longer has it.
+ */
+export type RemotePictureDto_Deserialize = {
+	role: string,
+	position: number,
+	media_id: string,
+	path?: string | null,
+	gone: boolean,
+};
+
+/**
+ *  One remote picture: its role (`gallery` / `condition`), its position in that role, its media
+ *  id, its cached file on this Mac (`null` until downloaded) and whether the shop no longer has it.
+ */
+export type RemotePictureDto_Serialize = {
+	role: string,
+	position: number,
+	media_id: string,
+	path: string | null,
+	gone: boolean,
+};
+
+/**  The wire form of `RemoteState` (for the generated bindings only). */
+export type RemoteStateDto = "local" | "unknown" | "archived" | "shop_only";
+
+/**
+ *  Where a session's item's pictures are (`local`, `unknown`, `archived`, `shop_only`) and, for a
+ *  remote item, its pictures (MC-H3.5).
+ */
+export type RemoteViewDto = RemoteViewDto_Serialize | RemoteViewDto_Deserialize;
+
+/**
+ *  Where a session's item's pictures are (`local`, `unknown`, `archived`, `shop_only`) and, for a
+ *  remote item, its pictures (MC-H3.5).
+ */
+export type RemoteViewDto_Deserialize = {
+	item_id: number,
+	state: RemoteStateDto,
+	keep_files: boolean,
+	pictures: RemotePictureDto_Deserialize[],
+	bring_back_bytes: number,
+	check_failed: boolean,
+	bring_back?: BringBackProgressDto | null,
+};
+
+/**
+ *  Where a session's item's pictures are (`local`, `unknown`, `archived`, `shop_only`) and, for a
+ *  remote item, its pictures (MC-H3.5).
+ */
+export type RemoteViewDto_Serialize = {
+	item_id: number,
+	state: RemoteStateDto,
+	keep_files: boolean,
+	pictures: RemotePictureDto_Serialize[],
+	bring_back_bytes: number,
+	check_failed: boolean,
+	bring_back: BringBackProgressDto | null,
 };
 
 /**  The message a reply answers: its author and the target's first line (at most 80 characters). */
