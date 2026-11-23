@@ -14,6 +14,7 @@ mod c3_conversations_answer;
 mod c4_conversations_visit;
 mod h1_remote_record;
 mod h1_shopify_reads;
+mod h2_row_pictures;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

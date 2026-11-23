@@ -43,6 +43,11 @@ pub enum AppEvent {
         uploaded: i64,
         total: i64,
     },
+    /// H2 (MC-H1.3, MC-H2.5): a picture was downloaded and kept on this Mac at `path`.
+    PictureReady {
+        target: crate::domain::remote::PictureTarget,
+        path: String,
+    },
     /// C1 (`master_plan_conversations.md` §4 Event): the copy, a read mark or the connection
     /// changed; `notices` = the conversations a completed check found news in.
     ConversationsChanged {

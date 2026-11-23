@@ -24,6 +24,8 @@ pub struct SessionsService<'a> {
     camera: Option<&'a dyn CameraProvider>,
     follow: Option<&'a dyn ArrivalFollow>,
     events: Option<&'a dyn EventSink>,
+    /// H2 (MC-H1.1): the row picture rule's remote half and the cover queue.
+    remote: Option<&'a crate::services::remote::RemoteItems>,
     /// A16: the filing target was already claimed for this request (`claim_target`), so the
     /// switch does not set it again (an older request finishing late must not take it back).
     target_claimed: bool,
@@ -41,6 +43,7 @@ impl<'a> SessionsService<'a> {
             camera: None,
             follow: None,
             events: None,
+            remote: None,
             target_claimed: false,
         }
     }
@@ -65,6 +68,12 @@ impl<'a> SessionsService<'a> {
 
     pub fn with_events(mut self, events: &'a dyn EventSink) -> Self {
         self.events = Some(events);
+        self
+    }
+
+    /// H2: rows follow the whole row picture rule (MC-H1.1) and `page` requests pending covers.
+    pub fn with_remote(mut self, remote: &'a crate::services::remote::RemoteItems) -> Self {
+        self.remote = Some(remote);
         self
     }
 
@@ -418,6 +427,11 @@ impl SessionsService<'_> {
             time::group_by_activity,
         };
         let records = self.store.session_list_records()?;
+        // MC-H1.1: one read of the remote inputs for every row (none without remote items).
+        let pictures = self
+            .remote
+            .map(|remote| remote.row_pictures())
+            .transpose()?;
         let cleared = crate::services::retention::cleared_sessions(self.store)?;
         let unassigned_count = self.store.session(1)?.photo_count;
         let query = query.unwrap_or_default().to_lowercase();
@@ -458,6 +472,15 @@ impl SessionsService<'_> {
             } else {
                 None
             };
+            let adjusted = record.cover_adjusted_preview_path.as_deref();
+            let original = record.cover_original_preview_path.as_deref();
+            let (cover, cover_pending) = match &pictures {
+                Some(pictures) => pictures.row_picture(dto.session.id, adjusted, original),
+                None => (
+                    crate::services::remote::local_picture(adjusted, original),
+                    false,
+                ),
+            };
             rows.push(SessionRow {
                 id: dto.session.id,
                 sku: record.sku,
@@ -472,7 +495,8 @@ impl SessionsService<'_> {
                 last_activity_at: dto.session.last_activity_at,
                 created_at: dto.session.created_at,
                 arranged: dto.session.arranged_at.is_some(),
-                cover_preview_path: record.cover_preview_path,
+                cover_preview_path: cover.map(|path| path.to_string_lossy().into_owned()),
+                cover_pending,
                 publish: record.publish,
                 changes: dto.changes,
             });

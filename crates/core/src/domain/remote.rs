@@ -11,6 +11,15 @@ pub struct CallBudget {
     pub maximum: f64,
 }
 
+/// What a downloaded picture is for (master plan archive §4 Events): a row's cover, or a shop
+/// search result's picture.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PictureTarget {
+    Cover { session_id: i64 },
+    Search { external_id: String },
+}
+
 /// The two kinds of remote item (10H §3): files cleared on this Mac (`Archived`), or a shop
 /// product never photographed on this Mac (`ShopOnly`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

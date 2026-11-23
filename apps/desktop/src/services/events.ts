@@ -61,3 +61,11 @@ export type ConversationsChanged = { toasts: { conversation_id: string; text: st
 export async function onConversationsChanged(handler: (event: ConversationsChanged) => void): Promise<UnlistenFn> {
   return listen<ConversationsChanged>('conversations_changed', event => handler(event.payload));
 }
+
+/** H2: `picture_ready`: a row's cover or a shop search result's picture was kept on this Mac at `path`. */
+export type PictureReady =
+  | { kind: 'cover'; session_id: number; path: string }
+  | { kind: 'search'; external_id: string; path: string };
+export async function onPictureReady(handler: (event: PictureReady) => void): Promise<UnlistenFn> {
+  return listen<PictureReady>('picture_ready', event => handler(event.payload));
+}

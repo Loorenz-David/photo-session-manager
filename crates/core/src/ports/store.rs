@@ -503,6 +503,9 @@ pub trait Store: Send + Sync {
     /// MC-H3.1, one read: what the remote state rule needs about the session's item (all-false
     /// for a session without an item).
     fn remote_input(&self, session_id: i64) -> Result<RemoteInput>;
+    /// MC-H1.1 (H2), one read: for every item session, what the row picture rule needs about
+    /// its item (the remote state inputs and the record's cover picture).
+    fn remote_covers(&self) -> Result<Vec<crate::mechanisms::remote::RemoteCover>>;
     /// The sessions whose item's local files were cleared.
     fn cleared_sessions(&self) -> Result<Vec<i64>>;
     // Denied photos (changelog 46 (2); P66).

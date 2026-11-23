@@ -17,7 +17,7 @@ use psm_core::{
 use serde_json::Value as Json;
 use sha2::Digest;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -86,6 +86,26 @@ pub struct FakeShop {
     pub media_bytes: HashMap<String, i64>,
     /// H1: the call budget the fake answers (`None` = unknown, never wait).
     pub budget: Option<CallBudget>,
+    /// H2: the ids of every `media_urls` call, in order.
+    pub url_reads: Vec<Vec<String>>,
+    /// H2: per URL, the answers `fetch_image` gives before it serves the image (one per call).
+    pub image_faults: HashMap<String, VecDeque<ImageFault>>,
+    /// H2: per media id, how many fresh addresses `media_urls` has handed out.
+    pub url_versions: HashMap<String, u32>,
+}
+
+/// H2: how a `fetch_image` of a URL fails (`fail_image`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageFault {
+    /// The CDN says the picture is not there (`Error::ImageGone`).
+    Gone,
+    /// Any other failure (transport, server).
+    Fail,
+}
+
+/// H2: the address `media_urls` hands out the `n`th time it is asked for `id` (1, 2, …).
+pub fn fake_refreshed_url(id: &str, n: u32) -> String {
+    format!("{}?v={n}", fake_image_url(id))
 }
 
 /// WC8.2: the product's search texts as the platform answers them (blank → `None`).
@@ -116,6 +136,9 @@ pub struct FakeCommerce {
     uploads_in_flight: AtomicUsize,
     max_uploads_in_flight: AtomicUsize,
     upload_delay_ms: AtomicU64,
+    fetches_in_flight: AtomicUsize,
+    max_fetches_in_flight: AtomicUsize,
+    fetch_delay_ms: AtomicU64,
 }
 #[derive(Default)]
 struct MediaPollGate {
@@ -148,7 +171,35 @@ impl FakeCommerce {
             uploads_in_flight: AtomicUsize::new(0),
             max_uploads_in_flight: AtomicUsize::new(0),
             upload_delay_ms: AtomicU64::new(0),
+            fetches_in_flight: AtomicUsize::new(0),
+            max_fetches_in_flight: AtomicUsize::new(0),
+            fetch_delay_ms: AtomicU64::new(0),
         }
+    }
+    /// H2: every `fetch_image` takes `ms` (so parallel downloads overlap measurably).
+    pub fn set_fetch_delay(&self, ms: u64) {
+        self.fetch_delay_ms.store(ms, Ordering::SeqCst);
+    }
+    /// H2: the most `fetch_image` calls that were in flight at the same time.
+    pub fn max_fetches_in_flight(&self) -> usize {
+        self.max_fetches_in_flight.load(Ordering::SeqCst)
+    }
+    /// H2: the next `fetch_image` calls of `url` answer `faults`, one per call, before the image
+    /// is served.
+    pub fn fail_image(&self, url: &str, faults: Vec<ImageFault>) {
+        self.state
+            .lock()
+            .unwrap()
+            .image_faults
+            .insert(url.into(), faults.into());
+    }
+    /// H2: the ids of every `media_urls` call, in order.
+    pub fn url_reads(&self) -> Vec<Vec<String>> {
+        self.state.lock().unwrap().url_reads.clone()
+    }
+    /// The URL and long edge of every `fetch_image` call, in order.
+    pub fn image_fetches(&self) -> Vec<(String, u32)> {
+        self.state.lock().unwrap().image_fetches.clone()
     }
     /// P64: runs `hook(op)` at the start of every call (`None` removes it).
     pub fn set_hook(&self, hook: Option<CallHook>) {
@@ -771,12 +822,49 @@ impl CommerceAdapter for FakeCommerce {
     }
     fn fetch_image(&self, url: &str, max_edge: u32) -> Result<Vec<u8>> {
         self.read("fetch_image")?;
-        self.state
-            .lock()
-            .unwrap()
-            .image_fetches
-            .push((url.to_owned(), max_edge));
-        Ok(fake_image_bytes(url))
+        let now = self.fetches_in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+        self.max_fetches_in_flight.fetch_max(now, Ordering::SeqCst);
+        let delay = self.fetch_delay_ms.load(Ordering::SeqCst);
+        if delay > 0 {
+            std::thread::sleep(Duration::from_millis(delay));
+        }
+        self.fetches_in_flight.fetch_sub(1, Ordering::SeqCst);
+        let mut s = self.state.lock().unwrap();
+        s.image_fetches.push((url.to_owned(), max_edge));
+        match s.image_faults.get_mut(url).and_then(VecDeque::pop_front) {
+            Some(ImageFault::Gone) => Err(Error::ImageGone),
+            Some(ImageFault::Fail) => Err(Error::Provider("image download failed".into())),
+            None => Ok(fake_image_bytes(url)),
+        }
+    }
+    /// H2: one read op `media_urls`; a fresh address for each id the shop holds (gallery media
+    /// or file), `None` for one it does not.
+    fn media_urls(&self, media_ids: &[String]) -> Result<Vec<Option<MediaImage>>> {
+        self.read("media_urls")?;
+        let mut s = self.state.lock().unwrap();
+        s.url_reads.push(media_ids.to_vec());
+        let mut answers = Vec::new();
+        for id in media_ids {
+            let held = s.files.iter().any(|f| &f.id == id)
+                || s.products
+                    .iter()
+                    .any(|p| p.media.iter().any(|m| &m.id == id));
+            if !held {
+                answers.push(None);
+                continue;
+            }
+            let n = {
+                let n = s.url_versions.entry(id.clone()).or_insert(0);
+                *n += 1;
+                *n
+            };
+            answers.push(Some(MediaImage {
+                id: id.clone(),
+                url: Some(fake_refreshed_url(id, n)),
+                bytes: s.media_bytes.get(id).copied(),
+            }));
+        }
+        Ok(answers)
     }
     fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>> {
         self.read("list_files_by_name")?;

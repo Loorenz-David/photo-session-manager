@@ -400,6 +400,24 @@ the Shopify adapter keeps the newest `extensions.cost.throttleStatus` of every a
 `CommerceAdapter::budget()` projects it (`projected`); background work checks `must_wait` (below 25 %), a press never
 does. The adapter also has `media_urls` (one `nodes(ids:)` query per 25 ids) and `fetch_original` (full size);
 downloads answer `Error::ImageGone` on 403/404 (`HttpTransport::download` returns the status).
+**Row pictures (H2, MC-H1).** One rule for every list and search answer, `RowPictures::row_picture` (read once per
+answer by `RemoteItems::row_pictures`, `Store::remote_covers` = one query for every session): main photo 1's
+adjusted preview if its file exists, else its original preview if its file exists, else, for a remote item whose
+cover picture (first gallery picture of the record) is not gone, `previews/remote/<item>/cover-<12 hex>.jpg` if it
+exists (`cover_pending` when it does not), else none. **No path whose file is missing is ever handed to the screen**
+(M-H4); without `with_remote` `SessionsService::list` applies the preview half only (`remote::local_picture`).
+**The queue:** `request_covers(CoverSource {Page, Search}, sessions)` replaces that source's not-started cover
+downloads with the pending ones and returns at once; `run_pending` takes them as one batch, at most
+`PARALLEL_DOWNLOADS` (4) at once (`std::thread::scope`), each `fetch_image(url, COVER_EDGE 320)` → `<name>.part` →
+rename → the item's other `cover-*.jpg` deleted → `AppEvent::PictureReady {Cover {session_id}, path}` (window event
+`picture_ready`). **Stale rule:** a download answering `ImageGone` is stale; after the batch, when `must_wait` allows
+(else kept for the next step: `Waiting` only when nothing else ran), the stale media ids not asked for in the last 10
+minutes (`REFRESH_COOLDOWN_MS`, monotonic, in memory) go to `media_urls` in chunks of 25; a found address is stored
+(`update_remote_urls`) and retried once, a missing one stores the picture as **gone** (empty URL: never downloaded
+again until the record is replaced) and puts the item on Health `remote_picture_gone` (`1 picture is no longer in the
+shop: <SKU>`); any other download error is logged only. The item leaves that Health item when its record is replaced
+(first-open read, Refresh from the shop) or its session is deleted (`forget_item`, which also removes
+`previews/remote/<item>/` and `previews/archived/<item>/`; no shop call).
 
 **Delete session (A17, owner 2026-11-18; Session Manager only, never Shopify).** Commands
 `session_delete_preview` / `session_delete` → `psm_integrations::session_delete` (when photos are filed
@@ -666,7 +684,7 @@ recorded stage of one run, optionally with another model, effort or instructions
 ## Persistence
 | Where | What |
 |---|---|
-| `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) · `templates/<template id>/<uuid>.jpg` (shooting-template examples) |
+| `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) · `templates/<template id>/<uuid>.jpg` (shooting-template examples) · `previews/remote/<item id>/cover-<12 hex of sha256(media id)>.jpg` (H2: a remote item's row picture, 320 px, one per item) · `previews/archived/<item id>/<role>-<NN>-<12 hex>.jpg` (P62: 1600 px remote pictures) |
 | Under the capture root (`<document folder>/Capture`) | item folders by `folder_key`; `.incoming/` (FTP parts, `sdk-<run>/`); `.duplicates/`; Capture One's own `CaptureOne/` and `Output/_session_manager/` |
 | SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 020_remote_items.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`, 016 container labels, 017 `session_changes` (A10: one row per counted change with its `kind` arrival/editor/app/auto and the `seq` it produced; read by `published_changes` for "Changed after publishing", pruned when a publish completes), 018 `saved_pages`, 019 `conversation_sync`/`conversations`/`conversation_messages`/`conversation_outbox` (C1; no session, item or photo column, so Delete session never touches them), 020 `item_retention.restored_at`/`remote_checked_at` and `archived_images.bytes` (H1: the record of remote pictures; `ALTER TABLE … ADD COLUMN`, so the `p27` rewind test drops them); 014, 015, 017 and 019 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
 | `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research), `conversations {server, sound, banner}` (C1; read live through `ConversationSettingsSlot`, the default server stored as none, never rebuilds the App). A file that does not parse never stops the app (health `settings_invalid`) |
@@ -677,7 +695,7 @@ recorded stage of one run, optionally with another model, effort or instructions
 `psm_core::events::AppEvent` → `EventHub` (integrations `lib.rs`) → `TauriEvents::emit` (desktop
 `lib.rs`) → Tauri event names: `session_changed`, `photo_added`, `photo_changed`, `publish_progress`,
 `export_progress`, `health_changed`, `camera_status_changed` (payload `CameraStatusResponse`),
-`camera_fingerprint_pending`, `history_changed`, `research_changed`, `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); plus `edit_menu` emitted by the menu handler. The UI
+`camera_fingerprint_pending`, `history_changed`, `research_changed`, `picture_ready {kind: 'cover' | 'search', session_id?, external_id?, path}` (H2; listener `onPictureReady`), `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); plus `edit_menu` emitted by the menu handler. The UI
 subscribes in `apps/desktop/src/services/events.ts` (and `history.ts`). Events are **not** in the
 specta builder: adding one means a new `AppEvent` variant, a new match arm in `TauriEvents`, and a
 listener in `events.ts`.

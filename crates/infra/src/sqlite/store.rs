@@ -2372,7 +2372,7 @@ impl Store for SqliteStore {
         base.into_iter().map(|(id,sku,item_type,title)| {
             let session = session(&conn, id)?;
             let non_deleted_missing_preview_count = conn.query_row("SELECT COUNT(*) FROM photos WHERE session_id=?1 AND classification<>'deleted' AND integrity<>'raw_missing' AND adjusted_preview_path IS NULL", [id], |r| r.get(0)).map_err(db)?;
-            let cover_preview_path = conn.query_row("SELECT COALESCE(adjusted_preview_path,original_preview_path) FROM photos WHERE session_id=?1 AND classification='main' AND position=1", [id], |r| r.get(0)).optional().map_err(db)?.flatten();
+            let (cover_adjusted_preview_path, cover_original_preview_path) = conn.query_row("SELECT adjusted_preview_path,original_preview_path FROM photos WHERE session_id=?1 AND classification='main' AND position=1", [id], |r| Ok((r.get(0)?, r.get(1)?))).optional().map_err(db)?.unwrap_or((None, None));
             let publish = latest_publish(&conn, id)?;
             let unresolved_conflicts = if let Some(latest) = &publish {
                 if latest.step == PublishStep::Held {
@@ -2384,7 +2384,7 @@ impl Store for SqliteStore {
                 None => (None,None,0,0),
             };
             let waiting_for_editor: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE kind='render_export' AND target=?1 AND status='running' AND error='waiting_for_editor')", [format!("session:{id}")], |r| r.get(0)).map_err(db)?;
-            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total,unresolved_conflicts,publish,waiting_for_editor })
+            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_adjusted_preview_path,cover_original_preview_path,latest_step,failed_step,uploaded,total,unresolved_conflicts,publish,waiting_for_editor })
         }).collect()
     }
 
@@ -3323,6 +3323,56 @@ impl Store for SqliteStore {
             .optional()
             .map_err(db)?;
         Ok(input.unwrap_or_default())
+    }
+    fn remote_covers(&self) -> Result<Vec<psm_core::mechanisms::remote::RemoteCover>> {
+        let conn = self.locked()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT s.id, i.id, i.sku, \
+                        r.cleared_at IS NOT NULL, \
+                        EXISTS(SELECT 1 FROM item_links l WHERE l.item_id=i.id AND l.integration=?1), \
+                        i.origin='linked', \
+                        (SELECT COUNT(*) FROM photos p WHERE p.session_id=s.id), \
+                        r.remote_checked_at IS NOT NULL, \
+                        (SELECT COUNT(*) FROM archived_images a WHERE a.item_id=i.id), \
+                        c.position, c.media_id, c.url, c.bytes \
+                 FROM sessions s JOIN items i ON i.id=s.item_id \
+                 LEFT JOIN item_retention r ON r.item_id=i.id \
+                 LEFT JOIN archived_images c ON c.item_id=i.id AND c.role='gallery' \
+                   AND c.position=(SELECT MIN(position) FROM archived_images m \
+                                   WHERE m.item_id=i.id AND m.role='gallery') \
+                 ORDER BY s.id",
+            )
+            .map_err(db)?;
+        stmt.query_map([psm_core::services::retention::INTEGRATION], |r| {
+            let cover = match r.get::<_, Option<i64>>(9)? {
+                Some(position) => Some(ArchivedImage {
+                    role: psm_core::services::retention::ROLE_GALLERY.into(),
+                    position,
+                    media_id: r.get(10)?,
+                    url: r.get(11)?,
+                    bytes: r.get(12)?,
+                }),
+                None => None,
+            };
+            Ok(psm_core::mechanisms::remote::RemoteCover {
+                session_id: r.get(0)?,
+                item_id: r.get(1)?,
+                sku: r.get(2)?,
+                input: RemoteInput {
+                    cleared: r.get::<_, Option<bool>>(3)?.unwrap_or(false),
+                    linked: r.get(4)?,
+                    adopted: r.get(5)?,
+                    photo_rows: r.get::<_, i64>(6)? as usize,
+                    checked: r.get::<_, Option<bool>>(7)?.unwrap_or(false),
+                    pictures: r.get::<_, i64>(8)? as usize,
+                },
+                cover,
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)
     }
     fn archived_images(&self, item_id: i64) -> Result<Vec<ArchivedImage>> {
         let conn = self.locked()?;

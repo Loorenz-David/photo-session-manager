@@ -1,11 +1,37 @@
 //! Pure rules of remote items (book 10H; master plan archive §4 "Pure rules", §5 MC-H5).
 
-use crate::domain::remote::{CallBudget, RemoteKind, RemoteState};
+use crate::domain::{
+    remote::{CallBudget, RemoteKind, RemoteState},
+    storage::ArchivedImage,
+};
 
 /// MC-H5.3: background work waits while the budget is below this share of its maximum.
 pub const BUDGET_FLOOR: f64 = 0.25;
 /// MC-H5.5: the most media ids asked for in one URL read.
 pub const URL_REFRESH_CHUNK: usize = 25;
+/// MC-H1.3: the most picture downloads running at the same time.
+pub const PARALLEL_DOWNLOADS: usize = 4;
+/// MC-H1.2: the long edge of a row picture (cover), in px.
+pub const COVER_EDGE: u32 = 320;
+/// MC-H1.4: a picture's address is not asked for again within this time (monotonic).
+pub const REFRESH_COOLDOWN_MS: u64 = 600_000;
+
+/// MC-H1.2: the cover cache file name of a remote picture,
+/// `cover-<first 12 hex of sha256(media_id)>.jpg`.
+pub fn cover_name(media_id: &str) -> String {
+    format!("cover-{}.jpg", hex_prefix(media_id, 12))
+}
+
+/// The first `chars` lowercase hex characters of the SHA-256 of `text`.
+fn hex_prefix(text: &str, chars: usize) -> String {
+    use sha2::Digest;
+    let mut hex: String = sha2::Sha256::digest(text.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    hex.truncate(chars);
+    hex
+}
 
 /// MC-H5.3: whether a background step must wait for the call budget. Waits only on a known
 /// budget with a positive maximum whose available part is below `BUDGET_FLOOR` of it.
@@ -32,6 +58,18 @@ pub struct RemoteInput {
     pub checked: bool,
     /// Rows of the item's record of remote pictures.
     pub pictures: usize,
+}
+
+/// What the row picture rule needs about one session's item besides its photos (MC-H1.1), read
+/// for every session in one read (`Store::remote_covers`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteCover {
+    pub session_id: i64,
+    pub item_id: i64,
+    pub sku: String,
+    pub input: RemoteInput,
+    /// The record's gallery picture with the lowest position (gone when its URL is empty).
+    pub cover: Option<ArchivedImage>,
 }
 
 /// MC-H3.1: cleared → archived; an adopted, linked item without photo rows is unknown until
@@ -149,6 +187,19 @@ mod tests {
 
     fn b(available: f64, maximum: f64) -> Option<CallBudget> {
         Some(CallBudget { available, maximum })
+    }
+
+    #[test]
+    fn h2_c5d_cover_name() {
+        use sha2::Digest;
+        let digest: String = sha2::Sha256::digest(b"gid://shopify/MediaImage/1001")
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert_eq!(
+            cover_name("gid://shopify/MediaImage/1001"),
+            format!("cover-{}.jpg", &digest[..12])
+        );
     }
 
     #[test]

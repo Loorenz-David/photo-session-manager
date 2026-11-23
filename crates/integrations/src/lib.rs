@@ -1191,6 +1191,7 @@ impl App {
             paths.root.join("previews"),
             clock.clone(),
             events.clone(),
+            health.clone(),
         ));
         let remote_background = run_startup.then(|| {
             let worker_stop = stop.clone();

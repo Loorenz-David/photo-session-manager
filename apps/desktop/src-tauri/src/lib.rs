@@ -1615,6 +1615,14 @@ struct PublishProgressPayload {
     uploaded: i64,
     total: i64,
 }
+/// H2 (master plan archive §4 Events): `picture_ready {kind: 'cover' | 'search', session_id?,
+/// external_id?, path}`.
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+struct PictureReadyPayload {
+    #[serde(flatten)]
+    target: psm_core::domain::remote::PictureTarget,
+    path: String,
+}
 impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
     fn emit(&self, event: AppEvent) {
         match event {
@@ -1722,6 +1730,11 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
             }
             AppEvent::HealthChanged => {
                 let _ = self.app.emit("health_changed", ());
+            }
+            AppEvent::PictureReady { target, path } => {
+                let _ = self
+                    .app
+                    .emit("picture_ready", PictureReadyPayload { target, path });
             }
             // C1: the toasts' words; C2: one chime, and a Mac banner per line while the main
             // window does not have the focus (09B §9).

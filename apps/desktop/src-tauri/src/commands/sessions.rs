@@ -326,7 +326,10 @@ pub struct SessionRowResponse {
     #[specta(type = specta_typescript::Number)]
     pub created_at: i64,
     pub arranged: bool,
+    /// MC-H1.1: never a path whose file is missing (M-H4).
     pub cover_preview_path: Option<String>,
+    /// MC-H1.1: the item is remote and its cover is being fetched (a `picture_ready` follows).
+    pub cover_pending: bool,
     pub publish: Option<LatestPublishResponse>,
     /// A10: why a published session is open again.
     pub changes: Option<PublishedChangesResponse>,
@@ -344,54 +347,57 @@ pub struct SessionListResponse {
     pub unassigned_count: i64,
 }
 
+impl From<psm_core::domain::session::SessionRow> for SessionRowResponse {
+    fn from(row: psm_core::domain::session::SessionRow) -> Self {
+        use psm_core::domain::session::{RowLabel, SessionStatus};
+        Self {
+            id: row.id,
+            sku: row.sku,
+            item_type: row.item_type,
+            title: row.title,
+            main_count: row.main_count,
+            condition_count: row.condition_count,
+            unreviewed_count: row.unreviewed_count,
+            status: match row.status {
+                SessionStatus::Publishing => SessionStatusResponse::Publishing,
+                SessionStatus::Failed => SessionStatusResponse::Failed,
+                SessionStatus::Published => SessionStatusResponse::Published,
+                SessionStatus::Ready => SessionStatusResponse::Ready,
+                SessionStatus::InProgress => SessionStatusResponse::InProgress,
+            },
+            label: match row.label {
+                RowLabel::WaitingForYou(n) => RowLabelResponse::WaitingForYou(n),
+                RowLabel::Publishing(p) => RowLabelResponse::Publishing(p),
+                RowLabel::PublishFailed => RowLabelResponse::PublishFailed,
+                RowLabel::PublishCancelled => RowLabelResponse::PublishCancelled,
+                RowLabel::DescriptionFailed => RowLabelResponse::DescriptionFailed,
+                RowLabel::Published => RowLabelResponse::Published,
+                RowLabel::Ready => RowLabelResponse::Ready,
+                RowLabel::InProgress(n) => RowLabelResponse::InProgress(n),
+                RowLabel::Archived => RowLabelResponse::Archived,
+                RowLabel::WaitingForEditor => RowLabelResponse::WaitingForEditor,
+            },
+            progress: row.progress,
+            last_activity_at: row.last_activity_at,
+            created_at: row.created_at,
+            arranged: row.arranged,
+            cover_preview_path: row.cover_preview_path,
+            cover_pending: row.cover_pending,
+            publish: row.publish.map(Into::into),
+            changes: row.changes.map(Into::into),
+        }
+    }
+}
+
 impl From<psm_core::domain::session::SessionList> for SessionListResponse {
     fn from(list: psm_core::domain::session::SessionList) -> Self {
-        use psm_core::domain::session::{RowLabel, SessionStatus};
         Self {
             groups: list
                 .groups
                 .into_iter()
                 .map(|group| SessionListGroupResponse {
                     label: group.label,
-                    rows: group
-                        .rows
-                        .into_iter()
-                        .map(|row| SessionRowResponse {
-                            id: row.id,
-                            sku: row.sku,
-                            item_type: row.item_type,
-                            title: row.title,
-                            main_count: row.main_count,
-                            condition_count: row.condition_count,
-                            unreviewed_count: row.unreviewed_count,
-                            status: match row.status {
-                                SessionStatus::Publishing => SessionStatusResponse::Publishing,
-                                SessionStatus::Failed => SessionStatusResponse::Failed,
-                                SessionStatus::Published => SessionStatusResponse::Published,
-                                SessionStatus::Ready => SessionStatusResponse::Ready,
-                                SessionStatus::InProgress => SessionStatusResponse::InProgress,
-                            },
-                            label: match row.label {
-                                RowLabel::WaitingForYou(n) => RowLabelResponse::WaitingForYou(n),
-                                RowLabel::Publishing(p) => RowLabelResponse::Publishing(p),
-                                RowLabel::PublishFailed => RowLabelResponse::PublishFailed,
-                                RowLabel::PublishCancelled => RowLabelResponse::PublishCancelled,
-                                RowLabel::DescriptionFailed => RowLabelResponse::DescriptionFailed,
-                                RowLabel::Published => RowLabelResponse::Published,
-                                RowLabel::Ready => RowLabelResponse::Ready,
-                                RowLabel::InProgress(n) => RowLabelResponse::InProgress(n),
-                                RowLabel::Archived => RowLabelResponse::Archived,
-                                RowLabel::WaitingForEditor => RowLabelResponse::WaitingForEditor,
-                            },
-                            progress: row.progress,
-                            last_activity_at: row.last_activity_at,
-                            created_at: row.created_at,
-                            arranged: row.arranged,
-                            cover_preview_path: row.cover_preview_path,
-                            publish: row.publish.map(Into::into),
-                            changes: row.changes.map(Into::into),
-                        })
-                        .collect(),
+                    rows: group.rows.into_iter().map(Into::into).collect(),
                 })
                 .collect(),
             counts: SessionListCountsResponse {
@@ -414,6 +420,7 @@ pub async fn sessions_list(
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<SessionListResponse, CommandError> {
         SessionsService::new(app.store.as_ref(), &SystemClock)
+            .with_remote(app.remote.as_ref())
             .list(filter.into(), query)
             .map(Into::into)
             .map_err(Into::into)
@@ -712,6 +719,7 @@ mod list_tests {
                     last_activity_at: 123,
                     created_at: 100,
                     cover_preview_path: Some("/cover.jpg".into()),
+                    cover_pending: false,
                     publish: None,
                     changes: None,
                     arranged: false,

@@ -2,7 +2,8 @@
 //! photos are filed into it (the same ordered switch as going back to the list, A10/A16), then the
 //! storage service sends its files to the Trash and removes its rows. Capture One not running, or
 //! not answering, never stops the delete: it is logged (`capture_one_result=`). Shopify is never
-//! asked anything (the owner's scope: Session Manager only).
+//! asked anything (the owner's scope: Session Manager only). The item's picture caches
+//! (`previews/remote/<item>/`, `previews/archived/<item>/`) go too (H2).
 //!
 //! Capture One's own collection for the folder is not removed through the dictionary: its only
 //! way is the generic `delete` on a session-folder collection, which the dictionary does not
@@ -12,7 +13,7 @@
 use crate::AppHandles;
 use psm_core::{
     Result,
-    ports::clock::SystemClock,
+    ports::{clock::SystemClock, store::Store},
     services::{
         sessions::{CAPTURE_TARGET_ORDER, SessionsService},
         storage::{DeletePreview, SessionDeleted},
@@ -26,6 +27,7 @@ pub fn preview(app: &AppHandles, session_id: i64) -> Result<DeletePreview> {
 
 pub fn delete(app: &AppHandles, session_id: i64) -> Result<SessionDeleted> {
     let preview = app.storage.delete_preview(session_id)?;
+    let item_id = app.store.session(session_id)?.session.item_id;
     let capture_one = if preview.active {
         let service = || {
             SessionsService::new(app.store.as_ref(), &SystemClock)
@@ -47,5 +49,13 @@ pub fn delete(app: &AppHandles, session_id: i64) -> Result<SessionDeleted> {
     } else {
         "not_needed".to_owned()
     };
-    app.storage.delete_session(session_id, &capture_one)
+    let deleted = app.storage.delete_session(session_id, &capture_one)?;
+    // H2 (M-H5, 10H §9): the item's picture caches on this Mac go with its row; no shop call.
+    if let Some(item_id) = item_id
+        && app.store.item(item_id).is_err()
+        && let Err(error) = app.remote.forget_item(item_id)
+    {
+        tracing::warn!(%error, item = item_id, "session.delete picture caches kept");
+    }
+    Ok(deleted)
 }

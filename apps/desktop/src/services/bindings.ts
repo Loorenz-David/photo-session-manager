@@ -2208,7 +2208,10 @@ export type SessionRowResponse_Deserialize = {
 	/**  Changelog 46 (1): the list's order, time groups and time filter. */
 	created_at: number,
 	arranged: boolean,
+	/**  MC-H1.1: never a path whose file is missing (M-H4). */
 	cover_preview_path?: string | null,
+	/**  MC-H1.1: the item is remote and its cover is being fetched (a `picture_ready` follows). */
+	cover_pending: boolean,
 	publish?: LatestPublishResponse_Deserialize | null,
 	/**  A10: why a published session is open again. */
 	changes?: PublishedChangesResponse | null,
@@ -2229,7 +2232,10 @@ export type SessionRowResponse_Serialize = {
 	/**  Changelog 46 (1): the list's order, time groups and time filter. */
 	created_at: number,
 	arranged: boolean,
+	/**  MC-H1.1: never a path whose file is missing (M-H4). */
 	cover_preview_path: string | null,
+	/**  MC-H1.1: the item is remote and its cover is being fetched (a `picture_ready` follows). */
+	cover_pending: boolean,
 	publish: LatestPublishResponse_Serialize | null,
 	/**  A10: why a published session is open again. */
 	changes: PublishedChangesResponse | null,
