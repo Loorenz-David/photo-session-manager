@@ -31,9 +31,9 @@ criteria. Each milestone needs the one before approved (its `depends_on`), gate 
 file. Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list.
 
-## 2A. ⚠ OWNER DECISIONS REQUIRED (1)
+## 2A. Owner decisions (1, answered 2026-11-23)
 
-**Card 1 — When does the Labels box show its number?**
+**Card 1 — When does the Labels box show its number?** **Answered 2026-11-23: Yes, as soon as the list opens** (the owner chose the recommendation; the plans stand as written).
 - **Question:** Should the Labels box show its number as soon as the Sessions list opens (yes), or only after you
   have gone into the box once (no)?
 - **Story:** You start Session Manager in the morning. Pricing holds 12 priced products without a label. With "no",

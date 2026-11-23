@@ -4,7 +4,6 @@ title: The Labels box — a fourth box in the sessions list shows the products w
 difficulty: normal
 projection: no
 depends_on: [L1_labels_provider_and_marker]
-blocked_on: owner card 1 (master_plan_labels.md §2A)
 ---
 # L2 — The Labels box
 
