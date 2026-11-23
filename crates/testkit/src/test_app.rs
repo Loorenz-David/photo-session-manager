@@ -1,6 +1,7 @@
 use crate::clock::ManualClock;
 use crate::fake_capture_one::FakeCaptureOneScripting;
 use crate::fake_commerce::FakeCommerce;
+use crate::fake_label_files::FakeLabelFiles;
 use crate::fake_pricing::FakePricing;
 use crate::fake_processes::FakeProcessList;
 use crate::fake_secrets::FakeSecrets;
@@ -49,6 +50,9 @@ pub struct TestApp {
     pub trash: Arc<FakeTrash>,
     /// C1: the fake Pricing server behind the conversations adapter (`with_pricing…` only).
     pub pricing: Option<Arc<FakePricing>>,
+    /// L3: the label files (previews and saved PDFs, under the test's own folder; never `sips`
+    /// nor `open`), installed in every constructor.
+    pub label_files: Arc<FakeLabelFiles>,
     next_hook: AtomicU64,
 }
 
@@ -646,6 +650,12 @@ impl TestApp {
         }
         let trash = Arc::new(FakeTrash::new(dir.path().join("Trash")));
         psm_integrations::with_test_trash(&paths, trash.clone());
+        // L3: the label files live under the test's folder (its home is the temporary folder).
+        let label_files = Arc::new(FakeLabelFiles::new(
+            paths.root.join("previews"),
+            paths.home.join(psm_integrations::labels::LABELS_FOLDER),
+        ));
+        psm_integrations::labels::with_test_label_files(&paths, label_files.clone());
         let secrets = Arc::new(FakeSecrets::default());
         if !secret_cache_enabled {
             secrets.disable_cache();
@@ -694,6 +704,7 @@ impl TestApp {
             research,
             trash,
             pricing,
+            label_files,
             next_hook: AtomicU64::new(1),
         })
     }
@@ -734,6 +745,10 @@ impl TestApp {
     /// C1: the fake Pricing server (`with_pricing…` apps only).
     pub fn fake_pricing(&self) -> &FakePricing {
         self.pricing.as_deref().expect("fake Pricing configured")
+    }
+    /// L3: the fake label files of this app.
+    pub fn label_files(&self) -> &FakeLabelFiles {
+        &self.label_files
     }
     pub fn fake_shop(&self) -> &FakeCommerce {
         self.commerce.as_deref().expect("fake commerce configured")

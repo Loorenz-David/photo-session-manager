@@ -3,6 +3,7 @@ pub mod collecting_sink;
 pub mod fake_capture_one;
 pub mod fake_commerce;
 pub mod fake_direct_camera;
+pub mod fake_label_files;
 pub mod fake_pricing;
 pub mod fake_processes;
 pub mod fake_secrets;

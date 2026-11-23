@@ -45,6 +45,7 @@ function pricing(connection: Partial<ConversationsSettings['connection']> = {}):
   return {
     server: DEFAULT_SERVER, server_default: DEFAULT_SERVER, key_saved: true, sound: true, banner: true,
     connection: { state: 'ready', store_name: 'Beyo Vintage', shop: SHOP, visible_stores: [], last_ok_at: null, last_error: null, last_error_at: null, ...connection },
+    labels: 'off',
   };
 }
 

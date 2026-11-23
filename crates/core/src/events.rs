@@ -64,6 +64,12 @@ pub enum AppEvent {
         chime: bool,
         banner: bool,
     },
+    /// L1 (`master_plan_labels.md` §4 Event): `product_ids` = the products whose display copy
+    /// changed (first-appearance order); `access` = the labels access changed (re-read it).
+    LabelsChanged {
+        product_ids: Vec<String>,
+        access: bool,
+    },
 }
 
 /// `export_progress.state` (master plan §6.7).

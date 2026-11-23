@@ -1,0 +1,57 @@
+---
+plan: L1_labels_provider_and_marker
+role: implement
+round: 1
+date: 2026-11-23
+---
+# Implement phase L1_labels_provider_and_marker
+
+Repository root: `/Users/davidloorenz/Desktop/Developer/Photo-Session-Manager-agentic` (your working directory). Read first, in this order:
+1. `docs/process/flow.md` — the project's flow; it wins over your doctrine where they differ.
+2. `docs/implementation/master_plan.md` — naming registry, environment topology (exact build and
+   test commands), standing rules.
+3. `docs/intention/intention.md`, then `docs/intention/book/01_objective_and_constraints.md` and
+   `docs/intention/book/14_measurement_ledger.md`, then every chapter the plan file names.
+4. `/Users/davidloorenz/Desktop/Developer/Photo-Session-Manager-agentic/docs/implementation/plans/L1_labels_provider_and_marker.md` — your task list and acceptance criteria. **The plan file wins over this prompt.**
+
+**Gate.** The intention header reads RATIFIED; the master plan tracker (or the tracker the plan
+file names) shows every phase in `depends_on` APPROVED and L1_labels_provider_and_marker not yet APPROVED. Otherwise
+stop with `STATE: BLOCKED`.
+
+**A plan made of units (flow.md §10).** If the plan file has `## Unit` sections, work the units in
+their order. After each unit: run that unit's **Unit test commands**, then make a
+`CHECKPOINT (not approved):` commit of that unit's paths before starting the next. The plan's
+**Closing gate** section replaces the closing gate described below, and its per-unit commands
+replace the per-phase test command. The handoff lists every unit's checkpoint SHA in order.
+
+**Build the phase.** Stay inside the plan's file perimeter; nothing from other phases. Use the
+exact names in the registry. Mechanism contracts from the intention are implemented verbatim.
+
+**Tests (flow.md §4).** One behavioural test per criterion row at the boundary the row names,
+asserting the exact outcome. Unit tests only for the plan's **Core mechanisms** list. Nothing
+that asserts internals.
+
+**Test runs (flow.md §4A; the full Rust suite takes about 9 minutes warm on this Mac, more right after a rebuild).** While working, run
+only this phase's test module (`cargo test -p psm-testkit --test suite <stem>::`), the unit tests of the
+module you changed, and the UI test files you touched (`npx vitest run <files>`); use
+`cargo check -p <crate>` to see compile errors. Run the whole closing gate (suite, clippy, fmt,
+typecheck, `npm test`) **exactly once**, at the very end, one command after the other. If it shows
+a failure, fix it and re-run **only the failing test files**, not the whole suite. Never run two
+cargo commands at the same time, never in the background, never piped into `head` (a cut pipe
+can leave cargo holding the build lock).
+
+**Hardware (flow.md §6A).** You may trigger real captures through Capture One's `capture`
+command to check behaviour by hand; the test suite itself never requires the camera or Capture One.
+
+**Judgment calls (flow.md §6).** Where the plan leaves a choice open, take the smallest option
+consistent with the intention chapter the plan cites and record it under **Assumptions** in the
+handoff. Never stop to ask. `BLOCKED` only for a plan/intention contradiction or an impossible task.
+
+**Close.** Suite, lint and typecheck green (pre-existing failures named); tracker row for
+L1_labels_provider_and_marker → `IMPLEMENTED` (date, actor `codex`, one line); Review log entry in the plan file
+(what you built, assumptions, deviations); the checkpoint commit (wrapper rules); the handoff at
+`/Users/davidloorenz/Desktop/Developer/Photo-Session-Manager-agentic/docs/implementation/handoffs/implementer/handoff_L1_labels_provider_and_marker_implement_r1.md` with frontmatter `plan: L1_labels_provider_and_marker`, `role: implement`, `round: 1`,
+`state`, `date`, `actor` and these sections: **What was built** (product terms first) · **Tests →
+criterion rows** · **Assumptions** · **Deviations** · **Files changed** · **Checkpoint SHA** ·
+**Stamp** (command, result) · **Manual try-out** (how the owner can see it work, steps) ·
+`⚠ OWNER DECISIONS REQUIRED (n)` (or one line: none).

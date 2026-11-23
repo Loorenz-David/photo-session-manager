@@ -8,10 +8,13 @@
 use super::transport::{HttpReply, Method, PricingHttp, PricingRequest};
 use super::types;
 use psm_core::{
-    domain::conversation::{
-        Attachment, Author, AuthorKind, Conversation, ConversationStatus, EventKind, EventPage,
-        Message, NewMessage, ProviderError, ProviderEvent, ProviderStore, Quote, ReplyRef,
-        ResolvedBy,
+    domain::{
+        conversation::{
+            Attachment, Author, AuthorKind, Conversation, ConversationStatus, EventKind, EventPage,
+            Message, NewMessage, ProviderError, ProviderEvent, ProviderStore, Quote, ReplyRef,
+            ResolvedBy,
+        },
+        label::{LabelChange, LabelChangeKind},
     },
     ports::conversations::{ConversationsProvider, ProviderResult},
 };
@@ -26,9 +29,9 @@ type ServerFn = Box<dyn Fn() -> String + Send + Sync>;
 type KeyFn = Box<dyn Fn() -> Option<String> + Send + Sync>;
 
 pub struct BeyoPricingAdapter {
-    http: Arc<dyn PricingHttp>,
-    server: ServerFn,
-    key: KeyFn,
+    pub(super) http: Arc<dyn PricingHttp>,
+    pub(super) server: ServerFn,
+    pub(super) key: KeyFn,
 }
 
 impl BeyoPricingAdapter {
@@ -58,7 +61,7 @@ impl BeyoPricingAdapter {
             .map_err(|error| ProviderError::Unreachable(error.to_string()))
     }
 
-    fn store_path(store_id: &str) -> String {
+    pub(super) fn store_path(store_id: &str) -> String {
         format!("/stores/{}", encode(store_id))
     }
 
@@ -68,7 +71,7 @@ impl BeyoPricingAdapter {
 }
 
 /// Percent-encodes one path segment (RFC 3986 unreserved characters kept).
-fn encode(segment: &str) -> String {
+pub(super) fn encode(segment: &str) -> String {
     let mut out = String::new();
     for b in segment.bytes() {
         match b {
@@ -218,8 +221,34 @@ fn conversation(
     }))
 }
 
+/// MC-L4.1: a `label.printed` / `label.reset` event's change; the product is `data.productId`,
+/// else the envelope's `productId`; neither → none (the event is `Other`).
+fn label_change(wire: &types::StoreEvent, at: i64) -> Option<EventKind> {
+    let data = &wire.data;
+    let product_id = data
+        .get("productId")
+        .and_then(Json::as_str)
+        .or(wire.product_id.as_deref())
+        .filter(|id| !id.is_empty())?
+        .to_owned();
+    let kind = match wire.kind.as_str() {
+        "label.printed" => LabelChangeKind::Printed {
+            price_minor: data.get("priceMinor").and_then(Json::as_i64),
+        },
+        "label.reset" => LabelChangeKind::Reset {
+            reason: super::labels::reset_reason(data.get("reason").and_then(Json::as_str)),
+        },
+        _ => return None,
+    };
+    Some(EventKind::Label(LabelChange {
+        product_id,
+        at,
+        kind,
+    }))
+}
+
 fn event(wire: types::StoreEvent) -> ProviderResult<ProviderEvent> {
-    time(&wire.at)?;
+    let at = time(&wire.at)?;
     let data = &wire.data;
     let text = |key: &str| data.get(key).and_then(Json::as_str);
     let conversation_id = wire
@@ -238,9 +267,10 @@ fn event(wire: types::StoreEvent) -> ProviderResult<ProviderEvent> {
         },
         "message.updated" => EventKind::MessageUpdated,
         "message.deleted" => EventKind::MessageDeleted,
+        "label.printed" | "label.reset" => label_change(&wire, at).unwrap_or(EventKind::Other),
         _ => EventKind::Other,
     };
-    let for_us = kind != EventKind::Other
+    let for_us = !matches!(kind, EventKind::Other | EventKind::Label(_))
         && conversation_id.is_some()
         && text("recipient") == Some(RECIPIENT);
     Ok(ProviderEvent {
@@ -392,12 +422,84 @@ impl ConversationsProvider for BeyoPricingAdapter {
     }
 }
 
+/// The adapter tests' recording transport, shared with the label tests (`labels.rs`).
+#[cfg(test)]
+pub(super) mod testing {
+    use super::super::transport::{HttpReply, PricingHttp, PricingRequest, RawReply};
+    use psm_core::{Error, Result};
+    use serde_json::Value as Json;
+    use std::{collections::VecDeque, sync::Mutex, time::Duration};
+
+    /// Replays the queued replies in order and records every request (`send` and `fetch` each
+    /// have their own queue and record).
+    #[derive(Default)]
+    pub struct Recording {
+        replies: Mutex<VecDeque<Result<HttpReply>>>,
+        requests: Mutex<Vec<PricingRequest>>,
+        raw_replies: Mutex<VecDeque<Result<RawReply>>>,
+        fetches: Mutex<Vec<(PricingRequest, Duration)>>,
+    }
+    impl Recording {
+        pub fn reply(&self, status: u16, body: Json) -> &Self {
+            self.replies
+                .lock()
+                .unwrap()
+                .push_back(Ok(HttpReply::new(status, body)));
+            self
+        }
+        pub fn fail(&self, error: Error) -> &Self {
+            self.replies.lock().unwrap().push_back(Err(error));
+            self
+        }
+        /// Queues a `fetch` answer.
+        pub fn raw(&self, status: u16, content_type: Option<&str>, bytes: &[u8]) -> &Self {
+            self.raw_replies.lock().unwrap().push_back(Ok(RawReply {
+                status,
+                content_type: content_type.map(str::to_owned),
+                bytes: bytes.to_vec(),
+            }));
+            self
+        }
+        /// Queues a `fetch` transport failure.
+        pub fn raw_fail(&self, error: Error) -> &Self {
+            self.raw_replies.lock().unwrap().push_back(Err(error));
+            self
+        }
+        /// The requests made through `send`.
+        pub fn requests(&self) -> Vec<PricingRequest> {
+            self.requests.lock().unwrap().clone()
+        }
+        /// The requests made through `fetch`, each with its time-out.
+        pub fn fetches(&self) -> Vec<(PricingRequest, Duration)> {
+            self.fetches.lock().unwrap().clone()
+        }
+    }
+    impl PricingHttp for Recording {
+        fn send(&self, request: PricingRequest) -> Result<HttpReply> {
+            self.requests.lock().unwrap().push(request);
+            self.replies
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("a queued reply")
+        }
+        fn fetch(&self, request: PricingRequest, timeout: Duration) -> Result<RawReply> {
+            self.fetches.lock().unwrap().push((request, timeout));
+            self.raw_replies
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("a queued raw reply")
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::testing::Recording;
     use super::*;
-    use psm_core::{Error, Result};
+    use psm_core::Error;
     use serde_json::json;
-    use std::{collections::VecDeque, sync::Mutex};
 
     const STORES: &str = include_str!("fixtures/stores.json");
     const CASES_LIST: &str = include_str!("fixtures/cases_list.json");
@@ -412,39 +514,6 @@ mod tests {
     const MESSAGE_ID: &str = "9c2d4e6f-1a3b-4c5d-8e7f-0a1b2c3d4e5f";
     /// 2026-11-20T08:12:03.512Z
     const CREATED_MS: i64 = 1_795_162_323_512;
-
-    /// Replays the queued replies in order and records every request.
-    #[derive(Default)]
-    struct Recording {
-        replies: Mutex<VecDeque<Result<HttpReply>>>,
-        requests: Mutex<Vec<PricingRequest>>,
-    }
-    impl Recording {
-        fn reply(&self, status: u16, body: Json) -> &Self {
-            self.replies
-                .lock()
-                .unwrap()
-                .push_back(Ok(HttpReply::new(status, body)));
-            self
-        }
-        fn fail(&self, error: Error) -> &Self {
-            self.replies.lock().unwrap().push_back(Err(error));
-            self
-        }
-        fn requests(&self) -> Vec<PricingRequest> {
-            self.requests.lock().unwrap().clone()
-        }
-    }
-    impl PricingHttp for Recording {
-        fn send(&self, request: PricingRequest) -> Result<HttpReply> {
-            self.requests.lock().unwrap().push(request);
-            self.replies
-                .lock()
-                .unwrap()
-                .pop_front()
-                .expect("a queued reply")
-        }
-    }
 
     fn fixture(text: &str) -> Json {
         serde_json::from_str(text).unwrap()

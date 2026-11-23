@@ -30,13 +30,14 @@ use crate::{
             SyncRecord,
         },
         events::EventSink,
+        labels::LabelsLink,
         secrets::SecretStore,
     },
 };
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard, Weak},
 };
 
 /// Events asked per page (the package's maximum).
@@ -249,6 +250,8 @@ pub struct ConversationsService {
     events: Arc<dyn EventSink>,
     lane: Arc<ConversationsLane>,
     memory: Mutex<Memory>,
+    /// L1: what is told to the labels service (absent = nothing is told).
+    labels_link: Mutex<Option<Weak<dyn LabelsLink>>>,
 }
 
 /// A conversation of the copy with its session (none = "Not on this Mac").
@@ -372,7 +375,22 @@ impl ConversationsService {
             events,
             lane,
             memory: Mutex::new(Memory::default()),
+            labels_link: Mutex::new(None),
         }
+    }
+
+    /// L1 (`master_plan_labels.md` §4 Ports `LabelsLink`): set once by the labels wiring. A
+    /// `Weak`, so neither service keeps the other alive.
+    pub fn set_labels_link(&self, link: Weak<dyn LabelsLink>) {
+        *self.labels_link.lock().unwrap_or_else(|e| e.into_inner()) = Some(link);
+    }
+
+    fn labels_link(&self) -> Option<Arc<dyn LabelsLink>> {
+        self.labels_link
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .and_then(Weak::upgrade)
     }
 
     fn memory(&self) -> MutexGuard<'_, Memory> {
@@ -486,6 +504,10 @@ impl ConversationsService {
 
     /// MC-C1.3: stores the key (trimmed; empty = remove), holds it in memory, then connects.
     pub fn key_set(&self, key: Option<&str>) -> std::result::Result<Connection, ConnectError> {
+        // ACC.3: the labels access of the old key is forgotten before anything else.
+        if let Some(link) = self.labels_link() {
+            link.key_changed();
+        }
         let before = self.connection()?.state;
         let after = match key.map(str::trim).filter(|k| !k.is_empty()) {
             None => {
@@ -565,6 +587,12 @@ impl ConversationsService {
             connection.state.as_str(),
             if connection.state == ConnectionState::Ready { "yes" } else { "no" }
         );
+        // ACC.2: told after the lane was left (its templates read never holds the pull).
+        if connection.state == ConnectionState::Ready
+            && let Some(link) = self.labels_link()
+        {
+            link.connected();
+        }
         Ok(connection)
     }
 
@@ -781,8 +809,25 @@ impl ConversationsService {
             .retain(|m| m.conversation_id != conversation_id);
     }
 
-    /// MC-C1.6: one page of the pull.
+    /// MC-C1.6: one page of the pull. MC-L4.3: the page's label changes are handed to the labels
+    /// service once, on every way out (their cursor has already moved).
     fn pull(&self, store_id: &str, now: i64) -> std::result::Result<Tick, Stop> {
+        let mut labels = Vec::new();
+        let outcome = self.pull_page(store_id, now, &mut labels);
+        if !labels.is_empty()
+            && let Some(link) = self.labels_link()
+        {
+            link.changed(&labels);
+        }
+        outcome
+    }
+
+    fn pull_page(
+        &self,
+        store_id: &str,
+        now: i64,
+        labels: &mut Vec<crate::domain::label::LabelChange>,
+    ) -> std::result::Result<Tick, Stop> {
         let (page, mut cursor) = self.in_lane(store_id, None, |s| {
             let cursor = s.cursor.unwrap_or(0);
             Ok((
@@ -807,6 +852,11 @@ impl ConversationsService {
                         Ok(self.store.set_cursor(event.id)?)
                     })?;
                     cursor = Some(event.id);
+                    // MC-L4.2: a label event moves the cursor like any event not for us, and
+                    // its change joins the page's list (never a mark, never "applied").
+                    if let EventKind::Label(change) = &event.kind {
+                        labels.push(change.clone());
+                    }
                     continue;
                 }
             };

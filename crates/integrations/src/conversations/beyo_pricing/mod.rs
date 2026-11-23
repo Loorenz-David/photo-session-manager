@@ -4,6 +4,8 @@
 //! knows its addresses, its wire words and its sentences.
 
 pub mod adapter;
+pub mod label_types;
+pub mod labels;
 pub mod transport;
 pub mod types;
 

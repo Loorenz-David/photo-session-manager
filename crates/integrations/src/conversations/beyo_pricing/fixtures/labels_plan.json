@@ -1,0 +1,61 @@
+{
+  "_source": "schema-grounded: openapi-integration.json IntegrationPlan + IntegrationPlanItem + UnresolvedItem + API.md example; values neutral; not captured",
+  "items": [
+    {
+      "position": 0,
+      "sku": "TEST-1802",
+      "productId": "15531808096409",
+      "title": "Test table",
+      "productType": "Test tables",
+      "template": { "id": "tpl-1", "name": "Label 70×100", "widthMm": 70, "heightMm": 100, "source": "assignment" },
+      "hasPrice": true,
+      "priceMinor": 890000,
+      "labelStatus": "notPrinted",
+      "labelPrintedAt": null,
+      "outcome": "markPrinted",
+      "issues": [],
+      "notes": []
+    },
+    {
+      "position": 1,
+      "sku": "TEST-1878",
+      "productId": "15531808096410",
+      "title": "Test chair",
+      "productType": "Test chairs",
+      "template": { "id": "tpl-1", "name": "Label 70×100", "widthMm": 70, "heightMm": 100, "source": "assignment" },
+      "hasPrice": false,
+      "priceMinor": null,
+      "labelStatus": "notPrinted",
+      "labelPrintedAt": null,
+      "outcome": "noPrice",
+      "issues": [],
+      "notes": []
+    },
+    {
+      "position": 2,
+      "sku": "TEST-1808",
+      "productId": "15531808096411",
+      "title": "Test lamp",
+      "productType": "Test lamps",
+      "template": { "id": "tpl-1", "name": "Label 70×100", "widthMm": 70, "heightMm": 100, "source": "default" },
+      "hasPrice": true,
+      "priceMinor": 120000,
+      "labelStatus": "notPrinted",
+      "labelPrintedAt": null,
+      "outcome": "fail",
+      "issues": [
+        { "code": "missing_code_value", "message": "Barcode: The product's variant has no barcode in Shopify." }
+      ],
+      "notes": []
+    }
+  ],
+  "unresolved": [
+    {
+      "sku": "NOPE",
+      "productId": null,
+      "error": { "code": "sku_not_found", "message": "No product with SKU 'NOPE' in this store.", "details": null }
+    }
+  ],
+  "summary": { "items": 3, "ready": 2, "failing": 1, "markPrinted": 1, "reprint": 0, "noPrice": 1 },
+  "sizes": [ { "widthMm": 70, "heightMm": 100, "count": 2 } ]
+}

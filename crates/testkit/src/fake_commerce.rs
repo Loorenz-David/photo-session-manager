@@ -293,6 +293,36 @@ impl FakeCommerce {
         });
         id
     }
+    /// L1: a shop product with the given external id (e.g. `gid://shopify/Product/<digits>`, the
+    /// form whose labels-provider product id is known).
+    pub fn add_product_with_id(
+        &self,
+        external_id: &str,
+        sku: &str,
+        title: &str,
+        barcode: Option<&str>,
+    ) -> String {
+        let mut s = self.state.lock().unwrap();
+        s.products.push(RemoteItem {
+            external_id: external_id.into(),
+            title: title.into(),
+            item_type: None,
+            sku: Some(sku.into()),
+            barcode: barcode.map(Into::into),
+            thumbnail_url: None,
+            media: Vec::new(),
+        });
+        external_id.into()
+    }
+    /// L2: a shop product with the given external id and no SKU.
+    pub fn add_product_without_sku(&self, external_id: &str, title: &str) -> String {
+        let id = self.add_product_with_id(external_id, "", title, None);
+        let mut s = self.state.lock().unwrap();
+        if let Some(product) = s.products.iter_mut().find(|p| p.external_id == id) {
+            product.sku = None;
+        }
+        id
+    }
     /// WC8: sets the product's search texts as the shop holds them (`None` = unset).
     pub fn set_seo(&self, id: &str, title: Option<&str>, description: Option<&str>) {
         self.state.lock().unwrap().seo.insert(

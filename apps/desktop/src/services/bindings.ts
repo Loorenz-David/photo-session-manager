@@ -213,6 +213,39 @@ export const commands = {
 	conversationsSettingsSave: (patch: ConversationsSettingsPatchDto_Deserialize) => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_settings_save", { patch })),
 	conversationsKeySet: (key: string) => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_key_set", { key })),
 	conversationsTest: () => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_test")),
+	/**
+	 *  The label markers of `session_ids` (in that order), with the labels access. `refresh` asks
+	 *  Pricing for products without a fresh answer; without it only what this Mac already knows is
+	 *  answered.
+	 */
+	labelsStatus: (sessionIds: CommandId[], refresh: boolean) => typedError<LabelsStatusDto_Serialize, CommandError>(__TAURI_INVOKE("labels_status", { sessionIds, refresh })),
+	/**  One page of the Labels box (25 rows) for the filter, the search and the cursor of the page. */
+	labelsList: (filter: LabelFilterDto, query: string | null, cursor: string | null) => typedError<LabelPageDto_Serialize, CommandError>(__TAURI_INVOKE("labels_list", { filter, query, cursor })),
+	/**  The Labels box's number; `refresh` asks Pricing when the remembered number is not fresh. */
+	labelsSummary: (refresh: boolean) => typedError<LabelsSummaryDto_Serialize, CommandError>(__TAURI_INVOKE("labels_summary", { refresh })),
+	/**  Every product of the filter and the search that has a SKU (Select all N). */
+	labelsSelectAll: (filter: LabelFilterDto, query: string | null) => typedError<SelectedDto[], CommandError>(__TAURI_INVOKE("labels_select_all", { filter, query })),
+	/**  The session a Labels row opens (an unmatched product is adopted from the shop first). */
+	labelsOpen: (productId: string) => typedError<LabelsOpenDto, CommandError>(__TAURI_INVOKE("labels_open", { productId })),
+	/**
+	 *  What generating the labels of these products would do (changes nothing); a bigger selection
+	 *  is checked in chunks and shown as one.
+	 */
+	labelsCheck: (productIds: string[]) => typedError<LabelCheckDto_Serialize, CommandError>(__TAURI_INVOKE("labels_check", { productIds })),
+	/**  The preview picture of one product of the check. */
+	labelsPreview: (checkId: string, productId: string) => typedError<LabelPreviewDto, CommandError>(__TAURI_INVOKE("labels_preview", { checkId, productId })),
+	/**
+	 *  Generates the labels of the check's ready products (Generate PDF / Reprint PDF; Try again
+	 *  continues where it stopped).
+	 */
+	labelsGenerate: (checkId: string) => typedError<LabelRunResultDto_Serialize, CommandError>(__TAURI_INVOKE("labels_generate", { checkId })),
+	/**  The result over what was generated so far (leaving the dialog after a failed Generate). */
+	labelsPartial: (checkId: string) => typedError<LabelRunResultDto_Serialize, CommandError>(__TAURI_INVOKE("labels_partial", { checkId })),
+	/**
+	 *  Saves one label file of the result in Documents › Session Manager Labels and opens it in
+	 *  Preview.
+	 */
+	labelsDownload: (checkId: string, artifactId: string) => typedError<SavedLabelDto, CommandError>(__TAURI_INVOKE("labels_download", { checkId, artifactId })),
 	/**  The panel's rows from the local copy (never waits on the network). */
 	conversationsList: (scope: ConversationScopeDto, tab: ConversationTabDto) => typedError<ConversationListDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_list", { scope, tab })),
 	/**  The header count for the session on screen (`session_id` null = all). */
@@ -626,6 +659,64 @@ export type CaptureResponse = {
 	capture_id: string,
 };
 
+/**  One group of the check (`template` null = the products without a template, always last). */
+export type CheckGroupDto = CheckGroupDto_Serialize | CheckGroupDto_Deserialize;
+
+/**  One group of the check (`template` null = the products without a template, always last). */
+export type CheckGroupDto_Deserialize = {
+	template?: PlanTemplateDto | null,
+	product_types: string[],
+	items: CheckItemDto_Deserialize[],
+};
+
+/**  One group of the check (`template` null = the products without a template, always last). */
+export type CheckGroupDto_Serialize = {
+	template: PlanTemplateDto | null,
+	product_types: string[],
+	items: CheckItemDto_Serialize[],
+};
+
+/**  One product of the check, with what will happen to it and Pricing's messages as given. */
+export type CheckItemDto = CheckItemDto_Serialize | CheckItemDto_Deserialize;
+
+/**  One product of the check, with what will happen to it and Pricing's messages as given. */
+export type CheckItemDto_Deserialize = {
+	product_id: string,
+	sku?: string | null,
+	title?: string | null,
+	price_minor?: number | null,
+	status: LabelStatusDto,
+	printed_at?: number | null,
+	outcome: CheckOutcomeDto,
+	issues: string[],
+	notes: string[],
+};
+
+/**  One product of the check, with what will happen to it and Pricing's messages as given. */
+export type CheckItemDto_Serialize = {
+	product_id: string,
+	sku: string | null,
+	title: string | null,
+	price_minor: number | null,
+	status: LabelStatusDto,
+	printed_at: number | null,
+	outcome: CheckOutcomeDto,
+	issues: string[],
+	notes: string[],
+};
+
+/**  What generating will do to one product: `mark_printed`, `reprint`, `no_price`, `fail`. */
+export type CheckOutcomeDto = "mark_printed" | "reprint" | "no_price" | "fail";
+
+export type CheckSummaryDto = {
+	items: number,
+	ready: number,
+	failing: number,
+	mark_printed: number,
+	reprint: number,
+	no_price: number,
+};
+
 export type CommandError = {
 	code: string,
 	message: string,
@@ -958,6 +1049,11 @@ export type ConversationsSettingsDto_Deserialize = {
 	sound: boolean,
 	banner: boolean,
 	connection: ConnectionDto_Deserialize,
+	/**
+	 *  L1 (09C §4): whether the saved key may read labels (`off` while the connection is not
+	 *  ready).
+	 */
+	labels: LabelsAccessStateDto,
 };
 
 /**  Settings → Pricing. `key_saved` only: the key itself never leaves the Keychain. */
@@ -969,6 +1065,11 @@ export type ConversationsSettingsDto_Serialize = {
 	sound: boolean,
 	banner: boolean,
 	connection: ConnectionDto_Serialize,
+	/**
+	 *  L1 (09C §4): whether the saved key may read labels (`off` while the connection is not
+	 *  ready).
+	 */
+	labels: LabelsAccessStateDto,
 };
 
 /**  The fields to save; the others are kept. `server: ""` returns to the default address. */
@@ -1328,6 +1429,246 @@ export type KeyDecisionDto = {
 	decision: string,
 };
 
+/**  The check dialog's content; `id` names the check for preview, generate and download. */
+export type LabelCheckDto = LabelCheckDto_Serialize | LabelCheckDto_Deserialize;
+
+/**  The check dialog's content; `id` names the check for preview, generate and download. */
+export type LabelCheckDto_Deserialize = {
+	id: string,
+	groups: CheckGroupDto_Deserialize[],
+	unresolved: UnresolvedDto_Deserialize[],
+	summary: CheckSummaryDto,
+	sizes: LabelSizeDto[],
+};
+
+/**  The check dialog's content; `id` names the check for preview, generate and download. */
+export type LabelCheckDto_Serialize = {
+	id: string,
+	groups: CheckGroupDto_Serialize[],
+	unresolved: UnresolvedDto_Serialize[],
+	summary: CheckSummaryDto,
+	sizes: LabelSizeDto[],
+};
+
+/**  The provider's totals over the searched list (each on its own, the filter not applied). */
+export type LabelCountsDto = {
+	total: number,
+	has_price: number,
+	missing_price: number,
+	missing_price_tag: number,
+	printed: number,
+	not_printed: number,
+};
+
+/**  One product not generated, with its message. */
+export type LabelFailureDto = LabelFailureDto_Serialize | LabelFailureDto_Deserialize;
+
+/**  One product not generated, with its message. */
+export type LabelFailureDto_Deserialize = {
+	product_id?: string | null,
+	sku?: string | null,
+	title?: string | null,
+	message: string,
+};
+
+/**  One product not generated, with its message. */
+export type LabelFailureDto_Serialize = {
+	product_id: string | null,
+	sku: string | null,
+	title: string | null,
+	message: string,
+};
+
+/**  One label file of the result (`page_count` = its labels). */
+export type LabelFileDto = {
+	id: string,
+	filename: string,
+	width_mm: number | null,
+	height_mm: number | null,
+	page_count: number,
+};
+
+/**  The Labels box's sub-filter. */
+export type LabelFilterDto = "missing_price_tag" | "not_printed" | "printed" | "all";
+
+/**  A product's label state (`printed_at` UTC ms; `has_price` null = unknown). */
+export type LabelMarkerDto = LabelMarkerDto_Serialize | LabelMarkerDto_Deserialize;
+
+/**  A product's label state (`printed_at` UTC ms; `has_price` null = unknown). */
+export type LabelMarkerDto_Deserialize = {
+	status: LabelStatusDto,
+	printed_at?: number | null,
+	has_price?: boolean | null,
+	reset?: ResetReasonDto | null,
+};
+
+/**  A product's label state (`printed_at` UTC ms; `has_price` null = unknown). */
+export type LabelMarkerDto_Serialize = {
+	status: LabelStatusDto,
+	printed_at: number | null,
+	has_price: boolean | null,
+	reset: ResetReasonDto | null,
+};
+
+export type LabelPageDto = LabelPageDto_Serialize | LabelPageDto_Deserialize;
+
+export type LabelPageDto_Deserialize = {
+	rows: LabelRowDto_Deserialize[],
+	next_cursor?: string | null,
+	counts: LabelCountsDto,
+	work_from?: string | null,
+};
+
+export type LabelPageDto_Serialize = {
+	rows: LabelRowDto_Serialize[],
+	next_cursor: string | null,
+	counts: LabelCountsDto,
+	work_from: string | null,
+};
+
+/**  The preview picture of one label (a file under the data folder's previews). */
+export type LabelPreviewDto = {
+	path: string,
+};
+
+/**
+ *  One row of the Labels box: the provider's fields, the row's own marker, the matched session
+ *  (`null` = none on this Mac) and the cached picture of an unmatched row (an existing file).
+ */
+export type LabelRowDto = LabelRowDto_Serialize | LabelRowDto_Deserialize;
+
+/**
+ *  One row of the Labels box: the provider's fields, the row's own marker, the matched session
+ *  (`null` = none on this Mac) and the cached picture of an unmatched row (an existing file).
+ */
+export type LabelRowDto_Deserialize = {
+	product_id: string,
+	commerce_id?: string | null,
+	sku?: string | null,
+	title: string,
+	product_type?: string | null,
+	price_minor?: number | null,
+	marker: LabelMarkerDto_Deserialize,
+	created_at?: number | null,
+	session?: SessionRowResponse_Deserialize | null,
+	picture_path?: string | null,
+};
+
+/**
+ *  One row of the Labels box: the provider's fields, the row's own marker, the matched session
+ *  (`null` = none on this Mac) and the cached picture of an unmatched row (an existing file).
+ */
+export type LabelRowDto_Serialize = {
+	product_id: string,
+	commerce_id: string | null,
+	sku: string | null,
+	title: string,
+	product_type: string | null,
+	price_minor: number | null,
+	marker: LabelMarkerDto_Serialize,
+	created_at: number | null,
+	session: SessionRowResponse_Serialize | null,
+	picture_path: string | null,
+};
+
+/**  The done dialog's content. Fully generated ⇔ `failures` and `not_run` are both empty. */
+export type LabelRunResultDto = LabelRunResultDto_Serialize | LabelRunResultDto_Deserialize;
+
+/**  The done dialog's content. Fully generated ⇔ `failures` and `not_run` are both empty. */
+export type LabelRunResultDto_Deserialize = {
+	total: number,
+	rendered: number,
+	marked_printed: number,
+	reprinted: number,
+	no_price: number,
+	failures: LabelFailureDto_Deserialize[],
+	not_run: string[],
+	artifacts: LabelFileDto[],
+	failed_product_ids: string[],
+};
+
+/**  The done dialog's content. Fully generated ⇔ `failures` and `not_run` are both empty. */
+export type LabelRunResultDto_Serialize = {
+	total: number,
+	rendered: number,
+	marked_printed: number,
+	reprinted: number,
+	no_price: number,
+	failures: LabelFailureDto_Serialize[],
+	not_run: string[],
+	artifacts: LabelFileDto[],
+	failed_product_ids: string[],
+};
+
+/**  A label size among the ready products, with how many labels it has. */
+export type LabelSizeDto = {
+	width_mm: number | null,
+	height_mm: number | null,
+	count: number,
+};
+
+/**  `printed` | `not_printed`. */
+export type LabelStatusDto = "printed" | "not_printed";
+
+/**
+ *  The access with, when `off`, the connection state (`no_key`, `no_shop`, `store_unmatched`,
+ *  `refused`, `store_gone`).
+ */
+export type LabelsAccessDto = LabelsAccessDto_Serialize | LabelsAccessDto_Deserialize;
+
+/**
+ *  The access with, when `off`, the connection state (`no_key`, `no_shop`, `store_unmatched`,
+ *  `refused`, `store_gone`).
+ */
+export type LabelsAccessDto_Deserialize = {
+	state: LabelsAccessStateDto,
+	reason?: string | null,
+};
+
+/**
+ *  The access with, when `off`, the connection state (`no_key`, `no_shop`, `store_unmatched`,
+ *  `refused`, `store_gone`).
+ */
+export type LabelsAccessDto_Serialize = {
+	state: LabelsAccessStateDto,
+	reason: string | null,
+};
+
+/**
+ *  Whether label calls may be made: `off` (the connection is not ready), `unknown`, `allowed`,
+ *  `denied`.
+ */
+export type LabelsAccessStateDto = "off" | "unknown" | "allowed" | "denied";
+
+export type LabelsOpenDto = {
+	session_id: number,
+};
+
+export type LabelsStatusDto = LabelsStatusDto_Serialize | LabelsStatusDto_Deserialize;
+
+export type LabelsStatusDto_Deserialize = {
+	access: LabelsAccessDto_Deserialize,
+	labels: SessionLabelDto_Deserialize[],
+};
+
+export type LabelsStatusDto_Serialize = {
+	access: LabelsAccessDto_Serialize,
+	labels: SessionLabelDto_Serialize[],
+};
+
+/**  The Labels box's number (`null` = none known, or labels are off). */
+export type LabelsSummaryDto = LabelsSummaryDto_Serialize | LabelsSummaryDto_Deserialize;
+
+/**  The Labels box's number (`null` = none known, or labels are off). */
+export type LabelsSummaryDto_Deserialize = {
+	missing_price_tag?: number | null,
+};
+
+/**  The Labels box's number (`null` = none known, or labels are off). */
+export type LabelsSummaryDto_Serialize = {
+	missing_price_tag: number | null,
+};
+
 export type LatestPublishResponse = LatestPublishResponse_Serialize | LatestPublishResponse_Deserialize;
 
 export type LatestPublishResponse_Deserialize = {
@@ -1535,6 +1876,14 @@ export type PhotoResponse_Serialize = {
 	source: string,
 	integrity: string,
 	upload_state: string | null,
+};
+
+/**  A group's template (millimetres). */
+export type PlanTemplateDto = {
+	id: string,
+	name: string,
+	width_mm: number | null,
+	height_mm: number | null,
 };
 
 export type PresetDto = PresetDto_Serialize | PresetDto_Deserialize;
@@ -2031,6 +2380,9 @@ export type ResearchTimeoutsDto = {
 	other: number,
 };
 
+/**  Why a printed label went back to not printed (the wire words `price_changed`, …). */
+export type ResetReasonDto = "price_changed" | "sku_changed" | "barcode_changed";
+
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;
 
 export type ReviewResponse_Deserialize = {
@@ -2069,6 +2421,15 @@ export type RunViewDto_Serialize = {
 	error: string | null,
 };
 
+/**
+ *  A saved label file (in the labels folder, outside the data folder: shown as text only) and
+ *  whether Preview opened it.
+ */
+export type SavedLabelDto = {
+	path: string,
+	opened: boolean,
+};
+
 export type SavedPageDto = {
 	id: number,
 	url: string,
@@ -2094,6 +2455,11 @@ export type SecretsStateDto = {
 	model: boolean,
 	search: boolean,
 	reader: boolean,
+};
+
+export type SelectedDto = {
+	product_id: string,
+	sku: string,
 };
 
 /**  What is selected on the page: the selection, or why it was refused. */
@@ -2146,6 +2512,23 @@ export type SessionDeletedResponse = {
 };
 
 export type SessionFilter = "open" | "published" | "all";
+
+/**  One session with its product (`null` = not in the shop) and its marker (`null` = none known). */
+export type SessionLabelDto = SessionLabelDto_Serialize | SessionLabelDto_Deserialize;
+
+/**  One session with its product (`null` = not in the shop) and its marker (`null` = none known). */
+export type SessionLabelDto_Deserialize = {
+	session_id: number,
+	product_id?: string | null,
+	marker?: LabelMarkerDto_Deserialize | null,
+};
+
+/**  One session with its product (`null` = not in the shop) and its marker (`null` = none known). */
+export type SessionLabelDto_Serialize = {
+	session_id: number,
+	product_id: string | null,
+	marker: LabelMarkerDto_Serialize | null,
+};
 
 export type SessionListCountsResponse = {
 	open: number,
@@ -2663,6 +3046,23 @@ export type TestConnectionResponse_Serialize = {
 	holder: string | null,
 	programs: string[],
 	sentence: string | null,
+};
+
+/**  A product Pricing did not find ("Not found in Pricing", left out). */
+export type UnresolvedDto = UnresolvedDto_Serialize | UnresolvedDto_Deserialize;
+
+/**  A product Pricing did not find ("Not found in Pricing", left out). */
+export type UnresolvedDto_Deserialize = {
+	product_id?: string | null,
+	sku?: string | null,
+	message: string,
+};
+
+/**  A product Pricing did not find ("Not found in Pricing", left out). */
+export type UnresolvedDto_Serialize = {
+	product_id: string | null,
+	sku: string | null,
+	message: string,
 };
 
 export type VisualMatchDto = VisualMatchDto_Serialize | VisualMatchDto_Deserialize;

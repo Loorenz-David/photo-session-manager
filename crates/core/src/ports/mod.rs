@@ -5,6 +5,7 @@ pub mod conversations;
 pub mod editing;
 pub mod events;
 pub mod images;
+pub mod labels;
 pub mod raw_previews;
 pub mod secrets;
 pub mod storage;

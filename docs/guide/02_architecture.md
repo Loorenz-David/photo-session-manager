@@ -614,6 +614,118 @@ of that folder (`variant_background` → `resync_folder`).
   Banners go through `tauri-plugin-notification` (registered in `run()`, used from Rust only: no capability entry, no
   npm package); macOS asks once to allow them and never tells the app a refusal.
 
+### Price labels (book `09C`; contracts ACC, MC-L3, MC-L4 in `docs/implementation/master_plan_labels.md` §5; L1)
+- **Port and vocabulary:** `crates/core/src/domain/label.rs` (label state, access, list, plan and run vocabulary,
+  `LabelsError`), `crates/core/src/ports/labels.rs` (`LabelsProvider`: `products`, `status`, `templates`, `plan`,
+  `preview`, `run` (**the only writing method**), `download`, pure `describe`, `product_id_of`, `commerce_id_of`;
+  `LabelStore`; `LabelsLink`). No provider or platform word in core (H7).
+- **Adapter:** `crates/integrations/src/conversations/beyo_pricing/labels.rs` (`impl LabelsProvider for
+  BeyoPricingAdapter`, one error function `label_error` — **never** `read_error` / `write_error`, so a refused label
+  call never marks the conversations connection refused), `label_types.rs` (wire types), fixtures
+  `fixtures/labels_*.json`, `events_labels.json`. Preview, run and download go through `PricingHttp::fetch` (bytes
+  untouched, `RawReply`); `send` turns bodies into JSON and must never carry a PDF. A download path is sent only
+  under `/integration/v1/stores/<store>/labels/runs/` (MC-L2.12). One adapter instance serves both ports
+  (`conversations::build_service` returns it beside the service).
+- **Service:** `crates/core/src/services/labels.rs` (`LabelsService`, `App.labels`, also in `AppHandles`; built in
+  `crates/integrations/src/labels.rs::build_service`, which calls `ConversationsService::set_labels_link` with a
+  `Weak`). `access()` = `Off(state)` unless the connection is `Ready`, else the stored access (`unknown | allowed |
+  denied`, column `conversation_sync.labels_access`, migration `022`, `crates/infra/src/sqlite/labels.rs`).
+  `session_labels(ids, refresh)` reads each session's link (`LabelStore::session_products`), maps it with
+  `product_id_of`, and with `refresh` asks `status` (200 ids per request) only when a product has no answer younger
+  than 10 s (`mechanisms::labels::STATUS_FRESH_MS`, measured on `clock.mono()`).
+- **The display copy:** `mechanisms/labels.rs` `LabelCopy` (memory only, M-L1): answers and events per product; an
+  answer started before a later event for that product is not applied.
+- **What the conversations service tells it:** `connect` ending `Ready` → `connected()` after the lane is left (one
+  templates read sets the access, the copy is emptied, one `LabelsChanged {[], access: true}`); `key_set` →
+  `key_changed()` first (access `unknown`); the pull (`pull` wraps `pull_page`) collects `EventKind::Label` changes
+  (moved past like any event not for us, never a mark, never "applied") and hands them to `changed()` once on every
+  way out of the page → one `LabelsChanged {product_ids, access: false}`. The first connection pages past label
+  events and tells nothing.
+- **Event:** `AppEvent::LabelsChanged` → window event `labels_changed {product_ids, access}` (`TauriEvents`).
+- **Command:** `apps/desktop/src-tauri/src/commands/labels.rs` `labels_status(session_ids, refresh)` →
+  `LabelsStatusDto {access: {state: off|unknown|allowed|denied, reason}, labels: [{session_id, product_id, marker}]}`
+  (`labels_error` maps `LabelsFailure` to the `labels_*` codes; `labels_off` carries `data.reason`); the
+  conversations settings answer (`settings_dto`) gains `labels`. Wrapper `apps/desktop/src/services/labels.ts`.
+  L2 adds `labels_list(filter, query, cursor)` → `LabelPageDto {rows: [LabelRowDto {…, marker, session:
+  SessionRowResponse | null, picture_path}], next_cursor, counts, work_from}`, `labels_summary(refresh)` →
+  `{missing_price_tag}`, `labels_select_all(filter, query)` → `[{product_id, sku}]`, `labels_open(product_id)` →
+  `{session_id}` (wrappers `labelsList`, `labelsSummary`, `labelsSelectAll`, `labelsOpen`).
+- **Frontend:** `apps/desktop/src/features/labels/` — `labelWords.ts` (`markerText`, the words), `useSessionLabels`
+  (asks after each page answer; `refresh` only when the shown id list differs from the last refreshing call; one
+  `labels_changed` listener; failures leave the pills; guarded so a test's events mock without `onLabelsChanged`
+  cannot crash a page), `LabelPill` (in `SessionRow`'s pill line and beside the title in `Header`),
+  `LabelMenuItem` (in `SessionActionsMenu`; disabled with its hint when there is no shop product, labels are off or
+  denied; from L3 enabled for access `allowed` / `unknown` — `Generate label`, or `Reprint label` when printed —
+  opening `LabelDialog` for that product beside the menu; a Labels row without a session gets a ⋯ holding only this
+  item). L3: `LabelDialog` (`useLabelDialog`: `checking` → `check` → `generating` → `done`, `error`; not closable while
+  generating; Cancel after a failed Generate asks `labelsPartial`), `LabelCheckView` (groups, lines, not found, footer,
+  the preview on a white `.label-preview` tile with ‹ › in group order), `LabelDoneView` (title, result lines,
+  failures, files and Download PDF); `LabelsBatchBar`'s `Generate labels for N` opens it for the selection, and when it
+  closes after a run `LabelsBox` keeps only the selected `failed_product_ids` and asks the page again. Settings → Pricing's Labels line in
+  `PricingSection.tsx`. L2: the **Labels box** — `Filters` has a fourth box `labels` (its number: the last list
+  answer's `missing_price_tag` inside the box, else `labelsSummary({refresh: true})`, asked when `SessionsPage` mounts,
+  after leaving the box and, throttled to 2 s, on `labels_changed` outside it); in the box `SessionsPage` renders
+  `LabelsBox` (sub-filters, work-from line, `LabelRow`s, Previous / Next through `labelPages.ts::pageStep`, the
+  selection map and `LabelsBatchBar`, its own throttled `labels_changed` refresh of the page shown) instead of the
+  session table, keeps asking `sessions_page` for the box it left, and pauses `useSessionLabels` (no `labels_status`).
+- **The Labels box's list (L2, MC-L1):** `LabelsService::list(filter, query, cursor)` — calls allowed (ACC.1) or
+  `Off` / `Denied`; the search trimmed, dropped when empty, cut to `QUERY_MAX` (100) characters; one
+  `provider.products(…, LIST_PAGE = 25)`; every row's state goes into the copy (so a session marker reads it without
+  a status request) and the counts are remembered in memory with whether the request had a search.
+  **Matching** (`mechanisms::labels::match_product` over `LabelStore::linked_items`, one read of every item with its
+  `shopify` link and its latest session): the item whose link's `product_id_of` equals the row's product id (the
+  lowest item id when several), else the item whose SKU equals the row's SKU exactly (case-sensitive). The matched
+  rows' sessions come from **one** `SessionsService::page(All, …, Some(&ids), 1)` (so name, pills and
+  `cover_preview_path` follow 10H §4); none is asked when nothing matched. **Pictures** of unmatched rows:
+  `RemoteItems::search_picture(commerce_id, thumb_url)` only for an `https://` address with a commerce integration
+  (cached file or queued for the background, `PictureReady {Search}` when it lands); the list never downloads.
+  **The box's number** `summary(refresh)`: the remembered `missing_price_tag`; with `refresh` one unsearched
+  one-row request when nothing is remembered, the remembered answer had a search, or it is older than
+  `COUNT_FRESH_MS`; none and no request when calls are not allowed; `connected()` / `key_changed()` forget it.
+  **Select all** `select_all(filter, query)` pages `SELECT_ALL_PAGE = 500` to the end and answers the rows with a
+  SKU; a repeated cursor or more than 200 pages is `BadReply`, any error is that error (never a partial selection).
+  **Opening a row** `open_product(product_id)`: matched → the item's latest session (created when it has none);
+  else `commerce_id_of` → the existing `ItemsService::adopt` (one shop read, no write) → `SessionsService::create`.
+  The service holds `store`, `remote` and `commerce` from L2 on (`labels::ServiceParts`).
+- **Check → generate → result (L3, MC-L2.1–.10):** `crates/core/src/services/label_runs.rs` (a second `impl
+  LabelsService`). `check(product_ids)`: ids without repeats, `InvalidValue` when none, `Busy` while a generation
+  runs, then one `provider.plan` per `RUN_CHUNK` (300) ids and one `templates` read; `mechanisms::labels::merge_plans`
+  (positions renumbered over the merged items, summaries summed, sizes merged; a chunk answering `NoProducts` lists
+  its ids as `Unresolved {message: "Not found"}`; all chunks `NoProducts` → `NoProducts`) and `group_check` (by template
+  id, the template-less group last, product types from the templates read). **The one kept check** lives in
+  `LabelsService.kept` (memory, a mutex slot): a new check replaces it and calls `LabelFiles::clear_previews`; a
+  check that fails with a provider error drops it too (projection r0, D10). `generate(check_id)` is **the only
+  caller of `provider.run`**: the first call builds the generation (ready items = outcome not `Fail`, chunks of 300,
+  **each chunk's key `sm-<uuid v4>` made once and stored beside the chunk**), sets `running` (cleared by a drop
+  guard on every way out), and sends each chunk without an outcome with its stored key and ids; `Unreachable` /
+  `RendererUnavailable` are sent again at once up to `RUN_RETRIES` (2) more times; still failing → that error, and
+  the next `generate` (Try again) continues at that chunk with the same key; `NoProducts` → the chunk's products
+  fail with the provider's sentence; `NotAllowed` → ACC.4. After each finished chunk the copy follows the run
+  (`MarkedPrinted` → printed at the run's `created_at`; `Reprinted` → printed at the check item's `printed_at`;
+  `NoPrice` → not printed without a price) and one `LabelsChanged {those products}` is emitted. The result is
+  `mechanisms::labels::merge_runs` (check failures first, then per chunk; a failure's SKU and title from the check
+  item); a finished generation is answered again without a request; `partial(check_id)` answers the result over the
+  finished chunks. Nothing of a check, a generation or a key is written to the database or kept across a quit.
+- **Preview, download and the label files (L3, MC-L2.5, .11, .13):** `preview(check_id, product_id)` (a product of
+  the kept check, else `NotFound`): `provider.preview` → the PDF → `LabelFiles::raster(pdf, "<check id>-<product
+  id>")` → `<data>/previews/labels/<name>.png` (the one folder the webview may read, `asset_protocol_scope`); a later
+  ask answers that file without a request; a picture that cannot be made is `PreviewFailed` and never blocks
+  Generate. `download(check_id, artifact_id)` (a file of the kept generation's finished chunks): `provider.download`
+  with the run's own `download_url` (the adapter refuses any address that is not this store's runs path, MC-L2.12)
+  → `LabelFiles::save(filename, bytes)` → `LabelFiles::open(path)` (a failed open answers `opened: false`).
+  **Files:** `crates/infra/src/label_files.rs` `DiskLabelFiles::new(<data>/previews, <home>/Documents/Session Manager
+  Labels)`: `raster` writes `<previews>/labels/<name>.src.pdf`, runs `/usr/bin/sips -s format png -Z 1200 … --out
+  <name>.png` and always removes the `.src.pdf`; `clear_previews` removes `<previews>/labels/`; `save` creates the
+  folder, cleans the name (`label_file_name`), numbers a taken one (`numbered_name`: `<stem> (2).pdf` …), writes
+  `<name>.part` and renames it; `open` runs `/usr/bin/open -a Preview <path>`. Built once in
+  `psm_integrations::labels::files_for(paths)` (the labels folder always from `AppPaths.home`; the suite's seam
+  `with_test_label_files`). Every `TestApp` installs `psm_testkit::fake_label_files::FakeLabelFiles` (saves under
+  the test's own home, never runs `sips` or `open`). **Commands** (L3): `labels_check(product_ids)` →
+  `LabelCheckDto`, `labels_preview(check_id, product_id)` → `{path}`, `labels_generate(check_id)` /
+  `labels_partial(check_id)` → `LabelRunResultDto`, `labels_download(check_id, artifact_id)` → `{path, opened}`
+  (wrappers `labelsCheck`, `labelsPreview`, `labelsGenerate`, `labelsPartial`, `labelsDownload`; error codes
+  `labels_busy`, `labels_nothing`, `labels_preview_failed`, `labels_save_failed`, `not_found` added to L1's).
+
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams
 listed in the research master plan §5 "Seams".
@@ -781,7 +893,7 @@ recorded stage of one run, optionally with another model, effort or instructions
 `psm_core::events::AppEvent` → `EventHub` (integrations `lib.rs`) → `TauriEvents::emit` (desktop
 `lib.rs`) → Tauri event names: `session_changed`, `photo_added`, `photo_changed`, `publish_progress`,
 `export_progress`, `health_changed`, `camera_status_changed` (payload `CameraStatusResponse`),
-`camera_fingerprint_pending`, `history_changed`, `research_changed`, `picture_ready {kind: 'cover' | 'search', session_id?, external_id?, path}` (H2; listener `onPictureReady`), `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); plus `edit_menu` emitted by the menu handler. The UI
+`camera_fingerprint_pending`, `history_changed`, `research_changed`, `picture_ready {kind: 'cover' | 'search', session_id?, external_id?, path}` (H2; listener `onPictureReady`), `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); `labels_changed {product_ids, access}` (L1; listener `onLabelsChanged`); plus `edit_menu` emitted by the menu handler. The UI
 subscribes in `apps/desktop/src/services/events.ts` (and `history.ts`). Events are **not** in the
 specta builder: adding one means a new `AppEvent` variant, a new match arm in `TauriEvents`, and a
 listener in `events.ts`.

@@ -9,6 +9,9 @@ import { StatusPill } from './StatusPill';
 import { SessionActionsMenu } from './DeleteSession';
 import { SessionBadge } from '@/features/conversations/SessionBadge';
 import type { ConversationSessionBadge } from '@/services/conversations';
+import type { LabelsAccess, SessionLabel } from '@/services/labels';
+import { LabelPill } from '@/features/labels/LabelPill';
+import { markerText } from '@/features/labels/labelWords';
 
 type Row = SessionList['groups'][number]['rows'][number];
 
@@ -35,11 +38,16 @@ type SessionRowProps = {
   conversations?: ConversationSessionBadge;
   /** H2: the row's picture when it differs from the answer's (a cover that arrived since). */
   picture?: string | null;
+  /** L1 (MC-L3.6): the session's label marker (absent: no answer yet). */
+  label?: SessionLabel;
+  /** L1: the labels access of the last markers answer (for the ⋯ entry). */
+  labelsAccess?: LabelsAccess | null;
 };
 
-export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged, onDeleted, conversations, picture }: SessionRowProps) {
+export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged, onDeleted, conversations, picture, label, labelsAccess }: SessionRowProps) {
   const name = row.item_type || row.title;
   const shown = picture ?? row.cover_preview_path;
+  const marked = markerText(label?.marker, now) !== null;
   return (
     <div className="session-row" data-testid={`session-row-${row.id}`} data-selected={selected || undefined}>
       <div className="row-check">
@@ -51,12 +59,13 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
           <span className="row-name">
             <strong>{name}</strong>
             <small>{row.sku}</small>
-            {(row.arranged || research || conversations) && (
+            {(row.arranged || research || conversations || marked) && (
               <span className="row-pills">
                 {row.arranged && <span className="pill">Arranged</span>}
                 <ResearchPill research={research} />
                 <WriterPill research={research} />
                 <SessionBadge badge={conversations} />
+                <LabelPill label={label} now={now} />
               </span>
             )}
           </span>
@@ -75,7 +84,7 @@ export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry
       <time className="row-time" dateTime={new Date(row.created_at).toISOString()}>
         {activityLabel(row.created_at, now)}
       </time>
-      <span className="row-menu">{onDeleted && <SessionActionsMenu sessionId={row.id} onDeleted={onDeleted} />}</span>
+      <span className="row-menu">{onDeleted && <SessionActionsMenu sessionId={row.id} onDeleted={onDeleted} label={label} labelsAccess={labelsAccess} />}</span>
     </div>
   );
 }

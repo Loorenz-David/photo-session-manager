@@ -1,0 +1,28 @@
+[
+  {
+    "_source": "schema-grounded: openapi-integration.json IntegrationLabelStatus + LabelStatusOut + API.md example; values neutral; not captured",
+    "sku": "TEST-1802",
+    "productId": "15531808096409",
+    "label": {
+      "productId": "15531808096409",
+      "labelStatus": "printed",
+      "labelPrintedAt": "2026-11-20T09:12:00Z",
+      "hasPrice": true,
+      "source": "export",
+      "resetReason": null,
+      "resetAt": null,
+      "printedPriceMinor": 890000,
+      "printedSku": "TEST-1802"
+    }
+  },
+  {
+    "sku": null,
+    "productId": "999",
+    "label": null,
+    "error": {
+      "code": "product_not_found",
+      "message": "No product with id '999' in this store.",
+      "details": null
+    }
+  }
+]

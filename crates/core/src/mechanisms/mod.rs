@@ -9,6 +9,7 @@ pub mod composition;
 pub mod conversation_rules;
 pub mod hash;
 pub mod hook_payload;
+pub mod labels;
 pub mod missing;
 pub mod name_key;
 pub mod naming;

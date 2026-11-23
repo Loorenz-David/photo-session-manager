@@ -11,11 +11,23 @@ import {
 } from '@/services/conversations';
 import { onConversationsChanged } from '@/services/events';
 import { clock, connectionLine } from '@/features/conversations/connectionLine';
+import { LABELS_ALLOWED, LABELS_DENIED, LABELS_UNKNOWN } from '@/features/labels/labelWords';
+import type { LabelsAccessState } from '@/services/labels';
 
 export { connectionLine };
 
 /** How often the section re-reads the connection while it is open (the checks run every 10 s). */
 const REFRESH_MS = 10_000;
+
+/** L1 (09C §4): whether the saved key may read labels, under the connection line; nothing while the connection is off. */
+function labelsLine(labels: LabelsAccessState | undefined): string | null {
+  switch (labels) {
+    case 'allowed': return LABELS_ALLOWED;
+    case 'denied': return LABELS_DENIED;
+    case 'unknown': return LABELS_UNKNOWN;
+    default: return null;
+  }
+}
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -131,6 +143,7 @@ export function PricingSection() {
     <div className="flex flex-col gap-1">
       <Button type="button" variant="outline" className="self-start" disabled={busy} onClick={() => void test()}>{testing ? 'Checking…' : 'Test connection'}</Button>
       {line && <p role="status" data-testid="pricing-connection">{line}</p>}
+      {labelsLine(settings.labels) && <p className="health-detail" data-testid="pricing-labels">{labelsLine(settings.labels)}</p>}
       {checkedAt !== null && !testing && <p className="health-detail" data-testid="pricing-checked-at">Checked at {clock(checkedAt)}</p>}
     </div>
     <Switch id="pricing-sound" label="Sound for new questions and replies" on={settings.sound} disabled={busy}

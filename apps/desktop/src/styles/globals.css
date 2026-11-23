@@ -492,3 +492,63 @@ button.research-pill { cursor: pointer; }
 .photo-picker-item input { position: absolute; top: 4px; left: 4px; }
 .photo-picker-item img { width: 100%; height: 100%; object-fit: cover; }
 .photo-picker-missing { display: flex; align-items: center; justify-content: center; height: 100%; font-size: var(--text-xs); color: var(--muted); }
+
+/* L1 (09C §7): the label marker. Printed reads neutral; missing, stale and no price need attention (--warn), never by
+   colour alone: the words say which. */
+.label-pill { background: transparent; border-color: var(--hair-strong); color: var(--muted); font-weight: var(--weight-medium, 500); }
+.label-pill[data-tone="attention"] { background: color-mix(in srgb, var(--warn) 18%, transparent); border-color: var(--warn); color: var(--color-text); }
+.label-menu-text { display: flex; flex-direction: column; gap: 2px; }
+.label-menu-hint { color: var(--muted); font-size: var(--text-xs); white-space: normal; max-width: 240px; }
+
+/* L2 (09C §5): the Labels box. Rows reuse the session row's look; the columns are Item · Price · Label · Created. */
+.label-table .list-labels, .label-row { grid-template-columns: 40px minmax(240px, 1fr) 120px 220px 110px 32px; }
+.labels-toolbar { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+.labels-work-from { margin: 0 0 var(--space-2); color: var(--muted); font-size: var(--text-sm); }
+.row-price { font-variant-numeric: tabular-nums; }
+.row-label { color: var(--muted); font-size: var(--text-sm); }
+.labels-error { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--warn); border-radius: var(--r); background: color-mix(in srgb, var(--warn) 12%, transparent); font-size: var(--text-sm); }
+.labels-error .batch-link, .labels-message .batch-link { color: inherit; text-decoration: underline; }
+.label-pager .page-step { display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 var(--space-2); }
+.label-page { padding: 0 var(--space-3); color: var(--muted); font-size: var(--text-sm); }
+@media (max-width: 900px) {
+  .label-table .list-labels, .label-row { grid-template-columns: 36px minmax(200px, 1fr) 100px 190px 80px 32px; }
+}
+
+/* L3 (09C §6): the label dialog. The check list on the left, the preview on the right (the package's arrangement); the
+   preview PNG has an alpha channel, so it always sits on a white tile, in both themes. */
+.label-dialog { max-height: calc(100vh - 4rem); overflow: auto; }
+.label-check { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--space-4, 16px); align-items: start; }
+.label-check > .label-dialog-error, .label-check > .label-dialog-buttons { grid-column: 1 / -1; }
+.label-check-list { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.label-group-heading { margin: 0 0 var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-bold); }
+.label-lines, .label-unresolved, .label-done-lines, .label-failures, .label-files { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
+.label-line-main { display: grid; grid-template-columns: 110px minmax(0, 1fr) 100px 190px; gap: var(--space-2); align-items: baseline; font-size: var(--text-sm); }
+.label-line-sku { font-variant-numeric: tabular-nums; }
+.label-line-price { font-variant-numeric: tabular-nums; text-align: right; }
+.label-line-outcome { color: var(--muted); }
+.label-line-fail { color: var(--color-text); font-weight: var(--weight-bold); }
+.label-line-issue, .label-line-note { margin: 2px 0 0; color: var(--muted); font-size: var(--text-xs); }
+.label-unresolved { color: var(--muted); font-size: var(--text-sm); }
+.label-footer { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); }
+.label-footer p { margin: 0; }
+.label-preview-pane { display: flex; flex-direction: column; gap: var(--space-2); }
+.label-preview { display: grid; place-items: center; padding: var(--space-2); border: 1px solid var(--hair-strong); border-radius: var(--r); background: #fff; }
+.label-preview img { display: block; max-width: 100%; max-height: 360px; object-fit: contain; }
+.label-preview-placeholder { width: 100%; max-height: 360px; background: #fff; opacity: .6; }
+.label-preview-message { margin: 0; padding: var(--space-3); border: 1px dashed var(--hair-strong); border-radius: var(--r); color: var(--muted); font-size: var(--text-sm); }
+.label-preview-steps { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--text-sm); }
+.label-dialog-buttons { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.label-busy { display: inline-flex; align-items: center; gap: var(--space-2); margin-right: auto; color: var(--muted); font-size: var(--text-sm); }
+.label-busy svg { width: 14px; height: 14px; }
+.label-done { display: flex; flex-direction: column; gap: var(--space-3); }
+.label-done-note, .label-print-hint, .label-saved { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.label-saved-path { color: var(--color-text); word-break: break-all; user-select: text; }
+.label-file { display: grid; grid-template-columns: minmax(0, 1fr) 70px 110px auto; gap: var(--space-2); align-items: center; font-size: var(--text-sm); }
+.label-file > .label-dialog-error, .label-file > .label-saved { grid-column: 1 / -1; }
+.label-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.label-dialog-error-view { display: flex; flex-direction: column; gap: var(--space-3); }
+.label-dialog-error-view p { margin: 0; }
+@media (max-width: 760px) {
+  .label-check { grid-template-columns: minmax(0, 1fr); }
+  .label-line-main { grid-template-columns: 90px minmax(0, 1fr) 90px; }
+}

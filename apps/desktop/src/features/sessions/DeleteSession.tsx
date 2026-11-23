@@ -6,6 +6,9 @@ import { ActionButton } from '@/components/ui/action-button';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useSharedRemoteItem } from '@/features/workspace/remote/useRemoteItem';
+import { LabelDialog } from '@/features/labels/LabelDialog';
+import { LabelMenuItem } from '@/features/labels/LabelMenuItem';
+import type { LabelRunResult, LabelsAccess, SessionLabel } from '@/services/labels';
 import { deleteSession, fixSessionFiles, sessionDeletePreview, sessionFilesMisplaced, type FilesFixed, type SessionDeletePreview } from '@/services/sessions';
 
 function fixedToast(done: FilesFixed) {
@@ -25,8 +28,19 @@ function fixedToast(done: FilesFixed) {
  * A21: "Fix photo files location", shown only when some of the session's photos have their files in another
  * session's folder (photos moved before files followed them): their files move into this session's folder.
  */
-export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu-button' }: { sessionId: number; onDeleted: () => void; className?: string }) {
+export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu-button', label, labelsAccess, onLabelsDone }: {
+  sessionId: number;
+  onDeleted: () => void;
+  className?: string;
+  /** L1 (09C §6): the session's label and the labels access, for the "Generate label" entry. */
+  label?: SessionLabel;
+  labelsAccess?: LabelsAccess | null;
+  /** L3: the label dialog closed (with the run's result when one ran). */
+  onLabelsDone?: (result: LabelRunResult | null) => void;
+}) {
   const [confirming, setConfirming] = useState(false);
+  // L3: the label dialog, rendered beside the menu so it outlives the menu closing.
+  const [labelProducts, setLabelProducts] = useState<string[] | null>(null);
   const [misplaced, setMisplaced] = useState(0);
   const [fixing, setFixing] = useState(false);
   // H4 (10H §6): Refresh from Shopify, for a remote product on screen only (an ordinary session's photos are here).
@@ -72,6 +86,7 @@ export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu
                 <span>Refresh from Shopify</span>
               </DropdownMenu.Item>
             )}
+            <LabelMenuItem label={label} access={labelsAccess} onGenerate={productId => setLabelProducts([productId])} />
             <DropdownMenu.Item className="photo-menu-item" data-danger onSelect={() => setConfirming(true)}>
               <span>Delete session…</span>
             </DropdownMenu.Item>
@@ -79,6 +94,15 @@ export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       {confirming && <DeleteSessionDialog sessionId={sessionId} onClose={() => setConfirming(false)} onDeleted={onDeleted} />}
+      {labelProducts && (
+        <LabelDialog
+          productIds={labelProducts}
+          onClose={result => {
+            setLabelProducts(null);
+            onLabelsDone?.(result);
+          }}
+        />
+      )}
     </>
   );
 }

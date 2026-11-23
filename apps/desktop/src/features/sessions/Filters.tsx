@@ -1,27 +1,35 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { SessionFilter, SessionListCountsResponse } from '@/services/bindings';
 
+/** The boxes of the sessions list: the three session filters and, L2 (09C §5), the Labels box. */
+export type ListBox = SessionFilter | 'labels';
+
 const FILTERS: { value: SessionFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
   { value: 'published', label: 'Published' },
   { value: 'all', label: 'All' },
 ];
 
-/** Open (default, everything not published) / Published / All, with the backend's counts. */
+/**
+ * Open (default, everything not published) / Published / All, with the backend's counts, then Labels (L2) with the
+ * number the page gives it (empty when none).
+ */
 export function Filters({
   value,
   counts,
+  labelsCount = null,
   onChange,
 }: {
-  value: SessionFilter;
+  value: ListBox;
   counts: SessionListCountsResponse | null;
-  onChange: (filter: SessionFilter) => void;
+  labelsCount?: number | null;
+  onChange: (filter: ListBox) => void;
 }) {
   return (
     <ToggleGroup
       type="single"
       value={value}
-      onValueChange={next => next && onChange(next as SessionFilter)}
+      onValueChange={next => next && onChange(next as ListBox)}
       className="filters"
       aria-label="Session filter"
     >
@@ -33,6 +41,12 @@ export function Filters({
           </span>
         </ToggleGroupItem>
       ))}
+      <ToggleGroupItem value="labels" className="filter-item" data-testid="filter-labels">
+        Labels
+        <span className="filter-count" data-testid="count-labels">
+          {labelsCount ?? ''}
+        </span>
+      </ToggleGroupItem>
     </ToggleGroup>
   );
 }
