@@ -77,7 +77,6 @@ export function Composer({
 
   return (
     <div className="composer">
-      {view.status === 'resolved' && view.can_send && <p className="conversation-note">Replying re-opens it as answered</p>}
       {!view.can_send && view.off_reason && (
         <p className="composer-off" role="status">
           {view.off_reason}

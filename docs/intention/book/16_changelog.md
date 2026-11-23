@@ -319,3 +319,8 @@ A30. **2026-11-22 — Owner correction: the product is the conversation's contai
 - **Thread:** "Questions · SKU" with every question of the product oldest first, each with its own header line (topic, "· Blocking", status, Mark answered on an open one); resolved questions stay, quieter. Opening it marks every question read.
 - **Composer:** one per thread. It answers the question the thread was opened on (the newest unresolved, or a notification's own), changed with **Answering** or by pressing Reply on any message.
 - **Counts:** the header icon counts products with news; the sessions-list "N open" still counts unresolved questions.
+
+A31. **2026-11-23 — Owner correction: the product thread is a plain chat.** Seeing A30's thread, the owner: "the chat interface seems to be adding things that i don't need or ask for … line divisions … status saying other answered … a button that says mark answered, and a drop down also for answering. conversations in chats are simple, i open i see who sent the time, and i answer, i want to reply to some specific text then i select that message and select reply (common industry practice in chat apps)." Amends 09B §7 and §8.
+- **Thread:** one chat with every message of the product's questions in time order; no question dividers, topic or status lines, "· Blocking" or dimming. Each message shows who sent it and when.
+- **Reply:** on the message itself, a small button on hover or keyboard focus, and a right-click menu; it shows the message above the box (✕ cancels) and sends to that message's question with the reply-to.
+- **No Mark answered and no Answering choice** on screen. Without a reply-to, a reply goes to the newest unresolved question, unseen. The list rows stay as A30 made them.

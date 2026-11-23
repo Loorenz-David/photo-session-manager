@@ -406,10 +406,6 @@ button.research-pill { cursor: pointer; }
 .conversation-view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .conversation-view-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px 4px; }
 .conversation-view-product { display: flex; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.conversation-header-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 16px 10px; border-bottom: 1px solid var(--hair); font-size: var(--text-sm); }
-.conversation-header-topic { font-weight: var(--weight-bold); }
-.conversation-header-blocking { color: var(--warn); font-weight: var(--weight-bold); }
-.conversation-header-status { color: var(--muted); }
 .conversation-thread { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px; }
 .message { display: flex; flex-direction: column; gap: 4px; max-width: 85%; }
 .message[data-side="received"] { align-self: flex-start; align-items: flex-start; }
@@ -420,6 +416,19 @@ button.research-pill { cursor: pointer; }
 .message-pending { opacity: 0.6; }
 .message-pending[data-state="failed"] { opacity: 1; }
 .message-pending[data-state="failed"] .message-bubble { opacity: 0.6; }
+/* A31: Reply on the message itself: a small button beside the bubble on hover or keyboard focus, and a right-click menu. */
+.message-row { position: relative; display: flex; align-items: center; gap: 6px; }
+.message[data-side="sent"] .message-row { flex-direction: row-reverse; }
+.message-reply { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; color: var(--muted); opacity: 0; transition: opacity 120ms ease; }
+.message-reply svg { width: 15px; height: 15px; }
+.message:hover .message-reply, .message:focus-within .message-reply { opacity: 1; }
+.message-reply:hover { background: color-mix(in srgb, currentColor 10%, transparent); color: var(--color-text); }
+.message-menu { position: absolute; top: 100%; z-index: 20; margin-top: 4px; min-width: 120px; padding: 4px; border: 1px solid var(--hair-strong); border-radius: 8px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 6px 20px rgb(0 0 0 / 0.12); }
+.message[data-side="received"] .message-menu { left: 0; }
+.message[data-side="sent"] .message-menu { right: 0; }
+.message-menu button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: var(--text-sm); text-align: left; }
+.message-menu button:hover, .message-menu button:focus-visible { background: color-mix(in srgb, currentColor 8%, transparent); }
+.message-menu svg { width: 15px; height: 15px; }
 .message-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); }
 .message-author { font-weight: var(--weight-bold); }
 .message-failure { color: var(--danger-700); }
@@ -443,14 +452,6 @@ button.research-pill { cursor: pointer; }
 .conversation-view-label { color: var(--muted); }
 .conversation-questions { font-weight: var(--weight-bold); }
 .conversation-product-line { display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; border-bottom: 1px solid var(--hair); font-size: var(--text-sm); }
-.conversation-question { display: flex; flex-direction: column; gap: 12px; }
-.conversation-question + .conversation-question { padding-top: 8px; border-top: 1px solid var(--hair); }
-.conversation-question[data-status="resolved"] { opacity: 0.7; }
-.conversation-question .conversation-header-line { justify-content: center; padding: 4px 0; border-bottom: none; }
-.conversation-question .conversation-mark-answered { margin-left: 8px; }
-.conversation-question[data-target="true"] .conversation-header-topic { text-decoration: underline; text-underline-offset: 3px; }
-.composer-target { display: flex; align-items: center; gap: 8px; padding: 6px 16px 0; font-size: var(--text-xs); color: var(--muted); }
-.composer-target select { flex: 1; min-width: 0; padding: 4px 6px; border: 1px solid var(--hair-strong); border-radius: 6px; background: transparent; color: var(--fg, inherit); font-size: var(--text-xs); }
 .visit-bar { position: sticky; top: 56px; z-index: 19; display: flex; align-items: center; gap: var(--space-3); min-height: 36px; padding: 2px var(--space-4); border-bottom: 1px solid var(--hair); background: color-mix(in srgb, var(--warn) 14%, var(--color-bg)); font-size: var(--text-sm); }
 .visit-bar-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* C3 (09B §8; CHAT_UX §4): the composer, Pricing's rounded box with a round send button. */

@@ -5,36 +5,47 @@ import { Button } from '@/components/ui/button';
 import {
   conversationAttachable,
   conversationDiscard,
-  conversationMarkAnswered,
   conversationMarkRead,
   conversationRetry,
   conversationThread,
   type ConversationAttachable,
+  type ConversationMessage,
   type ConversationThread,
   type ConversationView as View,
+  type PendingReply,
 } from '@/services/conversations';
 import { ServiceError } from '@/services/sessions';
 import { Composer, replyExcerpt, type ReplyTarget } from './Composer';
 import { MessageBubble, PendingBubble } from './MessageBubble';
 import { useConversationsChanged, useConversationsContext } from './useConversations';
 
-const STATUS_WORDS: Record<string, string> = { open: 'Open', answered: 'Answered' };
-
-/** 09B §7, §8: the status in words; who resolved it when this Mac saw it happen. */
-export function statusWords(view: Pick<View, 'status' | 'resolved_by'>): string {
-  if (view.status !== 'resolved') return STATUS_WORDS[view.status] ?? view.status;
-  if (view.resolved_by === 'asker') return 'Resolved by the pricer';
-  if (view.resolved_by === 'activation') return 'Resolved when the product was activated';
-  return 'Resolved';
-}
-
 /**
- * A30 (09B §7 Thread): the question the composer answers when the photographer has not chosen one: the newest
- * unresolved question, else the newest (`questions` are oldest first).
+ * A30/A31 (09B §8): the question a reply goes to when the photographer has not picked a message to reply to: the newest
+ * unresolved question, else the newest (`questions` are oldest first). It is never shown.
  */
 export function defaultQuestion(questions: View[]): View | undefined {
   const open = questions.filter(q => q.status !== 'resolved');
   return open[open.length - 1] ?? questions[questions.length - 1];
+}
+
+/** One line of the chat: a confirmed message or a reply not yet confirmed, with the question it belongs to. */
+export type ChatEntry =
+  | { kind: 'message'; questionId: string; message: ConversationMessage }
+  | { kind: 'pending'; questionId: string; pending: PendingReply };
+
+/**
+ * A31 (09B §7 Thread): every question's messages and unconfirmed replies as one chat, ordered by time. Equal times keep
+ * the questions' order (oldest question first), then the message order within it, confirmed before unconfirmed.
+ */
+export function chatEntries(questions: View[]): ChatEntry[] {
+  const entries: { entry: ChatEntry; at: number; order: number }[] = [];
+  questions.forEach(q => {
+    q.messages.forEach(message => entries.push({ entry: { kind: 'message', questionId: q.id, message }, at: message.created_at, order: entries.length }));
+  });
+  questions.forEach(q => {
+    q.pending.forEach(pending => entries.push({ entry: { kind: 'pending', questionId: q.id, pending }, at: pending.created_at, order: entries.length }));
+  });
+  return entries.sort((a, b) => a.at - b.at || a.order - b.order).map(e => e.entry);
 }
 
 /** The product's thread, re-read on `conversations_changed`; `conversations_off` (the copy is hidden) leaves it. */
@@ -126,54 +137,31 @@ function ProductLine({ sessionId }: { sessionId: number | null }) {
   );
 }
 
-/** A question's header line: status dot, topic, "· Blocking", the status in words; Mark answered on an open question. */
-function HeaderLine({ view, onMarkAnswered }: { view: View; onMarkAnswered: () => void }) {
-  return (
-    <div className="conversation-header-line">
-      <span className="conversation-status-dot" data-status={view.status} aria-hidden="true" />
-      <span className="conversation-header-topic">{view.topic}</span>
-      {view.blocking && <span className="conversation-header-blocking">· Blocking</span>}
-      <span className="conversation-header-status">{statusWords(view)}</span>
-      {view.status === 'open' && (
-        <Button variant="outline" size="sm" className="conversation-mark-answered" onClick={onMarkAnswered}>
-          Mark answered
-        </Button>
-      )}
-    </div>
-  );
-}
-
-/** A question's label in the composer's choice: its topic and the first line of its first message. */
-function questionLabel(q: View): string {
-  const first = q.messages[0];
-  const excerpt = first ? replyExcerpt(first.text) : '';
-  return excerpt ? `${q.topic} · ${excerpt}` : q.topic;
-}
-
 /**
- * A30 (09B §7 Thread; CHAT_UX §1–2): the product is the container. Its questions stacked oldest first, each with its
- * header line, its messages (the pricer's dark on the left, the photographer's light on the right) and its replies not
- * yet confirmed; resolved questions quieter. One composer at the bottom answers one question: the one opened (a row
- * opens the newest unresolved, a toast its own), changed with "Answering" or by pressing Reply on any message.
+ * A31 (09B §7 Thread; owner 2026-11-23): the product is the container and the thread is a plain chat. Every message of
+ * every question in time order, the pricer's dark on the left, the photographer's light on the right, each with who sent
+ * it and when; no question dividers, status lines or answering controls. Reply is offered on the message itself (on
+ * hover or focus, and on right-click) and sends to that message's question; otherwise a reply goes to the newest
+ * unresolved question.
  */
 export function ConversationView({ id, onBack }: { id: string; onBack: () => void }) {
   const { thread, reload } = useThread(id, onBack);
   const questions = thread?.questions ?? [];
-  const [chosen, setChosen] = useState(id);
-  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
-  const target = questions.find(q => q.id === chosen) ?? defaultQuestion(questions);
+  const [replyTarget, setReplyTarget] = useState<(ReplyTarget & { questionId: string }) | null>(null);
+  const target = questions.find(q => q.id === replyTarget?.questionId) ?? defaultQuestion(questions);
   const attachable = useAttachable(target?.id, thread);
   useReadMarks(questions);
+  const entries = chatEntries(questions);
 
-  // A toast's Open: the question it names is brought into view once the thread is on screen.
+  // A toast's Open: the first message of the question it names is brought into view once the thread is on screen.
   const scrolled = useRef(false);
   const threadRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (scrolled.current || questions.length < 2) return;
     scrolled.current = true;
-    const sections = threadRef.current?.querySelectorAll<HTMLElement>('[data-question-id]') ?? [];
-    const section = Array.from(sections).find(s => s.dataset.questionId === id);
-    section?.scrollIntoView?.({ block: 'start' });
+    const lines = threadRef.current?.querySelectorAll<HTMLElement>('[data-question-id]') ?? [];
+    const line = Array.from(lines).find(l => l.dataset.questionId === id);
+    line?.scrollIntoView?.({ block: 'start' });
   }, [questions, id]);
 
   const act = (work: () => Promise<unknown>) => {
@@ -181,22 +169,6 @@ export function ConversationView({ id, onBack }: { id: string; onBack: () => voi
       .then(work)
       .catch(error => toast(failureMessage(error)))
       .finally(reload);
-  };
-  const markAnswered = (questionId: string) => {
-    Promise.resolve()
-      .then(() => conversationMarkAnswered(questionId))
-      .catch(error => {
-        if (error instanceof ServiceError && error.code === 'conversation_resolved') {
-          toast('Pricing has already resolved this');
-        } else {
-          toast(failureMessage(error));
-        }
-      })
-      .finally(reload);
-  };
-  const choose = (questionId: string) => {
-    if (questionId !== target?.id) setReplyTarget(null);
-    setChosen(questionId);
   };
 
   return (
@@ -215,59 +187,48 @@ export function ConversationView({ id, onBack }: { id: string; onBack: () => voi
       </div>
       {thread && <ProductLine sessionId={thread.session_id} />}
       <div className="conversation-thread" ref={threadRef}>
-        {questions.map(q => (
-          <section
-            key={q.id}
-            className="conversation-question"
-            data-question-id={q.id}
-            data-status={q.status}
-            data-testid={`question-${q.id}`}
-            data-target={questions.length > 1 && q.id === target?.id ? 'true' : undefined}
-          >
-            <HeaderLine view={q} onMarkAnswered={() => markAnswered(q.id)} />
-            {q.messages.map(m => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                sessionId={thread?.session_id ?? q.session_id}
-                onReply={() => {
-                  setChosen(q.id);
-                  setReplyTarget({ message_id: m.id, author_name: m.author.name, excerpt: replyExcerpt(m.text) });
-                }}
-              />
-            ))}
-            {q.pending.map(p => (
-              <PendingBubble
-                key={p.client_mutation_id}
-                pending={p}
-                actions={
-                  <>
-                    <button type="button" className="message-action" onClick={() => act(() => conversationRetry(p.client_mutation_id))}>
-                      Retry
-                    </button>
-                    <button type="button" className="message-action" onClick={() => act(() => conversationDiscard(p.client_mutation_id))}>
-                      Remove
-                    </button>
-                  </>
-                }
-              />
-            ))}
-          </section>
-        ))}
+        {entries.map(entry =>
+          entry.kind === 'message' ? (
+            <MessageBubble
+              key={entry.message.id}
+              message={entry.message}
+              questionId={entry.questionId}
+              sessionId={thread?.session_id ?? null}
+              onReply={() =>
+                setReplyTarget({
+                  questionId: entry.questionId,
+                  message_id: entry.message.id,
+                  author_name: entry.message.author.name,
+                  excerpt: replyExcerpt(entry.message.text),
+                })
+              }
+            />
+          ) : (
+            <PendingBubble
+              key={entry.pending.client_mutation_id}
+              pending={entry.pending}
+              actions={
+                <>
+                  <button
+                    type="button"
+                    className="message-action"
+                    onClick={() => act(() => conversationRetry(entry.pending.client_mutation_id))}
+                  >
+                    Retry
+                  </button>
+                  <button
+                    type="button"
+                    className="message-action"
+                    onClick={() => act(() => conversationDiscard(entry.pending.client_mutation_id))}
+                  >
+                    Remove
+                  </button>
+                </>
+              }
+            />
+          ),
+        )}
       </div>
-      {target && questions.length > 1 && (
-        <label className="composer-target">
-          <span>Answering</span>
-          <select aria-label="Answering" value={target.id} onChange={event => choose(event.target.value)}>
-            {questions.map(q => (
-              <option key={q.id} value={q.id}>
-                {questionLabel(q)}
-                {q.status === 'resolved' ? ' (resolved)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
       {target && (
         <Composer
           view={target}
