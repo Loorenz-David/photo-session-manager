@@ -21,3 +21,4 @@ Running log of the 09C track on branch `feature/agentic`. The main tracker `STAT
   - **L1 APPROVED** (`07b96c64`, re-review r2 after one fix: the session page's marker now refreshes on every open). **L2 APPROVED** (`7dff8dda`, first review). The Mac hibernated 16:02–18:21 mid-L1; the run resumed on wake, nothing lost; later runs are wrapped in `caffeinate -i`.
   - **L3 projection r0:** AMENDMENTS_REQUIRED, 0 owner cards (17 ledger rows); applied (`533a2252`). L3 implementation started.
   - **L3 APPROVED** (review r1, APPROVED_WITH_NOTES). **All three milestones approved.** Release build `19380f3d` installed (previous kept as "2026-11-23 10H"); zip for the work Mac on the Desktop. No live Pricing call made by any check; the first real Generate is the owner's.
+  - **PR #30 merged** into main (`b131802b`).
