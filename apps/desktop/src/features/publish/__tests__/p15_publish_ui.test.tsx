@@ -7,7 +7,7 @@ vi.mock('@/services/publish', async importOriginal => {
   return { shownOf, confirmedText, withheldLine, waitsLine, SUGGESTIONS_CHANGED, publishPreview: vi.fn(), publishConfirm: vi.fn(), publishRetry: vi.fn(), notificationsList: vi.fn(), onPublishProgress: vi.fn() };
 });
 const delivered = vi.hoisted(() => ({ sessions: [] as (() => void)[], progress: [] as (() => void)[], workspace: [] as ((event: { kind: string; session_id: number }) => void)[] }));
-vi.mock('@/services/sessions', () => ({ previewUrl: (path: string) => path, listSessions: vi.fn(), createSession: vi.fn() }));
+vi.mock('@/services/sessions', () => ({ previewUrl: (path: string) => path, listSessions: vi.fn(), sessionsPage: vi.fn(), createSession: vi.fn() }));
 vi.mock('@/services/events', () => ({ onSessionsChanged: vi.fn(async (handler: () => void) => { delivered.sessions.push(handler); delivered.progress.push(handler); return () => undefined; }), onWorkspaceEvents: vi.fn(async (handler: (event: { kind: string; session_id: number }) => void) => { delivered.workspace.push(handler); return () => undefined; }), onFileDrop: vi.fn(async () => () => undefined), onResearchChanged: vi.fn(async () => () => undefined) }));
 vi.mock('@/services/export', () => ({ integrationKind: vi.fn(async () => 'shopify'), onExportProgress: vi.fn(async () => () => undefined) }));
 vi.mock('@/features/workspace/Stage', () => ({ Stage: () => <div /> }));
@@ -26,7 +26,8 @@ import { SessionsPage } from '@/features/sessions/SessionsPage';
 import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 import { NotificationsDrawer } from '../NotificationsDrawer';
 import { usePublish } from '../usePublish';
-import { listSessions } from '@/services/sessions';
+import { listSessions, sessionsPage } from '@/services/sessions';
+import { answerFromList } from '@/features/sessions/__tests__/pageFromList';
 import { toast } from 'sonner';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); delivered.sessions.length = 0; delivered.progress.length = 0; delivered.workspace.length = 0; delete (window as Window & { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__; });
@@ -97,6 +98,7 @@ const list = (row: ReturnType<typeof listRow>) => ({ groups: [{ label: 'Today', 
 it('C2(a) refreshes the row from publish progress alone to Publishing 42%', async () => {
   let percent = 10;
   vi.mocked(listSessions).mockImplementation(async () => list(listRow({ kind: 'publishing', value: percent })) as Awaited<ReturnType<typeof listSessions>>);
+  answerFromList(sessionsPage, listSessions);
   vi.mocked(notificationsList).mockResolvedValue([]);
   vi.mocked(onPublishProgress).mockImplementation(async handler => { delivered.progress.push(() => handler({ session_id: 4, item_id: 7, step: 'upload', uploaded: 2, total: 4 })); return () => undefined; });
   (window as Window & { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__ = {};
@@ -112,6 +114,7 @@ it('C2(a) refreshes the row from publish progress alone to Publishing 42%', asyn
 
 it('C3(b) retries the failed publish item from its session row', async () => {
   vi.mocked(listSessions).mockResolvedValue(list(listRow({ kind: 'description_failed' }, { item_id: 9, step: 'failed' })) as Awaited<ReturnType<typeof listSessions>>);
+  answerFromList(sessionsPage, listSessions);
   vi.mocked(publishRetry).mockResolvedValue();
   render(<SessionsPage navigate={() => undefined} />);
   expect(await screen.findByText('Description failed')).toBeInTheDocument();

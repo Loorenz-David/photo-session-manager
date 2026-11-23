@@ -43,6 +43,20 @@ pub enum AppEvent {
         uploaded: i64,
         total: i64,
     },
+    /// H2 (MC-H1.3, MC-H2.5): a picture was downloaded and kept on this Mac at `path`.
+    PictureReady {
+        target: crate::domain::remote::PictureTarget,
+        path: String,
+    },
+    /// H3 (MC-H4.3, .5): a bring back's progress: `done` of `total` pictures downloaded while
+    /// `Running`; `Done` after the import; `Failed` with the reason when nothing was imported.
+    BringBack {
+        session_id: i64,
+        done: usize,
+        total: usize,
+        state: crate::domain::remote::BringBackState,
+        error: Option<String>,
+    },
     /// C1 (`master_plan_conversations.md` §4 Event): the copy, a read mark or the connection
     /// changed; `notices` = the conversations a completed check found news in.
     ConversationsChanged {

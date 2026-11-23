@@ -37,6 +37,7 @@ vi.mock('@/services/events', () => ({
 vi.mock('@/services/sessions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/sessions')>()),
   listSessions: vi.fn(),
+  sessionsPage: vi.fn(),
   arrangeNext: vi.fn(),
   activeSession: vi.fn(),
   activateSession: vi.fn(async () => undefined),
@@ -86,7 +87,8 @@ vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
 
 import App from '@/App';
 import { conversationGet, conversationsList } from '@/services/conversations';
-import { activateSession, activeSession, deactivateSession, listSessions } from '@/services/sessions';
+import { activateSession, activeSession, deactivateSession, listSessions, sessionsPage } from '@/services/sessions';
+import { answerFromList } from '@/features/sessions/__tests__/pageFromList';
 import { getSettings } from '@/services/settings';
 
 globalThis.ResizeObserver ??= class {
@@ -98,7 +100,7 @@ globalThis.ResizeObserver ??= class {
 function sessionRow(id: number, sku: string, title: string): SessionRowResponse_Serialize {
   return {
     id, sku, item_type: '', title, main_count: 2, condition_count: 1, unreviewed_count: 0, status: 'in_progress',
-    label: { kind: 'in_progress', value: 0 }, progress: null, last_activity_at: Date.now(), created_at: Date.now(), cover_preview_path: null,
+    label: { kind: 'in_progress', value: 0 }, progress: null, last_activity_at: Date.now(), created_at: Date.now(), cover_preview_path: null, cover_pending: false,
     arranged: false, publish: null, changes: null,
   };
 }
@@ -129,6 +131,7 @@ const SETTINGS: Settings = {
 } as Settings;
 
 beforeEach(() => {
+  answerFromList(sessionsPage, listSessions);
   vi.mocked(listSessions).mockResolvedValue(LIST);
   vi.mocked(activeSession).mockResolvedValue(null);
   vi.mocked(conversationsList).mockResolvedValue({ state: 'ready', problem: null, rows: [conversationRow('c7', 7), conversationRow('c9', 9)], news_elsewhere: 0 });

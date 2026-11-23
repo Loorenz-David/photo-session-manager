@@ -10,6 +10,7 @@ pub mod item;
 pub mod output;
 pub mod photo;
 pub mod publish;
+pub mod remote;
 pub mod research;
 pub mod session;
 pub mod storage;

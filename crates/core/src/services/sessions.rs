@@ -24,6 +24,8 @@ pub struct SessionsService<'a> {
     camera: Option<&'a dyn CameraProvider>,
     follow: Option<&'a dyn ArrivalFollow>,
     events: Option<&'a dyn EventSink>,
+    /// H2 (MC-H1.1): the row picture rule's remote half and the cover queue.
+    remote: Option<&'a crate::services::remote::RemoteItems>,
     /// A16: the filing target was already claimed for this request (`claim_target`), so the
     /// switch does not set it again (an older request finishing late must not take it back).
     target_claimed: bool,
@@ -41,6 +43,7 @@ impl<'a> SessionsService<'a> {
             camera: None,
             follow: None,
             events: None,
+            remote: None,
             target_claimed: false,
         }
     }
@@ -65,6 +68,12 @@ impl<'a> SessionsService<'a> {
 
     pub fn with_events(mut self, events: &'a dyn EventSink) -> Self {
         self.events = Some(events);
+        self
+    }
+
+    /// H2: rows follow the whole row picture rule (MC-H1.1) and `page` requests pending covers.
+    pub fn with_remote(mut self, remote: &'a crate::services::remote::RemoteItems) -> Self {
+        self.remote = Some(remote);
         self
     }
 
@@ -129,6 +138,8 @@ impl<'a> SessionsService<'a> {
             return Ok(false);
         }
         let folder = match id {
+            // MC-H3.4 (H4 projection r0, L1): a remote item is never the filing target.
+            Some(id) if self.is_remote(id)? => return Ok(false),
             Some(id) => {
                 let session = self.store.session(id)?;
                 let item = self
@@ -198,7 +209,37 @@ impl<'a> SessionsService<'a> {
         self
     }
 
+    /// MC-H3.1: whether the session's item is `Remote(_)`: from `with_remote` when attached,
+    /// else from the store when the service has a commerce integration, else never (H6).
+    fn remote_state(&self, id: i64) -> Result<crate::domain::remote::RemoteState> {
+        if let Some(remote) = self.remote {
+            return remote.state(id);
+        }
+        if self.commerce.is_some() {
+            return Ok(crate::mechanisms::remote::remote_state(
+                self.store.remote_input(id)?,
+            ));
+        }
+        Ok(crate::domain::remote::RemoteState::Local)
+    }
+
+    fn is_remote(&self, id: i64) -> Result<bool> {
+        Ok(matches!(
+            self.remote_state(id)?,
+            crate::domain::remote::RemoteState::Remote(_)
+        ))
+    }
+
     pub fn activate(&self, id: i64) -> Result<()> {
+        // MC-H3.4: opening a remote item never moves the camera's capture folder: no editing
+        // call, no camera target change, the active session unchanged.
+        if self.is_remote(id)? {
+            tracing::info!(
+                target: "psm::capture_one",
+                "capture_one.switch_skipped request=\"open session {id}\" reason=remote_item"
+            );
+            return Ok(());
+        }
         let editing = self.editing.ok_or(Error::DocumentNotOpen)?;
         let health = self.health.ok_or(Error::DocumentNotOpen)?;
         let session = self.store.session(id)?;
@@ -351,10 +392,14 @@ impl<'a> SessionsService<'a> {
             Some(item_id) => Some(self.store.item(item_id)?),
             None => None,
         };
+        // MC-H3.5 (M-H4): a remote item's photo rows never reach the screen (an archived item's
+        // cleared rows name deleted previews); its pictures come from `RemoteItems::view`.
+        let remote = self.is_remote(id)?;
         let photos: Vec<_> = self
             .store
             .photos_in_session(id)?
             .into_iter()
+            .filter(|_| !remote)
             .filter(|photo| {
                 photo.classification != crate::domain::photo::Classification::Deleted
                     && photo.integrity != crate::domain::photo::Integrity::RawMissing
@@ -418,6 +463,11 @@ impl SessionsService<'_> {
             time::group_by_activity,
         };
         let records = self.store.session_list_records()?;
+        // MC-H1.1: one read of the remote inputs for every row (none without remote items).
+        let pictures = self
+            .remote
+            .map(|remote| remote.row_pictures())
+            .transpose()?;
         let cleared = crate::services::retention::cleared_sessions(self.store)?;
         let unassigned_count = self.store.session(1)?.photo_count;
         let query = query.unwrap_or_default().to_lowercase();
@@ -429,7 +479,21 @@ impl SessionsService<'_> {
         let mut rows = Vec::new();
         for record in records {
             let dto = &record.session;
-            let input = status_input(&record);
+            // MC-H3.7: a remote item's row counts its record (the list and pages only;
+            // `ready_session_ids` keeps the raw input, H4 projection r0, L8).
+            let remote_row = pictures
+                .as_ref()
+                .and_then(|pictures| pictures.remote_row(dto.session.id));
+            let mut input = status_input(&record);
+            let (main_count, condition_count, unreviewed_count) = match remote_row {
+                Some(row) => {
+                    input.main_count = row.gallery as i64;
+                    input.unreviewed_count = 0;
+                    input.non_deleted_missing_preview_count = 0;
+                    (row.gallery as i64, row.condition as i64, 0)
+                }
+                None => (dto.main_count, dto.condition_count, dto.unreviewed_count),
+            };
             let status = derive_status(input);
             counts.all += 1;
             if status == SessionStatus::Published {
@@ -445,8 +509,18 @@ impl SessionsService<'_> {
             {
                 continue;
             }
-            let label = if cleared.contains(&dto.session.id) {
-                crate::domain::session::RowLabel::Archived
+            let label = if cleared.contains(&dto.session.id) || remote_row.is_some() {
+                // MC-H3.7: "Archived in Shopify" for both kinds, unless a publish of theirs is
+                // running, held, failed or cancelled.
+                use crate::domain::session::RowLabel;
+                match row_label(input) {
+                    label @ (RowLabel::WaitingForYou(_)
+                    | RowLabel::Publishing(_)
+                    | RowLabel::PublishFailed
+                    | RowLabel::PublishCancelled
+                    | RowLabel::DescriptionFailed) => label,
+                    _ => RowLabel::Archived,
+                }
             } else if status == SessionStatus::Publishing && record.waiting_for_editor {
                 // Changelog 45 (P65): the publish waits for Capture One to load its photos.
                 crate::domain::session::RowLabel::WaitingForEditor
@@ -458,21 +532,31 @@ impl SessionsService<'_> {
             } else {
                 None
             };
+            let adjusted = record.cover_adjusted_preview_path.as_deref();
+            let original = record.cover_original_preview_path.as_deref();
+            let (cover, cover_pending) = match &pictures {
+                Some(pictures) => pictures.row_picture(dto.session.id, adjusted, original),
+                None => (
+                    crate::services::remote::local_picture(adjusted, original),
+                    false,
+                ),
+            };
             rows.push(SessionRow {
                 id: dto.session.id,
                 sku: record.sku,
                 item_type: record.item_type,
                 title: record.title,
-                main_count: dto.main_count,
-                condition_count: dto.condition_count,
-                unreviewed_count: dto.unreviewed_count,
+                main_count,
+                condition_count,
+                unreviewed_count,
                 status,
                 label,
                 progress,
                 last_activity_at: dto.session.last_activity_at,
                 created_at: dto.session.created_at,
                 arranged: dto.session.arranged_at.is_some(),
-                cover_preview_path: record.cover_preview_path,
+                cover_preview_path: cover.map(|path| path.to_string_lossy().into_owned()),
+                cover_pending,
                 publish: record.publish,
                 changes: dto.changes,
             });
@@ -502,6 +586,73 @@ impl SessionsService<'_> {
             groups,
             counts,
             unassigned_count,
+        })
+    }
+}
+
+impl SessionsService<'_> {
+    /// MC-H2.1: one page of `list(filter, query)`: its rows kept when created at or after
+    /// `created_from` and whose id is in `only_ids` (each when given; `Some([])` keeps none), in
+    /// the list's order, cut to the page (`page_of`); each group keeps its row count before the
+    /// cut, empty groups are left out. Then the page's pending covers are requested (MC-H1.3);
+    /// nothing is downloaded here.
+    pub fn page(
+        &self,
+        filter: crate::domain::session::ListFilter,
+        query: Option<String>,
+        created_from: Option<i64>,
+        only_ids: Option<&[i64]>,
+        page: u32,
+    ) -> Result<crate::domain::session::SessionPage> {
+        use crate::domain::session::{PageGroup, SessionPage};
+        let list = self.list(filter, query)?;
+        let kept = |row: &crate::domain::session::SessionRow| {
+            created_from.is_none_or(|from| row.created_at >= from)
+                && only_ids.is_none_or(|ids| ids.contains(&row.id))
+        };
+        let groups: Vec<(String, Vec<crate::domain::session::SessionRow>)> = list
+            .groups
+            .into_iter()
+            .map(|group| (group.label, group.rows.into_iter().filter(kept).collect()))
+            .collect();
+        let total = groups.iter().map(|(_, rows)| rows.len()).sum();
+        let (page, pages, range) = crate::mechanisms::remote::page_of(total, page);
+        let mut index = 0;
+        let mut cut = Vec::new();
+        for (label, rows) in groups {
+            let group_total = rows.len();
+            let start = index;
+            index += group_total;
+            let rows: Vec<_> = rows
+                .into_iter()
+                .enumerate()
+                .filter(|(i, _)| range.contains(&(start + i)))
+                .map(|(_, row)| row)
+                .collect();
+            if !rows.is_empty() {
+                cut.push(PageGroup {
+                    label,
+                    total: group_total,
+                    rows,
+                });
+            }
+        }
+        if let Some(remote) = self.remote {
+            let pending: Vec<i64> = cut
+                .iter()
+                .flat_map(|group| &group.rows)
+                .filter(|row| row.cover_pending)
+                .map(|row| row.id)
+                .collect();
+            remote.request_covers(crate::services::remote::CoverSource::Page, &pending)?;
+        }
+        Ok(SessionPage {
+            groups: cut,
+            counts: list.counts,
+            unassigned_count: list.unassigned_count,
+            page,
+            pages,
+            total,
         })
     }
 }

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ActionButton } from '@/components/ui/action-button';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useSharedRemoteItem } from '@/features/workspace/remote/useRemoteItem';
 import { deleteSession, fixSessionFiles, sessionDeletePreview, sessionFilesMisplaced, type FilesFixed, type SessionDeletePreview } from '@/services/sessions';
 
 function fixedToast(done: FilesFixed) {
@@ -28,6 +29,8 @@ export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu
   const [confirming, setConfirming] = useState(false);
   const [misplaced, setMisplaced] = useState(0);
   const [fixing, setFixing] = useState(false);
+  // H4 (10H §6): Refresh from Shopify, for a remote product on screen only (an ordinary session's photos are here).
+  const remote = useSharedRemoteItem(sessionId);
   return (
     <>
       <DropdownMenu.Root
@@ -57,6 +60,16 @@ export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu
                 }}
               >
                 <span>Fix photo files location ({misplaced})</span>
+              </DropdownMenu.Item>
+            )}
+            {remote?.remote && (
+              <DropdownMenu.Item
+                className="photo-menu-item"
+                onSelect={() => {
+                  remote.refresh().catch(e => toast.error(`Could not refresh from Shopify: ${(e as Error).message}`));
+                }}
+              >
+                <span>Refresh from Shopify</span>
               </DropdownMenu.Item>
             )}
             <DropdownMenu.Item className="photo-menu-item" data-danger onSelect={() => setConfirming(true)}>

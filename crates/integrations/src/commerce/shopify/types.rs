@@ -82,6 +82,10 @@ impl VariantNode {
 #[derive(Debug, Clone, Deserialize)]
 pub struct UrlHolder {
     pub url: Option<String>,
+    /// `MediaImageOriginalSource.fileSize` (H1; schema-grounded): the original file's size in
+    /// bytes, when asked for and known.
+    #[serde(default, rename = "fileSize")]
+    pub file_size: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

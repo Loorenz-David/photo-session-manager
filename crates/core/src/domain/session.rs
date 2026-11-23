@@ -134,7 +134,10 @@ pub struct SessionRow {
     /// When the session was created: the list's order and time groups (changelog 46 (1)).
     pub created_at: i64,
     pub arranged: bool,
+    /// MC-H1.1: the row picture; never a path whose file is missing (M-H4).
     pub cover_preview_path: Option<String>,
+    /// MC-H1.1: the row's item is remote and its cover is not on this Mac yet.
+    pub cover_pending: bool,
     pub publish: Option<LatestPublish>,
     /// A10: why a published session is open again.
     pub changes: Option<PublishedChanges>,
@@ -153,6 +156,25 @@ pub struct SessionList {
     pub unassigned_count: i64,
 }
 
+/// MC-H2.1: one group of a page: its rows on the page and its row count before the cut.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PageGroup {
+    pub label: String,
+    pub total: usize,
+    pub rows: Vec<SessionRow>,
+}
+
+/// MC-H2.1: one page of the sessions list (`counts` and `unassigned_count` over all sessions).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionPage {
+    pub groups: Vec<PageGroup>,
+    pub counts: ListCounts,
+    pub unassigned_count: i64,
+    pub page: u32,
+    pub pages: u32,
+    pub total: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionListRecord {
     pub session: SessionDto,
@@ -160,7 +182,10 @@ pub struct SessionListRecord {
     pub item_type: String,
     pub title: String,
     pub non_deleted_missing_preview_count: i64,
-    pub cover_preview_path: Option<String>,
+    /// The stored preview paths of the main photo at position 1 (MC-H1.1(i); the files may be
+    /// gone).
+    pub cover_adjusted_preview_path: Option<String>,
+    pub cover_original_preview_path: Option<String>,
     pub latest_step: Option<PublishStep>,
     pub failed_step: Option<PublishStep>,
     pub uploaded: i64,

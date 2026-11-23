@@ -18,6 +18,7 @@ vi.mock('@/services/photos', () => ({
 vi.mock('@/services/sessions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/sessions')>()),
   listSessions: vi.fn(),
+  sessionsPage: vi.fn(),
   activeSession: vi.fn(),
   createSession: vi.fn(),
   activateSession: vi.fn(),
@@ -46,7 +47,8 @@ import App from '@/App';
 import { SessionsPage } from '@/features/sessions/SessionsPage';
 import { cameraStatus } from '@/services/camera';
 import { classifyPhoto, deletePhoto, getSessionView } from '@/services/photos';
-import { activateSession, activeSession, deactivateSession, listSessions } from '@/services/sessions';
+import { activateSession, activeSession, deactivateSession, listSessions, sessionsPage } from '@/services/sessions';
+import { answerFromList } from '@/features/sessions/__tests__/pageFromList';
 
 globalThis.ResizeObserver ??= class {
   observe() {}
@@ -172,13 +174,14 @@ function sessionRow(id: number, title: string, createdAt: number, lastActivityAt
     progress: null,
     last_activity_at: lastActivityAt,
     created_at: createdAt,
-    cover_preview_path: null,
+    cover_preview_path: null, cover_pending: false,
     arranged: false,
     publish: null, changes: null,
   };
 }
 
 beforeEach(() => {
+  answerFromList(sessionsPage, listSessions);
   vi.mocked(listSessions).mockResolvedValue({ groups: [], counts: { open: 0, published: 0, all: 0 }, unassigned_count: 0 });
   vi.mocked(activeSession).mockResolvedValue(null);
   vi.mocked(activateSession).mockResolvedValue();

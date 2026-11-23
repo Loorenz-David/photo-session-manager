@@ -22,6 +22,10 @@ pub struct RetentionInput {
     pub keep_files: bool,
     /// Already cleared.
     pub cleared: bool,
+    /// The item is a shop-only remote item (MC-H3.8): it has no local files to clear.
+    pub shop_only: bool,
+    /// When the item's pictures were last brought back to this Mac (MC-H4.8).
+    pub restored_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +41,8 @@ pub enum Eligibility {
 
 /// 10F §3: an item is cleared `retention_days` after its publish completed, if it is published
 /// (latest run done), not dirty, not pinned, not cleared yet, and an integration is configured.
+/// Never for a shop-only item (MC-H3.8), nor for an item brought back after its last completed
+/// publish (`published_at ≤ restored_at`, MC-H4.8).
 pub fn eligibility(input: RetentionInput, now_ms: i64, retention_days: u32) -> Eligibility {
     let Some(published_at) = input.published_at else {
         return Eligibility::Never;
@@ -46,6 +52,10 @@ pub fn eligibility(input: RetentionInput, now_ms: i64, retention_days: u32) -> E
         || input.keep_files
         || input.cleared
         || input.latest_step != Some(PublishStep::Done)
+        || input.shop_only
+        || input
+            .restored_at
+            .is_some_and(|restored| published_at <= restored)
     {
         return Eligibility::Never;
     }
@@ -123,7 +133,40 @@ mod tests {
             latest_step: Some(PublishStep::Done),
             keep_files: false,
             cleared: false,
+            shop_only: false,
+            restored_at: None,
         }
+    }
+
+    /// H1·C11's input: published, clean, done, integration, not pinned, not cleared, past the
+    /// retention days.
+    const LATE: i64 = T + 30 * DAY_MS;
+
+    #[test]
+    fn h1_c11a_shop_only_is_never_cleared() {
+        let input = RetentionInput {
+            shop_only: true,
+            ..published()
+        };
+        assert_eq!(eligibility(input, LATE, 4), Eligibility::Never);
+    }
+
+    #[test]
+    fn h1_c11b_brought_back_at_the_publish_is_never_cleared() {
+        let input = RetentionInput {
+            restored_at: Some(T),
+            ..published()
+        };
+        assert_eq!(eligibility(input, LATE, 4), Eligibility::Never);
+    }
+
+    #[test]
+    fn h1_c11c_published_after_the_bring_back_is_due() {
+        let input = RetentionInput {
+            restored_at: Some(T - 1),
+            ..published()
+        };
+        assert_eq!(eligibility(input, LATE, 4), Eligibility::Due);
     }
 
     #[test]

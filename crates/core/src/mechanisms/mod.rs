@@ -16,6 +16,7 @@ pub mod position;
 pub mod publish;
 pub mod publish_partition;
 pub mod reconcile;
+pub mod remote;
 pub mod retention;
 pub mod sameness;
 pub mod secrets;

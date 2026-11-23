@@ -8,6 +8,7 @@ pub mod history;
 pub mod items;
 pub mod photos;
 pub mod publish;
+pub mod remote;
 pub mod research;
 pub mod search;
 pub mod sessions;

@@ -160,7 +160,7 @@ function sessionRow(id: number, title: string, status: SessionStatusResponse = '
     progress: null,
     last_activity_at: 0,
     created_at: 0,
-    cover_preview_path: null,
+    cover_preview_path: null, cover_pending: false,
     arranged: false,
     publish: null, changes: null,
   };

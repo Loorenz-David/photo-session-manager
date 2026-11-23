@@ -49,14 +49,22 @@ pub trait HttpTransport: Send + Sync {
     /// PUT raw bytes to a staged-upload target; `headers` are the target's `parameters`.
     fn put_bytes(&self, url: &str, headers: &[(String, String)], bytes: &[u8])
     -> Result<HttpReply>;
-    /// GET a file's bytes (a published image on the platform's CDN, P62). A transport that
-    /// cannot download refuses.
-    fn get_bytes(&self, _url: &str) -> Result<Vec<u8>> {
+    /// GET a file (a published image on the platform's CDN, P62, H1): the HTTP status and the
+    /// body for any HTTP answer (a non-200 answer is a `Download`, not an error). A transport
+    /// that cannot download refuses.
+    fn download(&self, _url: &str) -> Result<Download> {
         Err(Error::Provider("download not supported".into()))
     }
 }
 
-/// The largest image `get_bytes` accepts (a preview-size JPEG is far smaller).
+/// One download answer (H1): the HTTP status and the body bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Download {
+    pub status: u16,
+    pub bytes: Vec<u8>,
+}
+
+/// The largest body `download` accepts (a full-size JPEG is far smaller).
 pub const MAX_DOWNLOAD_BYTES: usize = 64 * 1024 * 1024;
 
 /// `application/x-www-form-urlencoded` encoding of `fields`.
@@ -190,22 +198,22 @@ fn map_error(error: reqwest::Error) -> Error {
 }
 
 impl ReqwestTransport {
-    fn download(&self, url: String) -> Result<Vec<u8>> {
-        let (reply_tx, reply_rx) = mpsc::channel::<Result<Vec<u8>>>();
+    fn get_file(&self, url: String) -> Result<Download> {
+        let (reply_tx, reply_rx) = mpsc::channel::<Result<Download>>();
         let task: Task = Box::new(move |runtime, client| {
             let request = client.get(url);
             runtime.spawn(async move {
                 let result = async move {
                     let response = request.send().await.map_err(map_error)?;
                     let status = response.status().as_u16();
-                    if status != 200 {
-                        return Err(Error::Provider(format!("download: HTTP {status}")));
-                    }
                     let bytes = response.bytes().await.map_err(map_error)?;
                     if bytes.len() > MAX_DOWNLOAD_BYTES {
                         return Err(Error::Provider("download: too large".into()));
                     }
-                    Ok(bytes.to_vec())
+                    Ok(Download {
+                        status,
+                        bytes: bytes.to_vec(),
+                    })
                 }
                 .await;
                 let _ = reply_tx.send(result);
@@ -223,8 +231,8 @@ impl ReqwestTransport {
 }
 
 impl HttpTransport for ReqwestTransport {
-    fn get_bytes(&self, url: &str) -> Result<Vec<u8>> {
-        self.download(url.to_owned())
+    fn download(&self, url: &str) -> Result<Download> {
+        self.get_file(url.to_owned())
     }
 
     fn post_graphql(

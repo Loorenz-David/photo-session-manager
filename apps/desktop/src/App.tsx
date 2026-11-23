@@ -24,6 +24,7 @@ import { ConversationsContext, useConversations } from './features/conversations
 import { ConversationsPanel } from './features/conversations/ConversationsPanel';
 import { ConversationToasts } from './features/conversations/ConversationToasts';
 import { VisitBar } from './features/conversations/VisitBar';
+import { RemoteItemContext, activatable, useRemoteItem } from './features/workspace/remote/useRemoteItem';
 import {
   captureTarget,
   hashOf,
@@ -91,11 +92,24 @@ function useNav(): Nav {
 /**
  * Opening a session points the editing provider's capture folder at it (ch04 S-B, P04 `session_activate`);
  * back on the Sessions page new captures go to Unassigned (S-E, `session_deactivate`).
+ * H4 (MC-H3.4): only once the target's remote state is known and allows it (`activatable`: `local`, or `unknown`
+ * whose first read failed); an archived or shop-only product is never the capture folder, and the call is made once
+ * when the state becomes activatable while the session is still the target (after bring back).
  */
-function useCaptureTarget(sessionId?: number) {
+function useCaptureTarget(sessionId: number | undefined, canActivate: boolean) {
   const active = useRef(false);
+  // The target this hook already activated: a state that is read again (or read by another instance during a visit)
+  // never activates the same target twice.
+  const activated = useRef<number | undefined>(undefined);
+  const previous = useRef(sessionId);
   useEffect(() => {
+    if (previous.current !== sessionId) {
+      previous.current = sessionId;
+      activated.current = undefined;
+    }
     if (sessionId !== undefined && sessionId !== 1) {
+      if (!canActivate || activated.current === sessionId) return;
+      activated.current = sessionId;
       activateSession(sessionId)
         .then(() => {
           active.current = true;
@@ -107,7 +121,7 @@ function useCaptureTarget(sessionId?: number) {
       active.current = false;
       deactivateSession().catch(error => toast.error(`Could not switch captures to Unassigned: ${(error as Error).message}`));
     }
-  }, [sessionId]);
+  }, [sessionId, canActivate]);
 }
 
 /**
@@ -160,16 +174,23 @@ export default function App() {
   // A14: "Open AI review" in a search window (declared after the reset above, so it opens after it).
   useReviewFromSearch(sessionId, navigate, useCallback(() => { setDetailsStep(REVIEW_STEP); setDetailsOpen(true); }, []));
   // C4 (MC-C3.2): a visit keeps the capture folder where it was; only this value moves it.
-  useCaptureTarget(captureTarget(nav));
+  // H4 (MC-H3.4, L9): the gate reads the remote state of the capture target, keyed by session id; when the target is
+  // the session on screen, the workspace shares that one instance.
+  const target = captureTarget(nav);
+  const screenRemote = useRemoteItem(sessionId);
+  const otherRemote = useRemoteItem(target !== sessionId ? target : undefined);
+  useCaptureTarget(target, activatable(target === sessionId ? screenRemote : otherRemote));
   useHistory(sessionId);
   useHistoryKeys(sessionId);
   // C2 (09B §6, §7, §9): one conversations state for every route (header icon, panel, toasts).
   const conversations = useConversations(sessionId, { visit: nav.visit, openSession, visitBack, shootHere, openField });
   const withConversations = (page: ReactNode) => (
     <ConversationsContext.Provider value={conversations}>
-      {page}
-      <ConversationsPanel />
-      <ConversationToasts />
+      <RemoteItemContext.Provider value={screenRemote}>
+        {page}
+        <ConversationsPanel />
+        <ConversationToasts />
+      </RemoteItemContext.Provider>
     </ConversationsContext.Provider>
   );
 

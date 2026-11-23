@@ -390,6 +390,17 @@ impl TestApp {
     pub fn with_camera() -> Result<Self> {
         Self::with_camera_behaviour(serde_json::json!({}))
     }
+    /// H4 (projection r0, L2): the camera sidecar together with the fake shop (`with_camera()`
+    /// has no commerce integration, so every item there is `Local`, H6).
+    pub fn with_camera_and_shop() -> Result<Self> {
+        Self::create(
+            true,
+            true,
+            "custom.damage_report",
+            Some(serde_json::json!({})),
+            0,
+        )
+    }
     pub fn with_camera_behaviour(behaviour: serde_json::Value) -> Result<Self> {
         Self::create(true, false, "custom.damage_report", Some(behaviour), 0)
     }
@@ -726,6 +737,11 @@ impl TestApp {
     }
     pub fn fake_shop(&self) -> &FakeCommerce {
         self.commerce.as_deref().expect("fake commerce configured")
+    }
+    /// H1: the app's remote items service (its background thread never runs in tests: they
+    /// call `run_pending` themselves).
+    pub fn remote(&self) -> &psm_core::services::remote::RemoteItems {
+        self.app.remote.as_ref()
     }
     pub fn kill_and_restart(&mut self) -> Result<()> {
         self.restart(false)

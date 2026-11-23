@@ -326,7 +326,10 @@ pub struct SessionRowResponse {
     #[specta(type = specta_typescript::Number)]
     pub created_at: i64,
     pub arranged: bool,
+    /// MC-H1.1: never a path whose file is missing (M-H4).
     pub cover_preview_path: Option<String>,
+    /// MC-H1.1: the item is remote and its cover is being fetched (a `picture_ready` follows).
+    pub cover_pending: bool,
     pub publish: Option<LatestPublishResponse>,
     /// A10: why a published session is open again.
     pub changes: Option<PublishedChangesResponse>,
@@ -344,54 +347,57 @@ pub struct SessionListResponse {
     pub unassigned_count: i64,
 }
 
+impl From<psm_core::domain::session::SessionRow> for SessionRowResponse {
+    fn from(row: psm_core::domain::session::SessionRow) -> Self {
+        use psm_core::domain::session::{RowLabel, SessionStatus};
+        Self {
+            id: row.id,
+            sku: row.sku,
+            item_type: row.item_type,
+            title: row.title,
+            main_count: row.main_count,
+            condition_count: row.condition_count,
+            unreviewed_count: row.unreviewed_count,
+            status: match row.status {
+                SessionStatus::Publishing => SessionStatusResponse::Publishing,
+                SessionStatus::Failed => SessionStatusResponse::Failed,
+                SessionStatus::Published => SessionStatusResponse::Published,
+                SessionStatus::Ready => SessionStatusResponse::Ready,
+                SessionStatus::InProgress => SessionStatusResponse::InProgress,
+            },
+            label: match row.label {
+                RowLabel::WaitingForYou(n) => RowLabelResponse::WaitingForYou(n),
+                RowLabel::Publishing(p) => RowLabelResponse::Publishing(p),
+                RowLabel::PublishFailed => RowLabelResponse::PublishFailed,
+                RowLabel::PublishCancelled => RowLabelResponse::PublishCancelled,
+                RowLabel::DescriptionFailed => RowLabelResponse::DescriptionFailed,
+                RowLabel::Published => RowLabelResponse::Published,
+                RowLabel::Ready => RowLabelResponse::Ready,
+                RowLabel::InProgress(n) => RowLabelResponse::InProgress(n),
+                RowLabel::Archived => RowLabelResponse::Archived,
+                RowLabel::WaitingForEditor => RowLabelResponse::WaitingForEditor,
+            },
+            progress: row.progress,
+            last_activity_at: row.last_activity_at,
+            created_at: row.created_at,
+            arranged: row.arranged,
+            cover_preview_path: row.cover_preview_path,
+            cover_pending: row.cover_pending,
+            publish: row.publish.map(Into::into),
+            changes: row.changes.map(Into::into),
+        }
+    }
+}
+
 impl From<psm_core::domain::session::SessionList> for SessionListResponse {
     fn from(list: psm_core::domain::session::SessionList) -> Self {
-        use psm_core::domain::session::{RowLabel, SessionStatus};
         Self {
             groups: list
                 .groups
                 .into_iter()
                 .map(|group| SessionListGroupResponse {
                     label: group.label,
-                    rows: group
-                        .rows
-                        .into_iter()
-                        .map(|row| SessionRowResponse {
-                            id: row.id,
-                            sku: row.sku,
-                            item_type: row.item_type,
-                            title: row.title,
-                            main_count: row.main_count,
-                            condition_count: row.condition_count,
-                            unreviewed_count: row.unreviewed_count,
-                            status: match row.status {
-                                SessionStatus::Publishing => SessionStatusResponse::Publishing,
-                                SessionStatus::Failed => SessionStatusResponse::Failed,
-                                SessionStatus::Published => SessionStatusResponse::Published,
-                                SessionStatus::Ready => SessionStatusResponse::Ready,
-                                SessionStatus::InProgress => SessionStatusResponse::InProgress,
-                            },
-                            label: match row.label {
-                                RowLabel::WaitingForYou(n) => RowLabelResponse::WaitingForYou(n),
-                                RowLabel::Publishing(p) => RowLabelResponse::Publishing(p),
-                                RowLabel::PublishFailed => RowLabelResponse::PublishFailed,
-                                RowLabel::PublishCancelled => RowLabelResponse::PublishCancelled,
-                                RowLabel::DescriptionFailed => RowLabelResponse::DescriptionFailed,
-                                RowLabel::Published => RowLabelResponse::Published,
-                                RowLabel::Ready => RowLabelResponse::Ready,
-                                RowLabel::InProgress(n) => RowLabelResponse::InProgress(n),
-                                RowLabel::Archived => RowLabelResponse::Archived,
-                                RowLabel::WaitingForEditor => RowLabelResponse::WaitingForEditor,
-                            },
-                            progress: row.progress,
-                            last_activity_at: row.last_activity_at,
-                            created_at: row.created_at,
-                            arranged: row.arranged,
-                            cover_preview_path: row.cover_preview_path,
-                            publish: row.publish.map(Into::into),
-                            changes: row.changes.map(Into::into),
-                        })
-                        .collect(),
+                    rows: group.rows.into_iter().map(Into::into).collect(),
                 })
                 .collect(),
             counts: SessionListCountsResponse {
@@ -404,6 +410,93 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
     }
 }
 
+/// MC-H2.1: one group of a page: its rows on the page and its row count before the cut.
+#[derive(Serialize, Type)]
+pub struct SessionPageGroupResponse {
+    pub label: String,
+    pub total: u32,
+    pub rows: Vec<SessionRowResponse>,
+}
+/// MC-H2.2: one page of the sessions list (the Sessions page only).
+#[derive(Serialize, Type)]
+pub struct SessionPageResponse {
+    pub groups: Vec<SessionPageGroupResponse>,
+    pub counts: SessionListCountsResponse,
+    #[specta(type = specta_typescript::Number)]
+    pub unassigned_count: i64,
+    pub page: u32,
+    pub pages: u32,
+    pub total: u32,
+}
+
+impl From<psm_core::domain::session::SessionPage> for SessionPageResponse {
+    fn from(page: psm_core::domain::session::SessionPage) -> Self {
+        Self {
+            groups: page
+                .groups
+                .into_iter()
+                .map(|group| SessionPageGroupResponse {
+                    label: group.label,
+                    total: group.total as u32,
+                    rows: group.rows.into_iter().map(Into::into).collect(),
+                })
+                .collect(),
+            counts: SessionListCountsResponse {
+                open: page.counts.open,
+                published: page.counts.published,
+                all: page.counts.all,
+            },
+            unassigned_count: page.unassigned_count,
+            page: page.page,
+            pages: page.pages,
+            total: page.total as u32,
+        }
+    }
+}
+
+/// MC-H2.2: the Sessions page's list, one page of `PAGE_SIZE` rows; the page's pending covers
+/// are requested and fetched in the background (a `picture_ready` per cover).
+#[tauri::command]
+#[specta::specta]
+pub async fn sessions_page(
+    state: State<'_, AppState>,
+    filter: SessionFilter,
+    query: Option<String>,
+    created_from: Option<CommandId>,
+    only_ids: Option<Vec<CommandId>>,
+    page: u32,
+) -> Result<SessionPageResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<SessionPageResponse, CommandError> {
+        session_page(&app, filter, query, created_from, only_ids, page)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// The body of `sessions_page`.
+pub(crate) fn session_page(
+    app: &psm_integrations::AppHandles,
+    filter: SessionFilter,
+    query: Option<String>,
+    created_from: Option<CommandId>,
+    only_ids: Option<Vec<CommandId>>,
+    page: u32,
+) -> Result<SessionPageResponse, CommandError> {
+    let only_ids: Option<Vec<i64>> = only_ids.map(|ids| ids.into_iter().map(|id| id.0).collect());
+    SessionsService::new(app.store.as_ref(), &SystemClock)
+        .with_remote(app.remote.as_ref())
+        .page(
+            filter.into(),
+            query,
+            created_from.map(|at| at.0),
+            only_ids.as_deref(),
+            page,
+        )
+        .map(Into::into)
+        .map_err(Into::into)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn sessions_list(
@@ -414,6 +507,7 @@ pub async fn sessions_list(
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<SessionListResponse, CommandError> {
         SessionsService::new(app.store.as_ref(), &SystemClock)
+            .with_remote(app.remote.as_ref())
             .list(filter.into(), query)
             .map(Into::into)
             .map_err(Into::into)
@@ -473,7 +567,7 @@ pub async fn session_activate(
     state: State<'_, AppState>,
     session_id: CommandId,
 ) -> Result<(), CommandError> {
-    let (store, editing, health, provision, camera, follow) = {
+    let (store, editing, health, provision, camera, follow, remote) = {
         let app = state.handles().map_err(CommandError::from)?;
         (
             app.store.clone(),
@@ -482,16 +576,19 @@ pub async fn session_activate(
             app.provision.clone(),
             app.camera.clone(),
             app.follow.clone(),
+            app.remote.clone(),
         )
     };
     // A10: switches apply in the order they were asked for (the ticket is taken now).
     let ticket = CAPTURE_TARGET_ORDER.ticket();
     tauri::async_runtime::spawn_blocking(move || {
+        // MC-H3.4: both the filing-target claim and the switch read the item's remote state.
         let service = || {
             SessionsService::new(store.as_ref(), &SystemClock)
                 .with_editing(editing.as_ref(), health.as_ref(), &provision)
                 .with_camera(camera.as_ref())
                 .with_follow(follow.as_ref())
+                .with_remote(remote.as_ref())
         };
         // A16: photos are filed to this session from now on, whatever Capture One is doing.
         let claimed =
@@ -712,6 +809,7 @@ mod list_tests {
                     last_activity_at: 123,
                     created_at: 100,
                     cover_preview_path: Some("/cover.jpg".into()),
+                    cover_pending: false,
                     publish: None,
                     changes: None,
                     arranged: false,

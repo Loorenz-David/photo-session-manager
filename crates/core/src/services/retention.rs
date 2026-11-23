@@ -1,22 +1,16 @@
 //! Retention after publish (10F §3, Rules, Q2, Q3, M41; P62): the read-only guard of a cleared
-//! item, the verification that Shopify holds every published image of an item before anything
-//! of it is deleted, and the archived view (the item's photos shown from Shopify, downloaded on
-//! demand and cached small). The deletions themselves are the storage service's.
+//! item and the verification that Shopify holds every published image of an item before anything
+//! of it is deleted. The deletions themselves are the storage service's; the archived view and
+//! the pin are `RemoteItems`' (H4, MC-H3.5).
 
 use crate::{
     Error, Result,
     domain::{
-        photo::Classification,
-        publish::MediaImage,
-        session::PublishStep,
-        storage::{ArchivedImage, ItemRetention},
+        photo::Classification, publish::MediaImage, session::PublishStep, storage::ArchivedImage,
     },
     ports::{commerce::CommerceAdapter, store::Store},
 };
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::collections::HashSet;
 
 /// The integration whose links and media are verified.
 pub const INTEGRATION: &str = "shopify";
@@ -40,6 +34,18 @@ pub fn ensure_session_not_cleared(store: &dyn Store, session_id: i64) -> Result<
 /// 10F Q3 for a photo: refused when the photo's session's item was cleared.
 pub fn ensure_photo_not_cleared(store: &dyn Store, photo_id: i64) -> Result<()> {
     ensure_session_not_cleared(store, store.photo(photo_id)?.session_id)
+}
+
+/// The cache file name of one remote picture in `<previews>/archived/<item_id>/` (P62):
+/// `<role>-<NN>-<first 12 hex of sha256(media_id)>.jpg`.
+pub fn archived_file_name(image: &ArchivedImage) -> String {
+    use sha2::Digest;
+    let tag: String = sha2::Sha256::digest(image.media_id.as_bytes())
+        .iter()
+        .take(6)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("{}-{:02}-{tag}.jpg", image.role, image.position)
 }
 
 /// The outcome of reading an item's published images back from the platform (M41).
@@ -119,13 +125,14 @@ pub fn verify(
             let found = id
                 .as_ref()
                 .and_then(|id| held.iter().find(|m: &&MediaImage| &m.id == id))
-                .and_then(|m| m.url.clone().map(|url| (m.id.clone(), url)));
+                .and_then(|m| m.url.clone().map(|url| (m.id.clone(), url, m.bytes)));
             match found {
-                Some((media_id, url)) => images.push(ArchivedImage {
+                Some((media_id, url, bytes)) => images.push(ArchivedImage {
                     role: role.into(),
                     position: index as i64 + 1,
                     media_id,
                     url,
+                    bytes,
                 }),
                 None => missing += 1,
             }
@@ -136,115 +143,6 @@ pub fn verify(
     } else {
         Verification::Missing(missing)
     })
-}
-
-/// One archived picture as the workspace shows it: the Shopify URL and, once downloaded, the
-/// cached file.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArchivedPicture {
-    pub role: String,
-    pub position: i64,
-    pub url: String,
-    pub path: Option<PathBuf>,
-}
-
-/// What the workspace needs to know about an item's retention (10F §3, Q2, Q3).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArchiveView {
-    pub item_id: i64,
-    pub retention: ItemRetention,
-    pub pictures: Vec<ArchivedPicture>,
-}
-
-/// The archived view and the pin (P62).
-pub struct ArchiveService<'a> {
-    store: &'a dyn Store,
-    commerce: Option<&'a dyn CommerceAdapter>,
-    /// `<data>/previews/archived` (the small cache of downloaded Shopify images).
-    cache_dir: &'a Path,
-}
-
-impl<'a> ArchiveService<'a> {
-    pub fn new(
-        store: &'a dyn Store,
-        commerce: Option<&'a dyn CommerceAdapter>,
-        cache_dir: &'a Path,
-    ) -> Self {
-        Self {
-            store,
-            commerce,
-            cache_dir,
-        }
-    }
-
-    fn cached_path(&self, item_id: i64, image: &ArchivedImage) -> PathBuf {
-        use sha2::Digest;
-        let tag: String = sha2::Sha256::digest(image.media_id.as_bytes())
-            .iter()
-            .take(6)
-            .map(|b| format!("{b:02x}"))
-            .collect();
-        self.cache_dir
-            .join(item_id.to_string())
-            .join(format!("{}-{:02}-{tag}.jpg", image.role, image.position))
-    }
-
-    /// The session's item retention state; for a cleared item its pictures, each downloaded
-    /// from Shopify once (at preview size) and then served from the cache. A download that
-    /// fails leaves the picture without a file (tried again next time).
-    pub fn view(&self, session_id: i64) -> Result<Option<ArchiveView>> {
-        let Some(item_id) = self.store.session(session_id)?.session.item_id else {
-            return Ok(None);
-        };
-        let retention = self.store.item_retention(item_id)?;
-        let mut pictures = Vec::new();
-        if retention.cleared_at.is_some() {
-            for image in self.store.archived_images(item_id)? {
-                let path = self.cached_path(item_id, &image);
-                let cached = path.is_file() || self.download(&image, &path);
-                pictures.push(ArchivedPicture {
-                    role: image.role,
-                    position: image.position,
-                    url: image.url,
-                    path: cached.then_some(path),
-                });
-            }
-        }
-        Ok(Some(ArchiveView {
-            item_id,
-            retention,
-            pictures,
-        }))
-    }
-
-    fn download(&self, image: &ArchivedImage, path: &Path) -> bool {
-        let Some(commerce) = self.commerce else {
-            return false;
-        };
-        let written = commerce
-            .fetch_image(&image.url, ARCHIVED_IMAGE_EDGE)
-            .and_then(|bytes| {
-                let dir = path
-                    .parent()
-                    .ok_or_else(|| Error::InvalidData("cache path".into()))?;
-                std::fs::create_dir_all(dir)?;
-                let partial = path.with_extension("part");
-                std::fs::write(&partial, bytes)?;
-                std::fs::rename(&partial, path)?;
-                Ok(())
-            });
-        if let Err(error) = &written {
-            tracing::warn!(%error, media = image.media_id, "archived image not downloaded");
-        }
-        written.is_ok()
-    }
-
-    /// 10F Q2: "Keep files on this Mac" exempts the item from retention and the budget.
-    pub fn set_keep_files(&self, item_id: i64, keep: bool) -> Result<ItemRetention> {
-        self.store.item(item_id)?;
-        self.store.set_item_keep_files(item_id, keep)?;
-        self.store.item_retention(item_id)
-    }
 }
 
 /// The set of sessions whose item was cleared (the preview service leaves their photos alone:

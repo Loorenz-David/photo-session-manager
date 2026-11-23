@@ -19,6 +19,11 @@ export const commands = {
 	sessionCreate: (itemId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_create", { itemId })),
 	sessionGet: (sessionId: CommandId) => typedError<SessionViewResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
 	sessionsList: (filter: SessionFilter, query: string | null) => typedError<SessionListResponse_Serialize, CommandError>(__TAURI_INVOKE("sessions_list", { filter, query })),
+	/**
+	 *  MC-H2.2: the Sessions page's list, one page of `PAGE_SIZE` rows; the page's pending covers
+	 *  are requested and fetched in the background (a `picture_ready` per cover).
+	 */
+	sessionsPage: (filter: SessionFilter, query: string | null, createdFrom: CommandId | null, onlyIds: CommandId[] | null, page: number) => typedError<SessionPageResponse_Serialize, CommandError>(__TAURI_INVOKE("sessions_page", { filter, query, createdFrom, onlyIds, page })),
 	sessionActivate: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("session_activate", { sessionId })),
 	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
 	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
@@ -332,15 +337,19 @@ export const commands = {
 	/**  Saves the retention period in days; the background clean-up applies it at its next tick. */
 	storageRetentionSet: (days: number) => typedError<number, CommandError>(__TAURI_INVOKE("storage_retention_set", { days })),
 	/**
-	 *  The session's item retention state; a cleared item's photos are downloaded from Shopify on
-	 *  demand (preview size) and cached. `null` for the Unassigned session.
-	 */
-	itemArchiveGet: (sessionId: CommandId) => typedError<ItemArchiveDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_archive_get", { sessionId })),
-	/**
 	 *  "Keep files on this Mac" (10F Q2): the pinned item is never cleared by retention or by the
-	 *  storage budget.
+	 *  storage budget. Answers the session's remote view (`null` for the Unassigned session).
 	 */
-	itemKeepFilesSet: (sessionId: CommandId, keep: boolean) => typedError<ItemArchiveDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_keep_files_set", { sessionId, keep })),
+	itemKeepFilesSet: (sessionId: CommandId, keep: boolean) => typedError<RemoteViewDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_keep_files_set", { sessionId, keep })),
+	/**
+	 *  MC-H3.5: the session's remote view (`null` for the Unassigned session). Missing picture
+	 *  files are queued for the background; nothing is downloaded here.
+	 */
+	sessionRemoteGet: (sessionId: CommandId) => typedError<RemoteViewDto_Serialize | null, CommandError>(__TAURI_INVOKE("session_remote_get", { sessionId })),
+	/**  MC-H3.3, Refresh from Shopify (a press): the record re-read, then the view. */
+	sessionRemoteRefresh: (sessionId: CommandId) => typedError<RemoteViewDto_Serialize, CommandError>(__TAURI_INVOKE("session_remote_refresh", { sessionId })),
+	/**  MC-H4, Bring back: the item's pictures downloaded at full size and made the session's photos. */
+	sessionBringBack: (sessionId: CommandId) => typedError<BringBackOutcomeDto, CommandError>(__TAURI_INVOKE("session_bring_back", { sessionId })),
 	templatesList: () => typedError<TemplateSummaryDto[], CommandError>(__TAURI_INVOKE("templates_list")),
 	templateGet: (itemType: string) => typedError<TemplateDto_Serialize | null, CommandError>(__TAURI_INVOKE("template_get", { itemType })),
 	templateCreate: (itemType: string) => typedError<TemplateDto_Serialize, CommandError>(__TAURI_INVOKE("template_create", { itemType })),
@@ -382,34 +391,6 @@ export type ApplyRefusalDto = {
 export type ApplyResultDto = {
 	applied: number[],
 	refused: ApplyRefusalDto[],
-};
-
-/**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
- *  small cached copy the workspace shows.
- */
-export type ArchivedPictureDto = ArchivedPictureDto_Serialize | ArchivedPictureDto_Deserialize;
-
-/**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
- *  small cached copy the workspace shows.
- */
-export type ArchivedPictureDto_Deserialize = {
-	role: string,
-	position: number,
-	url: string,
-	path?: string | null,
-};
-
-/**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
- *  small cached copy the workspace shows.
- */
-export type ArchivedPictureDto_Serialize = {
-	role: string,
-	position: number,
-	url: string,
-	path: string | null,
 };
 
 export type ArrangeNextResponse = ArrangeNextResponse_Serialize | ArrangeNextResponse_Deserialize;
@@ -598,6 +579,18 @@ export type AttributeValueDto_Serialize = {
 export type AuthorDto = {
 	kind: string,
 	name: string,
+};
+
+/**  What a finished bring back did: the new photos, and whether Capture One listed the folder. */
+export type BringBackOutcomeDto = {
+	photo_ids: number[],
+	synced: boolean,
+};
+
+/**  A running bring back's progress. */
+export type BringBackProgressDto = {
+	done: number,
+	total: number,
 };
 
 export type CameraSettingsDto = CameraSettingsDto_Serialize | CameraSettingsDto_Deserialize;
@@ -1254,34 +1247,6 @@ export type IntegrationSettingsDto = {
 	condition_photos_key: string,
 };
 
-/**
- *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
- */
-export type ItemArchiveDto = ItemArchiveDto_Serialize | ItemArchiveDto_Deserialize;
-
-/**
- *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
- */
-export type ItemArchiveDto_Deserialize = {
-	item_id: number,
-	keep_files: boolean,
-	cleared: boolean,
-	pictures: ArchivedPictureDto_Deserialize[],
-};
-
-/**
- *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
- */
-export type ItemArchiveDto_Serialize = {
-	item_id: number,
-	keep_files: boolean,
-	cleared: boolean,
-	pictures: ArchivedPictureDto_Serialize[],
-};
-
 export type ItemDto = ItemDto_Serialize | ItemDto_Deserialize;
 
 export type ItemDto_Deserialize = {
@@ -1295,6 +1260,16 @@ export type ItemDto_Deserialize = {
 	external_id?: string | null,
 	created_at: number,
 	updated_at: number,
+	/**
+	 *  H2 (MC-H2.4, MC-H2.5): the search result's picture on this Mac (only from the searches;
+	 *  never a path whose file is missing). Left out when there is none.
+	 */
+	picture_path?: string | null,
+	/**
+	 *  H2 (MC-H2.4): a local result's session (only from `items_search`). Left out when there is
+	 *  none.
+	 */
+	session_id?: number | null,
 };
 
 export type ItemDto_Serialize = {
@@ -1308,6 +1283,16 @@ export type ItemDto_Serialize = {
 	external_id: string | null,
 	created_at: number,
 	updated_at: number,
+	/**
+	 *  H2 (MC-H2.4, MC-H2.5): the search result's picture on this Mac (only from the searches;
+	 *  never a path whose file is missing). Left out when there is none.
+	 */
+	picture_path?: string,
+	/**
+	 *  H2 (MC-H2.4): a local result's session (only from `items_search`). Left out when there is
+	 *  none.
+	 */
+	session_id?: number,
 };
 
 /**
@@ -1673,6 +1658,11 @@ export type PreviewItemDto_Deserialize = {
 	/**  MC-A10: the conflicts this item waits on once confirmed. */
 	conflicts: PreviewConflictDto_Deserialize[],
 	researching: boolean,
+	/**
+	 *  H4 (MC-H3.6): a remote item publishes its details only; its photos stay as they are in
+	 *  the shop. Left out when false.
+	 */
+	details_only?: boolean,
 };
 
 export type PreviewItemDto_Serialize = {
@@ -1691,6 +1681,11 @@ export type PreviewItemDto_Serialize = {
 	/**  MC-A10: the conflicts this item waits on once confirmed. */
 	conflicts: PreviewConflictDto_Serialize[],
 	researching: boolean,
+	/**
+	 *  H4 (MC-H3.6): a remote item publishes its details only; its photos stay as they are in
+	 *  the shop. Left out when false.
+	 */
+	details_only?: boolean,
 };
 
 /**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */
@@ -1814,6 +1809,73 @@ export type RectDto = {
 	y: number | null,
 	w: number | null,
 	h: number | null,
+};
+
+/**
+ *  One remote picture: its role (`gallery` / `condition`), its position in that role, its media
+ *  id, its cached file on this Mac (`null` until downloaded) and whether the shop no longer has it.
+ */
+export type RemotePictureDto = RemotePictureDto_Serialize | RemotePictureDto_Deserialize;
+
+/**
+ *  One remote picture: its role (`gallery` / `condition`), its position in that role, its media
+ *  id, its cached file on this Mac (`null` until downloaded) and whether the shop no longer has it.
+ */
+export type RemotePictureDto_Deserialize = {
+	role: string,
+	position: number,
+	media_id: string,
+	path?: string | null,
+	gone: boolean,
+};
+
+/**
+ *  One remote picture: its role (`gallery` / `condition`), its position in that role, its media
+ *  id, its cached file on this Mac (`null` until downloaded) and whether the shop no longer has it.
+ */
+export type RemotePictureDto_Serialize = {
+	role: string,
+	position: number,
+	media_id: string,
+	path: string | null,
+	gone: boolean,
+};
+
+/**  The wire form of `RemoteState` (for the generated bindings only). */
+export type RemoteStateDto = "local" | "unknown" | "archived" | "shop_only";
+
+/**
+ *  Where a session's item's pictures are (`local`, `unknown`, `archived`, `shop_only`) and, for a
+ *  remote item, its pictures (MC-H3.5).
+ */
+export type RemoteViewDto = RemoteViewDto_Serialize | RemoteViewDto_Deserialize;
+
+/**
+ *  Where a session's item's pictures are (`local`, `unknown`, `archived`, `shop_only`) and, for a
+ *  remote item, its pictures (MC-H3.5).
+ */
+export type RemoteViewDto_Deserialize = {
+	item_id: number,
+	state: RemoteStateDto,
+	keep_files: boolean,
+	pictures: RemotePictureDto_Deserialize[],
+	bring_back_bytes: number,
+	check_failed: boolean,
+	bring_back?: BringBackProgressDto | null,
+};
+
+/**
+ *  Where a session's item's pictures are (`local`, `unknown`, `archived`, `shop_only`) and, for a
+ *  remote item, its pictures (MC-H3.5).
+ */
+export type RemoteViewDto_Serialize = {
+	item_id: number,
+	state: RemoteStateDto,
+	keep_files: boolean,
+	pictures: RemotePictureDto_Serialize[],
+	bring_back_bytes: number,
+	check_failed: boolean,
+	bring_back: BringBackProgressDto | null,
 };
 
 /**  The message a reply answers: its author and the target's first line (at most 80 characters). */
@@ -2117,6 +2179,46 @@ export type SessionListResponse_Serialize = {
 	unassigned_count: number,
 };
 
+/**  MC-H2.1: one group of a page: its rows on the page and its row count before the cut. */
+export type SessionPageGroupResponse = SessionPageGroupResponse_Serialize | SessionPageGroupResponse_Deserialize;
+
+/**  MC-H2.1: one group of a page: its rows on the page and its row count before the cut. */
+export type SessionPageGroupResponse_Deserialize = {
+	label: string,
+	total: number,
+	rows: SessionRowResponse_Deserialize[],
+};
+
+/**  MC-H2.1: one group of a page: its rows on the page and its row count before the cut. */
+export type SessionPageGroupResponse_Serialize = {
+	label: string,
+	total: number,
+	rows: SessionRowResponse_Serialize[],
+};
+
+/**  MC-H2.2: one page of the sessions list (the Sessions page only). */
+export type SessionPageResponse = SessionPageResponse_Serialize | SessionPageResponse_Deserialize;
+
+/**  MC-H2.2: one page of the sessions list (the Sessions page only). */
+export type SessionPageResponse_Deserialize = {
+	groups: SessionPageGroupResponse_Deserialize[],
+	counts: SessionListCountsResponse,
+	unassigned_count: number,
+	page: number,
+	pages: number,
+	total: number,
+};
+
+/**  MC-H2.2: one page of the sessions list (the Sessions page only). */
+export type SessionPageResponse_Serialize = {
+	groups: SessionPageGroupResponse_Serialize[],
+	counts: SessionListCountsResponse,
+	unassigned_count: number,
+	page: number,
+	pages: number,
+	total: number,
+};
+
 /**
  *  A6: one session's research state (`researching`, `waiting`, `to_review`, `done`, `failed`,
  *  `blocked`) for the sessions list and the session header.
@@ -2208,7 +2310,10 @@ export type SessionRowResponse_Deserialize = {
 	/**  Changelog 46 (1): the list's order, time groups and time filter. */
 	created_at: number,
 	arranged: boolean,
+	/**  MC-H1.1: never a path whose file is missing (M-H4). */
 	cover_preview_path?: string | null,
+	/**  MC-H1.1: the item is remote and its cover is being fetched (a `picture_ready` follows). */
+	cover_pending: boolean,
 	publish?: LatestPublishResponse_Deserialize | null,
 	/**  A10: why a published session is open again. */
 	changes?: PublishedChangesResponse | null,
@@ -2229,7 +2334,10 @@ export type SessionRowResponse_Serialize = {
 	/**  Changelog 46 (1): the list's order, time groups and time filter. */
 	created_at: number,
 	arranged: boolean,
+	/**  MC-H1.1: never a path whose file is missing (M-H4). */
 	cover_preview_path: string | null,
+	/**  MC-H1.1: the item is remote and its cover is being fetched (a `picture_ready` follows). */
+	cover_pending: boolean,
 	publish: LatestPublishResponse_Serialize | null,
 	/**  A10: why a published session is open again. */
 	changes: PublishedChangesResponse | null,

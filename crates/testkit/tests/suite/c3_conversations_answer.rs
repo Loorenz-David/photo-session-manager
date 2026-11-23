@@ -170,11 +170,20 @@ fn session(a: &TestApp, sku: &str) -> (i64, i64) {
     (session.session.id, item.id)
 }
 
+/// A preview file `name` in the test's folder (H4, M-H4: a preview path is offered only when its
+/// file exists); its path.
+fn preview_file(a: &TestApp, name: &str) -> String {
+    let path = a.dir.path().join(name);
+    std::fs::write(&path, b"jpeg").unwrap();
+    path.to_string_lossy().into_owned()
+}
+
 fn photo(a: &TestApp, session_id: i64, name: &str, class: C) -> (i64, String) {
     let p = a.add_photo(session_id, &format!("{name}.ARW")).unwrap();
     a.review().classify(p.id, class).unwrap();
+    let preview = preview_file(a, &format!("orig-{name}.jpg"));
     a.store()
-        .set_original_preview(&p.raw_path, Some(&format!("orig-{name}.jpg")), None)
+        .set_original_preview(&p.raw_path, Some(&preview), None)
         .unwrap();
     (p.id, p.raw_path)
 }
@@ -216,7 +225,7 @@ fn published(a: &TestApp, sku: &str) -> (i64, i64, [i64; 3]) {
     let (s, item) = session(a, sku);
     let (g1, raw1) = photo(a, s, "g1", C::Main);
     a.store()
-        .set_missing_preview_paths(&raw1, "adj-g1.jpg")
+        .set_missing_preview_paths(&raw1, &preview_file(a, "adj-g1.jpg"))
         .unwrap();
     let (g2, _) = photo(a, s, "g2", C::Main);
     let (c1, _) = photo(a, s, "c1", C::Condition);
@@ -747,6 +756,7 @@ fn c3_c7e_mark_answered_while_refused_is_off_without_a_request() {
 fn c3_c8a_published_gallery_and_condition_photos_are_offered() {
     let a = connected();
     let (_, _, [g1, g2, c1]) = published(&a, SKU);
+    let file = |name: &str| a.dir.path().join(name).to_string_lossy().into_owned();
     let case = asked(&a, Some(SKU));
     let attachable = a.app.conversations.attachable(&case).unwrap();
     assert_eq!(attachable.reason, None);
@@ -765,9 +775,24 @@ fn c3_c8a_published_gallery_and_condition_photos_are_offered() {
     assert_eq!(
         got,
         [
-            ("media-g1", g1, AttachRole::Gallery, Some("adj-g1.jpg")),
-            ("media-g2", g2, AttachRole::Gallery, Some("orig-g2.jpg")),
-            ("media-c1", c1, AttachRole::Condition, Some("orig-c1.jpg")),
+            (
+                "media-g1",
+                g1,
+                AttachRole::Gallery,
+                Some(file("adj-g1.jpg").as_str())
+            ),
+            (
+                "media-g2",
+                g2,
+                AttachRole::Gallery,
+                Some(file("orig-g2.jpg").as_str())
+            ),
+            (
+                "media-c1",
+                c1,
+                AttachRole::Condition,
+                Some(file("orig-c1.jpg").as_str())
+            ),
         ]
     );
 }

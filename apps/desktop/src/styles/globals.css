@@ -293,6 +293,18 @@ button.research-pill { cursor: pointer; }
 
 .hover-preview { width: 400px; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); }
 .hover-image { display: block; width: 100%; height: 280px; overflow: hidden; border-radius: var(--r); background: var(--stage); }
+/* H2: a row picture not on this Mac (yet): a neutral placeholder, never a broken image. */
+.row-thumb-empty { display: grid; place-items: center; color: var(--muted); }
+.row-thumb-empty svg { width: 16px; height: 16px; opacity: .6; }
+.hover-image.row-thumb-empty svg { width: 32px; height: 32px; }
+/* H2: page numbers under the sessions list. */
+.pagination { display: flex; justify-content: center; align-items: center; gap: var(--space-1); padding: var(--space-3) 0; }
+.page-number, .page-step { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 var(--space-2); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); font-size: var(--text-sm); font-weight: var(--weight-bold); font-variant-numeric: tabular-nums; cursor: pointer; }
+.page-number:hover, .page-step:hover:not(:disabled) { background: var(--stage); color: inherit; }
+.page-number[aria-current="page"] { background: var(--stage); color: inherit; box-shadow: inset 0 0 0 1px var(--hair-strong); }
+.page-step:disabled { opacity: .4; cursor: default; }
+.page-step svg { width: 16px; height: 16px; }
+.page-gap { color: var(--muted); padding: 0 2px; }
 .hover-preview strong { font-size: var(--text-lg); }
 .hover-props { display: grid; grid-template-columns: 80px 1fr; gap: 4px var(--space-3); margin: 0; font-size: var(--text-sm); }
 .hover-props dt { color: var(--muted); }
@@ -318,6 +330,9 @@ button.research-pill { cursor: pointer; }
 .new-session-results { max-height: 320px; }
 .result-row { gap: var(--space-3); padding: var(--space-2); }
 .result-thumb { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: var(--r-sm); background: var(--stage); color: var(--muted); font-weight: var(--weight-heavy); }
+/* H2: a search result's picture fills its tile. */
+.result-thumb { overflow: hidden; }
+.result-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .result-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .result-text small { color: var(--muted); font-size: var(--text-sm); }
 .sku-entry { display: flex; flex-direction: column; gap: 6px; padding-top: var(--space-2); border-top: 1px solid var(--hair); font-size: var(--text-sm); font-weight: var(--weight-bold); }

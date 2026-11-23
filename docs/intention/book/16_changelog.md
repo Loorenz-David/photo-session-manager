@@ -324,3 +324,11 @@ A31. **2026-11-23 — Owner correction: the product thread is a plain chat.** Se
 - **Thread:** one chat with every message of the product's questions in time order; no question dividers, topic or status lines, "· Blocking" or dimming. Each message shows who sent it and when.
 - **Reply:** on the message itself, a small button on hover or keyboard focus, and a right-click menu; it shows the message above the box (✕ cancels) and sends to that message's question with the reply-to.
 - **No Mark answered and no Answering choice** on screen. Without a reply-to, a reply goes to the newest unresolved question, unseen. The list rows stay as A30 made them.
+
+A32. **2026-11-23 — Owner: archived and shop-only items seen, opened and edited like any session (new chapter 10H, RATIFIED).** The owner: archived items show a broken picture in the sessions list and a read-only page; "when i enter into the session i should have the same session interface as if the picture where still existing … the program should allow to download the picture from shopify to be edited and then i can publish those changes", with pages so a load does not spend Shopify points, and pictures on search results. Cards answered: products from the other Mac get the same flow; editing from the published JPEG is fine; 25 sessions per page.
+- **Pictures:** every sessions-list row and search result shows the first main picture; remote ones come from Shopify's CDN at 320/160 px, fetched only for rows on screen, cached on the Mac; stale URLs refreshed in one batched query per page.
+- **Pages:** the sessions list shows 25 per page with page numbers; search and filters apply before paging.
+- **Workspace:** archived and shop-only items open in the normal workspace; details, the writer and details-only publish need nothing downloaded.
+- **Bring back:** the first photo edit asks to download the item's published pictures at full size into its folder and Capture One; they become ordinary (JPEG) photos linked to their Shopify media, so a publish uploads only what changed and reorders the rest.
+- **Points:** CDN downloads cost none; background GraphQL waits when the throttle budget is low.
+- Amends 10F: the read-only rule and Q3 are reversed.

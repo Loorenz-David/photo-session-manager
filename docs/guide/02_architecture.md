@@ -25,7 +25,7 @@ are thin and run off the app lock (`spawn_blocking`); business logic never depen
 | `domain/` | `item.rs`, `session.rs` (SessionStatus, PublishStep, RowLabel), `photo.rs` (Classification, Integrity), `attribute.rs`, `composition.rs` (10D values, Frame, Rect, EditorGeometry), `template.rs` (shooting templates, containers, presets), `output.rs` (OutputFormat), `publish.rs`, `camera.rs` (CameraStatus, Link, reasons, CameraSettings, Keychain account names, ledger constants), `editing.rs` (Job, ProvisionInputs, RecipeProps…), `storage.rs` (StorageSettings, ExportSettings) |
 | `mechanisms/` (pure, unit-testable; the only place plans allow unit tests) | `arrival.rs` (candidate filter, path_key), `canon.rs` (NFC canonical path), `hash.rs` (SHA-256), `position.rs`, `status.rs` (status derivation, progress %), `time.rs`, `naming.rs` (folder key, export names), `template.rs` (item type key, `expected` place, `zoomed`, `preset_values`), `shot_order.rs` (P4 shot order: slots, counter runs, holds), `values.rs` (MC-9 canonical attribute values, MC-14 selection), `attribute_write.rs` (MC-13 diff), `reconcile.rs` (MC-12 gallery diff), `publish.rs` (frozen_main, upload waves), `upload_name.rs`, `staleness.rs`, `backoff.rs` (render backoff; `editor_wait` = "Waiting for Capture One…", 10 min max), `missing.rs` (files deleted outside the app), `composition.rs` + `composition_cases.json` (shared with the TS editor), `capture_ledger.rs` (MC-33 rules), `camera_status.rs` (precedence, sentences), `secrets.rs` (FTP password), `cleanup.rs` + `retention.rs` (10F decisions), `hook_payload.rs` |
 | `ports/` | `store.rs` (Store/StoreTx; one impl: SQLite), `clock.rs`, `editing.rs`, `camera.rs` (CameraProvider, CaptureSink, ArrivalSource, ArrivalFollow, CompletedNames, DeliveryFs), `commerce.rs`, `images.rs`, `raw_previews.rs`, `secrets.rs`, `system.rs`, `storage.rs`, `trash.rs` (A17: the macOS Trash), `events.rs` |
-| `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `templates` (local editor, each action saved immediately), `template_placement` (placement on arrival, the session's `TemplateView`, drop onto a container / retake, Back to template, Shift the rest back), `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing, archived view) |
+| `services/` | `arrival`, `review`, `photos`, `sessions`, `items`, `attributes`, `composition`, `templates` (local editor, each action saved immediately), `template_placement` (placement on arrival, the session's `TemplateView`, drop onto a container / retake, Back to template, Shift the rest back), `previews`, `export`, `prepare_masters`, `publish`, `history` (25 steps per session, in memory), `health`, `settings`, `integrity`, `editing_startup`, `editing_events` (hook dispatcher), `camera` (FTP address, "address changed"), `camera_ledger` (MC-33 worker), `storage` (10F clean-up/budget, denied files), `retention` (10F clearing and its guards; the archived view is `RemoteItems::view`, H4) |
 | `events.rs` | `AppEvent` (below); `error.rs`: `Error` with snake_case codes carried to the UI as `{code, message, data}` |
 
 ### `crates/infra` (psm-infra)
@@ -33,7 +33,7 @@ are thin and run off the app lock (`spawn_blocking`); business logic never depen
 (**SqliteStore**, migrations list) + `sqlite/migrations/NNN_*.sql`, `spool.rs` + `nudge.rs` (hook delivery),
 `watcher.rs` (FSEvents/notify), `osascript.rs` (**OsaRunner**, 30 s timeout, cwd = data dir),
 `jobs.rs` (**JobRunner**, `JobHandler`), `logging.rs` (daily file, secret redaction), `backup.rs`,
-`rawpreview.rs` (embedded JPEG out of a RAW, MC-20), `imaging/` (the only pixel code: dimensions,
+`rawpreview.rs` (embedded JPEG out of a RAW, MC-20; `JpegSource` for a photo whose file is a JPEG, MC-H4.6), `imaging/` (the only pixel code: dimensions,
 thumbnails, `render.rs` output renderer), `media_store.rs` (masters/outputs caches), `previews_store.rs`,
 `export_fs.rs` (staging + swap), `storage_fs.rs`, `disk.rs`, `ftp/` (hand-written passive FTP receiver:
 `server.rs`, `session.rs`, `peers.rs`, `names.rs`), `camera_files.rs` (`renamex_np(RENAME_EXCL)`, never
@@ -193,6 +193,17 @@ wrapper `services/search.ts`. Saved pages:
   `template_container_presets_set` · T2 `template_session_view` · T3 `template_drop`, `template_back` ·
   T4 `template_shift_back`. Error codes `template_exists`, `template_image_unreadable`, `no_template`,
   `nothing_to_shift`.
+- **Remote products in the workspace (H4, `features/workspace/remote/`):** `useRemoteItem(sessionId)` (`getRemote`
+  on mount and on `session_changed`, `picture_ready {kind: 'remote'}` paths and `bring_back_progress` merged in place,
+  `reload` / `refresh` / `bringBack`; its state keyed by session id); `App.tsx` holds the instance of the session on
+  screen and shares it through `RemoteItemContext` (the workspace, the header's `SessionActionsMenu` → **Refresh from
+  Shopify**, the visit bar). `remotePhotos(view)` (pure) turns the pictures into photo objects with negative ids and a
+  neutral composition; `WorkspacePage` hands them to `useWorkspaceState(sessionId, shown)` (stage, panel, menus,
+  stepping), keeps the session view's own photos for `FormDialog`, sends no preview focus for a negative id, shows
+  `RemoteNote` and gates every photo-changing action (classify, deny, drag, compose, split/normal/apply, move, copy,
+  assign, template actions) behind `BringBackDialog` (question, progress, failure with Try again). `PublishPopover`
+  shows the details-only line and **Publish details** when every item is `details_only`. `ArchivedView` and
+  `item_archive_get` are gone.
 - **Frontend** (`features/workspace/`): `useTemplateView.ts` (re-reads `template_session_view` on
   `photo_added`, `photo_changed`, `session_changed`), `ContainerGrid.tsx` (faded numbered containers with
   their black-and-white example and "Shot n"; the container of `TemplateView.next_shot` is outlined "Next"),
@@ -270,7 +281,13 @@ query per RAW).
    `path_key`, attribute to the active session else Unassigned; inserts the photo **approved** (P66),
    a `capture_events` row, queues `original_preview` + `hash` jobs; emits `photo_added`.
 3. Original preview: `rawpreview::EmbeddedJpeg` copies the camera JPEG → `previews/<pk>/original.jpg`
-   (P58: Compose works on it at once).
+   (P58: Compose works on it at once). **A photo's file may be a JPEG** (an imported JPEG, or a picture brought
+   back from the shop, H3 / MC-H4.6): the `original_preview` job (`OriginalPreviewJob`, `integrations/src/lib.rs`)
+   picks `rawpreview::JpegSource` for a `.jpg`/`.jpeg` target (any case): the JPEG itself when its long edge is at
+   most 1600 px, else a copy scaled to 1600 px (never enlarged, pixels never rotated); `orientation` = its EXIF
+   orientation; frame = its pixel size (width/height swapped for orientations 5–8) adopted as `FrameSource::Camera`,
+   which Capture One's first preview replaces (P58 rule). Every other extension takes `EmbeddedJpeg`. The watcher's
+   candidate rule is unchanged: **a `.jpg` written into a capture folder is never an arrival** (RAWs only).
 4. `CaptureOneFollow` (`follow.rs`): sets Capture One's current collection to the folder and calls
    `sync_folder` so the variant appears in seconds (P65); applies the Style once (`raw_state.style_applied_at`).
 5. `PreviewService` (`services/previews.rs`): asks Capture One to `process` the variant with `PSM Preview`;
@@ -317,6 +334,20 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
    (trimmed), never clears a field without a frozen value, reads back and fails with
    `attribute_verification` naming the key) → `done` (`published_at`, backup). Each step is idempotent and
    resumes after a crash (H4); `photo_links` rows track per-photo upload state and remote ids.
+2a. **Details-only publish (H4, MC-H3.6).** For a session whose item is `Remote(_)` (archived or shop-only;
+   an `Unknown` adopted item is read first with `RemoteItems::ensure_record`, a press, wired by
+   `PublishService::set_remote`) `preview` answers no photos, no thumbnails, no announced removals,
+   `create_item` false and `details_only` true, with no `item_get`; `confirm` (the P62 refusal is gone)
+   freezes empty photo lists, skips the in-transaction photo comparison and stores
+   `publish_items.details_only = 1` (migration 021). The run reads the flag from the stored item on every
+   resume: `prepare` and `upload` do nothing, `update` skips the gallery block (`update_gallery`) and leaves
+   every media-list value (the condition photos) out of the writes (`update_details`); title, type, tags,
+   description, metafields and search texts are written as for any publish. The item stays remote.
+   **Rows (MC-H3.7):** with `with_remote`, a remote row counts its record (`RowPictures::remote_row`, from
+   the one `remote_covers` read: gallery / condition counts), `unreviewed_count` 0, and its status input
+   has `main_count` = gallery, `unreviewed` 0, missing previews 0 (`ready_session_ids` keeps the raw input);
+   the label is the publish label while a publish is running, held, failed or cancelled, else `Archived`
+   (archived rows via `cleared_sessions`, also without `with_remote`).
 3. Waiting: a Capture One "not ready" error (`mechanisms/backoff.rs::editor_wait`) requeues with
    backoff 1/2/4/8 s then 15 s, label "Waiting for Capture One…", gives up after 10 min with a plain
    sentence. `publish_cancel` stops after the request in flight; `publish_activity` feeds the popover.
@@ -379,7 +410,97 @@ take-back, export or publish runs; deletes at most a batch per tick; rules in `m
 (duplicates ≥ 24 h, copied preview exports, unneeded masters, budget `storage.min_free_gb`) and
 `mechanisms/retention.rs` (items published-and-clean for `retention_days_after_publish` days, after
 `RetentionService` verified Shopify still holds every published image; `item_retention.keep_files` pin;
-`archived_images` for the read-only archived view). Every deletion logs `storage.cleared rule=… path=… bytes=…`.
+`archived_images`, the record a remote item is shown from, H4). Every deletion logs `storage.cleared rule=… path=… bytes=…`.
+H1 (10H): retention never clears a shop-only item, nor an item brought back after its last completed publish
+(`RetentionInput.shop_only`, `restored_at`); the verification records each picture's size (`archived_images.bytes`)
+and is not started for further items of a scan while the call budget is low (`must_wait`, scan requested again).
+
+### Remote items (book `10H`; master plan `master_plan_archive.md` §4, §5 MC-H3, MC-H5; H1)
+An item is **remote** when its pictures are only in the shop: **archived** (`item_retention.cleared_at` set) or
+**shop-only** (adopted from the search, linked, its session has no photo row, and its first read found pictures).
+`mechanisms::remote::remote_state(RemoteInput)` is the one rule (`Store::remote_input(session_id)` reads its input in
+one query); `Unknown` = adopted and not read yet. The **record** of remote pictures is `archived_images` for both
+kinds (gallery then condition, each by position, with `bytes`); `item_retention.remote_checked_at` says it was read.
+`RemoteItems` (`services/remote.rs`, `App.remote`, also in `AppHandles`; always present, `Local` without an
+integration): `ensure_record` (the first-open read, one `media_readback` under one lock), `refresh` (Refresh from the
+shop: remote items only, else `NotRemote`; record replaced with `cleared_at` kept, stale `remote/<item>/cover-*` and
+`archived/<item>/*` cache files deleted, names by `retention::archived_file_name`), `queue_record` + `run_pending`
+(the background step, thread `remote_background` started with the startup work like `storage_background`; queued
+reads wait while `must_wait(budget())`, logged once as `remote.budget_wait available= maximum=`). **The call budget:**
+the Shopify adapter keeps the newest `extensions.cost.throttleStatus` of every answer (also throttled ones) and
+`CommerceAdapter::budget()` projects it (`projected`); background work checks `must_wait` (below 25 %), a press never
+does. The adapter also has `media_urls` (one `nodes(ids:)` query per 25 ids) and `fetch_original` (full size);
+downloads answer `Error::ImageGone` on 403/404 (`HttpTransport::download` returns the status).
+**Row pictures (H2, MC-H1).** One rule for every list and search answer, `RowPictures::row_picture` (read once per
+answer by `RemoteItems::row_pictures`, `Store::remote_covers` = one query for every session): main photo 1's
+adjusted preview if its file exists, else its original preview if its file exists, else, for a remote item whose
+cover picture (first gallery picture of the record) is not gone, `previews/remote/<item>/cover-<12 hex>.jpg` if it
+exists (`cover_pending` when it does not), else none. **No path whose file is missing is ever handed to the screen**
+(M-H4); without `with_remote` `SessionsService::list` applies the preview half only (`remote::local_picture`).
+**The queue:** `request_covers(CoverSource {Page, Search}, sessions)` replaces that source's not-started cover
+downloads with the pending ones and returns at once; `run_pending` takes them as one batch, at most
+`PARALLEL_DOWNLOADS` (4) at once (`std::thread::scope`), each `fetch_image(url, COVER_EDGE 320)` → `<name>.part` →
+rename → the item's other `cover-*.jpg` deleted → `AppEvent::PictureReady {Cover {session_id}, path}` (window event
+`picture_ready`). **Stale rule:** a download answering `ImageGone` is stale; after the batch, when `must_wait` allows
+(else kept for the next step: `Waiting` only when nothing else ran), the stale media ids not asked for in the last 10
+minutes (`REFRESH_COOLDOWN_MS`, monotonic, in memory) go to `media_urls` in chunks of 25; a found address is stored
+(`update_remote_urls`) and retried once, a missing one stores the picture as **gone** (empty URL: never downloaded
+again until the record is replaced) and puts the item on Health `remote_picture_gone` (`1 picture is no longer in the
+shop: <SKU>`); any other download error is logged only. The item leaves that Health item when its record is replaced
+(first-open read, Refresh from the shop) or its session is deleted (`forget_item`, which also removes
+`previews/remote/<item>/` and `previews/archived/<item>/`; no shop call).
+**Pages and search pictures (H2, MC-H2).** `SessionsService::page(filter, query, created_from, only_ids, page)` (command
+`sessions_page`, the Sessions page only) filters `list`'s rows (time filter, "To review" ids), cuts them to `PAGE_SIZE`
+(25) by `mechanisms::remote::page_of` (clamped, at least one page; groups keep their `total`) and requests the page's
+pending covers; `sessions_list` stays unpaged for the other callers. `items_search` answers each local result's row
+picture and session (`RemoteItems::item_pictures`, pending covers requested with source `Search`); `items_search_shop`
+keeps the shop's `featuredMedia` address (`ItemsService::search_shop_pictures`) and answers
+`previews/remote/search/<search_name(url)>` when it exists, else queues it (`search_picture`: `fetch_image(url,
+SEARCH_EDGE 160)`, `PictureReady {Search {external_id}}`; a gone picture is dropped, never refreshed). **The search
+cache** is one flat folder capped at `SEARCH_CACHE_LIMIT_BYTES` (200 MB): after each write the file's modified time is
+set to the app clock and `evict` deletes the oldest files (name ascending on a tie) until the folder fits.
+
+**Bring back (H3, MC-H4; `services/bring_back.rs`, `impl RemoteItems`).** `RemoteItems::bring_back(session_id)`
+(`RemoteItems::new` also takes `editing`, a `capture_root` closure and `history`; `App::build` passes a closure that calls
+`editing.inspect_document()` and canonicalizes its capture root, **uncached**): (1) preconditions in order: an
+integration (`NoIntegration`), state `Remote(_)` (an `Unknown` item is read first with `ensure_record`) else `NotRemote`,
+no bring back of the session running (in-memory mark with its progress, `bring_back_progress`; cleared on every exit;
+`BringBackRunning`), the latest publish not in held/prepare/upload/update/describe, the capture root known, no record
+picture gone (each a `BringBackFailed {reason}`); (2) names `mechanisms::remote::bring_back_names` in
+`<capture root>/<folder key>/` (`taken` = a photo row of any session has that canonical path; a store error fails before
+any download); (3) every picture `fetch_original(url)` → `<name>.part` → rename, at most 4 at once, 1 + `DOWNLOAD_RETRIES`
+(2) tries, a body not starting with `FF D8 FF` is a failed try; `ImageGone` → one `media_urls` for the stale ids (no budget
+wait), the new address stored and tried with the full tries, none found → stored gone and `<n> photos are no longer in the
+shop`; `AppEvent::BringBack {Running, done, total}` after each file (window event `bring_back_progress`, `onBringBack`);
+any picture missing → **every file this attempt wrote is deleted**, nothing imported, `BringBack {Failed}`; (4)
+`Store::bring_back(BringBackInput)` — **one transaction**, run inside `History::retire_session`'s `act` (the session's undo
+and redo lists go): the session's earlier rows retired (deleted, no position, preview paths null, `raw_missing`, links for
+the item deleted, `photo_places.released = 1`), one photo per file (canonical path, SHA-256, `source import`, composition
+`original` with rect (0,0,1,1) revision 0, `raw_state` row, jobs `original_preview` + `render_preview`; in a templated
+session main *k* placed by hand in container *k*), one `ready` link per photo (role `gallery` or
+`attribute:<condition key>`, the stored `raw_state.retouch_gen`, revision 0), `item_retention` `cleared_at` null and
+`restored_at` now; **`change_seq` untouched**; (5) `editing.sync_folder(folder)` (failure → `synced = false`),
+`BringBack {Done}`, `SessionChanged`. No style, no colour tag, no shop write (M-H1), no editor delete (M-H2).
+
+**The remote view and activation (H4, MC-H3.2–5, .8; replaces P62's archived view).** `RemoteItems::view(session_id)`
+(command `session_remote_get`, `commands/remote.rs`) is a read plus a queue push, never a download and never a shop
+call: `None` without an item; `Local` → no pictures; `Unknown` → no pictures and the first-open read queued; `Remote(_)`
+→ the record's pictures, each with `previews/archived/<item>/<role>-<NN>-<12 hex>.jpg` when that file exists (`gone`
+when its URL is empty), `bring_back_bytes = estimate_bytes(record)`, `check_failed` (the last first-open read failed;
+in memory, cleared by a successful read) and the running bring back's progress. Missing files are queued as `View`
+downloads (a new view of a session replaces only that session's not-started ones) and run in `run_pending`'s batch
+like covers: `fetch_image(url, ARCHIVED_IMAGE_EDGE 1600)`, 4 at a time, the same stale rule, `PictureReady {Remote
+{session_id, role, position}, path}`; a queued download whose file already exists is skipped. A failed queued
+first-open read emits `SessionChanged` only when `check_failed` turns true (the screen reloads on it and its view
+queues the read again). `session_remote_refresh` = `refresh` then `view`; `session_bring_back` = `bring_back`.
+`item_keep_files_set` answers the remote view (`RemoteItems::set_keep_files`). **Activation:**
+`SessionsService::activate` and `claim_target(Some(id))` read the state first (`with_remote`, else the store when the
+service has a commerce integration) and, for `Remote(_)`, answer at once (`Ok` / `false`) with no editing call, no
+camera target and no change of the active session; `session_activate` attaches `with_remote(app.remote)`. Every other
+state activates as before. **Other readers (M-H4):** `SessionsService::view` answers no photos (nor compositions or
+upload states) for a remote session; the conversations' attachable photos carry a preview path only when its file
+exists (`remote::local_picture`); a media-list attribute write is refused with `FilesCleared` for a remote item
+(`AttributesService` reads the state from the item's session when an integration is set).
 
 **Delete session (A17, owner 2026-11-18; Session Manager only, never Shopify).** Commands
 `session_delete_preview` / `session_delete` → `psm_integrations::session_delete` (when photos are filed
@@ -477,7 +598,10 @@ of that folder (`variant_background` → `resync_folder`).
   render, already sees the new route); a `hashchange` that only confirms the route does nothing, any other is an
   ordinary navigation (`route-changed`, which ends a visit). `useCaptureTarget` receives `captureTarget(state)` (the
   visit's `capture` while visiting, else the route's session) and is the only caller of `activateSession` /
-  `deactivateSession`. `openSession`, `visitBack`, `shootHere` and `visit` reach the panel through
+  `deactivateSession`. **H4 (MC-H3.4):** it calls `activateSession(target)` only when the target's remote state
+  (`useRemoteItem`, keyed by session id) is `activatable` — `local`, or `unknown` whose first read failed — and once per
+  target becoming activatable (a re-read, or a second instance during a visit, never activates twice); `VisitBar` hides
+  **Shoot here instead** while the visited session is not activatable. `openSession`, `visitBack`, `shootHere` and `visit` reach the panel through
   `ConversationsContext`; **Open session** runs through `lib/routes.ts` `leaveThen(target, proceed)`, so a dirty
   Settings page (whose guard receives the continuation) runs the jump itself from Discard / Save. `VisitBar.tsx` is the
   bar (capture SKU from `activeSession()` and the sessions list).
@@ -646,9 +770,9 @@ recorded stage of one run, optionally with another model, effort or instructions
 ## Persistence
 | Where | What |
 |---|---|
-| `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) · `templates/<template id>/<uuid>.jpg` (shooting-template examples) |
+| `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) · `templates/<template id>/<uuid>.jpg` (shooting-template examples) · `previews/remote/<item id>/cover-<12 hex of sha256(media id)>.jpg` (H2: a remote item's row picture, 320 px, one per item) · `previews/remote/search/<16 hex of sha256(url without query)>.jpg` (H2: shop search pictures, 160 px, at most 200 MB, oldest first) · `previews/archived/<item id>/<role>-<NN>-<12 hex>.jpg` (P62: 1600 px remote pictures) |
 | Under the capture root (`<document folder>/Capture`) | item folders by `folder_key`; `.incoming/` (FTP parts, `sdk-<run>/`); `.duplicates/`; Capture One's own `CaptureOne/` and `Output/_session_manager/` |
-| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 019_conversations.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`, 016 container labels, 017 `session_changes` (A10: one row per counted change with its `kind` arrival/editor/app/auto and the `seq` it produced; read by `published_changes` for "Changed after publishing", pruned when a publish completes), 018 `saved_pages`, 019 `conversation_sync`/`conversations`/`conversation_messages`/`conversation_outbox` (C1; no session, item or photo column, so Delete session never touches them); 014, 015, 017 and 019 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
+| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 020_remote_items.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`, 016 container labels, 017 `session_changes` (A10: one row per counted change with its `kind` arrival/editor/app/auto and the `seq` it produced; read by `published_changes` for "Changed after publishing", pruned when a publish completes), 018 `saved_pages`, 019 `conversation_sync`/`conversations`/`conversation_messages`/`conversation_outbox` (C1; no session, item or photo column, so Delete session never touches them), 020 `item_retention.restored_at`/`remote_checked_at` and `archived_images.bytes` (H1: the record of remote pictures; `ALTER TABLE … ADD COLUMN`, so the `p27` rewind test drops them); 014, 015, 017 and 019 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
 | `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research), `conversations {server, sound, banner}` (C1; read live through `ConversationSettingsSlot`, the default server stored as none, never rebuilds the App). A file that does not parse never stops the app (health `settings_invalid`) |
 | Keychain (`infra/keychain.rs`; names in `domain/camera.rs::secrets`) | service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`, the three `research-*-key` accounts (§Research), and `conversations-api-key` (C1: the Pricing key, registered for log redaction on `set` and on the first read). What research redacts and the export looks for (`integrations::research_secret_values`): the three `research-*-key` accounts plus the client secret, nothing of the camera's (A9: the short FTP code turned up by chance in records and image headers). Shopify client id/secret: `settings.json` only; access token: memory only |
 | `settings` table | app state, not user config (`mechanisms_version`, `active_session_id`, spool dedupe keys) |
@@ -657,7 +781,7 @@ recorded stage of one run, optionally with another model, effort or instructions
 `psm_core::events::AppEvent` → `EventHub` (integrations `lib.rs`) → `TauriEvents::emit` (desktop
 `lib.rs`) → Tauri event names: `session_changed`, `photo_added`, `photo_changed`, `publish_progress`,
 `export_progress`, `health_changed`, `camera_status_changed` (payload `CameraStatusResponse`),
-`camera_fingerprint_pending`, `history_changed`, `research_changed`, `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); plus `edit_menu` emitted by the menu handler. The UI
+`camera_fingerprint_pending`, `history_changed`, `research_changed`, `picture_ready {kind: 'cover' | 'search', session_id?, external_id?, path}` (H2; listener `onPictureReady`), `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); plus `edit_menu` emitted by the menu handler. The UI
 subscribes in `apps/desktop/src/services/events.ts` (and `history.ts`). Events are **not** in the
 specta builder: adding one means a new `AppEvent` variant, a new match arm in `TauriEvents`, and a
 listener in `events.ts`.

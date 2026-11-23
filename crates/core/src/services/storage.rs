@@ -35,12 +35,14 @@ use crate::{
     domain::{
         camera::{DeliveryOutcome, DeliveryState},
         photo::{Classification, Photo},
+        remote::{CallBudget, RemoteKind, RemoteState},
         storage::{PhotoDenial, StorageReport},
     },
     events::AppEvent,
     mechanisms::{
         arrival::path_key,
         cleanup::{Candidate, CleanupKind, plan_cleanup},
+        remote::{must_wait, remote_state},
         retention::{
             Eligibility, RetentionCandidate, RetentionInput, RetentionRule, eligibility,
             plan_retention,
@@ -261,6 +263,9 @@ struct Work {
     /// When denied photos were last looked at (every [`BATCH_PAUSE`], not only at the scan, so a
     /// publish closes the window within seconds).
     denied_checked_at: Option<Instant>,
+    /// H1 (MC-H5.3): the last scan stopped its verifications for the call budget (the wait is
+    /// logged once, when it starts).
+    budget_waiting: bool,
 }
 
 /// What happened to one item chosen for clearing.
@@ -726,6 +731,8 @@ impl StorageService {
                 latest_step: record.latest_step,
                 keep_files: state.keep_files,
                 cleared: state.cleared_at.is_some(),
+                shop_only: self.shop_only(record.session.session.id)?,
+                restored_at: state.restored_at,
             };
             let due = match eligibility(input, now, days) {
                 Eligibility::Never => continue,
@@ -763,12 +770,27 @@ impl StorageService {
         let mut free = free_after_levels;
         let mut not_cleared = BTreeMap::new();
         let mut processed = 0;
+        let mut budget_waiting = false;
         loop {
             let plan = plan_retention(&remaining, free, min_free);
             let Some(&(item_id, rule)) = plan.first() else {
                 break;
             };
-            if processed == ITEMS_PER_SCAN {
+            // MC-H5.3: no further verification read while the call budget is low.
+            let budget = config.commerce.budget();
+            budget_waiting = must_wait(budget);
+            if budget_waiting && !work.budget_waiting {
+                let budget = budget.unwrap_or(CallBudget {
+                    available: 0.0,
+                    maximum: 0.0,
+                });
+                tracing::info!(
+                    "remote.budget_wait available={} maximum={}",
+                    budget.available,
+                    budget.maximum
+                );
+            }
+            if processed == ITEMS_PER_SCAN || budget_waiting {
                 // The rest follow at the next scans; count them as freed for the warning.
                 work.scan_requested = true;
                 free = plan.iter().fold(free, |free, (id, _)| {
@@ -801,6 +823,7 @@ impl StorageService {
                 ItemClearing::Skipped => {}
             }
         }
+        work.budget_waiting = budget_waiting;
         // Items checked earlier and not read again this time (retry delay) stay reported while
         // they would still be cleared.
         for (item_id, line) in &work.not_cleared {
@@ -820,6 +843,13 @@ impl StorageService {
         }
         self.set_not_cleared(work, not_cleared);
         Ok(free)
+    }
+
+    /// MC-H3.8: whether the session's item is a shop-only remote item (retention runs only with
+    /// an integration, so no integration → never shop-only holds).
+    fn shop_only(&self, session_id: i64) -> Result<bool> {
+        Ok(remote_state(self.store.remote_input(session_id)?)
+            == RemoteState::Remote(RemoteKind::ShopOnly))
     }
 
     /// One item: verify against Shopify, re-check it is still published and clean, mark it
@@ -865,6 +895,8 @@ impl StorageService {
                     latest_step: latest.map(|l| l.step),
                     keep_files: state.keep_files,
                     cleared: state.cleared_at.is_some(),
+                    shop_only: self.shop_only(session_id)?,
+                    restored_at: state.restored_at,
                 },
                 self.clock.now_ms(),
                 0,

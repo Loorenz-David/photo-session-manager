@@ -22,6 +22,15 @@ pub struct ItemDto {
     pub created_at: i64,
     #[specta(type = specta_typescript::Number)]
     pub updated_at: i64,
+    /// H2 (MC-H2.4, MC-H2.5): the search result's picture on this Mac (only from the searches;
+    /// never a path whose file is missing). Left out when there is none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub picture_path: Option<String>,
+    /// H2 (MC-H2.4): a local result's session (only from `items_search`). Left out when there is
+    /// none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[specta(type = Option<specta_typescript::Number>)]
+    pub session_id: Option<i64>,
 }
 
 #[derive(Serialize, Type)]
@@ -149,6 +158,10 @@ impl From<Error> for CommandError {
                 "shop_domain_invalid"
             }
             Error::FilesCleared => "files_cleared",
+            Error::ImageGone => "image_gone",
+            Error::NotRemote => "not_remote",
+            Error::BringBackRunning => "bring_back_running",
+            Error::BringBackFailed { .. } => "bring_back_failed",
         };
         Self {
             code: code.into(),
@@ -175,6 +188,8 @@ impl From<Item> for ItemDto {
             external_id: item.external_id,
             created_at: item.created_at,
             updated_at: item.updated_at,
+            picture_path: None,
+            session_id: None,
         }
     }
 }
@@ -272,6 +287,56 @@ pub async fn item_update_identity(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
+/// MC-H2.4: local results with their session's row picture; their pending covers are requested
+/// (source `Search`) and arrive as `picture_ready`. Never downloads here.
+fn search_local(
+    app: &psm_integrations::AppHandles,
+    query: &str,
+) -> Result<Vec<ItemDto>, CommandError> {
+    let items = ItemsService::new(app.store.as_ref(), &SystemClock).search_local(query)?;
+    let ids: Vec<i64> = items.iter().map(|item| item.id).collect();
+    let pictures = app.remote.item_pictures(&ids)?;
+    let pending: Vec<i64> = pictures
+        .iter()
+        .filter(|(_, _, pending)| *pending)
+        .filter_map(|(_, session, _)| *session)
+        .collect();
+    app.remote
+        .request_covers(psm_core::services::remote::CoverSource::Search, &pending)?;
+    Ok(items
+        .into_iter()
+        .zip(pictures)
+        .map(|(item, (path, session_id, _))| ItemDto {
+            picture_path: path.map(|p| p.to_string_lossy().into_owned()),
+            session_id,
+            ..item.into()
+        })
+        .collect())
+}
+
+/// MC-H2.5: shop results with their picture when it is on this Mac; the others' pictures are
+/// queued for the background and arrive as `picture_ready`. Never downloads here.
+fn search_shop(
+    app: &psm_integrations::AppHandles,
+    query: &str,
+) -> Result<Vec<ItemDto>, CommandError> {
+    let results = ItemsService::new(app.store.as_ref(), &SystemClock)
+        .with_commerce(app.commerce.as_deref())
+        .search_shop_pictures(query)?;
+    let mut out = Vec::with_capacity(results.len());
+    for result in results {
+        let picture = match (&result.item.external_id, &result.thumbnail_url) {
+            (Some(external_id), Some(url)) => app.remote.search_picture(external_id, url)?,
+            _ => None,
+        };
+        out.push(ItemDto {
+            picture_path: picture.map(|p| p.to_string_lossy().into_owned()),
+            ..result.item.into()
+        });
+    }
+    Ok(out)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn items_search(
@@ -280,10 +345,7 @@ pub async fn items_search(
 ) -> Result<Vec<ItemDto>, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ItemDto>, CommandError> {
-        ItemsService::new(app.store.as_ref(), &SystemClock)
-            .search_local(&query)
-            .map(|items| items.into_iter().map(Into::into).collect())
-            .map_err(Into::into)
+        search_local(&app, &query)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -297,11 +359,7 @@ pub async fn items_search_shop(
 ) -> Result<Vec<ItemDto>, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ItemDto>, CommandError> {
-        ItemsService::new(app.store.as_ref(), &SystemClock)
-            .with_commerce(app.commerce.as_deref())
-            .search_shop(&query)
-            .map(|items| items.into_iter().map(Into::into).collect())
-            .map_err(Into::into)
+        search_shop(&app, &query)
     })
     .await
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
@@ -339,105 +397,30 @@ pub async fn item_adopt(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
-/// One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, the
-/// small cached copy the workspace shows.
-#[derive(Serialize, Type)]
-pub struct ArchivedPictureDto {
-    pub role: String,
-    #[specta(type = specta_typescript::Number)]
-    pub position: i64,
-    pub url: String,
-    pub path: Option<String>,
-}
-
-/// An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
-/// were cleared after publishing (then it is read-only) and, if so, its photos from Shopify.
-#[derive(Serialize, Type)]
-pub struct ItemArchiveDto {
-    #[specta(type = specta_typescript::Number)]
-    pub item_id: i64,
-    pub keep_files: bool,
-    pub cleared: bool,
-    pub pictures: Vec<ArchivedPictureDto>,
-}
-
-fn archive_dto(view: psm_core::services::retention::ArchiveView) -> ItemArchiveDto {
-    ItemArchiveDto {
-        item_id: view.item_id,
-        keep_files: view.retention.keep_files,
-        cleared: view.retention.cleared_at.is_some(),
-        pictures: view
-            .pictures
-            .into_iter()
-            .map(|p| ArchivedPictureDto {
-                role: p.role,
-                position: p.position,
-                url: p.url,
-                path: p.path.map(|path| path.to_string_lossy().into_owned()),
-            })
-            .collect(),
-    }
-}
-
-fn archive_cache(app: &psm_integrations::AppHandles) -> std::path::PathBuf {
-    app.paths.root.join("previews").join("archived")
-}
-
-/// The session's item retention state; a cleared item's photos are downloaded from Shopify on
-/// demand (preview size) and cached. `null` for the Unassigned session.
-#[tauri::command]
-#[specta::specta]
-pub async fn item_archive_get(
-    state: State<'_, AppState>,
-    session_id: CommandId,
-) -> Result<Option<ItemArchiveDto>, CommandError> {
-    let app = state.handles().map_err(CommandError::from)?;
-    tauri::async_runtime::spawn_blocking(move || -> Result<Option<ItemArchiveDto>, CommandError> {
-        let cache = archive_cache(&app);
-        psm_core::services::retention::ArchiveService::new(
-            app.store.as_ref(),
-            app.commerce.as_deref(),
-            &cache,
-        )
-        .view(session_id.0)
-        .map(|view| view.map(archive_dto))
-        .map_err(Into::into)
-    })
-    .await
-    .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
-}
-
 /// "Keep files on this Mac" (10F Q2): the pinned item is never cleared by retention or by the
-/// storage budget.
+/// storage budget. Answers the session's remote view (`null` for the Unassigned session).
 #[tauri::command]
 #[specta::specta]
 pub async fn item_keep_files_set(
     state: State<'_, AppState>,
     session_id: CommandId,
     keep: bool,
-) -> Result<Option<ItemArchiveDto>, CommandError> {
+) -> Result<Option<crate::commands::remote::RemoteViewDto>, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
-    tauri::async_runtime::spawn_blocking(move || -> Result<Option<ItemArchiveDto>, CommandError> {
-        let cache = archive_cache(&app);
-        let service = psm_core::services::retention::ArchiveService::new(
-            app.store.as_ref(),
-            app.commerce.as_deref(),
-            &cache,
-        );
-        let Some(item_id) =
-            psm_core::ports::store::Store::session(app.store.as_ref(), session_id.0)?
-                .session
-                .item_id
-        else {
-            return Ok(None);
-        };
-        service.set_keep_files(item_id, keep)?;
-        app.storage.request_scan();
-        service
-            .view(session_id.0)
-            .map(|view| view.map(archive_dto))
-            .map_err(Into::into)
-    })
+    tauri::async_runtime::spawn_blocking(
+        move || -> Result<Option<crate::commands::remote::RemoteViewDto>, CommandError> {
+            let Some(item_id) =
+                psm_core::ports::store::Store::session(app.store.as_ref(), session_id.0)?
+                    .session
+                    .item_id
+            else {
+                return Ok(None);
+            };
+            app.remote.set_keep_files(item_id, keep)?;
+            app.storage.request_scan();
+            Ok(app.remote.view(session_id.0)?.map(Into::into))
+        },
+    )
     .await
     .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
 }

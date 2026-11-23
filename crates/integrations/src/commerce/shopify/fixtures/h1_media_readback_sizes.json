@@ -1,0 +1,79 @@
+{
+  "source": "schema-grounded: shopify.dev Admin GraphQL 2026-10 queries/product, objects/MediaImage, objects/MediaImageOriginalSource, objects/GenericFile, objects/Metafield; not captured. extensions.cost copied from sv4_job_poll_done.json (captured). Placeholder ids and URLs.",
+  "request": {
+    "query": "query MediaReadback($id: ID!, $namespace: String!, $key: String!) { product(id: $id) { id media(first: 250) { nodes { id status ... on MediaImage { image { url } originalSource { url fileSize } } } } metafield(namespace: $namespace, key: $key) { value references(first: 100) { nodes { ... on MediaImage { id image { url } originalSource { fileSize } } ... on GenericFile { id url originalFileSize } } } } } }",
+    "variables": {
+      "id": "gid://shopify/Product/1000",
+      "namespace": "custom",
+      "key": "damage_report"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "data": {
+        "product": {
+          "id": "gid://shopify/Product/1000",
+          "media": {
+            "nodes": [
+              {
+                "id": "gid://shopify/MediaImage/1101",
+                "status": "READY",
+                "image": {
+                  "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/g1.jpg"
+                },
+                "originalSource": {
+                  "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/g1-original.jpg",
+                  "fileSize": 2100345
+                }
+              },
+              {
+                "id": "gid://shopify/MediaImage/1102",
+                "status": "READY",
+                "image": {
+                  "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/g2.jpg"
+                },
+                "originalSource": {
+                  "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/g2-original.jpg",
+                  "fileSize": null
+                }
+              }
+            ]
+          },
+          "metafield": {
+            "value": "[\"gid://shopify/MediaImage/2001\", \"gid://shopify/GenericFile/2002\", \"gid://shopify/MediaImage/2003\"]",
+            "references": {
+              "nodes": [
+                {
+                  "id": "gid://shopify/MediaImage/2001",
+                  "image": {
+                    "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/d1.jpg"
+                  },
+                  "originalSource": {
+                    "fileSize": 1500111
+                  }
+                },
+                {
+                  "id": "gid://shopify/GenericFile/2002",
+                  "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/d2.jpg",
+                  "originalFileSize": 700222
+                }
+              ]
+            }
+          }
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 1,
+          "requestedQueryCost": 1,
+          "throttleStatus": {
+            "currentlyAvailable": 1999,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    }
+  }
+}

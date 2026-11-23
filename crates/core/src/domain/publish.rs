@@ -56,11 +56,13 @@ pub struct RemoteMedia {
     pub position: i64,
 }
 
-/// One image read back from the platform: its id and where it can be downloaded (P62).
+/// One image read back from the platform: its id, where it can be downloaded (P62) and the size
+/// of its original file in bytes when the platform tells it (H1, MC-H4.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaImage {
     pub id: String,
     pub url: Option<String>,
+    pub bytes: Option<i64>,
 }
 
 /// What the platform holds for an item (10F Rules, M41): its gallery media and the files of its
@@ -156,6 +158,8 @@ pub struct PublishPreviewItem {
     pub n_withheld: usize,
     /// MC-A10: the item's conflicts, which wait for the photographer once confirmed.
     pub conflicts: Vec<PreviewConflict>,
+    /// H4 (MC-H3.6): a remote item publishes its details only (no photos, no media change).
+    pub details_only: bool,
 }
 
 /// One conflict as the confirmation shows it (MC-A10): the field, the previous value and where it
@@ -209,6 +213,8 @@ pub struct PublishItem {
     pub total: i64,
     pub error: Option<String>,
     pub export_run_id: Option<i64>,
+    /// H4 (MC-H3.6): decided at confirmation and never recomputed: the run touches no media.
+    pub details_only: bool,
 }
 
 impl PublishItem {

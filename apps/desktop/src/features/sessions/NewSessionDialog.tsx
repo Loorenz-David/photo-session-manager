@@ -8,6 +8,8 @@ import { useAction } from '@/lib/pending';
 import { adoptItem, createItem, refreshItem, nextSku, searchItems, searchItemsShop, type Item } from '@/services/items';
 import { ItemTypePicker, useItemTypes } from '@/features/form/ItemTypePicker';
 import { createSession, ServiceError } from '@/services/sessions';
+import { ResultThumb } from './ResultThumb';
+import { usePictures } from './usePictures';
 
 export const ITEM_SEARCH_DEBOUNCE_MS = 75;
 export const SHOP_SEARCH_DEBOUNCE_MS = 300;
@@ -43,6 +45,7 @@ function errorText(error: unknown): string {
 
 /** New session (ch04 S-B, S-D; 05B MC-22): find an item, or create a local one with a proposed, editable SKU. */
 export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDialogProps) {
+  const pictures = usePictures();
   const [query, setQuery] = useState('');
   const [localResults, setLocalResults] = useState<Item[]>([]);
   const [shopResults, setShopResults] = useState<Item[]>([]);
@@ -201,9 +204,7 @@ export function NewSessionDialog({ open, onOpenChange, onOpened }: NewSessionDia
               <CommandGroup heading={openAction.busy ? 'Opening session…' : heading}>
                 {results.map(item => (
                   <CommandItem key={item.external_id ?? item.id} value={`item-${item.external_id ?? item.id}`} onSelect={() => openExisting(item)} disabled={openAction.busy} aria-busy={openAction.busy ? 'true' : undefined} className="result-row">
-                    <span className="result-thumb" aria-hidden>
-                      {(item.item_type || item.title).slice(0, 1).toUpperCase()}
-                    </span>
+                    <ResultThumb item={item} pictures={pictures} />
                     <span className="result-text">
                       <strong>{item.title}</strong>
                       <small>

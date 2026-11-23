@@ -61,3 +61,24 @@ export type ConversationsChanged = { toasts: { conversation_id: string; text: st
 export async function onConversationsChanged(handler: (event: ConversationsChanged) => void): Promise<UnlistenFn> {
   return listen<ConversationsChanged>('conversations_changed', event => handler(event.payload));
 }
+
+/** H2, H4: `picture_ready`: a row's cover, a shop search result's picture or a remote item's picture was kept on this Mac at `path`. */
+export type PictureReady =
+  | { kind: 'cover'; session_id: number; path: string }
+  | { kind: 'search'; external_id: string; path: string }
+  | { kind: 'remote'; session_id: number; role: string; position: number; path: string };
+export async function onPictureReady(handler: (event: PictureReady) => void): Promise<UnlistenFn> {
+  return listen<PictureReady>('picture_ready', event => handler(event.payload));
+}
+
+/** H3: `bring_back_progress`: a bring back's progress (`done` of `total` while running), then done or failed with the reason. */
+export type BringBack = {
+  session_id: number;
+  done: number;
+  total: number;
+  state: 'running' | 'done' | 'failed';
+  error: string | null;
+};
+export async function onBringBack(handler: (event: BringBack) => void): Promise<UnlistenFn> {
+  return listen<BringBack>('bring_back_progress', event => handler(event.payload));
+}

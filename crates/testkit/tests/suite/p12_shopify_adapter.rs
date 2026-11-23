@@ -1338,7 +1338,7 @@ fn c9g_secret_and_tokens_never_leave_the_token_request() {
                     assert!(clean(&url));
                     assert!(headers.iter().all(|(k, v)| clean(k) && clean(v)));
                 }
-                Recorded::Form { .. } => {}
+                Recorded::Form { .. } | Recorded::Download { .. } => {}
             }
         }
     }

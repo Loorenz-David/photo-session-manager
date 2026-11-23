@@ -97,6 +97,9 @@ pub struct PublishService {
     stock_defaults: Mutex<Option<Arc<dyn StockDefaults>>>,
     /// The platform's stock locations, read once per app run.
     stock_locations: Mutex<Option<StockLocations>>,
+    /// H4 (MC-H3.6): the first-open read a preview runs for an `Unknown` item; `None` in bare
+    /// services (an `Unknown` item is then previewed as before).
+    remote: std::sync::OnceLock<Arc<crate::services::remote::RemoteItems>>,
 }
 
 /// The integration whose links and stock this service writes.
@@ -254,7 +257,31 @@ impl PublishService {
             live: Mutex::new(HashMap::new()),
             stock_defaults: Mutex::new(None),
             stock_locations: Mutex::new(None),
+            remote: std::sync::OnceLock::new(),
         }
+    }
+
+    /// H4 (MC-H3.6): the remote items whose first-open read a preview runs.
+    pub fn set_remote(&self, remote: Arc<crate::services::remote::RemoteItems>) {
+        let _ = self.remote.set(remote);
+    }
+
+    /// MC-H3.6: whether the session publishes its details only: its item is `Remote(_)`; an
+    /// `Unknown` item is read first, at once (a press, MC-H5.4); a failed read is not an error
+    /// here and the item is previewed as before.
+    fn details_only(&self, session_id: i64) -> Result<bool> {
+        use crate::domain::remote::RemoteState;
+        let mut state =
+            crate::mechanisms::remote::remote_state(self.store.remote_input(session_id)?);
+        if state == RemoteState::Unknown
+            && let Some(remote) = self.remote.get()
+        {
+            state = remote.ensure_record(session_id).unwrap_or_else(|error| {
+                tracing::warn!(%error, session = session_id, "publish preview: remote record not read");
+                RemoteState::Unknown
+            });
+        }
+        Ok(matches!(state, RemoteState::Remote(_)))
     }
 
     /// Changelog 45 (P65): where the stock default is read and remembered.
@@ -666,11 +693,17 @@ impl PublishService {
                 .session
                 .item_id
                 .ok_or_else(|| Error::InvalidValue("unassigned cannot publish".into()))?;
-            let (main, condition, unreviewed) = self.split(session_id)?;
+            let details_only = self.details_only(session_id)?;
+            let (main, condition, unreviewed) = if details_only {
+                (Vec::new(), Vec::new(), 0)
+            } else {
+                self.split(session_id)?
+            };
             let condition = self.filtered_condition(item_id, &condition)?;
             let link = self.store.item_link(item_id, "shopify")?;
             let mut announced_removals = Vec::new();
-            if let Some(link) = &link {
+            // MC-H3.6: a details-only publish reads nothing about the item's media.
+            if let Some(link) = link.as_ref().filter(|_| !details_only) {
                 let own: HashSet<String> = self
                     .store
                     .photo_links_for_item(item_id)?
@@ -729,9 +762,10 @@ impl PublishService {
                 details_total,
                 unreviewed,
                 announced_removals,
-                create_item: link.is_none(),
+                create_item: link.is_none() && !details_only,
                 n_withheld: suggestions.withheld.len(),
                 conflicts: shown_conflicts(&suggestions, &all_definitions),
+                details_only,
             });
         }
         let mut preview = PublishPreview {
@@ -751,13 +785,7 @@ impl PublishService {
         summary_text: &str,
         shown: &[ShownSuggestions],
     ) -> Result<i64> {
-        // 10F Q3: a cleared item is never republished (its photos would need a new session).
-        for session_id in session_ids {
-            crate::services::retention::ensure_session_not_cleared(
-                self.store.as_ref(),
-                *session_id,
-            )?;
-        }
+        // H4 (MC-H3.6): a remote item (archived or shop-only) is confirmed details-only.
         let preview = self.preview(session_ids)?;
         // 10D MC-27 §Revisions: refused, naming the photos, while any of them needs re-framing.
         let mut flagged = Vec::new();
@@ -859,7 +887,9 @@ impl PublishService {
                     .map(|(_, id)| id)
                     .filter(|id| !excluded.contains(id))
                     .collect();
-                if current_main != p.main || current_condition != p.condition {
+                // MC-H3.6 (H4 projection r0, L4): a details-only item freezes no photos, while an
+                // archived item's cleared rows keep their classification: not compared.
+                if !p.details_only && (current_main != p.main || current_condition != p.condition) {
                     return Err(Error::InvalidValue(
                         "publish preview changed; review again".into(),
                     ));
@@ -891,6 +921,7 @@ impl PublishService {
                     total: totals.get(&p.session_id).copied().unwrap_or(0),
                     error: None,
                     export_run_id: None,
+                    details_only: p.details_only,
                 };
                 let held = row.step == PublishStep::Held;
                 item_ids.push((tx.insert_publish_item(&row)?, p.session_id, held));
@@ -1144,6 +1175,11 @@ impl PublishService {
         )
     }
     fn prepare(&self, item: &PublishItem, run: &ConfirmedRun) -> Result<bool> {
+        // MC-H3.6: a details-only item stages no export and touches no link; it waits for no
+        // other item's prepare either (it stages nothing; H4 projection r0, L21).
+        if item.details_only {
+            return Ok(true);
+        }
         let local = self.store.item(
             self.store
                 .session(item.session_id)?
@@ -1444,6 +1480,10 @@ impl PublishService {
     /// wave registered in one request and polled to ready. Every remote effect is recorded before
     /// the next request; a cancel stops before the next upload or mutation (changelog 44).
     fn upload(&self, item: &PublishItem, run: &ConfirmedRun) -> Result<bool> {
+        // MC-H3.6: nothing to upload for a details-only item (its total is 0).
+        if item.details_only {
+            return Ok(true);
+        }
         let local = self.store.item(
             self.store
                 .session(item.session_id)?
@@ -1730,6 +1770,24 @@ impl PublishService {
             .item_link(local.id, "shopify")?
             .ok_or(Error::UploadIncomplete)?
             .external_id;
+        // MC-H3.6: a details-only item skips the whole gallery block (no reconcile, delete,
+        // reorder or readback).
+        if !item.details_only && !self.update_gallery(item, run, &local, &external)? {
+            return Ok(false);
+        }
+        self.update_details(item, run, &local, &external)
+    }
+
+    /// MC-12 / 10D MC-29: the gallery reconciled, reordered and read back; `false` when a cancel
+    /// stopped it at a safe point.
+    fn update_gallery(
+        &self,
+        item: &PublishItem,
+        run: &ConfirmedRun,
+        local: &crate::domain::item::Item,
+        external: &str,
+    ) -> Result<bool> {
+        let external = external.to_owned();
         // MC-12 `D`: one ready link per main output, in order (10D MC-29 §Gallery and cover).
         let mut desired = Vec::new();
         for id in self.selected(item.session_id, &item.frozen_main)? {
@@ -1802,6 +1860,19 @@ impl PublishService {
         if readback != desired {
             return Err(Error::GalleryVerification);
         }
+        Ok(true)
+    }
+
+    /// MC-13 and the rest of the update step: attributes, type, title, tags, description, search
+    /// texts. For a details-only item the condition-photos value is never written (MC-H3.6).
+    fn update_details(
+        &self,
+        item: &PublishItem,
+        run: &ConfirmedRun,
+        local: &crate::domain::item::Item,
+        external: &str,
+    ) -> Result<bool> {
+        let external = external.to_owned();
         // MC-13: compare typed values, write only confirmed differences, then verify the same keys.
         let mut definitions = Vec::new();
         self.store.transaction(&mut |tx| {
@@ -1815,9 +1886,19 @@ impl PublishService {
             .collect();
         let remote_values = self.commerce.attributes_read(&external)?;
         // MC-A10: the frozen list with each resolved key's value; "no value" keys are left out.
-        let attributes = item.run_attributes();
+        let mut attributes = item.run_attributes();
+        if item.details_only {
+            // MC-H3.6: no media-list value (the condition photos) is part of a details-only write,
+            // even when the frozen attributes hold its key.
+            attributes.remove(self.commerce.condition_photos_key());
+            attributes.retain(|key, _| {
+                !definitions
+                    .iter()
+                    .any(|d| &d.key == key && d.core_type == CoreType::MediaList)
+            });
+        }
         let mut changes = write_set(&attributes, &definitions, &remote_values);
-        if let Some(key) = self.condition_key()? {
+        if let Some(key) = self.condition_key()?.filter(|_| !item.details_only) {
             let selected = self.selected(item.session_id, &item.frozen_condition)?;
             if !selected.is_empty() || attributes.contains_key(&key) {
                 // 10D MC-29 §Damage report: the selected condition outputs in order.

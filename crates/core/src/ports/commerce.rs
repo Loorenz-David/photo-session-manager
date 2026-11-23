@@ -5,9 +5,11 @@
 use crate::Result;
 use crate::domain::attribute::Definition;
 use crate::domain::publish::{
-    ConfirmedRun, DefinitionLink, MediaReadback, RemoteIdentity, RemoteItem, RemoteMedia,
-    RemoteValues, Seo, StagedTarget, StockChoice, StockLocations, StockOutcome, WriteValue,
+    ConfirmedRun, DefinitionLink, MediaImage, MediaReadback, RemoteIdentity, RemoteItem,
+    RemoteMedia, RemoteValues, Seo, StagedTarget, StockChoice, StockLocations, StockOutcome,
+    WriteValue,
 };
+use crate::domain::remote::CallBudget;
 use serde_json::Value as Json;
 
 /// The nine capabilities of ch09 §Capabilities.
@@ -213,7 +215,23 @@ pub trait CommerceAdapter: Send + Sync {
     fn media_readback(&self, external_id: &str) -> Result<MediaReadback>;
     /// Read-only: downloads one published image at most `max_edge` px on its long edge (10F §3:
     /// a cleared item's photos are shown from the platform).
+    /// `Err(Error::ImageGone)` when the platform says the picture is not there (MC-H1.4).
     fn fetch_image(&self, url: &str, max_edge: u32) -> Result<Vec<u8>>;
+    /// Read-only (10H §4, MC-H1.4): the current address and size of each media id, one entry per
+    /// id in order; `None` = the platform no longer has it.
+    fn media_urls(&self, _media_ids: &[String]) -> Result<Vec<Option<MediaImage>>> {
+        Err(crate::Error::Provider("not supported".into()))
+    }
+    /// Read-only (10H §7.1): downloads one published image at full size;
+    /// `Err(Error::ImageGone)` when the platform says it is not there.
+    fn fetch_original(&self, _url: &str) -> Result<Vec<u8>> {
+        Err(crate::Error::Provider("not supported".into()))
+    }
+    /// The platform's call budget as last read, projected to now (MC-H5.2); `None` = unknown,
+    /// never wait.
+    fn budget(&self) -> Option<CallBudget> {
+        None
+    }
     fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>>;
     /// Removes the media from the item; a not-found reply counts as removed (MC-12 step 3).
     fn product_delete_media(

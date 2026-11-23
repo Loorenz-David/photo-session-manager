@@ -1,0 +1,9 @@
+# Archived and shop-only items editable (book 10H, branch feature/agentic), single-track order. One runner phase each (flow.md §10; master_plan_archive.md §3).
+# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>`.
+# Each needs the one before it approved (the Tracker line of its plan file). Projection for H1, H3 and H4 (`projection: yes`); not for H2.
+# No session calls Shopify or its CDN and no session launches the built app (master_plan_archive.md §3); tests run against the fake transport and the fake shop.
+# The live check against the real shop (one archived test product: row picture, bring back, republish one re-framed photo) and the Capture One JPEG probe (VERIFY-JPEG) are the orchestrator's, after H4.
+H1_points_and_remote_record
+H2_list_pictures_pages_search
+H3_bring_back
+H4_remote_workspace

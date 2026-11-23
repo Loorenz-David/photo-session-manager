@@ -6,7 +6,7 @@ import type { Session, SessionList } from '@/services/sessions';
 
 vi.mock('@/services/sessions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/sessions')>()),
-  listSessions: vi.fn(),
+  listSessions: vi.fn(), sessionsPage: vi.fn(),
   activeSession: vi.fn(),
   createSession: vi.fn(),
   activateSession: vi.fn(),
@@ -39,7 +39,8 @@ import { StatusPill } from '@/features/sessions/StatusPill';
 import { UnassignedCard } from '@/features/sessions/UnassignedCard';
 import { cameraStatus } from '@/services/camera';
 import { createItem, nextSku, searchItems, searchItemsShop } from '@/services/items';
-import { activateSession, activeSession, createSession, deactivateSession, listSessions } from '@/services/sessions';
+import { activateSession, activeSession, createSession, deactivateSession, listSessions, sessionsPage } from '@/services/sessions';
+import { answerFromList } from '@/features/sessions/__tests__/pageFromList';
 
 // cmdk and Radix need these browser APIs, which jsdom lacks.
 globalThis.ResizeObserver ??= class {
@@ -63,7 +64,7 @@ function row(id: number, title: string, label: RowLabelResponse = { kind: 'in_pr
     progress: null,
     last_activity_at: Date.now() - 2 * 60 * 60 * 1000,
     created_at: Date.now() - 2 * 60 * 60 * 1000,
-    cover_preview_path: null,
+    cover_preview_path: null, cover_pending: false,
     arranged: false,
     publish: null, changes: null,
   };
@@ -78,6 +79,7 @@ function item(id: number, sku: string, title: string, origin = 'local'): ItemDto
 }
 
 beforeEach(() => {
+  answerFromList(sessionsPage, listSessions);
   vi.mocked(listSessions).mockResolvedValue(list([]));
   vi.mocked(activateSession).mockResolvedValue();
   vi.mocked(activeSession).mockResolvedValue(null);

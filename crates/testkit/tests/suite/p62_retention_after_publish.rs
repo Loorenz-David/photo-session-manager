@@ -21,7 +21,7 @@ use psm_core::{
     services::{
         attributes::AttributesService,
         photos::PhotosService,
-        retention::{ARCHIVED_IMAGE_EDGE, ArchiveService},
+        retention::ARCHIVED_IMAGE_EDGE,
         storage::{Cleared, RETENTION_NOT_CLEARED},
     },
 };
@@ -47,7 +47,7 @@ const GB: u64 = 1_000_000_000;
 // ---------------------------------------------------------------------------------------------
 // helpers
 
-fn shop_app() -> TestApp {
+pub(crate) fn shop_app() -> TestApp {
     let a = TestApp::with_fake_shop().unwrap();
     a.clock.advance(NOW_MS);
     condition_field(&a);
@@ -145,10 +145,10 @@ fn capture_one_files(raw: &str) -> Vec<PathBuf> {
     files
 }
 
-struct Item {
-    session: i64,
-    item: i64,
-    photos: Vec<Photo>,
+pub(crate) struct Item {
+    pub(crate) session: i64,
+    pub(crate) item: i64,
+    pub(crate) photos: Vec<Photo>,
 }
 
 fn drain(a: &TestApp) {
@@ -164,7 +164,7 @@ fn latest_step(a: &TestApp, session: i64) -> Option<PublishStep> {
 
 /// An item with its photos (`main`, `condition`, plus a deleted one and a never-reviewed one),
 /// not published.
-fn item(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
+pub(crate) fn item(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
     let (_, session) = a
         .items()
         .create_local(sku, &format!("{sku} title"), "Sideboard", None)
@@ -200,7 +200,7 @@ fn hidden_before_p66(a: &TestApp, photo_id: i64) {
 }
 
 /// `item` published to the fake shop now (the publish flow runs to done).
-fn published(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
+pub(crate) fn published(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
     let it = item(a, sku, main, condition);
     // A never-reviewed photo blocks the ready rule: review it as deleted before publishing.
     let unreviewed = it.photos.last().unwrap().id;
@@ -257,7 +257,7 @@ fn disk_free(a: &TestApp, bytes: u64) {
 }
 
 /// Ticks the clean-up past its batch pauses until it has nothing more to do.
-fn clear_all(a: &TestApp) -> Vec<Cleared> {
+pub(crate) fn clear_all(a: &TestApp) -> Vec<Cleared> {
     let mut all = Vec::new();
     for _ in 0..40 {
         a.clock.advance(3_000);
@@ -286,7 +286,7 @@ fn health_detail(a: &TestApp, code: &str) -> Option<String> {
         .map(|i| i.detail)
 }
 
-fn product_of(a: &TestApp, it: &Item) -> String {
+pub(crate) fn product_of(a: &TestApp, it: &Item) -> String {
     a.store()
         .item_link(it.item, "shopify")
         .unwrap()
@@ -519,9 +519,7 @@ fn c1b_dirty_unpublished_pinned_or_without_integration_nothing_is_deleted() {
     assert!(a.store().session(dirty.session).unwrap().dirty);
     let unpublished = item(&a, "NEW", 1, 0);
     let pinned = published(&a, "PIN", 1, 0);
-    ArchiveService::new(a.store(), None, a.dir.path())
-        .set_keep_files(pinned.item, true)
-        .unwrap();
+    a.remote().set_keep_files(pinned.item, true).unwrap();
     let before: Vec<BTreeSet<PathBuf>> = [&dirty, &unpublished, &pinned]
         .iter()
         .map(|it| files_of(&a, it))
@@ -627,15 +625,14 @@ fn c3a_a_cleared_item_shows_its_photos_from_shopify_cached_and_is_archived_in_th
     assert!(cleared_at(&a, &it).is_some());
 
     let cache = a.app.paths.root.join("previews/archived");
-    let shop: &dyn CommerceAdapter = a.fake_shop();
-    let view = ArchiveService::new(a.store(), Some(shop), &cache)
-        .view(it.session)
-        .unwrap()
-        .unwrap();
+    // H4 (MC-H3.5): the view never downloads; the background step does.
+    a.remote().view(it.session).unwrap().unwrap();
+    a.remote().run_pending().unwrap();
+    let view = a.remote().view(it.session).unwrap().unwrap();
     let shown: Vec<(String, i64, String)> = view
         .pictures
         .iter()
-        .map(|p| (p.role.clone(), p.position, p.url.clone()))
+        .map(|p| (p.role.clone(), p.position, fake_image_url(&p.media_id)))
         .collect();
     assert_eq!(
         shown,
@@ -648,21 +645,22 @@ fn c3a_a_cleared_item_shows_its_photos_from_shopify_cached_and_is_archived_in_th
     for p in &view.pictures {
         let path = p.path.as_ref().expect("downloaded");
         assert!(path.starts_with(&cache));
-        assert_eq!(fs::read(path).unwrap(), fake_image_bytes(&p.url));
+        assert_eq!(
+            fs::read(path).unwrap(),
+            fake_image_bytes(&fake_image_url(&p.media_id))
+        );
     }
-    let fetches = a.fake_shop().state.lock().unwrap().image_fetches.clone();
-    assert_eq!(
-        fetches,
-        shown
-            .iter()
-            .map(|(_, _, url)| (url.clone(), ARCHIVED_IMAGE_EDGE))
-            .collect::<Vec<_>>()
-    );
+    let mut fetches = a.fake_shop().state.lock().unwrap().image_fetches.clone();
+    fetches.sort();
+    let mut expected: Vec<(String, u32)> = shown
+        .iter()
+        .map(|(_, _, url)| (url.clone(), ARCHIVED_IMAGE_EDGE))
+        .collect();
+    expected.sort();
+    assert_eq!(fetches, expected);
     // Opened again: served from the cache, nothing downloaded.
-    let again = ArchiveService::new(a.store(), Some(shop), &cache)
-        .view(it.session)
-        .unwrap()
-        .unwrap();
+    let again = a.remote().view(it.session).unwrap().unwrap();
+    a.remote().run_pending().unwrap();
     assert_eq!(again.pictures, view.pictures);
     assert_eq!(a.fake_shop().state.lock().unwrap().image_fetches.len(), 3);
 
@@ -708,14 +706,15 @@ fn c3b_a_cleared_item_refuses_what_needs_images_and_saves_an_attribute_without_i
         ),
     };
     refused(a.app.compositions.set(main.id, values).map(|_| ()));
-    refused(
-        a.app
-            .publish
-            .as_ref()
-            .unwrap()
-            .confirm_as_shown(&[it.session], "Publish images")
-            .map(|_| ()),
-    );
+    // H4 (MC-H3.6): a cleared item's publish is accepted as details-only.
+    a.app
+        .publish
+        .as_ref()
+        .unwrap()
+        .confirm_as_shown(&[it.session], "Publish images")
+        .unwrap();
+    let latest = a.store().latest_publish(it.session).unwrap().unwrap();
+    assert!(a.store().publish_item(latest.item_id).unwrap().details_only);
     // Nothing changed: the photo keeps its place.
     assert_eq!(a.store().photo(main.id).unwrap().classification, C::Main);
     // A text attribute needs no image: it saves.
@@ -747,9 +746,7 @@ fn c4a_a_pinned_item_is_never_cleared_by_retention_or_by_the_budget() {
     let free_item = published(&a, "FREE", 1, 0);
     let pinned_files = files_of(&a, &pinned);
     let free_files = files_of(&a, &free_item);
-    ArchiveService::new(a.store(), None, a.dir.path())
-        .set_keep_files(pinned.item, true)
-        .unwrap();
+    a.remote().set_keep_files(pinned.item, true).unwrap();
     a.clock.advance(60 * DAY);
     disk_free(&a, 0);
     let cleared = clear_all(&a);

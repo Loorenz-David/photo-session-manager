@@ -1,5 +1,6 @@
 pub mod arrival;
 pub mod attributes;
+pub mod bring_back;
 pub mod camera;
 pub mod camera_ledger;
 pub mod composition;
@@ -15,6 +16,7 @@ pub mod photos;
 pub mod prepare_masters;
 pub mod previews;
 pub mod publish;
+pub mod remote;
 pub mod retention;
 pub mod review;
 pub mod sessions;

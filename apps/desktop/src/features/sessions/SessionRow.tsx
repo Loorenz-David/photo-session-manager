@@ -33,18 +33,21 @@ type SessionRowProps = {
   onDeleted?: () => void;
   /** C2 (09B §6): the session's conversations badge (absent: no unresolved conversation). */
   conversations?: ConversationSessionBadge;
+  /** H2: the row's picture when it differs from the answer's (a cover that arrived since). */
+  picture?: string | null;
 };
 
-export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged, onDeleted, conversations }: SessionRowProps) {
+export function SessionRow({ row, selected, onToggle, onOpen, onPublish, onRetry, now, research, onChanged, onDeleted, conversations, picture }: SessionRowProps) {
   const name = row.item_type || row.title;
+  const shown = picture ?? row.cover_preview_path;
   return (
     <div className="session-row" data-testid={`session-row-${row.id}`} data-selected={selected || undefined}>
       <div className="row-check">
         {isSelectable(row) && <Checkbox checked={selected} onCheckedChange={onToggle} aria-label={`Select ${name}`} />}
       </div>
-      <HoverPreview row={row}>
+      <HoverPreview row={row} picture={shown}>
         <button type="button" className="row-main" onClick={onOpen}>
-          <Thumb path={row.cover_preview_path} className="row-thumb" />
+          <Thumb path={shown} className="row-thumb" />
           <span className="row-name">
             <strong>{name}</strong>
             <small>{row.sku}</small>

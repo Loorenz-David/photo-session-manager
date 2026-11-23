@@ -45,10 +45,15 @@ impl Default for ExportSettings {
 pub struct ItemRetention {
     pub keep_files: bool,
     pub cleared_at: Option<i64>,
+    /// When the item's pictures were last brought back to this Mac (10H §7, MC-H4.8).
+    pub restored_at: Option<i64>,
+    /// When the item's remote pictures were last read from the shop (MC-H3.2).
+    pub remote_checked_at: Option<i64>,
 }
 
-/// One published image of a cleared item, as Shopify held it when the item was verified
-/// (10F §3: the item's photos are shown from Shopify after clearing).
+/// One remote picture of an item (10H §3): a published image of a cleared item as the shop held
+/// it when the item was verified (10F §3), or a picture of a shop-only item read at its first
+/// open (MC-H3.2). An empty `url` means the shop no longer has it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArchivedImage {
     /// `gallery` (main photos) or `condition`.
@@ -57,6 +62,8 @@ pub struct ArchivedImage {
     pub position: i64,
     pub media_id: String,
     pub url: String,
+    /// The original file's size in bytes, when the shop told it (MC-H4.1).
+    pub bytes: Option<i64>,
 }
 
 /// The space each kind of file uses, computed in the background (10F §4).

@@ -38,7 +38,7 @@ vi.mock('@/services/writer', () => ({
 }));
 vi.mock('@/services/sessions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/sessions')>()),
-  listSessions: vi.fn(),
+  listSessions: vi.fn(), sessionsPage: vi.fn(),
   arrangeNext: vi.fn(),
   previewUrl: (path: string) => `asset://${path}`,
 }));
@@ -61,7 +61,8 @@ import { FormDialog } from '@/features/form/FormDialog';
 import { Header } from '@/features/shell/Header';
 import { getForm } from '@/services/attributes';
 import { researchOverview, researchStatus } from '@/services/research';
-import { listSessions } from '@/services/sessions';
+import { listSessions, sessionsPage } from '@/services/sessions';
+import { answerFromList } from '@/features/sessions/__tests__/pageFromList';
 import { writerRequest, writerStatus } from '@/services/writer';
 
 globalThis.ResizeObserver ??= class {
@@ -108,6 +109,7 @@ const renderForm = () =>
   render(<FormDialog open onOpenChange={() => undefined} item={ITEM} photos={[]} sessionId={SESSION} onItemChanged={() => undefined} review={{ left: 1, onNext: () => undefined }} />);
 
 beforeEach(() => {
+  answerFromList(sessionsPage, listSessions);
   vi.mocked(researchStatus).mockResolvedValue(research());
   vi.mocked(writerStatus).mockResolvedValue(writer());
   vi.mocked(writerRequest).mockResolvedValue({ queued: true, reason: null });

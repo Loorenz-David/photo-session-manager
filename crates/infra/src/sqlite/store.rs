@@ -32,6 +32,7 @@ use psm_core::{
             default_rect, fingerprint_compatible, orientation_of, refit_rect, review_reason,
             turned_frame,
         },
+        remote::RemoteInput,
     },
     ports::store::{FrameCommit, PreviewCommit, RawPreviewState, Store, StoreTx},
 };
@@ -85,6 +86,8 @@ impl SqliteStore {
             M::up(include_str!("migrations/017_session_changes.sql")),
             M::up(include_str!("migrations/018_saved_pages.sql")),
             M::up(include_str!("migrations/019_conversations.sql")),
+            M::up(include_str!("migrations/020_remote_items.sql")),
+            M::up(include_str!("migrations/021_publish_details_only.sql")),
         ]
     }
 
@@ -129,6 +132,20 @@ impl SqliteStore {
         store_tx.tx.commit().map_err(db)?;
         Ok(value)
     }
+}
+
+/// Replaces the item's remote pictures (`archived_images`) with `images` inside `tx`.
+fn replace_archived_images(tx: &Transaction, item_id: i64, images: &[ArchivedImage]) -> Result<()> {
+    tx.execute("DELETE FROM archived_images WHERE item_id=?1", [item_id])
+        .map_err(db)?;
+    for image in images {
+        tx.execute(
+            "INSERT INTO archived_images(item_id,role,position,media_id,url,bytes) VALUES (?1,?2,?3,?4,?5,?6)",
+            params![item_id, image.role, image.position, image.media_id, image.url, image.bytes],
+        )
+        .map_err(db)?;
+    }
+    Ok(())
 }
 
 fn db(error: rusqlite::Error) -> Error {
@@ -694,9 +711,9 @@ fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
         "SELECT id,run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,failed_step,uploaded,total,error,(SELECT CAST(value AS INTEGER) FROM settings WHERE key='publish_export:'||publish_items.id),frozen_item_type FROM publish_items WHERE id=?1", [id],
         |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?,r.get(8)?,r.get(9)?,r.get(10)?,r.get(11)?,r.get(12)?,r.get(13)?,r.get(14)?,r.get(15)?,r.get(16)?))
     ).optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("publish item {id}")))?;
-    let (origin, pending, resolved, released): (Option<String>, Option<String>, Option<String>, Option<i64>) = conn.query_row(
-        "SELECT frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at FROM publish_items WHERE id=?1", [id],
-        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)),
+    let (origin, pending, resolved, released, details_only): (Option<String>, Option<String>, Option<String>, Option<i64>, bool) = conn.query_row(
+        "SELECT frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at,details_only FROM publish_items WHERE id=?1", [id],
+        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?)),
     ).map_err(db)?;
     Ok(PublishItem {
         id: row.0,
@@ -720,6 +737,7 @@ fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
         total: row.13,
         error: row.14,
         export_run_id: row.15,
+        details_only,
     })
 }
 
@@ -1177,8 +1195,8 @@ impl StoreTx for SqliteTx<'_> {
         Ok(self.tx.last_insert_rowid())
     }
     fn insert_publish_item(&mut self, item: &PublishItem) -> Result<i64> {
-        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total,frozen_item_type,frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11,?12,?13,?14,?15,?16)",
-            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total,item.frozen_item_type,to_json(&item.frozen_attribute_origin)?,to_json(&item.pending_conflicts)?,to_json(&item.resolved_attributes)?,item.released_at]).map_err(db)?;
+        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total,frozen_item_type,frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at,details_only) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11,?12,?13,?14,?15,?16,?17)",
+            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total,item.frozen_item_type,to_json(&item.frozen_attribute_origin)?,to_json(&item.pending_conflicts)?,to_json(&item.resolved_attributes)?,item.released_at,item.details_only]).map_err(db)?;
         Ok(self.tx.last_insert_rowid())
     }
     fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>> {
@@ -2356,7 +2374,7 @@ impl Store for SqliteStore {
         base.into_iter().map(|(id,sku,item_type,title)| {
             let session = session(&conn, id)?;
             let non_deleted_missing_preview_count = conn.query_row("SELECT COUNT(*) FROM photos WHERE session_id=?1 AND classification<>'deleted' AND integrity<>'raw_missing' AND adjusted_preview_path IS NULL", [id], |r| r.get(0)).map_err(db)?;
-            let cover_preview_path = conn.query_row("SELECT COALESCE(adjusted_preview_path,original_preview_path) FROM photos WHERE session_id=?1 AND classification='main' AND position=1", [id], |r| r.get(0)).optional().map_err(db)?.flatten();
+            let (cover_adjusted_preview_path, cover_original_preview_path) = conn.query_row("SELECT adjusted_preview_path,original_preview_path FROM photos WHERE session_id=?1 AND classification='main' AND position=1", [id], |r| Ok((r.get(0)?, r.get(1)?))).optional().map_err(db)?.unwrap_or((None, None));
             let publish = latest_publish(&conn, id)?;
             let unresolved_conflicts = if let Some(latest) = &publish {
                 if latest.step == PublishStep::Held {
@@ -2368,7 +2386,7 @@ impl Store for SqliteStore {
                 None => (None,None,0,0),
             };
             let waiting_for_editor: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM jobs WHERE kind='render_export' AND target=?1 AND status='running' AND error='waiting_for_editor')", [format!("session:{id}")], |r| r.get(0)).map_err(db)?;
-            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_preview_path,latest_step,failed_step,uploaded,total,unresolved_conflicts,publish,waiting_for_editor })
+            Ok(SessionListRecord { session,sku,item_type,title,non_deleted_missing_preview_count,cover_adjusted_preview_path,cover_original_preview_path,latest_step,failed_step,uploaded,total,unresolved_conflicts,publish,waiting_for_editor })
         }).collect()
     }
 
@@ -3211,12 +3229,14 @@ impl Store for SqliteStore {
         let conn = self.locked()?;
         Ok(conn
             .query_row(
-                "SELECT keep_files,cleared_at FROM item_retention WHERE item_id=?1",
+                "SELECT keep_files,cleared_at,restored_at,remote_checked_at FROM item_retention WHERE item_id=?1",
                 [item_id],
                 |r| {
                     Ok(ItemRetention {
                         keep_files: r.get::<_, i64>(0)? != 0,
                         cleared_at: r.get(1)?,
+                        restored_at: r.get(2)?,
+                        remote_checked_at: r.get(3)?,
                     })
                 },
             )
@@ -3241,21 +3261,240 @@ impl Store for SqliteStore {
             params![item_id, at],
         )
         .map_err(db)?;
-        tx.execute("DELETE FROM archived_images WHERE item_id=?1", [item_id])
-            .map_err(db)?;
-        for image in images {
+        replace_archived_images(&tx, item_id, images)?;
+        tx.commit().map_err(db)
+    }
+    fn set_remote_record(
+        &self,
+        item_id: i64,
+        images: &[ArchivedImage],
+        checked_at: i64,
+    ) -> Result<()> {
+        let mut conn = self.locked()?;
+        let tx = conn.transaction().map_err(db)?;
+        // MC-H3.2: the pin, the clearing and the bring-back times stay as they are.
+        tx.execute(
+            "INSERT INTO item_retention(item_id,remote_checked_at) VALUES (?1,?2) ON CONFLICT(item_id) DO UPDATE SET remote_checked_at=excluded.remote_checked_at",
+            params![item_id, checked_at],
+        )
+        .map_err(db)?;
+        replace_archived_images(&tx, item_id, images)?;
+        tx.commit().map_err(db)
+    }
+    fn update_remote_urls(
+        &self,
+        item_id: i64,
+        updates: &[(String, Option<String>, Option<i64>)],
+    ) -> Result<()> {
+        let mut conn = self.locked()?;
+        let tx = conn.transaction().map_err(db)?;
+        for (media_id, url, bytes) in updates {
+            // A `None` URL stores the empty string: the picture is gone (MC-H1.4).
             tx.execute(
-                "INSERT INTO archived_images(item_id,role,position,media_id,url) VALUES (?1,?2,?3,?4,?5)",
-                params![item_id, image.role, image.position, image.media_id, image.url],
+                "UPDATE archived_images SET url=?3, bytes=COALESCE(?4,bytes) WHERE item_id=?1 AND media_id=?2",
+                params![item_id, media_id, url.as_deref().unwrap_or(""), bytes],
             )
             .map_err(db)?;
         }
         tx.commit().map_err(db)
     }
+    fn bring_back(&self, input: psm_core::domain::remote::BringBackInput) -> Result<Vec<i64>> {
+        let mut conn = self.locked()?;
+        let tx = conn.transaction().map_err(db)?;
+        let at = input.at;
+        // (a) Every photo row the session had is retired: hidden, its files gone (M-H4), its
+        // links for the item gone, its place released (10G §6.4: it leaves the shot count and
+        // leaves no container to refill). The rows stay (history, UNIQUE(session_id, raw_path)).
+        tx.execute(
+            "DELETE FROM photo_links WHERE item_id=?1 AND photo_id IN (SELECT id FROM photos WHERE session_id=?2)",
+            params![input.item_id, input.session_id],
+        )
+        .map_err(db)?;
+        tx.execute(
+            "INSERT INTO photo_places(photo_id,released) SELECT id,1 FROM photos WHERE session_id=?1 ON CONFLICT(photo_id) DO UPDATE SET released=1",
+            [input.session_id],
+        )
+        .map_err(db)?;
+        tx.execute(
+            "UPDATE photos SET classification='deleted',position=NULL,original_preview_path=NULL,adjusted_preview_path=NULL,thumbnail_path=NULL,integrity='raw_missing' WHERE session_id=?1",
+            [input.session_id],
+        )
+        .map_err(db)?;
+        // The containers of the session's shooting template (none for an untemplated session).
+        let item_type: String = tx
+            .query_row(
+                "SELECT item_type FROM items WHERE id=?1",
+                [input.item_id],
+                |r| r.get(0),
+            )
+            .map_err(db)?;
+        let containers: Vec<i64> = {
+            let mut stmt = tx
+                .prepare("SELECT c.final_no FROM template_containers c JOIN shooting_templates t ON t.id=c.template_id WHERE t.type_key=?1")
+                .map_err(db)?;
+            stmt.query_map(
+                [psm_core::mechanisms::template::type_key(&item_type)],
+                |r| r.get(0),
+            )
+            .map_err(db)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db)?
+        };
+        let mut ids = Vec::with_capacity(input.files.len());
+        for file in &input.files {
+            let main = file.role == psm_core::services::retention::ROLE_GALLERY;
+            let classification = if main { "main" } else { "condition" };
+            // (b) The photo, its composition exactly as published, its RAW state and its jobs.
+            let uid = uuid::Uuid::new_v4().to_string();
+            tx.execute(
+                "INSERT INTO photos(uid,session_id,raw_path,raw_hash,source,captured_at,created_at,classification,position) VALUES (?1,?2,?3,?4,'import',?5,?5,?6,?7)",
+                params![uid, input.session_id, file.path, file.sha256, at, classification, file.position],
+            )
+            .map_err(db)?;
+            let id = tx.last_insert_rowid();
+            tx.execute(
+                "INSERT INTO compositions(photo_id,kind,shape,orientation,quarter_turns,flip,straighten,x,y,w,h,origin,revision,updated_at) VALUES (?1,'normal','original','named',0,'none',0,0,0,1,1,'default',0,?2)",
+                params![id, at],
+            )
+            .map_err(db)?;
+            tx.execute(
+                "INSERT INTO raw_state(raw_path,path_key) VALUES (?1,?2) ON CONFLICT(raw_path) DO UPDATE SET path_key=excluded.path_key",
+                params![file.path, psm_core::mechanisms::arrival::path_key(&file.path)],
+            )
+            .map_err(db)?;
+            for kind in ["original_preview", "render_preview"] {
+                tx.execute(
+                    "INSERT INTO jobs(kind,target,payload,status,attempts,next_attempt_at,created_at,updated_at) VALUES (?1,?2,'{}','queued',0,?3,?3,?3)",
+                    params![kind, file.path, at],
+                )
+                .map_err(db)?;
+            }
+            if main && !containers.is_empty() {
+                // 10G §4.4, §6.1: the published order is kept; main photo k is placed by hand in
+                // the container whose final number is k (none past the last container).
+                let slot = containers.contains(&file.position).then_some(file.position);
+                tx.execute(
+                    "INSERT INTO photo_places(photo_id,slot,place_by_hand) VALUES (?1,?2,1)",
+                    params![id, slot],
+                )
+                .map_err(db)?;
+            }
+            // (c) Linked to the media it came from, as uploaded at its current state.
+            let retouch_gen: i64 = tx
+                .query_row(
+                    "SELECT retouch_gen FROM raw_state WHERE raw_path=?1",
+                    [&file.path],
+                    |r| r.get(0),
+                )
+                .map_err(db)?;
+            let role = if main {
+                psm_core::services::retention::ROLE_GALLERY.to_owned()
+            } else {
+                input.link_role_condition.clone()
+            };
+            tx.execute(
+                "INSERT INTO photo_links(photo_id,integration,item_id,role,slot,external_id,revision,retouch_gen,composition_rev,superseded_ids,upload_state,updated_at) VALUES (?1,'shopify',?2,?3,'single',?4,0,?5,0,NULL,'ready',?6)",
+                params![id, input.item_id, role, file.media_id, retouch_gen, at],
+            )
+            .map_err(db)?;
+            ids.push(id);
+        }
+        // (d) The item is on this Mac again; the record rows stay (ignored while it is local).
+        tx.execute(
+            "INSERT INTO item_retention(item_id,restored_at) VALUES (?1,?2) ON CONFLICT(item_id) DO UPDATE SET cleared_at=NULL,restored_at=excluded.restored_at",
+            params![input.item_id, at],
+        )
+        .map_err(db)?;
+        // (e) `sessions.change_seq` is left as it is: bringing back is not an edit.
+        tx.commit().map_err(db)?;
+        Ok(ids)
+    }
+    fn remote_input(&self, session_id: i64) -> Result<RemoteInput> {
+        let conn = self.locked()?;
+        let input = conn
+            .query_row(
+                "SELECT r.cleared_at IS NOT NULL, \
+                        EXISTS(SELECT 1 FROM item_links l WHERE l.item_id=i.id AND l.integration=?2), \
+                        i.origin='linked', \
+                        (SELECT COUNT(*) FROM photos p WHERE p.session_id=s.id), \
+                        r.remote_checked_at IS NOT NULL, \
+                        (SELECT COUNT(*) FROM archived_images a WHERE a.item_id=i.id) \
+                 FROM sessions s JOIN items i ON i.id=s.item_id \
+                 LEFT JOIN item_retention r ON r.item_id=i.id WHERE s.id=?1",
+                params![session_id, psm_core::services::retention::INTEGRATION],
+                |r| {
+                    Ok(RemoteInput {
+                        cleared: r.get::<_, Option<bool>>(0)?.unwrap_or(false),
+                        linked: r.get(1)?,
+                        adopted: r.get(2)?,
+                        photo_rows: r.get::<_, i64>(3)? as usize,
+                        checked: r.get::<_, Option<bool>>(4)?.unwrap_or(false),
+                        pictures: r.get::<_, i64>(5)? as usize,
+                    })
+                },
+            )
+            .optional()
+            .map_err(db)?;
+        Ok(input.unwrap_or_default())
+    }
+    fn remote_covers(&self) -> Result<Vec<psm_core::mechanisms::remote::RemoteCover>> {
+        let conn = self.locked()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT s.id, i.id, i.sku, \
+                        r.cleared_at IS NOT NULL, \
+                        EXISTS(SELECT 1 FROM item_links l WHERE l.item_id=i.id AND l.integration=?1), \
+                        i.origin='linked', \
+                        (SELECT COUNT(*) FROM photos p WHERE p.session_id=s.id), \
+                        r.remote_checked_at IS NOT NULL, \
+                        (SELECT COUNT(*) FROM archived_images a WHERE a.item_id=i.id), \
+                        c.position, c.media_id, c.url, c.bytes, \
+                        (SELECT COUNT(*) FROM archived_images g WHERE g.item_id=i.id AND g.role='gallery'), \
+                        (SELECT COUNT(*) FROM archived_images k WHERE k.item_id=i.id AND k.role='condition') \
+                 FROM sessions s JOIN items i ON i.id=s.item_id \
+                 LEFT JOIN item_retention r ON r.item_id=i.id \
+                 LEFT JOIN archived_images c ON c.item_id=i.id AND c.role='gallery' \
+                   AND c.position=(SELECT MIN(position) FROM archived_images m \
+                                   WHERE m.item_id=i.id AND m.role='gallery') \
+                 ORDER BY s.id",
+            )
+            .map_err(db)?;
+        stmt.query_map([psm_core::services::retention::INTEGRATION], |r| {
+            let cover = match r.get::<_, Option<i64>>(9)? {
+                Some(position) => Some(ArchivedImage {
+                    role: psm_core::services::retention::ROLE_GALLERY.into(),
+                    position,
+                    media_id: r.get(10)?,
+                    url: r.get(11)?,
+                    bytes: r.get(12)?,
+                }),
+                None => None,
+            };
+            Ok(psm_core::mechanisms::remote::RemoteCover {
+                session_id: r.get(0)?,
+                item_id: r.get(1)?,
+                sku: r.get(2)?,
+                input: RemoteInput {
+                    cleared: r.get::<_, Option<bool>>(3)?.unwrap_or(false),
+                    linked: r.get(4)?,
+                    adopted: r.get(5)?,
+                    photo_rows: r.get::<_, i64>(6)? as usize,
+                    checked: r.get::<_, Option<bool>>(7)?.unwrap_or(false),
+                    pictures: r.get::<_, i64>(8)? as usize,
+                },
+                cover,
+                gallery: r.get::<_, i64>(13)? as usize,
+                condition: r.get::<_, i64>(14)? as usize,
+            })
+        })
+        .map_err(db)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(db)
+    }
     fn archived_images(&self, item_id: i64) -> Result<Vec<ArchivedImage>> {
         let conn = self.locked()?;
         let mut stmt = conn
-            .prepare("SELECT role,position,media_id,url FROM archived_images WHERE item_id=?1 ORDER BY role<>'gallery',position")
+            .prepare("SELECT role,position,media_id,url,bytes FROM archived_images WHERE item_id=?1 ORDER BY role<>'gallery',position")
             .map_err(db)?;
         stmt.query_map([item_id], |r| {
             Ok(ArchivedImage {
@@ -3263,6 +3502,7 @@ impl Store for SqliteStore {
                 position: r.get(1)?,
                 media_id: r.get(2)?,
                 url: r.get(3)?,
+                bytes: r.get(4)?,
             })
         })
         .map_err(db)?
