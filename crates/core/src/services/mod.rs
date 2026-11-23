@@ -1,5 +1,6 @@
 pub mod arrival;
 pub mod attributes;
+pub mod bring_back;
 pub mod camera;
 pub mod camera_ledger;
 pub mod composition;

@@ -1185,13 +1185,26 @@ impl App {
         };
         // H1 (10H §6, §8): remote items; the background step runs only with the startup work, like
         // the storage clean-up.
+        // H3 (MC-H4.1, projection r0 L4): bring back asks the editor's document for the capture
+        // root each time (a press; never the arrival service's cached answer).
+        let capture_root: psm_core::services::remote::CaptureRootSource = {
+            let editing = editing.clone();
+            Arc::new(move || {
+                Ok(std::fs::canonicalize(
+                    editing.inspect_document()?.capture_root,
+                )?)
+            })
+        };
         let remote = Arc::new(RemoteItems::new(
             store.clone(),
             commerce.clone(),
+            editing.clone(),
             paths.root.join("previews"),
+            capture_root,
             clock.clone(),
             events.clone(),
             health.clone(),
+            history.clone(),
             psm_core::mechanisms::remote::SEARCH_CACHE_LIMIT_BYTES,
         ));
         let remote_background = run_startup.then(|| {

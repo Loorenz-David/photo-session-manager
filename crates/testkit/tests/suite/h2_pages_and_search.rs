@@ -203,10 +203,13 @@ fn h2_c13d_the_search_folder_keeps_the_newest_within_its_limit() {
     let remote = RemoteItems::new(
         store,
         a.app.commerce.clone(),
+        a.app.editing.clone(),
         previews.clone(),
+        Arc::new(|| Err(psm_core::Error::DocumentNotOpen)),
         a.app.clock.clone(),
         a.events.clone(),
         a.app.health.clone(),
+        a.app.history.clone(),
         2 * size,
     );
     for (i, url) in urls.iter().enumerate() {

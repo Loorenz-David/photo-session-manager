@@ -500,6 +500,15 @@ pub trait Store: Send + Sync {
         item_id: i64,
         updates: &[(String, Option<String>, Option<i64>)],
     ) -> Result<()>;
+    /// MC-H4.4, one transaction, called only when every file is on disk: retires every photo row
+    /// the session had (deleted, no position, no preview paths, `raw_missing`, its links for the
+    /// item gone, its place released), adds one photo per file (composition `original` with no
+    /// crop and no turn, a `raw_state` row, the `original_preview` and `render_preview` jobs; in a
+    /// templated session main photo *k* placed by hand in container *k*), links each to its media
+    /// as uploaded (`ready`, revision 0, the stored retouch generation), clears `cleared_at` and
+    /// sets `restored_at`. The session's `change_seq` is not changed. Returns the new photo ids in
+    /// the order of `files`.
+    fn bring_back(&self, input: crate::domain::remote::BringBackInput) -> Result<Vec<i64>>;
     /// MC-H3.1, one read: what the remote state rule needs about the session's item (all-false
     /// for a session without an item).
     fn remote_input(&self, session_id: i64) -> Result<RemoteInput>;

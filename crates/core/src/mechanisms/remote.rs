@@ -16,6 +16,12 @@ pub const COVER_EDGE: u32 = 320;
 /// MC-H1.4: a picture's address is not asked for again within this time (monotonic).
 pub const REFRESH_COOLDOWN_MS: u64 = 600_000;
 
+/// MC-H4.3: a failed bring-back download is tried this many more times.
+pub const DOWNLOAD_RETRIES: usize = 2;
+/// MC-H3.5: the size assumed for a remote picture whose size the shop did not tell (10F's
+/// measured output size).
+pub const UNKNOWN_PICTURE_BYTES: i64 = 1_500_000;
+
 /// MC-H2.5: the long edge of a shop search result's picture, in px.
 pub const SEARCH_EDGE: u32 = 160;
 /// MC-H2.6: the search-picture cache holds at most this many bytes.
@@ -85,6 +91,46 @@ pub fn must_wait(budget: Option<CallBudget>) -> bool {
     }
 }
 
+/// MC-H4.2: the file names of a bring back, `<folder_key>-main-<NN>.jpg` for each gallery
+/// picture then `<folder_key>-condition-<NN>.jpg` for each condition picture (`NN` = position,
+/// two digits at least). When any name of the set is `taken`, the whole set carries `-b2` before
+/// `.jpg`, then `-b3`, …: the smallest suffix for which none is taken.
+pub fn bring_back_names(
+    folder_key: &str,
+    gallery: usize,
+    condition: usize,
+    taken: &dyn Fn(&str) -> bool,
+) -> Vec<String> {
+    let set = |round: usize| -> Vec<String> {
+        let suffix = if round == 1 {
+            String::new()
+        } else {
+            format!("-b{round}")
+        };
+        (1..=gallery)
+            .map(|n| format!("{folder_key}-main-{n:02}{suffix}.jpg"))
+            .chain((1..=condition).map(|n| format!("{folder_key}-condition-{n:02}{suffix}.jpg")))
+            .collect()
+    };
+    let mut round = 1;
+    loop {
+        let names = set(round);
+        if !names.iter().any(|name| taken(name)) {
+            return names;
+        }
+        round += 1;
+    }
+}
+
+/// MC-H3.5: the bytes a bring back of `pictures` downloads, about: each picture's `bytes`, or
+/// `UNKNOWN_PICTURE_BYTES` when the shop did not tell it.
+pub fn estimate_bytes(pictures: &[ArchivedImage]) -> i64 {
+    pictures
+        .iter()
+        .map(|picture| picture.bytes.unwrap_or(UNKNOWN_PICTURE_BYTES))
+        .sum()
+}
+
 /// What the remote state rule needs to know about a session's item (MC-H3.1), read by
 /// `Store::remote_input` in one read. A session without an item answers all-false.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -136,6 +182,73 @@ pub fn remote_state(input: RemoteInput) -> RemoteState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn none_taken(_: &str) -> bool {
+        false
+    }
+
+    #[test]
+    fn h3_c3a_names_main_then_condition() {
+        assert_eq!(
+            bring_back_names("BEYO-12", 2, 1, &none_taken),
+            vec![
+                "BEYO-12-main-01.jpg",
+                "BEYO-12-main-02.jpg",
+                "BEYO-12-condition-01.jpg"
+            ]
+        );
+    }
+
+    #[test]
+    fn h3_c3b_one_taken_name_suffixes_the_whole_set() {
+        let taken = |name: &str| name == "BEYO-12-main-02.jpg";
+        assert_eq!(
+            bring_back_names("BEYO-12", 2, 1, &taken),
+            vec![
+                "BEYO-12-main-01-b2.jpg",
+                "BEYO-12-main-02-b2.jpg",
+                "BEYO-12-condition-01-b2.jpg"
+            ]
+        );
+    }
+
+    #[test]
+    fn h3_c3c_the_smallest_free_suffix() {
+        let taken =
+            |name: &str| name == "BEYO-12-main-02.jpg" || name == "BEYO-12-condition-01-b2.jpg";
+        let names = bring_back_names("BEYO-12", 2, 1, &taken);
+        assert_eq!(
+            names,
+            vec![
+                "BEYO-12-main-01-b3.jpg",
+                "BEYO-12-main-02-b3.jpg",
+                "BEYO-12-condition-01-b3.jpg"
+            ]
+        );
+    }
+
+    #[test]
+    fn h3_c3d_twelve_names_two_digits() {
+        let names = bring_back_names("K", 12, 0, &none_taken);
+        assert_eq!(names.len(), 12);
+        assert_eq!(names.last().map(String::as_str), Some("K-main-12.jpg"));
+    }
+
+    #[test]
+    fn h3_c3e_estimate_uses_sizes_or_the_assumed_size() {
+        let picture = |bytes| ArchivedImage {
+            role: "gallery".into(),
+            position: 1,
+            media_id: "m".into(),
+            url: "u".into(),
+            bytes,
+        };
+        assert_eq!(
+            estimate_bytes(&[picture(Some(1_000_000)), picture(None)]),
+            2_500_000
+        );
+        assert_eq!(estimate_bytes(&[]), 0);
+    }
 
     const ARCHIVED: RemoteState = RemoteState::Remote(RemoteKind::Archived);
     const SHOP_ONLY: RemoteState = RemoteState::Remote(RemoteKind::ShopOnly);

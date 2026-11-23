@@ -160,6 +160,8 @@ impl From<Error> for CommandError {
             Error::FilesCleared => "files_cleared",
             Error::ImageGone => "image_gone",
             Error::NotRemote => "not_remote",
+            Error::BringBackRunning => "bring_back_running",
+            Error::BringBackFailed { .. } => "bring_back_failed",
         };
         Self {
             code: code.into(),

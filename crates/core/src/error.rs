@@ -143,6 +143,12 @@ pub enum Error {
     /// Refresh (and later bring back) asked for an item whose photos are on this Mac (MC-H3.3).
     #[error("This item's photos are on this Mac, not in the shop")]
     NotRemote,
+    /// MC-H4.1: a bring back of this session is already running.
+    #[error("The photos are already being brought back")]
+    BringBackRunning,
+    /// MC-H4.1, .3: a bring back could not finish; nothing was imported.
+    #[error("Could not bring back the photos: {reason}")]
+    BringBackFailed { reason: String },
     /// Changelog 45 (P65): an export or publish waited 10 minutes for the editor; the sentence
     /// names the photo (`Capture One has not loaded DSC05162.ARW after 10 minutes`).
     #[error("{0}")]

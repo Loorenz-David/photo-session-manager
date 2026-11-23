@@ -1975,6 +1975,16 @@ struct PictureReadyPayload {
     target: psm_core::domain::remote::PictureTarget,
     path: String,
 }
+/// H3 (master plan archive §4 Events): `bring_back_progress {session_id, done, total, state,
+/// error}`.
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+struct BringBackPayload {
+    session_id: i64,
+    done: usize,
+    total: usize,
+    state: psm_core::domain::remote::BringBackState,
+    error: Option<String>,
+}
 impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
     fn emit(&self, event: AppEvent) {
         match event {
@@ -2087,6 +2097,24 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                 let _ = self
                     .app
                     .emit("picture_ready", PictureReadyPayload { target, path });
+            }
+            AppEvent::BringBack {
+                session_id,
+                done,
+                total,
+                state,
+                error,
+            } => {
+                let _ = self.app.emit(
+                    "bring_back_progress",
+                    BringBackPayload {
+                        session_id,
+                        done,
+                        total,
+                        state,
+                        error,
+                    },
+                );
             }
             // C1: the toasts' words; C2: one chime, and a Mac banner per line while the main
             // window does not have the focus (09B §9).

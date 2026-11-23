@@ -435,6 +435,28 @@ SEARCH_EDGE 160)`, `PictureReady {Search {external_id}}`; a gone picture is drop
 cache** is one flat folder capped at `SEARCH_CACHE_LIMIT_BYTES` (200 MB): after each write the file's modified time is
 set to the app clock and `evict` deletes the oldest files (name ascending on a tie) until the folder fits.
 
+**Bring back (H3, MC-H4; `services/bring_back.rs`, `impl RemoteItems`).** `RemoteItems::bring_back(session_id)`
+(`RemoteItems::new` also takes `editing`, a `capture_root` closure and `history`; `App::build` passes a closure that calls
+`editing.inspect_document()` and canonicalizes its capture root, **uncached**): (1) preconditions in order: an
+integration (`NoIntegration`), state `Remote(_)` (an `Unknown` item is read first with `ensure_record`) else `NotRemote`,
+no bring back of the session running (in-memory mark with its progress, `bring_back_progress`; cleared on every exit;
+`BringBackRunning`), the latest publish not in held/prepare/upload/update/describe, the capture root known, no record
+picture gone (each a `BringBackFailed {reason}`); (2) names `mechanisms::remote::bring_back_names` in
+`<capture root>/<folder key>/` (`taken` = a photo row of any session has that canonical path; a store error fails before
+any download); (3) every picture `fetch_original(url)` → `<name>.part` → rename, at most 4 at once, 1 + `DOWNLOAD_RETRIES`
+(2) tries, a body not starting with `FF D8 FF` is a failed try; `ImageGone` → one `media_urls` for the stale ids (no budget
+wait), the new address stored and tried with the full tries, none found → stored gone and `<n> photos are no longer in the
+shop`; `AppEvent::BringBack {Running, done, total}` after each file (window event `bring_back_progress`, `onBringBack`);
+any picture missing → **every file this attempt wrote is deleted**, nothing imported, `BringBack {Failed}`; (4)
+`Store::bring_back(BringBackInput)` — **one transaction**, run inside `History::retire_session`'s `act` (the session's undo
+and redo lists go): the session's earlier rows retired (deleted, no position, preview paths null, `raw_missing`, links for
+the item deleted, `photo_places.released = 1`), one photo per file (canonical path, SHA-256, `source import`, composition
+`original` with rect (0,0,1,1) revision 0, `raw_state` row, jobs `original_preview` + `render_preview`; in a templated
+session main *k* placed by hand in container *k*), one `ready` link per photo (role `gallery` or
+`attribute:<condition key>`, the stored `raw_state.retouch_gen`, revision 0), `item_retention` `cleared_at` null and
+`restored_at` now; **`change_seq` untouched**; (5) `editing.sync_folder(folder)` (failure → `synced = false`),
+`BringBack {Done}`, `SessionChanged`. No style, no colour tag, no shop write (M-H1), no editor delete (M-H2).
+
 **Delete session (A17, owner 2026-11-18; Session Manager only, never Shopify).** Commands
 `session_delete_preview` / `session_delete` → `psm_integrations::session_delete` (when photos are filed
 into the session: `CAPTURE_TARGET_ORDER` claim + `deactivate`, so Capture One leaves it; failure only logged)

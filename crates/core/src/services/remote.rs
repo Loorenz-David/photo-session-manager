@@ -9,7 +9,7 @@ use crate::{
     Error, Result,
     domain::{
         publish::MediaImage,
-        remote::{CallBudget, PictureTarget, RemoteState},
+        remote::{BringBackProgress, CallBudget, PictureTarget, RemoteState},
         storage::ArchivedImage,
     },
     events::AppEvent,
@@ -17,9 +17,13 @@ use crate::{
         COVER_EDGE, PARALLEL_DOWNLOADS, REFRESH_COOLDOWN_MS, RemoteCover, SEARCH_EDGE,
         URL_REFRESH_CHUNK, cover_name, evict, must_wait, remote_state, search_name,
     },
-    ports::{clock::Clock, commerce::CommerceAdapter, events::EventSink, store::Store},
+    ports::{
+        clock::Clock, commerce::CommerceAdapter, editing::EditingProvider, events::EventSink,
+        store::Store,
+    },
     services::{
         health::HealthService,
+        history::History,
         retention::{INTEGRATION, ROLE_CONDITION, ROLE_GALLERY, archived_file_name},
     },
 };
@@ -205,14 +209,25 @@ pub enum Pending {
     Worked,
 }
 
+/// MC-H4.1: where the capture root is, asked at each bring back (never cached: a press).
+pub type CaptureRootSource = Arc<dyn Fn() -> Result<PathBuf> + Send + Sync>;
+
 pub struct RemoteItems {
-    store: Arc<dyn Store>,
-    commerce: Option<Arc<dyn CommerceAdapter>>,
+    pub(super) store: Arc<dyn Store>,
+    pub(super) commerce: Option<Arc<dyn CommerceAdapter>>,
+    /// MC-H4.5: the editor asked to list a brought-back folder.
+    pub(super) editing: Arc<dyn EditingProvider>,
     /// `<data>/previews` (the `remote/` and `archived/` caches live under it).
     previews_root: PathBuf,
-    clock: Arc<dyn Clock>,
-    events: Arc<dyn EventSink>,
+    /// MC-H4.1, .2: the canonical capture root (the editor's document, asked each time).
+    pub(super) capture_root: CaptureRootSource,
+    pub(super) clock: Arc<dyn Clock>,
+    pub(super) events: Arc<dyn EventSink>,
     health: Arc<HealthService>,
+    /// MC-H4.5: the session's undo and redo lists go with a bring back.
+    pub(super) history: Arc<History>,
+    /// MC-H4.1: the sessions whose bring back is running, with its progress (in memory).
+    pub(super) bring_backs: Mutex<HashMap<i64, BringBackProgress>>,
     /// MC-H2.6: the most bytes the search-picture folder keeps.
     search_cache_limit: u64,
     /// MC-H2.6: one eviction of the search-picture folder at a time.
@@ -231,22 +246,30 @@ pub struct RemoteItems {
 }
 
 impl RemoteItems {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         store: Arc<dyn Store>,
         commerce: Option<Arc<dyn CommerceAdapter>>,
+        editing: Arc<dyn EditingProvider>,
         previews_root: PathBuf,
+        capture_root: CaptureRootSource,
         clock: Arc<dyn Clock>,
         events: Arc<dyn EventSink>,
         health: Arc<HealthService>,
+        history: Arc<History>,
         search_cache_limit: u64,
     ) -> Self {
         Self {
             store,
             commerce,
+            editing,
             previews_root,
+            capture_root,
             clock,
             events,
             health,
+            history,
+            bring_backs: Mutex::new(HashMap::new()),
             search_cache_limit,
             evict_lock: Mutex::new(()),
             record_lock: Mutex::new(()),
@@ -741,7 +764,7 @@ impl RemoteItems {
         Ok(Refreshed::Done)
     }
 
-    fn mark_gone(&self, item_id: i64, media_id: &str) -> Result<()> {
+    pub(super) fn mark_gone(&self, item_id: i64, media_id: &str) -> Result<()> {
         let sku = self.store.item(item_id)?.sku;
         self.lock_gone()?
             .entry(item_id)
@@ -752,7 +775,7 @@ impl RemoteItems {
     }
 
     /// MC-H1.5: the item leaves the gone map (record replaced, brought back, session deleted).
-    fn leave_gone(&self, item_id: i64) -> Result<()> {
+    pub(super) fn leave_gone(&self, item_id: i64) -> Result<()> {
         let removed = self.lock_gone()?.remove(&item_id).is_some();
         if removed {
             self.report_gone()?;
@@ -761,7 +784,7 @@ impl RemoteItems {
     }
 
     /// MC-H1.5: Health `remote_picture_gone` with the count and SKUs, or cleared when none.
-    fn report_gone(&self) -> Result<()> {
+    pub(super) fn report_gone(&self) -> Result<()> {
         let detail = {
             let gone = self.lock_gone()?;
             let count: usize = gone.values().map(|(_, ids)| ids.len()).sum();

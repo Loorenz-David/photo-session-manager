@@ -72,3 +72,54 @@ impl<'de> Deserialize<'de> for RemoteState {
         }
     }
 }
+
+/// How far a bring back is (master plan archive §4 Vocabulary; MC-H4.3): `done` of `total`
+/// pictures are on this Mac.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BringBackProgress {
+    pub done: usize,
+    pub total: usize,
+}
+
+/// Where a bring back is (MC-H4.3, .5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BringBackState {
+    Running,
+    Done,
+    Failed,
+}
+
+/// What a finished bring back did (MC-H4.5): the new photos, and whether the editor was asked
+/// to list the folder.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BringBackOutcome {
+    pub photo_ids: Vec<i64>,
+    pub synced: bool,
+}
+
+/// One downloaded picture of a bring back (MC-H4.4(b), (c); H3 projection r0 L12).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BroughtBack {
+    /// `gallery` (main) or `condition`, as `ArchivedImage::role`.
+    pub role: String,
+    /// 1-based order within the role.
+    pub position: i64,
+    pub media_id: String,
+    /// The file's canonical path.
+    pub path: String,
+    /// The file's SHA-256 (hex).
+    pub sha256: String,
+}
+
+/// The import of a bring back, one transaction (`Store::bring_back`, MC-H4.4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BringBackInput {
+    pub session_id: i64,
+    pub item_id: i64,
+    /// Gallery then condition, each in position order.
+    pub files: Vec<BroughtBack>,
+    /// The link role of a condition photo, `attribute:<condition photos key>`.
+    pub link_role_condition: String,
+    pub at: i64,
+}
