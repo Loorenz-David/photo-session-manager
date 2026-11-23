@@ -517,6 +517,8 @@ fn c1a_open_creates_all_domain_columns() {
                 "last_ok_at",
                 "last_error",
                 "last_error_at",
+                // L1 (migration 022): whether the saved key may read labels.
+                "labels_access",
             ],
         ),
         (
