@@ -56,3 +56,10 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
     - Session badges are unchanged (they count questions).
     - The fake Pricing now gives a product's questions one product id.
   - Not yet seen in the running app.
+
+- **2026-11-22: A30 installed** (`d3cfce1`; previous build kept as "2026-11-20 A29"); PR #27 merged into main (`4ef74c8`). Not yet seen in the running app by the orchestrator.
+
+- **2026-11-23: A31 owner correction (plain chat).** The product thread is one time-ordered chat: no question
+  dividers, status lines, Mark answered or Answering choice. Reply is offered on the message (hover/focus button
+  and right-click menu) and sends to that message's question; otherwise replies go to the newest unresolved
+  question. Frontend only. Not yet seen in the running app.

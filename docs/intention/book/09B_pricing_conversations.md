@@ -139,11 +139,12 @@ SKU).
   and an unread dot when any question has news. A row opens the thread on its newest unresolved question (else its
   newest). Inside a session the list shows that session's products and a footer "N new in other sessions → All
   conversations" (N = products), which switches the list to all.
-- **Thread**: a back arrow to the list; "Questions", the SKU and product title; **Open session** (when the product
-  belongs to a session other than the one on screen), or "Not on this Mac". Then every question of the product,
-  oldest first, each opened by its own centred header line: the status dot, topic, "· Blocking", the status in
-  words, and **Mark answered** on an open question. Resolved questions stay in the thread, quieter. Each
-  question's messages follow its header line. Messages as in Pricing, mirrored to the viewer (CHAT_UX §2): the pricer's messages in **dark bubbles on the
+- **Thread** (A31, owner 2026-11-23: a plain chat): a back arrow to the list; "Questions", the SKU and product
+  title; **Open session** (when the product belongs to a session other than the one on screen), or "Not on this
+  Mac". Then **one chat**: every message of every question of the product in time order (equal times keep the
+  questions' order, then the message order; replies not yet confirmed among them by their time). No dividers
+  between questions, no topic, status or "· Blocking" lines, no dimming of resolved questions: the thread shows
+  who sent each message and when, nothing else. Messages as in Pricing, mirrored to the viewer (CHAT_UX §2): the pricer's messages in **dark bubbles on the
   left** with name and time, the photographer's own in **light bubbles on the right** ("You"); "· edited" after the
   time when edited; photos as rounded thumbnails above the text (click opens the large image); the reply-to line
   ("↩ Elin: …"); and the **quote** as its own block (accent bar, contrasting fill, uppercase field chip, the
@@ -168,13 +169,15 @@ SKU).
 
 ## 8. Answering (contract MC-C2)
 
-- **One composer per thread (A30).** It answers one question: the one the thread was opened on (a row opens the
-  newest unresolved question, else the newest; a notification its own question, scrolled into view). With more
-  than one question, an **Answering** choice above the box names it (topic and the first line of its first
-  message) and changes it; **Reply** on any message answers that message's question. Changing the question drops a
-  reply-to of another question. Opening the thread marks every question read.
+- **One composer per thread (A31).** A reply goes to the newest unresolved question of the product (else its
+  newest), never shown. To answer a particular message, the photographer replies to it, as in any chat app: a
+  small **Reply** button appears beside the message on hover or keyboard focus, and right-clicking a message offers
+  **Reply**. The message then shows above the box with ✕ to cancel, and the reply goes to that message's question
+  with the reply-to set. A notification's **Open** scrolls the thread to that question's first message. Opening the
+  thread marks every question read. There is no "Answering" choice.
 - **Composer** at the bottom of a conversation: a text box (1–4000 characters after trimming), **Enter sends**,
-  Shift+Enter is a new line; **Reply** on a message sets the reply-to (shown above the box with ✕); a **photo
+  Shift+Enter is a new line; **Reply** on a message (hover button or right-click, A31) sets the reply-to (shown
+  above the box with ✕); a **photo
   button** offers the photos of *this* conversation's session that already have a Shopify media id (published
   gallery photos and published condition photos), at most 10; photos without one are not offered ("Publish first
   to attach photos"). The composer needs the conversation's session on this Mac only for photos; text replies
@@ -185,11 +188,11 @@ SKU).
   echoed event is recognised by its id). Failure → it stays with "Couldn't send · Retry" (same id), or
   **Remove** (deletes the local pending message, sends nothing; for a reply Pricing refuses for good). A pending
   message survives a restart.
-- **Mark answered** (A30: in the header line of each open question, for that question only): `PATCH status=answered` without a message, for when the fix
-  was made in the data. 409 `case_resolved` → refresh and say "Pricing has already resolved this".
-- **Resolved conversations**: the panel says "Resolved by the pricer" (or "Resolved when the product was
-  activated"); the composer stays, with the note "Replying re-opens it as answered" when the question it answers
-  is resolved (API.md, POST messages).
+- **Mark answered**: removed from the screen by A31 (owner 2026-11-23: no answering controls in the chat). The
+  service and command (`PATCH status=answered`; 409 `case_resolved` → "Pricing has already resolved this") stay
+  for a later use; a reply already moves a question to answered.
+- **Resolved questions**: shown in the chat like the others, without a status line or note; the composer stays,
+  and a reply to a resolved question re-opens it as answered (API.md, POST messages).
 - Session Manager **never resolves**, never sets topic or blocking, never starts a question, never edits or
   deletes messages (not in the API).
 

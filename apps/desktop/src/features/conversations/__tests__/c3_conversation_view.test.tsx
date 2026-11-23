@@ -120,7 +120,7 @@ async function shown(v: View) {
   vi.mocked(conversationGet).mockResolvedValue(v);
   render(<ConversationView id={v.id} onBack={() => undefined} />);
   return screen.findByTestId('conversation-view').then(async node => {
-    await within(node).findByText(v.topic);
+    await within(node).findByRole('textbox', { name: 'Reply' });
     return node;
   });
 }
@@ -161,18 +161,18 @@ it('c3_c9a_a_row_opens_the_conversation_and_back_returns_to_the_list', async () 
   expect(within(panel).queryByTestId('conversation-view')).toBeNull();
 });
 
-it('c3_c9b_the_header_line_of_a_blocking_open_conversation_on_this_mac', async () => {
+it('a31_c9b_no_topic_blocking_or_status_line_in_the_thread', async () => {
   const node = await shown(view({ topic: 'Condition', blocking: true, status: 'open', session_id: 7 }));
-  expect(within(node).getByText('Condition')).toBeInTheDocument();
-  expect(within(node).getByText('· Blocking')).toBeInTheDocument();
-  expect(within(node).getByText('Open')).toBeInTheDocument();
+  expect(within(node).queryByText('Condition')).toBeNull();
+  expect(within(node).queryByText('· Blocking')).toBeNull();
+  expect(within(node).queryByText('Open')).toBeNull();
+  expect(node.querySelector('.conversation-status-dot')).toBeNull();
   expect(within(node).queryByText('Not on this Mac')).toBeNull();
 });
 
-it('c3_c9c_the_header_line_of_an_answered_conversation_not_on_this_mac', async () => {
+it('a31_c9c_an_answered_question_not_on_this_mac_shows_no_status_but_the_product_line', async () => {
   const node = await shown(view({ blocking: false, status: 'answered', session_id: null }));
-  expect(within(node).getByText('Answered')).toBeInTheDocument();
-  expect(within(node).queryByText('· Blocking')).toBeNull();
+  expect(within(node).queryByText('Answered')).toBeNull();
   expect(within(node).getByText('Not on this Mac')).toBeInTheDocument();
 });
 
@@ -306,17 +306,11 @@ it('c3_c14c_a_newer_message_while_open_is_shown_and_marked_read_again', async ()
 
 // ---------- C3·C15 resolved, pending, empty ----------
 
-it('c3_c15a_resolved_by_the_pricer', async () => {
+it('a31_c15a_a_resolved_question_shows_no_resolved_wording_and_is_not_dimmed', async () => {
   const node = await shown(view({ status: 'resolved', resolved_by: 'asker' }));
-  expect(within(node).getByText('Resolved by the pricer')).toBeInTheDocument();
-});
-
-it('c3_c15b_resolved_by_activation_or_unknown', async () => {
-  const node = await shown(view({ status: 'resolved', resolved_by: 'activation' }));
-  expect(within(node).getByText('Resolved when the product was activated')).toBeInTheDocument();
-  cleanup();
-  const again = await shown(view({ status: 'resolved', resolved_by: null }));
-  expect(within(again).getByText('Resolved')).toBeInTheDocument();
+  expect(within(node).queryByText(/Resolved/)).toBeNull();
+  expect(node.querySelector('[data-status="resolved"]')).toBeNull();
+  expect(within(node).getByTestId('message-m1')).toBeInTheDocument();
 });
 
 it('c3_c15c_pending_replies_follow_the_messages_dimmed_on_the_sent_side', async () => {
@@ -341,9 +335,9 @@ it('c3_c15c_pending_replies_follow_the_messages_dimmed_on_the_sent_side', async 
   expect(sending.compareDocumentPosition(failed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-it('c3_c15d_no_message_and_no_pending_shows_only_the_header_line', async () => {
+it('c3_c15d_no_message_and_no_pending_shows_only_the_product_header', async () => {
   const node = await shown(view({ messages: [], pending: [] }));
-  expect(within(node).getByText('Condition')).toBeInTheDocument();
+  expect(within(node).getByText('Questions')).toBeInTheDocument();
   expect(within(node).queryByTestId(/^message-/)).toBeNull();
   expect(within(node).queryByTestId(/^pending-/)).toBeNull();
 });

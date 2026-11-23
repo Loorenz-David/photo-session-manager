@@ -42,7 +42,6 @@ import {
   conversationReply,
   conversationRetry,
 } from '@/services/conversations';
-import { ServiceError } from '@/services/sessions';
 import { ConversationView } from '../ConversationView';
 
 const NOW = 1_795_176_000_000;
@@ -111,7 +110,7 @@ async function shown(v: View = view(), a: ConversationAttachable = attachable())
   vi.mocked(conversationAttachable).mockResolvedValue(a);
   render(<ConversationView id={v.id} onBack={() => undefined} />);
   const node = await screen.findByTestId('conversation-view');
-  await within(node).findByText(v.topic);
+  await within(node).findByRole('textbox', { name: 'Reply' });
   await waitFor(() => expect(vi.mocked(conversationAttachable)).toHaveBeenCalled());
   return node;
 }
@@ -317,37 +316,19 @@ it('c3_c20d_not_on_this_mac_disables_photos_but_not_text', async () => {
   await waitFor(() => expect(vi.mocked(conversationReply)).toHaveBeenCalledTimes(1));
 });
 
-// ---------- C3·C21 Mark answered, resolved, off ----------
+// ---------- C3·C21 (A31: no Mark answered), off ----------
 
-it('c3_c21a_an_open_conversation_offers_mark_answered', async () => {
-  const node = await shown(view({ status: 'open' }));
-  fireEvent.click(within(node).getByRole('button', { name: 'Mark answered' }));
-  await waitFor(() => expect(vi.mocked(conversationMarkAnswered)).toHaveBeenCalledTimes(1));
-  expect(vi.mocked(conversationMarkAnswered)).toHaveBeenCalledWith('c1');
+it('a31_c21a_no_mark_answered_button_on_any_question', async () => {
+  for (const status of ['open', 'answered', 'resolved']) {
+    const node = await shown(view({ status }));
+    expect(within(node).queryByRole('button', { name: 'Mark answered' })).toBeNull();
+    cleanup();
+  }
 });
 
-it('c3_c21b_answered_or_resolved_offers_no_mark_answered', async () => {
-  const answered = await shown(view({ status: 'answered' }));
-  expect(within(answered).queryByRole('button', { name: 'Mark answered' })).toBeNull();
-  cleanup();
-  const resolved = await shown(view({ status: 'resolved' }));
-  expect(within(resolved).queryByRole('button', { name: 'Mark answered' })).toBeNull();
-});
-
-it('c3_c21c_already_resolved_is_told_and_the_view_re_read', async () => {
-  const node = await shown(view({ status: 'open' }));
-  const reads = vi.mocked(conversationGet).mock.calls.length;
-  vi.mocked(conversationMarkAnswered).mockRejectedValue(
-    new ServiceError({ code: 'conversation_resolved', message: 'Pricing has already resolved this', data: {} }),
-  );
-  fireEvent.click(within(node).getByRole('button', { name: 'Mark answered' }));
-  await waitFor(() => expect(vi.mocked(toast)).toHaveBeenCalledWith('Pricing has already resolved this'));
-  await waitFor(() => expect(vi.mocked(conversationGet).mock.calls.length).toBeGreaterThan(reads));
-});
-
-it('c3_c21d_resolved_notes_the_reopen_and_off_disables_the_box', async () => {
+it('c3_c21d_a_resolved_question_takes_a_reply_quietly_and_off_disables_the_box', async () => {
   const resolved = await shown(view({ status: 'resolved', can_send: true }));
-  expect(within(resolved).getByText('Replying re-opens it as answered')).toBeInTheDocument();
+  expect(within(resolved).queryByText('Replying re-opens it as answered')).toBeNull();
   expect(box()).toBeEnabled();
   cleanup();
   const reason = 'Pricing refused the key: check Settings → Pricing';

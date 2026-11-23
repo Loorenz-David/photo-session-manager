@@ -259,8 +259,9 @@ it('c2_c15c_a_row_opens_its_conversation_and_the_back_arrow_returns', async () =
   const panel = await openPanel();
   fireEvent.click(await within(panel).findByTestId('conversation-row-a'));
   expect(within(panel).getByTestId('conversation-view')).toBeInTheDocument();
-  expect(await within(panel).findByText('Dimensions')).toBeInTheDocument();
-  expect(within(panel).getByText('BEYO-1')).toBeInTheDocument();
+  const view = within(panel).getByTestId('conversation-view');
+  expect(await within(view).findByText('Vintage Brass Wall Mirror, Round')).toBeInTheDocument();
+  expect(within(view).getByText('BEYO-1')).toBeInTheDocument();
   expect(vi.mocked(conversationGet)).toHaveBeenCalledWith('a');
   fireEvent.click(within(panel).getByRole('button', { name: 'Back to conversations' }));
   expect(within(panel).getByTestId('conversation-row-a')).toBeInTheDocument();

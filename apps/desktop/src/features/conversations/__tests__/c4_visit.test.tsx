@@ -161,7 +161,7 @@ async function openConversationOf(sessionId: number) {
   const panel = await screen.findByRole('dialog', { name: 'Conversations' });
   fireEvent.click(await within(panel).findByText(`Topic ${sessionId}`));
   await within(panel).findByTestId('conversation-view');
-  await within(panel).findByText(`Topic ${sessionId}`, { selector: '.conversation-header-topic' });
+  await within(panel).findByText(`Product ${sessionId}`, { selector: '.conversation-title' });
 }
 
 async function openSessionButton() {
@@ -219,7 +219,7 @@ it('c4_c3c_after_the_jump_the_panel_is_still_open_on_the_same_conversation', asy
   await visit7FromSession3();
   const panel = screen.getByRole('dialog', { name: 'Conversations' });
   expect(within(panel).getByTestId('conversation-view')).toBeInTheDocument();
-  expect(within(panel).getByText('Topic 7', { selector: '.conversation-header-topic' })).toBeInTheDocument();
+  expect(within(panel).getByText('Product 7', { selector: '.conversation-title' })).toBeInTheDocument();
   // The conversation's session is now on screen: no Open session.
   expect(within(panel).queryByRole('button', { name: 'Open session' })).toBeNull();
 });
@@ -305,7 +305,7 @@ it('c4_c5c_back_after_two_jumps_returns_to_session_3_without_a_call', async () =
   const panel = screen.getByRole('dialog', { name: 'Conversations' });
   fireEvent.click(within(panel).getByRole('button', { name: 'Back to conversations' }));
   fireEvent.click(await within(panel).findByText('Topic 9'));
-  await within(panel).findByText('Topic 9', { selector: '.conversation-header-topic' });
+  await within(panel).findByText('Product 9', { selector: '.conversation-title' });
   fireEvent.click(await openSessionButton());
   await workspaceShows(9);
   fireEvent.click(within(bar()!).getByRole('button', { name: /^← Back to/ }));
