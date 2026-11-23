@@ -46,7 +46,7 @@ A 200-photo day ≈ 10 GB on Wi-Fi, ≈ 20 GB on the cable, almost all RAWs and 
 - Clearing deletes permanently (moving to the Trash frees no space); every deletion is logged with the file, its size and the rule that removed it.
 - Before clearing an item (rule 3/4), the app verifies that Shopify still holds every published image of that item (read back media ids and URLs);
   if not, it clears nothing for that item and reports it.
-- After clearing, the item is **read-only** in the app (no reorder, retouch, recomposition or republish of its photos); its attributes stay editable
+- *(Amended by 10H, 2026-11-23: a cleared item opens in the normal workspace and a photo edit brings its pictures back from Shopify first.)* After clearing, the item is **read-only** in the app (no reorder, retouch, recomposition or republish of its photos); its attributes stay editable
   only where they do not need images (Q3).
 - Capture One keeps its catalogue entries for cleared files; they show as missing there (Q4).
 
