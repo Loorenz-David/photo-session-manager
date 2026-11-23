@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # L3 — Generate and download price labels
 
-**Tracker:** IMPLEMENTED (2026-11-23, opus, 4 units checkpointed 00dd4e2f / 51815be6 / 9acd03f1 / 4ec02089; closing gate green: workspace suite, clippy, fmt, typecheck, npm test 935)
+**Tracker:** APPROVED (2026-11-23, opus, review r1 APPROVED_WITH_NOTES: perimeter = the declared paths of 00dd4e2f..f7880ee7 (Header.tsx / SessionRow.tsx untouched and the U4 guide edit disclosed); review-mode checks green (core mechanisms 23, infra label_files 6, suite l3_labels_check 21 / l3_labels_generate 24 / l3_labels_download 7, psm-desktop 120, vitest labels 82, clippy, fmt, typecheck); all 107 rows have a boundary test that fails on a wrong outcome; every Review-mode reading check holds; H1–H8 hold; no assumption contradicts 09C / MC-L2; 2 backlog notes + 1 carried forward)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -365,3 +365,27 @@ Needs a Pricing key with `labels:read` and `labels:write`. **Generating marks pr
   - **Assumptions** (handoff § Assumptions, 24 items; the ones the owner may notice): Try again after a failed Generate only for "can't be reached" and "renderer busy", every other refusal offers Close (which shows what was generated so far, as Cancel does, D16); the batch footer always shows "{n} products will be marked Printed" (also 0); a failed check drops the kept check only on a provider error (D10), not on Off / Denied / Busy / an empty list; a finished generation is answered again even after the connection went off; downloads are offered for the files of every finished chunk (so from the partial result too).
   - **Deviations.** `Header.tsx` and `SessionRow.tsx` (listed under U4 Files) needed no change: `SessionActionsMenu` hosts the dialog. `docs/guide/02_architecture.md` also edited in U4 (flow §7A, the Frontend line was stale). L3·C1(i) and L3·C3(e) were committed in U1 without their `generate` half (no `generate` yet) and completed in U2 as the rows read. No migration, no column (`SqliteStore::migrations()` untouched).
 
+- **2026-11-23, review r1 (opus, pipeline-reviewer): APPROVED_WITH_NOTES** (handoff `handoffs/reviewer/handoff_L3_generate_and_download_review_r1.md`).
+  - **Gate.** Tracker `IMPLEMENTED`; checkpoints `00dd4e2f`, `51815be6`, `9acd03f1`, `4ec02089`, `f7880ee7` in `git log`; tree clean, `f7880ee7..HEAD` touches only the runner's prompt and handoff.
+  - **Perimeter.** `git diff --stat 00dd4e2f^ f7880ee7` = 42 paths = the handoff's Files changed. Deviations are disclosed: `Header.tsx` and `SessionRow.tsx` were not needed (`SessionActionsMenu` hosts the dialog), and `02_architecture.md` was edited in U4 (flow §7A). `crates/infra/src/sqlite/` is untouched, so no migration and no column.
+  - **Checks (Review mode, once each, one cargo command at a time).** All green: `mechanisms::labels` 23 · `label_files` 6 (C4(c) runs the real `sips`) · `l3_labels_check::` 21 · `l3_labels_generate::` 24 · `l3_labels_download::` 7 · `psm-desktop` 120 (bindings regenerated with no diff) · vitest `src/features/labels` 11 files / 82 · clippy (core, infra, integrations, testkit, desktop; `-D warnings`) · fmt · typecheck. The implementer's workspace stamp (1447 suite, npm 935) stands.
+  - **Rows.** I read all 107 rows against the code and their tests. Each test observes the row's outcome at the row's boundary with exact values: request bodies and keys, `FakePricing` runs, events and label state, files on disk, wire JSON compared whole, rendered texts compared exactly. Each would fail on a wrong outcome. No B2.
+  - **Reading checks of Review mode all hold:**
+    - `provider.run` is called only at `label_runs.rs:315`, with the chunk's stored ids and key. `labels_generate` takes only a `check_id`.
+    - Each chunk's key is made once, when the generation is created. Keys are never logged: the log line has chunk, of, items, attempt and outcome only.
+    - `running` is cleared by the `Running` drop guard on every way out, including the `gate()?` and `NotFound` early returns. Lock drop order is safe.
+    - The labels folder is built only in `files_for`, from `paths.home`.
+    - `FakeLabelFiles::open` only records the path, and no test calls `DiskLabelFiles::open`.
+    - `download` passes `artifact.download_url` through unchanged, and the result DTO does not expose it.
+    - Nothing of a check, run or key is stored.
+    - Core names no platform: `sips` and `open -a Preview` live only in `psm-infra`.
+    - Only `l1_c19c` and `l2_c13a` changed among earlier tests. The `fake_pricing.rs` `send`/`fetch` refactor is covered by the workspace stamp.
+    - D1, D2 and D3 hold as written.
+  - **Assumptions.** None of the 24 contradicts 09C §6/§10, MC-L2 or Pricing's `LABELS.md` §3.3–§3.5. Assumption 12 (the batch footer shows "0 products will be marked Printed") is the package's own wording. All 24 are reported in plain words in the narrative.
+  - **H1–H8.** All hold:
+    - H1: a run starts only from the Generate press on a shown check.
+    - H3: `sips` rasterises Pricing's PDF, not a photo, as master plan §3 decided.
+    - H4: one key per chunk is reused on every retry and Try again.
+    - H7: core stays platform-free.
+    - H8: commands are thin, on `spawn_blocking`.
+  - **Notes** (to `docs/implementation/backlog_labels/L3_generate_and_download.md`): D10 is applied only to provider errors, and the kept check also survives a key change (not reachable today, one modal dialog). After "saved, but Preview couldn't open it", Download PDF saves a second numbered copy. Carried forward: L2 r1's key-removal note is still open, and L3's plan did not take it.
