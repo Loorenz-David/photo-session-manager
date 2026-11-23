@@ -19,6 +19,11 @@ export const commands = {
 	sessionCreate: (itemId: CommandId) => typedError<SessionResponse_Serialize, CommandError>(__TAURI_INVOKE("session_create", { itemId })),
 	sessionGet: (sessionId: CommandId) => typedError<SessionViewResponse_Serialize, CommandError>(__TAURI_INVOKE("session_get", { sessionId })),
 	sessionsList: (filter: SessionFilter, query: string | null) => typedError<SessionListResponse_Serialize, CommandError>(__TAURI_INVOKE("sessions_list", { filter, query })),
+	/**
+	 *  MC-H2.2: the Sessions page's list, one page of `PAGE_SIZE` rows; the page's pending covers
+	 *  are requested and fetched in the background (a `picture_ready` per cover).
+	 */
+	sessionsPage: (filter: SessionFilter, query: string | null, createdFrom: CommandId | null, onlyIds: CommandId[] | null, page: number) => typedError<SessionPageResponse_Serialize, CommandError>(__TAURI_INVOKE("sessions_page", { filter, query, createdFrom, onlyIds, page })),
 	sessionActivate: (sessionId: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("session_activate", { sessionId })),
 	sessionDeactivate: () => typedError<null, CommandError>(__TAURI_INVOKE("session_deactivate")),
 	sessionActive: () => typedError<SessionResponse_Serialize | null, CommandError>(__TAURI_INVOKE("session_active")),
@@ -2115,6 +2120,46 @@ export type SessionListResponse_Serialize = {
 	groups: SessionListGroupResponse_Serialize[],
 	counts: SessionListCountsResponse,
 	unassigned_count: number,
+};
+
+/**  MC-H2.1: one group of a page: its rows on the page and its row count before the cut. */
+export type SessionPageGroupResponse = SessionPageGroupResponse_Serialize | SessionPageGroupResponse_Deserialize;
+
+/**  MC-H2.1: one group of a page: its rows on the page and its row count before the cut. */
+export type SessionPageGroupResponse_Deserialize = {
+	label: string,
+	total: number,
+	rows: SessionRowResponse_Deserialize[],
+};
+
+/**  MC-H2.1: one group of a page: its rows on the page and its row count before the cut. */
+export type SessionPageGroupResponse_Serialize = {
+	label: string,
+	total: number,
+	rows: SessionRowResponse_Serialize[],
+};
+
+/**  MC-H2.2: one page of the sessions list (the Sessions page only). */
+export type SessionPageResponse = SessionPageResponse_Serialize | SessionPageResponse_Deserialize;
+
+/**  MC-H2.2: one page of the sessions list (the Sessions page only). */
+export type SessionPageResponse_Deserialize = {
+	groups: SessionPageGroupResponse_Deserialize[],
+	counts: SessionListCountsResponse,
+	unassigned_count: number,
+	page: number,
+	pages: number,
+	total: number,
+};
+
+/**  MC-H2.2: one page of the sessions list (the Sessions page only). */
+export type SessionPageResponse_Serialize = {
+	groups: SessionPageGroupResponse_Serialize[],
+	counts: SessionListCountsResponse,
+	unassigned_count: number,
+	page: number,
+	pages: number,
+	total: number,
 };
 
 /**

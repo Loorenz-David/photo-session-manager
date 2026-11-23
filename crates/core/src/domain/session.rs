@@ -156,6 +156,25 @@ pub struct SessionList {
     pub unassigned_count: i64,
 }
 
+/// MC-H2.1: one group of a page: its rows on the page and its row count before the cut.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PageGroup {
+    pub label: String,
+    pub total: usize,
+    pub rows: Vec<SessionRow>,
+}
+
+/// MC-H2.1: one page of the sessions list (`counts` and `unassigned_count` over all sessions).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionPage {
+    pub groups: Vec<PageGroup>,
+    pub counts: ListCounts,
+    pub unassigned_count: i64,
+    pub page: u32,
+    pub pages: u32,
+    pub total: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionListRecord {
     pub session: SessionDto,

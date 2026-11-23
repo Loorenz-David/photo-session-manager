@@ -1301,6 +1301,104 @@ mod r6_command_tests {
     }
 }
 
+/// H2 (`plans/H2_list_pictures_pages_search.md`): the command rows, through Tauri's IPC.
+#[cfg(test)]
+mod h2_tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    type Window = tauri::WebviewWindow<tauri::test::MockRuntime>;
+
+    fn call(w: &Window, cmd: &str, args: Value) -> Value {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+        .unwrap_or_else(|error| panic!("{cmd}: {error}"))
+    }
+
+    /// The app of `a` behind the H2 commands (the test keeps the temp folder alive).
+    fn wired(
+        a: psm_testkit::TestApp,
+    ) -> (
+        tempfile::TempDir,
+        tauri::App<tauri::test::MockRuntime>,
+        Window,
+    ) {
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::sessions::sessions_page,
+                commands::sessions::sessions_list,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        (dir, tauri_app, w)
+    }
+
+    fn thirty_sessions() -> psm_testkit::TestApp {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        for i in 0..30 {
+            a.clock.advance(60_000);
+            a.items()
+                .create_local(&format!("H2-{i:02}"), &format!("Item {i}"), "object", None)
+                .unwrap();
+        }
+        a
+    }
+
+    fn rows(groups: &Value) -> Vec<Value> {
+        groups
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|g| g["rows"].as_array().unwrap().clone())
+            .collect()
+    }
+
+    #[test]
+    fn h2_c8a_sessions_page_answers_one_page() {
+        let (_dir, _app, w) = wired(thirty_sessions());
+        let page = call(
+            &w,
+            "sessions_page",
+            json!({"filter": "all", "query": null, "createdFrom": null, "onlyIds": null, "page": 2}),
+        );
+        let rows = rows(&page["groups"]);
+        assert_eq!(
+            (&page["page"], &page["pages"], &page["total"], rows.len()),
+            (&json!(2), &json!(2), &json!(30), 5)
+        );
+        assert!(rows.iter().all(|r| r["cover_pending"].is_boolean()));
+    }
+
+    #[test]
+    fn h2_c8b_sessions_list_stays_unpaged() {
+        let (_dir, _app, w) = wired(thirty_sessions());
+        let list = call(&w, "sessions_list", json!({"filter": "all", "query": null}));
+        assert_eq!(rows(&list["groups"]).len(), 30);
+    }
+}
+
 #[cfg(test)]
 mod p39_tests {
     use super::*;
@@ -1777,6 +1875,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::sessions::session_create,
         commands::sessions::session_get,
         commands::sessions::sessions_list,
+        commands::sessions::sessions_page,
         commands::sessions::session_activate,
         commands::sessions::session_deactivate,
         commands::sessions::session_active,

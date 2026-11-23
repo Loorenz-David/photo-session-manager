@@ -410,6 +410,93 @@ impl From<psm_core::domain::session::SessionList> for SessionListResponse {
     }
 }
 
+/// MC-H2.1: one group of a page: its rows on the page and its row count before the cut.
+#[derive(Serialize, Type)]
+pub struct SessionPageGroupResponse {
+    pub label: String,
+    pub total: u32,
+    pub rows: Vec<SessionRowResponse>,
+}
+/// MC-H2.2: one page of the sessions list (the Sessions page only).
+#[derive(Serialize, Type)]
+pub struct SessionPageResponse {
+    pub groups: Vec<SessionPageGroupResponse>,
+    pub counts: SessionListCountsResponse,
+    #[specta(type = specta_typescript::Number)]
+    pub unassigned_count: i64,
+    pub page: u32,
+    pub pages: u32,
+    pub total: u32,
+}
+
+impl From<psm_core::domain::session::SessionPage> for SessionPageResponse {
+    fn from(page: psm_core::domain::session::SessionPage) -> Self {
+        Self {
+            groups: page
+                .groups
+                .into_iter()
+                .map(|group| SessionPageGroupResponse {
+                    label: group.label,
+                    total: group.total as u32,
+                    rows: group.rows.into_iter().map(Into::into).collect(),
+                })
+                .collect(),
+            counts: SessionListCountsResponse {
+                open: page.counts.open,
+                published: page.counts.published,
+                all: page.counts.all,
+            },
+            unassigned_count: page.unassigned_count,
+            page: page.page,
+            pages: page.pages,
+            total: page.total as u32,
+        }
+    }
+}
+
+/// MC-H2.2: the Sessions page's list, one page of `PAGE_SIZE` rows; the page's pending covers
+/// are requested and fetched in the background (a `picture_ready` per cover).
+#[tauri::command]
+#[specta::specta]
+pub async fn sessions_page(
+    state: State<'_, AppState>,
+    filter: SessionFilter,
+    query: Option<String>,
+    created_from: Option<CommandId>,
+    only_ids: Option<Vec<CommandId>>,
+    page: u32,
+) -> Result<SessionPageResponse, CommandError> {
+    let app = state.handles().map_err(CommandError::from)?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<SessionPageResponse, CommandError> {
+        session_page(&app, filter, query, created_from, only_ids, page)
+    })
+    .await
+    .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
+}
+
+/// The body of `sessions_page`.
+pub(crate) fn session_page(
+    app: &psm_integrations::AppHandles,
+    filter: SessionFilter,
+    query: Option<String>,
+    created_from: Option<CommandId>,
+    only_ids: Option<Vec<CommandId>>,
+    page: u32,
+) -> Result<SessionPageResponse, CommandError> {
+    let only_ids: Option<Vec<i64>> = only_ids.map(|ids| ids.into_iter().map(|id| id.0).collect());
+    SessionsService::new(app.store.as_ref(), &SystemClock)
+        .with_remote(app.remote.as_ref())
+        .page(
+            filter.into(),
+            query,
+            created_from.map(|at| at.0),
+            only_ids.as_deref(),
+            page,
+        )
+        .map(Into::into)
+        .map_err(Into::into)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn sessions_list(

@@ -8,10 +8,13 @@ import {
   type SessionDeletePreviewResponse,
   type SessionFilter,
   type SessionListResponse_Serialize,
+  type SessionPageResponse_Serialize,
   type SessionResponse_Serialize,
 } from './bindings';
 
 export type SessionList = SessionListResponse_Serialize;
+/** H2 (MC-H2.1): one page of the Sessions page's list. */
+export type SessionPage = SessionPageResponse_Serialize;
 export type Session = SessionResponse_Serialize;
 /** A10: why a published session is open again. */
 export type PublishedChanges = PublishedChangesResponse;
@@ -34,6 +37,20 @@ export function unwrap<T>(result: { status: 'ok'; data: T } | { status: 'error';
 
 export async function listSessions(args: { filter: SessionFilter; query: string | null }): Promise<SessionList> {
   return unwrap(await commands.sessionsList(args.filter, args.query));
+}
+
+/**
+ * H2 (MC-H2.1–3): one page (25 rows) of the Sessions page's list. The search, the filter, the time filter
+ * (`created_from`, ms) and "To review" (`only_ids`) look through every session; only the answer is cut.
+ */
+export async function sessionsPage(args: {
+  filter: SessionFilter;
+  query: string | null;
+  created_from: number | null;
+  only_ids: number[] | null;
+  page: number;
+}): Promise<SessionPage> {
+  return unwrap(await commands.sessionsPage(args.filter, args.query, args.created_from, args.only_ids, args.page));
 }
 
 /** Returns the item's session; the backend returns the existing one when the item already has a session. */

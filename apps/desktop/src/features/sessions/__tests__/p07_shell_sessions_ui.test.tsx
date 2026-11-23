@@ -63,7 +63,7 @@ function row(id: number, title: string, label: RowLabelResponse = { kind: 'in_pr
     progress: null,
     last_activity_at: Date.now() - 2 * 60 * 60 * 1000,
     created_at: Date.now() - 2 * 60 * 60 * 1000,
-    cover_preview_path: null,
+    cover_preview_path: null, cover_pending: false,
     arranged: false,
     publish: null, changes: null,
   };

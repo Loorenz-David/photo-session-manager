@@ -530,6 +530,73 @@ impl SessionsService<'_> {
     }
 }
 
+impl SessionsService<'_> {
+    /// MC-H2.1: one page of `list(filter, query)`: its rows kept when created at or after
+    /// `created_from` and whose id is in `only_ids` (each when given; `Some([])` keeps none), in
+    /// the list's order, cut to the page (`page_of`); each group keeps its row count before the
+    /// cut, empty groups are left out. Then the page's pending covers are requested (MC-H1.3);
+    /// nothing is downloaded here.
+    pub fn page(
+        &self,
+        filter: crate::domain::session::ListFilter,
+        query: Option<String>,
+        created_from: Option<i64>,
+        only_ids: Option<&[i64]>,
+        page: u32,
+    ) -> Result<crate::domain::session::SessionPage> {
+        use crate::domain::session::{PageGroup, SessionPage};
+        let list = self.list(filter, query)?;
+        let kept = |row: &crate::domain::session::SessionRow| {
+            created_from.is_none_or(|from| row.created_at >= from)
+                && only_ids.is_none_or(|ids| ids.contains(&row.id))
+        };
+        let groups: Vec<(String, Vec<crate::domain::session::SessionRow>)> = list
+            .groups
+            .into_iter()
+            .map(|group| (group.label, group.rows.into_iter().filter(kept).collect()))
+            .collect();
+        let total = groups.iter().map(|(_, rows)| rows.len()).sum();
+        let (page, pages, range) = crate::mechanisms::remote::page_of(total, page);
+        let mut index = 0;
+        let mut cut = Vec::new();
+        for (label, rows) in groups {
+            let group_total = rows.len();
+            let start = index;
+            index += group_total;
+            let rows: Vec<_> = rows
+                .into_iter()
+                .enumerate()
+                .filter(|(i, _)| range.contains(&(start + i)))
+                .map(|(_, row)| row)
+                .collect();
+            if !rows.is_empty() {
+                cut.push(PageGroup {
+                    label,
+                    total: group_total,
+                    rows,
+                });
+            }
+        }
+        if let Some(remote) = self.remote {
+            let pending: Vec<i64> = cut
+                .iter()
+                .flat_map(|group| &group.rows)
+                .filter(|row| row.cover_pending)
+                .map(|row| row.id)
+                .collect();
+            remote.request_covers(crate::services::remote::CoverSource::Page, &pending)?;
+        }
+        Ok(SessionPage {
+            groups: cut,
+            counts: list.counts,
+            unassigned_count: list.unassigned_count,
+            page,
+            pages,
+            total,
+        })
+    }
+}
+
 /// The status inputs of one session-list record (07).
 fn status_input(
     record: &crate::domain::session::SessionListRecord,

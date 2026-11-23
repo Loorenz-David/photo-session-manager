@@ -39,7 +39,7 @@ globalThis.ResizeObserver ??= class {
 function row(id: number, title: string, arranged = true): SessionRowResponse_Serialize {
   return {
     id, sku: `SKU-${id}`, item_type: '', title, main_count: 2, condition_count: 1, unreviewed_count: 0, status: 'in_progress',
-    label: { kind: 'in_progress', value: 0 }, progress: null, last_activity_at: Date.now(), created_at: Date.now(), cover_preview_path: null,
+    label: { kind: 'in_progress', value: 0 }, progress: null, last_activity_at: Date.now(), created_at: Date.now(), cover_preview_path: null, cover_pending: false,
     arranged, publish: null, changes: null,
   };
 }

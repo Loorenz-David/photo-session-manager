@@ -16,6 +16,18 @@ pub const COVER_EDGE: u32 = 320;
 /// MC-H1.4: a picture's address is not asked for again within this time (monotonic).
 pub const REFRESH_COOLDOWN_MS: u64 = 600_000;
 
+/// MC-H2.1: the sessions list shows this many rows per page.
+pub const PAGE_SIZE: usize = 25;
+
+/// MC-H2.1: `(page, pages, rows)` for `total` rows and the requested page: `pages =
+/// max(1, ceil(total / PAGE_SIZE))`, the page clamped to `1..=pages`, the rows' index range.
+pub fn page_of(total: usize, page: u32) -> (u32, u32, std::ops::Range<usize>) {
+    let pages = total.div_ceil(PAGE_SIZE).max(1) as u32;
+    let page = page.clamp(1, pages);
+    let start = (page as usize - 1) * PAGE_SIZE;
+    (page, pages, start..(start + PAGE_SIZE).min(total))
+}
+
 /// MC-H1.2: the cover cache file name of a remote picture,
 /// `cover-<first 12 hex of sha256(media_id)>.jpg`.
 pub fn cover_name(media_id: &str) -> String {
@@ -187,6 +199,35 @@ mod tests {
 
     fn b(available: f64, maximum: f64) -> Option<CallBudget> {
         Some(CallBudget { available, maximum })
+    }
+
+    #[test]
+    fn h2_c6a_pages_of_twenty_five() {
+        assert_eq!(
+            (page_of(60, 1), page_of(60, 3)),
+            ((1, 3, 0..25), (3, 3, 50..60))
+        );
+    }
+
+    #[test]
+    fn h2_c6b_the_page_is_clamped() {
+        assert_eq!(
+            (page_of(60, 9), page_of(60, 0)),
+            ((3, 3, 50..60), (1, 3, 0..25))
+        );
+    }
+
+    #[test]
+    fn h2_c6c_at_least_one_page() {
+        assert_eq!(page_of(0, 1), (1, 1, 0..0));
+    }
+
+    #[test]
+    fn h2_c6d_the_boundary() {
+        assert_eq!(
+            (page_of(25, 1), page_of(26, 2)),
+            ((1, 1, 0..25), (2, 2, 25..26))
+        );
     }
 
     #[test]
