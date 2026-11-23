@@ -7,7 +7,7 @@ depends_on: [L1_labels_provider_and_marker]
 ---
 # L2 — The Labels box
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-23, opus, implement r1: 3 units, checkpoints e81b52d3 / 70f4d19b / 80a720ca; suite 36 + core 6 + desktop 6 Rust tests, 36 UI tests; workspace suite, clippy, fmt, typecheck green; npm test 902/903 with the known intermittent p33 C4(d), green on re-run)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -258,3 +258,23 @@ Needs a Pricing key with `labels:read`.
 7. Print a label in Pricing: within about ten seconds the product leaves Missing price tag and the number drops, without a sound.
 
 ## Review log
+
+### 2026-11-23 — implement r1 (opus, implementer)
+**Built.** U1: `LinkedItem`, `LabelRow`, `LabelPage`, `Selected`; the constants; `match_product` (6 unit tests); `LabelStore::linked_items` (one SQL read); `LabelsService::{list, summary, select_all, open_product}` by MC-L1.1–.8 (the service now takes `store`, `remote`, `commerce`); `connected()` / `key_changed()` also forget the counts; `FakePricing` `GET /labels/products` (`add_label_products`, `set_work_from`, `repeat_cursor_next`, and `fail_matching_after` for L2·C6(e)); `FakeCommerce::add_product_without_sku`; 36 suite tests `l2_labels_list::`. U2: the four commands and DTOs, bindings, wrappers; `labelPages.ts` (`pageStep`, `askCursor`, `canNext`, `pageLabel`, `LABELS_REFRESH_MS`); `formatPrice`, `workFromLine`; 6 desktop tests `l2_tests`, 13 unit tests. U3: `Filters`' fourth box, `SessionsPage` in the box, `LabelsBox`, `LabelRow`, `LabelsBatchBar`, CSS; 23 UI tests in three files.
+
+**Assumptions (judgment calls).**
+1. `open_product` matches by MC-L1.3 with the SKU **the last list answer showed** for that product (kept in memory, product id → SKU, forgotten with the counts); the command carries only the product id, and a row whose SKU matched a session opens that session directly on screen anyway.
+2. `summary(refresh)` passes a provider error through (the screen keeps the number it had); `summary` applies its one row to the display copy (delegated: "it may").
+3. A connection `Ready` without a store answers `Off(Ready)` (cannot happen in practice; ACC.1 names no other word).
+4. The fake's cursor is `o:<offset>` (so a percent-encoded cursor is visible on the wire: `cursor=o%3A25`).
+5. Inside the box the search field has its own text (separate from the sessions search), kept when leaving and re-entering; the sub-filter starts on Missing price tag at each entry (delegated).
+6. **Try again** asks the first page (MC-L1.9); the selection is kept.
+7. The throttle of `labels_changed` counts only events (entering the box does not open a window).
+8. Leaving the box asks `labelsSummary({refresh: true})` once, so the number outside the box is the unsearched one again (card 1 note: "outside it is the unsearched number"); the service answers without a request when its count is fresh and unsearched.
+9. The marker words appear both as the pill and in the Label column (task U3.4 names both).
+10. A matched row's ⋯ gets the access `allowed` (a list answer implies it); the box's empty page reads "No products here".
+
+**Deviations.** (a) `apps/desktop/src/features/labels/useSessionLabels.ts` (outside the U3 file list): with no ids on screen it now clears its remembered ids, so `labels_changed` asks no `labels_status` while the Labels box is shown (U3 task 2: "asks no `labelsStatus` for them"); behaviour with rows on screen is unchanged. (b) `docs/guide/{02_architecture.md, 04_change_impact.md}` also changed in U2 and U3 (commands, frontend), as flow §7A asks, though only U1 lists them. (c) The tracker actor reads `opus` (the session ran on Claude Opus), not `codex` as the prompt template says. (d) `FakePricing::fail_matching_after` is a small test-kit addition not named in the plan's L2 list (the only way to fail the second page of L2·C6(e) while the first passes).
+
+**Observations.** The first run of every new test passed; nothing in the plan contradicted the code. `npm test` once failed `p33_split_grid` C4(d), a known intermittent (`04_change_impact.md` §Fragile spots); green when re-run alone.
+
