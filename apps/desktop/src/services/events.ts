@@ -62,10 +62,11 @@ export async function onConversationsChanged(handler: (event: ConversationsChang
   return listen<ConversationsChanged>('conversations_changed', event => handler(event.payload));
 }
 
-/** H2: `picture_ready`: a row's cover or a shop search result's picture was kept on this Mac at `path`. */
+/** H2, H4: `picture_ready`: a row's cover, a shop search result's picture or a remote item's picture was kept on this Mac at `path`. */
 export type PictureReady =
   | { kind: 'cover'; session_id: number; path: string }
-  | { kind: 'search'; external_id: string; path: string };
+  | { kind: 'search'; external_id: string; path: string }
+  | { kind: 'remote'; session_id: number; role: string; position: number; path: string };
 export async function onPictureReady(handler: (event: PictureReady) => void): Promise<UnlistenFn> {
   return listen<PictureReady>('picture_ready', event => handler(event.payload));
 }

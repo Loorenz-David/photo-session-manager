@@ -36,6 +36,8 @@ export function PublishPopover({ sessionIds, onClose, onConfirmed, modal = false
   const [changed, setChanged] = useState<string | null>(null);
   useEffect(() => { if (error) toast.error(`Could not preview publish: ${(error as Error).message}`); }, [error]);
   const count = preview?.items.reduce((n, item) => n + item.main.length + item.condition.length, 0) ?? 0;
+  // H4 (MC-H3.6, projection r0 L21): `Publish details` only when every item publishes its details only.
+  const detailsOnly = preview !== undefined && preview !== null && preview.items.length > 0 && preview.items.every(item => item.details_only === true);
   const confirm = useAction(async () => {
     if (!preview) return;
     try {
@@ -50,8 +52,9 @@ export function PublishPopover({ sessionIds, onClose, onConfirmed, modal = false
   }, error => toast.error(publishFailureText(error)));
   const body = !preview ? <SkeletonRows n={3} /> : <>
       {preview.items.map(item => <div key={item.session_id} data-session={item.session_id} className="space-y-2 py-2">
-        <p>Main images</p><div className="flex gap-1">{item.main_thumbnails.map((path, index) => path ? <img key={item.main[index]} src={previewUrl(path)} alt={`Main ${index + 1}`} className="size-12 object-cover" /> : <span key={item.main[index]}>Main {index + 1}</span>)}</div>
-        <p>Condition images</p><div className="flex gap-1">{item.condition_thumbnails.map((path, index) => path ? <img key={item.condition[index]} src={previewUrl(path)} alt={`Condition ${index + 1}`} className="size-12 object-cover" /> : <span key={item.condition[index]}>Condition {index + 1}</span>)}</div>
+        {item.details_only && <p data-details-only>Details only: the photos stay as they are on Shopify.</p>}
+        {!item.details_only && <><p>Main images</p><div className="flex gap-1">{item.main_thumbnails.map((path, index) => path ? <img key={item.main[index]} src={previewUrl(path)} alt={`Main ${index + 1}`} className="size-12 object-cover" /> : <span key={item.main[index]}>Main {index + 1}</span>)}</div>
+        <p>Condition images</p><div className="flex gap-1">{item.condition_thumbnails.map((path, index) => path ? <img key={item.condition[index]} src={previewUrl(path)} alt={`Condition ${index + 1}`} className="size-12 object-cover" /> : <span key={item.condition[index]}>Condition {index + 1}</span>)}</div></>}
         <p>Product details {item.details_filled}/{item.details_total}</p>
         {item.unreviewed > 0 && <p>{item.unreviewed} unreviewed photos will be published after the main photos</p>}
         {item.announced_removals.length > 0 && <p>{item.announced_removals.length} gallery removals</p>}
@@ -62,7 +65,7 @@ export function PublishPopover({ sessionIds, onClose, onConfirmed, modal = false
       </div>)}
       {changed && <p role="alert">{changed}</p>}
       <p data-testid="publish-summary">{preview.summary}</p>
-      <div className="flex justify-end gap-2 pt-3"><Button variant="outline" disabled={confirm.busy} onClick={onClose}>Cancel</Button><Button disabled={confirm.busy} aria-busy={confirm.busy ? 'true' : undefined} onClick={() => void confirm.run()}>Publish {count} images{confirm.busy ? '…' : ''}</Button></div>
+      <div className="flex justify-end gap-2 pt-3"><Button variant="outline" disabled={confirm.busy} onClick={onClose}>Cancel</Button><Button disabled={confirm.busy} aria-busy={confirm.busy ? 'true' : undefined} onClick={() => void confirm.run()}>{detailsOnly ? 'Publish details' : `Publish ${count} images`}{confirm.busy ? '…' : ''}</Button></div>
     </>;
   if (modal) return <Dialog open onOpenChange={open => !open && !confirm.busy && onClose()}>
     <DialogContent showCloseButton={false} className="max-h-[85vh] overflow-y-auto">

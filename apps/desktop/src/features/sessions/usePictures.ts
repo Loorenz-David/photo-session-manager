@@ -21,7 +21,7 @@ export function usePictures(): Pictures {
     let off: (() => void) | undefined;
     const take = (event: PictureReady) => {
       if (event.kind === 'cover') setCovers(previous => new Map(previous).set(event.session_id, event.path));
-      else setSearches(previous => new Map(previous).set(event.external_id, event.path));
+      else if (event.kind === 'search') setSearches(previous => new Map(previous).set(event.external_id, event.path));
     };
     Promise.resolve()
       .then(() => onPictureReady(take))

@@ -337,11 +337,6 @@ export const commands = {
 	/**  Saves the retention period in days; the background clean-up applies it at its next tick. */
 	storageRetentionSet: (days: number) => typedError<number, CommandError>(__TAURI_INVOKE("storage_retention_set", { days })),
 	/**
-	 *  The session's item retention state, answered from `RemoteItems::view` (cached files only;
-	 *  missing ones are queued for the background, MC-H3.5). `null` for the Unassigned session.
-	 */
-	itemArchiveGet: (sessionId: CommandId) => typedError<ItemArchiveDto_Serialize | null, CommandError>(__TAURI_INVOKE("item_archive_get", { sessionId })),
-	/**
 	 *  "Keep files on this Mac" (10F Q2): the pinned item is never cleared by retention or by the
 	 *  storage budget. Answers the session's remote view (`null` for the Unassigned session).
 	 */
@@ -396,34 +391,6 @@ export type ApplyRefusalDto = {
 export type ApplyResultDto = {
 	applied: number[],
 	refused: ApplyRefusalDto[],
-};
-
-/**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, its
- *  cached copy. (Kept for `item_archive_get` until H4·U3 removes it with its last caller.)
- */
-export type ArchivedPictureDto = ArchivedPictureDto_Serialize | ArchivedPictureDto_Deserialize;
-
-/**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, its
- *  cached copy. (Kept for `item_archive_get` until H4·U3 removes it with its last caller.)
- */
-export type ArchivedPictureDto_Deserialize = {
-	role: string,
-	position: number,
-	url: string,
-	path?: string | null,
-};
-
-/**
- *  One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, its
- *  cached copy. (Kept for `item_archive_get` until H4·U3 removes it with its last caller.)
- */
-export type ArchivedPictureDto_Serialize = {
-	role: string,
-	position: number,
-	url: string,
-	path: string | null,
 };
 
 export type ArrangeNextResponse = ArrangeNextResponse_Serialize | ArrangeNextResponse_Deserialize;
@@ -1278,34 +1245,6 @@ export type IntegrationSettingsDto = {
 	client_id: string,
 	client_secret: string,
 	condition_photos_key: string,
-};
-
-/**
- *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing and, if so, its photos from Shopify.
- */
-export type ItemArchiveDto = ItemArchiveDto_Serialize | ItemArchiveDto_Deserialize;
-
-/**
- *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing and, if so, its photos from Shopify.
- */
-export type ItemArchiveDto_Deserialize = {
-	item_id: number,
-	keep_files: boolean,
-	cleared: boolean,
-	pictures: ArchivedPictureDto_Deserialize[],
-};
-
-/**
- *  An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
- *  were cleared after publishing and, if so, its photos from Shopify.
- */
-export type ItemArchiveDto_Serialize = {
-	item_id: number,
-	keep_files: boolean,
-	cleared: boolean,
-	pictures: ArchivedPictureDto_Serialize[],
 };
 
 export type ItemDto = ItemDto_Serialize | ItemDto_Deserialize;

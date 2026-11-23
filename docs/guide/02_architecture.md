@@ -193,6 +193,17 @@ wrapper `services/search.ts`. Saved pages:
   `template_container_presets_set` · T2 `template_session_view` · T3 `template_drop`, `template_back` ·
   T4 `template_shift_back`. Error codes `template_exists`, `template_image_unreadable`, `no_template`,
   `nothing_to_shift`.
+- **Remote products in the workspace (H4, `features/workspace/remote/`):** `useRemoteItem(sessionId)` (`getRemote`
+  on mount and on `session_changed`, `picture_ready {kind: 'remote'}` paths and `bring_back_progress` merged in place,
+  `reload` / `refresh` / `bringBack`; its state keyed by session id); `App.tsx` holds the instance of the session on
+  screen and shares it through `RemoteItemContext` (the workspace, the header's `SessionActionsMenu` → **Refresh from
+  Shopify**, the visit bar). `remotePhotos(view)` (pure) turns the pictures into photo objects with negative ids and a
+  neutral composition; `WorkspacePage` hands them to `useWorkspaceState(sessionId, shown)` (stage, panel, menus,
+  stepping), keeps the session view's own photos for `FormDialog`, sends no preview focus for a negative id, shows
+  `RemoteNote` and gates every photo-changing action (classify, deny, drag, compose, split/normal/apply, move, copy,
+  assign, template actions) behind `BringBackDialog` (question, progress, failure with Try again). `PublishPopover`
+  shows the details-only line and **Publish details** when every item is `details_only`. `ArchivedView` and
+  `item_archive_get` are gone.
 - **Frontend** (`features/workspace/`): `useTemplateView.ts` (re-reads `template_session_view` on
   `photo_added`, `photo_changed`, `session_changed`), `ContainerGrid.tsx` (faded numbered containers with
   their black-and-white example and "Shot n"; the container of `TemplateView.next_shot` is outlined "Next"),
@@ -587,7 +598,10 @@ of that folder (`variant_background` → `resync_folder`).
   render, already sees the new route); a `hashchange` that only confirms the route does nothing, any other is an
   ordinary navigation (`route-changed`, which ends a visit). `useCaptureTarget` receives `captureTarget(state)` (the
   visit's `capture` while visiting, else the route's session) and is the only caller of `activateSession` /
-  `deactivateSession`. `openSession`, `visitBack`, `shootHere` and `visit` reach the panel through
+  `deactivateSession`. **H4 (MC-H3.4):** it calls `activateSession(target)` only when the target's remote state
+  (`useRemoteItem`, keyed by session id) is `activatable` — `local`, or `unknown` whose first read failed — and once per
+  target becoming activatable (a re-read, or a second instance during a visit, never activates twice); `VisitBar` hides
+  **Shoot here instead** while the visited session is not activatable. `openSession`, `visitBack`, `shootHere` and `visit` reach the panel through
   `ConversationsContext`; **Open session** runs through `lib/routes.ts` `leaveThen(target, proceed)`, so a dirty
   Settings page (whose guard receives the continuation) runs the jump itself from Discard / Save. `VisitBar.tsx` is the
   bar (capture SKU from `activeSession()` and the sessions list).

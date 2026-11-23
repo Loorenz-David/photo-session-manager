@@ -55,8 +55,12 @@ function nextAfterAction(photos: readonly Photo[], actedId: number, actedLeaves:
 
 export type WorkspaceState = ReturnType<typeof useWorkspaceState>;
 
-/** Session workspace state: the loaded session view, the active photo, the Original/Adjusted mode, review actions. */
-export function useWorkspaceState(sessionId: number) {
+/**
+ * Session workspace state: the loaded session view, the active photo, the Original/Adjusted mode, review actions.
+ * H4: `shown` replaces the session view's photos on screen (a remote product's Shopify pictures); the active photo,
+ * stepping and the selection follow it, while `view` stays the session view.
+ */
+export function useWorkspaceState(sessionId: number, shown: readonly Photo[] | null = null) {
   const [view, setView] = useState<SessionView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeId, setActiveIdState] = useState<number | null>(null);
@@ -67,6 +71,8 @@ export function useWorkspaceState(sessionId: number) {
   const commandsInFlight = useRef(0);
   const reloadWanted = useRef(false);
   const reloadScheduled = useRef(false);
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
 
   const setActiveId = useCallback((id: number | null) => {
     activeRef.current = id;
@@ -80,12 +86,13 @@ export function useWorkspaceState(sessionId: number) {
       if (ticket !== request.current) return;
       setView(next);
       setLoadError(null);
+      const visiblePhotos = shownRef.current ?? next.photos;
       // The active photo stays while it is visible; otherwise the default rule picks one.
-      if (activeRef.current === null || !next.photos.some(photo => photo.id === activeRef.current)) {
-        setActiveId(defaultActive(next.photos));
+      if (activeRef.current === null || !visiblePhotos.some(photo => photo.id === activeRef.current)) {
+        setActiveId(defaultActive(visiblePhotos));
       }
       setSelection(current => {
-        const visible = new Set(next.photos.map(photo => photo.id));
+        const visible = new Set(visiblePhotos.map(photo => photo.id));
         const kept = [...current].filter(id => visible.has(id));
         return kept.length === current.size ? current : new Set(kept);
       });
@@ -129,9 +136,15 @@ export function useWorkspaceState(sessionId: number) {
     };
   }, [sessionId, scheduleReload, setActiveId]);
 
-  const photos = useMemo(() => view?.photos ?? [], [view]);
+  const photos = useMemo(() => (shown ? [...shown] : view?.photos ?? []), [shown, view]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
+  // H4: when the shown photos change (a remote product's pictures, or back to the session's own), the active photo
+  // follows the default rule unless it is still visible.
+  useEffect(() => {
+    if (!shown) return;
+    if (activeRef.current === null || !shown.some(photo => photo.id === activeRef.current)) setActiveId(defaultActive(shown));
+  }, [shown, setActiveId]);
   const active = photos.find(photo => photo.id === activeId) ?? null;
 
   /** Runs a review command, then opens `next` and reloads; failures are told, never silent. */

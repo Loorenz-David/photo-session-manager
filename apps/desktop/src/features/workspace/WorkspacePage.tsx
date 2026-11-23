@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -29,8 +29,11 @@ import { FormDialog, type FormFieldJump } from '@/features/form/FormDialog';
 import type { Step } from '@/features/form/StepTabs';
 import { FailurePopover } from '@/features/publish/FailurePopover';
 import { publishRetry } from '@/services/publish';
-import { getItemArchive, setKeepFiles, type ItemArchive } from '@/services/retention';
-import { ArchivedView } from './ArchivedView';
+import { setKeepFiles } from '@/services/retention';
+import { BringBackDialog } from './remote/BringBackDialog';
+import { RemoteNote } from './remote/RemoteNote';
+import { remotePhotos } from './remote/remotePhotos';
+import { useRemoteItem, useSharedRemoteItem } from './remote/useRemoteItem';
 import { FoldedStrip } from './FoldedStrip';
 import { ImportDropZone, pickAndImport } from './ImportDropZone';
 import { ItemDetailsCard } from './ItemDetailsCard';
@@ -148,9 +151,42 @@ function useDrop(state: WorkspaceState, templateView: TemplateView | null) {
 
 /** The session workspace (NOTES.md §Screens 4–5): stage, photo panel or strip, and in Unassigned the sessions panel. */
 export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detailsOpen = false, onDetailsOpenChange = () => undefined, detailsStep = null, detailsField = null, navigate, reviewQueue }: WorkspacePageProps) {
-  const state = useWorkspaceState(sessionId);
-  const templateView = useTemplateView(sessionId);
   const unassigned = sessionId === UNASSIGNED_SESSION_ID;
+  // H4 (10H §6, MC-H3.5): where the item's pictures are; the app shell's instance when it follows this session.
+  const shared = useSharedRemoteItem(sessionId);
+  const own = useRemoteItem(shared || unassigned ? undefined : sessionId);
+  const remoteItem = shared ?? own;
+  const remoteView = remoteItem.view ?? null;
+  const remote = remoteItem.remote && remoteView !== null;
+  // The Shopify pictures take the session photos' place on the stage, in the panel and in the menus (never in the
+  // details form: its damage-report picker would offer them).
+  const shown = useMemo(() => (remote && remoteView ? remotePhotos(remoteView) : null), [remote, remoteView]);
+  const workspace = useWorkspaceState(sessionId, shown);
+  const sessionPhotos = workspace.view?.photos ?? [];
+  // The edit gate: while the product is remote every photo-changing action asks to bring the photos back first and
+  // calls no photo command (the pseudo-photos' negative ids never reach the backend).
+  const [bringBackOpen, setBringBackOpen] = useState(false);
+  const askBringBack = useCallback(() => setBringBackOpen(true), []);
+  const state: WorkspaceState = remote ? {
+    ...workspace,
+    classify: async () => { askBringBack(); return null; },
+    reorder: async () => { askBringBack(); return null; },
+    move: async () => { askBringBack(); return null; },
+    copy: async () => { askBringBack(); return null; },
+    templateDrop: async () => { askBringBack(); return null; },
+    remove: async () => { askBringBack(); },
+    templateBack: async () => { askBringBack(); },
+    templateShiftBack: async () => { askBringBack(); },
+    patchPhoto: () => undefined,
+  } : workspace;
+  // After a bring back the session is ordinary: its own photos are read again (never shown together with the pictures).
+  const wasRemote = useRef(remote);
+  const reloadWorkspace = workspace.reload;
+  useEffect(() => {
+    if (wasRemote.current && !remote) void reloadWorkspace();
+    wasRemote.current = remote;
+  }, [remote, reloadWorkspace]);
+  const templateView = useTemplateView(sessionId);
   const [folded, setFolded] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(unassigned);
   const [itemCardOpen, setItemCardOpen] = useState(false);
@@ -162,24 +198,17 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   const shownFailure = useRef<number | null>(null);
   const shownFailureSession = useRef(sessionId);
   const drop = useDrop(state, templateView);
-  // P62: the item's retention state, re-read with every session view (a clean-up may have cleared it meanwhile).
-  const [archive, setArchive] = useState<ItemArchive | null>(null);
-  const loadedView = state.view;
-  useEffect(() => {
-    let alive = true;
-    if (unassigned || !loadedView) { setArchive(null); return; }
-    Promise.resolve().then(() => getItemArchive(sessionId)).then(value => { if (alive) setArchive(value); }).catch(() => { if (alive) setArchive(null); });
-    return () => { alive = false; };
-  }, [sessionId, unassigned, loadedView]);
-  const archived = archive?.cleared === true;
+  // 10F Q2: "Keep files on this Mac" (the remote view carries the pin).
+  const reloadRemote = remoteItem.reload;
   const toggleKeepFiles = useCallback((keep: boolean) => {
-    setKeepFiles(sessionId, keep).then(setArchive).catch(error => toast.error(`Not saved: ${(error as Error).message}`));
-  }, [sessionId]);
+    setKeepFiles(sessionId, keep).then(() => reloadRemote()).catch(error => toast.error(`Not saved: ${(error as Error).message}`));
+  }, [sessionId, reloadRemote]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const { active } = state;
   // P58: the photo on the stage or in the editor is the next preview Capture One renders. One message per change
   // (a "nothing" in between could arrive after the new photo); "nothing" only when the workspace closes.
-  const focusId = active?.id ?? null;
+  // H4 (projection r0, L12): a remote picture (negative id) is never a preview focus.
+  const focusId = active && active.id > 0 ? active.id : null;
   useEffect(() => setPreviewFocus(focusId), [focusId]);
   useEffect(() => () => setPreviewFocus(null), []);
   const dragging = state.photos.find(photo => photo.id === draggingId) ?? null;
@@ -241,11 +270,12 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   /** Compose (10D): R, a double-click on the stage photo, or Compose… in a menu; only a photo with a preview and a frame. */
   const enterCompose = useCallback(
     (photo: Photo) => {
+      if (remote) { askBringBack(); return; }
       if (!canCompose(photo)) { toast(COMPOSE_WAITING, { id: 'compose-waiting' }); return; }
       if (state.activeId !== photo.id) state.setActiveId(photo.id);
       setComposing(true);
     },
-    [state],
+    [state, remote, askBringBack],
   );
   // The editor needs a frame: when the stage photo loses it (or the stage empties) the normal stage returns.
   useEffect(() => {
@@ -292,6 +322,9 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   /** The ⋯ / right-click menu acts on the selection when the photo is part of it, else on the photo alone. */
   const onMenu = useCallback(
     (action: PhotoMenuAction, photo: Photo) => {
+      // H4: every menu action changes photos (compose, split / normal, apply, move between groups, deny, move, copy,
+      // assign): a remote product asks to bring its photos back first.
+      if (remote) { askBringBack(); return; }
       const photoIds = state.selection.has(photo.id)
         ? displaySequence(state.photos).filter(p => state.selection.has(p.id)).map(p => p.id)
         : [photo.id];
@@ -319,7 +352,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
       else if (action === 'delete') void state.remove(photo.id);
       else setPicker({ kind: action, photoIds });
     },
-    [state, enterCompose, setKind],
+    [state, enterCompose, setKind, remote, askBringBack],
   );
 
   const assignWhole = useCallback(
@@ -357,7 +390,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
   // D opens the product details form (design handoff §Keyboard); Esc closes it (the dialog's own Esc).
   useKeyboard({ d: () => onDetailsOpenChange(true) }, !dialogOpen && item !== null && !composing);
   // R opens Compose on the stage photo (10D); while composing the workspace keys are off and the editor owns the keyboard.
-  useKeyboard({ r: () => { if (active) enterCompose(active); } }, !dialogOpen && !composing && active !== null && !archived);
+  useKeyboard({ r: () => { if (active) enterCompose(active); } }, !dialogOpen && !composing && active !== null && !bringBackOpen);
   useWorkspaceKeyboard(
     {
       approve: () => review('approve'),
@@ -373,7 +406,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         else state.clearSelection();
       },
     },
-    !dialogOpen && !composing && !archived,
+    !dialogOpen && !composing && !bringBackOpen,
   );
 
   function onDragStart(event: DragStartEvent) {
@@ -415,16 +448,10 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
     <aside className="photo-panel" aria-label="Photos"><div className="panel-scroll"><SkeletonTiles n={8} /></div></aside>
   </main>;
 
-  // 10F §3, Q3: a cleared item is shown from Shopify, read-only; its details form stays available.
-  if (archived && archive) return <>
-    <ArchivedView pictures={archive.pictures} onEdit={item ? () => onDetailsOpenChange(true) : undefined} />
-    {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} sessionId={sessionId} position={detailsStep ? { step: detailsStep, scroll: 0 } : undefined} reviewFirst review={reviewQueue} field={detailsField} onItemChanged={() => void state.reload()} />}
-  </>;
-
   // The stage column's other occupants, in both the normal stage and the editor.
   const stageExtras = (
     <>
-      {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} onEdit={() => onDetailsOpenChange(true)} keepFiles={archive?.keep_files ?? false} onKeepFilesChange={archive ? toggleKeepFiles : undefined} />}
+      {itemCardOpen && state.view && <ItemDetailsCard view={state.view} onClose={() => setItemCardOpen(false)} onEdit={() => onDetailsOpenChange(true)} keepFiles={remoteView?.keep_files ?? false} onKeepFilesChange={remoteView ? toggleKeepFiles : undefined} />}
     </>
   );
 
@@ -451,6 +478,7 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
           </ComposeMode>
         ) : (
           <div className="stage-column">
+            {remoteView && <RemoteNote view={remoteView} onBringBack={askBringBack} onTryAgain={() => void remoteItem.reload()} />}
             <Stage
               photos={state.photos}
               active={active}
@@ -498,7 +526,8 @@ export function WorkspacePage({ sessionId, assignOpen, onAssignOpenChange, detai
         onOpenChange={open => !open && setPicker(null)}
         onPick={item => { if (picker) return assignSome(item, picker.photoIds); }}
       />
-      {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={state.photos} sessionId={sessionId} position={detailsStep ? { step: detailsStep, scroll: 0 } : undefined} reviewFirst review={reviewQueue} field={detailsField} onItemChanged={() => void state.reload()} />}
+      {remote && remoteView && <BringBackDialog open={bringBackOpen} view={remoteView} onOpenChange={setBringBackOpen} bringBack={remoteItem.bringBack} />}
+      {item && <FormDialog open={detailsOpen} onOpenChange={onDetailsOpenChange} item={item} photos={sessionPhotos} sessionId={sessionId} position={detailsStep ? { step: detailsStep, scroll: 0 } : undefined} reviewFirst review={reviewQueue} field={detailsField} onItemChanged={() => void state.reload()} />}
       {unassigned && <ItemPickerDialog open={assignOpen} title="Assign product" onOpenChange={onAssignOpenChange} onPick={assignWhole} />}
     </DndContext>
     </PublishFailedContext.Provider>

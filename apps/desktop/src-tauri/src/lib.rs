@@ -2511,7 +2511,6 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::settings::storage_min_free_set,
         commands::settings::storage_retention_get,
         commands::settings::storage_retention_set,
-        commands::items::item_archive_get,
         commands::items::item_keep_files_set,
         commands::remote::session_remote_get,
         commands::remote::session_remote_refresh,

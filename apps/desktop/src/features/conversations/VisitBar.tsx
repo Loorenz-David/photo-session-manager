@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { onSessionsChanged } from '@/services/events';
 import { activeSession, listSessions } from '@/services/sessions';
+import { RemoteItemContext, activatable } from '@/features/workspace/remote/useRemoteItem';
 import { useConversationsContext } from './useConversations';
 import type { Route, Visit } from './visit';
 
@@ -63,6 +64,10 @@ function originLabel(origin: Route, skus: Map<number, string> | undefined): stri
 
 function Bar({ visit, onBack, onShootHere }: { visit: Visit; onBack: () => void; onShootHere: () => void }) {
   const { skus, capture } = useFacts();
+  // H4 (MC-H3.4, projection r0 L15): Shoot here instead would make the visited product the capture target; an archived
+  // or shop-only product (or one whose state is not known yet) never is, so the button is not offered for it.
+  const remote = useContext(RemoteItemContext);
+  const shootable = visit.visited === UNASSIGNED_SESSION || (remote?.sessionId === visit.visited && activatable(remote));
   const captureLabel = capture === undefined ? '' : capture === null ? 'Unassigned' : sessionLabel(capture, skus);
   return (
     <div className="visit-bar" role="status" aria-label="Visit">
@@ -72,9 +77,11 @@ function Bar({ visit, onBack, onShootHere }: { visit: Visit; onBack: () => void;
       <Button variant="ghost" size="sm" onClick={onBack}>
         ← Back to {originLabel(visit.origin, skus)}
       </Button>
-      <Button variant="outline" size="sm" onClick={onShootHere}>
-        Shoot here instead
-      </Button>
+      {shootable && (
+        <Button variant="outline" size="sm" onClick={onShootHere}>
+          Shoot here instead
+        </Button>
+      )}
     </div>
   );
 }

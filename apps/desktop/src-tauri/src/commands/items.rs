@@ -397,68 +397,6 @@ pub async fn item_adopt(
     .map_err(|e| CommandError::from(psm_core::Error::InvalidData(e.to_string())))?
 }
 
-/// One published image of a cleared item (10F §3): the Shopify URL and, once downloaded, its
-/// cached copy. (Kept for `item_archive_get` until H4·U3 removes it with its last caller.)
-#[derive(Serialize, Type)]
-pub struct ArchivedPictureDto {
-    pub role: String,
-    #[specta(type = specta_typescript::Number)]
-    pub position: i64,
-    pub url: String,
-    pub path: Option<String>,
-}
-
-/// An item's retention state (P62): the "keep files on this Mac" pin, whether its local files
-/// were cleared after publishing and, if so, its photos from Shopify.
-#[derive(Serialize, Type)]
-pub struct ItemArchiveDto {
-    #[specta(type = specta_typescript::Number)]
-    pub item_id: i64,
-    pub keep_files: bool,
-    pub cleared: bool,
-    pub pictures: Vec<ArchivedPictureDto>,
-}
-
-/// The session's item retention state, answered from `RemoteItems::view` (cached files only;
-/// missing ones are queued for the background, MC-H3.5). `null` for the Unassigned session.
-#[tauri::command]
-#[specta::specta]
-pub async fn item_archive_get(
-    state: State<'_, AppState>,
-    session_id: CommandId,
-) -> Result<Option<ItemArchiveDto>, CommandError> {
-    let app = state.handles().map_err(CommandError::from)?;
-    tauri::async_runtime::spawn_blocking(move || -> Result<Option<ItemArchiveDto>, CommandError> {
-        let Some(view) = app.remote.view(session_id.0)? else {
-            return Ok(None);
-        };
-        let store: &dyn psm_core::ports::store::Store = app.store.as_ref();
-        let cleared = store.item_retention(view.item_id)?.cleared_at.is_some();
-        let record = store.archived_images(view.item_id)?;
-        Ok(Some(ItemArchiveDto {
-            item_id: view.item_id,
-            keep_files: view.keep_files,
-            cleared,
-            pictures: view
-                .pictures
-                .into_iter()
-                .map(|p| ArchivedPictureDto {
-                    url: record
-                        .iter()
-                        .find(|image| image.media_id == p.media_id)
-                        .map(|image| image.url.clone())
-                        .unwrap_or_default(),
-                    role: p.role,
-                    position: p.position,
-                    path: p.path.map(|path| path.to_string_lossy().into_owned()),
-                })
-                .collect(),
-        }))
-    })
-    .await
-    .map_err(|e| CommandError::from(Error::InvalidData(e.to_string())))?
-}
-
 /// "Keep files on this Mac" (10F Q2): the pinned item is never cleared by retention or by the
 /// storage budget. Answers the session's remote view (`null` for the Unassigned session).
 #[tauri::command]
