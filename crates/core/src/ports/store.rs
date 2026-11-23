@@ -11,6 +11,7 @@ use crate::domain::{
     storage::{ArchivedImage, DeletedRows, ItemRetention, PhotoDenial},
     template::{PlaceRow, Presets, ShotKey, Template, TemplateSummary},
 };
+use crate::mechanisms::remote::RemoteInput;
 
 #[derive(Debug, Clone)]
 pub struct RawPreviewState {
@@ -481,8 +482,27 @@ pub trait Store: Send + Sync {
     fn set_item_keep_files(&self, item_id: i64, keep: bool) -> Result<()>;
     /// Marks the item cleared at `at` and stores the published images it is shown from.
     fn mark_item_cleared(&self, item_id: i64, at: i64, images: &[ArchivedImage]) -> Result<()>;
-    /// The cleared item's images, gallery first, each role in order.
+    /// The item's remote pictures, gallery first, each role in order.
     fn archived_images(&self, item_id: i64) -> Result<Vec<ArchivedImage>>;
+    // Remote items (10H §3, §6; H1).
+    /// MC-H3.2, one transaction: replaces the item's record of remote pictures with `images` and
+    /// sets `remote_checked_at`; the pin, `cleared_at` and `restored_at` stay as they are.
+    fn set_remote_record(
+        &self,
+        item_id: i64,
+        images: &[ArchivedImage],
+        checked_at: i64,
+    ) -> Result<()>;
+    /// MC-H1.4, one transaction: each `(media_id, url, bytes)` updates that picture's URL (a
+    /// `None` URL stores the empty string: gone) and, when given, its size.
+    fn update_remote_urls(
+        &self,
+        item_id: i64,
+        updates: &[(String, Option<String>, Option<i64>)],
+    ) -> Result<()>;
+    /// MC-H3.1, one read: what the remote state rule needs about the session's item (all-false
+    /// for a session without an item).
+    fn remote_input(&self, session_id: i64) -> Result<RemoteInput>;
     /// The sessions whose item's local files were cleared.
     fn cleared_sessions(&self) -> Result<Vec<i64>>;
     // Denied photos (changelog 46 (2); P66).

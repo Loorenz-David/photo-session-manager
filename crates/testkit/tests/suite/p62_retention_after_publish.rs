@@ -47,7 +47,7 @@ const GB: u64 = 1_000_000_000;
 // ---------------------------------------------------------------------------------------------
 // helpers
 
-fn shop_app() -> TestApp {
+pub(crate) fn shop_app() -> TestApp {
     let a = TestApp::with_fake_shop().unwrap();
     a.clock.advance(NOW_MS);
     condition_field(&a);
@@ -145,10 +145,10 @@ fn capture_one_files(raw: &str) -> Vec<PathBuf> {
     files
 }
 
-struct Item {
-    session: i64,
-    item: i64,
-    photos: Vec<Photo>,
+pub(crate) struct Item {
+    pub(crate) session: i64,
+    pub(crate) item: i64,
+    pub(crate) photos: Vec<Photo>,
 }
 
 fn drain(a: &TestApp) {
@@ -164,7 +164,7 @@ fn latest_step(a: &TestApp, session: i64) -> Option<PublishStep> {
 
 /// An item with its photos (`main`, `condition`, plus a deleted one and a never-reviewed one),
 /// not published.
-fn item(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
+pub(crate) fn item(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
     let (_, session) = a
         .items()
         .create_local(sku, &format!("{sku} title"), "Sideboard", None)
@@ -200,7 +200,7 @@ fn hidden_before_p66(a: &TestApp, photo_id: i64) {
 }
 
 /// `item` published to the fake shop now (the publish flow runs to done).
-fn published(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
+pub(crate) fn published(a: &TestApp, sku: &str, main: usize, condition: usize) -> Item {
     let it = item(a, sku, main, condition);
     // A never-reviewed photo blocks the ready rule: review it as deleted before publishing.
     let unreviewed = it.photos.last().unwrap().id;
@@ -257,7 +257,7 @@ fn disk_free(a: &TestApp, bytes: u64) {
 }
 
 /// Ticks the clean-up past its batch pauses until it has nothing more to do.
-fn clear_all(a: &TestApp) -> Vec<Cleared> {
+pub(crate) fn clear_all(a: &TestApp) -> Vec<Cleared> {
     let mut all = Vec::new();
     for _ in 0..40 {
         a.clock.advance(3_000);
@@ -286,7 +286,7 @@ fn health_detail(a: &TestApp, code: &str) -> Option<String> {
         .map(|i| i.detail)
 }
 
-fn product_of(a: &TestApp, it: &Item) -> String {
+pub(crate) fn product_of(a: &TestApp, it: &Item) -> String {
     a.store()
         .item_link(it.item, "shopify")
         .unwrap()

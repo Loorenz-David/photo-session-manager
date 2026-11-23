@@ -42,6 +42,18 @@ pub fn ensure_photo_not_cleared(store: &dyn Store, photo_id: i64) -> Result<()> 
     ensure_session_not_cleared(store, store.photo(photo_id)?.session_id)
 }
 
+/// The cache file name of one remote picture in `<previews>/archived/<item_id>/` (P62):
+/// `<role>-<NN>-<first 12 hex of sha256(media_id)>.jpg`.
+pub fn archived_file_name(image: &ArchivedImage) -> String {
+    use sha2::Digest;
+    let tag: String = sha2::Sha256::digest(image.media_id.as_bytes())
+        .iter()
+        .take(6)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("{}-{:02}-{tag}.jpg", image.role, image.position)
+}
+
 /// The outcome of reading an item's published images back from the platform (M41).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verification {
@@ -119,13 +131,14 @@ pub fn verify(
             let found = id
                 .as_ref()
                 .and_then(|id| held.iter().find(|m: &&MediaImage| &m.id == id))
-                .and_then(|m| m.url.clone().map(|url| (m.id.clone(), url)));
+                .and_then(|m| m.url.clone().map(|url| (m.id.clone(), url, m.bytes)));
             match found {
-                Some((media_id, url)) => images.push(ArchivedImage {
+                Some((media_id, url, bytes)) => images.push(ArchivedImage {
                     role: role.into(),
                     position: index as i64 + 1,
                     media_id,
                     url,
+                    bytes,
                 }),
                 None => missing += 1,
             }
@@ -178,15 +191,9 @@ impl<'a> ArchiveService<'a> {
     }
 
     fn cached_path(&self, item_id: i64, image: &ArchivedImage) -> PathBuf {
-        use sha2::Digest;
-        let tag: String = sha2::Sha256::digest(image.media_id.as_bytes())
-            .iter()
-            .take(6)
-            .map(|b| format!("{b:02x}"))
-            .collect();
         self.cache_dir
             .join(item_id.to_string())
-            .join(format!("{}-{:02}-{tag}.jpg", image.role, image.position))
+            .join(archived_file_name(image))
     }
 
     /// The session's item retention state; for a cleared item its pictures, each downloaded

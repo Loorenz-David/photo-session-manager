@@ -140,6 +140,9 @@ pub enum Error {
     /// The platform says the picture is not there (a download answered 403 or 404; 10H §4).
     #[error("image_gone")]
     ImageGone,
+    /// Refresh (and later bring back) asked for an item whose photos are on this Mac (MC-H3.3).
+    #[error("This item's photos are on this Mac, not in the shop")]
+    NotRemote,
     /// Changelog 45 (P65): an export or publish waited 10 minutes for the editor; the sentence
     /// names the photo (`Capture One has not loaded DSC05162.ARW after 10 minutes`).
     #[error("{0}")]

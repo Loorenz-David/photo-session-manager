@@ -727,6 +727,11 @@ impl TestApp {
     pub fn fake_shop(&self) -> &FakeCommerce {
         self.commerce.as_deref().expect("fake commerce configured")
     }
+    /// H1: the app's remote items service (its background thread never runs in tests: they
+    /// call `run_pending` themselves).
+    pub fn remote(&self) -> &psm_core::services::remote::RemoteItems {
+        self.app.remote.as_ref()
+    }
     pub fn kill_and_restart(&mut self) -> Result<()> {
         self.restart(false)
     }

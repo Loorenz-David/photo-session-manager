@@ -32,6 +32,7 @@ use psm_core::{
             default_rect, fingerprint_compatible, orientation_of, refit_rect, review_reason,
             turned_frame,
         },
+        remote::RemoteInput,
     },
     ports::store::{FrameCommit, PreviewCommit, RawPreviewState, Store, StoreTx},
 };
@@ -85,6 +86,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/017_session_changes.sql")),
             M::up(include_str!("migrations/018_saved_pages.sql")),
             M::up(include_str!("migrations/019_conversations.sql")),
+            M::up(include_str!("migrations/020_remote_items.sql")),
         ]
     }
 
@@ -129,6 +131,20 @@ impl SqliteStore {
         store_tx.tx.commit().map_err(db)?;
         Ok(value)
     }
+}
+
+/// Replaces the item's remote pictures (`archived_images`) with `images` inside `tx`.
+fn replace_archived_images(tx: &Transaction, item_id: i64, images: &[ArchivedImage]) -> Result<()> {
+    tx.execute("DELETE FROM archived_images WHERE item_id=?1", [item_id])
+        .map_err(db)?;
+    for image in images {
+        tx.execute(
+            "INSERT INTO archived_images(item_id,role,position,media_id,url,bytes) VALUES (?1,?2,?3,?4,?5,?6)",
+            params![item_id, image.role, image.position, image.media_id, image.url, image.bytes],
+        )
+        .map_err(db)?;
+    }
+    Ok(())
 }
 
 fn db(error: rusqlite::Error) -> Error {
@@ -3211,12 +3227,14 @@ impl Store for SqliteStore {
         let conn = self.locked()?;
         Ok(conn
             .query_row(
-                "SELECT keep_files,cleared_at FROM item_retention WHERE item_id=?1",
+                "SELECT keep_files,cleared_at,restored_at,remote_checked_at FROM item_retention WHERE item_id=?1",
                 [item_id],
                 |r| {
                     Ok(ItemRetention {
                         keep_files: r.get::<_, i64>(0)? != 0,
                         cleared_at: r.get(1)?,
+                        restored_at: r.get(2)?,
+                        remote_checked_at: r.get(3)?,
                     })
                 },
             )
@@ -3241,21 +3259,75 @@ impl Store for SqliteStore {
             params![item_id, at],
         )
         .map_err(db)?;
-        tx.execute("DELETE FROM archived_images WHERE item_id=?1", [item_id])
-            .map_err(db)?;
-        for image in images {
+        replace_archived_images(&tx, item_id, images)?;
+        tx.commit().map_err(db)
+    }
+    fn set_remote_record(
+        &self,
+        item_id: i64,
+        images: &[ArchivedImage],
+        checked_at: i64,
+    ) -> Result<()> {
+        let mut conn = self.locked()?;
+        let tx = conn.transaction().map_err(db)?;
+        // MC-H3.2: the pin, the clearing and the bring-back times stay as they are.
+        tx.execute(
+            "INSERT INTO item_retention(item_id,remote_checked_at) VALUES (?1,?2) ON CONFLICT(item_id) DO UPDATE SET remote_checked_at=excluded.remote_checked_at",
+            params![item_id, checked_at],
+        )
+        .map_err(db)?;
+        replace_archived_images(&tx, item_id, images)?;
+        tx.commit().map_err(db)
+    }
+    fn update_remote_urls(
+        &self,
+        item_id: i64,
+        updates: &[(String, Option<String>, Option<i64>)],
+    ) -> Result<()> {
+        let mut conn = self.locked()?;
+        let tx = conn.transaction().map_err(db)?;
+        for (media_id, url, bytes) in updates {
+            // A `None` URL stores the empty string: the picture is gone (MC-H1.4).
             tx.execute(
-                "INSERT INTO archived_images(item_id,role,position,media_id,url) VALUES (?1,?2,?3,?4,?5)",
-                params![item_id, image.role, image.position, image.media_id, image.url],
+                "UPDATE archived_images SET url=?3, bytes=COALESCE(?4,bytes) WHERE item_id=?1 AND media_id=?2",
+                params![item_id, media_id, url.as_deref().unwrap_or(""), bytes],
             )
             .map_err(db)?;
         }
         tx.commit().map_err(db)
     }
+    fn remote_input(&self, session_id: i64) -> Result<RemoteInput> {
+        let conn = self.locked()?;
+        let input = conn
+            .query_row(
+                "SELECT r.cleared_at IS NOT NULL, \
+                        EXISTS(SELECT 1 FROM item_links l WHERE l.item_id=i.id AND l.integration=?2), \
+                        i.origin='linked', \
+                        (SELECT COUNT(*) FROM photos p WHERE p.session_id=s.id), \
+                        r.remote_checked_at IS NOT NULL, \
+                        (SELECT COUNT(*) FROM archived_images a WHERE a.item_id=i.id) \
+                 FROM sessions s JOIN items i ON i.id=s.item_id \
+                 LEFT JOIN item_retention r ON r.item_id=i.id WHERE s.id=?1",
+                params![session_id, psm_core::services::retention::INTEGRATION],
+                |r| {
+                    Ok(RemoteInput {
+                        cleared: r.get::<_, Option<bool>>(0)?.unwrap_or(false),
+                        linked: r.get(1)?,
+                        adopted: r.get(2)?,
+                        photo_rows: r.get::<_, i64>(3)? as usize,
+                        checked: r.get::<_, Option<bool>>(4)?.unwrap_or(false),
+                        pictures: r.get::<_, i64>(5)? as usize,
+                    })
+                },
+            )
+            .optional()
+            .map_err(db)?;
+        Ok(input.unwrap_or_default())
+    }
     fn archived_images(&self, item_id: i64) -> Result<Vec<ArchivedImage>> {
         let conn = self.locked()?;
         let mut stmt = conn
-            .prepare("SELECT role,position,media_id,url FROM archived_images WHERE item_id=?1 ORDER BY role<>'gallery',position")
+            .prepare("SELECT role,position,media_id,url,bytes FROM archived_images WHERE item_id=?1 ORDER BY role<>'gallery',position")
             .map_err(db)?;
         stmt.query_map([item_id], |r| {
             Ok(ArchivedImage {
@@ -3263,6 +3335,7 @@ impl Store for SqliteStore {
                 position: r.get(1)?,
                 media_id: r.get(2)?,
                 url: r.get(3)?,
+                bytes: r.get(4)?,
             })
         })
         .map_err(db)?

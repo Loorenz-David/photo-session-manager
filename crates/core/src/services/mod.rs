@@ -15,6 +15,7 @@ pub mod photos;
 pub mod prepare_masters;
 pub mod previews;
 pub mod publish;
+pub mod remote;
 pub mod retention;
 pub mod review;
 pub mod sessions;

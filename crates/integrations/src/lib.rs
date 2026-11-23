@@ -57,6 +57,7 @@ use psm_core::{
         prepare_masters::PrepareMastersService,
         previews::PreviewService,
         publish::PublishService,
+        remote::{Pending, RemoteItems},
         settings::SettingsService,
         storage::{
             CopiedExports, PREVIEW_EXPORT_FOLDER, RetentionConfig, StorageLocations, StorageService,
@@ -134,6 +135,9 @@ pub struct App {
     pub prepare_masters: Arc<PrepareMastersService>,
     /// C1 (09B): conversations with Pricing; always present (H6: silent without a key or shop).
     pub conversations: Arc<ConversationsService>,
+    /// H1 (10H): remote items' records and their background reads; always present (H6: without a
+    /// commerce integration every item is local and nothing is read).
+    pub remote: Arc<RemoteItems>,
     scripting: Arc<dyn CaptureOneScripting>,
     lanes: Lanes,
     run_startup: bool,
@@ -150,6 +154,8 @@ pub struct App {
     research_background: Option<thread::JoinHandle<()>>,
     /// C1: the conversations pull (`ConversationsService::tick` every 250 ms).
     conversations_background: Option<thread::JoinHandle<()>>,
+    /// H1: `RemoteItems::run_pending`, sleeping 250 ms when idle or waiting for the call budget.
+    remote_background: Option<thread::JoinHandle<()>>,
 }
 
 #[derive(Clone)]
@@ -178,6 +184,8 @@ pub struct AppHandles {
     pub storage: Arc<StorageService>,
     /// C1: conversations with Pricing.
     pub conversations: Arc<ConversationsService>,
+    /// H1: remote items.
+    pub remote: Arc<RemoteItems>,
     pub hooks_compiled: bool,
     pub nudge_running: bool,
 }
@@ -485,6 +493,7 @@ impl App {
             history: self.history.clone(),
             storage: self.storage.clone(),
             conversations: self.conversations.clone(),
+            remote: self.remote.clone(),
             hooks_compiled: self.hooks_compiled,
             nudge_running: self.nudge_port() != 0,
         }
@@ -1174,6 +1183,29 @@ impl App {
         } else {
             None
         };
+        // H1 (10H §6, §8): remote items; the background step runs only with the startup work, like
+        // the storage clean-up.
+        let remote = Arc::new(RemoteItems::new(
+            store.clone(),
+            commerce.clone(),
+            paths.root.join("previews"),
+            clock.clone(),
+            events.clone(),
+        ));
+        let remote_background = run_startup.then(|| {
+            let worker_stop = stop.clone();
+            let worker = remote.clone();
+            thread::spawn(move || {
+                while !worker_stop.load(Ordering::Relaxed) {
+                    match worker.run_pending() {
+                        Ok(Pending::Worked) => continue,
+                        Ok(Pending::Idle | Pending::Waiting) => {}
+                        Err(error) => tracing::warn!(%error, "remote items deferred"),
+                    }
+                    thread::sleep(Duration::from_millis(250));
+                }
+            })
+        });
         // C1: the conversations service (no request and no Keychain read here: the key is read at
         // the first `tick` or `connection()`, on a worker thread).
         let conversations = conversations::build_service(conversations::ServiceParts {
@@ -1260,6 +1292,7 @@ impl App {
             storage,
             prepare_masters,
             conversations,
+            remote,
             scripting,
             lanes,
             run_startup,
@@ -1274,6 +1307,7 @@ impl App {
             prepare_background,
             research_background,
             conversations_background,
+            remote_background,
         })
     }
     /// One turn of the research runner (what its thread does; `false` while a turn is running).
@@ -1389,6 +1423,17 @@ impl App {
             // C1 (master plan §4 Service): a thread inside a request (up to 20 s) is not waited
             // for; it leaves after its apply, and the lane keeps it from interleaving with the
             // next App's thread.
+            let end = std::time::Instant::now() + BACKGROUND_JOIN_BOUND;
+            while !bg.is_finished() && std::time::Instant::now() < end {
+                thread::sleep(Duration::from_millis(5));
+            }
+            if bg.is_finished() {
+                let _ = bg.join();
+            }
+        }
+        if let Some(bg) = self.remote_background.take() {
+            // H1: a thread inside a shop read is not waited for longer than the bound; it leaves
+            // after the read (it checks `stop` first).
             let end = std::time::Instant::now() + BACKGROUND_JOIN_BOUND;
             while !bg.is_finished() && std::time::Instant::now() < end {
                 thread::sleep(Duration::from_millis(5));
