@@ -16,3 +16,5 @@ Running log of the 09C track on branch `feature/agentic`. The main tracker `STAT
     Settings → Pricing), and the service account bound to the live Beyo store.
   - **Plan written** (`e3c9f70`): L1 labels provider and marker (projection), L2 Labels box, L3 generate and download (projection). 11 units, 50 criteria, 294 rows. Preview picture by macOS `sips` (probed on this Mac). 1 owner card: should the Labels box count show as soon as the list opens (recommended yes); L2 carries `blocked_on: owner card 1`.
   - **L1 started** in the background (`scratchpad/labels_chain.sh`, log `scratchpad/labels_chain.log`).
+  - **L1 projection r0:** AMENDMENTS_REQUIRED, 0 owner cards (13 plan gaps: a test row that could never pass, two existing tests to adjust, Pricing's `lifecycleResult` example vs schema, the ⋯ hint source). Applied (`7ea89a7`). Owner card 1 answered: Labels count shown as soon as the list opens (`49ac9ff`, L2 unblocked).
+  - **Chain L1→L3 restarted** in the background.
