@@ -175,9 +175,17 @@ it('l1_c18e_a_failed_markers_call_leaves_the_rows_alone', async () => {
 it('l1_c18f_the_session_page_shows_the_marker_beside_its_title', async () => {
   vi.mocked(listSessions).mockResolvedValue({ groups: [{ label: 'Today', rows: [{ ...row(5), item_type: 'Chair', label: { kind: 'ready' } }] }], counts: { open: 1, published: 0, all: 1 }, unassigned_count: 0 } as SessionList);
   vi.mocked(labelsStatus).mockResolvedValue(status([printed(5)]));
-  render(<Header sessionId={5} theme="light" onThemeChange={() => undefined} onNewSession={() => undefined} />);
+  const header = (sessionId?: number) => <Header sessionId={sessionId} theme="light" onThemeChange={() => undefined} onNewSession={() => undefined} />;
+  const { rerender } = render(header(5));
   const label = await screen.findByTestId('label-pill');
   expect(label).toHaveTextContent('Label printed · 4 Nov');
   expect(label.closest('.page-header, header')).not.toBeNull();
   expect(calls()).toEqual([{ session_ids: [5], refresh: true }]);
+  // Reopened after another page: the same session asks its provider again.
+  rerender(header(undefined));
+  rerender(header(5));
+  await waitFor(() => expect(calls()).toEqual([
+    { session_ids: [5], refresh: true },
+    { session_ids: [5], refresh: true },
+  ]));
 });

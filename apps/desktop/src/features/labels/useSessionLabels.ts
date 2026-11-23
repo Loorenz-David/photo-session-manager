@@ -16,9 +16,10 @@ const EMPTY: SessionLabels = { labels: new Map(), access: null };
  * answer, or the session opened), never delaying the rows; `refresh` is true when the id list differs from this mount's
  * last refreshing call (a reload of the same page asks no provider). On `labels_changed` it asks once more without
  * refresh, or with refresh when the access changed. A failed call leaves the markers as they were; nothing here throws
- * into the page.
+ * into the page. `refreshOnOpen` (the session page) asks with refresh on every `answer`, so a reopen of the same session
+ * still asks its provider (MC-L3.7).
  */
-export function useSessionLabels(ids: number[] | null, answer: unknown): SessionLabels {
+export function useSessionLabels(ids: number[] | null, answer: unknown, refreshOnOpen = false): SessionLabels {
   const [state, setState] = useState<SessionLabels>(EMPTY);
   const shown = useRef<string | null>(null);
   const shownIds = useRef<number[]>([]);
@@ -48,7 +49,7 @@ export function useSessionLabels(ids: number[] | null, answer: unknown): Session
     if (shown.current !== key) setState(EMPTY);
     shown.current = key;
     shownIds.current = ids;
-    latestAsk.current(ids, key !== lastRefreshed.current);
+    latestAsk.current(ids, refreshOnOpen || key !== lastRefreshed.current);
     // Only a new answer asks again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answer]);

@@ -167,10 +167,10 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
   const publish = usePublish(sessionId);
   const [publishOpen, setPublishOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  // L1 (MC-L3.7): the open session's label marker, asked with refresh when the session is opened.
+  // L1 (MC-L3.7): the open session's label marker, asked with refresh each time the session is opened, a reopen included.
   const labelled = sessionId !== undefined && sessionId !== 1 ? sessionId : null;
   const labelIds = useMemo(() => (labelled === null ? null : [labelled]), [labelled]);
-  const labels = useSessionLabels(labelIds, labelled);
+  const labels = useSessionLabels(labelIds, labelled, true);
   const sessionLabel = labelled === null ? undefined : labels.labels.get(labelled);
   const failedCount = publish.failedCount;
   const bell = <Button variant="ghost" size="icon" aria-label="Notifications" onClick={() => setNotificationsOpen(true)} className="relative"><Bell />{failedCount > 0 && <span className="bell-count">{failedCount}</span>}</Button>;
