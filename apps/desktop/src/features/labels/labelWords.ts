@@ -36,3 +36,37 @@ export function markerText(marker: LabelMarker | null | undefined, now: number):
   if (marker.has_price === true) return 'Missing price tag';
   return null;
 }
+
+// ---------- L2: the Labels box (09C §5) ----------
+
+export const NO_PRICE = 'No price';
+
+/** Groups the digits of a non-negative whole number in threes with a thin space (U+2009). */
+function grouped(whole: number): string {
+  return String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, '\u2009');
+}
+
+/**
+ * 09C §5 Rows (Price): the provider's minor units as kronor: the whole units grouped in threes with a thin space
+ * (U+2009), a remainder as `,<two digits>`, then a no-break space (U+00A0) and `kr`; `null` → `No price`.
+ */
+export function formatPrice(minor: number | null | undefined): string {
+  if (minor == null) return NO_PRICE;
+  const whole = Math.floor(minor / 100);
+  const rest = minor - whole * 100;
+  const cents = rest === 0 ? '' : `,${String(rest).padStart(2, '0')}`;
+  return `${grouped(whole)}${cents}\u00A0kr`;
+}
+
+/**
+ * 09C §5: the line under the toolbar, `Products created since <d MMM yyyy>`, built from the text's three parts (never a
+ * `Date` made from the text, which would shift by the time zone); anything but `YYYY-MM-DD` → none.
+ */
+export function workFromLine(text: string | null | undefined): string | null {
+  const match = text?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const month = MONTHS[Number(match[2]) - 1];
+  const dayOfMonth = Number(match[3]);
+  if (!month || dayOfMonth < 1 || dayOfMonth > 31) return null;
+  return `Products created since ${dayOfMonth} ${month} ${match[1]}`;
+}

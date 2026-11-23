@@ -936,6 +936,258 @@ mod l1_tests {
 }
 
 #[cfg(test)]
+mod l2_tests {
+    //! L2·U2 (`docs/implementation/plans/L2_labels_box.md` L2·C7): the Labels box commands over the
+    //! wired app with the fake Pricing server and the fake shop.
+    use super::*;
+    use psm_core::{ports::clock::Clock, services::items::ItemsService};
+    use psm_testkit::{fake_pricing::LabelSpec, test_app::PRICING_KEY};
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    /// 2026-11-20T09:12:00Z.
+    const T: i64 = 1_795_165_920_000;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    struct Wired {
+        _dir: tempfile::TempDir,
+        _app: tauri::App<tauri::test::MockRuntime>,
+        window: tauri::WebviewWindow<tauri::test::MockRuntime>,
+        pricing: Arc<psm_testkit::fake_pricing::FakePricing>,
+        /// The linked session for P1 (none unless `with_s1`).
+        s1: Option<i64>,
+    }
+
+    fn product(sku: Option<&str>, id: &str, created: i64) -> LabelSpec {
+        LabelSpec {
+            product_id: id.into(),
+            sku: sku.map(Into::into),
+            title: format!("Test table {id}"),
+            product_type: Some("Test tables".into()),
+            price_minor: Some(890_000),
+            created_at: Some(T + created * 1_000),
+            ..LabelSpec::default()
+        }
+    }
+
+    /// The wired app: the fake Pricing holds `products`; `with_s1` adds a linked session for P1;
+    /// `connect` saves the key and runs the first connection.
+    fn wired(products: Vec<LabelSpec>, with_s1: bool, connect: bool) -> Wired {
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        let s1 = with_s1.then(|| {
+            let external = a.fake_shop().add_product_with_id(
+                "gid://shopify/Product/1",
+                "TEST-1",
+                "Test table 1",
+                None,
+            );
+            let item = ItemsService::new(a.store(), a.clock.as_ref())
+                .with_commerce(Some(a.fake_shop()))
+                .adopt(&external)
+                .unwrap();
+            a.sessions().create(item.id).unwrap().session.id
+        });
+        a.fake_shop()
+            .add_product_with_id("gid://shopify/Product/4", "SH-4", "Test table", None);
+        let pricing = a.pricing.clone().unwrap();
+        for spec in products {
+            pricing.add_label_product(spec);
+        }
+        if connect {
+            a.app.conversations.key_set(Some(PRICING_KEY)).unwrap();
+            while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+        }
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::conversations::conversations_key_set,
+                commands::labels::labels_list,
+                commands::labels::labels_summary,
+                commands::labels::labels_select_all,
+                commands::labels::labels_open,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        Wired {
+            _dir: dir,
+            _app: tauri_app,
+            window,
+            pricing,
+            s1,
+        }
+    }
+
+    fn list(w: &Wired) -> Result<Value, Value> {
+        call(
+            &w.window,
+            "labels_list",
+            json!({"filter": "missing_price_tag", "query": null, "cursor": null}),
+        )
+    }
+
+    #[test]
+    fn l2_c7a_labels_list_answers_rows_counts_and_work_from() {
+        let w = wired(
+            vec![
+                product(Some("TEST-1"), "1", 1),
+                product(Some("TEST-3"), "3", 3),
+            ],
+            true,
+            true,
+        );
+        let mut got = list(&w).unwrap();
+        let session = got["rows"][1]["session"].take();
+        assert_eq!(session["id"], json!(w.s1.unwrap()));
+        assert_eq!(session["sku"], json!("TEST-1"));
+        let marker =
+            json!({"status": "not_printed", "printed_at": null, "has_price": true, "reset": null});
+        assert_eq!(
+            got,
+            json!({
+                "rows": [
+                    {"product_id": "3", "commerce_id": "gid://shopify/Product/3", "sku": "TEST-3",
+                     "title": "Test table 3", "product_type": "Test tables", "price_minor": 890000,
+                     "marker": marker, "created_at": T + 3_000, "session": null, "picture_path": null},
+                    {"product_id": "1", "commerce_id": "gid://shopify/Product/1", "sku": "TEST-1",
+                     "title": "Test table 1", "product_type": "Test tables", "price_minor": 890000,
+                     "marker": marker, "created_at": T + 1_000, "session": null, "picture_path": null}
+                ],
+                "next_cursor": null,
+                "counts": {"total": 2, "has_price": 2, "missing_price": 0, "missing_price_tag": 2,
+                           "printed": 0, "not_printed": 2},
+                "work_from": "2026-11-19"
+            })
+        );
+    }
+
+    #[test]
+    fn l2_c7b_off_and_denied_are_their_codes() {
+        let off = wired(vec![product(Some("TEST-1"), "1", 1)], false, false);
+        let error = list(&off).unwrap_err();
+        assert_eq!(
+            error,
+            json!({"code": "labels_off", "message": "", "data": {"reason": "no_key"}})
+        );
+        let w = wired(vec![product(Some("TEST-1"), "1", 1)], false, false);
+        w.pricing.deny_labels();
+        call(
+            &w.window,
+            "conversations_key_set",
+            json!({"key": PRICING_KEY}),
+        )
+        .unwrap();
+        let denied = list(&w).unwrap_err();
+        assert_eq!(denied["code"], json!("labels_denied"));
+        assert_eq!(
+            denied["message"],
+            json!("Session Manager isn't allowed to print labels. Ask a Pricing admin.")
+        );
+    }
+
+    #[test]
+    fn l2_c7c_an_unavailable_list_is_labels_list_unavailable() {
+        let w = wired(vec![product(Some("TEST-1"), "1", 1)], false, true);
+        w.pricing.fail_matching_with(
+            "/labels/products",
+            1,
+            503,
+            "product_list_unavailable",
+            "The product list is unavailable.",
+        );
+        let error = list(&w).unwrap_err();
+        assert_eq!(error["code"], json!("labels_list_unavailable"));
+        assert_eq!(
+            error["message"],
+            json!("The product list isn't available right now.")
+        );
+    }
+
+    #[test]
+    fn l2_c7d_labels_summary_answers_the_number_or_null() {
+        let w = wired(
+            vec![
+                product(Some("TEST-1"), "1", 1),
+                product(Some("TEST-2"), "2", 2),
+                product(Some("TEST-3"), "3", 3),
+            ],
+            false,
+            true,
+        );
+        assert_eq!(
+            call(&w.window, "labels_summary", json!({"refresh": true})).unwrap(),
+            json!({"missing_price_tag": 3})
+        );
+        call(&w.window, "conversations_key_set", json!({"key": ""})).unwrap();
+        assert_eq!(
+            call(&w.window, "labels_summary", json!({"refresh": true})).unwrap(),
+            json!({"missing_price_tag": null})
+        );
+    }
+
+    #[test]
+    fn l2_c7e_labels_select_all_answers_the_products_with_a_sku() {
+        let w = wired(
+            vec![
+                product(Some("TEST-1"), "1", 1),
+                product(None, "2", 2),
+                product(Some("TEST-3"), "3", 3),
+            ],
+            false,
+            true,
+        );
+        assert_eq!(
+            call(
+                &w.window,
+                "labels_select_all",
+                json!({"filter": "missing_price_tag", "query": null})
+            )
+            .unwrap(),
+            json!([
+                {"product_id": "3", "sku": "TEST-3"},
+                {"product_id": "1", "sku": "TEST-1"}
+            ])
+        );
+    }
+
+    #[test]
+    fn l2_c7f_labels_open_answers_the_new_session() {
+        let w = wired(vec![], false, true);
+        let got = call(&w.window, "labels_open", json!({"productId": "4"})).unwrap();
+        let id = got["session_id"].as_i64().expect("a session id");
+        assert_eq!(got, json!({"session_id": id}));
+    }
+}
+
+#[cfg(test)]
 mod c2_tests {
     //! C2·U1 (`docs/implementation/plans/C2_header_panel_notifications.md` C2·C7): the list,
     //! counts and badges commands over the wired app with the fake Pricing server.
@@ -2692,6 +2944,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::conversations::conversations_key_set,
         commands::conversations::conversations_test,
         commands::labels::labels_status,
+        commands::labels::labels_list,
+        commands::labels::labels_summary,
+        commands::labels::labels_select_all,
+        commands::labels::labels_open,
         commands::conversations::conversations_list,
         commands::conversations::conversations_counts,
         commands::conversations::conversations_session_badges,

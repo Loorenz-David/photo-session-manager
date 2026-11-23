@@ -646,6 +646,10 @@ of that folder (`variant_background` → `resync_folder`).
   `LabelsStatusDto {access: {state: off|unknown|allowed|denied, reason}, labels: [{session_id, product_id, marker}]}`
   (`labels_error` maps `LabelsFailure` to the `labels_*` codes; `labels_off` carries `data.reason`); the
   conversations settings answer (`settings_dto`) gains `labels`. Wrapper `apps/desktop/src/services/labels.ts`.
+  L2 adds `labels_list(filter, query, cursor)` → `LabelPageDto {rows: [LabelRowDto {…, marker, session:
+  SessionRowResponse | null, picture_path}], next_cursor, counts, work_from}`, `labels_summary(refresh)` →
+  `{missing_price_tag}`, `labels_select_all(filter, query)` → `[{product_id, sku}]`, `labels_open(product_id)` →
+  `{session_id}` (wrappers `labelsList`, `labelsSummary`, `labelsSelectAll`, `labelsOpen`).
 - **Frontend:** `apps/desktop/src/features/labels/` — `labelWords.ts` (`markerText`, the words), `useSessionLabels`
   (asks after each page answer; `refresh` only when the shown id list differs from the last refreshing call; one
   `labels_changed` listener; failures leave the pills; guarded so a test's events mock without `onLabelsChanged`
