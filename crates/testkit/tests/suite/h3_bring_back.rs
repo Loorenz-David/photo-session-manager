@@ -91,14 +91,14 @@ fn drain(a: &TestApp) {
 }
 
 /// A remote item ready to be brought back.
-struct Remote {
-    session: i64,
-    item: i64,
-    folder: PathBuf,
+pub(crate) struct Remote {
+    pub(crate) session: i64,
+    pub(crate) item: i64,
+    pub(crate) folder: PathBuf,
     /// Gallery then condition media ids, in record order.
-    media: Vec<String>,
+    pub(crate) media: Vec<String>,
     /// The bytes each media serves at full size.
-    bytes: HashMap<String, Vec<u8>>,
+    pub(crate) bytes: HashMap<String, Vec<u8>>,
 }
 
 impl Remote {
@@ -114,7 +114,7 @@ impl Remote {
 }
 
 /// Registers each record picture of `item` with a distinct real JPEG (`640 + 16·i` × 480).
-fn register_pictures(a: &TestApp, item: i64) -> (Vec<String>, HashMap<String, Vec<u8>>) {
+pub(crate) fn register_pictures(a: &TestApp, item: i64) -> (Vec<String>, HashMap<String, Vec<u8>>) {
     let mut media = Vec::new();
     let mut bytes = HashMap::new();
     for (i, image) in a.store().archived_images(item).unwrap().iter().enumerate() {
@@ -132,7 +132,13 @@ fn register_pictures(a: &TestApp, item: i64) -> (Vec<String>, HashMap<String, Ve
 
 /// An item of `kind` with `main` and `condition` photos, published to the fake shop, then cleared
 /// by the real clearing; its pictures registered.
-fn archived_of(a: &TestApp, sku: &str, kind: &str, main: usize, condition: usize) -> Remote {
+pub(crate) fn archived_of(
+    a: &TestApp,
+    sku: &str,
+    kind: &str,
+    main: usize,
+    condition: usize,
+) -> Remote {
     let (_, created) = a
         .items()
         .create_local(sku, &format!("{sku} title"), kind, None)
@@ -185,7 +191,7 @@ fn archived(a: &TestApp, sku: &str) -> Remote {
 
 /// A shop product adopted from the search with its session; its pictures `gallery` and
 /// `condition` registered (`640 + 16·i` × 480).
-fn adopted(a: &TestApp, sku: &str, gallery: &[&str], condition: &[&str]) -> Remote {
+pub(crate) fn adopted(a: &TestApp, sku: &str, gallery: &[&str], condition: &[&str]) -> Remote {
     let product = a
         .fake_shop()
         .add_product(sku, &format!("{sku} title"), None);
