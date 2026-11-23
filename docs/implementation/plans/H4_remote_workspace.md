@@ -161,6 +161,7 @@ Where in `run_item` the `details_only` branches sit (one early branch per step i
 - Hazard: `publish_items` carries research columns added by `ensure.rs`; add the column with `ALTER TABLE`, never by recreating the table.
 - Hazard (MC-H3.7): the label rule replaces `sessions.rs:448-450` ("cleared → Archived" unconditionally); a running or failed publish must show through.
 - The publish popover's words are U3's.
+- **Carried from H1's projection r0 (for H4's projection):** retention's exclusion is keyed on `Remote(ShopOnly)`. An adopted, photo-less item that is still `Unknown` (never read) is not excluded. Today such a session can never be Ready (`status.rs:33`), so this matters only if the details-only publish can complete for an `Unknown` item. MC-H3.6 says an `Unknown` item "is confirmed as today", so H4's projection confirms that path cannot reach "published and clean" with zero photos (else H4·C8 needs an `Unknown` row).
 
 ### Unit test commands
 `cargo test -p psm-testkit --test suite h4_details_only_publish::` · `cargo test -p psm-testkit --test suite p62_retention_after_publish::` · `cargo test -p psm-testkit --test suite p13_publish_runs::` · `cargo test -p psm-testkit --test suite p14_publish_update::` · `cargo test -p psm-testkit --test suite p03_session_state_list::` · `cargo test -p psm-testkit --test suite p27_retire_shape_on_arrival::` · `cargo test -p psm-desktop` · `cd apps/desktop && npm run typecheck` · `cargo clippy -p psm-core -p psm-infra -p psm-integrations -p psm-desktop -p psm-testkit --all-targets -- -D warnings`
@@ -253,4 +254,8 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-testkit
 6. Search (N) for a product photographed on the other Mac and open it: the same workspace with its Shopify pictures, and the same Bring back.
 7. In the session's ⋯ menu, "Refresh from Shopify" re-reads the pictures after someone changed them in Shopify's admin.
 
+(For the orchestrator's live check after H4, carried from H1's projection r0: include one 10F clearing verification, i.e. the readback with `originalSource.fileSize` and `GenericFile.originalFileSize`, not only covers; those field names and `nodes(ids:)`'s `null` per unknown id are schema-grounded only.)
+
 ## Review log
+
+- **2026-11-23, orchestrator: carried from H1's projection r0** (`handoffs/reviewer/handoff_H1_points_and_remote_record_projection_r0.md`): the "Note for H4's projection" (an `Unknown` item and retention) added to U2 Notes; the live check's clearing verification added under Manual try-out. Rows and counts unchanged.

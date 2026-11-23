@@ -1,4 +1,4 @@
-# Archived and shop-only items editable — master plan (v1, 2026-11-23)
+# Archived and shop-only items editable — master plan (v1.1, 2026-11-23)
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, registry §6, environment
 §7) and wins over it on a name listed here. Process: `docs/process/flow.md` §10 (milestones of units), with the deltas
@@ -18,11 +18,11 @@ invariants **M-H1…M-H5** it serves. Where 10H and this file differ, 10H wins a
 ## 2. Milestones (one runner phase each; order in `docs/implementation/phases_archive.txt`)
 | Id | Builds | Units | Criteria | Rows | Changes app files | Projection | depends_on | Useful on its own |
 |---|---|---|---|---|---|---|---|---|
-| `H1_points_and_remote_record` | the adapter reads Shopify's points after every answer and background work waits when they are low; typed "picture gone" downloads, full-size downloads, the batched URL read (`nodes(ids:)`), picture sizes in the readback; the record of an item's remote pictures (archived and shop-only), the first-open read, Refresh from Shopify, retention kept away from items without local files | 2 | 12 | 55 | yes | **yes** | — | nothing shows yet; the Mac knows which pictures Shopify holds for an archived or adopted product and never spends points in the background when they are low |
+| `H1_points_and_remote_record` | the adapter reads Shopify's points after every answer and background work waits when they are low; typed "picture gone" downloads, full-size downloads, the batched URL read (`nodes(ids:)`), picture sizes in the readback; the record of an item's remote pictures (archived and shop-only), the first-open read, Refresh from Shopify, retention kept away from items without local files | 2 | 12 | 56 | yes | **yes** | — | nothing shows yet; the Mac knows which pictures Shopify holds for an archived or adopted product and never spends points in the background when they are low |
 | `H2_list_pictures_pages_search` | the row-picture rule (never a missing file), the cover cache and its background fetch, stale-URL refresh; the paged sessions list (25 per page) behind a new command; page numbers and live row pictures in the UI; pictures on the product search results | 4 | 14 | 67 | yes | no | H1 | the sessions list shows a picture on every row and has pages; the New session and Assign product searches show pictures |
 | `H3_bring_back` | JPEG photos in the photo pipeline (preview, frame, orientation); bring back (download all at full size, then import in one transaction, retire the cleared rows, link each photo to its Shopify media); the proof that a publish afterwards uploads only what changed; retention only after the next publish | 3 | 14 | 62 | yes | **yes** | H2 | nothing shows yet; the service can turn a remote item into an ordinary session and republish only changes |
 | `H4_remote_workspace` | the remote view (pictures in the background, 4 at a time), activation that never moves the capture folder for a remote item, the details-only publish; the normal workspace for remote items with the note, the edit gate, the Bring back dialog and progress, Refresh from Shopify | 3 | 14 | 66 | yes | **yes** | H3 | the owner opens an archived or shop-only item like any session, edits its details, brings its photos back and republishes |
-Totals (computed from the plan files by script): 4 milestones, 12 units, 54 criteria, 250 rows; every unit has at most 8
+Totals (computed from the plan files by script): 4 milestones, 12 units, 54 criteria, 251 rows; every unit has at most 8
 criteria. Each milestone needs the one before approved (its `depends_on`), gate = the **Tracker** line of that plan
 file. Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list.
@@ -54,14 +54,20 @@ file. Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase 
   - `extensions.cost.throttleStatus {maximumAvailable, currentlyAvailable, restoreRate}`: **captured**: every P12
     fixture carries it (e.g. `crates/integrations/src/commerce/shopify/fixtures/sv4_job_poll_done.json`:
     `currentlyAvailable: 1999` an integer, `maximumAvailable: 2000.0` and `restoreRate: 100.0` floats), and
-    shopify.dev "GraphQL Admin API rate limits" shows the same keys. Numbers are read as `f64`.
+    shopify.dev "GraphQL Admin API rate limits" shows the same keys. Numbers are read as `f64`. The **throttled**
+    reply (`errors[].extensions.code = "THROTTLED"` beside the top-level `extensions.cost`, H1·C1(f)) is
+    schema-grounded from that page (no captured fixture has an `errors` body with a cost block); the code is the one
+    `errors::is_throttled` already reads.
   - `nodes(ids: [ID!]!): [Node]!` (shopify.dev Admin GraphQL 2026-10 `queries/nodes`): the list has one entry per
     id, in order, **`null` for an id Shopify no longer has**. `MediaImage.image.url`, `MediaImage.originalSource
     {fileSize: Int, url}` (`objects/MediaImageOriginalSource`: the `url` there is "valid only for a short period", so
     the stored URL is always `image.url`), `GenericFile {url, originalFileSize: Int}` (`objects/GenericFile`). These
     are **schema-grounded, not captured**: new fixture files say so in their `source` field
     (`"schema-grounded: shopify.dev Admin GraphQL 2026-10 <pages>; not captured"`), and the orchestrator's live check
-    after H4 is their first real contact.
+    after H4 is their first real contact. H1 adds `originalSource.fileSize` and `GenericFile.originalFileSize` to the
+    existing `MEDIA_READBACK` that 10F's clearing uses, so that live check **includes one clearing verification (the
+    readback)**, not only covers; a wrong field name would make every clearing report "Shopify could not be read". No
+    build carrying H1 is installed before that check (H1 projection r0).
   - Download failures: the shape our code receives is `Download {status, bytes}` built by
     `ReqwestTransport::download` from the HTTP response (`transport.rs:193`, changed in H1·U1 to return the status
     instead of an error string); the adapter maps `403`/`404` to `Error::ImageGone`.
@@ -147,7 +153,9 @@ file per item, 320 px) · `remote/search/<16 hex>.jpg` (160 px, at most 200 MB, 
 commerce integration every item is `Local` and nothing is fetched). Constructor: `RemoteItems::new(store: Arc<dyn
 Store>, commerce: Option<Arc<dyn CommerceAdapter>>, editing: Arc<dyn EditingProvider>, previews_root: PathBuf,
 capture_root: Arc<dyn Fn() -> Result<PathBuf> + Send + Sync>, clock, events, health, history: Arc<History>,
-search_cache_limit: u64)`. Methods: H1 `state(session_id)`, `ensure_record(session_id)` (the first-open read),
+search_cache_limit: u64)` is the final form; each milestone takes only the arguments it reads (no unused field under
+`-D warnings`): H1 `(store, commerce, previews_root, clock, events)`, H2 adds `health` and `search_cache_limit`, H3
+adds `editing`, `capture_root`, `history`. Methods: H1 `state(session_id)`, `ensure_record(session_id)` (the first-open read),
 `refresh(session_id)`, `run_pending() -> Pending {Idle, Waiting, Worked}` · H2 `request_covers(source, session_ids)`,
 `row_picture(record) `, `item_picture(item_id)`, `search_picture(external_id, url)` · H3 `bring_back(session_id)` · H4
 `view(session_id)`. **Background:** one thread `remote_background` in `App::build` (only when `run_startup`, like
@@ -188,8 +196,8 @@ are no longer in the shop` (`1 photo is no longer in the shop`) · `the shop cou
 folder is not known yet` · `wait until the publish has finished`.
 
 **Log lines.** `remote.record item= kind= pictures=` · `remote.cover item= outcome=` · `remote.urls_refreshed asked=
-found= gone=` · `remote.bring_back item= photos= bytes= outcome=` · `shopify.budget available= maximum=` (when a
-background step waits). Never a URL with a query, never a token.
+found= gone=` · `remote.bring_back item= photos= bytes= outcome=` · `remote.budget_wait available= maximum=` (when a
+background step waits; logged by core, so it names no platform, H7). Never a URL with a query, never a token.
 
 **Frontend.** H2: `features/sessions/{Pagination.tsx, usePictures.ts, ResultThumb.tsx}`. H4:
 `features/workspace/remote/{remotePhotos.ts (pure), useRemoteItem.ts, RemoteNote.tsx, BringBackDialog.tsx}`;
@@ -199,9 +207,12 @@ background step waits). Never a URL with a query, never a token.
 h2_pages_and_search.rs, h3_jpeg_photos.rs, h3_bring_back.rs, h3_publish_after_bring_back.rs, h4_remote_workspace.rs,
 h4_details_only_publish.rs}` (each with its `mod` line in `main.rs`); desktop command tests in
 `apps/desktop/src-tauri/src/lib.rs` (`h2_tests`, `h4_tests`); UI `features/<f>/__tests__/h<n>_<slug>.test.tsx`.
-`FakeCommerce` grows (H1): per-media `bytes`, `budget: Option<CallBudget>`, `original_fetches: Vec<String>`,
-`url_reads: Vec<Vec<String>>`, `image_faults` (per URL: a queue of `Gone` / `Fail` answers), `set_fetch_delay(ms)` with
-`max_fetches_in_flight()`, images served as real JPEGs (`SyntheticJpeg`) when a test registers them
+`FakeCommerce` grows, each addition in the milestone whose rows first call it (charter rule 4: no unused
+scaffolding): **H1** per-media `bytes` (`set_media_bytes`, gallery media and condition files alike), `budget:
+Option<CallBudget>` (`set_budget`), `media_readback` answering `url: None` for a gallery media whose status is
+`Processing`; **H2** `media_urls` with `url_reads: Vec<Vec<String>>`, `image_faults` (per URL: a queue of `Gone` /
+`Fail` answers, `fail_image`), `set_fetch_delay(ms)` with `max_fetches_in_flight()`; **H3** `fetch_original` with
+`original_fetches: Vec<String>`, images served as real JPEGs (`SyntheticJpeg`) when a test registers them
 (`set_image(media_id, bytes)`); `fake_image_bytes` stays the default.
 
 ## 5. Contracts (stand in for the mechanism inventory; plans implement them verbatim)
@@ -287,7 +298,8 @@ command the photographer triggered; *background* = work run by `run_pending` or 
    `check_failed`). `view` queues this read for an `Unknown` item (background, MC-H5.3); `bring_back` runs it at once.
 3. **Refresh from Shopify** (`refresh`, a press): `Remote(_)` only (else `NotRemote`); the same read, the record
    replaced (`cleared_at` untouched), then cache files of the item that no longer match the record are deleted
-   (`remote/<item_id>/cover-*` not the new cover's, `archived/<item_id>/*` not named by a current picture).
+   (`remote/<item_id>/cover-*` not the new cover's, `archived/<item_id>/*` not named by a current picture). In H1,
+   before `cover_name` exists, every `cover-*` is deleted; H2 narrows it to keep `cover_name(new cover)`.
 4. **Activation.** `SessionsService::activate` (`sessions.rs:201`) of a session whose state is `Remote(_)` answers
    `Ok` with **no** editing call, no camera target change and no change of the active session. Every other state
    activates as today. The frontend (`useCaptureTarget`, `App.tsx:95`) calls `activateSession(target)` only when the
@@ -431,3 +443,9 @@ citations were read in the code at that commit; the lines move as milestones lan
 ## 8. Log
 - **v1, 2026-11-23 (planner).** Written from 10H and the code at `7f839cc`. No owner card. Points for the orchestrator
   in `handoffs/reviewer/handoff_archive_plan_r1.md`.
+- **v1.1, 2026-11-23 (orchestrator, H1 projection r0).** `handoffs/reviewer/handoff_H1_points_and_remote_record_projection_r0.md`
+  (AMENDMENTS_REQUIRED, 0 owner cards): log line `shopify.budget` renamed `remote.budget_wait` (L4, H7); the
+  `FakeCommerce` additions split by first caller H1/H2/H3 (L9); the `RemoteItems` constructor grows per milestone (L10);
+  MC-H3.3's cover pruning in H1 deletes every `cover-*` (L8); rule 17 gains the throttled reply (L2, row H1·C1(f)) and
+  the live check after H4 includes a clearing verification (reality check). Counts: H1 56 rows; totals 54 criteria,
+  251 rows.
