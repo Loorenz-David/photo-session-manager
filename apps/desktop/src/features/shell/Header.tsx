@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Bell, ClipboardList, CloudUpload, FolderDown, Info, Settings, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,8 @@ import { SessionActionsMenu } from '@/features/sessions/DeleteSession';
 import { requestTexts, showsNextToReview } from '@/features/sessions/reviewQueue';
 import { onSessionsChanged } from '@/services/events';
 import { ConversationsButton } from '@/features/conversations/ConversationsButton';
+import { LabelPill } from '@/features/labels/LabelPill';
+import { useSessionLabels } from '@/features/labels/useSessionLabels';
 import type { PublishedChanges } from '@/services/sessions';
 
 type HeaderProps = {
@@ -165,6 +167,11 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
   const publish = usePublish(sessionId);
   const [publishOpen, setPublishOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // L1 (MC-L3.7): the open session's label marker, asked with refresh when the session is opened.
+  const labelled = sessionId !== undefined && sessionId !== 1 ? sessionId : null;
+  const labelIds = useMemo(() => (labelled === null ? null : [labelled]), [labelled]);
+  const labels = useSessionLabels(labelIds, labelled);
+  const sessionLabel = labelled === null ? undefined : labels.labels.get(labelled);
   const failedCount = publish.failedCount;
   const bell = <Button variant="ghost" size="icon" aria-label="Notifications" onClick={() => setNotificationsOpen(true)} className="relative"><Bell />{failedCount > 0 && <span className="bell-count">{failedCount}</span>}</Button>;
   const drawer = notificationsOpen && <NotificationsDrawer notifications={publish.notifications} onClose={() => setNotificationsOpen(false)} onOpen={id => { window.location.hash = `#/session/${id}`; setNotificationsOpen(false); }} />;
@@ -200,6 +207,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
             <ResearchPill research={research.get(sessionId)} onClick={research.get(sessionId)?.state === 'to_review' && onReview ? onReview : onDetails} />
             <WriterPill research={research.get(sessionId)} />
             <ChangedPill sessionId={sessionId} changes={identity?.changes} onKept={reloadIdentity} />
+            <LabelPill label={sessionLabel} now={Date.now()} />
           </>
         )}
       </>}>
@@ -244,7 +252,7 @@ export function Header({ sessionId, theme, onThemeChange, onNewSession, onAssign
             {publish.label?.kind === 'publishing' && <PublishProgress value={publish.label.value} sessionId={sessionId} />}
             {typeof integration === 'string' && <div className="relative"><ActionButton action={async () => { setPublishOpen(true); }}><CloudUpload /> Publish</ActionButton>{publishOpen && <PublishPopover sessionIds={[sessionId]} onClose={() => { setPublishOpen(false); void publish.refresh(); }} />}</div>}
             {/* A17: "Delete session…" (Session Manager only); afterwards the sessions list. */}
-            <SessionActionsMenu sessionId={sessionId} className="header-menu-button" onDeleted={() => { window.location.hash = '#/'; }} />
+            <SessionActionsMenu sessionId={sessionId} className="header-menu-button" onDeleted={() => { window.location.hash = '#/'; }} label={sessionLabel} labelsAccess={labels.access} />
           </>
         )}
     </PageHeader>

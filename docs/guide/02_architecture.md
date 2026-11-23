@@ -642,6 +642,16 @@ of that folder (`variant_background` → `resync_folder`).
   way out of the page → one `LabelsChanged {product_ids, access: false}`. The first connection pages past label
   events and tells nothing.
 - **Event:** `AppEvent::LabelsChanged` → window event `labels_changed {product_ids, access}` (`TauriEvents`).
+- **Command:** `apps/desktop/src-tauri/src/commands/labels.rs` `labels_status(session_ids, refresh)` →
+  `LabelsStatusDto {access: {state: off|unknown|allowed|denied, reason}, labels: [{session_id, product_id, marker}]}`
+  (`labels_error` maps `LabelsFailure` to the `labels_*` codes; `labels_off` carries `data.reason`); the
+  conversations settings answer (`settings_dto`) gains `labels`. Wrapper `apps/desktop/src/services/labels.ts`.
+- **Frontend:** `apps/desktop/src/features/labels/` — `labelWords.ts` (`markerText`, the words), `useSessionLabels`
+  (asks after each page answer; `refresh` only when the shown id list differs from the last refreshing call; one
+  `labels_changed` listener; failures leave the pills; guarded so a test's events mock without `onLabelsChanged`
+  cannot crash a page), `LabelPill` (in `SessionRow`'s pill line and beside the title in `Header`),
+  `LabelMenuItem` (in `SessionActionsMenu`; in L1 only its disabled states). Settings → Pricing's Labels line in
+  `PricingSection.tsx`.
 
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams
@@ -810,7 +820,7 @@ recorded stage of one run, optionally with another model, effort or instructions
 `psm_core::events::AppEvent` → `EventHub` (integrations `lib.rs`) → `TauriEvents::emit` (desktop
 `lib.rs`) → Tauri event names: `session_changed`, `photo_added`, `photo_changed`, `publish_progress`,
 `export_progress`, `health_changed`, `camera_status_changed` (payload `CameraStatusResponse`),
-`camera_fingerprint_pending`, `history_changed`, `research_changed`, `picture_ready {kind: 'cover' | 'search', session_id?, external_id?, path}` (H2; listener `onPictureReady`), `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); plus `edit_menu` emitted by the menu handler. The UI
+`camera_fingerprint_pending`, `history_changed`, `research_changed`, `picture_ready {kind: 'cover' | 'search', session_id?, external_id?, path}` (H2; listener `onPictureReady`), `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); `labels_changed {product_ids, access}` (L1; listener `onLabelsChanged`); plus `edit_menu` emitted by the menu handler. The UI
 subscribes in `apps/desktop/src/services/events.ts` (and `history.ts`). Events are **not** in the
 specta builder: adding one means a new `AppEvent` variant, a new match arm in `TauriEvents`, and a
 listener in `events.ts`.

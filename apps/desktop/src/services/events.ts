@@ -62,6 +62,15 @@ export async function onConversationsChanged(handler: (event: ConversationsChang
   return listen<ConversationsChanged>('conversations_changed', event => handler(event.payload));
 }
 
+/**
+ * L1: `labels_changed {product_ids, access}`: the label state of those products changed (the markers are read again
+ * without asking Pricing), or the labels access changed (`access: true`: read again, asking Pricing).
+ */
+export type LabelsChanged = { product_ids: string[]; access: boolean };
+export async function onLabelsChanged(handler: (event: LabelsChanged) => void): Promise<UnlistenFn> {
+  return listen<LabelsChanged>('labels_changed', event => handler(event.payload));
+}
+
 /** H2, H4: `picture_ready`: a row's cover, a shop search result's picture or a remote item's picture was kept on this Mac at `path`. */
 export type PictureReady =
   | { kind: 'cover'; session_id: number; path: string }

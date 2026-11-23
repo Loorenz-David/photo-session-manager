@@ -492,3 +492,10 @@ button.research-pill { cursor: pointer; }
 .photo-picker-item input { position: absolute; top: 4px; left: 4px; }
 .photo-picker-item img { width: 100%; height: 100%; object-fit: cover; }
 .photo-picker-missing { display: flex; align-items: center; justify-content: center; height: 100%; font-size: var(--text-xs); color: var(--muted); }
+
+/* L1 (09C §7): the label marker. Printed reads neutral; missing, stale and no price need attention (--warn), never by
+   colour alone: the words say which. */
+.label-pill { background: transparent; border-color: var(--hair-strong); color: var(--muted); font-weight: var(--weight-medium, 500); }
+.label-pill[data-tone="attention"] { background: color-mix(in srgb, var(--warn) 18%, transparent); border-color: var(--warn); color: var(--color-text); }
+.label-menu-text { display: flex; flex-direction: column; gap: 2px; }
+.label-menu-hint { color: var(--muted); font-size: var(--text-xs); white-space: normal; max-width: 240px; }

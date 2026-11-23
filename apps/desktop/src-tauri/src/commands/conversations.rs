@@ -46,6 +46,9 @@ pub struct ConversationsSettingsDto {
     pub sound: bool,
     pub banner: bool,
     pub connection: ConnectionDto,
+    /// L1 (09C §4): whether the saved key may read labels (`off` while the connection is not
+    /// ready).
+    pub labels: crate::commands::labels::LabelsAccessStateDto,
 }
 
 /// The fields to save; the others are kept. `server: ""` returns to the default address.
@@ -84,6 +87,7 @@ fn settings_dto(app: &AppHandles) -> Result<ConversationsSettingsDto, CommandErr
         sound: settings.sound,
         banner: settings.banner,
         connection: connection.into(),
+        labels: crate::commands::labels::access_state(app.labels.access()?),
     })
 }
 

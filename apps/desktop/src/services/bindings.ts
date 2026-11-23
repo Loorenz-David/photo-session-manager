@@ -213,6 +213,12 @@ export const commands = {
 	conversationsSettingsSave: (patch: ConversationsSettingsPatchDto_Deserialize) => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_settings_save", { patch })),
 	conversationsKeySet: (key: string) => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_key_set", { key })),
 	conversationsTest: () => typedError<ConversationsSettingsDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_test")),
+	/**
+	 *  The label markers of `session_ids` (in that order), with the labels access. `refresh` asks
+	 *  Pricing for products without a fresh answer; without it only what this Mac already knows is
+	 *  answered.
+	 */
+	labelsStatus: (sessionIds: CommandId[], refresh: boolean) => typedError<LabelsStatusDto_Serialize, CommandError>(__TAURI_INVOKE("labels_status", { sessionIds, refresh })),
 	/**  The panel's rows from the local copy (never waits on the network). */
 	conversationsList: (scope: ConversationScopeDto, tab: ConversationTabDto) => typedError<ConversationListDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_list", { scope, tab })),
 	/**  The header count for the session on screen (`session_id` null = all). */
@@ -958,6 +964,11 @@ export type ConversationsSettingsDto_Deserialize = {
 	sound: boolean,
 	banner: boolean,
 	connection: ConnectionDto_Deserialize,
+	/**
+	 *  L1 (09C §4): whether the saved key may read labels (`off` while the connection is not
+	 *  ready).
+	 */
+	labels: LabelsAccessStateDto,
 };
 
 /**  Settings → Pricing. `key_saved` only: the key itself never leaves the Keychain. */
@@ -969,6 +980,11 @@ export type ConversationsSettingsDto_Serialize = {
 	sound: boolean,
 	banner: boolean,
 	connection: ConnectionDto_Serialize,
+	/**
+	 *  L1 (09C §4): whether the saved key may read labels (`off` while the connection is not
+	 *  ready).
+	 */
+	labels: LabelsAccessStateDto,
 };
 
 /**  The fields to save; the others are kept. `server: ""` returns to the default address. */
@@ -1326,6 +1342,70 @@ export type ItemStockDto_Serialize = {
 export type KeyDecisionDto = {
 	key: string,
 	decision: string,
+};
+
+/**  A product's label state (`printed_at` UTC ms; `has_price` null = unknown). */
+export type LabelMarkerDto = LabelMarkerDto_Serialize | LabelMarkerDto_Deserialize;
+
+/**  A product's label state (`printed_at` UTC ms; `has_price` null = unknown). */
+export type LabelMarkerDto_Deserialize = {
+	status: LabelStatusDto,
+	printed_at?: number | null,
+	has_price?: boolean | null,
+	reset?: ResetReasonDto | null,
+};
+
+/**  A product's label state (`printed_at` UTC ms; `has_price` null = unknown). */
+export type LabelMarkerDto_Serialize = {
+	status: LabelStatusDto,
+	printed_at: number | null,
+	has_price: boolean | null,
+	reset: ResetReasonDto | null,
+};
+
+/**  `printed` | `not_printed`. */
+export type LabelStatusDto = "printed" | "not_printed";
+
+/**
+ *  The access with, when `off`, the connection state (`no_key`, `no_shop`, `store_unmatched`,
+ *  `refused`, `store_gone`).
+ */
+export type LabelsAccessDto = LabelsAccessDto_Serialize | LabelsAccessDto_Deserialize;
+
+/**
+ *  The access with, when `off`, the connection state (`no_key`, `no_shop`, `store_unmatched`,
+ *  `refused`, `store_gone`).
+ */
+export type LabelsAccessDto_Deserialize = {
+	state: LabelsAccessStateDto,
+	reason?: string | null,
+};
+
+/**
+ *  The access with, when `off`, the connection state (`no_key`, `no_shop`, `store_unmatched`,
+ *  `refused`, `store_gone`).
+ */
+export type LabelsAccessDto_Serialize = {
+	state: LabelsAccessStateDto,
+	reason: string | null,
+};
+
+/**
+ *  Whether label calls may be made: `off` (the connection is not ready), `unknown`, `allowed`,
+ *  `denied`.
+ */
+export type LabelsAccessStateDto = "off" | "unknown" | "allowed" | "denied";
+
+export type LabelsStatusDto = LabelsStatusDto_Serialize | LabelsStatusDto_Deserialize;
+
+export type LabelsStatusDto_Deserialize = {
+	access: LabelsAccessDto_Deserialize,
+	labels: SessionLabelDto_Deserialize[],
+};
+
+export type LabelsStatusDto_Serialize = {
+	access: LabelsAccessDto_Serialize,
+	labels: SessionLabelDto_Serialize[],
 };
 
 export type LatestPublishResponse = LatestPublishResponse_Serialize | LatestPublishResponse_Deserialize;
@@ -2031,6 +2111,9 @@ export type ResearchTimeoutsDto = {
 	other: number,
 };
 
+/**  Why a printed label went back to not printed (the wire words `price_changed`, …). */
+export type ResetReasonDto = "price_changed" | "sku_changed" | "barcode_changed";
+
 export type ReviewResponse = ReviewResponse_Serialize | ReviewResponse_Deserialize;
 
 export type ReviewResponse_Deserialize = {
@@ -2146,6 +2229,23 @@ export type SessionDeletedResponse = {
 };
 
 export type SessionFilter = "open" | "published" | "all";
+
+/**  One session with its product (`null` = not in the shop) and its marker (`null` = none known). */
+export type SessionLabelDto = SessionLabelDto_Serialize | SessionLabelDto_Deserialize;
+
+/**  One session with its product (`null` = not in the shop) and its marker (`null` = none known). */
+export type SessionLabelDto_Deserialize = {
+	session_id: number,
+	product_id?: string | null,
+	marker?: LabelMarkerDto_Deserialize | null,
+};
+
+/**  One session with its product (`null` = not in the shop) and its marker (`null` = none known). */
+export type SessionLabelDto_Serialize = {
+	session_id: number,
+	product_id: string | null,
+	marker: LabelMarkerDto_Serialize | null,
+};
 
 export type SessionListCountsResponse = {
 	open: number,

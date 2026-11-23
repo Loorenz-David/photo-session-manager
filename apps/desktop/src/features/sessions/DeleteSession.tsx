@@ -6,6 +6,8 @@ import { ActionButton } from '@/components/ui/action-button';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useSharedRemoteItem } from '@/features/workspace/remote/useRemoteItem';
+import { LabelMenuItem } from '@/features/labels/LabelMenuItem';
+import type { LabelsAccess, SessionLabel } from '@/services/labels';
 import { deleteSession, fixSessionFiles, sessionDeletePreview, sessionFilesMisplaced, type FilesFixed, type SessionDeletePreview } from '@/services/sessions';
 
 function fixedToast(done: FilesFixed) {
@@ -25,7 +27,14 @@ function fixedToast(done: FilesFixed) {
  * A21: "Fix photo files location", shown only when some of the session's photos have their files in another
  * session's folder (photos moved before files followed them): their files move into this session's folder.
  */
-export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu-button' }: { sessionId: number; onDeleted: () => void; className?: string }) {
+export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu-button', label, labelsAccess }: {
+  sessionId: number;
+  onDeleted: () => void;
+  className?: string;
+  /** L1 (09C §6): the session's label and the labels access, for the "Generate label" entry. */
+  label?: SessionLabel;
+  labelsAccess?: LabelsAccess | null;
+}) {
   const [confirming, setConfirming] = useState(false);
   const [misplaced, setMisplaced] = useState(0);
   const [fixing, setFixing] = useState(false);
@@ -72,6 +81,7 @@ export function SessionActionsMenu({ sessionId, onDeleted, className = 'row-menu
                 <span>Refresh from Shopify</span>
               </DropdownMenu.Item>
             )}
+            <LabelMenuItem label={label} access={labelsAccess} />
             <DropdownMenu.Item className="photo-menu-item" data-danger onSelect={() => setConfirming(true)}>
               <span>Delete session…</span>
             </DropdownMenu.Item>

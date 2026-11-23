@@ -23,6 +23,7 @@ import { TimeFilter } from './TimeFilter';
 import { UnassignedCard } from './UnassignedCard';
 import { usePictures } from './usePictures';
 import { useSessionBadges } from '@/features/conversations/SessionBadge';
+import { useSessionLabels } from '@/features/labels/useSessionLabels';
 
 export const SEARCH_DEBOUNCE_MS = 250;
 
@@ -84,6 +85,9 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
 
   const now = Date.now();
   const groups = useMemo(() => list?.groups ?? [], [list]);
+  // L1 (MC-L3.7): the page's label markers, asked after each page answer (never delaying the rows).
+  const shownIds = useMemo(() => groups.flatMap(group => group.rows).map(row => row.id), [groups]);
+  const labels = useSessionLabels(shownIds, list);
   const toReview = waiting.length;
   const selectable = useMemo(() => groups.flatMap(group => group.rows).filter(isSelectable).map(row => row.id), [groups]);
 
@@ -197,6 +201,8 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
                   research={research.get(row.id)}
                   conversations={conversationBadges.get(row.id)}
                   picture={pictures.cover(row.id)}
+                  label={labels.labels.get(row.id)}
+                  labelsAccess={labels.access}
                   selected={selected.has(row.id)}
                   onToggle={() => toggle(row.id)}
                   onOpen={() => navigate(row.id)}

@@ -22,6 +22,7 @@ function settings(extra: Partial<ConversationsSettings> = {}, connection: Partia
   return {
     server: DEFAULT_SERVER, server_default: DEFAULT_SERVER, key_saved: false, sound: true, banner: true,
     connection: { state: 'no_key', store_name: null, shop: SHOP, visible_stores: [], last_ok_at: null, last_error: null, last_error_at: null, ...connection },
+    labels: 'off',
     ...extra,
   };
 }

@@ -726,6 +726,216 @@ mod c1_tests {
 }
 
 #[cfg(test)]
+mod l1_tests {
+    //! L1·U4 (`docs/implementation/plans/L1_labels_provider_and_marker.md` L1·C15): the label
+    //! markers command, the settings answer's `labels` and the event bridge over the wired app with
+    //! the fake Pricing server.
+    use super::*;
+    use psm_core::{
+        domain::conversation::KEY_ACCOUNT,
+        ports::{clock::Clock, secrets::SecretStore},
+        services::items::ItemsService,
+    };
+    use psm_testkit::{fake_pricing::LabelSpec, test_app::PRICING_KEY};
+    use serde_json::{Value, json};
+    use tauri::Listener;
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    const P1: &str = "15531808096409";
+    /// 2026-11-20T09:12:00Z.
+    const T: i64 = 1_795_165_920_000;
+
+    fn call(
+        w: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+        cmd: &str,
+        args: Value,
+    ) -> Result<Value, Value> {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+    }
+
+    struct Wired {
+        _dir: tempfile::TempDir,
+        _app: tauri::App<tauri::test::MockRuntime>,
+        window: tauri::WebviewWindow<tauri::test::MockRuntime>,
+        pricing: Arc<psm_testkit::fake_pricing::FakePricing>,
+        secrets: Arc<psm_testkit::fake_secrets::FakeSecrets>,
+        /// `s1`: linked to `P1`, printed in the fake at `T`; `s2`: an item without a link.
+        s1: i64,
+        s2: i64,
+    }
+
+    /// L1·C13(a)'s app, wired; connected (key saved, first connection run) when `connect`.
+    fn wired(connect: bool) -> Wired {
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        let external = a.fake_shop().add_product_with_id(
+            &format!("gid://shopify/Product/{P1}"),
+            "TEST-1802",
+            "Test table",
+            None,
+        );
+        let item = ItemsService::new(a.store(), a.clock.as_ref())
+            .with_commerce(Some(a.fake_shop()))
+            .adopt(&external)
+            .unwrap();
+        let s1 = a.sessions().create(item.id).unwrap().session.id;
+        let (_, local) = a
+            .items()
+            .create_local("LOCAL-1", "Local", "object", None)
+            .unwrap();
+        let s2 = local.session.id;
+        let pricing = a.pricing.clone().unwrap();
+        pricing.add_label_product(LabelSpec {
+            product_id: P1.into(),
+            sku: Some("TEST-1802".into()),
+            title: "Test table".into(),
+            price_minor: Some(890000),
+            printed_at: Some(T),
+            ..LabelSpec::default()
+        });
+        if connect {
+            a.app.conversations.key_set(Some(PRICING_KEY)).unwrap();
+            while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+        }
+        let secrets = a.secrets.clone();
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::conversations::conversations_settings_get,
+                commands::conversations::conversations_key_set,
+                commands::conversations::conversations_test,
+                commands::labels::labels_status,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let window = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        Wired {
+            _dir: dir,
+            _app: tauri_app,
+            window,
+            pricing,
+            secrets,
+            s1,
+            s2,
+        }
+    }
+
+    #[test]
+    fn l1_c15a_labels_status_answers_markers_and_access() {
+        let w = wired(true);
+        let got = call(
+            &w.window,
+            "labels_status",
+            json!({"sessionIds": [w.s1, w.s2], "refresh": true}),
+        )
+        .unwrap();
+        assert_eq!(
+            got,
+            json!({
+                "access": {"state": "allowed", "reason": null},
+                "labels": [
+                    {"session_id": w.s1, "product_id": P1, "marker":
+                        {"status": "printed", "printed_at": T, "has_price": true, "reset": null}},
+                    {"session_id": w.s2, "product_id": null, "marker": null}
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn l1_c15b_without_a_key_the_access_is_off_with_its_reason() {
+        let w = wired(false);
+        let got = call(
+            &w.window,
+            "labels_status",
+            json!({"sessionIds": [w.s1], "refresh": true}),
+        )
+        .unwrap();
+        assert_eq!(
+            got,
+            json!({
+                "access": {"state": "off", "reason": "no_key"},
+                "labels": [{"session_id": w.s1, "product_id": P1, "marker": null}]
+            })
+        );
+    }
+
+    #[test]
+    fn l1_c15c_an_unreachable_pricing_is_labels_unreachable() {
+        let w = wired(true);
+        w.pricing.fail_matching("/labels/status", 1, 500);
+        let error = call(
+            &w.window,
+            "labels_status",
+            json!({"sessionIds": [w.s1], "refresh": true}),
+        )
+        .unwrap_err();
+        assert_eq!(error["code"], json!("labels_unreachable"));
+        assert_eq!(
+            error["message"],
+            json!("Pricing can't be reached right now.")
+        );
+    }
+
+    #[test]
+    fn l1_c15d_the_bridge_forwards_labels_changed() {
+        let tauri_app = mock_builder().build(mock_context(noop_assets())).unwrap();
+        let payloads = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+        let seen = payloads.clone();
+        tauri_app.listen_any("labels_changed", move |event| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(event.payload()).unwrap())
+        });
+        EventSink::emit(
+            &TauriEvents::silent(tauri_app.handle().clone()),
+            AppEvent::LabelsChanged {
+                product_ids: vec![P1.into()],
+                access: false,
+            },
+        );
+        assert_eq!(
+            *payloads.lock().unwrap(),
+            vec![json!({"product_ids": [P1], "access": false})]
+        );
+    }
+
+    #[test]
+    fn l1_c15e_test_connection_answers_the_labels_access() {
+        let w = wired(false);
+        w.secrets.set(KEY_ACCOUNT, PRICING_KEY).unwrap();
+        let allowed = call(&w.window, "conversations_test", json!({})).unwrap();
+        assert_eq!(allowed["labels"], json!("allowed"));
+        w.pricing.deny_labels();
+        let denied = call(&w.window, "conversations_test", json!({})).unwrap();
+        assert_eq!(denied["labels"], json!("denied"));
+        call(&w.window, "conversations_key_set", json!({"key": ""})).unwrap();
+        let off = call(&w.window, "conversations_test", json!({})).unwrap();
+        assert_eq!(off["labels"], json!("off"));
+    }
+}
+
+#[cfg(test)]
 mod c2_tests {
     //! C2·U1 (`docs/implementation/plans/C2_header_panel_notifications.md` C2·C7): the list,
     //! counts and badges commands over the wired app with the fake Pricing server.
@@ -2481,6 +2691,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::conversations::conversations_settings_save,
         commands::conversations::conversations_key_set,
         commands::conversations::conversations_test,
+        commands::labels::labels_status,
         commands::conversations::conversations_list,
         commands::conversations::conversations_counts,
         commands::conversations::conversations_session_badges,
