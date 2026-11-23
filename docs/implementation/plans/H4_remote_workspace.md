@@ -100,6 +100,7 @@ Whether `check_failed` is a map or a field of the queue · whether `item_archive
 - Hazard: an `Unknown` item is **activated as today** by the backend (H4·C2(d)); the gate for it is the frontend's (U3, MC-H3.4). Do not make `activate` wait for a read.
 - Hazard: `SessionsService::view` is also what the conversations visit and the form read; for a remote session they get no photos, which the form already handles for a session without photos.
 - H4·C2(f) is `p62`'s `c1e` for a session that was never activated: both must hold.
+- **Carried from H3's projection r0 (fixtures that bring back: H4·C2(e), H4·C3(b), H4·C9(g)):** register every picture with `FakeCommerce::set_image` as a real `SyntheticJpeg` (the default `fake_image_bytes` does not start with `FF D8 FF`, and MC-H4.3 refuses such a body, so the bring back would fail), and register each brought-back file with the fake Capture One (`add_image`) before its renders are asked for. H3's `brought_back` helper in `h3_publish_after_bring_back.rs` does both. The capture-root source `RemoteItems` uses is uncached `inspect_document` (MC-H4, H3 U2 task 5), so a fixture with no open document cannot bring back.
 
 ### Unit test commands
 `cargo test -p psm-testkit --test suite h4_remote_workspace::` · `cargo test -p psm-testkit --test suite p62_retention_after_publish::` · `cargo test -p psm-testkit --test suite a16_switch_cost_and_filing_target::` · `cargo test -p psm-testkit --test suite c3_conversations_answer::` · `cargo test -p psm-testkit --test suite c4_conversations_visit::` · `cargo test -p psm-desktop` · `cd apps/desktop && npm run typecheck` · `cargo clippy -p psm-core -p psm-integrations -p psm-desktop -p psm-testkit --all-targets -- -D warnings`
@@ -256,6 +257,9 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-testkit
 
 (For the orchestrator's live check after H4, carried from H1's projection r0: include one 10F clearing verification, i.e. the readback with `originalSource.fileSize` and `GenericFile.originalFileSize`, not only covers; those field names and `nodes(ids:)`'s `null` per unknown id are schema-grounded only.)
 
+(Also for that live check, carried from H3's projection r0, L6: record the first bytes and the content type of one full-size download made through `ReqwestTransport` (`fetch_original`); nothing grounds that the CDN answers JPEG bytes, and MC-H4.3 refuses a body that does not start with `FF D8 FF`.)
+
 ## Review log
 
 - **2026-11-23, orchestrator: carried from H1's projection r0** (`handoffs/reviewer/handoff_H1_points_and_remote_record_projection_r0.md`): the "Note for H4's projection" (an `Unknown` item and retention) added to U2 Notes; the live check's clearing verification added under Manual try-out. Rows and counts unchanged.
+- **2026-11-23, orchestrator: carried from H3's projection r0** (`handoffs/reviewer/handoff_H3_bring_back_projection_r0.md`): U1 Notes gain the bring-back fixture note (register pictures with `set_image`, files with `add_image`; the uncached capture-root source); Manual try-out gains the live check's full-size download line (L6). Rows and counts unchanged.

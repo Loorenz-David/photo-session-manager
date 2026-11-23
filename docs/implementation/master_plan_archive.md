@@ -1,4 +1,4 @@
-# Archived and shop-only items editable — master plan (v1.1, 2026-11-23)
+# Archived and shop-only items editable — master plan (v1.2, 2026-11-23)
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, registry §6, environment
 §7) and wins over it on a name listed here. Process: `docs/process/flow.md` §10 (milestones of units), with the deltas
@@ -20,9 +20,9 @@ invariants **M-H1…M-H5** it serves. Where 10H and this file differ, 10H wins a
 |---|---|---|---|---|---|---|---|---|
 | `H1_points_and_remote_record` | the adapter reads Shopify's points after every answer and background work waits when they are low; typed "picture gone" downloads, full-size downloads, the batched URL read (`nodes(ids:)`), picture sizes in the readback; the record of an item's remote pictures (archived and shop-only), the first-open read, Refresh from Shopify, retention kept away from items without local files | 2 | 12 | 56 | yes | **yes** | — | nothing shows yet; the Mac knows which pictures Shopify holds for an archived or adopted product and never spends points in the background when they are low |
 | `H2_list_pictures_pages_search` | the row-picture rule (never a missing file), the cover cache and its background fetch, stale-URL refresh; the paged sessions list (25 per page) behind a new command; page numbers and live row pictures in the UI; pictures on the product search results | 4 | 14 | 67 | yes | no | H1 | the sessions list shows a picture on every row and has pages; the New session and Assign product searches show pictures |
-| `H3_bring_back` | JPEG photos in the photo pipeline (preview, frame, orientation); bring back (download all at full size, then import in one transaction, retire the cleared rows, link each photo to its Shopify media); the proof that a publish afterwards uploads only what changed; retention only after the next publish | 3 | 14 | 62 | yes | **yes** | H2 | nothing shows yet; the service can turn a remote item into an ordinary session and republish only changes |
+| `H3_bring_back` | JPEG photos in the photo pipeline (preview, frame, orientation); bring back (download all at full size, then import in one transaction, retire the cleared rows, link each photo to its Shopify media); the proof that a publish afterwards uploads only what changed; retention only after the next publish | 3 | 14 | 64 | yes | **yes** | H2 | nothing shows yet; the service can turn a remote item into an ordinary session and republish only changes |
 | `H4_remote_workspace` | the remote view (pictures in the background, 4 at a time), activation that never moves the capture folder for a remote item, the details-only publish; the normal workspace for remote items with the note, the edit gate, the Bring back dialog and progress, Refresh from Shopify | 3 | 14 | 66 | yes | **yes** | H3 | the owner opens an archived or shop-only item like any session, edits its details, brings its photos back and republishes |
-Totals (computed from the plan files by script): 4 milestones, 12 units, 54 criteria, 251 rows; every unit has at most 8
+Totals (computed from the plan files by script): 4 milestones, 12 units, 54 criteria, 253 rows; every unit has at most 8
 criteria. Each milestone needs the one before approved (its `depends_on`), gate = the **Tracker** line of that plan
 file. Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list.
@@ -71,6 +71,11 @@ file. Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase 
   - Download failures: the shape our code receives is `Download {status, bytes}` built by
     `ReqwestTransport::download` from the HTTP response (`transport.rs:193`, changed in H1·U1 to return the status
     instead of an error string); the adapter maps `403`/`404` to `Error::ImageGone`.
+  - What a full-size download (`fetch_original`) sends back: **not grounded** (H3 projection r0, L6). Nothing records
+    that the CDN answers JPEG bytes; `ReqwestTransport::get_file` sends no `Accept` header and a product made in the
+    Shopify admin may hold PNG originals, while `image::open` picks its decoder from the file extension only. So
+    MC-H4.3 refuses a body that does not start with `FF D8 FF` (row H3·C6(f)), and the orchestrator's live check after
+    H4 records the first bytes and the content type of one full-size download made through `ReqwestTransport`.
   - Capture One and JPEG sources (does the dictionary find, sync and process a `.jpg` in a capture folder like a RAW):
     **not in the evidence doc today**. H3·U1 task 0 is the probe that records it in
     `docs/intention/evidence/capture_one_16.8.6.md`; the suite never depends on it (the fake accepts any path).
@@ -99,7 +104,9 @@ f64, maximum: f64}` · `PictureTarget {Cover {session_id}, Search {external_id},
 · `RemotePictureView {role, position, media_id, path: Option<PathBuf>, gone: bool}` · `RemoteView {item_id, state,
 keep_files, pictures, bring_back_bytes: i64, check_failed: bool, bring_back: Option<BringBackProgress>}` ·
 `BringBackProgress {done: usize, total: usize}` · `BringBackState {Running, Done, Failed}` · `BringBackOutcome
-{photo_ids: Vec<i64>, synced: bool}` · `SessionPage {groups: Vec<PageGroup {label, total, rows}>, counts,
+{photo_ids: Vec<i64>, synced: bool}` · `BringBackInput {session_id, item_id, files: Vec<BroughtBack>,
+link_role_condition, at}` · `BroughtBack {role (as `ArchivedImage`'s), position, media_id, path, sha256}` (H3
+projection r0, L12) · `SessionPage {groups: Vec<PageGroup {label, total, rows}>, counts,
 unassigned_count, page: u32, pages: u32, total: usize}` (`psm_core::domain::session`) · `ShopResult {item: Item,
 thumbnail_url: Option<String>}` (`psm_core::services::items`). Existing types that grow: `ArchivedImage` (**the
 remote picture**; `domain/storage.rs:53`) gains `bytes: Option<i64>`; `MediaImage` (`domain/publish.rs:61`) gains
@@ -155,7 +162,9 @@ Store>, commerce: Option<Arc<dyn CommerceAdapter>>, editing: Arc<dyn EditingProv
 capture_root: Arc<dyn Fn() -> Result<PathBuf> + Send + Sync>, clock, events, health, history: Arc<History>,
 search_cache_limit: u64)` is the final form; each milestone takes only the arguments it reads (no unused field under
 `-D warnings`): H1 `(store, commerce, previews_root, clock, events)`, H2 adds `health` and `search_cache_limit`, H3
-adds `editing`, `capture_root`, `history`. Methods: H1 `state(session_id)`, `ensure_record(session_id)` (the first-open read),
+adds `editing`, `capture_root`, `history`. The `capture_root` closure `App::build` passes calls
+`editing.inspect_document()` and canonicalizes its `capture_root`, **uncached** (bring back is a press;
+`ArrivalService::capture_root()` caches its first answer forever; H3 projection r0, L4). Methods: H1 `state(session_id)`, `ensure_record(session_id)` (the first-open read),
 `refresh(session_id)`, `run_pending() -> Pending {Idle, Waiting, Worked}` · H2 `request_covers(source, session_ids)`,
 `row_picture(record) `, `item_picture(item_id)`, `search_picture(external_id, url)` · H3 `bring_back(session_id)` · H4
 `view(session_id)`. **Background:** one thread `remote_background` in `App::build` (only when `run_startup`, like
@@ -341,35 +350,47 @@ the active session.
    the record is gone (`BringBackFailed {<n> photos are no longer in the shop}`).
 2. **Names.** `bring_back_names(folder_key, gallery, condition, taken)`: `<folder_key>-main-<NN>.jpg` and
    `<folder_key>-condition-<NN>.jpg` (`NN` = position, two digits at least); `taken(name)` ⇔ a photo row of any
-   session has that file as `raw_path`. If any name of the set is taken, the whole set carries the suffix `-b2`
+   session has the canonical `<capture root>/<folder_key>/<name>` as `raw_path` (a store error is kept and fails the
+   bring back before any download; the names still end). If any name of the set is taken, the whole set carries the suffix `-b2`
    before `.jpg` (`…-main-01-b2.jpg`), then `-b3`, … (the smallest for which none is taken). The folder is `<capture
    root>/<folder_key>/` (created when missing).
 3. **Download.** Each picture: `fetch_original(url)` to `<name>.part`, renamed to `<name>` (replacing a leftover file
    of an interrupted attempt, which by rule 2 no photo row names); at most `PARALLEL_DOWNLOADS` at once; a failed
    download is tried `DOWNLOAD_RETRIES` more times; an `ImageGone` first goes through one `media_urls` for the item's
-   stale ids (a press: no budget wait) and continues at the new URL. Progress: `BringBack {Running, done, total}`
+   stale ids (a press: no budget wait) and continues at the new URL with the full 1 + `DOWNLOAD_RETRIES` tries (the
+   `Gone` attempt not counted); an answer `None` or without a URL stores that picture as gone (MC-H1.4) and the bring
+   back fails with `<n> photos are no longer in the shop`. A downloaded body that does not start with the JPEG marker
+   `FF D8 FF` counts as a failed download (same retries; rule 17). Progress: `BringBack {Running, done, total}`
    after each file. **If any picture is still missing:** every file this attempt wrote is deleted, nothing is
-   imported, the item stays remote, `BringBack {Failed, error}` and `BringBackFailed`.
+   imported, the item stays remote, `BringBack {Failed, error}` and `BringBackFailed`. A `Store::bring_back` error
+   after every download succeeded gets the same clean-up and event and is returned unchanged.
 4. **Import** (`Store::bring_back`, one transaction, only when every file is on disk):
    (a) every photo row the session had: `classification = deleted`, `position` null, the three preview paths null,
-   `integrity = raw_missing`; its `photo_links` rows for the item and its `photo_places` row are deleted; the row
-   itself stays;
+   `integrity = raw_missing`; its `photo_links` rows for the item are deleted; its `photo_places` row is kept with
+   `released = 1` (created so when missing), so the retired shot leaves a template's shot count as a released deleted
+   shot does (10G §6.4) and leaves no container to refill; the row itself stays;
    (b) one photo per picture, gallery then condition, in position order: `classification` main / condition,
-   `position` 1…, `raw_path` = its file, `raw_hash` = the file's SHA-256, `source = import`, `captured_at =
+   `position` 1…, `raw_path` = the **canonical** path of its file (as `arrival_insert`, `store.rs:2447`: Capture One
+   edit events find a photo by its canonical path), `raw_hash` = the file's SHA-256, `source = import`, `captured_at =
    created_at = now`; its composition `kind normal, shape original, orientation named, quarter_turns 0, flip none,
    straighten 0, rect (0, 0, 1, 1), origin default, revision 0`; a `raw_state` row; the jobs `original_preview` and
-   `render_preview` (as `store.rs:2482`, without `hash`);
-   (c) one `photo_links` row per new photo: role `gallery` or `attribute:<condition photos key>`, slot `single`,
-   `external_id` = the picture's media id, `upload_state = ready`, `revision 0`, `retouch_gen` = the new
-   `raw_state.retouch_gen` (0), `composition_rev 0`, no superseded ids;
+   `render_preview` (as `store.rs:2496-2501`, without `hash`); in a session whose item type has a shooting template,
+   the main photo at position *k* is placed by hand (`place_by_hand = 1`) with `slot` = the `final_no` of the
+   container whose `final_no = k` (null past the last container), so the published order is kept and an arrival
+   never takes a published photo's place (10G §4.4, §6.1);
+   (c) one `photo_links` row per new photo: role `gallery` or `attribute:<commerce.condition_photos_key()>` (as
+   `SessionsService::view`), slot `single`, `external_id` = the picture's media id, `upload_state = ready`,
+   `revision 0`, `retouch_gen` = the photo's `raw_state.retouch_gen` as stored in this transaction (a row for the path
+   may pre-exist; never the literal 0), `composition_rev 0`, no superseded ids;
    (d) `item_retention`: `cleared_at` null, `restored_at = now` (the record rows stay: they are ignored while the item
    is `Local` and replaced at the next clearing);
    (e) **`sessions.change_seq` is not changed** (bringing back is not an edit: a published item stays published).
-5. **After the transaction:** the session's undo and redo lists are emptied (`History::retire_session`'s rule,
-   `history.rs:309`, for the session and the retired photo ids); `editing.sync_folder(folder)` (`ports/editing.rs:58`;
+5. **Around and after the transaction:** the session's undo and redo lists are emptied by
+   `History::retire_session(session, retired photo ids, act)` (`history.rs:309`), with `Store::bring_back` run
+   **inside** its `act` (under the undo lock, so no undo step naming a retired photo applies in between); after it: `editing.sync_folder(folder)` (`ports/editing.rs:58`;
    a failure is logged and reported as `synced = false`, never undone); `BringBack {Done}`, `SessionChanged`. No style
    is applied and no colour tag is mirrored for the new files.
-6. **JPEG photos.** The `original_preview` job of a source whose extension is `jpg`/`jpeg` (`lib.rs:1526`) writes the
+6. **JPEG photos.** The `original_preview` job of a source whose extension is `jpg`/`jpeg` (`lib.rs:1573`) writes the
    JPEG scaled to at most 1600 px on its long edge (never enlarged) as the original preview, stores its EXIF
    orientation (none → null) and adopts the frame = its pixel size, width and height swapped for orientations 5–8,
    with `FrameSource::Camera` (Capture One's measurement replaces it by the P58 rule, `store.rs:363-384`). Every other
@@ -381,7 +402,9 @@ the active session.
    raised by `adjusted_event`, `store.rs:1921`) replaces its media through `superseded_ids` (`publish.rs:1247-1264`);
    a hidden photo's media is unwanted and own, so reconciliation removes it; the links make a shop-only item's media
    **own** (`publish.rs:1749-1774`), so it is never announced or refused as foreign. Capture One writing a first
-   settings file for a brought-back JPEG is not an edit (`previews.rs:810-814` adopts the first fingerprint).
+   settings file for a brought-back JPEG is not an edit (`previews.rs:810-814` adopts the first fingerprint). While
+   the session is published and unchanged the sidecar check does not look at it at all (`PreviewScope::Live`,
+   `store.rs:592`, A16), so that clause bites only once something else in the session changed (row H3·C10(b)).
 8. **Retention after bring back.** `eligibility` answers `Never` while `restored_at` is set and `published_at ≤
    restored_at` (no publish completed since the bring back). The next completed publish makes the item eligible again
    by 10F's rule; its clearing replaces the record with the verified images.
@@ -449,3 +472,12 @@ citations were read in the code at that commit; the lines move as milestones lan
   MC-H3.3's cover pruning in H1 deletes every `cover-*` (L8); rule 17 gains the throttled reply (L2, row H1·C1(f)) and
   the live check after H4 includes a clearing verification (reality check). Counts: H1 56 rows; totals 54 criteria,
   251 rows.
+- **v1.2, 2026-11-23 (orchestrator, H3 projection r0).** `handoffs/reviewer/handoff_H3_bring_back_projection_r0.md`
+  (AMENDMENTS_REQUIRED, 0 owner cards): MC-H4.2 and .4(b) store and test canonical paths (L5); MC-H4.3 refuses a
+  non-JPEG body, stores a picture gone when its refresh finds no URL, gives a refreshed URL the full tries, and cleans
+  up after a store failure (L6, L11, L10); MC-H4.4(a)/(b) pin the templated-session marks from 10G (retired rows
+  released, brought-back main photos placed by hand in their container; L3); MC-H4.4(c) the condition role from
+  `condition_photos_key()` and `retouch_gen` as stored (L13, L16); MC-H4.5 runs the import inside
+  `retire_session`'s `act` (L8); MC-H4.7 gains the A16 sentence (L1); §4 Vocabulary `BringBackInput` / `BroughtBack`
+  (L12), Service the uncached capture-root closure (L4); rule 17 the full-size download's body (L6, live check after
+  H4). Counts: H3 64 rows (rows H3·C6(f), H3·C9(c) added); totals 54 criteria, 253 rows.
