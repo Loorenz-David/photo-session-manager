@@ -310,10 +310,20 @@ fn c1a_open_creates_all_domain_columns() {
             ],
         ),
         // P62 (010_retention.sql): the keep-files pin, the clearing time, the archived images.
-        ("item_retention", &["item_id", "keep_files", "cleared_at"]),
+        // H1 (020_remote_items.sql): bring-back and remote-read times, each picture's size.
+        (
+            "item_retention",
+            &[
+                "item_id",
+                "keep_files",
+                "cleared_at",
+                "restored_at",
+                "remote_checked_at",
+            ],
+        ),
         (
             "archived_images",
-            &["item_id", "role", "position", "media_id", "url"],
+            &["item_id", "role", "position", "media_id", "url", "bytes"],
         ),
         // P65 (011_item_stock.sql): the stock a new item is created with, and the frozen copy.
         (
