@@ -18,3 +18,5 @@ Running log of the 09C track on branch `feature/agentic`. The main tracker `STAT
   - **L1 started** in the background (`scratchpad/labels_chain.sh`, log `scratchpad/labels_chain.log`).
   - **L1 projection r0:** AMENDMENTS_REQUIRED, 0 owner cards (13 plan gaps: a test row that could never pass, two existing tests to adjust, Pricing's `lifecycleResult` example vs schema, the ⋯ hint source). Applied (`7ea89a7`). Owner card 1 answered: Labels count shown as soon as the list opens (`49ac9ff`, L2 unblocked).
   - **Chain L1→L3 restarted** in the background.
+  - **L1 APPROVED** (`07b96c64`, re-review r2 after one fix: the session page's marker now refreshes on every open). **L2 APPROVED** (`7dff8dda`, first review). The Mac hibernated 16:02–18:21 mid-L1; the run resumed on wake, nothing lost; later runs are wrapped in `caffeinate -i`.
+  - **L3 projection r0:** AMENDMENTS_REQUIRED, 0 owner cards (17 ledger rows); applied (`533a2252`). L3 implementation started.
