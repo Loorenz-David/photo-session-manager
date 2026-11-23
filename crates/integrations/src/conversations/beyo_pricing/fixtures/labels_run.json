@@ -1,0 +1,55 @@
+{
+  "_source": "schema-grounded: openapi-integration.json IntegrationLabelRun + RunArtifactOut + RunItemOut + API.md example; values neutral; not captured",
+  "id": "r1",
+  "status": "partial",
+  "createdAt": "2026-11-20T09:30:00Z",
+  "expiresAt": "2026-12-04T09:30:00Z",
+  "requestedByKind": "service",
+  "requestedByName": "Photographer",
+  "counts": { "items": 2, "rendered": 1, "failed": 1, "markedPrinted": 1, "reprinted": 0, "noPrice": 0 },
+  "artifacts": [
+    {
+      "id": "a1",
+      "widthMm": 70,
+      "heightMm": 100,
+      "pageCount": 1,
+      "filename": "labels-2026-11-20.pdf",
+      "sizeBytes": 18211,
+      "expired": false,
+      "downloadUrl": "/integration/v1/stores/e8f6b61a-40a4-4504-8090-d9ea5b62a069/labels/runs/r1/artifacts/a1"
+    }
+  ],
+  "items": [
+    {
+      "position": 0,
+      "productId": "15531808096409",
+      "sku": "TEST-1802",
+      "title": "Test table",
+      "variantId": "gid://shopify/ProductVariant/1",
+      "templateRevisionId": "tpl-1-r3",
+      "templateSource": "assignment",
+      "priceMinor": 890000,
+      "outcome": "rendered",
+      "lifecycleResult": "marked_printed",
+      "error": null,
+      "artifactId": "a1",
+      "pageIndex": 0
+    },
+    {
+      "position": 1,
+      "productId": "15531808096411",
+      "sku": "TEST-1808",
+      "title": "Test lamp",
+      "variantId": "gid://shopify/ProductVariant/2",
+      "templateRevisionId": "tpl-1-r3",
+      "templateSource": "default",
+      "priceMinor": 120000,
+      "outcome": "failed",
+      "lifecycleResult": null,
+      "error": { "code": "missing_code_value", "message": "Barcode: The product's variant has no barcode in Shopify." },
+      "artifactId": null,
+      "pageIndex": null
+    }
+  ],
+  "unresolved": []
+}

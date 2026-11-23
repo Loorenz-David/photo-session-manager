@@ -409,8 +409,6 @@ pub(super) mod testing {
         raw_replies: Mutex<VecDeque<Result<RawReply>>>,
         fetches: Mutex<Vec<(PricingRequest, Duration)>>,
     }
-    // `raw`, `raw_fail` and `fetches` are first used by the byte calls' tests (L1·U2).
-    #[allow(dead_code)]
     impl Recording {
         pub fn reply(&self, status: u16, body: Json) -> &Self {
             self.replies

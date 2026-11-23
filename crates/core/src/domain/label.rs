@@ -134,7 +134,7 @@ pub struct PlanTemplate {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlanItem {
     pub position: usize,
-    pub product_id: Option<String>,
+    pub product_id: String,
     pub sku: Option<String>,
     pub title: Option<String>,
     pub product_type: Option<String>,
@@ -200,7 +200,7 @@ pub enum RunResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunItem {
-    pub product_id: Option<String>,
+    pub product_id: String,
     pub sku: Option<String>,
     pub title: Option<String>,
     pub rendered: bool,

@@ -6,20 +6,33 @@
 
 use super::adapter::{BeyoPricingAdapter, encode};
 use super::label_types::{
-    IntegrationLabelProduct, IntegrationLabelProductPage, IntegrationLabelStatus,
-    IntegrationLabelTemplate, LabelStatusOut, WireLabelStatus,
+    IntegrationLabelProduct, IntegrationLabelProductPage, IntegrationLabelRun,
+    IntegrationLabelStatus, IntegrationLabelTemplate, IntegrationPlan, IntegrationPlanItem,
+    IntegrationPlanRequest, IntegrationPreviewRequest, IntegrationRunCreate, IntegrationRunItemIn,
+    LabelStatusOut, UnresolvedItem, WireLabelStatus, WirePlanOutcome, WireRunStatus,
 };
-use super::transport::{HttpReply, Method, PricingRequest};
+use super::transport::{HttpReply, Method, PricingRequest, RawReply};
 use super::types::{ErrorBody, ErrorEnvelope};
 use psm_core::{
     domain::label::{
-        LabelCounts, LabelFilter, LabelProduct, LabelProductPage, LabelState, LabelStatus,
-        LabelTemplate, LabelsError, ResetReason,
+        CheckOutcome, LabelArtifact, LabelCounts, LabelFilter, LabelPlan, LabelProduct,
+        LabelProductPage, LabelRun, LabelSize, LabelState, LabelStatus, LabelTemplate, LabelsError,
+        PlanItem, PlanSummary, PlanTemplate, ResetReason, RunCounts, RunItem, RunResult, RunStatus,
+        Unresolved,
     },
     ports::labels::{LabelsProvider, LabelsResult},
 };
 use serde::de::DeserializeOwned;
 use serde_json::Value as Json;
+use std::time::Duration;
+
+/// The time-out of a run (rendering is synchronous: a few seconds for hundreds of labels).
+pub const RUN_TIMEOUT: Duration = Duration::from_secs(60);
+/// The time-out of a preview or a file download.
+pub const FILE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// The first bytes of every PDF (MC-L2.12): anything else is not a label file.
+const PDF_MAGIC: &[u8] = b"%PDF-";
 
 /// The commerce external id form of a product (Shopify's global id).
 const COMMERCE_PRODUCT_PREFIX: &str = "gid://shopify/Product/";
@@ -29,6 +42,10 @@ const COMMERCE_PRODUCT_PREFIX: &str = "gid://shopify/Product/";
 pub(super) enum Call {
     /// List, status, templates, plan, runs.
     Read,
+    /// `POST …/labels/preview`: a 404 names a product, with its message.
+    Preview,
+    /// The artifact download: a 404 is a file that is gone.
+    Download,
 }
 
 /// A non-2xx label answer (Adapter paths "Status mapping"; the only error function of label
@@ -46,6 +63,8 @@ pub(super) fn label_error(status: u16, envelope: Option<ErrorBody>, call: Call) 
         401 | 403 => LabelsError::NotAllowed,
         404 => match call {
             Call::Read => LabelsError::StoreGone,
+            Call::Preview => rejected(envelope),
+            Call::Download => LabelsError::Expired,
         },
         409 => rejected(envelope),
         410 => LabelsError::Expired,
@@ -62,6 +81,182 @@ fn json_envelope(body: &Json) -> Option<ErrorBody> {
     serde_json::from_value::<ErrorEnvelope>(body.clone())
         .ok()
         .map(|e| e.error)
+}
+
+fn bytes_envelope(bytes: &[u8]) -> Option<ErrorBody> {
+    serde_json::from_slice::<ErrorEnvelope>(bytes)
+        .ok()
+        .map(|e| e.error)
+}
+
+/// A file answer: the bytes of a 2xx PDF, else the mapped error.
+fn pdf(reply: RawReply, call: Call) -> LabelsResult<Vec<u8>> {
+    if !(200..300).contains(&reply.status) {
+        return Err(label_error(
+            reply.status,
+            bytes_envelope(&reply.bytes),
+            call,
+        ));
+    }
+    if !reply.bytes.starts_with(PDF_MAGIC) {
+        return Err(LabelsError::BadReply("not a PDF".into()));
+    }
+    Ok(reply.bytes)
+}
+
+/// MC-L2.12: a run's download path is sent only when it is a path under this store's runs
+/// (`/integration/v1/stores/<store, encoded as the adapter encodes it>/labels/runs/`) with no
+/// `..` segment, no `?`, no `#` and no `//`. A backslash and a percent-encoded dot segment are
+/// refused too: an address parser reads them as `/` and `..`.
+fn download_path_ok(store_id: &str, path: &str) -> bool {
+    let prefix = format!("/integration/v1/stores/{}/labels/runs/", encode(store_id));
+    let dot_segment = |segment: &str| {
+        matches!(
+            segment.to_ascii_lowercase().as_str(),
+            "." | ".." | ".%2e" | "%2e." | "%2e%2e" | "%2e"
+        )
+    };
+    path.starts_with(&prefix)
+        && !path.contains(['?', '#', '\\'])
+        && !path.contains("//")
+        && !path.split('/').any(dot_segment)
+}
+
+fn items_in(product_ids: &[String]) -> Vec<IntegrationRunItemIn> {
+    product_ids
+        .iter()
+        .map(|id| IntegrationRunItemIn {
+            sku: None,
+            product_id: Some(id.clone()),
+            template_id: None,
+        })
+        .collect()
+}
+
+fn body<T: serde::Serialize>(value: &T) -> LabelsResult<Json> {
+    serde_json::to_value(value).map_err(|e| LabelsError::BadReply(e.to_string()))
+}
+
+fn unresolved(wire: UnresolvedItem) -> Unresolved {
+    Unresolved {
+        product_id: wire.product_id,
+        sku: wire.sku,
+        message: wire.error.message,
+    }
+}
+
+fn plan_item(wire: IntegrationPlanItem) -> LabelsResult<PlanItem> {
+    Ok(PlanItem {
+        position: wire.position,
+        printed_at: optional_time(wire.label_printed_at.as_deref())?,
+        product_id: wire.product_id,
+        sku: wire.sku,
+        title: wire.title,
+        product_type: wire.product_type,
+        template: wire.template.map(|t| PlanTemplate {
+            id: t.id,
+            name: t.name,
+            width_mm: t.width_mm,
+            height_mm: t.height_mm,
+        }),
+        price_minor: wire.price_minor,
+        status: status(wire.label_status),
+        outcome: match wire.outcome {
+            WirePlanOutcome::MarkPrinted => CheckOutcome::MarkPrinted,
+            WirePlanOutcome::Reprint => CheckOutcome::Reprint,
+            WirePlanOutcome::NoPrice => CheckOutcome::NoPrice,
+            WirePlanOutcome::Fail => CheckOutcome::Fail,
+        },
+        issues: wire.issues.into_iter().map(|i| i.message).collect(),
+        notes: wire.notes.into_iter().map(|n| n.message).collect(),
+    })
+}
+
+fn plan(wire: IntegrationPlan) -> LabelsResult<LabelPlan> {
+    let s = wire.summary;
+    Ok(LabelPlan {
+        items: wire
+            .items
+            .into_iter()
+            .map(plan_item)
+            .collect::<LabelsResult<_>>()?,
+        unresolved: wire.unresolved.into_iter().map(unresolved).collect(),
+        summary: PlanSummary {
+            items: s.items,
+            ready: s.ready,
+            failing: s.failing,
+            mark_printed: s.mark_printed,
+            reprint: s.reprint,
+            no_price: s.no_price,
+        },
+        sizes: wire
+            .sizes
+            .into_iter()
+            .map(|z| LabelSize {
+                width_mm: z.width_mm,
+                height_mm: z.height_mm,
+                count: z.count,
+            })
+            .collect(),
+    })
+}
+
+/// `lifecycleResult`, read tolerantly (anything but the three words → none; projection r0 D4).
+fn run_result(word: Option<&str>) -> Option<RunResult> {
+    match word? {
+        "marked_printed" => Some(RunResult::MarkedPrinted),
+        "reprinted" => Some(RunResult::Reprinted),
+        "no_price" => Some(RunResult::NoPrice),
+        _ => None,
+    }
+}
+
+fn run(wire: IntegrationLabelRun) -> LabelsResult<LabelRun> {
+    let c = wire.counts;
+    Ok(LabelRun {
+        created_at: time(&wire.created_at)?,
+        id: wire.id,
+        status: match wire.status {
+            WireRunStatus::Rendered => RunStatus::Rendered,
+            WireRunStatus::Partial => RunStatus::Partial,
+            WireRunStatus::Failed => RunStatus::Failed,
+        },
+        counts: RunCounts {
+            items: c.items,
+            rendered: c.rendered,
+            failed: c.failed,
+            marked_printed: c.marked_printed,
+            reprinted: c.reprinted,
+            no_price: c.no_price,
+        },
+        artifacts: wire
+            .artifacts
+            .into_iter()
+            .map(|a| LabelArtifact {
+                id: a.id,
+                width_mm: a.width_mm,
+                height_mm: a.height_mm,
+                page_count: a.page_count,
+                filename: a.filename,
+                size_bytes: a.size_bytes,
+                download_url: a.download_url,
+                expired: a.expired,
+            })
+            .collect(),
+        items: wire
+            .items
+            .into_iter()
+            .map(|i| RunItem {
+                rendered: i.outcome == "rendered",
+                result: run_result(i.lifecycle_result.as_deref()),
+                error: i.error.map(|e| e.message),
+                product_id: i.product_id,
+                sku: i.sku,
+                title: i.title,
+            })
+            .collect(),
+        unresolved: wire.unresolved.into_iter().map(unresolved).collect(),
+    })
 }
 
 fn parse<T: DeserializeOwned>(body: &Json) -> LabelsResult<T> {
@@ -165,6 +360,32 @@ impl BeyoPricingAdapter {
         parse(&reply.body)
     }
 
+    /// One label request through `fetch` (the body untouched); a transport failure is
+    /// `Unreachable`.
+    fn label_fetch(
+        &self,
+        method: Method,
+        url: String,
+        body: Option<Json>,
+        timeout: Duration,
+    ) -> LabelsResult<RawReply> {
+        self.http
+            .fetch(
+                PricingRequest {
+                    method,
+                    url,
+                    bearer: (self.key)(),
+                    body,
+                },
+                timeout,
+            )
+            .map_err(|error| LabelsError::Unreachable(error.to_string()))
+    }
+
+    fn label_url(&self, path: &str) -> String {
+        format!("{}/integration/v1{path}", (self.server)())
+    }
+
     pub(super) fn labels_path(store_id: &str) -> String {
         format!("{}/labels", Self::store_path(store_id))
     }
@@ -258,6 +479,61 @@ impl LabelsProvider for BeyoPricingAdapter {
                 product_types: t.product_types,
             })
             .collect())
+    }
+
+    fn plan(&self, store_id: &str, product_ids: &[String]) -> LabelsResult<LabelPlan> {
+        let request = body(&IntegrationPlanRequest {
+            items: items_in(product_ids),
+        })?;
+        let path = format!("{}/plan", Self::labels_path(store_id));
+        let reply = self.label_send(Method::Post, &path, Some(request))?;
+        if !(200..300).contains(&reply.status) {
+            return Err(label_error(
+                reply.status,
+                json_envelope(&reply.body),
+                Call::Read,
+            ));
+        }
+        plan(parse(&reply.body)?)
+    }
+
+    fn preview(&self, store_id: &str, product_id: &str) -> LabelsResult<Vec<u8>> {
+        let request = body(&IntegrationPreviewRequest {
+            sku: None,
+            product_id: Some(product_id.to_owned()),
+            template_id: None,
+        })?;
+        let url = self.label_url(&format!("{}/preview", Self::labels_path(store_id)));
+        let reply = self.label_fetch(Method::Post, url, Some(request), FILE_TIMEOUT)?;
+        pdf(reply, Call::Preview)
+    }
+
+    fn run(&self, store_id: &str, product_ids: &[String], key: &str) -> LabelsResult<LabelRun> {
+        let request = body(&IntegrationRunCreate {
+            items: items_in(product_ids),
+            idempotency_key: key.to_owned(),
+        })?;
+        let url = self.label_url(&format!("{}/runs", Self::labels_path(store_id)));
+        let reply = self.label_fetch(Method::Post, url, Some(request), RUN_TIMEOUT)?;
+        if !(200..300).contains(&reply.status) {
+            return Err(label_error(
+                reply.status,
+                bytes_envelope(&reply.bytes),
+                Call::Read,
+            ));
+        }
+        let wire: IntegrationLabelRun = serde_json::from_slice(&reply.bytes)
+            .map_err(|error| LabelsError::BadReply(format!("reply shape: {error}")))?;
+        run(wire)
+    }
+
+    fn download(&self, store_id: &str, download_url: &str) -> LabelsResult<Vec<u8>> {
+        if !download_path_ok(store_id, download_url) {
+            return Err(LabelsError::BadReply("download address".into()));
+        }
+        let url = format!("{}{download_url}", (self.server)());
+        let reply = self.label_fetch(Method::Get, url, None, FILE_TIMEOUT)?;
+        pdf(reply, Call::Download)
     }
 
     fn describe(&self, error: &LabelsError, shop: Option<&str>) -> String {
@@ -866,5 +1142,547 @@ mod tests {
         for id in ["", "12a", "gid://shopify/Product/1"] {
             assert_eq!(a.commerce_id_of(id), None, "{id}");
         }
+    }
+
+    // ---------- L1·U2: plan, preview, run, download ----------
+
+    const PLAN: &str = include_str!("fixtures/labels_plan.json");
+    const RUN: &str = include_str!("fixtures/labels_run.json");
+    const PDF_BYTES: &[u8] = b"%PDF-1.4 test label";
+    const BARCODE: &str = "Barcode: The product's variant has no barcode in Shopify.";
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|id| (*id).to_owned()).collect()
+    }
+
+    fn envelope_bytes(code: &str, message: &str) -> Vec<u8> {
+        envelope(code, message).to_string().into_bytes()
+    }
+
+    fn plan_with(items: Vec<Json>) -> Json {
+        let mut plan = fixture(PLAN);
+        plan["items"] = json!(items);
+        plan
+    }
+
+    fn run_reply(http: &Recording, run: &Json) {
+        http.raw(201, Some("application/json"), run.to_string().as_bytes());
+    }
+
+    fn artifact_path() -> String {
+        format!("/integration/v1/stores/{S}/labels/runs/r1/artifacts/a1")
+    }
+
+    #[test]
+    fn l1_c7a_plan_posts_product_ids_only() {
+        let (http, adapter) = adapter();
+        http.reply(200, fixture(PLAN));
+        adapter.plan(S, &ids(&["1", "2"])).unwrap();
+        assert_eq!(
+            http.requests(),
+            vec![PricingRequest {
+                method: Method::Post,
+                url: format!("https://pricing.example/integration/v1/stores/{S}/labels/plan"),
+                bearer: Some("k1".into()),
+                body: Some(json!({"items": [{"productId": "1"}, {"productId": "2"}]})),
+            }]
+        );
+    }
+
+    #[test]
+    fn l1_c7b_plan_maps_items_unresolved_summary_and_sizes() {
+        let (http, adapter) = adapter();
+        http.reply(200, fixture(PLAN));
+        let plan = adapter.plan(S, &ids(&["1", "2"])).unwrap();
+        let first = &plan.items[0];
+        assert_eq!(first.position, 0);
+        assert_eq!(first.outcome, CheckOutcome::MarkPrinted);
+        assert_eq!(
+            first.template,
+            Some(PlanTemplate {
+                id: "tpl-1".into(),
+                name: "Label 70×100".into(),
+                width_mm: 70.0,
+                height_mm: 100.0,
+            })
+        );
+        assert_eq!(first.price_minor, Some(890000));
+        assert_eq!(first.status, LabelStatus::NotPrinted);
+        assert!(first.issues.is_empty());
+        assert!(first.notes.is_empty());
+        assert_eq!(plan.items[1].position, 1);
+        assert_eq!(plan.items[1].outcome, CheckOutcome::NoPrice);
+        assert_eq!(plan.items[1].price_minor, None);
+        assert_eq!(plan.items[2].position, 2);
+        assert_eq!(plan.items[2].outcome, CheckOutcome::Fail);
+        assert_eq!(plan.items[2].issues, vec![BARCODE.to_owned()]);
+        assert_eq!(
+            plan.unresolved,
+            vec![Unresolved {
+                product_id: None,
+                sku: Some("NOPE".into()),
+                message: "No product with SKU 'NOPE' in this store.".into(),
+            }]
+        );
+        assert_eq!(
+            plan.summary,
+            PlanSummary {
+                items: 3,
+                ready: 2,
+                failing: 1,
+                mark_printed: 1,
+                reprint: 0,
+                no_price: 1,
+            }
+        );
+        assert_eq!(
+            plan.sizes,
+            vec![LabelSize {
+                width_mm: 70.0,
+                height_mm: 100.0,
+                count: 2,
+            }]
+        );
+    }
+
+    #[test]
+    fn l1_c7c_plan_reprint_and_nullable_template_and_title() {
+        let (http, adapter) = adapter();
+        let base = fixture(PLAN)["items"][0].clone();
+        let mut reprint = base.clone();
+        reprint["outcome"] = json!("reprint");
+        reprint["labelStatus"] = json!("printed");
+        reprint["labelPrintedAt"] = json!("2026-11-20T09:12:00Z");
+        let mut bare = base;
+        bare["template"] = Json::Null;
+        bare["title"] = Json::Null;
+        bare["notes"] = json!([{"code": "url_not_published", "message": "M"}]);
+        http.reply(200, plan_with(vec![reprint, bare]));
+        let plan = adapter.plan(S, &ids(&["1", "2"])).unwrap();
+        assert_eq!(plan.items[0].outcome, CheckOutcome::Reprint);
+        assert_eq!(plan.items[0].status, LabelStatus::Printed);
+        assert_eq!(plan.items[0].printed_at, Some(ms("2026-11-20T09:12:00Z")));
+        assert_eq!(plan.items[1].template, None);
+        assert_eq!(plan.items[1].title, None);
+        assert_eq!(plan.items[1].notes, vec!["M".to_owned()]);
+    }
+
+    #[test]
+    fn l1_c7d_plan_with_no_products() {
+        let (http, adapter) = adapter();
+        http.reply(422, envelope("no_products", "Nothing resolved."));
+        assert_eq!(adapter.plan(S, &ids(&["1"])), Err(LabelsError::NoProducts));
+    }
+
+    #[test]
+    fn l1_c7e_plan_with_an_unknown_outcome_is_a_bad_reply() {
+        let (http, adapter) = adapter();
+        let mut item = fixture(PLAN)["items"][0].clone();
+        item["outcome"] = json!("skip");
+        http.reply(200, plan_with(vec![item]));
+        assert!(matches!(
+            adapter.plan(S, &ids(&["1"])),
+            Err(LabelsError::BadReply(_))
+        ));
+    }
+
+    #[test]
+    fn l1_c7f_plan_errors() {
+        let (http, adapter) = adapter();
+        http.reply(403, envelope("insufficient_scope", "Missing scope."))
+            .reply(404, envelope("not_found", "Not found."))
+            .reply(500, envelope("internal_error", "Oops."));
+        assert_eq!(adapter.plan(S, &ids(&["1"])), Err(LabelsError::NotAllowed));
+        assert_eq!(adapter.plan(S, &ids(&["1"])), Err(LabelsError::StoreGone));
+        assert!(matches!(
+            adapter.plan(S, &ids(&["1"])),
+            Err(LabelsError::Unreachable(_))
+        ));
+    }
+
+    #[test]
+    fn l1_c8a_preview_answers_the_pdf_bytes() {
+        let (http, adapter) = adapter();
+        http.raw(200, Some("application/pdf"), PDF_BYTES);
+        assert_eq!(adapter.preview(S, "1"), Ok(PDF_BYTES.to_vec()));
+        assert_eq!(
+            http.fetches(),
+            vec![(
+                PricingRequest {
+                    method: Method::Post,
+                    url: format!(
+                        "https://pricing.example/integration/v1/stores/{S}/labels/preview"
+                    ),
+                    bearer: Some("k1".into()),
+                    body: Some(json!({"productId": "1"})),
+                },
+                FILE_TIMEOUT
+            )]
+        );
+        assert!(http.requests().is_empty());
+    }
+
+    #[test]
+    fn l1_c8b_preview_that_is_not_a_pdf_is_a_bad_reply() {
+        let (http, adapter) = adapter();
+        http.raw(200, Some("application/json"), &envelope_bytes("x", "y"))
+            .raw(200, Some("application/pdf"), b"");
+        for _ in 0..2 {
+            assert!(matches!(
+                adapter.preview(S, "1"),
+                Err(LabelsError::BadReply(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn l1_c8c_preview_refusals_keep_their_message() {
+        let (http, adapter) = adapter();
+        let cases = [
+            (404, "sku_not_found", "M1"),
+            (409, "sku_ambiguous", "M2"),
+            (422, "no_template", "M3"),
+        ];
+        for (status, code, message) in cases {
+            http.raw(
+                status,
+                Some("application/json"),
+                &envelope_bytes(code, message),
+            );
+            assert_eq!(
+                adapter.preview(S, "1"),
+                Err(LabelsError::Rejected {
+                    code: code.into(),
+                    message: message.into(),
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn l1_c8d_preview_renderer_unavailable() {
+        let (http, adapter) = adapter();
+        http.raw(
+            503,
+            Some("application/json"),
+            &envelope_bytes("renderer_unavailable", "Down."),
+        );
+        assert_eq!(
+            adapter.preview(S, "1"),
+            Err(LabelsError::RendererUnavailable)
+        );
+    }
+
+    #[test]
+    fn l1_c8e_preview_not_allowed_and_timeout() {
+        let (http, adapter) = adapter();
+        http.raw(
+            403,
+            Some("application/json"),
+            &envelope_bytes("insufficient_scope", "Missing scope."),
+        )
+        .raw_fail(Error::Timeout);
+        assert_eq!(adapter.preview(S, "1"), Err(LabelsError::NotAllowed));
+        assert!(matches!(
+            adapter.preview(S, "1"),
+            Err(LabelsError::Unreachable(_))
+        ));
+    }
+
+    #[test]
+    fn l1_c9a_run_posts_ids_and_the_key_through_fetch() {
+        let (http, adapter) = adapter();
+        run_reply(&http, &fixture(RUN));
+        adapter.run(S, &ids(&["1", "2"]), "sm-0123456789").unwrap();
+        assert_eq!(
+            http.fetches(),
+            vec![(
+                PricingRequest {
+                    method: Method::Post,
+                    url: format!("https://pricing.example/integration/v1/stores/{S}/labels/runs"),
+                    bearer: Some("k1".into()),
+                    body: Some(json!({
+                        "items": [{"productId": "1"}, {"productId": "2"}],
+                        "idempotencyKey": "sm-0123456789"
+                    })),
+                },
+                RUN_TIMEOUT
+            )]
+        );
+        assert!(http.requests().is_empty());
+    }
+
+    #[test]
+    fn l1_c9b_run_maps_the_answer() {
+        let (http, adapter) = adapter();
+        run_reply(&http, &fixture(RUN));
+        assert_eq!(
+            adapter.run(S, &ids(&["1", "2"]), "sm-0123456789").unwrap(),
+            LabelRun {
+                id: "r1".into(),
+                status: RunStatus::Partial,
+                created_at: ms("2026-11-20T09:30:00Z"),
+                counts: RunCounts {
+                    items: 2,
+                    rendered: 1,
+                    failed: 1,
+                    marked_printed: 1,
+                    reprinted: 0,
+                    no_price: 0,
+                },
+                artifacts: vec![LabelArtifact {
+                    id: "a1".into(),
+                    width_mm: 70.0,
+                    height_mm: 100.0,
+                    page_count: 1,
+                    filename: "labels-2026-11-20.pdf".into(),
+                    size_bytes: 18211,
+                    download_url: artifact_path(),
+                    expired: false,
+                }],
+                items: vec![
+                    RunItem {
+                        product_id: PRODUCT.into(),
+                        sku: Some("TEST-1802".into()),
+                        title: Some("Test table".into()),
+                        rendered: true,
+                        result: Some(RunResult::MarkedPrinted),
+                        error: None,
+                    },
+                    RunItem {
+                        product_id: "15531808096411".into(),
+                        sku: Some("TEST-1808".into()),
+                        title: Some("Test lamp".into()),
+                        rendered: false,
+                        result: None,
+                        error: Some(BARCODE.into()),
+                    },
+                ],
+                unresolved: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn l1_c9c_run_variants_parse() {
+        let (http, adapter) = adapter();
+        let mut rendered = fixture(RUN);
+        rendered["status"] = json!("rendered");
+        rendered["items"][0]["lifecycleResult"] = json!("reprinted");
+        let mut failed = fixture(RUN);
+        failed["status"] = json!("failed");
+        failed["artifacts"] = json!([]);
+        let mut no_price = fixture(RUN);
+        no_price["items"][0]["lifecycleResult"] = json!("no_price");
+        let mut without_unresolved = fixture(RUN);
+        without_unresolved
+            .as_object_mut()
+            .unwrap()
+            .remove("unresolved");
+        let mut none_word = fixture(RUN);
+        none_word["items"][1]["outcome"] = json!("failed");
+        none_word["items"][1]["lifecycleResult"] = json!("none");
+        for run in [
+            &rendered,
+            &failed,
+            &no_price,
+            &without_unresolved,
+            &none_word,
+        ] {
+            run_reply(&http, run);
+        }
+        let key = "sm-0123456789";
+        let r = adapter.run(S, &ids(&["1"]), key).unwrap();
+        assert_eq!(r.status, RunStatus::Rendered);
+        assert_eq!(r.items[0].result, Some(RunResult::Reprinted));
+        let r = adapter.run(S, &ids(&["1"]), key).unwrap();
+        assert_eq!(r.status, RunStatus::Failed);
+        assert!(r.artifacts.is_empty());
+        let r = adapter.run(S, &ids(&["1"]), key).unwrap();
+        assert_eq!(r.items[0].result, Some(RunResult::NoPrice));
+        let r = adapter.run(S, &ids(&["1"]), key).unwrap();
+        assert_eq!(r.unresolved, vec![]);
+        let r = adapter.run(S, &ids(&["1"]), key).unwrap();
+        assert_eq!(r.items[1].result, None);
+        assert!(!r.items[1].rendered);
+    }
+
+    #[test]
+    fn l1_c9d_run_with_no_products() {
+        let (http, adapter) = adapter();
+        http.raw(
+            422,
+            Some("application/json"),
+            &envelope_bytes("no_products", "Nothing resolved."),
+        );
+        assert_eq!(
+            adapter.run(S, &ids(&["1"]), "sm-0123456789"),
+            Err(LabelsError::NoProducts)
+        );
+    }
+
+    #[test]
+    fn l1_c9e_run_retryable_errors() {
+        let (http, adapter) = adapter();
+        http.raw(
+            503,
+            Some("application/json"),
+            &envelope_bytes("renderer_unavailable", "Down."),
+        )
+        .raw(
+            500,
+            Some("application/json"),
+            &envelope_bytes("internal_error", "Oops."),
+        )
+        .raw_fail(Error::Timeout);
+        let key = "sm-0123456789";
+        assert_eq!(
+            adapter.run(S, &ids(&["1"]), key),
+            Err(LabelsError::RendererUnavailable)
+        );
+        for _ in 0..2 {
+            assert!(matches!(
+                adapter.run(S, &ids(&["1"]), key),
+                Err(LabelsError::Unreachable(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn l1_c9f_run_errors_that_are_not_retried() {
+        let (http, adapter) = adapter();
+        http.raw(
+            403,
+            Some("application/json"),
+            &envelope_bytes("insufficient_scope", "Missing scope."),
+        )
+        .raw(
+            404,
+            Some("application/json"),
+            &envelope_bytes("not_found", "Gone."),
+        )
+        .raw(
+            422,
+            Some("application/json"),
+            &envelope_bytes("validation_error", "M"),
+        );
+        let key = "sm-0123456789";
+        assert_eq!(
+            adapter.run(S, &ids(&["1"]), key),
+            Err(LabelsError::NotAllowed)
+        );
+        assert_eq!(
+            adapter.run(S, &ids(&["1"]), key),
+            Err(LabelsError::StoreGone)
+        );
+        assert_eq!(
+            adapter.run(S, &ids(&["1"]), key),
+            Err(LabelsError::Rejected {
+                code: "validation_error".into(),
+                message: "M".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn l1_c9g_run_answer_that_is_not_a_run_is_a_bad_reply() {
+        let (http, adapter) = adapter();
+        http.raw(201, Some("application/json"), br#"{"id": "r1"}"#);
+        assert!(matches!(
+            adapter.run(S, &ids(&["1"]), "sm-0123456789"),
+            Err(LabelsError::BadReply(_))
+        ));
+    }
+
+    #[test]
+    fn l1_c10a_download_answers_the_pdf_bytes() {
+        let (http, adapter) = adapter();
+        http.raw(200, Some("application/pdf"), PDF_BYTES);
+        assert_eq!(
+            adapter.download(S, &artifact_path()),
+            Ok(PDF_BYTES.to_vec())
+        );
+        assert_eq!(
+            http.fetches(),
+            vec![(
+                get(&format!("https://pricing.example{}", artifact_path())),
+                FILE_TIMEOUT
+            )]
+        );
+    }
+
+    #[test]
+    fn l1_c10b_download_refuses_any_other_address_without_a_request() {
+        let (http, adapter) = adapter();
+        let refused = [
+            format!("https://evil.example/integration/v1/stores/{S}/labels/runs/r1/artifacts/a1"),
+            "//evil.example/x".to_owned(),
+            "/integration/v1/stores/OTHER/labels/runs/r1/artifacts/a1".to_owned(),
+            format!("/integration/v1/stores/{S}/labels/runs/../../cases"),
+            format!("/integration/v1/stores/{S}/labels/runs/r1/artifacts/a1?x=1"),
+            format!("/integration/v1/stores/{S}/cases"),
+        ];
+        for path in &refused {
+            assert!(
+                matches!(adapter.download(S, path), Err(LabelsError::BadReply(_))),
+                "{path}"
+            );
+        }
+        assert!(http.fetches().is_empty());
+        assert!(http.requests().is_empty());
+    }
+
+    #[test]
+    fn l1_c10c_expired_and_missing_files() {
+        let (http, adapter) = adapter();
+        http.raw(
+            410,
+            Some("application/json"),
+            &envelope_bytes("artifact_expired", "Expired."),
+        )
+        .raw(
+            404,
+            Some("application/json"),
+            &envelope_bytes("not_found", "Gone."),
+        );
+        for _ in 0..2 {
+            assert_eq!(
+                adapter.download(S, &artifact_path()),
+                Err(LabelsError::Expired)
+            );
+        }
+    }
+
+    #[test]
+    fn l1_c10d_download_that_is_not_a_pdf_is_a_bad_reply() {
+        let (http, adapter) = adapter();
+        http.raw(200, Some("application/pdf"), b"<html>not a pdf</html>");
+        assert!(matches!(
+            adapter.download(S, &artifact_path()),
+            Err(LabelsError::BadReply(_))
+        ));
+    }
+
+    #[test]
+    fn l1_c10e_download_not_allowed_and_server_error() {
+        let (http, adapter) = adapter();
+        http.raw(
+            403,
+            Some("application/json"),
+            &envelope_bytes("insufficient_scope", "Missing scope."),
+        )
+        .raw(
+            500,
+            Some("application/json"),
+            &envelope_bytes("internal_error", "Oops."),
+        );
+        assert_eq!(
+            adapter.download(S, &artifact_path()),
+            Err(LabelsError::NotAllowed)
+        );
+        assert!(matches!(
+            adapter.download(S, &artifact_path()),
+            Err(LabelsError::Unreachable(_))
+        ));
     }
 }
