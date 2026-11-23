@@ -699,6 +699,25 @@ of that folder (`variant_background` → `resync_folder`).
   `mechanisms::labels::merge_runs` (check failures first, then per chunk; a failure's SKU and title from the check
   item); a finished generation is answered again without a request; `partial(check_id)` answers the result over the
   finished chunks. Nothing of a check, a generation or a key is written to the database or kept across a quit.
+- **Preview, download and the label files (L3, MC-L2.5, .11, .13):** `preview(check_id, product_id)` (a product of
+  the kept check, else `NotFound`): `provider.preview` → the PDF → `LabelFiles::raster(pdf, "<check id>-<product
+  id>")` → `<data>/previews/labels/<name>.png` (the one folder the webview may read, `asset_protocol_scope`); a later
+  ask answers that file without a request; a picture that cannot be made is `PreviewFailed` and never blocks
+  Generate. `download(check_id, artifact_id)` (a file of the kept generation's finished chunks): `provider.download`
+  with the run's own `download_url` (the adapter refuses any address that is not this store's runs path, MC-L2.12)
+  → `LabelFiles::save(filename, bytes)` → `LabelFiles::open(path)` (a failed open answers `opened: false`).
+  **Files:** `crates/infra/src/label_files.rs` `DiskLabelFiles::new(<data>/previews, <home>/Documents/Session Manager
+  Labels)`: `raster` writes `<previews>/labels/<name>.src.pdf`, runs `/usr/bin/sips -s format png -Z 1200 … --out
+  <name>.png` and always removes the `.src.pdf`; `clear_previews` removes `<previews>/labels/`; `save` creates the
+  folder, cleans the name (`label_file_name`), numbers a taken one (`numbered_name`: `<stem> (2).pdf` …), writes
+  `<name>.part` and renames it; `open` runs `/usr/bin/open -a Preview <path>`. Built once in
+  `psm_integrations::labels::files_for(paths)` (the labels folder always from `AppPaths.home`; the suite's seam
+  `with_test_label_files`). Every `TestApp` installs `psm_testkit::fake_label_files::FakeLabelFiles` (saves under
+  the test's own home, never runs `sips` or `open`). **Commands** (L3): `labels_check(product_ids)` →
+  `LabelCheckDto`, `labels_preview(check_id, product_id)` → `{path}`, `labels_generate(check_id)` /
+  `labels_partial(check_id)` → `LabelRunResultDto`, `labels_download(check_id, artifact_id)` → `{path, opened}`
+  (wrappers `labelsCheck`, `labelsPreview`, `labelsGenerate`, `labelsPartial`, `labelsDownload`; error codes
+  `labels_busy`, `labels_nothing`, `labels_preview_failed`, `labels_save_failed`, `not_found` added to L1's).
 
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams

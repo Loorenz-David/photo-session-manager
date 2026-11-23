@@ -227,6 +227,25 @@ export const commands = {
 	labelsSelectAll: (filter: LabelFilterDto, query: string | null) => typedError<SelectedDto[], CommandError>(__TAURI_INVOKE("labels_select_all", { filter, query })),
 	/**  The session a Labels row opens (an unmatched product is adopted from the shop first). */
 	labelsOpen: (productId: string) => typedError<LabelsOpenDto, CommandError>(__TAURI_INVOKE("labels_open", { productId })),
+	/**
+	 *  What generating the labels of these products would do (changes nothing); a bigger selection
+	 *  is checked in chunks and shown as one.
+	 */
+	labelsCheck: (productIds: string[]) => typedError<LabelCheckDto_Serialize, CommandError>(__TAURI_INVOKE("labels_check", { productIds })),
+	/**  The preview picture of one product of the check. */
+	labelsPreview: (checkId: string, productId: string) => typedError<LabelPreviewDto, CommandError>(__TAURI_INVOKE("labels_preview", { checkId, productId })),
+	/**
+	 *  Generates the labels of the check's ready products (Generate PDF / Reprint PDF; Try again
+	 *  continues where it stopped).
+	 */
+	labelsGenerate: (checkId: string) => typedError<LabelRunResultDto_Serialize, CommandError>(__TAURI_INVOKE("labels_generate", { checkId })),
+	/**  The result over what was generated so far (leaving the dialog after a failed Generate). */
+	labelsPartial: (checkId: string) => typedError<LabelRunResultDto_Serialize, CommandError>(__TAURI_INVOKE("labels_partial", { checkId })),
+	/**
+	 *  Saves one label file of the result in Documents › Session Manager Labels and opens it in
+	 *  Preview.
+	 */
+	labelsDownload: (checkId: string, artifactId: string) => typedError<SavedLabelDto, CommandError>(__TAURI_INVOKE("labels_download", { checkId, artifactId })),
 	/**  The panel's rows from the local copy (never waits on the network). */
 	conversationsList: (scope: ConversationScopeDto, tab: ConversationTabDto) => typedError<ConversationListDto_Serialize, CommandError>(__TAURI_INVOKE("conversations_list", { scope, tab })),
 	/**  The header count for the session on screen (`session_id` null = all). */
@@ -638,6 +657,64 @@ export type CameraSupportDto = {
 /**  The id `camera_capture` answers (MC-31 §Capture; the exposure row carries it). */
 export type CaptureResponse = {
 	capture_id: string,
+};
+
+/**  One group of the check (`template` null = the products without a template, always last). */
+export type CheckGroupDto = CheckGroupDto_Serialize | CheckGroupDto_Deserialize;
+
+/**  One group of the check (`template` null = the products without a template, always last). */
+export type CheckGroupDto_Deserialize = {
+	template?: PlanTemplateDto | null,
+	product_types: string[],
+	items: CheckItemDto_Deserialize[],
+};
+
+/**  One group of the check (`template` null = the products without a template, always last). */
+export type CheckGroupDto_Serialize = {
+	template: PlanTemplateDto | null,
+	product_types: string[],
+	items: CheckItemDto_Serialize[],
+};
+
+/**  One product of the check, with what will happen to it and Pricing's messages as given. */
+export type CheckItemDto = CheckItemDto_Serialize | CheckItemDto_Deserialize;
+
+/**  One product of the check, with what will happen to it and Pricing's messages as given. */
+export type CheckItemDto_Deserialize = {
+	product_id: string,
+	sku?: string | null,
+	title?: string | null,
+	price_minor?: number | null,
+	status: LabelStatusDto,
+	printed_at?: number | null,
+	outcome: CheckOutcomeDto,
+	issues: string[],
+	notes: string[],
+};
+
+/**  One product of the check, with what will happen to it and Pricing's messages as given. */
+export type CheckItemDto_Serialize = {
+	product_id: string,
+	sku: string | null,
+	title: string | null,
+	price_minor: number | null,
+	status: LabelStatusDto,
+	printed_at: number | null,
+	outcome: CheckOutcomeDto,
+	issues: string[],
+	notes: string[],
+};
+
+/**  What generating will do to one product: `mark_printed`, `reprint`, `no_price`, `fail`. */
+export type CheckOutcomeDto = "mark_printed" | "reprint" | "no_price" | "fail";
+
+export type CheckSummaryDto = {
+	items: number,
+	ready: number,
+	failing: number,
+	mark_printed: number,
+	reprint: number,
+	no_price: number,
 };
 
 export type CommandError = {
@@ -1352,6 +1429,27 @@ export type KeyDecisionDto = {
 	decision: string,
 };
 
+/**  The check dialog's content; `id` names the check for preview, generate and download. */
+export type LabelCheckDto = LabelCheckDto_Serialize | LabelCheckDto_Deserialize;
+
+/**  The check dialog's content; `id` names the check for preview, generate and download. */
+export type LabelCheckDto_Deserialize = {
+	id: string,
+	groups: CheckGroupDto_Deserialize[],
+	unresolved: UnresolvedDto_Deserialize[],
+	summary: CheckSummaryDto,
+	sizes: LabelSizeDto[],
+};
+
+/**  The check dialog's content; `id` names the check for preview, generate and download. */
+export type LabelCheckDto_Serialize = {
+	id: string,
+	groups: CheckGroupDto_Serialize[],
+	unresolved: UnresolvedDto_Serialize[],
+	summary: CheckSummaryDto,
+	sizes: LabelSizeDto[],
+};
+
 /**  The provider's totals over the searched list (each on its own, the filter not applied). */
 export type LabelCountsDto = {
 	total: number,
@@ -1360,6 +1458,34 @@ export type LabelCountsDto = {
 	missing_price_tag: number,
 	printed: number,
 	not_printed: number,
+};
+
+/**  One product not generated, with its message. */
+export type LabelFailureDto = LabelFailureDto_Serialize | LabelFailureDto_Deserialize;
+
+/**  One product not generated, with its message. */
+export type LabelFailureDto_Deserialize = {
+	product_id?: string | null,
+	sku?: string | null,
+	title?: string | null,
+	message: string,
+};
+
+/**  One product not generated, with its message. */
+export type LabelFailureDto_Serialize = {
+	product_id: string | null,
+	sku: string | null,
+	title: string | null,
+	message: string,
+};
+
+/**  One label file of the result (`page_count` = its labels). */
+export type LabelFileDto = {
+	id: string,
+	filename: string,
+	width_mm: number | null,
+	height_mm: number | null,
+	page_count: number,
 };
 
 /**  The Labels box's sub-filter. */
@@ -1400,6 +1526,11 @@ export type LabelPageDto_Serialize = {
 	work_from: string | null,
 };
 
+/**  The preview picture of one label (a file under the data folder's previews). */
+export type LabelPreviewDto = {
+	path: string,
+};
+
 /**
  *  One row of the Labels box: the provider's fields, the row's own marker, the matched session
  *  (`null` = none on this Mac) and the cached picture of an unmatched row (an existing file).
@@ -1438,6 +1569,42 @@ export type LabelRowDto_Serialize = {
 	created_at: number | null,
 	session: SessionRowResponse_Serialize | null,
 	picture_path: string | null,
+};
+
+/**  The done dialog's content. Fully generated ⇔ `failures` and `not_run` are both empty. */
+export type LabelRunResultDto = LabelRunResultDto_Serialize | LabelRunResultDto_Deserialize;
+
+/**  The done dialog's content. Fully generated ⇔ `failures` and `not_run` are both empty. */
+export type LabelRunResultDto_Deserialize = {
+	total: number,
+	rendered: number,
+	marked_printed: number,
+	reprinted: number,
+	no_price: number,
+	failures: LabelFailureDto_Deserialize[],
+	not_run: string[],
+	artifacts: LabelFileDto[],
+	failed_product_ids: string[],
+};
+
+/**  The done dialog's content. Fully generated ⇔ `failures` and `not_run` are both empty. */
+export type LabelRunResultDto_Serialize = {
+	total: number,
+	rendered: number,
+	marked_printed: number,
+	reprinted: number,
+	no_price: number,
+	failures: LabelFailureDto_Serialize[],
+	not_run: string[],
+	artifacts: LabelFileDto[],
+	failed_product_ids: string[],
+};
+
+/**  A label size among the ready products, with how many labels it has. */
+export type LabelSizeDto = {
+	width_mm: number | null,
+	height_mm: number | null,
+	count: number,
 };
 
 /**  `printed` | `not_printed`. */
@@ -1709,6 +1876,14 @@ export type PhotoResponse_Serialize = {
 	source: string,
 	integrity: string,
 	upload_state: string | null,
+};
+
+/**  A group's template (millimetres). */
+export type PlanTemplateDto = {
+	id: string,
+	name: string,
+	width_mm: number | null,
+	height_mm: number | null,
 };
 
 export type PresetDto = PresetDto_Serialize | PresetDto_Deserialize;
@@ -2244,6 +2419,15 @@ export type RunViewDto_Serialize = {
 	trigger: string,
 	stage_reached: string | null,
 	error: string | null,
+};
+
+/**
+ *  A saved label file (in the labels folder, outside the data folder: shown as text only) and
+ *  whether Preview opened it.
+ */
+export type SavedLabelDto = {
+	path: string,
+	opened: boolean,
 };
 
 export type SavedPageDto = {
@@ -2862,6 +3046,23 @@ export type TestConnectionResponse_Serialize = {
 	holder: string | null,
 	programs: string[],
 	sentence: string | null,
+};
+
+/**  A product Pricing did not find ("Not found in Pricing", left out). */
+export type UnresolvedDto = UnresolvedDto_Serialize | UnresolvedDto_Deserialize;
+
+/**  A product Pricing did not find ("Not found in Pricing", left out). */
+export type UnresolvedDto_Deserialize = {
+	product_id?: string | null,
+	sku?: string | null,
+	message: string,
+};
+
+/**  A product Pricing did not find ("Not found in Pricing", left out). */
+export type UnresolvedDto_Serialize = {
+	product_id: string | null,
+	sku: string | null,
+	message: string,
 };
 
 export type VisualMatchDto = VisualMatchDto_Serialize | VisualMatchDto_Deserialize;

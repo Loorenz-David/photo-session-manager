@@ -25,6 +25,7 @@ mod l1_labels_access;
 mod l1_labels_markers;
 mod l2_labels_list;
 mod l3_labels_check;
+mod l3_labels_download;
 mod l3_labels_generate;
 mod p00_spike;
 mod p01_storage_identity;

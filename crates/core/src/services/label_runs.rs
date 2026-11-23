@@ -4,13 +4,14 @@
 //! again) and its result. Nothing here is stored (M-L1): the check, its generation and the keys
 //! live in the service's memory and are gone at quit. Platform-neutral (H7): the provider is a
 //! port, the files are a port. `provider.run` is called at exactly one place, in `generate`.
+//! The download saves a file of the kept result into the labels folder and opens it.
 
 use super::labels::{LabelsFailure, LabelsService};
 use crate::{
     Error,
     domain::label::{
-        CheckOutcome, LabelCheck, LabelPlan, LabelRun, LabelRunResult, LabelState, LabelStatus,
-        LabelsError, RunResult, Unresolved,
+        CheckOutcome, LabelArtifact, LabelCheck, LabelPlan, LabelRun, LabelRunResult, LabelState,
+        LabelStatus, LabelsError, RunResult, SavedLabel, Unresolved,
     },
     events::AppEvent,
     mechanisms::labels::{
@@ -434,5 +435,56 @@ impl LabelsService {
             .filter(|c| c.id == check_id)
             .and_then(KeptCheck::result)
             .ok_or(LabelsFailure::NotFound)
+    }
+
+    /// MC-L2.11: a file of the kept check's finished chunks (else `NotFound`, no request) is
+    /// downloaded by the address the run named (never changed here), saved in the labels folder
+    /// and opened; a failed open is logged and answered as `opened: false` (the file is saved).
+    /// `Expired` and `SaveFailed` are answered; a second call tries again.
+    pub fn download(&self, check_id: &str, artifact_id: &str) -> Answer<SavedLabel> {
+        let artifact: LabelArtifact = {
+            let kept = self.kept();
+            kept.as_ref()
+                .filter(|c| c.id == check_id)
+                .and_then(|c| c.generation.as_ref())
+                .and_then(|g| {
+                    g.chunks.iter().find_map(|chunk| match &chunk.outcome {
+                        Some(ChunkOutcome::Ran(run)) => {
+                            run.artifacts.iter().find(|a| a.id == artifact_id).cloned()
+                        }
+                        _ => None,
+                    })
+                })
+                .ok_or(LabelsFailure::NotFound)?
+        };
+        let store = self.gate()?;
+        let bytes = match self.learn(self.provider.download(&store, &artifact.download_url)) {
+            Ok(bytes) => bytes,
+            Err(failure) => {
+                tracing::info!(target: LOG, "labels.download bytes=0 outcome={failure}");
+                return Err(failure);
+            }
+        };
+        let path = match self.files.save(&artifact.filename, &bytes) {
+            Ok(path) => path,
+            Err(error) => {
+                tracing::warn!(target: LOG, "labels.download bytes={} outcome=save failed", bytes.len());
+                return Err(LabelsFailure::SaveFailed(reason(&error)));
+            }
+        };
+        let opened = match self.files.open(&path) {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::warn!(target: LOG, %error, "label file not opened");
+                false
+            }
+        };
+        tracing::info!(
+            target: LOG,
+            "labels.download bytes={} outcome={}",
+            bytes.len(),
+            if opened { "opened" } else { "saved" }
+        );
+        Ok(SavedLabel { path, opened })
     }
 }

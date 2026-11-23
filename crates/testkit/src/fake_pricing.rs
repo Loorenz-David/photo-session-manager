@@ -128,6 +128,8 @@ struct State {
     fail_in_run: HashMap<String, (String, String)>,
     /// L3: the stored runs, one per idempotency key.
     runs: Vec<StoredRun>,
+    /// L3: every artifact download answers 410 `artifact_expired`.
+    artifacts_expired: bool,
 }
 
 /// L3: one run the fake made, under its idempotency key.
@@ -882,6 +884,22 @@ impl State {
         HttpReply::new(201, to_json!(&run))
     }
 
+    /// L3: `GET …/labels/runs/<run>/artifacts/<artifact>`: the file's bytes; 404 for an unknown
+    /// one, 410 `artifact_expired` after `expire_artifacts`.
+    fn label_artifact(&self, run_id: &str, artifact_id: &str) -> Answer {
+        let known = self
+            .runs
+            .iter()
+            .any(|r| r.run.id == run_id && r.run.artifacts.iter().any(|a| a.id == artifact_id));
+        if !known {
+            return Answer::Json(envelope(404, "not_found", "No such file."));
+        }
+        if self.artifacts_expired {
+            return Answer::Json(envelope(410, "artifact_expired", "The file has expired."));
+        }
+        Answer::File(format!("%PDF-1.4 fake labels {run_id} {artifact_id}").into_bytes())
+    }
+
     fn touch(&mut self, case_id: &str) {
         let now = self.now();
         self.case_mut(case_id).case.updated_at = now;
@@ -1161,6 +1179,11 @@ impl FakePricing {
     /// L3: the product leaves the fake's label state (a later check or run does not find it).
     pub fn remove_label_product(&self, product_id: &str) {
         self.state().labels.retain(|l| l.product_id != product_id);
+    }
+
+    /// L3: every file of every run has expired (its download answers 410 `artifact_expired`).
+    pub fn expire_artifacts(&self) {
+        self.state().artifacts_expired = true;
     }
 
     /// L3: the stored runs, in the order made, with their keys, products and times.
@@ -1612,7 +1635,11 @@ impl FakePricing {
         let ["stores", store_id, rest @ ..] = segments.as_slice() else {
             return None;
         };
-        if !matches!((method, rest), (Method::Post, ["labels", "preview"])) {
+        if !matches!(
+            (method, rest),
+            (Method::Post, ["labels", "preview"])
+                | (Method::Get, ["labels", "runs", _, "artifacts", _])
+        ) {
             return None;
         }
         if !state.stores.iter().any(|s| s.id == *store_id) {
@@ -1625,7 +1652,10 @@ impl FakePricing {
                 "This key lacks labels:read.",
             )));
         }
-        Some(state.label_preview(body))
+        Some(match rest {
+            ["labels", "runs", run, "artifacts", artifact] => state.label_artifact(run, artifact),
+            _ => state.label_preview(body),
+        })
     }
 
     /// One request as `send` and `fetch` both take it: recorded, held while [`Self::hold`] is

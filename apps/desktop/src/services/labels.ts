@@ -1,6 +1,11 @@
 import {
   commands,
+  type CheckOutcomeDto,
+  type LabelCheckDto_Serialize,
   type LabelFilterDto,
+  type LabelPreviewDto,
+  type LabelRunResultDto_Serialize,
+  type SavedLabelDto,
   type LabelPageDto_Serialize,
   type LabelsAccessStateDto,
   type LabelsOpenDto,
@@ -60,4 +65,46 @@ export async function labelsSelectAll(args: { filter: LabelFilter; query: string
 /** L2 (MC-L1.8): the session a Labels row opens (an unmatched product is adopted from the shop first). */
 export async function labelsOpen(args: { product_id: string }): Promise<LabelsOpenDto> {
   return unwrap(await commands.labelsOpen(args.product_id));
+}
+
+/** L3 (09C §6.1): what generating will do to one product. */
+export type CheckOutcome = CheckOutcomeDto;
+/** L3 (MC-L2.1–.4): the check dialog's content; `id` names the check for preview, generate and download. */
+export type LabelCheck = LabelCheckDto_Serialize;
+/** One group of the check (`template` null = the products without a template, always last). */
+export type CheckGroup = LabelCheck['groups'][number];
+export type CheckItem = CheckGroup['items'][number];
+export type CheckUnresolved = LabelCheck['unresolved'][number];
+export type CheckSummary = LabelCheck['summary'];
+/** L3 (MC-L2.9): the done dialog's content. Fully generated ⇔ `failures` and `not_run` are both empty. */
+export type LabelRunResult = LabelRunResultDto_Serialize;
+export type LabelFailure = LabelRunResult['failures'][number];
+/** One label file of the result (`page_count` = its labels). */
+export type LabelFile = LabelRunResult['artifacts'][number];
+/** A saved label file: its path (outside the data folder: shown as text, never through `previewUrl`) and whether Preview opened it. */
+export type SavedLabel = SavedLabelDto;
+
+/** L3 (MC-L2.1): checks the products (changes nothing). Failures: `labels_off`, `labels_denied`, `labels_no_products`, `labels_busy`, … */
+export async function labelsCheck(args: { product_ids: string[] }): Promise<LabelCheck> {
+  return unwrap(await commands.labelsCheck(args.product_ids));
+}
+
+/** L3 (MC-L2.5): the preview picture of one product of the check (`labels_rejected`, `labels_preview_failed`, …). */
+export async function labelsPreview(args: { check_id: string; product_id: string }): Promise<LabelPreviewDto> {
+  return unwrap(await commands.labelsPreview(args.check_id, args.product_id));
+}
+
+/** L3 (MC-L2.6–.10): generates the check's labels; Try again calls it again with the same `check_id`. */
+export async function labelsGenerate(args: { check_id: string }): Promise<LabelRunResult> {
+  return unwrap(await commands.labelsGenerate(args.check_id));
+}
+
+/** L3 (MC-L2.10): the result over what was generated so far (`not_found` without a generation). */
+export async function labelsPartial(args: { check_id: string }): Promise<LabelRunResult> {
+  return unwrap(await commands.labelsPartial(args.check_id));
+}
+
+/** L3 (MC-L2.11): saves one file in Documents › Session Manager Labels and opens it in Preview. */
+export async function labelsDownload(args: { check_id: string; artifact_id: string }): Promise<SavedLabel> {
+  return unwrap(await commands.labelsDownload(args.check_id, args.artifact_id));
 }

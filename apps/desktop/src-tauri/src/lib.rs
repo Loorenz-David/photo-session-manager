@@ -1188,6 +1188,388 @@ mod l2_tests {
 }
 
 #[cfg(test)]
+mod l3_tests {
+    //! L3·U3 (`docs/implementation/plans/L3_generate_and_download.md` L3·C11): the bodies of the
+    //! five L3 label commands over the wired app with the fake Pricing server and the fake label
+    //! files (nothing is opened, no file lands outside the test's folder).
+    use super::*;
+    use commands::{
+        items::CommandError,
+        labels::{
+            labels_check_body, labels_download_body, labels_generate_body, labels_partial_body,
+            labels_preview_body,
+        },
+    };
+    use psm_core::ports::{clock::Clock, conversations::ConversationStore};
+    use psm_integrations::conversations::beyo_pricing::label_types::IntegrationLabelTemplate;
+    use psm_testkit::{TestApp, fake_pricing::LabelSpec, test_app::PRICING_KEY};
+    use serde_json::{Value, json};
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    fn product(a: &TestApp, id: &str, price: Option<i64>) {
+        a.fake_pricing().add_label_product(LabelSpec {
+            product_id: id.into(),
+            sku: Some(format!("TEST-{id}")),
+            title: format!("Test product {id}"),
+            price_minor: price,
+            ..LabelSpec::default()
+        });
+    }
+
+    fn template(a: &TestApp, id: &str, is_default: bool) {
+        a.fake_pricing().add_template(IntegrationLabelTemplate {
+            id: id.into(),
+            name: "Label 70×100".into(),
+            width_mm: 70.0,
+            height_mm: 100.0,
+            is_default,
+            product_types: ids(&["Tables", "Chairs"]),
+        });
+    }
+
+    /// Connected (key saved, first connection run, access `allowed`) when `connect`; the fake
+    /// holds L3·C1(a)'s products and the default template `Label 70×100` when `standard`.
+    fn app(connect: bool, standard: bool) -> TestApp {
+        let a = TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        if standard {
+            template(&a, "tpl-70x100", true);
+            product(&a, "1", Some(890_000));
+            product(&a, "2", None);
+            product(&a, "3", Some(450_000));
+            a.fake_pricing()
+                .fail_label("3", "missing_code_value", "Barcode: no barcode.");
+        }
+        if connect {
+            a.app.conversations.key_set(Some(PRICING_KEY)).unwrap();
+            while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+        }
+        a
+    }
+
+    fn ok<T: serde::Serialize>(result: Result<T, CommandError>) -> Value {
+        match result {
+            Ok(value) => serde_json::to_value(value).unwrap(),
+            Err(error) => panic!("{}", serde_json::to_value(error).unwrap()),
+        }
+    }
+
+    fn err<T: std::fmt::Debug>(result: Result<T, CommandError>) -> Value {
+        serde_json::to_value(result.unwrap_err()).unwrap()
+    }
+
+    fn code_message(error: &Value) -> (String, String) {
+        (
+            error["code"].as_str().unwrap().to_owned(),
+            error["message"].as_str().unwrap().to_owned(),
+        )
+    }
+
+    fn check_id(a: &TestApp, list: &[&str]) -> String {
+        ok(labels_check_body(&a.app.handles(), &ids(list)))["id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    fn item(id: &str, price: Value, outcome: &str, issues: Value) -> Value {
+        json!({
+            "product_id": id, "sku": format!("TEST-{id}"), "title": format!("Test product {id}"),
+            "price_minor": price, "status": "not_printed", "printed_at": null,
+            "outcome": outcome, "issues": issues, "notes": []
+        })
+    }
+
+    #[test]
+    fn l3_c11a_labels_check_answers_the_groups() {
+        let a = app(true, true);
+        let mut got = ok(labels_check_body(&a.app.handles(), &ids(&["1", "2", "3"])));
+        let id = got["id"].as_str().unwrap().to_owned();
+        assert!(!id.is_empty());
+        got["id"] = json!("<id>");
+        assert_eq!(
+            got,
+            json!({
+                "id": "<id>",
+                "groups": [{
+                    "template": {"id": "tpl-70x100", "name": "Label 70×100", "width_mm": 70.0, "height_mm": 100.0},
+                    "product_types": ["Tables", "Chairs"],
+                    "items": [
+                        item("1", json!(890_000), "mark_printed", json!([])),
+                        item("2", json!(null), "no_price", json!([])),
+                        item("3", json!(450_000), "fail", json!(["Barcode: no barcode."])),
+                    ]
+                }],
+                "unresolved": [],
+                "summary": {"items": 3, "ready": 2, "failing": 1, "mark_printed": 1, "reprint": 0, "no_price": 1},
+                "sizes": [{"width_mm": 70.0, "height_mm": 100.0, "count": 2}]
+            })
+        );
+    }
+
+    #[test]
+    fn l3_c11b_labels_preview_answers_the_picture_path() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1", "2", "3"]);
+        let got = ok(labels_preview_body(&a.app.handles(), &id, "1"));
+        let path = got["path"].as_str().unwrap();
+        assert!(
+            path.ends_with(&format!("/previews/labels/{id}-1.png")),
+            "{path}"
+        );
+        assert_eq!(got.as_object().unwrap().len(), 1);
+    }
+
+    fn expected_result() -> Value {
+        json!({
+            "total": 3, "rendered": 2, "marked_printed": 1, "reprinted": 0, "no_price": 1,
+            "failures": [{"product_id": "3", "sku": "TEST-3", "title": "Test product 3", "message": "Barcode: no barcode."}],
+            "not_run": [],
+            "artifacts": [{"id": "art-1-1", "filename": "labels-1-70x100.pdf", "width_mm": 70.0, "height_mm": 100.0, "page_count": 2}],
+            "failed_product_ids": ["3"]
+        })
+    }
+
+    #[test]
+    fn l3_c11c_labels_generate_and_partial_answer_the_result() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1", "2", "3"]);
+        assert_eq!(
+            ok(labels_generate_body(&a.app.handles(), &id)),
+            expected_result()
+        );
+        assert_eq!(
+            ok(labels_partial_body(&a.app.handles(), &id)),
+            expected_result()
+        );
+    }
+
+    #[test]
+    fn l3_c11d_labels_download_answers_the_saved_file() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1", "2", "3"]);
+        ok(labels_generate_body(&a.app.handles(), &id));
+        let got = ok(labels_download_body(&a.app.handles(), &id, "art-1-1"));
+        let folder = a.dir.path().join("Documents/Session Manager Labels");
+        assert_eq!(
+            got,
+            json!({
+                "path": folder.join("labels-1-70x100.pdf").to_string_lossy(),
+                "opened": true
+            })
+        );
+    }
+
+    #[test]
+    fn l3_c11e_no_products() {
+        let a = app(true, true);
+        let error = err(labels_check_body(&a.app.handles(), &ids(&["98", "99"])));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_no_products".into(),
+                "None of these products were found in Pricing.".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11f_renderer_unavailable() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1"]);
+        a.fake_pricing().fail_matching_with(
+            "/labels/runs",
+            3,
+            503,
+            "renderer_unavailable",
+            "The renderer is busy.",
+        );
+        let error = err(labels_generate_body(&a.app.handles(), &id));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_renderer_unavailable".into(),
+                "Labels can't be generated right now. Try again in a moment.".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11g_unreachable() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1"]);
+        a.fake_pricing().fail_matching("/labels/runs", 3, 500);
+        let error = err(labels_generate_body(&a.app.handles(), &id));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_unreachable".into(),
+                "Pricing can't be reached right now.".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11h_expired() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1"]);
+        ok(labels_generate_body(&a.app.handles(), &id));
+        a.fake_pricing().expire_artifacts();
+        let error = err(labels_download_body(&a.app.handles(), &id, "art-1-1"));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_expired".into(),
+                "This file has expired. Generate the labels again.".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11i_save_failed() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1"]);
+        ok(labels_generate_body(&a.app.handles(), &id));
+        a.label_files().fail_save_next("disk full");
+        let error = err(labels_download_body(&a.app.handles(), &id, "art-1-1"));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_save_failed".into(),
+                "Couldn't save the PDF: disk full.".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11j_preview_refusals() {
+        let a = app(true, false);
+        template(&a, "tpl-a", false);
+        product(&a, "1", Some(100));
+        a.fake_pricing()
+            .set_label("1", |l| l.template = Some("tpl-a".into()));
+        product(&a, "3", Some(100));
+        let id = check_id(&a, &["1", "3"]);
+        let error = err(labels_preview_body(&a.app.handles(), &id, "3"));
+        assert_eq!(
+            code_message(&error),
+            ("labels_rejected".into(), "No template applies.".into())
+        );
+        let other = check_id(&a, &["1"]);
+        a.label_files().fail_raster_next();
+        let error = err(labels_preview_body(&a.app.handles(), &other, "1"));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_preview_failed".into(),
+                "The label preview can't be shown.".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11k_nothing_to_generate() {
+        let a = app(true, true);
+        let id = check_id(&a, &["3"]);
+        let error = err(labels_generate_body(&a.app.handles(), &id));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_nothing".into(),
+                "None of these products can be generated.".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11l_not_found() {
+        let a = app(true, true);
+        let error = err(labels_generate_body(&a.app.handles(), "no-such-check"));
+        assert_eq!(error["code"], "not_found");
+    }
+
+    #[test]
+    fn l3_c11m_denied() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1"]);
+        a.fake_pricing().fail_matching_with(
+            "/labels/runs",
+            1,
+            403,
+            "insufficient_scope",
+            "This key lacks labels:write.",
+        );
+        let error = err(labels_generate_body(&a.app.handles(), &id));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_denied".into(),
+                "Session Manager isn't allowed to print labels. Ask a Pricing admin.".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11n_store_gone() {
+        let a = app(true, true);
+        let store = a.app.store.sync().unwrap().store.unwrap().id;
+        a.fake_pricing().remove_store(&store);
+        let error = err(labels_check_body(&a.app.handles(), &ids(&["1"])));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_store_gone".into(),
+                "This key is no longer tied to shop-a.myshopify.com".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11o_bad_reply() {
+        let a = app(true, true);
+        a.fake_pricing().fail_matching("/labels/plan", 1, 200);
+        let error = err(labels_check_body(&a.app.handles(), &ids(&["1"])));
+        assert_eq!(
+            code_message(&error),
+            (
+                "labels_bad_reply".into(),
+                "Pricing answered in a way this version does not understand".into()
+            )
+        );
+    }
+
+    #[test]
+    fn l3_c11p_a_second_generate_while_one_runs_is_busy() {
+        let a = app(true, true);
+        let id = check_id(&a, &["1"]);
+        let fake = a.pricing.clone().unwrap();
+        fake.hold();
+        let handles = a.app.handles();
+        let first_id = id.clone();
+        let first = std::thread::spawn(move || labels_generate_body(&handles, &first_id).is_ok());
+        assert!(fake.wait_until_held());
+        let error = err(labels_generate_body(&a.app.handles(), &id));
+        fake.release();
+        assert_eq!(
+            code_message(&error),
+            ("labels_busy".into(), "Labels are being generated.".into())
+        );
+        assert!(first.join().unwrap());
+    }
+
+    #[test]
+    fn l3_c11q_no_key_is_off() {
+        let a = app(false, true);
+        let error = err(labels_check_body(&a.app.handles(), &ids(&["1"])));
+        assert_eq!(error["code"], "labels_off");
+        assert_eq!(error["data"], json!({"reason": "no_key"}));
+    }
+}
+
+#[cfg(test)]
 mod c2_tests {
     //! C2·U1 (`docs/implementation/plans/C2_header_panel_notifications.md` C2·C7): the list,
     //! counts and badges commands over the wired app with the fake Pricing server.
@@ -2948,6 +3330,11 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::labels::labels_summary,
         commands::labels::labels_select_all,
         commands::labels::labels_open,
+        commands::labels::labels_check,
+        commands::labels::labels_preview,
+        commands::labels::labels_generate,
+        commands::labels::labels_partial,
+        commands::labels::labels_download,
         commands::conversations::conversations_list,
         commands::conversations::conversations_counts,
         commands::conversations::conversations_session_badges,
