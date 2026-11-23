@@ -360,3 +360,30 @@ Opened alongside the owner's document by the VERIFY-14 throwaway-window form; tw
   `keystoneHorizontal`, `keystoneAmount`, default amount reads 100) and the master size instead. Writing rotation or
   keystone also changed the variant's crop (3794 / 3891 square, moved centre); resetting the values restored it.
 - `session test 1` was left open in Capture One beside the owner's document.
+
+## VERIFY-JPEG result — a JPEG in a capture folder (H3 implementer, 2026-11-23, PASS)
+Asked by the archived-items track (master plan archive §3 rule 17, MC-H4.6): does Capture One list, find and process a
+`.jpg` in a capture folder like a RAW? Probed on the owner's open session `Beyo Studio` through the adapter's own
+JXA scripts (`lib.js` + `sync_folder.js`, `find_image.js`, `process.js`, run with `osascript -l JavaScript`); the
+shutter was never fired.
+- **File.** A 3000 × 2000 baseline JPEG without EXIF (`psm-probe-verify-jpeg-2026-11-23.jpg`, 170,637 bytes, made
+  with `sips` from the app icon), copied into `Capture/_Unassigned/` (the document's current capture folder, which has
+  a folder collection). **Left where it is** (H2), with its exports and settings file below.
+- **Listed after `sync_folder`: yes.** `sync_folder` answered `null` at 10:20:37; an immediate `find_image` answered
+  `null` (synchronisation runs in the background); 7 s later the image was listed (`images.whose({path})` found it on
+  the first poll).
+- **`find_image` for a `.jpg` path: yes**, the primary variant id (`"5219"`), exactly as for a RAW.
+- **Both recipes export it.** `process` with `PSM Preview` and with `PSM Master` each returned a job id and the
+  editor geometry (`rotation 0, flip none, keystone 0/0, amount 100`). Outputs in
+  `Output/_session_manager/`: `psm-probe-verify-jpeg-2026-11-23.jpg` **2560 × 1707** (the preview recipe's long edge,
+  i.e. scaled down from 3000 × 2000, same 3:2 frame) and `psm-probe-verify-jpeg-2026-11-23.tif` **3000 × 2000**
+  (the master = the JPEG's own pixel size), written 1 s apart (10:20:55, 10:20:56).
+- **Settings file.** None existed when the file was copied in. A `.cos` appeared at
+  `Capture/_Unassigned/CaptureOne/Settings1690/psm-probe-verify-jpeg-2026-11-23.jpg.cos` (7,294 bytes) at 10:21:10,
+  about 15 s after the two process calls (not checked between the listing and the processing). So a brought-back
+  JPEG gets its first settings file from Capture One soon after its first render: MC-H4.7's "a first settings file is
+  not an edit" (`previews.rs` first-fingerprint clause) is the rule that keeps it from counting as an edit. This Capture One
+  writes `Settings1690` (the fixtures use `Settings1680`; the app's sidecar lookup takes any `Settings*` folder).
+- Consequence for the app: a JPEG photo needs no special handling in the Capture One adapter (lookup, sync and both
+  recipes behave as for a RAW); its master is its pixel size, so Capture One's measurement after the first render
+  (P58 rule) replaces the camera frame with the same 3:2 frame.

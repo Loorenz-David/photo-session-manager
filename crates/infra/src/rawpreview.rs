@@ -26,6 +26,76 @@ impl RawPreviews for EmbeddedJpeg {
     }
 }
 
+/// The long edge of an original preview made from a JPEG photo (MC-H4.6; never enlarged).
+pub const JPEG_PREVIEW_EDGE: u32 = 1600;
+
+/// A photo whose file is a JPEG (a brought-back published picture, MC-H4.6): the preview is the
+/// JPEG itself, scaled to at most [`JPEG_PREVIEW_EDGE`] on its long edge (never enlarged); the
+/// orientation is its EXIF orientation (absent or outside 1–8 → none); the frame is its pixel
+/// size, width and height swapped for orientations 5–8. The pixels are never rotated: the
+/// orientation tells the screen how to show them, as for a camera's embedded preview.
+pub struct JpegSource;
+impl RawPreviews for JpegSource {
+    fn extract(&self, source: &Path, dest: &Path) -> Result<Option<Extracted>> {
+        let bytes = fs::read(source)?;
+        let Ok(image) = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg)
+        else {
+            return Ok(None);
+        };
+        let (width, height) = (image.width(), image.height());
+        if width == 0 || height == 0 {
+            return Ok(None);
+        }
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let temp = dest.with_extension("jpg.tmp");
+        if width.max(height) <= JPEG_PREVIEW_EDGE {
+            fs::write(&temp, &bytes)?;
+        } else {
+            let scaled = image.resize(
+                JPEG_PREVIEW_EDGE,
+                JPEG_PREVIEW_EDGE,
+                image::imageops::FilterType::Lanczos3,
+            );
+            let mut out = Vec::new();
+            if image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 80)
+                .encode_image(&scaled)
+                .is_err()
+            {
+                return Ok(None);
+            }
+            fs::write(&temp, out)?;
+        }
+        fs::rename(temp, dest)?;
+        let orientation = jpeg_orientation(&bytes);
+        let (w, h) = if matches!(orientation, Some(5..=8)) {
+            (height, width)
+        } else {
+            (width, height)
+        };
+        Ok(Some(Extracted {
+            orientation,
+            compose_frame: Some(Frame {
+                w: i64::from(w),
+                h: i64::from(h),
+            }),
+        }))
+    }
+}
+
+/// The EXIF orientation (tag 0x0112) of a JPEG's APP1 segment; absent or outside 1–8 → none.
+fn jpeg_orientation(bytes: &[u8]) -> Option<u8> {
+    let exif = exif::Reader::new()
+        .read_from_container(&mut std::io::Cursor::new(bytes))
+        .ok()?;
+    let value = exif
+        .get_field(exif::Tag::Orientation, exif::In::PRIMARY)?
+        .value
+        .get_uint(0)?;
+    (1..=8).contains(&value).then_some(value as u8)
+}
+
 /// The RAW's sensor frame (10A MC-20, P58): the DNG `DefaultCropSize` (0xC620) that Sony writes
 /// in the raw SubIFD, else the largest ImageWidth × ImageLength of an IFD that carries no embedded
 /// JPEG. Sony's tiled raw data pads ImageWidth/ImageLength to whole tiles (A7R V: 6656 × 4608 for

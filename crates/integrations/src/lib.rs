@@ -74,7 +74,7 @@ use psm_infra::{
     nudge::NudgeServer,
     paths::AppPaths,
     previews_store::PreviewStore,
-    rawpreview::EmbeddedJpeg,
+    rawpreview::{EmbeddedJpeg, JpegSource},
     settings_file::Settings,
     spool::Spool,
     sqlite::store::SqliteStore,
@@ -1585,7 +1585,18 @@ impl JobHandler for OriginalPreviewJob {
             .join(&key[..2])
             .join(&key)
             .join("original.jpg");
-        let extracted = EmbeddedJpeg.extract(std::path::Path::new(&job.target), &dest)?;
+        let source = std::path::Path::new(&job.target);
+        // MC-H4.6: a JPEG photo (a brought-back picture) is its own preview; every other
+        // extension keeps the embedded-JPEG path.
+        let is_jpeg = source
+            .extension()
+            .map(|e| e.to_string_lossy().to_ascii_lowercase())
+            .is_some_and(|e| e == "jpg" || e == "jpeg");
+        let extracted = if is_jpeg {
+            JpegSource.extract(source, &dest)?
+        } else {
+            EmbeddedJpeg.extract(source, &dest)?
+        };
         self.store.set_original_preview(
             &job.target,
             extracted

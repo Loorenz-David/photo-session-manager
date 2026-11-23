@@ -33,7 +33,7 @@ are thin and run off the app lock (`spawn_blocking`); business logic never depen
 (**SqliteStore**, migrations list) + `sqlite/migrations/NNN_*.sql`, `spool.rs` + `nudge.rs` (hook delivery),
 `watcher.rs` (FSEvents/notify), `osascript.rs` (**OsaRunner**, 30 s timeout, cwd = data dir),
 `jobs.rs` (**JobRunner**, `JobHandler`), `logging.rs` (daily file, secret redaction), `backup.rs`,
-`rawpreview.rs` (embedded JPEG out of a RAW, MC-20), `imaging/` (the only pixel code: dimensions,
+`rawpreview.rs` (embedded JPEG out of a RAW, MC-20; `JpegSource` for a photo whose file is a JPEG, MC-H4.6), `imaging/` (the only pixel code: dimensions,
 thumbnails, `render.rs` output renderer), `media_store.rs` (masters/outputs caches), `previews_store.rs`,
 `export_fs.rs` (staging + swap), `storage_fs.rs`, `disk.rs`, `ftp/` (hand-written passive FTP receiver:
 `server.rs`, `session.rs`, `peers.rs`, `names.rs`), `camera_files.rs` (`renamex_np(RENAME_EXCL)`, never
@@ -270,7 +270,13 @@ query per RAW).
    `path_key`, attribute to the active session else Unassigned; inserts the photo **approved** (P66),
    a `capture_events` row, queues `original_preview` + `hash` jobs; emits `photo_added`.
 3. Original preview: `rawpreview::EmbeddedJpeg` copies the camera JPEG → `previews/<pk>/original.jpg`
-   (P58: Compose works on it at once).
+   (P58: Compose works on it at once). **A photo's file may be a JPEG** (an imported JPEG, or a picture brought
+   back from the shop, H3 / MC-H4.6): the `original_preview` job (`OriginalPreviewJob`, `integrations/src/lib.rs`)
+   picks `rawpreview::JpegSource` for a `.jpg`/`.jpeg` target (any case): the JPEG itself when its long edge is at
+   most 1600 px, else a copy scaled to 1600 px (never enlarged, pixels never rotated); `orientation` = its EXIF
+   orientation; frame = its pixel size (width/height swapped for orientations 5–8) adopted as `FrameSource::Camera`,
+   which Capture One's first preview replaces (P58 rule). Every other extension takes `EmbeddedJpeg`. The watcher's
+   candidate rule is unchanged: **a `.jpg` written into a capture folder is never an arrival** (RAWs only).
 4. `CaptureOneFollow` (`follow.rs`): sets Capture One's current collection to the folder and calls
    `sync_folder` so the variant appears in seconds (P65); applies the Style once (`raw_state.style_applied_at`).
 5. `PreviewService` (`services/previews.rs`): asks Capture One to `process` the variant with `PSM Preview`;

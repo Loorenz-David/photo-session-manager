@@ -16,6 +16,7 @@ mod h1_remote_record;
 mod h1_shopify_reads;
 mod h2_pages_and_search;
 mod h2_row_pictures;
+mod h3_jpeg_photos;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;
