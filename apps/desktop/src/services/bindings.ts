@@ -1719,6 +1719,11 @@ export type PreviewItemDto_Deserialize = {
 	/**  MC-A10: the conflicts this item waits on once confirmed. */
 	conflicts: PreviewConflictDto_Deserialize[],
 	researching: boolean,
+	/**
+	 *  H4 (MC-H3.6): a remote item publishes its details only; its photos stay as they are in
+	 *  the shop. Left out when false.
+	 */
+	details_only?: boolean,
 };
 
 export type PreviewItemDto_Serialize = {
@@ -1737,6 +1742,11 @@ export type PreviewItemDto_Serialize = {
 	/**  MC-A10: the conflicts this item waits on once confirmed. */
 	conflicts: PreviewConflictDto_Serialize[],
 	researching: boolean,
+	/**
+	 *  H4 (MC-H3.6): a remote item publishes its details only; its photos stay as they are in
+	 *  the shop. Left out when false.
+	 */
+	details_only?: boolean,
 };
 
 /**  P64: what the publish progress popover shows (step in words, elapsed time, last error). */

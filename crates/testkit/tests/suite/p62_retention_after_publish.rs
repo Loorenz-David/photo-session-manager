@@ -706,14 +706,15 @@ fn c3b_a_cleared_item_refuses_what_needs_images_and_saves_an_attribute_without_i
         ),
     };
     refused(a.app.compositions.set(main.id, values).map(|_| ()));
-    refused(
-        a.app
-            .publish
-            .as_ref()
-            .unwrap()
-            .confirm_as_shown(&[it.session], "Publish images")
-            .map(|_| ()),
-    );
+    // H4 (MC-H3.6): a cleared item's publish is accepted as details-only.
+    a.app
+        .publish
+        .as_ref()
+        .unwrap()
+        .confirm_as_shown(&[it.session], "Publish images")
+        .unwrap();
+    let latest = a.store().latest_publish(it.session).unwrap().unwrap();
+    assert!(a.store().publish_item(latest.item_id).unwrap().details_only);
     // Nothing changed: the photo keeps its place.
     assert_eq!(a.store().photo(main.id).unwrap().classification, C::Main);
     // A text attribute needs no image: it saves.

@@ -158,6 +158,8 @@ pub struct PublishPreviewItem {
     pub n_withheld: usize,
     /// MC-A10: the item's conflicts, which wait for the photographer once confirmed.
     pub conflicts: Vec<PreviewConflict>,
+    /// H4 (MC-H3.6): a remote item publishes its details only (no photos, no media change).
+    pub details_only: bool,
 }
 
 /// One conflict as the confirmation shows it (MC-A10): the field, the previous value and where it
@@ -211,6 +213,8 @@ pub struct PublishItem {
     pub total: i64,
     pub error: Option<String>,
     pub export_run_id: Option<i64>,
+    /// H4 (MC-H3.6): decided at confirmation and never recomputed: the run touches no media.
+    pub details_only: bool,
 }
 
 impl PublishItem {

@@ -162,6 +162,14 @@ struct Queue {
     stale: Vec<Download>,
 }
 
+/// MC-H3.7: what a list row of a remote item is counted from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteRow {
+    pub state: RemoteState,
+    pub gallery: usize,
+    pub condition: usize,
+}
+
 /// The row picture inputs of every session, read once (MC-H1.1; one read for a whole list).
 pub struct RowPictures {
     covers: HashMap<i64, RemoteCover>,
@@ -186,6 +194,23 @@ impl RowPictures {
             CoverFile::Present(path) => (Some(path), false),
             CoverFile::Missing(_) => (None, true),
             CoverFile::None => (None, false),
+        }
+    }
+
+    /// MC-H3.7 (H4 projection r0, L7): a remote session's row facts: its item's state and its
+    /// record's gallery and condition picture counts; `None` unless the item is `Remote(_)`.
+    pub fn remote_row(&self, session_id: i64) -> Option<RemoteRow> {
+        if !self.remote {
+            return None;
+        }
+        let row = self.covers.get(&session_id)?;
+        match remote_state(row.input) {
+            state @ RemoteState::Remote(_) => Some(RemoteRow {
+                state,
+                gallery: row.gallery,
+                condition: row.condition,
+            }),
+            _ => None,
         }
     }
 

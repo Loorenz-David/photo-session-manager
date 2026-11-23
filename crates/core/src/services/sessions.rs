@@ -479,7 +479,21 @@ impl SessionsService<'_> {
         let mut rows = Vec::new();
         for record in records {
             let dto = &record.session;
-            let input = status_input(&record);
+            // MC-H3.7: a remote item's row counts its record (the list and pages only;
+            // `ready_session_ids` keeps the raw input, H4 projection r0, L8).
+            let remote_row = pictures
+                .as_ref()
+                .and_then(|pictures| pictures.remote_row(dto.session.id));
+            let mut input = status_input(&record);
+            let (main_count, condition_count, unreviewed_count) = match remote_row {
+                Some(row) => {
+                    input.main_count = row.gallery as i64;
+                    input.unreviewed_count = 0;
+                    input.non_deleted_missing_preview_count = 0;
+                    (row.gallery as i64, row.condition as i64, 0)
+                }
+                None => (dto.main_count, dto.condition_count, dto.unreviewed_count),
+            };
             let status = derive_status(input);
             counts.all += 1;
             if status == SessionStatus::Published {
@@ -495,8 +509,18 @@ impl SessionsService<'_> {
             {
                 continue;
             }
-            let label = if cleared.contains(&dto.session.id) {
-                crate::domain::session::RowLabel::Archived
+            let label = if cleared.contains(&dto.session.id) || remote_row.is_some() {
+                // MC-H3.7: "Archived in Shopify" for both kinds, unless a publish of theirs is
+                // running, held, failed or cancelled.
+                use crate::domain::session::RowLabel;
+                match row_label(input) {
+                    label @ (RowLabel::WaitingForYou(_)
+                    | RowLabel::Publishing(_)
+                    | RowLabel::PublishFailed
+                    | RowLabel::PublishCancelled
+                    | RowLabel::DescriptionFailed) => label,
+                    _ => RowLabel::Archived,
+                }
             } else if status == SessionStatus::Publishing && record.waiting_for_editor {
                 // Changelog 45 (P65): the publish waits for Capture One to load its photos.
                 crate::domain::session::RowLabel::WaitingForEditor
@@ -522,9 +546,9 @@ impl SessionsService<'_> {
                 sku: record.sku,
                 item_type: record.item_type,
                 title: record.title,
-                main_count: dto.main_count,
-                condition_count: dto.condition_count,
-                unreviewed_count: dto.unreviewed_count,
+                main_count,
+                condition_count,
+                unreviewed_count,
                 status,
                 label,
                 progress,

@@ -38,6 +38,10 @@ pub struct PreviewItemDto {
     /// MC-A10: the conflicts this item waits on once confirmed.
     pub conflicts: Vec<PreviewConflictDto>,
     pub researching: bool,
+    /// H4 (MC-H3.6): a remote item publishes its details only; its photos stay as they are in
+    /// the shop. Left out when false.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub details_only: bool,
 }
 /// One conflict as the confirmation shows it: values are canonical JSON text; `prior_provenance`
 /// is `default` (preset default) or `integration` (from Shopify).
@@ -98,6 +102,7 @@ impl From<PublishPreview> for PreviewDto {
                     n_withheld: p.n_withheld,
                     conflicts: p.conflicts.into_iter().map(Into::into).collect(),
                     researching: false,
+                    details_only: p.details_only,
                 })
                 .collect(),
             summary: preview.summary,

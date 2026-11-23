@@ -1207,6 +1207,10 @@ impl App {
             history.clone(),
             psm_core::mechanisms::remote::SEARCH_CACHE_LIMIT_BYTES,
         ));
+        // H4 (MC-H3.6): a publish preview reads an `Unknown` item's pictures first.
+        if let Some(publish) = &publish {
+            publish.set_remote(remote.clone());
+        }
         let remote_background = run_startup.then(|| {
             let worker_stop = stop.clone();
             let worker = remote.clone();

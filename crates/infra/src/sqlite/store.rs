@@ -87,6 +87,7 @@ impl SqliteStore {
             M::up(include_str!("migrations/018_saved_pages.sql")),
             M::up(include_str!("migrations/019_conversations.sql")),
             M::up(include_str!("migrations/020_remote_items.sql")),
+            M::up(include_str!("migrations/021_publish_details_only.sql")),
         ]
     }
 
@@ -710,9 +711,9 @@ fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
         "SELECT id,run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,failed_step,uploaded,total,error,(SELECT CAST(value AS INTEGER) FROM settings WHERE key='publish_export:'||publish_items.id),frozen_item_type FROM publish_items WHERE id=?1", [id],
         |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?,r.get(8)?,r.get(9)?,r.get(10)?,r.get(11)?,r.get(12)?,r.get(13)?,r.get(14)?,r.get(15)?,r.get(16)?))
     ).optional().map_err(db)?.ok_or_else(|| Error::NotFound(format!("publish item {id}")))?;
-    let (origin, pending, resolved, released): (Option<String>, Option<String>, Option<String>, Option<i64>) = conn.query_row(
-        "SELECT frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at FROM publish_items WHERE id=?1", [id],
-        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)),
+    let (origin, pending, resolved, released, details_only): (Option<String>, Option<String>, Option<String>, Option<i64>, bool) = conn.query_row(
+        "SELECT frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at,details_only FROM publish_items WHERE id=?1", [id],
+        |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?)),
     ).map_err(db)?;
     Ok(PublishItem {
         id: row.0,
@@ -736,6 +737,7 @@ fn publish_item(conn: &Connection, id: i64) -> Result<PublishItem> {
         total: row.13,
         error: row.14,
         export_run_id: row.15,
+        details_only,
     })
 }
 
@@ -1193,8 +1195,8 @@ impl StoreTx for SqliteTx<'_> {
         Ok(self.tx.last_insert_rowid())
     }
     fn insert_publish_item(&mut self, item: &PublishItem) -> Result<i64> {
-        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total,frozen_item_type,frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11,?12,?13,?14,?15,?16)",
-            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total,item.frozen_item_type,to_json(&item.frozen_attribute_origin)?,to_json(&item.pending_conflicts)?,to_json(&item.resolved_attributes)?,item.released_at]).map_err(db)?;
+        self.tx.execute("INSERT INTO publish_items(run_id,session_id,create_item,title,frozen_main,frozen_condition,frozen_attributes,announced_removals,confirmed_change_seq,step,uploaded,total,frozen_item_type,frozen_attribute_origin,pending_conflicts,resolved_attributes,released_at,details_only) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11,?12,?13,?14,?15,?16,?17)",
+            params![item.run_id,item.session_id,item.create_item,item.title,to_json(&item.frozen_main)?,to_json(&item.frozen_condition)?,to_json(&item.frozen_attributes)?,to_json(&item.announced_removals)?,item.confirmed_change_seq,step_name(item.step),item.total,item.frozen_item_type,to_json(&item.frozen_attribute_origin)?,to_json(&item.pending_conflicts)?,to_json(&item.resolved_attributes)?,item.released_at,item.details_only]).map_err(db)?;
         Ok(self.tx.last_insert_rowid())
     }
     fn attribute_definitions(&self, integration: &str) -> Result<Vec<Definition>> {
@@ -3446,7 +3448,9 @@ impl Store for SqliteStore {
                         (SELECT COUNT(*) FROM photos p WHERE p.session_id=s.id), \
                         r.remote_checked_at IS NOT NULL, \
                         (SELECT COUNT(*) FROM archived_images a WHERE a.item_id=i.id), \
-                        c.position, c.media_id, c.url, c.bytes \
+                        c.position, c.media_id, c.url, c.bytes, \
+                        (SELECT COUNT(*) FROM archived_images g WHERE g.item_id=i.id AND g.role='gallery'), \
+                        (SELECT COUNT(*) FROM archived_images k WHERE k.item_id=i.id AND k.role='condition') \
                  FROM sessions s JOIN items i ON i.id=s.item_id \
                  LEFT JOIN item_retention r ON r.item_id=i.id \
                  LEFT JOIN archived_images c ON c.item_id=i.id AND c.role='gallery' \
@@ -3479,6 +3483,8 @@ impl Store for SqliteStore {
                     pictures: r.get::<_, i64>(8)? as usize,
                 },
                 cover,
+                gallery: r.get::<_, i64>(13)? as usize,
+                condition: r.get::<_, i64>(14)? as usize,
             })
         })
         .map_err(db)?

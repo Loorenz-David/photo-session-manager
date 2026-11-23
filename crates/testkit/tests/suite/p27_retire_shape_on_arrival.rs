@@ -377,6 +377,8 @@ fn c4a_migration_removes_old_jobs_and_health_codes() {
         .unwrap();
         conn.execute("ALTER TABLE archived_images DROP COLUMN bytes", [])
             .unwrap();
+        conn.execute("ALTER TABLE publish_items DROP COLUMN details_only", [])
+            .unwrap();
         conn.pragma_update(None, "user_version", 2).unwrap();
     }
     a.kill_and_restart().unwrap();

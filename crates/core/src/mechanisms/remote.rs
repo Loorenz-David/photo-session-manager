@@ -159,6 +159,9 @@ pub struct RemoteCover {
     pub input: RemoteInput,
     /// The record's gallery picture with the lowest position (gone when its URL is empty).
     pub cover: Option<ArchivedImage>,
+    /// H4 (MC-H3.7): the record's gallery and condition picture counts.
+    pub gallery: usize,
+    pub condition: usize,
 }
 
 /// MC-H3.1: cleared → archived; an adopted, linked item without photo rows is unknown until

@@ -21,6 +21,7 @@ Each rule names its source. When a rule here and the source disagree, the source
 | M-H2 | Bring back imports all of an item's pictures or none, and never deletes anything in the shop or in Capture One's catalogue | `services/bring_back.rs`: `Store::bring_back` (one transaction) runs only after every file is on disk; a failure removes only that attempt's files; the editor is only asked `inspect_document` and `sync_folder` |
 | M-H3 | A publish after bring back uploads only photos whose composition, rotation or Capture One edit changed since, plus new ones | the links `Store::bring_back` writes (`ready`, revision 0, `composition_rev` 0, the stored `retouch_gen`) feed `mechanisms/publish.rs::replacement_candidates` and Upload's `ready` skip; no publish code knows about bring back |
 | M-H4 | The screen is never given a local image path whose file is missing | `RowPictures::row_picture`; `Store::bring_back` nulls the retired rows' preview paths |
+| M-H1 (H4) | A details-only run never touches media | `publish_items.details_only` (decided at confirmation, read on every resume): `prepare`/`upload` do nothing, `update` skips `update_gallery` and every media-list write (`services/publish.rs`) |
 | M-H5 | "Delete session" never touches the shop or Pricing | `services/storage/session_delete.rs` (no adapter call); `RemoteItems::forget_item` removes only cache folders |
 
 ## Conversations rules CR1–CR6 (book `09B` §10 rules 1–6; `docs/implementation/master_plan_conversations.md` §3)

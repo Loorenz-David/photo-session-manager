@@ -323,6 +323,20 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
    (trimmed), never clears a field without a frozen value, reads back and fails with
    `attribute_verification` naming the key) → `done` (`published_at`, backup). Each step is idempotent and
    resumes after a crash (H4); `photo_links` rows track per-photo upload state and remote ids.
+2a. **Details-only publish (H4, MC-H3.6).** For a session whose item is `Remote(_)` (archived or shop-only;
+   an `Unknown` adopted item is read first with `RemoteItems::ensure_record`, a press, wired by
+   `PublishService::set_remote`) `preview` answers no photos, no thumbnails, no announced removals,
+   `create_item` false and `details_only` true, with no `item_get`; `confirm` (the P62 refusal is gone)
+   freezes empty photo lists, skips the in-transaction photo comparison and stores
+   `publish_items.details_only = 1` (migration 021). The run reads the flag from the stored item on every
+   resume: `prepare` and `upload` do nothing, `update` skips the gallery block (`update_gallery`) and leaves
+   every media-list value (the condition photos) out of the writes (`update_details`); title, type, tags,
+   description, metafields and search texts are written as for any publish. The item stays remote.
+   **Rows (MC-H3.7):** with `with_remote`, a remote row counts its record (`RowPictures::remote_row`, from
+   the one `remote_covers` read: gallery / condition counts), `unreviewed_count` 0, and its status input
+   has `main_count` = gallery, `unreviewed` 0, missing previews 0 (`ready_session_ids` keeps the raw input);
+   the label is the publish label while a publish is running, held, failed or cancelled, else `Archived`
+   (archived rows via `cleared_sessions`, also without `with_remote`).
 3. Waiting: a Capture One "not ready" error (`mechanisms/backoff.rs::editor_wait`) requeues with
    backoff 1/2/4/8 s then 15 s, label "Waiting for Capture One…", gives up after 10 min with a plain
    sentence. `publish_cancel` stops after the request in flight; `publish_activity` feeds the popover.
