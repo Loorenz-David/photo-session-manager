@@ -29,7 +29,14 @@ pub const PRODUCT_CREATE_MEDIA_MANY: &str = "mutation ProductCreateMediaMany($pr
 
 /// P62 (10F Rules, M41): the product's gallery media and its condition-photos field's files,
 /// each with id and image URL, in one read.
-pub const MEDIA_READBACK: &str = "query MediaReadback($id: ID!, $namespace: String!, $key: String!) { product(id: $id) { id media(first: 250) { nodes { id status ... on MediaImage { image { url } originalSource { url } } } } metafield(namespace: $namespace, key: $key) { value references(first: 100) { nodes { ... on MediaImage { id image { url } } ... on GenericFile { id url } } } } } }";
+/// H1 (MC-H4.1): each picture also carries its original file size (schema-grounded:
+/// `MediaImageOriginalSource.fileSize`, `GenericFile.originalFileSize`).
+pub const MEDIA_READBACK: &str = "query MediaReadback($id: ID!, $namespace: String!, $key: String!) { product(id: $id) { id media(first: 250) { nodes { id status ... on MediaImage { image { url } originalSource { url fileSize } } } } metafield(namespace: $namespace, key: $key) { value references(first: 100) { nodes { ... on MediaImage { id image { url } originalSource { fileSize } } ... on GenericFile { id url originalFileSize } } } } } }";
+
+/// H1 (10H §4, MC-H1.4): the current address and size of up to `URL_REFRESH_CHUNK` media ids;
+/// `nodes` answers one entry per id, in order, `null` for an id the shop no longer has
+/// (schema-grounded: Admin GraphQL 2026-10 `queries/nodes`).
+pub const MEDIA_URLS: &str = "query MediaUrls($ids: [ID!]!) { nodes(ids: $ids) { id ... on MediaImage { image { url } originalSource { fileSize } } ... on GenericFile { url originalFileSize } } }";
 
 pub const MEDIA_POLL: &str = "query MediaPoll($id: ID!) { node(id: $id) { id ... on MediaImage { status fileStatus alt image { url } originalSource { url } mediaErrors { code message details } } } }";
 

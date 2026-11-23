@@ -8,7 +8,7 @@
 use super::{
     auth::ClientCredentialsAuth,
     errors, graphql,
-    transport::{HttpReply, HttpTransport},
+    transport::{Download, HttpReply, HttpTransport},
     type_map,
     types::{DefinitionNode, DefinitionsPage, MediaNode, MetafieldsPage, ProductNode, VariantNode},
 };
@@ -20,14 +20,18 @@ use psm_core::{
         RemoteMedia, RemoteMediaStatus, RemoteValues, Seo, StagedTarget, StockChoice,
         StockLocation, StockLocations, StockOutcome, WriteValue,
     },
-    mechanisms::{upload_name, values::canonical_decimal},
+    domain::remote::CallBudget,
+    mechanisms::{remote::URL_REFRESH_CHUNK, upload_name, values::canonical_decimal},
     ports::{
         clock::Clock,
         commerce::{ALL_CAPABILITIES, CommerceAdapter, PublicListing, ShopProduct},
     },
 };
 use serde_json::{Value as Json, json};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 use unicode_normalization::UnicodeNormalization;
 
 /// The integration name used in core tables (`attribute_definitions.integration`, links).
@@ -385,6 +389,71 @@ pub struct ShopifyAdapter {
     transport: Arc<dyn HttpTransport>,
     auth: ClientCredentialsAuth,
     poll: PollConfig,
+    /// MC-H5.1: the newest `extensions.cost.throttleStatus` reading. Locked only to store or
+    /// copy it, never across a request (uploads run in parallel, P64).
+    throttle: Mutex<Option<ThrottleReading>>,
+}
+
+/// One `throttleStatus` reading and when it was taken (monotonic; MC-H5.1).
+#[derive(Debug, Clone, Copy)]
+struct ThrottleReading {
+    maximum: f64,
+    available: f64,
+    restore_per_s: f64,
+    at: Instant,
+}
+
+impl ThrottleReading {
+    /// `body.extensions.cost.throttleStatus` when its three numbers are all present.
+    fn of(body: &Json) -> Option<Self> {
+        let status = &body["extensions"]["cost"]["throttleStatus"];
+        Some(Self {
+            maximum: status["maximumAvailable"].as_f64()?,
+            available: status["currentlyAvailable"].as_f64()?,
+            restore_per_s: status["restoreRate"].as_f64()?,
+            at: Instant::now(),
+        })
+    }
+}
+
+/// MC-H5.2: the points available `elapsed_s` seconds after a reading of `available` out of
+/// `maximum` that refills at `restore_per_s`; never above the maximum.
+pub fn projected(available: f64, maximum: f64, restore_per_s: f64, elapsed_s: f64) -> f64 {
+    maximum.min(available + restore_per_s * elapsed_s)
+}
+
+/// Download answers (MC-H1.4): `200` → the bytes; `403`/`404` → the picture is gone; any other
+/// status → a provider error that names the status only (never the URL).
+fn download_bytes(download: Download) -> Result<Vec<u8>> {
+    match download.status {
+        200 => Ok(download.bytes),
+        403 | 404 => Err(Error::ImageGone),
+        status => Err(errors::provider("download", format!("HTTP {status}"))),
+    }
+}
+
+/// One `nodes(ids:)` entry (MC-H1.4): `null` → `None`; else the id, the image URL (a
+/// `MediaImage`'s `image.url`, a `GenericFile`'s `url`) and the original file's size.
+fn media_url_of(node: &Json) -> Option<MediaImage> {
+    if node.is_null() {
+        return None;
+    }
+    Some(MediaImage {
+        id: node["id"].as_str().unwrap_or_default().to_owned(),
+        url: node["image"]["url"]
+            .as_str()
+            .or_else(|| node["url"].as_str())
+            .map(str::to_owned),
+        bytes: file_size_of(node),
+    })
+}
+
+/// A file node's original size: `originalSource.fileSize` (`MediaImage`) or `originalFileSize`
+/// (`GenericFile`).
+fn file_size_of(node: &Json) -> Option<i64> {
+    node["originalSource"]["fileSize"]
+        .as_i64()
+        .or_else(|| node["originalFileSize"].as_i64())
 }
 
 impl ShopifyAdapter {
@@ -406,11 +475,36 @@ impl ShopifyAdapter {
             transport,
             auth,
             poll,
+            throttle: Mutex::new(None),
         }
     }
 
     pub fn config(&self) -> &ShopifyConfig {
         &self.config
+    }
+
+    /// MC-H5.1: keeps the reply's budget reading, if it carries one; else the stored one stays.
+    fn note_budget(&self, body: &Json) {
+        if let Some(reading) = ThrottleReading::of(body)
+            && let Ok(mut throttle) = self.throttle.lock()
+        {
+            *throttle = Some(reading);
+        }
+    }
+
+    /// One CDN download (H1): refuses a non-https URL before any request, logs the provider
+    /// call (never the URL) and maps the answer by `download_bytes`.
+    fn get(&self, op: &str, url: &str) -> Result<Vec<u8>> {
+        let started = std::time::Instant::now();
+        let result = self.transport.download(url).and_then(download_bytes);
+        tracing::info!(
+            provider = "shopify",
+            op = %op,
+            duration_ms = started.elapsed().as_millis(),
+            ok = result.is_ok(),
+            "provider call"
+        );
+        result
     }
 
     fn graphql_url(&self) -> String {
@@ -465,6 +559,9 @@ impl ShopifyAdapter {
             let reply: HttpReply = self.auth.with_token(&|token| {
                 self.transport.post_graphql(url, token, document, variables)
             })?;
+            // MC-H5.1: every answer's budget, before any retry or error return (a throttled
+            // answer is the one that matters most).
+            self.note_budget(&reply.body);
             let retryable = reply.status == 429
                 || errors::is_throttled(&reply.body)
                 || (!is_mutation && reply.status >= 500);
@@ -1698,18 +1795,48 @@ impl CommerceAdapter for ShopifyAdapter {
             return Err(Error::InvalidData("image URL is not https".into()));
         }
         let separator = if url.contains('?') { '&' } else { '?' };
-        let started = std::time::Instant::now();
-        let result = self
-            .transport
-            .get_bytes(&format!("{url}{separator}width={max_edge}"));
-        tracing::info!(
-            provider = "shopify",
-            op = "fetch_image",
-            duration_ms = started.elapsed().as_millis(),
-            ok = result.is_ok(),
-            "provider call"
-        );
-        result
+        self.get("fetch_image", &format!("{url}{separator}width={max_edge}"))
+    }
+
+    /// H1 (10H §7.1): the image at full size: the URL unchanged, no size parameter.
+    fn fetch_original(&self, url: &str) -> Result<Vec<u8>> {
+        if !url.starts_with("https://") {
+            return Err(Error::InvalidData("image URL is not https".into()));
+        }
+        self.get("fetch_original", url)
+    }
+
+    /// H1 (MC-H1.4, MC-H5.5): one `MediaUrls` query per `URL_REFRESH_CHUNK` ids, in order; the
+    /// answers joined in the order of `media_ids`. A reply with a different number of nodes than
+    /// asked is refused (never a wrong pairing).
+    fn media_urls(&self, media_ids: &[String]) -> Result<Vec<Option<MediaImage>>> {
+        let mut out = Vec::with_capacity(media_ids.len());
+        for chunk in media_ids.chunks(URL_REFRESH_CHUNK) {
+            let data = self.call(graphql::MEDIA_URLS, json!({ "ids": chunk }))?;
+            let nodes = data["nodes"].as_array().cloned().unwrap_or_default();
+            if nodes.len() != chunk.len() {
+                return Err(errors::provider(
+                    "media urls",
+                    format!("{} of {}", nodes.len(), chunk.len()),
+                ));
+            }
+            out.extend(nodes.iter().map(media_url_of));
+        }
+        Ok(out)
+    }
+
+    /// MC-H5.2: `None` before the first reading, else the reading projected to now.
+    fn budget(&self) -> Option<CallBudget> {
+        let reading = (*self.throttle.lock().ok()?)?;
+        Some(CallBudget {
+            available: projected(
+                reading.available,
+                reading.maximum,
+                reading.restore_per_s,
+                reading.at.elapsed().as_secs_f64(),
+            ),
+            maximum: reading.maximum,
+        })
     }
 
     fn list_files_by_name(&self, stem: &str) -> Result<Vec<RemoteMedia>> {
@@ -1977,6 +2104,7 @@ fn media_readback_of(product: &Json) -> Result<MediaReadback> {
                 .into_iter()
                 .flatten()
                 .find_map(|u| u.url.clone()),
+            bytes: node.original_source.as_ref().and_then(|u| u.file_size),
         })
         .collect();
     let mut condition = Vec::new();
@@ -1994,16 +2122,17 @@ fn media_readback_of(product: &Json) -> Result<MediaReadback> {
             .cloned()
             .unwrap_or_default();
         for id in ids {
-            let url = references
+            let node = references
                 .iter()
-                .find(|node| node["id"].as_str() == Some(id.as_str()))
-                .and_then(|node| {
-                    node["image"]["url"]
-                        .as_str()
-                        .or_else(|| node["url"].as_str())
-                        .map(str::to_owned)
-                });
-            condition.push(MediaImage { id, url });
+                .find(|node| node["id"].as_str() == Some(id.as_str()));
+            let url = node.and_then(|node| {
+                node["image"]["url"]
+                    .as_str()
+                    .or_else(|| node["url"].as_str())
+                    .map(str::to_owned)
+            });
+            let bytes = node.and_then(file_size_of);
+            condition.push(MediaImage { id, url, bytes });
         }
     }
     Ok(MediaReadback { gallery, condition })
@@ -2029,6 +2158,26 @@ mod tests {
             "<p>x &gt; y\nline</p><p>z</p>"
         );
         assert_eq!(description_html(""), "");
+    }
+
+    #[test]
+    fn h1_c2a_projected_refills_by_the_rate() {
+        assert_eq!(projected(100.0, 1000.0, 50.0, 4.0), 300.0);
+    }
+
+    #[test]
+    fn h1_c2b_projected_never_above_the_maximum() {
+        assert_eq!(projected(100.0, 1000.0, 50.0, 30.0), 1000.0);
+    }
+
+    #[test]
+    fn h1_c2c_projected_at_the_reading() {
+        assert_eq!(projected(954.0, 1000.0, 50.0, 0.0), 954.0);
+    }
+
+    #[test]
+    fn h1_c2d_projected_without_a_rate() {
+        assert_eq!(projected(954.0, 1000.0, 0.0, 60.0), 954.0);
     }
 
     #[test]

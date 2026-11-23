@@ -1,0 +1,48 @@
+{
+  "source": "schema-grounded: shopify.dev Admin GraphQL 2026-10 queries/nodes, objects/MediaImage, objects/MediaImageOriginalSource, objects/GenericFile; not captured. extensions.cost copied from sv4_job_poll_done.json (captured). Placeholder ids and URLs.",
+  "request": {
+    "query": "query MediaUrls($ids: [ID!]!) { nodes(ids: $ids) { id ... on MediaImage { image { url } originalSource { fileSize } } ... on GenericFile { url originalFileSize } } }",
+    "variables": {
+      "ids": [
+        "gid://shopify/MediaImage/1001",
+        "gid://shopify/MediaImage/1002",
+        "gid://shopify/GenericFile/1003"
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "data": {
+        "nodes": [
+          {
+            "id": "gid://shopify/MediaImage/1001",
+            "image": {
+              "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/a.jpg"
+            },
+            "originalSource": {
+              "fileSize": 1843211
+            }
+          },
+          null,
+          {
+            "id": "gid://shopify/GenericFile/1003",
+            "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/c.jpg",
+            "originalFileSize": 904112
+          }
+        ]
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 1,
+          "requestedQueryCost": 1,
+          "throttleStatus": {
+            "currentlyAvailable": 1999,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    }
+  }
+}

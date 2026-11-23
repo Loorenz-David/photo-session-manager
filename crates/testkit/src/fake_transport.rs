@@ -1,14 +1,18 @@
 //! `FakeTransport` (master plan §7.5): replays sanitized Shopify fixtures for the real
 //! `ShopifyAdapter`. Replies are keyed by GraphQL operation name + a digest of the variables
 //! (canonical JSON), or by operation name alone (any variables); each key holds a sequence of
-//! replies (for polls), optionally repeating its last one. An unmatched request panics, which
-//! fails the test. Every request is recorded.
+//! replies (for polls), optionally repeating its last one. Downloads (H1) are keyed by the exact
+//! URL, a queue whose last answer repeats. An unmatched request panics, which fails the test.
+//! Every request is recorded.
 
 use crate::fixtures::shopify::{Fixture, operation_name};
 use psm_core::{Result, mechanisms::values::canonical_json};
-use psm_integrations::commerce::shopify::transport::{HttpReply, HttpTransport};
+use psm_integrations::commerce::shopify::transport::{Download, HttpReply, HttpTransport};
 use serde_json::Value as Json;
-use std::{collections::VecDeque, sync::Mutex};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Mutex,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Recorded {
@@ -28,6 +32,9 @@ pub enum Recorded {
         headers: Vec<(String, String)>,
         bytes: usize,
     },
+    Download {
+        url: String,
+    },
 }
 
 struct Rule {
@@ -40,6 +47,7 @@ struct Rule {
 #[derive(Default)]
 pub struct FakeTransport {
     rules: Mutex<Vec<Rule>>,
+    downloads: Mutex<HashMap<String, VecDeque<Download>>>,
     requests: Mutex<Vec<Recorded>>,
 }
 
@@ -88,6 +96,25 @@ impl FakeTransport {
 
     pub fn on_form_always(&self, url: &str, reply: HttpReply) {
         self.push(format!("form:{url}"), None, vec![reply], true);
+    }
+
+    /// H1: answers downloads of exactly `url` with `answers` in order, the last one repeating.
+    pub fn on_download(&self, url: &str, answers: Vec<Download>) {
+        self.downloads
+            .lock()
+            .unwrap()
+            .insert(url.to_owned(), answers.into());
+    }
+
+    /// The URLs of the recorded downloads, in order.
+    pub fn downloads(&self) -> Vec<String> {
+        self.requests()
+            .into_iter()
+            .filter_map(|r| match r {
+                Recorded::Download { url } => Some(url),
+                _ => None,
+            })
+            .collect()
     }
 
     pub fn on_put(&self, url: &str, reply: HttpReply) {
@@ -233,5 +260,24 @@ impl HttpTransport for FakeTransport {
             bytes: bytes.len(),
         });
         Ok(self.answer(&format!("put:{url}"), None, &format!("put {url}")))
+    }
+
+    fn download(&self, url: &str) -> Result<Download> {
+        self.requests.lock().unwrap().push(Recorded::Download {
+            url: url.to_owned(),
+        });
+        let mut downloads = self.downloads.lock().unwrap();
+        let answer = downloads.get_mut(url).and_then(|queue| {
+            if queue.len() > 1 {
+                queue.pop_front()
+            } else {
+                queue.front().cloned()
+            }
+        });
+        drop(downloads);
+        match answer {
+            Some(answer) => Ok(answer),
+            None => panic!("FakeTransport: unmatched request download {url}"),
+        }
     }
 }

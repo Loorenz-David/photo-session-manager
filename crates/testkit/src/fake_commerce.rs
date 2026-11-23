@@ -7,6 +7,7 @@ use psm_core::{
             RemoteMedia, RemoteMediaStatus, RemoteValues, Seo, StagedTarget, StockChoice,
             StockLocation, StockLocations, StockOutcome, WriteValue,
         },
+        remote::CallBudget,
     },
     ports::{
         clock::Clock,
@@ -81,6 +82,10 @@ pub struct FakeShop {
     pub stock: HashMap<String, StockChoice>,
     /// P65: how many times the locations were read.
     pub location_reads: usize,
+    /// H1: media or file id → the original file's size the shop reports (unset = unknown).
+    pub media_bytes: HashMap<String, i64>,
+    /// H1: the call budget the fake answers (`None` = unknown, never wait).
+    pub budget: Option<CallBudget>,
 }
 
 /// WC8.2: the product's search texts as the platform answers them (blank → `None`).
@@ -223,6 +228,18 @@ impl FakeCommerce {
     /// WC8: the product's search texts as the shop holds them now.
     pub fn seo_of(&self, id: &str) -> Seo {
         shop_seo(&self.state.lock().unwrap(), id)
+    }
+    /// H1: the size the shop reports for a gallery media or a condition file.
+    pub fn set_media_bytes(&self, id: &str, bytes: i64) {
+        self.state
+            .lock()
+            .unwrap()
+            .media_bytes
+            .insert(id.into(), bytes);
+    }
+    /// H1: the call budget `budget()` answers.
+    pub fn set_budget(&self, budget: Option<CallBudget>) {
+        self.state.lock().unwrap().budget = budget;
     }
     pub fn fail_after_effect(&self, op: &str) {
         self.state.lock().unwrap().fail_after = Some(op.into());
@@ -715,16 +732,17 @@ impl CommerceAdapter for FakeCommerce {
     }
     fn media_readback(&self, id: &str) -> Result<MediaReadback> {
         self.read("media_readback")?;
-        let gallery = self
-            .item_get(id)?
-            .media
+        let media = self.item_get(id)?.media;
+        let state = self.state.lock().unwrap();
+        // H1: a gallery media the shop is still processing exposes no URL yet.
+        let gallery = media
             .into_iter()
             .map(|m| MediaImage {
-                url: Some(fake_image_url(&m.id)),
+                url: (m.status != RemoteMediaStatus::Processing).then(|| fake_image_url(&m.id)),
+                bytes: state.media_bytes.get(&m.id).copied(),
                 id: m.id,
             })
             .collect();
-        let state = self.state.lock().unwrap();
         let ids: Vec<String> = state
             .values
             .get(id)
@@ -742,10 +760,14 @@ impl CommerceAdapter for FakeCommerce {
                     .iter()
                     .any(|f| f.id == id)
                     .then(|| fake_image_url(&id)),
+                bytes: state.media_bytes.get(&id).copied(),
                 id,
             })
             .collect();
         Ok(MediaReadback { gallery, condition })
+    }
+    fn budget(&self) -> Option<CallBudget> {
+        self.state.lock().unwrap().budget
     }
     fn fetch_image(&self, url: &str, max_edge: u32) -> Result<Vec<u8>> {
         self.read("fetch_image")?;

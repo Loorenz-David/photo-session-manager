@@ -149,6 +149,7 @@ impl From<Error> for CommandError {
                 "shop_domain_invalid"
             }
             Error::FilesCleared => "files_cleared",
+            Error::ImageGone => "image_gone",
         };
         Self {
             code: code.into(),
