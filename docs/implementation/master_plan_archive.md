@@ -1,4 +1,4 @@
-# Archived and shop-only items editable — master plan (v1.2, 2026-11-23)
+# Archived and shop-only items editable — master plan (v1.3, 2026-11-23)
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, registry §6, environment
 §7) and wins over it on a name listed here. Process: `docs/process/flow.md` §10 (milestones of units), with the deltas
@@ -21,8 +21,8 @@ invariants **M-H1…M-H5** it serves. Where 10H and this file differ, 10H wins a
 | `H1_points_and_remote_record` | the adapter reads Shopify's points after every answer and background work waits when they are low; typed "picture gone" downloads, full-size downloads, the batched URL read (`nodes(ids:)`), picture sizes in the readback; the record of an item's remote pictures (archived and shop-only), the first-open read, Refresh from Shopify, retention kept away from items without local files | 2 | 12 | 56 | yes | **yes** | — | nothing shows yet; the Mac knows which pictures Shopify holds for an archived or adopted product and never spends points in the background when they are low |
 | `H2_list_pictures_pages_search` | the row-picture rule (never a missing file), the cover cache and its background fetch, stale-URL refresh; the paged sessions list (25 per page) behind a new command; page numbers and live row pictures in the UI; pictures on the product search results | 4 | 14 | 67 | yes | no | H1 | the sessions list shows a picture on every row and has pages; the New session and Assign product searches show pictures |
 | `H3_bring_back` | JPEG photos in the photo pipeline (preview, frame, orientation); bring back (download all at full size, then import in one transaction, retire the cleared rows, link each photo to its Shopify media); the proof that a publish afterwards uploads only what changed; retention only after the next publish | 3 | 14 | 64 | yes | **yes** | H2 | nothing shows yet; the service can turn a remote item into an ordinary session and republish only changes |
-| `H4_remote_workspace` | the remote view (pictures in the background, 4 at a time), activation that never moves the capture folder for a remote item, the details-only publish; the normal workspace for remote items with the note, the edit gate, the Bring back dialog and progress, Refresh from Shopify | 3 | 14 | 66 | yes | **yes** | H3 | the owner opens an archived or shop-only item like any session, edits its details, brings its photos back and republishes |
-Totals (computed from the plan files by script): 4 milestones, 12 units, 54 criteria, 253 rows; every unit has at most 8
+| `H4_remote_workspace` | the remote view (pictures in the background, 4 at a time), activation that never moves the capture folder for a remote item, the details-only publish; the normal workspace for remote items with the note, the edit gate, the Bring back dialog and progress, Refresh from Shopify | 3 | 14 | 69 | yes | **yes** | H3 | the owner opens an archived or shop-only item like any session, edits its details, brings its photos back and republishes |
+Totals (computed from the plan files by script): 4 milestones, 12 units, 54 criteria, 256 rows; every unit has at most 8
 criteria. Each milestone needs the one before approved (its `depends_on`), gate = the **Tracker** line of that plan
 file. Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list.
@@ -216,6 +216,8 @@ background step waits; logged by core, so it names no platform, H7). Never a URL
 h2_pages_and_search.rs, h3_jpeg_photos.rs, h3_bring_back.rs, h3_publish_after_bring_back.rs, h4_remote_workspace.rs,
 h4_details_only_publish.rs}` (each with its `mod` line in `main.rs`); desktop command tests in
 `apps/desktop/src-tauri/src/lib.rs` (`h2_tests`, `h4_tests`); UI `features/<f>/__tests__/h<n>_<slug>.test.tsx`.
+**H4** adds `TestApp::with_camera_and_shop()` (`crates/testkit/src/test_app.rs`: the camera sidecar with the fake shop;
+first caller H4·C2(c); H4 projection r0, L2).
 `FakeCommerce` grows, each addition in the milestone whose rows first call it (charter rule 4: no unused
 scaffolding): **H1** per-media `bytes` (`set_media_bytes`, gallery media and condition files alike), `budget:
 Option<CallBudget>` (`set_budget`), `media_readback` answering `url: None` for a gallery media whose status is
@@ -241,9 +243,9 @@ command the photographer triggered; *background* = work run by `run_pending` or 
    are left in the queue (`run_pending` answers `Waiting`); 10F's verification (`storage.rs:827 clear_item`) is not
    started for any further item of that scan and the scan is requested again. Nothing sleeps while holding a lock.
 4. **A press is never delayed:** `refresh`, `bring_back` (its own URL refresh and, for an `Unknown` item, its read),
-   publish, search and every existing command call the adapter without consulting `must_wait`.
+   publish (including its preview's read of an `Unknown` item, MC-H3.6), search and every existing command call the adapter without consulting `must_wait`.
 5. **Calls this chapter adds** are exactly: `media_urls` (one request per `URL_REFRESH_CHUNK` ids) and
-   `media_readback` (first-open read, Refresh from Shopify). Listing a page, showing a row, searching and downloading
+   `media_readback` (first-open read, also run by a publish preview of an `Unknown` item; Refresh from Shopify). Listing a page, showing a row, searching and downloading
    pictures add no GraphQL call (downloads go to the CDN).
 
 ### MC-H1 — The row picture (10H §4)
@@ -304,17 +306,21 @@ command the photographer triggered; *background* = work run by `run_pending` or 
    read): `media_readback(external id)`; when every picture has a URL, one transaction replaces the record (gallery
    in the answer's order, positions 1…, then condition) and sets `remote_checked_at`; then `SessionChanged`. A picture
    without a URL (still processing) or a failed read writes nothing (the item stays `Unknown`; `view` reports
-   `check_failed`). `view` queues this read for an `Unknown` item (background, MC-H5.3); `bring_back` runs it at once.
+   `check_failed`); a failed queued read emits `SessionChanged` only when `check_failed` turns from false to true (the
+   screen reloads on it and its `view` queues the read again, so an emit per failure would loop; H4 projection r0, L3). `view` queues this read for an `Unknown` item (background, MC-H5.3); `bring_back` runs it at once.
 3. **Refresh from Shopify** (`refresh`, a press): `Remote(_)` only (else `NotRemote`); the same read, the record
    replaced (`cleared_at` untouched), then cache files of the item that no longer match the record are deleted
    (`remote/<item_id>/cover-*` not the new cover's, `archived/<item_id>/*` not named by a current picture). In H1,
    before `cover_name` exists, every `cover-*` is deleted; H2 narrows it to keep `cover_name(new cover)`.
 4. **Activation.** `SessionsService::activate` (`sessions.rs:201`) of a session whose state is `Remote(_)` answers
-   `Ok` with **no** editing call, no camera target change and no change of the active session. Every other state
-   activates as today. The frontend (`useCaptureTarget`, `App.tsx:95`) calls `activateSession(target)` only when the
+   `Ok` with **no** editing call, no camera target change and no change of the active session; likewise
+   `claim_target(Some(id))` (`sessions.rs:136`, which `session_activate` calls *before* `activate` in camera-independent
+   mode, A16) answers `false` and stores nothing for it (H4 projection r0, L1). Every other state activates as today. The frontend (`useCaptureTarget`, `App.tsx:95`) calls `activateSession(target)` only when the
    target's remote state is `local`, or `unknown` with `check_failed`; it calls it once when the state becomes one of
    those while the session is still the capture target (after bring back, or when the first-open read finds no
-   pictures or fails). Leaving a session behaves as today.
+   pictures or fails). The state it reads is that of `captureTarget(nav)`, keyed by session id (a state loaded for
+   another session counts as not loaded; L9). The visit bar's **Shoot here instead** is hidden while the visited
+   session is not activatable by the same rule (L15). Leaving a session behaves as today.
 5. **View** (`view`): for `Remote(_)`: the record's pictures, each with its cache file if it exists
    (`archived/<item_id>/…`, `ARCHIVED_IMAGE_EDGE`), `bring_back_bytes = estimate_bytes(record)` (`bytes` or
    `UNKNOWN_PICTURE_BYTES` each); missing files are queued (`source = View(session_id)`, same queue, limit, stale
@@ -326,13 +332,19 @@ command the photographer triggered; *background* = work run by `run_pending` or 
 6. **Details-only publish.** For a session whose state is `Remote(_)`: `preview` answers no photos, no announced
    removals, `details_only = true`, and makes no platform read for media; `confirm` (the P62 refusal at
    `publish.rs:755-760` goes) freezes `frozen_main = []`, `frozen_condition = []`, `announced_removals = []` and
-   persists `details_only = 1`. A run of a `details_only` item: Prepare stages no export, Upload uploads nothing, and
+   persists `details_only = 1`, skipping for it the in-transaction photo comparison (`publish.rs:832-866`: an archived
+   item's cleared rows keep their classification, so it would refuse every one; H4 projection r0, L4). A run of a `details_only` item: Prepare stages no export, Upload uploads nothing, and
    Update **skips the gallery block** (`publish.rs:1733-1804`: no reconcile, delete, reorder or readback) **and the
    condition-photos value** (never part of the attribute writes, even when the frozen attributes hold its key); every
    other write (title, type, tags, description, attributes, search texts) is as for any publish. `details_only` is
-   decided at confirmation and never recomputed by a run. An `Unknown` item is confirmed as today.
+   decided at confirmation and never recomputed by a run. For an `Unknown` item, `preview` first runs `ensure_record`
+   at once (a press, MC-H5.4) and, when that leaves it `Remote(ShopOnly)`, answers it details-only as above; when the
+   read finds no pictures or fails, it is previewed and confirmed as today (10H §6 "Publish of details only"; H4
+   projection r0, L16: otherwise a Publish during "Checking Shopify…" would announce and delete every shop picture).
 7. **Rows of remote items** (`list` and `page`): `main_count` / `condition_count` = the record's gallery / condition
-   picture counts, `unreviewed_count = 0`, the status input's missing-preview count 0; the label is the publish
+   picture counts, `unreviewed_count = 0`; the status input (for `list` / `page` only) has `main_count` = the gallery count, `unreviewed`
+   0 and missing-preview 0, while `ready_session_ids` keeps the raw input (L8); archived rows keep `cleared_sessions`
+   as their label's source, so it holds without `with_remote` (L7); the label is the publish
    label while the latest publish is running, held, failed or cancelled, else `Archived` (both kinds).
 8. **Guards.** A media-list attribute write is refused with `FilesCleared` for `Remote(_)` (today: cleared only,
    `attributes.rs:793-803`). The photo guards of a cleared item (`retention.rs:30-43` and their callers) stay.
@@ -435,6 +447,10 @@ since. M-H5: "Delete session" of any item of this chapter makes no adapter call.
 - **Publishing a remote product sends its details only;** the confirmation says so, and the pictures and the damage
   report photos on Shopify are left exactly as they are.
 - **Refresh from Shopify is offered for remote products only** (an ordinary session's photos are on this Mac).
+- **"Shoot here instead" is not offered while you visit an archived or shop-only product from a conversation** (it
+  would move the camera's folder there before its photos are back; H4 projection r0, L15).
+- **Publishing an adopted shop product that was never opened first reads its pictures from Shopify** (one read); when
+  it has pictures, only its details are published (H4 projection r0, L16).
 - **A picture Shopify no longer has** shows the placeholder, is reported once on Health, and is not asked for again
   until Refresh from Shopify.
 - **A search result's picture that fails to download** keeps its letter tile (the next search carries a fresh
@@ -481,3 +497,12 @@ citations were read in the code at that commit; the lines move as milestones lan
   `retire_session`'s `act` (L8); MC-H4.7 gains the A16 sentence (L1); §4 Vocabulary `BringBackInput` / `BroughtBack`
   (L12), Service the uncached capture-root closure (L4); rule 17 the full-size download's body (L6, live check after
   H4). Counts: H3 64 rows (rows H3·C6(f), H3·C9(c) added); totals 54 criteria, 253 rows.
+- **v1.3, 2026-11-23 (orchestrator, H4 projection r0).** `handoffs/reviewer/handoff_H4_remote_workspace_projection_r0.md`
+  (AMENDMENTS_REQUIRED, 0 owner cards): MC-H3.4 guards `claim_target` as well as `activate` for a remote session (L1),
+  reads the capture target's state keyed by session id (L9) and hides the visit bar's Shoot here instead for a remote
+  visited session (L15); MC-H3.2 emits `SessionChanged` for a failed first-open read only on the false → true change of
+  `check_failed` (L3); MC-H3.6 skips `confirm`'s in-transaction photo comparison for a `details_only` item (L4) and
+  reads an `Unknown` item's record at preview time, publishing details only when it is shop-only (L16; MC-H5.4/.5 say
+  so); MC-H3.7 names the status input of a remote row and the label's source (L7, L8); §4 Tests
+  `TestApp::with_camera_and_shop()` (L2); §6 two sentences (L15, L16). Counts: H4 69 rows (rows H4·C1(i), H4·C5(d),
+  H4·C13(f) added); totals 54 criteria, 256 rows.
