@@ -1,4 +1,4 @@
-# Price labels from Pricing — master plan (v1, 2026-11-23)
+# Price labels from Pricing — master plan (v1.1, 2026-11-23)
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, registry §6, environment
 §7), `master_plan_conversations.md` (the Pricing connection, adapter, fake and pull it extends) and
@@ -54,8 +54,10 @@ call", and `labels_summary` loses its `refresh` argument (row L2·C7(d) then ask
 - **No mechanism-inventory gate.** §5 stands in for it (as for the writer, conversations and archive tracks): one
   contract per mechanism 09C names (MC-L1…MC-L4) plus its connection rule (ACC), each resolved to code-level rules.
   09C's measurement ledger is its §9 (**M-L1…M-L6**). Trace cells cite `M-L<n>`, `MC-L<n>.<item>` / `ACC.<item>` (the
-  items of §5), a 09C section or scenario (`§12.<n>`), a 09B rule (`CR<n>`, `MC-C1.<n>`), a 10H rule, or `H1`–`H8`.
-  `[rule]` only for UI rendering rows.
+  items of §5), a 09C section or scenario (`§12.<n>`), a 09B rule (`CR<n>`, `MC-C1.<n>`), a 10H rule, `H1`–`H8`, or
+  a **registry entry of §4** (`master plan §4 <entry>`, written short as the entry's name: `Adapter paths`, `Rule 17`
+  (§3), `Ports`, `Words`, `Event`, `Commands`, `Storage`), when that entry states the asserted behaviour (L1
+  projection r0, D12). `[rule]` only for UI rendering rows.
 - **Milestones of units** (flow §10): one implementer session works the units in order with a
   `CHECKPOINT (not approved):` commit after each, one review, one fix budget, one narrative per milestone. Reason for
   more than 8 criteria per milestone: as for research, the writer, conversations and archive, a phase cycle per unit
@@ -338,7 +340,8 @@ the stored access value; *copy* = the display copy (`LabelCopy`, memory only); *
 2. **`connected()`** (told by `ConversationsService::connect` after it has left the lane, when the resulting state is
    `Ready`: Test connection, and Save key): one `templates(store)`: `Ok` → `A := allowed`; `NotAllowed` → `A :=
    denied`; any other error → `A := unknown`. Then the copy and the remembered counts are emptied and `LabelsChanged
-   {[], access: true}` is emitted.
+   {[], access: true}` is emitted. `connected()` applies only this rule (its own three-way assignment and exactly one
+   `LabelsChanged`); rule 4 governs every other label call (L1 projection r0, D2).
 3. **`key_changed()`** (told by `key_set`, before it connects or removes the key): `A := unknown`, the copy and the
    counts are emptied. (A saved key whose connect then fails leaves `unknown`, never the old key's answer.)
 4. **Learning by use.** A label call that succeeds while `A = unknown` → `A := allowed`. A label call that answers
@@ -585,3 +588,7 @@ milestones land, so symbols are named beside them.
 ## 8. Log
 - **v1, 2026-11-23 (planner).** Written from 09C, the Pricing integration package (read 2026-11-23) and the code at
   `ae91079`. One owner card (§2A). Points for the orchestrator in `handoffs/reviewer/handoff_labels_plan_r1.md`.
+- **v1.1, 2026-11-23 (orchestrator): L1 projection r0 amendments**
+  (`handoffs/reviewer/handoff_L1_labels_provider_and_marker_projection_r0.md`, AMENDMENTS_REQUIRED, 0 owner cards).
+  §3 trace grammar admits a §4 registry entry (D12); ACC.2: `connected()` applies only ACC.2, ACC.4 governs every
+  other label call (D2). Everything else landed in the L1 plan (its Review log). Counts unchanged (§2).
