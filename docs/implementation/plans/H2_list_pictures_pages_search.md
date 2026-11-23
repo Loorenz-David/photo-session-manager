@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # H2 — A picture on every row, pages, and pictures in the search
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-23, claude-opus implementer r1: 4 units, 67 rows tested, closing gate green; handoff `handoffs/implementer/handoff_H2_list_pictures_pages_search_implement_r1.md`)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -281,3 +281,17 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-core --
 ## Review log
 
 - **2026-11-23, orchestrator: carried from H1's projection r0** (`handoffs/reviewer/handoff_H1_points_and_remote_record_projection_r0.md`). L8: U1 task 1, `refresh` keeps `cover_name(new cover)` (H1 deletes every `cover-*`). L9: the `FakeCommerce` additions `media_urls`/`url_reads`, `image_faults`/`fail_image`, `set_fetch_delay`/`max_fetches_in_flight` moved here (U1 task 6; `fake_commerce.rs` added to U1 Files). L10: `RemoteItems::new` gains `health` (U1 task 6) and `search_cache_limit` (U4 task 3; `crates/integrations/src/lib.rs` added to U4 Files). Rows and counts unchanged.
+- **2026-11-23, implementer r1 (Claude Opus; checkpoints U1 `5e1a0d6`, U2 `a54ad20`, U3 `b9cb01f`, U4 `ba13aed`).**
+  Built: the row-picture rule (`RowPictures::row_picture`, read once per answer by `RemoteItems::row_pictures` through a
+  new one-query `Store::remote_covers`), the cover cache and queue (`request_covers`, `run_pending` downloading 4 at a
+  time, the stale-URL refresh behind `must_wait` with the 10-minute cool-down, Health `remote_picture_gone`),
+  `PictureReady` → `picture_ready`, Delete session removing the item's picture caches; `page_of`,
+  `SessionsService::page`, `sessions_page`; the Sessions page on `sessionsPage` with page numbers, placeholder tiles and
+  live covers; `search_shop_pictures`, `item_pictures` / `search_picture`, the 200 MB search cache with `evict`,
+  `ItemDto.picture_path` / `session_id`, `ResultThumb` in New session and Assign product. Tests: one per row (H2·C1–C14,
+  67 rows). Assumptions and deviations: see the handoff (main ones: the Store read `remote_covers` and the split of the
+  list record's cover path into adjusted/original, in `ports/store.rs` and `infra/sqlite/store.rs` outside the listed
+  files; search pictures queued in their own list so the local and shop searches do not replace each other's;
+  `ItemDto`'s new fields are left out when empty (TS optional); the Sessions-page tests answer `sessionsPage` from their
+  existing `listSessions` mock through `__tests__/pageFromList.ts`, so no assertion changed, and three more such tests
+  than listed needed it: `p18_pending_state`, `p15_publish_ui`, `c4_visit`).
