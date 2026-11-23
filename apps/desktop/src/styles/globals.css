@@ -499,3 +499,17 @@ button.research-pill { cursor: pointer; }
 .label-pill[data-tone="attention"] { background: color-mix(in srgb, var(--warn) 18%, transparent); border-color: var(--warn); color: var(--color-text); }
 .label-menu-text { display: flex; flex-direction: column; gap: 2px; }
 .label-menu-hint { color: var(--muted); font-size: var(--text-xs); white-space: normal; max-width: 240px; }
+
+/* L2 (09C §5): the Labels box. Rows reuse the session row's look; the columns are Item · Price · Label · Created. */
+.label-table .list-labels, .label-row { grid-template-columns: 40px minmax(240px, 1fr) 120px 220px 110px 32px; }
+.labels-toolbar { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+.labels-work-from { margin: 0 0 var(--space-2); color: var(--muted); font-size: var(--text-sm); }
+.row-price { font-variant-numeric: tabular-nums; }
+.row-label { color: var(--muted); font-size: var(--text-sm); }
+.labels-error { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--warn); border-radius: var(--r); background: color-mix(in srgb, var(--warn) 12%, transparent); font-size: var(--text-sm); }
+.labels-error .batch-link, .labels-message .batch-link { color: inherit; text-decoration: underline; }
+.label-pager .page-step { display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 var(--space-2); }
+.label-page { padding: 0 var(--space-3); color: var(--muted); font-size: var(--text-sm); }
+@media (max-width: 900px) {
+  .label-table .list-labels, .label-row { grid-template-columns: 36px minmax(200px, 1fr) 100px 190px 80px 32px; }
+}

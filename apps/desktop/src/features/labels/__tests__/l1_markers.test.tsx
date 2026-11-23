@@ -13,7 +13,7 @@ import type { SessionList, SessionPage } from '@/services/sessions';
 
 const delivered = vi.hoisted(() => ({ changed: [] as (() => void)[], labels: [] as ((event: LabelsChanged) => void)[] }));
 
-vi.mock('@/services/labels', () => ({ labelsStatus: vi.fn() }));
+vi.mock('@/services/labels', () => ({ labelsStatus: vi.fn(), labelsSummary: vi.fn(async () => ({ missing_price_tag: null })) }));
 vi.mock('@/services/sessions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/sessions')>()),
   listSessions: vi.fn(),

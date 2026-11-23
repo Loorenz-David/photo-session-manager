@@ -655,7 +655,12 @@ of that folder (`variant_background` → `resync_folder`).
   `labels_changed` listener; failures leave the pills; guarded so a test's events mock without `onLabelsChanged`
   cannot crash a page), `LabelPill` (in `SessionRow`'s pill line and beside the title in `Header`),
   `LabelMenuItem` (in `SessionActionsMenu`; in L1 only its disabled states). Settings → Pricing's Labels line in
-  `PricingSection.tsx`.
+  `PricingSection.tsx`. L2: the **Labels box** — `Filters` has a fourth box `labels` (its number: the last list
+  answer's `missing_price_tag` inside the box, else `labelsSummary({refresh: true})`, asked when `SessionsPage` mounts,
+  after leaving the box and, throttled to 2 s, on `labels_changed` outside it); in the box `SessionsPage` renders
+  `LabelsBox` (sub-filters, work-from line, `LabelRow`s, Previous / Next through `labelPages.ts::pageStep`, the
+  selection map and `LabelsBatchBar`, its own throttled `labels_changed` refresh of the page shown) instead of the
+  session table, keeps asking `sessions_page` for the box it left, and pauses `useSessionLabels` (no `labels_status`).
 - **The Labels box's list (L2, MC-L1):** `LabelsService::list(filter, query, cursor)` — calls allowed (ACC.1) or
   `Off` / `Denied`; the search trimmed, dropped when empty, cut to `QUERY_MAX` (100) characters; one
   `provider.products(…, LIST_PAGE = 25)`; every row's state goes into the copy (so a session marker reads it without

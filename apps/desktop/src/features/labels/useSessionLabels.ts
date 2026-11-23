@@ -44,7 +44,11 @@ export function useSessionLabels(ids: number[] | null, answer: unknown, refreshO
   latestAsk.current = ask;
 
   useEffect(() => {
-    if (!ids || ids.length === 0) return;
+    if (!ids || ids.length === 0) {
+      // L2: nothing on screen (the Labels box shows its own rows): `labels_changed` asks nothing.
+      shownIds.current = [];
+      return;
+    }
     const key = ids.join(',');
     if (shown.current !== key) setState(EMPTY);
     shown.current = key;

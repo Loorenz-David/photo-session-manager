@@ -7,13 +7,14 @@ import { rangeStart, type TimeRange } from '@/lib/format';
 import { useDebounced, useKeyboard } from '@/lib/keyboard';
 import { usePageData } from '@/lib/pending';
 import type { SessionFilter } from '@/services/bindings';
-import { onSessionsChanged } from '@/services/events';
+import { onLabelsChanged, onSessionsChanged } from '@/services/events';
+import { labelsSummary } from '@/services/labels';
 import { BatchQueue } from '@/features/publish/BatchQueue';
 import { PublishPopover } from '@/features/publish/PublishPopover';
 import { publishRetry } from '@/services/publish';
 import { sessionsPage } from '@/services/sessions';
 import { BatchBar } from './BatchBar';
-import { Filters } from './Filters';
+import { Filters, type ListBox } from './Filters';
 import { GroupHeader } from './GroupHeader';
 import { Pagination } from './Pagination';
 import { SessionRow, isSelectable } from './SessionRow';
@@ -24,6 +25,8 @@ import { UnassignedCard } from './UnassignedCard';
 import { usePictures } from './usePictures';
 import { useSessionBadges } from '@/features/conversations/SessionBadge';
 import { useSessionLabels } from '@/features/labels/useSessionLabels';
+import { LabelsBox, useThrottled } from '@/features/labels/LabelsBox';
+import { LABELS_REFRESH_MS } from '@/features/labels/labelPages';
 
 export const SEARCH_DEBOUNCE_MS = 250;
 
@@ -32,10 +35,19 @@ export const SEARCH_DEBOUNCE_MS = 250;
  * grouped by creation time: changelog 46 (1)), filters, search, time filter, 25 rows per page (H2, MC-H2). The search,
  * the filter tabs, the time filter and "To review" look through every session (the backend applies them); changing
  * one of them goes to page 1.
+ *
+ * L2 (09C §5): a fourth box, Labels, shows Pricing's label list (`LabelsBox`) in place of the session table; the page
+ * keeps asking `sessions_page` for the box it left (the other boxes' numbers stay current) but shows none of its rows.
+ * The Labels box's number is asked once when the page opens and after a label change outside the box (owner card 1).
  */
 export function SessionsPage({ navigate }: { navigate: (sessionId: number) => void }) {
   const [filter, setFilter] = useState<SessionFilter>('open');
+  const [box, setBox] = useState<ListBox>('open');
+  const inLabels = box === 'labels';
   const [query, setQuery] = useState('');
+  const [labelQuery, setLabelQuery] = useState('');
+  const debouncedLabelQuery = useDebounced(labelQuery.trim(), SEARCH_DEBOUNCE_MS);
+  const [labelsNumber, setLabelsNumber] = useState<number | null>(null);
   const [range, setRange] = useState<TimeRange>('any');
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [queueIds, setQueueIds] = useState<number[]>([]);
@@ -87,7 +99,51 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   const groups = useMemo(() => list?.groups ?? [], [list]);
   // L1 (MC-L3.7): the page's label markers, asked after each page answer (never delaying the rows).
   const shownIds = useMemo(() => groups.flatMap(group => group.rows).map(row => row.id), [groups]);
-  const labels = useSessionLabels(shownIds, list);
+  const labels = useSessionLabels(inLabels ? null : shownIds, inLabels ? box : list);
+
+  // L2 (MC-L1.6, owner card 1): the Labels box's number outside the box: asked when the page opens, after leaving the
+  // box and on a label change (throttled); inside the box it is the last list answer's.
+  function askSummary() {
+    try {
+      labelsSummary({ refresh: true }).then(got => setLabelsNumber(got.missing_price_tag), () => undefined);
+    } catch {
+      // No number.
+    }
+  }
+  const summaryOnChange = useThrottled(askSummary, LABELS_REFRESH_MS);
+  const inLabelsRef = useRef(inLabels);
+  inLabelsRef.current = inLabels;
+  useEffect(() => {
+    askSummary();
+    let alive = true;
+    let unlisten: (() => void) | undefined;
+    try {
+      onLabelsChanged(() => {
+        if (!inLabelsRef.current) summaryOnChange();
+      })
+        .then(off => (alive ? (unlisten = off) : off()))
+        .catch(() => undefined);
+    } catch {
+      // No listener: the number follows the next visit.
+    }
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
+    // Once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function changeBox(next: ListBox) {
+    if (next === box) return;
+    if (next === 'labels') {
+      setBox('labels');
+      return;
+    }
+    if (inLabels) askSummary();
+    setFilter(next);
+    setBox(next);
+  }
   const toReview = waiting.length;
   const selectable = useMemo(() => groups.flatMap(group => group.rows).filter(isSelectable).map(row => row.id), [groups]);
 
@@ -99,7 +155,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
     });
   }, [selectable]);
 
-  useKeyboard({ escape: () => setSelected(new Set()) }, selected.size > 0);
+  useKeyboard({ escape: () => setSelected(new Set()) }, selected.size > 0 && !inLabels);
 
   function toggle(id: number) {
     setSelected(previous => {
@@ -119,17 +175,27 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
       <div className="list-toolbar">
         <label className="search-field">
           <Search aria-hidden />
-          <input
-            type="search"
-            placeholder="Title or SKU"
-            aria-label="Search sessions by title or SKU"
-            value={query}
-            onChange={event => setQuery(event.target.value)}
-          />
-          <TimeFilter value={range} onChange={setRange} />
+          {inLabels ? (
+            <input
+              type="search"
+              placeholder="SKU, title or type"
+              aria-label="Search labels by SKU, title or type"
+              value={labelQuery}
+              onChange={event => setLabelQuery(event.target.value)}
+            />
+          ) : (
+            <input
+              type="search"
+              placeholder="Title or SKU"
+              aria-label="Search sessions by title or SKU"
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+            />
+          )}
+          {!inLabels && <TimeFilter value={range} onChange={setRange} />}
         </label>
-        <Filters value={filter} counts={list?.counts ?? null} onChange={setFilter} />
-        {(toReview > 0 || reviewOnly) && (
+        <Filters value={box} counts={list?.counts ?? null} labelsCount={labelsNumber} onChange={changeBox} />
+        {!inLabels && (toReview > 0 || reviewOnly) && (
           <button
             type="button"
             className="pill research-pill review-queue-toggle"
@@ -143,88 +209,100 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
         )}
       </div>
 
-      <UnassignedCard count={list?.unassigned_count ?? 0} onOpen={() => navigate(1)} />
-
-      {loading ? <div className="session-table" role="table" aria-label="Sessions" aria-busy="true"><SkeletonRows n={6} /></div> : list && groups.length === 0 ? (
-        <div className="empty-sessions">
-          {searching ? (
-            <>
-              <strong>No sessions match{debouncedQuery ? ` “${debouncedQuery}”` : ''}</strong>
-              <p>Try another title or SKU, or widen the time filter.</p>
-            </>
-          ) : reviewOnly ? (
-            <>
-              <strong>Nothing waits for review</strong>
-              <p>Sessions appear here once AI research has suggestions for you to check.</p>
-            </>
-          ) : filter === 'published' ? (
-            <>
-              <strong>Nothing published yet</strong>
-              <p>Published sessions appear here.</p>
-            </>
-          ) : (
-            <>
-              <strong>No sessions yet</strong>
-              <p>
-                Press <kbd>N</kbd> to start a new session.
-              </p>
-            </>
-          )}
-        </div>
+      {inLabels ? (
+        <LabelsBox
+          query={debouncedLabelQuery}
+          navigate={navigate}
+          onNumber={setLabelsNumber}
+          research={research}
+          conversations={conversationBadges}
+        />
       ) : (
-        <div className="session-table" role="table" aria-label="Sessions">
-          <div className="list-labels" role="row">
-            <span className="row-check">
-              <Checkbox
-                checked={headerState}
-                disabled={selectable.length === 0}
-                onCheckedChange={() => setSelected(allSelected ? new Set() : new Set(selectable))}
-                aria-label="Select all publishable sessions"
-              />
-            </span>
-            <span>Item</span>
-            <span>Photos</span>
-            <span>Status</span>
-            <span className="label-activity">
-              Created <ArrowDown aria-hidden />
-            </span>
-            <span aria-hidden />
-          </div>
-          {groups.map(group => (
-            <section key={group.label} className="session-group" aria-label={group.label}>
-              <GroupHeader label={group.label} count={group.total} />
-              {group.rows.map(row => (
-                <SessionRow
-                  key={row.id}
-                  row={row}
-                  now={now}
-                  research={research.get(row.id)}
-                  conversations={conversationBadges.get(row.id)}
-                  picture={pictures.cover(row.id)}
-                  label={labels.labels.get(row.id)}
-                  labelsAccess={labels.access}
-                  selected={selected.has(row.id)}
-                  onToggle={() => toggle(row.id)}
-                  onOpen={() => navigate(row.id)}
-                  onPublish={() => setPublishId(row.id)}
-                  onRetry={row.publish?.item_id ? () => publishRetry(row.publish!.item_id).then(load) : undefined}
-                  onChanged={() => void load()}
-                  onDeleted={() => void load()}
-                />
-              ))}
-            </section>
-          ))}
-        </div>
-      )}
-      {list && <Pagination page={list.page} pages={list.pages} onPage={next => setAsked({ question, page: next })} />}
+        <>
+          <UnassignedCard count={list?.unassigned_count ?? 0} onOpen={() => navigate(1)} />
 
-      <BatchBar
-        count={selected.size}
-        selectableCount={selectable.length}
-        onSelectAll={() => setSelected(new Set(selectable))}
-        onClear={() => setSelected(new Set())}
-        onReview={() => setQueueIds([...selected])}
-      />
+          {loading ? <div className="session-table" role="table" aria-label="Sessions" aria-busy="true"><SkeletonRows n={6} /></div> : list && groups.length === 0 ? (
+            <div className="empty-sessions">
+              {searching ? (
+                <>
+                  <strong>No sessions match{debouncedQuery ? ` “${debouncedQuery}”` : ''}</strong>
+                  <p>Try another title or SKU, or widen the time filter.</p>
+                </>
+              ) : reviewOnly ? (
+                <>
+                  <strong>Nothing waits for review</strong>
+                  <p>Sessions appear here once AI research has suggestions for you to check.</p>
+                </>
+              ) : filter === 'published' ? (
+                <>
+                  <strong>Nothing published yet</strong>
+                  <p>Published sessions appear here.</p>
+                </>
+              ) : (
+                <>
+                  <strong>No sessions yet</strong>
+                  <p>
+                    Press <kbd>N</kbd> to start a new session.
+                  </p>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="session-table" role="table" aria-label="Sessions">
+              <div className="list-labels" role="row">
+                <span className="row-check">
+                  <Checkbox
+                    checked={headerState}
+                    disabled={selectable.length === 0}
+                    onCheckedChange={() => setSelected(allSelected ? new Set() : new Set(selectable))}
+                    aria-label="Select all publishable sessions"
+                  />
+                </span>
+                <span>Item</span>
+                <span>Photos</span>
+                <span>Status</span>
+                <span className="label-activity">
+                  Created <ArrowDown aria-hidden />
+                </span>
+                <span aria-hidden />
+              </div>
+              {groups.map(group => (
+                <section key={group.label} className="session-group" aria-label={group.label}>
+                  <GroupHeader label={group.label} count={group.total} />
+                  {group.rows.map(row => (
+                    <SessionRow
+                      key={row.id}
+                      row={row}
+                      now={now}
+                      research={research.get(row.id)}
+                      conversations={conversationBadges.get(row.id)}
+                      picture={pictures.cover(row.id)}
+                      label={labels.labels.get(row.id)}
+                      labelsAccess={labels.access}
+                      selected={selected.has(row.id)}
+                      onToggle={() => toggle(row.id)}
+                      onOpen={() => navigate(row.id)}
+                      onPublish={() => setPublishId(row.id)}
+                      onRetry={row.publish?.item_id ? () => publishRetry(row.publish!.item_id).then(load) : undefined}
+                      onChanged={() => void load()}
+                      onDeleted={() => void load()}
+                    />
+                  ))}
+                </section>
+              ))}
+            </div>
+          )}
+          {list && <Pagination page={list.page} pages={list.pages} onPage={next => setAsked({ question, page: next })} />}
+
+          <BatchBar
+            count={selected.size}
+            selectableCount={selectable.length}
+            onSelectAll={() => setSelected(new Set(selectable))}
+            onClear={() => setSelected(new Set())}
+            onReview={() => setQueueIds([...selected])}
+          />
+        </>
+      )}
       {queueIds.length > 0 && <BatchQueue ids={queueIds} onClose={() => { setQueueIds([]); setSelected(new Set()); void load(); }} />}
       {publishId !== null && <PublishPopover sessionIds={[publishId]} onClose={() => { setPublishId(null); void load(); }} />}
     </main>
