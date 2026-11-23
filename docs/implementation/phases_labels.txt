@@ -1,0 +1,9 @@
+# Price labels from Pricing (book 09C, branch feature/agentic), single-track order. One runner phase each (flow.md §10; master_plan_labels.md §3).
+# Not read by `run_phase.sh all` (that reads phases.txt). Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>`.
+# Each needs the one before it approved (the Tracker line of its plan file). Projection for L1 and L3 (`projection: yes`); not for L2.
+# L2 also waits for owner card 1 (master_plan_labels.md §2A: when the Labels box shows its number); L1 does not.
+# No session calls Pricing, Shopify or a CDN, none launches the built app, none reads the Pricing key (master_plan_labels.md §3); tests run against the fake Pricing server, the fake shop and the fake label files (no test opens Preview or writes into Documents).
+# The live check against the real Pricing server (read-only: list, status, templates, one check, one preview) is the orchestrator's, after L3. The first real Generate marks products Printed in Pricing and is the owner's (09C §13).
+L1_labels_provider_and_marker
+L2_labels_box
+L3_generate_and_download
