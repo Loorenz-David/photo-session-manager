@@ -35,13 +35,22 @@ export const TIME_RANGES: { value: TimeRange; label: string }[] = [
   { value: 'last30', label: 'Last 30 days' },
 ];
 
-/** Calendar-day based (like MC-4): "Last 7 days" = today and the six local days before it. */
-export function withinRange(ms: number, range: TimeRange, now = Date.now()): boolean {
-  if (range === 'any') return true;
+/**
+ * H2 (MC-H2.3): the first instant the time filter keeps (the start of its first local day), the bound `withinRange`
+ * uses; null for "Any time".
+ */
+export function rangeStart(range: TimeRange, now = Date.now()): number | null {
+  if (range === 'any') return null;
   const daysBack = range === 'today' ? 0 : range === 'last7' ? 6 : 29;
   const start = new Date(startOfDay(now));
   start.setDate(start.getDate() - daysBack);
-  return ms >= start.getTime();
+  return start.getTime();
+}
+
+/** Calendar-day based (like MC-4): "Last 7 days" = today and the six local days before it. */
+export function withinRange(ms: number, range: TimeRange, now = Date.now()): boolean {
+  const start = rangeStart(range, now);
+  return start === null || ms >= start;
 }
 
 export function photoSummary(main: number, condition: number): string {

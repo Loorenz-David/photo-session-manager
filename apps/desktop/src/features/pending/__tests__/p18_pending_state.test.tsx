@@ -8,7 +8,8 @@ import { SessionsPage } from '@/features/sessions/SessionsPage';
 import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 import { HealthPage } from '@/features/health/HealthPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
-import { listSessions } from '@/services/sessions';
+import { listSessions, sessionsPage } from '@/services/sessions';
+import { answerFromList } from '@/features/sessions/__tests__/pageFromList';
 import { getSessionView } from '@/services/photos';
 import { getHealth, getAppPaths } from '@/services/health';
 import { getSettings } from '@/services/settings';
@@ -16,7 +17,7 @@ import type { SessionList } from '@/services/sessions';
 import type { SessionView } from '@/services/photos';
 import type { Settings } from '@/services/settings';
 
-vi.mock('@/services/sessions', async importOriginal => ({ ...(await importOriginal<typeof import('@/services/sessions')>()), listSessions: vi.fn() }));
+vi.mock('@/services/sessions', async importOriginal => ({ ...(await importOriginal<typeof import('@/services/sessions')>()), listSessions: vi.fn(), sessionsPage: vi.fn() }));
 vi.mock('@/services/photos', () => ({ getSessionView: vi.fn() }));
 vi.mock('@/services/health', () => ({ getHealth: vi.fn(), getAppPaths: vi.fn() }));
 vi.mock('@/services/settings', () => ({ getSettings: vi.fn(), pickFolder: vi.fn(), pickSessionFile: vi.fn(), saveSettings: vi.fn() }));
@@ -87,6 +88,7 @@ it('C2(a) page data shows skeletons only before its first result and keeps conte
 it('C2(b) sessions list shows rows only after the first list result', async () => {
   const pending = deferred<SessionList>();
   vi.mocked(listSessions).mockReturnValue(pending.promise);
+  answerFromList(sessionsPage, listSessions);
   render(<SessionsPage navigate={() => undefined} />);
   expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThanOrEqual(3);
   expect(screen.queryByText('No sessions yet')).not.toBeInTheDocument();

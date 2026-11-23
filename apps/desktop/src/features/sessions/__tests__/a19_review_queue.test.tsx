@@ -7,7 +7,7 @@ import type { SessionResearch } from '@/services/research';
 
 vi.mock('@/services/sessions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/sessions')>()),
-  listSessions: vi.fn(),
+  listSessions: vi.fn(), sessionsPage: vi.fn(),
   arrangeNext: vi.fn(),
   previewUrl: (path: string) => `asset://${path}`,
 }));
@@ -27,7 +27,8 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), loading: v
 import { Header } from '@/features/shell/Header';
 import { SessionsPage } from '@/features/sessions/SessionsPage';
 import { nextToReview, showsNextToReview } from '@/features/sessions/reviewQueue';
-import { listSessions } from '@/services/sessions';
+import { listSessions, sessionsPage } from '@/services/sessions';
+import { answerFromList } from '@/features/sessions/__tests__/pageFromList';
 import { researchOverview } from '@/services/research';
 
 globalThis.ResizeObserver ??= class {
@@ -49,6 +50,7 @@ function research(session_id: number, state: SessionResearch['state'], to_review
 const LIST: SessionList = { groups: [{ label: 'Today', rows: [row(4, 'Desk'), row(3, 'Chair'), row(2, 'Lamp'), row(1, 'Unassigned')] }], counts: { open: 4, published: 0, all: 4 }, unassigned_count: 0 };
 
 beforeEach(() => {
+  answerFromList(sessionsPage, listSessions);
   vi.mocked(listSessions).mockResolvedValue(LIST);
   vi.mocked(researchOverview).mockResolvedValue([research(4, 'to_review', 3), research(3, 'researching'), research(2, 'to_review', 1)]);
 });

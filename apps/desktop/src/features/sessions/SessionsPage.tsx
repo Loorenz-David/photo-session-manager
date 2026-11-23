@@ -3,7 +3,7 @@ import { ArrowDown, Search, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SkeletonRows } from '@/components/pending/SkeletonRows';
-import { withinRange, type TimeRange } from '@/lib/format';
+import { rangeStart, type TimeRange } from '@/lib/format';
 import { useDebounced, useKeyboard } from '@/lib/keyboard';
 import { usePageData } from '@/lib/pending';
 import type { SessionFilter } from '@/services/bindings';
@@ -11,22 +11,26 @@ import { onSessionsChanged } from '@/services/events';
 import { BatchQueue } from '@/features/publish/BatchQueue';
 import { PublishPopover } from '@/features/publish/PublishPopover';
 import { publishRetry } from '@/services/publish';
-import { listSessions } from '@/services/sessions';
+import { sessionsPage } from '@/services/sessions';
 import { BatchBar } from './BatchBar';
 import { Filters } from './Filters';
 import { GroupHeader } from './GroupHeader';
+import { Pagination } from './Pagination';
 import { SessionRow, isSelectable } from './SessionRow';
 import { useResearchOverview } from './ResearchPill';
 import { waitingForReview } from './reviewQueue';
 import { TimeFilter } from './TimeFilter';
 import { UnassignedCard } from './UnassignedCard';
+import { usePictures } from './usePictures';
 import { useSessionBadges } from '@/features/conversations/SessionBadge';
 
 export const SEARCH_DEBOUNCE_MS = 250;
 
 /**
- * Sessions list (ch04 S-A, ch07): grouped rows as delivered by `sessions_list` (creation order, newest created on top,
- * grouped by creation time: changelog 46 (1)), filters, search, time filter.
+ * Sessions list (ch04 S-A, ch07): grouped rows as delivered by `sessions_page` (creation order, newest created on top,
+ * grouped by creation time: changelog 46 (1)), filters, search, time filter, 25 rows per page (H2, MC-H2). The search,
+ * the filter tabs, the time filter and "To review" look through every session (the backend applies them); changing
+ * one of them goes to page 1.
  */
 export function SessionsPage({ navigate }: { navigate: (sessionId: number) => void }) {
   const [filter, setFilter] = useState<SessionFilter>('open');
@@ -38,8 +42,28 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   // A19: only the sessions whose research finished with AI suggestions waiting (the review queue).
   const [reviewOnly, setReviewOnly] = useState(false);
   const debouncedQuery = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
-  const { data: list, loading, error, reload: load } = usePageData(() => listSessions({ filter, query: debouncedQuery || null }), [filter, debouncedQuery]);
   const research = useResearchOverview(null);
+  // A19: the sessions whose suggestions wait for review, from the research overview alone (every session).
+  const waiting = useMemo(
+    () => [...research.values()].filter(waitingForReview).map(row => row.session_id).sort((a, b) => a - b),
+    [research],
+  );
+  const onlyIds = reviewOnly ? waiting : null;
+  // MC-H2.3: the page belongs to the question asked; a new filter, search, time filter or "To review" is page 1.
+  const question = JSON.stringify([filter, debouncedQuery, range, onlyIds]);
+  const [asked, setAsked] = useState({ question, page: 1 });
+  const page = asked.question === question ? asked.page : 1;
+  const { data: list, loading, error, reload: load } = usePageData(
+    () => sessionsPage({ filter, query: debouncedQuery || null, created_from: rangeStart(range), only_ids: onlyIds, page }),
+    [question, page],
+  );
+  // MC-H2.1: an answer clamped to the last page is the page shown.
+  useEffect(() => {
+    if (list && list.page !== page) setAsked({ question, page: list.page });
+    // Only a new answer moves the page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list]);
+  const pictures = usePictures();
   // C2 (09B §6): "N open" / "Pricing is waiting" per session.
   const conversationBadges = useSessionBadges();
   useEffect(() => { if (error) toast.error(`Could not load sessions: ${(error as Error).message}`); }, [error]);
@@ -59,17 +83,8 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
   }, []);
 
   const now = Date.now();
-  const groups = useMemo(() => {
-    const at = Date.now();
-    return (list?.groups ?? [])
-      // Changelog 46 (1): the time filter, like the order and the groups, uses the creation time.
-      .map(group => ({ ...group, rows: group.rows.filter(row => withinRange(row.created_at, range, at) && (!reviewOnly || waitingForReview(research.get(row.id)))) }))
-      .filter(group => group.rows.length > 0);
-  }, [list, range, reviewOnly, research]);
-  const toReview = useMemo(
-    () => (list?.groups ?? []).flatMap(group => group.rows).filter(row => waitingForReview(research.get(row.id))).length,
-    [list, research],
-  );
+  const groups = useMemo(() => list?.groups ?? [], [list]);
+  const toReview = waiting.length;
   const selectable = useMemo(() => groups.flatMap(group => group.rows).filter(isSelectable).map(row => row.id), [groups]);
 
   // Keep the selection to rows still visible and selectable.
@@ -173,7 +188,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
           </div>
           {groups.map(group => (
             <section key={group.label} className="session-group" aria-label={group.label}>
-              <GroupHeader label={group.label} count={group.rows.length} />
+              <GroupHeader label={group.label} count={group.total} />
               {group.rows.map(row => (
                 <SessionRow
                   key={row.id}
@@ -181,6 +196,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
                   now={now}
                   research={research.get(row.id)}
                   conversations={conversationBadges.get(row.id)}
+                  picture={pictures.cover(row.id)}
                   selected={selected.has(row.id)}
                   onToggle={() => toggle(row.id)}
                   onOpen={() => navigate(row.id)}
@@ -194,6 +210,7 @@ export function SessionsPage({ navigate }: { navigate: (sessionId: number) => vo
           ))}
         </div>
       )}
+      {list && <Pagination page={list.page} pages={list.pages} onPage={next => setAsked({ question, page: next })} />}
 
       <BatchBar
         count={selected.size}

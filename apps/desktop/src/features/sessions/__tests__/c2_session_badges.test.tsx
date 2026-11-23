@@ -11,13 +11,14 @@ vi.mock('@/services/events', () => ({
 }));
 vi.mock('@/services/sessions', async importOriginal => ({
   ...(await importOriginal<typeof import('@/services/sessions')>()),
-  listSessions: vi.fn(),
+  listSessions: vi.fn(), sessionsPage: vi.fn(),
   previewUrl: (path: string) => `asset://${path}`,
 }));
 vi.mock('@/services/research', () => ({ researchOverview: vi.fn(async () => []) }));
 
 import { SessionsPage } from '../SessionsPage';
-import { listSessions } from '@/services/sessions';
+import { listSessions, sessionsPage } from '@/services/sessions';
+import { answerFromList } from '@/features/sessions/__tests__/pageFromList';
 import { conversationsSessionBadges } from '@/services/conversations';
 
 function session(id: number, sku: string) {
@@ -28,6 +29,7 @@ function session(id: number, sku: string) {
 }
 
 beforeEach(() => {
+  answerFromList(sessionsPage, listSessions);
   vi.mocked(listSessions).mockResolvedValue({
     groups: [{ label: 'Today', rows: [session(7, 'BEYO-7'), session(8, 'BEYO-8')] }],
     counts: { open: 2, published: 0, all: 2 },

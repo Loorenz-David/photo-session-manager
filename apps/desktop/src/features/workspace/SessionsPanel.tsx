@@ -3,7 +3,8 @@ import { useDroppable } from '@dnd-kit/core';
 import { Search, X } from 'lucide-react';
 import { useDebounced } from '@/lib/keyboard';
 import { onSessionsChanged } from '@/services/events';
-import { listSessions, previewUrl } from '@/services/sessions';
+import { listSessions } from '@/services/sessions';
+import { Thumb } from '@/features/sessions/HoverPreview';
 import type { SessionRowResponse_Serialize } from '@/services/bindings';
 
 export type SessionRow = SessionRowResponse_Serialize;
@@ -31,7 +32,7 @@ function SessionDropRow({ row }: { row: SessionRow }) {
       aria-disabled={!enabled || undefined}
       title={enabled ? `Drop photos to move them to ${row.title}` : 'Published sessions cannot receive photos'}
     >
-      <span className="row-thumb">{row.cover_preview_path && <img src={previewUrl(row.cover_preview_path)} alt="" />}</span>
+      <Thumb path={row.cover_preview_path} className="row-thumb" />
       <span className="row-name">
         <strong>{row.item_type || row.title}</strong>
         <small>
