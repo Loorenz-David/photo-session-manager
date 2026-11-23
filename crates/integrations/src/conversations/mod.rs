@@ -189,8 +189,10 @@ pub struct ServiceParts {
 }
 
 /// Builds the service over the Beyo Pricing adapter: the adapter reads the live effective server
-/// from the slot and the key the service holds in memory.
-pub fn build_service(parts: ServiceParts) -> Arc<ConversationsService> {
+/// from the slot and the key the service holds in memory. The same adapter instance is handed
+/// back for the labels port (one instance, two ports: the label calls use the same live server
+/// and key closures).
+pub fn build_service(parts: ServiceParts) -> (Arc<ConversationsService>, Arc<BeyoPricingAdapter>) {
     let slot = Arc::new(SettingsFileSlot::new(parts.paths.clone()));
     let service_cell: Arc<OnceLock<Weak<ConversationsService>>> = Arc::new(OnceLock::new());
     let server_slot = slot.clone();
@@ -211,9 +213,10 @@ pub fn build_service(parts: ServiceParts) -> Arc<ConversationsService> {
                 .and_then(|service| service.held_key())
         },
     );
+    let adapter = Arc::new(adapter);
     let service = Arc::new(ConversationsService::new(
         parts.store,
-        Arc::new(adapter),
+        adapter.clone(),
         Arc::new(RedactingSecrets::new(parts.secrets)),
         slot,
         parts.shop,
@@ -223,5 +226,5 @@ pub fn build_service(parts: ServiceParts) -> Arc<ConversationsService> {
         parts.lane,
     ));
     let _ = service_cell.set(Arc::downgrade(&service));
-    service
+    (service, adapter)
 }

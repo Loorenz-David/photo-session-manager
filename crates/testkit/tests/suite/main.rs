@@ -21,6 +21,8 @@ mod h3_jpeg_photos;
 mod h3_publish_after_bring_back;
 mod h4_details_only_publish;
 mod h4_remote_workspace;
+mod l1_labels_access;
+mod l1_labels_markers;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

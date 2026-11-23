@@ -102,6 +102,14 @@ at P70 (§Research: after R13); add a row whenever a phase creates a new couplin
 | The form's layout rules (`layout_keys`, `active_definitions`, `form_get`) | `services::attributes::form_keys` stays their one copy (used by the conversations store's `form_keys`) | a quote chip links to a field the form does not show, or not to one it does | `c4_conversations_visit::c4_c10*` |
 | The sync rules (MC-C1: what a `tick` asks, the cursor, the lane) | `services/conversations.rs` and the store transactions in `crates/infra/src/sqlite/conversations.rs` (the cursor in the same transaction as the change it follows) | a change is lost or applied twice after an interruption | `c1_conversations_sync::` |
 
+## Price labels (L1–L3; names in `docs/implementation/master_plan_labels.md` §4)
+| If you change… | You must also change… | Otherwise… | Check |
+|---|---|---|---|
+| A Pricing label reply shape or endpoint (`openapi-integration.json`, `API.md` › Price labels, `EVENTS_AND_WEBHOOKS.md` › Price-label events) | `beyo_pricing/label_types.rs`, the fixture in `beyo_pricing/fixtures/labels_*.json` / `events_labels.json`, the mapping in `beyo_pricing/labels.rs` (and `label_change` in `adapter.rs` for events), `FakePricing` (serialises through `label_types.rs`) | the fake proves a shape Pricing does not send, or a strict enum turns a valid answer into "Pricing answered in a way this version does not understand" | `cargo test -p psm-integrations --lib conversations::beyo_pricing`; `cargo test -p psm-testkit --test suite l1_labels_markers::` |
+| The `LabelsChanged` payload | the `TauriEvents` arm and `LabelsChangedPayload` (desktop `lib.rs`), `onLabelsChanged` in `services/events.ts`, `useSessionLabels` | markers stop following Pricing | `cargo test -p psm-desktop l1_tests`; `npx vitest run src/features/labels` |
+| A label status call (a new caller of `provider.status` / `products`) | route its result through `LabelsService::learn` (ACC.4) | a key without `labels:read` is asked again and again, or a refusal marks the conversations connection | `l1_labels_access::` |
+| The pull (`ConversationsService::pull` / `pull_page`) | keep the label list handed over in `pull` on every return of `pull_page` | a label event's cursor moves but its marker never changes | `l1_labels_markers::l1_c14f` |
+
 ## Research (verified after R13; names in `docs/implementation/master_plan_research.md` §6)
 | If you change… | You must also change… | Otherwise… | Check |
 |---|---|---|---|

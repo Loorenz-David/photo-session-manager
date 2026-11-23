@@ -173,6 +173,8 @@ pub enum EventKind {
     },
     MessageUpdated,
     MessageDeleted,
+    /// L1 (MC-L4.1): a product's label was printed or reset; never a conversation's.
+    Label(crate::domain::label::LabelChange),
     Other,
 }
 

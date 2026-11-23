@@ -9,6 +9,9 @@
 
 use psm_core::{Error, Result};
 use psm_integrations::conversations::beyo_pricing::{
+    label_types::{
+        IntegrationLabelStatus, IntegrationLabelTemplate, LabelStatusOut, WireLabelStatus,
+    },
     transport::{HttpReply, Method, PricingHttp, PricingRequest, RawReply},
     types::{
         Actor, ErrorBody, ErrorEnvelope, EventPage, IntegrationCase, IntegrationCaseUpdate,
@@ -49,6 +52,30 @@ impl FakeRequest {
     }
 }
 
+/// L1 (`master_plan_labels.md` §4 Tests): one product of the fake's label state.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LabelSpec {
+    pub product_id: String,
+    pub sku: Option<String>,
+    pub title: String,
+    pub product_type: Option<String>,
+    pub price_minor: Option<i64>,
+    /// Printed at this time (UTC ms); none = not printed.
+    pub printed_at: Option<i64>,
+    /// `price_changed | sku_changed | barcode_changed` while not printed.
+    pub reset: Option<String>,
+    pub thumb_url: Option<String>,
+    pub created_at: Option<i64>,
+    pub template: Option<String>,
+}
+
+fn iso(ms: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(ms)
+        .unwrap()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string()
+}
+
 struct FakeCase {
     store_id: String,
     case: IntegrationCase,
@@ -79,6 +106,9 @@ struct State {
     redeliver: Vec<i64>,
     mutations: HashMap<(String, String), Message>,
     requests: Vec<FakeRequest>,
+    labels: Vec<LabelSpec>,
+    templates: Vec<IntegrationLabelTemplate>,
+    deny_labels: bool,
 }
 
 #[derive(Default)]
@@ -282,6 +312,71 @@ impl State {
         case_id
     }
 
+    fn label_mut(&mut self, product_id: &str) -> &mut LabelSpec {
+        if !self.labels.iter().any(|l| l.product_id == product_id) {
+            self.labels.push(LabelSpec {
+                product_id: product_id.into(),
+                title: format!("Product {product_id}"),
+                ..LabelSpec::default()
+            });
+        }
+        self.labels
+            .iter_mut()
+            .find(|l| l.product_id == product_id)
+            .unwrap()
+    }
+
+    /// Logs a label event for the product (`productId` in `data` and in the envelope) in the
+    /// first store's log; answers the event id.
+    fn log_label_event(&mut self, product_id: &str, kind: &str, extra: Json) -> i64 {
+        let store_id = self
+            .stores
+            .first()
+            .map(|s| s.id.clone())
+            .expect("FakePricing: a store for the label event");
+        let sku = self.label_mut(product_id).sku.clone();
+        let mut data = json!({"productId": product_id, "sku": sku});
+        for (k, v) in extra.as_object().cloned().unwrap_or_default() {
+            data[k] = v;
+        }
+        self.push_event(&store_id, kind, None, Some(product_id.to_owned()), data)
+    }
+
+    fn label_status(&self, product_id: &str) -> IntegrationLabelStatus {
+        match self.labels.iter().find(|l| l.product_id == product_id) {
+            Some(l) => IntegrationLabelStatus {
+                sku: l.sku.clone(),
+                product_id: Some(l.product_id.clone()),
+                label: Some(LabelStatusOut {
+                    product_id: l.product_id.clone(),
+                    label_status: if l.printed_at.is_some() {
+                        WireLabelStatus::Printed
+                    } else {
+                        WireLabelStatus::NotPrinted
+                    },
+                    label_printed_at: l.printed_at.map(iso),
+                    has_price: Some(l.price_minor.is_some()),
+                    source: l.printed_at.map(|_| "export".into()),
+                    reset_reason: l.reset.clone().filter(|_| l.printed_at.is_none()),
+                    reset_at: None,
+                    printed_price_minor: l.printed_at.and(l.price_minor),
+                    printed_sku: l.printed_at.and(l.sku.clone()),
+                }),
+                error: None,
+            },
+            None => IntegrationLabelStatus {
+                sku: None,
+                product_id: Some(product_id.to_owned()),
+                label: None,
+                error: Some(ErrorBody {
+                    code: "product_not_found".into(),
+                    message: format!("No product with id '{product_id}' in this store."),
+                    details: None,
+                }),
+            },
+        }
+    }
+
     fn touch(&mut self, case_id: &str) {
         let now = self.now();
         self.case_mut(case_id).case.updated_at = now;
@@ -469,6 +564,78 @@ impl FakePricing {
             .collect()
     }
 
+    /// The time of a logged event (UTC ms).
+    pub fn event_at_ms(&self, event_id: i64) -> i64 {
+        let state = self.state();
+        let event = state
+            .events
+            .iter()
+            .find(|e| e.id == event_id)
+            .expect("FakePricing: no such event");
+        chrono::DateTime::parse_from_rfc3339(&event.at)
+            .unwrap()
+            .timestamp_millis()
+    }
+
+    // ---------- price labels (L1) ----------
+
+    /// Adds (or replaces) a product of the label state.
+    pub fn add_label_product(&self, spec: LabelSpec) {
+        let mut state = self.state();
+        state.labels.retain(|l| l.product_id != spec.product_id);
+        state.labels.push(spec);
+    }
+
+    /// Changes a product of the label state without an event.
+    pub fn set_label(&self, product_id: &str, change: impl FnOnce(&mut LabelSpec)) {
+        change(self.state().label_mut(product_id));
+    }
+
+    /// Adds an active label template.
+    pub fn add_template(&self, template: IntegrationLabelTemplate) {
+        self.state().templates.push(template);
+    }
+
+    /// From now on every `/labels/` path answers `403 insufficient_scope` (a key without
+    /// `labels:read`).
+    pub fn deny_labels(&self) {
+        self.state().deny_labels = true;
+    }
+
+    /// A label is generated for the product: it becomes Printed at the fake clock's time and
+    /// `label.printed` is logged. Answers the event id (its time: [`Self::event_at_ms`]).
+    pub fn label_printed(&self, product_id: &str) -> i64 {
+        let mut state = self.state();
+        let price = state.label_mut(product_id).price_minor;
+        let id = state.log_label_event(
+            product_id,
+            "label.printed",
+            json!({"runId": "fake-run", "priceMinor": price}),
+        );
+        let at = state
+            .events
+            .last()
+            .map(|e| e.at.clone())
+            .unwrap_or_default();
+        let at = chrono::DateTime::parse_from_rfc3339(&at)
+            .map(|t| t.timestamp_millis())
+            .ok();
+        let label = state.label_mut(product_id);
+        label.printed_at = at;
+        label.reset = None;
+        id
+    }
+
+    /// The product's price, SKU or barcode changed: it is Not printed again with `reason` and
+    /// `label.reset` is logged. Answers the event id.
+    pub fn label_reset(&self, product_id: &str, reason: &str) -> i64 {
+        let mut state = self.state();
+        let label = state.label_mut(product_id);
+        label.printed_at = None;
+        label.reset = Some(reason.into());
+        state.log_label_event(product_id, "label.reset", json!({"reason": reason}))
+    }
+
     /// The id of the last event in the log (0 when empty).
     pub fn last_event_id(&self) -> i64 {
         self.state().next_event
@@ -591,7 +758,25 @@ impl FakePricing {
         if !state.stores.iter().any(|s| s.id == store_id) {
             return envelope(404, "not_found", "Not found.");
         }
+        if rest.first() == Some(&"labels") && state.deny_labels {
+            return envelope(403, "insufficient_scope", "This key lacks labels:read.");
+        }
         match (method, rest) {
+            (Method::Get, ["labels", "status"]) => {
+                let ids: Vec<String> = params
+                    .get("productIds")
+                    .map(|ids| ids.split(',').map(decode).collect())
+                    .unwrap_or_default();
+                if ids.is_empty() || ids.len() > 200 {
+                    return envelope(422, "validation_error", "1 to 200 productIds.");
+                }
+                let entries: Vec<IntegrationLabelStatus> =
+                    ids.iter().map(|id| state.label_status(id)).collect();
+                HttpReply::new(200, to_json!(&entries))
+            }
+            (Method::Get, ["labels", "templates"]) => {
+                HttpReply::new(200, to_json!(&state.templates))
+            }
             (Method::Get, ["cases"]) => {
                 let recipient = params.get("recipient").copied();
                 let status = params.get("status").copied();

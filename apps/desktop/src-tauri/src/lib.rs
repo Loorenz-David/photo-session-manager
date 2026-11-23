@@ -2193,6 +2193,12 @@ struct PictureReadyPayload {
     target: psm_core::domain::remote::PictureTarget,
     path: String,
 }
+/// L1 (`master_plan_labels.md` §4 Event): `labels_changed {product_ids, access}`.
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+struct LabelsChangedPayload {
+    product_ids: Vec<String>,
+    access: bool,
+}
 /// H3 (master plan archive §4 Events): `bring_back_progress {session_id, done, total, state,
 /// error}`.
 #[derive(serde::Serialize, Clone, Debug, PartialEq)]
@@ -2353,6 +2359,19 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                         self.alerts.banner(alerts::BANNER_TITLE, &body);
                     }
                 }
+            }
+            // L1 (`master_plan_labels.md` §4 Event): the markers' products, or the access.
+            AppEvent::LabelsChanged {
+                product_ids,
+                access,
+            } => {
+                let _ = self.app.emit(
+                    "labels_changed",
+                    LabelsChangedPayload {
+                        product_ids,
+                        access,
+                    },
+                );
             }
         }
     }

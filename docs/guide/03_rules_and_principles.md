@@ -35,6 +35,16 @@ Each rule names its source. When a rule here and the source disagree, the source
 | CR6 | No duplicate replies: every send carries its `clientMutationId`, every retry reuses it (C3) | the composer makes the id once per press (`crypto.randomUUID()`); it is the `conversation_outbox` primary key and nothing in the backend makes another; `checked_reply` (1–80 characters) and `reply` (same id → the stored row, nothing written); the flush sends exactly the stored id; a `failed` row is sent again only through `retry`, with the same id, never by a `tick` |
 | — | No test, session or tool ever calls Pricing or Shopify; sessions never launch the built app in C1–C4 | the adapter is tested over a recording `PricingHttp` and `FakePricing` |
 
+## Price labels invariants M-L1–M-L6 (book `09C` §9; `docs/implementation/master_plan_labels.md` §5; as far as L1 builds them)
+| # | Invariant | Where it bites in code |
+|---|---|---|
+| M-L1 | Label state is never stored: markers come from the provider's latest answer or event | `LabelCopy` (memory) in `LabelsService`; the only stored fact is `conversation_sync.labels_access` (whether the key may read labels); `l1_labels_markers::l1_c13f` lists every `label` column |
+| M-L2 | Only a run changes anything at the provider | `LabelsProvider::run` is the one writing method and the adapter's only `POST …/labels/runs`; in L1 nothing outside the adapter's tests calls `run`, `plan`, `preview` or `download` |
+| M-L3 | One key per chunk, reused on every retry | (L3) `run(store, ids, key)` sends the key it is given and nothing else |
+| M-L4 | A run with a failure is never reported fully generated | (L3) `RunItem.rendered` / `result` are read per item; `lifecycleResult` is read tolerantly so a run that marked products is never a `BadReply` |
+| M-L5 | Labels never write to Shopify; the key is never logged | label calls use the conversations key closure and bearer header (CR2); log lines `labels.access`, `labels.status asked= answered=`, `labels.events changed=` carry no key, URL query, SKU or title |
+| M-L6 | Without a key, a matched store and `labels:read`, no label call is made | `LabelsService::allowed_store` (connection `Ready` with a store, access not `denied`); `connected()` is the only call that ignores a remembered `denied` (one templates read per Test connection / Save key) |
+
 ## Public repository: what must never be committed (`CLAUDE.md`; master plan §3 "Camera hard rules" and "Secrets"; `native/camera-sidecar/README.md` §Never commit; `.gitignore`)
 - Any Sony SDK file: headers, `*.dylib`, `CrAdapter/`, the `CrSDK_*` archive or folder, the lab's
   hand-written `sdk_shim` headers. The SDK lives only on the build machine, outside the repo.

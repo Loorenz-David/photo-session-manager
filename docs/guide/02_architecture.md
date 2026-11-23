@@ -614,6 +614,35 @@ of that folder (`variant_background` → `resync_folder`).
   Banners go through `tauri-plugin-notification` (registered in `run()`, used from Rust only: no capability entry, no
   npm package); macOS asks once to allow them and never tells the app a refusal.
 
+### Price labels (book `09C`; contracts ACC, MC-L3, MC-L4 in `docs/implementation/master_plan_labels.md` §5; L1)
+- **Port and vocabulary:** `crates/core/src/domain/label.rs` (label state, access, list, plan and run vocabulary,
+  `LabelsError`), `crates/core/src/ports/labels.rs` (`LabelsProvider`: `products`, `status`, `templates`, `plan`,
+  `preview`, `run` (**the only writing method**), `download`, pure `describe`, `product_id_of`, `commerce_id_of`;
+  `LabelStore`; `LabelsLink`). No provider or platform word in core (H7).
+- **Adapter:** `crates/integrations/src/conversations/beyo_pricing/labels.rs` (`impl LabelsProvider for
+  BeyoPricingAdapter`, one error function `label_error` — **never** `read_error` / `write_error`, so a refused label
+  call never marks the conversations connection refused), `label_types.rs` (wire types), fixtures
+  `fixtures/labels_*.json`, `events_labels.json`. Preview, run and download go through `PricingHttp::fetch` (bytes
+  untouched, `RawReply`); `send` turns bodies into JSON and must never carry a PDF. A download path is sent only
+  under `/integration/v1/stores/<store>/labels/runs/` (MC-L2.12). One adapter instance serves both ports
+  (`conversations::build_service` returns it beside the service).
+- **Service:** `crates/core/src/services/labels.rs` (`LabelsService`, `App.labels`, also in `AppHandles`; built in
+  `crates/integrations/src/labels.rs::build_service`, which calls `ConversationsService::set_labels_link` with a
+  `Weak`). `access()` = `Off(state)` unless the connection is `Ready`, else the stored access (`unknown | allowed |
+  denied`, column `conversation_sync.labels_access`, migration `022`, `crates/infra/src/sqlite/labels.rs`).
+  `session_labels(ids, refresh)` reads each session's link (`LabelStore::session_products`), maps it with
+  `product_id_of`, and with `refresh` asks `status` (200 ids per request) only when a product has no answer younger
+  than 10 s (`mechanisms::labels::STATUS_FRESH_MS`, measured on `clock.mono()`).
+- **The display copy:** `mechanisms/labels.rs` `LabelCopy` (memory only, M-L1): answers and events per product; an
+  answer started before a later event for that product is not applied.
+- **What the conversations service tells it:** `connect` ending `Ready` → `connected()` after the lane is left (one
+  templates read sets the access, the copy is emptied, one `LabelsChanged {[], access: true}`); `key_set` →
+  `key_changed()` first (access `unknown`); the pull (`pull` wraps `pull_page`) collects `EventKind::Label` changes
+  (moved past like any event not for us, never a mark, never "applied") and hands them to `changed()` once on every
+  way out of the page → one `LabelsChanged {product_ids, access: false}`. The first connection pages past label
+  events and tells nothing.
+- **Event:** `AppEvent::LabelsChanged` → window event `labels_changed {product_ids, access}` (`TauriEvents`).
+
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams
 listed in the research master plan §5 "Seams".

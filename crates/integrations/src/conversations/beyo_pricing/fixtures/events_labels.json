@@ -1,0 +1,26 @@
+{
+  "_source": "schema-grounded: openapi-integration.json StoreEvent + EVENTS_AND_WEBHOOKS.md › Price-label events; values neutral; not captured",
+  "events": [
+    {
+      "id": 1850,
+      "type": "label.printed",
+      "storeId": "e8f6b61a-40a4-4504-8090-d9ea5b62a069",
+      "productId": "15531808096409",
+      "caseId": null,
+      "actorId": null,
+      "data": { "productId": "15531808096409", "sku": "TEST-1802", "runId": "r1", "priceMinor": 890000 },
+      "at": "2026-11-20T09:30:01Z"
+    },
+    {
+      "id": 1851,
+      "type": "label.reset",
+      "storeId": "e8f6b61a-40a4-4504-8090-d9ea5b62a069",
+      "productId": "15531808096409",
+      "caseId": null,
+      "actorId": null,
+      "data": { "productId": "15531808096409", "sku": "TEST-1802", "reason": "price_changed" },
+      "at": "2026-11-20T10:05:00Z"
+    }
+  ],
+  "nextCursor": 1851
+}

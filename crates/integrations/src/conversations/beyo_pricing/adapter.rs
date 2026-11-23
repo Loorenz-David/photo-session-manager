@@ -8,10 +8,13 @@
 use super::transport::{HttpReply, Method, PricingHttp, PricingRequest};
 use super::types;
 use psm_core::{
-    domain::conversation::{
-        Attachment, Author, AuthorKind, Conversation, ConversationStatus, EventKind, EventPage,
-        Message, NewMessage, ProviderError, ProviderEvent, ProviderStore, Quote, ReplyRef,
-        ResolvedBy,
+    domain::{
+        conversation::{
+            Attachment, Author, AuthorKind, Conversation, ConversationStatus, EventKind, EventPage,
+            Message, NewMessage, ProviderError, ProviderEvent, ProviderStore, Quote, ReplyRef,
+            ResolvedBy,
+        },
+        label::{LabelChange, LabelChangeKind},
     },
     ports::conversations::{ConversationsProvider, ProviderResult},
 };
@@ -218,8 +221,34 @@ fn conversation(
     }))
 }
 
+/// MC-L4.1: a `label.printed` / `label.reset` event's change; the product is `data.productId`,
+/// else the envelope's `productId`; neither → none (the event is `Other`).
+fn label_change(wire: &types::StoreEvent, at: i64) -> Option<EventKind> {
+    let data = &wire.data;
+    let product_id = data
+        .get("productId")
+        .and_then(Json::as_str)
+        .or(wire.product_id.as_deref())
+        .filter(|id| !id.is_empty())?
+        .to_owned();
+    let kind = match wire.kind.as_str() {
+        "label.printed" => LabelChangeKind::Printed {
+            price_minor: data.get("priceMinor").and_then(Json::as_i64),
+        },
+        "label.reset" => LabelChangeKind::Reset {
+            reason: super::labels::reset_reason(data.get("reason").and_then(Json::as_str)),
+        },
+        _ => return None,
+    };
+    Some(EventKind::Label(LabelChange {
+        product_id,
+        at,
+        kind,
+    }))
+}
+
 fn event(wire: types::StoreEvent) -> ProviderResult<ProviderEvent> {
-    time(&wire.at)?;
+    let at = time(&wire.at)?;
     let data = &wire.data;
     let text = |key: &str| data.get(key).and_then(Json::as_str);
     let conversation_id = wire
@@ -238,9 +267,10 @@ fn event(wire: types::StoreEvent) -> ProviderResult<ProviderEvent> {
         },
         "message.updated" => EventKind::MessageUpdated,
         "message.deleted" => EventKind::MessageDeleted,
+        "label.printed" | "label.reset" => label_change(&wire, at).unwrap_or(EventKind::Other),
         _ => EventKind::Other,
     };
-    let for_us = kind != EventKind::Other
+    let for_us = !matches!(kind, EventKind::Other | EventKind::Label(_))
         && conversation_id.is_some()
         && text("recipient") == Some(RECIPIENT);
     Ok(ProviderEvent {

@@ -1022,7 +1022,7 @@ mod tests {
     }
 
     fn describe(error: LabelsError, shop: Option<&str>) -> String {
-        adapter().1.describe(&error, shop)
+        LabelsProvider::describe(&adapter().1, &error, shop)
     }
 
     #[test]
@@ -1683,6 +1683,146 @@ mod tests {
         assert!(matches!(
             adapter.download(S, &artifact_path()),
             Err(LabelsError::Unreachable(_))
+        ));
+    }
+
+    // ---------- L1·U3: label events in the pull ----------
+
+    use psm_core::{
+        domain::conversation::{EventKind, ProviderEvent},
+        domain::label::{LabelChange, LabelChangeKind},
+        ports::conversations::ConversationsProvider,
+    };
+
+    const EVENTS_LABELS: &str = include_str!("fixtures/events_labels.json");
+
+    fn label_event(kind: &str, envelope_product: Option<&str>, data: Json) -> Json {
+        json!({"id": 1860, "type": kind, "storeId": S, "productId": envelope_product,
+               "caseId": null, "actorId": null, "data": data, "at": "2026-11-20T09:30:01Z"})
+    }
+
+    fn kinds(http: &Recording, adapter: &BeyoPricingAdapter, events: Vec<Json>) -> Vec<EventKind> {
+        http.reply(200, json!({"events": events, "nextCursor": 1860}));
+        adapter
+            .events_after(S, 0, 500)
+            .unwrap()
+            .events
+            .into_iter()
+            .map(|e| e.kind)
+            .collect()
+    }
+
+    #[test]
+    fn l1_c11a_label_events_map_to_label_changes() {
+        let (http, adapter) = adapter();
+        http.reply(200, fixture(EVENTS_LABELS));
+        let page = adapter.events_after(S, 1849, 500).unwrap();
+        assert_eq!(
+            page.events,
+            vec![
+                ProviderEvent {
+                    id: 1850,
+                    kind: EventKind::Label(LabelChange {
+                        product_id: PRODUCT.into(),
+                        at: ms("2026-11-20T09:30:01Z"),
+                        kind: LabelChangeKind::Printed {
+                            price_minor: Some(890000)
+                        },
+                    }),
+                    conversation_id: None,
+                    for_us: false,
+                },
+                ProviderEvent {
+                    id: 1851,
+                    kind: EventKind::Label(LabelChange {
+                        product_id: PRODUCT.into(),
+                        at: ms("2026-11-20T10:05:00Z"),
+                        kind: LabelChangeKind::Reset {
+                            reason: Some(ResetReason::PriceChanged)
+                        },
+                    }),
+                    conversation_id: None,
+                    for_us: false,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn l1_c11b_reset_reasons_of_events() {
+        let (http, adapter) = adapter();
+        let events = ["sku_changed", "barcode_changed", "other"]
+            .into_iter()
+            .map(|reason| {
+                label_event(
+                    "label.reset",
+                    Some("7"),
+                    json!({"productId": "7", "sku": "TEST-1", "reason": reason}),
+                )
+            })
+            .collect();
+        let reasons: Vec<Option<ResetReason>> = kinds(&http, &adapter, events)
+            .into_iter()
+            .map(|kind| match kind {
+                EventKind::Label(LabelChange {
+                    kind: LabelChangeKind::Reset { reason },
+                    ..
+                }) => reason,
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            reasons,
+            vec![
+                Some(ResetReason::SkuChanged),
+                Some(ResetReason::BarcodeChanged),
+                None
+            ]
+        );
+    }
+
+    #[test]
+    fn l1_c11c_the_product_comes_from_data_else_the_envelope() {
+        let (http, adapter) = adapter();
+        let got = kinds(
+            &http,
+            &adapter,
+            vec![
+                label_event("label.printed", Some("7"), json!({"sku": "TEST-1"})),
+                label_event("label.printed", None, json!({"sku": "TEST-1"})),
+            ],
+        );
+        assert_eq!(
+            got,
+            vec![
+                EventKind::Label(LabelChange {
+                    product_id: "7".into(),
+                    at: ms("2026-11-20T09:30:01Z"),
+                    kind: LabelChangeKind::Printed { price_minor: None },
+                }),
+                EventKind::Other,
+            ]
+        );
+    }
+
+    #[test]
+    fn l1_c11d_printed_without_a_price() {
+        let (http, adapter) = adapter();
+        let got = kinds(
+            &http,
+            &adapter,
+            vec![label_event(
+                "label.printed",
+                Some("7"),
+                json!({"productId": "7", "sku": "TEST-1", "runId": "r1"}),
+            )],
+        );
+        assert!(matches!(
+            &got[0],
+            EventKind::Label(LabelChange {
+                kind: LabelChangeKind::Printed { price_minor: None },
+                ..
+            })
         ));
     }
 }

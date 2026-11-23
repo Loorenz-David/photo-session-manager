@@ -299,7 +299,13 @@ fn c1_c9a_test_connection_saves_the_matching_store() {
     assert_eq!(saved.id, id);
     assert_eq!(saved.name, PRICING_STORE_NAME);
     assert_eq!(saved.shop_domain, "Shop-A.myshopify.com");
-    assert_eq!(a.fake_pricing().request_lines(), ["GET /stores"]);
+    assert_eq!(
+        a.fake_pricing().request_lines(),
+        [
+            "GET /stores".to_owned(),
+            format!("GET /stores/{id}/labels/templates")
+        ]
+    );
 }
 
 #[test]

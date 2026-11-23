@@ -3,6 +3,7 @@ pub mod camera;
 pub mod commerce;
 pub mod conversations;
 pub mod editing;
+pub mod labels;
 pub mod photo_files;
 pub mod render_output;
 pub mod session_delete;
@@ -54,6 +55,7 @@ use psm_core::{
         export::{ExportRender, ExportService},
         health::HealthService,
         history::{History, HistoryStore},
+        labels::LabelsService,
         prepare_masters::PrepareMastersService,
         previews::PreviewService,
         publish::PublishService,
@@ -135,6 +137,9 @@ pub struct App {
     pub prepare_masters: Arc<PrepareMastersService>,
     /// C1 (09B): conversations with Pricing; always present (H6: silent without a key or shop).
     pub conversations: Arc<ConversationsService>,
+    /// L1 (09C): price labels from the labels provider; always present (H6: without a ready
+    /// connection it answers `Off` and makes no request).
+    pub labels: Arc<LabelsService>,
     /// H1 (10H): remote items' records and their background reads; always present (H6: without a
     /// commerce integration every item is local and nothing is read).
     pub remote: Arc<RemoteItems>,
@@ -184,6 +189,8 @@ pub struct AppHandles {
     pub storage: Arc<StorageService>,
     /// C1: conversations with Pricing.
     pub conversations: Arc<ConversationsService>,
+    /// L1: price labels.
+    pub labels: Arc<LabelsService>,
     /// H1: remote items.
     pub remote: Arc<RemoteItems>,
     pub hooks_compiled: bool,
@@ -493,6 +500,7 @@ impl App {
             history: self.history.clone(),
             storage: self.storage.clone(),
             conversations: self.conversations.clone(),
+            labels: self.labels.clone(),
             remote: self.remote.clone(),
             hooks_compiled: self.hooks_compiled,
             nudge_running: self.nudge_port() != 0,
@@ -1227,15 +1235,24 @@ impl App {
         });
         // C1: the conversations service (no request and no Keychain read here: the key is read at
         // the first `tick` or `connection()`, on a worker thread).
-        let conversations = conversations::build_service(conversations::ServiceParts {
-            paths: paths.clone(),
+        let (conversations, labels_provider) =
+            conversations::build_service(conversations::ServiceParts {
+                paths: paths.clone(),
+                store: store.clone(),
+                secrets: camera_runtime.secret_store(),
+                shop: integration.as_ref().map(|i| i.shop_domain.clone()),
+                integration: integration.as_ref().map(|i| i.kind.clone()),
+                clock: clock.clone(),
+                events: events.clone(),
+                lane: lanes.conversations.clone(),
+            });
+        // L1: the labels service over the same adapter, told by the conversations service.
+        let labels = labels::build_service(labels::ServiceParts {
+            conversations: conversations.clone(),
+            provider: labels_provider,
             store: store.clone(),
-            secrets: camera_runtime.secret_store(),
-            shop: integration.as_ref().map(|i| i.shop_domain.clone()),
-            integration: integration.as_ref().map(|i| i.kind.clone()),
             clock: clock.clone(),
             events: events.clone(),
-            lane: lanes.conversations.clone(),
         });
         // C1 (MC-C1.7): the pull, every 250 ms and again at once while a check has more pages;
         // only with the startup work, like the storage clean-up.
@@ -1311,6 +1328,7 @@ impl App {
             storage,
             prepare_masters,
             conversations,
+            labels,
             remote,
             scripting,
             lanes,

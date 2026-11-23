@@ -3,8 +3,10 @@
 //! for a failure only through `describe`, and the two id forms of a product only through
 //! `product_id_of` / `commerce_id_of`.
 
+use crate::Result;
 use crate::domain::label::{
-    LabelFilter, LabelPlan, LabelProductPage, LabelRun, LabelState, LabelTemplate, LabelsError,
+    LabelChange, LabelFilter, LabelPlan, LabelProductPage, LabelRun, LabelState, LabelTemplate,
+    LabelsAccess, LabelsError,
 };
 
 pub type LabelsResult<T> = std::result::Result<T, LabelsError>;
@@ -44,4 +46,26 @@ pub trait LabelsProvider: Send + Sync {
     fn product_id_of(&self, commerce_external_id: &str) -> Option<String>;
     /// The commerce external id of a provider product id (pure); none when it is not one.
     fn commerce_id_of(&self, product_id: &str) -> Option<String>;
+}
+
+/// What labels store on this Mac (`022_labels_access.sql`): whether the saved key may read
+/// labels, and the reads that join sessions to their products. Nothing about label state.
+pub trait LabelStore: Send + Sync {
+    /// The stored access (`Unknown`, `Allowed` or `Denied`; never `Off`).
+    fn labels_access(&self) -> Result<LabelsAccess>;
+    /// Stores the access (`Off` is stored as `Unknown`).
+    fn set_labels_access(&self, access: LabelsAccess) -> Result<()>;
+    /// Each session with its item's commerce link external id (none without a link), in the
+    /// order asked; an unknown session is left out.
+    fn session_products(&self, session_ids: &[i64]) -> Result<Vec<(i64, Option<String>)>>;
+}
+
+/// What the conversations service tells the labels service (ACC.2, ACC.3, MC-L4.3).
+pub trait LabelsLink: Send + Sync {
+    /// A connect ended `Ready` (Test connection, Save key), after the lane was left.
+    fn connected(&self);
+    /// The key is about to be saved or removed.
+    fn key_changed(&self);
+    /// The label changes of one pull page, in log order (never empty).
+    fn changed(&self, changes: &[LabelChange]);
 }
