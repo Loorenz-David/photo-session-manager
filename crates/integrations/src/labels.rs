@@ -5,10 +5,11 @@
 use psm_core::{
     ports::{
         clock::Clock,
+        commerce::CommerceAdapter,
         events::EventSink,
         labels::{LabelsLink, LabelsProvider},
     },
-    services::{conversations::ConversationsService, labels::LabelsService},
+    services::{conversations::ConversationsService, labels::LabelsService, remote::RemoteItems},
 };
 use psm_infra::sqlite::store::SqliteStore;
 use std::sync::{Arc, Weak};
@@ -19,6 +20,10 @@ pub struct ServiceParts {
     /// The same adapter instance as the conversations service's.
     pub provider: Arc<dyn LabelsProvider>,
     pub store: Arc<SqliteStore>,
+    /// L2: the row pictures of matched sessions and the search-picture cache of the others.
+    pub remote: Arc<RemoteItems>,
+    /// L2: the shop an unmatched row is adopted from (none without a commerce integration).
+    pub commerce: Option<Arc<dyn CommerceAdapter>>,
     pub clock: Arc<dyn Clock>,
     pub events: Arc<dyn EventSink>,
 }
@@ -27,7 +32,10 @@ pub fn build_service(parts: ServiceParts) -> Arc<LabelsService> {
     let labels = Arc::new(LabelsService::new(
         parts.conversations.clone(),
         parts.provider,
+        parts.store.clone(),
         parts.store,
+        parts.remote,
+        parts.commerce,
         parts.clock,
         parts.events,
     ));

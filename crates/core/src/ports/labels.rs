@@ -6,7 +6,7 @@
 use crate::Result;
 use crate::domain::label::{
     LabelChange, LabelFilter, LabelPlan, LabelProductPage, LabelRun, LabelState, LabelTemplate,
-    LabelsAccess, LabelsError,
+    LabelsAccess, LabelsError, LinkedItem,
 };
 
 pub type LabelsResult<T> = std::result::Result<T, LabelsError>;
@@ -58,6 +58,9 @@ pub trait LabelStore: Send + Sync {
     /// Each session with its item's commerce link external id (none without a link), in the
     /// order asked; an unknown session is left out.
     fn session_products(&self, session_ids: &[i64]) -> Result<Vec<(i64, Option<String>)>>;
+    /// L2 (MC-L1.3): every item with its commerce link's external id (none without a link) and
+    /// its latest session (none without one), by item id; one read.
+    fn linked_items(&self) -> Result<Vec<LinkedItem>>;
 }
 
 /// What the conversations service tells the labels service (ACC.2, ACC.3, MC-L4.3).

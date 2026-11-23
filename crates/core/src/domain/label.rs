@@ -294,3 +294,45 @@ impl std::fmt::Display for LabelsError {
         }
     }
 }
+
+/// L2 (MC-L1.3): one local item as the matching rule sees it: its SKU, its commerce link's
+/// external id and its latest session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkedItem {
+    pub item_id: i64,
+    pub sku: String,
+    pub external_id: Option<String>,
+    pub session_id: Option<i64>,
+}
+
+/// L2 (MC-L1.2): one row of the Labels box, in the provider's order. `session` is the matched
+/// session's own row (10H §4); `picture_path` is an existing cached picture of an unmatched row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelRow {
+    pub product_id: String,
+    pub commerce_id: Option<String>,
+    pub sku: Option<String>,
+    pub title: String,
+    pub product_type: Option<String>,
+    pub price_minor: Option<i64>,
+    pub state: LabelState,
+    pub created_at: Option<i64>,
+    pub session: Option<super::session::SessionRow>,
+    pub picture_path: Option<std::path::PathBuf>,
+}
+
+/// L2 (MC-L1.1): one page of the Labels box.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelPage {
+    pub rows: Vec<LabelRow>,
+    pub next_cursor: Option<String>,
+    pub counts: LabelCounts,
+    pub work_from: Option<String>,
+}
+
+/// L2 (MC-L1.7): one product Select all chose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Selected {
+    pub product_id: String,
+    pub sku: String,
+}

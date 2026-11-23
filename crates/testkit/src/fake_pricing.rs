@@ -10,6 +10,7 @@
 use psm_core::{Error, Result};
 use psm_integrations::conversations::beyo_pricing::{
     label_types::{
+        IntegrationLabelCounts, IntegrationLabelProduct, IntegrationLabelProductPage,
         IntegrationLabelStatus, IntegrationLabelTemplate, LabelStatusOut, WireLabelStatus,
     },
     transport::{HttpReply, Method, PricingHttp, PricingRequest, RawReply},
@@ -84,6 +85,8 @@ struct FakeCase {
 struct Scripted {
     path_part: String,
     remaining: usize,
+    /// L2: this many matching requests pass before the rule applies.
+    skip: usize,
     status: u16,
     /// The envelope's `code` and `message` (none = the status's default code, "Scripted failure.").
     envelope: Option<(String, String)>,
@@ -109,7 +112,16 @@ struct State {
     labels: Vec<LabelSpec>,
     templates: Vec<IntegrationLabelTemplate>,
     deny_labels: bool,
+    /// L2: `workFrom` of every list answer (none = the default `2026-11-19`).
+    work_from: Option<Option<String>>,
+    /// L2: the next list answer carrying a cursor answers that same cursor as `nextCursor`.
+    repeat_cursor: bool,
+    /// L2: products added by `add_label_products`.
+    bulk: usize,
 }
+
+/// L2: the `workFrom` the fake answers unless `set_work_from` changed it.
+pub const FAKE_WORK_FROM: &str = "2026-11-19";
 
 #[derive(Default)]
 struct Hold {
@@ -377,6 +389,100 @@ impl State {
         }
     }
 
+    /// L2: `GET …/labels/products` by the package's meaning: newest created first, `q` over SKU,
+    /// title and product type (case-insensitive), `counts` over the searched list before the
+    /// filter, `limit` 1–500, an opaque cursor (`o:<offset>`, percent-encoded on the wire).
+    fn label_products(&mut self, params: &HashMap<&str, &str>) -> HttpReply {
+        let limit: usize = match params.get("limit").and_then(|l| l.parse().ok()) {
+            Some(l) if (1..=500).contains(&l) => l,
+            _ => return envelope(422, "validation_error", "limit must be 1 to 500."),
+        };
+        let offset: usize = match params.get("cursor").map(|c| decode(c)) {
+            None => 0,
+            Some(c) => match c.strip_prefix("o:").and_then(|n| n.parse().ok()) {
+                Some(n) => n,
+                None => return envelope(422, "invalid_cursor", "The cursor is not valid."),
+            },
+        };
+        let q = params
+            .get("q")
+            .map(|q| decode(&q.replace('+', " ")).to_lowercase());
+        let mut list: Vec<&LabelSpec> = self.labels.iter().rev().collect();
+        list.sort_by_key(|l| std::cmp::Reverse(l.created_at.unwrap_or(i64::MIN)));
+        let list: Vec<&LabelSpec> = list
+            .into_iter()
+            .filter(|l| {
+                q.as_deref().is_none_or(|q| {
+                    [Some(&l.title), l.sku.as_ref(), l.product_type.as_ref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|t| t.to_lowercase().contains(q))
+                })
+            })
+            .collect();
+        let printed = |l: &LabelSpec| l.printed_at.is_some();
+        let priced = |l: &LabelSpec| l.price_minor.is_some();
+        let count = |f: &dyn Fn(&LabelSpec) -> bool| list.iter().filter(|l| f(l)).count() as i64;
+        let counts = IntegrationLabelCounts {
+            total: list.len() as i64,
+            has_price: count(&priced),
+            missing_price: count(&|l| !priced(l)),
+            missing_price_tag: count(&|l| priced(l) && !printed(l)),
+            printed: count(&printed),
+            not_printed: count(&|l| !printed(l)),
+        };
+        let filtered: Vec<&LabelSpec> = list
+            .into_iter()
+            .filter(|l| match params.get("filter").copied() {
+                Some("missingPriceTag") => priced(l) && !printed(l),
+                Some("notPrinted") => !printed(l),
+                Some("printed") => printed(l),
+                _ => true,
+            })
+            .collect();
+        let end = (offset + limit).min(filtered.len());
+        let items: Vec<IntegrationLabelProduct> = filtered
+            .get(offset..end)
+            .unwrap_or_default()
+            .iter()
+            .map(|l| IntegrationLabelProduct {
+                product_id: l.product_id.clone(),
+                sku: l.sku.clone(),
+                title: l.title.clone(),
+                product_type: l.product_type.clone(),
+                has_price: priced(l),
+                price_minor: l.price_minor,
+                label_status: if printed(l) {
+                    WireLabelStatus::Printed
+                } else {
+                    WireLabelStatus::NotPrinted
+                },
+                label_printed_at: l.printed_at.map(iso),
+                label_reset_reason: l.reset.clone().filter(|_| !printed(l)),
+                barcode: None,
+                thumb_url: l.thumb_url.clone(),
+                created_at: l.created_at.map(iso),
+            })
+            .collect();
+        let mut next_cursor = (end < filtered.len()).then(|| format!("o:{end}"));
+        if self.repeat_cursor && params.contains_key("cursor") {
+            self.repeat_cursor = false;
+            next_cursor = params.get("cursor").map(|c| decode(c));
+        }
+        HttpReply::new(
+            200,
+            to_json!(&IntegrationLabelProductPage {
+                items,
+                next_cursor,
+                counts,
+                work_from: self
+                    .work_from
+                    .clone()
+                    .unwrap_or_else(|| Some(FAKE_WORK_FROM.into())),
+            }),
+        )
+    }
+
     fn touch(&mut self, case_id: &str) {
         let now = self.now();
         self.case_mut(case_id).case.updated_at = now;
@@ -596,6 +702,40 @@ impl FakePricing {
         self.state().templates.push(template);
     }
 
+    /// L2: adds `n` priced, not printed products at once, each newer than the last: product id
+    /// `77000<k>` (k from 1, counted over every call), SKU `TEST-<k>`, title `Test product <k>`.
+    /// Answers their product ids in the order added.
+    pub fn add_label_products(&self, n: usize) -> Vec<String> {
+        let mut state = self.state();
+        let mut ids = Vec::with_capacity(n);
+        for _ in 0..n {
+            state.bulk += 1;
+            let k = state.bulk;
+            let id = format!("77000{k}");
+            state.labels.push(LabelSpec {
+                product_id: id.clone(),
+                sku: Some(format!("TEST-{k}")),
+                title: format!("Test product {k}"),
+                price_minor: Some(100_000),
+                created_at: Some(FAKE_EPOCH_MS + k as i64 * 1_000),
+                ..LabelSpec::default()
+            });
+            ids.push(id);
+        }
+        ids
+    }
+
+    /// L2: the `workFrom` of the list answers (none = no `workFrom`).
+    pub fn set_work_from(&self, work_from: Option<&str>) {
+        self.state().work_from = Some(work_from.map(str::to_owned));
+    }
+
+    /// L2: the next list answer for a request that carries a cursor answers that same cursor as
+    /// its `nextCursor` (a list that never ends).
+    pub fn repeat_cursor_next(&self) {
+        self.state().repeat_cursor = true;
+    }
+
     /// From now on every `/labels/` path answers `403 insufficient_scope` (a key without
     /// `labels:read`).
     pub fn deny_labels(&self) {
@@ -648,6 +788,18 @@ impl FakePricing {
         self.state().scripted.push(Scripted {
             path_part: path_part.into(),
             remaining: n,
+            skip: 0,
+            status,
+            envelope: None,
+        });
+    }
+
+    /// L2: as [`Self::fail_matching`], after the first `skip` matching requests have passed.
+    pub fn fail_matching_after(&self, path_part: &str, skip: usize, n: usize, status: u16) {
+        self.state().scripted.push(Scripted {
+            path_part: path_part.into(),
+            remaining: n,
+            skip,
             status,
             envelope: None,
         });
@@ -666,6 +818,7 @@ impl FakePricing {
         self.state().scripted.push(Scripted {
             path_part: path_part.into(),
             remaining: n,
+            skip: 0,
             status,
             envelope: Some((code.into(), message.into())),
         });
@@ -774,6 +927,7 @@ impl FakePricing {
                     ids.iter().map(|id| state.label_status(id)).collect();
                 HttpReply::new(200, to_json!(&entries))
             }
+            (Method::Get, ["labels", "products"]) => state.label_products(&params),
             (Method::Get, ["labels", "templates"]) => {
                 HttpReply::new(200, to_json!(&state.templates))
             }
@@ -1022,11 +1176,17 @@ impl PricingHttp for FakePricing {
             state.refusals -= 1;
             return Err(Error::Provider("http: connection refused".into()));
         }
-        if let Some(rule) = state
+        let mut rule = state
             .scripted
             .iter_mut()
-            .find(|r| r.remaining > 0 && path.contains(&r.path_part))
+            .find(|r| r.remaining > 0 && path.contains(&r.path_part));
+        if let Some(r) = rule.as_mut()
+            && r.skip > 0
         {
+            r.skip -= 1;
+            rule = None;
+        }
+        if let Some(rule) = rule {
             rule.remaining -= 1;
             let status = rule.status;
             return Ok(match &rule.envelope {

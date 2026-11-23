@@ -4,7 +4,9 @@
 //! here (M-L1).
 
 use psm_core::{
-    Error, Result, domain::label::LabelsAccess, ports::labels::LabelStore,
+    Error, Result,
+    domain::label::{LabelsAccess, LinkedItem},
+    ports::labels::LabelStore,
     services::attributes::LINK_INTEGRATION,
 };
 use rusqlite::{OptionalExtension, params};
@@ -70,6 +72,34 @@ impl LabelStore for SqliteStore {
                 }
             }
             Ok(out)
+        })
+    }
+
+    fn linked_items(&self) -> Result<Vec<LinkedItem>> {
+        self.research_transaction(|tx| {
+            let conn = tx.conn();
+            let mut stmt = conn
+                .prepare(
+                    "SELECT i.id, i.sku, \
+                     (SELECT l.external_id FROM item_links l \
+                      WHERE l.item_id = i.id AND l.integration = ?1 LIMIT 1), \
+                     (SELECT MAX(s.id) FROM sessions s WHERE s.item_id = i.id) \
+                     FROM items i ORDER BY i.id",
+                )
+                .map_err(db)?;
+            let rows = stmt
+                .query_map([LINK_INTEGRATION], |r| {
+                    Ok(LinkedItem {
+                        item_id: r.get(0)?,
+                        sku: r.get(1)?,
+                        external_id: r
+                            .get::<_, Option<String>>(2)?
+                            .filter(|e| !e.trim().is_empty()),
+                        session_id: r.get(3)?,
+                    })
+                })
+                .map_err(db)?;
+            rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db)
         })
     }
 }

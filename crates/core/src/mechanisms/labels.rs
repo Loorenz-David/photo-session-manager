@@ -2,13 +2,44 @@
 //! §5 MC-L3.2): request chunking and the display copy of label state. Memory only: nothing here
 //! is ever stored (M-L1).
 
-use crate::domain::label::{LabelChange, LabelChangeKind, LabelState, LabelStatus};
+use crate::domain::label::{LabelChange, LabelChangeKind, LabelState, LabelStatus, LinkedItem};
 use std::{collections::HashMap, ops::Range, time::Duration, time::Instant};
 
 /// At most this many product ids per status request (the provider's maximum).
 pub const STATUS_CHUNK: usize = 200;
 /// A status answer younger than this is not asked again by a refreshing read.
 pub const STATUS_FRESH_MS: u64 = 10_000;
+/// L2 (MC-L1.1): rows per page of the Labels box.
+pub const LIST_PAGE: u32 = 25;
+/// L2 (MC-L1.7): rows per request of Select all (the provider's maximum).
+pub const SELECT_ALL_PAGE: u32 = 500;
+/// L2 (MC-L1.7): Select all never asks more pages than this.
+pub const SELECT_ALL_MAX_PAGES: usize = 200;
+/// L2 (MC-L1.6): a remembered unsearched count younger than this is not asked again.
+pub const COUNT_FRESH_MS: u64 = 10_000;
+/// L2 (MC-L1.1): the search sent to the provider is cut to this many characters.
+pub const QUERY_MAX: usize = 100;
+
+/// L2 (MC-L1.3): the local item a provider product is matched to, as an index into `items`
+/// (each item with its link's provider product id): (i) the item whose link names the product
+/// (the lowest item id when several do); else (ii) the item whose SKU equals `sku` exactly
+/// (case-sensitive); else none.
+pub fn match_product(
+    product_id: &str,
+    sku: Option<&str>,
+    items: &[(LinkedItem, Option<String>)],
+) -> Option<usize> {
+    let linked = items
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, product))| product.as_deref() == Some(product_id))
+        .min_by_key(|(_, (item, _))| item.item_id)
+        .map(|(i, _)| i);
+    linked.or_else(|| {
+        let sku = sku?;
+        items.iter().position(|(item, _)| item.sku == sku)
+    })
+}
 
 /// Consecutive ranges covering `0..n`, each `size` long except the last, which is shorter;
 /// none for `n = 0`.
@@ -145,6 +176,58 @@ mod tests {
             at,
             kind,
         }
+    }
+
+    fn item(item_id: i64, sku: &str) -> LinkedItem {
+        LinkedItem {
+            item_id,
+            sku: sku.into(),
+            external_id: None,
+            session_id: Some(item_id * 10),
+        }
+    }
+
+    #[test]
+    fn match_by_link() {
+        let items = vec![(item(1, "A"), None), (item(2, "B"), Some("p7".to_owned()))];
+        assert_eq!(match_product("p7", Some("X"), &items), Some(1));
+    }
+
+    #[test]
+    fn match_by_sku() {
+        let items = vec![(item(1, "A"), None), (item(2, "AB-1"), None)];
+        assert_eq!(match_product("p7", Some("AB-1"), &items), Some(1));
+    }
+
+    #[test]
+    fn the_link_wins_over_the_sku() {
+        let items = vec![
+            (item(1, "AB-1"), None),
+            (item(2, "B"), Some("p7".to_owned())),
+        ];
+        assert_eq!(match_product("p7", Some("AB-1"), &items), Some(1));
+    }
+
+    #[test]
+    fn two_items_linked_to_one_product_match_the_lowest_item_id() {
+        let items = vec![
+            (item(5, "A"), Some("p7".to_owned())),
+            (item(3, "B"), Some("p7".to_owned())),
+            (item(9, "C"), Some("p7".to_owned())),
+        ];
+        assert_eq!(match_product("p7", None, &items), Some(1));
+    }
+
+    #[test]
+    fn no_sku_and_no_link_match_nothing() {
+        let items = vec![(item(1, "A"), Some("p1".to_owned()))];
+        assert_eq!(match_product("p7", None, &items), None);
+    }
+
+    #[test]
+    fn a_sku_differing_only_in_case_matches_nothing() {
+        let items = vec![(item(1, "AB-1"), None)];
+        assert_eq!(match_product("p7", Some("ab-1"), &items), None);
     }
 
     #[test]

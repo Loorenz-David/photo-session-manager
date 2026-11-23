@@ -5,26 +5,42 @@
 //! `product_id_of`. Nothing about label state is stored (M-L1): the copy lives in memory; the
 //! only stored fact is whether the saved key may read labels. Nothing here starts a thread or a
 //! timer.
+//!
+//! L2 (MC-L1): the Labels box's list (rows in the provider's order, matched to local sessions,
+//! with their pictures), its number, Select all, and opening an unmatched row (the existing
+//! adopt: one shop read, no write). The counts and the SKUs of rows seen live in memory only.
 
 use crate::{
     Error, Result,
     domain::{
         conversation::ConnectionState,
-        label::{LabelChange, LabelState, LabelsAccess, LabelsError, SessionLabel},
+        label::{
+            LabelChange, LabelCounts, LabelFilter, LabelPage, LabelProductPage, LabelRow,
+            LabelState, LabelsAccess, LabelsError, LinkedItem, Selected, SessionLabel,
+        },
+        session::ListFilter,
     },
     events::AppEvent,
-    mechanisms::labels::{LabelCopy, STATUS_CHUNK, STATUS_FRESH_MS, chunks},
+    mechanisms::labels::{
+        COUNT_FRESH_MS, LIST_PAGE, LabelCopy, QUERY_MAX, SELECT_ALL_MAX_PAGES, SELECT_ALL_PAGE,
+        STATUS_CHUNK, STATUS_FRESH_MS, chunks, match_product,
+    },
     ports::{
         clock::Clock,
+        commerce::CommerceAdapter,
         events::EventSink,
         labels::{LabelStore, LabelsLink, LabelsProvider, LabelsResult},
+        store::Store,
     },
-    services::conversations::ConversationsService,
+    services::{
+        conversations::ConversationsService, items::ItemsService, remote::RemoteItems,
+        sessions::SessionsService,
+    },
 };
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex, MutexGuard},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 /// What the labels service answers when it cannot (master plan §4 Errors).
@@ -54,22 +70,50 @@ pub enum LabelsFailure {
 
 const LOG: &str = "psm::labels";
 
+/// MC-L1.5: the counts of the last list answer (memory only), whether its request had a search,
+/// and when it was answered (monotonic).
+#[derive(Debug, Clone, Copy)]
+struct Remembered {
+    counts: LabelCounts,
+    searched: bool,
+    at: Instant,
+}
+
+/// MC-L1.1: the search sent to the provider: trimmed, none when empty, cut to `QUERY_MAX`
+/// characters.
+fn search_text(query: Option<&str>) -> Option<String> {
+    let q = query?.trim();
+    (!q.is_empty()).then(|| q.chars().take(QUERY_MAX).collect())
+}
+
 pub struct LabelsService {
     conversations: Arc<ConversationsService>,
     provider: Arc<dyn LabelsProvider>,
     labels: Arc<dyn LabelStore>,
+    store: Arc<dyn Store>,
+    remote: Arc<RemoteItems>,
+    commerce: Option<Arc<dyn CommerceAdapter>>,
     clock: Arc<dyn Clock>,
     events: Arc<dyn EventSink>,
     copy: Mutex<LabelCopy>,
     /// The stored access as last read or written (`None` = not read yet in this build).
     access: Mutex<Option<LabelsAccess>>,
+    /// MC-L1.5, .6: the counts of the last list or summary answer.
+    counts: Mutex<Option<Remembered>>,
+    /// MC-L1.8: the SKU of every product a list answer showed (product id → SKU), so opening a
+    /// row matches it by rule 3 as the list did.
+    seen_skus: Mutex<HashMap<String, Option<String>>>,
 }
 
 impl LabelsService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         conversations: Arc<ConversationsService>,
         provider: Arc<dyn LabelsProvider>,
         labels: Arc<dyn LabelStore>,
+        store: Arc<dyn Store>,
+        remote: Arc<RemoteItems>,
+        commerce: Option<Arc<dyn CommerceAdapter>>,
         clock: Arc<dyn Clock>,
         events: Arc<dyn EventSink>,
     ) -> Self {
@@ -77,11 +121,24 @@ impl LabelsService {
             conversations,
             provider,
             labels,
+            store,
+            remote,
+            commerce,
             clock,
             events,
             copy: Mutex::new(LabelCopy::new()),
             access: Mutex::new(None),
+            counts: Mutex::new(None),
+            seen_skus: Mutex::new(HashMap::new()),
         }
+    }
+
+    fn counts(&self) -> MutexGuard<'_, Option<Remembered>> {
+        self.counts.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn seen_skus(&self) -> MutexGuard<'_, HashMap<String, Option<String>>> {
+        self.seen_skus.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn copy(&self) -> MutexGuard<'_, LabelCopy> {
@@ -129,6 +186,21 @@ impl LabelsService {
             return Ok(None);
         }
         Ok(Some(store.id))
+    }
+
+    /// ACC.1 for a press: the store a label call may address, else `Off(state)` or `Denied`.
+    fn gate(&self) -> std::result::Result<String, LabelsFailure> {
+        let connection = self.conversations.connection()?;
+        if connection.state != ConnectionState::Ready {
+            return Err(LabelsFailure::Off(connection.state));
+        }
+        let Some(store) = connection.store else {
+            return Err(LabelsFailure::Off(connection.state));
+        };
+        if self.stored_access()? == LabelsAccess::Denied {
+            return Err(LabelsFailure::Denied);
+        }
+        Ok(store.id)
     }
 
     /// The sentence shown for a failure (the provider's words for its errors, the connected
@@ -260,6 +332,234 @@ impl LabelsService {
         );
         Ok(())
     }
+
+    /// ACC.2, .3: the copy, the remembered counts and the SKUs seen are emptied.
+    fn forget(&self) {
+        self.copy().clear();
+        *self.counts() = None;
+        self.seen_skus().clear();
+    }
+
+    /// One products request whose rows' states are applied to the copy and whose counts are
+    /// remembered (MC-L1.5).
+    fn products(
+        &self,
+        store: &str,
+        filter: LabelFilter,
+        q: Option<&str>,
+        cursor: Option<&str>,
+        limit: u32,
+    ) -> std::result::Result<LabelProductPage, LabelsFailure> {
+        let started = self.copy().start();
+        let page = self.learn(self.provider.products(store, filter, q, cursor, limit))?;
+        let now = self.clock.mono();
+        {
+            let mut copy = self.copy();
+            for product in &page.products {
+                copy.apply_answer(started, &product.product_id, Some(product.state), now);
+            }
+        }
+        *self.counts() = Some(Remembered {
+            counts: page.counts,
+            searched: q.is_some(),
+            at: now,
+        });
+        Ok(page)
+    }
+
+    /// Every local item with its link's provider product id (MC-L1.3).
+    fn match_items(&self) -> Result<Vec<(LinkedItem, Option<String>)>> {
+        Ok(self
+            .labels
+            .linked_items()?
+            .into_iter()
+            .map(|item| {
+                let product = item
+                    .external_id
+                    .as_deref()
+                    .and_then(|external| self.provider.product_id_of(external));
+                (item, product)
+            })
+            .collect())
+    }
+
+    /// MC-L1.1–.5: one page of the provider's label list (`LIST_PAGE` rows), each row matched to
+    /// a local session (one sessions page for the matched ones) or given its cached picture.
+    pub fn list(
+        &self,
+        filter: LabelFilter,
+        query: Option<&str>,
+        cursor: Option<&str>,
+    ) -> std::result::Result<LabelPage, LabelsFailure> {
+        let store = self.gate()?;
+        let q = search_text(query);
+        let page = self.products(&store, filter, q.as_deref(), cursor, LIST_PAGE)?;
+        {
+            let mut seen = self.seen_skus();
+            for product in &page.products {
+                seen.insert(product.product_id.clone(), product.sku.clone());
+            }
+        }
+        let items = self.match_items()?;
+        let matched: Vec<Option<i64>> = page
+            .products
+            .iter()
+            .map(|product| {
+                match_product(&product.product_id, product.sku.as_deref(), &items)
+                    .and_then(|i| items[i].0.session_id)
+            })
+            .collect();
+        let mut ids: Vec<i64> = Vec::new();
+        for id in matched.iter().flatten() {
+            if !ids.contains(id) {
+                ids.push(*id);
+            }
+        }
+        let mut sessions: HashMap<i64, crate::domain::session::SessionRow> = HashMap::new();
+        if !ids.is_empty() {
+            let rows = SessionsService::new(self.store.as_ref(), self.clock.as_ref())
+                .with_remote(self.remote.as_ref())
+                .page(ListFilter::All, None, None, Some(&ids), 1)?;
+            for row in rows.groups.into_iter().flat_map(|group| group.rows) {
+                sessions.insert(row.id, row);
+            }
+        }
+        let mut rows = Vec::with_capacity(page.products.len());
+        for (product, session_id) in page.products.into_iter().zip(matched) {
+            let commerce_id = self.provider.commerce_id_of(&product.product_id);
+            let session = session_id.and_then(|id| sessions.get(&id).cloned());
+            let picture_path = match (&session, &commerce_id, product.thumb_url.as_deref()) {
+                (None, Some(external_id), Some(url))
+                    if url.starts_with("https://") && self.commerce.is_some() =>
+                {
+                    self.remote.search_picture(external_id, url)?
+                }
+                _ => None,
+            };
+            rows.push(LabelRow {
+                product_id: product.product_id,
+                commerce_id,
+                sku: product.sku,
+                title: product.title,
+                product_type: product.product_type,
+                price_minor: product.price_minor,
+                state: product.state,
+                created_at: product.created_at,
+                session,
+                picture_path,
+            });
+        }
+        tracing::info!(
+            target: LOG,
+            "labels.list filter={filter:?} rows={} more={}",
+            rows.len(),
+            page.next_cursor.is_some()
+        );
+        Ok(LabelPage {
+            rows,
+            next_cursor: page.next_cursor,
+            counts: page.counts,
+            work_from: page.work_from,
+        })
+    }
+
+    /// MC-L1.6 (owner card 1): the box's number, the remembered `missing_price_tag`. With
+    /// `refresh`, when calls are allowed and nothing is remembered, or the remembered answer had
+    /// a search, or it is older than `COUNT_FRESH_MS`, one unsearched one-row request is made
+    /// first. Not allowed → none, no request.
+    pub fn summary(&self, refresh: bool) -> std::result::Result<Option<i64>, LabelsFailure> {
+        let Some(store) = self.allowed_store()? else {
+            return Ok(None);
+        };
+        if refresh {
+            let stale = match *self.counts() {
+                None => true,
+                Some(r) => {
+                    r.searched
+                        || self.clock.mono().saturating_duration_since(r.at)
+                            >= Duration::from_millis(COUNT_FRESH_MS)
+                }
+            };
+            if stale {
+                self.products(&store, LabelFilter::MissingPriceTag, None, None, 1)?;
+            }
+        }
+        Ok(self.counts().map(|r| r.counts.missing_price_tag))
+    }
+
+    /// MC-L1.7: every product of the filter and search with a SKU, in the provider's order,
+    /// paged to the end (`SELECT_ALL_PAGE` per request); a cursor seen twice or more than
+    /// `SELECT_ALL_MAX_PAGES` pages is a reply this version does not understand. Any error is
+    /// that error and nothing else.
+    pub fn select_all(
+        &self,
+        filter: LabelFilter,
+        query: Option<&str>,
+    ) -> std::result::Result<Vec<Selected>, LabelsFailure> {
+        let store = self.gate()?;
+        let q = search_text(query);
+        let mut selected = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut cursor: Option<String> = None;
+        let mut pages = 0;
+        loop {
+            if pages == SELECT_ALL_MAX_PAGES {
+                return Err(LabelsFailure::Provider(LabelsError::BadReply(
+                    "the label list did not end".into(),
+                )));
+            }
+            pages += 1;
+            let page = self.learn(self.provider.products(
+                &store,
+                filter,
+                q.as_deref(),
+                cursor.as_deref(),
+                SELECT_ALL_PAGE,
+            ))?;
+            selected.extend(page.products.into_iter().filter_map(|product| {
+                product.sku.map(|sku| Selected {
+                    product_id: product.product_id,
+                    sku,
+                })
+            }));
+            match page.next_cursor {
+                None => break,
+                Some(next) => {
+                    if !seen.insert(next.clone()) {
+                        return Err(LabelsFailure::Provider(LabelsError::BadReply(
+                            "the label list repeated a cursor".into(),
+                        )));
+                    }
+                    cursor = Some(next);
+                }
+            }
+        }
+        Ok(selected)
+    }
+
+    /// MC-L1.8: the session a row opens: the matched item's latest session (created when it has
+    /// none); with no match, the shop product is adopted (one read, no write) and given a
+    /// session. Errors of the adopt pass through and create nothing. Needs no label access.
+    pub fn open_product(&self, product_id: &str) -> std::result::Result<i64, LabelsFailure> {
+        let items = self.match_items()?;
+        let sku = self.seen_skus().get(product_id).cloned().flatten();
+        let sessions = SessionsService::new(self.store.as_ref(), self.clock.as_ref());
+        if let Some(i) = match_product(product_id, sku.as_deref(), &items) {
+            let item = &items[i].0;
+            return Ok(match item.session_id {
+                Some(id) => id,
+                None => sessions.create(item.item_id)?.session.id,
+            });
+        }
+        let external_id = self
+            .provider
+            .commerce_id_of(product_id)
+            .ok_or_else(|| Error::InvalidValue("not a shop product id".into()))?;
+        let item = ItemsService::new(self.store.as_ref(), self.clock.as_ref())
+            .with_commerce(self.commerce.as_deref())
+            .adopt(&external_id)?;
+        Ok(sessions.create(item.id)?.session.id)
+    }
 }
 
 impl LabelsLink for LabelsService {
@@ -281,7 +581,7 @@ impl LabelsLink for LabelsService {
         if let Err(error) = self.set_access(access) {
             tracing::warn!(target: LOG, %error, "labels access not stored");
         }
-        self.copy().clear();
+        self.forget();
         self.events.emit(AppEvent::LabelsChanged {
             product_ids: vec![],
             access: true,
@@ -293,7 +593,7 @@ impl LabelsLink for LabelsService {
         if let Err(error) = self.set_access(LabelsAccess::Unknown) {
             tracing::warn!(target: LOG, %error, "labels access not stored");
         }
-        self.copy().clear();
+        self.forget();
     }
 
     /// MC-L4.3: each change applied in order, then one event naming the distinct products.

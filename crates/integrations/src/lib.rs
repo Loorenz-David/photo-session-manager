@@ -1251,6 +1251,8 @@ impl App {
             conversations: conversations.clone(),
             provider: labels_provider,
             store: store.clone(),
+            remote: remote.clone(),
+            commerce: commerce.clone(),
             clock: clock.clone(),
             events: events.clone(),
         });

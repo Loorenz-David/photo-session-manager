@@ -652,6 +652,25 @@ of that folder (`variant_background` → `resync_folder`).
   cannot crash a page), `LabelPill` (in `SessionRow`'s pill line and beside the title in `Header`),
   `LabelMenuItem` (in `SessionActionsMenu`; in L1 only its disabled states). Settings → Pricing's Labels line in
   `PricingSection.tsx`.
+- **The Labels box's list (L2, MC-L1):** `LabelsService::list(filter, query, cursor)` — calls allowed (ACC.1) or
+  `Off` / `Denied`; the search trimmed, dropped when empty, cut to `QUERY_MAX` (100) characters; one
+  `provider.products(…, LIST_PAGE = 25)`; every row's state goes into the copy (so a session marker reads it without
+  a status request) and the counts are remembered in memory with whether the request had a search.
+  **Matching** (`mechanisms::labels::match_product` over `LabelStore::linked_items`, one read of every item with its
+  `shopify` link and its latest session): the item whose link's `product_id_of` equals the row's product id (the
+  lowest item id when several), else the item whose SKU equals the row's SKU exactly (case-sensitive). The matched
+  rows' sessions come from **one** `SessionsService::page(All, …, Some(&ids), 1)` (so name, pills and
+  `cover_preview_path` follow 10H §4); none is asked when nothing matched. **Pictures** of unmatched rows:
+  `RemoteItems::search_picture(commerce_id, thumb_url)` only for an `https://` address with a commerce integration
+  (cached file or queued for the background, `PictureReady {Search}` when it lands); the list never downloads.
+  **The box's number** `summary(refresh)`: the remembered `missing_price_tag`; with `refresh` one unsearched
+  one-row request when nothing is remembered, the remembered answer had a search, or it is older than
+  `COUNT_FRESH_MS`; none and no request when calls are not allowed; `connected()` / `key_changed()` forget it.
+  **Select all** `select_all(filter, query)` pages `SELECT_ALL_PAGE = 500` to the end and answers the rows with a
+  SKU; a repeated cursor or more than 200 pages is `BadReply`, any error is that error (never a partial selection).
+  **Opening a row** `open_product(product_id)`: matched → the item's latest session (created when it has none);
+  else `commerce_id_of` → the existing `ItemsService::adopt` (one shop read, no write) → `SessionsService::create`.
+  The service holds `store`, `remote` and `commerce` from L2 on (`labels::ServiceParts`).
 
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams
