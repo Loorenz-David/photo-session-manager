@@ -1,3 +1,4 @@
+import type { CheckItem, CheckOutcome, CheckSummary, LabelRunResult } from '@/services/labels';
 import type { LabelMarker } from '@/services/labels';
 
 /** L1 (09C §4, §6, §7; master plan labels §4 Words): the words labels show. */
@@ -8,11 +9,12 @@ export const LABELS_UNKNOWN = "Labels: couldn't check. Press Test connection.";
 export const DENIED_HINT = "This key can't read labels. Ask a Pricing admin to add labels:read and labels:write.";
 export const PUBLISH_FIRST = 'Publish first so Pricing can see it';
 export const GENERATE_LABEL = 'Generate label';
+export const REPRINT_LABEL = 'Reprint label';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** `d MMM` of the local calendar day, with the year when it is not `now`'s year (fixed English months). */
-function day(ms: number, now: number): string {
+export function day(ms: number, now: number): string {
   const at = new Date(ms);
   const text = `${at.getDate()} ${MONTHS[at.getMonth()]}`;
   return at.getFullYear() === new Date(now).getFullYear() ? text : `${text} ${at.getFullYear()}`;
@@ -69,4 +71,95 @@ export function workFromLine(text: string | null | undefined): string | null {
   const dayOfMonth = Number(match[3]);
   if (!month || dayOfMonth < 1 || dayOfMonth > 31) return null;
   return `Products created since ${dayOfMonth} ${month} ${match[1]}`;
+}
+
+// ---------- L3: the check and done dialogs (09C §6, Pricing's LABELS.md §3.3–§3.5) ----------
+
+export const GENERATE_PDF = 'Generate PDF';
+export const REPRINT_PDF = 'Reprint PDF';
+export const DOWNLOAD_PDF = 'Download PDF';
+export const DONE = 'Done';
+export const CLOSE = 'Close';
+export const CANCEL = 'Cancel';
+export const TRY_AGAIN = 'Try again';
+export const NO_TEMPLATE = 'No template';
+export const NOT_FOUND_IN_PRICING = 'Not found in Pricing';
+export const CANT_GENERATE = "Can't generate";
+export const PRINT_AT_100 = 'Print at 100 % (not Fit to page).';
+export const FAILED_STAY_SELECTED = 'Failed products stay selected so you can fix and retry.';
+export const OPEN_PRICING_SETTINGS = 'Open Settings → Pricing';
+
+/** Master plan labels §6: the outcome words of a check line. */
+export function outcomeWords(outcome: CheckOutcome): string {
+  switch (outcome) {
+    case 'mark_printed': return 'Will be marked Printed';
+    case 'reprint': return 'Reprint · stays Printed';
+    case 'no_price': return 'No price · stays Not printed';
+    default: return CANT_GENERATE;
+  }
+}
+
+/** A millimetre value: whole numbers without decimals. */
+function mm(value: number | null): string {
+  if (value == null) return '?';
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(1)));
+}
+
+/** `<w> × <h> mm`. */
+export function sizeText(width: number | null, height: number | null): string {
+  return `${mm(width)} × ${mm(height)} mm`;
+}
+
+/**
+ * 09C §6.1 (Pricing's wording, LABELS.md §3.3): the check's footer and notes. A batch: "{mark_printed} products will be
+ * marked Printed" (Pricing's own plural), then the failing and reprint sentences when their numbers are not zero. One
+ * product (the dialog was opened with one product id, projection r0 D11): by its outcome.
+ */
+export function checkSentences(summary: CheckSummary, single: CheckItem | null, now: number): string[] {
+  if (single) {
+    switch (single.outcome) {
+      case 'mark_printed': return ['The product will be marked Printed.'];
+      case 'reprint': return single.printed_at == null
+        ? ['Label status stays Printed.', 'Reprinting keeps it marked Printed.']
+        : ['Label status stays Printed.', `Printed ${day(single.printed_at, now)}. Reprinting keeps it marked Printed.`];
+      case 'no_price': return ['Label status stays Not printed.', 'This product has no selling price. You can generate its label, but it stays marked Not printed.'];
+      default: return [];
+    }
+  }
+  const sentences = [`${summary.mark_printed} products will be marked Printed`];
+  if (summary.failing > 0) sentences.push(`${summary.failing} can't be generated with the current template. They're marked below.`);
+  if (summary.reprint > 0) sentences.push(`${summary.reprint} already printed. They're reprinted and stay Printed.`);
+  return sentences;
+}
+
+/** Fully generated ⇔ nothing failed and nothing is left to run (M-L4). */
+export function fullyGenerated(result: LabelRunResult): boolean {
+  return result.failures.length === 0 && result.not_run.length === 0;
+}
+
+/**
+ * 09C §6.3: the done dialog's title. One product: "Label generated" / "Label not generated"; a batch: "{rendered} of
+ * {total} labels generated" when anything failed or was not generated, else "{total} labels generated".
+ */
+export function doneTitle(result: LabelRunResult, single: boolean): string {
+  const full = fullyGenerated(result);
+  if (single) return full && result.rendered > 0 ? 'Label generated' : 'Label not generated';
+  return full ? `${result.total} labels generated` : `${result.rendered} of ${result.total} labels generated`;
+}
+
+/** 09C §6.3: the result lines (a line whose number is zero is not shown), each with its mark. */
+export function resultLines(result: LabelRunResult): { mark: string; text: string }[] {
+  const lines = [
+    { n: result.marked_printed, mark: '✓', text: `${result.marked_printed} marked Printed` },
+    { n: result.reprinted, mark: '↻', text: `${result.reprinted} reprinted · stay Printed` },
+    { n: result.no_price, mark: '○', text: `${result.no_price} stay Not printed · No selling price` },
+    { n: result.failures.length, mark: '✕', text: `${result.failures.length} failed` },
+    { n: result.not_run.length, mark: '✕', text: `${result.not_run.length} not generated` },
+  ];
+  return lines.filter(line => line.n > 0).map(({ mark, text }) => ({ mark, text }));
+}
+
+/** A file row's label count: `1 label`, `2 labels`. */
+export function labelCount(n: number): string {
+  return n === 1 ? '1 label' : `${n} labels`;
 }

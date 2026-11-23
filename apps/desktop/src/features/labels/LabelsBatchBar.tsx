@@ -2,8 +2,8 @@ import { Printer, X } from 'lucide-react';
 
 /**
  * L2 (09C §5 Selection, MC-L1.9): the Labels box's selection bar: `<N> selected` (`All <N> selected` after Select all),
- * `Select all <count>` when offered, `Generate labels for <N>` (greyed out until label generation lands, L3) and the
- * clear button. Nothing when nothing is selected.
+ * `Select all <count>` when offered, `Generate labels for <N>` and the clear button. Nothing when nothing is selected.
+ * L3 (09C §6): `Generate labels for <N>` opens the label dialog for the selection.
  */
 export function LabelsBatchBar({
   count,
@@ -11,6 +11,7 @@ export function LabelsBatchBar({
   offer,
   onSelectAll,
   onClear,
+  onGenerate,
 }: {
   count: number;
   /** The selection is what Select all answered. */
@@ -19,6 +20,8 @@ export function LabelsBatchBar({
   offer: number | null;
   onSelectAll: () => void;
   onClear: () => void;
+  /** L3: opens the label dialog with the selected products. */
+  onGenerate: () => void;
 }) {
   if (count === 0) return null;
   return (
@@ -29,7 +32,7 @@ export function LabelsBatchBar({
           Select all {offer}
         </button>
       )}
-      <button type="button" className="batch-primary" disabled>
+      <button type="button" className="batch-primary" onClick={onGenerate}>
         <Printer aria-hidden /> Generate labels for {count}
       </button>
       <button type="button" className="batch-close" aria-label="Clear selection" onClick={onClear}>

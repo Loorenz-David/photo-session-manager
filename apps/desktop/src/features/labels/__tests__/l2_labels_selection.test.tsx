@@ -127,10 +127,11 @@ async function tickTwo() {
   await waitFor(() => expect(bar()).toHaveTextContent('2 selected'));
 }
 
-it('l2_c13a_ticking_rows_shows_the_bar_with_generate_greyed_out', async () => {
+// Replaced by L3 (L3·C17(d)): Generate labels for N is now enabled.
+it('l2_c13a_ticking_rows_shows_the_bar_with_generate', async () => {
   await enterBox();
   await tickTwo();
-  expect(within(bar()!).getByRole('button', { name: /Generate labels for 2/ })).toBeDisabled();
+  expect(within(bar()!).getByRole('button', { name: /Generate labels for 2/ })).toBeEnabled();
   expect(within(bar()!).queryByRole('button', { name: /Review & publish/ })).not.toBeInTheDocument();
 });
 

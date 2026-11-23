@@ -654,7 +654,14 @@ of that folder (`variant_background` → `resync_folder`).
   (asks after each page answer; `refresh` only when the shown id list differs from the last refreshing call; one
   `labels_changed` listener; failures leave the pills; guarded so a test's events mock without `onLabelsChanged`
   cannot crash a page), `LabelPill` (in `SessionRow`'s pill line and beside the title in `Header`),
-  `LabelMenuItem` (in `SessionActionsMenu`; in L1 only its disabled states). Settings → Pricing's Labels line in
+  `LabelMenuItem` (in `SessionActionsMenu`; disabled with its hint when there is no shop product, labels are off or
+  denied; from L3 enabled for access `allowed` / `unknown` — `Generate label`, or `Reprint label` when printed —
+  opening `LabelDialog` for that product beside the menu; a Labels row without a session gets a ⋯ holding only this
+  item). L3: `LabelDialog` (`useLabelDialog`: `checking` → `check` → `generating` → `done`, `error`; not closable while
+  generating; Cancel after a failed Generate asks `labelsPartial`), `LabelCheckView` (groups, lines, not found, footer,
+  the preview on a white `.label-preview` tile with ‹ › in group order), `LabelDoneView` (title, result lines,
+  failures, files and Download PDF); `LabelsBatchBar`'s `Generate labels for N` opens it for the selection, and when it
+  closes after a run `LabelsBox` keeps only the selected `failed_product_ids` and asks the page again. Settings → Pricing's Labels line in
   `PricingSection.tsx`. L2: the **Labels box** — `Filters` has a fourth box `labels` (its number: the last list
   answer's `missing_price_tag` inside the box, else `labelsSummary({refresh: true})`, asked when `SessionsPage` mounts,
   after leaving the box and, throttled to 2 s, on `labels_changed` outside it); in the box `SessionsPage` renders

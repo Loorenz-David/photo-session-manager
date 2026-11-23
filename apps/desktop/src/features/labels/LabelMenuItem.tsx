@@ -3,16 +3,31 @@ import { DropdownMenu } from 'radix-ui';
 import { CONNECT_PRICING, connectionLine } from '@/features/conversations/connectionLine';
 import { conversationsSettingsGet } from '@/services/conversations';
 import type { LabelsAccess, SessionLabel } from '@/services/labels';
-import { DENIED_HINT, GENERATE_LABEL, PUBLISH_FIRST } from './labelWords';
+import { DENIED_HINT, GENERATE_LABEL, PUBLISH_FIRST, REPRINT_LABEL } from './labelWords';
 
 /**
- * L1 (09C §6 "⋯ menu entry", projection r0 D5, D6): "Generate label" in a session's ⋯ menu, shown in L1 only where it is
- * off and says why. First match: no answer yet → nothing; no shop product → off, "Publish first…" (in every access
- * state); connection off → off with 09B's words for it; key denied → off with the denied words; access unknown, or it
- * would be on → nothing (Generate arrives in L3). Rendered inside the open menu, so the connection is read when it opens.
+ * L1 (09C §6 "⋯ menu entry", projection r0 D5, D6): "Generate label" in a session's ⋯ menu. First match: no answer yet →
+ * nothing; no shop product → off, "Publish first…" (in every access state); connection off → off with 09B's words for
+ * it; key denied → off with the denied words. Rendered inside the open menu, so the connection is read when it opens.
+ * L3 (09C §6; ACC.1, projection r0 D6): with a product and the access `allowed` or `unknown` the item is on — "Reprint
+ * label" when the marker is printed, else "Generate label" — and a press asks `onGenerate` for that one product.
  */
-export function LabelMenuItem({ label, access }: { label?: SessionLabel | null; access?: LabelsAccess | null }) {
+export function LabelMenuItem({ label, access, onGenerate }: {
+  label?: SessionLabel | null;
+  access?: LabelsAccess | null;
+  /** L3: opens the label dialog for the product. */
+  onGenerate?: (productId: string) => void;
+}) {
   const hint = useHint(label, access);
+  const productId = label?.product_id ?? null;
+  const on = !!label && productId !== null && (access?.state === 'allowed' || access?.state === 'unknown');
+  if (on && onGenerate) {
+    return (
+      <DropdownMenu.Item className="photo-menu-item label-menu-item" onSelect={() => onGenerate(productId)}>
+        <span>{label.marker?.status === 'printed' ? REPRINT_LABEL : GENERATE_LABEL}</span>
+      </DropdownMenu.Item>
+    );
+  }
   if (!hint) return null;
   return (
     <DropdownMenu.Item className="photo-menu-item label-menu-item" disabled>

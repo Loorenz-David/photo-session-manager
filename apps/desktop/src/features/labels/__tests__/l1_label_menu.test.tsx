@@ -119,10 +119,11 @@ it('l1_c19b_off_and_denied_say_why', async () => {
   await waitFor(() => expect(labelItem()).toEqual({ disabled: true, text: 'Generate labelThis key is no longer tied to shop-a.myshopify.com' }));
 });
 
-it('l1_c19c_allowed_and_unknown_show_no_label_item_yet', async () => {
+// Replaced by L3 (L3·C17(a), projection r0 D6): with access `allowed` or `unknown` the item is now shown, enabled.
+it('l1_c19c_allowed_and_unknown_show_the_enabled_label_item', async () => {
   for (const access of [ALLOWED, { state: 'unknown', reason: null } as LabelsAccess]) {
     await menuOf(label('P1'), access);
-    expect(labelItem()).toBeNull();
+    expect(labelItem()).toEqual({ disabled: false, text: 'Generate label' });
     expect(screen.getByRole('menuitem', { name: 'Delete session…' })).toBeInTheDocument();
     cleanup();
   }

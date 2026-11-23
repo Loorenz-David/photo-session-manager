@@ -6,11 +6,12 @@ import { SkeletonRows } from '@/components/pending/SkeletonRows';
 import { useKeyboard } from '@/lib/keyboard';
 import { conversationsSettingsGet, type ConversationSessionBadge } from '@/services/conversations';
 import { onLabelsChanged } from '@/services/events';
-import { labelsList, labelsSelectAll, type LabelCounts, type LabelFilter, type LabelPage } from '@/services/labels';
+import { labelsList, labelsSelectAll, type LabelCounts, type LabelFilter, type LabelPage, type LabelRunResult } from '@/services/labels';
 import type { SessionResearch } from '@/services/research';
 import { CONNECT_PRICING, connectionLine } from '@/features/conversations/connectionLine';
 import { openSettingsSection } from '@/features/settings/SettingsNav';
 import { usePictures } from '@/features/sessions/usePictures';
+import { LabelDialog } from './LabelDialog';
 import { LabelRow } from './LabelRow';
 import { LabelsBatchBar } from './LabelsBatchBar';
 import { INITIAL_PAGES, LABELS_REFRESH_MS, askCursor, canNext, pageLabel, pageStep, type PageAction, type PageState } from './labelPages';
@@ -86,6 +87,8 @@ export function LabelsBox({
   const [offWords, setOffWords] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, string>>(() => new Map());
   const [allSelected, setAllSelected] = useState(false);
+  // L3: the batch's label dialog (the selected product ids, in selection order).
+  const [batch, setBatch] = useState<string[] | null>(null);
   const pictures = usePictures();
   const ticket = useRef(0);
   const pagesRef = useRef(pages);
@@ -188,7 +191,20 @@ export function LabelsBox({
     setSelection(new Map());
     setAllSelected(false);
   }
-  useKeyboard({ escape: clearSelection }, selection.size > 0);
+  useKeyboard({ escape: clearSelection }, selection.size > 0 && batch === null);
+
+  /**
+   * L3 (09C §6.5, MC-L1.9): after a run the selection keeps exactly the selected products that failed or were not
+   * generated, and the page shown is asked again.
+   */
+  function batchClosed(result: LabelRunResult | null) {
+    setBatch(null);
+    if (!result) return;
+    const failed = new Set(result.failed_product_ids);
+    setAllSelected(false);
+    setSelection(previous => new Map([...previous].filter(([productId]) => failed.has(productId))));
+    refresh();
+  }
 
   const rows = page?.rows ?? [];
   const tickable = rows.filter(row => row.sku);
@@ -330,7 +346,15 @@ export function LabelsBox({
         </>
       )}
 
-      <LabelsBatchBar count={selection.size} all={allSelected} offer={offer} onSelectAll={selectAll} onClear={clearSelection} />
+      <LabelsBatchBar
+        count={selection.size}
+        all={allSelected}
+        offer={offer}
+        onSelectAll={selectAll}
+        onClear={clearSelection}
+        onGenerate={() => setBatch([...selection.keys()])}
+      />
+      {batch && <LabelDialog productIds={batch} onClose={batchClosed} />}
     </section>
   );
 }
