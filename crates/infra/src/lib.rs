@@ -7,6 +7,7 @@ pub mod ftp;
 pub mod imaging;
 pub mod jobs;
 pub mod keychain;
+pub mod label_files;
 pub mod logging;
 pub mod media_store;
 pub mod net;

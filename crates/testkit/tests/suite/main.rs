@@ -24,6 +24,7 @@ mod h4_remote_workspace;
 mod l1_labels_access;
 mod l1_labels_markers;
 mod l2_labels_list;
+mod l3_labels_check;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

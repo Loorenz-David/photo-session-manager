@@ -9,6 +9,9 @@
 //! L2 (MC-L1): the Labels box's list (rows in the provider's order, matched to local sessions,
 //! with their pictures), its number, Select all, and opening an unmatched row (the existing
 //! adopt: one shop read, no write). The counts and the SKUs of rows seen live in memory only.
+//!
+//! L3 (MC-L2): the check, the preview, generating, the result and the download live in the
+//! sibling module `label_runs`; the one kept check is a field here.
 
 use crate::{
     Error, Result,
@@ -29,12 +32,12 @@ use crate::{
         clock::Clock,
         commerce::CommerceAdapter,
         events::EventSink,
-        labels::{LabelStore, LabelsLink, LabelsProvider, LabelsResult},
+        labels::{LabelFiles, LabelStore, LabelsLink, LabelsProvider, LabelsResult},
         store::Store,
     },
     services::{
-        conversations::ConversationsService, items::ItemsService, remote::RemoteItems,
-        sessions::SessionsService,
+        conversations::ConversationsService, items::ItemsService, label_runs::KeptCheck,
+        remote::RemoteItems, sessions::SessionsService,
     },
 };
 use std::{
@@ -88,14 +91,18 @@ fn search_text(query: Option<&str>) -> Option<String> {
 
 pub struct LabelsService {
     conversations: Arc<ConversationsService>,
-    provider: Arc<dyn LabelsProvider>,
+    pub(super) provider: Arc<dyn LabelsProvider>,
     labels: Arc<dyn LabelStore>,
     store: Arc<dyn Store>,
     remote: Arc<RemoteItems>,
     commerce: Option<Arc<dyn CommerceAdapter>>,
-    clock: Arc<dyn Clock>,
-    events: Arc<dyn EventSink>,
+    /// L3: preview pictures and saved label files.
+    pub(super) files: Arc<dyn LabelFiles>,
+    pub(super) clock: Arc<dyn Clock>,
+    pub(super) events: Arc<dyn EventSink>,
     copy: Mutex<LabelCopy>,
+    /// L3 (MC-L2.3): the one kept check (memory only, M-L1).
+    pub(super) kept: Mutex<Option<KeptCheck>>,
     /// The stored access as last read or written (`None` = not read yet in this build).
     access: Mutex<Option<LabelsAccess>>,
     /// MC-L1.5, .6: the counts of the last list or summary answer.
@@ -114,6 +121,7 @@ impl LabelsService {
         store: Arc<dyn Store>,
         remote: Arc<RemoteItems>,
         commerce: Option<Arc<dyn CommerceAdapter>>,
+        files: Arc<dyn LabelFiles>,
         clock: Arc<dyn Clock>,
         events: Arc<dyn EventSink>,
     ) -> Self {
@@ -124,9 +132,11 @@ impl LabelsService {
             store,
             remote,
             commerce,
+            files,
             clock,
             events,
             copy: Mutex::new(LabelCopy::new()),
+            kept: Mutex::new(None),
             access: Mutex::new(None),
             counts: Mutex::new(None),
             seen_skus: Mutex::new(HashMap::new()),
@@ -141,7 +151,7 @@ impl LabelsService {
         self.seen_skus.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn copy(&self) -> MutexGuard<'_, LabelCopy> {
+    pub(super) fn copy(&self) -> MutexGuard<'_, LabelCopy> {
         self.copy.lock().unwrap_or_else(|e| e.into_inner())
     }
 
@@ -189,7 +199,7 @@ impl LabelsService {
     }
 
     /// ACC.1 for a press: the store a label call may address, else `Off(state)` or `Denied`.
-    fn gate(&self) -> std::result::Result<String, LabelsFailure> {
+    pub(super) fn gate(&self) -> std::result::Result<String, LabelsFailure> {
         let connection = self.conversations.connection()?;
         if connection.state != ConnectionState::Ready {
             return Err(LabelsFailure::Off(connection.state));
@@ -214,7 +224,7 @@ impl LabelsService {
         }
     }
 
-    fn describe_error(&self, error: &LabelsError) -> String {
+    pub(super) fn describe_error(&self, error: &LabelsError) -> String {
         let shop = self.conversations.connection().ok().and_then(|c| c.shop);
         self.provider.describe(error, shop.as_deref())
     }
@@ -222,7 +232,10 @@ impl LabelsService {
     /// ACC.4, learning by use, for every label call but `connected()`'s own: a success while the
     /// access is unknown makes it allowed; `NotAllowed` makes it denied, empties the copy and
     /// tells the screen. Never touches the conversations connection (ACC.5).
-    fn learn<T>(&self, result: LabelsResult<T>) -> std::result::Result<T, LabelsFailure> {
+    pub(super) fn learn<T>(
+        &self,
+        result: LabelsResult<T>,
+    ) -> std::result::Result<T, LabelsFailure> {
         match result {
             Ok(value) => {
                 if self.stored_access()? == LabelsAccess::Unknown {

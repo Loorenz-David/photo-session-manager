@@ -72,3 +72,18 @@ pub trait LabelsLink: Send + Sync {
     /// The label changes of one pull page, in log order (never empty).
     fn changed(&self, changes: &[LabelChange]);
 }
+
+/// L3 (MC-L2.5, .13; `master_plan_labels.md` §4 Files): the label files on this Mac: preview
+/// pictures under the previews folder, saved label files in the labels folder.
+pub trait LabelFiles: Send + Sync {
+    /// A PNG of the first page of `pdf` under `<previews>/labels/<name>.png`, long edge
+    /// `PREVIEW_EDGE`; answers its path.
+    fn raster(&self, pdf: &[u8], name: &str) -> Result<std::path::PathBuf>;
+    /// Removes every preview picture.
+    fn clear_previews(&self) -> Result<()>;
+    /// Writes `bytes` into the labels folder under the cleaned `filename` (a taken name is
+    /// numbered); answers the file's path. Nothing outside the folder is ever written.
+    fn save(&self, filename: &str, bytes: &[u8]) -> Result<std::path::PathBuf>;
+    /// Opens the file for the photographer to print.
+    fn open(&self, path: &std::path::Path) -> Result<()>;
+}

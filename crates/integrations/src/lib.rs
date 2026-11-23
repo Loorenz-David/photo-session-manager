@@ -1253,6 +1253,7 @@ impl App {
             store: store.clone(),
             remote: remote.clone(),
             commerce: commerce.clone(),
+            files: labels::files_for(&paths),
             clock: clock.clone(),
             events: events.clone(),
         });

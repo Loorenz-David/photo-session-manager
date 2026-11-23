@@ -336,3 +336,57 @@ pub struct Selected {
     pub product_id: String,
     pub sku: String,
 }
+
+/// L3 (MC-L2.4): one group of the check, by template in first-appearance order; the items
+/// without a template form one last group (`template` none).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CheckGroup {
+    pub template: Option<PlanTemplate>,
+    /// The template's product types (empty when unknown).
+    pub product_types: Vec<String>,
+    pub items: Vec<PlanItem>,
+}
+
+/// L3 (MC-L2.1–.4): what generating would do, as shown in the check dialog. `id` names the one
+/// kept check.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabelCheck {
+    pub id: String,
+    pub groups: Vec<CheckGroup>,
+    pub unresolved: Vec<Unresolved>,
+    pub summary: PlanSummary,
+    pub sizes: Vec<LabelSize>,
+}
+
+/// L3 (MC-L2.9): one product that was not generated, with its message.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LabelFailure {
+    pub product_id: Option<String>,
+    pub sku: Option<String>,
+    pub title: Option<String>,
+    pub message: String,
+}
+
+/// L3 (MC-L2.9): the result of a generation. Fully generated ⇔ `failures` and `not_run` are
+/// both empty (M-L4).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabelRunResult {
+    /// The check's items (those that failed the check included).
+    pub total: i64,
+    pub rendered: i64,
+    pub marked_printed: i64,
+    pub reprinted: i64,
+    pub no_price: i64,
+    pub failures: Vec<LabelFailure>,
+    /// The products of chunks that have no outcome yet.
+    pub not_run: Vec<String>,
+    pub artifacts: Vec<LabelArtifact>,
+    pub failed_product_ids: Vec<String>,
+}
+
+/// L3 (MC-L2.11): a label file saved in the labels folder, and whether it was opened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedLabel {
+    pub path: std::path::PathBuf,
+    pub opened: bool,
+}

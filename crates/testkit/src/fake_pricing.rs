@@ -11,7 +11,9 @@ use psm_core::{Error, Result};
 use psm_integrations::conversations::beyo_pricing::{
     label_types::{
         IntegrationLabelCounts, IntegrationLabelProduct, IntegrationLabelProductPage,
-        IntegrationLabelStatus, IntegrationLabelTemplate, LabelStatusOut, WireLabelStatus,
+        IntegrationLabelStatus, IntegrationLabelTemplate, IntegrationPlan, IntegrationPlanIssue,
+        IntegrationPlanItem, IntegrationPlanSize, IntegrationPlanSummary, IntegrationPlanTemplate,
+        IntegrationRunItemIn, LabelStatusOut, UnresolvedItem, WireLabelStatus, WirePlanOutcome,
     },
     transport::{HttpReply, Method, PricingHttp, PricingRequest, RawReply},
     types::{
@@ -118,6 +120,14 @@ struct State {
     repeat_cursor: bool,
     /// L2: products added by `add_label_products`.
     bulk: usize,
+    /// L3: products that fail in the check and in the run (code, message).
+    fail_label: HashMap<String, (String, String)>,
+}
+
+/// L3: one answer of the fake: JSON, or the bytes of a file.
+enum Answer {
+    Json(HttpReply),
+    File(Vec<u8>),
 }
 
 /// L2: the `workFrom` the fake answers unless `set_work_from` changed it.
@@ -144,6 +154,22 @@ fn envelope(status: u16, code: &str, message: &str) -> HttpReply {
                 code: code.into(),
                 message: message.into(),
                 details: None,
+            },
+            correlation_id: Some("fake".into()),
+        })
+        .unwrap(),
+    )
+}
+
+/// L3: 422 `no_products` with `details.unresolved`.
+fn no_products(unresolved: &[UnresolvedItem]) -> HttpReply {
+    HttpReply::new(
+        422,
+        serde_json::to_value(ErrorEnvelope {
+            error: ErrorBody {
+                code: "no_products".into(),
+                message: "None of the items resolved to a product.".into(),
+                details: Some(json!({ "unresolved": unresolved })),
             },
             correlation_id: Some("fake".into()),
         })
@@ -483,6 +509,176 @@ impl State {
         )
     }
 
+    /// L3 (projection r0, D8): the template of a product: its assigned template, else the one
+    /// whose product types hold its type, else the default, else none.
+    fn template_of(&self, spec: &LabelSpec) -> Option<IntegrationLabelTemplate> {
+        let by_id = spec
+            .template
+            .as_ref()
+            .and_then(|id| self.templates.iter().find(|t| &t.id == id));
+        let by_type = || {
+            spec.product_type.as_ref().and_then(|ty| {
+                self.templates
+                    .iter()
+                    .find(|t| t.product_types.iter().any(|p| p == ty))
+            })
+        };
+        let default = || self.templates.iter().find(|t| t.is_default);
+        by_id.or_else(by_type).or_else(default).cloned()
+    }
+
+    fn unresolved_item(product_id: &str) -> UnresolvedItem {
+        UnresolvedItem {
+            sku: None,
+            product_id: Some(product_id.to_owned()),
+            error: ErrorBody {
+                code: "product_not_found".into(),
+                message: format!("No product with id '{product_id}' in this store."),
+                details: None,
+            },
+        }
+    }
+
+    /// L3: one plan item by the package's rules (`fail` when `fail_label` names it or no
+    /// template applies, `reprint` when printed, `noPrice` when unpriced, else `markPrinted`).
+    fn plan_item(&self, position: usize, spec: &LabelSpec) -> IntegrationPlanItem {
+        let template = self.template_of(spec);
+        let mut issues = Vec::new();
+        if let Some((code, message)) = self.fail_label.get(&spec.product_id) {
+            issues.push(IntegrationPlanIssue {
+                code: code.clone(),
+                message: message.clone(),
+            });
+        }
+        if template.is_none() {
+            issues.push(IntegrationPlanIssue {
+                code: "no_template".into(),
+                message: "No template applies.".into(),
+            });
+        }
+        let outcome = if !issues.is_empty() {
+            WirePlanOutcome::Fail
+        } else if spec.printed_at.is_some() {
+            WirePlanOutcome::Reprint
+        } else if spec.price_minor.is_none() {
+            WirePlanOutcome::NoPrice
+        } else {
+            WirePlanOutcome::MarkPrinted
+        };
+        IntegrationPlanItem {
+            position,
+            sku: spec.sku.clone(),
+            product_id: spec.product_id.clone(),
+            title: Some(spec.title.clone()),
+            product_type: spec.product_type.clone(),
+            template: template.map(|t| IntegrationPlanTemplate {
+                id: t.id,
+                name: t.name,
+                width_mm: t.width_mm,
+                height_mm: t.height_mm,
+                source: Some("default".into()),
+            }),
+            has_price: spec.price_minor.is_some(),
+            price_minor: spec.price_minor,
+            label_status: if spec.printed_at.is_some() {
+                WireLabelStatus::Printed
+            } else {
+                WireLabelStatus::NotPrinted
+            },
+            label_printed_at: spec.printed_at.map(iso),
+            outcome,
+            issues,
+            notes: vec![],
+        }
+    }
+
+    /// The product ids of a plan or run body (`items[].productId`).
+    fn body_ids(body: Option<&Json>) -> Option<Vec<String>> {
+        let items: Vec<IntegrationRunItemIn> =
+            serde_json::from_value(body?.get("items")?.clone()).ok()?;
+        items.into_iter().map(|i| i.product_id).collect()
+    }
+
+    /// L3: `POST …/labels/plan`: per product its plan item, unknown ids `unresolved`; none
+    /// resolved → 422 `no_products` with `details.unresolved`; `sizes` over the items that do
+    /// not fail (projection r0, D8).
+    fn label_plan(&self, body: Option<&Json>) -> HttpReply {
+        let Some(ids) = Self::body_ids(body).filter(|ids| (1..=300).contains(&ids.len())) else {
+            return envelope(
+                422,
+                "validation_error",
+                "1 to 300 items, each with productId.",
+            );
+        };
+        let mut items = Vec::new();
+        let mut unresolved = Vec::new();
+        for (position, id) in ids.iter().enumerate() {
+            match self.labels.iter().find(|l| &l.product_id == id) {
+                Some(spec) => items.push(self.plan_item(position, spec)),
+                None => unresolved.push(Self::unresolved_item(id)),
+            }
+        }
+        if items.is_empty() {
+            return no_products(&unresolved);
+        }
+        let count = |o: WirePlanOutcome| items.iter().filter(|i| i.outcome == o).count() as i64;
+        let failing = count(WirePlanOutcome::Fail);
+        let mut sizes: Vec<IntegrationPlanSize> = Vec::new();
+        for item in items.iter().filter(|i| i.outcome != WirePlanOutcome::Fail) {
+            let Some(t) = &item.template else { continue };
+            match sizes
+                .iter_mut()
+                .find(|z| z.width_mm == t.width_mm && z.height_mm == t.height_mm)
+            {
+                Some(z) => z.count += 1,
+                None => sizes.push(IntegrationPlanSize {
+                    width_mm: t.width_mm,
+                    height_mm: t.height_mm,
+                    count: 1,
+                }),
+            }
+        }
+        let summary = IntegrationPlanSummary {
+            items: items.len() as i64,
+            ready: items.len() as i64 - failing,
+            failing,
+            mark_printed: count(WirePlanOutcome::MarkPrinted),
+            reprint: count(WirePlanOutcome::Reprint),
+            no_price: count(WirePlanOutcome::NoPrice),
+        };
+        HttpReply::new(
+            200,
+            to_json!(&IntegrationPlan {
+                items,
+                unresolved,
+                summary,
+                sizes,
+            }),
+        )
+    }
+
+    /// L3: `POST …/labels/preview`: the label's PDF; 404 `product_not_found` for an unknown id,
+    /// 422 `no_template` when no template applies.
+    fn label_preview(&self, body: Option<&Json>) -> Answer {
+        let Some(id) = body
+            .and_then(|b| serde_json::from_value::<IntegrationRunItemIn>(b.clone()).ok())
+            .and_then(|i| i.product_id)
+        else {
+            return Answer::Json(envelope(422, "validation_error", "productId is required."));
+        };
+        let Some(spec) = self.labels.iter().find(|l| l.product_id == id) else {
+            return Answer::Json(envelope(
+                404,
+                "product_not_found",
+                &format!("No product with id '{id}' in this store."),
+            ));
+        };
+        if self.template_of(spec).is_none() {
+            return Answer::Json(envelope(422, "no_template", "No template applies."));
+        }
+        Answer::File(format!("%PDF-1.4 fake preview {id}").into_bytes())
+    }
+
     fn touch(&mut self, case_id: &str) {
         let now = self.now();
         self.case_mut(case_id).case.updated_at = now;
@@ -742,6 +938,23 @@ impl FakePricing {
         self.state().deny_labels = true;
     }
 
+    /// L3: the product's label state as the fake holds it now (none when it holds no such
+    /// product).
+    pub fn label(&self, product_id: &str) -> Option<LabelSpec> {
+        self.state()
+            .labels
+            .iter()
+            .find(|l| l.product_id == product_id)
+            .cloned()
+    }
+
+    /// L3: the product fails in the check and in the run with this issue.
+    pub fn fail_label(&self, product_id: &str, code: &str, message: &str) {
+        self.state()
+            .fail_label
+            .insert(product_id.into(), (code.into(), message.into()));
+    }
+
     /// A label is generated for the product: it becomes Printed at the fake clock's time and
     /// `label.printed` is logged. Answers the event id (its time: [`Self::event_at_ms`]).
     pub fn label_printed(&self, product_id: &str) -> i64 {
@@ -931,6 +1144,7 @@ impl FakePricing {
             (Method::Get, ["labels", "templates"]) => {
                 HttpReply::new(200, to_json!(&state.templates))
             }
+            (Method::Post, ["labels", "plan"]) => state.label_plan(body),
             (Method::Get, ["cases"]) => {
                 let recipient = params.get("recipient").copied();
                 let status = params.get("status").copied();
@@ -1141,21 +1355,45 @@ impl FakePricing {
     }
 }
 
-impl PricingHttp for FakePricing {
-    /// L1: recorded like `send`; every byte route answers `404 not_found` until L3 adds the
-    /// preview, run and artifact routes.
-    fn fetch(&self, request: PricingRequest, _timeout: Duration) -> Result<RawReply> {
-        self.record(&request);
-        let reply = envelope(404, "not_found", "Not found.");
-        Ok(RawReply {
-            status: reply.status,
-            content_type: Some("application/json".into()),
-            bytes: reply.body.to_string().into_bytes(),
-        })
+impl FakePricing {
+    /// L3: a file route (`POST …/labels/preview`), with the store and scope checks of every
+    /// label path; none for any other path.
+    fn route_file(
+        state: &mut State,
+        method: Method,
+        path: &str,
+        body: Option<&Json>,
+    ) -> Option<Answer> {
+        let segments: Vec<String> = path
+            .trim_start_matches('/')
+            .split('/')
+            .map(decode)
+            .collect();
+        let segments: Vec<&str> = segments.iter().map(String::as_str).collect();
+        let ["stores", store_id, rest @ ..] = segments.as_slice() else {
+            return None;
+        };
+        if !matches!((method, rest), (Method::Post, ["labels", "preview"])) {
+            return None;
+        }
+        if !state.stores.iter().any(|s| s.id == *store_id) {
+            return Some(Answer::Json(envelope(404, "not_found", "Not found.")));
+        }
+        if state.deny_labels {
+            return Some(Answer::Json(envelope(
+                403,
+                "insufficient_scope",
+                "This key lacks labels:read.",
+            )));
+        }
+        Some(state.label_preview(body))
     }
 
-    fn send(&self, request: PricingRequest) -> Result<HttpReply> {
-        let (path, query, authorized) = self.record(&request);
+    /// One request as `send` and `fetch` both take it: recorded, held while [`Self::hold`] is
+    /// on, then the scripted time-outs, refusals and failures, the route, and the dropped
+    /// answers (L3: `fetch` honours them all, as `send` does).
+    fn answer(&self, request: &PricingRequest) -> Result<Answer> {
+        let (path, query, authorized) = self.record(request);
         {
             let mut hold = self.hold.lock().unwrap();
             if hold.held {
@@ -1189,26 +1427,58 @@ impl PricingHttp for FakePricing {
         if let Some(rule) = rule {
             rule.remaining -= 1;
             let status = rule.status;
-            return Ok(match &rule.envelope {
+            return Ok(Answer::Json(match &rule.envelope {
                 Some((code, message)) => envelope(status, code, message),
                 None => envelope(status, code_for(status), "Scripted failure."),
-            });
+            }));
         }
         let reply = if authorized {
-            Self::route(
-                &mut state,
-                request.method,
-                &path,
-                &query,
-                request.body.as_ref(),
-            )
+            match Self::route_file(&mut state, request.method, &path, request.body.as_ref()) {
+                Some(answer) => answer,
+                None => Answer::Json(Self::route(
+                    &mut state,
+                    request.method,
+                    &path,
+                    &query,
+                    request.body.as_ref(),
+                )),
+            }
         } else {
-            envelope(401, "invalid_api_key", "No/invalid/revoked key.")
+            Answer::Json(envelope(401, "invalid_api_key", "No/invalid/revoked key."))
         };
         if state.drops > 0 {
             state.drops -= 1;
             return Err(Error::Timeout);
         }
         Ok(reply)
+    }
+}
+
+impl PricingHttp for FakePricing {
+    /// L3: as `send` (held, scripted, dropped alike); a file answers `application/pdf` bytes,
+    /// JSON answers its text.
+    fn fetch(&self, request: PricingRequest, _timeout: Duration) -> Result<RawReply> {
+        Ok(match self.answer(&request)? {
+            Answer::Json(reply) => RawReply {
+                status: reply.status,
+                content_type: Some("application/json".into()),
+                bytes: reply.body.to_string().into_bytes(),
+            },
+            Answer::File(bytes) => RawReply {
+                status: 200,
+                content_type: Some("application/pdf".into()),
+                bytes,
+            },
+        })
+    }
+
+    fn send(&self, request: PricingRequest) -> Result<HttpReply> {
+        Ok(match self.answer(&request)? {
+            Answer::Json(reply) => reply,
+            Answer::File(bytes) => HttpReply::new(
+                200,
+                Json::String(String::from_utf8_lossy(&bytes).into_owned()),
+            ),
+        })
     }
 }
