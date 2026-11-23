@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # H3 — Bring back
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-23, claude opus implementer r1: 3 units, 64 rows → 59 behaviour tests + 5 unit tests, all green; closing gate green: workspace suite, clippy, fmt, typecheck, npm test; checkpoints fb8d34f, c9dad23, 747a2c4; handoff `handoffs/implementer/handoff_H3_bring_back_implement_r1.md`)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -249,3 +249,44 @@ Nothing to try on screen yet: the next milestone adds the workspace and the Brin
 - **2026-11-23, orchestrator: carried from H1's projection r0** (`handoffs/reviewer/handoff_H1_points_and_remote_record_projection_r0.md`). L3: `NotRemote` is added by H1 (U2 task 2 now adds only the two bring-back errors). L9: `FakeCommerce::fetch_original` / `original_fetches` and `set_image` moved here (U2 task 5). L10: `RemoteItems::new` gains `editing`, `capture_root`, `history` here (U2 task 5). Rows and counts unchanged.
 
 - **2026-11-23, orchestrator: projection r0 amendments applied** (`handoffs/reviewer/handoff_H3_bring_back_projection_r0.md`, AMENDMENTS_REQUIRED, 0 owner cards; master plan v1.2). L1 H3·C10(b) rewritten so it has a production cause: photo 2's composition changed first (a published-unchanged session is left out of the sidecar check, `PreviewScope::Live`, A16), photo 1's first sidecar written, `a.focus()` (not `tick`) runs the check; exact outcome one upload, photo 1's link `ready` / `m1` / revision 0, gallery `[m1, n, m3]`; U3 Read first and the hazard note say why; master plan MC-H4.7 gains the A16 sentence. L2 H3·C2(c) completes its preview with `complete_render_with(<preview job>, SyntheticJpeg::rgb(1500, 1000, …))` after `a.fake.add_image(…)`, outcome frame 1500 × 1000 source `preview`; U1 Read first and a test-setup note added. L3 (10G-derivable, settled from 10G §4.2/§4.4/§6.4, the recommended option): U2 task 3 pins (a) brought-back main photo *k* placed by hand with `slot` = container `final_no = k` (null past the last container), (b) every retired row keeps a `photo_places` row with `released = 1`, (c) H3·C9(a) checks the marks, H3·C9(b)'s exact outcome is Condition 1 with Main `m1, m2, m3`, and row **H3·C9(c)** added (2 pictures, 3 containers: the arrival is Main 3), the row that fails without (b); master plan MC-H4.4(a)/(b) amended; a narrative point added. L4 U2 task 5: the production `capture_root` closure is `editing.inspect_document()` + canonicalize, uncached; H3·C7(e)'s input clears the fake's `open_documents`; master plan §4 Service says so. L5 U2 tasks 3–4: canonical `raw_path` and canonical `taken`; hazard note; master plan MC-H4.2, MC-H4.4(b). L6 MC-H4.3 and U2 task 4: a body not starting with `FF D8 FF` is a failed download; row **H3·C6(f)** added (PNG-signature bytes → `Err(BringBackFailed)`, 3 fetches, nothing imported); every bring-back fixture registers each picture with `set_image` (the default `fake_image_bytes` is refused); the live check after H4 records the first bytes and content type of one real full-size download (Manual try-out here and in H4, master plan §3 rule 17); a narrative point added. L7 H3·C8(b) exact: the ops during the call are `document_info_started`, `document_info`, `sync_folder:<capture root>/BEYO-12`. L8–L16 delegated (U2 Delegated choices, "Decided at projection r0"; the recommended option where one was given): L8 the import runs inside `retire_session`'s `act` (master plan MC-H4.5 amended); L9 `taken` fails closed without an endless suffix loop (no option recommended between the two: the smallest safe one); L10 a store failure after the downloads → same clean-up and `BringBack {Failed}`, error unchanged; L11 gone after the refresh → stored gone, `1 photo is no longer in the shop`, the refreshed URL gets the full tries (master plan MC-H4.3); L12 `BringBackInput` / `BroughtBack` in `domain::remote` (master plan §4 Vocabulary); L13 the condition role from `commerce.condition_photos_key()` (MC-H4.4(c)); L14 caches left; L15 `add_image` registration and the URL → media mapping incl. `fake_refreshed_url` (U2 task 5, U3 task 1); L16 `retouch_gen` read from the stored `raw_state` row (MC-H4.4(c)). Reality checks: line drift fixed where cited (`OriginalPreviewJob` :1573-1611, `arrival_insert` :2425-2501 with its job insert at :2496-2501; master plan MC-H4.4(b), MC-H4.6); test-setup hints added (C1(a) 1067, C1(b) EXIF writer/reader, C1(d) SQL, C6(e) `catch_unwind`, C7(c) sync, C12(d) `watcher_event`, C4(i) no `done: 0`, C4(j), C8(d)); C14 recorded as acceptance only (MC-H4.8 implemented by H1). Prompt note for the compiler: this track's naming and contract authority is `master_plan_archive.md`, not `master_plan.md`. No H1/H2 code needs a change (every amendment lands in H3's own files or in `FakeCommerce`, which H3 edits anyway); H4 carries the fixture note and the live-check line. Counts: U2 7 criteria / 36 rows; H3 14 / 64 (recounted from the four plan files: 12 units, 54 criteria, 253 rows). Outcomes otherwise unchanged, so no new projection round (`projection: done`).
+
+- **2026-11-23, implementer r1 (Claude Opus, `PSM_IMPLEMENTER=claude`).** Built the three units in order with a
+  checkpoint each (U1 `fb8d34f`, U2 `c9dad23`, U3 `747a2c4`). **U1:** `rawpreview::JpegSource` (decodes the JPEG; long
+  edge ≤ 1600 → the file itself, else a Lanczos3 copy at 1600 px, quality 80; EXIF orientation via `kamadak-exif`;
+  frame = pixel size, swapped for 5–8; a file that does not decode → `Ok(None)`); `OriginalPreviewJob` picks it for
+  `.jpg`/`.jpeg` (any case); `SyntheticJpeg::with_orientation` (hand-built TIFF via `set_exif_metadata`); 10 rows.
+  **VERIFY-JPEG probed: PASS** (Capture One was running with the owner's `Beyo Studio` session open): listed ~7 s
+  after `sync_folder`, `find_image` answers for a `.jpg`, both recipes export it (preview 2560 × 1707, master
+  3000 × 2000 = its pixel size), a `.cos` appears ~15 s after processing; recorded in the evidence doc. The probe JPEG
+  and its two exports and settings file were left in that session (`Capture/_Unassigned/psm-probe-verify-jpeg-2026-11-23.jpg`,
+  `Output/_session_manager/`), never deleted (H2). **U2:** `bring_back_names`, `estimate_bytes`, `DOWNLOAD_RETRIES`,
+  `UNKNOWN_PICTURE_BYTES` (Core mechanisms, 5 unit tests); `BringBackInput`/`BroughtBack`/`BringBackProgress`/
+  `BringBackState`/`BringBackOutcome`; errors `BringBackRunning`, `BringBackFailed {reason}` (codes
+  `bring_back_running`, `bring_back_failed`); `AppEvent::BringBack` → `bring_back_progress` (`onBringBack`);
+  `Store::bring_back` (one transaction, MC-H4.4 (a)–(e), templated marks of L3); `RemoteItems::bring_back`
+  (`services/bring_back.rs`) with the running mark (`bring_back_progress` accessor for H4), downloads, the one URL
+  refresh, clean-up, the import inside `History::retire_session`; `RemoteItems::new` in its registry form;
+  `FakeCommerce::fetch_original`/`set_image`/`original_fetches`; 31 behaviour tests. **U3:** 18 behaviour tests on the
+  real publish and storage services; **no production change was needed** (MC-H4.7 and MC-H4.8 held as written).
+  Assumptions (smallest option, 10H §7 / MC-H4): (1) every error after the running mark is taken (also the
+  precondition refusals "wait until…", "capture folder…", "no longer in the shop", and store errors) emits
+  `BringBack {Failed, error}` with the progress so far; `NoIntegration`, `NotRemote`, `BringBackRunning` emit nothing;
+  (2) a picture found gone at the refresh is also put on Health `remote_picture_gone`, as MC-H1.4's "stored as gone"
+  does in H1; (3) the stale ids of the first pass go to `media_urls` once (chunks of 25) after that pass, then the
+  refreshed ones get the full tries, a second `Gone` counting as a failed try; (4) a leftover file of an interrupted
+  attempt is replaced by the rename, and a failed attempt removes it with its own files (no photo row names it,
+  rule 2); (5) the JPEG-marker check is a private constant of `bring_back.rs`; (6) a store error inside `taken` is
+  returned unchanged (not wrapped in `BringBackFailed`); (7) in a templated session only the brought-back **main**
+  photos get a placement row (condition photos none, as the plan names); (8) the `Done` event carries done = total.
+  Deviations: (a) `crates/testkit/tests/suite/h2_pages_and_search.rs` (H2's file) gained the three new
+  `RemoteItems::new` arguments at its one direct call (a capture-root closure answering `DocumentNotOpen`; forced by
+  the registry constructor, behaviour of that row unchanged); (b) the U3 checkpoint also touches `h3_bring_back.rs`
+  (fixtures made `pub(crate)` for reuse); (c) H3·C4(d) uses an archived fixture without `p62`'s two hidden photos so
+  exactly five earlier rows exist; (d) H3·C8(a) runs the four scenarios in one test and asserts no mutation **during**
+  each bring back (the archived fixtures were published before, so the list is not literally empty there; the
+  shop-only case asserts it empty). Observations for the reviewer: a link with a media id that is not `ready` is
+  treated by Upload as "attached" and polled, so H3·C10(a) rests on the link's media id and H3·C10(b)/C11 on `ready`
+  plus the stored generation/revision (checked by temporary, reverted probes: `upload_state 'none'` turns C10(b) red;
+  dropping the `released` marks turns C9(a)/(c) red; a real settings edit after the first `.cos` gives 2 uploads in
+  C10(b)). Candidate criterion: none.
+
