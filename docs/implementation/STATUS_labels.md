@@ -14,3 +14,5 @@ Running log of the 09C track on branch `feature/agentic`. The main tracker `STAT
   - Chapter `09C_pricing_labels.md` RATIFIED (changelog A33). Planner next.
   - **Owner action before the first real use:** a Pricing key with `labels:read` and `labels:write` (Replace in
     Settings → Pricing), and the service account bound to the live Beyo store.
+  - **Plan written** (`e3c9f70`): L1 labels provider and marker (projection), L2 Labels box, L3 generate and download (projection). 11 units, 50 criteria, 294 rows. Preview picture by macOS `sips` (probed on this Mac). 1 owner card: should the Labels box count show as soon as the list opens (recommended yes); L2 carries `blocked_on: owner card 1`.
+  - **L1 started** in the background (`scratchpad/labels_chain.sh`, log `scratchpad/labels_chain.log`).
