@@ -1,4 +1,4 @@
-# Price labels from Pricing — master plan (v1.1, 2026-11-23)
+# Price labels from Pricing — master plan (v1.2, 2026-11-23)
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, registry §6, environment
 §7), `master_plan_conversations.md` (the Pricing connection, adapter, fake and pull it extends) and
@@ -213,8 +213,9 @@ state, M-L1). No other table, column, settings field or file holds anything abou
 number at `ae91079`; if another change takes it first, use the next (never renumber an applied file).
 
 **Files.** `psm_infra::label_files::DiskLabelFiles::new(previews_root, labels_dir)`: `raster` writes the PDF to a
-temporary file, runs `/usr/bin/sips -s format png -Z 1200 <pdf> --out <previews>/labels/<name>.png` (a non-zero exit
-or a missing output is an error; the temporary PDF is always removed), `save` by MC-L2.13, `open` runs
+temporary file `<previews>/labels/<name>.src.pdf` (never the system's temporary folder: L3 projection r0, D1), runs
+`/usr/bin/sips -s format png -Z 1200 <pdf> --out <previews>/labels/<name>.png` (a non-zero exit or a missing output is
+an error; the temporary PDF is always removed), `save` by MC-L2.13, `open` runs
 `/usr/bin/open -a Preview <path>`. The labels folder is `paths.home.join("Documents/Session Manager Labels")`, always
 from `AppPaths.home` (never `$HOME` read again, never a hard-coded user path). `<previews>/labels/` is inside the
 previews folder the webview may already read (`asset_protocol_scope`, desktop `lib.rs`). Test seam:
@@ -464,7 +465,9 @@ copy holds, for each product, the state of its last event in the log order; a re
 ### MC-L2 — Check, generate, download (09C §6; M-L2, M-L3, M-L4, M-L5)
 1. **`check(product_ids)`** (a press; changes nothing): the ids without repeats (first kept), at least one
    (`InvalidValue` otherwise); calls allowed; no generation running (`Busy`). One `plan(store, chunk)` per
-   `RUN_CHUNK` ids in order; `merge_plans`: items in request order with `position` counted over the whole request,
+   `RUN_CHUNK` ids in order; `merge_plans`: items in request order with `position` counted over the whole request
+   (`position` := the item's index among the merged items, 0, 1, 2, … in merged order, independent of Pricing's own
+   numbering, so unresolved entries and `NoProducts` chunks leave no gap; L3 projection r0, D4),
    `unresolved` concatenated, each `summary` number summed, `sizes` merged where width and height are equal, in
    first-appearance order. A chunk answering `NoProducts` contributes its ids as `Unresolved {message: "Not found"}`;
    when every chunk does, the check answers `NoProducts`. Any other error → that error, nothing kept.
@@ -492,15 +495,17 @@ copy holds, for each product, the state of its last event in the log order; a re
    the chunk stays without an outcome.
 8. **After each finished chunk** the copy follows the run (`started` taken before the request, MC-L3.2): an item with
    `MarkedPrinted` → `{Printed, the run's created_at, true, none}`; `NoPrice` → `{NotPrinted, none, false, reset as
-   it was}`; `Reprinted` → `Printed` with the time it had (the run's when unknown); then `LabelsChanged {those
-   products}`.
+   it was}`; `Reprinted` → `Printed` with the time it had: the **check item's `printed_at`**, else the run's `created_at`
+   (L3 projection r0, D5); then `LabelsChanged {those products}`.
 9. **The result** (`merge_runs`; this is what reconciles 09C §6.2 "ready products only" with §12 scenario 4 "2 of 3"):
    `total` = the check's items (those that failed the check included; unresolved ones are not items); `rendered`,
    `marked_printed`, `reprinted`, `no_price` = the sums of the runs' counts; `failures`, in this order: the check's
    `Fail` items (message = their issues joined with " · "), then per chunk its run items that were not rendered
    (their error message), its run's `unresolved` (their message), or all its products for a `NoProducts` chunk;
    `not_run` = the products of chunks without an outcome; `artifacts` in chunk order; `failed_product_ids` = the
-   failures' and `not_run`'s product ids. **Fully generated ⇔ `failures` and `not_run` are both empty** (M-L4).
+   failures' and `not_run`'s product ids. A failure's `sku` and `title` are the **check item's** (always kept with
+   the check), falling back to the run item's or the `Unresolved`'s own (rule 17: Pricing's `RunItemOut.title` is
+   nullable and its `API.md` runs example sends none; L3 projection r0, D3). **Fully generated ⇔ `failures` and `not_run` are both empty** (M-L4).
 10. **Kept with the check:** a finished generation's result; `generate(check_id)` again answers it without a
     request. `partial(check_id)` = the result over the finished chunks (for a dialog the photographer leaves after a
     failed chunk); `NotFound` without a generation.
@@ -592,3 +597,9 @@ milestones land, so symbols are named beside them.
   (`handoffs/reviewer/handoff_L1_labels_provider_and_marker_projection_r0.md`, AMENDMENTS_REQUIRED, 0 owner cards).
   §3 trace grammar admits a §4 registry entry (D12); ACC.2: `connected()` applies only ACC.2, ACC.4 governs every
   other label call (D2). Everything else landed in the L1 plan (its Review log). Counts unchanged (§2).
+- **v1.2, 2026-11-23 (orchestrator): L3 projection r0 amendments**
+  (`handoffs/reviewer/handoff_L3_generate_and_download_projection_r0.md`, AMENDMENTS_REQUIRED, 0 owner cards).
+  §4 Files: `raster`'s temporary PDF lives in `<previews>/labels/` (D1); MC-L2.1: `position` = the index among the
+  merged items (D4); MC-L2.8: a `Reprinted` item keeps the check item's `printed_at`, else the run's `created_at` (D5);
+  MC-L2.9: a failure's `sku` / `title` come from the check item first (D3). Everything else landed in the L3 plan (its
+  Review log). Counts unchanged (§2).
