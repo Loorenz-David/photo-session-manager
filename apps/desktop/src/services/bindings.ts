@@ -1300,6 +1300,16 @@ export type ItemDto_Deserialize = {
 	external_id?: string | null,
 	created_at: number,
 	updated_at: number,
+	/**
+	 *  H2 (MC-H2.4, MC-H2.5): the search result's picture on this Mac (only from the searches;
+	 *  never a path whose file is missing). Left out when there is none.
+	 */
+	picture_path?: string | null,
+	/**
+	 *  H2 (MC-H2.4): a local result's session (only from `items_search`). Left out when there is
+	 *  none.
+	 */
+	session_id?: number | null,
 };
 
 export type ItemDto_Serialize = {
@@ -1313,6 +1323,16 @@ export type ItemDto_Serialize = {
 	external_id: string | null,
 	created_at: number,
 	updated_at: number,
+	/**
+	 *  H2 (MC-H2.4, MC-H2.5): the search result's picture on this Mac (only from the searches;
+	 *  never a path whose file is missing). Left out when there is none.
+	 */
+	picture_path?: string,
+	/**
+	 *  H2 (MC-H2.4): a local result's session (only from `items_search`). Left out when there is
+	 *  none.
+	 */
+	session_id?: number,
 };
 
 /**

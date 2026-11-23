@@ -1346,6 +1346,8 @@ mod h2_tests {
             .invoke_handler(tauri::generate_handler![
                 commands::sessions::sessions_page,
                 commands::sessions::sessions_list,
+                commands::items::items_search,
+                commands::items::items_search_shop,
             ])
             .build(mock_context(noop_assets()))
             .unwrap();
@@ -1396,6 +1398,258 @@ mod h2_tests {
         let (_dir, _app, w) = wired(thirty_sessions());
         let list = call(&w, "sessions_list", json!({"filter": "all", "query": null}));
         assert_eq!(rows(&list["groups"]).len(), 30);
+    }
+
+    // H2·U4 the searches' pictures (MC-H2.4, MC-H2.5).
+
+    use psm_core::{
+        domain::{
+            photo::{Classification, NewPhoto, PhotoSource},
+            publish::{RemoteMedia, RemoteMediaStatus},
+            remote::PictureTarget,
+            storage::ArchivedImage,
+        },
+        events::AppEvent,
+        mechanisms::remote::search_name,
+        services::remote::RemoteItems,
+    };
+    use psm_testkit::fake_commerce::{FakeCommerce, ImageFault, fake_image_url};
+    use std::sync::Arc;
+
+    /// What a search test keeps of the app after it is behind the commands.
+    struct Kept {
+        remote: Arc<RemoteItems>,
+        shop: Arc<FakeCommerce>,
+        events: Arc<psm_testkit::test_app::CollectingEventSink>,
+        previews: std::path::PathBuf,
+    }
+
+    fn keep(a: &psm_testkit::TestApp) -> Kept {
+        Kept {
+            remote: a.app.remote.clone(),
+            shop: a.commerce.clone().unwrap(),
+            events: a.events.clone(),
+            previews: a.app.paths.root.join("previews"),
+        }
+    }
+
+    fn search(w: &Window, cmd: &str, query: &str) -> Vec<Value> {
+        call(w, cmd, json!({"query": query}))
+            .as_array()
+            .unwrap()
+            .clone()
+    }
+
+    fn pictures_ready(kept: &Kept) -> Vec<PictureTarget> {
+        kept.events
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|e| match e {
+                AppEvent::PictureReady { target, .. } => Some(target.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn h2_c11a_a_local_result_carries_its_session_picture() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        let (_, created) = a
+            .items()
+            .create_local("PIC-1", "Oak chair", "Chair", None)
+            .unwrap();
+        let session = created.session.id;
+        let raw = a.dir.path().join("PIC-1.ARW");
+        std::fs::write(&raw, "raw").unwrap();
+        let photo = a
+            .store()
+            .photo_insert_or_get(NewPhoto {
+                session_id: session,
+                raw_path: raw.to_string_lossy().into_owned(),
+                raw_hash: None,
+                captured_at: None,
+                source: PhotoSource::Capture,
+                created_at: 0,
+            })
+            .unwrap();
+        a.review().classify(photo.id, Classification::Main).unwrap();
+        let preview = a.dir.path().join("pic-1-preview.jpg");
+        std::fs::write(&preview, "jpeg").unwrap();
+        rusqlite::Connection::open(a.app.paths.db())
+            .unwrap()
+            .execute(
+                "UPDATE photos SET adjusted_preview_path=?1 WHERE id=?2",
+                rusqlite::params![preview.to_string_lossy(), photo.id],
+            )
+            .unwrap();
+        let (_dir, _app, w) = wired(a);
+        let found = search(&w, "items_search", "PIC-1");
+        assert_eq!(
+            (&found[0]["picture_path"], &found[0]["session_id"]),
+            (&json!(preview.to_string_lossy()), &json!(session))
+        );
+    }
+
+    #[test]
+    fn h2_c11b_a_local_result_without_a_session_has_no_picture() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        // A shop product adopted from the search and not opened yet: an item without a session.
+        let product = a.fake_shop().add_product("NOSESS-1", "Lamp", None);
+        let item = psm_core::services::items::ItemsService::new(a.store(), a.clock.as_ref())
+            .with_commerce(Some(a.fake_shop()))
+            .adopt(&product)
+            .unwrap();
+        assert!(a.store().session_for_item(item.id).unwrap().is_none());
+        let (_dir, _app, w) = wired(a);
+        let found = search(&w, "items_search", "NOSESS-1");
+        assert_eq!(
+            (&found[0]["picture_path"], &found[0]["session_id"]),
+            (&Value::Null, &Value::Null)
+        );
+    }
+
+    #[test]
+    fn h2_c11c_an_archived_result_requests_its_cover() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        let (item, created) = a
+            .items()
+            .create_local("ARCH-S", "Desk", "Desk", None)
+            .unwrap();
+        let product = a.fake_shop().add_product("ARCH-S", "Desk", None);
+        a.fake_shop()
+            .state
+            .lock()
+            .unwrap()
+            .products
+            .iter_mut()
+            .find(|p| p.external_id == product)
+            .unwrap()
+            .media = vec![RemoteMedia {
+            id: "arch-m1".into(),
+            filename: Some("arch-m1.jpg".into()),
+            status: RemoteMediaStatus::Ready,
+            position: 1,
+        }];
+        a.store()
+            .transaction(&mut |tx| tx.insert_item_link(item.id, "shopify", &product, None))
+            .unwrap();
+        a.store()
+            .mark_item_cleared(
+                item.id,
+                0,
+                &[ArchivedImage {
+                    role: "gallery".into(),
+                    position: 1,
+                    media_id: "arch-m1".into(),
+                    url: fake_image_url("arch-m1"),
+                    bytes: None,
+                }],
+            )
+            .unwrap();
+        let session = created.session.id;
+        let kept = keep(&a);
+        let (_dir, _app, w) = wired(a);
+        let found = search(&w, "items_search", "ARCH-S");
+        assert_eq!(found[0]["picture_path"], Value::Null);
+        kept.remote.run_pending().unwrap();
+        let cover = kept
+            .previews
+            .join("remote")
+            .join(item.id.to_string())
+            .join(psm_core::mechanisms::remote::cover_name("arch-m1"));
+        assert!(cover.is_file());
+        assert_eq!(
+            pictures_ready(&kept),
+            vec![PictureTarget::Cover {
+                session_id: session
+            }]
+        );
+    }
+
+    /// A fake shop product whose picture address is `url`.
+    fn shop_product(a: &psm_testkit::TestApp, sku: &str, url: Option<&str>) -> String {
+        let product = a
+            .fake_shop()
+            .add_product(sku, &format!("{sku} chair"), None);
+        a.fake_shop()
+            .state
+            .lock()
+            .unwrap()
+            .products
+            .iter_mut()
+            .find(|p| p.external_id == product)
+            .unwrap()
+            .thumbnail_url = url.map(Into::into);
+        product
+    }
+
+    const U: &str = "https://cdn.fake-shop.test/files/shop-u.jpg";
+
+    #[test]
+    fn h2_c12c_a_shop_result_picture_is_fetched_small_and_kept() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        let product = shop_product(&a, "SHOP-U", Some(U));
+        let kept = keep(&a);
+        let (_dir, _app, w) = wired(a);
+        assert_eq!(
+            search(&w, "items_search_shop", "SHOP-U")[0]["picture_path"],
+            Value::Null
+        );
+        kept.remote.run_pending().unwrap();
+        let file = kept
+            .previews
+            .join("remote")
+            .join("search")
+            .join(search_name(U));
+        assert!(file.is_file());
+        assert_eq!(kept.shop.image_fetches(), vec![(U.to_owned(), 160)]);
+        assert_eq!(
+            pictures_ready(&kept),
+            vec![PictureTarget::Search {
+                external_id: product
+            }]
+        );
+        let again = search(&w, "items_search_shop", "SHOP-U");
+        kept.remote.run_pending().unwrap();
+        assert_eq!(again[0]["picture_path"], json!(file.to_string_lossy()));
+        assert_eq!(kept.shop.image_fetches().len(), 1);
+    }
+
+    #[test]
+    fn h2_c12d_a_shop_result_without_a_picture() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        shop_product(&a, "SHOP-N", None);
+        let kept = keep(&a);
+        let (_dir, _app, w) = wired(a);
+        assert_eq!(
+            search(&w, "items_search_shop", "SHOP-N")[0]["picture_path"],
+            Value::Null
+        );
+        kept.remote.run_pending().unwrap();
+        assert!(kept.shop.image_fetches().is_empty());
+    }
+
+    #[test]
+    fn h2_c12e_a_gone_search_picture_is_dropped() {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        shop_product(&a, "SHOP-G", Some(U));
+        a.fake_shop().fail_image(U, vec![ImageFault::Gone]);
+        let kept = keep(&a);
+        let (_dir, _app, w) = wired(a);
+        search(&w, "items_search_shop", "SHOP-G");
+        kept.remote.run_pending().unwrap();
+        assert!(
+            !kept
+                .previews
+                .join("remote")
+                .join("search")
+                .join(search_name(U))
+                .exists()
+        );
+        assert!(pictures_ready(&kept).is_empty());
+        assert!(kept.shop.url_reads().is_empty());
     }
 }
 

@@ -16,6 +16,37 @@ pub const COVER_EDGE: u32 = 320;
 /// MC-H1.4: a picture's address is not asked for again within this time (monotonic).
 pub const REFRESH_COOLDOWN_MS: u64 = 600_000;
 
+/// MC-H2.5: the long edge of a shop search result's picture, in px.
+pub const SEARCH_EDGE: u32 = 160;
+/// MC-H2.6: the search-picture cache holds at most this many bytes.
+pub const SEARCH_CACHE_LIMIT_BYTES: u64 = 200_000_000;
+
+/// MC-H2.5: the search-picture cache file name of a picture address,
+/// `<first 16 hex of sha256(url without its query)>.jpg` (a fresh address of the same picture
+/// keeps its name).
+pub fn search_name(url: &str) -> String {
+    let bare = url.split('?').next().unwrap_or(url);
+    format!("{}.jpg", hex_prefix(bare, 16))
+}
+
+/// MC-H2.6: the files to delete so the folder totals at most `limit` bytes: the oldest first (by
+/// modified time, name ascending on a tie), until the rest fits. `entries` are `(name, bytes,
+/// modified_ms)`.
+pub fn evict<S: AsRef<str>>(entries: &[(S, u64, i64)], limit: u64) -> Vec<String> {
+    let mut total: u64 = entries.iter().map(|(_, bytes, _)| *bytes).sum();
+    let mut oldest: Vec<&(S, u64, i64)> = entries.iter().collect();
+    oldest.sort_by(|a, b| a.2.cmp(&b.2).then_with(|| a.0.as_ref().cmp(b.0.as_ref())));
+    let mut out = Vec::new();
+    for (name, bytes, _) in oldest {
+        if total <= limit {
+            break;
+        }
+        total -= bytes;
+        out.push(name.as_ref().to_owned());
+    }
+    out
+}
+
 /// MC-H2.1: the sessions list shows this many rows per page.
 pub const PAGE_SIZE: usize = 25;
 
@@ -227,6 +258,44 @@ mod tests {
         assert_eq!(
             (page_of(25, 1), page_of(26, 2)),
             ((1, 1, 0..25), (2, 2, 25..26))
+        );
+    }
+
+    #[test]
+    fn h2_c13a_the_oldest_goes_first() {
+        assert_eq!(
+            evict(&[("a", 120, 1), ("b", 60, 2), ("c", 50, 3)], 200),
+            vec!["a"]
+        );
+    }
+
+    #[test]
+    fn h2_c13b_at_the_limit_nothing_goes() {
+        assert!(evict(&[("a", 120, 1), ("b", 80, 2)], 200).is_empty());
+    }
+
+    #[test]
+    fn h2_c13c_name_ascending_on_a_tie() {
+        assert_eq!(
+            evict(&[("a", 150, 1), ("b", 150, 1), ("c", 150, 2)], 200),
+            vec!["a", "b"]
+        );
+    }
+
+    #[test]
+    fn h2_c13e_search_name_ignores_the_query() {
+        use sha2::Digest;
+        let digest: String = sha2::Sha256::digest(b"https://cdn.shopify.com/a/f.jpg")
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        let want = format!("{}.jpg", &digest[..16]);
+        assert_eq!(
+            (
+                search_name("https://cdn.shopify.com/a/f.jpg?v=1"),
+                search_name("https://cdn.shopify.com/a/f.jpg?v=2")
+            ),
+            (want.clone(), want)
         );
     }
 

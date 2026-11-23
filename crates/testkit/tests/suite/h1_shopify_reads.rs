@@ -486,3 +486,23 @@ fn h1_c6f_fetch_original_refuses_http() {
     assert!(matches!(error, Error::InvalidData(_)), "{error:?}");
     assert!(shop.fake.requests().is_empty());
 }
+
+// ---------------------------------------------------------------------------------------------
+// H2·C12(a) the search result's picture address (MC-H2.5; `plans/H2_list_pictures_pages_search.md`)
+
+#[test]
+fn h2_c12a_the_search_reads_the_featured_picture() {
+    let featured = shop();
+    featured.fake.replay(&fixture("h2_search_featured"));
+    let without = shop();
+    without.fake.replay(&fixture("sv6_search_immediate"));
+    let url = |shop: &Shop| {
+        shop.adapter.item_search("PSM-PROBE-SKU-1").unwrap()[0]
+            .thumbnail_url
+            .clone()
+    };
+    assert_eq!(
+        (url(&featured), url(&without)),
+        (Some(format!("{CDN}f.jpg")), None)
+    );
+}

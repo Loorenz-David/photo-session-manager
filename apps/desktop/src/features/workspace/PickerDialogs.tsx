@@ -6,6 +6,8 @@ import { useDebounced } from '@/lib/keyboard';
 import { useAction } from '@/lib/pending';
 import { searchItems, searchItemsShop, type Item } from '@/services/items';
 import { listSessions } from '@/services/sessions';
+import { ResultThumb } from '@/features/sessions/ResultThumb';
+import { usePictures } from '@/features/sessions/usePictures';
 import { acceptsPhotos, type SessionRow } from './SessionsPanel';
 
 type PickerProps<T> = {
@@ -74,6 +76,7 @@ export function SessionPickerDialog({ open, title, onOpenChange, onPick, exclude
 
 /** "Assign product" / "Assign to product…": the New session dialog's item search, picking an existing item. */
 export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerProps<Item>) {
+  const pictures = usePictures();
   const [query, setQuery] = useState('');
   const [local, setLocal] = useState<Item[]>([]);
   const [shop, setShop] = useState<Item[]>([]);
@@ -133,9 +136,7 @@ export function ItemPickerDialog({ open, title, onOpenChange, onPick }: PickerPr
               <CommandGroup heading={pick.busy ? 'Assigning…' : `${results.length} found · ${shopDone ? `${shop.length} in the shop` : shopFailedFor === currentQuery ? 'shop unavailable' : 'searching the shop…'}`}>
                 {results.map(item => (
                   <CommandItem key={item.external_id ?? item.id} value={`item-${item.external_id ?? item.id}`} onSelect={() => void pick.run(item)} disabled={pick.busy} aria-busy={pick.busy ? 'true' : undefined} className="result-row">
-                    <span className="result-thumb" aria-hidden>
-                      {(item.item_type || item.title).slice(0, 1).toUpperCase()}
-                    </span>
+                    <ResultThumb item={item} pictures={pictures} />
                     <span className="result-text">
                       <strong>{item.title}</strong>
                       <small>

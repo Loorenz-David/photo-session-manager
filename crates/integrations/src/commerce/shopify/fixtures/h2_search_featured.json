@@ -1,0 +1,54 @@
+{
+  "source": "schema-grounded: the request and response of sv6_search_immediate.json (captured, P12 probe) with the product's featuredMedia set to the form the VariantSearch document selects (featuredMedia { preview { image { url } } }; shopify.dev Admin GraphQL 2026-10 objects/Product.featuredMedia, objects/MediaPreviewImage); not captured. Placeholder CDN URL.",
+  "request": {
+    "query": "query VariantSearch($query: String!) { productVariants(first: 10, query: $query) { nodes { id sku barcodes(first: 5) { nodes { value } } product { id title status featuredMedia { preview { image { url } } } } } } }",
+    "variables": {
+      "query": "sku:\"PSM-PROBE-SKU-1\""
+    }
+  },
+  "response": {
+    "body": {
+      "data": {
+        "productVariants": {
+          "nodes": [
+            {
+              "barcodes": {
+                "nodes": [
+                  {
+                    "value": "4006381333931"
+                  }
+                ]
+              },
+              "id": "gid://shopify/ProductVariant/67785913991321",
+              "product": {
+                "featuredMedia": {
+                  "preview": {
+                    "image": {
+                      "url": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/f.jpg"
+                    }
+                  }
+                },
+                "id": "gid://shopify/Product/15444448280729",
+                "status": "DRAFT",
+                "title": "PSM-PROBE product (Session Manager grounding probe)"
+              },
+              "sku": "PSM-PROBE-SKU-1"
+            }
+          ]
+        }
+      },
+      "extensions": {
+        "cost": {
+          "actualQueryCost": 5,
+          "requestedQueryCost": 42,
+          "throttleStatus": {
+            "currentlyAvailable": 1995,
+            "maximumAvailable": 2000.0,
+            "restoreRate": 100.0
+          }
+        }
+      }
+    },
+    "status": 200
+  }
+}

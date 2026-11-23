@@ -13,6 +13,13 @@ use crate::{
     },
 };
 
+/// MC-H2.5: a shop search result with the address of its first picture (when the shop has one).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShopResult {
+    pub item: Item,
+    pub thumbnail_url: Option<String>,
+}
+
 pub struct ItemsService<'a> {
     store: &'a dyn Store,
     clock: &'a dyn Clock,
@@ -56,6 +63,15 @@ impl<'a> ItemsService<'a> {
 
     /// Shop matches that are not already represented by a local item or link.
     pub fn search_shop(&self, query: &str) -> Result<Vec<Item>> {
+        Ok(self
+            .search_shop_pictures(query)?
+            .into_iter()
+            .map(|result| result.item)
+            .collect())
+    }
+
+    /// MC-H2.5: `search_shop` with each result's picture address (`thumbnail_url`) kept.
+    pub fn search_shop_pictures(&self, query: &str) -> Result<Vec<ShopResult>> {
         if query.trim().is_empty() {
             return Ok(Vec::new());
         }
@@ -79,21 +95,26 @@ impl<'a> ItemsService<'a> {
                     continue;
                 };
                 if local.iter().any(|item| item.sku == sku)
-                    || items.iter().any(|item: &Item| item.sku == sku)
+                    || items
+                        .iter()
+                        .any(|result: &ShopResult| result.item.sku == sku)
                 {
                     continue;
                 }
-                items.push(Item {
-                    id: 0,
-                    folder_key: folder_key(&sku)?,
-                    sku,
-                    barcode: hit.barcode,
-                    item_type: hit.item_type.unwrap_or_default(),
-                    title: hit.title,
-                    origin: ItemOrigin::Linked,
-                    external_id: Some(hit.external_id),
-                    created_at: 0,
-                    updated_at: 0,
+                items.push(ShopResult {
+                    item: Item {
+                        id: 0,
+                        folder_key: folder_key(&sku)?,
+                        sku,
+                        barcode: hit.barcode,
+                        item_type: hit.item_type.unwrap_or_default(),
+                        title: hit.title,
+                        origin: ItemOrigin::Linked,
+                        external_id: Some(hit.external_id),
+                        created_at: 0,
+                        updated_at: 0,
+                    },
+                    thumbnail_url: hit.thumbnail_url,
                 });
             }
         }

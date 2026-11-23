@@ -145,3 +145,81 @@ fn h2_c7h_counts_are_over_all_sessions() {
     let published = page(&a, ListFilter::Published, None, None, None, 2);
     assert_eq!((searched.counts, published.counts), (want.clone(), want));
 }
+
+// ---------------------------------------------------------------------------------------------
+// H2·U4 search pictures at the service (rows H2·C12(b), C13(d); the command rows are desktop tests
+// `h2_tests`, the adapter row is in `h1_shopify_reads`)
+
+/// A fake shop product whose picture address is `url` (not on this Mac). Its id.
+fn product_with_picture(a: &TestApp, sku: &str, url: Option<&str>) -> String {
+    let product = a
+        .fake_shop()
+        .add_product(sku, &format!("{sku} chair"), None);
+    a.fake_shop()
+        .state
+        .lock()
+        .unwrap()
+        .products
+        .iter_mut()
+        .find(|p| p.external_id == product)
+        .unwrap()
+        .thumbnail_url = url.map(Into::into);
+    product
+}
+
+#[test]
+fn h2_c12b_shop_results_keep_their_picture_address() {
+    let a = TestApp::with_fake_shop().unwrap();
+    let url = "https://cdn.fake-shop.test/files/u.jpg";
+    let product = product_with_picture(&a, "SHOPPIC", Some(url));
+    let results = psm_core::services::items::ItemsService::new(a.store(), a.clock.as_ref())
+        .with_commerce(Some(a.fake_shop()))
+        .search_shop_pictures("SHOPPIC")
+        .unwrap();
+    assert_eq!(
+        results
+            .iter()
+            .map(|r| (r.item.external_id.clone(), r.thumbnail_url.clone()))
+            .collect::<Vec<_>>(),
+        vec![(Some(product), Some(url.to_owned()))]
+    );
+}
+
+#[test]
+fn h2_c13d_the_search_folder_keeps_the_newest_within_its_limit() {
+    use psm_core::{
+        mechanisms::remote::search_name, ports::store::Store, services::remote::RemoteItems,
+    };
+    use psm_testkit::fake_commerce::fake_image_bytes;
+    use std::sync::Arc;
+    let a = TestApp::with_fake_shop().unwrap();
+    a.clock.advance(NOON_MS);
+    let urls: Vec<String> = (1..=3)
+        .map(|i| format!("https://cdn.fake-shop.test/files/s{i}.jpg"))
+        .collect();
+    let size = fake_image_bytes(&urls[0]).len() as u64;
+    let previews = a.app.paths.root.join("previews");
+    let store: Arc<dyn Store> = a.app.store.clone();
+    let remote = RemoteItems::new(
+        store,
+        a.app.commerce.clone(),
+        previews.clone(),
+        a.app.clock.clone(),
+        a.events.clone(),
+        a.app.health.clone(),
+        2 * size,
+    );
+    for (i, url) in urls.iter().enumerate() {
+        a.clock.advance(MINUTE);
+        assert_eq!(remote.search_picture(&format!("p{i}"), url).unwrap(), None);
+        remote.run_pending().unwrap();
+    }
+    let mut kept: Vec<String> = std::fs::read_dir(previews.join("remote").join("search"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    kept.sort();
+    let mut want = vec![search_name(&urls[1]), search_name(&urls[2])];
+    want.sort();
+    assert_eq!(kept, want);
+}

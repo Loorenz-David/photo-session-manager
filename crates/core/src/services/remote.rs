@@ -14,8 +14,8 @@ use crate::{
     },
     events::AppEvent,
     mechanisms::remote::{
-        COVER_EDGE, PARALLEL_DOWNLOADS, REFRESH_COOLDOWN_MS, RemoteCover, URL_REFRESH_CHUNK,
-        cover_name, must_wait, remote_state,
+        COVER_EDGE, PARALLEL_DOWNLOADS, REFRESH_COOLDOWN_MS, RemoteCover, SEARCH_EDGE,
+        URL_REFRESH_CHUNK, cover_name, evict, must_wait, remote_state, search_name,
     },
     ports::{clock::Clock, commerce::CommerceAdapter, events::EventSink, store::Store},
     services::{
@@ -46,6 +46,10 @@ pub enum CoverSource {
     Search,
 }
 
+/// MC-H2.4: an item's search picture: its session's row picture, its session, and whether its
+/// cover is pending.
+pub type ItemPicture = (Option<PathBuf>, Option<i64>, bool);
+
 /// One queued picture download.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Download {
@@ -61,6 +65,8 @@ enum DownloadKind {
         item_id: i64,
         media_id: String,
     },
+    /// A shop search result's picture (MC-H2.5).
+    Search { external_id: String },
 }
 
 impl Download {
@@ -70,8 +76,24 @@ impl Download {
             DownloadKind::Cover {
                 item_id, media_id, ..
             } => cover_path(previews_root, *item_id, media_id),
+            DownloadKind::Search { .. } => search_dir(previews_root).join(search_name(&self.url)),
         }
     }
+
+    /// The item and media id of a cover download (the only kind whose address is refreshed).
+    fn cover_media(&self) -> Option<(i64, &str)> {
+        match &self.kind {
+            DownloadKind::Cover {
+                item_id, media_id, ..
+            } => Some((*item_id, media_id.as_str())),
+            DownloadKind::Search { .. } => None,
+        }
+    }
+}
+
+/// MC-H2.5: `<previews>/remote/search/` (one flat folder; item folders are numeric).
+fn search_dir(previews_root: &Path) -> PathBuf {
+    previews_root.join("remote").join("search")
 }
 
 /// The work `run_pending` takes (MC-H1.3, MC-H1.4, MC-H3.2).
@@ -82,6 +104,8 @@ struct Queue {
     /// Not-started cover downloads, per source.
     page: Vec<Download>,
     search: Vec<Download>,
+    /// Not-started shop search pictures (MC-H2.5).
+    search_pictures: Vec<Download>,
     /// Covers whose address answered "gone", waiting for the address refresh the budget held
     /// back (MC-H5.3).
     stale: Vec<Download>,
@@ -189,6 +213,10 @@ pub struct RemoteItems {
     clock: Arc<dyn Clock>,
     events: Arc<dyn EventSink>,
     health: Arc<HealthService>,
+    /// MC-H2.6: the most bytes the search-picture folder keeps.
+    search_cache_limit: u64,
+    /// MC-H2.6: one eviction of the search-picture folder at a time.
+    evict_lock: Mutex<()>,
     /// MC-H3.2: one process-wide lock around reading and replacing a record, so two callers make
     /// one read.
     record_lock: Mutex<()>,
@@ -210,6 +238,7 @@ impl RemoteItems {
         clock: Arc<dyn Clock>,
         events: Arc<dyn EventSink>,
         health: Arc<HealthService>,
+        search_cache_limit: u64,
     ) -> Self {
         Self {
             store,
@@ -218,6 +247,8 @@ impl RemoteItems {
             clock,
             events,
             health,
+            search_cache_limit,
+            evict_lock: Mutex::new(()),
             record_lock: Mutex::new(()),
             queue: Mutex::new(Queue::default()),
             waiting: AtomicBool::new(false),
@@ -266,6 +297,69 @@ impl RemoteItems {
             CoverSource::Search => queue.search = downloads,
         }
         Ok(())
+    }
+
+    /// MC-H2.4: the row picture of each item's session (none without a session), its session and
+    /// whether its cover is pending; one read of the remote inputs for all of them.
+    pub fn item_pictures(&self, item_ids: &[i64]) -> Result<Vec<ItemPicture>> {
+        if item_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let pictures = self.row_pictures()?;
+        let mut out = Vec::with_capacity(item_ids.len());
+        for item_id in item_ids {
+            let Some(session_id) = self.store.session_for_item(*item_id)? else {
+                out.push((None, None, false));
+                continue;
+            };
+            let main = self
+                .store
+                .photos_in_session(session_id)?
+                .into_iter()
+                .find(|photo| {
+                    photo.classification == crate::domain::photo::Classification::Main
+                        && photo.position == Some(1)
+                });
+            let (adjusted, original) = main
+                .map(|photo| (photo.adjusted_preview_path, photo.original_preview_path))
+                .unwrap_or((None, None));
+            let (path, pending) =
+                pictures.row_picture(session_id, adjusted.as_deref(), original.as_deref());
+            out.push((path, Some(session_id), pending));
+        }
+        Ok(out)
+    }
+
+    /// MC-H2.4: `item_pictures` of one item.
+    pub fn item_picture(&self, item_id: i64) -> Result<ItemPicture> {
+        Ok(self
+            .item_pictures(&[item_id])?
+            .pop()
+            .unwrap_or((None, None, false)))
+    }
+
+    /// MC-H2.5: the cached picture of a shop search result when it is on this Mac; otherwise its
+    /// download (`SEARCH_EDGE`) is queued for the background and none is answered. Never
+    /// downloads here.
+    pub fn search_picture(&self, external_id: &str, url: &str) -> Result<Option<PathBuf>> {
+        if self.commerce.is_none() || url.is_empty() {
+            return Ok(None);
+        }
+        let download = Download {
+            kind: DownloadKind::Search {
+                external_id: external_id.to_owned(),
+            },
+            url: url.to_owned(),
+        };
+        let path = download.path(&self.previews_root);
+        if path.is_file() {
+            return Ok(Some(path));
+        }
+        let mut queue = self.lock_queue()?;
+        if !queue.search_pictures.contains(&download) {
+            queue.search_pictures.push(download);
+        }
+        Ok(None)
     }
 
     /// "Delete session" of an item whose row is gone (M-H5, 10H §9): its cache folders go (cache
@@ -347,7 +441,10 @@ impl RemoteItems {
         let (batch, mut stale, mut queued) = {
             let mut queue = self.lock_queue()?;
             let mut batch = std::mem::take(&mut queue.page);
-            for download in std::mem::take(&mut queue.search) {
+            for download in std::mem::take(&mut queue.search)
+                .into_iter()
+                .chain(std::mem::take(&mut queue.search_pictures))
+            {
                 if !batch.contains(&download) {
                     batch.push(download);
                 }
@@ -425,7 +522,9 @@ impl RemoteItems {
                         };
                         match self.download(commerce, download) {
                             Ok(()) => {}
-                            Err(Error::ImageGone) => {
+                            // MC-H1.4: a cover's address is refreshed; a search picture is
+                            // dropped (the next search carries a fresh address, MC-H2.5).
+                            Err(Error::ImageGone) if download.cover_media().is_some() => {
                                 if let Ok(mut stale) = stale.lock() {
                                     stale.push(download.clone());
                                 }
@@ -449,6 +548,12 @@ impl RemoteItems {
                     session_id: *session_id,
                 },
             ),
+            DownloadKind::Search { external_id } => (
+                SEARCH_EDGE,
+                PictureTarget::Search {
+                    external_id: external_id.clone(),
+                },
+            ),
         };
         let bytes = commerce.fetch_image(&download.url, edge)?;
         let path = download.path(&self.previews_root);
@@ -460,10 +565,11 @@ impl RemoteItems {
         let partial = dir.join(format!("{name}.part"));
         std::fs::write(&partial, bytes)?;
         std::fs::rename(&partial, &path)?;
-        if matches!(download.kind, DownloadKind::Cover { .. }) {
-            remove_files(dir, |other| {
+        match download.kind {
+            DownloadKind::Cover { .. } => remove_files(dir, |other| {
                 other != name && other.starts_with("cover-") && other.ends_with(".jpg")
-            });
+            }),
+            DownloadKind::Search { .. } => self.evict_search(&path),
         }
         self.log_download(download, "written");
         self.events.emit(AppEvent::PictureReady {
@@ -477,6 +583,51 @@ impl RemoteItems {
         match &download.kind {
             DownloadKind::Cover { item_id, .. } => {
                 tracing::info!("remote.cover item={item_id} outcome={outcome}");
+            }
+            DownloadKind::Search { .. } => {
+                tracing::info!("remote.search_picture outcome={outcome}");
+            }
+        }
+    }
+
+    /// MC-H2.6: after a search picture is written (its modified time set to the app's clock, so
+    /// the folder's order follows it), the oldest files go until the folder fits the limit.
+    fn evict_search(&self, written: &Path) {
+        let _turn = self.evict_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let modified =
+            std::time::UNIX_EPOCH + Duration::from_millis(self.clock.now_ms().max(0) as u64);
+        if let Err(error) = std::fs::File::options()
+            .write(true)
+            .open(written)
+            .and_then(|file| file.set_modified(modified))
+        {
+            tracing::warn!(%error, "search picture time not set");
+        }
+        let Some(dir) = written.parent() else {
+            return;
+        };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let files: Vec<(String, u64, i64)> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let meta = entry.metadata().ok()?;
+                if !meta.is_file() || !name.ends_with(".jpg") {
+                    return None;
+                }
+                let at = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_millis() as i64);
+                Some((name, meta.len(), at))
+            })
+            .collect();
+        for name in evict(&files, self.search_cache_limit) {
+            if let Err(error) = std::fs::remove_file(dir.join(&name)) {
+                tracing::warn!(%error, file = %name, "search picture not evicted");
             }
         }
     }
@@ -499,9 +650,9 @@ impl RemoteItems {
             stale
                 .into_iter()
                 .filter(|download| {
-                    let DownloadKind::Cover {
-                        media_id, item_id, ..
-                    } = &download.kind;
+                    let Some((item_id, media_id)) = download.cover_media() else {
+                        return false;
+                    };
                     let recent = refreshed
                         .get(media_id)
                         .is_some_and(|at| now.saturating_duration_since(*at) < cooldown);
@@ -524,10 +675,9 @@ impl RemoteItems {
         }
         self.waiting.store(false, Ordering::Relaxed);
         let mut ids: Vec<String> = Vec::new();
-        for download in &stale {
-            let DownloadKind::Cover { media_id, .. } = &download.kind;
-            if !ids.contains(media_id) {
-                ids.push(media_id.clone());
+        for (_, media_id) in stale.iter().filter_map(Download::cover_media) {
+            if !ids.iter().any(|id| id == media_id) {
+                ids.push(media_id.to_owned());
             }
         }
         let mut found = 0;
@@ -551,13 +701,15 @@ impl RemoteItems {
             for (media_id, answer) in chunk.iter().zip(answers) {
                 let url = answer.as_ref().and_then(|image| image.url.clone());
                 let bytes = answer.as_ref().and_then(|image| image.bytes);
-                for download in stale.iter().filter(|d| {
-                    let DownloadKind::Cover { media_id: id, .. } = &d.kind;
-                    id == media_id
-                }) {
-                    let DownloadKind::Cover { item_id, .. } = &download.kind;
+                for download in stale
+                    .iter()
+                    .filter(|d| d.cover_media().is_some_and(|(_, id)| id == media_id))
+                {
+                    let Some((item_id, _)) = download.cover_media() else {
+                        continue;
+                    };
                     self.store
-                        .update_remote_urls(*item_id, &[(media_id.clone(), url.clone(), bytes)])?;
+                        .update_remote_urls(item_id, &[(media_id.clone(), url.clone(), bytes)])?;
                     match &url {
                         Some(url) => {
                             found += 1;
@@ -569,7 +721,7 @@ impl RemoteItems {
                         None => {
                             gone += 1;
                             gone_items = true;
-                            self.mark_gone(*item_id, media_id)?;
+                            self.mark_gone(item_id, media_id)?;
                         }
                     }
                 }

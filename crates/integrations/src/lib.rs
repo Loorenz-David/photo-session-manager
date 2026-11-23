@@ -1192,6 +1192,7 @@ impl App {
             clock.clone(),
             events.clone(),
             health.clone(),
+            psm_core::mechanisms::remote::SEARCH_CACHE_LIMIT_BYTES,
         ));
         let remote_background = run_startup.then(|| {
             let worker_stop = stop.clone();
