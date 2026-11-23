@@ -63,3 +63,5 @@ Pricing repo): `~/Desktop/Developer/pricing-app/docs/integrations/session-manage
   dividers, status lines, Mark answered or Answering choice. Reply is offered on the message (hover/focus button
   and right-click menu) and sends to that message's question; otherwise replies go to the newest unresolved
   question. Frontend only. Not yet seen in the running app.
+
+- **2026-11-23: A31 installed** (`9299f4a`; previous build kept as "2026-11-22 A30"); PR #28 merged into main (`c5996fb`). Not yet seen in the running app by the orchestrator.
