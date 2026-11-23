@@ -9,7 +9,7 @@
 
 use psm_core::{Error, Result};
 use psm_integrations::conversations::beyo_pricing::{
-    transport::{HttpReply, Method, PricingHttp, PricingRequest},
+    transport::{HttpReply, Method, PricingHttp, PricingRequest, RawReply},
     types::{
         Actor, ErrorBody, ErrorEnvelope, EventPage, IntegrationCase, IntegrationCaseUpdate,
         IntegrationMessageCreate, IntegrationStore, Message, Quote, StoreEvent,
@@ -769,8 +769,10 @@ impl FakePricing {
     }
 }
 
-impl PricingHttp for FakePricing {
-    fn send(&self, request: PricingRequest) -> Result<HttpReply> {
+impl FakePricing {
+    /// Records the request (never its bearer value); answers its path, query and whether the
+    /// bearer is accepted.
+    fn record(&self, request: &PricingRequest) -> (String, String, bool) {
         let (address, query) = request
             .url
             .split_once('?')
@@ -783,22 +785,38 @@ impl PricingHttp for FakePricing {
             .strip_prefix("/integration/v1")
             .unwrap_or(&full_path)
             .to_owned();
-        let authorized = {
-            let mut state = self.state();
-            let authorized = request
-                .bearer
-                .as_ref()
-                .is_some_and(|b| state.accepted_keys.contains(b));
-            state.requests.push(FakeRequest {
-                method: request.method.as_str().into(),
-                server: format!("https://{host}"),
-                path: path.clone(),
-                query: query.clone(),
-                body: request.body.clone(),
-                authorized,
-            });
-            authorized
-        };
+        let mut state = self.state();
+        let authorized = request
+            .bearer
+            .as_ref()
+            .is_some_and(|b| state.accepted_keys.contains(b));
+        state.requests.push(FakeRequest {
+            method: request.method.as_str().into(),
+            server: format!("https://{host}"),
+            path: path.clone(),
+            query: query.clone(),
+            body: request.body.clone(),
+            authorized,
+        });
+        (path, query, authorized)
+    }
+}
+
+impl PricingHttp for FakePricing {
+    /// L1: recorded like `send`; every byte route answers `404 not_found` until L3 adds the
+    /// preview, run and artifact routes.
+    fn fetch(&self, request: PricingRequest, _timeout: Duration) -> Result<RawReply> {
+        self.record(&request);
+        let reply = envelope(404, "not_found", "Not found.");
+        Ok(RawReply {
+            status: reply.status,
+            content_type: Some("application/json".into()),
+            bytes: reply.body.to_string().into_bytes(),
+        })
+    }
+
+    fn send(&self, request: PricingRequest) -> Result<HttpReply> {
+        let (path, query, authorized) = self.record(&request);
         {
             let mut hold = self.hold.lock().unwrap();
             if hold.held {

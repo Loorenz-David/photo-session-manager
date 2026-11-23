@@ -1,0 +1,11 @@
+[
+  {
+    "_source": "schema-grounded: openapi-integration.json IntegrationLabelTemplate + API.md › GET …/labels/templates; values neutral; not captured",
+    "id": "tpl-1",
+    "name": "Label 70×100",
+    "widthMm": 70,
+    "heightMm": 100,
+    "isDefault": true,
+    "productTypes": ["Test tables", "Test chairs"]
+  }
+]

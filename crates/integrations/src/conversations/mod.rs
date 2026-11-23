@@ -7,7 +7,7 @@ pub mod beyo_pricing;
 
 use beyo_pricing::{
     BeyoPricingAdapter, DEFAULT_SERVER, checked_server, effective_server,
-    transport::{HttpReply, PricingHttp, PricingRequest, ReqwestPricing},
+    transport::{HttpReply, PricingHttp, PricingRequest, RawReply, ReqwestPricing},
 };
 use psm_core::{
     Error, Result,
@@ -141,6 +141,9 @@ impl SecretStore for RedactingSecrets {
 struct NoTransport;
 impl PricingHttp for NoTransport {
     fn send(&self, _: PricingRequest) -> Result<HttpReply> {
+        Err(Error::Provider("http: unavailable".into()))
+    }
+    fn fetch(&self, _: PricingRequest, _: std::time::Duration) -> Result<RawReply> {
         Err(Error::Provider("http: unavailable".into()))
     }
 }

@@ -1,0 +1,29 @@
+{
+  "_source": "schema-grounded: openapi-integration.json IntegrationLabelProductPage + API.md example; values neutral; not captured",
+  "items": [
+    {
+      "productId": "15531808096409",
+      "sku": "TEST-1802",
+      "title": "Test table",
+      "productType": "Test tables",
+      "hasPrice": true,
+      "priceMinor": 890000,
+      "labelStatus": "notPrinted",
+      "labelPrintedAt": null,
+      "labelResetReason": "price_changed",
+      "barcode": "0000000000000",
+      "thumbUrl": "https://cdn.shopify.com/s/files/1/0000/0000/0000/files/test-table_160x.jpg",
+      "createdAt": "2026-11-20T08:41:00Z"
+    }
+  ],
+  "nextCursor": "bzoxMDA",
+  "counts": {
+    "total": 214,
+    "hasPrice": 180,
+    "missingPrice": 34,
+    "missingPriceTag": 12,
+    "printed": 168,
+    "notPrinted": 46
+  },
+  "workFrom": "2026-11-19"
+}

@@ -57,10 +57,22 @@ impl std::fmt::Debug for PricingRequest {
     }
 }
 
+/// An answer with its body untouched (`master_plan_labels.md` §4 Transport): label files are
+/// bytes, never JSON.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawReply {
+    pub status: u16,
+    pub content_type: Option<String>,
+    pub bytes: Vec<u8>,
+}
+
 pub trait PricingHttp: Send + Sync {
     /// Sends one request; `Err` only for a transport failure (`Error::Timeout` or
     /// `Error::Provider("http: …")`), never for an HTTP status.
     fn send(&self, request: PricingRequest) -> Result<HttpReply>;
+    /// Sends one request with its own total time-out and answers the body as bytes, untouched
+    /// (`Accept: application/pdf, application/json`). Errors as `send`.
+    fn fetch(&self, request: PricingRequest, timeout: Duration) -> Result<RawReply>;
 }
 
 type Task = Box<dyn FnOnce(&tokio::runtime::Runtime, &reqwest::Client) + Send>;
@@ -126,24 +138,43 @@ fn map_error(error: reqwest::Error) -> Error {
     }
 }
 
+impl ReqwestPricing {
+    fn run(&self, task: Task) -> Result<()> {
+        self.tasks
+            .lock()
+            .map_err(|_| Error::Provider("http worker poisoned".into()))?
+            .send(task)
+            .map_err(|_| Error::Provider("http worker stopped".into()))
+    }
+}
+
+fn builder(
+    client: &reqwest::Client,
+    request: &PricingRequest,
+    accept: &str,
+) -> reqwest::RequestBuilder {
+    let mut builder = match request.method {
+        Method::Get => client.get(&request.url),
+        Method::Post => client.post(&request.url),
+        Method::Patch => client.patch(&request.url),
+    }
+    .header("Accept", accept);
+    if let Some(bearer) = &request.bearer {
+        builder = builder.header("Authorization", format!("Bearer {bearer}"));
+    }
+    if let Some(body) = &request.body {
+        builder = builder
+            .header("Content-Type", "application/json")
+            .body(body.to_string());
+    }
+    builder
+}
+
 impl PricingHttp for ReqwestPricing {
     fn send(&self, request: PricingRequest) -> Result<HttpReply> {
         let (reply_tx, reply_rx) = mpsc::channel::<Result<HttpReply>>();
         let task: Task = Box::new(move |runtime, client| {
-            let mut builder = match request.method {
-                Method::Get => client.get(&request.url),
-                Method::Post => client.post(&request.url),
-                Method::Patch => client.patch(&request.url),
-            }
-            .header("Accept", "application/json");
-            if let Some(bearer) = &request.bearer {
-                builder = builder.header("Authorization", format!("Bearer {bearer}"));
-            }
-            if let Some(body) = &request.body {
-                builder = builder
-                    .header("Content-Type", "application/json")
-                    .body(body.to_string());
-            }
+            let builder = builder(client, &request, "application/json");
             runtime.spawn(async move {
                 let result = async move {
                     let response = builder.send().await.map_err(map_error)?;
@@ -162,11 +193,38 @@ impl PricingHttp for ReqwestPricing {
                 let _ = reply_tx.send(result);
             });
         });
-        self.tasks
-            .lock()
-            .map_err(|_| Error::Provider("http worker poisoned".into()))?
-            .send(task)
-            .map_err(|_| Error::Provider("http worker stopped".into()))?;
+        self.run(task)?;
+        reply_rx
+            .recv()
+            .map_err(|_| Error::Provider("http worker stopped".into()))?
+    }
+
+    fn fetch(&self, request: PricingRequest, timeout: Duration) -> Result<RawReply> {
+        let (reply_tx, reply_rx) = mpsc::channel::<Result<RawReply>>();
+        let task: Task = Box::new(move |runtime, client| {
+            let builder =
+                builder(client, &request, "application/pdf, application/json").timeout(timeout);
+            runtime.spawn(async move {
+                let result = async move {
+                    let response = builder.send().await.map_err(map_error)?;
+                    let status = response.status().as_u16();
+                    let content_type = response
+                        .headers()
+                        .get(reqwest::header::CONTENT_TYPE)
+                        .and_then(|v| v.to_str().ok())
+                        .map(str::to_owned);
+                    let bytes = response.bytes().await.map_err(map_error)?;
+                    Ok(RawReply {
+                        status,
+                        content_type,
+                        bytes: bytes.to_vec(),
+                    })
+                }
+                .await;
+                let _ = reply_tx.send(result);
+            });
+        });
+        self.run(task)?;
         reply_rx
             .recv()
             .map_err(|_| Error::Provider("http worker stopped".into()))?
