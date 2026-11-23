@@ -11,9 +11,11 @@ use psm_core::{Error, Result};
 use psm_integrations::conversations::beyo_pricing::{
     label_types::{
         IntegrationLabelCounts, IntegrationLabelProduct, IntegrationLabelProductPage,
-        IntegrationLabelStatus, IntegrationLabelTemplate, IntegrationPlan, IntegrationPlanIssue,
-        IntegrationPlanItem, IntegrationPlanSize, IntegrationPlanSummary, IntegrationPlanTemplate,
-        IntegrationRunItemIn, LabelStatusOut, UnresolvedItem, WireLabelStatus, WirePlanOutcome,
+        IntegrationLabelRun, IntegrationLabelStatus, IntegrationLabelTemplate, IntegrationPlan,
+        IntegrationPlanIssue, IntegrationPlanItem, IntegrationPlanSize, IntegrationPlanSummary,
+        IntegrationPlanTemplate, IntegrationRunCreate, IntegrationRunItemIn, IssueOut,
+        LabelStatusOut, RunArtifactOut, RunItemOut, UnresolvedItem, WireLabelStatus,
+        WirePlanOutcome, WireRunCounts, WireRunStatus,
     },
     transport::{HttpReply, Method, PricingHttp, PricingRequest, RawReply},
     types::{
@@ -122,6 +124,29 @@ struct State {
     bulk: usize,
     /// L3: products that fail in the check and in the run (code, message).
     fail_label: HashMap<String, (String, String)>,
+    /// L3: products that pass the check and fail in the run (code, message).
+    fail_in_run: HashMap<String, (String, String)>,
+    /// L3: the stored runs, one per idempotency key.
+    runs: Vec<StoredRun>,
+}
+
+/// L3: one run the fake made, under its idempotency key.
+struct StoredRun {
+    key: String,
+    product_ids: Vec<String>,
+    created_at: i64,
+    run: IntegrationLabelRun,
+}
+
+/// L3: what `FakePricing::runs` answers for one stored run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FakeRun {
+    pub id: String,
+    pub key: String,
+    /// The products the run was asked for, in order.
+    pub product_ids: Vec<String>,
+    /// UTC ms.
+    pub created_at: i64,
 }
 
 /// L3: one answer of the fake: JSON, or the bytes of a file.
@@ -679,6 +704,184 @@ impl State {
         Answer::File(format!("%PDF-1.4 fake preview {id}").into_bytes())
     }
 
+    /// L3: `POST …/labels/runs` (201): a key seen before answers its stored run without marking
+    /// again; otherwise each resolved product is rendered unless `fail_label` / `fail_in_run`
+    /// names it or no template applies (`failed`, `lifecycleResult` null); priced unprinted
+    /// products become printed (one `label.printed` each), printed ones are `reprinted`, unpriced
+    /// ones `no_price`; unknown ids are `unresolved`; none resolved → 422 `no_products`. One
+    /// artifact per label size among the rendered items, its `pageCount` = those items.
+    fn label_run(&mut self, store_id: &str, body: Option<&Json>) -> HttpReply {
+        let Some(create) =
+            body.and_then(|b| serde_json::from_value::<IntegrationRunCreate>(b.clone()).ok())
+        else {
+            return envelope(
+                422,
+                "validation_error",
+                "items and idempotencyKey are required.",
+            );
+        };
+        if !(8..=80).contains(&create.idempotency_key.len()) {
+            return envelope(
+                422,
+                "validation_error",
+                "idempotencyKey must be 8 to 80 characters.",
+            );
+        }
+        if let Some(stored) = self.runs.iter().find(|r| r.key == create.idempotency_key) {
+            return HttpReply::new(201, to_json!(&stored.run));
+        }
+        let Some(ids) = Self::body_ids(body).filter(|ids| (1..=300).contains(&ids.len())) else {
+            return envelope(
+                422,
+                "validation_error",
+                "1 to 300 items, each with productId.",
+            );
+        };
+        let mut resolved: Vec<LabelSpec> = Vec::new();
+        let mut unresolved = Vec::new();
+        for id in &ids {
+            match self.labels.iter().find(|l| &l.product_id == id) {
+                Some(spec) => resolved.push(spec.clone()),
+                None => unresolved.push(Self::unresolved_item(id)),
+            }
+        }
+        if resolved.is_empty() {
+            return no_products(&unresolved);
+        }
+        let n = self.runs.len() + 1;
+        let run_id = format!("run-{n}");
+        let created = self.now();
+        let created_ms = chrono::DateTime::parse_from_rfc3339(&created)
+            .unwrap()
+            .timestamp_millis();
+        let mut items = Vec::new();
+        let mut sizes: Vec<(f64, f64, Vec<usize>)> = Vec::new();
+        for (position, spec) in resolved.iter().enumerate() {
+            let template = self.template_of(spec);
+            let failure = self
+                .fail_label
+                .get(&spec.product_id)
+                .or_else(|| self.fail_in_run.get(&spec.product_id))
+                .cloned()
+                .or_else(|| {
+                    template
+                        .is_none()
+                        .then(|| ("no_template".into(), "No template applies.".into()))
+                });
+            let mut item = RunItemOut {
+                position: position as i64,
+                product_id: spec.product_id.clone(),
+                sku: spec.sku.clone(),
+                title: Some(spec.title.clone()),
+                variant_id: None,
+                template_revision_id: None,
+                template_source: Some("default".into()),
+                price_minor: spec.price_minor,
+                outcome: "failed".into(),
+                lifecycle_result: None,
+                error: None,
+                artifact_id: None,
+                page_index: None,
+            };
+            match (failure, template) {
+                (Some((code, message)), _) => item.error = Some(IssueOut { code, message }),
+                (None, Some(t)) => {
+                    item.outcome = "rendered".into();
+                    let result = if spec.printed_at.is_some() {
+                        "reprinted"
+                    } else if spec.price_minor.is_none() {
+                        "no_price"
+                    } else {
+                        let label = self.label_mut(&spec.product_id);
+                        label.printed_at = Some(created_ms);
+                        label.reset = None;
+                        let price = spec.price_minor;
+                        self.log_label_event(
+                            &spec.product_id,
+                            "label.printed",
+                            json!({"runId": run_id, "priceMinor": price}),
+                        );
+                        "marked_printed"
+                    };
+                    item.lifecycle_result = Some(result.into());
+                    let k = match sizes
+                        .iter()
+                        .position(|(w, h, _)| *w == t.width_mm && *h == t.height_mm)
+                    {
+                        Some(k) => k,
+                        None => {
+                            sizes.push((t.width_mm, t.height_mm, Vec::new()));
+                            sizes.len() - 1
+                        }
+                    };
+                    sizes[k].2.push(items.len());
+                }
+                (None, None) => unreachable!("a missing template is a failure"),
+            }
+            items.push(item);
+        }
+        let mut artifacts = Vec::new();
+        for (k, (w, h, members)) in sizes.iter().enumerate() {
+            let artifact_id = format!("art-{n}-{}", k + 1);
+            for (page, i) in members.iter().enumerate() {
+                items[*i].artifact_id = Some(artifact_id.clone());
+                items[*i].page_index = Some(page as i64);
+            }
+            artifacts.push(RunArtifactOut {
+                download_url: format!(
+                    "/integration/v1/stores/{store_id}/labels/runs/{run_id}/artifacts/{artifact_id}"
+                ),
+                id: artifact_id,
+                width_mm: *w,
+                height_mm: *h,
+                page_count: members.len() as i64,
+                filename: format!("labels-{n}-{w}x{h}.pdf"),
+                size_bytes: 1024 * members.len() as i64,
+                expired: false,
+            });
+        }
+        let with = |word: &str| {
+            items
+                .iter()
+                .filter(|i| i.lifecycle_result.as_deref() == Some(word))
+                .count() as i64
+        };
+        let rendered = items.iter().filter(|i| i.outcome == "rendered").count() as i64;
+        let counts = WireRunCounts {
+            items: items.len() as i64,
+            rendered,
+            failed: items.len() as i64 - rendered,
+            marked_printed: with("marked_printed"),
+            reprinted: with("reprinted"),
+            no_price: with("no_price"),
+        };
+        let run = IntegrationLabelRun {
+            id: run_id,
+            status: if rendered == items.len() as i64 {
+                WireRunStatus::Rendered
+            } else if rendered > 0 {
+                WireRunStatus::Partial
+            } else {
+                WireRunStatus::Failed
+            },
+            created_at: created,
+            expires_at: None,
+            requested_by_kind: Some("service".into()),
+            requested_by_name: Some("Photographer".into()),
+            counts,
+            artifacts,
+            items,
+            unresolved,
+        };
+        self.runs.push(StoredRun {
+            key: create.idempotency_key,
+            product_ids: ids,
+            created_at: created_ms,
+            run: run.clone(),
+        });
+        HttpReply::new(201, to_json!(&run))
+    }
+
     fn touch(&mut self, case_id: &str) {
         let now = self.now();
         self.case_mut(case_id).case.updated_at = now;
@@ -948,6 +1151,41 @@ impl FakePricing {
             .cloned()
     }
 
+    /// L3: the product passes the check and fails in the run with this error.
+    pub fn fail_in_run(&self, product_id: &str, code: &str, message: &str) {
+        self.state()
+            .fail_in_run
+            .insert(product_id.into(), (code.into(), message.into()));
+    }
+
+    /// L3: the product leaves the fake's label state (a later check or run does not find it).
+    pub fn remove_label_product(&self, product_id: &str) {
+        self.state().labels.retain(|l| l.product_id != product_id);
+    }
+
+    /// L3: the stored runs, in the order made, with their keys, products and times.
+    pub fn runs(&self) -> Vec<FakeRun> {
+        self.state()
+            .runs
+            .iter()
+            .map(|r| FakeRun {
+                id: r.run.id.clone(),
+                key: r.key.clone(),
+                product_ids: r.product_ids.clone(),
+                created_at: r.created_at,
+            })
+            .collect()
+    }
+
+    /// L3: how many `label.printed` events the log holds for the product.
+    pub fn printed_events(&self, product_id: &str) -> usize {
+        self.state()
+            .events
+            .iter()
+            .filter(|e| e.kind == "label.printed" && e.product_id.as_deref() == Some(product_id))
+            .count()
+    }
+
     /// L3: the product fails in the check and in the run with this issue.
     pub fn fail_label(&self, product_id: &str, code: &str, message: &str) {
         self.state()
@@ -1145,6 +1383,7 @@ impl FakePricing {
                 HttpReply::new(200, to_json!(&state.templates))
             }
             (Method::Post, ["labels", "plan"]) => state.label_plan(body),
+            (Method::Post, ["labels", "runs"]) => state.label_run(&store_id, body),
             (Method::Get, ["cases"]) => {
                 let recipient = params.get("recipient").copied();
                 let status = params.get("status").copied();

@@ -680,6 +680,25 @@ of that folder (`variant_background` → `resync_folder`).
   **Opening a row** `open_product(product_id)`: matched → the item's latest session (created when it has none);
   else `commerce_id_of` → the existing `ItemsService::adopt` (one shop read, no write) → `SessionsService::create`.
   The service holds `store`, `remote` and `commerce` from L2 on (`labels::ServiceParts`).
+- **Check → generate → result (L3, MC-L2.1–.10):** `crates/core/src/services/label_runs.rs` (a second `impl
+  LabelsService`). `check(product_ids)`: ids without repeats, `InvalidValue` when none, `Busy` while a generation
+  runs, then one `provider.plan` per `RUN_CHUNK` (300) ids and one `templates` read; `mechanisms::labels::merge_plans`
+  (positions renumbered over the merged items, summaries summed, sizes merged; a chunk answering `NoProducts` lists
+  its ids as `Unresolved {message: "Not found"}`; all chunks `NoProducts` → `NoProducts`) and `group_check` (by template
+  id, the template-less group last, product types from the templates read). **The one kept check** lives in
+  `LabelsService.kept` (memory, a mutex slot): a new check replaces it and calls `LabelFiles::clear_previews`; a
+  check that fails with a provider error drops it too (projection r0, D10). `generate(check_id)` is **the only
+  caller of `provider.run`**: the first call builds the generation (ready items = outcome not `Fail`, chunks of 300,
+  **each chunk's key `sm-<uuid v4>` made once and stored beside the chunk**), sets `running` (cleared by a drop
+  guard on every way out), and sends each chunk without an outcome with its stored key and ids; `Unreachable` /
+  `RendererUnavailable` are sent again at once up to `RUN_RETRIES` (2) more times; still failing → that error, and
+  the next `generate` (Try again) continues at that chunk with the same key; `NoProducts` → the chunk's products
+  fail with the provider's sentence; `NotAllowed` → ACC.4. After each finished chunk the copy follows the run
+  (`MarkedPrinted` → printed at the run's `created_at`; `Reprinted` → printed at the check item's `printed_at`;
+  `NoPrice` → not printed without a price) and one `LabelsChanged {those products}` is emitted. The result is
+  `mechanisms::labels::merge_runs` (check failures first, then per chunk; a failure's SKU and title from the check
+  item); a finished generation is answered again without a request; `partial(check_id)` answers the result over the
+  finished chunks. Nothing of a check, a generation or a key is written to the database or kept across a quit.
 
 ## Research (book `08A`, `08B` + changelog 12–18; `docs/implementation/master_plan_research.md` §5, §6)
 Names below are real after R13. The engine is one isolated crate; app code changes only at the seams

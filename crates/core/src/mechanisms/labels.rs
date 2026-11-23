@@ -3,8 +3,9 @@
 //! is ever stored (M-L1).
 
 use crate::domain::label::{
-    CheckGroup, LabelChange, LabelChangeKind, LabelPlan, LabelState, LabelStatus, LabelTemplate,
-    LinkedItem, PlanSummary, Unresolved,
+    CheckGroup, CheckOutcome, LabelChange, LabelChangeKind, LabelFailure, LabelPlan, LabelRun,
+    LabelRunResult, LabelState, LabelStatus, LabelTemplate, LinkedItem, PlanItem, PlanSummary,
+    Unresolved,
 };
 use std::{collections::HashMap, ops::Range, time::Duration, time::Instant};
 
@@ -166,6 +167,102 @@ pub fn numbered_name(name: &str, n: u32) -> String {
     format!("{stem} ({n}).pdf")
 }
 
+/// L3 (MC-L2.7): what one chunk of a generation ended with.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChunkOutcome {
+    /// The provider's run of the chunk.
+    Ran(LabelRun),
+    /// The provider found none of the chunk's products; every one failed with this sentence.
+    NoProducts(String),
+}
+
+/// L3 (MC-L2.9): the result of a generation over the check's `items` and its chunks (each with
+/// its products and its outcome, none while it has not run). `total` = the check's items;
+/// `rendered`, `marked_printed`, `reprinted`, `no_price` = the sums of the runs' counts;
+/// `failures` = the check's `Fail` items (their issues joined with " · "), then per chunk its run
+/// items not rendered, its run's unresolved, or all its products for a chunk found nothing;
+/// `not_run` = the products of chunks without an outcome; `artifacts` in chunk order;
+/// `failed_product_ids` = the failures' and `not_run`'s products. A failure's `sku` and `title`
+/// are the check item's, falling back to the run item's or the unresolved entry's own.
+pub fn merge_runs(
+    items: &[PlanItem],
+    chunks: &[(Vec<String>, Option<ChunkOutcome>)],
+) -> LabelRunResult {
+    let item_of = |id: Option<&str>| id.and_then(|id| items.iter().find(|i| i.product_id == id));
+    let failure = |id: Option<&str>, sku: Option<&str>, title: Option<&str>, message: &str| {
+        let item = item_of(id);
+        LabelFailure {
+            product_id: id.map(str::to_owned),
+            sku: item
+                .and_then(|i| i.sku.clone())
+                .or_else(|| sku.map(str::to_owned)),
+            title: item
+                .and_then(|i| i.title.clone())
+                .or_else(|| title.map(str::to_owned)),
+            message: message.to_owned(),
+        }
+    };
+    let mut result = LabelRunResult {
+        total: items.len() as i64,
+        rendered: 0,
+        marked_printed: 0,
+        reprinted: 0,
+        no_price: 0,
+        failures: Vec::new(),
+        not_run: Vec::new(),
+        artifacts: Vec::new(),
+        failed_product_ids: Vec::new(),
+    };
+    for item in items.iter().filter(|i| i.outcome == CheckOutcome::Fail) {
+        result.failures.push(failure(
+            Some(&item.product_id),
+            None,
+            None,
+            &item.issues.join(" · "),
+        ));
+    }
+    for (product_ids, outcome) in chunks {
+        match outcome {
+            None => result.not_run.extend(product_ids.iter().cloned()),
+            Some(ChunkOutcome::NoProducts(message)) => {
+                for id in product_ids {
+                    result.failures.push(failure(Some(id), None, None, message));
+                }
+            }
+            Some(ChunkOutcome::Ran(run)) => {
+                result.rendered += run.counts.rendered;
+                result.marked_printed += run.counts.marked_printed;
+                result.reprinted += run.counts.reprinted;
+                result.no_price += run.counts.no_price;
+                for item in run.items.iter().filter(|i| !i.rendered) {
+                    result.failures.push(failure(
+                        Some(&item.product_id),
+                        item.sku.as_deref(),
+                        item.title.as_deref(),
+                        item.error.as_deref().unwrap_or_default(),
+                    ));
+                }
+                for missing in &run.unresolved {
+                    result.failures.push(failure(
+                        missing.product_id.as_deref(),
+                        missing.sku.as_deref(),
+                        None,
+                        &missing.message,
+                    ));
+                }
+                result.artifacts.extend(run.artifacts.iter().cloned());
+            }
+        }
+    }
+    result.failed_product_ids = result
+        .failures
+        .iter()
+        .filter_map(|f| f.product_id.clone())
+        .chain(result.not_run.iter().cloned())
+        .collect();
+    result
+}
+
 /// L2 (MC-L1.3): the local item a provider product is matched to, as an index into `items`
 /// (each item with its link's provider product id): (i) the item whose link names the product
 /// (the lowest item id when several do); else (ii) the item whose SKU equals `sku` exactly
@@ -296,7 +393,10 @@ impl LabelCopy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::label::{CheckOutcome, LabelSize, PlanItem, PlanTemplate, ResetReason};
+    use crate::domain::label::{
+        LabelArtifact, LabelSize, PlanTemplate, ResetReason, RunCounts, RunItem, RunResult,
+        RunStatus,
+    };
 
     fn template(id: &str, w: f64, h: f64) -> PlanTemplate {
         PlanTemplate {
@@ -506,6 +606,186 @@ mod tests {
             label_file_name(&format!("{long}.pdf")),
             format!("{}.pdf", "x".repeat(120))
         );
+    }
+
+    fn run(created_at: i64, items: Vec<RunItem>, artifacts: &[&str]) -> LabelRun {
+        let rendered = items.iter().filter(|i| i.rendered).count() as i64;
+        let with = |r: RunResult| items.iter().filter(|i| i.result == Some(r)).count() as i64;
+        LabelRun {
+            id: format!("run-{created_at}"),
+            status: RunStatus::Rendered,
+            created_at,
+            counts: RunCounts {
+                items: items.len() as i64,
+                rendered,
+                failed: items.len() as i64 - rendered,
+                marked_printed: with(RunResult::MarkedPrinted),
+                reprinted: with(RunResult::Reprinted),
+                no_price: with(RunResult::NoPrice),
+            },
+            artifacts: artifacts
+                .iter()
+                .map(|id| LabelArtifact {
+                    id: (*id).into(),
+                    width_mm: 70.0,
+                    height_mm: 100.0,
+                    page_count: 1,
+                    filename: format!("{id}.pdf"),
+                    size_bytes: 10,
+                    download_url: format!("/x/{id}"),
+                    expired: false,
+                })
+                .collect(),
+            items,
+            unresolved: vec![],
+        }
+    }
+
+    fn run_item(id: &str, result: Option<RunResult>, error: Option<&str>) -> RunItem {
+        RunItem {
+            product_id: id.into(),
+            sku: Some(format!("RUN-{id}")),
+            title: None,
+            rendered: error.is_none(),
+            result,
+            error: error.map(Into::into),
+        }
+    }
+
+    fn failing(position: usize, id: &str, issues: &[&str]) -> PlanItem {
+        PlanItem {
+            outcome: CheckOutcome::Fail,
+            issues: issues.iter().map(|i| (*i).to_owned()).collect(),
+            ..plan_item(position, id, None)
+        }
+    }
+
+    fn failure(id: &str, message: &str) -> LabelFailure {
+        LabelFailure {
+            product_id: Some(id.into()),
+            sku: Some(format!("SKU-{id}")),
+            title: Some(format!("Title {id}")),
+            message: message.into(),
+        }
+    }
+
+    #[test]
+    fn merge_runs_totals_over_two_chunks() {
+        let items: Vec<PlanItem> = (0..4).map(|n| plan_item(n, &n.to_string(), None)).collect();
+        let chunks = vec![
+            (
+                ids_of(&["0", "1"]),
+                Some(ChunkOutcome::Ran(run(
+                    1,
+                    vec![
+                        run_item("0", Some(RunResult::MarkedPrinted), None),
+                        run_item("1", Some(RunResult::Reprinted), None),
+                    ],
+                    &["a1"],
+                ))),
+            ),
+            (
+                ids_of(&["2", "3"]),
+                Some(ChunkOutcome::Ran(run(
+                    2,
+                    vec![
+                        run_item("2", Some(RunResult::NoPrice), None),
+                        run_item("3", Some(RunResult::MarkedPrinted), None),
+                    ],
+                    &["b1", "b2"],
+                ))),
+            ),
+        ];
+        let result = merge_runs(&items, &chunks);
+        assert_eq!(
+            (
+                result.total,
+                result.rendered,
+                result.marked_printed,
+                result.reprinted,
+                result.no_price
+            ),
+            (4, 4, 2, 1, 1)
+        );
+        assert_eq!(
+            result
+                .artifacts
+                .iter()
+                .map(|a| a.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a1", "b1", "b2"]
+        );
+        assert!(result.failures.is_empty() && result.not_run.is_empty());
+        assert!(result.failed_product_ids.is_empty());
+    }
+
+    #[test]
+    fn merge_runs_orders_failures_and_lists_what_did_not_run() {
+        let items = vec![
+            plan_item(0, "1", None),
+            failing(1, "2", &["Barcode: no barcode.", "Too long."]),
+            plan_item(2, "3", None),
+            plan_item(3, "4", None),
+            plan_item(4, "5", None),
+            plan_item(5, "6", None),
+        ];
+        let mut first = run(
+            1,
+            vec![
+                run_item("1", Some(RunResult::MarkedPrinted), None),
+                run_item("3", None, Some("Render failed.")),
+            ],
+            &[],
+        );
+        first.unresolved = vec![unresolved("4", "Gone.")];
+        let chunks = vec![
+            (ids_of(&["1", "3", "4"]), Some(ChunkOutcome::Ran(first))),
+            (
+                ids_of(&["5"]),
+                Some(ChunkOutcome::NoProducts("None found.".into())),
+            ),
+            (ids_of(&["6"]), None),
+        ];
+        let result = merge_runs(&items, &chunks);
+        assert_eq!(
+            result.failures,
+            vec![
+                failure("2", "Barcode: no barcode. · Too long."),
+                failure("3", "Render failed."),
+                failure("4", "Gone."),
+                failure("5", "None found."),
+            ]
+        );
+        assert_eq!(result.not_run, ids_of(&["6"]));
+        assert_eq!(
+            result.failed_product_ids,
+            ids_of(&["2", "3", "4", "5", "6"])
+        );
+        assert_eq!(result.total, 6);
+        assert_eq!(result.rendered, 1);
+    }
+
+    #[test]
+    fn merge_runs_takes_sku_and_title_from_the_check_item() {
+        let items = vec![plan_item(0, "1", None)];
+        let chunks = vec![(
+            ids_of(&["1"]),
+            Some(ChunkOutcome::Ran(run(
+                1,
+                vec![run_item("1", None, Some("Render failed."))],
+                &[],
+            ))),
+        )];
+        let result = merge_runs(&items, &chunks);
+        assert_eq!(result.failures, vec![failure("1", "Render failed.")]);
+        // A product the check does not hold keeps the run item's own SKU (and no title).
+        let result = merge_runs(&[], &chunks);
+        assert_eq!(result.failures[0].sku.as_deref(), Some("RUN-1"));
+        assert_eq!(result.failures[0].title, None);
+    }
+
+    fn ids_of(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_owned()).collect()
     }
 
     #[test]

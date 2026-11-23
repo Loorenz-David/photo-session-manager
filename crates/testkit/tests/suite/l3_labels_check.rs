@@ -334,9 +334,10 @@ fn l3_c1i_a_failed_check_keeps_nothing() {
         matches!(error, LabelsFailure::Provider(LabelsError::Unreachable(_))),
         "{error:?}"
     );
-    // U1 checkpoint: the kept check is gone (U2 asserts it through `generate`).
-    let error = a.app.labels.preview(&earlier.id, "1").unwrap_err();
-    assert!(matches!(error, LabelsFailure::NotFound), "{error:?}");
+    for id in [earlier.id.as_str(), "any-id"] {
+        let error = a.app.labels.generate(id).unwrap_err();
+        assert!(matches!(error, LabelsFailure::NotFound), "{error:?}");
+    }
 }
 
 /// `n` priced, unprinted products (ids `77000<k>`); answers their ids.
@@ -554,6 +555,7 @@ fn l3_c3e_a_picture_that_cannot_be_made_never_blocks_generate() {
         matches!(error, LabelsFailure::PreviewFailed(_)),
         "{error:?}"
     );
+    assert!(a.app.labels.generate(&c.id).is_ok());
 }
 
 #[test]
