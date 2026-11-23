@@ -237,6 +237,8 @@ fn c1a_open_creates_all_domain_columns() {
                 "error",
                 "finished_at",
                 "frozen_item_type",
+                // H4 (migration 021): the details-only publish.
+                "details_only",
                 "frozen_attribute_origin",
                 "pending_conflicts",
                 "resolved_attributes",

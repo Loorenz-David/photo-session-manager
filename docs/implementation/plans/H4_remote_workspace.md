@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # H4 — The normal workspace for archived and shop-only products
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-23, claude opus implementer r1: 3 units, 69 rows → 72 behaviour tests (22 + 18 + 32; C13(c) two runs, C13(e) three runs) incl. the `remotePhotos` unit test, all green; closing gate green: workspace suite, clippy, fmt, typecheck, npm test; checkpoints 16606c1, e9dd489, 264133a; handoff `handoffs/implementer/handoff_H4_remote_workspace_implement_r1.md`)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -277,3 +277,53 @@ The reviewer reads the units in order and runs, once: `cargo test -p psm-testkit
 - **2026-11-23, orchestrator: carried from H1's projection r0** (`handoffs/reviewer/handoff_H1_points_and_remote_record_projection_r0.md`): the "Note for H4's projection" (an `Unknown` item and retention) added to U2 Notes; the live check's clearing verification added under Manual try-out. Rows and counts unchanged.
 - **2026-11-23, orchestrator: carried from H3's projection r0** (`handoffs/reviewer/handoff_H3_bring_back_projection_r0.md`): U1 Notes gain the bring-back fixture note (register pictures with `set_image`, files with `add_image`; the uncached capture-root source); Manual try-out gains the live check's full-size download line (L6). Rows and counts unchanged.
 - **2026-11-23, orchestrator: projection r0 amendments applied** (`handoffs/reviewer/handoff_H4_remote_workspace_projection_r0.md`, AMENDMENTS_REQUIRED, 0 owner cards; master plan v1.3). L1 (H) U1 task 4: `SessionsService::claim_target(Some(id))` answers `Ok(false)` and stores nothing for a `Remote(_)` session (the command claims the filing target before `activate` in camera-independent mode, A16); `session_activate`'s `service()` builder gets `.with_remote(app.remote)`; the hazard note names `claim_target`; H4·C2(c) re-pointed at the command `session_activate` in `h4_tests` (outcome `active_session_id` still B, no fake Capture One operation); master plan MC-H3.4 amended. L2 U1 Files + task 10: `TestApp::with_camera_and_shop()` in `crates/testkit/src/test_app.rs`, first caller H4·C2(c); master plan §4 Tests. L3 (H) U1 task 2: a failed first-open read emits `SessionChanged` only when `check_failed` turns false → true; row **H4·C1(i)** added (a second failed read in a row emits nothing); Try again stays `getRemote`; master plan MC-H3.2 amended. L4 (H) U2 task 3: the in-transaction photo comparison (`publish.rs:832-866`) is skipped for a `details_only` item; master plan MC-H3.6 amended. L5 U1 task 8: `p62::c1b`/`c4a` only switch to `a.remote().set_keep_files(item, true)`, `c3a` compares fetches as a set. L6 U3 task 6: the Header clause struck (`:220` hides Arranged / Next to review, which stay hidden; Publish at `:241` already shows); Header stays in Files only for the Refresh wiring; Read first corrected. L7 U2 Files gain `services/remote.rs` (public row accessor) and, conditionally, `mechanisms/remote.rs`; task 5 says archived rows keep `cleared_sessions` as the label's source. L8 U2 task 5: the status input's `main_count` = the record's gallery count, `ready_session_ids` unchanged (intended); master plan MC-H3.7. L9 U3 tasks 1 and 5: the remote state is keyed by session id and the gate reads `captureTarget(nav)`'s; one shared instance when target = session on screen; H4·C13(c) exact (two runs, without and with `session_changed`). L10 U3 task 3: `FormDialog` keeps the session view's photos. L11 U3 task 2: the pseudo-photo's composition named (`rect {0,0,1,1}`, `frame {1,1}`, `frame_source 'preview'`, `state 'ok'`, `thumbnail_path` null, rest null or 0); H4·C10(a) asserts the non-null frame and rect. L12 U3 task 3: preview focus `null` for a negative id. L13 U3 Files list the 12 real test files that render `App` / `WorkspacePage`; Notes give the allowed edits (remote mock answering `local`, no-op `onPictureReady` / `onBringBack`, `waitFor`); `src/features/pending` added to the U3 vitest command (and `sessions`, `pending` to Review mode's). L14 `services/events.ts` added to U3 Files. L15 U3 task 5 + Files: `VisitBar`'s Shoot here instead hidden while the visited session is not activatable; row **H4·C13(f)** added; a planning point and master plan MC-H3.4 / §6 sentence added. L16 (the carried H1 question) answered: an `Unknown` item can reach "published and clean" with zero photos, but clearing then loses nothing, so H4·C8 needs no `Unknown` row; the recommended amendment taken: `preview` of an `Unknown` item runs `ensure_record` at once (a press) and continues details-only when it becomes `Remote(ShopOnly)` (U2 task 2, row **H4·C5(d)**; master plan MC-H3.6 last sentence, MC-H5.4/.5, §6); the U2 carried note records the answer. L17 H4·C4(a) exact: sizes unknown, `bring_back_bytes: 7500000`. L18 M-H2 dropped from H4·C2(f)'s trace; H4·C11(c) says `Deny`. L19, L20, L22 delegated in U1 ("Decided at projection r0"); L21 delegated in U2 (details-only prepare skips P69's wait) and U3 (batch popover). Reality checks: `session_activate` cited at `:566` with `claim_target` at `:592`; `cover_media()` cited by symbol (its lines had drifted); test-setup notes for C1(a)/(g), C2 (`.with_remote(a.remote())`), C6–C7 (reachable only with L4; C7(a)'s condition value stored before clearing), C9(d)–(f). Every change the findings need in H1–H3 code (the `View` kind in `refresh_stale` / `download_all`, the public row accessor on `RemoteItems`) is written as an H4 task; no other phase plan was edited (`claim_target` and `confirm`'s comparison are pre-archive code). Counts: U1 4 criteria / 22 rows, U2 5 / 18, U3 5 / 29; H4 14 / 69 (recounted from the four plan files: 12 units, 54 criteria, 256 rows). Outcomes otherwise unchanged, so no new projection round (`projection: done`).
+- **2026-11-23, implementer r1 (Claude Opus, `PSM_IMPLEMENTER=claude`).** Built the three units in order with a
+  checkpoint each (U1 `16606c1`, U2 `e9dd489`, U3 `264133a`; the closing commit adds the p01 column line and this entry).
+  **U1:** `RemoteView` / `RemotePictureView` / `PictureTarget::Remote`; `RemoteItems::view` (a read plus a queue push:
+  `View` downloads replace only that session's not-started ones, gone pictures never queued), `View` joins the batch,
+  the stale rule (`cover_media()` now answers covers and view pictures) and `PictureReady {Remote}`; a queued download
+  whose file exists is skipped (L19); `check_failed` = an in-memory set of sessions, set by `ensure_record`'s failed
+  read, cleared by a successful one; `run_pending` emits `SessionChanged` only on its false → true change (L3);
+  `RemoteItems::set_keep_files`; `ArchiveService` removed (nothing was left in it). `SessionsService` reads the state
+  through `with_remote`, else from the store when it has a commerce integration, else `Local`: `activate` returns
+  before any editing / camera / store call and `claim_target(Some)` answers `false` for `Remote(_)` (L1);
+  `view` answers no photos, compositions or upload states for it. `session_activate` attaches `with_remote`.
+  Attribute guard by state (L20, cleared still counts); `link_preview` = `remote::local_picture` (L22). Commands
+  `session_remote_get` / `_refresh` / `session_bring_back` (`commands/remote.rs`), `item_keep_files_set` answers the
+  remote view; `item_archive_get` kept as an interim answer from `RemoteItems::view` until U3. `TestApp::with_camera_and_shop`.
+  **U2:** migration 021 (+ the p27 rewind line); `details_only` on `PublishItem` / `PublishPreviewItem` / the preview
+  DTO (left out of the JSON when false, `#[serde(default)]`, so existing UI fixtures stay valid); `preview` decides it
+  (an `Unknown` item is read first through `PublishService::set_remote`, a press; a failed read previews as today);
+  `confirm` drops the P62 refusal, freezes empty lists and skips the photo comparison for it (L4); the run reads the
+  stored flag: `prepare` / `upload` return at once (no export, no links, no P69 wait, L21), `update` is split into
+  `update_gallery` (skipped) and `update_details` (every media-list key removed from the write set and the condition
+  block skipped). Rows: `RemoteCover` gains gallery / condition counts from the same `remote_covers` read;
+  `RowPictures::remote_row`; `list` counts remote rows from the record with the status input of MC-H3.7 (L8) and the
+  label rule (publish label while running / held / failed / cancelled, else `Archived`; archived rows also without
+  `with_remote`). **U3:** `features/workspace/remote/{remotePhotos, useRemoteItem, RemoteNote, BringBackDialog}`;
+  `App.tsx` holds the instance of the session on screen and a second one for the capture target when they differ,
+  shares the first through `RemoteItemContext` (workspace, header ⋯ menu, visit bar); `useCaptureTarget(target,
+  activatable)` activates once per target becoming activatable; `useWorkspaceState(sessionId, shown)` puts the
+  pseudo-photos on stage / panel / menus; `WorkspacePage` gates every photo-changing action, keeps the session view's
+  photos for `FormDialog`, sends no preview focus for a negative id; `VisitBar` hides Shoot here instead; Refresh from
+  Shopify in `SessionActionsMenu`; `PublishPopover` details-only line and `Publish details`; `ArchivedView`, its test and
+  `item_archive_get` removed. Guide: 01, 02, 03, 04.
+  **Assumptions:** (1) a `getRemote` that fails is treated as `local` by the frontend (the screen and the gate behave as
+  before H4; the backend's own MC-H3.4 guard still refuses to activate a remote item), which also keeps the 12 existing
+  App/Workspace test files unedited (they pass as they were); (2) `check_failed` is keyed by session (one session per
+  item); (3) the attribute guard keeps "cleared → refused" besides the state rule (both hold for an archived item);
+  (4) the pseudo-photos' string composition fields take the defaults `orientation 'named'`, `flip 'none'`, `origin
+  'default'` (the plan's "null or 0" cannot apply to strings), `session_id 0`; (5) `View` downloads log
+  `remote.view_picture item= outcome=`; (6) Refresh from Shopify is offered in the ⋯ menu of the session on screen
+  (the header), not on list rows; (7) the Bring back dialog's progress before the first event reads `0 of N`.
+  **Deviations (files outside the declared perimeter, each forced):** `crates/testkit/tests/suite/c3_conversations_answer.rs`
+  (C3·C8(a)'s fixture pointed at preview files that do not exist; under MC-H3.5 / L22 they are no longer offered, so
+  the fixture now writes the files in the test folder and expects their paths; the row's intent — adjusted first,
+  else original — is unchanged), `crates/testkit/tests/suite/p01_storage_identity.rs` (the schema inventory gains
+  `details_only`, as H1 added its columns), `apps/desktop/src/features/sessions/usePictures.ts` (one guard
+  `else if (event.kind === 'search')`: the new `remote` kind of `picture_ready` would otherwise be filed as a search
+  picture). **Fixture finding (H4·C9(c)):** an attribute edit never moves `change_seq` (attributes MC-6), so "an
+  archived item with an edited attribute" is not dirty; the test makes it dirty through the store and the row's
+  outcome (status `ready`, label `archived`) holds. In this codebase a dirty archived row is reachable only by data.
+  H4·C5(d)'s "no `item_get` read": the fake's `media_readback` itself reads through `item_get` once; the test asserts
+  exactly that one.
