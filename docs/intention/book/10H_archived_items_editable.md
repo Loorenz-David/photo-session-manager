@@ -88,6 +88,7 @@ The photographer gets:
 - Opening an archived or shop-only item shows the standard workspace (stage, Main and Condition, Details, Publish,
   conversations), not the read-only page. A short line under the header says where the photos are: "Photos are on
   Shopify. Editing a photo brings them back to this Mac first." The "Archived in Shopify" label stays on the row.
+  A shop-only item counts and filters as **Published** in the sessions list (amended 2026-11-24, 09C §14.3, A34).
 - **Shop-only items, first open:** one GraphQL read of the product's media and condition files (the existing
   readback, one query) records its remote pictures. Later opens use the record. The record is refreshed when the
   photographer presses **Refresh from Shopify** (in the session's ⋯ menu) or when a picture's URL fails (§4 rule).
