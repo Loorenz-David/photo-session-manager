@@ -377,3 +377,49 @@ Both chapters were first committed as 10G/10H on a checkout 610 commits behind `
 exist); renamed 10I/10J with per-chapter IDs (MC-MT*, M-MT*, MC-LV*, M-LV*). The 10E, 13 and guide texts are amended
 at ratification, not before. Book header stays RATIFIED; 10I and 10J are outside it until ratified.
 
+D5. **2026-11-25 — Lab: spikes LV-S1 and LV-S2 done** (camera lab Experiment 07, owner-attended; evidence
+`sony_camera_lab.md` §Live view). a7R V live view works over USB (25 fps) and Wi-Fi (~20 fps), 1024×680 High /
+640×424 Low, no dropped frames, glass → Mac ≈ 120 ms; no camera setting needed (LV-D2: list is empty); the SDK never
+signals "no new frame", so the sidecar paces pulls and de-duplicates by frame number (MC-LV1); capture and Auto FTP
+work during live view, FTP uploads dip Wi-Fi live view to ~13 fps, live view never slows uploads; a release without
+half-press is silently not taken (Capture keeps 10E's half-press). **The camera keeps live view running whether or not
+the app pulls**: wake is instant, pausing saves no camera battery (≈ 27–33 %/h over Wi-Fi) → LV-D5 annotated, MC-LV2
+grace proposed 2 s, new card LV4 (what sleep means). Also recorded: one remote session per camera (another Mac's
+Session Manager blocks with a generic 0x8202, C12) and an SSH fingerprint change after the owner changed the camera's
+Access Authentication credentials (C13).
+
+D6. **2026-11-25 — Owner: no sleep (card LV4 → c).** Since pausing does not rest the camera, live view sleep is not
+built: frames are pulled whenever the camera session is up and sent only to viewers showing Live (LV-D5 revised,
+MC-LV2 rewritten "Who receives frames", M-LV2 restated; "Waking camera…" and "Live paused" statuses dropped). Reopened
+only if LV-S3 measures a real Mac or Wi-Fi cost. Spike LV-S4 prepared in the camera lab (Experiment 08: the same test
+phone app over HTTP and HTTPS with a name-constrained lab test certificate, live camera frames over ws/wss).
+
+D7. **2026-11-25 — Lab: spike LV-S4 done, LV-S3 phone half done** (Experiment 08, owner's iPhone, iOS 18.7; new
+`evidence/live_preview_lab.md`). The installed phone app opens full screen on plain HTTP and HTTPS and shows the
+camera's live view at 25 fps, ~15–30 ms behind the Mac (glass → phone ≈ 145 ms on USB); the screen wake lock and the
+service worker exist only on HTTPS: on plain HTTP the phone locked at ~61 s and the stream closed; on HTTPS (one-time
+trusted profile, a lab authority limited to local names and private addresses) it stayed on > 3 min. Mac cost ≈ 5–7 %
+of a core each for pulling and serving. Card LV3 now carries the evidence; shaper recommends (a), own certificate with
+a one-time profile at pairing.
+
+D8. **2026-11-25 — Owner: card LV3 → plain HTTP.** No HTTPS and no certificate on phones: everything the phone app
+needs works on HTTP; screen lock is the user's phone setting; offline start has no use without the Mac. Consequences
+recorded in 10J: the phone app uses no secure-context API; Android full screen unverified (fallback: public
+certificate on an owner domain, no phone install); studio Wi-Fi traffic unencrypted, accepted, per-phone revocable
+tokens. The video keep-awake test (option A) was not run, not needed after this answer.
+
+D9. **2026-11-25 — Lab + owner: Android test; card LV3 → HTTPS on an owner domain.** Android Chrome over plain HTTP
+refuses to install the app ("This app cannot be installed"; shortcuts open in Chrome); a Full screen button works on
+HTTP but needs a tap each open. The owner chose the full app experience: HTTPS with a publicly trusted certificate for
+a subdomain of the owner's Route 53 domain pointing at the Mac's local address, renewed and re-pointed automatically
+by Session Manager; nothing installed on phones (supersedes D8). Lab Experiment 09 to verify (router, iPhone, Android).
+
+D10. **2026-11-25 — Owner: card LV3 final → plain HTTP now, HTTPS later** (supersedes D9's route as the build target;
+D9's owner-domain design is kept as the later HTTPS plan, lab Experiment 09 deferred). iPhone: Add to Home Screen
+once, full screen; Android: shortcut + Full screen button (added to the phone UI). The phone app uses no
+secure-context API and the server keeps the same paths so HTTPS can be added without changing the phone app.
+
+D11. **2026-11-25 — Owner: MC-LV3 retake aim confirmed** as written (any button; bound at exposure; Next returns; one
+photo; cancel / session switch / relaunch clears). 10J has no open owner card; left before READY_FOR_RATIFICATION:
+spike LV-S3's desktop-webview half. At ratification the 10E, 13 and guide texts are amended (live view in scope,
+camera-settings rule narrowed, phone remote moves up).

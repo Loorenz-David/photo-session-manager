@@ -46,7 +46,7 @@ This file records facts. What the product does with them is chapter 10E.
 ## Not covered by the lab
 Wi-Fi outage; long sessions (hours, hundreds of shots, battery); FTPS with the camera; a second network or Mac; other firmware;
 the **ZV-E10** (untested; its SDK support must be checked); bracketing and Pixel Shift progress; direct USB connect by serial
-(possible 3.5 s faster switch); live view; **Capture One's handling of files written into its capture folder by another process**
+(possible 3.5 s faster switch); live view (since covered: §Live view — Experiment 07); **Capture One's handling of files written into its capture folder by another process**
 (visibility, Next Capture Adjustments, scripting) — owed by Session Manager, chapter 10E §Verification.
 
 ## Session Manager's own checks (2026-11-06, Capture One 16.8.6, dev Mac, document "session test 1")
@@ -219,3 +219,33 @@ automatic take-back with no click (plug-in 14:35:55.3 → Capture One quit +6.1 
 (duplicates 93 MB from two cable shots, preview exports 0 MB); unplug → Wi-Fi ready 11.8 s (run 2: 6.1 s), photos kept arriving.
 Defects: #22 remainder, #27 (deleted document silently recreated; one photo filed outside Capture One), #28 (helper staging stays under the old
 document until restart), "Save settings" missed at the bottom of Settings, unplug recovery 11.8 s → P63.
+
+## Live view — Experiment 07 (2026-11-25, A7R V, SDK 2.02.00, lab `crlab liveview` at lab commit `5608e00`; owner-attended) [TEST-HW]
+Spikes LV-S1 and LV-S2 of chapter 10J. Procedure: lab `experiments/07-live-view.md`; one `summary.md` per run folder
+(`results/20261125T*_07-*`, local to the lab Mac). USB-C runs on USB power; Wi-Fi runs (SSH, Access Authentication) on
+battery. Same static scene per step; JPEG size depends on the scene.
+
+| Question | Answer |
+|---|---|
+| Does live view work through the SDK? | Yes, USB and Wi-Fi. `LiveViewStatus` = Enable at connect; **no setting had to be changed**. `LiveViewProtocol` = Main over Wi-Fi (not reported on USB). |
+| Frame size and rate | High: **1024×680**, Low: **640×424** (`LiveView_Image_Quality`, writable, applies ~0.1–0.2 s). USB: **25.0 fps** both qualities, interval p50 40 / p95 ~60 / max ~80 ms. Wi-Fi: **~20 fps** (18–25 per second) both qualities, p50 41–48 / p95 77–122 / max 141–350 ms. JPEG 40–170 KB (≈1–3.5 MB/s). Wi-Fi rate does not improve at Low: the camera's Wi-Fi live-view cadence is the limit, not bandwidth. |
+| Dropped frames | None: camera frame numbers (`GetFrameNo`) were contiguous in every run (skipped = 0). Occasional `0x8000` pull errors on Wi-Fi (2–3 per minute), recovered on the next pull. |
+| "No new frame" signal | **`CrWarning_Frame_NotUpdated` was never returned.** Pulling faster than the camera returns the same frame again with the same frame number (~400 repeats/s at full speed). A consumer must pace pulls to the frame interval and de-duplicate by frame number. The very first pull after connect can report a buffer size of 0. |
+| Latency, glass → Mac (camera filming a ms clock on the same Mac) | USB **117–119 ms**; Wi-Fi **88–137 ms (median 122)**. Includes display lag (≤ ~16 ms). Delivery to a webview/phone (LV-S3) comes on top. |
+| Capture while live view runs | Works: 4/4 USB (Save to PC, ~52 MB ARW delivered ~0.45 s after exposure), 4/4 + 4/4 Wi-Fi. Live picture freezes **0.29–0.46 s** per capture (AF + exposure), then continues by itself. |
+| **Shutter without half-press** | With the camera in AF (focus priority), an SDK release without a prior half-press is **acknowledged but nothing is exposed** (USB, live view on and off). With half-press + AF wait (focused in 230–290 ms) every release exposed, ~0.40–0.58 s after the request. Confirms C3 and the lab's half-press-then-release. |
+| Auto FTP while live view streams (Wi-Fi) | **8/8 RAW (~55.5 MB) complete, each once.** Exposed → file complete 5.5–5.7 s streaming vs 5.3–6.0 s paused; upload 4.23–4.48 s vs 4.08–4.81 s (~12–13 MB/s). **Live view does not slow FTP; FTP slows live view:** 13.5 fps average (lowest second 9) during each ~4.3 s upload, 21 fps otherwise. |
+| Does live view "sleep" when the app stops pulling? | **No.** During 20 s pauses the camera's frame counter advanced by fps × 20 s (USB 500, Wi-Fi 394–445): the camera keeps its live view running whether or not anyone pulls. Wake: the first pull after a pause returns a fresh frame (0 ms), 18/18 cycles; no re-enable step. |
+| Battery (Wi-Fi, 9 min each) | Pulled continuously 94 → 89 %; connected but not pulling 82 → 78 % (`BatteryRemain`, 1 % steps). **≈ 27–33 %/h either way: pulling costs no measurable extra camera battery.** USB-C powered the camera (`BatteryLevel` USB-power flag), so USB sessions do not drain it. |
+
+**Constraints found (live view).**
+- **C11 — App-side sleep saves the Mac, the network and the phone, not the camera.** Camera battery is spent by the
+  SDK session with the camera's live view on, not by pulling (above).
+- **C12 — One remote session per camera.** While Session Manager on the owner's other Mac was open, this Mac's
+  connect failed with `0x8202` (`CrError_Connect_ConnectIP`) after a normal discovery and SSH check; quitting the other
+  app fixed it at once. The losing side sees only a generic connection error. Also: after a Wi-Fi session ends, the
+  camera may not be discoverable again for 1–18 s.
+- **C13 — Changing Access Authentication user/password changes the camera's SSH fingerprint** (pinned fingerprint
+  mismatch, verified by the owner on the camera screen before re-pinning). The app must treat a fingerprint change as
+  an owner decision, never accept it silently.
+- Not measured yet: CPU on the Mac, delivery to a browser/phone (LV-S3), hours-long live sessions, USB with FTP.
