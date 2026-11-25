@@ -52,7 +52,7 @@ The plans are written for **yes**. If the owner answers **no**: criterion L2·C5
 L2 plan are removed, L2·C10(a) reads "no number until the first list answer of this launch", L2·C14(c) reads "no
 call", and `labels_summary` loses its `refresh` argument (row L2·C7(d) then asks without it).
 
-**Card 2 — A product from the other Mac after you bring its photos back.** **Open.**
+**Card 2 — A product from the other Mac after you bring its photos back.** **Answered 2026-11-25: No — it moves to Open** (the recommendation; nothing more is built). **Open.**
 - **Question:** After you bring back the photos of a product from the other Mac, should it stay under Published
   until a photo really changes (yes), or sit under Open from then on, as today (no)?
 - **Story:** You open a sofa that was photographed on the other Mac and start to rotate a photo; the app brings its 8

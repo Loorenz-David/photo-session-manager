@@ -311,5 +311,7 @@ After the first use against the real Pricing, the owner:
   so in the sessions list it counts and filters as **Published**, not Open, with its "Archived in Shopify" label.
   Opening it, looking at it or reading its details changes nothing about that.
 - It counts as Open only for the same reasons a published session would show work to do: a publish of it running,
-  held, failed or cancelled (10H MC-H3.7's exceptions). Bring back and later edits follow the published session's
-  rules (07B / A10: still Published, with its "Changed" pill when it differs from Shopify).
+  held, failed or cancelled (10H MC-H3.7's exceptions).
+- **After bring back** (owner card 2, 2026-11-25: "Move to Open"): once its photos are brought back for editing, it
+  counts as Open until it is published from this Mac, like any session with work in progress (book 07). Nothing more
+  is remembered about it.
