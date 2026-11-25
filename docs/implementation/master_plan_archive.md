@@ -346,6 +346,11 @@ command the photographer triggered; *background* = work run by `run_pending` or 
    0 and missing-preview 0, while `ready_session_ids` keeps the raw input (L8); archived rows keep `cleared_sessions`
    as their label's source, so it holds without `with_remote` (L7); the label is the publish
    label while the latest publish is running, held, failed or cancelled, else `Archived` (both kinds).
+   **7A (MC-H3.7A; 09C §14.3, changelog A34, amends 10H §6; planned as `L4_owner_corrections`).** The status of a
+   `Remote(ShopOnly)` row is `Published` whenever its label by this rule is `Archived`; while a publish of it shows
+   through (running, held, failed, cancelled) its status stays what `derive_status` gives. The Open / Published
+   counts and filters of `list` and `page` use that status. Archived rows, `Unknown` rows, local rows (a
+   brought-back item included: owner card 2 of `master_plan_labels.md` §2A) and `ready_session_ids` are unchanged.
 8. **Guards.** A media-list attribute write is refused with `FilesCleared` for `Remote(_)` (today: cleared only,
    `attributes.rs:793-803`). The photo guards of a cleared item (`retention.rs:30-43` and their callers) stay.
    Retention (`mechanisms/retention.rs:40`) answers `Never` for an item whose state is `Remote(ShopOnly)`.
@@ -506,3 +511,6 @@ citations were read in the code at that commit; the lines move as milestones lan
   so); MC-H3.7 names the status input of a remote row and the label's source (L7, L8); §4 Tests
   `TestApp::with_camera_and_shop()` (L2); §6 two sentences (L15, L16). Counts: H4 69 rows (rows H4·C1(i), H4·C5(d),
   H4·C13(f) added); totals 54 criteria, 256 rows.
+- **v1.4, 2026-11-25 (labels planner, L4).** MC-H3.7A added under MC-H3.7 (09C §14.3: a shop-only row counts and
+  filters as Published unless a publish of it shows through). Row H4·C9(a) (`status ready`) is replaced by L4·C1(a) in
+  `plans/L4_owner_corrections.md`; H4·C9(b)–(g) stand. No other archive rule or count changes.
