@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # L4 — Price labels: the owner's corrections (09C §14)
 
-**Tracker:** NOT_STARTED
+**Tracker:** IMPLEMENTED (2026-11-25, opus, implement r1: U1 9cda2589, U2 7600a70b, U3 5d25b5f3; 51 rows tested; closing gate green — suite 1464 + crate tests, clippy, fmt, typecheck, npm test 948)
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is the Tracker line of the plan named there.)
 
@@ -243,3 +243,17 @@ Needs the Pricing key with `labels:read` and `labels:write`. **Generating marks 
 8. One label from a session's ⋯ → Generate label → Generate PDF: Preview opens, "Label generated · opened in Preview".
 
 ## Review log
+- **2026-11-25 implement r1 (Claude Opus 5.5, `pipeline-implementer`).** Built the three units in order with a checkpoint
+  each: U1 `9cda2589` (a `Remote(ShopOnly)` row labelled Archived has status Published in `list` / `page`, private
+  `row_status` in `services/sessions.rs`; label computed before status; `derive_status`, `row_label`,
+  `ready_session_ids` untouched; `h4_c9a` replaced by L4·C1(a)), U2 `7600a70b` (`NoteKind` / `PlanNote`,
+  `LabelCheck.pictures`; adapter `plan_note`; `LabelsService` remembers SKU + `thumb_url` per row from `list` and
+  `select_all`, `check_pictures` from one `SessionsService::list(All)` else `search_picture`; check item DTO `notes`
+  / `picture_path`, bindings regenerated; `FakePricing::note_label`; `LabelCard`, two-line group header, scrolling
+  list + pinned footer; `l3_c12b` removed, `l1_c7c` note assertion and `l3_c11a` `picture_path: null` updated), U3
+  `5d25b5f3` (`useLabelDialog` `saving` phase: every file of a result saved and opened once, toast + close when
+  everything generated, else the result view with problem cards, file lines, Try again, Close;
+  `l3_label_done_dialog.test.tsx` and `l3_c14d` removed). Assumptions and deviations: handoff
+  `handoffs/implementer/handoff_L4_owner_corrections_implement_r1.md` (notably: `LabelCard` gained a `failure` prop
+  for U3's problem cards; the unused `PRICE`, `T50` and `result` fixtures of `l3_label_check_dialog.test.tsx` were
+  removed with the tests that used them, for `tsc`'s unused-locals rule). Closing gate green.
