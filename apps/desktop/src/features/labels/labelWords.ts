@@ -1,4 +1,4 @@
-import type { CheckItem, CheckOutcome, CheckSummary, LabelRunResult } from '@/services/labels';
+import type { CheckGroup, CheckItem, CheckOutcome, CheckSummary, LabelRunResult } from '@/services/labels';
 import type { LabelMarker } from '@/services/labels';
 
 /** L1 (09C §4, §6, §7; master plan labels §4 Words): the words labels show. */
@@ -77,8 +77,6 @@ export function workFromLine(text: string | null | undefined): string | null {
 
 export const GENERATE_PDF = 'Generate PDF';
 export const REPRINT_PDF = 'Reprint PDF';
-export const DOWNLOAD_PDF = 'Download PDF';
-export const DONE = 'Done';
 export const CLOSE = 'Close';
 export const CANCEL = 'Cancel';
 export const TRY_AGAIN = 'Try again';
@@ -138,14 +136,30 @@ export function fullyGenerated(result: LabelRunResult): boolean {
 }
 
 /**
- * 09C §6.3: the done dialog's title. One product: "Label generated" / "Label not generated"; a batch: "{rendered} of
- * {total} labels generated" when anything failed or was not generated, else "{total} labels generated".
+ * 09C §14.2 (MC-L2.17): the result's title; `notFound` = the check's products Pricing did not find. One product: "Label
+ * generated" when fully generated, none was not found and one was rendered, else "Label not generated"; a batch:
+ * "{total} labels generated" when fully generated and none was not found, else "{rendered} of {total + notFound} labels
+ * generated".
  */
-export function doneTitle(result: LabelRunResult, single: boolean): string {
-  const full = fullyGenerated(result);
+export function doneTitle(result: LabelRunResult, single: boolean, notFound: number): string {
+  const full = fullyGenerated(result) && notFound === 0;
   if (single) return full && result.rendered > 0 ? 'Label generated' : 'Label not generated';
-  return full ? `${result.total} labels generated` : `${result.rendered} of ${result.total} labels generated`;
+  return full ? `${result.total} labels generated` : `${result.rendered} of ${result.total + notFound} labels generated`;
 }
+
+/**
+ * 09C §14.2: the toast when everything was generated: "Label generated · opened in Preview" for one label, else
+ * "{rendered} labels generated · opened in Preview", plus " · {no_price} stay Not printed (no price)" when some had no
+ * price.
+ */
+export function generatedToast(result: LabelRunResult): string {
+  const head = result.rendered === 1 ? 'Label generated · opened in Preview' : `${result.rendered} labels generated · opened in Preview`;
+  return result.no_price > 0 ? `${head} · ${result.no_price} stay Not printed (no price)` : head;
+}
+
+export const OPENING_IN_PREVIEW = 'Opening in Preview…';
+export const SAVED_AND_OPENED = 'Saved and opened in Preview: ';
+export const SAVED_NOT_OPENED = "Saved, but Preview couldn't open it: ";
 
 /** 09C §6.3: the result lines (a line whose number is zero is not shown), each with its mark. */
 export function resultLines(result: LabelRunResult): { mark: string; text: string }[] {
@@ -157,6 +171,29 @@ export function resultLines(result: LabelRunResult): { mark: string; text: strin
     { n: result.not_run.length, mark: '✕', text: `${result.not_run.length} not generated` },
   ];
   return lines.filter(line => line.n > 0).map(({ mark, text }) => ({ mark, text }));
+}
+
+// ---------- L4: the check's product cards (09C §14.1) ----------
+
+export const NO_PRICE_PILL = NO_PRICE;
+export const NOT_PUBLISHED_YET = 'Not published yet';
+export const QR_LINK = 'QR link';
+
+/** A red pill of a card: `Can't generate: <message>` (the message as Pricing gave it, 09C §10). */
+export function cantGenerate(message: string): string {
+  return `${CANT_GENERATE}: ${message}`;
+}
+
+/**
+ * 09C §14.1: a group's header in two lines: the template's name (`No template` without one), then its product types
+ * joined by ", " and its size (only the size when it names no product types); no second line without a template.
+ */
+export function groupLines(group: CheckGroup): { name: string; detail: string | null } {
+  const template = group.template;
+  if (!template) return { name: NO_TEMPLATE, detail: null };
+  const size = sizeText(template.width_mm, template.height_mm);
+  const detail = group.product_types.length > 0 ? `${group.product_types.join(', ')} · ${size}` : size;
+  return { name: template.name, detail };
 }
 
 /** A file row's label count: `1 label`, `2 labels`. */

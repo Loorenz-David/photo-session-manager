@@ -124,6 +124,8 @@ struct State {
     bulk: usize,
     /// L3: products that fail in the check and in the run (code, message).
     fail_label: HashMap<String, (String, String)>,
+    /// L4: the notes a product's plan item carries (code, message).
+    note_label: HashMap<String, Vec<(String, String)>>,
     /// L3: products that pass the check and fail in the run (code, message).
     fail_in_run: HashMap<String, (String, String)>,
     /// L3: the stored runs, one per idempotency key.
@@ -615,7 +617,16 @@ impl State {
             label_printed_at: spec.printed_at.map(iso),
             outcome,
             issues,
-            notes: vec![],
+            notes: self
+                .note_label
+                .get(&spec.product_id)
+                .into_iter()
+                .flatten()
+                .map(|(code, message)| IntegrationPlanIssue {
+                    code: code.clone(),
+                    message: message.clone(),
+                })
+                .collect(),
         }
     }
 
@@ -1214,6 +1225,15 @@ impl FakePricing {
         self.state()
             .fail_label
             .insert(product_id.into(), (code.into(), message.into()));
+    }
+
+    /// L4: a plan item of the product carries this note (`{code, message}`, as Pricing gives it).
+    pub fn note_label(&self, product_id: &str, code: &str, message: &str) {
+        self.state()
+            .note_label
+            .entry(product_id.into())
+            .or_default()
+            .push((code.into(), message.into()));
     }
 
     /// A label is generated for the product: it becomes Printed at the fake clock's time and

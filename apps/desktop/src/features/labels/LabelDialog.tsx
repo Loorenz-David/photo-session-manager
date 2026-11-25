@@ -5,14 +5,15 @@ import { openSettingsSection } from '@/features/settings/SettingsNav';
 import type { LabelRunResult } from '@/services/labels';
 import { LabelCheckView } from './LabelCheckView';
 import { LabelDoneView } from './LabelDoneView';
-import { CLOSE, OPEN_PRICING_SETTINGS, doneTitle } from './labelWords';
+import { CLOSE, OPENING_IN_PREVIEW, OPEN_PRICING_SETTINGS, doneTitle } from './labelWords';
 import { useLabelDialog } from './useLabelDialog';
 
 /**
- * L3 (09C §6): the label dialog for one product (⋯ → Generate label / Reprint label) or a batch (Generate labels for N).
- * It opens at once with a busy state while the products are checked, shows the check and the preview, generates on
- * Generate PDF (it cannot be closed while generating: the close keys, Escape and a click outside do nothing), and ends
- * with the done view and the downloads. `onClose` gets the run's result when there is one (the Labels box keeps the
+ * L3 (09C §6), L4 (09C §14.2): the label dialog for one product (⋯ → Generate label / Reprint label) or a batch
+ * (Generate labels for N). It opens at once with a busy state while the products are checked, shows the check and the
+ * preview, generates on Generate PDF, then saves and opens every file in Preview by itself (it cannot be closed while
+ * generating or saving: the close keys, Escape and a click outside do nothing). Everything generated → it closes with a
+ * toast; otherwise it stays on the result. `onClose` gets the run's result when there is one (the Labels box keeps the
  * failed products selected and refreshes, MC-L1.9).
  */
 export function LabelDialog({ productIds, onClose }: { productIds: string[]; onClose: (result: LabelRunResult | null) => void }) {
@@ -20,18 +21,19 @@ export function LabelDialog({ productIds, onClose }: { productIds: string[]; onC
   const { state } = dialog;
   const single = productIds.length === 1;
   const generating = state.phase === 'generating';
+  const busy = generating || state.phase === 'saving';
   const title = state.phase === 'done'
-    ? doneTitle(state.result, single)
+    ? doneTitle(state.result, single, state.check.unresolved.length)
     : single ? 'Generate label' : `Generate labels for ${productIds.length}`;
   return (
     <Dialog open onOpenChange={open => !open && dialog.leave()}>
       <DialogContent
         className="label-dialog sm:max-w-3xl"
         showCloseButton={false}
-        onEscapeKeyDown={event => generating && event.preventDefault()}
-        onPointerDownOutside={event => generating && event.preventDefault()}
-        onInteractOutside={event => generating && event.preventDefault()}
-        aria-busy={state.phase === 'checking' || generating}
+        onEscapeKeyDown={event => busy && event.preventDefault()}
+        onPointerDownOutside={event => busy && event.preventDefault()}
+        onInteractOutside={event => busy && event.preventDefault()}
+        aria-busy={state.phase === 'checking' || busy}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -61,26 +63,29 @@ export function LabelDialog({ productIds, onClose }: { productIds: string[]; onC
             </div>
           </div>
         )}
-        {(state.phase === 'check' || state.phase === 'generating') && (
+        {(state.phase === 'check' || state.phase === 'generating' || state.phase === 'saving') && (
           <LabelCheckView
             check={state.check}
             single={single}
-            generating={generating}
+            generating={busy}
+            busyWords={state.phase === 'saving' ? OPENING_IN_PREVIEW : undefined}
             failure={state.phase === 'check' ? state.failure : null}
             items={dialog.items}
             shown={dialog.shown}
             preview={dialog.preview}
             onStep={dialog.step}
+            onShow={dialog.show}
             onGenerate={dialog.generate}
             onLeave={dialog.leave}
           />
         )}
         {state.phase === 'done' && (
           <LabelDoneView
+            check={state.check}
             result={state.result}
             single={single}
             downloads={dialog.downloads}
-            onDownload={dialog.download}
+            onRetry={dialog.retry}
             onClose={() => dialog.close(state.result)}
           />
         )}

@@ -1,6 +1,6 @@
 # 09C — Price labels from Pricing: see what needs a label, generate and print it
 
-**Status: RATIFIED** (owner David Loorenz, 2026-11-23; chapter 16 entry A33). Shaper Claude. Branch `feature/agentic`.
+**Status: RATIFIED** (owner David Loorenz, 2026-11-23; chapter 16 entry A33; owner corrections 2026-11-24, A34, §14). Shaper Claude. Branch `feature/agentic`.
 Builds on 09B (the Pricing connection, the key in the Keychain, the event pull every 10 s) and 10H (shop-only items
 opened in the normal workspace, remote pictures). Source: the Pricing package
 `pricing-app/docs/integrations/session-manager/` (`LABELS.md`, `API.md` › Price labels, `EVENTS_AND_WEBHOOKS.md`),
@@ -113,7 +113,7 @@ The photographer gets:
 - **Refresh:** on entering the box, after a run, and on a label event (§8), the page shown and its counts are read
   again (debounced to at most once per 2 s). Never a tight loop.
 
-## 6. Generating labels (contract MC-L2)
+## 6. Generating labels (contract MC-L2; the dialog's layout and its end amended by §14)
 
 Started from ⋯ on one row (any box, or the session page) or from the batch bar (Labels box).
 
@@ -137,11 +137,11 @@ Started from ⋯ on one row (any box, or the session page) or from the batch bar
    `POST …/labels/runs` for each chunk in turn with its key. A network error or 5xx retries that chunk with the
    **same** key (twice, then the dialog offers Try again, which still reuses it). The dialog stays busy and can't be
    closed while a run is in flight. A double press starts nothing new.
-3. **Done.** The title: batch "{rendered} of {items} labels generated" when anything failed, else "{items} labels
+3. **Done** (superseded by §14.2). The title: batch "{rendered} of {items} labels generated" when anything failed, else "{items} labels
    generated"; one product "Label generated" / "Label not generated". Result lines: ✓ "{markedPrinted} marked
    Printed", ↻ "{reprinted} reprinted · stay Printed", ○ "{noPrice} stay Not printed · No selling price", ✕
    "{failed} failed" with each failure's SKU · name and message. Never "all done" when anything failed.
-4. **Download.** One file in total: a single **Download PDF** that saves it, opens it in Preview and closes the
+4. **Download** (superseded by §14.2). One file in total: a single **Download PDF** that saves it, opens it in Preview and closes the
    dialog. Several files (several sizes or chunks): one row per file (filename, label count, W × H mm) each with
    **Download PDF**, plus **Done**. No file: **Close**. Download = the artifact's `downloadUrl` with the key, written
    to the Labels folder (`.part` then renamed; a taken name gets " (2)", " (3)" …) and opened in Preview. The dialog
@@ -254,3 +254,64 @@ session's item has no shop product yet ("Publish first so Pricing can see it") o
   batch bar wired, the errors of §10.
 
 The first real Generate (it marks products Printed in the live Pricing) is the owner's, after L3.
+
+## 14. Owner corrections (2026-11-24, changelog A34)
+
+After the first use against the real Pricing, the owner:
+
+> "the label preview interface has some container distribution issues. the title is wrapping word by word, this should
+> be a single row … the no price warning or warnings that can appear should be below each product content container
+> … the not published yet text … should be part of the warning batch, the qr code open x … should be a triggerable
+> button pill. the picture of the product should display on the left side, the sku below that picture, 1:1 container
+> like in the session listing … a simple well made card easy to read and well distributed … the footer action row is
+> directly accessible regardless of the scroll … why this step [Download PDF]? why doesn't it download and open the
+> document ready for command + p?"
+
+### 14.1 The check dialog's layout
+
+- **The dialog keeps its fixed height.** Its header (title) stays at the top, its **footer** (the summary sentence and
+  Cancel / Generate PDF) is pinned to the bottom and always visible; only the list of products between them scrolls.
+  The preview column stays beside the list.
+- **Template group header:** the template's name on one line; product types and size on a second, smaller line.
+  Neither wraps word by word; overflow ends with "…" and the full text is the tooltip.
+- **One card per product**, evenly spaced, easy to read:
+  - **left:** the product's picture in a 1:1 square the size of a sessions-list thumbnail, with the **SKU under it**.
+    The picture is the one the product's sessions-list row shows (10H §4), else Pricing's `thumbUrl` known from the
+    Labels list, else the neutral placeholder. Showing it makes no extra Pricing or Shopify call per card beyond 10H's
+    picture cache.
+  - **right, first line:** the title on **one line** (ends with "…" when too long; full title as the tooltip).
+  - **right, second line:** the price ("8 900 kr" / "No price") and the outcome in words ("Will be marked Printed",
+    "Reprint · stays Printed", "No price · stays Not printed", "Can't generate").
+  - **below the card's content, a warnings row** of small pills, only when there is something to say:
+    - "No price" (amber) when the product has no selling price;
+    - each `issues[]` message, red ("Can't generate: <message>");
+    - "Not published yet" (amber) for Pricing's `url_not_published` note;
+    - **"QR link"**: a pill button. Pressing it shows or hides the address the QR code opens (the note's address) under
+      the pills; the address opens in the browser when clicked. It never opens anything by itself.
+    - any other note as a grey pill with its text.
+  - The selected card (the one in the preview) is highlighted; clicking a card shows its preview.
+
+### 14.2 Generate goes straight to Preview
+
+- **Generate PDF** runs as §6 step 2, then **at once** saves every file the run made to the Labels folder (§6 step 4's
+  naming rule) and opens them in Preview, ready for ⌘P. There is no Download PDF step.
+- **When everything was generated** (no failed, no not-found product, every file saved): the dialog closes and a
+  toast says "{n} labels generated · opened in Preview" ("Label generated · opened in Preview" for one), plus "· {k}
+  stay Not printed (no price)" when some had no price.
+- **When anything went wrong** (failed or not-found products, or a file that couldn't be saved or opened): the files
+  that were made are still saved and opened; the dialog stays open on the result: the "{rendered} of {items} labels
+  generated" title, each problem as a card with its message (the §14.1 card), "Failed products stay selected so you
+  can fix and retry." in the Labels box, a **Try again** next to a file that couldn't be saved, and **Close**.
+- Preview opens each file once; when Preview can't be opened the file stays saved and the dialog says where.
+- §6's other rules stand: one key per chunk reused on retry (M-L3), never "all done" when anything failed (M-L4).
+
+### 14.3 Products from the other Mac count as Published (amends 10H §6)
+
+- A shop-only item (10H §3: linked to a shop product, never photographed or published from this Mac) is on Shopify,
+  so in the sessions list it counts and filters as **Published**, not Open, with its "Archived in Shopify" label.
+  Opening it, looking at it or reading its details changes nothing about that.
+- It counts as Open only for the same reasons a published session would show work to do: a publish of it running,
+  held, failed or cancelled (10H MC-H3.7's exceptions).
+- **After bring back** (owner card 2, 2026-11-25: "Move to Open"): once its photos are brought back for editing, it
+  counts as Open until it is published from this Mac, like any session with work in progress (book 07). Nothing more
+  is remembered about it.

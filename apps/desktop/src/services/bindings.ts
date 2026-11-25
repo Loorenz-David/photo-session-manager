@@ -689,7 +689,10 @@ export type CheckItemDto_Deserialize = {
 	printed_at?: number | null,
 	outcome: CheckOutcomeDto,
 	issues: string[],
-	notes: string[],
+	/**  L4 (MC-L2.15): Pricing's notes with their kind and the QR code's address. */
+	notes: PlanNoteDto_Deserialize[],
+	/**  L4 (MC-L2.16): a picture of the product already on this Mac (inside the data folder). */
+	picture_path?: string | null,
 };
 
 /**  One product of the check, with what will happen to it and Pricing's messages as given. */
@@ -702,7 +705,10 @@ export type CheckItemDto_Serialize = {
 	printed_at: number | null,
 	outcome: CheckOutcomeDto,
 	issues: string[],
-	notes: string[],
+	/**  L4 (MC-L2.15): Pricing's notes with their kind and the QR code's address. */
+	notes: PlanNoteDto_Serialize[],
+	/**  L4 (MC-L2.16): a picture of the product already on this Mac (inside the data folder). */
+	picture_path: string | null,
 };
 
 /**  What generating will do to one product: `mark_printed`, `reprint`, `no_price`, `fail`. */
@@ -1739,6 +1745,9 @@ export type NoteDto_Serialize = {
 	missing_main: boolean,
 };
 
+/**  What a note says (`not_published`: not on the web shop yet; its QR code opens `link`). */
+export type NoteKindDto = "not_published" | "other";
+
 export type NotificationDto = {
 	id: number,
 	item_id: number,
@@ -1876,6 +1885,23 @@ export type PhotoResponse_Serialize = {
 	source: string,
 	integrity: string,
 	upload_state: string | null,
+};
+
+/**  One note of a check item: its kind, the message as given, the address (or null). */
+export type PlanNoteDto = PlanNoteDto_Serialize | PlanNoteDto_Deserialize;
+
+/**  One note of a check item: its kind, the message as given, the address (or null). */
+export type PlanNoteDto_Deserialize = {
+	kind: NoteKindDto,
+	message: string,
+	link?: string | null,
+};
+
+/**  One note of a check item: its kind, the message as given, the address (or null). */
+export type PlanNoteDto_Serialize = {
+	kind: NoteKindDto,
+	message: string,
+	link: string | null,
 };
 
 /**  A group's template (millimetres). */

@@ -458,10 +458,7 @@ impl SessionsService<'_> {
         use crate::domain::session::{
             ListCounts, ListFilter, ListGroup, SessionList, SessionRow, SessionStatus,
         };
-        use crate::mechanisms::{
-            status::{derive_status, row_label},
-            time::group_by_activity,
-        };
+        use crate::mechanisms::{status::row_label, time::group_by_activity};
         let records = self.store.session_list_records()?;
         // MC-H1.1: one read of the remote inputs for every row (none without remote items).
         let pictures = self
@@ -494,7 +491,25 @@ impl SessionsService<'_> {
                 }
                 None => (dto.main_count, dto.condition_count, dto.unreviewed_count),
             };
-            let status = derive_status(input);
+            let cleared_or_remote = cleared.contains(&dto.session.id) || remote_row.is_some();
+            let label = if cleared_or_remote {
+                // MC-H3.7: "Archived in Shopify" for both kinds, unless a publish of theirs is
+                // running, held, failed or cancelled.
+                use crate::domain::session::RowLabel;
+                match row_label(input) {
+                    label @ (RowLabel::WaitingForYou(_)
+                    | RowLabel::Publishing(_)
+                    | RowLabel::PublishFailed
+                    | RowLabel::PublishCancelled
+                    | RowLabel::DescriptionFailed) => label,
+                    _ => RowLabel::Archived,
+                }
+            } else {
+                row_label(input)
+            };
+            // MC-H3.7A (09C §14.3): a shop-only row whose label is "Archived in Shopify" is
+            // Published; while a publish of it shows through, `derive_status` as for any row.
+            let status = row_status(remote_row.as_ref(), label, input);
             counts.all += 1;
             if status == SessionStatus::Published {
                 counts.published += 1;
@@ -509,23 +524,14 @@ impl SessionsService<'_> {
             {
                 continue;
             }
-            let label = if cleared.contains(&dto.session.id) || remote_row.is_some() {
-                // MC-H3.7: "Archived in Shopify" for both kinds, unless a publish of theirs is
-                // running, held, failed or cancelled.
-                use crate::domain::session::RowLabel;
-                match row_label(input) {
-                    label @ (RowLabel::WaitingForYou(_)
-                    | RowLabel::Publishing(_)
-                    | RowLabel::PublishFailed
-                    | RowLabel::PublishCancelled
-                    | RowLabel::DescriptionFailed) => label,
-                    _ => RowLabel::Archived,
-                }
-            } else if status == SessionStatus::Publishing && record.waiting_for_editor {
+            let label = if !cleared_or_remote
+                && status == SessionStatus::Publishing
+                && record.waiting_for_editor
+            {
                 // Changelog 45 (P65): the publish waits for Capture One to load its photos.
                 crate::domain::session::RowLabel::WaitingForEditor
             } else {
-                row_label(input)
+                label
             };
             let progress = if let crate::domain::session::RowLabel::Publishing(pct) = label {
                 Some(pct)
@@ -654,6 +660,26 @@ impl SessionsService<'_> {
             pages,
             total,
         })
+    }
+}
+
+/// MC-H3.7A (09C §14.3): the list status of a row. A `Remote(ShopOnly)` row labelled
+/// "Archived in Shopify" is `Published`; every other row is `derive_status(input)`.
+fn row_status(
+    remote_row: Option<&crate::services::remote::RemoteRow>,
+    label: crate::domain::session::RowLabel,
+    input: crate::mechanisms::status::StatusInput,
+) -> crate::domain::session::SessionStatus {
+    use crate::domain::remote::{RemoteKind, RemoteState};
+    use crate::domain::session::{RowLabel, SessionStatus};
+    match remote_row {
+        Some(row)
+            if row.state == RemoteState::Remote(RemoteKind::ShopOnly)
+                && label == RowLabel::Archived =>
+        {
+            SessionStatus::Published
+        }
+        _ => crate::mechanisms::status::derive_status(input),
     }
 }
 

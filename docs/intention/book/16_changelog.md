@@ -338,3 +338,9 @@ A33. **2026-11-23 — Owner: price labels from Pricing (new chapter 09C, RATIFIE
 - **Generate:** check (grouped by template, outcomes, issues, preview image) → run with one idempotency key per chunk of 300 → done with one Download PDF per file → saved to `~/Documents/Session Manager Labels/` and opened in Preview.
 - **Marker and events:** label state per product from Pricing's status call and its `label.printed` / `label.reset` events in the existing 10 s pull; kept only in memory, never as Session Manager's truth; no notifications.
 - Extends 09B §4 (scopes `labels:read`, `labels:write`; Test connection reports labels) and §5 (label events no longer skipped).
+
+A34. **2026-11-24 — Owner corrections after the first use of labels and of 10H (09C §14, amends 10H §6).** The owner, with screenshots: the check dialog's titles wrap word by word, warnings and the "not published / QR opens …" note crowd the rows, the footer is too low; "why doesn't it download and open the document ready for command + p?"; and a product from the other Mac, opened without changes, shows under Open.
+- **Check dialog:** fixed height with a pinned footer and a scrolling list; one card per product (1:1 picture with the SKU under it, title on one line, price and outcome), warnings as pills under the card ("No price", "Can't generate: …", "Not published yet"), the QR address behind a "QR link" pill.
+- **Generate:** saves and opens every PDF in Preview at once; the dialog closes with a toast when all went well and stays on the problems otherwise. No Download PDF step.
+- **Shop-only items count as Published** in the sessions list (counts and filters), unless a publish of theirs is running, held, failed or cancelled.
+

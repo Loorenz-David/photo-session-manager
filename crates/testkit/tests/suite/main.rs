@@ -27,6 +27,7 @@ mod l2_labels_list;
 mod l3_labels_check;
 mod l3_labels_download;
 mod l3_labels_generate;
+mod l4_labels_check_cards;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

@@ -182,12 +182,20 @@ impl LabelsService {
             plan.summary.ready,
             plan.summary.failing
         );
+        // MC-L2.16: a picture per product from this Mac (no call, nothing downloaded).
+        let products: Vec<(String, Option<String>)> = plan
+            .items
+            .iter()
+            .map(|item| (item.product_id.clone(), item.sku.clone()))
+            .collect();
+        let pictures = self.check_pictures(&products);
         let check = LabelCheck {
             id: id.clone(),
             groups,
             unresolved: plan.unresolved.clone(),
             summary: plan.summary,
             sizes: plan.sizes.clone(),
+            pictures,
         };
         if self.kept().as_ref().is_some_and(KeptCheck::running) {
             return Err(LabelsFailure::Busy);

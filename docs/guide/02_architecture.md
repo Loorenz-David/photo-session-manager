@@ -347,7 +347,10 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
    the one `remote_covers` read: gallery / condition counts), `unreviewed_count` 0, and its status input
    has `main_count` = gallery, `unreviewed` 0, missing previews 0 (`ready_session_ids` keeps the raw input);
    the label is the publish label while a publish is running, held, failed or cancelled, else `Archived`
-   (archived rows via `cleared_sessions`, also without `with_remote`).
+   (archived rows via `cleared_sessions`, also without `with_remote`). A `Remote(ShopOnly)` row whose
+   label is `Archived` has the status `Published` (MC-H3.7A, 09C §14.3; the private `row_status` in
+   `services/sessions.rs`), so it counts and filters as Published in `list` and `page`; while a publish of
+   it shows through, its status is `derive_status` as for any row.
 3. Waiting: a Capture One "not ready" error (`mechanisms/backoff.rs::editor_wait`) requeues with
    backoff 1/2/4/8 s then 15 s, label "Waiting for Capture One…", gives up after 10 min with a plain
    sentence. `publish_cancel` stops after the request in flight; `publish_activity` feeds the popover.
@@ -658,9 +661,20 @@ of that folder (`variant_background` → `resync_folder`).
   denied; from L3 enabled for access `allowed` / `unknown` — `Generate label`, or `Reprint label` when printed —
   opening `LabelDialog` for that product beside the menu; a Labels row without a session gets a ⋯ holding only this
   item). L3: `LabelDialog` (`useLabelDialog`: `checking` → `check` → `generating` → `done`, `error`; not closable while
-  generating; Cancel after a failed Generate asks `labelsPartial`), `LabelCheckView` (groups, lines, not found, footer,
-  the preview on a white `.label-preview` tile with ‹ › in group order), `LabelDoneView` (title, result lines,
-  failures, files and Download PDF); `LabelsBatchBar`'s `Generate labels for N` opens it for the selection, and when it
+  generating; Cancel after a failed Generate asks `labelsPartial`), `LabelCheckView` (L4, 09C §14.1: a fixed-height
+  dialog; the scrolling `label-check-scroll` holds the groups with a two-line header (`groupLines`) and a `LabelCard`
+  per product (picture `picture_path` through `previewUrl`, SKU, one-line title, price and outcome, warnings pills,
+  `QR link` showing the note's address as an `ExternalLink`; a click selects the card via `useLabelDialog.show`) and
+  the not-found lines; the pinned `label-check-footer` holds the sentences, a Generate failure and the buttons; the
+  preview on a white `.label-preview` tile with ‹ › in group order beside the list), L4 (09C §14.2, MC-L2.17): whenever a result
+  arrives (`labelsGenerate`, or `labelsPartial` after a failed Generate) `useLabelDialog` enters `saving` (busy line
+  `Opening in Preview…`, not closable) and calls `labelsDownload` for each of its files in order, each at most once
+  automatically (a ref keyed by artifact id; `labels_download` is called by the dialog, never by a button); everything
+  generated (no failure, nothing not run, nothing not found, every file `opened`) → one `toast.success`
+  (`generatedToast`, raised only here) and the dialog closes with the result; otherwise `LabelDoneView` (title
+  `doneTitle(result, single, notFound)`, result lines, a `LabelCard` per failure, the not-found lines, a line per
+  file — saved and opened, saved but not opened with its path, or the failure with Try again for a retryable code —
+  and `Close`, scrolling inside the fixed height with `Close` pinned); `LabelsBatchBar`'s `Generate labels for N` opens it for the selection, and when it
   closes after a run `LabelsBox` keeps only the selected `failed_product_ids` and asks the page again. Settings → Pricing's Labels line in
   `PricingSection.tsx`. L2: the **Labels box** — `Filters` has a fourth box `labels` (its number: the last list
   answer's `missing_price_tag` inside the box, else `labelsSummary({refresh: true})`, asked when `SessionsPage` mounts,
@@ -706,6 +720,15 @@ of that folder (`variant_background` → `resync_folder`).
   `mechanisms::labels::merge_runs` (check failures first, then per chunk; a failure's SKU and title from the check
   item); a finished generation is answered again without a request; `partial(check_id)` answers the result over the
   finished chunks. Nothing of a check, a generation or a key is written to the database or kept across a quit.
+- **The check's notes and pictures (L4, MC-L2.15, .16; 09C §14.1):** a plan item's `notes` are `PlanNote {kind:
+  NotPublished | Other, message, link}`: the adapter (`beyo_pricing/labels.rs::plan_note`) maps Pricing's
+  `url_not_published` to `NotPublished` and reads the QR address out of its sentence (the first `http(s)://` word,
+  trailing `.,;)` removed; none → no link); core never names the code. `LabelCheck.pictures` (product id → a file
+  on this Mac) is filled in `check` by `LabelsService::check_pictures`: the matched item's session row picture from
+  **one** `SessionsService::list(All, None)` with the remote items, else the cached search picture of the `thumb_url`
+  the last `list` / `select_all` answer carried (`seen`: product id → SKU and `thumb_url`, emptied by `forget`),
+  through `RemoteItems::search_picture` (queued, never downloaded in `check`). No new call; a failed read leaves the
+  pictures empty; nothing is stored.
 - **Preview, download and the label files (L3, MC-L2.5, .11, .13):** `preview(check_id, product_id)` (a product of
   the kept check, else `NotFound`): `provider.preview` → the PDF → `LabelFiles::raster(pdf, "<check id>-<product
   id>")` → `<data>/previews/labels/<name>.png` (the one folder the webview may read, `asset_protocol_scope`); a later

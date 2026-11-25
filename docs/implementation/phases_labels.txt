@@ -7,3 +7,5 @@
 L1_labels_provider_and_marker
 L2_labels_box
 L3_generate_and_download
+# L4: the owner's corrections of 2026-11-24 (09C §14, A34). No projection. It does not wait for owner card 2 (master_plan_labels.md §2A).
+L4_owner_corrections

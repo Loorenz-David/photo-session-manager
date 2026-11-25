@@ -1,10 +1,11 @@
-# Price labels from Pricing — master plan (v1.2, 2026-11-23)
+# Price labels from Pricing — master plan (v1.3, 2026-11-25)
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, registry §6, environment
 §7), `master_plan_conversations.md` (the Pricing connection, adapter, fake and pull it extends) and
 `master_plan_archive.md` (the remote items and picture caches it reuses), and wins over them on a name listed here.
 Process: `docs/process/flow.md` §10 (milestones of units), with the deltas of §3 below. Planner: Claude
-(`pipeline-planner`), from book `09C_pricing_labels.md` (RATIFIED 2026-11-23, changelog A33).
+(`pipeline-planner`), from book `09C_pricing_labels.md` (RATIFIED 2026-11-23, changelog A33; owner corrections
+2026-11-24, §14, changelog A34, planned as L4).
 
 ## 1. Goal
 Build book `09C_pricing_labels.md`: a **Labels** box in the sessions list whose rows, filters, counts, search and pages
@@ -26,12 +27,13 @@ wins.
 | `L1_labels_provider_and_marker` | the labels port and vocabulary in core; the Beyo Pricing adapter's seven label calls and the binary transport; the access rule and its one stored value; the display copy, the status read, the label events in the 09B pull and the `labels_changed` event; Settings → Pricing's Labels line; the marker on Open / Published / All rows and on the session page; the ⋯ entry in its disabled states | 4 | 19 | 109 | yes | **yes** | — | every session row and the session page say whether the product's price label is printed, missing or stale, and follow Pricing within the 10-second check |
 | `L2_labels_box` | the provider-backed list (filters, counts, search), rows matched to sessions or shown as shop products, their pictures, opening an unmatched row (adopt, no write), Select all N; the Labels box UI with Previous / Next pages, selection and refresh | 3 | 14 | 78 | yes | no | L1 | the photographer sees the labels still to print, searches and filters them through Pricing, and opens any of them as a session |
 | `L3_generate_and_download` | the check (chunked, merged, grouped by template), the preview picture, runs with one key per chunk and safe retries, the result, saving to the Labels folder and opening in Preview; the check and done dialogs; the ⋯ entry and the batch bar wired; the errors of 09C §10 | 4 | 17 | 107 | yes | **yes** | L2 | the photographer generates and prints price labels, one or many |
-Totals (computed from the plan files by script): 3 milestones, 11 units, 50 criteria, 294 rows; every unit has at most 8
+| `L4_owner_corrections` | 09C §14 (owner corrections 2026-11-24, A34): products from the other Mac count and filter as Published in the sessions list; the check dialog's fixed height, pinned footer and one card per product (picture, SKU, one-line title, price and outcome, warning pills, the "QR link" pill), with the notes' kind and address and a picture per product from the backend; Generate saves and opens every PDF in Preview at once, closes with a toast on full success and stays on the problems otherwise (no Download PDF step) | 3 | 9 | 51 | yes | no | L3 | the check is easy to read at any size, one press ends in Preview ready for ⌘P, and the Open count shows only work to do |
+Totals (computed from the plan files by script): 4 milestones, 14 units, 59 criteria, 345 rows; every unit has at most 8
 criteria. Each milestone needs the one before approved (its `depends_on`), gate = the **Tracker** line of that plan
 file. Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list.
 
-## 2A. Owner decisions (1, answered 2026-11-23)
+## 2A. Owner decisions (2: card 1 answered 2026-11-23; card 2 open, raised by the L4 plan 2026-11-25)
 
 **Card 1 — When does the Labels box show its number?** **Answered 2026-11-23: Yes, as soon as the list opens** (the owner chose the recommendation; the plans stand as written).
 - **Question:** Should the Labels box show its number as soon as the Sessions list opens (yes), or only after you
@@ -49,6 +51,23 @@ file. Start each with `PSM_IMPLEMENTER=claude tools/pipeline/run_phase.sh phase 
 The plans are written for **yes**. If the owner answers **no**: criterion L2·C5 and the tasks marked "(card 1)" in the
 L2 plan are removed, L2·C10(a) reads "no number until the first list answer of this launch", L2·C14(c) reads "no
 call", and `labels_summary` loses its `refresh` argument (row L2·C7(d) then asks without it).
+
+**Card 2 — A product from the other Mac after you bring its photos back.** **Answered 2026-11-25: No — it moves to Open** (the recommendation; nothing more is built). **Open.**
+- **Question:** After you bring back the photos of a product from the other Mac, should it stay under Published
+  until a photo really changes (yes), or sit under Open from then on, as today (no)?
+- **Story:** You open a sofa that was photographed on the other Mac and start to rotate a photo; the app brings its 8
+  photos back to this Mac. Today the sofa then sits under Open, even if you cancel the rotation and change nothing,
+  and stays there until you publish it from this Mac.
+- **Branches:** **Yes** — it stays under Published until a photo changes; this needs extra work after L4 (the app
+  must remember "published, as it came back"). **No** — nothing more is built; a brought-back product is under Open
+  until you publish it here.
+- **Recommendation:** No: photos only come back when you start a photo edit, so the product is about to change anyway.
+- **On silence:** L4 is built (it does not depend on this); a brought-back product stays under Open as today, and
+  nothing more is planned.
+- **Trace:** 09C §14.3 second bullet against book 07 "Dirty" and 10H §7; MC-H3.7A; L4·U1 Notes (no row asserts it).
+
+L4 is written so that neither answer changes one of its rows. If the owner answers **yes**, a follow-up milestone
+stamps the published baseline at bring back (storage and retention are touched: 10H §7.7); it is not part of L4.
 
 ## 3. Process deltas (flow §10 applies; these add to it)
 - **No mechanism-inventory gate.** §5 stands in for it (as for the writer, conversations and archive tracks): one
@@ -118,6 +137,10 @@ call", and `labels_summary` loses its `refresh` argument (row L2·C7(d) then ask
   same change (flow §7A); each plan carries it as a task. `docs/implementation/STATUS_labels.md` is the
   orchestrator's; `STATUS.md` and `master_plan.md` §4 are not used or edited by these milestones.
 - **Join:** after L3 and the live check the orchestrator opens the PR into `main`.
+- **L4 (owner corrections, 09C §14).** One milestone of 3 units under the same rules; `projection: no`: its only
+  outside shape is the `url_not_published` note's sentence, grounded in §5A MC-L2.15 and failing soft; it adds no
+  writing call (M-L2, M-L3 untouched) and no storage. Its rows trace to `09C §14.<n>`, `MC-L2.15`–`.17` (§5A) and
+  `MC-H3.7A` (`master_plan_archive.md` §5). It replaces named L3 and H4 tests by design (listed per unit in its plan).
 
 ## 4. Names (registry; exact)
 **Code layout.** Core: `crates/core/src/domain/label.rs` (vocabulary), `crates/core/src/ports/labels.rs`
@@ -161,7 +184,10 @@ Vec<String>, items: Vec<PlanItem>}` · `LabelCheck {id, groups, unresolved, summ
 {product_id: Option<String>, sku: Option<String>, title: Option<String>, message}` · `LabelRunResult {total, rendered,
 marked_printed, reprinted, no_price, failures: Vec<LabelFailure>, not_run: Vec<String>, artifacts: Vec<LabelArtifact>,
 failed_product_ids: Vec<String>}` · `SavedLabel {path: PathBuf, opened: bool}`. `psm_core::domain::conversation::
-EventKind` gains the variant `Label(LabelChange)`.
+EventKind` gains the variant `Label(LabelChange)`. **L4:** `NoteKind {NotPublished, Other}` · `PlanNote {kind, message, link:
+Option<String>}`; `PlanItem.notes` becomes `Vec<PlanNote>`; `LabelCheck` gains `pictures: HashMap<String, PathBuf>`
+(product id → a picture file that exists). Wire: a check item's `notes: [{kind: 'not_published' | 'other', message,
+link: string | null}]` and `picture_path: string | null`.
 **Errors.** `LabelsError` (what the adapter answers): `Unreachable(String)`, `BadReply(String)`, `NotAllowed`,
 `StoreGone`, `NoProducts`, `RendererUnavailable`, `ListUnavailable`, `Expired`, `Rejected {code, message}`.
 `LabelsFailure` (what the service answers): `Off(ConnectionState)`, `Denied`, `Provider(LabelsError)`, `Busy`,
@@ -299,6 +325,9 @@ and the ⋯ hint when denied) · `Open Settings → Pricing` · `Publish first s
 `Generate labels for <N>` · `Try again` · the check and done dialogs' sentences of 09C §6 (in the L3 plan, verbatim)
 · `Not found in Pricing` · `Can't generate` · `Print at 100 % (not Fit to page).` · `Failed products stay selected so
 you can fix and retry.` · `Download PDF` · `Generate PDF` · `Reprint PDF` · `Done` · `Close` · `Cancel`.
+**L4** removes `Download PDF` and `Done` and adds: `Can't generate: <message>` · `Not published yet` · `QR link` ·
+`Label generated · opened in Preview` · `<n> labels generated · opened in Preview` · ` · <k> stay Not printed (no
+price)` · `Opening in Preview…` · `Saved and opened in Preview: <path>` · `Saved, but Preview couldn't open it: <path>`.
 
 **Log lines.** `labels.access state=` · `labels.status asked= answered=` · `labels.events changed=` · `labels.list
 filter= rows= more=` · `labels.check products= chunks= ready= failing=` · `labels.run chunk= of= items= attempt=
@@ -307,7 +336,7 @@ product title.
 
 **Frontend.** `apps/desktop/src/features/labels/`: L1 `labelWords.ts` (pure), `LabelPill.tsx`, `useSessionLabels.ts`,
 `LabelMenuItem.tsx` · L2 `labelPages.ts` (pure), `LabelsBox.tsx`, `LabelRow.tsx`, `LabelsBatchBar.tsx` · L3
-`LabelDialog.tsx`, `LabelCheckView.tsx`, `LabelDoneView.tsx`, `useLabelDialog.ts`. Edited: `features/sessions/
+`LabelDialog.tsx`, `LabelCheckView.tsx`, `LabelDoneView.tsx`, `useLabelDialog.ts` · L4 `LabelCard.tsx`. Edited: `features/sessions/
 {SessionsPage.tsx, Filters.tsx, SessionRow.tsx, DeleteSession.tsx}`, `features/shell/Header.tsx`,
 `features/settings/PricingSection.tsx`.
 
@@ -328,7 +357,9 @@ event with `productId` in `data` and in the envelope) · **L2** `GET /labels/pro
 the run), `POST /labels/preview` (bytes `%PDF-1.4 fake preview <productId>`), `POST /labels/runs` (one run per
 `idempotencyKey`: the same key answers the stored run; marks priced unprinted products Printed and logs one
 `label.printed` each; one artifact per label size; `runs()` lists the stored runs with their keys), the artifact
-download (`expire_artifacts()` → `410 artifact_expired`).
+download (`expire_artifacts()` → `410 artifact_expired`) · **L4** `note_label(product_id, code, message)` (a plan item of
+that product carries the note). L4 suite stem `l4_labels_check_cards.rs`; its shop-only rows live in
+`h4_details_only_publish.rs` beside H4·C9; desktop `l4_tests`; UI `l4_label_check_cards.test.tsx`, `l4_label_result.test.tsx`.
 
 ## 5. Contracts (stand in for the mechanism inventory; plans implement them verbatim)
 
@@ -534,6 +565,38 @@ first attempt, automatic retry and Try again alike; two chunks never share a key
 M-L4: a result with a failure or a product not run never has `rendered = total`, and every such product is in
 `failures` or `not_run` with a message.
 
+## 5A. L4 rules (09C §14; they add to §5 and win over it where they differ)
+
+15. **MC-L2.15 — Notes keep their kind and their address** (09C §14.1). The adapter maps each plan note `{code,
+    message}`: code `url_not_published` → `NotPublished`, any other → `Other`; `message` as given; `link`, for
+    `NotPublished` only = the first whitespace-separated word of the message starting with `https://` or `http://`,
+    with trailing `.`, `,`, `;`, `)` removed; none → no link (the card then shows no "QR link"). Rule 17: the schema
+    gives a note only `code` and `message`; the sentence `Not published to the Online Store yet; the QR code opens
+    {url}.` was read in Pricing's source (`pricing-app/backend/app/domains/labels/plan.py:196-200`, 2026-11-25); the
+    package does not promise it, hence the soft failure. Core never names the code (H7).
+16. **MC-L2.16 — A picture per checked product, from this Mac only** (09C §14.1). The service remembers, in memory,
+    the `thumb_url` of every row a `list` or `select_all` answer carried (with the SKU it already remembers; emptied
+    with it, ACC.2, ACC.3). `check` answers `pictures`: per item, matched by MC-L1.3 → its session's row picture as
+    one `SessionsService::list(All, None)` with the remote items answers `cover_preview_path` (a file that exists,
+    M-H4); else, with a remembered `thumb_url` starting `https://`, a known `commerce_id_of` and a commerce
+    integration → `RemoteItems::search_picture` (the cached file, or none while its download waits in 10H's queue);
+    else none. No provider call and no shop call is added; nothing is downloaded inside `check`; a failed read
+    leaves `pictures` empty and never fails the check. Nothing of it is stored (M-L1).
+17. **MC-L2.17 — Straight to Preview** (09C §14.2; replaces 09C §6.3–§6.4 and the screen half of MC-L2.11). Whenever
+    the dialog obtains a result (`labels_generate`, or `labels_partial` after a failed chunk) it calls
+    `labels_download` for each of the result's files, in order, **each at most once automatically**, in a busy state
+    that cannot be closed. **Everything was generated** ⇔ `failures` and `not_run` are empty ∧ the check's
+    `unresolved` is empty ∧ every file answered `opened: true`: the dialog closes with the result and one toast
+    (`Label generated · opened in Preview` when `rendered = 1`, else `<rendered> labels generated · opened in
+    Preview`; plus ` · <no_price> stay Not printed (no price)` when `no_price > 0`). Otherwise it stays on the result:
+    title `Label generated` / `Label not generated` for one product, `<total> labels generated` or `<rendered> of
+    <total + not found> labels generated` for a batch; the result lines; a card per failure; the not-found lines; a
+    line per file (saved and opened, saved but not opened with its path and no retry, or the failure with **Try
+    again** when the code is `labels_save_failed` or `labels_unreachable`); **Close**. `LabelsService::download` and
+    the run rules (MC-L2.6–.10, M-L2, M-L3, M-L4) are unchanged.
+
+**MC-H3.7A** (09C §14.3) lives with MC-H3.7 in `master_plan_archive.md` §5.
+
 ## 6. Delegated choices (decided here; each is one sentence in a narrative's "Choices made for you")
 - **Products are always sent to Pricing by their product id, never by SKU** (the id is known for every Labels row
   and for every published session; a session without a shop product has the entry disabled). 09C's "else SKU" has
@@ -603,3 +666,10 @@ milestones land, so symbols are named beside them.
   merged items (D4); MC-L2.8: a `Reprinted` item keeps the check item's `printed_at`, else the run's `created_at` (D5);
   MC-L2.9: a failure's `sku` / `title` come from the check item first (D3). Everything else landed in the L3 plan (its
   Review log). Counts unchanged (§2).
+- **v1.3, 2026-11-25 (planner): L4, the owner's corrections of 2026-11-24** (09C §14, changelog A34). §2 row
+  `L4_owner_corrections` (3 units, 9 criteria, 51 rows; totals recounted by script: 4 milestones, 14 units, 59
+  criteria, 345 rows); §2A owner card 2 (a product from the other Mac after bring back; L4 does not depend on it);
+  §3 L4 delta (`projection: no`, with its reason); §4 vocabulary (`PlanNote`, `NoteKind`, `LabelCheck.pictures`), Words
+  (`Download PDF` and `Done` go; the pill, toast and file-line words), Frontend (`LabelCard.tsx`), Tests
+  (`note_label`, the L4 stems); §5A MC-L2.15–.17; `master_plan_archive.md` MC-H3.7A. L1–L3 rows are unchanged; the
+  earlier tests L4 replaces are named in its plan. Handoff `handoffs/reviewer/handoff_labels_L4_plan_r1.md`.

@@ -1279,7 +1279,7 @@ mod l3_tests {
         json!({
             "product_id": id, "sku": format!("TEST-{id}"), "title": format!("Test product {id}"),
             "price_minor": price, "status": "not_printed", "printed_at": null,
-            "outcome": outcome, "issues": issues, "notes": []
+            "outcome": outcome, "issues": issues, "notes": [], "picture_path": null
         })
     }
 
@@ -5320,5 +5320,254 @@ mod w1_writer_command_tests {
         ] {
             assert!(bindings.contains(name), "binding missing {name}");
         }
+    }
+}
+
+#[cfg(test)]
+mod l4_tests {
+    //! L4 (`docs/implementation/plans/L4_owner_corrections.md`): L4·C2 the two session commands
+    //! with a shop-only item (09C §14.3, MC-H3.7A); L4·C5 the label check's notes and pictures
+    //! (MC-L2.15, MC-L2.16).
+    use super::*;
+    use psm_core::domain::{
+        publish::{RemoteMedia, RemoteMediaStatus},
+        remote::{RemoteKind, RemoteState},
+    };
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    type Window = tauri::WebviewWindow<tauri::test::MockRuntime>;
+
+    fn call(w: &Window, cmd: &str, args: Value) -> Value {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+        .unwrap_or_else(|error| panic!("{cmd}: {error}"))
+    }
+
+    fn wired(
+        a: psm_testkit::TestApp,
+    ) -> (
+        tempfile::TempDir,
+        tauri::App<tauri::test::MockRuntime>,
+        Window,
+    ) {
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::sessions::sessions_page,
+                commands::sessions::sessions_list,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        (dir, tauri_app, w)
+    }
+
+    fn rows(groups: &Value) -> Vec<Value> {
+        groups
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|g| g["rows"].as_array().unwrap().clone())
+            .collect()
+    }
+
+    /// The fake shop with one local session (an Open row) and the counts of `list(All)` then.
+    fn shop() -> (psm_testkit::TestApp, psm_core::domain::session::ListCounts) {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        a.items()
+            .create_local("TEST-1", "Test table", "object", None)
+            .unwrap();
+        let before = a
+            .sessions()
+            .with_remote(a.remote())
+            .list(psm_core::domain::session::ListFilter::All, None)
+            .unwrap()
+            .counts;
+        (a, before)
+    }
+
+    /// A shop product adopted with its session, three gallery pictures, its first-open read run.
+    fn shop_only(a: &psm_testkit::TestApp, sku: &str) -> i64 {
+        let product = a.fake_shop().add_product(sku, "Test table", None);
+        a.fake_shop()
+            .state
+            .lock()
+            .unwrap()
+            .products
+            .iter_mut()
+            .find(|p| p.external_id == product)
+            .unwrap()
+            .media = (1..=3)
+            .map(|i| RemoteMedia {
+                id: format!("l4-m{i}"),
+                filename: Some(format!("l4-m{i}.jpg")),
+                status: RemoteMediaStatus::Ready,
+                position: i,
+            })
+            .collect();
+        let item = psm_core::services::items::ItemsService::new(a.store(), a.clock.as_ref())
+            .with_commerce(Some(a.fake_shop()))
+            .adopt(&product)
+            .unwrap();
+        let session = a.sessions().create(item.id).unwrap().session.id;
+        assert_eq!(
+            a.remote().ensure_record(session).unwrap(),
+            RemoteState::Remote(RemoteKind::ShopOnly)
+        );
+        session
+    }
+
+    #[test]
+    fn l4_c2a_sessions_page_shows_a_shop_only_item_as_published() {
+        let (a, before) = shop();
+        let session = shop_only(&a, "TEST-1802");
+        let (_dir, _app, w) = wired(a);
+        let page = call(
+            &w,
+            "sessions_page",
+            json!({"filter": "published", "query": null, "createdFrom": null, "onlyIds": null, "page": 1}),
+        );
+        let row = rows(&page["groups"])
+            .into_iter()
+            .find(|r| r["id"] == json!(session))
+            .expect("the shop-only row is on the Published page");
+        assert_eq!(
+            (&row["status"], &row["label"]),
+            (&json!("published"), &json!({"kind": "archived"}))
+        );
+        assert_eq!(
+            (&page["counts"]["published"], &page["counts"]["open"]),
+            (&json!(before.published + 1), &json!(before.open))
+        );
+    }
+
+    #[test]
+    fn l4_c2b_sessions_list_agrees_with_the_page() {
+        let (a, _) = shop();
+        let session = shop_only(&a, "TEST-1802");
+        let (_dir, _app, w) = wired(a);
+        let page = call(
+            &w,
+            "sessions_page",
+            json!({"filter": "published", "query": null, "createdFrom": null, "onlyIds": null, "page": 1}),
+        );
+        let list = call(&w, "sessions_list", json!({"filter": "all", "query": null}));
+        let row = rows(&list["groups"])
+            .into_iter()
+            .find(|r| r["id"] == json!(session))
+            .unwrap();
+        assert_eq!(row["status"], json!("published"));
+        assert_eq!(list["counts"], page["counts"]);
+    }
+
+    // L4·C5 — the check item's notes and picture (the body of `labels_check`).
+
+    const ADDR: &str = "https://shop.example/search?q=TEST-1802";
+    const SENT: &str = "Not published to the Online Store yet; the QR code opens https://shop.example/search?q=TEST-1802.";
+
+    /// Connected to the fake Pricing (key saved, first connection run) with the default template
+    /// and P1 (`TEST-1`, priced).
+    fn pricing() -> psm_testkit::TestApp {
+        use psm_core::ports::clock::Clock;
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        a.fake_pricing().add_template(
+            psm_integrations::conversations::beyo_pricing::label_types::IntegrationLabelTemplate {
+                id: "tpl-70x100".into(),
+                name: "Label 70×100".into(),
+                width_mm: 70.0,
+                height_mm: 100.0,
+                is_default: true,
+                product_types: vec![],
+            },
+        );
+        a.fake_pricing()
+            .add_label_product(psm_testkit::fake_pricing::LabelSpec {
+                product_id: "1".into(),
+                sku: Some("TEST-1".into()),
+                title: "Test table".into(),
+                price_minor: Some(890_000),
+                ..Default::default()
+            });
+        a.app
+            .conversations
+            .key_set(Some(psm_testkit::test_app::PRICING_KEY))
+            .unwrap();
+        while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+        a
+    }
+
+    fn check_item(a: &psm_testkit::TestApp) -> Value {
+        let check = commands::labels::labels_check_body(&a.app.handles(), &["1".to_owned()])
+            .unwrap_or_else(|_| panic!("labels_check failed"));
+        serde_json::to_value(check).unwrap()["groups"][0]["items"][0].clone()
+    }
+
+    #[test]
+    fn l4_c5a_a_check_item_carries_its_notes_kind_and_address() {
+        let a = pricing();
+        a.fake_pricing().note_label("1", "url_not_published", SENT);
+        let item = check_item(&a);
+        assert_eq!(
+            (&item["notes"], &item["picture_path"]),
+            (
+                &json!([{"kind": "not_published", "message": SENT, "link": ADDR}]),
+                &Value::Null
+            )
+        );
+    }
+
+    #[test]
+    fn l4_c5b_a_check_item_carries_its_sessions_picture() {
+        let a = pricing();
+        let external = a.fake_shop().add_product_with_id(
+            "gid://shopify/Product/1",
+            "TEST-1",
+            "Test table",
+            None,
+        );
+        let item_id = psm_core::services::items::ItemsService::new(a.store(), a.clock.as_ref())
+            .with_commerce(Some(a.fake_shop()))
+            .adopt(&external)
+            .unwrap()
+            .id;
+        let session = a.sessions().create(item_id).unwrap().session.id;
+        let photo = a.add_photo(session, "TEST-1_M0.ARW").unwrap();
+        let preview = a.dir.path().join("test-previews").join("adjusted.jpg");
+        std::fs::create_dir_all(preview.parent().unwrap()).unwrap();
+        std::fs::write(&preview, b"cached").unwrap();
+        rusqlite::Connection::open(a.app.paths.db())
+            .unwrap()
+            .execute(
+                "UPDATE photos SET classification='main', position=1, adjusted_preview_path=?1 \
+                 WHERE id=?2",
+                rusqlite::params![preview.to_string_lossy(), photo.id],
+            )
+            .unwrap();
+        let item = check_item(&a);
+        assert_eq!(
+            (&item["notes"], &item["picture_path"]),
+            (&json!([]), &json!(preview.to_string_lossy()))
+        );
     }
 }
