@@ -49,7 +49,7 @@ const FILE_50: LabelFile = { id: 'a2', filename: 'labels-1-50x30.pdf', width_mm:
 function item(id: string): CheckItem {
   return {
     product_id: id, sku: `TEST-${id}`, title: `Test product ${id}`, price_minor: 890_000, status: 'not_printed', printed_at: null,
-    outcome: 'mark_printed', issues: [], notes: [],
+    outcome: 'mark_printed', issues: [], notes: [], picture_path: null,
   };
 }
 

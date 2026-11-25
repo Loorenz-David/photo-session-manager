@@ -7,9 +7,10 @@
 use super::adapter::{BeyoPricingAdapter, encode};
 use super::label_types::{
     IntegrationLabelProduct, IntegrationLabelProductPage, IntegrationLabelRun,
-    IntegrationLabelStatus, IntegrationLabelTemplate, IntegrationPlan, IntegrationPlanItem,
-    IntegrationPlanRequest, IntegrationPreviewRequest, IntegrationRunCreate, IntegrationRunItemIn,
-    LabelStatusOut, UnresolvedItem, WireLabelStatus, WirePlanOutcome, WireRunStatus,
+    IntegrationLabelStatus, IntegrationLabelTemplate, IntegrationPlan, IntegrationPlanIssue,
+    IntegrationPlanItem, IntegrationPlanRequest, IntegrationPreviewRequest, IntegrationRunCreate,
+    IntegrationRunItemIn, LabelStatusOut, UnresolvedItem, WireLabelStatus, WirePlanOutcome,
+    WireRunStatus,
 };
 use super::transport::{HttpReply, Method, PricingRequest, RawReply};
 use super::types::{ErrorBody, ErrorEnvelope};
@@ -17,8 +18,8 @@ use psm_core::{
     domain::label::{
         CheckOutcome, LabelArtifact, LabelCounts, LabelFilter, LabelPlan, LabelProduct,
         LabelProductPage, LabelRun, LabelSize, LabelState, LabelStatus, LabelTemplate, LabelsError,
-        PlanItem, PlanSummary, PlanTemplate, ResetReason, RunCounts, RunItem, RunResult, RunStatus,
-        Unresolved,
+        NoteKind, PlanItem, PlanNote, PlanSummary, PlanTemplate, ResetReason, RunCounts, RunItem,
+        RunResult, RunStatus, Unresolved,
     },
     ports::labels::{LabelsProvider, LabelsResult},
 };
@@ -168,8 +169,32 @@ fn plan_item(wire: IntegrationPlanItem) -> LabelsResult<PlanItem> {
             WirePlanOutcome::Fail => CheckOutcome::Fail,
         },
         issues: wire.issues.into_iter().map(|i| i.message).collect(),
-        notes: wire.notes.into_iter().map(|n| n.message).collect(),
+        notes: wire.notes.into_iter().map(plan_note).collect(),
     })
+}
+
+/// MC-L2.15: Pricing's `url_not_published` note is `NotPublished`, any other code `Other`. Its
+/// address is read out of the sentence (`… the QR code opens {url}.`): the first word starting
+/// with `https://` or `http://`, trailing `.`, `,`, `;`, `)` removed; none → no link (Rule 17:
+/// the schema gives only `code` and `message`, so this fails soft).
+fn plan_note(wire: IntegrationPlanIssue) -> PlanNote {
+    if wire.code != "url_not_published" {
+        return PlanNote {
+            kind: NoteKind::Other,
+            message: wire.message,
+            link: None,
+        };
+    }
+    let link = wire
+        .message
+        .split_whitespace()
+        .find(|word| word.starts_with("https://") || word.starts_with("http://"))
+        .map(|word| word.trim_end_matches(['.', ',', ';', ')']).to_owned());
+    PlanNote {
+        kind: NoteKind::NotPublished,
+        message: wire.message,
+        link,
+    }
 }
 
 fn plan(wire: IntegrationPlan) -> LabelsResult<LabelPlan> {
@@ -1264,7 +1289,81 @@ mod tests {
         assert_eq!(plan.items[0].printed_at, Some(ms("2026-11-20T09:12:00Z")));
         assert_eq!(plan.items[1].template, None);
         assert_eq!(plan.items[1].title, None);
-        assert_eq!(plan.items[1].notes, vec!["M".to_owned()]);
+        assert_eq!(
+            plan.items[1].notes,
+            vec![PlanNote {
+                kind: NoteKind::NotPublished,
+                message: "M".into(),
+                link: None,
+            }]
+        );
+    }
+
+    // L4·C3 — the notes keep their kind and their address (MC-L2.15).
+
+    const ADDR: &str = "https://shop.example/search?q=TEST-1802";
+    const SENT: &str = "Not published to the Online Store yet; the QR code opens https://shop.example/search?q=TEST-1802.";
+
+    /// The plan answer of one item carrying `notes`, mapped by the adapter: that item's notes.
+    fn notes_of(notes: Json) -> Vec<PlanNote> {
+        let (http, adapter) = adapter();
+        let mut item = fixture(PLAN)["items"][0].clone();
+        item["notes"] = notes;
+        http.reply(200, plan_with(vec![item]));
+        adapter.plan(S, &ids(&["1"])).unwrap().items[0]
+            .notes
+            .clone()
+    }
+
+    fn note(kind: NoteKind, message: &str, link: Option<&str>) -> PlanNote {
+        PlanNote {
+            kind,
+            message: message.into(),
+            link: link.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn l4_c3a_a_not_published_note_keeps_its_address() {
+        assert_eq!(
+            notes_of(json!([{"code": "url_not_published", "message": SENT}])),
+            vec![note(NoteKind::NotPublished, SENT, Some(ADDR))]
+        );
+    }
+
+    #[test]
+    fn l4_c3b_a_not_published_note_without_an_address_has_no_link() {
+        assert_eq!(
+            notes_of(json!([{"code": "url_not_published", "message": "M"}])),
+            vec![note(NoteKind::NotPublished, "M", None)]
+        );
+    }
+
+    #[test]
+    fn l4_c3c_any_other_note_is_other_without_a_link() {
+        let message = "See https://shop.example/a.";
+        assert_eq!(
+            notes_of(json!([{"code": "something_else", "message": message}])),
+            vec![note(NoteKind::Other, message, None)]
+        );
+    }
+
+    #[test]
+    fn l4_c3d_the_address_is_an_http_word_with_its_trailing_marks_removed() {
+        let http_message = "Opens http://shop.example/a, soon.";
+        let ftp_message = "Opens ftp://shop.example/a.";
+        assert_eq!(
+            notes_of(json!([{"code": "url_not_published", "message": http_message}])),
+            vec![note(
+                NoteKind::NotPublished,
+                http_message,
+                Some("http://shop.example/a")
+            )]
+        );
+        assert_eq!(
+            notes_of(json!([{"code": "url_not_published", "message": ftp_message}])),
+            vec![note(NoteKind::NotPublished, ftp_message, None)]
+        );
     }
 
     #[test]

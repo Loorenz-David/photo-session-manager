@@ -71,6 +71,7 @@ export function LabelDialog({ productIds, onClose }: { productIds: string[]; onC
             shown={dialog.shown}
             preview={dialog.preview}
             onStep={dialog.step}
+            onShow={dialog.show}
             onGenerate={dialog.generate}
             onLeave={dialog.leave}
           />

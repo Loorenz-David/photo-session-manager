@@ -178,6 +178,11 @@ export function useLabelDialog(productIds: string[], onClose: (result: LabelRunR
     shownItem,
     preview: shownId === null ? null : previews.get(shownId) ?? { kind: 'loading' as const },
     step: (by: number) => setShown(index => Math.max(0, Math.min(items.length - 1, index + by))),
+    /** L4 (09C §14.1): shows a product's preview (a click on its card). */
+    show: (productId: string) => {
+      const index = items.findIndex(item => item.product_id === productId);
+      if (index >= 0) setShown(index);
+    },
     generate,
     leave,
     close,

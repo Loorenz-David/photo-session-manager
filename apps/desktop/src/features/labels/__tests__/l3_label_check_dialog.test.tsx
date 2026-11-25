@@ -50,14 +50,12 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 };
 
-const PRICE = '8 900 kr';
 const T70 = { id: 't70', name: 'Label 70×100', width_mm: 70, height_mm: 100 };
-const T50 = { id: 't50', name: 'Small tag', width_mm: 50, height_mm: 30 };
 
 function item(id: string, outcome: CheckItem['outcome'], change: Partial<CheckItem> = {}): CheckItem {
   return {
     product_id: id, sku: `TEST-${id}`, title: `Test product ${id}`, price_minor: 890_000, status: 'not_printed', printed_at: null,
-    outcome, issues: [], notes: [], ...change,
+    outcome, issues: [], notes: [], picture_path: null, ...change,
   };
 }
 
@@ -121,24 +119,6 @@ it('l3_c12a_the_dialog_opens_at_once_with_a_busy_state', async () => {
   expect(dialog).toHaveAttribute('aria-busy', 'true');
   expect(within(dialog).getByRole('status')).toHaveTextContent('Checking…');
   expect(vi.mocked(labelsCheck).mock.calls).toEqual([[{ product_ids: ['1'] }]]);
-});
-
-it('l3_c12b_one_section_per_template_with_a_line_per_product', async () => {
-  vi.mocked(labelsCheck).mockResolvedValue(check([
-    group(T70, [item('1', 'mark_printed'), item('2', 'reprint', { status: 'printed' })], ['Tables', 'Chairs']),
-    group(T50, [item('3', 'no_price', { price_minor: null })]),
-    group(null, [item('4', 'fail', { issues: ['Barcode: no barcode.'] })]),
-  ]));
-  open(['1', '2', '3', '4']);
-  expect(await screen.findByRole('heading', { name: 'Label 70×100 · Tables, Chairs · 70 × 100 mm' })).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: 'Small tag · 50 × 30 mm' })).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: 'No template' })).toBeInTheDocument();
-  const line = (id: string) => screen.getByTestId(`label-line-${id}`).textContent;
-  expect(line('1')).toBe(`TEST-1Test product 1${PRICE}Will be marked Printed`);
-  expect(line('2')).toBe(`TEST-2Test product 2${PRICE}Reprint · stays Printed`);
-  expect(line('3')).toBe('TEST-3Test product 3No priceNo price · stays Not printed');
-  expect(line('4')).toBe(`TEST-4Test product 4${PRICE}Can't generateBarcode: no barcode.`);
-  expect(within(screen.getByTestId('label-line-4')).getByText('Barcode: no barcode.').tagName).toBe('P');
 });
 
 it('l3_c12c_products_pricing_did_not_find_are_listed_outside_the_groups', async () => {

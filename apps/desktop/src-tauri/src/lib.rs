@@ -1279,7 +1279,7 @@ mod l3_tests {
         json!({
             "product_id": id, "sku": format!("TEST-{id}"), "title": format!("Test product {id}"),
             "price_minor": price, "status": "not_printed", "printed_at": null,
-            "outcome": outcome, "issues": issues, "notes": []
+            "outcome": outcome, "issues": issues, "notes": [], "picture_path": null
         })
     }
 
@@ -5326,7 +5326,8 @@ mod w1_writer_command_tests {
 #[cfg(test)]
 mod l4_tests {
     //! L4 (`docs/implementation/plans/L4_owner_corrections.md`): L4·C2 the two session commands
-    //! with a shop-only item (09C §14.3, MC-H3.7A); L4·C5 the label check's notes and pictures.
+    //! with a shop-only item (09C §14.3, MC-H3.7A); L4·C5 the label check's notes and pictures
+    //! (MC-L2.15, MC-L2.16).
     use super::*;
     use psm_core::domain::{
         publish::{RemoteMedia, RemoteMediaStatus},
@@ -5477,5 +5478,96 @@ mod l4_tests {
             .unwrap();
         assert_eq!(row["status"], json!("published"));
         assert_eq!(list["counts"], page["counts"]);
+    }
+
+    // L4·C5 — the check item's notes and picture (the body of `labels_check`).
+
+    const ADDR: &str = "https://shop.example/search?q=TEST-1802";
+    const SENT: &str = "Not published to the Online Store yet; the QR code opens https://shop.example/search?q=TEST-1802.";
+
+    /// Connected to the fake Pricing (key saved, first connection run) with the default template
+    /// and P1 (`TEST-1`, priced).
+    fn pricing() -> psm_testkit::TestApp {
+        use psm_core::ports::clock::Clock;
+        let a = psm_testkit::TestApp::with_pricing().unwrap();
+        a.clock.advance(1_000_000);
+        a.fake_pricing().add_template(
+            psm_integrations::conversations::beyo_pricing::label_types::IntegrationLabelTemplate {
+                id: "tpl-70x100".into(),
+                name: "Label 70×100".into(),
+                width_mm: 70.0,
+                height_mm: 100.0,
+                is_default: true,
+                product_types: vec![],
+            },
+        );
+        a.fake_pricing()
+            .add_label_product(psm_testkit::fake_pricing::LabelSpec {
+                product_id: "1".into(),
+                sku: Some("TEST-1".into()),
+                title: "Test table".into(),
+                price_minor: Some(890_000),
+                ..Default::default()
+            });
+        a.app
+            .conversations
+            .key_set(Some(psm_testkit::test_app::PRICING_KEY))
+            .unwrap();
+        while a.app.conversations.tick(a.clock.now_ms()).unwrap().more {}
+        a
+    }
+
+    fn check_item(a: &psm_testkit::TestApp) -> Value {
+        let check = commands::labels::labels_check_body(&a.app.handles(), &["1".to_owned()])
+            .unwrap_or_else(|_| panic!("labels_check failed"));
+        serde_json::to_value(check).unwrap()["groups"][0]["items"][0].clone()
+    }
+
+    #[test]
+    fn l4_c5a_a_check_item_carries_its_notes_kind_and_address() {
+        let a = pricing();
+        a.fake_pricing().note_label("1", "url_not_published", SENT);
+        let item = check_item(&a);
+        assert_eq!(
+            (&item["notes"], &item["picture_path"]),
+            (
+                &json!([{"kind": "not_published", "message": SENT, "link": ADDR}]),
+                &Value::Null
+            )
+        );
+    }
+
+    #[test]
+    fn l4_c5b_a_check_item_carries_its_sessions_picture() {
+        let a = pricing();
+        let external = a.fake_shop().add_product_with_id(
+            "gid://shopify/Product/1",
+            "TEST-1",
+            "Test table",
+            None,
+        );
+        let item_id = psm_core::services::items::ItemsService::new(a.store(), a.clock.as_ref())
+            .with_commerce(Some(a.fake_shop()))
+            .adopt(&external)
+            .unwrap()
+            .id;
+        let session = a.sessions().create(item_id).unwrap().session.id;
+        let photo = a.add_photo(session, "TEST-1_M0.ARW").unwrap();
+        let preview = a.dir.path().join("test-previews").join("adjusted.jpg");
+        std::fs::create_dir_all(preview.parent().unwrap()).unwrap();
+        std::fs::write(&preview, b"cached").unwrap();
+        rusqlite::Connection::open(a.app.paths.db())
+            .unwrap()
+            .execute(
+                "UPDATE photos SET classification='main', position=1, adjusted_preview_path=?1 \
+                 WHERE id=?2",
+                rusqlite::params![preview.to_string_lossy(), photo.id],
+            )
+            .unwrap();
+        let item = check_item(&a);
+        assert_eq!(
+            (&item["notes"], &item["picture_path"]),
+            (&json!([]), &json!(preview.to_string_lossy()))
+        );
     }
 }

@@ -23,15 +23,18 @@ use psm_core::{
     domain::label::{
         CheckGroup, CheckOutcome, LabelArtifact, LabelCheck, LabelCounts, LabelFailure,
         LabelFilter, LabelPage, LabelRow, LabelRunResult, LabelSize, LabelState, LabelStatus,
-        LabelsAccess, LabelsError, PlanItem, PlanSummary, PlanTemplate, ResetReason, SavedLabel,
-        Selected, SessionLabel, Unresolved,
+        LabelsAccess, LabelsError, NoteKind, PlanItem, PlanSummary, PlanTemplate, ResetReason,
+        SavedLabel, Selected, SessionLabel, Unresolved,
     },
     services::labels::{LabelsFailure, LabelsService},
 };
 use psm_integrations::AppHandles;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::BTreeMap;
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+};
 use tauri::State;
 
 /// `printed` | `not_printed`.
@@ -483,7 +486,26 @@ pub struct CheckItemDto {
     pub printed_at: Option<i64>,
     pub outcome: CheckOutcomeDto,
     pub issues: Vec<String>,
-    pub notes: Vec<String>,
+    /// L4 (MC-L2.15): Pricing's notes with their kind and the QR code's address.
+    pub notes: Vec<PlanNoteDto>,
+    /// L4 (MC-L2.16): a picture of the product already on this Mac (inside the data folder).
+    pub picture_path: Option<String>,
+}
+
+/// What a note says (`not_published`: not on the web shop yet; its QR code opens `link`).
+#[derive(Debug, Clone, Copy, Serialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NoteKindDto {
+    NotPublished,
+    Other,
+}
+
+/// One note of a check item: its kind, the message as given, the address (or null).
+#[derive(Debug, Clone, Serialize, Type, PartialEq, Eq)]
+pub struct PlanNoteDto {
+    pub kind: NoteKindDto,
+    pub message: String,
+    pub link: Option<String>,
 }
 
 /// One group of the check (`template` null = the products without a template, always last).
@@ -599,8 +621,12 @@ fn template_dto(t: PlanTemplate) -> PlanTemplateDto {
     }
 }
 
-fn check_item_dto(item: PlanItem) -> CheckItemDto {
+fn check_item_dto(item: PlanItem, pictures: &HashMap<String, PathBuf>) -> CheckItemDto {
+    let picture_path = pictures
+        .get(&item.product_id)
+        .map(|path| path.to_string_lossy().into_owned());
     CheckItemDto {
+        picture_path,
         product_id: item.product_id,
         sku: item.sku,
         title: item.title,
@@ -617,15 +643,30 @@ fn check_item_dto(item: PlanItem) -> CheckItemDto {
             CheckOutcome::Fail => CheckOutcomeDto::Fail,
         },
         issues: item.issues,
-        notes: item.notes,
+        notes: item
+            .notes
+            .into_iter()
+            .map(|note| PlanNoteDto {
+                kind: match note.kind {
+                    NoteKind::NotPublished => NoteKindDto::NotPublished,
+                    NoteKind::Other => NoteKindDto::Other,
+                },
+                message: note.message,
+                link: note.link,
+            })
+            .collect(),
     }
 }
 
-fn group_dto(group: CheckGroup) -> CheckGroupDto {
+fn group_dto(group: CheckGroup, pictures: &HashMap<String, PathBuf>) -> CheckGroupDto {
     CheckGroupDto {
         template: group.template.map(template_dto),
         product_types: group.product_types,
-        items: group.items.into_iter().map(check_item_dto).collect(),
+        items: group
+            .items
+            .into_iter()
+            .map(|item| check_item_dto(item, pictures))
+            .collect(),
     }
 }
 
@@ -643,7 +684,11 @@ fn summary_dto(s: PlanSummary) -> CheckSummaryDto {
 fn check_dto(check: LabelCheck) -> LabelCheckDto {
     LabelCheckDto {
         id: check.id,
-        groups: check.groups.into_iter().map(group_dto).collect(),
+        groups: check
+            .groups
+            .into_iter()
+            .map(|group| group_dto(group, &check.pictures))
+            .collect(),
         unresolved: check
             .unresolved
             .into_iter()

@@ -661,8 +661,12 @@ of that folder (`variant_background` → `resync_folder`).
   denied; from L3 enabled for access `allowed` / `unknown` — `Generate label`, or `Reprint label` when printed —
   opening `LabelDialog` for that product beside the menu; a Labels row without a session gets a ⋯ holding only this
   item). L3: `LabelDialog` (`useLabelDialog`: `checking` → `check` → `generating` → `done`, `error`; not closable while
-  generating; Cancel after a failed Generate asks `labelsPartial`), `LabelCheckView` (groups, lines, not found, footer,
-  the preview on a white `.label-preview` tile with ‹ › in group order), `LabelDoneView` (title, result lines,
+  generating; Cancel after a failed Generate asks `labelsPartial`), `LabelCheckView` (L4, 09C §14.1: a fixed-height
+  dialog; the scrolling `label-check-scroll` holds the groups with a two-line header (`groupLines`) and a `LabelCard`
+  per product (picture `picture_path` through `previewUrl`, SKU, one-line title, price and outcome, warnings pills,
+  `QR link` showing the note's address as an `ExternalLink`; a click selects the card via `useLabelDialog.show`) and
+  the not-found lines; the pinned `label-check-footer` holds the sentences, a Generate failure and the buttons; the
+  preview on a white `.label-preview` tile with ‹ › in group order beside the list), `LabelDoneView` (title, result lines,
   failures, files and Download PDF); `LabelsBatchBar`'s `Generate labels for N` opens it for the selection, and when it
   closes after a run `LabelsBox` keeps only the selected `failed_product_ids` and asks the page again. Settings → Pricing's Labels line in
   `PricingSection.tsx`. L2: the **Labels box** — `Filters` has a fourth box `labels` (its number: the last list
@@ -709,6 +713,15 @@ of that folder (`variant_background` → `resync_folder`).
   `mechanisms::labels::merge_runs` (check failures first, then per chunk; a failure's SKU and title from the check
   item); a finished generation is answered again without a request; `partial(check_id)` answers the result over the
   finished chunks. Nothing of a check, a generation or a key is written to the database or kept across a quit.
+- **The check's notes and pictures (L4, MC-L2.15, .16; 09C §14.1):** a plan item's `notes` are `PlanNote {kind:
+  NotPublished | Other, message, link}`: the adapter (`beyo_pricing/labels.rs::plan_note`) maps Pricing's
+  `url_not_published` to `NotPublished` and reads the QR address out of its sentence (the first `http(s)://` word,
+  trailing `.,;)` removed; none → no link); core never names the code. `LabelCheck.pictures` (product id → a file
+  on this Mac) is filled in `check` by `LabelsService::check_pictures`: the matched item's session row picture from
+  **one** `SessionsService::list(All, None)` with the remote items, else the cached search picture of the `thumb_url`
+  the last `list` / `select_all` answer carried (`seen`: product id → SKU and `thumb_url`, emptied by `forget`),
+  through `RemoteItems::search_picture` (queued, never downloaded in `check`). No new call; a failed read leaves the
+  pictures empty; nothing is stored.
 - **Preview, download and the label files (L3, MC-L2.5, .11, .13):** `preview(check_id, product_id)` (a product of
   the kept check, else `NotFound`): `provider.preview` → the PDF → `LabelFiles::raster(pdf, "<check id>-<product
   id>")` → `<data>/previews/labels/<name>.png` (the one folder the webview may read, `asset_protocol_scope`); a later

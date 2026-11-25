@@ -517,17 +517,42 @@ button.research-pill { cursor: pointer; }
 /* L3 (09C §6): the label dialog. The check list on the left, the preview on the right (the package's arrangement); the
    preview PNG has an alpha channel, so it always sits on a white tile, in both themes. */
 .label-dialog { max-height: calc(100vh - 4rem); overflow: auto; }
-.label-check { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--space-4, 16px); align-items: start; }
-.label-check > .label-dialog-error, .label-check > .label-dialog-buttons { grid-column: 1 / -1; }
-.label-check-list { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
-.label-group-heading { margin: 0 0 var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-bold); }
-.label-lines, .label-unresolved, .label-done-lines, .label-failures, .label-files { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
-.label-line-main { display: grid; grid-template-columns: 110px minmax(0, 1fr) 100px 190px; gap: var(--space-2); align-items: baseline; font-size: var(--text-sm); }
-.label-line-sku { font-variant-numeric: tabular-nums; }
-.label-line-price { font-variant-numeric: tabular-nums; text-align: right; }
-.label-line-outcome { color: var(--muted); }
-.label-line-fail { color: var(--color-text); font-weight: var(--weight-bold); }
-.label-line-issue, .label-line-note { margin: 2px 0 0; color: var(--muted); font-size: var(--text-xs); }
+/* L4 (09C §14.1): the check keeps a fixed height; its header stays on top, only the list scrolls, the footer (the
+   sentences and the buttons) is pinned to the bottom, the preview stays beside the list. */
+.label-dialog:has(.label-check) { height: min(720px, calc(100vh - 4rem)); overflow: hidden; grid-template-rows: auto minmax(0, 1fr); }
+.label-check { display: grid; grid-template-columns: minmax(0, 1fr) 260px; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-4, 16px); min-height: 0; }
+.label-check-scroll { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4, 16px); padding-right: var(--space-2); }
+.label-check > .label-preview-pane { min-height: 0; overflow-y: auto; }
+.label-check-footer { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--hair); }
+.label-group-header { display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--space-2); min-width: 0; }
+.label-group-heading { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label-group-detail { margin: 0; color: var(--muted); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label-lines, .label-cards, .label-unresolved, .label-done-lines, .label-failures, .label-files { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
+/* L4 (09C §14.1): a product card: the picture (1:1, the sessions-list thumbnail's width) with the SKU under it, then the
+   one-line title, the price and the outcome, and the warnings row under them. */
+.label-card { display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--hair); border-radius: var(--r); background: var(--color-surface, transparent); cursor: pointer; }
+.label-card:hover { border-color: var(--hair-strong); }
+.label-card[aria-current="true"] { border-color: var(--color-text); box-shadow: 0 0 0 1px var(--color-text); }
+.label-card:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.label-card-side { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.label-card-thumb { display: block; width: 50px; aspect-ratio: 1 / 1; overflow: hidden; border-radius: var(--r-sm); background: var(--stage); }
+.label-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.label-card-sku { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.label-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.label-card-title { display: block; min-width: 0; font-size: var(--text-sm); font-weight: var(--weight-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label-card-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); font-size: var(--text-sm); }
+.label-card-price { font-variant-numeric: tabular-nums; }
+.label-card-outcome { color: var(--muted); }
+.label-card-fail { color: var(--color-text); font-weight: var(--weight-bold); }
+.label-card-warnings { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.label-card-pill-group { display: inline-flex; gap: 4px; max-width: 100%; }
+.label-card-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.label-card-pill[data-tone="amber"] { background: transparent; border-color: var(--warn); color: var(--color-text); }
+.label-card-pill[data-tone="red"] { background: transparent; border-color: var(--danger); color: var(--danger-700); }
+.label-card-pill[data-tone="grey"] { background: transparent; border-color: var(--hair-strong); color: var(--muted); }
+.label-card-pill[data-tone="link"] { background: transparent; border-color: var(--hair-strong); }
+.label-card-pill[data-tone="link"][aria-expanded="true"] { background: var(--accent-tint); }
+.label-card-link { margin: 0; font-size: var(--text-xs); word-break: break-all; user-select: text; }
 .label-unresolved { color: var(--muted); font-size: var(--text-sm); }
 .label-footer { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); }
 .label-footer p { margin: 0; }
@@ -549,6 +574,5 @@ button.research-pill { cursor: pointer; }
 .label-dialog-error-view { display: flex; flex-direction: column; gap: var(--space-3); }
 .label-dialog-error-view p { margin: 0; }
 @media (max-width: 760px) {
-  .label-check { grid-template-columns: minmax(0, 1fr); }
-  .label-line-main { grid-template-columns: 90px minmax(0, 1fr) 90px; }
+  .label-check { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; }
 }

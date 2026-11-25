@@ -108,8 +108,16 @@ pub struct LabelsService {
     /// MC-L1.5, .6: the counts of the last list or summary answer.
     counts: Mutex<Option<Remembered>>,
     /// MC-L1.8: the SKU of every product a list answer showed (product id → SKU), so opening a
-    /// row matches it by rule 3 as the list did.
-    seen_skus: Mutex<HashMap<String, Option<String>>>,
+    /// row matches it by rule 3 as the list did; L4 (MC-L2.16): with its picture address, so the
+    /// check can name a picture already on this Mac (rows of `select_all` too).
+    seen: Mutex<HashMap<String, SeenRow>>,
+}
+
+/// MC-L1.8, MC-L2.16: what is remembered of a row a list or Select all answer carried.
+#[derive(Debug, Clone, Default)]
+struct SeenRow {
+    sku: Option<String>,
+    thumb_url: Option<String>,
 }
 
 impl LabelsService {
@@ -139,7 +147,7 @@ impl LabelsService {
             kept: Mutex::new(None),
             access: Mutex::new(None),
             counts: Mutex::new(None),
-            seen_skus: Mutex::new(HashMap::new()),
+            seen: Mutex::new(HashMap::new()),
         }
     }
 
@@ -147,8 +155,22 @@ impl LabelsService {
         self.counts.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn seen_skus(&self) -> MutexGuard<'_, HashMap<String, Option<String>>> {
-        self.seen_skus.lock().unwrap_or_else(|e| e.into_inner())
+    fn seen(&self) -> MutexGuard<'_, HashMap<String, SeenRow>> {
+        self.seen.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// MC-L1.8, MC-L2.16: the rows of an answer are remembered (SKU and picture address).
+    fn remember(&self, products: &[crate::domain::label::LabelProduct]) {
+        let mut seen = self.seen();
+        for product in products {
+            seen.insert(
+                product.product_id.clone(),
+                SeenRow {
+                    sku: product.sku.clone(),
+                    thumb_url: product.thumb_url.clone(),
+                },
+            );
+        }
     }
 
     pub(super) fn copy(&self) -> MutexGuard<'_, LabelCopy> {
@@ -346,11 +368,12 @@ impl LabelsService {
         Ok(())
     }
 
-    /// ACC.2, .3: the copy, the remembered counts and the SKUs seen are emptied.
+    /// ACC.2, .3: the copy, the remembered counts and the rows seen (SKUs and picture
+    /// addresses) are emptied.
     fn forget(&self) {
         self.copy().clear();
         *self.counts() = None;
-        self.seen_skus().clear();
+        self.seen().clear();
     }
 
     /// One products request whose rows' states are applied to the copy and whose counts are
@@ -407,12 +430,7 @@ impl LabelsService {
         let store = self.gate()?;
         let q = search_text(query);
         let page = self.products(&store, filter, q.as_deref(), cursor, LIST_PAGE)?;
-        {
-            let mut seen = self.seen_skus();
-            for product in &page.products {
-                seen.insert(product.product_id.clone(), product.sku.clone());
-            }
-        }
+        self.remember(&page.products);
         let items = self.match_items()?;
         let matched: Vec<Option<i64>> = page
             .products
@@ -476,6 +494,67 @@ impl LabelsService {
         })
     }
 
+    /// MC-L2.16: a picture per checked product from what is on this Mac: the matched session's
+    /// row picture (one sessions list with the remote items), else the cached search picture of
+    /// its remembered `https://` address (none while its download waits in the queue). No
+    /// provider or shop call, nothing downloaded; a failed read leaves the answer empty.
+    pub(super) fn check_pictures(
+        &self,
+        products: &[(String, Option<String>)],
+    ) -> HashMap<String, std::path::PathBuf> {
+        match self.pictures_of(products) {
+            Ok(pictures) => pictures,
+            Err(error) => {
+                tracing::warn!(target: LOG, %error, "label check pictures not read");
+                HashMap::new()
+            }
+        }
+    }
+
+    fn pictures_of(
+        &self,
+        products: &[(String, Option<String>)],
+    ) -> Result<HashMap<String, std::path::PathBuf>> {
+        let items = self.match_items()?;
+        let matched: Vec<Option<i64>> = products
+            .iter()
+            .map(|(product_id, sku)| {
+                match_product(product_id, sku.as_deref(), &items)
+                    .and_then(|i| items[i].0.session_id)
+            })
+            .collect();
+        let mut covers: HashMap<i64, std::path::PathBuf> = HashMap::new();
+        if matched.iter().any(Option::is_some) {
+            let list = SessionsService::new(self.store.as_ref(), self.clock.as_ref())
+                .with_remote(self.remote.as_ref())
+                .list(ListFilter::All, None)?;
+            for row in list.groups.into_iter().flat_map(|group| group.rows) {
+                if let Some(path) = row.cover_preview_path {
+                    covers.insert(row.id, std::path::PathBuf::from(path));
+                }
+            }
+        }
+        let seen = self.seen().clone();
+        let mut pictures = HashMap::new();
+        for ((product_id, _), session) in products.iter().zip(matched) {
+            if let Some(path) = session.and_then(|id| covers.get(&id)) {
+                pictures.insert(product_id.clone(), path.clone());
+                continue;
+            }
+            let url = seen
+                .get(product_id)
+                .and_then(|row| row.thumb_url.as_deref())
+                .filter(|url| url.starts_with("https://"));
+            let commerce_id = self.provider.commerce_id_of(product_id);
+            if let (Some(url), Some(external_id), Some(_)) = (url, commerce_id, &self.commerce)
+                && let Some(path) = self.remote.search_picture(&external_id, url)?
+            {
+                pictures.insert(product_id.clone(), path);
+            }
+        }
+        Ok(pictures)
+    }
+
     /// MC-L1.6 (owner card 1): the box's number, the remembered `missing_price_tag`. With
     /// `refresh`, when calls are allowed and nothing is remembered, or the remembered answer had
     /// a search, or it is older than `COUNT_FRESH_MS`, one unsearched one-row request is made
@@ -529,6 +608,7 @@ impl LabelsService {
                 cursor.as_deref(),
                 SELECT_ALL_PAGE,
             ))?;
+            self.remember(&page.products);
             selected.extend(page.products.into_iter().filter_map(|product| {
                 product.sku.map(|sku| Selected {
                     product_id: product.product_id,
@@ -555,7 +635,7 @@ impl LabelsService {
     /// session. Errors of the adopt pass through and create nothing. Needs no label access.
     pub fn open_product(&self, product_id: &str) -> std::result::Result<i64, LabelsFailure> {
         let items = self.match_items()?;
-        let sku = self.seen_skus().get(product_id).cloned().flatten();
+        let sku = self.seen().get(product_id).and_then(|row| row.sku.clone());
         let sessions = SessionsService::new(self.store.as_ref(), self.clock.as_ref());
         if let Some(i) = match_product(product_id, sku.as_deref(), &items) {
             let item = &items[i].0;

@@ -98,7 +98,7 @@ function checkOf(ids: string[]): LabelCheck {
     id: 'c',
     groups: [{
       template: { id: 't70', name: 'Label 70×100', width_mm: 70, height_mm: 100 }, product_types: [],
-      items: ids.map(id => ({ product_id: id, sku: `TEST-${id}`, title: `Test table ${id}`, price_minor: 890_000, status: 'not_printed', printed_at: null, outcome: 'mark_printed', issues: [], notes: [] })),
+      items: ids.map(id => ({ product_id: id, sku: `TEST-${id}`, title: `Test table ${id}`, price_minor: 890_000, status: 'not_printed', printed_at: null, outcome: 'mark_printed', issues: [], notes: [], picture_path: null })),
     }],
     unresolved: [],
     summary: { items: ids.length, ready: ids.length, failing: 0, mark_printed: ids.length, reprint: 0, no_price: 0 },

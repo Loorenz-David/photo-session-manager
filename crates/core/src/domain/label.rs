@@ -145,8 +145,26 @@ pub struct PlanItem {
     pub outcome: CheckOutcome,
     /// The messages as given.
     pub issues: Vec<String>,
-    /// The messages as given.
-    pub notes: Vec<String>,
+    /// L4 (MC-L2.15): the notes with their kind and address.
+    pub notes: Vec<PlanNote>,
+}
+
+/// L4 (MC-L2.15): what a plan note says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NoteKind {
+    /// The product is not on the web shop yet; its QR code opens `link`.
+    NotPublished,
+    Other,
+}
+
+/// L4 (MC-L2.15): one note of a plan item: its kind, the message as given, and the address the
+/// QR code opens (only for `NotPublished`, when the message names one).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlanNote {
+    pub kind: NoteKind,
+    pub message: String,
+    pub link: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -356,6 +374,8 @@ pub struct LabelCheck {
     pub unresolved: Vec<Unresolved>,
     pub summary: PlanSummary,
     pub sizes: Vec<LabelSize>,
+    /// L4 (MC-L2.16): product id → a picture file on this Mac that exists (never stored).
+    pub pictures: std::collections::HashMap<String, std::path::PathBuf>,
 }
 
 /// L3 (MC-L2.9): one product that was not generated, with its message.

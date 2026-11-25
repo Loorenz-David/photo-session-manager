@@ -1,4 +1,4 @@
-import type { CheckItem, CheckOutcome, CheckSummary, LabelRunResult } from '@/services/labels';
+import type { CheckGroup, CheckItem, CheckOutcome, CheckSummary, LabelRunResult } from '@/services/labels';
 import type { LabelMarker } from '@/services/labels';
 
 /** L1 (09C §4, §6, §7; master plan labels §4 Words): the words labels show. */
@@ -157,6 +157,29 @@ export function resultLines(result: LabelRunResult): { mark: string; text: strin
     { n: result.not_run.length, mark: '✕', text: `${result.not_run.length} not generated` },
   ];
   return lines.filter(line => line.n > 0).map(({ mark, text }) => ({ mark, text }));
+}
+
+// ---------- L4: the check's product cards (09C §14.1) ----------
+
+export const NO_PRICE_PILL = NO_PRICE;
+export const NOT_PUBLISHED_YET = 'Not published yet';
+export const QR_LINK = 'QR link';
+
+/** A red pill of a card: `Can't generate: <message>` (the message as Pricing gave it, 09C §10). */
+export function cantGenerate(message: string): string {
+  return `${CANT_GENERATE}: ${message}`;
+}
+
+/**
+ * 09C §14.1: a group's header in two lines: the template's name (`No template` without one), then its product types
+ * joined by ", " and its size (only the size when it names no product types); no second line without a template.
+ */
+export function groupLines(group: CheckGroup): { name: string; detail: string | null } {
+  const template = group.template;
+  if (!template) return { name: NO_TEMPLATE, detail: null };
+  const size = sizeText(template.width_mm, template.height_mm);
+  const detail = group.product_types.length > 0 ? `${group.product_types.join(', ')} · ${size}` : size;
+  return { name: template.name, detail };
 }
 
 /** A file row's label count: `1 label`, `2 labels`. */

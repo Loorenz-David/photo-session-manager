@@ -74,6 +74,8 @@ export type LabelCheck = LabelCheckDto_Serialize;
 /** One group of the check (`template` null = the products without a template, always last). */
 export type CheckGroup = LabelCheck['groups'][number];
 export type CheckItem = CheckGroup['items'][number];
+/** L4 (MC-L2.15): a note of a check item (`not_published` with the QR code's address, or `other`). */
+export type CheckNote = CheckItem['notes'][number];
 export type CheckUnresolved = LabelCheck['unresolved'][number];
 export type CheckSummary = LabelCheck['summary'];
 /** L3 (MC-L2.9): the done dialog's content. Fully generated ⇔ `failures` and `not_run` are both empty. */
