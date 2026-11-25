@@ -209,6 +209,30 @@ before the first jump, also after several jumps) and **Shoot here instead** (act
 opening does). Any ordinary navigation ends the visit and behaves as before; a visit does not survive a restart. From
 Settings with unsaved changes, Open session asks "Save your changes?" first.
 
+## Price labels (book `09C` incl. §14; `docs/implementation/master_plan_labels.md`; L1–L4 built)
+Beyo Pricing also owns price-label templates, renders the labels and records which products have a printed label.
+Session Manager only asks and generates; it never stores label state (M-L1), never edits templates and never marks a
+label printed itself. Same key and store as conversations; labels need the scopes `labels:read` and `labels:write`
+(Settings → Pricing → Test connection says "Labels: allowed").
+- **Labels box:** the fourth box after Open / Published / All, its count = Pricing's missing price tags (has a price,
+  not printed), shown as soon as the list opens. Inside it the filters (Missing price tag · Not printed · Printed ·
+  All), counts and search go through Pricing; pages of 25 with Previous / Next. A row with a session on this Mac is
+  that session; any other row shows Pricing's title and picture and opens as a shop-only item (adopt, 10H). Rows can
+  be ticked, or **Select all N** across pages.
+- **Generate label / Reprint label** in every published session's ⋯ (rows and session page; greyed "Publish first so
+  Pricing can see it" before publishing), and **Generate labels for N** in the Labels box.
+- **Check dialog** (nothing changes yet): products grouped by template; one card per product (1:1 picture with the
+  SKU under it, one-line title, price, outcome), warnings as pills ("No price", "Can't generate: …", "Not published
+  yet", a "QR link" toggle); a picture of the real label (PDF rasterised with macOS `sips`); a pinned footer.
+- **Generate PDF:** runs in chunks of 300 with one idempotency key per chunk reused on every retry (M-L3), then saves
+  every PDF in `~/Documents/Session Manager Labels/` and opens it in Preview at once. All well: the dialog closes
+  with a toast; otherwise it stays on the problems ("N of M labels generated").
+- **Markers** on every row and the session page ("Label printed · 4 Nov", "Missing price tag", "Price changed: new
+  label needed", "No price yet") come from Pricing's status call and its `label.printed` / `label.reset` events in the
+  10 s pull; no notifications.
+- **Products from the other Mac** (shop-only items) count as Published in the sessions list until their photos are
+  brought back for editing (09C §14.3).
+
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |
 |---|---|

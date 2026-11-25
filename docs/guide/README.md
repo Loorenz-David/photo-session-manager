@@ -32,6 +32,10 @@ summarises and points; it never replaces the authorities below. Keep it current 
 | Research: names, tables, settings keys, seams, commands, test commands | `docs/implementation/master_plan_research.md` (§6 registry, §7 environment); it wins over `master_plan.md` on a research name |
 | Research: what was built, measured and decided, newest state | `docs/implementation/STATUS_research.md`; `narratives/R*.md`; `backlog_research/R*.md`; measurements in `docs/intention/evidence/research_providers.md` |
 | Shooting templates: what they must do; names, tables, commands and the placement contract (P1–P10) | `docs/intention/book/10G_shooting_templates.md`; `docs/implementation/master_plan_templates.md` (wins over `master_plan.md` on a template name); plans `T1`–`T4` |
+| Publication writer: what it must do; names, settings, commands | `docs/intention/book/08C_publication_writer.md`; `docs/implementation/master_plan_writer.md`; `STATUS_writer.md` |
+| Conversations with Pricing: what they must do; names, contracts MC-C1…MC-C3 | `docs/intention/book/09B_pricing_conversations.md`; `docs/implementation/master_plan_conversations.md`; `STATUS_conversations.md` |
+| Price labels: what they must do (incl. owner corrections §14); names, contracts ACC, MC-L1…MC-L4 | `docs/intention/book/09C_pricing_labels.md`; `docs/implementation/master_plan_labels.md`; `STATUS_labels.md`; Pricing's package `pricing-app/docs/integrations/session-manager/` (read-only) |
+| Archived and shop-only items: what they must do; names, contracts MC-H1…MC-H5 | `docs/intention/book/10H_archived_items_editable.md`; `docs/implementation/master_plan_archive.md`; `STATUS_archive.md` |
 | What exists and how it behaves today | **the code**; then `docs/implementation/narratives/P*.md` (plain-language result per phase), `STATUS.md`, `backlog.md` |
 | Orientation | this guide |
 
@@ -53,6 +57,8 @@ few places (listed in `01_product.md` §Book pending updates).
 | Touch research (engine, rules, adapters, its settings or UI) | `01_product.md` §Research assistant; `02_architecture.md` §Research; `03_rules_and_principles.md` §Research hard rules; `04_change_impact.md` §Research; book `08A`, then the `08B` contract you touch **and** its changelog 12–18; the "supersedes" sections of plans `R11`–`R13`; `master_plan_research.md` §5 Seams, §6; `crates/research/src/`; narratives R11–R13 |
 | Run a research measurement or replay a stage | `05_working.md` §Research tool; `crates/research-tool/src/lib.rs` (`USAGE`); `master_plan_research.md` §3 (Rule 9, Keys, Spending ceilings); `docs/intention/evidence/research_providers.md` (how the earlier measurements were run and what they found) |
 | Touch shooting templates (editor, placement, hand changes, retake, shift) | `01_product.md` workflow row "Shooting template"; `02_architecture.md` §Shooting templates; `04_change_impact.md` §Shooting templates; book `10G`; `master_plan_templates.md` §4, §5; `crates/core/src/services/template_placement.rs`; tests `crates/testkit/tests/suite/t1_templates.rs`…`t4_template_retake_shift.rs` |
+| Touch conversations or price labels (Pricing adapter, pull, Labels box, check dialog) | `01_product.md` §Conversations with Pricing, §Price labels; `02_architecture.md` §Conversations with Pricing, §Price labels; `03_rules_and_principles.md` §Price labels invariants; `04_change_impact.md` §Price labels |
+| Touch archived / shop-only items (covers, pages, bring back, remote workspace) | `01_product.md` workflow rows "Archived in Shopify", "Bring back"; `02_architecture.md` §Remote items; `master_plan_archive.md` |
 | Run a research phase | `docs/process/flow.md` §10; `master_plan_research.md` §0, §5 Driver loop, §7.2; `docs/implementation/STATUS_research.md`; `docs/implementation/phases_research.txt`; the plan `docs/implementation/plans/R<n>_<slug>.md` (its Tracker line and Closing gate); `05_working.md` §Research phases |
 
 ## Repo map (one screen)
@@ -84,6 +90,8 @@ docs/intention/                   intention.md (map) + book/ (chapters) + eviden
 docs/implementation/              master_plan.md, plans/, narratives/, backlog.md, STATUS.md, handoffs/, prompts/, state/, phases.txt
                                   research track: master_plan_research.md, phases_research.txt (R1–R13), plans/R*.md, narratives/R*.md,
                                   backlog_research/, STATUS_research.md, research_row_mapping.md (where each criterion row went)
+                                  other tracks, same shape: writer (W*), conversations (C*), templates (T*), archive (H*), labels (L*):
+                                  master_plan_<track>.md, phases_<track>.txt, STATUS_<track>.md
 docs/test-items/                  research test pieces + answer key, accept_settings_owner.json (the owner's research set-up for `accept`)
 docs/process/                     flow.md (process authority), orchestrator.md, prompts/
 docs/reference/                   capture_one_16.8.6.sdef
