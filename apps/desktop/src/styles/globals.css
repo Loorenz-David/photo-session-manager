@@ -519,7 +519,7 @@ button.research-pill { cursor: pointer; }
 .label-dialog { max-height: calc(100vh - 4rem); overflow: auto; }
 /* L4 (09C §14.1): the check keeps a fixed height; its header stays on top, only the list scrolls, the footer (the
    sentences and the buttons) is pinned to the bottom, the preview stays beside the list. */
-.label-dialog:has(.label-check) { height: min(720px, calc(100vh - 4rem)); overflow: hidden; grid-template-rows: auto minmax(0, 1fr); }
+.label-dialog:has(.label-check), .label-dialog:has(.label-done) { height: min(720px, calc(100vh - 4rem)); overflow: hidden; grid-template-rows: auto minmax(0, 1fr); }
 .label-check { display: grid; grid-template-columns: minmax(0, 1fr) 260px; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-4, 16px); min-height: 0; }
 .label-check-scroll { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4, 16px); padding-right: var(--space-2); }
 .label-check > .label-preview-pane { min-height: 0; overflow-y: auto; }
@@ -565,12 +565,14 @@ button.research-pill { cursor: pointer; }
 .label-dialog-buttons { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 .label-busy { display: inline-flex; align-items: center; gap: var(--space-2); margin-right: auto; color: var(--muted); font-size: var(--text-sm); }
 .label-busy svg { width: 14px; height: 14px; }
-.label-done { display: flex; flex-direction: column; gap: var(--space-3); }
+.label-done { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-3); min-height: 0; }
+/* L4 (09C §14.2): the result scrolls inside the dialog's fixed height; Close stays in view below it. */
+.label-done-scroll { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-3); padding-right: var(--space-2); }
+.label-done > .label-dialog-buttons { padding-top: var(--space-3); border-top: 1px solid var(--hair); }
+.label-saved svg { width: 14px; height: 14px; vertical-align: -2px; }
 .label-done-note, .label-print-hint, .label-saved { margin: 0; color: var(--muted); font-size: var(--text-sm); }
 .label-saved-path { color: var(--color-text); word-break: break-all; user-select: text; }
-.label-file { display: grid; grid-template-columns: minmax(0, 1fr) 70px 110px auto; gap: var(--space-2); align-items: center; font-size: var(--text-sm); }
-.label-file > .label-dialog-error, .label-file > .label-saved { grid-column: 1 / -1; }
-.label-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.label-file { font-size: var(--text-sm); }
 .label-dialog-error-view { display: flex; flex-direction: column; gap: var(--space-3); }
 .label-dialog-error-view p { margin: 0; }
 @media (max-width: 760px) {

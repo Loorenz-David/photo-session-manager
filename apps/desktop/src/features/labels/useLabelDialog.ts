@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CONNECT_PRICING, connectionLine } from '@/features/conversations/connectionLine';
 import { conversationsSettingsGet } from '@/services/conversations';
 import {
@@ -13,25 +14,28 @@ import {
   type LabelRunResult,
   type SavedLabel,
 } from '@/services/labels';
+import { fullyGenerated, generatedToast } from './labelWords';
 
 /** A command failure as the wrappers reject it. */
 export type LabelFailure = { code: string; message: string; data?: Record<string, string> };
 
 /**
- * L3 (09C §6, MC-L2): the dialog's states. `checking` → `check` → `generating` → `done`; `error` when the check
- * failed; a failed Generate goes back to `check` with its failure (Try again / Cancel).
+ * L3 (09C §6, MC-L2), L4 (09C §14.2, MC-L2.17): the dialog's states. `checking` → `check` → `generating` → `saving`
+ * (every file of the result saved and opened, not closable) → closed with a toast, or `done` (the result view);
+ * `error` when the check failed; a failed Generate goes back to `check` with its failure (Try again / Cancel).
  */
 export type DialogState =
   | { phase: 'checking' }
   | { phase: 'error'; failure: LabelFailure; words: string }
   | { phase: 'check'; check: LabelCheck; failure: LabelFailure | null }
   | { phase: 'generating'; check: LabelCheck }
+  | { phase: 'saving'; check: LabelCheck; result: LabelRunResult }
   | { phase: 'done'; check: LabelCheck; result: LabelRunResult };
 
 /** The preview picture of one product: loading, its file, or the message shown in its place. */
 export type PreviewState = { kind: 'loading' } | { kind: 'ready'; path: string } | { kind: 'failed'; message: string };
 
-/** One file row's download: in flight, failed (with Try again when it may help), saved without Preview. */
+/** One file's save: in flight, failed (with Try again when it may help), saved (opened in Preview or not). */
 export type DownloadState = { kind: 'busy' } | { kind: 'failed'; failure: LabelFailure } | { kind: 'saved'; saved: SavedLabel };
 
 /** Generate failures that a press of Try again may cure (09C §6.2, §10). */
@@ -55,13 +59,19 @@ export function displayItems(check: LabelCheck): CheckItem[] {
 /**
  * The dialog's logic: `labelsCheck` when opened, `labelsPreview` for the product shown, `labelsGenerate` on the button
  * (a second press while one is in flight does nothing), `labelsPartial` when the photographer leaves after a failed
- * Generate, `labelsDownload` per file. `onClose` gets the run's result when there is one.
+ * Generate. Whenever a result arrives, `labelsDownload` saves and opens each of its files, in order, each at most once
+ * automatically (MC-L2.17); everything generated → one toast and the dialog closes, otherwise the result view (Try
+ * again per file whose save may succeed again). `onClose` gets the run's result when there is one.
  */
 export function useLabelDialog(productIds: string[], onClose: (result: LabelRunResult | null) => void) {
   const [state, setState] = useState<DialogState>({ phase: 'checking' });
   const [shown, setShown] = useState(0);
   const [previews, setPreviews] = useState<Map<string, PreviewState>>(() => new Map());
   const [downloads, setDownloads] = useState<Map<string, DownloadState>>(() => new Map());
+  /** The files' states as last set (read when the automatic saves have settled). */
+  const files = useRef(new Map<string, DownloadState>());
+  /** The files already asked automatically (by artifact id; never asked twice, MC-L2.17). */
+  const savedOnce = useRef(new Set<string>());
   const inFlight = useRef(false);
   /** The products whose preview was asked (once each). */
   const asked = useRef(new Set<string>());
@@ -105,7 +115,7 @@ export function useLabelDialog(productIds: string[], onClose: (result: LabelRunR
     };
   }, [idsKey]);
 
-  const check = state.phase === 'check' || state.phase === 'generating' || state.phase === 'done' ? state.check : null;
+  const check = state.phase === 'check' || state.phase === 'generating' || state.phase === 'saving' || state.phase === 'done' ? state.check : null;
   const items = check ? displayItems(check) : [];
   const shownItem: CheckItem | null = items[Math.min(shown, Math.max(items.length - 1, 0))] ?? null;
   const checkId = check?.id ?? null;
@@ -129,7 +139,7 @@ export function useLabelDialog(productIds: string[], onClose: (result: LabelRunR
     setState({ phase: 'generating', check: current });
     labelsGenerate({ check_id: current.id })
       .then(
-        result => setState({ phase: 'done', check: current, result }),
+        result => void deliver(current, result),
         (failure: LabelFailure) => setState({ phase: 'check', check: current, failure }),
       )
       .finally(() => {
@@ -137,9 +147,49 @@ export function useLabelDialog(productIds: string[], onClose: (result: LabelRunR
       });
   }
 
-  /** Leaving: closes, except after a failed Generate, where the result so far is shown (MC-L2.10, D16). */
+  function setFile(id: string, file: DownloadState) {
+    files.current.set(id, file);
+    setDownloads(new Map(files.current));
+  }
+
+  /** Saves and opens one file of the kept result. */
+  async function save(current: LabelCheck, file: LabelFile) {
+    setFile(file.id, { kind: 'busy' });
+    try {
+      const saved = await labelsDownload({ check_id: current.id, artifact_id: file.id });
+      setFile(file.id, { kind: 'saved', saved });
+    } catch (failure) {
+      setFile(file.id, { kind: 'failed', failure: failure as LabelFailure });
+    }
+  }
+
+  /**
+   * MC-L2.17: a result arrived. Each of its files not asked yet is saved and opened, one after the other, while the
+   * dialog cannot be closed; then everything generated (nothing failed or left, none not found, every file opened) →
+   * one toast and the dialog closes with the result; otherwise the result view.
+   */
+  async function deliver(current: LabelCheck, result: LabelRunResult) {
+    setState({ phase: 'saving', check: current, result });
+    for (const file of result.artifacts) {
+      if (savedOnce.current.has(file.id)) continue;
+      savedOnce.current.add(file.id);
+      await save(current, file);
+    }
+    const opened = result.artifacts.every(file => {
+      const saved = files.current.get(file.id);
+      return saved?.kind === 'saved' && saved.saved.opened;
+    });
+    if (fullyGenerated(result) && current.unresolved.length === 0 && opened) {
+      toast.success(generatedToast(result));
+      close(result);
+      return;
+    }
+    setState({ phase: 'done', check: current, result });
+  }
+
+  /** Leaving: closes, except after a failed Generate, where the result so far is saved and shown (MC-L2.10, D16). */
   function leave() {
-    if (state.phase === 'generating') return;
+    if (state.phase === 'generating' || state.phase === 'saving') return;
     if (state.phase === 'done') {
       close(state.result);
       return;
@@ -147,7 +197,7 @@ export function useLabelDialog(productIds: string[], onClose: (result: LabelRunR
     if (state.phase === 'check' && state.failure) {
       const current = state.check;
       labelsPartial({ check_id: current.id }).then(
-        result => setState({ phase: 'done', check: current, result }),
+        result => void deliver(current, result),
         () => close(null),
       );
       return;
@@ -155,20 +205,12 @@ export function useLabelDialog(productIds: string[], onClose: (result: LabelRunR
     close(null);
   }
 
-  function download(file: LabelFile, single: boolean) {
-    if (state.phase !== 'done' || downloads.get(file.id)?.kind === 'busy') return;
-    const { check: current, result } = state;
-    setDownloads(previous => new Map(previous).set(file.id, { kind: 'busy' }));
-    labelsDownload({ check_id: current.id, artifact_id: file.id }).then(
-      saved => {
-        if (single && saved.opened) {
-          close(result);
-          return;
-        }
-        setDownloads(previous => new Map(previous).set(file.id, { kind: 'saved', saved }));
-      },
-      (failure: LabelFailure) => setDownloads(previous => new Map(previous).set(file.id, { kind: 'failed', failure })),
-    );
+  /** Try again for a file whose save failed with a code that may succeed again; the dialog stays open. */
+  function retry(file: LabelFile) {
+    if (state.phase !== 'done') return;
+    const current = files.current.get(file.id);
+    if (current?.kind !== 'failed' || !canRetryDownload(current.failure)) return;
+    void save(state.check, file);
   }
 
   return {
@@ -186,7 +228,7 @@ export function useLabelDialog(productIds: string[], onClose: (result: LabelRunR
     generate,
     leave,
     close,
-    download,
+    retry,
     downloads,
   };
 }

@@ -666,8 +666,15 @@ of that folder (`variant_background` → `resync_folder`).
   per product (picture `picture_path` through `previewUrl`, SKU, one-line title, price and outcome, warnings pills,
   `QR link` showing the note's address as an `ExternalLink`; a click selects the card via `useLabelDialog.show`) and
   the not-found lines; the pinned `label-check-footer` holds the sentences, a Generate failure and the buttons; the
-  preview on a white `.label-preview` tile with ‹ › in group order beside the list), `LabelDoneView` (title, result lines,
-  failures, files and Download PDF); `LabelsBatchBar`'s `Generate labels for N` opens it for the selection, and when it
+  preview on a white `.label-preview` tile with ‹ › in group order beside the list), L4 (09C §14.2, MC-L2.17): whenever a result
+  arrives (`labelsGenerate`, or `labelsPartial` after a failed Generate) `useLabelDialog` enters `saving` (busy line
+  `Opening in Preview…`, not closable) and calls `labelsDownload` for each of its files in order, each at most once
+  automatically (a ref keyed by artifact id; `labels_download` is called by the dialog, never by a button); everything
+  generated (no failure, nothing not run, nothing not found, every file `opened`) → one `toast.success`
+  (`generatedToast`, raised only here) and the dialog closes with the result; otherwise `LabelDoneView` (title
+  `doneTitle(result, single, notFound)`, result lines, a `LabelCard` per failure, the not-found lines, a line per
+  file — saved and opened, saved but not opened with its path, or the failure with Try again for a retryable code —
+  and `Close`, scrolling inside the fixed height with `Close` pinned); `LabelsBatchBar`'s `Generate labels for N` opens it for the selection, and when it
   closes after a run `LabelsBox` keeps only the selected `failed_product_ids` and asks the page again. Settings → Pricing's Labels line in
   `PricingSection.tsx`. L2: the **Labels box** — `Filters` has a fourth box `labels` (its number: the last list
   answer's `missing_price_tag` inside the box, else `labelsSummary({refresh: true})`, asked when `SessionsPage` mounts,

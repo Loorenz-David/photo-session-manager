@@ -74,6 +74,7 @@ export function LabelCheckView({
   check,
   single,
   generating,
+  busyWords,
   failure,
   items,
   shown,
@@ -87,6 +88,8 @@ export function LabelCheckView({
   /** The dialog was opened with one product id (projection r0 D11). */
   single: boolean;
   generating: boolean;
+  /** The busy line while generating (`Generating…` when none). */
+  busyWords?: string;
   failure: LabelFailure | null;
   items: CheckItem[];
   shown: number;
@@ -148,7 +151,7 @@ export function LabelCheckView({
         <div className="label-dialog-buttons">
           {generating && (
             <span className="label-busy" role="status" aria-busy="true">
-              <Loader2 className="animate-spin" aria-hidden /> Generating…
+              <Loader2 className="animate-spin" aria-hidden /> {busyWords ?? 'Generating…'}
             </span>
           )}
           {failure && !canRetryGenerate(failure) ? (

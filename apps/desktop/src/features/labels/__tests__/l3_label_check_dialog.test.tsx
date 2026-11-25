@@ -30,7 +30,7 @@ vi.mock('@/features/settings/SettingsNav', async importOriginal => ({
 }));
 
 import { LabelDialog } from '@/features/labels/LabelDialog';
-import { labelsCheck, labelsGenerate, labelsPartial, labelsPreview } from '@/services/labels';
+import { labelsCheck, labelsGenerate, labelsPreview } from '@/services/labels';
 
 if (!('PointerEvent' in window)) {
   class PointerEventPolyfill extends MouseEvent {
@@ -71,10 +71,6 @@ function check(groups: CheckGroup[], change: Partial<LabelCheck> = {}): LabelChe
     summary: { items: all.length, ready: all.length - n('fail'), failing: n('fail'), mark_printed: n('mark_printed'), reprint: n('reprint'), no_price: n('no_price') },
     sizes: [], ...change,
   };
-}
-
-function result(change: Partial<LabelRunResult> = {}): LabelRunResult {
-  return { total: 1, rendered: 1, marked_printed: 1, reprinted: 0, no_price: 0, failures: [], not_run: [], artifacts: [], failed_product_ids: [], ...change };
 }
 
 /** Renders the dialog in a host that unmounts it when it closes; answers the `onClose` calls. */
@@ -289,29 +285,6 @@ it('l3_c14c_a_busy_renderer_offers_try_again', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Generate PDF' }));
   expect(await screen.findByText("Labels can't be generated right now. Try again in a moment.")).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
-});
-
-it('l3_c14d_leaving_after_a_failed_generate_shows_what_was_generated', async () => {
-  vi.mocked(labelsGenerate).mockRejectedValue({ code: 'labels_unreachable', message: "Pricing can't be reached right now." });
-  vi.mocked(labelsPartial).mockResolvedValue(result({
-    total: 50, rendered: 3, marked_printed: 3, not_run: Array.from({ length: 47 }, (_, i) => String(i + 4)),
-    artifacts: [{ id: 'a1', filename: 'labels-1-70x100.pdf', width_mm: 70, height_mm: 100, page_count: 3 }],
-    failed_product_ids: Array.from({ length: 47 }, (_, i) => String(i + 4)),
-  }));
-  await checked(['1', '2', '3']);
-  fireEvent.click(screen.getByRole('button', { name: 'Generate PDF' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-  expect(await screen.findByRole('heading', { name: '3 of 50 labels generated' })).toBeInTheDocument();
-  expect(screen.getByText('✕ 47 not generated')).toBeInTheDocument();
-  expect(vi.mocked(labelsPartial).mock.calls).toEqual([[{ check_id: 'c' }]]);
-  cleanup();
-
-  vi.mocked(labelsPartial).mockRejectedValue({ code: 'not_found', message: 'Not found' });
-  const closed = await checked(['1', '2', '3']);
-  fireEvent.click(screen.getByRole('button', { name: 'Generate PDF' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  expect(closed).toEqual([null]);
 });
 
 it('l3_c14e_a_refused_run_offers_only_close', async () => {

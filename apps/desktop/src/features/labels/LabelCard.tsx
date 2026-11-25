@@ -14,18 +14,30 @@ type Tone = 'amber' | 'red' | 'grey';
  * not-published note, with the `QR link` pill button when the note names an address · each other note as a grey pill.
  * `QR link` shows or hides the address under the pills (it opens nothing itself; the address opens in the browser when
  * clicked). Clicking the card selects it (`aria-current="true"` when selected).
+ *
+ * With `failure` (the result view's problem card, 09C §14.2) the outcome reads `Can't generate` and the only pill is the
+ * red `Can't generate: <failure>`.
  */
-export function LabelCard({ item, selected = false, onSelect }: { item: CheckItem; selected?: boolean; onSelect?: () => void }) {
+export function LabelCard({ item, selected = false, onSelect, failure }: {
+  item: CheckItem;
+  selected?: boolean;
+  onSelect?: () => void;
+  failure?: string;
+}) {
   const [shownLink, setShownLink] = useState<string | null>(null);
-  const failing = item.outcome === 'fail';
+  const failing = failure !== undefined || item.outcome === 'fail';
   const title = item.title ?? '';
   const pills: { key: string; text: string; tone: Tone; link?: string }[] = [];
-  if (item.outcome === 'no_price' || item.price_minor == null) pills.push({ key: 'no-price', text: NO_PRICE_PILL, tone: 'amber' });
-  item.issues.forEach((issue, i) => pills.push({ key: `issue-${i}`, text: cantGenerate(issue), tone: 'red' }));
-  item.notes.forEach((note, i) => {
-    if (note.kind === 'not_published') pills.push({ key: `note-${i}`, text: NOT_PUBLISHED_YET, tone: 'amber', link: note.link ?? undefined });
-    else pills.push({ key: `note-${i}`, text: note.message, tone: 'grey' });
-  });
+  if (failure !== undefined) {
+    pills.push({ key: 'failure', text: cantGenerate(failure), tone: 'red' });
+  } else {
+    if (item.outcome === 'no_price' || item.price_minor == null) pills.push({ key: 'no-price', text: NO_PRICE_PILL, tone: 'amber' });
+    item.issues.forEach((issue, i) => pills.push({ key: `issue-${i}`, text: cantGenerate(issue), tone: 'red' }));
+    item.notes.forEach((note, i) => {
+      if (note.kind === 'not_published') pills.push({ key: `note-${i}`, text: NOT_PUBLISHED_YET, tone: 'amber', link: note.link ?? undefined });
+      else pills.push({ key: `note-${i}`, text: note.message, tone: 'grey' });
+    });
+  }
   const onKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
     if (event.target !== event.currentTarget || !onSelect) return;
     if (event.key === 'Enter' || event.key === ' ') {

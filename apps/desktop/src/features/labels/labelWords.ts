@@ -77,8 +77,6 @@ export function workFromLine(text: string | null | undefined): string | null {
 
 export const GENERATE_PDF = 'Generate PDF';
 export const REPRINT_PDF = 'Reprint PDF';
-export const DOWNLOAD_PDF = 'Download PDF';
-export const DONE = 'Done';
 export const CLOSE = 'Close';
 export const CANCEL = 'Cancel';
 export const TRY_AGAIN = 'Try again';
@@ -138,14 +136,30 @@ export function fullyGenerated(result: LabelRunResult): boolean {
 }
 
 /**
- * 09C §6.3: the done dialog's title. One product: "Label generated" / "Label not generated"; a batch: "{rendered} of
- * {total} labels generated" when anything failed or was not generated, else "{total} labels generated".
+ * 09C §14.2 (MC-L2.17): the result's title; `notFound` = the check's products Pricing did not find. One product: "Label
+ * generated" when fully generated, none was not found and one was rendered, else "Label not generated"; a batch:
+ * "{total} labels generated" when fully generated and none was not found, else "{rendered} of {total + notFound} labels
+ * generated".
  */
-export function doneTitle(result: LabelRunResult, single: boolean): string {
-  const full = fullyGenerated(result);
+export function doneTitle(result: LabelRunResult, single: boolean, notFound: number): string {
+  const full = fullyGenerated(result) && notFound === 0;
   if (single) return full && result.rendered > 0 ? 'Label generated' : 'Label not generated';
-  return full ? `${result.total} labels generated` : `${result.rendered} of ${result.total} labels generated`;
+  return full ? `${result.total} labels generated` : `${result.rendered} of ${result.total + notFound} labels generated`;
 }
+
+/**
+ * 09C §14.2: the toast when everything was generated: "Label generated · opened in Preview" for one label, else
+ * "{rendered} labels generated · opened in Preview", plus " · {no_price} stay Not printed (no price)" when some had no
+ * price.
+ */
+export function generatedToast(result: LabelRunResult): string {
+  const head = result.rendered === 1 ? 'Label generated · opened in Preview' : `${result.rendered} labels generated · opened in Preview`;
+  return result.no_price > 0 ? `${head} · ${result.no_price} stay Not printed (no price)` : head;
+}
+
+export const OPENING_IN_PREVIEW = 'Opening in Preview…';
+export const SAVED_AND_OPENED = 'Saved and opened in Preview: ';
+export const SAVED_NOT_OPENED = "Saved, but Preview couldn't open it: ";
 
 /** 09C §6.3: the result lines (a line whose number is zero is not shown), each with its mark. */
 export function resultLines(result: LabelRunResult): { mark: string; text: string }[] {
