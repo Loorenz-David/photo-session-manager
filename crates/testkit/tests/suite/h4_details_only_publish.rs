@@ -13,7 +13,9 @@ use psm_core::{
         attribute::{AttributeGroup, CoreType, Definition, Provenance},
         publish::{DefinitionLink, PublishItem, PublishPreviewItem},
         remote::{RemoteKind, RemoteState},
-        session::{ListFilter, PublishStep, RowLabel, SessionRow, SessionStatus},
+        session::{
+            ListFilter, PublishStep, RowLabel, SessionList, SessionPage, SessionRow, SessionStatus,
+        },
     },
     ports::{clock::Clock, commerce::CommerceAdapter},
     services::attributes::{AttributesService, PRODUCT_TITLE},
@@ -445,18 +447,6 @@ fn h4_c8a_a_published_shop_only_item_is_never_cleared() {
 // H4·C9 — the rows of remote items
 
 #[test]
-fn h4_c9a_a_shop_only_row_counts_its_record() {
-    let a = app();
-    let r = shop_only(&a, "ROW-SO", &["rs-m1", "rs-m2", "rs-m3"], &["rs-c1"]);
-    let row = row(&a, r.session);
-    assert_eq!(counts(&row), (3, 1, 0));
-    assert_eq!(
-        (row.status, row.label),
-        (SessionStatus::Ready, RowLabel::Archived)
-    );
-}
-
-#[test]
 fn h4_c9b_a_clean_archived_row() {
     let a = app();
     let r = archived(&a, "ROW-CLEAN");
@@ -544,5 +534,205 @@ fn h4_c9g_after_bring_back_the_row_is_an_ordinary_published_row() {
     assert_eq!(
         (row.status, row.label, row.main_count, row.condition_count),
         (SessionStatus::Published, RowLabel::Published, 3, 2)
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// L4·C1 — products from the other Mac count as Published (09C §14.3, MC-H3.7A)
+
+fn listed(a: &TestApp, filter: ListFilter) -> SessionList {
+    a.sessions()
+        .with_remote(a.remote())
+        .list(filter, None)
+        .unwrap()
+}
+
+fn holds(list: &SessionList, session: i64) -> usize {
+    list.groups
+        .iter()
+        .flat_map(|g| &g.rows)
+        .filter(|r| r.id == session)
+        .count()
+}
+
+fn page_holds(page: &SessionPage, session: i64) -> Option<SessionRow> {
+    page.groups
+        .iter()
+        .flat_map(|g| &g.rows)
+        .find(|r| r.id == session)
+        .cloned()
+}
+
+/// A shop-only item whose details-only publish was confirmed and then put in `step` (through the
+/// store, as `archived_in_step` does for an archived item).
+fn shop_only_in_step(
+    a: &TestApp,
+    sku: &str,
+    step: PublishStep,
+    failed: Option<PublishStep>,
+) -> i64 {
+    let r = shop_only(a, sku, &["st-m1", "st-m2", "st-m3"], &["st-c1"]);
+    set_text(a, r.item, "Maple");
+    confirm(a, r.session);
+    let item = latest_item(a, r.session);
+    assert!(item.details_only);
+    a.store()
+        .set_publish_step(
+            item.id,
+            step,
+            failed,
+            failed.map(|_| "the shop could not be reached"),
+            a.clock.now_ms(),
+        )
+        .unwrap();
+    r.session
+}
+
+#[test]
+fn l4_c1a_a_shop_only_row_is_published_and_counts_its_record() {
+    let a = app();
+    let r = shop_only(&a, "TEST-1802", &["so-m1", "so-m2", "so-m3"], &["so-c1"]);
+    let row = row(&a, r.session);
+    assert_eq!(counts(&row), (3, 1, 0));
+    assert_eq!(
+        (row.status, row.label),
+        (SessionStatus::Published, RowLabel::Archived)
+    );
+}
+
+#[test]
+fn l4_c1b_a_shop_only_item_raises_published_not_open() {
+    let a = app();
+    let before = listed(&a, ListFilter::All).counts;
+    shop_only(&a, "TEST-1803", &["sb-m1", "sb-m2", "sb-m3"], &["sb-c1"]);
+    let after = listed(&a, ListFilter::All).counts;
+    assert_eq!(
+        (after.published, after.open, after.all),
+        (before.published + 1, before.open, before.all + 1)
+    );
+}
+
+#[test]
+fn l4_c1c_a_shop_only_item_filters_as_published() {
+    let a = app();
+    let r = shop_only(&a, "TEST-1804", &["sc-m1", "sc-m2", "sc-m3"], &["sc-c1"]);
+    assert_eq!(holds(&listed(&a, ListFilter::Open), r.session), 0);
+    assert_eq!(holds(&listed(&a, ListFilter::Published), r.session), 1);
+}
+
+#[test]
+fn l4_c1d_the_paged_list_agrees() {
+    let a = app();
+    let r = shop_only(&a, "TEST-1805", &["sd-m1", "sd-m2", "sd-m3"], &["sd-c1"]);
+    let all = listed(&a, ListFilter::All).counts;
+    let sessions = a.sessions();
+    let sessions = sessions.with_remote(a.remote());
+    let published = sessions
+        .page(ListFilter::Published, None, None, None, 1)
+        .unwrap();
+    let open = sessions
+        .page(ListFilter::Open, None, None, None, 1)
+        .unwrap();
+    assert_eq!(
+        page_holds(&published, r.session).map(|row| row.status),
+        Some(SessionStatus::Published)
+    );
+    assert!(page_holds(&open, r.session).is_none());
+    assert_eq!(published.counts, all);
+    assert_eq!(open.counts, all);
+}
+
+#[test]
+fn l4_c1e_a_running_publish_of_a_shop_only_item_is_open() {
+    let a = app();
+    let s = shop_only_in_step(&a, "TEST-1806", PublishStep::Update, None);
+    let row = row(&a, s);
+    assert_eq!(
+        (row.status, row.label),
+        (SessionStatus::Publishing, RowLabel::Publishing(75))
+    );
+    assert_eq!(holds(&listed(&a, ListFilter::Open), s), 1);
+}
+
+#[test]
+fn l4_c1f_a_held_publish_of_a_shop_only_item_is_publishing() {
+    let a = app();
+    let s = shop_only_in_step(&a, "TEST-1807", PublishStep::Held, None);
+    let row = row(&a, s);
+    assert_eq!(
+        (row.status, row.label),
+        (SessionStatus::Publishing, RowLabel::WaitingForYou(0))
+    );
+}
+
+#[test]
+fn l4_c1g_a_failed_publish_of_a_shop_only_item_is_failed() {
+    let a = app();
+    let s = shop_only_in_step(
+        &a,
+        "TEST-1808",
+        PublishStep::Failed,
+        Some(PublishStep::Update),
+    );
+    let row = row(&a, s);
+    assert_eq!(
+        (row.status, row.label),
+        (SessionStatus::Failed, RowLabel::PublishFailed)
+    );
+    assert_eq!(holds(&listed(&a, ListFilter::Published), s), 0);
+}
+
+#[test]
+fn l4_c1h_a_cancelled_publish_of_a_shop_only_item_is_ready() {
+    let a = app();
+    let s = shop_only_in_step(&a, "TEST-1809", PublishStep::Cancelled, None);
+    let row = row(&a, s);
+    assert_eq!(
+        (row.status, row.label),
+        (SessionStatus::Ready, RowLabel::PublishCancelled)
+    );
+    assert_eq!(holds(&listed(&a, ListFilter::Published), s), 0);
+}
+
+#[test]
+fn l4_c1i_after_its_details_publish_a_shop_only_item_is_published() {
+    let a = app();
+    let r = shop_only(&a, "TEST-1810", &["si-m1", "si-m2", "si-m3"], &["si-c1"]);
+    set_text(&a, r.item, "Ash");
+    confirm(&a, r.session);
+    drain(&a);
+    assert_eq!(latest_item(&a, r.session).step, PublishStep::Done);
+    let row = row(&a, r.session);
+    assert_eq!(
+        (row.status, row.label),
+        (SessionStatus::Published, RowLabel::Archived)
+    );
+}
+
+#[test]
+fn l4_c1j_an_unread_adopted_item_stays_open() {
+    let a = app();
+    let r = adopted(&a, "TEST-1811", &["sj-m1", "sj-m2", "sj-m3"], &["sj-c1"]);
+    assert_eq!(a.remote().state(r.session).unwrap(), RemoteState::Unknown);
+    let row = row(&a, r.session);
+    assert_eq!(
+        (row.status, row.label),
+        (SessionStatus::InProgress, RowLabel::InProgress(0))
+    );
+    assert_eq!(holds(&listed(&a, ListFilter::Open), r.session), 1);
+}
+
+#[test]
+fn l4_c1k_an_adopted_item_without_pictures_stays_open() {
+    let a = app();
+    let r = adopted(&a, "TEST-1812", &[], &[]);
+    assert_eq!(
+        a.remote().ensure_record(r.session).unwrap(),
+        RemoteState::Local
+    );
+    let row = row(&a, r.session);
+    assert_eq!(
+        (row.status, row.label),
+        (SessionStatus::InProgress, RowLabel::InProgress(0))
     );
 }

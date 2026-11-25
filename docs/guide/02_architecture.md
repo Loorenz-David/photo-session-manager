@@ -347,7 +347,10 @@ Progress event `export_progress{done,total,state}`; `state=waiting` while Captur
    the one `remote_covers` read: gallery / condition counts), `unreviewed_count` 0, and its status input
    has `main_count` = gallery, `unreviewed` 0, missing previews 0 (`ready_session_ids` keeps the raw input);
    the label is the publish label while a publish is running, held, failed or cancelled, else `Archived`
-   (archived rows via `cleared_sessions`, also without `with_remote`).
+   (archived rows via `cleared_sessions`, also without `with_remote`). A `Remote(ShopOnly)` row whose
+   label is `Archived` has the status `Published` (MC-H3.7A, 09C §14.3; the private `row_status` in
+   `services/sessions.rs`), so it counts and filters as Published in `list` and `page`; while a publish of
+   it shows through, its status is `derive_status` as for any row.
 3. Waiting: a Capture One "not ready" error (`mechanisms/backoff.rs::editor_wait`) requeues with
    backoff 1/2/4/8 s then 15 s, label "Waiting for Capture One…", gives up after 10 min with a plain
    sentence. `publish_cancel` stops after the request in flight; `publish_activity` feeds the popover.

@@ -5322,3 +5322,160 @@ mod w1_writer_command_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod l4_tests {
+    //! L4 (`docs/implementation/plans/L4_owner_corrections.md`): L4·C2 the two session commands
+    //! with a shop-only item (09C §14.3, MC-H3.7A); L4·C5 the label check's notes and pictures.
+    use super::*;
+    use psm_core::domain::{
+        publish::{RemoteMedia, RemoteMediaStatus},
+        remote::{RemoteKind, RemoteState},
+    };
+    use serde_json::{Value, json};
+    use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
+    use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+    use tauri::webview::InvokeRequest;
+
+    type Window = tauri::WebviewWindow<tauri::test::MockRuntime>;
+
+    fn call(w: &Window, cmd: &str, args: Value) -> Value {
+        get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|body| match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        })
+        .unwrap_or_else(|error| panic!("{cmd}: {error}"))
+    }
+
+    fn wired(
+        a: psm_testkit::TestApp,
+    ) -> (
+        tempfile::TempDir,
+        tauri::App<tauri::test::MockRuntime>,
+        Window,
+    ) {
+        let psm_testkit::TestApp { dir, app, .. } = a;
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .invoke_handler(tauri::generate_handler![
+                commands::sessions::sessions_page,
+                commands::sessions::sessions_list,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        (dir, tauri_app, w)
+    }
+
+    fn rows(groups: &Value) -> Vec<Value> {
+        groups
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|g| g["rows"].as_array().unwrap().clone())
+            .collect()
+    }
+
+    /// The fake shop with one local session (an Open row) and the counts of `list(All)` then.
+    fn shop() -> (psm_testkit::TestApp, psm_core::domain::session::ListCounts) {
+        let a = psm_testkit::TestApp::with_fake_shop().unwrap();
+        a.items()
+            .create_local("TEST-1", "Test table", "object", None)
+            .unwrap();
+        let before = a
+            .sessions()
+            .with_remote(a.remote())
+            .list(psm_core::domain::session::ListFilter::All, None)
+            .unwrap()
+            .counts;
+        (a, before)
+    }
+
+    /// A shop product adopted with its session, three gallery pictures, its first-open read run.
+    fn shop_only(a: &psm_testkit::TestApp, sku: &str) -> i64 {
+        let product = a.fake_shop().add_product(sku, "Test table", None);
+        a.fake_shop()
+            .state
+            .lock()
+            .unwrap()
+            .products
+            .iter_mut()
+            .find(|p| p.external_id == product)
+            .unwrap()
+            .media = (1..=3)
+            .map(|i| RemoteMedia {
+                id: format!("l4-m{i}"),
+                filename: Some(format!("l4-m{i}.jpg")),
+                status: RemoteMediaStatus::Ready,
+                position: i,
+            })
+            .collect();
+        let item = psm_core::services::items::ItemsService::new(a.store(), a.clock.as_ref())
+            .with_commerce(Some(a.fake_shop()))
+            .adopt(&product)
+            .unwrap();
+        let session = a.sessions().create(item.id).unwrap().session.id;
+        assert_eq!(
+            a.remote().ensure_record(session).unwrap(),
+            RemoteState::Remote(RemoteKind::ShopOnly)
+        );
+        session
+    }
+
+    #[test]
+    fn l4_c2a_sessions_page_shows_a_shop_only_item_as_published() {
+        let (a, before) = shop();
+        let session = shop_only(&a, "TEST-1802");
+        let (_dir, _app, w) = wired(a);
+        let page = call(
+            &w,
+            "sessions_page",
+            json!({"filter": "published", "query": null, "createdFrom": null, "onlyIds": null, "page": 1}),
+        );
+        let row = rows(&page["groups"])
+            .into_iter()
+            .find(|r| r["id"] == json!(session))
+            .expect("the shop-only row is on the Published page");
+        assert_eq!(
+            (&row["status"], &row["label"]),
+            (&json!("published"), &json!({"kind": "archived"}))
+        );
+        assert_eq!(
+            (&page["counts"]["published"], &page["counts"]["open"]),
+            (&json!(before.published + 1), &json!(before.open))
+        );
+    }
+
+    #[test]
+    fn l4_c2b_sessions_list_agrees_with_the_page() {
+        let (a, _) = shop();
+        let session = shop_only(&a, "TEST-1802");
+        let (_dir, _app, w) = wired(a);
+        let page = call(
+            &w,
+            "sessions_page",
+            json!({"filter": "published", "query": null, "createdFrom": null, "onlyIds": null, "page": 1}),
+        );
+        let list = call(&w, "sessions_list", json!({"filter": "all", "query": null}));
+        let row = rows(&list["groups"])
+            .into_iter()
+            .find(|r| r["id"] == json!(session))
+            .unwrap();
+        assert_eq!(row["status"], json!("published"));
+        assert_eq!(list["counts"], page["counts"]);
+    }
+}
