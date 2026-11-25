@@ -344,3 +344,36 @@ A34. **2026-11-24 — Owner corrections after the first use of labels and of 10H
 - **Generate:** saves and opens every PDF in Preview at once; the dialog closes with a toast when all went well and stays on the problems otherwise. No Download PDF step.
 - **Shop-only items count as Published** in the sessions list (counts and filters), unless a publish of theirs is running, held, failed or cancelled.
 
+**Devices track (D-series).** Entries for the measuring tape (10I) and live preview (10J), numbered D1… so they
+cannot collide with the A-series written on `feature/agentic` in parallel.
+
+D1. **2026-11-21 — Shaper: chapter 10I Measuring tape (COLLABORATING)** from the owner's draft
+`messuring-tape-implementation/SESSION_MANAGER_REEKON_T1M_INTENTION.md` (kept as raw input). Conflicts resolved by the
+shaper, each open to the owner: "measurement" is the ledger's word, so the chapter says tape, reading, measuring order,
+step, run, draft; the run controller moves from the UI to a Rust service (H8, R24); readings are integer tenths of a
+millimetre (MC-MT1) written in the field's MC-9 canonical form (MC-MT3), unit lengths declared by the commerce adapter
+(H7); Confirm goes through `AttributeService::set_value`, provenance human, one undo step (MC-30); drafts in memory only;
+Confirm never blocked; readings synced from the tape's memory never fill a step. Cards MT1 (the store has text and
+number-plus-unit size fields), MT2 (unit and precision), MT3 (second press in the review pause), MT4 (keyboard mode
+before the SDK), MT5 (adapter source vs REEKON's terms in a public repo).
+
+D2. **2026-11-23 — Owner: 10I parked.** Implementation held until later; cards MT1–MT5 answered then.
+
+D3. **2026-11-25 — Owner + shaper: chapter 10J Live preview (COLLABORATING, research phase).** Owner: live view is ruled
+in now (reverses the 10E/13 deferral and the camera hard rule "live view is out of scope"); the app may change camera
+settings live view requires (network/FTP untouched); one frame source in Rust with many viewers; USB and Wi-Fi; live
+view sleeps while nobody looks; overlay style is a setting; the phone app is an installable PWA; the owner's working
+loop is the acceptance story. Shaper: own frame channel from the sidecar, newest-frame hub, one WebSocket path for
+desktop and phone, no re-encoding; spikes LV-S1…S4.
+
+D4. **2026-11-26 — Owner answers and rebase.** Templates are 10G's shooting templates (published order + shooting
+order; placement by shooting order keeps photos in the right container despite transfer delays; drag always allowed;
+made in Settings → Shooting templates) — LV-D8; a capture moves to Next, retake and view what was taken — LV-D9; a
+retake replaces, the old photo is denied — LV-D10; live-view settings not restored if they neither slow the workflow
+nor change captures, live shooting becomes normal — LV-D11; any paired phone, several at once — LV-D12; image analysis
+for machine guidance is a future H3 exception — LV-D13. Shaper: MC-LV3 retake aim (extends 10G: the next shutter after
+Retake goes to the chosen container, bound at exposure) for owner confirmation; card LV3 (HTTPS for the PWA) stays open.
+Both chapters were first committed as 10G/10H on a checkout 610 commits behind `origin/main` (where 10G/10H already
+exist); renamed 10I/10J with per-chapter IDs (MC-MT*, M-MT*, MC-LV*, M-LV*). The 10E, 13 and guide texts are amended
+at ratification, not before. Book header stays RATIFIED; 10I and 10J are outside it until ratified.
+

@@ -46,6 +46,8 @@ the meaning, the contract gives the exact rule.
 | [10F Storage and retention](book/10F_storage_and_retention.md) | **Ratified 2026-11-09, not planned yet:** duplicates after 24 h, no double preview exports, published items cleared after N days (Shopify as the archive; amends H2), a storage budget with a removal order, recipe self-repair. Q1–Q5 answered |
 | [10G Shooting templates](book/10G_shooting_templates.md) | **Ratified 2026-11-16:** per item type, containers in final order + shooting order + framing presets; photos fill containers by shutter order on arrival; Condition after the last container; manual changes win (warning, Back to template); Settings as a sectioned drawer. Mechanical, no model |
 | [10H Archived and shop-only items editable](book/10H_archived_items_editable.md) | **Ratified 2026-11-23 on branch `feature/agentic` (changelog A32); planning next:** pictures on every sessions-list row and search result (Shopify covers fetched small, on screen only), 25 sessions per page, archived and shop-only items open in the normal workspace, photo edits bring the published JPEGs back from Shopify, publish sends only changes (MC-H1…MC-H5; amends 10F read-only and Q3) |
+| [10I Measuring tape](book/10I_measuring_tape.md) | **COLLABORATING, parked (owner 2026-11-23):** a Bluetooth tape (REEKON T1M first) fills dimension fields of the open item through an armed measuring run; tape port and adapter, measuring orders per item type, contracts MC-MT1…MT3, proposed M-MT1…MT5, owner cards MT1–MT5 open |
+| [10J Live preview](book/10J_live_preview.md) | **COLLABORATING, research phase:** camera live view on the Mac and on paired phones (installable PWA) for matching 10G's template shot, capture and retake from either, live view sleeps when nobody looks, USB and Wi-Fi; machine guidance accounted for; decisions LV-D1…LV-D13 (live view now in scope, settings it needs allowed), proposed MC-LV1…LV3, M-LV1…LV6, spikes LV-S1…S4, card LV3 open |
 | [11 Architecture and packaging](book/11_architecture_and_packaging.md) | Tauri + Rust, layers, commands/events, repo layout, packaging spike, phone remote |
 | [12 Operations](book/12_operations.md) | settings, logs, backup, health |
 | [13 Scope ladder](book/13_scope_ladder.md) | must ship / only if cheap / deferred |
@@ -58,6 +60,7 @@ Evidence (source-contract facts, beside the book):
 - `evidence/design_handoff.md` — rules extracted from the Claude Design handoff in `claude_design/`.
 - `evidence/sony_camera_lab.md` — Sony Camera Lab findings (A7R V, SDK 2.02) and the Capture One / camera-ownership checks V1–V6.
 - `evidence/research_providers.md` — reverse image search routes, OpenAI web search and image input, probes owed (2026-11-12).
+- `evidence/reekon_t1m.md` — REEKON T1M public facts, vendor questions Q1–Q9, hardware acceptance checklist (SDK pending).
 - `evidence/shopify_admin.md` — written when the dev store is provided (not yet).
 
 Stages of the brief are referred to as **S0–S8** (`M` is reserved for measurements).
