@@ -53,6 +53,21 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     inside; the bundled helper links `@rpath/libCr_Core.dylib` (supplied at run time by the installed camera support
     package). **Installed** with the owner's OK (build `2523595b`; previous kept as "2026-11-25 labels L4" in
     `~/Desktop/Session Manager old (2026-11-12)/`). Owner preparing the template; phones ready.
+  - **LV4 hardware check in progress (owner-attended, 2026-11-26 from 14:35), running record:**
+    - C7 iPhone: first QR opened (`.local` page), Add to Home Screen → full screen, still paired. PASS.
+    - C8 Android: shortcut only (Chrome), Full screen button shown once a session showed; one tap hid the bars. PASS.
+    - Phones follow the Mac's active session (session opened → both showed shot 1 at once). Settings → Phone list showed
+      Android "Never connected" while it was connected (stale list; note).
+    - C4 both on template: `sent_10s=0` for both, many lines. PASS.
+    - C2/C5 Wi-Fi: source 17–21 fps; iPhone locked 153–217 per 10 s, dip during a 42 MB RAW upload (2.4 s) to ~15–18
+      fps, no stall text; both phones locked together ~20 fps each, skipped 0–9 per 10 s. PASS (edge-of-Wi-Fi part not run).
+    - Glass→Android over Wi-Fi (iPhone photo of Mac clock + Android): 264600−264436 ≈ 165 ms, 262258−262067 ≈ 190 ms,
+      260383−260235 ≈ 150 ms → **≈ 150–190 ms** (lab ≈ 145 ms USB, Wi-Fi camera→Mac ≈ 122 ms). Camera's own screen lags
+      the Mac ≈ 20–30 ms.
+    - C9/C10 partial (Wi-Fi): 5 captures (camera button, iPhone ×2, Android ×2) → 5 photos, bound 7→10→8→9 (shooting
+      order) then none (Condition); request→exposed 0.50–0.63 s; AF 305 ms. PASS so far.
+    - Finding F1: the real helper's `liveview.exposure` line (shutter/f_number/iso as objects with `display`) is
+      "unparsable" in Rust → the phone's exposure readout never shows.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
