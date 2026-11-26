@@ -99,7 +99,14 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     - **Finding F6 (owner card):** after Remove + re-pair, the **installed** app (iPhone home-screen app, Android
       shortcut) stays dead: it starts from the manifest `start_url` `/phone/?pair=<old token>` (`wire.rs:132`) → 401; the
       new QR opens a browser tab with the new token, so the owner had to install the app again. On iPhone the installed
-      app's storage is separate from Safari, so a new QR can never reach it.
+      app's storage is separate from Safari, so a new QR can never reach it. **Owner: accept reinstalling** (LV-D19 (2)).
+    - Finding F7: dock tiles show broken images ("?") — `/photos/{id}/preview` answered 404 (31×) before the preview
+      existed and the phone never retried; files exist now.
+    - **Paused by the owner at 15:25 local** before the USB rows (C1, C9), C19 (M-LV5), C20 (clean stop, M-LV6 targets),
+      C5's edge-of-Wi-Fi part. Owner: "for now we can correct these issues". Owner decision LV-D19 (book, changelog D19):
+      dock without hold gestures (bigger tiles, scroll, single tap); reinstall after Remove.
+  - **Fix planning launched:** planner (Opus) with `prompts/reviewer/live_fix_plan_r1.md` → LV5_live_fixes (default
+    implementer: F1–F5, F7 server half, Settings list) and LV6_phone_dock (Fable: LV-D19 dock, F7 phone half, removed text).
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -108,7 +115,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-None.
+- Planner for LV5/LV6 (`.pipeline/runs/live_fix_plan_r1.log`), started 2026-11-26 15:30.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
