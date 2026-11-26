@@ -338,7 +338,7 @@ fn lv1_c15b_exposure_mapping() {
     let o = viewing(&a);
     a.inject(
         "liveview.exposure",
-        json!({"shutter_speed":"1/125","f_number":"8.0","iso":"100"}),
+        json!({"shutter_speed":{"display":"1/80"},"f_number":{"display":"F8.0"},"iso":{"display":"ISO 2000"}}),
     )
     .unwrap();
     settle(&a, || {
@@ -347,9 +347,9 @@ fn lv1_c15b_exposure_mapping() {
             .any(|e| matches!(e, LiveEvent::Exposure(_)))
     });
     assert!(o.events().contains(&LiveEvent::Exposure(ExposureReadout {
-        shutter: "1/125".into(),
+        shutter: "1/80".into(),
         aperture: "f/8".into(),
-        iso: "ISO 100".into(),
+        iso: "ISO 2000".into(),
     })));
 }
 #[test]

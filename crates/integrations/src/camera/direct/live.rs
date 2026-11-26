@@ -22,10 +22,52 @@ pub fn frame_norm(raw: [i64; 8]) -> Option<FocusFrame> {
     })
 }
 pub fn exposure_readout(shutter: &str, f_number: &str, iso: &str) -> ExposureReadout {
-    let f = f_number.strip_suffix(".0").unwrap_or(f_number);
+    fn part(s: &str) -> &str {
+        if s.is_empty() || s == "special" {
+            "–"
+        } else {
+            s
+        }
+    }
+    let f = part(f_number);
+    let aperture = if let Some(number) = f.strip_prefix('F') {
+        format!("f/{}", number.strip_suffix(".0").unwrap_or(number))
+    } else {
+        f.to_owned()
+    };
+    let iso = part(iso);
     ExposureReadout {
-        shutter: shutter.to_owned(),
-        aperture: format!("f/{f}"),
-        iso: format!("ISO {iso}"),
+        shutter: part(shutter).to_owned(),
+        aperture,
+        iso: if iso == "AUTO" {
+            "ISO AUTO".into()
+        } else {
+            iso.to_owned()
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::exposure_readout;
+    #[test]
+    fn lv5_c12c_exposure_display_mapping() {
+        let cases = [
+            (("1/80", "F8.0", "ISO 2000"), ("1/80", "f/8", "ISO 2000")),
+            (("2.5\"", "F5.6", "AUTO"), ("2.5\"", "f/5.6", "ISO AUTO")),
+            (("BULB", "F11.0", "ISO 100"), ("BULB", "f/11", "ISO 100")),
+            (("special", "special", ""), ("–", "–", "–")),
+        ];
+        for (input, expected) in cases {
+            let actual = exposure_readout(input.0, input.1, input.2);
+            assert_eq!(
+                (
+                    actual.shutter.as_str(),
+                    actual.aperture.as_str(),
+                    actual.iso.as_str()
+                ),
+                expected
+            );
+        }
     }
 }

@@ -383,9 +383,9 @@ pub fn parse_line(line: &str) -> Result<Stamped, ProtocolError> {
             frames: f.req_frames("frames")?,
         },
         "liveview.exposure" => SidecarEvent::LiveviewExposure {
-            shutter_speed: f.req_str("shutter_speed")?,
-            f_number: f.req_str("f_number")?,
-            iso: f.req_str("iso")?,
+            shutter_speed: f.req_display("shutter_speed")?,
+            f_number: f.req_display("f_number")?,
+            iso: f.req_display("iso")?,
         },
         "focus.result" => SidecarEvent::FocusResult {
             cmd_id: f.req_str("cmd_id")?,
@@ -410,6 +410,14 @@ pub fn parse_line(line: &str) -> Result<Stamped, ProtocolError> {
 
 struct Fields<'a>(&'a Map<String, Value>);
 impl Fields<'_> {
+    fn req_display(&self, key: &str) -> Result<String, ProtocolError> {
+        let value = self.0.get(key).ok_or(ProtocolError::Json)?;
+        value
+            .as_str()
+            .or_else(|| value.get("display").and_then(Value::as_str))
+            .map(str::to_owned)
+            .ok_or(ProtocolError::Json)
+    }
     fn req_str(&self, key: &str) -> Result<String, ProtocolError> {
         self.opt_str(key).ok_or(ProtocolError::Json)
     }

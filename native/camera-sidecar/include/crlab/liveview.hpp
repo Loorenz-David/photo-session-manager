@@ -113,6 +113,15 @@ template <class T> class LatestSlot {
 };
 
 struct FocusJob { int x=0, y=0; bool af=true; std::string cmd_id; };
+
+// FC4a: a writable position is usable only in a Flexible Spot focus area. A camera without
+// a Focus Area property keeps FC4's writability rule.
+inline bool focus_area_movable(int64_t focus_area, bool area_read, bool position_writable) {
+  if (!position_writable) return false;
+  if (!area_read) return true;
+  return (focus_area>=4 && focus_area<=8) || (focus_area>=0x14 && focus_area<=0x1d) ||
+         (focus_area>=0x23 && focus_area<=0x27);
+}
 class FocusQueue {
  public:
   std::optional<FocusJob> push(FocusJob j) {

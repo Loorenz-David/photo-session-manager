@@ -8,6 +8,22 @@
 using namespace crlab;
 using namespace std::chrono_literals;
 
+TEST_CASE("lv5_c11a_wide_is_not_movable") { CHECK(!focus_area_movable(1,true,true)); }
+TEST_CASE("lv5_c11b_zone_is_not_movable") { CHECK(!focus_area_movable(2,true,true)); }
+TEST_CASE("lv5_c11c_center_is_not_movable") { CHECK(!focus_area_movable(3,true,true)); }
+TEST_CASE("lv5_c11d_flexible_spot_sizes_are_movable") { for (int64_t n=4;n<=8;++n) CHECK(focus_area_movable(n,true,true)); }
+TEST_CASE("lv5_c11e_tracking_wide_zone_center_are_not_movable") { for (int64_t n=0x11;n<=0x13;++n) CHECK(!focus_area_movable(n,true,true)); }
+TEST_CASE("lv5_c11f_tracking_flexible_spots_are_movable") { for (int64_t n=0x14;n<=0x18;++n) CHECK(focus_area_movable(n,true,true)); }
+TEST_CASE("lv5_c11g_extra_flexible_spot_sizes_are_movable") {
+  for (int64_t n=0x19;n<=0x1d;++n) CHECK(focus_area_movable(n,true,true));
+  for (int64_t n=0x23;n<=0x27;++n) CHECK(focus_area_movable(n,true,true));
+}
+TEST_CASE("lv5_c11h_unknown_is_not_movable") { CHECK(!focus_area_movable(0,true,true)); }
+TEST_CASE("lv5_c11i_unwritable_position_is_not_movable") { CHECK(!focus_area_movable(4,true,false)); }
+TEST_CASE("lv5_c11j_missing_area_uses_the_position_writable_rule") {
+  CHECK(focus_area_movable(-1,false,true)); CHECK(!focus_area_movable(-1,false,false));
+}
+
 TEST_CASE("lv1_c1a_first_frame_paced") {
   LivePacer p; p.reset(1); auto r=p.on_pull(PullKind::Ok,7,{1},0,1000);
   CHECK(r.forward); CHECK_EQ(r.next_ms,1030);

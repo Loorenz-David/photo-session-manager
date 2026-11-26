@@ -108,7 +108,7 @@ struct LiveRunner::Impl {
         action.lock_focus();
         int64_t start=monotonic_ms(),point_ms=0,af_ms=0; uint32_t err=0;
         auto state=session.focus_state();
-        if (!state.af_position_writable) {
+        if (!focus_area_movable(state.focus_area,state.focus_area>=0,state.af_position_writable)) {
           log.emit("focus.result",Fields().str("cmd_id",job->cmd_id).num("x",job->x).num("y",job->y)
                    .str("af","skipped").boolean("point_set",false).str("refused","focus_area_not_movable")
                    .num("point_ms",0).num("af_ms",0).num("total_ms",monotonic_ms()-start));

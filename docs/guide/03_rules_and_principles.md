@@ -70,7 +70,10 @@ Each rule names its source. When a rule here and the source disagree, the source
   cleanly (quit/disconnect), never cut off: an abrupt stop left the camera's USB session half-open in the lab.
 - The sidecar's one camera-write entry takes only StoreDestination, FocusPoint, HalfPress or
   ShutterRelease intent. Focus never changes Focus Area; a non-movable area is reported and no
-  write follows. An active focus is cancelled on quit; workers join before the SDK disconnects.
+  write follows. The sidecar reads Focus Area: only Flexible Spot sizes, Expanded Flexible Spot
+  and their tracking variants permit a phone point; Wide, Zone and Center refuse it even if the
+  position property reports writable. An active focus is cancelled on quit; workers join before
+  the SDK disconnects.
 - The automated suite never needs the camera, Capture One, Shopify or the network (flow §6A;
   master plan §3 "Hardware"); the sidecar in tests is `testkit/src/bin/fake_sidecar.rs`.
 - No `implementer: fable` on camera phases (owner).

@@ -36,6 +36,7 @@ mod lv2_phone_ops;
 mod lv2_phone_pairing;
 mod lv2_phone_ws;
 mod lv3_server_carry;
+mod lv5_camera_readouts;
 mod lv5_current_shot;
 mod lv5_mac_actions;
 mod lv5_phone_socket;
