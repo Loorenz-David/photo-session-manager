@@ -37,6 +37,8 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
   - **LV1 fix 2** (Codex Luna): R2-B1 fixed (`7bba1e49`); BLOCKED only on a P50 test failing inside the Codex sandbox
     (re-signing the bundled helper); passes outside it (orchestrator run). Handoff set DONE; runner gained a resume guard
     for fix r3; resumed for re-review r3.
+  - **LV1 APPROVED** (`0f56b860`, re-review r3, APPROVED_WITH_NOTES; narrative relayed). Notes in
+    `backlog_live/LV1_camera_live_view.md`. Branch pushed. **LV2 started.**
 
 ## Next
 When the planner returns: relay the milestone map and any owner cards verbatim; **wait for the owner's go** (this
@@ -45,7 +47,7 @@ per line of `phases_live.txt`, in the background, never polled; push `feature/li
 `main` when all milestones are approved.
 
 ## Run in flight
-- `RESUME=1 tools/pipeline/run_phase.sh phase LV1_camera_live_view` (re-review r3), started 2026-11-26.
+- `tools/pipeline/run_phase.sh phase LV2_current_shot_and_phone_server`, started 2026-11-26.
 
 ## Needs the owner
 
