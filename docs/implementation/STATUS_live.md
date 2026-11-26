@@ -86,6 +86,9 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
       arrival). A shutter in those windows (≈ 0.2–0.6 s with ~4 s Wi-Fi files) would bind a second exposure to a taken
       container. Nothing went wrong in this run. MC-LV3: "first empty container … after any reported shutters whose
       files are still on the way".
+    - C15 tap-to-focus over Wi-Fi from the phone: **20/20 focused**, tap → focused 0.39–0.97 s (median ≈ 0.63 s; point set
+      0.14–0.31 s, AF 0.32–0.62 s); camera screen followed. PASS. C16 sharp where tapped (owner at 100 %): PASS.
+    - C17 ×: no `/focus/clear` request in the whole day's log; re-testing with the owner.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
