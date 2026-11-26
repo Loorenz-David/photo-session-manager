@@ -4,6 +4,11 @@ Each row: change X → also change Y → otherwise Z → check with C. Rows are 
 at P70 (§Research: after R13); add a row whenever a phase creates a new coupling, delete it when the coupling goes.
 
 ## Backend ↔ frontend contract
+The phone's `PhoneImage.preview` token comes from `phone_view.rs` and must stay in sync with
+`apps/desktop/src/phone/api.ts`: the client requests a preview only when the token exists and
+uses it to refresh the URL after a preview write. A service that changes a session's photos must
+emit `SessionChanged` so `phone/ws.rs` sends `session` and the phone re-reads the view.
+
 | If you change… | You must also change… | Otherwise… | Check |
 |---|---|---|---|
 | A Tauri command signature, a DTO (`#[derive(Type)]` struct/enum in `apps/desktop/src-tauri/src/commands/*.rs`), or add/remove a command in `specta_builder()` (`src-tauri/src/lib.rs`) | regenerate `apps/desktop/src/services/bindings.ts` (`cargo test -p psm-desktop export_bindings`), adapt `apps/desktop/src/services/*.ts` wrappers and the features that use them; register the command/DTO in master plan §6.7 | `npm run typecheck` is red, or the UI calls a command that no longer exists (runtime `CommandError`); the reviewer diffs committed vs regenerated bindings | `cargo test -p psm-desktop export_bindings && git diff --stat apps/desktop/src/services/bindings.ts && (cd apps/desktop && npm run typecheck)` |

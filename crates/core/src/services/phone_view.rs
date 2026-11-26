@@ -3,6 +3,10 @@
 //! photos without a container (extras) and the Condition photos. Read-only; the phone server
 //! serializes it as is (H8: no rule lives in the handler).
 use serde::Serialize;
+use std::{
+    hash::{Hash, Hasher},
+    path::Path,
+};
 
 use crate::{
     Result,
@@ -71,6 +75,8 @@ pub struct PhoneImage {
     pub photo_id: i64,
     /// The photo's composition revision (the phone re-reads the preview when it changes).
     pub revision: i64,
+    /// Version of the preview the route can serve; never contains a file path.
+    pub preview: Option<String>,
     pub ratio: Option<f64>,
 }
 
@@ -86,6 +92,13 @@ fn image(tx: &dyn StoreTx, photo: &Photo, default_shape: Shape) -> Result<PhoneI
     Ok(PhoneImage {
         photo_id: photo.id,
         revision: c.revision,
+        preview: preview_file(photo).and_then(|path| {
+            let modified = Path::new(path).metadata().ok()?.modified().ok()?;
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            path.hash(&mut hash);
+            modified.hash(&mut hash);
+            Some(format!("{:016x}", hash.finish()))
+        }),
         ratio: shot_ratio(
             &Presets {
                 split: c.kind == CompositionKind::Split,

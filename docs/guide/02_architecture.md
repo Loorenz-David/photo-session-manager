@@ -1030,7 +1030,10 @@ the direct adapter only.
   with `EventHub::observe_carried`, so `apply_settings` hands it to a rebuilt App's hub with the target and open
   sockets stay fed, LV3·C28). Logs `phone.viewer opened|closed`, `live.viewer`.
 - **Events the phones depend on (LV3·U0).** A phone Delete goes through `ReviewService::delete_announced` (Deny, then
-  `PhotoChanged` + `SessionChanged`, so the Mac and other phones reload); `session_delete::delete` builds
+  `PhotoChanged` + `SessionChanged`, so the Mac and other phones reload). Mac review actions now announce from
+  `ReviewService` through `History` after commit; undo and redo announce every touched session. A photo's phone
+  view carries a `preview` version only when the served file exists; it changes with the file path or modification
+  time, and the preview step's `PhotoChanged` makes the socket send `session`. `session_delete::delete` builds
   `SessionsService` `with_events` (and announces `ActiveSessionChanged {None}` itself when Capture One could not be
   left), so phones get `{type: "session", session_id: null}`. Error bodies: every `500 internal` and every `404
   not_found` carries a fixed `message` (`wire::INTERNAL_MESSAGE`, `NOT_FOUND_MESSAGE`): no store text, no local path.
