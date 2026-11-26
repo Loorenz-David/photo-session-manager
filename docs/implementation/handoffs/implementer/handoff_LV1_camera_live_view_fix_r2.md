@@ -2,7 +2,7 @@
 plan: LV1_camera_live_view
 role: fix
 round: 2
-state: BLOCKED
+state: DONE
 date: 2026-11-26
 actor: codex
 ---
@@ -34,7 +34,9 @@ None. The persistent listener is the correction option named in R1-B1.
 - `docs/implementation/handoffs/implementer/handoff_LV1_camera_live_view_fix_r2.md`
 
 ## Checkpoint SHA
-None. The commit command was refused by the filesystem sandbox before a commit was created.
+`f7d03aa1` — made by the orchestrator (2026-11-26) with the exact command below; the session's sandbox could not write the
+worktree's git index. State set to DONE by the orchestrator: the only blocker was the commit (runner fixed to add the
+worktree's git common dir).
 
 ## Stamp
 Checks were run sequentially against the completed implementation. The LV1 suite and camera integration module tests were each run once in the closeout; the sidecar stub tests were also run once in the closeout. The full workspace suite was not run because this fix changes no store, migration, or service shared by every phase.

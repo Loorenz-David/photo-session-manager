@@ -111,7 +111,9 @@ run_codex() {  # run_codex MODEL EFFORT PROMPT LAST LOG
   fi
   set +e
   : > "${logf%.log}.timeline"
-  cat "$WRAP" "$prompt" | codex exec -C "$ROOT" -s workspace-write --add-dir "$ROOT/.git" \
+  # in a linked worktree .git is a file; the index and lock live in the main repo's .git (owner 2026-11-26, LV1 fix)
+  local gitcommon; gitcommon="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$ROOT/.git")"
+  cat "$WRAP" "$prompt" | codex exec -C "$ROOT" -s workspace-write --add-dir "$ROOT/.git" --add-dir "$gitcommon" \
       --add-dir "$HOME/.cargo" --add-dir "$HOME/.npm" \
       -m "$model" -c model_reasoning_effort="\"$effort\"" -o "$last" --json - 2>&1 \
       | stamp "${logf%.log}.timeline" > "$logf"
