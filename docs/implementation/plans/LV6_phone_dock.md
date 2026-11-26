@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV6 — The phone's dock (LV-D19) and the phone halves of the fixes
 
-**Tracker:** NOT_STARTED (2026-11-26, planner)
+**Tracker:** IMPLEMENTED (2026-11-26, fable) — U1 `a4df2ebd` + row C3(b) `da576109`, U2 `b0728c90`; 14 rows by 14 tests + 1 core-mechanism test; phone tests 103 passed; closing gate green on `da576109` (Rust 2760 passed, UI 1058 passed).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -222,3 +222,61 @@ On this Mac with the camera connected and both phones paired (the app built from
 
 ## Review log
 - 2026-11-26, orchestrator: owner request during the run — slide-up-to-lock distance halved (110 → 55 px), row LV6·C3(b) added to U1 (LV-D19 (3)). If the implement session finished U1 before this row existed, the review treats it as a missing row (fix cycle).
+
+### 2026-11-26 — implement r1 (fable)
+**Built.** U1 (`a4df2ebd`): `Dock.tsx` rewritten without the 200 ms hold, magnifier, label pill, hover/drag haptics,
+edge auto-scroll and drag-up; `gestures.ts` loses `tileScale`, `TILE_PX`, the hold thresholds and the three unused
+haptics (`magnify`, `hoverTick`, `dragOpen`); `DOCK = {tapPx: 8, nearPx: 32}`. `phone.css`: 56 px tiles, 12 px corners,
+8 px gap, 84 px strip, the scroller is the strip's height; `.ph-dock-label*` and `.ph-dock-magnifying` removed.
+U2 (`b0728c90`): `PhoneImage.preview`, `previewUrl(token, image, attempt)` (null without a preview), new
+`components/PhotoImage.tsx` used by the dock, the Preview and the Move drawer, `.ph-photo-wait`, `TEXT.removed` per P4,
+guide files. **Row LV6·C3(b)** (`da576109`; the orchestrator's entry above, added after U1 and U2 were committed):
+`gestures.ts` `LOCK_PX` 110 → 55, test `lv6_c3b_…`, the LV3 lock tests updated. The closing gate was run once on
+`b0728c90`, then taken again in full on `da576109` because code changed after it; both green. Details and the
+row → test map: `handoffs/implementer/handoff_LV6_phone_dock_implement_r1.md`.
+
+**Judgment calls.**
+1. *Tap decided on `pointerup`* (delegated). A touch is a tap unless it went more than 8 px sideways **or** more than
+   8 px up/down at any time (per axis, not the diagonal distance); a touch that came back to its start after leaving
+   that range is still not a tap. Sideways past 8 px scrolls from then on (also after a vertical move).
+2. *Nearest tile at release, measured then* (centres are read at `pointerup`, not snapshotted at `pointerdown`: nothing
+   resizes any more). "Within 32 px" is inclusive.
+3. *Sizes live in `phone.css` only* (the plan allowed `phone.css`/`gestures.ts`); no size constants duplicated in
+   TypeScript. LV6·C1(a) therefore loads `phone.css` into jsdom and asserts computed styles (file read as
+   `p23_tile_fit.test.tsx` does).
+4. *Details beyond P1:* tags in the dock 10 px (were 8), check badge 14 px (was 12), divider 40 px tall (was 28), tile
+   fill `#F1F1EF` (the design's neutral fill; was `#eee`), 14 px above and below the tiles.
+5. *Placeholder* = a plain `#F1F1EF` fill; in a dock or Move tile the tile's own tag stays on top of it and the
+   "captured" check stays; in the Preview it is opaque with "Preparing preview…" (the template is not shown under it;
+   hold-for-template does nothing visible until the photo is there). The same placeholder (same text in the Preview)
+   shows after a load error.
+6. *Retry state in `PhotoImage` state*, keyed by `photo_id:revision:preview`; while failed the `<img>` is unmounted,
+   so the broken-image glyph can never show. After the third retry fails nothing more is asked until `preview` or
+   `revision` changes.
+7. *One unit test for the Core mechanism* `previewUrl` (`lv6_core_previewUrl_…`), as flow §4 allows for listed
+   mechanisms; it maps to the plan's Core mechanisms list, not to a criterion row.
+8. *C3(b):* only the distance changed. The 14 px at which a slide starts, the lock control and its haptic are as LV3
+   built them, so the lock control now fills twice as fast. `lv6_c3b_…` lives in `lv6_dock.test.tsx` (U1's file).
+
+**Deviations (files outside the plan's lists, test-only, forced by the plan's own changes).**
+- `__tests__/lv3_preview.test.tsx` (U1): its dock tap coordinates were the old layout's (34/160/261 → 44/236/383).
+  With the new stub two of its taps hit other tiles. Rows unchanged.
+- `__tests__/lv3_preview.test.tsx`, `lv3_drawers.test.tsx`, `lv3_main.test.tsx` (U2): their inline image fixtures gain
+  `preview: 'k0'` (the type now requires PH6a's field, and a null preview shows no picture), and two expected preview
+  URLs gain `&v=k0`. `helpers.ts` and `lv3_dock.test.tsx` (in the plan's list) get the same. Rows unchanged.
+- `lv3_drawers.test.tsx` still taps the dock at x 34: inside tile "02" in the new layout too, so it was left alone.
+- C3(b), as the Notes ask: `lv3_geometry.test.ts::lv3_c8_lockProgress_and_overlayValue` (values for 55);
+  `lv3_main.test.tsx`: the `lock()` helper slides 55 px, `lv3_c8a` expects the fill at 27 % (15 of 55), `lv3_c8b` is
+  renamed `lv3_c8b_sliding_up_55_px_locks_live_and_it_stays_on_after_release` and slides 55 px, and `lv3_c8c` releases
+  at 40 px instead of 60 (60 px now locks). `docs/guide/01_product.md` names the 55 px.
+
+**Observations for the reviewer.**
+- No red baseline was recorded before the production edits (tests and code were written together); the six removed
+  LV3 tests and the kept ones are exactly those the plan lists.
+- `lv3_c1c_…` and `lv6_c6a_…` now assert the same outcome (the plan asks for both); `lv3_c8b` and `lv6_c3b` overlap on
+  the 55 px lock.
+- In jsdom the fixture's dock content (427 px) is wider than the 390 px stage, but jsdom does not clamp `scrollLeft`;
+  C3(a)'s 128 px swipe is exact there, a real browser stops at the end of the strip.
+- The plan's header table and frontmatter title still count 13 rows; with C3(b) there are 14.
+- Plan-fold notes for the orchestrator: `master_plan_live.md` §4.7 could name the LV3 test files above; its §2 row
+  for LV6 still says 13 rows; the design README's lock distance (110 px) is now superseded by LV-D19 (3).
