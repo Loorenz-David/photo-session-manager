@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # LV1 — Camera live view to the hub
 
-**Tracker:** NOT_STARTED (2026-11-26, planner)
+**Tracker:** IMPLEMENTED (2026-11-26, codex) — Sidecar live view, frame channel, focus, and the app hub are wired and pass the closing gate.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file.)
 
@@ -322,3 +322,4 @@ No phone yet; this milestone is visible in the logs.
    line near 250 on USB.
 
 ## Review log
+- 2026-11-26, codex, implement r1: Ported camera live pull, pacing, JPEG frame record, focus worker and clean stop; added the app live hub, viewer demand, binary frame reader, protocol, direct adapter mapping, fake sidecar, and guide. Assumed one bounded reader thread per runtime, deterministic fake JPEG-like bytes, `/tmp` fallback for long socket paths, and 10-second source counts from sidecar stat deltas. Deviations: also edited `sdk_adapter.cpp` and `camera_capture.cpp` for central camera writes and compile guards; corrected the Unit 1 runner during Unit 3; formatted Unit 2 Rust; updated three legacy camera test files for the added CTest target and process startup timing. Unit checkpoints: `503e9ff0`, `5ea89350`, `107682ce`. Closing gate passed once (workspace tests, clippy, fmt, stub sidecar tests, desktop typecheck and tests). No camera hardware or SDK build was run; that belongs to LV4.
