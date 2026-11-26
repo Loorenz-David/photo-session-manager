@@ -53,9 +53,13 @@ directory; the capture-done hook reaching the app (VERIFY-8); an ad-hoc-signed `
 the work Mac launches (Gatekeeper right-click Open). Outcome recorded in evidence before any UI
 phase.
 
-## Phone remote (design pending; N3: after the desktop MVP)
-Same React app with a phone layout, served on the LAN by the embedded server, opened via a QR
-code, pairing token. Nothing in core or services changes.
+## Phone remote (book `10J`, ratified 2026-11-26)
+The owner's **Shoot Companion** design (10J LV-D15): a separate mobile entry of the same React/TypeScript
+frontend, served on the LAN by the embedded HTTP + WebSocket server, opened via a QR code with a pairing token
+(per phone, revocable), **plain HTTP for now** and no secure-context API (HTTPS later on an owner domain, 10J card
+LV3). It follows the Mac's active session (LV-D18). Live frames: WebSocket to phones; a Tauri channel for a later
+desktop live view. New services for live view, focus and the current shot sit behind the same application
+services; the server and Tauri stay thin (H8).
 
 ## Not in the MVP
 Signed or notarised installer, auto-update, licensing, multi-window, Python component.

@@ -12,12 +12,13 @@ settings screen; packaged app (ad-hoc signed).
 
 ## Only if cheap
 Color-tag read-back from Capture One (D2: owner expects to sort only in the app). Capture trigger
-from the UI (`camera.capture`). Rating display (read-only). Keychain for tokens. Phone remote
-**layout** once a design exists; services already support it. Dark mode (tokens exist).
+from the UI (`camera.capture`). Rating display (read-only). Keychain for tokens. Phone remote:
+now chapter 10J (ratified 2026-11-26). Dark mode (tokens exist).
 
 ## Explicitly deferred (non-goals for the MVP)
 The AI research agent and description writing (chapter 08 ships its data model and UI states).
-Any camera make other than Sony; FTPS for the receiver; live view; camera settings beyond the store destination; capture
+Any camera make other than Sony; FTPS for the receiver; camera settings beyond the store destination and what 10J
+allows; capture
 groups, bracketing and Pixel Shift (chapter 10E §Out of scope). Second editing
 provider. Second commerce integration. Python component. Plugin system. Licensing,
 subscriptions, auto-update, notarised installer. Multi-user, cloud, remote access beyond the LAN.

@@ -60,6 +60,6 @@ to Ready. Publishing again reconciles the integration to the session's current l
 **S-L. No integration configured.** Everything above works except publish: the header action
 reads "Export", and completing a session writes the ordered files to the export folder (M7).
 
-**S-M. Phone in hand (design pending).** The same app opened on a phone on the studio Wi-Fi,
+**S-M. Phone in hand (designed and ratified in 10J, 2026-11-26).** The same app opened on a phone on the studio Wi-Fi,
 mirroring the current session and offering approve, condition, delete, undo and capture.
 Scope position in chapter 13.

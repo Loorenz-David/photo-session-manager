@@ -34,3 +34,6 @@ target/camera-sidecar/
 *.fingerprint
 vendor/
 CrSDK*
+
+# Design handoffs stay local (owner 2026-11-26); files already tracked are unaffected
+claude_design/

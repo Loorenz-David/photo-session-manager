@@ -1,8 +1,9 @@
 # 10J — Live preview (human guidance now, machine guidance later)
 
-**Status: READY_FOR_RATIFICATION (shaper draft 2026-11-25, rebased 2026-11-26; not ratified, not planned). All owner cards
+**Status: RATIFIED (owner, 2026-11-26: "i ratify"; changelog D18; not planned yet). All owner cards
 answered and MC-LV3 confirmed (2026-11-25); all spikes LV-S1…LV-S6 done (2026-11-26). The owner's phone design (Shoot Companion) is
-folded in (LV-D15…LV-D18) and its six conflicts answered (LV5–LV10). **READY_FOR_RATIFICATION** (2026-11-26).**
+folded in (LV-D15…LV-D18) and its six conflicts answered (LV5–LV10). The design folder is local to the owner's
+Mac and git-ignored (owner 2026-11-26: design folders are not committed).**
 Source: the owner's chat of 2026-11-25/26 (answers folded below). First written as "10H" on a stale checkout;
 renamed when the checkout was brought up to date (10G and 10H are Shooting templates and Archived items).
 Changelog entries D3–D4. Builds on **10G Shooting templates** (containers, shooting order, Next, retake) and

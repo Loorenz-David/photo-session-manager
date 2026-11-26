@@ -462,3 +462,11 @@ Retake denies the old photo at once (undoable). LV7: shots after the last templa
 the design's Free shot adapted. LV8 (a): phone Move swaps, the Mac keeps replace-by-drop. LV9 (a): clearing focus
 returns the camera's focus point to the centre. LV10: the Mac's live view screen waits for a later owner design; the
 phone first.
+
+D18. **2026-11-26 — Owner: chapter 10J RATIFIED** ("i ratify"). Amended with it: guide `03_rules_and_principles.md`
+(live view in scope; only live-view settings and the focus point are written, never exposure, network or FTP;
+focus/capture off the pull loop; clean camera stops), 10E (capabilities `camera.live_view`, `camera.focus.point`;
+live view leaves §Out of scope), 10G (§4 note: placement by 10J's current shot), 11 (phone remote = Shoot
+Companion, plain HTTP, follows the active session), 13 (phone remote and live view leave the deferred list),
+04 S-M. Owner: design folders are not committed (`claude_design/` git-ignored from now on; files already in the
+repo stay until the owner decides). Next: mechanism inventory, then planning (docs/process/flow.md).

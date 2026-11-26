@@ -63,6 +63,13 @@ mistakenly puts the split third photo in second place, sees the warning, taps Ba
 
 ## 4. Placement on arrival (the rule)
 
+> **Amended by 10J MC-LV3 (ratified 2026-11-26):** rule 2 (shot index → container) and §6's refill and retake are
+> replaced, for templated sessions, by **one current shot**: every exposure goes to the container that was current
+> when the camera fired; the current shot then moves to the next empty container in shooting order (else the first
+> empty, else none → Condition, rule 4 unchanged); the phone can choose it; Retake denies the old photo at once and
+> makes that container current. Rules 1 (shot order), 3 (presets), 4 (Condition), 5 and 6 and §6 rules 1, 2 and 5
+> still apply. On the Mac, dropping a photo onto a filled container still replaces it (§6 rule 3, card LV8).
+
 Applies only to a session whose item type has a template; every other session behaves exactly as today (P66:
 arrives Main, end of list).
 

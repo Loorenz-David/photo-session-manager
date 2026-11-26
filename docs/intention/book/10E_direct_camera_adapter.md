@@ -91,7 +91,10 @@ SDK is ever committed to the repo; the sidecar is compiled on a build machine th
   provisional }`); `capture()` returns a `capture_id`. Capabilities of the direct adapter: `camera.status`, `camera.capture`,
   `camera.transfer`, `camera.events.exposure`, `camera.settings.read`, and `camera.settings.write` limited in this chapter to the store
   destination (MC-31). The port is shaped so later work adds settings writes for capture intents and a live-view frame channel
-  without changing core's photo model.
+  without changing core's photo model. **Amended by 10J (ratified 2026-11-26):** the direct adapter adds the
+  capabilities `camera.live_view` (frames over the sidecar's own binary channel, MC-LV1) and `camera.focus.point`
+  (set the focus point from a normalised point, half-press, report focused/not; focus frames for drawing; LV-D14);
+  settings writes for live view are limited to what 10J LV-D2 lists.
 - An **arrival source** port (`ArrivalSource`) separate from the camera: the FTP receiver and the adapter's Save-to-PC downloads
   implement it; each reports `{ camera_filename, written_path, sha256, size, via: Cable|Wireless, completed_at }`.
 - The Capture One camera adapter (A2/R27) stops being used when this chapter ships; its code stays until the hardware acceptance below
@@ -362,7 +365,7 @@ program or system service (`ptpcamerad` included).
   matters. The style is applied at most once per RAW (recorded in SQLite), and never again after a restart or on a retouched variant.
 
 ## Out of scope (later chapters)
-Live view (its own frame channel); camera settings beyond the store destination (capture intents and presets); bracketing, Pixel Shift
+Live view → chapter 10J (ratified 2026-11-26); camera settings beyond the store destination (capture intents and presets); bracketing, Pixel Shift
 and capture groups (one result from many files: the owner's research intent, tracks C–G); FTPS; the ZV-E10 on the direct adapter
 (untested); a second camera.
 
