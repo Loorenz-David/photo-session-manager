@@ -127,6 +127,7 @@ impl FrameListener {
                             }
                             Self::read_stream(
                                 &mut stream,
+                                &listener,
                                 &thread_state,
                                 &thread_stop,
                                 &thread_hub,
@@ -168,6 +169,7 @@ impl FrameListener {
     }
     fn read_stream(
         stream: &mut UnixStream,
+        listener: &UnixListener,
         state: &Mutex<State>,
         stop: &AtomicBool,
         hub: &LiveViewHub,
@@ -177,6 +179,28 @@ impl FrameListener {
             let (epoch, link, source) = loop {
                 if stop.load(Ordering::SeqCst) {
                     return;
+                }
+                // The sidecar connects before it reports liveview.started. While the
+                // current connection is parked, replace it with any newer helper
+                // connection so a restart with live view off cannot strand the reader.
+                match listener.accept() {
+                    Ok((replacement, _)) => {
+                        replacement
+                            .set_read_timeout(Some(Duration::from_millis(30)))
+                            .ok();
+                        *stream = replacement;
+                        let mut s = state.lock().unwrap();
+                        s.bad = false;
+                        s.connection += 1;
+                        s.started = false;
+                        if let Some((epoch, link)) = s.active.clone() {
+                            hub.source_started(link, (s.connection << 32) | u64::from(epoch));
+                            s.started = true;
+                        }
+                        continue;
+                    }
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+                    Err(_) => return,
                 }
                 let s = state.lock().unwrap();
                 if s.bad {
