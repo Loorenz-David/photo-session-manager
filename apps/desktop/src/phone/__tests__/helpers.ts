@@ -257,16 +257,16 @@ export function phoneEnv(options: EnvOptions = {}): PhoneEnv {
       const [w, h] = turned ? [height, width] : [width, height];
       return box((stage.width - w) / 2, (stage.height - h) / 2, w, h);
     }
-    if (this.classList.contains('ph-dock-strip') || this.classList.contains('ph-dock-scroller')) return box(0, 700, stage.width, 62);
+    if (this.classList.contains('ph-dock-strip') || this.classList.contains('ph-dock-scroller')) return box(0, 700, stage.width, 84);
     if (this.hasAttribute('data-dock-k')) {
-      // 36 px tiles, 6 px gaps, 16 px side padding; the divider takes 11 px (design §3).
+      // LV-D19: 56 px tiles on a 64 px pitch (8 px gaps), 16 px side padding; the divider takes 11 px more.
       const scroller = this.closest('.ph-dock-scroller') as HTMLElement | null;
       let left = 16;
       for (const sibling of Array.from(this.parentElement?.children ?? [])) {
         if (sibling === this) break;
-        left += sibling.hasAttribute('data-dock-k') ? 42 : 17;
+        left += sibling.hasAttribute('data-dock-k') ? 64 : 19;
       }
-      return box(left - (scroller?.scrollLeft ?? 0), 712, 36, 36);
+      return box(left - (scroller?.scrollLeft ?? 0), 714, 56, 56);
     }
     return box(0, 0, 0, 0);
   });

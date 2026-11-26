@@ -5,7 +5,8 @@ import { screen, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { advance, B, chairSession, frameBytes, lift, type PhoneEnv, PHOTO_C1, phoneEnv, press, slide, startPhone } from './helpers';
 
-const X = { b: 34, extra: 160, c1: 261 };
+// Tile centres of LV6's dock layout (56 px tiles on a 64 px pitch).
+const X = { b: 44, extra: 236, c1: 383 };
 const dock = () => screen.getByTestId('dock');
 const preview = () => within(screen.getByTestId('preview'));
 const photo = () => screen.getByTestId('preview-photo');

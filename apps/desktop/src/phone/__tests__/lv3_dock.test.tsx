@@ -1,14 +1,15 @@
 // LV3·U3 — the shot dock (design README §3, §Shot dock gestures, §Selecting a tile; cards LV5, LV7):
 // rows LV3·C15–C19, and the dock halves of C13(a) and C14(f). The fixture session (helpers): shots in
 // shooting order B (final 02, "Back", filled), A (01, "Front", current), C (03); one extra (04); one
-// condition image. Tile centres, x: "02" 34 · "01" 76 · "03" 118 · "04" 160 · Free 202 · "C1" 261; y 730.
+// condition image. LV6 (LV-D19) removed the hold gestures and made the tiles larger: rows C16, C18(b) and C19
+// went with them (their tests are removed), and the layout below is LV6's. Tile centres, x: "02" 44 ·
+// "01" 108 · "03" 172 · "04" 236 · Free 300 · "C1" 383; y 742.
 import { screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
-import { tileScale } from '../gestures';
 import { advance, C, chairSession, lift, macChanges, type PhoneEnv, phoneEnv, press, slide, startPhone } from './helpers';
 
-const X = { b: 34, a: 76, c: 118, extra: 160, free: 202, c1: 261 };
-const Y = 730;
+const X = { b: 44, c: 172, free: 300 };
+const Y = 742;
 const dock = () => screen.getByTestId('dock');
 const row = () => Array.from(dock().querySelector('.ph-dock-row')!.children) as HTMLElement[];
 const tile = (label: string) => dock().querySelector(`[aria-label="${label}"]`) as HTMLElement;
@@ -17,10 +18,6 @@ const previewPhoto = () => screen.queryByTestId('preview')?.querySelector('[data
 function tap(x: number): void {
   press(dock(), x, Y);
   lift(dock(), x, Y);
-}
-async function hold(x: number): Promise<void> {
-  press(dock(), x, Y);
-  await advance(200);
 }
 
 // ---- LV3·C15: the tiles ----
@@ -73,29 +70,6 @@ test('lv3_c15c_a_split_shot_has_the_white_divider_at_the_middle', async () => {
   expect(dock().querySelectorAll('[data-testid="dock-split"]')).toHaveLength(1);
 });
 
-// ---- LV3·C16: magnification ----
-
-test('lv3_c16a_tileScale_is_2_5_under_the_finger_and_1_from_95_px', () => {
-  expect([tileScale(100, 100), tileScale(100, 147.5), tileScale(100, 195), tileScale(100, 220)]).toEqual([2.5, 1.75, 1, 1]);
-  expect(tileScale(147.5, 100)).toBe(1.75);
-});
-
-test('lv3_c16b_a_held_tile_is_magnified_and_names_itself', async () => {
-  const env = phoneEnv();
-  await startPhone(env);
-  const label = () => screen.getByTestId('dock-label').textContent;
-  await hold(X.a);
-  expect(label()).toBe('01 · Front');
-  expect(tile('01 · Front').style.width).toBe('90px');
-  expect(tile('Condition 01').style.width).toBe('36px');
-  slide(dock(), X.extra, Y);
-  expect(label()).toBe('04 · Extra image');
-  slide(dock(), X.free, Y);
-  expect(label()).toBe('Free shot · no template');
-  slide(dock(), X.c1, Y);
-  expect(label()).toBe('Condition 01');
-});
-
 // ---- LV3·C17: selecting ----
 
 test('lv3_c17a_tapping_an_empty_template_shot_makes_it_current_and_clears_the_focus_marker', async () => {
@@ -138,7 +112,7 @@ test('lv3_c17c_tapping_free_shot_makes_free_current', async () => {
   expect(env.mac.posts('/current')).toEqual([{ session_id: 7, container_id: null }]);
 });
 
-// ---- LV3·C18: swipe and hold ----
+// ---- LV3·C18: swipe ----
 
 test('lv3_c18a_a_quick_sideways_swipe_scrolls_and_selects_nothing', async () => {
   const env = phoneEnv();
@@ -154,63 +128,6 @@ test('lv3_c18a_a_quick_sideways_swipe_scrolls_and_selects_nothing', async () => 
   expect(env.mac.allPosts()).toEqual([]);
   expect(screen.queryByTestId('preview')).toBeNull();
   expect(screen.queryByTestId('dock-label')).toBeNull();
-});
-
-test('lv3_c18b_holding_200_ms_magnifies_with_a_tick_per_tile', async () => {
-  const env = phoneEnv();
-  await startPhone(env);
-  press(dock(), X.a, Y);
-  await advance(199);
-  expect(buzzed(env, 12)).toBe(0);
-  await advance(1);
-  expect(buzzed(env, 12)).toBe(1);
-  expect(buzzed(env, 6)).toBe(0);
-  slide(dock(), X.c, Y);
-  expect(buzzed(env, 6)).toBe(1);
-  slide(dock(), X.c + 2, Y);
-  expect(buzzed(env, 6)).toBe(1);
-});
-
-// ---- LV3·C19: hold, drag up, release ----
-
-test('lv3_c19a_dragging_a_held_tile_up_past_50_px_opens_it_on_release', async () => {
-  const env = phoneEnv();
-  await startPhone(env);
-  await hold(X.b);
-  slide(dock(), X.b, Y - 40);
-  expect(buzzed(env, 18)).toBe(0);
-  expect(screen.getByTestId('dock-label').textContent).toBe('02 · Back');
-  slide(dock(), X.b, Y - 60);
-  expect(buzzed(env, 18)).toBe(1);
-  const label = screen.getByTestId('dock-label');
-  expect(label.textContent).toBe('Release to open');
-  expect(label.classList.contains('ph-dock-label-armed')).toBe(true);
-  expect(screen.queryByTestId('preview')).toBeNull();
-  lift(dock(), X.b, Y - 60);
-  expect(previewPhoto()).toBe('/api/phone/v1/photos/201/preview?pair=T&r=1');
-});
-
-test('lv3_c19b_bringing_the_tile_back_down_before_release_opens_nothing', async () => {
-  const env = phoneEnv();
-  await startPhone(env);
-  await hold(X.b);
-  slide(dock(), X.b, Y - 60);
-  slide(dock(), X.b, Y - 30);
-  lift(dock(), X.b, Y - 30);
-  await advance(500);
-  expect(screen.queryByTestId('preview')).toBeNull();
-  expect(env.mac.allPosts()).toEqual([]);
-});
-
-test('lv3_c19c_opening_an_empty_template_shot_selects_it', async () => {
-  const env = phoneEnv();
-  await startPhone(env);
-  await hold(X.c);
-  slide(dock(), X.c, Y - 60);
-  lift(dock(), X.c, Y - 60);
-  await advance(0);
-  expect(env.mac.posts('/current')).toEqual([{ session_id: 7, container_id: C }]);
-  expect(screen.queryByTestId('preview')).toBeNull();
 });
 
 // ---- the dock halves of LV3·C13(a) and LV3·C14(f) ----

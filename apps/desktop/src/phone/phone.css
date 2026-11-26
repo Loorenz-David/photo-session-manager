@@ -510,24 +510,22 @@ body,
   transition: opacity 0.2s, transform 0.25s;
 }
 
-/* 3. Shot dock */
+/* 3. Shot dock (LV-D19: 56 px tiles that scroll sideways; no magnifier, so nothing grows over the stage) */
 .ph-dock-strip {
   flex: none;
   position: relative;
   z-index: 10;
-  height: 62px;
+  height: 84px;
   touch-action: none;
   -webkit-touch-callout: none;
 }
-/* Bottom-anchored and taller than the strip, so magnified tiles grow up over the stage without
-   clipping. The design's 190 px cut the "Release to open" pill of a tile dragged all the way up
-   (14 + 90 + 90 + 10 + 27 px); 260 px holds it. */
+/* The strip's own height; scrolled by the pointer handlers (scrollLeft), never by the browser. */
 .ph-dock-scroller {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 260px;
+  height: 84px;
   overflow: hidden;
   display: flex;
   align-items: flex-end;
@@ -541,26 +539,31 @@ body,
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   padding: 0 16px 14px;
 }
 .ph-dock-divider {
   flex: none;
   width: 1px;
-  height: 28px;
-  margin: 0 5px 4px;
+  height: 40px;
+  margin: 0 5px 8px;
   background: var(--ph-divider);
 }
 .ph-dock-tile {
   flex: none;
   position: relative;
   box-sizing: border-box;
-  border-radius: 9px;
-  background: #eee;
-  transition: width 0.2s ease, height 0.2s ease, transform 0.3s ease;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: var(--ph-fill);
+  transition: transform 0.3s ease;
 }
-.ph-dock-magnifying {
-  transition: width 0.08s, height 0.08s;
+.ph-dock-tile .ph-tag {
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 4px;
+  font-size: 10px;
 }
 .ph-dock-free {
   background: var(--ph-white);
@@ -572,7 +575,7 @@ body,
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 11px;
   pointer-events: none;
 }
 .ph-dock-plus {
@@ -609,36 +612,16 @@ body,
 }
 .ph-dock-check {
   position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 12px;
-  height: 12px;
+  top: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--ph-ink);
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.ph-dock-label {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--ph-white);
-  color: var(--ph-ink);
-  font-size: 12px;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  pointer-events: none;
-}
-.ph-dock-label-armed {
-  background: var(--ph-ink);
-  color: var(--ph-white);
-}
-
 /* 4. Captured image preview (full-screen overlay) */
 .ph-preview {
   position: absolute;
