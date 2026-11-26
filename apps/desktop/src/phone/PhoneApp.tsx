@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { ApiError, capture, focus, focusClear, forgetToken, hello, type PhoneSession, session, setCurrent, takeToken, Unpaired } from './api';
+import { ApiError, capture, focus, focusClear, forgetToken, hello, type PhoneSession, previewUrl, session, setCurrent, takeToken, Unpaired } from './api';
 import { ConnectingOverlay } from './components/ConnectingOverlay';
 import { ControlBar } from './components/ControlBar';
+import { Dock } from './components/Dock';
 import { FullscreenButton } from './components/FullscreenButton';
 import type { LiveCanvasHandle } from './components/LiveCanvas';
 import { Stage } from './components/Stage';
@@ -9,7 +10,7 @@ import { Toast } from './components/Toast';
 import { isRotated, type Point } from './geometry';
 import { buzz, HAPTIC } from './gestures';
 import { type CaptureMessage, type FocusMessage, PhoneSocket, type ServerMessage } from './socket';
-import { connected, initialState, landedToast, nextStep, photoIds, reduce, stageRatio, TEXT, wantsLive } from './state';
+import { connected, type DockTile, initialState, landedToast, nextStep, photoIds, reduce, stageRatio, TEXT, tileImage, wantsLive } from './state';
 
 /** While the Mac does not answer the first two requests they are asked again this often. */
 const RETRY_MS = 2000;
@@ -239,7 +240,18 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     }
   };
 
+  /** Design §Selecting a tile: an image opens its preview; an empty template shot (or Free shot) becomes current. */
+  const select = (tile: DockTile) => {
+    const image = tileImage(tile);
+    if (image) {
+      buzz(HAPTIC.select);
+      dispatch({ type: 'preview', photo_id: image.photo_id });
+    } else void choose(tile.kind === 'shot' ? tile.shot.container_id : null);
+  };
+
   const next = nextStep(view);
+  const rotated = isRotated(stageRatio(state));
+  const opened = view ? [...view.shots.flatMap(shot => (shot.photo ? [shot.photo] : [])), ...view.extras, ...view.condition].find(image => image.photo_id === state.preview) : undefined;
   if (isConnected && !view) {
     return <div className="ph-app">
       <p className="ph-pairing">{TEXT.noSession}</p>
@@ -248,13 +260,17 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
   return <div className="ph-app">
     <div className="ph-safe-top" />
     <FullscreenButton />
-    <Stage token={token} state={state} dispatch={dispatch} enabled={isConnected} canvas={canvas}
+    <Stage token={token} state={state} dispatch={dispatch} enabled={isConnected && !opened} canvas={canvas}
       isCurrentGen={gen => socket.current?.gen === gen} onFocus={(mark, point) => void onFocus(mark, point)} onClearFocus={() => {
         buzz(HAPTIC.clearFocus);
         clearFocus();
       }} />
-    <ControlBar rotated={isRotated(stageRatio(state))} next={next} onMenu={() => undefined} onCapture={() => void onCapture()} onNext={() => void choose(next.container_id)} />
+    {view && <Dock token={token} view={view} rotated={rotated} enabled={isConnected && !opened} onSelect={select} />}
+    <ControlBar rotated={rotated} next={next} onMenu={() => undefined} onCapture={() => void onCapture()} onNext={() => void choose(next.container_id)} />
     <Toast toast={state.toast} />
+    {opened && <div className="ph-preview" data-testid="preview">
+      <img className="ph-cover" alt="" draggable={false} src={previewUrl(token, opened)} />
+    </div>}
     <ConnectingOverlay connected={isConnected} macName={state.hello?.mac_name ?? null} itemName={view?.item.name ?? null} />
   </div>;
 }

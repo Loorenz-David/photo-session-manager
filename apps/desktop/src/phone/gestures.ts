@@ -46,6 +46,30 @@ export function isDoubleTap(first: Tap, second: Tap): boolean {
   return second.t - first.t < DOUBLE_TAP_MS && Math.hypot(second.x - first.x, second.y - first.y) < DOUBLE_TAP_PX;
 }
 
+/** Design §3: a dock tile's side, px. */
+export const TILE_PX = 36;
+/** Design §Shot dock gestures. */
+export const DOCK = {
+  /** Holding this long starts the magnifier; a release before it is a tap. */
+  holdMs: 200,
+  /** Moving this far sideways before the hold makes it a scroll. */
+  scrollPx: 8,
+  /** A tap selects the nearest tile within this distance. */
+  nearPx: 40,
+  /** Dragging a magnified tile up past this opens it on release. */
+  openPx: 50,
+  /** The magnified tile follows the finger up to this far. */
+  liftMaxPx: 90,
+  /** Within this distance of an edge the strip scrolls by `edgeStepPx` per move. */
+  edgePx: 36,
+  edgeStepPx: 6,
+} as const;
+
+/** Design §3 magnification (Mac-Dock style): 2.5× under the finger, back to 1× at 95 px. */
+export function tileScale(fingerX: number, tileCenterX: number): number {
+  return 1 + 1.5 * Math.max(0, 1 - Math.abs(fingerX - tileCenterX) / 95);
+}
+
 /** Design §Haptics (ms). Only where the browser has them (Android Chrome); iPhone keeps the visual cues. */
 export const HAPTIC = {
   capture: [80, 40, 120],

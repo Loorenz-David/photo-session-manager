@@ -3,7 +3,7 @@
  * PH6). The Mac owns the session: shots, photos and the current shot are only ever what
  * `GET /session` last answered (MC-LV3: one current shot, server-side).
  */
-import type { Hello, PhoneSession, PhoneShot } from './api';
+import type { Hello, PhoneImage, PhoneSession, PhoneShot } from './api';
 import type { CameraMessage } from './socket';
 
 /** master_plan_live §6: the phone's texts. */
@@ -53,6 +53,8 @@ export type PhoneState = {
   toast: { text: string; n: number } | null;
   /** Counts captures: each one flashes. */
   flash: number;
+  /** The photo whose preview is open (by id, so the preview follows the image when the Mac moves it). */
+  preview: number | null;
 };
 
 export const initialState: PhoneState = {
@@ -68,6 +70,7 @@ export const initialState: PhoneState = {
   focus: null,
   toast: null,
   flash: 0,
+  preview: null,
 };
 
 export type Action =
@@ -84,7 +87,8 @@ export type Action =
   | { type: 'focus-confirmed'; id: string }
   | { type: 'focus-lost'; id: string }
   | { type: 'toast'; text: string }
-  | { type: 'flash' };
+  | { type: 'flash' }
+  | { type: 'preview'; photo_id: number | null };
 
 export function reduce(state: PhoneState, action: Action): PhoneState {
   switch (action.type) {
@@ -116,6 +120,8 @@ export function reduce(state: PhoneState, action: Action): PhoneState {
       return { ...state, toast: { text: action.text, n: (state.toast?.n ?? 0) + 1 } };
     case 'flash':
       return { ...state, flash: state.flash + 1 };
+    case 'preview':
+      return { ...state, preview: action.photo_id };
   }
 }
 
@@ -208,3 +214,33 @@ export function landedToast(view: PhoneSession, photo_id: number): string | null
   const extra = view.extras.findIndex(image => image.photo_id === photo_id);
   return extra >= 0 ? `Extra image ${pad(extraPosition(view, extra))} added` : null;
 }
+
+/** One tile of the shot dock (design §3), in the dock's order. */
+export type DockTile =
+  | { key: string; kind: 'shot'; shot: PhoneShot; tag: string; label: string; current: boolean }
+  | { key: string; kind: 'extra'; image: PhoneImage; tag: string; label: string; current: false }
+  | { key: 'free'; kind: 'free'; tag: ''; label: string; current: boolean }
+  | { key: string; kind: 'condition'; image: PhoneImage; tag: string; label: string; current: false };
+
+/**
+ * The dock's tiles: template shots in shooting order with their final numbers (card LV5), extra
+ * Main images (tag = Main position), the Free shot tile, then the Condition images (C1…).
+ */
+export function dockTiles(view: PhoneSession): DockTile[] {
+  const now = currentShot(view);
+  return [
+    ...view.shots.map((shot): DockTile => ({
+      key: `s${shot.container_id}`, kind: 'shot', shot, tag: pad(shot.final_no), label: `${pad(shot.final_no)} · ${shot.name}`, current: shot === now,
+    })),
+    ...view.extras.map((image, index): DockTile => ({
+      key: `p${image.photo_id}`, kind: 'extra', image, tag: pad(extraPosition(view, index)), label: `${pad(extraPosition(view, index))} · Extra image`, current: false,
+    })),
+    { key: 'free', kind: 'free', tag: '', label: 'Free shot · no template', current: now === null },
+    ...view.condition.map((image, index): DockTile => ({
+      key: `p${image.photo_id}`, kind: 'condition', image, tag: `C${index + 1}`, label: `Condition ${pad(index + 1)}`, current: false,
+    })),
+  ];
+}
+
+/** The image a dock tile shows, if it has one. */
+export const tileImage = (tile: DockTile): PhoneImage | null => (tile.kind === 'shot' ? tile.shot.photo : tile.kind === 'free' ? null : tile.image);
