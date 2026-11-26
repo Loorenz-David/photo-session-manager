@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 answered 2026-11-26: `article_number` = the item'
 ---
 # LV2 — Current shot and the phone server
 
-**Tracker:** IMPLEMENTED (2026-11-26, opus) — 5 units, 101 rows: 79 behaviour tests (lv2_current_shot 31, lv2_phone_ops 13, lv2_phone_pairing 7, lv2_phone_http 27, lv2_phone_ws 10 incl. chained rows), 2 desktop command tests, 5 UI tests, core-mechanism unit tests; closing gate green (workspace suite 1598 after the p01 schema tripwire was updated). See the implement r1 handoff.
+**Tracker:** APPROVED (2026-11-26, opus) — review r1: APPROVED_WITH_NOTES. All 101 rows hold at their boundaries; Review-mode checks green (143 suite tests, desktop 126, settings UI 129, clippy, fmt, typecheck); H1–H8 hold; no blocking item; seven notes to the live backlog (first: a phone Delete sends no change event, for LV3).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -510,3 +510,28 @@ so the phone page exists):
   (the schema tripwire: the new `phone_pairings` table and binding columns); its expected schema updated, the file
   re-run green (20/20). Clippy, fmt, sidecar stub (2/2), typecheck, `npm test` (139 files / 953 tests), `npm run build`
   green.
+- 2026-11-26, opus (reviewer), review r1: **APPROVED_WITH_NOTES.** Perimeter: the six checkpoints equal the declared
+  per-unit file lists. The five t4 tests restored in U4 are byte-identical to their pre-LV2 versions. Checks (Review
+  mode, once each): suite stems 143 passed; `psm-desktop` 126; settings UI 129; clippy on the touched crates, fmt and
+  typecheck clean. The implementer's full-suite stamp stands.
+  **Verified correct:**
+  - CS1–CS8 as specified. The binding happens inside the ledger worker lock and the insert's transaction. Lock order is
+    store transaction → held value throughout. `slot_owners` is additive to `order`. Every rewritten t2/t3/t4 test is
+    listed with its 10G rule and asserts MC-LV3.
+  - PH6 view; `move_to` swaps with `place_by_hand`, one step.
+  - PH1 token: 43-char base64url, only its SHA-256 stored, never logged.
+  - Port rule; the setting saves without a rebuild and refreshes `App.settings`.
+  - Peer filter, auth before work, static files without traversal (C18(e) discriminates). The session guard runs on
+    every POST. Handlers are thin (H8).
+  - WebSocket: generation filter, LatestSlot frames, ≤ 64 events, 4408/4409/4401 closes, PH5 header.
+  - Every row's test observes its outcome at its boundary and can fail; no orphan test. H1–H8 hold. No assumption
+    contradicts the intention.
+
+  **Notes** (`backlog_live/LV2_current_shot_and_phone_server.md`):
+  1. A phone Delete emits no `SessionChanged`/`PhotoChanged` (Mac and other phones stay stale) → LV3.
+  2. Deleting the active session emits no `ActiveSessionChanged` → LV3.
+  3. Sockets miss App events after a rebuilding settings save until the next request → LV3.
+  4. The revoke command's two calls are tested in halves → LV4.
+  5. Error bodies carry internal text/paths → LV3.
+  6. `dist/` must exist before cargo builds `psm-desktop` (§8 gate order) → orchestrator.
+  7. The LV1 notes addressed to LV2 are still open → orchestrator.
