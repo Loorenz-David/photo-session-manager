@@ -76,6 +76,16 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     - Finding F3: Deny/delete on the **Mac** (`photos_delete` → `ReviewService::delete`) emits no event, so phones update
       only on their next request (owner: "the phone interface didn't react that fast"). LV3·U0 announced only the
       phone's own delete (`delete_announced`); every Mac review action needs the same.
+    - C11 tap a shot then camera button (container 9): PASS. C12 Retake → red on the Mac at once, Cmd+Z restores, retake +
+      phone capture fills it and advances: PASS. C13 two after the last → Condition: PASS. Phone request→exposed
+      0.55–0.73 s.
+    - **Finding F4 (MC-LV3, important):** the advance after a bound exposure treats a container whose exposure is bound
+      but whose file has not arrived yet as empty. Log 14:07:02.224 exposure 61 → 8, `set container=10 by=advance` while
+      exposure 60's file for 10 was still on the way (arrived 14:07:02.8, then `set none`); 14:07:07.375 exposure 63 →
+      none, then `set container=8` while exposure 61's file for 8 was on the way (corrected to none at 07.582 on
+      arrival). A shutter in those windows (≈ 0.2–0.6 s with ~4 s Wi-Fi files) would bind a second exposure to a taken
+      container. Nothing went wrong in this run. MC-LV3: "first empty container … after any reported shutters whose
+      files are still on the way".
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
