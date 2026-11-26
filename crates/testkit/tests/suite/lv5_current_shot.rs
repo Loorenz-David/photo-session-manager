@@ -102,6 +102,23 @@ fn photo_at(a: &TestApp, s: i64, path: &str) -> (Classification, Option<i64>) {
 fn fixture4() -> (TestApp, i64, [i64; 4]) {
     let ready = r#"{"timestamp":"2026-11-06T10:00:00.000Z","source":"sdk","event":"connection.ready","transport":"usb","model":"ILCE-7RM5","store_destination":"verified","store_value":"0x0003"}"#;
     let a = TestApp::with_camera_script(ready).unwrap();
+    let until = Instant::now() + Duration::from_secs(15);
+    while Instant::now() < until {
+        a.tick(0).unwrap();
+        if a.camera_status().is_ok_and(|status| {
+            matches!(
+                status,
+                psm_core::domain::camera::CameraStatus::Connected { .. }
+            )
+        }) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(a.camera_status().is_ok_and(|status| matches!(
+        status,
+        psm_core::domain::camera::CameraStatus::Connected { .. }
+    )));
     let templates = || {
         TemplatesService::new(
             a.store(),
