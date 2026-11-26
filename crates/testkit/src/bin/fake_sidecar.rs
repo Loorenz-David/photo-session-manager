@@ -128,7 +128,10 @@ impl Frames {
             .windows(2)
             .find(|w| w[0] == "--frame-socket")
             .map(|w| PathBuf::from(&w[1]));
-        Self { path, stream: None }
+        let stream = path
+            .as_ref()
+            .and_then(|path| UnixStream::connect(path).ok());
+        Self { path, stream }
     }
     fn send(&mut self, epoch: u32, number: u32, w: u16, h: u16, len: usize, bad: bool) {
         if self.stream.is_none() {

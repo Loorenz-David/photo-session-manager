@@ -804,16 +804,15 @@ impl CameraRuntime {
         }
         *self.staging_dir.lock().unwrap() = Some(staging.clone());
         let mut frame_listener = self.frame_listener.lock().unwrap();
-        if let Some(mut old) = frame_listener.take() {
-            old.stop();
+        if frame_listener.is_none() {
+            *frame_listener = FrameListener::bind(
+                &self.run_id,
+                self.live_hub.clone(),
+                self.helper_log.clone(),
+                0,
+            )
+            .ok();
         }
-        *frame_listener = FrameListener::bind(
-            &self.run_id,
-            self.live_hub.clone(),
-            self.helper_log.clone(),
-            0,
-        )
-        .ok();
         let frame_path = frame_listener
             .as_ref()
             .map(|l| l.path().to_string_lossy().into_owned());
@@ -1080,20 +1079,10 @@ impl CameraRuntime {
             match event {
                 SupervisorEvent::Exited { .. } => {
                     self.helper_running.store(false, Ordering::SeqCst);
-                    // A new helper process gets a newly bound frame channel at the same path.
-                    // This also clears the bad-record latch and prevents an old stream from
-                    // being mistaken for the next camera source.
-                    let mut listener = self.frame_listener.lock().unwrap();
-                    if let Some(mut old) = listener.take() {
-                        let connections = old.connection_count();
-                        old.stop();
-                        *listener = FrameListener::bind(
-                            &self.run_id,
-                            self.live_hub.clone(),
-                            self.helper_log.clone(),
-                            connections,
-                        )
-                        .ok();
+                    // The runtime listener stays bound across helper restarts, so the next
+                    // process can connect as soon as it starts without a rebind gap.
+                    if let Some(listener) = self.frame_listener.lock().unwrap().as_ref() {
+                        listener.helper_exited();
                     }
                     helper.push(HelperEvent::Exited);
                     if exits >= 3

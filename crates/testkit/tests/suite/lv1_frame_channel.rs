@@ -1,13 +1,14 @@
 use psm_core::{
     Error,
     domain::live::{
-        FocusFrameState, FocusOutcome, FocusPoint, FocusRefusal, LiveEvent, LiveState, ViewerDemand,
+        ExposureReadout, FocusFrameState, FocusOutcome, FocusPoint, FocusRefusal, LiveEvent,
+        LiveState, ViewerDemand,
     },
     ports::camera::CameraProvider,
     services::live_view::{focus, focus_clear},
 };
 use psm_integrations::camera::{
-    direct::live::{exposure_readout, frame_norm, to_grid},
+    direct::live::{frame_norm, to_grid},
     sidecar::{
         frames::{FrameError, parse_record},
         protocol::{Command, SidecarEvent, Transport, parse_line},
@@ -349,10 +350,11 @@ fn lv1_c15b_exposure_mapping() {
             .iter()
             .any(|e| matches!(e, LiveEvent::Exposure(_)))
     });
-    assert!(o.events().contains(&LiveEvent::Exposure(exposure_readout(
-        "1/125", "8.0", "100"
-    ))));
-    assert_eq!(exposure_readout("1/125", "8.0", "100").aperture, "f/8");
+    assert!(o.events().contains(&LiveEvent::Exposure(ExposureReadout {
+        shutter: "1/125".into(),
+        aperture: "f/8".into(),
+        iso: "ISO 100".into(),
+    })));
 }
 #[test]
 fn lv1_c15c_focus_result_mapping() {

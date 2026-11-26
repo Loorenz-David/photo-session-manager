@@ -248,7 +248,8 @@ The sidecar accepts `--frame-socket <path>` in `auto`; the first stdin line is s
 A focus line is `focus x=<0..639> y=<0..479> af=<0|1> cmd_id=<id>` and its result is a JSON
 `focus.result`. Binary frames use `PSLV` version 1, a 24-byte little-endian header and the
 camera's JPEG unchanged. For fake-sidecar scripts, `frame <epoch> <number> <width> <height> <len>`
-writes one deterministic record; `frames <epoch> <first> <count> <interval_ms>` writes a run of
+writes one deterministic record over the channel the fake connects to at process start;
+`frames <epoch> <first> <count> <interval_ms>` writes a run of
 640×424 records; `badframe` writes wrong magic. `{focus_cmd_id}` substitutes the last focus
 command id. `cargo test -p psm-testkit --test suite lv1_frame_channel::` checks the wired path;
 `lv1_live_hub::` checks viewer demand and focus independently of the SDK. `PSM_LOG=debug` shows

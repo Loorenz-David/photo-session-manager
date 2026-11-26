@@ -14,6 +14,7 @@ namespace crlab {
 struct LiveRunner::Impl {
   CameraSession& session; EventSink& log; ActionLock& action; int fd;
   std::atomic<bool> stop{true};
+  std::atomic<bool> stream_stop{true};
   bool started=false;
   bool streaming=false;
   uint32_t epoch=0;
@@ -24,7 +25,7 @@ struct LiveRunner::Impl {
   Impl(CameraSession& s, EventSink& l, ActionLock& a, int f):session(s),log(l),action(a),fd(f){}
   bool write_all(const std::vector<uint8_t>& bytes) {
     size_t off=0;
-    while (off<bytes.size() && !stop) {
+    while (off<bytes.size() && !stream_stop) {
       pollfd p{fd,POLLOUT,0};
       if (poll(&p,1,30)<=0) continue;
       ssize_t n=send(fd,bytes.data()+off,bytes.size()-off,MSG_NOSIGNAL|MSG_DONTWAIT);
@@ -36,7 +37,7 @@ struct LiveRunner::Impl {
   void pull() {
     int64_t next=monotonic_ms(); int64_t stats_at=next;
     uint64_t prev_frames=0,prev_repeats=0,prev_errors=0;
-    while (!stop) {
+    while (!stream_stop) {
       int64_t now=monotonic_ms();
       if (now<next) { std::this_thread::sleep_for(std::chrono::milliseconds(std::min<int64_t>(5,next-now))); continue; }
       auto frame=session.pull_live_view_frame();
@@ -60,12 +61,13 @@ struct LiveRunner::Impl {
     }
   }
   void sender() {
-    while (!stop) {
+    while (!stream_stop) {
       auto b=slot.take(std::chrono::milliseconds(30));
       if (b && !write_all(*b)) {
-        log.emit("liveview.unavailable",Fields().str("reason","frame_channel"));
-        stop=true;
-        session.cancel_autofocus();
+        if (!stop) {
+          log.emit("liveview.unavailable",Fields().str("reason","frame_channel"));
+          stream_stop=true;
+        }
         break;
       }
     }
@@ -132,7 +134,7 @@ LiveRunner::~LiveRunner(){stop("shutdown");}
 bool LiveRunner::running() const {return impl_->started && !impl_->stop;}
 void LiveRunner::start(uint32_t epoch) {
   if (impl_->started) return;
-  impl_->epoch=epoch; impl_->session.resume_autofocus(); impl_->stop=false; impl_->started=true;
+  impl_->epoch=epoch; impl_->session.resume_autofocus(); impl_->stop=false; impl_->stream_stop=false; impl_->started=true;
   impl_->focus_thread=std::thread([this]{impl_->focus();});
   auto state=impl_->session.live_view_state();
   if (state.status!=2) {
@@ -147,7 +149,7 @@ void LiveRunner::start(uint32_t epoch) {
 }
 void LiveRunner::stop(const std::string& reason) {
   if (!impl_->started) return;
-  impl_->stop=true; impl_->session.cancel_autofocus(); impl_->focus_queue.close(); impl_->slot.close();
+  impl_->stop=true; impl_->stream_stop=true; impl_->session.cancel_autofocus(); impl_->focus_queue.close(); impl_->slot.close();
   if (impl_->pull_thread.joinable()) impl_->pull_thread.join();
   if (impl_->sender_thread.joinable()) impl_->sender_thread.join();
   if (impl_->focus_thread.joinable()) impl_->focus_thread.join();

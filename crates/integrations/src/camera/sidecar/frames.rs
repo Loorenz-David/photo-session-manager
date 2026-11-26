@@ -112,9 +112,9 @@ impl FrameListener {
                                 .ok();
                             {
                                 let mut s = thread_state.lock().unwrap();
-                                if s.bad {
-                                    continue;
-                                }
+                                // A new sidecar process gets a fresh frame channel even when
+                                // the previous process left a malformed record behind.
+                                s.bad = false;
                                 s.connection += 1;
                                 s.started = false;
                                 if let Some((epoch, link)) = s.active.clone() {
@@ -269,6 +269,9 @@ impl FrameListener {
         s.started = false;
         drop(s);
         self.hub.source_stopped(reason);
+    }
+    pub fn helper_exited(&self) {
+        self.state.lock().unwrap().bad = false;
     }
     pub fn stop(&mut self) {
         if self.stop.swap(true, Ordering::SeqCst) {
