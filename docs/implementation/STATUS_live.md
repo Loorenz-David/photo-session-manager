@@ -46,7 +46,7 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
   - **LV3 APPROVED** (review r1, APPROVED_WITH_NOTES, no fix; Fable implement 13:14–13:56, 5 units incl. U0; narrative
     relayed). Six notes in `backlog_live/LV3_phone_app.md` (capture toast matching and the look comparison with the
     prototype go to LV4). Plan lesson folded (jsdom has no PointerEvent, master plan §3). **All three build milestones
-    approved**; pushed; pull request to `main` opened; waiting for the owner.
+    approved**; pushed; pull request #33 to `main` opened; waiting for the owner.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
