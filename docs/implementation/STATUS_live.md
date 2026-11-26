@@ -47,6 +47,12 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     relayed). Six notes in `backlog_live/LV3_phone_app.md` (capture toast matching and the look comparison with the
     prototype go to LV4). Plan lesson folded (jsdom has no PointerEvent, master plan §3). **All three build milestones
     approved**; pushed; pull request #33 to `main` opened; waiting for the owner.
+  - **LV4 preparation (2026-11-26 14:14):** SDK sidecar built against the lab's SDK 2.02 (`tools/sidecar/build.sh --sdk`,
+    both ctest programs pass, 17 live-view tests); release bundle built
+    (`apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app`, 50 MB, ad-hoc signed): `phone-web/phone.html`
+    inside; the bundled helper links `@rpath/libCr_Core.dylib` (supplied at run time by the installed camera support
+    package). **Not installed** — waiting for the owner's OK to replace `/Applications/Session Manager.app` (keep the old
+    one under a dated name).
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
