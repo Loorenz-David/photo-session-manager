@@ -45,3 +45,27 @@ pub fn ensure_research_columns(conn: &Connection) -> rusqlite::Result<()> {
     )?;
     Ok(())
 }
+
+pub fn ensure_live_columns(conn: &Connection) -> rusqlite::Result<()> {
+    for table in ["camera_exposures", "photo_places"] {
+        if !has_column(conn, table, "shot_bound")? {
+            conn.execute(
+                &format!("ALTER TABLE {table} ADD COLUMN shot_bound INTEGER NOT NULL DEFAULT 0"),
+                [],
+            )?;
+        }
+        if !has_column(conn, table, "shot_container_id")? {
+            conn.execute(
+                &format!("ALTER TABLE {table} ADD COLUMN shot_container_id INTEGER"),
+                [],
+            )?;
+        }
+    }
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS phone_pairings (
+        id INTEGER PRIMARY KEY, name TEXT NOT NULL, token_sha256 TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL, last_seen_at INTEGER, revoked_at INTEGER
+    )",
+    )?;
+    Ok(())
+}

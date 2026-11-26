@@ -297,7 +297,7 @@ impl CameraRuntime {
             helper_log: Arc::new(Mutex::new(VecDeque::with_capacity(HELPER_LOG_KEPT))),
             frame_listener: Mutex::new(None),
             live_hub: Arc::new(LiveViewHub::new(clock.clone())),
-            current_shots: Arc::new(CurrentShots),
+            current_shots: Arc::new(CurrentShots::default()),
             sidecar_timings: RwLock::new(SidecarTimings::default()),
             stopped: AtomicBool::new(false),
             direct: OnceLock::new(),
@@ -495,6 +495,7 @@ impl CameraRuntime {
                 health: ledger.health.clone(),
                 capture_root: ledger.capture_root.clone(),
                 shared: self.ledger_shared.clone(),
+                current_shots: self.current_shots.clone(),
             });
         }
     }
@@ -684,6 +685,7 @@ impl CameraRuntime {
             health: binding.health.clone(),
             capture_root: self.capture_root_fn(),
             shared: self.ledger_shared.clone(),
+            current_shots: self.current_shots.clone(),
         });
         if let Err(error) = ledger.recover_pending() {
             tracing::warn!(%error, "camera ledger recovery failed");

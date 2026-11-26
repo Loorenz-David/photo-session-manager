@@ -22,6 +22,9 @@ pub enum AppEvent {
     SessionChanged {
         session_id: i64,
     },
+    ActiveSessionChanged {
+        session_id: Option<i64>,
+    },
     HealthChanged,
     CameraStatusChanged {
         status: crate::domain::camera::CameraStatus,

@@ -152,8 +152,12 @@ pub async fn template_session_view(
 ) -> std::result::Result<TemplateViewDto, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let mut view =
-            psm_core::services::template_placement::session_view(app.store.as_ref(), session_id.0)?;
+        let mut view = psm_core::services::template_placement::session_view_with_current(
+            app.store.as_ref(),
+            app.camera_runtime.current_shots().as_ref(),
+            app.clock.now_ms(),
+            session_id.0,
+        )?;
         for c in &mut view.containers {
             c.example_path = c.example_file.as_ref().map(|file| {
                 app.paths
@@ -187,6 +191,7 @@ async fn hand_action(
             clock: app.clock.as_ref(),
             events: app.events.as_ref(),
             history: app.history.as_ref(),
+            shots: app.camera_runtime.current_shots(),
         })
         .map(ReviewResponse::from)
         .map_err(CommandError::from)

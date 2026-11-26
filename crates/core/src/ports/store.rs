@@ -9,7 +9,7 @@ use crate::domain::{
     publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
     session::{LatestPublish, Session, SessionDto, SessionListRecord},
     storage::{ArchivedImage, DeletedRows, ItemRetention, PhotoDenial},
-    template::{PlaceRow, Presets, ShotKey, Template, TemplateSummary},
+    template::{PlaceRow, Presets, ShotBinding, ShotKey, Template, TemplateSummary},
 };
 use crate::mechanisms::remote::RemoteInput;
 
@@ -44,6 +44,14 @@ pub trait StoreTx {
     fn template_for_session(&self, session_id: i64) -> Result<Option<Template>>;
     fn shot_keys(&self, session_id: i64) -> Result<Vec<ShotKey>>;
     fn hold_times(&self, session_id: i64, now_ms: i64) -> Result<Vec<(i64, i64)>>;
+    /// The binding of a `camera_exposures` row (`None` when `shot_bound = 0` or no such row).
+    fn exposure_shot(&self, exposure_id: i64) -> Result<Option<ShotBinding>>;
+    /// The ledger's exposure insert, inside the caller's transaction (CS5).
+    fn insert_exposure(&mut self, exposure: &NewExposure) -> Result<i64>;
+    /// R-I25's late match inside the caller's transaction: the oldest completed delivery with no
+    /// exposure within the FIFO window takes `exposure_id`. When its photo's place row is bound
+    /// (CS6), the exposure takes that binding, which is returned.
+    fn match_late_exposure(&mut self, exposure_id: i64, at: i64) -> Result<Option<ShotBinding>>;
     fn photo_place_row(&self, photo_id: i64) -> Result<Option<PlaceRow>>;
     fn photo_place_put(&mut self, row: &PlaceRow) -> Result<()>;
     fn photo_place_mark(

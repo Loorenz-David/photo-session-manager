@@ -258,6 +258,7 @@ pub struct Exposure {
     pub status: ExposureStatus,
     pub expected_files: Option<u32>,
     pub created_at: i64,
+    pub shot: Option<crate::domain::template::ShotBinding>,
 }
 
 /// The fields of a new `camera_exposures` row; `status` is always `expecting` and
@@ -269,6 +270,7 @@ pub struct NewExposure {
     pub initiated: ExposureInitiator,
     pub session_id: Option<i64>,
     pub created_at: i64,
+    pub shot: Option<crate::domain::template::ShotBinding>,
 }
 
 /// A `camera_deliveries` row (10E MC-33 R-I25; `written_path` per master plan §6.5).

@@ -6,6 +6,56 @@ pub struct Shot {
     pub photo_id: i64,
     pub at: i64,
     pub counter: Option<(String, u64)>,
+    pub exposure: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Occupant {
+    Photo(i64),
+    Hold(i64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Slot {
+    pub owner: Option<i64>,
+    pub occupant: Occupant,
+}
+
+/// CS2: the session's shots and holds sorted by time exactly as [`order`] sorts them; each
+/// time-sorted position's **owner** (a hold's exposure id; a shot's matched exposure id or
+/// `None`); then `order`'s counter-run reassignment. Each occupant's owner is the owner of the
+/// position it lands in, so a file the ledger's FIFO rule matched to an earlier exposure takes the
+/// binding of the exposure its camera counter says it belongs to (10G §4 rule 1).
+pub fn slot_owners(shots: Vec<Shot>, holds: Vec<(i64, i64)>) -> Vec<Slot> {
+    let mut initial: Vec<Entry> = shots
+        .iter()
+        .cloned()
+        .map(Entry::Shot)
+        .chain(
+            holds
+                .iter()
+                .map(|(at, id)| Entry::Hold { at: *at, id: *id }),
+        )
+        .collect();
+    initial.sort_by_key(|e| (e.at(), matches!(e, Entry::Hold { .. }), e.id()));
+    let owners: Vec<Option<i64>> = initial
+        .iter()
+        .map(|e| match e {
+            Entry::Shot(s) => s.exposure,
+            Entry::Hold { id, .. } => Some(*id),
+        })
+        .collect();
+    order(shots, holds)
+        .into_iter()
+        .zip(owners)
+        .map(|(e, owner)| Slot {
+            owner,
+            occupant: match e {
+                Entry::Shot(s) => Occupant::Photo(s.photo_id),
+                Entry::Hold { id, .. } => Occupant::Hold(id),
+            },
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +201,7 @@ mod tests {
             photo_id: id,
             at,
             counter: name.and_then(|n| seq_of(&stem_key(n))),
+            exposure: None,
         }
     }
     fn ids(shots: Vec<Shot>, holds: Vec<(i64, i64)>) -> Vec<i64> {
@@ -290,6 +341,58 @@ mod tests {
                 vec![]
             ),
             vec![1, 2]
+        );
+    }
+
+    #[test]
+    fn slot_owners_a_fifo_mismatch_takes_the_owner_of_the_counters_slot() {
+        // DSC00102 was matched (FIFO) to exposure 8, but its counter says it is the third shot:
+        // it lands in the third time slot, owned by exposure 9 (a hold); the hold moves to the
+        // second slot, owned by exposure 8.
+        let mut first = shot(1, 10, Some("DSC00100.ARW"));
+        first.exposure = Some(7);
+        let mut third = shot(3, 20, Some("DSC00102.ARW"));
+        third.exposure = Some(8);
+        assert_eq!(
+            slot_owners(vec![first, third], vec![(30, 9)]),
+            vec![
+                Slot {
+                    owner: Some(7),
+                    occupant: Occupant::Photo(1)
+                },
+                Slot {
+                    owner: Some(8),
+                    occupant: Occupant::Hold(9)
+                },
+                Slot {
+                    owner: Some(9),
+                    occupant: Occupant::Photo(3)
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn slot_owners_in_counter_order_keep_their_own_exposures() {
+        let mut a = shot(1, 10, Some("DSC00100.ARW"));
+        a.exposure = Some(7);
+        let b = shot(2, 20, Some("DSC00101.ARW"));
+        assert_eq!(
+            slot_owners(vec![a, b], vec![(30, 9)]),
+            vec![
+                Slot {
+                    owner: Some(7),
+                    occupant: Occupant::Photo(1)
+                },
+                Slot {
+                    owner: None,
+                    occupant: Occupant::Photo(2)
+                },
+                Slot {
+                    owner: Some(9),
+                    occupant: Occupant::Hold(9)
+                },
+            ]
         );
     }
 }

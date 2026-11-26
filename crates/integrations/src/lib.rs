@@ -699,6 +699,9 @@ impl App {
             })
         };
         let events = Arc::new(EventHub::default());
+        events.observe(Arc::new(CurrentShotObserver(
+            camera_runtime.current_shots(),
+        )));
         let history = Arc::new(match history_store {
             Some(store) => History::with_store(store, events.clone()),
             None => History::new(events.clone()),
@@ -779,7 +782,8 @@ impl App {
             camera.clone(),
             events.clone(),
             clock.clone(),
-        );
+        )
+        .with_current_shots(camera_runtime.current_shots());
         // A10: the arrival thread queues Capture One's work for a new photo; the background loop
         // runs it (`DeferredFollow::flush`), so a busy Capture One never holds arrivals up.
         // Without the background loop (`run_startup` off: tests, tools) nothing would flush the
@@ -1543,6 +1547,16 @@ pub fn commerce_from_settings(
 #[derive(Default)]
 pub struct EventHub {
     state: std::sync::Mutex<EventHubState>,
+}
+/// CS7 (`master_plan_live.md` §5): a session switch forgets the held current shot. The holder
+/// lives with the camera runtime (one per process); each App's hub observes for it.
+struct CurrentShotObserver(Arc<psm_core::services::current_shot::CurrentShots>);
+impl EventSink for CurrentShotObserver {
+    fn emit(&self, event: AppEvent) {
+        if matches!(event, AppEvent::ActiveSessionChanged { .. }) {
+            self.0.clear();
+        }
+    }
 }
 #[derive(Default)]
 struct EventHubState {

@@ -6,6 +6,16 @@ pub enum Error {
     TemplateImageUnreadable,
     #[error("no_template")]
     NoTemplate,
+    #[error("shot_filled")]
+    ShotFilled,
+    #[error("session_changed")]
+    SessionChanged,
+    #[error("not_in_template")]
+    NotInTemplate,
+    #[error("pairing_unknown")]
+    PairingUnknown,
+    #[error("phone_port_invalid")]
+    PhonePortInvalid,
     /// T4: Shift the rest back with no denied photo before a template-placed one.
     #[error("There is nothing to shift back")]
     NothingToShift,

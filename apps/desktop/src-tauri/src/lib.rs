@@ -3124,6 +3124,9 @@ impl<R: tauri::Runtime> EventSink for TauriEvents<R> {
                     .app
                     .emit("session_changed", SessionChangedPayload { session_id });
             }
+            AppEvent::ActiveSessionChanged { session_id } => {
+                let _ = self.app.emit("active_session_changed", session_id);
+            }
             AppEvent::ExportProgress {
                 session_id,
                 done,

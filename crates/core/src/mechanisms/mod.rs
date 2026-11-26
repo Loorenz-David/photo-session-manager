@@ -7,6 +7,7 @@ pub mod capture_ledger;
 pub mod cleanup;
 pub mod composition;
 pub mod conversation_rules;
+pub mod current_shot;
 pub mod hash;
 pub mod hook_payload;
 pub mod labels;

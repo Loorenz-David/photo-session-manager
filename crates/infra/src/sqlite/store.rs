@@ -24,7 +24,7 @@ use psm_core::{
             LatestPublish, PublishStep, PublishedChanges, Session, SessionDto, SessionListRecord,
         },
         storage::{ArchivedImage, ItemRetention},
-        template::{Container, PlaceRow, Presets, ShotKey, Template, TemplateSummary},
+        template::{Container, PlaceRow, Presets, ShotBinding, ShotKey, Template, TemplateSummary},
     },
     mechanisms::{
         canon::canon,
@@ -57,6 +57,7 @@ impl SqliteStore {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         Migrations::new(Self::migrations()).to_latest(&mut conn)?;
         super::ensure::ensure_research_columns(&conn)?;
+        super::ensure::ensure_live_columns(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             default_shape: shape.to_string(),
@@ -199,10 +200,11 @@ fn template_read(conn: &Connection, id: i64) -> Result<Template> {
 }
 
 fn photo_place_read(conn: &Connection, photo_id: i64) -> Result<Option<PlaceRow>> {
-    conn.query_row("SELECT photo_id,slot,place_by_hand,frame_by_hand,released,key_at,key_name,pending_zoom FROM photo_places WHERE photo_id=?1", [photo_id], |r| Ok(PlaceRow {
+    conn.query_row("SELECT photo_id,slot,place_by_hand,frame_by_hand,released,key_at,key_name,pending_zoom,shot_bound,shot_container_id FROM photo_places WHERE photo_id=?1", [photo_id], |r| Ok(PlaceRow {
         photo_id: r.get(0)?, slot: r.get(1)?, place_by_hand: r.get::<_,i64>(2)? != 0,
         frame_by_hand: r.get::<_,i64>(3)? != 0, released: r.get::<_,i64>(4)? != 0,
         key_at: r.get(5)?, key_name: r.get(6)?, pending_zoom: r.get(7)?,
+        shot: (r.get::<_, i64>(8)? != 0).then_some(ShotBinding { container_id: r.get(9)? }),
     })).optional().map_err(db)
 }
 
@@ -895,13 +897,14 @@ impl StoreTx for SqliteTx<'_> {
         id.map(|id| template_read(&self.tx, id)).transpose()
     }
     fn shot_keys(&self, session_id: i64) -> Result<Vec<ShotKey>> {
-        let mut stmt = self.tx.prepare("SELECT p.id,COALESCE(pp.key_at,p.captured_at,p.created_at),COALESCE(pp.key_name,(SELECT d.file_key FROM camera_deliveries d WHERE d.final_path=p.raw_path AND d.state='done' AND d.outcome!='duplicate' ORDER BY d.id DESC LIMIT 1)),COALESCE(pp.released,0) FROM photos p LEFT JOIN photo_places pp ON pp.photo_id=p.id WHERE p.session_id=?1 ORDER BY p.id").map_err(db)?;
+        let mut stmt = self.tx.prepare("SELECT p.id,COALESCE(pp.key_at,p.captured_at,p.created_at),COALESCE(pp.key_name,(SELECT d.file_key FROM camera_deliveries d WHERE d.final_path=p.raw_path AND d.state='done' AND d.outcome!='duplicate' ORDER BY d.id DESC LIMIT 1)),COALESCE(pp.released,0),(SELECT d.exposure_id FROM camera_deliveries d WHERE d.final_path=p.raw_path AND d.state='done' AND d.outcome!='duplicate' ORDER BY d.id DESC LIMIT 1) FROM photos p LEFT JOIN photo_places pp ON pp.photo_id=p.id WHERE p.session_id=?1 ORDER BY p.id").map_err(db)?;
         stmt.query_map([session_id], |r| {
             Ok(ShotKey {
                 photo_id: r.get(0)?,
                 at: r.get(1)?,
                 name: r.get(2)?,
                 released: r.get::<_, i64>(3)? != 0,
+                exposure_id: r.get(4)?,
             })
         })
         .map_err(db)?
@@ -918,11 +921,68 @@ impl StoreTx for SqliteTx<'_> {
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(db)
     }
+    fn exposure_shot(&self, exposure_id: i64) -> Result<Option<ShotBinding>> {
+        self.tx
+            .query_row(
+                "SELECT shot_bound,shot_container_id FROM camera_exposures WHERE id=?1",
+                [exposure_id],
+                |r| {
+                    Ok((r.get::<_, i64>(0)? != 0).then_some(ShotBinding {
+                        container_id: r.get(1)?,
+                    }))
+                },
+            )
+            .optional()
+            .map(Option::flatten)
+            .map_err(db)
+    }
+    fn insert_exposure(&mut self, e: &NewExposure) -> Result<i64> {
+        insert_exposure_row(&self.tx, e)
+    }
+    fn match_late_exposure(&mut self, exposure_id: i64, at: i64) -> Result<Option<ShotBinding>> {
+        let row: Option<(i64, Option<i64>)> = self
+            .tx
+            .query_row(
+                "SELECT d.id,(SELECT p.id FROM photos p WHERE p.raw_path=d.final_path ORDER BY p.id LIMIT 1) FROM camera_deliveries d WHERE d.exposure_id IS NULL AND d.state='done' AND d.outcome!='duplicate' AND d.completed_at BETWEEN ?1 AND ?2 ORDER BY d.completed_at,d.id LIMIT 1",
+                params![at - psm_core::domain::camera::FIFO_WINDOW_MS, at],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .map_err(db)?;
+        let Some((delivery_id, photo_id)) = row else {
+            return Ok(None);
+        };
+        self.tx
+            .execute(
+                "UPDATE camera_deliveries SET exposure_id=?1, association='fifo' WHERE id=?2",
+                params![exposure_id, delivery_id],
+            )
+            .map_err(db)?;
+        self.tx
+            .execute(
+                "UPDATE camera_exposures SET status='received',session_id=(SELECT session_id FROM camera_deliveries WHERE id=?2) WHERE id=?1",
+                params![exposure_id, delivery_id],
+            )
+            .map_err(db)?;
+        let binding = match photo_id {
+            Some(id) => photo_place_read(&self.tx, id)?.and_then(|row| row.shot),
+            None => None,
+        };
+        if let Some(shot) = binding {
+            self.tx
+                .execute(
+                    "UPDATE camera_exposures SET shot_bound=1,shot_container_id=?2 WHERE id=?1",
+                    params![exposure_id, shot.container_id],
+                )
+                .map_err(db)?;
+        }
+        Ok(binding)
+    }
     fn photo_place_row(&self, photo_id: i64) -> Result<Option<PlaceRow>> {
         photo_place_read(&self.tx, photo_id)
     }
     fn photo_place_put(&mut self, row: &PlaceRow) -> Result<()> {
-        self.tx.execute("INSERT INTO photo_places(photo_id,slot,place_by_hand,frame_by_hand,released,key_at,key_name,pending_zoom) VALUES (?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(photo_id) DO UPDATE SET slot=excluded.slot,place_by_hand=excluded.place_by_hand,frame_by_hand=excluded.frame_by_hand,released=excluded.released,key_at=excluded.key_at,key_name=excluded.key_name,pending_zoom=excluded.pending_zoom", params![row.photo_id,row.slot,row.place_by_hand as i64,row.frame_by_hand as i64,row.released as i64,row.key_at,row.key_name,row.pending_zoom]).map_err(db)?;
+        self.tx.execute("INSERT INTO photo_places(photo_id,slot,place_by_hand,frame_by_hand,released,key_at,key_name,pending_zoom,shot_bound,shot_container_id) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(photo_id) DO UPDATE SET slot=excluded.slot,place_by_hand=excluded.place_by_hand,frame_by_hand=excluded.frame_by_hand,released=excluded.released,key_at=excluded.key_at,key_name=excluded.key_name,pending_zoom=excluded.pending_zoom,shot_bound=excluded.shot_bound,shot_container_id=excluded.shot_container_id", params![row.photo_id,row.slot,row.place_by_hand as i64,row.frame_by_hand as i64,row.released as i64,row.key_at,row.key_name,row.pending_zoom,row.shot.is_some() as i64,row.shot.and_then(|b| b.container_id)]).map_err(db)?;
         Ok(())
     }
     fn photo_place_mark(
@@ -1624,6 +1684,24 @@ fn delivery_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<DeliveryRow> {
     })
 }
 
+/// One `camera_exposures` row, `expecting`, with its binding (CS5; `shot_bound = 0` without one).
+fn insert_exposure_row(conn: &Connection, e: &NewExposure) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO camera_exposures(capture_id,exposed_at,initiated,session_id,status,expected_files,created_at,shot_bound,shot_container_id) VALUES (?1,?2,?3,?4,'expecting',NULL,?5,?6,?7)",
+        params![
+            e.capture_id,
+            e.exposed_at,
+            e.initiated.as_str(),
+            e.session_id,
+            e.created_at,
+            i64::from(e.shot.is_some()),
+            e.shot.and_then(|b| b.container_id)
+        ],
+    )
+    .map_err(db)?;
+    Ok(conn.last_insert_rowid())
+}
+
 fn exposure_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Exposure> {
     let initiated: String = r.get(3)?;
     let status: String = r.get(5)?;
@@ -1636,6 +1714,9 @@ fn exposure_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Exposure> {
         status: ExposureStatus::parse(&status).ok_or_else(|| bad_enum(5, &status))?,
         expected_files: r.get::<_, Option<i64>>(6)?.map(|n| n.max(0) as u32),
         created_at: r.get(7)?,
+        shot: (r.get::<_, i64>(8)? != 0).then_some(ShotBinding {
+            container_id: r.get(9)?,
+        }),
     })
 }
 
@@ -3644,17 +3725,12 @@ impl SqliteStore {
 impl SqliteStore {
     fn ledger_insert_exposure(&self, e: &NewExposure) -> Result<i64> {
         let conn = self.locked()?;
-        conn.execute(
-            "INSERT INTO camera_exposures(capture_id,exposed_at,initiated,session_id,status,expected_files,created_at) VALUES (?1,?2,?3,?4,'expecting',NULL,?5)",
-            params![e.capture_id, e.exposed_at, e.initiated.as_str(), e.session_id, e.created_at],
-        )
-        .map_err(db)?;
-        Ok(conn.last_insert_rowid())
+        insert_exposure_row(&conn, e)
     }
     fn ledger_exposures(&self, status: Option<ExposureStatus>) -> Result<Vec<Exposure>> {
         let conn = self.locked()?;
         let mut stmt = conn
-            .prepare("SELECT id,capture_id,exposed_at,initiated,session_id,status,expected_files,created_at FROM camera_exposures WHERE ?1 IS NULL OR status=?1 ORDER BY exposed_at,id")
+            .prepare("SELECT id,capture_id,exposed_at,initiated,session_id,status,expected_files,created_at,shot_bound,shot_container_id FROM camera_exposures WHERE ?1 IS NULL OR status=?1 ORDER BY exposed_at,id")
             .map_err(db)?;
         stmt.query_map([status.map(ExposureStatus::as_str)], exposure_row)
             .map_err(db)?

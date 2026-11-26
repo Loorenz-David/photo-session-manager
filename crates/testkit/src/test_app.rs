@@ -254,6 +254,7 @@ impl TestApp {
             )
             .with_camera(self.app.camera.as_ref())
             .with_follow(self.app.follow.as_ref())
+            .with_events(self.app.events.as_ref())
     }
     /// "Take the camera back" over the app's camera runtime (P48).
     pub fn take_back(&self) -> psm_integrations::camera::direct::TakeBackService {

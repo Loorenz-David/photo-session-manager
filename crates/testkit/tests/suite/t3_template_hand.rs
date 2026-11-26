@@ -122,6 +122,7 @@ fn hand(a: &TestApp) -> HandAction<'_> {
         clock: a.clock.as_ref(),
         events: a.events.as_ref(),
         history: a.app.history.as_ref(),
+        shots: a.app.camera_runtime.current_shots(),
     }
 }
 fn drop_on(a: &TestApp, id: i64, n: i64) -> Result<(), Error> {
@@ -215,8 +216,11 @@ fn t3_c1c_reframed_photo_differs_only_with_presets() {
     assert_eq!(v.differs, 1);
 }
 
+/// Rewritten for 10J MC-LV3 (was 10G §6 rules 1–2 by shot index: the moved photo differed in its
+/// new session): the moved photo has no binding there (CS3: unbound), so it is placed by hand and
+/// does not differ.
 #[test]
-fn t3_c1d_moved_photo_differs_in_its_new_session() {
+fn t3_c1d_moved_photo_is_unbound_in_its_new_session() {
     let a = app();
     let (s, f) = s0(&a, "C1D", false);
     let s2 = session(&a, "C1D2", "Chair");
@@ -225,12 +229,14 @@ fn t3_c1d_moved_photo_differs_in_its_new_session() {
     assert!(!v.photos.iter().any(|p| p.slot == Some(2)));
     assert_eq!(v.differs, 0);
     let v2 = view(&a, s2);
-    assert_eq!(marks(&v2, f[0].id), (None, true, true));
-    assert_eq!(v2.differs, 1);
+    assert_eq!(marks(&v2, f[0].id), (None, true, false));
+    assert_eq!(v2.differs, 0);
 }
 
+/// Rewritten for 10J MC-LV3 (was 10G §6 rules 1–2 by shot index: the copy differed): the copy is
+/// placed by hand and unbound in its session (CS3), so it does not differ; the original stays.
 #[test]
-fn t3_c1e_copy_differs_original_stays() {
+fn t3_c1e_copy_is_unbound_original_stays() {
     let a = app();
     let (s, f) = s0(&a, "C1E", false);
     let s2 = session(&a, "C1E2", "Chair");
@@ -242,7 +248,7 @@ fn t3_c1e_copy_differs_original_stays() {
     assert_eq!(copy.len(), 1);
     let v2 = view(&a, s2);
     let m = marks(&v2, copy[0].id);
-    assert_eq!((m.1, m.2), (true, true));
+    assert_eq!((m.1, m.2), (true, false));
 }
 
 #[test]
@@ -479,8 +485,11 @@ fn t3_c3e_back_to_template_leaves_a_denial() {
     assert_eq!(a.history().state(s).undo, label);
 }
 
+/// Rewritten for 10J MC-LV3 (was 10G §6 rule 2 by shot index: Back to template filed them): photos
+/// from before the template are unbound (CS3), so they do not differ and Back to template leaves
+/// them where they are (no undo step).
 #[test]
-fn t3_c3f_photos_from_before_the_template_are_filed_by_back() {
+fn t3_c3f_photos_from_before_the_template_stay_where_they_are() {
     let a = app();
     let s = session(&a, "C3F", "Stool");
     let g1 = arrive(&a, s, "DSC00001.ARW");
@@ -493,20 +502,14 @@ fn t3_c3f_photos_from_before_the_template_are_filed_by_back() {
         .shooting_order_set(t.id, &[ids[1], ids[0]])
         .unwrap();
     let v = view(&a, s);
-    assert_eq!((marks(&v, g1.id).1, marks(&v, g1.id).2), (true, true));
-    assert_eq!((marks(&v, g2.id).1, marks(&v, g2.id).2), (true, true));
-    assert_eq!(v.differs, 2);
+    assert_eq!((marks(&v, g1.id).1, marks(&v, g1.id).2), (true, false));
+    assert_eq!((marks(&v, g2.id).1, marks(&v, g2.id).2), (true, false));
+    assert_eq!(v.differs, 0);
+    let undo = a.history().state(s).undo;
     back(&a, s);
-    assert_eq!((place(&a, g1.id).2, place(&a, g2.id).2), (Some(2), Some(1)));
-    assert_eq!((pos(&a, g2.id), pos(&a, g1.id)), (Some(1), Some(2)));
-    for id in [g1.id, g2.id] {
-        assert!(
-            !a.store()
-                .photo_place_row(id)
-                .unwrap()
-                .unwrap()
-                .place_by_hand
-        );
-    }
-    assert_eq!(view(&a, s).differs, 0);
+    assert_eq!(
+        (place(&a, g1.id), place(&a, g2.id)),
+        ((C::Main, Some(1), None), (C::Main, Some(2), None))
+    );
+    assert_eq!(a.history().state(s).undo, undo);
 }
