@@ -51,8 +51,8 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     both ctest programs pass, 17 live-view tests); release bundle built
     (`apps/desktop/src-tauri/target/release/bundle/macos/Session Manager.app`, 50 MB, ad-hoc signed): `phone-web/phone.html`
     inside; the bundled helper links `@rpath/libCr_Core.dylib` (supplied at run time by the installed camera support
-    package). **Not installed** — waiting for the owner's OK to replace `/Applications/Session Manager.app` (keep the old
-    one under a dated name).
+    package). **Installed** with the owner's OK (build `2523595b`; previous kept as "2026-11-25 labels L4" in
+    `~/Desktop/Session Manager old (2026-11-12)/`). Owner preparing the template; phones ready.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
