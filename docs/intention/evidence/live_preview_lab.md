@@ -25,6 +25,19 @@ studio Wi-Fi. The camera-side facts (frame rate, latency to the Mac, FTP interpl
 | Full screen over HTTP? | **Yes, by a button:** the Fullscreen API works on HTTP; one tap hides all browser bars. Needs the tap each time the app opens; the back gesture or an app switch leaves it. (iPhone has no Fullscreen API, but installs full screen on HTTP.) |
 | Live frames | 24–25 fps; Mac → phone 21–35 ms typical; `.local` name resolved. |
 
+## Desktop window (Experiment 09, 2026-11-26, run `results/20261126T070627Z_09-desktop-webview-usb`)
+Tauri 2.12.5 window configured as Session Manager (`csp: null`, page on `tauri://localhost` = secure context), camera
+25 fps on USB, 40 s per path; the window was unfocused and mostly hidden behind other windows.
+
+| Path | Allowed? | fps | Delay p50 / p95 | Dropped |
+|---|---|---|---|---|
+| WebSocket `ws://127.0.0.1` | yes | 5–17 | 18 / ~112 ms | 293–621 |
+| WebSocket `ws://<host>.local` | **yes** (not blocked, unlike the secure iPhone page) | 17.6 | 17 / ~110 ms | 271 |
+| **Tauri channel, raw bytes** | yes | **25.0** | **16 / 22 ms** | **0** |
+
+Decode + draw ≈ 9–10 ms per frame. CPU: app 3.6 %, WebKit helpers ≈ 26 % in total, crlab 7.5 %, lab Python server 10 %.
+**Desktop delivery: Tauri channel; phones: WebSocket.**
+
 ## Constraints found
 - **P1 — Wake lock needs a user gesture** each time the app opens (requested on a button press; the product can tie
   it to the first Live peek or Capture tap).
@@ -34,5 +47,5 @@ studio Wi-Fi. The camera-side facts (frame rate, latency to the Mac, FTP interpl
   it must be removable and short-lived enough to be rotated.
 
 ## Not covered yet
-Android over HTTPS; offline start in airplane mode; wake lock after switching apps; several phones at once; Wi-Fi camera (≈ 20 fps) to the
+The desktop window focused and in front (channel expected no worse); Android over HTTPS; offline start in airplane mode; wake lock after switching apps; several phones at once; Wi-Fi camera (≈ 20 fps) to the
 phone; delivery to the desktop webview inside Session Manager; behaviour when the phone sleeps and wakes (reconnect).

@@ -1,9 +1,8 @@
 # 10J — Live preview (human guidance now, machine guidance later)
 
 **Status: COLLABORATING (shaper draft 2026-11-25, rebased 2026-11-26; not ratified, not planned). All owner cards
-answered and MC-LV3 confirmed (2026-11-25); spikes LV-S1, LV-S2, LV-S4 done, LV-S3 phone half done. Left before
-READY_FOR_RATIFICATION: LV-S3 desktop-webview half and LV-S5 focus from the live picture (§Owed before
-ratification); the owner's Claude Design prototype for the phone app is folded in first.**
+answered and MC-LV3 confirmed (2026-11-25); all spikes LV-S1…LV-S5 done (2026-11-26; LV-S5 on USB). Left before
+READY_FOR_RATIFICATION: the owner's Claude Design prototype for the phone app, folded in first.**
 Source: the owner's chat of 2026-11-25/26 (answers folded below). First written as "10H" on a stale checkout;
 renamed when the checkout was brought up to date (10G and 10H are Shooting templates and Archived items).
 Changelog entries D3–D4. Builds on **10G Shooting templates** (containers, shooting order, Next, retake) and
@@ -75,12 +74,13 @@ revised): pausing it would not save camera battery (LV-S2).
 
 ## Architecture
 ```
-camera ──USB or Wi-Fi──▶ camera sidecar (owns the SDK session; pulls live frames only while wanted)
+camera ──USB or Wi-Fi──▶ camera sidecar (owns the SDK session; pulls live frames; focus and capture on
+                                │            their own threads so pulling never waits)
                                 │ frame channel (binary, separate from the JSON control line)
                                 ▼
-                      live view hub (Rust): newest frame only + viewer demand
-                         ├──▶ Session Manager window (desktop)    ┐ same delivery path: the embedded
-                         ├──▶ phone PWA(s) on the studio Wi-Fi    ┘ HTTP + WebSocket server (R26)
+                      live view hub (Rust): newest frame only + who is watching
+                         ├──▶ Session Manager window (desktop): Tauri channel, raw JPEG bytes (LV-S3)
+                         ├──▶ phone app(s) on the studio Wi-Fi: embedded HTTP + WebSocket server (R26)
                          └──▶ (later) machine-guidance subscribers, in Rust
 ```
 - **Sidecar.** It already owns the camera; it also pulls live frames. The installed Sony SDK (v2.02) is a **pull
@@ -96,9 +96,20 @@ camera ──USB or Wi-Fi──▶ camera sidecar (owns the SDK session; pulls l
   it runs; live view never slows the upload (LV-S1). The UI must tolerate this dip without calling live "stalled".
 - **Hub.** Keeps exactly the newest frame; every viewer gets the latest; a slow viewer skips frames, never queues.
   A viewer receives frames only while it shows Live (MC-LV2).
-- **Delivery.** One path for desktop and phone: the embedded HTTP + WebSocket server pushes frames as binary JPEG
-  messages, drawn on a canvas. No re-encoding. Video encoding (WebRTC/H.264) only if measured latency or Wi-Fi load
-  demands it (LV-S3).
+- **Delivery.** Two thin outlets over the one hub, both binary JPEG drawn on a canvas, no re-encoding:
+  **desktop through a Tauri channel** (raw bytes; in the lab every frame at ~16 ms p50 / 22 ms p95 even with the
+  window hidden, where a WebSocket in the same window dropped frames with ~110 ms tails; LV-S3), **phones through
+  the embedded server's WebSocket** (25 fps, ~15–30 ms Mac → phone). The window could open `ws://` (loopback and LAN
+  name) from `tauri://localhost`; the channel is chosen for robustness, not because WebSocket is blocked. Video
+  encoding (WebRTC/H.264) only if a later measurement demands it.
+- **Focus from the live picture (LV-D14, LV-S5).** A click/tap gives a point in the frame (0..1); the adapter maps
+  it to the camera's grid (Sony: `AF_Area_Position`, x<<16|y on 640×480), then half-presses and reports
+  focused / not focused. The camera's focus frame (Sony: live-view property, centre + size on the same grid, state
+  focused/not) is drawn over live view. Measured on the a7R V with the owner's settings unchanged (AF-S, Flexible
+  Spot S): **9/9 focused, click → focused ≈ 0.4 s (0.39–0.83)**, live view kept running at 21–25 fps when focus ran
+  on its own thread (on the pull thread it froze ~0.5 s). Needs a movable Focus Area (Flexible Spot / Tracking);
+  if the camera is set otherwise, the app reports it rather than silently changing it (to confirm with the owner
+  at ratification). Exposure mode is never touched (Sony's sample switches to P; the owner shoots Manual).
 - **Core vocabulary (H7):** live view is a **camera capability** declared by the adapter (`live_view`); core knows
   "live frame", "viewer", "demand"; nothing Sony-specific.
 - **H3 holds:** frames are passed through as the camera made them; overlays are UI drawing. Machine-guidance pixel
@@ -150,9 +161,9 @@ session switch or a relaunch. Placement for every other shot is 10G unchanged.
 |---|---|---|
 | LV-S1 | Sony SDK live view on the a7R V, USB and Wi-Fi: frame size, frames per second, latency, CPU, at Low and High quality; do capture and Save-to-PC / Auto FTP keep working while it runs; which properties must be set. | **Done 2026-11-25** (CPU not measured; moves to LV-S3) — `evidence/sony_camera_lab.md` §Live view |
 | LV-S2 | Can live view really sleep: does stopping the pull reduce camera battery use, or does the camera keep its sensor live anyway (monitor/EVF on)? Wake time after a pause. | **Done 2026-11-25**: camera keeps live view on; no battery saving; wake 0 ms — same |
-| LV-S3 | Delivery: frame channel sidecar → Rust, WebSocket to the desktop webview and to iPhone Safari/PWA; latency end to end; Mac CPU; viewer disappearing. (Camera-side FTP load already measured in LV-S1.) | **Phone half done 2026-11-25** (25 fps, Mac → phone ~15–30 ms, glass → phone ≈ 145 ms, Mac ≈ 5–7 % of a core per side); desktop webview, Wi-Fi camera to phone, several phones, reconnect still owed — `evidence/live_preview_lab.md` |
+| LV-S3 | Delivery: frame channel sidecar → Rust, WebSocket to the desktop webview and to iPhone Safari/PWA; latency end to end; Mac CPU; viewer disappearing. | **Done 2026-11-26**: phones via WebSocket (Experiment 08); desktop window via Tauri channel (Experiment 09: 25 fps, ~16 ms, 0 dropped; WebSocket in the window allowed but degraded when hidden). Viewer reconnect/several phones at hardware acceptance — `evidence/live_preview_lab.md` |
 | LV-S4 | PWA on iPhone from a LAN address: install, full screen, screen staying awake, which features need HTTPS (card LV3). | **Done 2026-11-25**: install + full screen on both; wake lock and service worker only on HTTPS — `evidence/live_preview_lab.md` |
-| LV-S5 | Focus from the live picture on the a7R V: set the focus point from a click (`AF_Area_Position`, 640×480 grid, or `RemoteTouchOperation`), focus (half-press), confirm focus, read the camera's focus frame for drawing (`GetLiveViewProperties`); which Focus Area / Focus Mode it needs; latency click → focused; USB and Wi-Fi; does a capture keep that point. | lab Experiment 10 → `evidence/sony_camera_lab.md` §Live view |
+| LV-S5 | Focus from the live picture on the a7R V: set the point from a click, focus, confirm, draw the camera's focus frame; settings needed; latency; USB and Wi-Fi; does a capture keep the point. | **Done on USB 2026-11-26** (Experiment 10): 9/9 focused ≈ 0.4 s, settings unchanged, focus on its own thread keeps live view moving. Wi-Fi and "photo sharp where clicked" at hardware acceptance — `evidence/sony_camera_lab.md` §Live view |
 
 ## Non-goals (this chapter)
 Machine guidance itself; crane controllers; recording video; exposure control from the phone; focus control beyond choosing the focus point (LV-D14); access from outside the studio network; a native iOS app; changes to 10G's placement other than the

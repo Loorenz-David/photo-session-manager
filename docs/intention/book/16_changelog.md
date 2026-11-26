@@ -429,3 +429,11 @@ moves the camera's focus point there and focuses, as Imaging Edge Desktop does; 
 moves the subject. Non-goals narrowed; new spike LV-S5 (lab Experiment 10). Grounding: SDK 2.02 has
 `AF_Area_Position` (x<<16|y in 640×480), `RemoteTouchOperation` (Spot / Tracking AF) and `GetLiveViewProperties`
 (focus frames to draw). Also left before ratification: LV-S3 desktop half; the owner's phone design folded in first.
+
+D13. **2026-11-26 — Lab: LV-S3 desktop half and LV-S5 done** (Experiments 09 and 10, owner-attended). Desktop window:
+a Tauri channel delivered every frame at ~16 ms (p95 22 ms) even with the window hidden, while a WebSocket in the same
+window (allowed from `tauri://localhost`, loopback and LAN name) dropped frames with ~110 ms tails → 10J delivery is
+now two outlets over one hub: Tauri channel for the desktop, WebSocket for phones. Focus from the live picture works
+on the a7R V with the owner's settings unchanged (AF-S, Flexible Spot S): 9/9 focused, click → focused ≈ 0.4 s; the
+focus frame (centre + size, 640×480 grid) is drawn over live view; focus and capture run on their own threads so live
+view keeps moving. All spikes done; 10J waits only for the owner's phone design before ratification.

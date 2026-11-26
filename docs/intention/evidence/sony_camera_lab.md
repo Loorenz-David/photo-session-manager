@@ -249,3 +249,19 @@ battery. Same static scene per step; JPEG size depends on the scene.
   mismatch, verified by the owner on the camera screen before re-pinning). The app must treat a fingerprint change as
   an owner decision, never accept it silently.
 - Not measured yet: CPU on the Mac, delivery to a browser/phone (LV-S3), hours-long live sessions, USB with FTP.
+
+## Focus from the live picture — Experiment 10 (2026-11-26, A7R V on USB-C, owner-attended) [TEST-HW]
+Spike LV-S5 of chapter 10J (decision LV-D14). Runs `results/20261126T0640*_10-focus-usb`, `…070042Z_10-focus-usb-2`,
+`…070321Z_10-focus-usb-3`. The owner clicked near and far objects on the live view in Safari on the Mac; the click went
+to `crlab liveview --commands` as `focusaf X Y`.
+
+| Question | Answer |
+|---|---|
+| Can the focus point be moved from a click with the owner's settings? | **Yes, unchanged:** Focus Mode AF-S, Focus Area Flexible Spot S (movable), `AF_Area_Position` writable, PriorityKeySettings = camera position. No setting written. |
+| How fast? | Point applied (focus frame moved) **49–140 ms**; half-press AF **304–685 ms**; **click → focused 0.39–0.83 s, median ≈ 0.42 s**; 9/9 focused in the final run (earlier runs: 4/4, and 3/4 with one back click not focused). |
+| Live view during focus | Focus on the pull thread froze live view ~0.5 s per click; **on its own thread live view kept 21–25 fps**. |
+| Where the camera focuses (for drawing) | `GetSelectLiveViewProperties(AF_Area_Position)` → focus frames `{type, state, x, y, w, h}` with **x/y = centre** on the 640×480 grid (Flexible Spot S = 38×38); state 1 not focused, 2 focused. Drawn centred, it lands on the click; the camera's own screen showed the square following the click. |
+| Read-back | The `AF_Area_Position` **device property does not read back** the new point on the A7R V (stays 0,0); confirm via the focus frame. |
+| Clean stop | A `quit` command / SIGINT / SIGTERM that disconnects avoids the half-open USB session seen on 2026-11-25 after an abrupt stop. After a clean disconnect the camera took ~18 s to be discoverable again over USB. |
+
+Not covered: Wi-Fi; a capture right after a click (photo sharp where clicked); Manual focus; other Focus Area modes.
