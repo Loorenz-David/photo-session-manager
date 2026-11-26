@@ -252,7 +252,7 @@ label printed itself. Same key and store as conversations; labels need the scope
   needed (iPhone: Add to Home Screen opens it full screen; Android: a **Full screen** button). It follows the Mac's
   active session and shows:
   - **Main screen.** The current shot's template in black and white. **Hold** the picture for live, release for the
-    template; **slide up** to lock live (double-tap unlocks); **slide sideways** to set how much of the template shows
+    template; **slide up** (55 px: half the design's distance, LV-D19) to lock live (double-tap unlocks); **slide sideways** to set how much of the template shows
     through live (0–100 %, starts at 35 %); while locked, **tap** to focus there ("AF LOCKED"; × sends the focus point
     back to the centre). Long shots turn the view 90° so the phone is held sideways. A split shot shows a centre line
     and Left/Right. The exposure (shutter · aperture · ISO) is read-only on live.

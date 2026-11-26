@@ -15,12 +15,12 @@ const freeShot = (session: PhoneSession) => {
   session.current = { kind: 'free' };
 };
 
-/** Slide up 110 px from (195, 405) and let go: live is locked. */
+/** Slide up 55 px from (195, 405) and let go: live is locked (LV6: LV-D19 (3) halved the design's 110 px). */
 function lock(): void {
   press(viewport(), 195, 405);
   slide(viewport(), 197, 390);
-  slide(viewport(), 195, 295);
-  lift(viewport(), 195, 295);
+  slide(viewport(), 195, 350);
+  lift(viewport(), 195, 350);
 }
 function tap(x: number, y: number): void {
   press(viewport(), x, y);
@@ -36,20 +36,20 @@ test('lv3_c8a_sliding_up_past_14_px_shows_the_lock_control_at_its_progress', asy
   expect(screen.queryByTestId('lock-control')).toBeNull();
   slide(viewport(), 197, 390);
   expect(screen.getByTestId('lock-control')).toBeTruthy();
-  // 15 of 110 px.
-  expect(screen.getByTestId('lock-fill').style.height).toBe('14%');
+  // 15 of 55 px.
+  expect(screen.getByTestId('lock-fill').style.height).toBe('27%');
   expect(pill()).toBe('LIVE');
 });
 
-test('lv3_c8b_sliding_up_110_px_locks_live_and_it_stays_on_after_release', async () => {
+test('lv3_c8b_sliding_up_55_px_locks_live_and_it_stays_on_after_release', async () => {
   const env = phoneEnv();
   await startPhone(env);
   press(viewport(), 195, 405);
   slide(viewport(), 197, 390);
-  slide(viewport(), 195, 295);
+  slide(viewport(), 195, 350);
   expect(buzzed(env, [25, 40, 70])).toBe(1);
   expect(pill()).toBe('LIVE · LOCKED');
-  lift(viewport(), 195, 295);
+  lift(viewport(), 195, 350);
   await advance(1000);
   expect(pill()).toBe('LIVE · LOCKED');
   expect(lastDemand(env)).toMatchObject({ live: true, visible: true });
@@ -61,8 +61,8 @@ test('lv3_c8c_releasing_before_the_end_does_not_lock_and_the_control_fades', asy
   await startPhone(env);
   press(viewport(), 195, 405);
   slide(viewport(), 197, 390);
-  slide(viewport(), 195, 345);
-  lift(viewport(), 195, 345);
+  slide(viewport(), 195, 365);
+  lift(viewport(), 195, 365);
   await advance(0);
   expect(pill()).toBe('TEMPLATE');
   expect(screen.getByTestId('lock-control').style.opacity).toBe('0');

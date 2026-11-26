@@ -5,8 +5,8 @@
 
 /** Slide past this many px (image-local) before a touch becomes a lock slide or an overlay slide. */
 export const SLIDE_PX = 14;
-/** Slide up this far to lock live. */
-export const LOCK_PX = 110;
+/** Slide up this far to lock live (book 10J LV-D19 (3): half the design's 110 px). */
+export const LOCK_PX = 55;
 /** A full image width of sideways slide changes the overlay by this many percent. */
 export const OVERLAY_GAIN = 130;
 /** A tap while locked focuses after this long (so a double tap can cancel it). */

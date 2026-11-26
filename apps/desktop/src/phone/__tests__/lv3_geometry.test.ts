@@ -56,7 +56,7 @@ test('lv3_c8_touchMode_decides_overlay_lock_or_hold_by_the_first_threshold', () 
 });
 
 test('lv3_c8_lockProgress_and_overlayValue', () => {
-  expect([lockProgress(0), lockProgress(-15), lockProgress(-110), lockProgress(-200), lockProgress(30)]).toEqual([0, 15 / 110, 1, 1, 0]);
+  expect([lockProgress(0), lockProgress(-15), lockProgress(-55), lockProgress(-200), lockProgress(30)]).toEqual([0, 15 / 55, 1, 1, 0]);
   expect(overlayValue(35, 20, 390)).toBe(42);
   expect(overlayValue(35, -390, 390)).toBe(0);
   expect(overlayValue(35, 390, 390)).toBe(100);

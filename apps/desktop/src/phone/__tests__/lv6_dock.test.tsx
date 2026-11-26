@@ -1,11 +1,12 @@
 // LV6·U1 — the shot dock without hold gestures (book 10J LV-D19 (1); plan points P1, P2; design README
-// §Selecting a tile): rows LV6·C1–C3. The fixture session (helpers): shots in shooting order B (final 02,
+// §Selecting a tile): rows LV6·C1–C3, with C3(b) the main screen's shorter lock swipe (LV-D19 (3)). The fixture session (helpers): shots in shooting order B (final 02,
 // "Back", filled), A (01, "Front", current), C (03); one extra (04); one condition image. Tile centres, x:
 // "02" 44 · "01" 108 · "03" 172 · "04" 236 · Free 300 · "C1" 383 (56 px tiles on a 64 px pitch); y 742.
 // @ts-expect-error The frontend tsconfig omits Node types; Vitest runs this test in Node.
 import { readFileSync } from 'node:fs';
 import { screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
+import { lockProgress } from '../gestures';
 import { advance, C, lift, phoneEnv, press, slide, startPhone } from './helpers';
 
 const X = { b: 44, extra: 236, c1: 383 };
@@ -117,4 +118,32 @@ test('lv6_c3a_a_sideways_swipe_scrolls_and_the_next_tap_selects_the_tile_now_und
   await advance(0);
   expect(env.mac.allPosts()).toEqual([['/current', { session_id: 7, container_id: C }]]);
   expect(screen.queryByTestId('preview')).toBeNull();
+});
+
+// ---- LV6·C3(b): the main screen's slide up to lock is 55 px (LV-D19 (3)) ----
+
+test('lv6_c3b_sliding_up_55_px_locks_live_and_50_px_does_not', async () => {
+  const env = phoneEnv();
+  await startPhone(env);
+  const viewport = screen.getByTestId('viewport');
+  const pill = () => screen.getByTestId('mode-pill').textContent;
+  const lastDemand = () => env.socket().demands().at(-1);
+  expect(lockProgress(-55)).toBe(1);
+  expect(lockProgress(-50)).toBe(50 / 55);
+  // 50 px: not locked; the template is back on release.
+  press(viewport, 195, 405);
+  slide(viewport, 195, 355);
+  expect(pill()).toBe('LIVE');
+  lift(viewport, 195, 355);
+  await advance(1000);
+  expect(pill()).toBe('TEMPLATE');
+  expect(lastDemand()).toMatchObject({ live: false });
+  // 55 px: locked, and live stays on after release.
+  press(viewport, 195, 405);
+  slide(viewport, 195, 350);
+  expect(pill()).toBe('LIVE · LOCKED');
+  lift(viewport, 195, 350);
+  await advance(1000);
+  expect(pill()).toBe('LIVE · LOCKED');
+  expect(lastDemand()).toMatchObject({ live: true, visible: true });
 });
