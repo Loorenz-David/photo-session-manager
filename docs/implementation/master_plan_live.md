@@ -469,7 +469,8 @@ Each plan file's **Tracker** line is that milestone's row (sessions change only 
 | Fake sidecar | `crates/testkit/src/bin/fake_sidecar.rs` (script directives: JSON line, `sleep`, `await`, `exit`, `stderr`; `rec/inject.txt`); started by `TestApp::with_camera_script…` | LV1 adds `--frame-socket` and the `frame`/`frames` directives (LV1·U3) |
 | Phone entry in dev | `cd apps/desktop && npm run build` → `dist/phone.html`; a debug app serves `apps/desktop/dist` (or `PSM_PHONE_WEB=<dir>`) on port 8686 | built and checked in LV2·U4 |
 | Phone entry packaged | `npm run tauri -- build --bundles app` → `Session Manager.app/Contents/Resources/phone-web/phone.html` | checked once at LV4 preparation (release build) |
-Closing gate of every build milestone, once, one command after the other: `cargo test --workspace` · `cargo clippy
+Closing gate of every build milestone, once, one command after the other: `cd apps/desktop && npm run build` (first:
+`psm-desktop` needs `apps/desktop/dist/`; LV2 review note) · `cargo test --workspace` · `cargo clippy
 --workspace --all-targets -- -D warnings` · `cargo fmt --all -- --check` · `tools/sidecar/build.sh --stub --test` ·
 `cd apps/desktop && npm run typecheck` · `npm test`. If reality disagrees with this table, the session updates it.
 

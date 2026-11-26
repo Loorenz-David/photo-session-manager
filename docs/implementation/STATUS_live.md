@@ -39,6 +39,10 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     for fix r3; resumed for re-review r3.
   - **LV1 APPROVED** (`0f56b860`, re-review r3, APPROVED_WITH_NOTES; narrative relayed). Notes in
     `backlog_live/LV1_camera_live_view.md`. Branch pushed. **LV2 started.**
+  - **LV2 APPROVED** (`APPROVED_WITH_NOTES`, review r1, no fix; narrative relayed). Codex hit its usage limit at
+    11:58 (resets 15:15); the runner fell back to Claude Opus by itself (implement 11:58–13:05). Reviewer notes routed to
+    LV3 folded into the LV3 plan as Unit 0 (phone Delete events, session-delete announce, rebuild observe, generic error
+    bodies; rows C26–C29); master plan §8 gate runs `npm run build` first. Pushed. **LV3 started** (Fable).
 
 ## Next
 When the planner returns: relay the milestone map and any owner cards verbatim; **wait for the owner's go** (this
@@ -47,7 +51,7 @@ per line of `phases_live.txt`, in the background, never polled; push `feature/li
 `main` when all milestones are approved.
 
 ## Run in flight
-- `tools/pipeline/run_phase.sh phase LV2_current_shot_and_phone_server`, started 2026-11-26.
+- `tools/pipeline/run_phase.sh phase LV3_phone_app` (Fable), started 2026-11-26.
 
 ## Needs the owner
 

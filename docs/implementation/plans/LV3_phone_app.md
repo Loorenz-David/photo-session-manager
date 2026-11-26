@@ -29,18 +29,19 @@ Move drawer, Item drawer, toasts.
 API), item property inputs ("Fill item properties" opens an empty page, LV-D17), session completion/opening (LV-D18).
 
 ## How to work this plan (flow.md §10, master_plan_live.md §3)
-One runner phase of 4 units, in order; after each, its **Unit test commands**, then a `CHECKPOINT (not approved):`
+One runner phase of 5 units (U0 first, then U1–U4), in order; after each, its **Unit test commands**, then a `CHECKPOINT (not approved):`
 commit of that unit's paths. Row ids `LV3·C<n>(<row>)`; tests named after their row. Open details: the design README
 and prototype first, then the smallest option consistent with 10J; recorded under **Assumptions**. Reviewer notes:
 `docs/implementation/backlog_live/LV3_phone_app.md`.
 
 | Unit | What it builds | Criteria | Rows | Changes app files |
 |---|---|---|---|---|
+| U0 | Server carry-overs from LV2's review (added by the orchestrator 2026-11-26) | 4 | 6 | yes (Rust) |
 | U1 | Shell: pairing, connecting, socket, demand, frames, reconnect, Full screen, camera status | 7 | 18 | yes (TypeScript) |
 | U2 | Main screen: hold, lock, overlay, focus, AF chip, geometry, viewport, capture, Next | 7 | 29 | yes (TypeScript) |
 | U3 | Shot dock: order, tiles, magnification, select, scroll, drag-up | 5 | 13 | yes (TypeScript) |
 | U4 | Preview, Move drawer, Item drawer, toasts | 6 | 19 | yes (TypeScript, guide) |
-| **Total** | | **25** | **79** | |
+| **Total** | | **29** | **85** | |
 
 ## Read first (whole milestone)
 `docs/process/flow.md` (§4, §4A, §6, §7A, §10) · `master_plan_live.md` (**§5 PH4–PH7**, §6, §4.5) · book `10J` (§The
@@ -76,6 +77,54 @@ camlab/pwa/static/index.html` (a working WebSocket JPEG drawer on iPhone and And
   is an `<img>` of `/api/phone/v1/containers/<id>/example?pair=` with `filter: grayscale(1)`; overlays and black and
   white are drawing only (H3).
 - Exact texts: `master_plan_live.md` §6 (phone texts, split labels) and the design README §2 and §7.
+
+## Unit 0 — Server carry-overs from LV2's review (orchestrator, 2026-11-26)
+
+**Unit id:** `LV3·U0` · **Rows:** LV3·C26–C29 · **Changes app files:** yes (Rust, small)
+
+### Goal
+Four notes the LV2 reviewer routed to this milestone (`docs/implementation/backlog_live/LV2_current_shot_and_phone_server.md`,
+destination LV3), done first because the phone's Delete (U4) and dock (U3) depend on them. Server side only; the
+handlers stay thin (H8): events are emitted in core/services, not in route handlers.
+
+### Read first
+The LV2 backlog notes above (each names the code path) · `master_plan_live.md` §5 PH4, PH5 · the LV2 plan rows
+LV2·C21(e) and the `session` WebSocket message · `crates/integrations/src/phone/{routes.rs, ws.rs, wire.rs}`,
+`crates/integrations/src/session_delete.rs`.
+
+### Files
+Edited (expected): `crates/core/src/services/review.rs` or a thin core wrapper used by the phone delete route,
+`crates/integrations/src/phone/{routes.rs, ws.rs, wire.rs}`, `crates/integrations/src/session_delete.rs`, the code
+path that rebuilds the App on a settings save (where the phone server must observe the new event hub), tests in
+`crates/testkit/tests/suite/lv2_phone_ops.rs` and `lv2_phone_ws.rs` (or a new `lv3_server_carry.rs`).
+
+### Ordered tasks
+1. Phone Delete emits the same change events as a Mac deny/delete (`SessionChanged` + `PhotoChanged`), from core.
+2. Deleting the active session on the Mac announces it (`SessionsService` built `with_events`), so phones get
+   `{type: "session", session_id: null}`.
+3. After a settings save rebuilds the App, open phone sockets keep receiving `session` and camera messages (observe the
+   new event hub at rebuild; no phone reconnect needed).
+4. Error bodies: a generic `message` for 500 `internal` and for a missing file (404); no internal text or local path.
+5. Tests for the rows.
+
+### Criteria (4 criteria, 6 rows)
+| Row | Boundary | Input | Exact outcome | Trace |
+|---|---|---|---|---|
+| LV3·C26(a) | `POST /photos/<id>/delete` | `{session_id}` on a Condition photo, a second phone socket open | 200; the event hub received `SessionChanged` and `PhotoChanged` for that session/photo; the second socket receives a `session` message | PH4, PH5, LV2 backlog note 1 |
+| LV3·C26(b) | same | the same delete | the history step is recorded once (undo restores the photo) | PH4, §6 |
+| LV3·C27 | desktop session delete | the active session deleted; a phone socket open | the socket receives `{type: "session", session_id: null}`; a following `GET /session` answers `session: null` | PH5, LV-D18, LV2 backlog note 2 |
+| LV3·C28 | settings save that rebuilds the App | a phone socket open; then a photo arrives in the active session | the socket receives a `session` message without reconnecting | PH5, LV2 backlog note 3 |
+| LV3·C29(a) | any route | an internal error (500) | body `message` is a fixed generic text; no error string from the store | PH4, LV2 backlog note 5 |
+| LV3·C29(b) | `GET` a photo preview | the preview file missing on disk | 404; body carries no local path | PH4, LV2 backlog note 5 |
+
+### Delegated choices
+Where the delete wrapper lives (core service method vs. a small wrapper); how the server observes the rebuilt hub
+(observe at rebuild, or re-subscribe on the next event-hub swap); the generic texts.
+
+### Unit test commands
+`cargo test -p psm-testkit --test suite -- lv2_phone_ops:: lv2_phone_ws::` (and the new stem if one is added) ·
+`cargo check -p psm-integrations`. **Run `cd apps/desktop && npm run build` once before any cargo command** (psm-desktop
+needs `apps/desktop/dist/`).
 
 ## Unit 1 — Shell: pairing, connecting, socket, demand, frames, reconnect, Full screen, camera status
 
@@ -345,11 +394,11 @@ Sheet animation implementation · whether the Move drawer's state labels come fr
 `cargo test --workspace` · `cargo clippy --workspace --all-targets -- -D warnings` · `cargo fmt --all -- --check` ·
 `tools/sidecar/build.sh --stub --test` · `cd apps/desktop && npm run typecheck` · `npm test` · `npm run build`. (The
 Rust gate runs once even though this milestone changes only TypeScript: the phone build is served by the Rust server;
-if no Rust or C++ file changed, the implementer may cite LV2's approval stamp instead and say so.) One command at a
-time.
+U0 changes Rust, so the Rust gate runs. **Run `npm run build` first** (psm-desktop needs `apps/desktop/dist/`.) One
+command at a time.
 
 ## Review mode
-The reviewer reads the units in order and runs, once: `cd apps/desktop && npx vitest run src/phone` · `npm run
+The reviewer reads the units in order and runs, once: U0's unit test commands · `cd apps/desktop && npx vitest run src/phone` · `npm run
 typecheck` · `npm run build`. Only B1–B4 block. Also check, by reading: no secure-context API (`serviceWorker`,
 `wakeLock`, `crypto.subtle`, `navigator.clipboard`, `getUserMedia`) anywhere under `src/phone/`; no absolute URL or
 scheme; the token never logged or put in a toast; every threshold and timing equals the design README (hold 200 ms, tap

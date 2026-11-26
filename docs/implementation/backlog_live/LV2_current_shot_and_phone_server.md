@@ -39,3 +39,8 @@
   commands; dead `previous_connections` / `connection_count()`. LV2 touched neither `frames.rs`, the fake sidecar nor
   the sidecar. Destination: orchestrator (fold into the next plan that touches `frames.rs`, the fake sidecar or the
   sidecar; otherwise LV4).
+- **Orchestrator (2026-11-26):** notes 1, 2, 3 and 5 (phone Delete events, session delete announce, rebuild observe,
+  generic error bodies) are folded into `LV3_phone_app.md` as **Unit 0** (rows LV3·C26–C29). The environment note:
+  `master_plan_live.md` §8 closing gate now runs `npm run build` first. The revoke-command note and the LV1 carry-overs
+  (sockets left in `$TMPDIR`, fake connect/reconnect fidelity, C13(e), SIGINT on diagnostics, dead
+  `previous_connections`) stay open for LV4 or the next plan touching those files.
