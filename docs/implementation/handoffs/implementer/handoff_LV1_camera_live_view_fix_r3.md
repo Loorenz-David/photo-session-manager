@@ -2,7 +2,7 @@
 plan: LV1_camera_live_view
 role: fix
 round: 3
-state: BLOCKED
+state: DONE
 date: 2026-11-26
 actor: codex
 ---
@@ -43,3 +43,6 @@ The single checkpoint commit includes this handoff, so its SHA is reported in th
 - `cd apps/desktop && npm run typecheck` — passed.
 - `cd apps/desktop && npm test` — passed, 138 files / 948 tests.
 - `git diff --check` — pending checkpoint close.
+
+## Orchestrator note (2026-11-26)
+The P50 test was re-run outside the Codex sandbox: `cargo test -p psm-desktop --lib p50_tests::c8a_support_and_secret_commands_have_their_wire_shapes` → **1 passed** (0.92 s). The workspace failure was a sandbox artefact (the test re-signs the bundled helper). State set to DONE; checkpoint `7bba1e49`.

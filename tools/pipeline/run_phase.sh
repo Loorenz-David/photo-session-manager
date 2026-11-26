@@ -277,10 +277,12 @@ run_phase() {
   grep -q 'FIX2_AUTHORISED:' "$plan" || stop_for_orchestrator "$phase" "re-review verdict $v (MUST items remain; no FIX2_AUTHORISED in plan)"
   local fp3="$P/implementer/${phase}_fix_r3.md" fh3="$H/implementer/handoff_${phase}_fix_r3.md"
   DRY_HANDOFF="$fh3"
+  if finished "$fh3"; then log "resume: fix r3 already DONE"; else
   render "$TPL/fix.md" "$fp3" PHASE="$phase" ROUND=3 FIXN=2 DATE="$DATE" ROOT="$ROOT" PLAN_FILE="$plan" REVIEW_HANDOFF="$rh2" IMPL_HANDOFF="$ih" HANDOFF="$fh3"
   commit_artifacts "pipeline: $phase fix 2 prompt"
   run_impl gpt-6-luna high "$fp3" "$RUNS/${phase}_fix_r3.last.md" "$RUNS/${phase}_fix_r3.log" || true
   commit_artifacts "pipeline: $phase fix 2 handoff"
+  fi
   st="$(session_state "$RUNS/${phase}_fix_r3.last.md" "$fh3")"; [[ "$st" == DONE ]] || stop_for_orchestrator "$phase" "fix 2 state $st"
   local rp3="$P/reviewer/${phase}_review_r3.md" rh3="$H/reviewer/handoff_${phase}_review_r3.md"
   DRY_HANDOFF="$rh3"; DRY_VERDICT="${DRY_VERDICT_R3:-APPROVED_WITH_NOTES}"
