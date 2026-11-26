@@ -43,6 +43,7 @@ Two purposes:
 | LV-D16 | **Split preview on live**: a split shot (10D Split, one 2:1 composition → two squares) shows a centre guide and the two halves on live view and in the preview, so it can be framed as it will be published. The design labels the halves A/B; the book calls them Left/Right. | — |
 | LV-D17 | **Item drawer** on the phone: item info (name, SKU, article number, current shot, angle, image counts; more fields later) and an action **"Fill item properties"** that opens an **empty full-page container** for now; phone inputs come later (e.g. the 10I tape's target dimension, properties easier to fill phone in hand). | — |
 | LV-D18 | **The phone follows the Mac's active session** ("reactive and submissive"): it shows and shoots for whatever session is open in Session Manager. **Later** (not built now, but the phone API must allow it): completing a session from the phone (triggering its agentic flows) and opening a new session. | 11 §Phone remote (the phone app is a separate mobile entry of the same frontend, QR + pairing token as planned) |
+| LV-D19 | **Hardware-check answers (owner 2026-11-26, changelog D19).** (1) **Shot dock without hold gestures:** "remove the preview interaction … where the user taps and drags … uncomfortable, i prefer to increase the container sizes and make the function to be scrollable, single tap opens that preview or selects the shot template". Larger tiles; the dock scrolls sideways; a **single tap** on a filled tile opens its Preview, on an empty template tile makes it the current shot (Free shot tile as before); **no hold-to-magnify and no hold-and-drag-up**. (2) **A removed phone reinstalls:** after Remove in Settings → Phone, the phone's installed app (iPhone home-screen app, Android shortcut) stays unpaired; the owner accepts deleting and installing it again from the new QR code ("i will go for accept reinstalling for now"); the removed screen says so. | LV-D15 (dock gestures), card LV3 consequences |
 
 ## The working loop (owner's description, the acceptance story)
 1. The phone (or the Mac) shows the **template shot for Next** (10G §5), frozen, full opacity.
@@ -82,7 +83,7 @@ Read against this book; the handoff README is the authority for look and gesture
 - **Exposure readout** on live (shutter · aperture · ISO, read-only from the camera).
 - **Landscape shots rotate the view 90°** so the phone is held sideways; gestures follow the image.
 - **Shot dock**: template shots, then extra Main images, a **Free shot** tile, then Condition images; tap opens or
-  selects, hold magnifies, hold-and-drag-up opens. **Preview** of a captured image with template overlay on hold;
+  selects (**amended LV-D19:** larger tiles, sideways scroll, single tap only; no hold-to-magnify, no drag-up). **Preview** of a captured image with template overlay on hold;
   actions Back, Retake (template shots), Delete (extras, condition), **Move image** (to any Main position, a new
   extra, or the Condition group).
 - **Capture** feedback is immediate (flash, haptic) and reconciled with the camera's confirmation (C3: an

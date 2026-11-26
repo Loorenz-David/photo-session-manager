@@ -470,3 +470,12 @@ live view leaves §Out of scope), 10G (§4 note: placement by 10J's current shot
 Companion, plain HTTP, follows the active session), 13 (phone remote and live view leave the deferred list),
 04 S-M. Owner: design folders are not committed (`claude_design/` git-ignored from now on; files already in the
 repo stay until the owner decides). Next: mechanism inventory, then planning (docs/process/flow.md).
+
+D19. **2026-11-26 — Owner answers at the 10J hardware check (LV4, paused part-way).** 10J LV-D19: the phone's shot
+dock drops hold-to-magnify and hold-and-drag-up (larger tiles, sideways scroll, single tap opens a filled shot's
+preview or makes an empty shot current); a removed phone's installed app is reinstalled from the new QR code (no
+re-pair into an installed app for now). Findings of the check so far (to fix, not semantic changes): Mac review
+actions do not reach phones; the next shot can briefly aim at a shot whose file is still on the way (contrary to
+MC-LV3); a Wi-Fi stall closes a phone's socket instead of skipping frames; Focus Area Wide not reported; the camera's
+exposure readout not read; tile previews stuck as broken images. Evidence: `docs/implementation/STATUS_live.md` (LV4
+running record), to be written into the evidence files when the check completes.
