@@ -116,6 +116,8 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     `c7a_attribute_events_only_history` (forbids `SessionChanged` after attribute undo; PH8 requires it). Answered from
     the master plan: PH8 supersedes P40 C7(a) (no rule, only "emits nothing today"); perimeter amended in the LV5 Review
     log; relaunched with RESUME=1 (implement re-runs to finish).
+  - **LV5 APPROVED** (17:28, re-review r2, APPROVED_WITH_NOTES; one fix: stricter C3 assertions, committed by the
+    orchestrator — Codex fix sandbox again refused the git lock). **LV6 started** (Fable).
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -124,7 +126,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-- `tools/pipeline/run_phase.sh phase LV5_live_fixes`, started 2026-11-26.
+- `tools/pipeline/run_phase.sh phase LV6_phone_dock` (Fable), started 2026-11-26 17:29.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
