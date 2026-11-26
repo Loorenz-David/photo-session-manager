@@ -93,13 +93,14 @@ fn live_of(state: &LiveState) -> (String, Option<String>) {
 }
 
 /// The server's state for the sockets: the camera view, the active session and the `rev` counter
-/// of `session` messages, fed by the App's events (observed once per App event hub).
+/// of `session` messages, fed by the App's events (one observer, carried across App rebuilds).
 #[derive(Default)]
 pub(crate) struct Feed {
     camera: Mutex<CameraView>,
     active: Mutex<Option<i64>>,
     rev: AtomicU64,
-    observed: Mutex<Vec<usize>>,
+    /// The one observer of the App's events (carried from hub to hub on a rebuild, LV3·C28).
+    bridge: std::sync::OnceLock<Arc<dyn EventSink>>,
 }
 
 impl Feed {
@@ -149,23 +150,17 @@ fn session_message(feed: &Feed, session_id: Option<i64>) -> String {
     json!({"type": "session", "session_id": session_id, "rev": rev}).to_string()
 }
 
-/// Makes sure the App's current event hub feeds the sockets, and reads the active session and
-/// the camera's status (outside any store lock: called on a blocking thread).
+/// Makes sure the App's event hub feeds the sockets, and reads the active session and the
+/// camera's status (outside any store lock: called on a blocking thread). The observer is
+/// registered as carried: a settings save that rebuilds the App hands it to the new hub, so open
+/// sockets keep hearing without a request or a reconnect (LV3·C28).
 pub(crate) fn ensure_fed(shared: &Arc<Shared>, handles: &AppHandles) {
-    let key = Arc::as_ptr(&handles.events) as usize;
-    {
-        let mut observed = shared
-            .feed
-            .observed
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if !observed.contains(&key) {
-            observed.push(key);
-            handles
-                .events
-                .observe(Arc::new(AppEventsBridge(Arc::downgrade(shared))));
-        }
-    }
+    let bridge = shared
+        .feed
+        .bridge
+        .get_or_init(|| Arc::new(AppEventsBridge(Arc::downgrade(shared))))
+        .clone();
+    handles.events.observe_carried(bridge);
     if let Ok(active) = handles.store.active_session_id() {
         *shared.feed.active.lock().unwrap_or_else(|e| e.into_inner()) = active;
     }

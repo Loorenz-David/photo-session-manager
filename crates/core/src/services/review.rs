@@ -203,6 +203,26 @@ impl<'a> ReviewService<'a> {
         self.result(&[session_id], None)
     }
 
+    /// LV3·C26: Delete from a surface that does not hold the workspace (the phone): the same
+    /// Deny as [`Self::delete`], then the change events the other surfaces reload on
+    /// (`PhotoChanged`, `SessionChanged`), so the Mac and every other phone follow.
+    pub fn delete_announced(
+        &self,
+        events: &dyn crate::ports::events::EventSink,
+        photo_id: i64,
+    ) -> Result<ReviewResult> {
+        let result = self.delete(photo_id)?;
+        for session in &result.sessions {
+            let session_id = session.session.id;
+            events.emit(crate::events::AppEvent::PhotoChanged {
+                photo_id,
+                session_id,
+            });
+            events.emit(crate::events::AppEvent::SessionChanged { session_id });
+        }
+        Ok(result)
+    }
+
     /// "Keep as published" (owner correction A10, 2026-11-18): a published session that changed
     /// since (photos that arrived late, adjustments in Capture One, edits) is marked published
     /// again as it is, without republishing. Photos that arrived after the publish are denied, so

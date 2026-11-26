@@ -501,7 +501,7 @@ async fn delete_photo(
             guard(h, b.session_id)?;
             phone_view::session_photo(h.store.as_ref(), Some(b.session_id), photo_id)?;
             ReviewService::new(h.store.as_ref(), h.clock.as_ref(), h.history.as_ref())
-                .delete(photo_id)?;
+                .delete_announced(h.events.as_ref(), photo_id)?;
             Ok(OK())
         },
     )

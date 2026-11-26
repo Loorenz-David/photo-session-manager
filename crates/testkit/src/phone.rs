@@ -4,14 +4,17 @@
 use std::{
     net::{IpAddr, Ipv4Addr},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
-use psm_integrations::phone::{
-    host::HostInfo,
-    pairing::PhonePairings,
-    server::{PhoneConfig, PhoneServer, PhoneTimings},
+use psm_integrations::{
+    AppHandles,
+    phone::{
+        host::HostInfo,
+        pairing::PhonePairings,
+        server::{HandlesFn, PhoneConfig, PhoneServer, PhoneTimings},
+    },
 };
 
 use crate::TestApp;
@@ -51,13 +54,28 @@ impl TestPhone {
     }
 
     pub fn start_with(a: &TestApp, timings: PhoneTimings) -> Self {
+        let handles = a.app.handles();
+        Self::start_resolving(a, timings, Arc::new(move || Ok(handles.clone())))
+    }
+
+    /// The server resolves its handles from `current` on every request, as the desktop does from
+    /// its app state: the test stores the rebuilt App's handles there after a settings save
+    /// (LV3·C28). The app's own timings: a socket nobody reads during the rebuild stays open.
+    pub fn start_following(a: &TestApp, current: Arc<Mutex<AppHandles>>) -> Self {
+        Self::start_resolving(
+            a,
+            PhoneTimings::default(),
+            Arc::new(move || Ok(current.lock().unwrap().clone())),
+        )
+    }
+
+    fn start_resolving(a: &TestApp, timings: PhoneTimings, handles: HandlesFn) -> Self {
         let dir = tempfile::tempdir().expect("temp web root");
         let web = dir.path().join("web");
         std::fs::create_dir_all(web.join("assets")).unwrap();
         std::fs::write(web.join("phone.html"), b"<p>phone</p>").unwrap();
         std::fs::write(web.join("assets/app.js"), APP_JS).unwrap();
         std::fs::write(dir.path().join("secret"), b"secret").unwrap();
-        let handles = a.app.handles();
         let server = PhoneServer::start(
             PhoneConfig {
                 enabled: true,
@@ -67,7 +85,7 @@ impl TestPhone {
                 timings,
                 host: Arc::new(TestHost),
             },
-            Arc::new(move || Ok(handles.clone())),
+            handles,
             a.live_hub(),
         );
         assert!(server.local_addr().is_some(), "{:?}", server.status());

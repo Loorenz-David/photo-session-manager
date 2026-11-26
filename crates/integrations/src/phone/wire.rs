@@ -24,10 +24,21 @@ pub fn error_code(error: &Error) -> (u16, &'static str) {
     }
 }
 
-/// `{error: {code, message}}`.
+/// The `message` of every `500 internal` (LV3·C29: no internal error text reaches a phone).
+pub const INTERNAL_MESSAGE: &str = "Something went wrong in Session Manager.";
+/// The `message` of every `404 not_found` (LV3·C29: no local path reaches a phone).
+pub const NOT_FOUND_MESSAGE: &str = "Not found.";
+
+/// `{error: {code, message}}`. An internal error and a missing photo, container or file answer
+/// a fixed text: the store's error string and local paths stay on the Mac.
 pub fn error_body(error: &Error) -> serde_json::Value {
-    let (_, code) = error_code(error);
-    serde_json::json!({"error": {"code": code, "message": error.to_string()}})
+    let (status, code) = error_code(error);
+    let message = match status {
+        500 => INTERNAL_MESSAGE.to_owned(),
+        404 => NOT_FOUND_MESSAGE.to_owned(),
+        _ => error.to_string(),
+    };
+    serde_json::json!({"error": {"code": code, "message": message}})
 }
 
 /// PH5: the 32-byte little-endian header of a binary frame message: `PSMF`, version 1, flags 0,
