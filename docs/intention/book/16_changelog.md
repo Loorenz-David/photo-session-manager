@@ -437,3 +437,7 @@ now two outlets over one hub: Tauri channel for the desktop, WebSocket for phone
 on the a7R V with the owner's settings unchanged (AF-S, Flexible Spot S): 9/9 focused, click → focused ≈ 0.4 s; the
 focus frame (centre + size, 640×480 grid) is drawn over live view; focus and capture run on their own threads so live
 view keeps moving. All spikes done; 10J waits only for the owner's phone design before ratification.
+
+D14. **2026-11-26 — Owner: focus setting and three more tests.** If the camera's Focus Area is not movable, the app
+reports it and does not change it (confirmed). Before implementation the owner wants: tap-to-focus from a phone over
+Wi-Fi, a photo sharp where tapped, and several phones at once → new spike LV-S6 (lab Experiment 11).
