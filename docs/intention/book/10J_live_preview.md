@@ -1,9 +1,8 @@
 # 10J — Live preview (human guidance now, machine guidance later)
 
 **Status: COLLABORATING (shaper draft 2026-11-25, rebased 2026-11-26; not ratified, not planned). All owner cards
-answered and MC-LV3 confirmed (2026-11-25); spikes LV-S1…LV-S5 done (2026-11-26; LV-S5 on USB). Left before
-READY_FOR_RATIFICATION: spike LV-S6 (Wi-Fi tap-to-focus from a phone, sharp photo, several phones) and the owner's
-Claude Design prototype for the phone app, folded in first.**
+answered and MC-LV3 confirmed (2026-11-25); all spikes LV-S1…LV-S6 done (2026-11-26). Left before READY_FOR_RATIFICATION: the
+owner's Claude Design prototype for the phone app, folded in first.**
 Source: the owner's chat of 2026-11-25/26 (answers folded below). First written as "10H" on a stale checkout;
 renamed when the checkout was brought up to date (10G and 10H are Shooting templates and Archived items).
 Changelog entries D3–D4. Builds on **10G Shooting templates** (containers, shooting order, Next, retake) and
@@ -164,7 +163,7 @@ session switch or a relaunch. Placement for every other shot is 10G unchanged.
 | LV-S3 | Delivery: frame channel sidecar → Rust, WebSocket to the desktop webview and to iPhone Safari/PWA; latency end to end; Mac CPU; viewer disappearing. | **Done 2026-11-26**: phones via WebSocket (Experiment 08); desktop window via Tauri channel (Experiment 09: 25 fps, ~16 ms, 0 dropped; WebSocket in the window allowed but degraded when hidden). Viewer reconnect/several phones at hardware acceptance — `evidence/live_preview_lab.md` |
 | LV-S4 | PWA on iPhone from a LAN address: install, full screen, screen staying awake, which features need HTTPS (card LV3). | **Done 2026-11-25**: install + full screen on both; wake lock and service worker only on HTTPS — `evidence/live_preview_lab.md` |
 | LV-S5 | Focus from the live picture on the a7R V: set the point from a click, focus, confirm, draw the camera's focus frame; settings needed; latency; USB and Wi-Fi; does a capture keep the point. | **Done on USB 2026-11-26** (Experiment 10): 9/9 focused ≈ 0.4 s, settings unchanged, focus on its own thread keeps live view moving. Wi-Fi and "photo sharp where clicked" at hardware acceptance — `evidence/sony_camera_lab.md` §Live view |
-| LV-S6 | Owner-requested before implementation (2026-11-26): focus by tap **from a phone over Wi-Fi**; a photo taken after a tap is **sharp where tapped**; **several phones at once** (iPhone, Android and the Mac together): frame rate per viewer, one slow viewer not slowing others, focus and capture from any of them. | lab Experiment 11 → `evidence/live_preview_lab.md` |
+| LV-S6 | Owner-requested before implementation (2026-11-26): focus by tap from a phone over Wi-Fi; a photo after a tap sharp where tapped; several phones at once. | **Done 2026-11-26** (Experiment 11): from the Android phone over Wi-Fi 10/10 focused in 0.38–0.83 s; both photos sharp exactly where tapped (other object blurred); Mac + Android together each 19.4 fps (all camera frames), none skipped. The iPhone could not reach the Mac that session (worked in Experiment 08); three viewers at once not shown — `evidence/live_preview_lab.md` |
 
 
 ## Non-goals (this chapter)

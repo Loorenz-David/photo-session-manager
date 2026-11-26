@@ -38,6 +38,14 @@ Tauri 2.12.5 window configured as Session Manager (`csp: null`, page on `tauri:/
 Decode + draw ≈ 9–10 ms per frame. CPU: app 3.6 %, WebKit helpers ≈ 26 % in total, crlab 7.5 %, lab Python server 10 %.
 **Desktop delivery: Tauri channel; phones: WebSocket.**
 
+## Wi-Fi, phone tap-to-focus, sharp photo, several viewers (Experiment 11, 2026-11-26, run `results/20261126T071828Z_11-wifi-phones`)
+| Question | Answer |
+|---|---|
+| Tap-to-focus from a phone over Wi-Fi | **10/10 focused**, tap → focused 0.38–0.83 s (Android phone; same as USB). |
+| Photo after a tap sharp where tapped? | **Yes**, both photos: full-size crops show the tapped object sharp and the other blurred (tape measure in front / table at the back). Button → exposed 0.60–0.77 s. |
+| Several viewers at once | Mac + Android: each **19.4 fps** (all frames the camera gave over Wi-Fi), 0 skipped, no viewer slowed the other; Mac 6 ms, Android 31 ms behind. Dips during the photo downloads over the same Wi-Fi. |
+| iPhone | Could not reach the Mac that session (no request arrived, by name or address); it worked through the same server and page the day before. Three viewers at once not shown; the owner chose to skip. |
+
 ## Constraints found
 - **P1 — Wake lock needs a user gesture** each time the app opens (requested on a button press; the product can tie
   it to the first Live peek or Capture tap).

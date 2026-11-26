@@ -441,3 +441,8 @@ view keeps moving. All spikes done; 10J waits only for the owner's phone design 
 D14. **2026-11-26 — Owner: focus setting and three more tests.** If the camera's Focus Area is not movable, the app
 reports it and does not change it (confirmed). Before implementation the owner wants: tap-to-focus from a phone over
 Wi-Fi, a photo sharp where tapped, and several phones at once → new spike LV-S6 (lab Experiment 11).
+
+D15. **2026-11-26 — Lab: spike LV-S6 done** (Experiment 11, Wi-Fi, owner-attended). From the Android phone over Wi-Fi
+10/10 taps focused in 0.38–0.83 s; both photos taken after a tap are sharp exactly where tapped; the Mac and the Android
+phone watching together each got every frame (19.4 fps) with none skipped. The iPhone could not reach the Mac that
+session (worked the day before); the owner skipped it. All 10J spikes done; the chapter waits for the phone design.
