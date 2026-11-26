@@ -295,14 +295,21 @@ afterEach(() => {
 });
 
 // --- pointers: one finger on a gesture surface, in client coordinates ---
+// jsdom has no PointerEvent: a mouse event of the pointer type carries the coordinates, and the
+// pointer id is added (React reads both from the native event).
+function pointer(type: string, target: Element, x: number, y: number): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 });
+  Object.defineProperty(event, 'pointerId', { value: 1 });
+  fireEvent(target, event);
+}
 export function press(target: Element, x: number, y: number): void {
-  fireEvent.pointerDown(target, { pointerId: 1, clientX: x, clientY: y, button: 0 });
+  pointer('pointerdown', target, x, y);
 }
 export function slide(target: Element, x: number, y: number): void {
-  fireEvent.pointerMove(target, { pointerId: 1, clientX: x, clientY: y });
+  pointer('pointermove', target, x, y);
 }
 export function lift(target: Element, x: number, y: number): void {
-  fireEvent.pointerUp(target, { pointerId: 1, clientX: x, clientY: y });
+  pointer('pointerup', target, x, y);
 }
 
 /**

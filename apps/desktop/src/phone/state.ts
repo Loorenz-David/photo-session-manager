@@ -3,7 +3,7 @@
  * PH6). The Mac owns the session: shots, photos and the current shot are only ever what
  * `GET /session` last answered (MC-LV3: one current shot, server-side).
  */
-import type { Hello, PhoneSession } from './api';
+import type { Hello, PhoneSession, PhoneShot } from './api';
 import type { CameraMessage } from './socket';
 
 /** master_plan_live §6: the phone's texts. */
@@ -13,10 +13,24 @@ export const TEXT = {
   cameraNotConnected: 'Camera not connected',
   liveUnavailable: 'Live unavailable on this camera',
   cameraBusy: 'Camera busy',
+  couldNotFocus: 'Could not focus there',
+  focusAreaNotMovable: "Set the camera's Focus Area to a movable spot (e.g. Flexible Spot) to focus from the phone",
+  notTaken: 'Not taken. Try again.',
+  sessionChanged: 'Session changed on the Mac',
+  conditionAdded: 'Condition image added',
+  noSession: 'Open a session in Session Manager to start shooting.',
+  failed: 'That did not work. Try again.',
 } as const;
 
 /** The design's default template overlay (0–100 %, shared by live view and preview). */
 export const DEFAULT_OVERLAY = 35;
+/** A shot that keeps the camera's own shape uses the live frame's; before any frame, the sensor's 3:2. */
+const SENSOR_ASPECT = 1.5;
+/** The Free shot's viewport (the design's session ratio). */
+const FREE_RATIO = 1;
+
+/** The focus marker: where the person tapped, as 0…1 of the image (so it turns with a rotated viewport). */
+export type FocusMark = { x: number; y: number; id: string | null; confirmed: boolean };
 
 export type PhoneState = {
   hello: Hello | null;
@@ -34,6 +48,11 @@ export type PhoneState = {
   drawnGen: number | null;
   /** The size of the last live frame drawn. */
   frame: { width: number; height: number } | null;
+  focus: FocusMark | null;
+  /** `n` counts toasts, so the same text twice shows twice. */
+  toast: { text: string; n: number } | null;
+  /** Counts captures: each one flashes. */
+  flash: number;
 };
 
 export const initialState: PhoneState = {
@@ -46,6 +65,9 @@ export const initialState: PhoneState = {
   gen: 0,
   drawnGen: null,
   frame: null,
+  focus: null,
+  toast: null,
+  flash: 0,
 };
 
 export type Action =
@@ -53,8 +75,16 @@ export type Action =
   | { type: 'view'; view: PhoneSession | null }
   | { type: 'camera'; camera: CameraMessage }
   | { type: 'hold'; holding: boolean }
+  | { type: 'lock'; locked: boolean }
+  | { type: 'overlay'; overlay: number }
   | { type: 'demand'; gen: number }
-  | { type: 'drawn'; gen: number; width: number; height: number };
+  | { type: 'drawn'; gen: number; width: number; height: number }
+  | { type: 'focus'; focus: FocusMark | null }
+  | { type: 'focus-id'; id: string }
+  | { type: 'focus-confirmed'; id: string }
+  | { type: 'focus-lost'; id: string }
+  | { type: 'toast'; text: string }
+  | { type: 'flash' };
 
 export function reduce(state: PhoneState, action: Action): PhoneState {
   switch (action.type) {
@@ -66,19 +96,63 @@ export function reduce(state: PhoneState, action: Action): PhoneState {
       return { ...state, camera: action.camera };
     case 'hold':
       return state.holding === action.holding ? state : { ...state, holding: action.holding };
+    case 'lock':
+      return { ...state, locked: action.locked, holding: false };
+    case 'overlay':
+      return { ...state, overlay: action.overlay };
     case 'demand':
       return { ...state, gen: action.gen };
     case 'drawn':
       return { ...state, drawnGen: action.gen, frame: { width: action.width, height: action.height } };
+    case 'focus':
+      return { ...state, focus: action.focus };
+    case 'focus-id':
+      return state.focus && state.focus.id === null ? { ...state, focus: { ...state.focus, id: action.id } } : state;
+    case 'focus-confirmed':
+      return state.focus?.id === action.id ? { ...state, focus: { ...state.focus, confirmed: true } } : state;
+    case 'focus-lost':
+      return state.focus?.id === action.id ? { ...state, focus: null } : state;
+    case 'toast':
+      return { ...state, toast: { text: action.text, n: (state.toast?.n ?? 0) + 1 } };
+    case 'flash':
+      return { ...state, flash: state.flash + 1 };
   }
 }
 
+export const pad = (n: number) => String(n).padStart(2, '0');
+
 /** Both first answers are in: the connecting overlay leaves and the stage takes presses (design §1). */
 export const connected = (s: PhoneState) => s.hello !== null && s.view !== undefined;
-/** The person asks for Live (hold or lock): what the demand's `live` says. */
-export const wantsLive = (s: PhoneState) => s.holding || s.locked;
+
+/** The template shot the Mac says is current, if it is one. */
+export function currentShot(view: PhoneSession | null | undefined): PhoneShot | null {
+  if (!view || view.current?.kind !== 'shot') return null;
+  const id = view.current.container_id;
+  return view.shots.find(shot => shot.container_id === id) ?? null;
+}
+
+/** Free shot: a session is open and no template shot is current (after the last shot, or no template at all). */
+export const inFreeShot = (view: PhoneSession | null | undefined) => !!view && currentShot(view) === null;
+
+/**
+ * The person sees Live: hold, lock, or Free shot (there is no template to show, so live is the
+ * picture; the design's "FREE SHOT · LIVE"). This is the demand's `live` (MC-LV2).
+ */
+export const wantsLive = (s: PhoneState) => s.holding || s.locked || inFreeShot(s.view);
 /** PH7: the live layer shows only once a frame of the current generation is drawn (never an old picture as live). */
 export const liveShown = (s: PhoneState) => wantsLive(s) && s.drawnGen !== null && s.drawnGen === s.gen;
+
+/** A ratio the Mac leaves open (`null`: the camera's own shape) is the live frame's. */
+export function frameAspect(s: PhoneState): number {
+  return s.frame && s.frame.height > 0 ? s.frame.width / s.frame.height : SENSOR_ASPECT;
+}
+
+/** The main viewport's aspect ratio. */
+export function stageRatio(s: PhoneState): number {
+  const shot = currentShot(s.view);
+  if (!shot) return FREE_RATIO;
+  return shot.ratio ?? frameAspect(s);
+}
 
 /** 10J §Status: what stands in the hint's place while the person asks for Live and the camera cannot give it. */
 export function cameraNotice(s: PhoneState): string | null {
@@ -87,4 +161,50 @@ export function cameraNotice(s: PhoneState): string | null {
   if (s.camera.status !== 'connected') return TEXT.cameraNotConnected;
   if (s.camera.live === 'unavailable') return TEXT.liveUnavailable;
   return null;
+}
+
+/** Design §2 mode pill. */
+export function modeLabel(s: PhoneState): string {
+  if (inFreeShot(s.view)) return s.locked ? 'FREE SHOT · LOCKED' : 'FREE SHOT · LIVE';
+  return s.locked ? 'LIVE · LOCKED' : s.holding ? 'LIVE' : 'TEMPLATE';
+}
+
+/** Design §2 hint chip. In a templated session the Free shot adds Condition images (card LV7). */
+export function hintText(s: PhoneState): string {
+  if (inFreeShot(s.view)) return s.view?.templated ? 'No template · each capture adds a condition image' : 'No template · each capture adds an extra image';
+  return s.locked ? 'Tap to focus · double-tap to unlock' : 'Hold for live · slide up to lock · slide sideways for overlay';
+}
+
+/** The exposure readout on live (read-only from the camera). */
+export function exposureText(camera: CameraMessage | null): string | null {
+  const e = camera?.exposure;
+  return e ? `${e.shutter} · ${e.aperture} · ${e.iso}` : null;
+}
+
+/**
+ * The control bar's Next: the next empty template shot after the current one in shooting order,
+ * and Free shot after the last (then the label says so). Off in Free shot.
+ */
+export function nextStep(view: PhoneSession | null | undefined): { enabled: boolean; label: 'Next shot' | 'Free shot'; container_id: number | null } {
+  const shot = currentShot(view);
+  if (!view || !shot) return { enabled: false, label: 'Next shot', container_id: null };
+  const after = view.shots.slice(view.shots.indexOf(shot) + 1).find(candidate => candidate.photo === null);
+  return after ? { enabled: true, label: 'Next shot', container_id: after.container_id } : { enabled: true, label: 'Free shot', container_id: null };
+}
+
+/** Every photo the session view lists. */
+export function photoIds(view: PhoneSession): number[] {
+  return [...view.shots.flatMap(shot => (shot.photo ? [shot.photo.photo_id] : [])), ...view.extras.map(i => i.photo_id), ...view.condition.map(i => i.photo_id)];
+}
+
+/** The Main position of extra `index` (extras follow the template's containers). */
+export const extraPosition = (view: PhoneSession, index: number) => view.shots.length + index + 1;
+
+/** The capture toast for a photo, by where the Mac placed it (10J: reconciled with the camera, C3). */
+export function landedToast(view: PhoneSession, photo_id: number): string | null {
+  const shot = view.shots.find(candidate => candidate.photo?.photo_id === photo_id);
+  if (shot) return `Shot ${pad(shot.final_no)} captured`;
+  if (view.condition.some(image => image.photo_id === photo_id)) return TEXT.conditionAdded;
+  const extra = view.extras.findIndex(image => image.photo_id === photo_id);
+  return extra >= 0 ? `Extra image ${pad(extraPosition(view, extra))} added` : null;
 }

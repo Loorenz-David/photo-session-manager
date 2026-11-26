@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { exampleUrl, forgetToken, hello, session, takeToken, Unpaired } from './api';
+import { ApiError, capture, focus, focusClear, forgetToken, hello, type PhoneSession, session, setCurrent, takeToken, Unpaired } from './api';
 import { ConnectingOverlay } from './components/ConnectingOverlay';
+import { ControlBar } from './components/ControlBar';
 import { FullscreenButton } from './components/FullscreenButton';
-import { LiveCanvas, type LiveCanvasHandle } from './components/LiveCanvas';
-import { PhoneSocket } from './socket';
-import { cameraNotice, connected, initialState, liveShown, reduce, TEXT } from './state';
+import type { LiveCanvasHandle } from './components/LiveCanvas';
+import { Stage } from './components/Stage';
+import { Toast } from './components/Toast';
+import { isRotated, type Point } from './geometry';
+import { buzz, HAPTIC } from './gestures';
+import { type CaptureMessage, type FocusMessage, PhoneSocket, type ServerMessage } from './socket';
+import { connected, initialState, landedToast, nextStep, photoIds, reduce, stageRatio, TEXT, wantsLive } from './state';
 
 /** While the Mac does not answer the first two requests they are asked again this often. */
 const RETRY_MS = 2000;
@@ -31,6 +36,27 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
   const canvas = useRef<LiveCanvasHandle>(null);
   const socket = useRef<PhoneSocket | null>(null);
   const isConnected = connected(state);
+  const view = state.view ?? null;
+  const toast = useCallback((text: string) => dispatch({ type: 'toast', text }), []);
+
+  // Capture feedback is reconciled with the camera (10J, C3: an acknowledgement is not an
+  // exposure, an exposure is not a file): the toast names where the Mac placed the new photo.
+  const captures = useRef({ mine: new Set<string>(), early: new Map<string, CaptureMessage['state']>(), exposed: 0, session: null as number | null, known: new Set<number>() });
+  const reconcile = useCallback((next: PhoneSession | null) => {
+    const c = captures.current;
+    const ids = next ? photoIds(next) : [];
+    if (next && next.id === c.session) {
+      for (const id of ids) {
+        if (c.exposed === 0) break;
+        if (c.known.has(id)) continue;
+        c.exposed -= 1;
+        const text = landedToast(next, id);
+        if (text) toast(text);
+      }
+    } else c.exposed = 0;
+    c.session = next?.id ?? null;
+    c.known = new Set(ids);
+  }, [toast]);
 
   // The session is only ever what the Mac last answered; a slower, older answer never replaces a newer one.
   const asked = useRef(0);
@@ -38,13 +64,62 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     const mine = ++asked.current;
     try {
       const answer = await session(token);
-      if (mine === asked.current) dispatch({ type: 'view', view: answer.session });
+      if (mine === asked.current) {
+        reconcile(answer.session);
+        dispatch({ type: 'view', view: answer.session });
+      }
       return true;
     } catch (error) {
       if (error instanceof Unpaired) onRemoved();
       return false;
     }
-  }, [token, onRemoved]);
+  }, [token, onRemoved, reconcile]);
+
+  /** A request the Mac refused: its code decides what the person is told (master_plan_live §6). */
+  const refused = useCallback((error: unknown, otherwise: string) => {
+    if (error instanceof Unpaired) return onRemoved();
+    const code = error instanceof ApiError ? error.code : '';
+    if (code === 'session_changed') {
+      toast(TEXT.sessionChanged);
+      void readSession();
+    } else if (code === 'camera_not_connected') toast(TEXT.cameraNotConnected);
+    else {
+      toast(otherwise);
+      void readSession();
+    }
+  }, [onRemoved, readSession, toast]);
+
+  const captureReport = useCallback((id: string, report: CaptureMessage['state']) => {
+    const c = captures.current;
+    if (report === 'acknowledged') return;
+    c.mine.delete(id);
+    if (report === 'exposed') c.exposed += 1;
+    else toast(TEXT.notTaken);
+  }, [toast]);
+
+  // The camera's answer to a tap (LV-D14): the marker is confirmed, or taken away with the reason.
+  const focusAsked = useRef<{ id: string | null; early: FocusMessage[] }>({ id: null, early: [] });
+  const focusReport = useCallback((message: FocusMessage) => {
+    if (message.outcome === 'focused') return dispatch({ type: 'focus-confirmed', id: message.focus_id });
+    if (message.outcome === 'superseded') return;
+    dispatch({ type: 'focus-lost', id: message.focus_id });
+    if (message.outcome !== 'refused') toast(TEXT.couldNotFocus);
+    else toast(message.reason === 'focus_area_not_movable' ? TEXT.focusAreaNotMovable : message.reason === 'not_connected' ? TEXT.cameraNotConnected : TEXT.couldNotFocus);
+  }, [toast]);
+
+  const onMessage = useRef<(message: ServerMessage) => void>(() => undefined);
+  onMessage.current = message => {
+    if (message.type === 'session') void readSession();
+    else if (message.type === 'camera') dispatch({ type: 'camera', camera: message });
+    else if (message.type === 'capture') {
+      // The report can overtake the answer to the capture request itself.
+      if (captures.current.mine.has(message.capture_id)) captureReport(message.capture_id, message.state);
+      else captures.current.early.set(message.capture_id, message.state);
+    } else if (message.type === 'focus') {
+      if (focusAsked.current.id === message.focus_id) focusReport(message);
+      else if (focusAsked.current.id === null) focusAsked.current.early.push(message);
+    }
+  };
 
   useEffect(() => {
     let stopped = false;
@@ -67,10 +142,7 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     };
     void load();
     const live = new PhoneSocket(token, {
-      onMessage: message => {
-        if (message.type === 'session') void readSession();
-        else if (message.type === 'camera') dispatch({ type: 'camera', camera: message });
-      },
+      onMessage: message => onMessage.current(message),
       onFrame: frame => canvas.current?.draw(frame),
       onDemand: gen => dispatch({ type: 'demand', gen }),
       // What happened while the socket was away is not replayed: read the session again.
@@ -88,7 +160,7 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
   }, [token, onRemoved, readSession]);
 
   // PH7: every change of showing Live is a new demand.
-  const wants = state.holding || state.locked;
+  const wants = isConnected && wantsLive(state);
   useEffect(() => {
     socket.current?.setLive(wants);
   }, [wants]);
@@ -107,32 +179,82 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     };
   }, []);
 
-  const view = state.view ?? null;
-  const shot = view?.current?.kind === 'shot' ? view.shots.find(s => s.container_id === (view.current as { container_id: number }).container_id) ?? null : null;
-  const showing = liveShown(state);
-  const notice = cameraNotice(state);
-  const hold = (holding: boolean) => {
-    if (isConnected) dispatch({ type: 'hold', holding });
+  /** The marker goes, and the camera's focus point goes back to the centre with it (card LV9). */
+  const clearFocus = useCallback(() => {
+    if (!state.focus || !view) return;
+    focusAsked.current = { id: null, early: [] };
+    dispatch({ type: 'focus', focus: null });
+    focusClear(token, view.id).catch(error => {
+      if (error instanceof Unpaired) onRemoved();
+    });
+  }, [state.focus, view, token, onRemoved]);
+
+  const onFocus = async (mark: Point, point: Point) => {
+    if (!view) return;
+    buzz(HAPTIC.focus);
+    const asking = { id: null as string | null, early: [] as FocusMessage[] };
+    focusAsked.current = asking;
+    dispatch({ type: 'focus', focus: { ...mark, id: null, confirmed: false } });
+    try {
+      const { focus_id } = await focus(token, view.id, point.x, point.y);
+      if (focusAsked.current !== asking) return;
+      asking.id = focus_id;
+      dispatch({ type: 'focus-id', id: focus_id });
+      asking.early.filter(message => message.focus_id === focus_id).forEach(focusReport);
+      asking.early = [];
+    } catch (error) {
+      if (focusAsked.current === asking) dispatch({ type: 'focus', focus: null });
+      refused(error, TEXT.couldNotFocus);
+    }
   };
 
+  const onCapture = async () => {
+    if (!view) return;
+    // Design §Shutter: the flash and the haptic are immediate; the toast waits for the camera.
+    buzz(HAPTIC.capture);
+    dispatch({ type: 'flash' });
+    try {
+      const { capture_id } = await capture(token, view.id);
+      const c = captures.current;
+      c.mine.add(capture_id);
+      const early = c.early.get(capture_id);
+      c.early.clear();
+      if (early) captureReport(capture_id, early);
+    } catch (error) {
+      refused(error, TEXT.notTaken);
+    }
+  };
+
+  /** The person chooses the current shot (`null` = Free shot); the Mac decides, the phone re-reads. */
+  const choose = async (container_id: number | null) => {
+    if (!view?.templated) return;
+    const now = view.current?.kind === 'shot' ? view.current.container_id : null;
+    if (now === container_id) return;
+    buzz(HAPTIC.select);
+    clearFocus();
+    try {
+      await setCurrent(token, view.id, container_id);
+    } catch (error) {
+      refused(error, TEXT.failed);
+    }
+  };
+
+  const next = nextStep(view);
+  if (isConnected && !view) {
+    return <div className="ph-app">
+      <p className="ph-pairing">{TEXT.noSession}</p>
+    </div>;
+  }
   return <div className="ph-app">
     <div className="ph-safe-top" />
     <FullscreenButton />
-    <div className="ph-stage">
-      <div className="ph-viewport" data-testid="viewport" style={{ width: '100%', aspectRatio: '1' }}
-        onPointerDown={event => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          hold(true);
-        }}
-        onPointerUp={() => hold(false)} onPointerCancel={() => hold(false)} onContextMenu={event => event.preventDefault()}>
-        <LiveCanvas ref={canvas} isCurrent={gen => socket.current?.gen === gen} shown={showing} scale={1}
-          onDrawn={(gen, width, height) => dispatch({ type: 'drawn', gen, width, height })} />
-        <div className="ph-layer ph-template-layer" data-testid="template-layer" style={{ opacity: shot ? (showing ? state.overlay / 100 : 1) : 0 }}>
-          {shot?.example && <img className="ph-cover ph-grey" alt="" draggable={false} src={exampleUrl(token, shot.container_id)} />}
-        </div>
-        {notice && <div className="ph-hint-row"><div className="ph-hint">{notice}</div></div>}
-      </div>
-    </div>
+    <Stage token={token} state={state} dispatch={dispatch} enabled={isConnected} canvas={canvas}
+      isCurrentGen={gen => socket.current?.gen === gen} onFocus={(mark, point) => void onFocus(mark, point)} onClearFocus={() => {
+        buzz(HAPTIC.clearFocus);
+        clearFocus();
+      }} />
+    <ControlBar rotated={isRotated(stageRatio(state))} next={next} onMenu={() => undefined} onCapture={() => void onCapture()} onNext={() => void choose(next.container_id)} />
+    <Toast toast={state.toast} />
     <ConnectingOverlay connected={isConnected} macName={state.hello?.mac_name ?? null} itemName={view?.item.name ?? null} />
   </div>;
 }
