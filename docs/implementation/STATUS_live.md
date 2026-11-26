@@ -118,6 +118,9 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     log; relaunched with RESUME=1 (implement re-runs to finish).
   - **LV5 APPROVED** (17:28, re-review r2, APPROVED_WITH_NOTES; one fix: stricter C3 assertions, committed by the
     orchestrator — Codex fix sandbox again refused the git lock). **LV6 started** (Fable).
+  - Owner during LV6: lock swipe halved (LV-D19 (3), row LV6·C3(b)). **LV6 APPROVED** (17:52, review r1, no fix; lock 55 px
+    made it in). SDK sidecar rebuilt; release bundle built from `3c403e05` and **installed** (previous kept as
+    "2026-11-26 live LV1-LV3"). Pushed.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -126,7 +129,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-- `tools/pipeline/run_phase.sh phase LV6_phone_dock` (Fable), started 2026-11-26 17:29.
+None. LV4 hardware check to resume with the owner (USB rows C1, C9; C19; C20 + targets; C5 edge of Wi-Fi; re-check F1–F7 and LV-D19).
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
