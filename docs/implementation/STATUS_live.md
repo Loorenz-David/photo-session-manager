@@ -94,6 +94,12 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
       `point_ms=-1` (point not confirmed by a focus frame) and `outcome=Focused` 1.3–1.4 s, so the phone shows AF LOCKED
       while the camera chose its own spot. The app changed nothing (owner set it back; still works): the safety half holds,
       the "set a movable focus area" report does not fire on the a7R V's Wide.
+    - C14 revoke while on live: `phone.viewer closed … reason=revoked`, Android showed the removed text; iPhone unaffected.
+      PASS. (Also a `write_timeout` on the iPhone at 14:15:43, reconnected in 0.7 s: F2 on the iPhone too.)
+    - **Finding F6 (owner card):** after Remove + re-pair, the **installed** app (iPhone home-screen app, Android
+      shortcut) stays dead: it starts from the manifest `start_url` `/phone/?pair=<old token>` (`wire.rs:132`) → 401; the
+      new QR opens a browser tab with the new token, so the owner had to install the app again. On iPhone the installed
+      app's storage is separate from Safari, so a new QR can never reach it.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
