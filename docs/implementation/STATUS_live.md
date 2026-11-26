@@ -88,7 +88,12 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
       files are still on the way".
     - C15 tap-to-focus over Wi-Fi from the phone: **20/20 focused**, tap → focused 0.39–0.97 s (median ≈ 0.63 s; point set
       0.14–0.31 s, AF 0.32–0.62 s); camera screen followed. PASS. C16 sharp where tapped (owner at 100 %): PASS.
-    - C17 ×: no `/focus/clear` request in the whole day's log; re-testing with the owner.
+    - C17 ×: retested — `/focus/clear` → `focus x=320 y=240 af=false`, point set in ≈ 0.21 s; chip gone, camera square back
+      at the centre (owner). PASS (the first round simply had no × press).
+    - **C18 FAIL → finding F5:** Focus Area set to Wide on the camera, taps on the phone: no message; results
+      `point_ms=-1` (point not confirmed by a focus frame) and `outcome=Focused` 1.3–1.4 s, so the phone shows AF LOCKED
+      while the camera chose its own spot. The app changed nothing (owner set it back; still works): the safety half holds,
+      the "set a movable focus area" report does not fire on the a7R V's Wide.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
