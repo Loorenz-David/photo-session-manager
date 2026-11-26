@@ -115,8 +115,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-None. The fix planner (15:30) stopped at once: Claude monthly spend limit / 5-hour limit (resets 16:10 Europe/Stockholm). Nothing written.
-**Next:** relaunch it with the prompt on stdin: `claude -p --agent pipeline-planner --model opus --allowedTools Bash Read Edit Write Grep Glob --permission-mode acceptEdits --no-session-persistence < docs/implementation/prompts/reviewer/live_fix_plan_r1.md`; then run LV5, LV6 with `run_phase.sh phase`; install; resume LV4 (USB rows, C19, C20, edge of Wi-Fi).
+- Fix planner relaunched after the usage limit reset (`.pipeline/runs/live_fix_plan_r1.log`).
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
