@@ -1,8 +1,8 @@
 # 10J — Live preview (human guidance now, machine guidance later)
 
-**Status: COLLABORATING (shaper draft 2026-11-25, rebased 2026-11-26; not ratified, not planned). All owner cards
-answered and MC-LV3 confirmed (2026-11-25); all spikes LV-S1…LV-S6 done (2026-11-26). Left before READY_FOR_RATIFICATION: the
-owner's Claude Design prototype for the phone app, folded in first.**
+**Status: READY_FOR_RATIFICATION (shaper draft 2026-11-25, rebased 2026-11-26; not ratified, not planned). All owner cards
+answered and MC-LV3 confirmed (2026-11-25); all spikes LV-S1…LV-S6 done (2026-11-26). The owner's phone design (Shoot Companion) is
+folded in (LV-D15…LV-D18) and its six conflicts answered (LV5–LV10). **READY_FOR_RATIFICATION** (2026-11-26).**
 Source: the owner's chat of 2026-11-25/26 (answers folded below). First written as "10H" on a stale checkout;
 renamed when the checkout was brought up to date (10G and 10H are Shooting templates and Archived items).
 Changelog entries D3–D4. Builds on **10G Shooting templates** (containers, shooting order, Next, retake) and
@@ -38,6 +38,10 @@ Two purposes:
 | LV-D12 | **Any paired phone may watch and shoot, several at once.** Answers card L5. | — |
 | LV-D13 | **Image analysis for machine guidance is a recorded future exception to H3**, decided with the machine-guidance chapter; human guidance needs none. Answers card L6. | — |
 | LV-D14 | **Focus from the live picture** (owner 2026-11-26, "the ability to direct the focus with this live stream which the IEDT does … once i have changed the furniture positioning the focus should also change"): clicking or tapping a point on the live view, on the Mac or the phone, moves the camera's focus point there and focuses; the live view shows where the camera is focusing. Mechanism and required camera settings from spike LV-S5. | 10J non-goals (focus control from the phone, narrowed); LV-D2 (Focus Area may need a movable setting) |
+| LV-D15 | **The phone app is the owner's "Shoot Companion" design** (`claude_design/live_preview/design_handoff_shoot_companion/`, 2026-11-26, high fidelity: colours, type, spacing, gesture thresholds, haptics and timings are final). Minimal, gesture-driven: hold for live, slide up to lock, double-tap to unlock, tap to focus while locked, slide sideways to set the template overlay; shot dock, captured-image preview, Move drawer, Item drawer. | LV-D6 (overlay style as a Settings choice) → replaced by the overlay **opacity gesture** (0–100 %, default 35 %, shared by live view and preview); no outline mode |
+| LV-D16 | **Split preview on live**: a split shot (10D Split, one 2:1 composition → two squares) shows a centre guide and the two halves on live view and in the preview, so it can be framed as it will be published. The design labels the halves A/B; the book calls them Left/Right. | — |
+| LV-D17 | **Item drawer** on the phone: item info (name, SKU, article number, current shot, angle, image counts; more fields later) and an action **"Fill item properties"** that opens an **empty full-page container** for now; phone inputs come later (e.g. the 10I tape's target dimension, properties easier to fill phone in hand). | — |
+| LV-D18 | **The phone follows the Mac's active session** ("reactive and submissive"): it shows and shoots for whatever session is open in Session Manager. **Later** (not built now, but the phone API must allow it): completing a session from the phone (triggering its agentic flows) and opening a new session. | 11 §Phone remote (the phone app is a separate mobile entry of the same frontend, QR + pairing token as planned) |
 
 ## The working loop (owner's description, the acceptance story)
 1. The phone (or the Mac) shows the **template shot for Next** (10G §5), frozen, full opacity.
@@ -59,8 +63,8 @@ revised): pausing it would not save camera battery (LV-S2).
   match is the published framing.
 - **Shot strip:** the containers in shooting order, each with what was taken for it (the photo's preview) or empty;
   Next marked. Tapping a filled container shows the taken photo beside its template shot.
-- **Retake** (LV-D10): pick a filled container, press Retake, capture; the new photo takes that container, the old
-  one is denied. Next then returns to where it was (MC-LV3).
+- **Retake** (LV-D10, card LV6): press Retake on a captured shot; its photo is denied at once (undoable) and the shot
+  becomes current; the next capture fills it, then the current shot moves on (MC-LV3).
 - **Capture** on both views, phone and Mac, through the existing capture command (10E). The photo arrives exactly
   as a shutter press on the camera would (MC-32/MC-33 unchanged) and is placed by 10G. The command must keep 10E's
   half-press-then-release: in the lab a release without half-press was acknowledged and **silently not taken**
@@ -71,6 +75,25 @@ revised): pausing it would not save camera battery (LV-S2).
   lab saw only a generic connection error (evidence C12); 10E should name it ("camera in use by another computer").
 - An item type **without a template** gets live view and Capture only, no template view.
 - The Mac shows the same views on the stage; the phone's PWA shows them full screen with a large Capture button.
+
+## The phone design (Shoot Companion, 2026-11-26) — what it adds
+Read against this book; the handoff README is the authority for look and gestures. Beyond LV-D15…LV-D18:
+- **Exposure readout** on live (shutter · aperture · ISO, read-only from the camera).
+- **Landscape shots rotate the view 90°** so the phone is held sideways; gestures follow the image.
+- **Shot dock**: template shots, then extra Main images, a **Free shot** tile, then Condition images; tap opens or
+  selects, hold magnifies, hold-and-drag-up opens. **Preview** of a captured image with template overlay on hold;
+  actions Back, Retake (template shots), Delete (extras, condition), **Move image** (to any Main position, a new
+  extra, or the Condition group).
+- **Capture** feedback is immediate (flash, haptic) and reconciled with the camera's confirmation (C3: an
+  acknowledgement is not an exposure, an exposure is not a file).
+- **Haptics** only where the browser has them (Android Chrome); iPhone gets the visual cues.
+- **Templates in black and white** by the phone's own display filter, as 10G already shows them (H3: no image
+  processing in the app's backend).
+- An untemplated session: live, Free shot only; each capture is Main at the end of the list (P66), as today.
+- **After the last template shot (card LV7):** captures are **Condition** (10G §4 rule 4), not extra Main images as
+  the prototype's Free shot shows; the person can move any of them to Main (Move image). The Free shot tile therefore
+  adds Condition images in a templated session; extra Main images exist only by Move.
+- Six points changed existing rules; the owner answered them on 2026-11-26 (cards LV5–LV10 below).
 
 ## Architecture
 ```
@@ -130,14 +153,19 @@ revised). A viewer **receives** frames only while it shows Live (peek held or Lo
 phone screen on); otherwise it is sent nothing. Pulling and sending never affect capture, file delivery or the camera
 session. Rules for a viewer that disappears (phone locked, Wi-Fi drop) come from LV-S3.
 
-### MC-LV3 — Retake aim (extends 10G §4/§6) — confirmed by the owner 2026-11-25
-10G places by shutter order; a retake from the phone needs a chosen container. Pressing Retake on filled container
-*c* sets the session's **aim** to *c*. The **next shutter** (from any device, including the camera's own button)
-takes the aim: the aim is bound to that exposure when the camera reports it (10E, `exposed_at`), so a late file still
-goes to *c*. When that photo arrives it is placed exactly as 10G §6 rule 3 places a photo dropped on a filled
-container (old photo denied and released, the new one takes *c*'s shot key and presets), then the aim clears and
-Next is computed by 10G as before. Cancelling Retake clears the aim. At most one aim per session; it never survives a
-session switch or a relaunch. Placement for every other shot is 10G unchanged.
+### MC-LV3 — Current shot (replaces the retake aim; amends 10G §4 rule 2 and §6) — owner 2026-11-26 (cards LV5, LV6)
+In a templated session there is **one current shot**: a container (or none). Default: 10G's "Next" — the first empty
+container in **shooting order**, after any reported shutters whose files are still on the way. The person changes it
+by tapping an empty shot (phone dock, later the Mac). **Every exposure** — phone, Mac or the camera's own button — is
+bound to the current shot **as it was when the camera reported the exposure** (10E `exposed_at`; a file that arrives
+late still goes there). After an exposure is bound, the current shot moves to the next empty container after it in
+shooting order, else the first empty one, else **none**. With no current shot, shots are **Condition** (10G §4 rule 4,
+appended; the person may move them to Main). **Retake** on a filled container = **Deny** the photo there at once
+(red, undoable, released as in 10G §6) and make that container current. Filling a container applies its presets
+(10G §4 rule 3). A photo placed through the current shot counts as **placed by template**. The current shot is per
+session, never survives a session switch or relaunch (it is recomputed from the default), and an untemplated session
+has none (P66: Main, end of list). This one rule absorbs 10G's shot-index placement, its refill and the earlier
+retake aim.
 
 ## Machine guidance — what this chapter guarantees for it
 - A Rust subscriber interface on the hub: a subscriber takes frames at its own rate, never slows human viewers.
@@ -151,7 +179,7 @@ session switch or a relaunch. Placement for every other shot is 10G unchanged.
 | **M-LV1** | MC-LV1 | Every viewer shows only frames newer than the last it showed; a slow viewer never delays another or the capture path. | stale frames shown as live; one phone freezing the Mac |
 | **M-LV2** | MC-LV2 | A viewer not showing Live receives no frames; a viewer switching to Live shows a frame newer than the switch within the measured delivery budget (LV-S3); live frames never delay capture or file delivery. | phones on the template view still downloading video; a switch to Live showing a stale frame |
 | **M-LV3** | 10E MC-32/33, 10G §4 | A capture from the phone or the Mac yields exactly one photo in the active session, placed by 10G exactly as a camera-button capture, with live view on or off, on USB and Wi-Fi. | lost, duplicated or misplaced photos when shooting from the phone |
-| **M-LV4** | MC-LV3 | A retake aimed at container *c* puts the next shot's photo in *c* and denies the old one, even when its file arrives after later shots; with no aim, placement equals 10G; the aim never applies to a second shot. | a retake landing in the wrong container or eating the next shot |
+| **M-LV4** | MC-LV3 | Each exposure lands in the shot that was current when the camera fired, even when its file arrives after later shots; the current shot then moves to the next empty one in shooting order; Retake denies the old photo at once (undoable) and the next exposure fills that shot; with no current shot photos go to Condition. | a photo landing in the wrong container; a retake eating the next shot; late Wi-Fi files misplaced |
 | **M-LV5** | LV-D2, LV-D11 | Only the camera settings listed for live view are ever written, network and FTP settings never; a photo captured with live view on has the same capture settings as one without (file type, quality, store destination, exposure mode). | live view silently changing how the camera shoots or uploads |
 | **M-LV6** | MC-LV1 (operational) | Shot-to-screen latency and frame rate on USB and Wi-Fi, Mac and phone, recorded at hardware acceptance against targets the owner sets after LV-S1…LV-S3. | a design that passes tests and is unusable by eye |
 
@@ -167,10 +195,11 @@ session switch or a relaunch. Placement for every other shot is 10G unchanged.
 
 
 ## Non-goals (this chapter)
-Machine guidance itself; crane controllers; recording video; exposure control from the phone; focus control beyond choosing the focus point (LV-D14); access from outside the studio network; a native iOS app; changes to 10G's placement other than the
+The Mac's live view screen (card LV10: the owner designs it later; the phone comes first — the desktop delivery
+finding, a Tauri channel, stays recorded for then); machine guidance itself; crane controllers; recording video; exposure control from the phone; focus control beyond choosing the focus point (LV-D14); access from outside the studio network; a native iOS app; changes to 10G's placement other than the
 retake aim (MC-LV3).
 
-## ⚠ OWNER DECISIONS REQUIRED (none open)
+## ⚠ OWNER DECISIONS REQUIRED (none open; all answered 2026-11-26)
 Answered 2026-11-26: L1, L7, L9 → LV-D8; L2 → LV-D9; L8 → LV-D10; L4 → LV-D11; L5 → LV-D12; L6 → LV-D13.
 **MC-LV3 (retake aim) confirmed 2026-11-25** as stated: the next photo from any button takes the aimed container
 and denies the old photo, bound at exposure so a late file still lands there; Next returns to where it was; one
@@ -237,3 +266,57 @@ MB/s), not camera battery; LV-S3 measures the Mac cost, and only a real cost reo
 - **Recommendation:** (a) now; (b) only if Wi-Fi battery life turns out to limit real shoots.
 - **On silence:** (a) holds as the working assumption; the gate does not wait on this card.
 - **Trace:** LV-D5, MC-LV2, LV-S2, evidence C11.
+
+**Card LV5 — Where does the next photo go?** — **ANSWERED 2026-11-26: (a)** "correct" → MC-LV3 rewritten (current shot, shooting order, bound at exposure).
+- **Story:** in 10G each shot goes to the container of its place in the **shooting order** (shot 3 → third
+  container in shooting order). The design gives the phone a **current shot**: tapping an empty shot makes it current,
+  each capture fills the current shot, then it moves on to the next empty one. The design's shots run in one order
+  only (its list order, which is the final/published order); it has no shooting order.
+- **Branches:** (a) **one current shot per session**, shown on the phone and as "Next" on the Mac; every exposure,
+  from any button including the camera's own, goes to the current shot **as it was when the camera fired** (so a late
+  Wi-Fi file still lands right); then current moves to the next empty shot **in shooting order**; tapping a shot
+  changes it. The phone dock lists shots in shooting order with their final numbers. (b) Keep 10G's rule; the phone
+  only shows Next and cannot choose. (c) Current shot, but advancing in final order (as the prototype).
+- **Recommendation:** (a): it keeps your shooting order, lets you choose freely, and absorbs today's retake aim
+  (MC-LV3) and 10G's refill into one rule.
+- **On silence:** the gate holds. **Trace:** 10G §4–§6, MC-LV3, design "current".
+
+**Card LV6 — Retake: when does the old photo go?** — **ANSWERED 2026-11-26: (a) design way** → denied at once, undoable.
+- **Story:** the design's Retake **removes the photo at once** ("Shot 02 reopened") and makes that shot current. The
+  rule you confirmed yesterday (MC-LV3) removes the old photo only **when the new one arrives**.
+- **Branches:** (a) as the design: Retake = Deny the old photo now (red, undoable) + make the shot current; (b) as
+  MC-LV3: keep the old photo until the new one arrives.
+- **Recommendation:** (a): what you see is what happens, undo brings it back, and with LV5 (a) no special aim rule
+  is needed. **On silence:** the gate holds. **Trace:** MC-LV3, 10G §6 rules 3–4.
+
+**Card LV7 — Photos after the last template shot: extra Main or Condition?** — **ANSWERED 2026-11-26 (b):** "photos after the template shot are condition, i can make them main if i want to" → 10G §4 rule 4 stays; the design's Free shot is adapted.
+- **Story:** 10G classifies every shot after the last container as **Condition** automatically. The design's
+  **Free shot** adds each capture as an **extra Main image**; photos reach Condition only by "Move image → Condition".
+- **Branches:** (a) as the design: extra Main; Condition by Move; (b) as 10G: automatically Condition (the Free shot
+  tile would then fill Condition); (c) as the design, plus a quick way to send the next captures to Condition.
+- **Recommendation:** (a) if condition photos are few per item; (b) if you usually shoot several damage close-ups
+  after the angles (moving each by hand is slow). **On silence:** the gate holds. **Trace:** 10G §4 rule 4, 06.
+
+**Card LV8 — Moving a photo onto an occupied place: swap or replace?** — **ANSWERED 2026-11-26: (a)** phone swaps, the Mac keeps replace-by-drop.
+- **Story:** the design's Move **swaps** the two photos (nothing is lost); a move into Condition takes a chosen
+  position. On the Mac today, dropping a photo onto a filled container **replaces** it and deletes the old one (10G
+  retake by drop), and a move between Main and Condition goes to the end (06).
+- **Branches:** (a) phone swaps (as designed), the Mac keeps replace-by-drop; (b) both swap; (c) both replace.
+- **Recommendation:** (a): each fits its gesture (an explicit "Move" picker on the phone, a drop on the Mac);
+  revisit if it confuses. **On silence:** the gate holds. **Trace:** 10G §6 rule 3, 06 Order.
+
+**Card LV9 — Clearing focus ("AF LOCKED ×")** — **ANSWERED 2026-11-26: (a)** × also returns the camera's focus point to the centre.
+- **Story:** after a tap the phone shows "AF LOCKED"; × clears it. On the camera the focus point stays where you
+  tapped and each capture refocuses there (measured: the photo is sharp where tapped).
+- **Branches:** (a) × also moves the camera's focus point back to the centre; (b) × only removes the marker; the
+  camera keeps the point.
+- **Recommendation:** (a): otherwise the screen says "no focus point" while the camera still focuses at the old
+  spot. **On silence:** (a). **Trace:** LV-D14, Experiment 10/11.
+
+**Card LV10 — The Mac's live view** — **ANSWERED 2026-11-26: wait**; "i don't think i will be using that view at the moment on the mac, the phone is the most important" → not built now (non-goals).
+- **Story:** the design covers the phone. The chapter says the Mac shows the same views on its stage.
+- **Branches:** (a) the Mac reuses the Shoot Companion view inside Session Manager's window (mouse for gestures);
+  (b) you design the Mac view in Claude Design first, the phone is built first meanwhile; (c) the Mac shows live and
+  template with buttons only, no gestures.
+- **Recommendation:** (b), as you prefer to design before building; nothing in the phone build waits for it.
+- **On silence:** (b). **Trace:** LV-D3, design scope.

@@ -446,3 +446,19 @@ D15. **2026-11-26 — Lab: spike LV-S6 done** (Experiment 11, Wi-Fi, owner-atten
 10/10 taps focused in 0.38–0.83 s; both photos taken after a tap are sharp exactly where tapped; the Mac and the Android
 phone watching together each got every frame (19.4 fps) with none skipped. The iPhone could not reach the Mac that
 session (worked the day before); the owner skipped it. All 10J spikes done; the chapter waits for the phone design.
+
+D16. **2026-11-26 — Owner design: Shoot Companion (phone app).** Handoff in `claude_design/live_preview/
+design_handoff_shoot_companion/` (high fidelity). Recorded: LV-D15 the design is the phone app (gestures; overlay
+opacity gesture replaces LV-D6's style setting), LV-D16 split preview on live, LV-D17 item drawer with an empty "Fill
+item properties" page for later inputs (e.g. 10I), LV-D18 the phone follows the Mac's active session (session
+completion and opening from the phone later). Conflicts with the book raised as cards: LV5 current shot vs 10G shot
+order, LV6 retake timing vs MC-LV3, LV7 after the last shot extra Main vs Condition, LV8 move = swap vs replace,
+LV9 clearing focus, LV10 the Mac's live view.
+
+D17. **2026-11-26 — Owner answers LV5–LV10; 10J READY_FOR_RATIFICATION.** LV5 (a): one current shot per templated
+session, every exposure bound to it at the shutter, advancing in shooting order → MC-LV3 rewritten as "Current shot"
+(absorbs 10G's shot-index placement, refill and the retake aim; amends 10G §4 rule 2 and §6 at ratification). LV6 (a):
+Retake denies the old photo at once (undoable). LV7: shots after the last template shot stay Condition (10G §4 rule 4);
+the design's Free shot adapted. LV8 (a): phone Move swaps, the Mac keeps replace-by-drop. LV9 (a): clearing focus
+returns the camera's focus point to the centre. LV10: the Mac's live view screen waits for a later owner design; the
+phone first.
