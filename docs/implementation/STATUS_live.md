@@ -68,6 +68,14 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
       order) then none (Condition); request→exposed 0.50–0.63 s; AF 305 ms. PASS so far.
     - Finding F1: the real helper's `liveview.exposure` line (shutter/f_number/iso as objects with `display`) is
       "unparsable" in Rust → the phone's exposure readout never shows.
+    - C3 no stale frame on a peek (Android): PASS (owner). C6 reconnect after a 1-min lock (iPhone): PASS; Android also,
+      with the template shown for a moment before live (designed: template until the first fresh frame).
+    - Finding F2: the Android's socket was closed `write_timeout` (one frame write > 2 s, PH5) 5 times in 2 min while on
+      live over Wi-Fi (13:51–13:53), reconnecting 1.4–8 s later (one 43 s gap); later 8 min without a drop. A Wi-Fi stall
+      closes the whole socket instead of skipping frames.
+    - Finding F3: Deny/delete on the **Mac** (`photos_delete` → `ReviewService::delete`) emits no event, so phones update
+      only on their next request (owner: "the phone interface didn't react that fast"). LV3·U0 announced only the
+      phone's own delete (`delete_announced`); every Mac review action needs the same.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
