@@ -1,4 +1,10 @@
-# Live preview — master plan (v1, 2026-11-26)
+# Live preview — master plan (v1, 2026-11-26; v1.1 2026-11-26: fix milestones LV5, LV6 after the paused hardware check)
+
+**v1.1 amendments (2026-11-26, planner, from the LV4 hardware check findings F1–F5, F7 and owner decision LV-D19;
+evidence `STATUS_live.md` §"LV4 hardware check in progress" and the app log `psm.2026-11-26.log`):** §2 (LV5, LV6 and
+the totals), §3 (LV6 `implementer: fable`), §4.3 (`PhoneTimings`), §4.6 (`reason=stalled`), §4.7 (new test stems),
+§5 **CS4a** (F4), **FC4a** (F5), **HB5a** (F1), **PH5a** (F2), **PH6a** (F7), **PH8** (F3), §6 phone texts (LV-D19
+(2)), §7, §9. Each amendment is marked in place; the text it replaces is kept and marked superseded.
 
 Short on purpose. It adds to `docs/implementation/master_plan.md` (roles, standing rules §3, environment §7) and wins
 over it on a name listed here. Process: `docs/process/flow.md` §10 (milestones of units) with the deltas of §3.
@@ -13,7 +19,8 @@ session that binds every exposure (MC-LV3, replacing 10G's shot-index rule, refi
 WebSocket server with per-phone pairing tokens; the owner's **Shoot Companion** phone app; then an owner-attended
 hardware check of M-LV1…M-LV6. Semantics live in 10J and the chapters it amends (10E, 10G, 11); §5 below is what 10J
 leaves to planning: the exact rules of the mechanisms that fail silently. Where 10J and this file differ, 10J wins and
-this file is amended.
+this file is amended. **v1.1:** the hardware check, paused part-way, found six defects (F1–F5, F7) and the owner
+decided LV-D19; `LV5_live_fixes` and `LV6_phone_dock` fix them before `LV4` resumes (§2, §9).
 
 **Not in this track:** the Mac's live view screen and the desktop Tauri-channel outlet (card LV10; the hub's outlet
 interface stays open for it and for machine-guidance subscribers), HTTPS (card LV3), sleep (LV-D5 revised), session
@@ -29,11 +36,14 @@ Milestone ids `LV1`…`LV4` are this track's; they are **not** 10J's card ids LV
 |---|---|---|---|---|---|---|---|---|
 | `LV1_camera_live_view` | sidecar live view, frame channel, focus worker, clean quit (C++, ported from the lab); the live view hub; protocol, fake sidecar, adapter capability and focus | 3 | 17 | 61 | default | no | — | live frames and focus reach the app's hub; nothing visible yet |
 | `LV2_current_shot_and_phone_server` | MC-LV3 in placement; phone operations; pairing and Settings → Phone; the HTTP server; the WebSocket | 5 | 29 | 101 | default | no | LV1 | the Mac shows "Next" as the current shot; a phone can be paired; the server answers (a placeholder page) |
-| `LV3_phone_app` | the Shoot Companion app: shell and live, main screen gestures and capture, shot dock, preview, Move and Item drawers | 4 | 25 | 79 | **fable** | no | LV2 | the photographer shoots from the phone |
-| `LV4_hardware_check` | owner-attended: M-LV1…M-LV6 and the "at hardware acceptance" items on the packaged app | 3 | 20 | 20 | — (owner + orchestrator) | no | LV3 | measured evidence; M-LV6 targets set by the owner |
+| `LV3_phone_app` | the Shoot Companion app: shell and live, main screen gestures and capture, shot dock, preview, Move and Item drawers (+ U0: LV2's server carry-overs, added by the orchestrator 2026-11-26) | 5 | 29 | 85 | **fable** | no | LV2 | the photographer shoots from the phone |
+| `LV5_live_fixes` (v1.1) | hardware-check fixes: shutters on the way until the photo exists (F4); Mac actions announced to phones (F3); preview version (F7 server); a Wi-Fi stall skips frames (F2); Settings → Phone list current; Focus Area not movable reported (F5); exposure readout (F1) | 4 | 12 | 49 | default | no | LV3 | the photographer can try the fixes on the hardware (dock unchanged) |
+| `LV6_phone_dock` (v1.1) | LV-D19: dock without hold gestures (larger tiles, scroll, single tap); pictures never broken (F7 phone); removed text | 2 | 6 | 13 | **fable** | no | LV5 | the dock as the owner asked; tile pictures appear when ready |
+| `LV4_hardware_check` | owner-attended: M-LV1…M-LV6 and the "at hardware acceptance" items on the packaged app (paused 2026-11-26 part-way; resumes after LV6) | 3 | 20 | 20 | — (owner + orchestrator) | no | LV3 (resumes after LV6, §9) | measured evidence; M-LV6 targets set by the owner |
 
-Totals (computed from the plan files by `grep`): 4 milestones, 15 units, 91 criteria, 261 rows; every unit has at most
-8 criteria. Each milestone needs the one before approved (its `depends_on`; gate = the **Tracker** line of that plan
+Totals (computed from the plan files by `grep`, v1.1): 6 milestones, 22 units, 113 criteria, 329 rows; every unit has
+at most 8 criteria. (v1 read 4 milestones, 15 units, 91 criteria, 261 rows; LV3's U0 had not been counted.) Each
+milestone needs the one before approved (its `depends_on`; gate = the **Tracker** line of that plan
 file). Start each with `tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list. `LV4` is never dispatched
 by the runner (its task 0 answers `BLOCKED`, as P52 did).
@@ -50,7 +60,12 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
 - **Implementers (owner, 2026-11-26; supersedes flow log v1.3's "no Fable for implementation" for this track):**
   `LV3_phone_app` carries `implementer: fable` (complex UI and interactions are built and fixed by Fable). `LV1` and
   `LV2` (sidecar, hub, backend, server, the small Settings page) use the default implementer and **never** carry
-  `implementer: fable` (guide: no Fable on camera phases). Reviewer Opus.
+  `implementer: fable` (guide: no Fable on camera phases). Reviewer Opus. **v1.1:** `LV6_phone_dock` (phone UI only)
+  carries `implementer: fable`; `LV5_live_fixes` (sidecar C++, core, server, the small Settings list) uses the default
+  implementer and never carries it.
+- **Projection off for LV5 and LV6 too (v1.1).** The two externally owned shapes in LV5 are grounded, not invented: the
+  helper's `liveview.exposure` line is quoted from the hardware log, and the Focus Area values are the installed SDK's
+  enum (`CrDeviceProperty.h:1456–1485` in the lab's SDK 2.02); the rest are this repo's shapes.
 - **Projection off** for every milestone. Reason: the fixtures are this repo's own shapes (the sidecar protocol and
   frame record of §5 FC, the phone wire of §5 PH); the Sony SDK calls are ported from lab code proven on the a7R V
   (evidence `sony_camera_lab.md` §Live view, §Focus from the live picture) and are checked by `LV4`, not by any test;
@@ -95,7 +110,7 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   `liveview.stopped {epoch, reason, frames, repeats, errors}` · `liveview.unavailable {reason}` ·
   `liveview.stats {epoch, frames, repeats, errors, fps}` (every 10 s while running) · `liveview.focus_frame {frames}`
   (`frames` = the lab's compact array `[[type,state,x_num,x_den,y_num,y_den,w,h],…]`) ·
-  `liveview.exposure {shutter_speed, f_number, iso}` (the decoded strings `props` already produces) ·
+  `liveview.exposure {shutter_speed, f_number, iso}` (the decoded strings `props` already produces; **superseded v1.1 by HB5a**: each value is the `props` object, the app reads its `display`) ·
   `focus.result {cmd_id, x, y, af, point_set, refused, point_ms, af_ms, total_ms}`. Values in §5 FC.
 
 ### 4.2 Core (`crates/core/`)
@@ -149,8 +164,9 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   10E R-I18).
 - New `src/phone/` (LV2): `mod.rs`, `pairing.rs` (`PhonePairings`), `host.rs` (Mac name, URLs, QR SVG), `server.rs`
   (`PhoneServer::start(config, handles: Arc<dyn Fn() -> Result<AppHandles> + Send + Sync>, hub)`, `rebind(port)`,
-  `stop()`; `PhoneTimings {ping: 5 s, idle_close: 15 s, write_timeout: 2 s}`), `auth.rs`, `routes.rs`, `ws.rs`,
-  `wire.rs` (DTOs, frame header, `error_code`), `web_root.rs`.
+  `stop()`; `PhoneTimings {ping: 5 s, idle_close: 15 s, write_timeout: 2 s}` — **superseded v1.1 (F2, PH5a):**
+  `PhoneTimings {ping: 5 s, idle_close: 15 s, stall_close: 15 s}`, `write_timeout` removed), `auth.rs`, `routes.rs`,
+  `ws.rs`, `wire.rs` (DTOs, frame header, `error_code`), `web_root.rs`.
 - Dependencies: `qrcode = { version = "0.15", default-features = false, features = ["svg"] }` (integrations);
   `axum` gains feature `"ws"` (infra's line `axum = "0.8"` → `axum = { version = "0.8", features = ["ws"] }`, and
   integrations depends on `axum` the same way); testkit dev-dependencies `tokio-tungstenite` (the version axum's `ws`
@@ -186,7 +202,8 @@ INTEGER, revoked_at INTEGER)`. Store trait (`crates/core/src/ports/store.rs`) ga
 sent_10s= skipped_10s=` · `live.stop reason=` · `focus.request focus= x= y= af=` · `focus.result focus= outcome= ms=`
 · `current_shot.bound session= exposure= container=` (`container=none` for Condition) · `current_shot.set session=
 container= by=phone|retake|advance|default` · `phone.server listening port= addresses=` · `phone.server error=` ·
-`phone.request route= status= pairing=` · `phone.viewer opened|closed viewer= pairing= reason=`.
+`phone.request route= status= pairing=` · `phone.viewer opened|closed viewer= pairing= reason=` (v1.1: close reasons
+`open`, `closed`, `idle`, `write`, `revoked`, `overflow`, **`stalled`**; `write_timeout` no longer occurs, PH5a).
 
 ### 4.7 Tests
 Rust stems (each with its `mod` line in `crates/testkit/tests/suite/main.rs`): `lv1_live_hub.rs`,
@@ -198,6 +215,13 @@ UI: `apps/desktop/src/features/settings/__tests__/lv2_phone_settings.test.tsx`;
 `apps/desktop/src/phone/__tests__/lv3_<slug>.test.tsx`. Existing tests that encode a rule 10J replaced (10G §4 rule 2,
 §6 refill, `next_shot` by index) in `t2_template_placement.rs`, `t3_template_hand.rs`, `t4_template_retake_shift.rs`
 are rewritten to MC-LV3 in LV2·U1, each listed in the handoff with the rule it encoded.
+**v1.1:** Rust stems `lv5_current_shot.rs`, `lv5_mac_actions.rs`, `lv5_phone_socket.rs`, `lv5_camera_readouts.rs`;
+UI `apps/desktop/src/features/settings/__tests__/lv5_phone_list.test.tsx`, `apps/desktop/src/phone/__tests__/
+lv6_dock.test.tsx`, `lv6_images.test.tsx`; C++ rows added to `native/camera-sidecar/tests/test_liveview.cpp`. Tests
+changed because the behaviour they encoded changed (each listed in its milestone's handoff):
+`lv1_frame_channel.rs::lv1_c15b_exposure_mapping` (an invented exposure shape → the helper's real line, LV5·C12(b));
+the `PhoneTimings` literals in `lv2_phone_ws.rs` and `crates/testkit/src/phone.rs`; six LV3 dock tests removed and
+`lv3_c1c_…` re-texted (LV6, listed in `plans/LV6_phone_dock.md`).
 
 ## 5. Contracts (stand in for the mechanism inventory; plans implement them verbatim)
 
@@ -235,13 +259,26 @@ the socket. `liveview.stats` every 10 s.
 `cmd.received`; invalid x/y (outside 0…639 / 0…479 or missing) → `cmd.rejected {reason: "bad_point"}`; not connected →
 the existing `not connected (…)` rejection; else queued, then `cmd.done` (= accepted). Queue depth 1: a job waiting
 when a newer one arrives is replaced and answered `focus.result {cmd_id: <old>, af: "superseded", point_set: false}`.
-A job: (1) under the **action lock**; (2) `focus_state()`: `AF_Area_Position` not settable → `focus.result {refused:
+A job: (1) under the **action lock**; (2) `focus_state()`: `AF_Area_Position` not settable (**test superseded v1.1 by FC4a**: the Focus Area value decides) → `focus.result {refused:
 "focus_area_not_movable", point_set: false, af: "skipped"}` and **nothing is written**; (3) `set_focus_point(x, y)`
 (confirmation by the focus frame, ≤ 1 s, as the lab); (4) `af=1` → `autofocus(3000)` (S1 locked, wait, S1 unlocked),
 `af=0` → `"skipped"`; (5) `focus.result {af: focused|not_focused|no_af_report|skipped, …, total_ms}`. While idle the
 worker reads the focus frames every 250 ms and the exposure (`f_number`, `shutter_speed`, `iso`, decoded as `props`
 does) every 1000 ms, emitting `liveview.focus_frame` / `liveview.exposure` **only when changed**. Neither ever runs on
 the pull thread.
+**FC4a Movable Focus Area (amended 2026-11-26, v1.1, finding F5; replaces FC4 step (2)'s test).** On the a7R V with
+Focus Area **Wide**, `AF_Area_Position` stays settable, the point write is accepted, no focus frame confirms it
+(`point_ms = -1`) and the half-press focuses where the camera chooses (log 14:13:50–14:14:09, `outcome=Focused`): step
+(2)'s "not settable" test never fires. Step (2) is now: refuse (same `focus.result`, nothing written) unless
+`focus_area_movable(focus_area, area_read, position_writable)` is true, a pure function: `area_read` (the camera has a
+`FocusArea` property) → true iff `position_writable` and the value is one of 4, 5, 6, 7, 8 (Flexible Spot S/M/L, Expand
+Flexible Spot, Flexible Spot), 0x14–0x18 (Tracking: Flexible Spot S/M/L, Expand, Flexible Spot), 0x19–0x1D (Flexible
+Spot XS/XL/FreeSize1–3), 0x23–0x27 (Tracking: Flexible Spot XS/XL/FreeSize1–3); every other value (0 Unknown, 1 Wide,
+2 Zone, 3 Center, 0x11–0x13 Tracking Wide/Zone/Center) → false. `!area_read` → `position_writable` (the old rule, for a
+camera without the property). Values: the installed SDK 2.02 header `CrDeviceProperty.h:1456–1485` (`enum
+CrFocusArea`); the lab saw Flexible Spot S = 4 movable and the a7R V offering 1–7, 26–29 (Experiment 10). A movable
+area whose point is not confirmed by a focus frame (e.g. a tap near the edge, where the camera clamps the point) still
+runs AF. The Focus Area is never written (LV-D14, FC6).
 **FC5 Capture and the action lock.** `capture` keeps 10E's half-press-then-release (`af=1`) on the main loop, exactly as
 today, but holds the action lock: it waits for a running focus job and no focus job starts during it. A capture after
 a tap therefore refocuses at the tapped point ("capture-at-point"; evidence Experiment 11: photo sharp where tapped).
@@ -283,9 +320,19 @@ never queues and never delays `publish`, another viewer, the control line or cap
 **not** used: a recentre reports `Focused` only if the camera reported so, else `NoReport`), `liveview.focus_frame` →
 `FocusFrames` (`cx = x_num/x_den`, `cy = y_num/y_den`, `w = width/640`, `h = height/480`, state 2→Focused,
 1→NotFocused, else Unknown; a zero denominator drops that frame), `liveview.exposure` → `Exposure` ("f/8", "1/125",
-"ISO 100": `f_number` without a trailing ".0", shutter as the camera's fraction or seconds with `"`, ISO prefixed),
+"ISO 100": `f_number` without a trailing ".0", shutter as the camera's fraction or seconds with `"`, ISO prefixed; **superseded v1.1 by HB5a**),
 `capture.acknowledged success=false` / `capture.exposure_missing` → `Capture{Failed}`, `capture.acknowledged
 success=true` → `Acknowledged`, `capture.exposed` with an app capture id → `Exposed`.
+**HB5a Exposure line and readout (amended 2026-11-26, v1.1, finding F1; replaces the `liveview.exposure` clause of HB5
+and §4.1's "(the decoded strings `props` already produces)").** The real helper sends each of `shutter_speed`,
+`f_number`, `iso` as the `props` object `{code, value, value_hex, display, writable, readable}`, or the string `""` when
+it could not read the property (evidence: the line logged at 2026-11-26T14:06:58.216844Z as "unparsable", quoted in
+`plans/LV5_live_fixes.md` U4). The protocol reads a field that is a string as its display, an object with a string
+`display` as that string; anything else makes the line unparsable (as today). The readout maps the displays the
+helper's `decode` produces (`native/camera-sidecar/src/camera_properties.cpp`): **aperture** `F<a>.<b>` → `f/<a>` when
+`<b>` is `0`, else `f/<a>.<b>` ("F8.0" → "f/8", "F5.6" → "f/5.6", "F11.0" → "f/11"); **shutter** unchanged ("1/80",
+`2.5"`, "BULB"); **ISO** `ISO <n>` unchanged, `AUTO` → "ISO AUTO"; a display that is empty or `special` → "–" (en dash)
+for that part.
 **HB6 Focus API.** `focus(provider, p)`: `!capabilities().focus_point` → `FocusUnsupported`; `p.x`/`p.y` not finite or
 outside `[0, 1]` → `InvalidValue`; else `provider.focus(p, true)`. `focus_clear(provider)` = `provider.focus({0.5,
 0.5}, false)` (× recentres, card LV9). Direct adapter: `to_grid` = `(round(x·639), round(y·479))` clamped (lab
@@ -323,6 +370,17 @@ occupied by a hold (CS2)} (reported shutters whose files are on the way, `FIFO_W
 the first container after `from` in `order` not taken, else the first in `order` not taken, else `Free`. After a
 `Free` binding the same rule runs with `after = None` (first not taken, else `Free`): 10J's rule "else the first empty
 one" applies to a Condition shot too (the book wins over the prototype's "stay in free shot"; planning point P1 in LV2).
+**CS4a On the way until the photo exists (amended 2026-11-26, v1.1, finding F4; makes CS4's "reported shutters whose
+files are on the way" exact).** A hold ended when the exposure's file was **filed** (a `camera_deliveries` row with its
+`exposure_id`), but the photo row appears only when the arrival scan takes the file in (≈ 1.1 s later on Wi-Fi), so in
+that gap the container was neither held nor filled and the advance aimed at it (log: exposure 61 at 14:07:02.224 →
+`set container=10 by=advance` while exposure 60's file, filed at 14:07:01.78, became a photo at 14:07:02.82). A
+reported shutter is **on the way**, and holds its slot in CS2 exactly as a hold does, while: it is an exposure of the
+session, `now − exposed_at ≤ FIFO_WINDOW_MS`, and **no photo of the session has `raw_path` equal to the `final_path`
+of one of its non-duplicate deliveries** (whether its file is not delivered, pending, or filed and not taken in).
+`taken`, `default_shot`, `advance`, `current` and `set` use this set; nothing else in CS1–CS8 changes. MC-LV3's "a
+container with a bound, pending exposure is not empty" is the invariant; the arrival of the pending file never moves
+the current shot (it fills a container that was already taken).
 **CS5 Binding an exposure** (`LedgerService::exposure_observed`, inside the ledger worker lock, before the exposure row
 is inserted): `s` = the active session (as today). Templated: `b = current(s)`; the row is inserted with `shot_bound =
 1`, `shot_container_id = b` (Free → NULL); then the held current becomes `advance(s, b)` with the new exposure counted
@@ -398,9 +456,18 @@ text: `{type: "demand", gen, live, visible}` (answered by `demand_ack` after `se
 **binary** (one frame per message): 32-byte little-endian header `0..4` `b"PSMF"` · `4` version `1` · `5` flags `0` ·
 `6..8` reserved · `8..16` `seq` u64 · `16..20` `gen` u32 · `20..22` width u16 · `22..24` height u16 · `24..32`
 `captured_at_ms` i64; then the JPEG bytes exactly as received from the sidecar (H3). **Lifecycle:** a WS ping every
-`ping` (5 s); no pong or message for `idle_close` (15 s) → close 4408 and unsubscribe; a frame write not finished in
-`write_timeout` (2 s) → close 4408; a close → unsubscribe at once; each viewer's frame buffer is a `LatestSlot` and its
+`ping` (5 s); no pong or message for `idle_close` (15 s) → close 4408 and unsubscribe; ~~a frame write not finished in
+`write_timeout` (2 s) → close 4408~~ (superseded v1.1 by PH5a); a close → unsubscribe at once; each viewer's frame buffer is a `LatestSlot` and its
 event queue holds at most 64 messages (overflow → close 4409). Several phones each get their own viewer (LV-D12).
+**PH5a Stalls (amended 2026-11-26, v1.1, finding F2; replaces "a frame write not finished in `write_timeout` (2 s) →
+close 4408").** Over Wi-Fi one frame write regularly took longer than 2 s and the whole socket was closed (Android 5×
+in 2 min, `phone.viewer closed … reason=write_timeout` 13:51–13:53; iPhone 14:15:43). Now: **one write in flight at a
+time, never cut short** (a WebSocket message dropped mid-write corrupts the stream); while it is in flight newer frames
+replace the one waiting in the viewer's `LatestSlot` (the phone skips frames, MC-LV1/HB4); pings are sent between
+writes; a write that has not finished after `stall_close` (default 15 s) → close 4408 `"stalled"` and unsubscribe; no
+message heard for `idle_close` (15 s) → 4408 as before; revoke (4401) and a reader that ended are served while a write
+is in flight (the write is dropped, the socket closed, the viewer gone within 1 s, PH1). Text writes follow the same
+rule. `PhoneTimings {ping: 5 s, idle_close: 15 s, stall_close: 15 s}` (§4.3).
 **PH6 PhoneSessionView** (`phone_view`): `{session: null | {id, item: {name (item title), sku, article_number: <string>
 |null /*the item's barcode, owner card 1 answered 2026-11-26*/}, templated, current: {kind: "shot", container_id} | {kind: "free"} | null (untemplated),
 shots: [{container_id, final_no, shoot_no, name (container name or "Container <final_no>"), ratio: <f64>|null, split,
@@ -409,6 +476,14 @@ order), condition: [Image] (Condition order), counts: {main, condition}}}`, `Ima
 <f64>|null}`. `ratio` = `shot_ratio(presets, settings.default_shape)`: split → 2.0; `1:1` 1.0, `4:5` 0.8, `3:2` 1.5,
 `2:3` 0.6667, `16:9` 1.7778; `original`/`free` → null (the phone uses the live frame's aspect). Untemplated: `shots:
 []`, `extras` = the Main list.
+**PH6a Preview version (amended 2026-11-26, v1.1, finding F7).** `Image = {photo_id, revision, ratio, preview:
+<string>|null}`. `preview` = null while the photo has no preview file the preview route can serve (`preview_file`
+gives none, or that file is missing on disk); otherwise a token that changes whenever the served file changes (its path
+or its modification time); never a path or any part of one. The preview route ignores extra query parameters. The
+phone requests a preview only when `preview` is a string, with `&v=<preview>` in the URL, and re-requests when it
+changes (the `session` message after the preview step's `PhotoChanged` brings the new token). Evidence: 31 × `404` on
+`/photos/{id}/preview` at the hardware check, requested before the previews existed (`arrival.preview_ready` ≈ 2.7 s
+after the photo row) with a URL that never changed.
 **PH7 Phone client rules** (LV3). Token: `?pair=` on `/phone/` → `localStorage["psm.phone.token"]`, removed from the URL
 (`history.replaceState`), manifest link `href="/phone/manifest.webmanifest?pair=<token>"` set at start (so an installed
 iPhone app starts with its token). Every request sends `Authorization: Bearer`; images and the socket use `?pair=`.
@@ -421,6 +496,17 @@ reconnect at once if closed; on open, send the current demand with a new `gen`. 
 other secure-context API anywhere in the phone app (card LV3). **Full screen** button shown iff
 `document.fullscreenEnabled && !document.fullscreenElement && !standalone` (Android over HTTP; iPhone installs full
 screen).
+**PH8 Change announcements (added 2026-11-26, v1.1, finding F3).** PH5's `session` message depends on the App's
+`SessionChanged`/`PhotoAdded`/`PhotoChanged`, but the Mac's review actions emitted none (`photos_delete` →
+`ReviewService::delete`: nothing; LV3·U0 announced only the phone's own delete) and an undo/redo announced only step
+kinds that report changed photos (Composition, Template). Every operation of a core or application service that
+commits a change to what `phone_view` returns for a session emits, after the commit, `PhotoChanged{photo, s}` for each
+photo whose place, classification or image it changed (where it knows them) and `SessionChanged{s}` for each session
+it changed. Emitters: `ReviewService` (`classify` incl. restore from Deleted, `reorder`, `delete`, `keep_published`,
+`move_photos` (source and target), `copy_photos` (target)); `HistoryService` undo and redo of **every** step kind (each
+session in the step's touched set); `HandAction::finish`, `CurrentShots`, the preview step and arrival as today. Tauri
+commands and HTTP handlers never emit (H8); the phone's delete uses the same announcing path as the Mac's (no double
+event).
 **Invariant PH.** No request without a live pairing reaches a service; no POST acts on a session other than the
 active one; the phone uses only relative URLs and no secure-context API.
 
@@ -443,7 +529,9 @@ active one; the phone uses only relative URLs and no secure-context API.
   IPv4 of `psm_infra::net::local_addresses`) is shown as text with its own QR (the iPhone could not reach the Mac by
   name once, Experiment 11).
 - **Phone texts** (exact): "Scan the QR code in Session Manager → Settings → Phone to connect this phone." (no token) ·
-  "This phone was removed in Session Manager. Scan a new QR code to connect it again." (401) · "Camera not connected" ·
+  ~~"This phone was removed in Session Manager. Scan a new QR code to connect it again."~~ (401; **superseded v1.1,
+  LV-D19 (2)**: "This phone was removed in Session Manager. Delete this app from the home screen, then scan the new QR
+  code in Session Manager → Settings → Phone and add it again.", for the 401 and the socket's 4401) · "Camera not connected" ·
   "Live unavailable on this camera" · "Camera busy" · "Could not focus there" (not focused) · "Set the camera's Focus
   Area to a movable spot (e.g. Flexible Spot) to focus from the phone" (refused) · "Not taken. Try again." (capture
   failed) · "Session changed on the Mac" (409). Toasts otherwise exactly as the design README §7 lists, plus "Condition
@@ -455,7 +543,8 @@ active one; the phone uses only relative URLs and no secure-context API.
 
 ## 7. Tracker
 Each plan file's **Tracker** line is that milestone's row (sessions change only that line). Current: all four
-`NOT_STARTED` (2026-11-26).
+`NOT_STARTED` (2026-11-26). (v1.1: LV1–LV3 are APPROVED per their plan files; LV4 is paused part-way, record in
+`STATUS_live.md`; `LV5_live_fixes` and `LV6_phone_dock` written `NOT_STARTED` 2026-11-26.)
 
 ## 8. Environment (verified on this Mac, 2026-11-26, worktree `Photo-Session-Manager-live`)
 | What | Command (repo root unless stated) | Measured |
@@ -477,7 +566,12 @@ Closing gate of every build milestone, once, one command after the other: `cd ap
 `cd apps/desktop && npm run typecheck` · `npm test`. If reality disagrees with this table, the session updates it.
 
 ## 9. Sequencing
-`LV1` → `LV2` → `LV3` → `LV4`, strictly (each needs the previous APPROVED). `LV2` needs `LV1`'s hub and focus API;
+`LV1` → `LV2` → `LV3` → `LV4`, strictly (each needs the previous APPROVED). **v1.1 (2026-11-26, the hardware check
+paused for fixes):** `LV1` → `LV2` → `LV3` → `LV5` → `LV6` → `LV4` (resumed). `LV5` needs `LV3`; `LV6` needs `LV5`
+(the `preview` token of PH6a, served by LV5·U2); `LV4` resumes on a packaged build that includes `LV6`, owner-attended,
+never run by the runner; its rows already passed are kept, the rows that found F1–F5, F7 (C18, the exposure readout,
+the stall rows, the dock look) are re-run. (The LV4 plan file's `depends_on` still reads `LV3_phone_app`; the
+orchestrator updates it when resuming, it is outside this planning session's write perimeter.) `LV2` needs `LV1`'s hub and focus API;
 `LV3` needs `LV2`'s routes and wire (frozen in §5 PH, so `LV3`'s tests mock them); `LV4` needs the packaged build of
 `LV3`. Owner card 1 answered 2026-11-26: "Article number" is the item's barcode (the Shopify product barcode Session Manager
 already reads); LV2·C9(b) fills it, LV3·C24(a) hides the row only when an item has no barcode.

@@ -3,7 +3,7 @@ phase: LV4_hardware_check
 title: Hardware check (owner-attended, camera and phones needed) — live view on the phone over USB and Wi-Fi, no stale frame on a switch, several phones, reconnect after sleep, iPhone and Android install; captures from phone, Mac and camera button land in the right shot even when files arrive late; retake; Condition after the last shot; tap-to-focus and sharp photos; × recentres; no camera setting changed; clean stop; frame rate and delay measured and targets set
 difficulty: normal
 projection: no
-depends_on: [LV3_phone_app]
+depends_on: [LV6_phone_dock]
 blocked_on: none
 ---
 # LV4 — Hardware check (book 10J M-LV1…M-LV6; owner-attended)

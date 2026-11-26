@@ -107,6 +107,11 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
       dock without hold gestures (bigger tiles, scroll, single tap); reinstall after Remove.
   - **Fix planning launched:** planner (Opus) with `prompts/reviewer/live_fix_plan_r1.md` → LV5_live_fixes (default
     implementer: F1–F5, F7 server half, Settings list) and LV6_phone_dock (Fable: LV-D19 dock, F7 phone half, removed text).
+  - **Fix plan written** (handoff `handoffs/reviewer/handoff_live_fix_plan_r1.md`, 0 owner cards): LV5_live_fixes
+    (default implementer; F1–F5, F7 server half, Settings list; F4 root cause: ~1 s between a file reaching the Mac and
+    its photo row) and LV6_phone_dock (Fable; LV-D19 dock, F7 phone half, removed text). Planner choices: tiles 56 px;
+    a still touch is a tap; only Flexible Spot (incl. tracking) counts as movable; sockets survive stalls ≤ 15 s;
+    Settings list refresh 5 s; missing exposure value "–". LV4 now depends on LV6. **LV5 started.**
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -115,7 +120,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-- Fix planner relaunched after the usage limit reset (`.pipeline/runs/live_fix_plan_r1.log`).
+- `tools/pipeline/run_phase.sh phase LV5_live_fixes`, started 2026-11-26.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
