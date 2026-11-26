@@ -34,7 +34,7 @@ test('lv3_c1c_a_removed_phone_forgets_its_token_and_says_so', async () => {
   env.mac.answer('GET /api/phone/v1/hello', 401, { error: { code: 'pairing_unknown', message: 'pairing_unknown' } });
   await mountPhone();
   expect(window.localStorage.getItem('psm.phone.token')).toBeNull();
-  expect(screen.getByText('This phone was removed in Session Manager. Scan a new QR code to connect it again.')).toBeTruthy();
+  expect(screen.getByText('This phone was removed in Session Manager. Delete this app from the home screen, then scan the new QR code in Session Manager → Settings → Phone and add it again.')).toBeTruthy();
 });
 
 // ---- LV3·C2: the connecting overlay ----

@@ -67,13 +67,13 @@ test('lv3_c23b_the_preview_stays_open_on_the_image_in_its_new_place', async () =
   await openMove(env);
   // The Mac swapped them: B's photo is now the extra, the old extra is in B.
   env.mac.view = { session: chairSession(s => {
-    s.shots[0].photo = { photo_id: PHOTO_EXTRA, revision: 1, ratio: 1 };
-    s.extras = [{ photo_id: PHOTO_B, revision: 1, ratio: 1 }];
+    s.shots[0].photo = { photo_id: PHOTO_EXTRA, revision: 1, ratio: 1, preview: 'k0' };
+    s.extras = [{ photo_id: PHOTO_B, revision: 1, ratio: 1, preview: 'k0' }];
   }) };
   await pick(mainTile(3));
   const preview = within(screen.getByTestId('preview'));
   expect(preview.getByText('IMAGE 04 · EXTRA')).toBeTruthy();
-  expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe(`/api/phone/v1/photos/${PHOTO_B}/preview?pair=T&r=1`);
+  expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe(`/api/phone/v1/photos/${PHOTO_B}/preview?pair=T&r=1&v=k0`);
   expect(preview.getByRole('button', { name: 'Delete' })).toBeTruthy();
 });
 

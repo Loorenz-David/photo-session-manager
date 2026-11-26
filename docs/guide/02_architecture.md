@@ -1057,7 +1057,8 @@ the direct adapter only.
   - `geometry.ts` — `viewportBox`, `isRotated` (> 1.2), `localPoint` (image-local coordinates in a rotated viewport),
     `tapToFrame` (undo the zoom about the centre, then the cover crop → 0…1 of the full live frame for `POST
     /focus`), `ratioLabel`. `gestures.ts` — the design's thresholds as pure rules (`touchMode`, `lockProgress`,
-    `overlayValue`, `isDoubleTap`, `tileScale`) and the haptic patterns (`HAPTIC`, `buzz`).
+    `overlayValue`, `isDoubleTap`), the dock's tap rule (`DOCK`: a touch within 8 px is a tap, the nearest tile within
+    32 px; LV6 removed `tileScale` and the hold gestures) and the haptic patterns (`HAPTIC`, `buzz`).
   - `components/` — `Stage` (the image viewport, its layers and one-finger gestures; `ImageFrame` sizes it from the
     stage and the shot's ratio and is reused by `Preview`), `LiveCanvas` (the JPEG drawn as it arrived with
     `createImageBitmap`; always mounted, shown by opacity only once a frame of the current `gen` is drawn),
@@ -1065,9 +1066,15 @@ the direct adapter only.
     `ControlBar`, `Dock`, `Preview`, `MoveDrawer`, `ItemDrawer`, `PropertiesPage`, `Toast`, `ConnectingOverlay`,
     `FullscreenButton`. `phone.css` holds the design tokens as CSS variables; values that change with state are
     inline styles. IBM Plex Mono is bundled (`@fontsource/ibm-plex-mono`, latin 400/500), never fetched at runtime.
+  - **The image rule (LV6; §5 PH6a, finding F7).** Every photo preview on the phone is drawn by
+    `components/PhotoImage.tsx` (dock, Preview, Move drawer), never by a bare `<img>`: it asks for
+    `photos/<id>/preview?pair=…&r=<revision>&v=<preview>` (`api.ts::previewUrl`) only while the session view's
+    `preview` token is a string; while it is null, or after a load error, it shows a plain placeholder (`.ph-photo-wait`;
+    "Preparing preview…" in the Preview). A failed load is asked again three times, 2 s apart (`&try=<n>`, which the
+    Mac ignores); a new `preview` or `revision` starts over.
   - Capture feedback: flash and haptic at the tap; the toast waits for the socket's `capture exposed` for that
     capture id and then for the session re-read that shows a new photo (its place decides the text).
-  - Tests: `src/phone/__tests__/lv3_*.test.ts(x)` render `PhoneApp` against `helpers.ts`'s fake Mac (a `fetch` and a
+  - Tests: `src/phone/__tests__/lv3_*.test.ts(x)` and `lv6_*.test.tsx` render `PhoneApp` against `helpers.ts`'s fake Mac (a `fetch` and a
     `WebSocket` the test plays), so the request bodies and demand messages asserted are the real ones; the helper also
     supplies what jsdom lacks (pointer events with coordinates, `vibrate`, Fullscreen, `createImageBitmap`, a canvas
     drawer spy, a layout for the stage, viewport and dock).

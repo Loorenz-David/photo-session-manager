@@ -326,7 +326,7 @@ export const PHOTO_C1 = 203;
 export function chairSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
   const shot = (container_id: number, final_no: number, shoot_no: number, name: string, photo_id: number | null) => ({
     container_id, final_no, shoot_no, name, ratio: 1, split: false, zoom: 0, example: true,
-    photo: photo_id === null ? null : { photo_id, revision: 1, ratio: 1 },
+    photo: photo_id === null ? null : { photo_id, revision: 1, ratio: 1, preview: 'k0' },
   });
   const session: PhoneSession = {
     id: 7,
@@ -334,8 +334,8 @@ export function chairSession(change: (session: PhoneSession) => void = () => und
     templated: true,
     current: { kind: 'shot', container_id: A },
     shots: [shot(B, 2, 1, 'Back', PHOTO_B), shot(A, 1, 2, 'Front', null), shot(C, 3, 3, 'Container 3', null)],
-    extras: [{ photo_id: PHOTO_EXTRA, revision: 1, ratio: 1 }],
-    condition: [{ photo_id: PHOTO_C1, revision: 1, ratio: 1 }],
+    extras: [{ photo_id: PHOTO_EXTRA, revision: 1, ratio: 1, preview: 'k0' }],
+    condition: [{ photo_id: PHOTO_C1, revision: 1, ratio: 1, preview: 'k0' }],
     counts: { main: 2, condition: 1 },
   };
   change(session);

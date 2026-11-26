@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { exampleUrl, type PhoneSession, previewUrl } from '../api';
+import { exampleUrl, type PhoneSession } from '../api';
 import { type MoveTile, moveTiles, type PreviewSubject } from '../state';
+import { PhotoImage } from './PhotoImage';
 
 type Props = {
   token: string;
@@ -18,7 +19,7 @@ function Tile({ token, tile, inverted, onPick }: { token: string; tile: MoveTile
   return <button type="button" className="ph-move-tile" disabled={source} aria-label={`${tile.tag || tile.name} ${tile.state}`} style={{ opacity: source ? 0.45 : 1 }}
     onClick={() => onPick(tile)}>
     <div className={`ph-move-thumb${end ? ' ph-move-thumb-end' : ''}`} style={{ outline: `2px solid ${source ? '#111' : 'transparent'}`, outlineOffset: '2px' }}>
-      {tile.image && <img className="ph-cover ph-move-image" alt="" draggable={false} src={previewUrl(token, tile.image)} />}
+      {tile.image && <PhotoImage token={token} image={tile.image} className="ph-cover ph-move-image" />}
       {!tile.image && tile.example !== null && <img className="ph-cover ph-move-image ph-grey" alt="" draggable={false} src={exampleUrl(token, tile.example)} />}
       {end && <svg className="ph-move-plus" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>}
       {tile.tag && <span className={`ph-tag ph-move-tag${inverted ? ' ph-tag-inverted' : ''}`}>{tile.tag}</span>}

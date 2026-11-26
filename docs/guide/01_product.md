@@ -243,7 +243,9 @@ label printed itself. Same key and store as conversations; labels need the scope
 - **Retake** (phone) denies the photo in a shot at once (undoable) and makes that shot current; the next shot fills it
   with its presets. A Deny on the Mac no longer refills the container by itself; "Shift the rest back" stays (P3).
 - **Pairing.** Settings → Phone → Pair a phone shows a QR code; the phone opens the app from it and keeps its token.
-  The phone server is on by default on port 8686 and answers only paired phones (P4). Remove stops a phone at once.
+  The phone server is on by default on port 8686 and answers only paired phones (P4). Remove stops a phone at once;
+  its installed app stays unpaired, so the phone's screen says to delete the app from the home screen and add it
+  again from the new QR code (LV6, LV-D19).
 - **Session guard.** Every phone action names its session; if the Mac switched session in between, the phone is told
   "Session changed on the Mac" and nothing happens (P5).
 - **The phone app ("Shoot Companion", LV3; the owner's design, book 10J §The phone design).** Plain HTTP, no install
@@ -257,8 +259,11 @@ label printed itself. Same key and store as conversations; labels need the scope
   - **Shutter.** Flash and haptic at once; the toast ("Shot 04 captured", "Condition image added") comes when the Mac
     shows where the photo landed. The phone never moves the current shot itself: it shows what the Mac says.
   - **Shot dock.** Template shots in shooting order with their final numbers, extra Main images, the **Free shot** tile
-    (in a templated session its captures are Condition, card LV7), then Condition images (C1…). Tap selects an empty
-    shot or opens an image; hold magnifies; hold and drag up opens. **Next** jumps to the next empty shot in shooting
+    (in a templated session its captures are Condition, card LV7), then Condition images (C1…). 56 px tiles that
+    **scroll sideways**; a **single tap** (however long the finger rests) selects an empty shot or opens an image's
+    preview; there is no hold gesture on the dock (LV6, book 10J LV-D19: no magnifier, no drag-up). A photo whose
+    preview the Mac has not made yet shows a plain grey tile with its number; the picture appears by itself, never
+    a broken image. **Next** jumps to the next empty shot in shooting
     order, then to Free shot. In Free shot live is always on (there is no template to show).
   - **Preview.** A captured image with Back, **Retake** (template shots: the photo is denied at once, undoable on the
     Mac, and the shot is current again) or **Delete** (extras, condition = Deny), and **Move image**: any Main

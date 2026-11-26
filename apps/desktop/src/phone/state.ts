@@ -10,7 +10,8 @@ import type { CameraMessage } from './socket';
 /** master_plan_live §6: the phone's texts. */
 export const TEXT = {
   notPaired: 'Scan the QR code in Session Manager → Settings → Phone to connect this phone.',
-  removed: 'This phone was removed in Session Manager. Scan a new QR code to connect it again.',
+  /** LV-D19 (2): a removed phone's installed app stays unpaired; it is deleted and added again. For the 401 and the socket's 4401. */
+  removed: 'This phone was removed in Session Manager. Delete this app from the home screen, then scan the new QR code in Session Manager → Settings → Phone and add it again.',
   cameraNotConnected: 'Camera not connected',
   liveUnavailable: 'Live unavailable on this camera',
   cameraBusy: 'Camera busy',

@@ -174,6 +174,19 @@ body,
 .ph-grey {
   filter: grayscale(1);
 }
+/* A photo whose preview is not ready, or did not load: a plain fill instead of a broken image (PH6a). */
+.ph-photo-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: var(--ph-fill);
+  color: var(--ph-secondary);
+  font-size: 13px;
+  pointer-events: none;
+}
 .ph-image-label {
   position: absolute;
   bottom: 12px;
@@ -817,7 +830,7 @@ body,
   aspect-ratio: 1;
   box-sizing: border-box;
   border-radius: 10px;
-  background: #eee;
+  background: var(--ph-fill);
 }
 .ph-move-thumb-end {
   background: var(--ph-white);

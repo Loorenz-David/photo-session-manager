@@ -1,9 +1,10 @@
 import { type Dispatch, type PointerEvent as ReactPointerEvent, useRef, useState } from 'react';
-import { exampleUrl, previewUrl } from '../api';
+import { exampleUrl } from '../api';
 import { isRotated, type LocalPoint } from '../geometry';
 import { buzz, HAPTIC, overlayValue, SLIDE_PX } from '../gestures';
 import { type Action, previewHeader, type PreviewSubject } from '../state';
 import { OverlayBar } from './OverlayBar';
+import { PhotoImage } from './PhotoImage';
 import { ImageFrame, pointerLocal } from './Stage';
 
 type Pointer = ReactPointerEvent<HTMLDivElement>;
@@ -72,7 +73,7 @@ export function Preview({ token, subject, ratio, overlay, dispatch, backLabel, o
     </div>
     <ImageFrame ratio={ratio} testId="preview-viewport" onPointerDown={down} onPointerMove={move} onPointerUp={release} onPointerCancel={release}>
       {hasTemplate && subject.shot.example && <img className="ph-cover ph-grey" alt="" draggable={false} src={exampleUrl(token, subject.shot.container_id)} />}
-      <img className="ph-cover ph-preview-photo" data-testid="preview-photo" alt="" draggable={false} src={previewUrl(token, subject.image)} style={{ opacity: holding ? overlay / 100 : 1 }} />
+      <PhotoImage token={token} image={subject.image} className="ph-cover ph-preview-photo" testId="preview-photo" style={{ opacity: holding ? overlay / 100 : 1 }}>Preparing preview…</PhotoImage>
       <div className="ph-top-row">
         <div className={`ph-pill${holding ? '' : ' ph-pill-dark'}`} data-testid="preview-pill">{holding ? 'TEMPLATE' : header.mode}</div>
       </div>

@@ -48,8 +48,11 @@ export class ApiError extends Error {
 }
 
 export type Hello = { api: number; pairing: { id: number; name: string }; mac_name: string; features: string[] };
-/** PH6 `Image`. `ratio` null = the photo keeps the camera's own shape. */
-export type PhoneImage = { photo_id: number; revision: number; ratio: number | null };
+/**
+ * PH6 `Image`. `ratio` null = the photo keeps the camera's own shape. PH6a: `preview` is null while
+ * the Mac has no preview file to serve, otherwise a token that changes whenever that file does.
+ */
+export type PhoneImage = { photo_id: number; revision: number; ratio: number | null; preview: string | null };
 export type PhoneShot = {
   container_id: number;
   final_no: number;
@@ -118,9 +121,16 @@ export const movePhoto = (token: string, photo_id: number, session_id: number, t
 export const deletePhoto = (token: string, photo_id: number, session_id: number) =>
   request<unknown>('POST', `/photos/${photo_id}/delete`, token, { session_id });
 
-/** The photo's preview as the Mac shows it; `revision` only makes the browser fetch a changed one again. */
-export const previewUrl = (token: string, image: PhoneImage) =>
-  `${API}/photos/${image.photo_id}/preview?pair=${encodeURIComponent(token)}&r=${image.revision}`;
+/**
+ * The photo's preview as the Mac shows it, or `null` while the Mac has none to serve (PH6a: never
+ * ask before `preview` is a string). `r` and `v` only make the browser fetch a changed picture
+ * again; `attempt` > 0 marks a retry after a failed load (`&try=<n>`; the Mac ignores it).
+ */
+export function previewUrl(token: string, image: PhoneImage, attempt = 0): string | null {
+  if (image.preview === null) return null;
+  const url = `${API}/photos/${image.photo_id}/preview?pair=${encodeURIComponent(token)}&r=${image.revision}&v=${encodeURIComponent(image.preview)}`;
+  return attempt > 0 ? `${url}&try=${attempt}` : url;
+}
 /** The container's template example as stored (black and white is the phone's own display filter, H3). */
 export const exampleUrl = (token: string, container_id: number) => `${API}/containers/${container_id}/example?pair=${encodeURIComponent(token)}`;
 /** PH5: the socket's address follows the page's scheme (`ws:` from `http:`, `wss:` from `https:`). */

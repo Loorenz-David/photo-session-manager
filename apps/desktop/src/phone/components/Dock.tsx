@@ -1,7 +1,8 @@
 import { type PointerEvent as ReactPointerEvent, useRef } from 'react';
-import { exampleUrl, type PhoneSession, previewUrl } from '../api';
+import { exampleUrl, type PhoneSession } from '../api';
 import { DOCK } from '../gestures';
 import { type DockTile, dockTiles, tileImage } from '../state';
+import { PhotoImage } from './PhotoImage';
 
 type Pointer = ReactPointerEvent<HTMLDivElement>;
 type Props = {
@@ -83,7 +84,7 @@ export function Dock({ token, view, rotated, enabled, onSelect }: Props) {
             <div key={tile.key} data-dock-k={tile.key} aria-label={tile.kind === 'free' ? 'Free shot' : tile.label} aria-current={tile.current || undefined}
               className={`ph-dock-tile${tile.kind === 'free' ? ' ph-dock-free' : ''}`}
               style={{ transform: `rotate(${rotated ? 90 : 0}deg)`, outline: `2px solid ${tile.current ? '#111' : 'transparent'}`, outlineOffset: '2px' }}>
-              {image && <img className="ph-dock-image" alt="" draggable={false} src={previewUrl(token, image)} />}
+              {image && <PhotoImage token={token} image={image} className="ph-dock-image" />}
               {!image && tile.kind === 'shot' && tile.shot.example
                 && <img className="ph-dock-image ph-grey" alt="" draggable={false} src={exampleUrl(token, tile.shot.container_id)} />}
               {tile.kind === 'free' && <svg className="ph-dock-plus" width="50%" height="50%" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>}

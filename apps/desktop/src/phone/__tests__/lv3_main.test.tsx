@@ -345,7 +345,7 @@ async function shoot(): Promise<void> {
 /** The plan's fixture with a fourth shot D (final 04), empty and current. */
 const D = 14;
 const withFourth = (photo: number | null) => chairSession(s => {
-  s.shots.push({ container_id: D, final_no: 4, shoot_no: 4, name: 'Detail', ratio: 1, split: false, zoom: 0, example: false, photo: photo === null ? null : { photo_id: photo, revision: 1, ratio: 1 } });
+  s.shots.push({ container_id: D, final_no: 4, shoot_no: 4, name: 'Detail', ratio: 1, split: false, zoom: 0, example: false, photo: photo === null ? null : { photo_id: photo, revision: 1, ratio: 1, preview: 'k0' } });
   s.extras = [];
   s.current = { kind: 'shot', container_id: D };
 });
@@ -404,7 +404,7 @@ test('lv3_c14d_a_capture_bound_to_no_shot_is_a_condition_image', async () => {
   await env.socket().text({ type: 'capture', capture_id: 'c1', state: 'exposed' });
   await macChanges(env, chairSession(s => {
     freeShot(s);
-    s.condition.push({ photo_id: 301, revision: 1, ratio: 1 });
+    s.condition.push({ photo_id: 301, revision: 1, ratio: 1, preview: 'k0' });
   }));
   expect(toast().textContent).toBe('Condition image added');
   expect(toast().style.opacity).toBe('1');
@@ -451,7 +451,7 @@ test('lv3_c14f_next_follows_the_macs_current_shot_and_the_phone_never_advances_b
   expect(env.mac.posts('/current')).toEqual([]);
   // The Mac filled A and made C (the last shot) current.
   await macChanges(env, chairSession(s => {
-    s.shots[1].photo = { photo_id: 302, revision: 1, ratio: 1 };
+    s.shots[1].photo = { photo_id: 302, revision: 1, ratio: 1, preview: 'k0' };
     s.current = { kind: 'shot', container_id: C };
   }));
   expect(screen.getByText('Free shot')).toBeTruthy();

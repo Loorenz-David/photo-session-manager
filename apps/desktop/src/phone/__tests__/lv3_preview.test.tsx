@@ -36,7 +36,7 @@ test('lv3_c20a_a_split_shots_chip_says_two_squares', async () => {
   await startPhone(env, chairSession(s => {
     s.shots[0].split = true;
     s.shots[0].ratio = 2;
-    s.shots[0].photo = { photo_id: 201, revision: 1, ratio: 2 };
+    s.shots[0].photo = { photo_id: 201, revision: 1, ratio: 2, preview: 'k0' };
   }));
   await open(X.b);
   expect(screen.getByTestId('ratio-chip').textContent).toBe('SPLIT 2×1:1');
@@ -65,7 +65,7 @@ test('lv3_c21a_holding_a_template_shots_photo_shows_the_template_through_it', as
   expect(preview().getByText('Hold to view template · slide sideways for overlay')).toBeTruthy();
   // The template lies under the photo.
   const layers = Array.from(viewport().querySelectorAll('img')).map(image => image.getAttribute('src'));
-  expect(layers).toEqual([`/api/phone/v1/containers/${B}/example?pair=T`, '/api/phone/v1/photos/201/preview?pair=T&r=1']);
+  expect(layers).toEqual([`/api/phone/v1/containers/${B}/example?pair=T`, '/api/phone/v1/photos/201/preview?pair=T&r=1&v=k0']);
   press(viewport(), 195, 305);
   expect(photo().style.opacity).toBe('0.35');
   expect(screen.getByTestId('preview-pill').textContent).toBe('TEMPLATE');
