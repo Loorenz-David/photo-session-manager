@@ -8,7 +8,7 @@ blocked_on: none (owner card 1 answered 2026-11-26: `article_number` = the item'
 ---
 # LV2 — Current shot and the phone server
 
-**Tracker:** NOT_STARTED (2026-11-26, planner)
+**Tracker:** IMPLEMENTED (2026-11-26, opus) — 5 units, 101 rows: 79 behaviour tests (lv2_current_shot 31, lv2_phone_ops 13, lv2_phone_pairing 7, lv2_phone_http 27, lv2_phone_ws 10 incl. chained rows), 2 desktop command tests, 5 UI tests, core-mechanism unit tests; closing gate green (workspace suite 1598 after the p01 schema tripwire was updated). See the implement r1 handoff.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -480,3 +480,33 @@ so the phone page exists):
 5. Settings → Phone → **Remove** that phone: reload the page on the phone; it says it was removed.
 
 ## Review log
+- 2026-11-26, opus (implementer; the runner moved to Claude Opus after Codex Sol/Terra were out of usage; a Codex
+  session had left uncommitted U1 work, which this session reviewed and reworked), implement r1. **Built:** U1 the
+  current shot (`services/current_shot.rs` `CurrentShots`, `mechanisms/current_shot.rs::next_untaken`,
+  `shot_order::slot_owners`; binding at exposure inside the ledger lock and the insert transaction, binding at arrival,
+  placement by binding, `retake`, Mac "Next" = current shot via `session_view_with_current`, `ActiveSessionChanged`);
+  U2 `phone_view`, `shot_ratio`, `move_to` (swap), Delete = Deny; U3 `phone_pairings` + `PhonePairings`,
+  `settings.phone` (port rule), host/QR, five commands, Settings → Phone; U4 `PhoneServer` (own thread/runtime, peers,
+  auth, static files without traversal, manifest, the PH4 routes with the session guard), web root, two Vite inputs,
+  `bundle.resources`, placeholder phone page, `TestPhone`; U5 the WebSocket viewer (LatestSlot frames by demand
+  generation, ≤ 64 events, pings/idle 4408, slow write 4408, overflow 4409, revoke 4401, `session`/`camera`/`focus`/
+  `focus_frames`/`capture`/`demand_ack`), guide files. Checkpoints: U1 `7a685d76`, U2 `18cdd4f2`, U3 `84d94253`,
+  U4 `d3db9091`, U5 `1463728a`.
+  **Judgment calls** (all in the handoff's Assumptions): "hand wins" applies to a photo coming into a container, a
+  template photo already there stays (keeps t2 B1); `ActiveSessionChanged` only on a real change; `current()` of a
+  non-active session = its default, held value untouched; a held `Free` is not re-read (CS1 advances only a held
+  shot); `phone_view` takes `now`; image ratio/revision from the photo's composition; untemplated `move_to` refuses
+  `Container`; preview = developed, else original, else thumbnail; POSTs answer `{"ok":true}`; one `camera` snapshot
+  after `hello`; the listener's send buffer is fixed at 256 KB (HB4: measured — a non-reading client otherwise let
+  macOS buffer more than one 1 MB frame); each App's EventHub is observed when a request or socket resolves it.
+  **Rewritten t2/t3/t4 tests** (rule encoded → MC-LV3 outcome) are listed in the handoff. **Deviations:** files
+  outside the unit lists (t1_settings_drawer test, core helpers in `phone_view.rs`/`template_placement.rs` for H8,
+  `live_view.rs::viewer_count`, desktop `commands/{sessions,templates,settings}.rs`, `test_app.rs`); the U1 checkpoint
+  dropped five t4 shift tests by an editing mistake, restored unchanged in U4. **Observations:** C3(b) needs an
+  earlier file of the counter run (the test starts with a Condition shot DSC00100); `psm-desktop` does not build
+  without `apps/desktop/dist/` (the `bundle.resources` mapping; verified), so `npm run build` must run before the
+  cargo part of the closing gate on a fresh checkout; `npm run build` writes `dist/phone.html` and `dist/phone/icon.png`.
+  **Closing gate:** `cargo test --workspace` red once at `p01_storage_identity::c1a_open_creates_all_domain_columns`
+  (the schema tripwire: the new `phone_pairings` table and binding columns); its expected schema updated, the file
+  re-run green (20/20). Clippy, fmt, sidecar stub (2/2), typecheck, `npm test` (139 files / 953 tests), `npm run build`
+  green.
