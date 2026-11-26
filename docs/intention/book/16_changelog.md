@@ -479,3 +479,4 @@ actions do not reach phones; the next shot can briefly aim at a shot whose file 
 MC-LV3); a Wi-Fi stall closes a phone's socket instead of skipping frames; Focus Area Wide not reported; the camera's
 exposure readout not read; tile previews stuck as broken images. Evidence: `docs/implementation/STATUS_live.md` (LV4
 running record), to be written into the evidence files when the check completes.
+D19 addendum (2026-11-26, owner): the phone's slide-up-to-lock distance halves (110 → 55 px), 10J LV-D19 (3).

@@ -103,7 +103,7 @@ None (`tileScale` is removed with the magnifier).
    on choosing a shot.
 4. Remove the six LV3 tests named above; update `helpers.ts`; tests for the rows.
 
-### Criteria (3 criteria, 6 rows)
+### Criteria (3 criteria, 7 rows)
 Session as LV3·U3: shots B (final 02, filled, "Back"), A (final 01, empty, "Front"), C (final 03, empty), each ratio
 1.0, in shooting order B, A, C; one extra (Main position 04); one condition image; current = A. Boundary: `PhoneApp`
 rendered with the Mac faked at `fetch`/`WebSocket` (as LV3's tests), mouse events of the pointer types with a
@@ -116,6 +116,7 @@ rendered with the Mac faked at `fetch`/`WebSocket` (as LV3's tests), mouse event
 | LV6·C2(c) | long press | press "02" (filled), hold still 600 ms, release | the Preview of B's photo opens; no tile changes size; no label pill; `navigator.vibrate` called only with 15 (never 12, 6 or 18) | LV-D19 (1) (no hold-to-magnify), P2 |
 | LV6·C2(d) | vertical move | press "02", move up 60 px, release | nothing opens; no request; no vibration | LV-D19 (1) (no drag-up), P2 |
 | LV6·C3(a) | scroll then tap | swipe left by 128 px (pointer down, move dx −128, up), then tap at the same screen x as the first press | the strip's `scrollLeft` grew by 128; the swipe selected nothing; the tap selects the tile two pitches to the right of the one first under the finger | LV-D19 (1) (scrollable), design §Shot dock gestures |
+| LV6·C3(b) | slide up to lock (main screen) | hold the stage, slide up **55 px** and release; separately slide up 50 px and release | at 55 px live is locked ("LIVE · LOCKED") and stays on after release; at 50 px it is not locked and returns to the template on release; `lockProgress(-55)` = 1 (core mechanism `gestures.ts` `LOCK_PX` = 55) | LV-D19 (3) (owner 2026-11-26: lock swipe half as long) |
 
 ### Delegated choices
 Whether the tap is decided on `pointerup` (movement ≤ 8 px) or on `click` · tile corner and shadow details beyond P1
@@ -123,7 +124,9 @@ Whether the tap is decided on `pointerup` (movement ≤ 8 px) or on `click` · t
 
 ### Notes
 - The main screen (hold for live, slide up to lock, overlay slide) and the Preview (hold for template) keep their
-  gestures; LV-D19 changes only the dock.
+  gestures; LV-D19 changes only the dock, **except LV-D19 (3): the slide-up-to-lock distance halves, 110 → 55 px**
+  (`apps/desktop/src/phone/gestures.ts` `LOCK_PX`; update `lv3_geometry.test.ts` and `lv3_main.test.tsx` rows LV3·C8(b)
+  and the lock-progress row to 55, and say so in the handoff). Added by the orchestrator while U1 was in progress.
 - The design's "never move" rule for the dock and control bar still holds (fixed height, now 84 px).
 
 ### Unit test commands
@@ -218,3 +221,4 @@ On this Mac with the camera connected and both phones paired (the app built from
    new QR code. Do that and add it again: it works.
 
 ## Review log
+- 2026-11-26, orchestrator: owner request during the run — slide-up-to-lock distance halved (110 → 55 px), row LV6·C3(b) added to U1 (LV-D19 (3)). If the implement session finished U1 before this row existed, the review treats it as a missing row (fix cycle).
