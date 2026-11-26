@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # LV5 — Fixes from the hardware check (findings F1–F5, F7 server half, the Settings list)
 
-**Tracker:** NOT_STARTED (2026-11-26, planner)
+**Tracker:** IMPLEMENTED (2026-11-26, codex) — four unit checkpoints; amended P40 event expectation; workspace suite, clippy, fmt, sidecar stub, typecheck and 1,049 UI tests green.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -451,6 +451,7 @@ dev`), the camera on Wi-Fi, both phones paired:
 
 ## Review log
 
+- **2026-11-26, implement r1 continuation (codex), IMPLEMENTED.** The orchestrator amended the perimeter to include `p40_undo_history_values.rs` and ruled that PH8 supersedes its old attribute-undo event expectation. The test now checks `SessionChanged` after both undo and redo, retains the two pre-existing `HistoryChanged` expectations for set and undo, checks redo history, and excludes `PhotoChanged`. Its module passed 18/18; the closing gate resumed at the previously failing workspace suite and passed through clippy, fmt (after applying formatter output), sidecar stub, typecheck and desktop tests. Assumption for the named `current_shot.set` and `phone.viewer closed` trace clauses: the existing test harness has no log capture; the tests prove the current-shot state, binding/placement, socket delivery and viewer lifecycle at their observable boundaries. No production deviation from the plan in this continuation. The four unit checkpoints remain `b487c8de`, `f82f0886`, `78018009`, `49ee1c8e`.
 - **2026-11-26, implement r1 (codex), BLOCKED after four unit checkpoints.** Built the current-shot hold through a filed-but-not-intaken photo, Mac change announcements and preview versions, stall-tolerant phone socket writes and Settings connection refresh, plus Focus Area refusal and real exposure display parsing. Used the delegated choices of a header-only focus predicate, no extra `focus_area` log field, a literal en dash, and a path/mtime-derived opaque preview token. Full closing gate was run once in order. Desktop build, workspace clippy, format check (after formatting), sidecar stub tests, typecheck, and desktop tests passed. The full Rust suite had three failures: two LV5 fake-sidecar startup races were fixed and their module passed on rerun; `p40_undo_history_values::c7a_attribute_events_only_history` still fails because it forbids `SessionChanged` on attribute undo, while PH8 and Unit 2 require that event for every history step. That test file is outside this plan's perimeter, so the tracker remains `NOT_STARTED`. The plan needs a perimeter amendment for that test and an updated expectation before implementation can close. See `handoffs/implementer/handoff_LV5_live_fixes_implement_r1.md` for stamps, checkpoints, and test coverage limits.
 - 2026-11-26, orchestrator (answer to the implementer's BLOCKED): **the perimeter now includes
   `crates/testkit/tests/suite/p40_undo_history_values.rs`.** Master plan §5 PH8 (2026-11-26, F3) supersedes P40 C7(a)'s

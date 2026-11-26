@@ -2,7 +2,7 @@
 plan: LV5_live_fixes
 role: implement
 round: 1
-state: BLOCKED
+state: DONE
 date: 2026-11-26
 actor: codex
 ---
@@ -28,7 +28,9 @@ actor: codex
 | LV5·C12(a–b), C12(d–f) | `lv5_camera_readouts` (5 tests), plus the revised `lv1_frame_channel` exposure case | Pass. |
 | LV5·C12(c) | `camera::direct::live` readout unit test | Pass. |
 
-The U1 tests assert placement and current-shot state; they do not assert the precise `current_shot.set` log lines named in C1(a), C2(a–b), and C3(a–b). C3(a–b) use the planned ordering and file/intake gaps but their exact clock offsets should be checked during review. These are test coverage deviations, even though the observed states pass.
+The U1 tests assert placement and current-shot state; they do not assert the precise `current_shot.set` log lines named in C1(a), C2(a–b), and C3(a–b). The C9 tests assert frame delivery and viewer lifecycle, without the `phone.viewer closed` log lines. The test kit has no log-capture facility. C3(a–b) use the planned ordering and file/intake gaps; their exact clock offsets remain for review.
+
+The amended P40 C7(a) test, `c7a_attribute_undo_announces_session`, passed with its module (18/18): set and undo retain their exact two history events; undo and redo each announce the touched session, with no photo event.
 
 ## Assumptions
 
@@ -37,16 +39,12 @@ The U1 tests assert placement and current-shot state; they do not assert the pre
 - The phone's in-flight socket send remains pinned across frame, ping, revoke, and stall checks. The server attempts a short close before unsubscribing.
 - A readable Focus Area number in the documented movable set permits position setting; absent Focus Area falls back to position writability. The helper uses a header-only predicate, adds no `focus_area` field to the result log, and writes no new camera property.
 - The missing exposure display is represented by the literal en dash `–`.
+- For criteria that name a log trace, the existing test kit cannot capture log lines. The corresponding current-shot state, exposure bindings, photo places, socket delivery and viewer removal are the automated boundary proof; the log clause remains a review limitation.
 
 ## Deviations
 
-- The closing gate is not green. `cargo test --workspace` reported 1,637 passed and three failed. Two new C3 fake-sidecar startup races were fixed by waiting for `CameraStatus::Connected`; the `lv5_current_shot` module then passed all nine tests. The remaining failure is `p40_undo_history_values::c7a_attribute_events_only_history` at line 531. It asserts that attribute undo emits neither `PhotoChanged` nor `SessionChanged`, while this plan's Unit 2 and master plan PH8 require `SessionChanged` after undo/redo of every history step kind. The test file is outside this phase's file perimeter. It remains unchanged.
-- The exact trace assertions for C1(a), C2(a–b), C3(a–b), and C9(a–c) are absent as described above.
-- The tracker remains `NOT_STARTED` because this implementation did not pass its closing gate. No out-of-scope tracker or test change was made.
-
-## Blocking conflict
-
-Amend the LV5 file perimeter to include `crates/testkit/tests/suite/p40_undo_history_values.rs`, then update `c7a_attribute_events_only_history` to expect `SessionChanged` for the touched session after attribute undo while retaining the `PhotoChanged` check appropriate to PH8. Re-run only that failing test file. The four unit checkpoints and their other checks can be retained. The trace assertion gaps above should be resolved before review approval.
+- The orchestrator amended this plan's perimeter for the P40 test and ruled that PH8 supersedes its old attribute-undo event expectation. The resumed closing gate is green.
+- The exact trace assertions for C1(a), C2(a–b), C3(a–b), and C9(a–c) are absent as described above; the existing harness cannot capture logs.
 
 ## Files changed
 
@@ -54,7 +52,7 @@ Amend the LV5 file perimeter to include `crates/testkit/tests/suite/p40_undo_his
 - Unit 2: `crates/core/src/services/history.rs`, `phone_view.rs`, `review.rs`; `crates/testkit/tests/suite/lv5_mac_actions.rs`; `docs/guide/02_architecture.md`; `docs/guide/04_change_impact.md`.
 - Unit 3: `apps/desktop/src/features/settings/PhoneSection.tsx`, `__tests__/lv5_phone_list.test.tsx`; `crates/integrations/src/phone/server.rs`, `ws.rs`; `crates/testkit/src/phone.rs`; `crates/testkit/tests/suite/lv5_phone_socket.rs`; `docs/guide/02_architecture.md`.
 - Unit 4: `native/camera-sidecar/include/crlab/liveview.hpp`, `src/live_runner.cpp`, `tests/test_liveview.cpp`; `crates/integrations/src/camera/direct/live.rs`, `sidecar/protocol.rs`; `crates/testkit/tests/suite/lv5_camera_readouts.rs`, `lv1_frame_channel.rs`, `lv2_phone_ws.rs`; `docs/guide/03_rules_and_principles.md`, `04_change_impact.md`.
-- Closing: `crates/testkit/tests/suite/lv5_current_shot.rs` (fake-sidecar readiness), `docs/implementation/plans/LV5_live_fixes.md` (Review log), this handoff.
+- Closing: `crates/testkit/tests/suite/lv5_current_shot.rs` (fake-sidecar readiness); `crates/testkit/tests/suite/p40_undo_history_values.rs` (orchestrator-authorized expectation); `docs/implementation/plans/LV5_live_fixes.md` (tracker and Review log); this handoff.
 
 ## Checkpoint SHA
 
@@ -63,7 +61,7 @@ Amend the LV5 file perimeter to include `crates/testkit/tests/suite/p40_undo_his
 3. U3 — `78018009` — phone stalls and Settings refresh.
 4. U4 — `49ee1c8e` — Focus Area and exposure readout.
 
-The closing documentation and readiness fix are included in the final `CHECKPOINT (not approved):` commit recorded in Git history.
+The earlier closing documentation and readiness fix are in `8f12723c`. This continuation's test and documentation are in its final `CHECKPOINT (not approved):` commit; its SHA is recorded by Git history and the runner.
 
 ## Stamp
 
@@ -74,11 +72,11 @@ The closing documentation and readiness fix are included in the final `CHECKPOIN
 | Unit 3 plan commands: focused socket suite, Settings Vitest, typecheck, clippy | Pass before checkpoint. |
 | Unit 4 plan commands: `tools/sidecar/build.sh --stub --test`, focused camera unit and suite, clippy | Pass before checkpoint. |
 | `cd apps/desktop && npm run build` | Pass. |
-| `cargo test --workspace` | **Fail:** 1,637 passed, 3 failed. Two LV5 startup failures fixed; one P40 history expectation remains. Full suite intentionally not re-run per flow §4A. |
+| `cargo test --workspace` | Pass on continuation after the authorized P40 expectation update. |
 | `cargo test -p psm-testkit --test suite lv5_current_shot::` | Pass: 9 tests after readiness fix. |
-| Focused `p40_undo_history_values::c7a_attribute_events_only_history` rerun | Fail: existing expectation forbids required `SessionChanged`. |
+| `cargo test -p psm-testkit --test suite p40_undo_history_values::` | Pass: 18 tests, including undo and redo event expectations. |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass. |
-| `cargo fmt --all -- --check` | Initial fail on the new readiness test's formatting; `cargo fmt --all` applied, check then passed. |
+| `cargo fmt --all -- --check` | Continuation's first check found formatting in the P40 test; `cargo fmt --all` applied, check then passed. |
 | `tools/sidecar/build.sh --stub --test` | Pass. |
 | `cd apps/desktop && npm run typecheck` | Pass. |
 | `cd apps/desktop && npm test` | Pass: 147 files, 1,049 tests. |
