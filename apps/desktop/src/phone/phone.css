@@ -519,13 +519,15 @@ body,
   touch-action: none;
   -webkit-touch-callout: none;
 }
-/* 190 px tall and bottom-anchored, so magnified tiles grow up over the stage without clipping. */
+/* Bottom-anchored and taller than the strip, so magnified tiles grow up over the stage without
+   clipping. The design's 190 px cut the "Release to open" pill of a tile dragged all the way up
+   (14 + 90 + 90 + 10 + 27 px); 260 px holds it. */
 .ph-dock-scroller {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 190px;
+  height: 260px;
   overflow: hidden;
   display: flex;
   align-items: flex-end;
@@ -645,4 +647,371 @@ body,
   display: flex;
   flex-direction: column;
   background: var(--ph-white);
+}
+.ph-preview {
+  animation: ph-preview-in 0.25s ease;
+}
+@keyframes ph-preview-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.ph-preview-header {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 22px 16px;
+}
+.ph-preview-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ph-kicker {
+  font-size: 11px;
+  color: var(--ph-secondary);
+  letter-spacing: 0.06em;
+}
+.ph-preview-title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ph-ratio-chip {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--ph-chip-border);
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+.ph-preview-photo {
+  transition: opacity 0.14s ease-out;
+}
+.ph-preview-hint-row {
+  left: 12px;
+  right: 12px;
+  bottom: 14px;
+}
+.ph-preview-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px calc(40px + env(safe-area-inset-bottom, 0px));
+}
+.ph-preview-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ph-rule {
+  height: 1px;
+  background: var(--ph-hairline);
+}
+.ph-button {
+  height: 54px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--ph-ui);
+  font-size: 15px;
+  font-weight: 500;
+}
+.ph-button-outline {
+  border: 1.5px solid var(--ph-ink);
+  background: var(--ph-white);
+  color: var(--ph-ink);
+}
+.ph-button-solid {
+  border: 0;
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
+.ph-button-move {
+  height: 50px;
+}
+.ph-button-wide {
+  width: 100%;
+  justify-content: space-between;
+  padding: 0 18px;
+}
+
+/* 5–6. Bottom sheets (Move drawer, Item drawer) */
+.ph-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--ph-scrim);
+  transition: opacity 0.2s;
+}
+.ph-backdrop-menu { z-index: 32; }
+.ph-backdrop-move { z-index: 35; }
+.ph-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 28px 28px 0 0;
+  background: var(--ph-white);
+  transition: transform var(--ph-sheet);
+}
+.ph-sheet-menu {
+  z-index: 33;
+  gap: 20px;
+  padding: 12px 22px calc(34px + env(safe-area-inset-bottom, 0px));
+}
+.ph-sheet-move {
+  z-index: 36;
+  gap: 16px;
+  padding: 12px 20px calc(34px + env(safe-area-inset-bottom, 0px));
+}
+.ph-grab {
+  align-self: center;
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--ph-handle);
+}
+.ph-sheet-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ph-sheet-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ph-sheet-sub {
+  font-size: 13px;
+  color: var(--ph-secondary);
+  text-wrap: pretty;
+}
+.ph-section {
+  font-size: 10px;
+  color: var(--ph-secondary);
+  letter-spacing: 0.08em;
+}
+.ph-move-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ph-move-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.ph-move-grid-main {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 3px;
+}
+.ph-move-grid-condition {
+  padding: 6px 3px 3px;
+}
+.ph-move-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  text-align: left;
+}
+.ph-move-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #eee;
+}
+.ph-move-thumb-end {
+  background: var(--ph-white);
+  border: 1.5px dashed var(--ph-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ph-move-image {
+  border-radius: 9px;
+}
+.ph-move-tag {
+  top: 3px;
+  bottom: auto;
+}
+.ph-move-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.ph-move-name {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-move-state {
+  font-size: 8px;
+  color: var(--ph-secondary);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.ph-condition-row {
+  height: 52px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px 0 12px;
+  border: 1.5px solid var(--ph-ink);
+  border-radius: 14px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+}
+.ph-condition-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.ph-condition-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--ph-ink);
+  color: var(--ph-white);
+  font-size: 11px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ph-condition-count {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.ph-condition-fold {
+  display: grid;
+  transition: grid-template-rows var(--ph-sheet);
+}
+.ph-condition-clip {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* 6. Item drawer */
+.ph-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.ph-item-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ph-item-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ph-item-connected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ph-secondary);
+  letter-spacing: 0.04em;
+}
+.ph-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ph-live-dot);
+  animation: ph-blink 1.6s infinite;
+}
+@keyframes ph-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.ph-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ph-fill);
+  color: var(--ph-ink);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ph-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ph-hairline);
+}
+.ph-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--ph-hairline);
+  font-size: 14px;
+}
+.ph-row dt {
+  color: var(--ph-secondary);
+}
+.ph-row dd {
+  margin: 0;
+  text-align: right;
+}
+.ph-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Item properties (LV-D17: an empty page for now) */
+.ph-page {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--ph-white);
+}
+.ph-page-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px 16px;
+}
+.ph-page-body {
+  flex: 1;
+  min-height: 0;
 }

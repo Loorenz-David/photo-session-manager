@@ -233,7 +233,7 @@ label printed itself. Same key and store as conversations; labels need the scope
 - **Products from the other Mac** (shop-only items) count as Published in the sessions list until their photos are
   brought back for editing (09C §14.3).
 
-## The phone and the current shot (book `10J`, `11` §Phone remote; `docs/implementation/master_plan_live.md`; LV1–LV2 built, LV3 the phone app)
+## The phone and the current shot (book `10J`, `11` §Phone remote; `docs/implementation/master_plan_live.md`; LV1–LV3 built, LV4 the hardware check)
 - **Current shot.** In a templated session one container is "current" (the Mac outlines it "Next"). Every shutter —
   the phone, the Mac or the camera's own button — goes to the shot that was current when the camera fired, even
   when its file arrives late over Wi-Fi; then the current shot moves to the next empty container in shooting order,
@@ -246,6 +246,28 @@ label printed itself. Same key and store as conversations; labels need the scope
   The phone server is on by default on port 8686 and answers only paired phones (P4). Remove stops a phone at once.
 - **Session guard.** Every phone action names its session; if the Mac switched session in between, the phone is told
   "Session changed on the Mac" and nothing happens (P5).
+- **The phone app ("Shoot Companion", LV3; the owner's design, book 10J §The phone design).** Plain HTTP, no install
+  needed (iPhone: Add to Home Screen opens it full screen; Android: a **Full screen** button). It follows the Mac's
+  active session and shows:
+  - **Main screen.** The current shot's template in black and white. **Hold** the picture for live, release for the
+    template; **slide up** to lock live (double-tap unlocks); **slide sideways** to set how much of the template shows
+    through live (0–100 %, starts at 35 %); while locked, **tap** to focus there ("AF LOCKED"; × sends the focus point
+    back to the centre). Long shots turn the view 90° so the phone is held sideways. A split shot shows a centre line
+    and Left/Right. The exposure (shutter · aperture · ISO) is read-only on live.
+  - **Shutter.** Flash and haptic at once; the toast ("Shot 04 captured", "Condition image added") comes when the Mac
+    shows where the photo landed. The phone never moves the current shot itself: it shows what the Mac says.
+  - **Shot dock.** Template shots in shooting order with their final numbers, extra Main images, the **Free shot** tile
+    (in a templated session its captures are Condition, card LV7), then Condition images (C1…). Tap selects an empty
+    shot or opens an image; hold magnifies; hold and drag up opens. **Next** jumps to the next empty shot in shooting
+    order, then to Free shot. In Free shot live is always on (there is no template to show).
+  - **Preview.** A captured image with Back, **Retake** (template shots: the photo is denied at once, undoable on the
+    Mac, and the shot is current again) or **Delete** (extras, condition = Deny), and **Move image**: any Main
+    position, a new extra, or the Condition group; a position that has an image swaps (card LV8; the Mac's drop
+    still replaces).
+  - **Item drawer** (menu button): item name, SKU, article number (the barcode, only when the item has one), current
+    shot, angle, image counts; **Fill item properties** opens an empty page for now (LV-D17).
+  - Haptics on Android only (iPhone browsers have none). No wake lock: the screen follows the phone's Auto-Lock; when
+    it comes back the app reconnects by itself.
 
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |

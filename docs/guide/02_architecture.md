@@ -1024,7 +1024,43 @@ the direct adapter only.
   older demand `gen`, writes the 32-byte `PSMF` header + JPEG, pings every 5 s, closes 4408 (idle 15 s or a write
   slower than 2 s), 4409 (event queue full), 4401 (pairing removed). Text: `hello`, `demand_ack`, `focus`,
   `focus_frames`, `capture` (hub events), `camera` (hub state/exposure and `CameraStatusChanged`; one snapshot after
-  `hello`), `session {session_id, rev}` (App events of the active session; the server observes each App's
-  `EventHub` once, `ensure_fed`). Logs `phone.viewer opened|closed`, `live.viewer`.
-- **Phone page.** `apps/desktop/phone.html` + `src/phone/` (LV2: a placeholder that keeps the token per PH7 and
-  says "Connected to <item>"; LV3 builds the Shoot Companion); `vite.config.ts` builds both pages into `dist/`.
+  `hello`), `session {session_id, rev}` (App events of the active session; the server's one observer is registered
+  with `EventHub::observe_carried`, so `apply_settings` hands it to a rebuilt App's hub with the target and open
+  sockets stay fed, LV3·C28). Logs `phone.viewer opened|closed`, `live.viewer`.
+- **Events the phones depend on (LV3·U0).** A phone Delete goes through `ReviewService::delete_announced` (Deny, then
+  `PhotoChanged` + `SessionChanged`, so the Mac and other phones reload); `session_delete::delete` builds
+  `SessionsService` `with_events` (and announces `ActiveSessionChanged {None}` itself when Capture One could not be
+  left), so phones get `{type: "session", session_id: null}`. Error bodies: every `500 internal` and every `404
+  not_found` carries a fixed `message` (`wire::INTERNAL_MESSAGE`, `NOT_FOUND_MESSAGE`): no store text, no local path.
+- **Phone app (LV3; `apps/desktop/phone.html` + `apps/desktop/src/phone/`, its own entry in `vite.config.ts`, built
+  into the same `dist/`).** It uses only relative URLs and no secure-context API (no service worker, wake lock,
+  `crypto.subtle`, clipboard): the same build runs on `http://` now and `https://` later (card LV3).
+  - `api.ts` — the PH4 routes (`Authorization: Bearer`; `?pair=` for images, the manifest and the socket), the token
+    in `localStorage["psm.phone.token"]` (taken from `?pair=` once, then removed from the address), `ApiError` with
+    the wire's code, `Unpaired` on 401 (the token is forgotten and the pairing text shows).
+  - `socket.ts` — `PhoneSocket`: text messages in; the demand `{gen, live, visible}` out on every change of showing
+    Live or of visibility (`gen` in memory, +1 each time, re-sent under a new `gen` on reconnect); a binary frame is
+    accepted only if its `gen` is the current one and its `seq` is above the last accepted (`decodeFrame`); reconnect
+    after 500, 1000, 2000, 4000, 4000… ms while visible (`reconnectDelay`), at once when the screen comes back; close
+    4401 = removed.
+  - `state.ts` — one reducer and the pure selectors every component reads (`dockTiles`, `nextStep`, `moveTiles`,
+    `previewSubject`, `itemRows`, the texts in `TEXT`). The session is only ever what `GET /session` last answered
+    (re-read on every `session` message, on socket open and after each of the phone's own actions); the phone never
+    advances the current shot itself (MC-LV3). The preview is held by photo id, so it follows a moved image.
+  - `geometry.ts` — `viewportBox`, `isRotated` (> 1.2), `localPoint` (image-local coordinates in a rotated viewport),
+    `tapToFrame` (undo the zoom about the centre, then the cover crop → 0…1 of the full live frame for `POST
+    /focus`), `ratioLabel`. `gestures.ts` — the design's thresholds as pure rules (`touchMode`, `lockProgress`,
+    `overlayValue`, `isDoubleTap`, `tileScale`) and the haptic patterns (`HAPTIC`, `buzz`).
+  - `components/` — `Stage` (the image viewport, its layers and one-finger gestures; `ImageFrame` sizes it from the
+    stage and the shot's ratio and is reused by `Preview`), `LiveCanvas` (the JPEG drawn as it arrived with
+    `createImageBitmap`; always mounted, shown by opacity only once a frame of the current `gen` is drawn),
+    `TemplateLayer` (the example `<img>`, `filter: grayscale(1)`: display only, H3), `LockControl`, `OverlayBar`,
+    `ControlBar`, `Dock`, `Preview`, `MoveDrawer`, `ItemDrawer`, `PropertiesPage`, `Toast`, `ConnectingOverlay`,
+    `FullscreenButton`. `phone.css` holds the design tokens as CSS variables; values that change with state are
+    inline styles. IBM Plex Mono is bundled (`@fontsource/ibm-plex-mono`, latin 400/500), never fetched at runtime.
+  - Capture feedback: flash and haptic at the tap; the toast waits for the socket's `capture exposed` for that
+    capture id and then for the session re-read that shows a new photo (its place decides the text).
+  - Tests: `src/phone/__tests__/lv3_*.test.ts(x)` render `PhoneApp` against `helpers.ts`'s fake Mac (a `fetch` and a
+    `WebSocket` the test plays), so the request bodies and demand messages asserted are the real ones; the helper also
+    supplies what jsdom lacks (pointer events with coordinates, `vibrate`, Fullscreen, `createImageBitmap`, a canvas
+    drawer spy, a layout for the stage, viewport and dock).

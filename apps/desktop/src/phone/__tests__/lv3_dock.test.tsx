@@ -13,7 +13,7 @@ const dock = () => screen.getByTestId('dock');
 const row = () => Array.from(dock().querySelector('.ph-dock-row')!.children) as HTMLElement[];
 const tile = (label: string) => dock().querySelector(`[aria-label="${label}"]`) as HTMLElement;
 const buzzed = (env: PhoneEnv, pattern: number) => env.vibrate.mock.calls.filter(call => call[0] === pattern).length;
-const previewPhoto = () => screen.queryByTestId('preview')?.querySelector('img')?.getAttribute('src') ?? null;
+const previewPhoto = () => screen.queryByTestId('preview')?.querySelector('[data-testid="preview-photo"]')?.getAttribute('src') ?? null;
 function tap(x: number): void {
   press(dock(), x, Y);
   lift(dock(), x, Y);

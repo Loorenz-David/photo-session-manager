@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { ApiError, capture, focus, focusClear, forgetToken, hello, type PhoneSession, previewUrl, session, setCurrent, takeToken, Unpaired } from './api';
+import { ApiError, capture, deletePhoto, focus, focusClear, forgetToken, hello, movePhoto, type PhoneSession, retake, session, setCurrent, takeToken, Unpaired } from './api';
 import { ConnectingOverlay } from './components/ConnectingOverlay';
 import { ControlBar } from './components/ControlBar';
 import { Dock } from './components/Dock';
 import { FullscreenButton } from './components/FullscreenButton';
+import { ItemDrawer } from './components/ItemDrawer';
 import type { LiveCanvasHandle } from './components/LiveCanvas';
+import { MoveDrawer } from './components/MoveDrawer';
+import { Preview } from './components/Preview';
+import { PropertiesPage } from './components/PropertiesPage';
 import { Stage } from './components/Stage';
 import { Toast } from './components/Toast';
 import { isRotated, type Point } from './geometry';
 import { buzz, HAPTIC } from './gestures';
 import { type CaptureMessage, type FocusMessage, PhoneSocket, type ServerMessage } from './socket';
-import { connected, type DockTile, initialState, landedToast, nextStep, photoIds, reduce, stageRatio, TEXT, tileImage, wantsLive } from './state';
+import {
+  backLabel, connected, type DockTile, initialState, itemRows, landedToast, type MoveTile, nextStep, pad, photoIds, previewRatio, previewSubject, reduce, stageRatio,
+  TEXT, tileImage, wantsLive,
+} from './state';
 
 /** While the Mac does not answer the first two requests they are asked again this often. */
 const RETRY_MS = 2000;
@@ -235,6 +242,7 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     clearFocus();
     try {
       await setCurrent(token, view.id, container_id);
+      void readSession();
     } catch (error) {
       refused(error, TEXT.failed);
     }
@@ -249,9 +257,52 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     } else void choose(tile.kind === 'shot' ? tile.shot.container_id : null);
   };
 
+  // The open preview follows its photo wherever the Mac's session has it now (design §Move
+  // semantics); a photo that left the session closes it.
+  const subject = previewSubject(view, state.preview);
+  const orphaned = state.preview !== null && state.view !== undefined && !subject;
+  useEffect(() => {
+    if (orphaned) dispatch({ type: 'preview', photo_id: null });
+  }, [orphaned]);
+
+  /** Design §Preview actions: Retake reopens a template shot (card LV6); Delete denies an extra or a condition image. */
+  const retakeOrDelete = async () => {
+    if (!view || !subject) return;
+    buzz(HAPTIC.retake);
+    try {
+      if (subject.kind === 'shot') {
+        clearFocus();
+        await retake(token, view.id, subject.shot.container_id);
+        toast(`Shot ${pad(subject.shot.final_no)} reopened`);
+      } else {
+        await deletePhoto(token, subject.image.photo_id, view.id);
+        toast('Image deleted');
+      }
+      dispatch({ type: 'preview', photo_id: null });
+      void readSession();
+    } catch (error) {
+      refused(error, TEXT.failed);
+    }
+  };
+
+  /** Card LV8: the Mac performs the move (a filled position swaps); the preview stays on the image. */
+  const move = async (tile: MoveTile) => {
+    if (!view || !subject || tile.state === 'THIS IMAGE') return;
+    buzz(HAPTIC.move);
+    try {
+      await movePhoto(token, subject.image.photo_id, view.id, tile.target);
+      dispatch({ type: 'move', open: false });
+      toast(tile.done);
+      void readSession();
+    } catch (error) {
+      dispatch({ type: 'move', open: false });
+      refused(error, TEXT.failed);
+    }
+  };
+
   const next = nextStep(view);
   const rotated = isRotated(stageRatio(state));
-  const opened = view ? [...view.shots.flatMap(shot => (shot.photo ? [shot.photo] : [])), ...view.extras, ...view.condition].find(image => image.photo_id === state.preview) : undefined;
+  const free = isConnected && !subject && !state.menuOpen;
   if (isConnected && !view) {
     return <div className="ph-app">
       <p className="ph-pairing">{TEXT.noSession}</p>
@@ -260,17 +311,30 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
   return <div className="ph-app">
     <div className="ph-safe-top" />
     <FullscreenButton />
-    <Stage token={token} state={state} dispatch={dispatch} enabled={isConnected && !opened} canvas={canvas}
+    <Stage token={token} state={state} dispatch={dispatch} enabled={free} canvas={canvas}
       isCurrentGen={gen => socket.current?.gen === gen} onFocus={(mark, point) => void onFocus(mark, point)} onClearFocus={() => {
         buzz(HAPTIC.clearFocus);
         clearFocus();
       }} />
-    {view && <Dock token={token} view={view} rotated={rotated} enabled={isConnected && !opened} onSelect={select} />}
-    <ControlBar rotated={rotated} next={next} onMenu={() => undefined} onCapture={() => void onCapture()} onNext={() => void choose(next.container_id)} />
+    {view && <Dock token={token} view={view} rotated={rotated} enabled={free} onSelect={select} />}
+    <ControlBar rotated={rotated} next={next} onCapture={() => void onCapture()} onNext={() => void choose(next.container_id)} onMenu={() => {
+      buzz(HAPTIC.menu);
+      dispatch({ type: 'menu', open: true });
+    }} />
     <Toast toast={state.toast} />
-    {opened && <div className="ph-preview" data-testid="preview">
-      <img className="ph-cover" alt="" draggable={false} src={previewUrl(token, opened)} />
-    </div>}
+    {view && subject && <Preview token={token} subject={subject} ratio={previewRatio(state, subject)} overlay={state.overlay} dispatch={dispatch}
+      backLabel={backLabel(view)} onBack={() => dispatch({ type: 'preview', photo_id: null })} onAct={() => void retakeOrDelete()} onMove={() => {
+        buzz(HAPTIC.menu);
+        dispatch({ type: 'move', open: true });
+      }} />}
+    {view && subject && <MoveDrawer token={token} view={view} subject={subject} open={state.moveOpen} onClose={() => dispatch({ type: 'move', open: false })}
+      onPick={tile => void move(tile)} />}
+    {view && <ItemDrawer open={state.menuOpen} itemName={view.item.name} macName={state.hello?.mac_name ?? ''} rows={itemRows(state, view)}
+      onClose={() => dispatch({ type: 'menu', open: false })} onProperties={() => {
+        buzz(HAPTIC.menu);
+        dispatch({ type: 'props', open: true });
+      }} />}
+    {state.propsOpen && <PropertiesPage onBack={() => dispatch({ type: 'props', open: false })} />}
     <ConnectingOverlay connected={isConnected} macName={state.hello?.mac_name ?? null} itemName={view?.item.name ?? null} />
   </div>;
 }

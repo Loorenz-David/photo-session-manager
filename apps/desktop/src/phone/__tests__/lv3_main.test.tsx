@@ -278,11 +278,8 @@ test('lv3_c13b_a_split_shot_shows_the_centre_guide_and_left_right', async () => 
   expect(screen.getByTestId('split-line').style.left).toBe('50%');
   expect(screen.getByText('Left · 1:1').style.left).toBe('25%');
   expect(screen.getByText('Right · 1:1').style.left).toBe('75%');
-});
-
-test('lv3_c13b_no_guide_on_a_shot_that_is_not_split', async () => {
-  const env = phoneEnv();
-  await startPhone(env);
+  // A shot that is not split has no guide.
+  await macChanges(env, chairSession());
   expect(screen.queryByTestId('split-line')).toBeNull();
   expect(screen.queryByText('Left · 1:1')).toBeNull();
 });

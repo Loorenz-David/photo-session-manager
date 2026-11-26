@@ -25,11 +25,17 @@ it is no longer required; its reason still holds for any build made *before* the
 does not know the publish step `held` or the research columns, so never point it at a data dir a
 research build has written. A scratch folder stays the sensible choice for try-outs.
 
-Phone in the dev app (LV2): `cd apps/desktop && npm run build` once (the server serves `apps/desktop/dist`, or
-`PSM_PHONE_WEB=<dir>`), then run the app; Settings → Phone shows "Phone server on port 8686". **Pair a phone**,
-scan the QR code with the phone (same Wi-Fi); the page says "Connected to <item>". If the phone cannot resolve the
-`.local` name, use **Show the address instead**. Remove the pairing and reload on the phone: it says it was
-removed. Log lines: `phone.server listening port=… addresses=…`, `phone.request route=… status=… pairing=…`,
+Phone in the dev app (LV2, LV3): `cd apps/desktop && npm run build` once (the server serves `apps/desktop/dist`, or
+`PSM_PHONE_WEB=<dir>`; rebuild after changing anything under `src/phone/`), then run the app; Settings → Phone shows
+"Phone server on port 8686". **Pair a phone**, scan the QR code with the phone (same Wi-Fi): the Shoot Companion
+opens on the active session (with no session open it says "Open a session in Session Manager to start shooting.").
+iPhone: Share → Add to Home Screen, then open it from the home screen; Android: tap **Full screen**. If the phone
+cannot resolve the `.local` name, use **Show the address instead**. Remove the pairing: the phone says it was
+removed. To look at the phone page without a phone, `npm run dev` and open `http://localhost:1420/phone.html` in a
+phone-sized browser window (it shows the pairing text: the dev server is not the Mac's phone server; for the full app
+open `http://localhost:8686/phone/?pair=<token>` from a pairing link while the app runs). Phone tests:
+`npx vitest run src/phone` (from `apps/desktop`); server rows `cargo test -p psm-testkit --test suite -- lv2_phone_http::
+lv2_phone_ws:: lv3_server_carry::`. Log lines: `phone.server listening port=… addresses=…`, `phone.request route=… status=… pairing=…`,
 `phone.viewer opened|closed`, `current_shot.bound …`. `psm-desktop` builds only when `apps/desktop/dist/` exists
 (`tauri.conf.json` bundles it as `phone-web/`).
 
