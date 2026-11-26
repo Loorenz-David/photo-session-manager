@@ -38,6 +38,8 @@ impl CameraProvider for CameraViaCaptureOne {
             settings_read: false,
             settings_write_store_destination: false,
             depends_on_editing_provider: true,
+            live_view: false,
+            focus_point: false,
         }
     }
 }

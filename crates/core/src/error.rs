@@ -73,6 +73,8 @@ pub enum Error {
     /// The direct camera adapter has no SDK session (10E MC-31).
     #[error("camera_not_connected")]
     CameraNotConnected,
+    #[error("focus_unsupported")]
+    FocusUnsupported,
     /// A reconnect is offered only on a Wi-Fi session (10E MC-33 R-I29).
     #[error("reconnect_on_cable_refused")]
     ReconnectOnCableRefused,

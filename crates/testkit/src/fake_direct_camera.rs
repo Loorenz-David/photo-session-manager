@@ -26,6 +26,8 @@ impl CameraProvider for FakeDirectProvider {
             settings_read: true,
             settings_write_store_destination: true,
             depends_on_editing_provider: false,
+            live_view: false,
+            focus_point: false,
         }
     }
 }

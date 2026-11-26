@@ -124,6 +124,8 @@ pub struct CameraCapabilities {
     pub settings_read: bool,
     pub settings_write_store_destination: bool,
     pub depends_on_editing_provider: bool,
+    pub live_view: bool,
+    pub focus_point: bool,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CaptureId(pub String);

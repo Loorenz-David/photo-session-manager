@@ -13,6 +13,7 @@ pub mod history;
 pub mod integrity;
 pub mod items;
 pub mod label_runs;
+pub mod live_view;
 pub mod labels;
 pub mod photos;
 pub mod prepare_masters;

@@ -843,6 +843,8 @@ impl CameraProvider for DirectCameraAdapter {
             settings_read: true,
             settings_write_store_destination: true,
             depends_on_editing_provider: false,
+            live_view: false,
+            focus_point: false,
         }
     }
     /// R-I29: only on a Wi-Fi session (a reconnect on USB gives the camera to Capture One, V6).

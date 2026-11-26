@@ -8,6 +8,7 @@ pub mod conversation;
 pub mod editing;
 pub mod item;
 pub mod label;
+pub mod live;
 pub mod output;
 pub mod photo;
 pub mod publish;

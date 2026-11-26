@@ -103,6 +103,7 @@ impl From<Error> for CommandError {
             }
             Error::CaptureFolderNotSet => "capture_folder_not_set",
             Error::CameraNotConnected => "camera_not_connected",
+            Error::FocusUnsupported => "focus_unsupported",
             Error::ReconnectOnCableRefused => "reconnect_on_cable_refused",
             Error::SidecarUnavailable => "sidecar_unavailable",
             Error::SupportArchiveInvalid { file } => {

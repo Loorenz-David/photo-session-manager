@@ -4,6 +4,7 @@ use crate::{
         CameraCapabilities, CameraStatus, CaptureId, Delivery, DeliveryOutcome, ExposureObserved,
         Link,
     },
+    domain::live::{FocusId, FocusPoint},
 };
 use std::path::Path;
 
@@ -12,6 +13,9 @@ pub trait CameraProvider: Send + Sync {
     fn status(&self) -> Result<CameraStatus>;
     fn capture(&self) -> Result<CaptureId>;
     fn capabilities(&self) -> CameraCapabilities;
+    fn focus(&self, _point: FocusPoint, _autofocus: bool) -> Result<FocusId> {
+        Err(crate::Error::FocusUnsupported)
+    }
     /// Closes and reopens the camera session (10E MC-33 R-I29: Wi-Fi only). Fails closed for
     /// providers that cannot.
     fn reconnect(&self) -> Result<()> {
