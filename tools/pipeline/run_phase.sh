@@ -19,7 +19,8 @@ RUNS="$ROOT/.pipeline/runs"
 TPL="$ROOT/tools/pipeline/templates"
 WRAP="$ROOT/tools/pipeline/wrappers/codex_implementer.md"
 CWRAP="$ROOT/tools/pipeline/wrappers/claude_implementer.md"
-# Implementer/fix runner: codex (default; owner 2026-10-26) or claude (PSM_IMPLEMENTER=claude: Opus for gpt-6-sol, Sonnet for gpt-6-luna)
+# Implementer/fix runner: codex (default; owner 2026-10-26) or claude (PSM_IMPLEMENTER=claude: Opus for both, owner 2026-11-26;
+# PSM_CLAUDE_FIX_MODEL overrides the fix model). Codex out of usage → Claude Opus automatically (owner 2026-11-26).
 IMPLEMENTER="${PSM_IMPLEMENTER:-codex}"
 # Per-phase override: plan frontmatter `implementer: fable` runs implement and fix with Claude Fable
 # (owner 2026-11-04: frontend logic and interactions are written and fixed by Fable).
@@ -121,6 +122,13 @@ run_codex() {  # run_codex MODEL EFFORT PROMPT LAST LOG
     log "gpt-6-sol at capacity → gpt-5.6-terra/high"
     run_codex gpt-5.6-terra high "$prompt" "$last" "$logf"; return $?
   fi
+  # owner 2026-11-26: when Codex is out of usage entirely, continue on Claude Opus (implement and fix),
+  # and stay on Claude for the rest of this run
+  if [[ $rc -ne 0 ]] && grep -qiE 'usage limit|hit your limit|insufficient_quota|quota exceeded|exceeded your current quota' "$logf"; then
+    log "codex out of usage → claude opus for the rest of this run"
+    IMPLEMENTER=claude; mv "$logf" "${logf%.log}.codex.log"
+    run_impl "$model" "$effort" "$prompt" "$last" "$logf"; return $?
+  fi
   return $rc
 }
 
@@ -163,7 +171,7 @@ run_impl() {  # run_impl CODEX_MODEL EFFORT PROMPT LAST LOG → codex, or claude
   local model="$1" effort="$2" prompt="$3" last="$4" logf="$5" cm
   if [[ "$PHASE_IMPLEMENTER" == fable ]]; then cm=fable
   elif [[ "$IMPLEMENTER" == codex ]]; then run_codex "$@"; return $?
-  else cm=opus; [[ "$model" == gpt-6-luna ]] && cm=sonnet; fi
+  else cm=opus; [[ "$model" == gpt-6-luna ]] && cm="${PSM_CLAUDE_FIX_MODEL:-opus}"; fi  # owner 2026-11-26: fixes on Opus too (was Sonnet)
   local full="$RUNS/$(basename "${prompt%.md}").full.md"
   cat "$CWRAP" "$prompt" > "$full"
   run_claude pipeline-implementer "$cm" "$full" "$last" "$logf" "$effort"

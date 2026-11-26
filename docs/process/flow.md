@@ -172,6 +172,10 @@ the work itself; the contracts of 08B are enumerated tables, so the risk of a ba
   Implementation stays on Opus / Codex as §2 says; no plan sets `implementer: fable`.
 
 ## Log
+- **2026-11-26 v1.7 (owner, live preview track).** When Codex is out of usage entirely, the runner continues the
+  implement and fix sessions on Claude Opus by itself (`run_phase.sh` `run_codex`), and `PSM_IMPLEMENTER=claude` now runs
+  fixes on Opus too (was Sonnet; `PSM_CLAUDE_FIX_MODEL` overrides). The owner leaves the build unattended: the orchestrator
+  answers blocked sessions from the book and the plan, and runs LV1→LV3 without waiting between milestones.
 - **2026-11-26 v1.6 (owner).** §2: the orchestrator runs on **Opus 5.5** by default (was Fable). The models of the
   sessions it launches are unchanged (planner/reviewer Opus, implementer per plan, Fable for `implementer: fable`).
 - **2026-11-15 v1.5 (owner).** §7A: the agent guide `docs/guide/` (written by Fable at the owner's request,

@@ -23,7 +23,9 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
   - **Card 1 answered (owner 2026-11-26):** "the article number is the product barcode in shopify" → branch (a):
     `article_number` = the item's barcode (already read from the Shopify variant barcode); LV2·C9(b), LV3·C24, master
     plan PH6/§9 amended.
-  - Plan relayed to the owner; **waiting for the owner's go** before LV1.
+  - Plan relayed to the owner. **Owner go (2026-11-26):** "we can go! … I expect you complete the three steps
+    autonomously"; resolve blocked sessions from the intention and the plan; if Codex runs out entirely, continue on
+    Opus (runner change, flow log v1.7).
 
 ## Next
 When the planner returns: relay the milestone map and any owner cards verbatim; **wait for the owner's go** (this
@@ -31,6 +33,8 @@ track's wake prompt overrides orchestrator.md's "start immediately"). Then `tool
 per line of `phases_live.txt`, in the background, never polled; push `feature/live-preview` at the end of a run; PR to
 `main` when all milestones are approved.
 
+## Run in flight
+- `tools/pipeline/run_phase.sh phase LV1_camera_live_view` (under `caffeinate -i`), started 2026-11-26.
+
 ## Needs the owner
-- Go for the build (LV1 → LV2 → LV3, then LV4 together).
 
