@@ -1,10 +1,12 @@
 //! Settings → Phone (`master_plan_live.md` §4.5, §5 PH1): pair a phone (QR code), list, rename and
 //! remove pairings, and the phone server's state. Thin commands over `psm_integrations::phone`.
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
+use psm_core::domain::live::PhoneSettings;
 use psm_integrations::phone::{
     host::{HostInfo, SystemHost, pairing_links},
     pairing::PhonePairings,
+    server::PhoneServer,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -31,6 +33,31 @@ impl PhoneState {
     #[cfg(test)]
     pub fn with_host(host: Arc<dyn HostInfo>) -> Self {
         Self { host }
+    }
+}
+
+/// PH2: the app's one phone server, started in the desktop setup after the first App.
+static SERVER: OnceLock<Arc<PhoneServer>> = OnceLock::new();
+
+/// Keeps the server the setup started (once per process).
+pub fn set_server(server: Arc<PhoneServer>) {
+    let _ = SERVER.set(server);
+}
+
+/// The phone server, once started.
+pub fn server() -> Option<Arc<PhoneServer>> {
+    SERVER.get().cloned()
+}
+
+/// §4.5: a saved `phone` setting rebinds (port) or stops/starts (switch) the server.
+pub fn settings_saved(settings: &serde_json::Value) {
+    if let (Some(server), Some(phone)) = (
+        server(),
+        settings
+            .get("phone")
+            .and_then(|v| serde_json::from_value::<PhoneSettings>(v.clone()).ok()),
+    ) {
+        server.apply(phone);
     }
 }
 
@@ -109,15 +136,16 @@ pub async fn phone_pairings_list(
 ) -> Result<Vec<PairingDto>, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<Vec<PairingDto>, CommandError> {
+        let connected = server().map(|s| s.connected_pairings()).unwrap_or_default();
         Ok(PhonePairings::new(app.store.as_ref(), app.clock.as_ref())
             .list()?
             .into_iter()
             .map(|p| PairingDto {
+                connected: connected.contains(&p.id),
                 id: p.id,
                 name: p.name,
                 created_at: p.created_at,
                 last_seen_at: p.last_seen_at,
-                connected: false,
             })
             .collect())
     })
@@ -149,7 +177,12 @@ pub async fn phone_pairing_revoke(
 ) -> Result<(), CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
     tauri::async_runtime::spawn_blocking(move || -> Result<(), CommandError> {
-        Ok(PhonePairings::new(app.store.as_ref(), app.clock.as_ref()).revoke(id.0)?)
+        PhonePairings::new(app.store.as_ref(), app.clock.as_ref()).revoke(id.0)?;
+        // PH1: that phone's open sockets close (4401).
+        if let Some(server) = server() {
+            server.close_pairing(id.0);
+        }
+        Ok(())
     })
     .await
     .map_err(blocking_error)?
@@ -162,10 +195,21 @@ pub async fn phone_server_status(
     state: State<'_, AppState>,
 ) -> Result<PhoneServerStatusDto, CommandError> {
     let app = state.handles().map_err(CommandError::from)?;
-    Ok(PhoneServerStatusDto {
-        enabled: app.settings.phone.enabled,
-        running: false,
-        port: app.settings.phone.port,
-        error: None,
+    Ok(match server() {
+        Some(server) => {
+            let status = server.status();
+            PhoneServerStatusDto {
+                enabled: status.enabled,
+                running: status.running,
+                port: status.port,
+                error: status.error,
+            }
+        }
+        None => PhoneServerStatusDto {
+            enabled: app.settings.phone.enabled,
+            running: false,
+            port: app.settings.phone.port,
+            error: None,
+        },
     })
 }

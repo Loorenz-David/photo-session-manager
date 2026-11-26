@@ -848,6 +848,22 @@ pub fn drop_on_container(h: &HandAction<'_>, photo_id: i64, n: i64) -> Result<Re
     h.finish(session_id, step)
 }
 
+/// The final number of container `container_id` of the session's template (the phone names
+/// containers by id; `MoveTarget::Container` takes the final number), else `not_in_template`.
+pub fn container_final_no(store: &dyn Store, session_id: i64, container_id: i64) -> Result<i64> {
+    let mut found = None;
+    store.transaction(&mut |tx| {
+        found = template_of(tx, session_id)?.and_then(|t| {
+            t.containers
+                .iter()
+                .find(|c| c.id == container_id)
+                .map(|c| c.final_no)
+        });
+        Ok(())
+    })?;
+    found.ok_or(Error::NotInTemplate)
+}
+
 /// Where the phone moves a photo to (card LV8; design README §Move semantics). Positions are
 /// 1-based. Main is read as the containers in final order (each holds a photo or nothing), then
 /// the Main photos without a container (extras); in an untemplated session Main is the Main list.

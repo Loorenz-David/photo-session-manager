@@ -241,7 +241,11 @@ pub async fn settings_set(
 ) -> Result<SettingsDto, CommandError> {
     let patch =
         serde_json::to_value(&patch).map_err(|e| psm_core::Error::InvalidData(e.to_string()))?;
-    to_dto(state.settings_set(&patch)?)
+    let saved = state.settings_set(&patch)?;
+    if patch.get("phone").is_some() {
+        crate::commands::phone::settings_saved(&saved);
+    }
+    to_dto(saved)
 }
 
 /// Settings → Storage (10F §4): free space on the disk holding the capture root, the space each

@@ -3519,6 +3519,28 @@ pub fn run() {
                 )));
                 (app.paths.root.join("previews"), app.paths.root.join("templates"))
             };
+            // LV2 (PH2): the phone server, once per process, over the App's current handles.
+            {
+                let app = state.handles().expect("app state");
+                let debug_default = cfg!(debug_assertions)
+                    .then(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist"));
+                let web_root = psm_integrations::phone::web_root::resolve(
+                    handle.path().resource_dir().ok(),
+                    std::env::var_os("PSM_PHONE_WEB"),
+                    debug_default,
+                );
+                let app_handle = handle.handle().clone();
+                let server = psm_integrations::phone::server::PhoneServer::start(
+                    psm_integrations::phone::server::PhoneConfig::for_settings(
+                        app.settings.phone,
+                        web_root,
+                        handle.state::<commands::phone::PhoneState>().host.clone(),
+                    ),
+                    Arc::new(move || app_handle.state::<AppState>().handles()),
+                    app.camera_runtime.live_hub(),
+                );
+                commands::phone::set_server(Arc::new(server));
+            }
             // The workspace loads preview files through the asset protocol; only the previews folder is readable.
             handle
                 .asset_protocol_scope()
@@ -3544,10 +3566,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("build Session Manager")
         .run(|handle, event| {
-            if let tauri::RunEvent::Exit = event
-                && let Ok(h) = handle.state::<AppState>().handles()
-            {
-                h.camera_runtime.shutdown();
+            if let tauri::RunEvent::Exit = event {
+                if let Some(server) = commands::phone::server() {
+                    server.stop();
+                }
+                if let Ok(h) = handle.state::<AppState>().handles() {
+                    h.camera_runtime.shutdown();
+                }
             }
         });
 }

@@ -207,3 +207,46 @@ pub fn phone_view(
     })?;
     Ok(PhoneSessionView { session: view })
 }
+
+/// PH4 `GET /photos/<id>/preview`: the preview the Mac's session view shows for the photo — the
+/// developed preview, else the camera's original preview, else the thumbnail.
+pub fn preview_file(photo: &Photo) -> Option<&str> {
+    photo
+        .adjusted_preview_path
+        .as_deref()
+        .or(photo.original_preview_path.as_deref())
+        .or(photo.thumbnail_path.as_deref())
+}
+
+/// PH4: the photo of the active session `session_id` (any other session's photo → `NotFound`:
+/// the phone follows the active session).
+pub fn session_photo(store: &dyn Store, session_id: Option<i64>, photo_id: i64) -> Result<Photo> {
+    match store.photo(photo_id) {
+        Ok(photo) if Some(photo.session_id) == session_id => Ok(photo),
+        _ => Err(crate::Error::NotFound(format!("photo {photo_id}"))),
+    }
+}
+
+/// PH4 `GET /containers/<id>/example`: the stored example file of a container of the active
+/// session's template (`<templates root>/<template id>/<file>`), or `NotFound`.
+pub fn example_file(
+    store: &dyn Store,
+    templates_root: &std::path::Path,
+    session_id: Option<i64>,
+    container_id: i64,
+) -> Result<std::path::PathBuf> {
+    let not_found = || crate::Error::NotFound(format!("container {container_id}"));
+    let session_id = session_id.ok_or_else(not_found)?;
+    let mut found = None;
+    store.transaction(&mut |tx| {
+        found = template_of(tx, session_id)?.and_then(|t| {
+            t.containers
+                .iter()
+                .find(|c| c.id == container_id)
+                .and_then(|c| c.example_file.clone())
+                .map(|file| templates_root.join(t.id.to_string()).join(file))
+        });
+        Ok(())
+    })?;
+    found.ok_or_else(not_found)
+}

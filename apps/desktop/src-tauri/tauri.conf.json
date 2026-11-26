@@ -17,6 +17,9 @@
     "active": true,
     "icon": ["icons/icon.png", "icons/icon.icns"],
     "externalBin": ["binaries/camera-sidecar"],
+    "resources": {
+      "../dist/": "phone-web/"
+    },
     "macOS": { "signingIdentity": "-", "minimumSystemVersion": "13.0" }
   }
 }
