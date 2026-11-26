@@ -43,15 +43,22 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     11:58 (resets 15:15); the runner fell back to Claude Opus by itself (implement 11:58–13:05). Reviewer notes routed to
     LV3 folded into the LV3 plan as Unit 0 (phone Delete events, session-delete announce, rebuild observe, generic error
     bodies; rows C26–C29); master plan §8 gate runs `npm run build` first. Pushed. **LV3 started** (Fable).
+  - **LV3 APPROVED** (review r1, APPROVED_WITH_NOTES, no fix; Fable implement 13:14–13:56, 5 units incl. U0; narrative
+    relayed). Six notes in `backlog_live/LV3_phone_app.md` (capture toast matching and the look comparison with the
+    prototype go to LV4). Plan lesson folded (jsdom has no PointerEvent, master plan §3). **All three build milestones
+    approved**; pushed; pull request to `main` opened; waiting for the owner.
 
 ## Next
-When the planner returns: relay the milestone map and any owner cards verbatim; **wait for the owner's go** (this
-track's wake prompt overrides orchestrator.md's "start immediately"). Then `tools/pipeline/run_phase.sh phase <id>`
-per line of `phases_live.txt`, in the background, never polled; push `feature/live-preview` at the end of a run; PR to
-`main` when all milestones are approved.
+The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
+dispatched by the runner): packaged build with the SDK sidecar, both phones, the a7R V; the plan is
+`plans/LV4_hardware_check.md`. Open notes for LV4: capture toast on real captures, look vs. the prototype, revoke while
+connected, LV1 carry-overs.
 
 ## Run in flight
-- `tools/pipeline/run_phase.sh phase LV3_phone_app` (Fable), started 2026-11-26.
+None.
 
 ## Needs the owner
+- Review / merge the pull request to `main`; schedule the hardware check (LV4).
+- Possible gap to raise: the phone does not draw the camera's own focus frame (10J LV-D14 "the live view shows where
+  the camera is focusing"); only the tap marker and "AF LOCKED".
 

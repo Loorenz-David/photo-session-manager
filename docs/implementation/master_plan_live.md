@@ -55,7 +55,9 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   frame record of §5 FC, the phone wire of §5 PH); the Sony SDK calls are ported from lab code proven on the a7R V
   (evidence `sony_camera_lab.md` §Live view, §Focus from the live picture) and are checked by `LV4`, not by any test;
   the only dependency-owned shapes at a test boundary (axum's WebSocket close frame as `tokio-tungstenite` receives
-  it; browser Pointer/Fullscreen/Vibration APIs in jsdom) are standard and stated where used.
+  it; browser Pointer/Fullscreen/Vibration APIs in jsdom) are standard and stated where used. (LV3 review lesson: this
+  repo's jsdom has **no `PointerEvent`**; phone tests send mouse events of the pointer types with a `pointerId`, see
+  `apps/desktop/src/phone/__tests__/helpers.ts`.)
 - **Test runs** (flow §4, §4A, §10). While working: the unit's **Unit test commands** only. The full closing gate runs
   **once, at the end of each build milestone** (all three change app files). Several test stems go **after `--`**:
   `cargo test -p psm-testkit --test suite -- <stem>:: <stem>::` (one filter is allowed before `--`; two are refused,
