@@ -8,7 +8,7 @@ blocked_on: none
 ---
 # LV5 — Fixes from the hardware check (findings F1–F5, F7 server half, the Settings list)
 
-**Tracker:** IMPLEMENTED (2026-11-26, codex) — fix 1: R1-B1 resolved; both C3 sequences assert current-shot state after each shutter and tap (C3 tests pass).
+**Tracker:** APPROVED (2026-11-26, opus) — re-review r2 APPROVED_WITH_NOTES: R1-B1 resolved (C3(a)/(b) assert `current` after every shutter and the tap, `Free` after s5 discriminates CS4a); no MUST; notes in `backlog_live/LV5_live_fixes.md`.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -465,3 +465,4 @@ dev`), the camera on Wi-Fi, both phones paired:
   command. Also close the trace gaps the handoff lists where the row's outcome names a log line only if the existing test
   harness can capture log lines; otherwise record the state assertion as the row's proof under Assumptions. Keep the four
   unit checkpoints.
+- 2026-11-26, opus, re-review r2: **APPROVED_WITH_NOTES.** Gate: tracker `IMPLEMENTED` with fix note; fix checkpoint `fd620c4a` (made by the orchestrator, sandbox refused the git lock) changes `crates/testkit/tests/suite/lv5_current_shot.rs` only (+11), the allowed file; runner commit `4019ee71` = fix handoff + this plan's tracker/Review log; `e25b5f4e` = orchestrator handoff note + backlog. Tree `f4468621`, clean. **R1-B1 resolved as corrected:** C3(a) asserts `current` X, Y, Z, Free, Free after s1–s5; C3(b) X, tap Z, X, Y, Free, Free. Discriminating by reading: the advance's `*held` is written inside the exposure-insert transaction, and `inject_exposure` waits for the committed row, so the read sees the settled value (no race); on the old `hold_times` (`NOT EXISTS(delivery)`) s1's (a) / s1's and s2's (b) holds end when their files are filed at 4.0/4.4 s, so the advance after s5 would hold `Shot(W)` and `resolve` keeps W (not taken), failing `== Free`. Checks once: `--test suite -- lv5_current_shot:: lv2_current_shot::` 40 passed; clippy `psm-testkit --all-targets -D warnings` clean; fmt clean; typecheck clean. Variation (not a re-run): `lv2_phone_ws:: lv5_phone_socket::` once at module scope, 14 passed; the fix stamp's one-off `lv2_c28b` miss stays a backlog note (stall and idle both close 4408; likely the 200 ms best-effort close frame under full-suite load; the phone reconnects either way, P2). Triage: no blocking item remains, no MUST. Notes: r1's five plus the orchestrator's two, in `backlog_live/LV5_live_fixes.md`. Narrative written.
