@@ -2,6 +2,7 @@
 //! ownership guard (P48: MC-34 R-I30…R-I33).
 pub mod adapter;
 pub mod filenames;
+pub mod live;
 pub mod ownership;
 pub mod start_order;
 pub mod take_back;

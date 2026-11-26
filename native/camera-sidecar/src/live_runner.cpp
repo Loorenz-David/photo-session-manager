@@ -14,6 +14,7 @@ namespace crlab {
 struct LiveRunner::Impl {
   CameraSession& session; EventSink& log; ActionLock& action; int fd;
   std::atomic<bool> stop{true};
+  bool started=false;
   bool streaming=false;
   uint32_t epoch=0;
   LivePacer pacer;
@@ -61,7 +62,12 @@ struct LiveRunner::Impl {
   void sender() {
     while (!stop) {
       auto b=slot.take(std::chrono::milliseconds(30));
-      if (b && !write_all(*b)) { log.emit("liveview.unavailable",Fields().str("reason","frame_channel")); break; }
+      if (b && !write_all(*b)) {
+        log.emit("liveview.unavailable",Fields().str("reason","frame_channel"));
+        stop=true;
+        session.cancel_autofocus();
+        break;
+      }
     }
   }
   void emit_focus_frames() {
@@ -79,8 +85,14 @@ struct LiveRunner::Impl {
   }
   void emit_exposure() {
     Fields props; if (!session.read_properties(props,false).ok) return;
+    std::string shutter="\"\"",aperture="\"\"",iso="\"\"";
+    for (const auto& kv:props.items()) {
+      if (kv.first=="shutter_speed") shutter=kv.second;
+      else if (kv.first=="f_number") aperture=kv.second;
+      else if (kv.first=="iso") iso=kv.second;
+    }
     Fields out;
-    for (const auto& kv:props.items()) if (kv.first=="shutter_speed"||kv.first=="f_number"||kv.first=="iso") out.raw(kv.first,kv.second);
+    out.raw("shutter_speed",shutter).raw("f_number",aperture).raw("iso",iso);
     auto json=out.encode_object();
     if (json!=last_exposure) { last_exposure=json; log.emit("liveview.exposure",out); }
   }
@@ -117,10 +129,10 @@ struct LiveRunner::Impl {
 
 LiveRunner::LiveRunner(CameraSession& s,EventSink& l,ActionLock& a,int fd):impl_(std::make_unique<Impl>(s,l,a,fd)){}
 LiveRunner::~LiveRunner(){stop("shutdown");}
-bool LiveRunner::running() const {return !impl_->stop;}
+bool LiveRunner::running() const {return impl_->started && !impl_->stop;}
 void LiveRunner::start(uint32_t epoch) {
-  if (running()) return;
-  impl_->epoch=epoch; impl_->session.resume_autofocus(); impl_->stop=false;
+  if (impl_->started) return;
+  impl_->epoch=epoch; impl_->session.resume_autofocus(); impl_->stop=false; impl_->started=true;
   impl_->focus_thread=std::thread([this]{impl_->focus();});
   auto state=impl_->session.live_view_state();
   if (state.status!=2) {
@@ -134,7 +146,7 @@ void LiveRunner::start(uint32_t epoch) {
   impl_->sender_thread=std::thread([this]{impl_->sender();});
 }
 void LiveRunner::stop(const std::string& reason) {
-  if (!running()) return;
+  if (!impl_->started) return;
   impl_->stop=true; impl_->session.cancel_autofocus(); impl_->focus_queue.close(); impl_->slot.close();
   if (impl_->pull_thread.joinable()) impl_->pull_thread.join();
   if (impl_->sender_thread.joinable()) impl_->sender_thread.join();
@@ -142,11 +154,13 @@ void LiveRunner::stop(const std::string& reason) {
   if (impl_->streaming) impl_->log.emit("liveview.stopped",Fields().unum("epoch",impl_->epoch).str("reason",reason)
                                   .unum("frames",impl_->pacer.frames()).unum("repeats",impl_->pacer.repeats())
                                   .unum("errors",impl_->pacer.errors()));
+  impl_->started=false;
 }
 void LiveRunner::queue_focus(FocusJob job) {
   auto old=impl_->focus_queue.push(std::move(job));
-  if (old) impl_->log.emit("focus.result",Fields().str("cmd_id",old->cmd_id).str("af","superseded")
-                          .boolean("point_set",false));
+  if (old) impl_->log.emit("focus.result",Fields().str("cmd_id",old->cmd_id).num("x",old->x).num("y",old->y)
+                          .str("af","superseded").boolean("point_set",false)
+                          .num("point_ms",0).num("af_ms",0).num("total_ms",0));
 }
 
 } // namespace crlab

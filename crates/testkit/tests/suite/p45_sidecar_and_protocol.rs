@@ -198,7 +198,7 @@ fn c2a_stub_build_and_cpp_tests() {
     assert!(bin.is_file());
     assert_ne!(fs::metadata(&bin).unwrap().permissions().mode() & 0o111, 0);
     assert!(stdout.contains("0 failed"), "{stdout}");
-    assert!(stdout.contains("100% tests passed out of 1"), "{stdout}");
+    assert!(stdout.contains("100% tests passed out of 2"), "{stdout}");
 }
 
 #[test]

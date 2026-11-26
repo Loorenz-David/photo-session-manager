@@ -961,3 +961,20 @@ name and `duration_ms` (`osascript.rs`); camera lines use target `psm::camera` (
 `camera.event …`); storage lines `storage.cleared` / `storage.item_cleared` / `storage.not_cleared`;
 publish `publish.timing`; Capture One sync `capture_one.sync` / `capture_one.variant_seen after_ms=`.
 The camera helper's own stderr is kept in memory for the Health page (`camera_helper_log`).
+
+## Live camera frames (LV1; book 10J, master_plan_live §5 FC/HB)
+`camera-sidecar auto --frame-socket <path>` connects to a private Unix socket before the camera
+session. Its SDK pull thread paces and de-duplicates JPEG frames; a latest-only sender writes the
+24-byte `PSLV` record and JPEG on the socket, never stdout. The focus worker reads camera focus
+frames and exposure properties and accepts point + half-press jobs. The command loop keeps capture;
+the action lock gives a waiting capture priority over a new focus. The transport adapter stops and
+joins the runner before disconnecting the SDK session.
+
+`camera/sidecar/frames.rs::FrameListener` reads that socket into `CameraFrame`s. The direct adapter
+maps sidecar events into neutral focus, exposure, capture and state events. `CameraRuntime` owns one
+`LiveViewHub` and an empty `CurrentShots` holder across app rebuilds. Core `services/live_view.rs`
+keeps one newest frame, increments a process-wide sequence and offers frames only to outlets whose
+Live demand is visible; each outlet owns a one-frame slot. The first phone outlet is added in LV2;
+the Mac outlet waits for its own design. The `CameraProvider` port declares `live_view` and
+`focus_point` capabilities, and focus accepts normalized 0..1 points; Sony's 640×480 grid lives in
+the direct adapter only.

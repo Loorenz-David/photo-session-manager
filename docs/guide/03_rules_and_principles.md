@@ -66,8 +66,11 @@ Each rule names its source. When a rule here and the source disagree, the source
   the dictionary, wait, never kill), and only when the preconditions hold. Nothing else quits it.
 - Live view is in scope (book `10J`, ratified 2026-11-26). The app may write only the settings live view needs
   (none on the a7R V) and the focus point from a tap (`AF_Area_Position`); **never exposure mode**, network or FTP.
-  Focus and capture run on their own threads, never on the live-pull loop. A camera session is always ended
+  Focus runs on its worker and capture on the command loop, never on the live-pull loop. A camera session is always ended
   cleanly (quit/disconnect), never cut off: an abrupt stop left the camera's USB session half-open in the lab.
+- The sidecar's one camera-write entry takes only StoreDestination, FocusPoint, HalfPress or
+  ShutterRelease intent. Focus never changes Focus Area; a non-movable area is reported and no
+  write follows. An active focus is cancelled on quit; workers join before the SDK disconnects.
 - The automated suite never needs the camera, Capture One, Shopify or the network (flow §6A;
   master plan §3 "Hardware"); the sidecar in tests is `testkit/src/bin/fake_sidecar.rs`.
 - No `implementer: fable` on camera phases (owner).

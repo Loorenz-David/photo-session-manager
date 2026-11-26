@@ -242,3 +242,15 @@ apps/desktop/src-tauri/target/debug/psm-research <command> …
 - When the book catches up with the code, delete the row from `01_product.md` §Book pending updates.
 - The reviewer checks the guide like the registry: a phase that moves something the guide names
   without updating the guide gets a backlog note.
+
+## LV1 live-view checks
+The sidecar accepts `--frame-socket <path>` in `auto`; the first stdin line is still credentials.
+A focus line is `focus x=<0..639> y=<0..479> af=<0|1> cmd_id=<id>` and its result is a JSON
+`focus.result`. Binary frames use `PSLV` version 1, a 24-byte little-endian header and the
+camera's JPEG unchanged. For fake-sidecar scripts, `frame <epoch> <number> <width> <height> <len>`
+writes one deterministic record; `frames <epoch> <first> <count> <interval_ms>` writes a run of
+640×424 records; `badframe` writes wrong magic. `{focus_cmd_id}` substitutes the last focus
+command id. `cargo test -p psm-testkit --test suite lv1_frame_channel::` checks the wired path;
+`lv1_live_hub::` checks viewer demand and focus independently of the SDK. `PSM_LOG=debug` shows
+`liveview.started`, `live.source … frames_10s=`, `focus.request` and `focus.result` when an SDK
+helper and a camera are present.

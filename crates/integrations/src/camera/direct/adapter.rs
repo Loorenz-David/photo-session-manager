@@ -3,6 +3,7 @@
 //! neutral model (P46 plan §The adapter contract is the authority for the event table).
 use super::{
     filenames::normalize_camera_filename,
+    live::{exposure_readout, frame_norm, to_grid},
     ownership::{HolderReport, name_programs},
     start_order::StartReason,
 };
@@ -17,6 +18,10 @@ use psm_core::{
         camera::{
             BusyReason, CameraCapabilities, CameraName, CameraStatus, CaptureId, Delivery,
             ExposureInitiator, ExposureObserved, Link, NeedsActionReason, TRANSFER_EXPECTED_MS,
+        },
+        live::{
+            CaptureReportState, FocusId, FocusOutcome, FocusPoint, FocusRefusal, LiveEvent,
+            SourceStop,
         },
     },
     mechanisms::{
@@ -106,6 +111,7 @@ struct AdapterState {
     pending_fingerprint: Option<(String, bool)>,
     usb_present: Option<bool>,
     auto_waiting: Option<String>,
+    last_live_stats: Option<(u32, u64, u64, u64)>,
 }
 
 pub struct DirectCameraAdapter {
@@ -236,6 +242,7 @@ impl DirectCameraAdapter {
                 pending_fingerprint: None,
                 usb_present: None,
                 auto_waiting: None,
+                last_live_stats: None,
             }),
         }
     }
@@ -450,6 +457,9 @@ impl DirectCameraAdapter {
                     state.remove(&NeedsActionReason::FingerprintMismatch);
                 }
                 HelperEvent::Exited => {
+                    if let Some(runtime) = self.runtime.upgrade() {
+                        runtime.live_stop(SourceStop::SidecarExit);
+                    }
                     out.usb_ready = Some(false);
                     state.inputs.session = None;
                     state.inputs.connecting = None;
@@ -485,6 +495,7 @@ impl DirectCameraAdapter {
         sink: &dyn CaptureSink,
         out: &mut StepOutcome,
     ) {
+        self.apply_live(&stamped.event);
         if let SidecarEvent::SshFingerprint {
             status,
             fingerprint: Some(fp),
@@ -618,6 +629,142 @@ impl DirectCameraAdapter {
                 self.apply_status(&stamped.event, sink);
             }
             event => self.apply_status(event, sink),
+        }
+    }
+
+    fn apply_live(&self, event: &SidecarEvent) {
+        let Some(runtime) = self.runtime.upgrade() else {
+            return;
+        };
+        let hub = runtime.live_hub();
+        match event {
+            SidecarEvent::LiveviewStarted {
+                epoch,
+                transport,
+                status,
+                frame_channel,
+            } => {
+                locked(&self.state).last_live_stats = None;
+                if status == "enabled" && frame_channel == "connected" {
+                    if let Some(link) = link_of(*transport) {
+                        runtime.live_start(*epoch, link);
+                    }
+                } else {
+                    runtime.live_stop(SourceStop::Unavailable {
+                        reason: if status != "enabled" {
+                            status.clone()
+                        } else {
+                            "frame_channel".into()
+                        },
+                    });
+                }
+            }
+            SidecarEvent::LiveviewStopped { .. }
+            | SidecarEvent::SessionClosed { .. }
+            | SidecarEvent::SessionLost { .. } => runtime.live_stop(SourceStop::SessionClosed),
+            SidecarEvent::LiveviewUnavailable { reason } => {
+                runtime.live_stop(SourceStop::Unavailable {
+                    reason: reason.clone(),
+                })
+            }
+            SidecarEvent::LiveviewStats {
+                epoch,
+                frames,
+                repeats,
+                errors,
+                ..
+            } => {
+                let mut state = locked(&self.state);
+                let (f, r, e) = match state.last_live_stats {
+                    Some((old_epoch, pf, pr, pe)) if old_epoch == *epoch => (
+                        frames.saturating_sub(pf),
+                        repeats.saturating_sub(pr),
+                        errors.saturating_sub(pe),
+                    ),
+                    _ => (*frames, *repeats, *errors),
+                };
+                state.last_live_stats = Some((*epoch, *frames, *repeats, *errors));
+                let link = state.inputs.session.clone();
+                drop(state);
+                tracing::info!(
+                    "live.source start={} link={:?} frames_10s={} repeats_10s={} errors_10s={}",
+                    epoch,
+                    link,
+                    f,
+                    r,
+                    e
+                );
+            }
+            SidecarEvent::LiveviewFocusFrame { frames } => hub.report(LiveEvent::FocusFrames(
+                frames.iter().filter_map(|r| frame_norm(*r)).collect(),
+            )),
+            SidecarEvent::LiveviewExposure {
+                shutter_speed,
+                f_number,
+                iso,
+            } => hub.report(LiveEvent::Exposure(exposure_readout(
+                shutter_speed,
+                f_number,
+                iso,
+            ))),
+            SidecarEvent::FocusResult {
+                cmd_id,
+                af,
+                point_set,
+                refused,
+                total_ms,
+                ..
+            } => {
+                let outcome = if af == "superseded" {
+                    FocusOutcome::Superseded
+                } else if refused.as_deref() == Some("focus_area_not_movable") {
+                    FocusOutcome::Refused(FocusRefusal::AreaNotMovable)
+                } else if !*point_set {
+                    FocusOutcome::Failed
+                } else {
+                    match af.as_str() {
+                        "focused" => FocusOutcome::Focused,
+                        "not_focused" => FocusOutcome::NotFocused,
+                        "superseded" => FocusOutcome::Superseded,
+                        "no_af_report" | "skipped" => FocusOutcome::NoReport,
+                        _ => FocusOutcome::Failed,
+                    }
+                };
+                tracing::info!(
+                    "focus.result focus={} outcome={:?} ms={}",
+                    cmd_id,
+                    outcome,
+                    total_ms
+                );
+                hub.report(LiveEvent::Focus {
+                    focus_id: FocusId(cmd_id.clone()),
+                    outcome,
+                });
+            }
+            SidecarEvent::CaptureAcknowledged {
+                capture_id,
+                success,
+                ..
+            } => hub.report(LiveEvent::Capture {
+                capture_id: capture_id.clone(),
+                state: if *success {
+                    CaptureReportState::Acknowledged
+                } else {
+                    CaptureReportState::Failed
+                },
+            }),
+            SidecarEvent::CaptureExposed {
+                capture_id: Some(id),
+                ..
+            } => hub.report(LiveEvent::Capture {
+                capture_id: id.clone(),
+                state: CaptureReportState::Exposed,
+            }),
+            SidecarEvent::CaptureExposureMissing { capture_id } => hub.report(LiveEvent::Capture {
+                capture_id: capture_id.clone(),
+                state: CaptureReportState::Failed,
+            }),
+            _ => {}
         }
     }
 
@@ -843,9 +990,33 @@ impl CameraProvider for DirectCameraAdapter {
             settings_read: true,
             settings_write_store_destination: true,
             depends_on_editing_provider: false,
-            live_view: false,
-            focus_point: false,
+            live_view: true,
+            focus_point: true,
         }
+    }
+    fn focus(&self, point: FocusPoint, autofocus: bool) -> Result<FocusId> {
+        {
+            let state = locked(&self.state);
+            if state.inputs.session.is_none() || !state.inputs.helper_running {
+                return Err(Error::CameraNotConnected);
+            }
+        }
+        let (x, y) = to_grid(point);
+        let id = uuid::Uuid::new_v4().simple().to_string();
+        tracing::info!(
+            "focus.request focus={} x={} y={} af={}",
+            id,
+            x,
+            y,
+            autofocus
+        );
+        self.runtime()?.send_command(Command::Focus {
+            x,
+            y,
+            af: autofocus,
+            cmd_id: id.clone(),
+        })?;
+        Ok(FocusId(id))
     }
     /// R-I29: only on a Wi-Fi session (a reconnect on USB gives the camera to Capture One, V6).
     fn reconnect(&self) -> Result<()> {

@@ -7,6 +7,7 @@ use super::{
     sidecar::{
         SidecarTimings,
         client::{CmdId, CommandOutcome, SidecarClient},
+        frames::FrameListener,
         protocol::{Command, SidecarEvent, Stamped, Transport},
         supervisor::{SidecarSpec, Supervisor, SupervisorEvent},
     },
@@ -31,6 +32,10 @@ use psm_core::{
         camera_ledger::{LedgerService, LedgerShared},
         health::HealthService,
     },
+};
+use psm_core::{
+    domain::live::SourceStop,
+    services::{current_shot::CurrentShots, live_view::LiveViewHub},
 };
 use psm_infra::{
     camera_files::CameraFiles,
@@ -193,7 +198,10 @@ pub struct CameraRuntime {
     spawned_credentials: Mutex<Option<String>>,
     clock: Arc<dyn Clock>,
     paths: AppPaths,
-    helper_log: Mutex<VecDeque<String>>,
+    helper_log: Arc<Mutex<VecDeque<String>>>,
+    frame_listener: Mutex<Option<FrameListener>>,
+    live_hub: Arc<LiveViewHub>,
+    current_shots: Arc<CurrentShots>,
     /// Sidecar timings (production: `SidecarTimings::default()`; `set_sidecar_timings` is the test seam, P70).
     sidecar_timings: RwLock<SidecarTimings>,
     stopped: AtomicBool,
@@ -284,9 +292,12 @@ impl CameraRuntime {
             secrets,
             credentials: Mutex::new(None),
             spawned_credentials: Mutex::new(None),
-            clock,
+            clock: clock.clone(),
             paths,
-            helper_log: Mutex::new(VecDeque::with_capacity(HELPER_LOG_KEPT)),
+            helper_log: Arc::new(Mutex::new(VecDeque::with_capacity(HELPER_LOG_KEPT))),
+            frame_listener: Mutex::new(None),
+            live_hub: Arc::new(LiveViewHub::new(clock.clone())),
+            current_shots: Arc::new(CurrentShots),
             sidecar_timings: RwLock::new(SidecarTimings::default()),
             stopped: AtomicBool::new(false),
             direct: OnceLock::new(),
@@ -432,6 +443,35 @@ impl CameraRuntime {
     }
     pub fn run_id(&self) -> &str {
         &self.run_id
+    }
+    pub fn live_hub(&self) -> Arc<LiveViewHub> {
+        self.live_hub.clone()
+    }
+    pub fn current_shots(&self) -> Arc<CurrentShots> {
+        self.current_shots.clone()
+    }
+    pub fn frame_socket_path(&self) -> Option<PathBuf> {
+        self.frame_listener
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|l| l.path().clone())
+    }
+    pub(crate) fn live_start(&self, epoch: u32, link: Link) {
+        if let Some(listener) = self.frame_listener.lock().unwrap().as_ref() {
+            listener.start_source(epoch, link);
+        } else {
+            self.live_hub.source_stopped(SourceStop::Unavailable {
+                reason: "frame_channel".into(),
+            });
+        }
+    }
+    pub(crate) fn live_stop(&self, reason: SourceStop) {
+        if let Some(listener) = self.frame_listener.lock().unwrap().as_ref() {
+            listener.stop_source(reason);
+        } else {
+            self.live_hub.source_stopped(reason);
+        }
     }
     pub fn set_capture_sink(&self, sink: Arc<dyn CaptureSink>, names: Arc<dyn CompletedNames>) {
         *self.sink.0.write().unwrap() = sink;
@@ -763,15 +803,34 @@ impl CameraRuntime {
             return false;
         }
         *self.staging_dir.lock().unwrap() = Some(staging.clone());
+        let mut frame_listener = self.frame_listener.lock().unwrap();
+        if let Some(mut old) = frame_listener.take() {
+            old.stop();
+        }
+        *frame_listener = FrameListener::bind(
+            &self.run_id,
+            self.live_hub.clone(),
+            self.helper_log.clone(),
+            0,
+        )
+        .ok();
+        let frame_path = frame_listener
+            .as_ref()
+            .map(|l| l.path().to_string_lossy().into_owned());
+        drop(frame_listener);
+        let mut args = vec![
+            "auto".into(),
+            "--save-dir".into(),
+            staging.to_string_lossy().into_owned(),
+            "--usb-product-id".into(),
+            USB_PRODUCT_IDS.into(),
+        ];
+        if let Some(path) = frame_path {
+            args.extend(["--frame-socket".into(), path]);
+        }
         let spec = SidecarSpec {
             program,
-            args: vec![
-                "auto".into(),
-                "--save-dir".into(),
-                staging.to_string_lossy().into_owned(),
-                "--usb-product-id".into(),
-                USB_PRODUCT_IDS.into(),
-            ],
+            args,
             env: vec![(
                 "CRLAB_FINGERPRINT_DIR".into(),
                 self.paths
@@ -1021,6 +1080,21 @@ impl CameraRuntime {
             match event {
                 SupervisorEvent::Exited { .. } => {
                     self.helper_running.store(false, Ordering::SeqCst);
+                    // A new helper process gets a newly bound frame channel at the same path.
+                    // This also clears the bad-record latch and prevents an old stream from
+                    // being mistaken for the next camera source.
+                    let mut listener = self.frame_listener.lock().unwrap();
+                    if let Some(mut old) = listener.take() {
+                        let connections = old.connection_count();
+                        old.stop();
+                        *listener = FrameListener::bind(
+                            &self.run_id,
+                            self.live_hub.clone(),
+                            self.helper_log.clone(),
+                            connections,
+                        )
+                        .ok();
+                    }
                     helper.push(HelperEvent::Exited);
                     if exits >= 3
                         && let Some(binding) = self.binding.read().expect("camera binding").as_ref()
@@ -1311,6 +1385,10 @@ impl CameraRuntime {
                 .supervisor_mut()
                 .quit_and_wait(self.sidecar_timings().quit_grace);
         }
+        if let Some(mut listener) = self.frame_listener.lock().unwrap().take() {
+            listener.stop();
+        }
+        self.live_hub.source_stopped(SourceStop::SessionClosed);
         self.sleep.read().unwrap().release();
         if let Some(staging) = self.staging_dir.lock().unwrap().take() {
             // Only an empty folder is removed. A camera transfer is never touched (H2).

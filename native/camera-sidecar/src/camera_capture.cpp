@@ -78,7 +78,13 @@ bool CameraSession::Impl::read_property(uint32_t code, uint64_t* value, uint32_t
 bool CameraSession::Impl::set_property_verified(uint32_t code, uint64_t value, uint32_t type, int timeout_ms,
                                                 int64_t* waited_ms, uint32_t* sdk_error, uint64_t* last_read,
                                                 bool* read) {
+#if CRLAB_HAS_PROP_StillImageStoreDestination
   if (code != static_cast<uint32_t>(SDK::CrDeviceProperty_StillImageStoreDestination)) return false;
+#else
+  (void)code; (void)value; (void)type; (void)timeout_ms; (void)waited_ms;
+  (void)sdk_error; (void)last_read; (void)read;
+  return false;
+#endif
   int64_t t0 = monotonic_ms();
   auto err = write_camera(WriteIntent::StoreDestination, value, type);
   if (sdk_error) *sdk_error = err;

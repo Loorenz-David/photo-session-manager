@@ -818,6 +818,12 @@ impl TestApp {
     pub fn camera_runtime(&self) -> Arc<psm_integrations::camera::runtime::CameraRuntime> {
         self.app.camera_runtime.clone()
     }
+    pub fn live_hub(&self) -> Arc<psm_core::services::live_view::LiveViewHub> {
+        self.app.camera_runtime.live_hub()
+    }
+    pub fn inject_sidecar_directive(&self, directive: &str) -> Result<()> {
+        self.inject_line(directive)
+    }
     /// `CameraService::capture` over the app's camera provider.
     pub fn capture(&self) -> Result<psm_core::domain::camera::CaptureId> {
         psm_core::services::camera::CameraService::new(
