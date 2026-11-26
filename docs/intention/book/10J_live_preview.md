@@ -2,7 +2,8 @@
 
 **Status: COLLABORATING (shaper draft 2026-11-25, rebased 2026-11-26; not ratified, not planned). All owner cards
 answered and MC-LV3 confirmed (2026-11-25); spikes LV-S1, LV-S2, LV-S4 done, LV-S3 phone half done. Left before
-READY_FOR_RATIFICATION: LV-S3 desktop-webview half (§Owed before ratification).**
+READY_FOR_RATIFICATION: LV-S3 desktop-webview half and LV-S5 focus from the live picture (§Owed before
+ratification); the owner's Claude Design prototype for the phone app is folded in first.**
 Source: the owner's chat of 2026-11-25/26 (answers folded below). First written as "10H" on a stale checkout;
 renamed when the checkout was brought up to date (10G and 10H are Shooting templates and Archived items).
 Changelog entries D3–D4. Builds on **10G Shooting templates** (containers, shooting order, Next, retake) and
@@ -37,6 +38,7 @@ Two purposes:
 | LV-D11 | **Camera settings changed for live view are not restored**, on the condition that they do not slow the workflow and do not change how photos are captured. Live shooting becomes the normal way of shooting. Answers card L4. | — |
 | LV-D12 | **Any paired phone may watch and shoot, several at once.** Answers card L5. | — |
 | LV-D13 | **Image analysis for machine guidance is a recorded future exception to H3**, decided with the machine-guidance chapter; human guidance needs none. Answers card L6. | — |
+| LV-D14 | **Focus from the live picture** (owner 2026-11-26, "the ability to direct the focus with this live stream which the IEDT does … once i have changed the furniture positioning the focus should also change"): clicking or tapping a point on the live view, on the Mac or the phone, moves the camera's focus point there and focuses; the live view shows where the camera is focusing. Mechanism and required camera settings from spike LV-S5. | 10J non-goals (focus control from the phone, narrowed); LV-D2 (Focus Area may need a movable setting) |
 
 ## The working loop (owner's description, the acceptance story)
 1. The phone (or the Mac) shows the **template shot for Next** (10G §5), frozen, full opacity.
@@ -150,10 +152,10 @@ session switch or a relaunch. Placement for every other shot is 10G unchanged.
 | LV-S2 | Can live view really sleep: does stopping the pull reduce camera battery use, or does the camera keep its sensor live anyway (monitor/EVF on)? Wake time after a pause. | **Done 2026-11-25**: camera keeps live view on; no battery saving; wake 0 ms — same |
 | LV-S3 | Delivery: frame channel sidecar → Rust, WebSocket to the desktop webview and to iPhone Safari/PWA; latency end to end; Mac CPU; viewer disappearing. (Camera-side FTP load already measured in LV-S1.) | **Phone half done 2026-11-25** (25 fps, Mac → phone ~15–30 ms, glass → phone ≈ 145 ms, Mac ≈ 5–7 % of a core per side); desktop webview, Wi-Fi camera to phone, several phones, reconnect still owed — `evidence/live_preview_lab.md` |
 | LV-S4 | PWA on iPhone from a LAN address: install, full screen, screen staying awake, which features need HTTPS (card LV3). | **Done 2026-11-25**: install + full screen on both; wake lock and service worker only on HTTPS — `evidence/live_preview_lab.md` |
+| LV-S5 | Focus from the live picture on the a7R V: set the focus point from a click (`AF_Area_Position`, 640×480 grid, or `RemoteTouchOperation`), focus (half-press), confirm focus, read the camera's focus frame for drawing (`GetLiveViewProperties`); which Focus Area / Focus Mode it needs; latency click → focused; USB and Wi-Fi; does a capture keep that point. | lab Experiment 10 → `evidence/sony_camera_lab.md` §Live view |
 
 ## Non-goals (this chapter)
-Machine guidance itself; crane controllers; recording video; focus/exposure control from the phone (beyond what live
-view needs); access from outside the studio network; a native iOS app; changes to 10G's placement other than the
+Machine guidance itself; crane controllers; recording video; exposure control from the phone; focus control beyond choosing the focus point (LV-D14); access from outside the studio network; a native iOS app; changes to 10G's placement other than the
 retake aim (MC-LV3).
 
 ## ⚠ OWNER DECISIONS REQUIRED (none open)

@@ -423,3 +423,9 @@ D11. **2026-11-25 — Owner: MC-LV3 retake aim confirmed** as written (any butto
 photo; cancel / session switch / relaunch clears). 10J has no open owner card; left before READY_FOR_RATIFICATION:
 spike LV-S3's desktop-webview half. At ratification the 10E, 13 and guide texts are amended (live view in scope,
 camera-settings rule narrowed, phone remote moves up).
+
+D12. **2026-11-26 — Owner: focus from the live picture (LV-D14).** Clicking or tapping the live view (Mac or phone)
+moves the camera's focus point there and focuses, as Imaging Edge Desktop does; needed because moving the furniture
+moves the subject. Non-goals narrowed; new spike LV-S5 (lab Experiment 10). Grounding: SDK 2.02 has
+`AF_Area_Position` (x<<16|y in 640×480), `RemoteTouchOperation` (Spot / Tracking AF) and `GetLiveViewProperties`
+(focus frames to draw). Also left before ratification: LV-S3 desktop half; the owner's phone design folded in first.
