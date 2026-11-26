@@ -233,6 +233,20 @@ label printed itself. Same key and store as conversations; labels need the scope
 - **Products from the other Mac** (shop-only items) count as Published in the sessions list until their photos are
   brought back for editing (09C §14.3).
 
+## The phone and the current shot (book `10J`, `11` §Phone remote; `docs/implementation/master_plan_live.md`; LV1–LV2 built, LV3 the phone app)
+- **Current shot.** In a templated session one container is "current" (the Mac outlines it "Next"). Every shutter —
+  the phone, the Mac or the camera's own button — goes to the shot that was current when the camera fired, even
+  when its file arrives late over Wi-Fi; then the current shot moves to the next empty container in shooting order,
+  else the first empty one, else none (shots go to Condition). After a Condition shot it goes back to the first empty
+  container (P1). A photo with no shutter report (Capture One tether, or a file more than 5 minutes after its shutter)
+  takes the shot that is current when it arrives (P2).
+- **Retake** (phone) denies the photo in a shot at once (undoable) and makes that shot current; the next shot fills it
+  with its presets. A Deny on the Mac no longer refills the container by itself; "Shift the rest back" stays (P3).
+- **Pairing.** Settings → Phone → Pair a phone shows a QR code; the phone opens the app from it and keeps its token.
+  The phone server is on by default on port 8686 and answers only paired phones (P4). Remove stops a phone at once.
+- **Session guard.** Every phone action names its session; if the Mac switched session in between, the phone is told
+  "Session changed on the Mac" and nothing happens (P5).
+
 ## Core vocabulary (book `05`; code in `crates/core/src/domain/`)
 | Term | Meaning |
 |---|---|

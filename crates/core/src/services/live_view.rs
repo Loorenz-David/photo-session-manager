@@ -193,6 +193,10 @@ impl LiveViewHub {
             viewer.outlet.event(&event);
         }
     }
+    /// The number of subscribed viewers.
+    pub fn viewer_count(&self) -> usize {
+        self.inner.lock().unwrap().viewers.len()
+    }
     pub fn newest(&self) -> Option<Arc<LiveFrame>> {
         self.inner.lock().unwrap().newest.clone()
     }

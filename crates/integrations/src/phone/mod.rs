@@ -8,3 +8,4 @@ pub(crate) mod routes;
 pub mod server;
 pub mod web_root;
 pub mod wire;
+pub mod ws;

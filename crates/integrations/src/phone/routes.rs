@@ -67,6 +67,7 @@ pub(crate) fn router(shared: Arc<Shared>) -> Router {
         .route("/api/phone/v1/photos/{id}/delete", post(delete_photo))
         .route("/api/phone/v1/photos/{id}/preview", get(preview))
         .route("/api/phone/v1/containers/{id}/example", get(example))
+        .route("/api/phone/v1/ws", get(crate::phone::ws::upgrade))
         .layer(middleware::from_fn(peers))
         .with_state(shared)
 }
@@ -140,6 +141,7 @@ where
                 Ok(pairing) => pairing,
                 Err(e) => return (None, Err(e)),
             };
+            crate::phone::ws::ensure_fed(&shared, &handles);
             let value = f(&handles, &pairing).and_then(|v| {
                 serde_json::to_value(v).map_err(|e| Error::InvalidData(e.to_string()))
             });
@@ -175,6 +177,7 @@ where
                 Ok(pairing) => pairing,
                 Err(e) => return (None, Err(e)),
             };
+            crate::phone::ws::ensure_fed(&shared, &handles);
             let read = f(&handles).and_then(|path| {
                 std::fs::read(&path)
                     .map(|bytes| (path.clone(), bytes))

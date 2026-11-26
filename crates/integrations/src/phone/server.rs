@@ -17,7 +17,13 @@ use std::{
 
 use psm_core::{Result, domain::live::PhoneSettings, services::live_view::LiveViewHub};
 
-use crate::{AppHandles, phone::host::HostInfo};
+use crate::{
+    AppHandles,
+    phone::{
+        host::HostInfo,
+        ws::{Feed, PhoneOutlet},
+    },
+};
 
 /// Resolves the App's current handles (called per request; never kept across requests).
 pub type HandlesFn = Arc<dyn Fn() -> Result<AppHandles> + Send + Sync>;
@@ -84,38 +90,56 @@ pub struct PhoneServerStatus {
 }
 
 /// The open WebSockets by pairing (PH1: a removed phone's sockets close; Settings shows which
-/// phones are connected).
+/// phones are connected; App events reach every socket).
 #[derive(Default)]
 pub(crate) struct Sockets {
-    #[allow(dead_code)] // the WebSocket adds sockets (LV2·U5)
     next: AtomicU64,
-    open: Mutex<HashMap<u64, (i64, Arc<tokio::sync::Notify>)>>,
+    open: Mutex<HashMap<u64, OpenSocket>>,
+}
+
+struct OpenSocket {
+    pairing: i64,
+    revoked: Arc<tokio::sync::Notify>,
+    outlet: Arc<PhoneOutlet>,
 }
 
 impl Sockets {
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<u64, (i64, Arc<tokio::sync::Notify>)>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<u64, OpenSocket>> {
         self.open.lock().unwrap_or_else(|e| e.into_inner())
     }
     /// A socket of `pairing` opened: its id and the signal that closes it (4401).
-    #[allow(dead_code)] // the WebSocket adds sockets (LV2·U5)
-    pub fn add(&self, pairing: i64) -> (u64, Arc<tokio::sync::Notify>) {
+    pub fn add(&self, pairing: i64, outlet: Arc<PhoneOutlet>) -> (u64, Arc<tokio::sync::Notify>) {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let revoked = Arc::new(tokio::sync::Notify::new());
-        self.lock().insert(id, (pairing, revoked.clone()));
+        self.lock().insert(
+            id,
+            OpenSocket {
+                pairing,
+                revoked: revoked.clone(),
+                outlet,
+            },
+        );
         (id, revoked)
     }
-    #[allow(dead_code)] // the WebSocket removes sockets (LV2·U5)
     pub fn remove(&self, id: u64) {
         self.lock().remove(&id);
     }
     pub fn pairings(&self) -> HashSet<i64> {
-        self.lock().values().map(|(p, _)| *p).collect()
+        self.lock().values().map(|s| s.pairing).collect()
     }
     pub fn close_pairing(&self, pairing: i64) {
-        for (p, revoked) in self.lock().values() {
-            if *p == pairing {
-                revoked.notify_one();
+        for socket in self.lock().values() {
+            if socket.pairing == pairing {
+                socket.revoked.notify_one();
             }
+        }
+    }
+    /// Queues a text message on every open socket.
+    pub fn broadcast(&self, message: &str) {
+        let outlets: Vec<Arc<PhoneOutlet>> =
+            self.lock().values().map(|s| s.outlet.clone()).collect();
+        for outlet in outlets {
+            outlet.push(message.to_owned());
         }
     }
 }
@@ -123,13 +147,12 @@ impl Sockets {
 /// What every request reads (no App: the handles are resolved per request).
 pub(crate) struct Shared {
     pub handles: HandlesFn,
-    #[allow(dead_code)] // read by the WebSocket (LV2·U5)
     pub hub: Arc<LiveViewHub>,
     pub web_root: Option<PathBuf>,
-    #[allow(dead_code)] // read by the WebSocket (LV2·U5)
     pub timings: PhoneTimings,
     pub host: Arc<dyn HostInfo>,
     pub sockets: Sockets,
+    pub feed: Feed,
 }
 
 struct Listening {
@@ -174,6 +197,7 @@ impl PhoneServer {
                 timings: config.timings,
                 host: config.host,
                 sockets: Sockets::default(),
+                feed: Feed::default(),
             }),
             state: Mutex::new(State {
                 enabled: config.enabled,
@@ -300,6 +324,23 @@ fn addresses(bind: IpAddr) -> String {
     }
 }
 
+/// HB4: the send buffer of the phone sockets (inherited from the listener). Fixed, so the network
+/// stack never holds more than about one live frame for a phone that stops reading: the frame
+/// waits in the viewer's slot instead, where a newer one replaces it.
+pub const SEND_BUFFER_BYTES: u32 = 256 * 1024;
+
+fn bind(addr: SocketAddr) -> std::io::Result<tokio::net::TcpListener> {
+    let socket = if addr.is_ipv4() {
+        tokio::net::TcpSocket::new_v4()?
+    } else {
+        tokio::net::TcpSocket::new_v6()?
+    };
+    socket.set_reuseaddr(true)?;
+    socket.set_send_buffer_size(SEND_BUFFER_BYTES)?;
+    socket.bind(addr)?;
+    socket.listen(1024)
+}
+
 /// Binds `addr` on a new thread with its own runtime and serves until stopped.
 fn listen(shared: Arc<Shared>, addr: SocketAddr) -> std::result::Result<Listening, String> {
     let (tx, rx) = mpsc::sync_channel(1);
@@ -320,7 +361,7 @@ fn listen(shared: Arc<Shared>, addr: SocketAddr) -> std::result::Result<Listenin
                 }
             };
             runtime.block_on(async move {
-                let listener = match tokio::net::TcpListener::bind(addr).await {
+                let listener = match bind(addr) {
                     Ok(listener) => listener,
                     Err(e) => {
                         let _ = tx.send(Err(match e.kind() {

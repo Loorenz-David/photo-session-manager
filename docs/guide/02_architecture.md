@@ -160,39 +160,52 @@ wrapper `services/search.ts`. Saved pages:
   (`services/templates.rs`) over the `Store` port; every change is its own write (no Save). Example images
   are JPEG copies under `<data>/templates/<template id>/<uuid>.jpg` (`ImageOpsImpl::thumbnail`; the webview
   reads that folder through the asset protocol), shown black and white.
-- **Placement on arrival (T2).** `ArrivalService::accept` → `template_placement::place_arrival` (one
-  transaction; an error is logged and the photo stays where P66 put it). The session's shots (all photos,
-  any classification, not `released`) and holds (reported shutters still expecting a file, ≤ 5 min) are
-  ordered by `mechanisms::shot_order::order`; shot k goes to the container with `shoot_no` k
-  (`mechanisms::template::expected`), beyond the last container → Condition. Only rows with
-  `place_by_hand = 0` move; Main positions are renumbered dense by slot (`renumber_main`, P7). Presets
-  become the photo's composition (P8); while the frame is unknown `pending_zoom` waits and
-  `adopt_frame_tx` (`crates/infra/src/sqlite/store.rs`) applies it to the first rect. No undo step.
+- **The current shot (LV2, book 10J MC-LV3; contract `master_plan_live.md` §5 CS1–CS8; replaces T2's shot
+  index, T4's refill and the retake aim).** `services/current_shot.rs::CurrentShots` (one per process, held by
+  `CameraRuntime::current_shots()`, memory only) holds `{session, Current::Shot(container) | Free}` for the active
+  templated session; a session switch (`AppEvent::ActiveSessionChanged`, emitted by `SessionsService::store_target`,
+  observed by `CurrentShotObserver` in `integrations/src/lib.rs`) or a relaunch forgets it. Read (`current`): a held
+  shot that became taken moves on (`mechanisms::current_shot::next_untaken`: next empty after it in shooting order,
+  else the first empty, else `Free`); nothing held → the default (first empty). `taken` = containers a photo is in +
+  the bindings of slots held by reported shutters. **Binding:** `LedgerService::exposure_observed` →
+  `CurrentShots::bind_exposure` inserts the `camera_exposures` row with `shot_bound = 1, shot_container_id` in the
+  same store transaction, under the ledger worker lock, then advances; a file that arrived before its shutter
+  (`match_late_exposure`) gives the exposure its own binding and nothing advances. A file with no slot owner and an
+  unbound place row (Capture One tether, a file no shutter matched) is bound at arrival on its `photo_places` row
+  (`bind_arrival`, inside `place_arrival`'s transaction). Lock order everywhere: store transaction, then the held
+  value. Logs `current_shot.bound session= exposure= container=` and `current_shot.set … by=phone|retake|advance|default`.
+- **Placement on arrival (T2, by binding since LV2).** `ArrivalService::accept` → `template_placement::place_arrival`
+  (one transaction; an error is logged and the photo stays where P66 put it). `current_shot::shot_plan` sorts the
+  session's unreleased shots and holds by time (`mechanisms::shot_order::slot_owners`: `order`'s counter-run
+  reassignment, keeping each time slot's exposure as its owner), then each photo's binding is its place row's, else
+  its slot owner's exposure's, else **unbound** (shot before LV2: never moved, still counts as taken). A binding to a
+  container goes Main in that container (its presets, P8), unless a hand-placed photo or an earlier photo of the same
+  binding holds it (then Condition; a photo already in its container stays); `None` (Free) → Condition in shot order.
+  Only rows with `place_by_hand = 0` move; Main positions are renumbered dense by slot (`renumber_main`, P7); while the
+  frame is unknown `pending_zoom` waits for `adopt_frame_tx`. No undo step.
 - **Hand changes (T3).** classify, reorder, Deny (`ReviewService`, `photo_place_mark`), a Compose edit
-  (`frame_by_hand`) and a move/copy (row deleted) make a photo "by hand". `drop_on_container` fills an
-  empty container or swaps two placed photos ("Move to container <n>"); `session_view` counts photos that
-  differ; `back_to_template` re-places them (one `StepKind::Template` step "Back to template").
-- **Shooting guidance (2026-11-16, after T4).** `session_view` also returns `next_shot`: the `shoot_no`
-  the next shot would take: the first empty container left by a deleted shot (`gaps`) after the holds
-  that will fill earlier gaps, else P5 applied to one past the shot order less the gaps; `None` past the
-  last container. Display only; placement never reads it.
-- **Retake and shift (T4).** A photo without a container dropped on a filled one: the old photo is denied
-  as Deny does (red, undo window) and `released`; the dropped photo takes its container, its shot key
-  (`key_at`, `key_name`) and the container's presets ("Retake container <n>"). Deny leaves the container
-  empty (a denied photo still counts as a shot) until the next shot refills it: `place_arrival` calls
-  `gap_for_arrival` (only when the arrival is the latest shot in the order) and `take_shot_key` (the
-  denied photo is `released`, the arrival takes its `key_at`/`key_name`), so P5 puts the arrival in that
-  container and nothing else moves; several gaps fill in shooting order (owner 2026-11-16 evening).
-  `TemplateView.can_shift_back` says a later
-  template-placed photo exists; `shift_back` releases the denied photos and re-places the template-placed
-  ones ("Shift the rest back"). Every template step stores each photo's whole state (place, row,
-  composition, denial) before and after; `HistoryService` restores it.
+  (`frame_by_hand`) and a move/copy (row deleted, so the photo is unbound in its new session) make a photo "by
+  hand"; a hand action never changes a binding. `drop_on_container` fills an empty container or swaps two placed
+  photos ("Move to container <n>"); `session_view` counts photos that differ from their binding;
+  `back_to_template` re-places them (one `StepKind::Template` step "Back to template").
+- **The Mac's "Next" (CS8).** `template_session_view` uses `session_view_with_current`: the `shoot_no` of the
+  current shot for the active session, of the default shot for any other (`session_view_at` alone gives the default).
+- **Retake and shift (T4 under CS8).** A photo without a container dropped on a filled one: the old photo is denied
+  (red, undo window) and `released`; the dropped photo is template-placed there with its place row bound to that
+  container and the container's presets ("Retake container <n>"). `template_placement::retake(h, session, container)`
+  (the phone's Retake) denies and releases the photo in the container and makes it the current shot ("Retake shot
+  <n>"). A Deny leaves the container empty and **no refill**: the next shot follows the current shot.
+  `shift_back` releases the denied photos and rebinds every later template-placed photo `|gaps before it|` ranks
+  earlier in shooting order (Condition-bound ones counted after the containers); `can_shift_back` = that changes a
+  place. Every template step stores each photo's whole state (place, row, composition, denial); undo restores it.
+- **Phone Move (LV2, card LV8).** `template_placement::move_to(h, photo, MoveTarget)` — the phone swaps (container or
+  Main position), appends a new extra, swaps with or appends to Condition; never replaces; one step "Move image".
 - **Commands** (`commands/templates.rs`): T1 `templates_list`, `template_get`, `template_create`,
   `template_delete`, `template_container_add`, `template_container_remove`,
   `template_container_example_set`, `template_containers_reorder`, `template_shooting_order_set`,
   `template_container_presets_set` · T2 `template_session_view` · T3 `template_drop`, `template_back` ·
   T4 `template_shift_back`. Error codes `template_exists`, `template_image_unreadable`, `no_template`,
-  `nothing_to_shift`.
+  `nothing_to_shift`; LV2 `shot_filled`, `session_changed`, `not_in_template`.
 - **Remote products in the workspace (H4, `features/workspace/remote/`):** `useRemoteItem(sessionId)` (`getRemote`
   on mount and on `session_changed`, `picture_ready {kind: 'remote'}` paths and `bring_back_progress` merged in place,
   `reload` / `refresh` / `bringBack`; its state keyed by session id); `App.tsx` holds the instance of the session on
@@ -907,8 +920,10 @@ recorded stage of one run, optionally with another model, effort or instructions
 |---|---|
 | `~/Library/Application Support/com.loorenz.sessionmanager/` (`PSM_DATA_DIR` overrides; `AppPaths`, master plan §6.3) | `session_manager.db` (SQLite, WAL) · `settings.json` (0600) · `previews/<pk[0..2]>/<pk>/{original.jpg, adjusted-<g>.jpg, thumb-<g>.jpg}` · `masters/…/master-<g>.tif` · `outputs/…` · `hooks/*.scpt` + `hooks/jxa/*.js` · `spool/`, `spool/bad/` · `logs/psm.<yyyy-mm-dd>.log` · `backup/session_manager-<stamp>.db` (last 30) · `camera/sony/<ver>/` (support package + sidecar copy) · `camera/fingerprints/` · `camera/staging/` · `research/images/<sha[0..2]>/<sha>.jpg` (research copies of photos, listing images) · `templates/<template id>/<uuid>.jpg` (shooting-template examples) · `previews/remote/<item id>/cover-<12 hex of sha256(media id)>.jpg` (H2: a remote item's row picture, 320 px, one per item) · `previews/remote/search/<16 hex of sha256(url without query)>.jpg` (H2: shop search pictures, 160 px, at most 200 MB, oldest first) · `previews/archived/<item id>/<role>-<NN>-<12 hex>.jpg` (P62: 1600 px remote pictures) |
 | Under the capture root (`<document folder>/Capture`) | item folders by `folder_key`; `.incoming/` (FTP parts, `sdk-<run>/`); `.duplicates/`; Capture One's own `CaptureOne/` and `Output/_session_manager/` |
-| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 020_remote_items.sql`, applied by `rusqlite_migration` at `App::open` (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`, 016 container labels, 017 `session_changes` (A10: one row per counted change with its `kind` arrival/editor/app/auto and the `seq` it produced; read by `published_changes` for "Changed after publishing", pruned when a publish completes), 018 `saved_pages`, 019 `conversation_sync`/`conversations`/`conversation_messages`/`conversation_outbox` (C1; no session, item or photo column, so Delete session never touches them), 020 `item_retention.restored_at`/`remote_checked_at` and `archived_images.bytes` (H1: the record of remote pictures; `ALTER TABLE … ADD COLUMN`, so the `p27` rewind test drops them); 014, 015, 017 and 019 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
-| `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research), `conversations {server, sound, banner}` (C1; read live through `ConversationSettingsSlot`, the default server stored as none, never rebuilds the App). A file that does not parse never stops the app (health `settings_invalid`) |
+| SQLite schema | `crates/infra/src/sqlite/migrations/001_init.sql … 020_remote_items.sql`, applied by `rusqlite_migration` at `App::open`, then the idempotent `ensure` steps
+(`sqlite/ensure.rs`: `ensure_research_columns`; LV2 `ensure_live_columns` — `camera_exposures` and
+`photo_places` gain `shot_bound`, `shot_container_id`; table `phone_pairings`) (`SqliteStore::migrations()`); numbering is sequential, files are append-only (a new change = `014_*.sql` + a new `M::up(include_str!)` line in `sqlite/store.rs`). Tables: master plan §6.5 (+ 008 `raw_state.settings_fingerprint`, 009 `publish_items.frozen_item_type`/`item_links.item_type_base`, 010 `item_retention`/`archived_images`, 011 `item_stock`/`publish_item_stock`, 012 `photo_denials`, 013 `attribute_saved_values`/`item_remote_titles`, 014 `shooting_templates`/`template_containers`, 015 `photo_places`, 016 container labels, 017 `session_changes` (A10: one row per counted change with its `kind` arrival/editor/app/auto and the `seq` it produced; read by `published_changes` for "Changed after publishing", pruned when a publish completes), 018 `saved_pages`, 019 `conversation_sync`/`conversations`/`conversation_messages`/`conversation_outbox` (C1; no session, item or photo column, so Delete session never touches them), 020 `item_retention.restored_at`/`remote_checked_at` and `archived_images.bytes` (H1: the record of remote pictures; `ALTER TABLE … ADD COLUMN`, so the `p27` rewind test drops them); 014, 015, 017 and 019 use `CREATE TABLE IF NOT EXISTS`, names in `master_plan_templates.md` §4) |
+| `settings.json` (`psm_infra::settings_file::Settings`; keys master plan §6.8) | `camera {receiver_port, passive_port_start, passive_port_end, auto_take_back}`, `document_id`, `preview_recipe`, `master_recipe`, `output_format {long_edge, quality}`, `style_name`, `default_shape`, `export_folder`, `preview_delay_s`, `theme`, `sku_prefix`, `integration {kind, shop_domain, api_version, client_id, client_secret, condition_photos_key}`, `storage {min_free_gb, retention_days_after_publish}`, `export {prepare_masters}`, `commerce {inventory_default}`, `research` (an opaque slot; shape in §Research), `conversations {server, sound, banner}` (C1; read live through `ConversationSettingsSlot`, the default server stored as none, never rebuilds the App), `phone {enabled, port}` (LV2; never rebuilds the App). A file that does not parse never stops the app (health `settings_invalid`) |
 | Keychain (`infra/keychain.rs`; names in `domain/camera.rs::secrets`) | service `com.loorenz.sessionmanager.camera`, accounts `access-auth-user`, `access-auth-password`, `ftp-password`, the three `research-*-key` accounts (§Research), and `conversations-api-key` (C1: the Pricing key, registered for log redaction on `set` and on the first read). What research redacts and the export looks for (`integrations::research_secret_values`): the three `research-*-key` accounts plus the client secret, nothing of the camera's (A9: the short FTP code turned up by chance in records and image headers). Shopify client id/secret: `settings.json` only; access token: memory only |
 | `settings` table | app state, not user config (`mechanisms_version`, `active_session_id`, spool dedupe keys) |
 
@@ -916,7 +931,7 @@ recorded stage of one run, optionally with another model, effort or instructions
 `psm_core::events::AppEvent` → `EventHub` (integrations `lib.rs`) → `TauriEvents::emit` (desktop
 `lib.rs`) → Tauri event names: `session_changed`, `photo_added`, `photo_changed`, `publish_progress`,
 `export_progress`, `health_changed`, `camera_status_changed` (payload `CameraStatusResponse`),
-`camera_fingerprint_pending`, `history_changed`, `research_changed`, `picture_ready {kind: 'cover' | 'search', session_id?, external_id?, path}` (H2; listener `onPictureReady`), `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); `labels_changed {product_ids, access}` (L1; listener `onLabelsChanged`); plus `edit_menu` emitted by the menu handler. The UI
+`camera_fingerprint_pending`, `history_changed`, `active_session_changed` (LV2, payload the session id or null), `research_changed`, `picture_ready {kind: 'cover' | 'search', session_id?, external_id?, path}` (H2; listener `onPictureReady`), `conversations_changed {toasts: [{conversation_id, text}], more}` (C1; built by `conversation_rules::notice_lines`, listener `onConversationsChanged`; C2: the same arm plays the chime and shows the Mac banners through `alerts.rs`); `labels_changed {product_ids, access}` (L1; listener `onLabelsChanged`); plus `edit_menu` emitted by the menu handler. The UI
 subscribes in `apps/desktop/src/services/events.ts` (and `history.ts`). Events are **not** in the
 specta builder: adding one means a new `AppEvent` variant, a new match arm in `TauriEvents`, and a
 listener in `events.ts`.
@@ -972,9 +987,44 @@ joins the runner before disconnecting the SDK session.
 
 `camera/sidecar/frames.rs::FrameListener` reads that socket into `CameraFrame`s. The direct adapter
 maps sidecar events into neutral focus, exposure, capture and state events. `CameraRuntime` owns one
-`LiveViewHub` and an empty `CurrentShots` holder across app rebuilds. Core `services/live_view.rs`
+`LiveViewHub` and the `CurrentShots` holder (LV2) across app rebuilds. Core `services/live_view.rs`
 keeps one newest frame, increments a process-wide sequence and offers frames only to outlets whose
-Live demand is visible; each outlet owns a one-frame slot. The first phone outlet is added in LV2;
-the Mac outlet waits for its own design. The `CameraProvider` port declares `live_view` and
+Live demand is visible; each outlet owns a one-frame slot. The phone's WebSocket viewer is the first
+outlet (LV2, below); the Mac outlet waits for its own design. The `CameraProvider` port declares `live_view` and
 `focus_point` capabilities, and focus accepts normalized 0..1 points; Sony's 640×480 grid lives in
 the direct adapter only.
+
+## The phone server (LV2; book 11 §Phone remote, 10J; `master_plan_live.md` §5 PH)
+- **Pairing (PH1).** `crates/integrations/src/phone/pairing.rs::PhonePairings` over the `Store` port: a token of 32
+  random bytes (unpadded base64url, 43 characters) is returned once; only its lowercase hex SHA-256 is stored in
+  `phone_pairings` (created by `ensure_live_columns`). `verify` updates `last_seen_at`; `revoke` sets `revoked_at`
+  and the server closes that phone's sockets (4401). `phone/host.rs` gives the Mac's Bonjour name
+  (`scutil --get LocalHostName`), the first private IPv4 and the QR codes (`qrcode` SVG).
+- **Settings → Phone.** `features/settings/PhoneSection.tsx` → `services/phone.ts` → `commands/phone.rs`
+  (`phone_pairing_create`, `phone_pairings_list`, `phone_pairing_rename`, `phone_pairing_revoke`,
+  `phone_server_status`). `settings.phone {enabled, port}` (default on, 8686; refused below 1024, on the FTP control
+  port and in the FTP passive range: `phone_port_invalid`) never rebuilds the App; `settings_set` calls
+  `PhoneServer::apply` (rebind or stop/start).
+- **Server (PH2).** `phone/server.rs::PhoneServer`: one per process, started in the desktop setup with a closure that
+  resolves the current `AppHandles` per request (App rebuilds are invisible) and the runtime's hub; its own thread and
+  tokio runtime; `0.0.0.0:<port>`, peers outside the private ranges get 403; a bind error is the status, the app runs
+  on. Listening socket send buffer fixed at 256 KB (`SEND_BUFFER_BYTES`, HB4: a phone that stops reading holds about
+  one frame in the network stack). Web root (`phone/web_root.rs`): `PSM_PHONE_WEB`, else
+  `<Resources>/phone-web` (packaged: `tauri.conf.json` `bundle.resources` maps `../dist/`), else `apps/desktop/dist`
+  in debug builds.
+- **Routes (PH3, PH4; `phone/routes.rs`, wire in `phone/wire.rs`).** Static `/phone/`, `/assets/*`, `/phone/icon.png`
+  (no token); token (`Authorization: Bearer` or `?pair=`) for `/phone/manifest.webmanifest` and `/api/phone/v1/*`:
+  `hello`, `session` (`core/services/phone_view.rs::phone_view`), POST `capture`, `focus`, `focus/clear`,
+  `current`, `retake`, `photos/<id>/move`, `photos/<id>/delete` (each with the session guard: a non-active
+  `session_id` is 409 `session_changed`), GET `photos/<id>/preview`, `containers/<id>/example`. Handlers only parse,
+  check auth and the guard, call core services on a blocking thread and serialize (H8). Log
+  `phone.request route= status= pairing=` (never the token).
+- **WebSocket (PH5; `phone/ws.rs`).** `/api/phone/v1/ws?pair=` (401 before upgrade). Each socket is a hub viewer
+  (`PhoneOutlet`: a `LatestSlot` for frames, a queue of ≤ 64 text messages); the writer task drops frames of an
+  older demand `gen`, writes the 32-byte `PSMF` header + JPEG, pings every 5 s, closes 4408 (idle 15 s or a write
+  slower than 2 s), 4409 (event queue full), 4401 (pairing removed). Text: `hello`, `demand_ack`, `focus`,
+  `focus_frames`, `capture` (hub events), `camera` (hub state/exposure and `CameraStatusChanged`; one snapshot after
+  `hello`), `session {session_id, rev}` (App events of the active session; the server observes each App's
+  `EventHub` once, `ensure_fed`). Logs `phone.viewer opened|closed`, `live.viewer`.
+- **Phone page.** `apps/desktop/phone.html` + `src/phone/` (LV2: a placeholder that keeps the token per PH7 and
+  says "Connected to <item>"; LV3 builds the Shoot Companion); `vite.config.ts` builds both pages into `dist/`.

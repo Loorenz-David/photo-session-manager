@@ -3785,6 +3785,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "futures-util",
  "getrandom 0.3.4",
  "image",
  "ipnet",
@@ -3801,6 +3802,7 @@ dependencies = [
  "sha2 0.11.1",
  "tempfile",
  "tokio",
+ "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
  "unicode-normalization",

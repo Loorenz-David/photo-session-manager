@@ -25,6 +25,14 @@ it is no longer required; its reason still holds for any build made *before* the
 does not know the publish step `held` or the research columns, so never point it at a data dir a
 research build has written. A scratch folder stays the sensible choice for try-outs.
 
+Phone in the dev app (LV2): `cd apps/desktop && npm run build` once (the server serves `apps/desktop/dist`, or
+`PSM_PHONE_WEB=<dir>`), then run the app; Settings → Phone shows "Phone server on port 8686". **Pair a phone**,
+scan the QR code with the phone (same Wi-Fi); the page says "Connected to <item>". If the phone cannot resolve the
+`.local` name, use **Show the address instead**. Remove the pairing and reload on the phone: it says it was
+removed. Log lines: `phone.server listening port=… addresses=…`, `phone.request route=… status=… pairing=…`,
+`phone.viewer opened|closed`, `current_shot.bound …`. `psm-desktop` builds only when `apps/desktop/dist/` exists
+(`tauri.conf.json` bundles it as `phone-web/`).
+
 ## Tests, lint, typecheck (flow §4A; one cargo command at a time, never two, never piped into `head`)
 | Purpose | Command |
 |---|---|

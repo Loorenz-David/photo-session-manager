@@ -110,6 +110,20 @@ Each rule names its source. When a rule here and the source disagree, the source
 | Without a key, network or integration the writer says why and everything else works; an automatic request ("Next to review", "All checked") never shows a toast and never holds up the owner | HW7, WC3, A19 | `writer/run.rs::writer_block`, commands answer `research_unavailable`, `requestTexts` in `features/sessions/reviewQueue.ts` |
 | At most one `write` run queued per session; none while research or a look runs on the session; automatic origins create at most one per session | WC3 | `writer/run.rs::request_decision` |
 
+## Current shot and phone rules (book 10J MC-LV3, 11 §Phone remote; `docs/implementation/master_plan_live.md` §5 CS, PH)
+- Every exposure of a templated session is bound **once**, when the camera reports it, to the shot current then,
+  inside the ledger worker lock and the same store transaction as its row; a later run never re-binds. A file is
+  placed by its binding whenever it arrives (a late Wi-Fi file still goes to its shot).
+- Photos without a binding (shot before LV2, moved or copied in) are never moved by placement; they still count as
+  taken. A hand action never changes a binding. There is no refill after a Deny: Retake or a tap chooses the shot.
+- The current shot lives in memory only; a session switch or a relaunch starts from the default. Untemplated
+  sessions are exactly as P66 (Main, end of the list).
+- Lock order: the store transaction first, then `CurrentShots`' held value — never the other way round.
+- Phone: no request without a live pairing reaches a service; every POST names the active session (else 409
+  `session_changed`, nothing happens); handlers decide nothing (H8). The token is never logged and never stored
+  (only its SHA-256). The phone app uses relative URLs only and no secure-context API (no service worker, no wake
+  lock): it runs over plain HTTP on the LAN (card LV3).
+
 ## Stack and boundaries (`CLAUDE.md`; book `11`; master plan §6.1)
 - Rust is the backend. **No Python in the product** (`11` §Processes: a Python sidecar only for a
   demonstrated need; none exists). `python3` is used only by the pipeline runner's template rendering
