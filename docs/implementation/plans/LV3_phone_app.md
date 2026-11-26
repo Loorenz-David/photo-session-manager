@@ -9,7 +9,7 @@ blocked_on: none (owner card 1 answered 2026-11-26: Article number = the item's 
 ---
 # LV3 — The phone app
 
-**Tracker:** NOT_STARTED (2026-11-26, planner)
+**Tracker:** IMPLEMENTED (2026-11-26, fable) — 5 units built; 85 rows tested (6 Rust in `lv3_server_carry`, 94 UI tests in `src/phone/__tests__`); closing gate green on a43b75d5 (Rust 2723 passed, behaviour suite 1604; clippy, fmt, sidecar stub, typecheck; UI 1047 passed).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -424,3 +424,63 @@ On this Mac with the camera connected and the phone on the same Wi-Fi:
 7. **Move image** → pick another position: the two images swap.
 
 ## Review log
+
+### 2026-11-26 — implement r1 (Claude Fable 5.2, `implementer: fable`)
+**Built.** U0: a phone Delete announces `PhotoChanged` + `SessionChanged` from core (`ReviewService::delete_announced`);
+deleting the active session announces `ActiveSessionChanged {None}` (`with_events`, plus the path where Capture One
+could not be left); the phone server's event observer is carried from hub to hub at a rebuild
+(`EventHub::observe_carried`, handed over by `transfer_target_to` in `apply_settings`); `500 internal` and `404
+not_found` bodies carry fixed texts. U1–U4: the Shoot Companion under `apps/desktop/src/phone/` as the registry names
+it (shell, socket, live canvas, main screen gestures, capture and focus, dock, preview, Move and Item drawers,
+properties page, toast), the guide updated. Checkpoints in unit order: 0ee711f8 · fefafb8f · ce02e69f · 34fa2a4f ·
+a43b75d5. Full detail, the row → test map and the try-out: `handoffs/implementer/handoff_LV3_phone_app_implement_r1.md`.
+
+**Judgment calls (each also under Assumptions in the handoff).**
+1. Tests fake the Mac at the transports (`fetch`, `WebSocket`) instead of mocking `api.ts`/`socket.ts`: the rows name
+   request bodies, the `Authorization` header and demand messages, which are only observable below those modules.
+2. Free shot shows live all the time (demand `live: true` while in Free shot): there is no template to show, and the
+   design's pill reads "FREE SHOT · LIVE". An untemplated session is Free shot only.
+3. Free shot's viewport is 1:1 (the design's session ratio; the row "FREE SHOT · 1:1"). A shot whose ratio is `null`
+   uses the live frame's aspect, 3:2 before the first frame.
+4. Whenever the phone removes its focus marker (×, choosing another shot, Retake) it also asks the camera to recentre
+   (`POST /focus/clear`), by card LV9's reason; when the Mac moves the current shot the marker stays (the camera keeps
+   its point).
+5. The capture toast waits for the socket's `exposed` for the phone's own capture id and then for the first session
+   re-read that lists a photo it did not list before; its place decides the text. An untemplated session's capture
+   reads "Extra image NN added" (the design's text; §6's "does not occur" is about templated sessions).
+6. "All template shots captured" (design §7) is not shown: the Mac moves the current shot at the exposure, before the
+   photo lands, so the design's order of the two toasts cannot be kept; the pill and the dock outline show Free shot.
+7. The camera's own focus frames (`focus_frames`) are not drawn: no row asks for it; the reticle at the tap and "AF
+   LOCKED" on the camera's report are the design's.
+8. No session open on the Mac: the text "Open a session in Session Manager to start shooting." A failed action other
+   than the named codes: the toast "That did not work. Try again." and a session re-read. Neither text is in §6.
+9. While the Mac does not answer `hello`/`session` the connecting overlay stays and both are asked again every 2 s;
+   the session is re-read on socket open, on every `session` message and after each of the phone's own actions.
+10. The Full screen button sits in its own row above the stage. The dock's scroller is 260 px tall, not the design's
+    190: at 190 the "Release to open" pill of a tile dragged up was cut off (seen in a real browser).
+11. Properties page title: "Item properties". Generic texts of U0: "Something went wrong in Session Manager." and
+    "Not found.".
+12. A double tap uses the prototype's strict `<` (300 ms, 50 px); the README writes `≤`.
+
+**Deviations.**
+- **LV3·C24(a) "Images 1 main · 1 condition".** The row's own fixture (U3's session: B's photo and one extra) has two
+  Main photos, and the Mac's `counts.main` counts both (`phone_view`). The phone shows the Mac's counts; the test's
+  fixture is truthful and asserts "2 main · 1 condition". A slip in the row's text, not a behaviour question.
+- **Preview in U3.** U3's rows open a preview that is U4's file; U3's checkpoint carried a minimal preview (the photo,
+  full screen) that U4 replaced with `Preview.tsx`.
+- **Tracker actor** is `fable` (the prompt template says `codex`): this plan is `implementer: fable`.
+- **No red baseline for U1–U4:** the UI tests were written with the code, not before it. U0's was captured (5 of the
+  6 rows failed before the change; C26(b), one undo step, already held). C28's first red was confounded by the test
+  server's short idle timeout, so it was re-checked by removing the hand-over once (red), then restoring it.
+
+**For the reviewer.**
+- jsdom in this repo has **no `PointerEvent`** (master_plan_live §3 calls the Pointer API "standard" in jsdom):
+  `helpers.ts` sends mouse events of the pointer types with a `pointerId`, and supplies a layout (stage 390 × 610,
+  viewport rect from its inline size and rotation, dock tiles 36 px on a 42 px pitch).
+- Seen in a real browser (headless Chrome, 390 × 844, a throwaway mock of the phone server outside the repo that sent
+  frames by demand): pairing, connecting, template, hold → live over the template at 35 %, the lock slide and lock,
+  tap → reticle → "AF LOCKED", the overlay bar, the flash, dock magnify and drag-up, preview with hold and slide, the
+  Move drawer with the condition group open, the Item drawer, the properties page, a long shot rotated. **Not seen:**
+  a real phone, a real camera, haptics, iPhone's home-screen app, Android's Full screen: LV4.
+- The LV2 backlog notes left for LV4 (the revoke command's wiring, the LV1 carry-overs) are untouched.
+
