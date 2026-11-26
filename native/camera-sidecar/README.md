@@ -51,3 +51,9 @@ file, a credential, or an SSH fingerprint (`*.fingerprint`). `.gitignore` covers
   fallback (`usb.retry_requested`).
 - The executable and CMake project are renamed (`camera-sidecar`, `camera_sidecar`); the internal
   `crlab` namespace and the event names are the lab's.
+- `auto --frame-socket <path>` connects a separate binary channel for live JPEG frames. The
+  control line stays JSON. Pulling runs on its own paced thread; a latest-only sender drops
+  intermediate frames when the reader is slow. `focus x=… y=… af=… cmd_id=…` runs on a separate
+  worker and reports a focus result. A capture waits for an active focus and takes priority
+  over a queued one. Every disconnect stops and joins those workers first. SIGINT and SIGTERM
+  request the same clean stop as `quit`.

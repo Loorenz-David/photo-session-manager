@@ -105,7 +105,7 @@ void SdkCameraAdapter::before_voluntary_stop(Transport t) {
   session_.set_store_destination("camera", 1000);
 }
 
-void SdkCameraAdapter::disconnect() { session_.disconnect(); }
+void SdkCameraAdapter::disconnect() { if (before_disconnect_) before_disconnect_(); session_.disconnect(); }
 
 bool SdkCameraAdapter::read_state(Fields& out) {
   auto r = session_.read_properties(out, false);

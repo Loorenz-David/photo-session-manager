@@ -55,6 +55,14 @@ CaptureResult CameraSession::capture(const std::string&, bool, int) {
   r.message = kMsg;
   return r;
 }
+LiveViewState CameraSession::live_view_state() { return {}; }
+LiveViewFrame CameraSession::pull_live_view_frame() { LiveViewFrame r; r.status=LvPull::Unsupported; return r; }
+FocusState CameraSession::focus_state() { return {}; }
+bool CameraSession::set_focus_point(int,int,int64_t*,uint32_t*) { return false; }
+std::string CameraSession::autofocus(int,int64_t*,uint32_t*) { return "unsupported"; }
+std::vector<FocusFrame> CameraSession::focus_frames(bool*) { return {}; }
+void CameraSession::cancel_autofocus() {}
+void CameraSession::resume_autofocus() {}
 bool CameraSession::configure_save(const std::string&, const std::string&) { return false; }
 StoreDestinationResult CameraSession::set_store_destination(const std::string&, int) { return {}; }
 void CameraSession::set_disconnect_handler(std::function<void(uint32_t, uint64_t)>) {}

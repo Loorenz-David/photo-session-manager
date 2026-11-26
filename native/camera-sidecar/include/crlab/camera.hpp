@@ -74,6 +74,23 @@ struct CaptureResult {
   std::string message;
 };
 
+struct LiveViewState { bool ok=false; int64_t status=-1, quality=-1, protocol=-1; };
+enum class LvPull { Ok, NotUpdated, Error, Unsupported };
+struct LiveViewFrame {
+  LvPull status=LvPull::Error; uint32_t sdk_error=0; int64_t pull_ms=0;
+  uint32_t frame_no=0; std::vector<uint8_t> jpeg;
+};
+struct FocusState {
+  bool ok=false; int64_t focus_mode=-1, focus_area=-1, af_area_position=-1;
+  int64_t priority_key=-1, focus_indication=-1;
+  bool af_position_writable=false, focus_area_writable=false;
+  std::vector<int64_t> focus_area_options;
+};
+struct FocusFrame {
+  int type=0, state=0, priority=0;
+  uint32_t x_num=0, x_den=0, y_num=0, y_den=0, width=0, height=0;
+};
+
 class CameraSession {
  public:
   // --- process-wide SDK lifecycle (Init once, Release once, same thread) ----
@@ -105,6 +122,15 @@ class CameraSession {
   // not focused, up to af_timeout_ms), full press, release, S1 unlock —
   // the RemoteCli "af_shutter" sequence. af=false: full press/release only.
   CaptureResult capture(const std::string& capture_id, bool af = false, int af_timeout_ms = 3000);
+
+  LiveViewState live_view_state();
+  LiveViewFrame pull_live_view_frame();
+  FocusState focus_state();
+  bool set_focus_point(int x, int y, int64_t* verify_ms, uint32_t* sdk_error);
+  std::string autofocus(int timeout_ms, int64_t* duration_ms, uint32_t* s1_error);
+  std::vector<FocusFrame> focus_frames(bool* ok);
+  void cancel_autofocus();
+  void resume_autofocus();
 
   // Set [Still Img. Save Dest.] ("camera" | "pc+camera"; Host PC alone is never written, R-I19)
   // and verify by reading it back for up to timeout_ms. The write is persistent: nothing is
@@ -147,6 +173,7 @@ class SdkCameraAdapter : public CameraAdapter {
   }
   CameraSession& session() { return session_; }
   void set_usb_serial_hint(const std::string& serial) { usb_serial_hint_ = serial; }
+  void set_before_disconnect(std::function<void()> fn) { before_disconnect_ = std::move(fn); }
 
  private:
   // Connect sequence after a successful session connect (R-I19): SetSaveInfo(save_dir), then the
@@ -159,6 +186,7 @@ class SdkCameraAdapter : public CameraAdapter {
   CameraSession session_;
   std::vector<DiscoveredCamera> last_found_;
   std::string usb_serial_hint_;
+  std::function<void()> before_disconnect_;
 };
 
 // Host diagnostics (no SDK): processes known to compete for the camera.

@@ -15,6 +15,46 @@
 
 namespace crlab {
 
+uint32_t CameraSession::Impl::write_camera(WriteIntent intent, uint64_t value, uint32_t type) {
+  if (intent == WriteIntent::ShutterRelease) {
+    return SDK::SendCommand(handle, SDK::CrCommandId::CrCommandId_Release,
+                            value ? SDK::CrCommandParam::CrCommandParam_Down : SDK::CrCommandParam::CrCommandParam_Up);
+  }
+  SDK::CrDeviceProperty p;
+  switch (intent) {
+    case WriteIntent::StoreDestination:
+#if CRLAB_HAS_PROP_StillImageStoreDestination
+      p.SetCode(SDK::CrDeviceProperty_StillImageStoreDestination); break;
+#else
+      return 1;
+#endif
+    case WriteIntent::FocusPoint:
+#if CRLAB_HAS_PROP_AF_Area_Position
+      p.SetCode(SDK::CrDeviceProperty_AF_Area_Position); break;
+#else
+      return 1;
+#endif
+    case WriteIntent::HalfPress:
+#if CRLAB_HAS_PROP_S1
+      p.SetCode(SDK::CrDeviceProperty_S1); break;
+#else
+      return 1;
+#endif
+    case WriteIntent::ShutterRelease: return 1;
+  }
+  p.SetCurrentValue(value);
+  p.SetValueType(static_cast<SDK::CrDataType>(type));
+  return SDK::SetDeviceProperty(handle, &p);
+}
+
+void CameraSession::cancel_autofocus() {
+  { std::lock_guard<std::mutex> lk(impl_->mu); impl_->cancel_focus=true; }
+  impl_->cv.notify_all();
+}
+void CameraSession::resume_autofocus() {
+  std::lock_guard<std::mutex> lk(impl_->mu); impl_->cancel_focus=false;
+}
+
 // ------------------------------------------------------------- property helpers
 
 bool CameraSession::Impl::read_property(uint32_t code, uint64_t* value, uint32_t* type) {
@@ -38,12 +78,9 @@ bool CameraSession::Impl::read_property(uint32_t code, uint64_t* value, uint32_t
 bool CameraSession::Impl::set_property_verified(uint32_t code, uint64_t value, uint32_t type, int timeout_ms,
                                                 int64_t* waited_ms, uint32_t* sdk_error, uint64_t* last_read,
                                                 bool* read) {
-  SDK::CrDeviceProperty p;
-  p.SetCode(code);
-  p.SetCurrentValue(value);
-  p.SetValueType(static_cast<SDK::CrDataType>(type));
+  if (code != static_cast<uint32_t>(SDK::CrDeviceProperty_StillImageStoreDestination)) return false;
   int64_t t0 = monotonic_ms();
-  auto err = SDK::SetDeviceProperty(handle, &p);
+  auto err = write_camera(WriteIntent::StoreDestination, value, type);
   if (sdk_error) *sdk_error = err;
   if (err != SDK::CrError_None) {
     if (waited_ms) *waited_ms = monotonic_ms() - t0;
@@ -100,7 +137,7 @@ CaptureResult CameraSession::capture(const std::string& capture_id, bool af, int
     s1.SetCode(SDK::CrDeviceProperty_S1);
     s1.SetCurrentValue(SDK::CrLockIndicator_Locked);
     s1.SetValueType(SDK::CrDataType_UInt16);
-    auto e = SDK::SetDeviceProperty(im.handle, &s1);
+    auto e = im.write_camera(WriteIntent::HalfPress, SDK::CrLockIndicator_Locked, static_cast<uint32_t>(SDK::CrDataType_UInt16));
     s1_locked = (e == SDK::CrError_None);
     int af_result = 0;
     {
@@ -125,9 +162,9 @@ CaptureResult CameraSession::capture(const std::string& capture_id, bool af, int
     im.awaiting_exposure.push_back({capture_id, t0, t_press});
     while (im.awaiting_exposure.size() > 64) im.awaiting_exposure.pop_front();
   }
-  auto e1 = SDK::SendCommand(im.handle, SDK::CrCommandId::CrCommandId_Release, SDK::CrCommandParam::CrCommandParam_Down);
+  auto e1 = im.write_camera(WriteIntent::ShutterRelease, 1, 0);
   std::this_thread::sleep_for(std::chrono::milliseconds(35));
-  auto e2 = SDK::SendCommand(im.handle, SDK::CrCommandId::CrCommandId_Release, SDK::CrCommandParam::CrCommandParam_Up);
+  auto e2 = im.write_camera(WriteIntent::ShutterRelease, 0, 0);
   r.ack_latency_ms = monotonic_ms() - t_press;
   r.sdk_error = (e1 != SDK::CrError_None) ? e1 : e2;
   r.ok = (e1 == SDK::CrError_None && e2 == SDK::CrError_None);
@@ -148,7 +185,7 @@ CaptureResult CameraSession::capture(const std::string& capture_id, bool af, int
     s1.SetCode(SDK::CrDeviceProperty_S1);
     s1.SetCurrentValue(SDK::CrLockIndicator_Unlocked);
     s1.SetValueType(SDK::CrDataType_UInt16);
-    SDK::SetDeviceProperty(im.handle, &s1);
+    im.write_camera(WriteIntent::HalfPress, SDK::CrLockIndicator_Unlocked, static_cast<uint32_t>(SDK::CrDataType_UInt16));
   }
 #endif
   return r;

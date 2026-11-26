@@ -5,6 +5,7 @@
 // Human-oriented hints go to stderr. Exit codes: 0 ok, 1 operation failed,
 // 2 usage error, 3 session lost, 4 SDK unavailable.
 #include <atomic>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -15,12 +16,15 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <vector>
 
 #include <unistd.h>
 
 #include "crlab/camera.hpp"
 #include "crlab/json_log.hpp"
+#include "crlab/liveview.hpp"
 #include "crlab/transport.hpp"
 #include "crlab/usb_monitor.hpp"
 
@@ -29,6 +33,9 @@ using namespace crlab;
 namespace crlab { __attribute__((weak)) std::string accept_fingerprint_on_next_connect(const std::string& fp, bool) { return fp.empty() ? "fingerprint required" : ""; } }
 
 namespace {
+
+volatile std::sig_atomic_t stop_signal = 0;
+void on_stop_signal(int) { stop_signal = 1; }
 
 const char* kUsage = R"(camera-sidecar — Session Manager camera sidecar (Sony Camera Remote SDK)
 
@@ -48,6 +55,7 @@ commands:
   session                    connect, then read commands from stdin (see below)
   auto                       transport manager: prefer USB, fall back to Wi-Fi [--no-usb] [--no-wifi]
                              [--save-dir DIR] Save-to-PC folder set on every new session
+                             [--frame-socket PATH] binary live-view frame channel
                              [--usb-product-id HEX[,HEX...]] the camera's USB product ids (default 0x0E0C)
                              first stdin line: credentials user=<pct> password=<pct> (percent-encoded)
 
@@ -71,6 +79,7 @@ stdin commands (session/auto):  capture [id=..] [count=N] [interval_ms=M] [af=1]
                                 | store-dest value=camera|pc+camera
                                 | save dir=.. dest=camera|pc+camera | status | busy reason=..|none
                                 | usb-retry (auto) | accept-fingerprint fp=<percent-encoded> [replace=1] | sleep ms=N | quit
+                                | focus x=0..639 y=0..479 af=0|1 cmd_id=<id>
 )";
 
 struct Args {
@@ -453,6 +462,18 @@ std::vector<uint16_t> parse_product_ids(const std::string& s) {
 constexpr int64_t kTransferExpectedMs = 10000;  // busy Transfer from a USB exposure to its download (R-I20)
 
 int cmd_auto(JsonLog& log, const Args& a) {
+  int frame_fd=-1;
+  if (a.has("frame-socket")) {
+    const auto path=a.get("frame-socket");
+    sockaddr_un addr{}; addr.sun_family=AF_UNIX;
+    if (path.size()<sizeof(addr.sun_path)) {
+      std::memcpy(addr.sun_path,path.c_str(),path.size()+1);
+      frame_fd=socket(AF_UNIX,SOCK_STREAM,0);
+      if (frame_fd>=0 && connect(frame_fd,reinterpret_cast<sockaddr*>(&addr),sizeof(addr))!=0) {
+        close(frame_fd); frame_fd=-1;
+      }
+    }
+  }
   ConnectOptions base = options_from(a);
   base.transport = Transport::None;
   base.sdk_reconnect = a.get("sdk-reconnect", "off") == "on";
@@ -479,6 +500,12 @@ int cmd_auto(JsonLog& log, const Args& a) {
   }
 
   SdkCameraAdapter adapter(log, base, a.geti("discover-timeout", 3));
+  ActionLock action;
+  std::unique_ptr<LiveRunner> live;
+  uint32_t live_epoch=0;
+  adapter.set_before_disconnect([&] {
+    if (live) { live->stop("session_closed"); live.reset(); }
+  });
   TransportConfig cfg;
   cfg.usb_enabled = !a.has("no-usb");
   cfg.wifi_enabled = !a.has("no-wifi");
@@ -532,6 +559,7 @@ int cmd_auto(JsonLog& log, const Args& a) {
   Transport ftp_polled_link = Transport::None;
   const int self_pid = static_cast<int>(getpid());
   while (running) {
+    if (stop_signal) tm.request_stop();
     int64_t poll_now = monotonic_ms();
     bool plugged = false;
     {
@@ -545,6 +573,10 @@ int cmd_auto(JsonLog& log, const Args& a) {
     }
     running = tm.step();
     Transport current_link = tm.transport();
+    if (current_link!=Transport::None && !live) {
+      live=std::make_unique<LiveRunner>(adapter.session(),log,action,frame_fd);
+      live->start(++live_epoch);
+    }
     if (current_link != Transport::None && (current_link != ftp_polled_link || monotonic_ms() - ftp_polled_at >= 60000)) {
       Fields ftp;
       adapter.session().read_ftp_status(ftp);
@@ -583,8 +615,10 @@ int cmd_auto(JsonLog& log, const Args& a) {
         usb_exposure_seen = false;
         tm.set_busy(BusyReason::Exposure);
         tm.step();  // drain busy flag before the blocking capture
+        action.lock_capture();
         run_capture(log, adapter.session(), c.get("id"), std::max(1, std::atoi(c.get("count", "1").c_str())),
                     std::atoi(c.get("interval_ms", "1500").c_str()), c.get("af") == "1");
+        action.unlock();
         // A USB exposure during this command already set FileTransfer: keep it until the download.
         if (!usb_exposure_seen) tm.set_busy(BusyReason::None);
       } else if (c.name == "props") {
@@ -595,6 +629,11 @@ int cmd_auto(JsonLog& log, const Args& a) {
         Fields f;
         adapter.session().read_ftp_status(f);
         log.emit("camera.ftp_state", f);
+      } else if (c.name == "focus") {
+        auto point=parse_focus_point(c.get("x"),c.get("y"),c.get("af") == "1",c.get("cmd_id"));
+        if (!point) log.emit("cmd.rejected",Fields().str("cmd",c.name).str("cmd_id",c.get("cmd_id")).str("reason","bad_point"));
+        else if (live && live->running()) live->queue_focus(*point);
+        else log.emit("cmd.rejected",Fields().str("cmd",c.name).str("cmd_id",c.get("cmd_id")).str("reason","live view unavailable"));
       } else {
         log.emit("cmd.error", Fields().str("cmd", c.name).str("error", "unknown command"));
       }
@@ -606,12 +645,16 @@ int cmd_auto(JsonLog& log, const Args& a) {
     wait_ms(100);
   }
   mon.stop();
+  if (live) live->stop("quit");
+  if (frame_fd>=0) close(frame_fd);
   return 0;
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
+  std::signal(SIGINT,on_stop_signal);
+  std::signal(SIGTERM,on_stop_signal);
   Args a;
   if (!parse_args(argc, argv, a) || a.cmd == "help" || a.has("help")) {
     std::fputs(kUsage, stderr);
