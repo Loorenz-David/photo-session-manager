@@ -452,3 +452,13 @@ dev`), the camera on Wi-Fi, both phones paired:
 ## Review log
 
 - **2026-11-26, implement r1 (codex), BLOCKED after four unit checkpoints.** Built the current-shot hold through a filed-but-not-intaken photo, Mac change announcements and preview versions, stall-tolerant phone socket writes and Settings connection refresh, plus Focus Area refusal and real exposure display parsing. Used the delegated choices of a header-only focus predicate, no extra `focus_area` log field, a literal en dash, and a path/mtime-derived opaque preview token. Full closing gate was run once in order. Desktop build, workspace clippy, format check (after formatting), sidecar stub tests, typecheck, and desktop tests passed. The full Rust suite had three failures: two LV5 fake-sidecar startup races were fixed and their module passed on rerun; `p40_undo_history_values::c7a_attribute_events_only_history` still fails because it forbids `SessionChanged` on attribute undo, while PH8 and Unit 2 require that event for every history step. That test file is outside this plan's perimeter, so the tracker remains `NOT_STARTED`. The plan needs a perimeter amendment for that test and an updated expectation before implementation can close. See `handoffs/implementer/handoff_LV5_live_fixes_implement_r1.md` for stamps, checkpoints, and test coverage limits.
+- 2026-11-26, orchestrator (answer to the implementer's BLOCKED): **the perimeter now includes
+  `crates/testkit/tests/suite/p40_undo_history_values.rs`.** Master plan §5 PH8 (2026-11-26, F3) supersedes P40 C7(a)'s
+  "no `SessionChanged` from the attribute reversal": P40 recorded only that attribute writes emitted nothing at the time
+  (P40 plan task 7, D10), not a rule that they must not. Update `c7a_attribute_events_only_history` to expect the same two
+  `HistoryChanged` events, **no** `PhotoChanged`, and `SessionChanged { session_id: s }` after each of the undo and the
+  redo it exercises (PH8: undo and redo of every step kind announce each touched session); keep the test's name or rename
+  it to `c7a_attribute_undo_announces_session` and say so. Re-run that file, then the closing gate from the first failing
+  command. Also close the trace gaps the handoff lists where the row's outcome names a log line only if the existing test
+  harness can capture log lines; otherwise record the state assertion as the row's proof under Assumptions. Keep the four
+  unit checkpoints.

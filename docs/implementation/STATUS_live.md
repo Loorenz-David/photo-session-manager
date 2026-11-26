@@ -112,6 +112,10 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     its photo row) and LV6_phone_dock (Fable; LV-D19 dock, F7 phone half, removed text). Planner choices: tiles 56 px;
     a still touch is a tap; only Flexible Spot (incl. tracking) counts as movable; sockets survive stalls ≤ 15 s;
     Settings list refresh 5 s; missing exposure value "–". LV4 now depends on LV6. **LV5 started.**
+  - **LV5 implement r1 BLOCKED** (16:31–17:01, Codex Sol): all 4 units checkpointed; the gate failed on P40's
+    `c7a_attribute_events_only_history` (forbids `SessionChanged` after attribute undo; PH8 requires it). Answered from
+    the master plan: PH8 supersedes P40 C7(a) (no rule, only "emits nothing today"); perimeter amended in the LV5 Review
+    log; relaunched with RESUME=1 (implement re-runs to finish).
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
