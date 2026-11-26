@@ -27,6 +27,12 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     autonomously"; resolve blocked sessions from the intention and the plan; if Codex runs out entirely, continue on
     Opus (runner change, flow log v1.7).
 
+  - **LV1 run 1** (10:15–11:08): implemented (Codex Sol high, 3 unit checkpoints), review r1 CHANGES_REQUESTED (3 findings:
+    frame listener across helper restarts, frame-channel failure stopping focus, a test expecting a derived value),
+    fix r2 done and green but BLOCKED on its commit (Codex sandbox could not write the worktree's git lock under the main
+    repo's `.git`). Orchestrator committed the fix (`f7d03aa1`), set the handoff DONE, added the git common dir to the
+    runner's Codex sandbox, resumed for the re-review.
+
 ## Next
 When the planner returns: relay the milestone map and any owner cards verbatim; **wait for the owner's go** (this
 track's wake prompt overrides orchestrator.md's "start immediately"). Then `tools/pipeline/run_phase.sh phase <id>`
@@ -34,7 +40,7 @@ per line of `phases_live.txt`, in the background, never polled; push `feature/li
 `main` when all milestones are approved.
 
 ## Run in flight
-- `tools/pipeline/run_phase.sh phase LV1_camera_live_view` (under `caffeinate -i`), started 2026-11-26.
+- `RESUME=1 tools/pipeline/run_phase.sh phase LV1_camera_live_view` (re-review r2), started 2026-11-26.
 
 ## Needs the owner
 
