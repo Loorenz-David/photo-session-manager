@@ -1,8 +1,8 @@
 //! PH5: `GET /api/phone/v1/ws?pair=<token>`. Each socket is a viewer of the live view hub (a
 //! [`LiveOutlet`]): frames by demand through a one-slot mailbox, events through a queue of at most
 //! 64 messages; a writer task sends them, drops a frame of an older demand generation, pings every
-//! `ping`, and closes after `idle_close` without a message (4408), on a frame write slower than
-//! `write_timeout` (4408), on a full event queue (4409) and when the pairing is removed (4401).
+//! `ping`, and closes after `idle_close` without a message (4408), when a write stalls for
+//! `stall_close` (4408), on a full event queue (4409) and when the pairing is removed (4401).
 //! The hub's `offer`/`event` only `put` and wake the writer (HB: never blocking under the hub's
 //! mutex).
 use std::{
@@ -329,6 +329,42 @@ fn close(code: u16, reason: &'static str) -> Message {
     }))
 }
 
+/// Keep one WebSocket send future alive while control events and timers are polled. A newer
+/// frame stays in LatestSlot until this send completes. Dropping the send closes the socket.
+#[allow(clippy::too_many_arguments)]
+async fn write_wait(
+    sink: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    message: Message,
+    timings: crate::phone::server::PhoneTimings,
+    last_heard: &Mutex<Instant>,
+    revoked: &tokio::sync::Notify,
+    reader_done: &tokio::sync::Notify,
+    ping: &mut tokio::time::Interval,
+    report: &mut tokio::time::Interval,
+    viewer: ViewerId,
+    pairing: i64,
+    outlet: &PhoneOutlet,
+) -> std::result::Result<(), &'static str> {
+    let send = sink.send(message);
+    tokio::pin!(send);
+    let stall = tokio::time::sleep(timings.stall_close);
+    tokio::pin!(stall);
+    loop {
+        tokio::select! {
+            result = &mut send => return result.map_err(|_| "write"),
+            _ = &mut stall => return Err("stalled"),
+            _ = revoked.notified() => return Err("revoked"),
+            _ = reader_done.notified() => return Err("closed"),
+            _ = ping.tick() => {
+                if last_heard.lock().unwrap_or_else(|e| e.into_inner()).elapsed() >= timings.idle_close {
+                    return Err("idle");
+                }
+            }
+            _ = report.tick() => log_demand_counts(viewer, pairing, outlet),
+        }
+    }
+}
+
 /// One socket: a hub viewer until it closes.
 async fn serve(shared: Arc<Shared>, pairing: i64, socket: WebSocket) {
     let outlet = Arc::new(PhoneOutlet::new(Arc::downgrade(&shared)));
@@ -387,17 +423,17 @@ async fn serve(shared: Arc<Shared>, pairing: i64, socket: WebSocket) {
     ping.tick().await;
     let mut report = tokio::time::interval(Duration::from_secs(10));
     report.tick().await;
-    let reason = loop {
+    let reason = 'socket: loop {
+        // Events retain FIFO order; a frame is taken only when no send is in progress.
         tokio::select! {
             _ = outlet.wake.notified() => {}
             _ = ping.tick() => {
-                let heard = *last_heard.lock().unwrap_or_else(|e| e.into_inner());
-                if heard.elapsed() >= timings.idle_close {
-                    let _ = tokio::time::timeout(timings.write_timeout, sink.send(close(4408, "idle"))).await;
-                    break "idle";
+                if last_heard.lock().unwrap_or_else(|e| e.into_inner()).elapsed() >= timings.idle_close {
+                    break 'socket "idle";
                 }
-                if tokio::time::timeout(timings.write_timeout, sink.send(Message::Ping(Vec::new().into()))).await.map_or(true, |r| r.is_err()) {
-                    break "write";
+                if let Err(reason) = write_wait(&mut sink, Message::Ping(Vec::new().into()), timings,
+                    &last_heard, &revoked, &reader_done, &mut ping, &mut report, viewer, pairing, &outlet).await {
+                    break 'socket reason;
                 }
                 continue;
             }
@@ -405,42 +441,30 @@ async fn serve(shared: Arc<Shared>, pairing: i64, socket: WebSocket) {
                 log_demand_counts(viewer, pairing, &outlet);
                 continue;
             }
-            _ = revoked.notified() => {
-                let _ = tokio::time::timeout(timings.write_timeout, sink.send(close(4401, "pairing removed"))).await;
-                break "revoked";
-            }
-            _ = reader_done.notified() => break "closed",
+            _ = revoked.notified() => break 'socket "revoked",
+            _ = reader_done.notified() => break 'socket "closed",
         }
         if outlet.overflow.load(Ordering::Relaxed) {
-            let _ = tokio::time::timeout(
-                timings.write_timeout,
-                sink.send(close(4409, "too many events")),
-            )
-            .await;
-            break "overflow";
+            break 'socket "overflow";
         }
-        let mut failed = None;
         while let Some(text) = outlet.pop() {
-            match tokio::time::timeout(timings.write_timeout, sink.send(Message::Text(text.into())))
-                .await
+            if let Err(reason) = write_wait(
+                &mut sink,
+                Message::Text(text.into()),
+                timings,
+                &last_heard,
+                &revoked,
+                &reader_done,
+                &mut ping,
+                &mut report,
+                viewer,
+                pairing,
+                &outlet,
+            )
+            .await
             {
-                Ok(Ok(())) => {}
-                Ok(Err(_)) => {
-                    failed = Some("write");
-                    break;
-                }
-                Err(_) => {
-                    failed = Some("write_timeout");
-                    break;
-                }
+                break 'socket reason;
             }
-        }
-        if let Some(reason) = failed {
-            if reason == "write_timeout" {
-                let _ = tokio::time::timeout(timings.write_timeout, sink.send(close(4408, "slow")))
-                    .await;
-            }
-            break reason;
         }
         if let Some((frame, frame_gen)) = outlet.frames.take() {
             if frame_gen != generation.load(Ordering::Relaxed) {
@@ -455,25 +479,36 @@ async fn serve(shared: Arc<Shared>, pairing: i64, socket: WebSocket) {
                 frame.captured_at_ms,
             ));
             bytes.extend_from_slice(&frame.jpeg);
-            match tokio::time::timeout(
-                timings.write_timeout,
-                sink.send(Message::Binary(bytes.into())),
+            if let Err(reason) = write_wait(
+                &mut sink,
+                Message::Binary(bytes.into()),
+                timings,
+                &last_heard,
+                &revoked,
+                &reader_done,
+                &mut ping,
+                &mut report,
+                viewer,
+                pairing,
+                &outlet,
             )
             .await
             {
-                Ok(Ok(())) => {
-                    outlet.sent.fetch_add(1, Ordering::Relaxed);
-                }
-                Ok(Err(_)) => break "write",
-                Err(_) => {
-                    let _ =
-                        tokio::time::timeout(timings.write_timeout, sink.send(close(4408, "slow")))
-                            .await;
-                    break "write_timeout";
-                }
+                break 'socket reason;
             }
+            outlet.sent.fetch_add(1, Ordering::Relaxed);
         }
     };
+    let closing = match reason {
+        "revoked" => Some(close(4401, "pairing removed")),
+        "stalled" => Some(close(4408, "stalled")),
+        "idle" => Some(close(4408, "idle")),
+        "overflow" => Some(close(4409, "too many events")),
+        _ => None,
+    };
+    if let Some(message) = closing {
+        let _ = tokio::time::timeout(Duration::from_millis(200), sink.send(message)).await;
+    }
     shared.hub.unsubscribe(viewer);
     shared.sockets.remove(socket_id);
     reader.abort();

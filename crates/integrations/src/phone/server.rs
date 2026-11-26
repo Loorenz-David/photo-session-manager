@@ -28,12 +28,12 @@ use crate::{
 /// Resolves the App's current handles (called per request; never kept across requests).
 pub type HandlesFn = Arc<dyn Fn() -> Result<AppHandles> + Send + Sync>;
 
-/// PH5: WebSocket keep-alive and write limits.
+/// PH5a: WebSocket keep-alive and stalled-write limits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PhoneTimings {
     pub ping: Duration,
     pub idle_close: Duration,
-    pub write_timeout: Duration,
+    pub stall_close: Duration,
 }
 
 impl Default for PhoneTimings {
@@ -41,7 +41,7 @@ impl Default for PhoneTimings {
         Self {
             ping: Duration::from_secs(5),
             idle_close: Duration::from_secs(15),
-            write_timeout: Duration::from_secs(2),
+            stall_close: Duration::from_secs(15),
         }
     }
 }

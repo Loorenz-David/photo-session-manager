@@ -278,7 +278,7 @@ fn lv2_c26a_a_viewer_that_does_not_read_gets_only_the_newest_frame() {
         PhoneTimings {
             ping: Duration::from_secs(30),
             idle_close: Duration::from_secs(60),
-            write_timeout: Duration::from_secs(30),
+            stall_close: Duration::from_secs(30),
         },
     );
     let token = phone.pair(&a);
@@ -430,7 +430,7 @@ fn lv2_c28b_a_socket_that_stops_answering_is_closed_4408() {
         PhoneTimings {
             ping: Duration::from_millis(200),
             idle_close: Duration::from_millis(600),
-            write_timeout: Duration::from_millis(500),
+            stall_close: Duration::from_millis(500),
         },
     );
     let token = phone.pair(&a);

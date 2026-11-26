@@ -50,6 +50,15 @@ export function PhoneSection() {
     }
   }, []);
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    let mounted = true;
+    const timer = window.setInterval(() => {
+      void phonePairingsList().then(found => { if (mounted) setPairings(found); }).catch(error => {
+        if (mounted) toast.error(`Phone settings not read: ${(error as Error).message ?? String(error)}`);
+      });
+    }, 5_000);
+    return () => { mounted = false; window.clearInterval(timer); };
+  }, []);
 
   const create = async () => {
     setBusy(true);
@@ -127,7 +136,7 @@ export function PhoneSection() {
           </>
           : <>
             <span>{p.name}</span>
-            <span className="text-muted-foreground">{lastSeen(p.last_seen_at)}</span>
+            <span className="text-muted-foreground">{p.connected ? 'Connected now' : lastSeen(p.last_seen_at)}</span>
             <Button type="button" variant="ghost" aria-label={`Rename ${p.name}`} onClick={() => setRenaming({ id: p.id, name: p.name })}>Rename</Button>
             <Button type="button" variant="ghost" aria-label={`Remove ${p.name}`} onClick={() => setRemoving(p)}>Remove</Button>
           </>}

@@ -41,14 +41,14 @@ pub struct TestPhone {
 }
 
 impl TestPhone {
-    /// Short timings: ping 200 ms, idle close 600 ms, write timeout 500 ms.
+    /// Short timings: ping 200 ms, idle close 600 ms, stalled write close 500 ms.
     pub fn start(a: &TestApp) -> Self {
         Self::start_with(
             a,
             PhoneTimings {
                 ping: Duration::from_millis(200),
                 idle_close: Duration::from_millis(600),
-                write_timeout: Duration::from_millis(500),
+                stall_close: Duration::from_millis(500),
             },
         )
     }

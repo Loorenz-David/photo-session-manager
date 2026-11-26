@@ -1005,7 +1005,8 @@ the direct adapter only.
 - **Settings → Phone.** `features/settings/PhoneSection.tsx` → `services/phone.ts` → `commands/phone.rs`
   (`phone_pairing_create`, `phone_pairings_list`, `phone_pairing_rename`, `phone_pairing_revoke`,
   `phone_server_status`). `settings.phone {enabled, port}` (default on, 8686; refused below 1024, on the FTP control
-  port and in the FTP passive range: `phone_port_invalid`) never rebuilds the App; `settings_set` calls
+  port and in the FTP passive range: `phone_port_invalid`) never rebuilds the App; the open list re-reads pairings
+  every five seconds and labels a live pairing "Connected now"; `settings_set` calls
   `PhoneServer::apply` (rebind or stop/start).
 - **Server (PH2).** `phone/server.rs::PhoneServer`: one per process, started in the desktop setup with a closure that
   resolves the current `AppHandles` per request (App rebuilds are invisible) and the runtime's hub; its own thread and
@@ -1024,7 +1025,8 @@ the direct adapter only.
 - **WebSocket (PH5; `phone/ws.rs`).** `/api/phone/v1/ws?pair=` (401 before upgrade). Each socket is a hub viewer
   (`PhoneOutlet`: a `LatestSlot` for frames, a queue of ≤ 64 text messages); the writer task drops frames of an
   older demand `gen`, writes the 32-byte `PSMF` header + JPEG, pings every 5 s, closes 4408 (idle 15 s or a write
-  slower than 2 s), 4409 (event queue full), 4401 (pairing removed). Text: `hello`, `demand_ack`, `focus`,
+  stalled for 15 s), 4409 (event queue full), 4401 (pairing removed). A write in flight is polled alongside revoke,
+  reader close and the stall timer; newer live frames replace the waiting frame in the one-slot mailbox. Text: `hello`, `demand_ack`, `focus`,
   `focus_frames`, `capture` (hub events), `camera` (hub state/exposure and `CameraStatusChanged`; one snapshot after
   `hello`), `session {session_id, rev}` (App events of the active session; the server's one observer is registered
   with `EventHub::observe_carried`, so `apply_settings` hands it to a rebuilt App's hub with the target and open
