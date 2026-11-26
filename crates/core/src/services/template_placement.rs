@@ -848,6 +848,220 @@ pub fn drop_on_container(h: &HandAction<'_>, photo_id: i64, n: i64) -> Result<Re
     h.finish(session_id, step)
 }
 
+/// Where the phone moves a photo to (card LV8; design README §Move semantics). Positions are
+/// 1-based. Main is read as the containers in final order (each holds a photo or nothing), then
+/// the Main photos without a container (extras); in an untemplated session Main is the Main list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveTarget {
+    /// The container with this final number.
+    Container(i64),
+    /// A Main position: a container (`1..=T`, by final number) or an extra (`T+1…`).
+    MainPosition(i64),
+    /// After every Main photo, as an extra.
+    ExtraEnd,
+    /// A Condition position.
+    Condition(i64),
+    /// After every Condition photo.
+    ConditionEnd,
+}
+
+/// Where a photo is in the phone's model of the session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Spot {
+    Main(usize),
+    Condition(usize),
+}
+
+/// Card LV8: the phone's Move. To a Main position → the photo swaps with whatever is there
+/// (nothing → it moves); `ExtraEnd` → Main after the containers; `Condition(j)` → it swaps with
+/// condition photo `j` (a Main photo gives its Main place to that photo); `ConditionEnd` → appended
+/// to Condition. Every photo whose place changes is placed by hand (10G §6 rule 1); compositions are
+/// not touched. One transaction, one undo step "Move image". Never replaces (the Mac's drop does).
+/// An untemplated session has no containers (`Container` → `no_template`).
+pub fn move_to(h: &HandAction<'_>, photo_id: i64, target: MoveTarget) -> Result<ReviewResult> {
+    crate::services::retention::ensure_photo_not_cleared(h.store, photo_id)?;
+    let at = h.clock.now_ms();
+    let mut session_id = 0;
+    let mut step = None;
+    h.store.transaction(&mut |tx| {
+        step = None;
+        let moved = tx.photo(photo_id)?;
+        session_id = moved.session_id;
+        let template = template_of(tx, session_id)?;
+        let mut finals: Vec<i64> = template
+            .as_ref()
+            .map(|t| t.containers.iter().map(|c| c.final_no).collect())
+            .unwrap_or_default();
+        finals.sort_unstable();
+        let slots = finals.len();
+        let mut photos = tx.photos(session_id)?;
+        photos.sort_by_key(|p| (p.position.unwrap_or(i64::MAX), p.id));
+        // The phone's model: containers (by final number), then extras; Condition in order.
+        let mut main: Vec<Option<i64>> = vec![None; slots];
+        let mut cond: Vec<i64> = Vec::new();
+        for p in &photos {
+            match p.classification {
+                Classification::Main => {
+                    let slot = tx.photo_place_row(p.id)?.and_then(|r| r.slot);
+                    match slot.and_then(|n| finals.iter().position(|f| *f == n)) {
+                        Some(i) if main[i].is_none() => main[i] = Some(p.id),
+                        _ => main.push(Some(p.id)),
+                    }
+                }
+                Classification::Condition => cond.push(p.id),
+                _ => {}
+            }
+        }
+        let source = if let Some(i) = main.iter().position(|m| *m == Some(photo_id)) {
+            Spot::Main(i)
+        } else if let Some(j) = cond.iter().position(|c| *c == photo_id) {
+            Spot::Condition(j)
+        } else {
+            return Err(Error::InvalidValue(
+                "only a Main or Condition photo can be moved".into(),
+            ));
+        };
+        let main_index = |n: i64, len: usize| -> Result<usize> {
+            usize::try_from(n)
+                .ok()
+                .filter(|n| (1..=len).contains(n))
+                .map(|n| n - 1)
+                .ok_or_else(|| Error::InvalidValue(format!("no Main position {n}")))
+        };
+        let destination = match target {
+            MoveTarget::Container(n) => {
+                if template.is_none() {
+                    return Err(Error::NoTemplate);
+                }
+                Some(Spot::Main(finals.iter().position(|f| *f == n).ok_or_else(
+                    || Error::InvalidValue(format!("no container {n}")),
+                )?))
+            }
+            MoveTarget::MainPosition(n) => Some(Spot::Main(main_index(n, main.len())?)),
+            MoveTarget::Condition(n) => Some(Spot::Condition(
+                usize::try_from(n)
+                    .ok()
+                    .filter(|n| (1..=cond.len()).contains(n))
+                    .map(|n| n - 1)
+                    .ok_or_else(|| Error::InvalidValue(format!("no Condition position {n}")))?,
+            )),
+            MoveTarget::ExtraEnd | MoveTarget::ConditionEnd => None,
+        };
+        if destination == Some(source) {
+            return Ok(());
+        }
+        match (target, destination, source) {
+            (_, Some(Spot::Main(i)), Spot::Main(j)) => main.swap(i, j),
+            (_, Some(Spot::Main(i)), Spot::Condition(j)) => match main[i].replace(photo_id) {
+                Some(other) => cond[j] = other,
+                None => {
+                    cond.remove(j);
+                }
+            },
+            (_, Some(Spot::Condition(k)), Spot::Condition(j)) => cond.swap(k, j),
+            (_, Some(Spot::Condition(k)), Spot::Main(j)) => {
+                main[j] = Some(cond[k]);
+                cond[k] = photo_id;
+            }
+            (MoveTarget::ExtraEnd, None, from) | (MoveTarget::ConditionEnd, None, from) => {
+                match from {
+                    Spot::Main(j) => main[j] = None,
+                    Spot::Condition(j) => {
+                        cond.remove(j);
+                    }
+                }
+                if target == MoveTarget::ExtraEnd {
+                    main.push(Some(photo_id));
+                } else {
+                    cond.push(photo_id);
+                }
+            }
+            _ => return Err(Error::InvalidValue("unknown move".into())),
+        }
+        // Extras (and an untemplated Main list) are compacted.
+        let mut extras: Vec<i64> = main.split_off(slots).into_iter().flatten().collect();
+        let wanted: Vec<(i64, Classification, Option<i64>, i64)> = main
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| p.map(|p| (p, Some(finals[i]))))
+            .chain(extras.drain(..).map(|p| (p, None)))
+            .enumerate()
+            .map(|(i, (p, slot))| (p, Classification::Main, slot, i as i64 + 1))
+            .chain(
+                cond.iter()
+                    .enumerate()
+                    .map(|(i, p)| (*p, Classification::Condition, None, i as i64 + 1)),
+            )
+            .collect();
+        let mut ids = Vec::new();
+        for (id, class, slot, _) in &wanted {
+            let p = photos.iter().find(|p| p.id == *id).expect("session photo");
+            let row = tx.photo_place_row(*id)?;
+            let here = place_of(p, row.as_ref());
+            let there = (
+                *class,
+                if *class == Classification::Main {
+                    *slot
+                } else {
+                    None
+                },
+            );
+            if here != there || p.classification != *class {
+                ids.push(*id);
+            }
+        }
+        let positions_change = wanted.iter().any(|(id, class, _, position)| {
+            photos
+                .iter()
+                .find(|p| p.id == *id)
+                .is_some_and(|p| p.classification != *class || p.position != Some(*position))
+        });
+        if ids.is_empty() && !positions_change {
+            return Ok(());
+        }
+        let all: Vec<i64> = wanted.iter().map(|(id, ..)| *id).collect();
+        let before = snapshot(tx, &all)?;
+        for (id, class, slot, position) in &wanted {
+            let p = photos.iter().find(|p| p.id == *id).expect("session photo");
+            tx.set_photo_review(*id, session_id, *class, Some(*position))?;
+            if p.classification != *class {
+                tx.enqueue_mirror_tag(&p.raw_path, *id, at)?;
+            }
+            if template.is_some() && ids.contains(id) {
+                let mut row = tx.photo_place_row(*id)?.unwrap_or(PlaceRow {
+                    photo_id: *id,
+                    ..PlaceRow::default()
+                });
+                row.place_by_hand = true;
+                if *class == Classification::Main {
+                    row.slot = *slot;
+                }
+                tx.photo_place_put(&row)?;
+            }
+        }
+        renumber_main(tx, session_id)?;
+        tx.touch_session(session_id, at)?;
+        let after = snapshot(tx, &all)?;
+        let mut changed = (Vec::new(), Vec::new(), Vec::new());
+        for ((id, b), a) in all.iter().zip(before).zip(after) {
+            if b != a {
+                changed.0.push(*id);
+                changed.1.push(b);
+                changed.2.push(a);
+            }
+        }
+        step = Some(template_step(
+            "Move image".into(),
+            session_id,
+            &changed.0,
+            changed.1,
+            changed.2,
+        ));
+        Ok(())
+    })?;
+    h.finish(session_id, step)
+}
+
 /// 10G §6 rule 3 (P10) under CS8: `old` is denied exactly as `ReviewService::delete` denies
 /// (Deleted, no position, placed by hand, the denial row, the mirror tag) and released; `new`
 /// becomes Main in container `n`, placed by the template with its place row bound to that

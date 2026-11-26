@@ -3,7 +3,9 @@ pub fn type_key(item_type: &str) -> String {
     item_type.trim().to_lowercase()
 }
 
-use crate::domain::composition::{CompositionKind, CompositionValues, Frame, Orientation, Rect};
+use crate::domain::composition::{
+    CompositionKind, CompositionValues, Frame, Orientation, Rect, Shape,
+};
 use crate::domain::template::{Container, Presets};
 use crate::mechanisms::composition::{default_rect, turned_frame};
 
@@ -29,6 +31,24 @@ pub fn zoomed(rect: Rect, zoom: u8) -> Rect {
         y: rect.y + (rect.h - h) / 2.0,
         w,
         h,
+    }
+}
+
+/// PH6 (`master_plan_live.md` §5): the width/height ratio the phone shows for a shot: split → 2.0;
+/// else the presets' shape (or `default_shape` when the container has none): `1:1` 1.0, `4:5` 0.8,
+/// `3:2` 1.5, `2:3` 0.6667, `16:9` 1.7778; `original` and `free` → `None` (the phone uses the live
+/// frame's aspect).
+pub fn shot_ratio(presets: &Presets, default_shape: Shape) -> Option<f64> {
+    if presets.split {
+        return Some(2.0);
+    }
+    match presets.shape.unwrap_or(default_shape) {
+        Shape::Square => Some(1.0),
+        Shape::FourFive => Some(0.8),
+        Shape::ThreeTwo => Some(1.5),
+        Shape::TwoThree => Some(2.0 / 3.0),
+        Shape::SixteenNine => Some(16.0 / 9.0),
+        Shape::Original | Shape::Free => None,
     }
 }
 
@@ -64,6 +84,54 @@ pub fn preset_values(
 
 #[cfg(test)]
 mod tests {
+    fn shaped(shape: Option<Shape>) -> Presets {
+        Presets {
+            split: false,
+            shape,
+            zoom: 0,
+        }
+    }
+    fn ratio_near(value: Option<f64>, want: f64) -> bool {
+        value.is_some_and(|v| (v - want).abs() < 1e-4)
+    }
+
+    /// LV2·C12(b): the PH6 ratio table.
+    #[test]
+    fn lv2_c12b_shot_ratio_follows_the_ph6_table() {
+        let split = Presets {
+            split: true,
+            shape: Some(Shape::ThreeTwo),
+            zoom: 20,
+        };
+        assert_eq!(shot_ratio(&split, Shape::Square), Some(2.0));
+        assert!(ratio_near(
+            shot_ratio(&shaped(Some(Shape::Square)), Shape::Original),
+            1.0
+        ));
+        assert!(ratio_near(
+            shot_ratio(&shaped(Some(Shape::FourFive)), Shape::Square),
+            0.8
+        ));
+        assert!(ratio_near(
+            shot_ratio(&shaped(Some(Shape::ThreeTwo)), Shape::Square),
+            1.5
+        ));
+        assert!(ratio_near(
+            shot_ratio(&shaped(Some(Shape::TwoThree)), Shape::Square),
+            0.6667
+        ));
+        assert!(ratio_near(
+            shot_ratio(&shaped(Some(Shape::SixteenNine)), Shape::Square),
+            1.7778
+        ));
+        assert_eq!(
+            shot_ratio(&shaped(Some(Shape::Original)), Shape::Square),
+            None
+        );
+        assert_eq!(shot_ratio(&shaped(Some(Shape::Free)), Shape::Square), None);
+        assert!(ratio_near(shot_ratio(&shaped(None), Shape::Square), 1.0));
+    }
+
     use super::*;
     use crate::domain::composition::{Flip, Shape};
     use crate::mechanisms::composition::validate;
