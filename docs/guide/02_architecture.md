@@ -167,7 +167,9 @@ wrapper `services/search.ts`. Saved pages:
   observed by `CurrentShotObserver` in `integrations/src/lib.rs`) or a relaunch forgets it. Read (`current`): a held
   shot that became taken moves on (`mechanisms::current_shot::next_untaken`: next empty after it in shooting order,
   else the first empty, else `Free`); nothing held → the default (first empty). `taken` = containers a photo is in +
-  the bindings of slots held by reported shutters. **Binding:** `LedgerService::exposure_observed` →
+  the bindings of slots held by reported shutters. A shutter keeps holding its slot while its file is pending or
+  filed but not yet a photo, up to the ledger's five-minute matching window; `store.rs::hold_times` ends the hold
+  only when a non-duplicate delivery's final path appears as a photo in that session. **Binding:** `LedgerService::exposure_observed` →
   `CurrentShots::bind_exposure` inserts the `camera_exposures` row with `shot_bound = 1, shot_container_id` in the
   same store transaction, under the ledger worker lock, then advances; a file that arrived before its shutter
   (`match_late_exposure`) gives the exposure its own binding and nothing advances. A file with no slot owner and an

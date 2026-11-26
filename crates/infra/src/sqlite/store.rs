@@ -913,7 +913,7 @@ impl StoreTx for SqliteTx<'_> {
         .map_err(db)
     }
     fn hold_times(&self, session_id: i64, now_ms: i64) -> Result<Vec<(i64, i64)>> {
-        let mut stmt = self.tx.prepare("SELECT e.exposed_at,e.id FROM camera_exposures e WHERE e.session_id=?1 AND e.status='expecting' AND ?2-e.exposed_at<=?3 AND NOT EXISTS(SELECT 1 FROM camera_deliveries d WHERE d.exposure_id=e.id AND d.outcome!='duplicate') ORDER BY e.exposed_at,e.id").map_err(db)?;
+        let mut stmt = self.tx.prepare("SELECT e.exposed_at,e.id FROM camera_exposures e WHERE e.session_id=?1 AND ?2-e.exposed_at<=?3 AND NOT EXISTS(SELECT 1 FROM camera_deliveries d JOIN photos p ON p.session_id=e.session_id AND p.raw_path=d.final_path WHERE d.exposure_id=e.id AND d.outcome!='duplicate') ORDER BY e.exposed_at,e.id").map_err(db)?;
         stmt.query_map(
             params![session_id, now_ms, psm_core::domain::camera::FIFO_WINDOW_MS],
             |r| Ok((r.get(0)?, r.get(1)?)),

@@ -206,8 +206,8 @@ impl TestApp {
         self.app.reopen()?;
         Ok(support)
     }
-    /// Deliver a camera file to the ledger, then let the watcher accept its final name.
-    pub fn arrival_photo(&self, _session_id: i64, name: &str) -> Result<String> {
+    /// File a camera delivery without taking it into the session's photo list yet.
+    pub fn file_photo(&self, name: &str) -> Result<String> {
         use sha2::{Digest, Sha256};
         let bytes = name.as_bytes();
         let staged = self
@@ -235,9 +235,19 @@ impl TestApp {
             .expect("delivery recorded")
             .final_path
             .clone();
-        self.app.arrival.watcher_event(Path::new(&final_path))?;
-        self.tick(1_000)?;
         Ok(final_path)
+    }
+    /// Take a previously filed delivery into the photo list.
+    pub fn take_in_photo(&self, final_path: &str) -> Result<()> {
+        self.app.arrival.watcher_event(Path::new(final_path))?;
+        self.tick(1_000)?;
+        Ok(())
+    }
+    /// Deliver a camera file to the ledger, then let the watcher accept its final name.
+    pub fn arrival_photo(&self, _session_id: i64, name: &str) -> Result<String> {
+        let path = self.file_photo(name)?;
+        self.take_in_photo(&path)?;
+        Ok(path)
     }
     pub fn settings_set(&mut self, patch: &serde_json::Value) -> Result<serde_json::Value> {
         self.app.settings_set(patch)

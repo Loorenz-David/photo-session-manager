@@ -36,6 +36,7 @@ mod lv2_phone_ops;
 mod lv2_phone_pairing;
 mod lv2_phone_ws;
 mod lv3_server_carry;
+mod lv5_current_shot;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

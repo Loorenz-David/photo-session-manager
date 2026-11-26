@@ -118,6 +118,8 @@ Each rule names its source. When a rule here and the source disagree, the source
   taken. A hand action never changes a binding. There is no refill after a Deny: Retake or a tap chooses the shot.
 - The current shot lives in memory only; a session switch or a relaunch starts from the default. Untemplated
   sessions are exactly as P66 (Main, end of the list).
+- A reported shutter's container stays taken until its delivered file has become a photo, or five minutes have
+  elapsed since the shutter. Filing a file alone never makes that container available to the next shutter.
 - Lock order: the store transaction first, then `CurrentShots`' held value — never the other way round.
 - Phone: no request without a live pairing reaches a service; every POST names the active session (else 409
   `session_changed`, nothing happens); handlers decide nothing (H8). The token is never logged and never stored
