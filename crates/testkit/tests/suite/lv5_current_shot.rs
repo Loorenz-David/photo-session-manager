@@ -302,16 +302,21 @@ fn lv5_c3a_five_fast_wifi_shutters_keep_distinct_bindings_through_late_files() {
     let (a, s, [w, x, y, z]) = fixture4();
     let t = a.clock.now_ms();
     let e1 = inject_exposure(&a, 1);
+    assert_eq!(current(&a, s), Current::Shot(x));
     at(&a, t, 1200);
     let e2 = inject_exposure(&a, 2);
+    assert_eq!(current(&a, s), Current::Shot(y));
     at(&a, t, 2400);
     let e3 = inject_exposure(&a, 3);
+    assert_eq!(current(&a, s), Current::Shot(z));
     at(&a, t, 3600);
     let e4 = inject_exposure(&a, 4);
+    assert_eq!(current(&a, s), Current::Free);
     at(&a, t, 4000);
     let p1 = file(&a, 101);
     at(&a, t, 4800);
     let e5 = inject_exposure(&a, 5);
+    assert_eq!(current(&a, s), Current::Free);
     assert_eq!(
         [
             binding(&a, e1),
@@ -359,6 +364,7 @@ fn lv5_c3b_a_phone_tap_and_out_of_order_files_keep_each_shutters_shot() {
     let (a, s, [w, x, y, z]) = fixture4();
     let t = a.clock.now_ms();
     let e1 = inject_exposure(&a, 1);
+    assert_eq!(current(&a, s), Current::Shot(x));
     at(&a, t, 500);
     a.app
         .camera_runtime
@@ -371,18 +377,23 @@ fn lv5_c3b_a_phone_tap_and_out_of_order_files_keep_each_shutters_shot() {
             a.clock.now_ms(),
         )
         .unwrap();
+    assert_eq!(current(&a, s), Current::Shot(z));
     at(&a, t, 1200);
     let e2 = inject_exposure(&a, 2);
+    assert_eq!(current(&a, s), Current::Shot(x));
     at(&a, t, 2400);
     let e3 = inject_exposure(&a, 3);
+    assert_eq!(current(&a, s), Current::Shot(y));
     at(&a, t, 3600);
     let e4 = inject_exposure(&a, 4);
+    assert_eq!(current(&a, s), Current::Free);
     at(&a, t, 4000);
     let p2 = file(&a, 102);
     at(&a, t, 4400);
     let p1 = file(&a, 101);
     at(&a, t, 4800);
     let e5 = inject_exposure(&a, 5);
+    assert_eq!(current(&a, s), Current::Free);
     assert_eq!(
         [
             binding(&a, e1),
