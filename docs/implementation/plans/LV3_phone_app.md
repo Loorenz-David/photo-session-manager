@@ -9,7 +9,7 @@ blocked_on: none (owner card 1 answered 2026-11-26: Article number = the item's 
 ---
 # LV3 — The phone app
 
-**Tracker:** IMPLEMENTED (2026-11-26, fable) — 5 units built; 85 rows tested (6 Rust in `lv3_server_carry`, 94 UI tests in `src/phone/__tests__`); closing gate green on a43b75d5 (Rust 2723 passed, behaviour suite 1604; clippy, fmt, sidecar stub, typecheck; UI 1047 passed).
+**Tracker:** APPROVED (2026-11-26, opus) — review r1: APPROVED_WITH_NOTES. All 85 rows hold at their boundaries; Review-mode checks green (build; suite stems `lv2_phone_ops`/`lv2_phone_ws`/`lv3_server_carry` 29 passed; phone UI 94 passed; typecheck); H1–H8 hold; no secure-context API, absolute URL or token leak under `src/phone/`; design thresholds match; no blocking item; six notes to the live backlog.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -483,4 +483,39 @@ a43b75d5. Full detail, the row → test map and the try-out: `handoffs/implement
   Move drawer with the condition group open, the Item drawer, the properties page, a long shot rotated. **Not seen:**
   a real phone, a real camera, haptics, iPhone's home-screen app, Android's Full screen: LV4.
 - The LV2 backlog notes left for LV4 (the revoke command's wiring, the LV1 carry-overs) are untouched.
+
+### 2026-11-26 — review r1 (opus, pipeline-reviewer): **APPROVED_WITH_NOTES**
+- **Gate.** Tracker read `IMPLEMENTED`; checkpoints `0ee711f8` · `fefafb8f` · `ce02e69f` · `34fa2a4f` · `a43b75d5` ·
+  close `9ba8180a` all in `git log`. Tree at review `1c00d149`, clean.
+- **Perimeter.** `git diff --stat 0ee711f8^ 9ba8180a` = 46 paths = the handoff's 45 code/guide files + this plan file.
+  The two paths outside the plan's file lists (`crates/testkit/src/phone.rs`, `crates/integrations/src/lib.rs`) are
+  disclosed and needed (C28: the plan's "code path that rebuilds the App"; the test server that follows a rebuild).
+- **Checks (Review mode, once each).** `npm run build` ok; `cargo test -p psm-testkit --test suite -- lv2_phone_ops::
+  lv2_phone_ws:: lv3_server_carry::` 29 passed; `npx vitest run src/phone` 7 files, 94 passed; `npm run typecheck`
+  clean. The implementer's closing-gate stamp (Rust 2723, clippy, fmt, sidecar stub, UI 1047) stands.
+- **Verified correct.** U0: `ReviewService::delete_announced` emits `PhotoChanged` + `SessionChanged` from core (H8; the
+  route only calls it); `session_delete` builds `SessionsService::with_events` and announces `ActiveSessionChanged
+  {None}` only when Capture One could not be left (no double emission); `EventHub::observe_carried` is handed over in
+  both rebuild paths (`apply_settings` Runtime and `reopen`), deduplicated by pointer; `error_body` fixes the 500/404
+  texts. U1–U4: tests fake the Mac at `fetch`/`WebSocket`, so the asserted bodies, `Authorization` header and demand
+  messages are the real ones. `decodeFrame`/`reconnectDelay` match PH5/PH7; frame acceptance by `gen` and `seq`;
+  `liveShown` keeps the template at 1 until a frame of the current `gen` is drawn. `tapToFrame` re-derived by hand
+  for C12(a–d) (0.16797, 0.23438, rotated (225, 150) → (0.5, 0.5)). Camera `status` strings match `ws::status_name`.
+  The phone's extra positions (`shots.length + index + 1`) match the server's container-then-extras Main model in
+  `move_to`, and the `container` target is converted to `final_no` by the route. Every threshold and timing equals the
+  design README (hold 200 ms, tap 260 ms, double tap 300 ms / 50 px, slide 14 px, lock 110 px, overlay ×130, magnify
+  95 px, drag-up −50 px, toast 1.4 s, flash .45 s after 70 ms). The book's differences hold: Condition after the last
+  shot (hint text, "Condition image added"), Move swaps, × recentres (`POST /focus/clear`), Left/Right split labels,
+  dock in shooting order with final numbers. No `serviceWorker`/`wakeLock`/`crypto`/`clipboard`/`getUserMedia`, no
+  `console`, no absolute URL or scheme under `src/phone/`; the token never reaches a toast or a log. Every row's test
+  observes the row's outcome at its boundary and fails on a wrong one (C24(a) asserts the truthful counts, see notes).
+- **Assumptions.** None contradicts 10J. Free shot always live fits LV-D5 as revised (no sleep). Recentring on every
+  marker removal follows card LV9's reasoning. Leaving out "All template shots captured" is allowed: §6 lists the
+  toast texts, it does not require each one. All twelve go to the narrative.
+- **H1–H8.** Hold (no external writes; Delete = Deny, bytes kept; frames drawn as received, grey by CSS; events from
+  core; nothing device-specific in core).
+- **Notes** (6, `docs/implementation/backlog_live/LV3_phone_app.md`): C24(a) row text vs fixture (plan lesson);
+  capture toast depends on `exposed` before the re-read; old hub keeps the carried observer; jsdom has no
+  `PointerEvent` (`master_plan_live` §3); overlay tick against the render's value; side-by-side look comparison not
+  done by the reviewer (unattended, no browser).
 
