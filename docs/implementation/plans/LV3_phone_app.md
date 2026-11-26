@@ -5,7 +5,7 @@ difficulty: high
 projection: no
 depends_on: [LV2_current_shot_and_phone_server]
 implementer: fable
-blocked_on: none (owner card 1 affects only the item drawer's "Article number" row, LV3·C24(a))
+blocked_on: none (owner card 1 answered 2026-11-26: Article number = the item's barcode, supplied by LV2's `article_number`)
 ---
 # LV3 — The phone app
 
@@ -324,7 +324,7 @@ Same session as U3 (B 02 "Back" filled; A 01 "Front"; C 03; all ratio 1.0; extra
 | LV3·C23(d) | same | tap "+ New extra" | target `{kind: "extra_end"}`; toast "Added as extra image" | PH4, design §7 |
 | LV3·C23(e) | same | expand Condition images; tap "C1" | target `{kind: "condition", position: 1}`; toast "Swapped with C1" | card LV8, PH4 |
 | LV3·C23(f) | same | expanded; tap "+ Add" | target `{kind: "condition_end"}`; toast "Sent to condition images" | PH4, design §7 |
-| LV3·C24(a) | Item drawer | tap the menu button; `article_number` null | `vibrate(12)`; title "Oak Lounge Chair"; "CONNECTED · <MAC NAME>"; rows SKU "BEY-123", Current shot "01/03 · 1:1", Angle "Front", Images "1 main · 1 condition"; **no** Article number row (owner card 1) | LV-D17, design §6 |
+| LV3·C24(a) | Item drawer | tap the menu button; `article_number` null | `vibrate(12)`; title "Oak Lounge Chair"; "CONNECTED · <MAC NAME>"; rows SKU "BEY-123", Current shot "01/03 · 1:1", Angle "Front", Images "1 main · 1 condition"; **no** Article number row (an item without a barcode) | LV-D17, design §6 |
 | LV3·C24(b) | same | `article_number` "A-77" | an "Article number" row "A-77" after SKU | LV-D17 |
 | LV3·C24(c) | same | current Free | Current shot "FREE SHOT · 1:1"; no Angle value | design §6 |
 | LV3·C24(d) | same | tap **Fill item properties** | a full-page empty container with a back control; back returns to the drawer | LV-D17 |

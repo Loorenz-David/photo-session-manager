@@ -3,7 +3,7 @@
 # Each needs the one before it approved (the Tracker line of its plan file). No projection, no inventory session (master_plan_live.md §3).
 # LV3 carries `implementer: fable` (owner 2026-11-26); LV1 and LV2 never do.
 # LV4 is owner-attended: the orchestrator runs it with the owner; if the runner starts it, its task 0 answers BLOCKED.
-# Owner card 1 (handoffs/reviewer/handoff_live_plan_r1.md) blocks nothing: on silence the phone hides the "Article number" row.
+# Owner card 1 answered 2026-11-26: the phone's "Article number" is the item's barcode (Shopify product barcode).
 LV1_camera_live_view
 LV2_current_shot_and_phone_server
 LV3_phone_app

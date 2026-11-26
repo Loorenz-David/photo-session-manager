@@ -4,7 +4,7 @@ title: The current shot and the phone server — every shutter (phone, Mac or th
 difficulty: high
 projection: no
 depends_on: [LV1_camera_live_view]
-blocked_on: none (owner card 1 affects only the `article_number` value of LV2·C9(b))
+blocked_on: none (owner card 1 answered 2026-11-26: `article_number` = the item's barcode)
 ---
 # LV2 — Current shot and the phone server
 
@@ -182,7 +182,7 @@ New: `crates/core/src/services/phone_view.rs`, `crates/testkit/tests/suite/lv2_p
 `mechanisms::template::shot_ratio`.
 
 ### Ordered tasks
-1. `shot_ratio` (PH6 table) and `phone_view` (PH6 shape; `article_number` = `null` until owner card 1 is answered).
+1. `shot_ratio` (PH6 table) and `phone_view` (PH6 shape; `article_number` = the item's `barcode` (`crates/core/src/domain/item.rs`, read from the Shopify variant barcode), owner card 1 answered 2026-11-26).
 2. `move_to` with the five targets: to a Main position (container or extra position) → swap with whatever is there
    (nothing → move); `ExtraEnd` → Main after the containers' range; `Condition(j)` → swap with condition j (a Main
    source gives its Main place to that condition photo); `ConditionEnd` → append. A template photo touched is placed by
@@ -197,7 +197,7 @@ events).
 | Row | Boundary | Input | Exact outcome | Trace |
 |---|---|---|---|---|
 | LV2·C9(a) | `phone_view` | active T3 session; item title "Oak Lounge Chair", SKU "BEY-123"; photo in B; one Condition photo; `current` = `Shot(A)` | `shots` in order B, A, C with `final_no` 2, 1, 3, `ratio` 2.0, 1.0, 1.0 (C has no shape: the default `1:1`), `split` true/false/false, `zoom` 0/20/0, `photo` only on B; `extras` []; `condition` one; `counts` {main 1, condition 1}; `current` {shot, A}; item name and SKU as given | PH6, LV-D15, LV-D17 |
-| LV2·C9(b) | same | any item | `article_number` = null (owner card 1 decides its source) | PH6, LV-D17 |
+| LV2·C9(b) | same | an item with barcode "7350001234567"; an item with no barcode | `article_number` = "7350001234567"; `article_number` = null (owner card 1, 2026-11-26: the item's barcode) | PH6, LV-D17 |
 | LV2·C9(c) | same | active untemplated session with Main P1, P2 and Condition Q | `templated` false; `shots` []; `extras` [P1, P2]; `condition` [Q]; `current` null | PH6, 10J §phone design (untemplated) |
 | LV2·C9(d) | same | no active session | `session` null | PH6, LV-D18 |
 | LV2·C10(a) | `move_to(P, Container(C))` | P in A, Q in C | P in C, Q in A, both `place_by_hand = 1`; one undo step reverses both | card LV8, 10G §6 rule 1 |

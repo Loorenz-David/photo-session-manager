@@ -400,7 +400,7 @@ text: `{type: "demand", gen, live, visible}` (answered by `demand_ack` after `se
 `write_timeout` (2 s) → close 4408; a close → unsubscribe at once; each viewer's frame buffer is a `LatestSlot` and its
 event queue holds at most 64 messages (overflow → close 4409). Several phones each get their own viewer (LV-D12).
 **PH6 PhoneSessionView** (`phone_view`): `{session: null | {id, item: {name (item title), sku, article_number: <string>
-|null /*owner card 1*/}, templated, current: {kind: "shot", container_id} | {kind: "free"} | null (untemplated),
+|null /*the item's barcode, owner card 1 answered 2026-11-26*/}, templated, current: {kind: "shot", container_id} | {kind: "free"} | null (untemplated),
 shots: [{container_id, final_no, shoot_no, name (container name or "Container <final_no>"), ratio: <f64>|null, split,
 zoom, example: bool, photo: Image|null}] in shooting order, extras: [Image] (Main photos without a container, in Main
 order), condition: [Image] (Condition order), counts: {main, condition}}}`, `Image = {photo_id, revision, ratio:
@@ -476,5 +476,5 @@ Closing gate of every build milestone, once, one command after the other: `cargo
 ## 9. Sequencing
 `LV1` → `LV2` → `LV3` → `LV4`, strictly (each needs the previous APPROVED). `LV2` needs `LV1`'s hub and focus API;
 `LV3` needs `LV2`'s routes and wire (frozen in §5 PH, so `LV3`'s tests mock them); `LV4` needs the packaged build of
-`LV3`. Owner card 1 (handoff) blocks only the item drawer's "Article number" row (LV2·C9(b)'s `article_number` stays
-`null` and LV3·C24(a) hides the row until it is answered); nothing else waits.
+`LV3`. Owner card 1 answered 2026-11-26: "Article number" is the item's barcode (the Shopify product barcode Session Manager
+already reads); LV2·C9(b) fills it, LV3·C24(a) hides the row only when an item has no barcode.

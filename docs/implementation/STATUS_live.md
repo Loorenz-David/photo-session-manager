@@ -20,6 +20,9 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     this worktree (`npm ci`; git-ignored).
   - Planner finding for later: `cargo test ... --test suite a:: b::` with two filters before `--` is refused; flow §4A
     wording could be corrected (not done; main's flow file).
+  - **Card 1 answered (owner 2026-11-26):** "the article number is the product barcode in shopify" → branch (a):
+    `article_number` = the item's barcode (already read from the Shopify variant barcode); LV2·C9(b), LV3·C24, master
+    plan PH6/§9 amended.
   - Plan relayed to the owner; **waiting for the owner's go** before LV1.
 
 ## Next
@@ -30,5 +33,4 @@ per line of `phases_live.txt`, in the background, never polled; push `feature/li
 
 ## Needs the owner
 - Go for the build (LV1 → LV2 → LV3, then LV4 together).
-- Card 1 (verbatim in the planner handoff): where the phone's "Article number" comes from — (a) barcode, (b) a shop
-  product field the owner names (recommended), (c) leave it out. On silence the phone hides that row; nothing waits.
+
