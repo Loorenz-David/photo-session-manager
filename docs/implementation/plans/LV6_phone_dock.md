@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV6 — The phone's dock (LV-D19) and the phone halves of the fixes
 
-**Tracker:** IMPLEMENTED (2026-11-26, fable) — U1 `a4df2ebd` + row C3(b) `da576109`, U2 `b0728c90`; 14 rows by 14 tests + 1 core-mechanism test; phone tests 103 passed; closing gate green on `da576109` (Rust 2760 passed, UI 1058 passed).
+**Tracker:** APPROVED (2026-11-26, opus) — review r1 APPROVED_WITH_NOTES: perimeter = the declared paths of `a4df2ebd`, `b0728c90`, `da576109`; phone tests 103 passed, typecheck and build green (reviewer run on `b815e3b2`); all 14 rows have a boundary test that fails on a wrong outcome; the six removed LV3 tests are exactly the plan's; H1–H8 hold; notes in `backlog_live/LV6_phone_dock.md`.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -280,3 +280,32 @@ row → test map: `handoffs/implementer/handoff_LV6_phone_dock_implement_r1.md`.
 - The plan's header table and frontmatter title still count 13 rows; with C3(b) there are 14.
 - Plan-fold notes for the orchestrator: `master_plan_live.md` §4.7 could name the LV3 test files above; its §2 row
   for LV6 still says 13 rows; the design README's lock distance (110 px) is now superseded by LV-D19 (3).
+
+### 2026-11-26 — review r1 (opus): APPROVED_WITH_NOTES
+**Verified correct.**
+- *Perimeter.* `a4df2ebd`, `b0728c90`, `da576109` change exactly the files the handoff declares (the plan's lists plus
+  the test-only deviations it names: `lv3_preview`, `lv3_drawers`, `lv3_main`, `lv3_geometry`); no production file
+  outside the plan; the document commits touch only the handoff and this file.
+- *Checks (Review mode, once, on `b815e3b2`).* `npx vitest run src/phone` 9 files, 103 passed · `npm run typecheck` exit
+  0 · `npm run build` built. The implementer's full-gate stamp on `da576109` stands (later commits are documents).
+- *Rows.* All 14 read code-then-test. C1(a) loads the real `phone.css` and asserts computed sizes, radius, gap and the
+  84 px ceiling. C2(a)–(d) tap through `PhoneApp`'s dock with exact preview kickers, `vibrate` calls equal to `[[15]]`
+  (or none) and empty POST lists; C2(c) would fail on the LV3 hold (its magnify and hover haptics break the exact `[[15]]`).
+  C3(a): the layout stub subtracts `scrollLeft`, so the second tap at x 44 lands on "03" and the test asserts the exact
+  `/current` body. C3(b) asserts both the 50 px and the 55 px outcomes and the demand sent. C4(a)–(c), C5(a)–(b) assert
+  whole URLs, the absence of `<img>` while waiting or failed, the 1999/2000 ms retry edges, `try=1..3` then none, and
+  the restart on `k2`. C6(a)/(b) assert the exact §6 text (as amended) and the token removed for 401 and 4401.
+- *By reading (Review mode).* No hold, magnify, label or drag-up code left in `Dock.tsx`/`gestures.ts` (`tileScale`,
+  `TILE_PX`, hold thresholds and the three haptics gone; one comment names the old design). The six removed LV3 tests
+  are exactly the plan's; the nine kept ones exist and pass. `previewUrl` is called only by `PhotoImage`, which is the
+  only preview `<img>` (dock, Preview, Move drawer); a failed image is unmounted, so no broken-image glyph. No
+  secure-context API or absolute URL under `src/phone/`. `TEXT.removed` equals master_plan_live §6 v1.1 verbatim. The
+  Mac side sends `preview: Option<String>` (`phone_view.rs`, LV5·U2).
+- *Assumptions 1–8:* none contradicts 10J LV-D19 or PH6a; reported to the owner in the narrative.
+- *H1–H8:* phone UI only; no external write, no pixel processing (the grey look is the existing CSS display filter), no
+  business logic moved into the UI. Guide files updated for the dock, the image rule and the 55 px lock.
+
+**Notes** (none blocks; `docs/implementation/backlog_live/LV6_phone_dock.md`): a picture that failed four times stays
+grey until its preview changes; the Preview's placeholder hides the template on hold; the dock layout stub encodes the
+pitch by hand; duplicated removed-text and 55 px tests; plan/master-plan row counts (13 vs 14) and the design README's
+110 px are stale.
