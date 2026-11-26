@@ -309,6 +309,21 @@ pub trait Store: Send + Sync {
     ) -> Result<i64>;
     fn active_session_id(&self) -> Result<Option<i64>>;
     fn set_active_session_id(&self, id: Option<i64>) -> Result<()>;
+    /// PH1 (`phone_pairings`): a new pairing; returns its id.
+    fn phone_pairing_insert(&self, name: &str, token_sha256: &str, created_at: i64) -> Result<i64>;
+    /// PH1: the number of pairings ever made (revoked ones included), for "Phone <n>".
+    fn phone_pairings_ever(&self) -> Result<i64>;
+    /// PH1: the live pairing (not revoked) with that token hash, its `last_seen_at` set to `at`.
+    fn phone_pairing_seen(
+        &self,
+        token_sha256: &str,
+        at: i64,
+    ) -> Result<Option<crate::domain::live::PhonePairing>>;
+    /// PH1: `revoked_at = at` (no change for an unknown or already revoked pairing).
+    fn phone_pairing_revoke(&self, id: i64, at: i64) -> Result<()>;
+    fn phone_pairing_rename(&self, id: i64, name: &str) -> Result<()>;
+    /// PH1: the pairings not revoked, oldest first.
+    fn phone_pairings(&self) -> Result<Vec<crate::domain::live::PhonePairing>>;
     fn job_due(
         &self,
         now_ms: i64,

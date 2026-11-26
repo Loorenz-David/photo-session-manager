@@ -16,6 +16,7 @@ use psm_core::{
         },
         editing::Job,
         item::{Item, ItemOrigin, NewItem},
+        live::PhonePairing,
         output::slot_name,
         photo::{Classification, Integrity, NewPhoto, Photo, PhotoSource},
         publish::{DefinitionLink, Notification, PhotoLink, PublishItem},
@@ -1684,6 +1685,16 @@ fn delivery_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<DeliveryRow> {
     })
 }
 
+fn phone_pairing_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<PhonePairing> {
+    Ok(PhonePairing {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        created_at: r.get(2)?,
+        last_seen_at: r.get(3)?,
+        revoked_at: r.get(4)?,
+    })
+}
+
 /// One `camera_exposures` row, `expecting`, with its binding (CS5; `shot_bound = 0` without one).
 fn insert_exposure_row(conn: &Connection, e: &NewExposure) -> Result<i64> {
     conn.execute(
@@ -2292,6 +2303,67 @@ impl Store for SqliteStore {
                     .map_err(|e| Error::InvalidData(e.to_string()))
             })
             .transpose()
+    }
+    fn phone_pairing_insert(&self, name: &str, token_sha256: &str, created_at: i64) -> Result<i64> {
+        let conn = self.locked()?;
+        conn.execute(
+            "INSERT INTO phone_pairings(name,token_sha256,created_at) VALUES (?1,?2,?3)",
+            params![name, token_sha256, created_at],
+        )
+        .map_err(db)?;
+        Ok(conn.last_insert_rowid())
+    }
+    fn phone_pairings_ever(&self) -> Result<i64> {
+        self.locked()?
+            .query_row("SELECT COUNT(*) FROM phone_pairings", [], |r| r.get(0))
+            .map_err(db)
+    }
+    fn phone_pairing_seen(&self, token_sha256: &str, at: i64) -> Result<Option<PhonePairing>> {
+        let conn = self.locked()?;
+        conn.execute(
+            "UPDATE phone_pairings SET last_seen_at=?2 WHERE token_sha256=?1 AND revoked_at IS NULL",
+            params![token_sha256, at],
+        )
+        .map_err(db)?;
+        conn.query_row(
+            "SELECT id,name,created_at,last_seen_at,revoked_at FROM phone_pairings WHERE token_sha256=?1 AND revoked_at IS NULL",
+            [token_sha256],
+            phone_pairing_row,
+        )
+        .optional()
+        .map_err(db)
+    }
+    fn phone_pairing_revoke(&self, id: i64, at: i64) -> Result<()> {
+        self.locked()?
+            .execute(
+                "UPDATE phone_pairings SET revoked_at=?2 WHERE id=?1 AND revoked_at IS NULL",
+                params![id, at],
+            )
+            .map_err(db)?;
+        Ok(())
+    }
+    fn phone_pairing_rename(&self, id: i64, name: &str) -> Result<()> {
+        let changed = self
+            .locked()?
+            .execute(
+                "UPDATE phone_pairings SET name=?2 WHERE id=?1 AND revoked_at IS NULL",
+                params![id, name],
+            )
+            .map_err(db)?;
+        if changed == 0 {
+            return Err(Error::NotFound(format!("phone pairing {id}")));
+        }
+        Ok(())
+    }
+    fn phone_pairings(&self) -> Result<Vec<PhonePairing>> {
+        let conn = self.locked()?;
+        let mut stmt = conn
+            .prepare("SELECT id,name,created_at,last_seen_at,revoked_at FROM phone_pairings WHERE revoked_at IS NULL ORDER BY id")
+            .map_err(db)?;
+        stmt.query_map([], phone_pairing_row)
+            .map_err(db)?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db)
     }
     fn set_active_session_id(&self, id: Option<i64>) -> Result<()> {
         let conn = self

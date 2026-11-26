@@ -3406,6 +3406,11 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::templates::template_drop,
         commands::templates::template_back,
         commands::templates::template_shift_back,
+        commands::phone::phone_pairing_create,
+        commands::phone::phone_pairings_list,
+        commands::phone::phone_pairing_rename,
+        commands::phone::phone_pairing_revoke,
+        commands::phone::phone_server_status,
     ])
 }
 
@@ -3434,6 +3439,8 @@ pub fn run() {
         // A6: research sources open in the default browser (capability limited to http/https).
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::new(app))
+        // LV2 (PH1): the phone remote's state (the Mac's name and address for pairing).
+        .manage(commands::phone::PhoneState::system())
         // A12: the "Search this photo" windows' Google Lens routes.
         .manage(search_window::SearchWindows::default())
         .menu(|handle| {
@@ -5572,5 +5579,118 @@ mod l4_tests {
             (&item["notes"], &item["picture_path"]),
             (&json!([]), &json!(preview.to_string_lossy()))
         );
+    }
+}
+
+/// LV2·U3 (`master_plan_live.md` §4.5, §5 PH1): the phone pairing commands.
+#[cfg(test)]
+mod lv2_tests {
+    use super::*;
+    use psm_integrations::phone::host::HostInfo;
+    use serde_json::{Value, json};
+    use tauri::{
+        ipc::{CallbackFn, InvokeBody, InvokeResponseBody},
+        test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets},
+        webview::InvokeRequest,
+    };
+
+    struct StudioMac;
+    impl HostInfo for StudioMac {
+        fn local_host_name(&self) -> Option<String> {
+            Some("Studio-Mac".into())
+        }
+        fn private_ipv4(&self) -> Option<std::net::Ipv4Addr> {
+            Some(std::net::Ipv4Addr::new(192, 168, 1, 20))
+        }
+    }
+
+    fn call(w: &tauri::WebviewWindow<tauri::test::MockRuntime>, cmd: &str, args: Value) -> Value {
+        let body = get_ipc_response(
+            w,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(args),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .unwrap_or_else(|e| panic!("{cmd}: {e:?}"));
+        match body {
+            InvokeResponseBody::Json(s) => serde_json::from_str(&s).unwrap(),
+            InvokeResponseBody::Raw(_) => panic!("raw"),
+        }
+    }
+
+    fn window(
+        app: psm_integrations::App,
+    ) -> (
+        tauri::App<tauri::test::MockRuntime>,
+        tauri::WebviewWindow<tauri::test::MockRuntime>,
+    ) {
+        let tauri_app = mock_builder()
+            .manage(AppState::new(app))
+            .manage(commands::phone::PhoneState::with_host(Arc::new(StudioMac)))
+            .invoke_handler(tauri::generate_handler![
+                commands::phone::phone_pairing_create,
+                commands::phone::phone_pairings_list,
+            ])
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let w = tauri::WebviewWindowBuilder::new(&tauri_app, "main", Default::default())
+            .build()
+            .unwrap();
+        (tauri_app, w)
+    }
+
+    fn token_of(url: &str) -> String {
+        url.split("?pair=").nth(1).unwrap().to_owned()
+    }
+
+    #[test]
+    fn lv2_c15a_pairing_create_gives_the_name_and_address_urls_with_qr_codes() {
+        let psm_testkit::TestApp { dir: _dir, app, .. } = psm_testkit::TestApp::new().unwrap();
+        let (_app, w) = window(app);
+        let created = call(&w, "phone_pairing_create", json!({"name": null}));
+        let token = token_of(created["url_name"].as_str().unwrap());
+        assert_eq!(token.len(), 43);
+        assert_eq!(
+            created["url_name"],
+            format!("http://Studio-Mac.local:8686/phone/?pair={token}")
+        );
+        assert_eq!(
+            created["url_address"],
+            format!("http://192.168.1.20:8686/phone/?pair={token}")
+        );
+        assert!(created["qr_name_svg"].as_str().unwrap().starts_with("<svg"));
+        assert!(
+            created["qr_address_svg"]
+                .as_str()
+                .unwrap()
+                .starts_with("<svg")
+        );
+    }
+
+    #[test]
+    fn lv2_c15b_the_list_never_holds_the_token_and_bindings_name_the_commands() {
+        let psm_testkit::TestApp { dir: _dir, app, .. } = psm_testkit::TestApp::new().unwrap();
+        let (_app, w) = window(app);
+        let created = call(&w, "phone_pairing_create", json!({"name": "iPhone"}));
+        let token = token_of(created["url_name"].as_str().unwrap());
+        let list = call(&w, "phone_pairings_list", json!({}));
+        assert_eq!(list[0]["name"], "iPhone");
+        assert!(!list.to_string().contains(&token));
+        let bindings = include_str!("../../src/services/bindings.ts");
+        for name in [
+            "phone_pairing_create",
+            "phone_pairings_list",
+            "phone_pairing_rename",
+            "phone_pairing_revoke",
+            "phone_server_status",
+        ] {
+            assert!(bindings.contains(name), "missing {name}");
+        }
     }
 }

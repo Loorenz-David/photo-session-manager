@@ -401,6 +401,15 @@ export const commands = {
 	templateBack: (sessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("template_back", { sessionId })),
 	/**  T4: Shift the rest back for the session; the touched session. */
 	templateShiftBack: (sessionId: CommandId) => typedError<ReviewResponse_Serialize, CommandError>(__TAURI_INVOKE("template_shift_back", { sessionId })),
+	/**  PH1: a new pairing (named, or "Phone <n>") with the URLs and QR codes that open the phone app. */
+	phonePairingCreate: (name: string | null) => typedError<PairingCreatedDto, CommandError>(__TAURI_INVOKE("phone_pairing_create", { name })),
+	/**  PH1: the pairings not removed, oldest first. */
+	phonePairingsList: () => typedError<PairingDto_Serialize[], CommandError>(__TAURI_INVOKE("phone_pairings_list")),
+	phonePairingRename: (id: CommandId, name: string) => typedError<null, CommandError>(__TAURI_INVOKE("phone_pairing_rename", { id, name })),
+	/**  PH1: Remove — the phone's token stops working. */
+	phonePairingRevoke: (id: CommandId) => typedError<null, CommandError>(__TAURI_INVOKE("phone_pairing_revoke", { id })),
+	/**  PH2: whether the phone server is switched on and listening, its port, and its bind error. */
+	phoneServerStatus: () => typedError<PhoneServerStatusDto_Serialize, CommandError>(__TAURI_INVOKE("phone_server_status")),
 };
 
 /* Types */
@@ -1802,6 +1811,39 @@ export type OutputFormatDto = {
 	quality: number,
 };
 
+/**  A pairing just made. The token is in the two URLs and QR codes only, shown once. */
+export type PairingCreatedDto = {
+	id: number,
+	name: string,
+	url_name: string,
+	url_address: string,
+	qr_name_svg: string,
+	qr_address_svg: string,
+};
+
+/**  One pairing in the list (never its token). */
+export type PairingDto = PairingDto_Serialize | PairingDto_Deserialize;
+
+/**  One pairing in the list (never its token). */
+export type PairingDto_Deserialize = {
+	id: number,
+	name: string,
+	created_at: number,
+	last_seen_at?: number | null,
+	/**  A socket of this phone is open now. */
+	connected: boolean,
+};
+
+/**  One pairing in the list (never its token). */
+export type PairingDto_Serialize = {
+	id: number,
+	name: string,
+	created_at: number,
+	last_seen_at: number | null,
+	/**  A socket of this phone is open now. */
+	connected: boolean,
+};
+
 /**  A photo of a reply not yet confirmed; `preview_path` when this Mac has the photo. */
 export type PendingAttachmentDto = PendingAttachmentDto_Serialize | PendingAttachmentDto_Deserialize;
 
@@ -1840,6 +1882,55 @@ export type PendingViewDto_Serialize = {
 	state: string,
 	failure: string | null,
 	created_at: number,
+};
+
+/**
+ *  The phone server: switched on (`phone.enabled`), listening, its port, and why it could not
+ *  start.
+ */
+export type PhoneServerStatusDto = PhoneServerStatusDto_Serialize | PhoneServerStatusDto_Deserialize;
+
+/**
+ *  The phone server: switched on (`phone.enabled`), listening, its port, and why it could not
+ *  start.
+ */
+export type PhoneServerStatusDto_Deserialize = {
+	enabled: boolean,
+	running: boolean,
+	port: number,
+	error?: string | null,
+};
+
+/**
+ *  The phone server: switched on (`phone.enabled`), listening, its port, and why it could not
+ *  start.
+ */
+export type PhoneServerStatusDto_Serialize = {
+	enabled: boolean,
+	running: boolean,
+	port: number,
+	error: string | null,
+};
+
+/**  `phone` (LV2, §4.5): the phone server's switch and port (default on, 8686). */
+export type PhoneSettingsDto = {
+	enabled: boolean,
+	port: number,
+};
+
+/**  A partial `phone` update: absent fields stay as stored. */
+export type PhoneSettingsPatchDto = PhoneSettingsPatchDto_Serialize | PhoneSettingsPatchDto_Deserialize;
+
+/**  A partial `phone` update: absent fields stay as stored. */
+export type PhoneSettingsPatchDto_Deserialize = {
+	enabled?: boolean | null,
+	port?: number | null,
+};
+
+/**  A partial `phone` update: absent fields stay as stored. */
+export type PhoneSettingsPatchDto_Serialize = {
+	enabled?: boolean,
+	port?: number,
 };
 
 export type PhotoClassification = "unreviewed" | "main" | "condition" | "deleted";
@@ -2800,6 +2891,8 @@ export type SettingsDto_Deserialize = {
 	export?: ExportSettingsDto | null,
 	/**  Settings → Research (R6·U2). */
 	research?: ResearchSettingsDto_Deserialize | null,
+	/**  Settings → Phone (LV2); always present on read (the stored value or its default). */
+	phone?: PhoneSettingsDto | null,
 };
 
 /**
@@ -2825,6 +2918,8 @@ export type SettingsDto_Serialize = {
 	export?: ExportSettingsDto,
 	/**  Settings → Research (R6·U2). */
 	research?: ResearchSettingsDto_Serialize,
+	/**  Settings → Phone (LV2); always present on read (the stored value or its default). */
+	phone?: PhoneSettingsDto,
 };
 
 /**  A partial update: absent fields stay as stored. */
@@ -2846,6 +2941,7 @@ export type SettingsPatchDto_Deserialize = {
 	integration?: IntegrationSettingsDto | null,
 	export?: ExportSettingsDto | null,
 	research?: ResearchSettingsDto_Deserialize | null,
+	phone?: PhoneSettingsPatchDto_Deserialize | null,
 };
 
 /**  A partial update: absent fields stay as stored. */
@@ -2864,6 +2960,7 @@ export type SettingsPatchDto_Serialize = {
 	integration?: IntegrationSettingsDto,
 	export?: ExportSettingsDto,
 	research?: ResearchSettingsDto_Serialize,
+	phone?: PhoneSettingsPatchDto_Serialize,
 };
 
 /**

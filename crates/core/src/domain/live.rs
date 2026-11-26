@@ -117,7 +117,9 @@ pub enum PublishOutcome {
     Repeat,
     Stale,
 }
+/// `settings.phone` (`master_plan_live.md` §4.5): the phone server is on by default, on port 8686.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct PhoneSettings {
     pub enabled: bool,
     pub port: u16,
@@ -129,4 +131,15 @@ impl Default for PhoneSettings {
             port: 8686,
         }
     }
+}
+
+/// One paired phone (PH1): a `phone_pairings` row. The token itself is never stored (only its
+/// SHA-256) and never read back.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PhonePairing {
+    pub id: i64,
+    pub name: String,
+    pub created_at: i64,
+    pub last_seen_at: Option<i64>,
+    pub revoked_at: Option<i64>,
 }

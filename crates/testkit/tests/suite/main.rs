@@ -32,6 +32,7 @@ mod lv1_frame_channel;
 mod lv1_live_hub;
 mod lv2_current_shot;
 mod lv2_phone_ops;
+mod lv2_phone_pairing;
 mod p00_spike;
 mod p01_storage_identity;
 mod p02_review_order;

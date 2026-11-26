@@ -3,6 +3,7 @@ use psm_core::{
     Error, Result,
     domain::{
         camera::CameraSettings,
+        live::PhoneSettings,
         output::OutputFormat,
         storage::{ExportSettings, StorageSettings},
     },
@@ -50,6 +51,8 @@ pub struct Settings {
     pub export: ExportSettings,
     /// Changelog 45 (P65): `commerce.inventory_default` — the stock a new item starts with.
     pub commerce: CommerceSettings,
+    /// LV2 (`master_plan_live.md` §4.5): the phone server's switch and port.
+    pub phone: PhoneSettings,
 }
 
 /// Changelog 45 (P65): `{"inventory_default": null | {"location_id", "location_name", "quantity"}}`.
@@ -103,6 +106,7 @@ impl Default for Settings {
             storage: StorageSettings::default(),
             export: ExportSettings::default(),
             commerce: CommerceSettings::default(),
+            phone: PhoneSettings::default(),
         }
     }
 }

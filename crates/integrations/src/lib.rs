@@ -4,6 +4,7 @@ pub mod commerce;
 pub mod conversations;
 pub mod editing;
 pub mod labels;
+pub mod phone;
 pub mod photo_files;
 pub mod render_output;
 pub mod session_delete;
@@ -298,8 +299,10 @@ impl SettingsSetContext {
         let mut b = next;
         // W3: the writer's slot is read live by the engine, like `theme` it never rebuilds.
         // C1: so is the conversations slot (read live through its slot port).
+        // LV2 (§4.5): the phone server reads `phone` itself (a port change rebinds it).
         for key in [
             "theme",
+            "phone",
             "output_format",
             "storage",
             "export",

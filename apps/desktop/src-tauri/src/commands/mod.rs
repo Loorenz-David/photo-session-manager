@@ -7,6 +7,7 @@ pub mod health;
 pub mod history;
 pub mod items;
 pub mod labels;
+pub mod phone;
 pub mod photos;
 pub mod publish;
 pub mod remote;

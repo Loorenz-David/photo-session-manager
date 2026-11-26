@@ -37,7 +37,7 @@ it('t1_c5a_lists_sections_in_order_and_opens_capture_one', async () => {
   render(<SettingsPage />);
   await screen.findByLabelText('Preview recipe');
   expect(within(nav()).getAllByRole('button').map(button => button.textContent)).toEqual([
-    'Capture One', 'Camera', 'Export and previews', 'Shopify', 'Pricing', 'Storage', 'Research', 'Writer', 'Shooting templates',
+    'Capture One', 'Camera', 'Phone', 'Export and previews', 'Shopify', 'Pricing', 'Storage', 'Research', 'Writer', 'Shooting templates',
   ]);
   expect(within(nav()).getByRole('button', { name: 'Capture One' })).toHaveAttribute('aria-current', 'page');
   for (const name of ['capture-one','camera','export-and-previews','shopify','storage','research','writer','shooting-templates']) {
