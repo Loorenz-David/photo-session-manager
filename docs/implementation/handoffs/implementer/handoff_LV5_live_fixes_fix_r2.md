@@ -2,7 +2,7 @@
 plan: LV5_live_fixes
 role: fix
 round: 2
-state: BLOCKED
+state: DONE
 date: 2026-11-26
 actor: codex
 ---
@@ -50,3 +50,6 @@ The two unrelated closing-gate failures were not changed because the finding's f
 ## ⚠ OWNER DECISIONS REQUIRED (0)
 
 None. The checkpoint is blocked by the sandbox refusing the command above.
+
+## Orchestrator note (2026-11-26)
+Checkpoint `fd620c4a` made by the orchestrator with the command above (sandbox refused the worktree git lock). The two closing-gate failures passed on targeted rerun (timing-sensitive: `lv2_c28b` socket close, `p33_split_grid` C4(d)); noted in `backlog_live/LV5_live_fixes.md`. State set to DONE.

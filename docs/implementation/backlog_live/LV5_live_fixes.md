@@ -32,3 +32,5 @@
     Otherwise… / Check" shape.
   - Why it matters: a reader scanning the table misses it.
   - Destination: LV6, which changes `phone/api.ts` for the token. It can move the paragraph into a row.
+- **Orchestrator (2026-11-26): flaky in the full gate, green on targeted rerun** — `lv2_phone_ws::lv2_c28b_a_socket_that_stops_answering_is_closed_4408` (did not observe 4408 once; LV5 changed the stall rule, check its timings against PH5a) and `apps/desktop` `p33_split_grid` C4(d) (stage-bar value timing). Destination: next touch of `phone/ws.rs` tests / the split grid tests.
+- **Orchestrator (2026-11-26): Codex fix sessions still cannot write the worktree's git index** (`index.lock … Operation not permitted`) although implement sessions can; the runner passes the git common dir with `--add-dir`. Investigate the fix wrapper or the Luna sandbox.
