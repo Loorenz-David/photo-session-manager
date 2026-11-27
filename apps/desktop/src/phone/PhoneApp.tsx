@@ -8,7 +8,7 @@ import { Dock } from './components/Dock';
 import { FullscreenButton } from './components/FullscreenButton';
 import { ItemDrawer } from './components/ItemDrawer';
 import type { LiveCanvasHandle } from './components/LiveCanvas';
-import { MoveDrawer } from './components/MoveDrawer';
+import { PhotoDrawer } from './components/PhotoDrawer';
 import { Preview } from './components/Preview';
 import { PropertiesPage } from './components/PropertiesPage';
 import { Stage } from './components/Stage';
@@ -17,8 +17,8 @@ import { isRotated, type Point } from './geometry';
 import { buzz, DRAG, HAPTIC } from './gestures';
 import { type CaptureMessage, type FocusMessage, PhoneSocket, type ServerMessage } from './socket';
 import {
-  backLabel, connected, type DockTile, initialState, itemRows, landedToast, type MoveTile, nextStep, pad, photoIds, previewRatio, previewSubject, reduce, stageRatio,
-  TEXT, tileImage, wantsLive,
+  connected, type DockTile, initialState, itemRows, landedToast, nextStep, pad, photoIds, previewHeader, previewRatio, previewSubject, reduce, stageRatio, TEXT,
+  tileImage, wantsLive,
 } from './state';
 
 /** While the Mac does not answer the first two requests they are asked again this often. */
@@ -301,7 +301,7 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     if (orphaned) dispatch({ type: 'preview', photo_id: null });
   }, [orphaned]);
 
-  /** Design §Preview actions: Retake reopens a template shot (card LV6) and closes the preview. */
+  /** Design §Preview actions, from the photo drawer since LV-D21 (4): Retake reopens a template shot (card LV6) and closes the drawer and the preview. */
   const retakeShot = async () => {
     if (!view || subject?.kind !== 'shot') return;
     buzz(HAPTIC.retake);
@@ -440,21 +440,6 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     void choose(tile.kind === 'shot' ? tile.shot.container_id : null);
   };
 
-  /** Card LV8: the Mac performs the move (a filled position swaps); the preview stays on the image. */
-  const move = async (tile: MoveTile) => {
-    if (!view || !subject || tile.state === 'THIS IMAGE') return;
-    buzz(HAPTIC.move);
-    try {
-      await movePhoto(token, subject.image.photo_id, view.id, tile.target);
-      dispatch({ type: 'move', open: false });
-      toast(tile.done);
-      void readSession();
-    } catch (error) {
-      dispatch({ type: 'move', open: false });
-      refused(error, TEXT.failed);
-    }
-  };
-
   const next = nextStep(view);
   const rotated = isRotated(stageRatio(state));
   const free = isConnected && !subject && !state.menuOpen && confirming === null;
@@ -479,15 +464,15 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     }} />
     <Toast toast={state.toast} />
     {view && subject && <Preview token={token} subject={subject} ratio={previewRatio(state, subject)} overlay={state.overlay} dispatch={dispatch}
-      backLabel={backLabel(view)} onBack={() => dispatch({ type: 'preview', photo_id: null })} onRetake={() => void retakeShot()} onMove={() => {
+      enabled={!state.detailsOpen && confirming === null} onClose={() => dispatch({ type: 'preview', photo_id: null })} onDetails={() => {
         buzz(HAPTIC.menu);
-        dispatch({ type: 'move', open: true });
+        dispatch({ type: 'details', open: true });
       }} onSwipe={action => (action === 'main_confirm' ? setConfirming({ photo_id: subject.image.photo_id, dropped: false }) : void swipe(action))}
-      strip={arranged && <Dock token={token} view={arranged} rotated={isRotated(previewRatio(state, subject))} enabled={!state.moveOpen && confirming === null}
+      strip={arranged && <Dock token={token} view={arranged} rotated={isRotated(previewRatio(state, subject))} enabled={!state.detailsOpen && confirming === null}
         onSelect={selectInPreview} onDrop={(photoId, target) => void drop(photoId, target)} pending={pending !== null} testId="preview-strip"
         marked={subject.image.photo_id} />} />}
-    {view && subject && <MoveDrawer token={token} view={view} subject={subject} open={state.moveOpen} onClose={() => dispatch({ type: 'move', open: false })}
-      onPick={tile => void move(tile)} />}
+    {view && subject && <PhotoDrawer open={state.detailsOpen} {...previewHeader(subject, previewRatio(state, subject))} hasTemplate={subject.kind === 'shot'}
+      onClose={() => dispatch({ type: 'details', open: false })} onRetake={() => void retakeShot()} />}
     {view && <ItemDrawer open={state.menuOpen} itemName={view.item.name} macName={state.hello?.mac_name ?? ''} rows={itemRows(state, view)}
       onClose={() => dispatch({ type: 'menu', open: false })} onProperties={() => {
         buzz(HAPTIC.menu);

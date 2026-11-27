@@ -19,7 +19,8 @@ const lifted = (within_: HTMLElement = dock()) => tiles(within_).filter(element 
 const marked = (mark: string) => tiles().filter(element => element.dataset.drop === mark).map(element => element.dataset.dockK);
 const slid = () => tiles().filter(element => element.style.transform.includes('translateX')).map(element => element.dataset.dockK);
 const scrollLeft = () => (dock().querySelector('.ph-dock-scroller') as HTMLElement).scrollLeft;
-const kicker = () => screen.queryByTestId('preview')?.querySelector('.ph-kicker')?.textContent ?? null;
+// LV9 (book 10J LV-D21 (4)): the Preview has no header; what it shows is its name.
+const kicker = () => screen.queryByTestId('preview')?.getAttribute('aria-label') ?? null;
 const dialog = () => screen.queryByRole('dialog', { name: CONFIRM });
 /** Every vibration so far, as the pattern given. */
 const buzzes = (env: PhoneEnv) => env.vibrate.mock.calls.map(call => call[0]);

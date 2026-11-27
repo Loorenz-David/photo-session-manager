@@ -1,123 +1,12 @@
-// LV3·U4 — the Move drawer, the Item drawer and the toast (design README §5–§7, §Move semantics;
-// master_plan_live §5 PH4; card LV8; LV-D17): rows LV3·C23–C25. Fixture session as in lv3_preview.
+// LV3·U4 — the Item drawer and the toast (design README §6–§7; LV-D17): rows LV3·C24–C25. Fixture session
+// as in lv3_preview. The Move drawer's rows (LV3·C23) went with the Move drawer (LV9, book 10J LV-D21 (4),
+// plan point P7: dragging in the strips and swiping reach every place it offered).
 import { screen, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
-import { advance, C, chairSession, lift, type PhoneEnv, PHOTO_B, PHOTO_EXTRA, phoneEnv, press, slide, startPhone } from './helpers';
+import { advance, chairSession, lift, type PhoneEnv, phoneEnv, press, slide, startPhone } from './helpers';
 
-const X = { b: 34 };
-const dock = () => screen.getByTestId('dock');
 const toast = () => screen.getByTestId('toast');
 const buzzed = (env: PhoneEnv, pattern: number | number[]) => env.vibrate.mock.calls.filter(call => JSON.stringify(call[0]) === JSON.stringify(pattern)).length;
-const moveDrawer = () => screen.getByTestId('move-drawer');
-/** A tile as the person reads it: number tag, name, state. */
-const read = (grid: HTMLElement) => Array.from(grid.children).map(tile => [
-  tile.querySelector('.ph-tag')?.textContent ?? '+',
-  tile.querySelector('.ph-move-name')!.textContent,
-  tile.querySelector('.ph-move-state')!.textContent,
-]);
-const mainTile = (index: number) => screen.getByTestId('move-main').children[index] as HTMLButtonElement;
-const conditionTile = (index: number) => screen.getByTestId('move-condition').children[index] as HTMLButtonElement;
-
-/** Opens B's photo and its Move drawer. */
-async function openMove(env: PhoneEnv): Promise<void> {
-  await startPhone(env);
-  press(dock(), X.b, 730);
-  lift(dock(), X.b, 730);
-  await advance(0);
-  within(screen.getByTestId('preview')).getByRole('button', { name: 'Move image' }).click();
-  await advance(0);
-}
-async function pick(tile: HTMLElement): Promise<void> {
-  tile.click();
-  await advance(0);
-}
-
-// ---- LV3·C23: the Move drawer ----
-
-test('lv3_c23a_the_main_positions_in_main_order_with_what_a_tap_does', async () => {
-  const env = phoneEnv();
-  await openMove(env);
-  expect(moveDrawer().style.transform).toBe('translateY(0%)');
-  expect(read(screen.getByTestId('move-main'))).toEqual([
-    ['01', 'Front', 'EMPTY'],
-    ['02', 'Back', 'THIS IMAGE'],
-    ['03', 'Container 3', 'EMPTY'],
-    ['04', 'Extra', 'SWAP'],
-    ['+', 'New extra', 'ADD AT END'],
-  ]);
-  // The image's own position cannot be picked.
-  expect(mainTile(1).disabled).toBe(true);
-  await pick(mainTile(1));
-  expect(env.mac.allPosts()).toEqual([]);
-});
-
-test('lv3_c23b_a_position_that_has_an_image_swaps', async () => {
-  const env = phoneEnv();
-  await openMove(env);
-  await pick(mainTile(3));
-  expect(env.mac.allPosts()).toEqual([[`/photos/${PHOTO_B}/move`, { session_id: 7, target: { kind: 'main_position', position: 4 } }]]);
-  expect(buzzed(env, [30, 40, 60])).toBe(1);
-  expect(toast().textContent).toBe('Swapped with 04');
-  expect(toast().style.opacity).toBe('1');
-  expect(moveDrawer().style.transform).toBe('translateY(105%)');
-});
-
-test('lv3_c23b_the_preview_stays_open_on_the_image_in_its_new_place', async () => {
-  const env = phoneEnv();
-  await openMove(env);
-  // The Mac swapped them: B's photo is now the extra, the old extra is in B.
-  env.mac.view = { session: chairSession(s => {
-    s.shots[0].photo = { photo_id: PHOTO_EXTRA, revision: 1, ratio: 1, preview: 'k0' };
-    s.extras = [{ photo_id: PHOTO_B, revision: 1, ratio: 1, preview: 'k0' }];
-  }) };
-  await pick(mainTile(3));
-  const preview = within(screen.getByTestId('preview'));
-  expect(preview.getByText('IMAGE 04 · EXTRA')).toBeTruthy();
-  expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe(`/api/phone/v1/photos/${PHOTO_B}/preview?pair=T&v=k0`);
-  // An extra has no Retake (LV8, book 10J LV-D20 (4): the Delete button it used to show is gone).
-  expect(preview.queryByRole('button', { name: 'Retake' })).toBeNull();
-});
-
-test('lv3_c23c_an_empty_template_shot_takes_the_image', async () => {
-  const env = phoneEnv();
-  await openMove(env);
-  await pick(mainTile(2));
-  expect(env.mac.allPosts()).toEqual([[`/photos/${PHOTO_B}/move`, { session_id: 7, target: { kind: 'container', container_id: C } }]]);
-  expect(toast().textContent).toBe('Moved to shot 03');
-});
-
-test('lv3_c23d_new_extra_adds_it_at_the_end_of_main', async () => {
-  const env = phoneEnv();
-  await openMove(env);
-  await pick(mainTile(4));
-  expect(env.mac.allPosts()).toEqual([[`/photos/${PHOTO_B}/move`, { session_id: 7, target: { kind: 'extra_end' } }]]);
-  expect(toast().textContent).toBe('Added as extra image');
-});
-
-test('lv3_c23e_a_condition_position_swaps_with_the_image_there', async () => {
-  const env = phoneEnv();
-  await openMove(env);
-  const row = screen.getByRole('button', { name: /Condition images/ });
-  expect(row.getAttribute('aria-expanded')).toBe('false');
-  expect(row.textContent).toContain('1 IMAGE');
-  row.click();
-  await advance(0);
-  expect(row.getAttribute('aria-expanded')).toBe('true');
-  expect(read(screen.getByTestId('move-condition'))).toEqual([['C1', 'Condition 01', 'SWAP'], ['+', 'Add', 'ADD AT END']]);
-  await pick(conditionTile(0));
-  expect(env.mac.allPosts()).toEqual([[`/photos/${PHOTO_B}/move`, { session_id: 7, target: { kind: 'condition', position: 1 } }]]);
-  expect(toast().textContent).toBe('Swapped with C1');
-});
-
-test('lv3_c23f_add_sends_it_to_the_end_of_the_condition_images', async () => {
-  const env = phoneEnv();
-  await openMove(env);
-  screen.getByRole('button', { name: /Condition images/ }).click();
-  await advance(0);
-  await pick(conditionTile(1));
-  expect(env.mac.allPosts()).toEqual([[`/photos/${PHOTO_B}/move`, { session_id: 7, target: { kind: 'condition_end' } }]]);
-  expect(toast().textContent).toBe('Sent to condition images');
-});
 
 // ---- LV3·C24: the Item drawer ----
 

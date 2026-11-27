@@ -17,7 +17,8 @@ const slid = () => tiles().filter(element => element.style.transform.includes('t
 const moved = () => tiles().filter(element => element.style.transform.includes('translate')).map(element => element.dataset.dockK);
 const marked = () => tiles().filter(element => element.hasAttribute('data-drop')).map(element => element.dataset.dockK);
 const toast = () => screen.getByTestId('toast').textContent;
-const kicker = () => screen.queryByTestId('preview')?.querySelector('.ph-kicker')?.textContent ?? null;
+// LV9 (book 10J LV-D21 (4)): the Preview has no header; what it shows is its name.
+const kicker = () => screen.queryByTestId('preview')?.getAttribute('aria-label') ?? null;
 const buzzes = (env: PhoneEnv) => env.vibrate.mock.calls.map(call => JSON.stringify(call[0]));
 const requests = (env: PhoneEnv) => env.mac.requests.map(r => `${r.method} ${r.path.replace('/api/phone/v1', '')}`);
 const INSERT_202_LAST: [string, unknown] = ['/photos/202/move', { session_id: 7, target: { kind: 'extra_insert', index: 3 } }];

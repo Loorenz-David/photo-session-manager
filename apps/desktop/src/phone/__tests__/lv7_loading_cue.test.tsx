@@ -92,5 +92,6 @@ test('lv7_c3a_a_waiting_tile_does_not_hold_up_the_shutter_and_still_opens_on_a_t
   press(dock(), X_B, Y);
   lift(dock(), X_B, Y);
   await advance(0);
-  expect(screen.getByTestId('preview').querySelector('.ph-kicker')!.textContent).toBe('SHOT 02 · CAPTURED');
+  // LV9 (book 10J LV-D21 (4)): the Preview has no header; what it shows is its name.
+  expect(screen.getByTestId('preview').getAttribute('aria-label')).toBe('SHOT 02 · CAPTURED');
 });

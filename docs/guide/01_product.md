@@ -280,19 +280,30 @@ label printed itself. Same key and store as conversations; labels need the scope
     picture that failed to load after three more tries is plain grey (it is not on its way); with Reduce Motion on
     nothing moves at all. **Next** jumps to the next empty shot in shooting
     order, then to Free shot. In Free shot live is always on (there is no template to show).
-  - **Preview.** A captured image with Back, **Retake** (template shots: the photo is denied at once, undoable on the
-    Mac, and the shot is current again) and **Move image**: any Main position, a new extra, or the Condition group; a
-    position that has an image swaps (card LV8; the Mac's drop still replaces). **Swipe to sort** (LV8, book 10J
+  - **Preview.** Minimal at first glance (LV9, book 10J LV-D21 (4)): only the captured image, the photo strip, a
+    **⋯** button (bottom left) and a **close** icon (bottom right). No header, no pill or hint resting on the photo,
+    no button block. **⋯** opens the photo drawer: what the photo is ("SHOT 02 · CAPTURED", the shot's name, the
+    ratio), for a template shot's photo the line "Hold to view template · slide sideways for overlay" and under
+    ACTIONS **Retake** (the photo is denied at once, undoable on the Mac, the shot is current again, the drawer and
+    the Preview close). While the drawer is open the photo and the strip take no touch; it closes on its ×, on the
+    backdrop and with its Preview. **×** goes back to the live screen. **Move image is gone**: dragging in the strips
+    and swiping reach every place its drawer offered. **Swipe to sort** (LV8, book 10J
     LV-D20 (1)): **left = Deny** (a template shot's photo as Retake does; ⌘Z on the Mac brings it back), **right =
     Main** (a Condition image goes to the end of Main; a template shot's photo first asks "Move this photo to Main,
     outside its template order?" with Move / Cancel, and its shot is then empty and current), **up = Condition** (a
     template shot it filled is empty and current). A swipe counts from 96 px; the next photo shows at once (after the
     last one the Preview closes); a photo already in that group springs back ("ALREADY MAIN" / "ALREADY CONDITION");
     downwards does nothing. On a template shot's photo a still hold of 0.2 s shows its template instead (sideways
-    then sets the overlay). There is **no Delete button** (the left swipe denies). The Preview shows **the same photo
-    strip** as the live screen between the picture and the buttons, marking the photo shown: a tap shows another
-    photo, a tap on an empty shot or the Free shot makes it current and closes the Preview, and photos are lifted and
-    dragged there as on the live screen.
+    then sets the overlay); only then do the "TEMPLATE" pill and the overlay readout show. There is **no Delete
+    button** (the left swipe denies). The Preview shows **the same photo strip** as the live screen between the
+    picture and the two buttons, marking the photo shown: a tap shows another photo, a tap on an empty shot or the
+    Free shot makes it current and closes the Preview, and photos are lifted and dragged there as on the live screen.
+  - **Nothing blinks when photos move** (LV9, book 10J LV-D21 (2), (3)): a drop **and a swipe** show in both strips at
+    once; several quick ones stack and the strips keep showing them all until the Mac has answered every one (a
+    refusal, or 8 s without an answer, puts the strips back to the Mac's view). A moved photo keeps its picture (it
+    is fetched again only when its file changed on the Mac). While a template shot's photo is lifted, its place
+    shows that shot's grey template picture with its number, as an empty shot does; extras and Condition images
+    leave a gap.
   - **Item drawer** (menu button): item name, SKU, article number (the barcode, only when the item has one), current
     shot, angle, image counts; **Fill item properties** opens an empty page for now (LV-D17).
   - Haptics on Android only (iPhone browsers have none). No wake lock: the screen follows the phone's Auto-Lock; when

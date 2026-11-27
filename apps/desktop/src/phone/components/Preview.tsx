@@ -17,14 +17,15 @@ type Props = {
   /** The template overlay, shared with the main screen. */
   overlay: number;
   dispatch: Dispatch<Action>;
-  backLabel: string;
-  onBack: () => void;
-  /** Retake (a template shot's photo only; the left swipe denies any photo). */
-  onRetake: () => void;
-  onMove: () => void;
+  /** The picture takes touches (the photo drawer is not open over it). */
+  enabled: boolean;
+  /** × : back to the live screen. */
+  onClose: () => void;
+  /** ⋯ : the photo's details and actions (the photo drawer). */
+  onDetails: () => void;
   /** A swipe that counted (never `none`): the app asks the Mac and shows the next photo. */
   onSwipe: (action: Exclude<SwipeAction, 'none'>) => void;
-  /** The photo strip, between the picture and the buttons (LV-D20 (2)). */
+  /** The photo strip, between the picture and the two buttons (LV-D20 (2)). */
   strip: ReactNode;
 };
 
@@ -63,11 +64,15 @@ const hintOf = (action: SwipeAction, direction: SwipeDirection): string => {
 const shift = (swipe: Swipe, by: number) => (swipe.axis === 'up' ? `translateY(${-by}px)` : `translateX(${Math.sign(swipe.d) * by}px) rotate(${(Math.sign(swipe.d) * by) / 24}deg)`);
 
 /**
- * Design §4 and §Preview gestures, with book 10J LV-D20: a captured image, full screen. Swipe it
- * left to deny, right for Main, up for Condition, and the next photo shows. A template shot's
- * photo lies over its template: hold shows the template through it, a sideways slide sets how much.
+ * Design §Preview gestures, with book 10J LV-D20 and LV-D21 (4) (master_plan_live §5 PH10): a
+ * captured image, full screen, and nothing else at first glance — the photo, its strip, ⋯ (bottom
+ * left: the photo's details and actions) and × (bottom right). Swipe the photo left to deny, right
+ * for Main, up for Condition, and the next photo shows. A template shot's photo lies over its
+ * template: hold shows the template through it, a sideways slide sets how much; the "TEMPLATE"
+ * pill and the overlay readout show only during that gesture. The root is named by what the photo
+ * is ("SHOT 02 · CAPTURED").
  */
-export function Preview({ token, subject, ratio, overlay, dispatch, backLabel, onBack, onRetake, onMove, onSwipe, strip }: Props) {
+export function Preview({ token, subject, ratio, overlay, dispatch, enabled, onClose, onDetails, onSwipe, strip }: Props) {
   const header = previewHeader(subject, ratio);
   const hasTemplate = subject.kind === 'shot';
   const rotated = isRotated(ratio);
@@ -105,10 +110,15 @@ export function Preview({ token, subject, ratio, overlay, dispatch, backLabel, o
     const timer = setTimeout(() => setFlyOut(null), FLY_OUT_MS);
     return () => clearTimeout(timer);
   }, [flyOut]);
+  // Design §Reliability: the drawer blocks the picture's gestures; one under way ends with nothing done.
+  useEffect(() => {
+    if (!enabled) reset();
+  }, [enabled, reset]);
 
   const down = (event: Pointer) => {
     // A second finger ends the gesture; nothing starts until the first one has left.
     if (touch.current) return reset();
+    if (!enabled) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const rect = event.currentTarget.getBoundingClientRect();
     const now: Touch = {
@@ -173,44 +183,31 @@ export function Preview({ token, subject, ratio, overlay, dispatch, backLabel, o
     transition: swipe ? 'opacity 0.14s ease-out' : undefined,
   };
 
-  return <div className="ph-preview" data-testid="preview">
+  return <div className="ph-preview" data-testid="preview" aria-label={header.kicker}>
     <div className="ph-safe-top" />
-    <div className="ph-preview-header">
-      <div className="ph-preview-titles">
-        <span className="ph-mono ph-kicker">{header.kicker}</span>
-        <span className="ph-preview-title">{header.title}</span>
-      </div>
-      <span className="ph-mono ph-ratio-chip" data-testid="ratio-chip">{header.chip}</span>
-    </div>
     <ImageFrame ratio={ratio} testId="preview-viewport" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={reset}>
       {hasTemplate && subject.shot.example && <img className="ph-cover ph-grey" alt="" draggable={false} src={exampleUrl(token, subject.shot.container_id)} />}
       <PhotoImage key={photoId} token={token} image={subject.image} className="ph-cover ph-preview-photo" testId="preview-photo" style={photoStyle}>Preparing preview…</PhotoImage>
       {flyOut && <img key={flyOut.n} className="ph-cover ph-swipe-out" alt="" draggable={false} src={flyOut.src}
         style={{ '--ph-swipe-from': flyOut.from, '--ph-swipe-to': flyOut.to } as CSSProperties} />}
-      <div className="ph-top-row">
-        <div className={`ph-pill${holding ? '' : ' ph-pill-dark'}`} data-testid="preview-pill">{holding ? 'TEMPLATE' : header.mode}</div>
-      </div>
+      {holding && <div className="ph-top-row">
+        <div className="ph-pill" data-testid="preview-pill">TEMPLATE</div>
+      </div>}
       {adjust && <OverlayBar at={adjust} percent={overlay} label="PHOTO" />}
       {swipe && action && direction && distance >= SWIPE.hintPx && <div className="ph-swipe-hint-row">
         <div className="ph-mono ph-swipe-hint" data-testid="swipe-hint" data-tone={action === 'none' ? 'none' : direction === 'left' ? 'deny' : 'go'} data-armed={armed || undefined}
           style={{ opacity: Math.min(1, distance / SWIPE.commitPx) }}>{hintOf(action, direction)}</div>
       </div>}
-      {hasTemplate && <div className="ph-hint-row ph-preview-hint-row">
-        <div className="ph-hint" style={{ opacity: holding || swipe ? 0 : 1 }}>Hold to view template · slide sideways for overlay</div>
-      </div>}
       {hasTemplate && subject.shot.split && <div className="ph-split-line" style={{ left: '50%' }} />}
     </ImageFrame>
     {strip}
-    <div className="ph-preview-actions">
-      <button type="button" className="ph-button ph-button-outline ph-button-move" onClick={onMove}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h14l-4-4M20 16H6l4 4" /></svg>
-        Move image
+    <div className="ph-preview-bar">
+      <button type="button" className="ph-round" aria-label="Photo details" onClick={onDetails}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
       </button>
-      <div className="ph-rule" />
-      <div className={`ph-preview-pair${hasTemplate ? '' : ' ph-preview-single'}`}>
-        <button type="button" className="ph-button ph-button-outline" onClick={onBack}>{backLabel}</button>
-        {hasTemplate && <button type="button" className="ph-button ph-button-solid" onClick={onRetake}>Retake</button>}
-      </div>
+      <button type="button" className="ph-round" aria-label="Close" onClick={onClose}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
     </div>
   </div>;
 }

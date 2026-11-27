@@ -79,7 +79,7 @@ test('lv6_c4c_a_picture_that_fails_shows_the_placeholder_and_is_tried_three_more
   expect(waits(tileB())).toBe(0);
 });
 
-// ---- LV6·C5: the Preview and the Move drawer ----
+// ---- LV6·C5: the Preview (row C5(b), the Move drawer's tile, went with the Move drawer: LV9, book 10J LV-D21 (4), plan point P7) ----
 
 test('lv6_c5a_the_preview_says_preparing_until_the_photo_has_a_preview', async () => {
   const env = phoneEnv();
@@ -93,20 +93,6 @@ test('lv6_c5a_the_preview_says_preparing_until_the_photo_has_a_preview', async (
   await macChanges(env, withPreview('k1'));
   expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe('/api/phone/v1/photos/201/preview?pair=T&v=k1');
   expect(within(preview).queryByText('Preparing preview…')).toBeNull();
-});
-
-test('lv6_c5b_the_move_drawer_shows_the_placeholder_for_a_photo_without_a_preview', async () => {
-  const env = phoneEnv();
-  await startPhone(env, withPreview(null));
-  await tap(X.extra);
-  within(screen.getByTestId('preview')).getByRole('button', { name: 'Move image' }).click();
-  await advance(0);
-  const tiles = Array.from(screen.getByTestId('move-main').children);
-  const tile02 = tiles.find(tile => tile.querySelector('.ph-tag')?.textContent === '02')!;
-  expect(tile02.querySelector('.ph-move-name')!.textContent).toBe('Back');
-  expect(waits(tile02)).toBe(1);
-  expect(previewRequests(tile02)).toEqual([]);
-  expect(Array.from(document.querySelectorAll('img')).filter(img => img.getAttribute('src')!.includes('/photos/201/'))).toEqual([]);
 });
 
 // ---- LV6·C6: a removed phone ----

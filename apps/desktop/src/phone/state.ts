@@ -3,7 +3,7 @@
  * PH6). The Mac owns the session: shots, photos and the current shot are only ever what
  * `GET /session` last answered (MC-LV3: one current shot, server-side).
  */
-import type { Hello, MoveTarget, PhoneImage, PhoneSession, PhoneShot } from './api';
+import type { Hello, PhoneImage, PhoneSession, PhoneShot } from './api';
 import { ratioLabel } from './geometry';
 import type { CameraMessage } from './socket';
 
@@ -62,9 +62,9 @@ export type PhoneState = {
   flash: number;
   /** The photo whose preview is open (by id, so the preview follows the image when the Mac moves it). */
   preview: number | null;
-  /** The Item drawer, the Move drawer (over a preview) and the item properties page. */
+  /** The Item drawer, the photo drawer (over a preview: its details and actions) and the item properties page. */
   menuOpen: boolean;
-  moveOpen: boolean;
+  detailsOpen: boolean;
   propsOpen: boolean;
 };
 
@@ -83,7 +83,7 @@ export const initialState: PhoneState = {
   flash: 0,
   preview: null,
   menuOpen: false,
-  moveOpen: false,
+  detailsOpen: false,
   propsOpen: false,
 };
 
@@ -104,7 +104,7 @@ export type Action =
   | { type: 'flash' }
   | { type: 'preview'; photo_id: number | null }
   | { type: 'menu'; open: boolean }
-  | { type: 'move'; open: boolean }
+  | { type: 'details'; open: boolean }
   | { type: 'props'; open: boolean };
 
 export function reduce(state: PhoneState, action: Action): PhoneState {
@@ -138,11 +138,12 @@ export function reduce(state: PhoneState, action: Action): PhoneState {
     case 'flash':
       return { ...state, flash: state.flash + 1 };
     case 'preview':
-      return { ...state, preview: action.photo_id, moveOpen: false };
+      // The photo drawer never outlives the photo it was opened for.
+      return { ...state, preview: action.photo_id, detailsOpen: false };
     case 'menu':
       return { ...state, menuOpen: action.open };
-    case 'move':
-      return { ...state, moveOpen: action.open };
+    case 'details':
+      return { ...state, detailsOpen: action.open };
     case 'props':
       return { ...state, propsOpen: action.open };
   }
@@ -306,77 +307,22 @@ export function previewSubject(view: PhoneSession | null | undefined, photo_id: 
   return condition >= 0 ? { kind: 'condition', image: view.condition[condition], position: condition + 1 } : null;
 }
 
-/** Design §4 header: kicker, title and the ratio chip. A split composition is two squares (ratio 2). */
-export function previewHeader(subject: PreviewSubject, ratio: number): { kicker: string; title: string; chip: string; mode: string } {
+/**
+ * What a previewed photo is (design §4's header; since LV-D21 (4) the Preview's name and the photo
+ * drawer's heading): kicker, title and the ratio chip. A split composition is two squares (ratio 2).
+ */
+export function previewHeader(subject: PreviewSubject, ratio: number): { kicker: string; title: string; chip: string } {
   const split = subject.kind === 'shot' ? subject.shot.split : subject.image.ratio === 2;
   const chip = ratioLabel(ratio, split);
-  if (subject.kind === 'shot') return { kicker: `SHOT ${pad(subject.shot.final_no)} · CAPTURED`, title: subject.shot.name, chip, mode: 'CAPTURED' };
-  if (subject.kind === 'extra') return { kicker: `IMAGE ${pad(subject.position)} · EXTRA`, title: 'Extra image', chip, mode: 'EXTRA' };
-  return { kicker: `CONDITION ${pad(subject.position)}`, title: 'Condition image', chip, mode: 'CONDITION' };
+  if (subject.kind === 'shot') return { kicker: `SHOT ${pad(subject.shot.final_no)} · CAPTURED`, title: subject.shot.name, chip };
+  if (subject.kind === 'extra') return { kicker: `IMAGE ${pad(subject.position)} · EXTRA`, title: 'Extra image', chip };
+  return { kicker: `CONDITION ${pad(subject.position)}`, title: 'Condition image', chip };
 }
 
 /** The preview image's aspect ratio: its own composition's; a split shot is 2; an open one the live frame's. */
 export function previewRatio(s: PhoneState, subject: PreviewSubject): number {
   if (subject.kind === 'shot' && subject.shot.split) return 2;
   return subject.image.ratio ?? (subject.kind === 'shot' ? subject.shot.ratio : null) ?? frameAspect(s);
-}
-
-/** "Back to shot 04" / "Back to free shot" (design §4). */
-export function backLabel(view: PhoneSession): string {
-  const shot = currentShot(view);
-  return shot ? `Back to shot ${pad(shot.final_no)}` : 'Back to free shot';
-}
-
-/** One tile of the Move drawer (design §5): where the image can go, and what the Mac is asked (PH4). */
-export type MoveTile = {
-  key: string;
-  /** The number tag ("03", "C1"); none on an "add at end" tile. */
-  tag: string;
-  name: string;
-  state: 'THIS IMAGE' | 'SWAP' | 'EMPTY' | 'ADD AT END';
-  image: PhoneImage | null;
-  /** The template example shown in an empty template position. */
-  example: number | null;
-  target: MoveTarget;
-  /** The toast after the move (design §7). */
-  done: string;
-};
-
-/**
- * The Move drawer's tiles for `subject` (card LV8: a position that has an image swaps the two).
- * Main positions in Main order (the template's containers by final number, then the extras) and
- * "New extra"; the Condition images and "Add".
- */
-export function moveTiles(view: PhoneSession, subject: PreviewSubject): { main: MoveTile[]; condition: MoveTile[] } {
-  const source = subject.image.photo_id;
-  const fromCondition = subject.kind === 'condition';
-  const main: MoveTile[] = [
-    ...[...view.shots].sort((a, b) => a.final_no - b.final_no).map((shot): MoveTile => ({
-      key: `s${shot.container_id}`, tag: pad(shot.final_no), name: shot.name, image: shot.photo, example: shot.example ? shot.container_id : null,
-      state: shot.photo?.photo_id === source ? 'THIS IMAGE' : shot.photo ? 'SWAP' : 'EMPTY',
-      target: { kind: 'container', container_id: shot.container_id },
-      done: shot.photo ? `Swapped with ${pad(shot.final_no)}` : `Moved to shot ${pad(shot.final_no)}`,
-    })),
-    ...view.extras.map((image, index): MoveTile => {
-      const position = extraPosition(view, index);
-      return {
-        key: `p${image.photo_id}`, tag: pad(position), name: 'Extra', image, example: null, state: image.photo_id === source ? 'THIS IMAGE' : 'SWAP',
-        target: { kind: 'main_position', position }, done: `Swapped with ${pad(position)}`,
-      };
-    }),
-    { key: 'extra-end', tag: '', name: 'New extra', image: null, example: null, state: 'ADD AT END', target: { kind: 'extra_end' }, done: 'Added as extra image' },
-  ];
-  const condition: MoveTile[] = [
-    ...view.condition.map((image, index): MoveTile => ({
-      key: `p${image.photo_id}`, tag: `C${index + 1}`, name: `Condition ${pad(index + 1)}`, image, example: null, state: image.photo_id === source ? 'THIS IMAGE' : 'SWAP',
-      target: { kind: 'condition', position: index + 1 }, done: fromCondition ? `Reordered to C${index + 1}` : `Swapped with C${index + 1}`,
-    })),
-    {
-      key: 'condition-end', tag: '', name: fromCondition ? 'Move to end' : 'Add', image: null, example: null, state: 'ADD AT END', target: { kind: 'condition_end' },
-      done: fromCondition ? 'Moved to end of condition images' : 'Sent to condition images',
-    },
-  ];
-  return { main, condition };
 }
 
 /** The Item drawer's rows (LV-D17, design §6). "Article number" only for an item that has a barcode. */

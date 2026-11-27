@@ -16,7 +16,8 @@ const strip = () => screen.getByTestId('preview-strip');
 const preview = () => within(screen.getByTestId('preview'));
 const viewport = () => screen.getByTestId('preview-viewport');
 const photo = () => screen.getByTestId('preview-photo');
-const kicker = () => screen.queryByTestId('preview')?.querySelector('.ph-kicker')?.textContent ?? null;
+// LV9 (book 10J LV-D21 (4)): the Preview has no header; what it shows is its name.
+const kicker = () => screen.queryByTestId('preview')?.getAttribute('aria-label') ?? null;
 const hint = () => screen.queryByTestId('swipe-hint')?.textContent ?? null;
 const toast = () => screen.getByTestId('toast').textContent;
 const dialog = () => screen.queryByRole('dialog', { name: CONFIRM });
@@ -53,7 +54,8 @@ test('lv8_c5a_a_move_within_200_ms_is_a_swipe_and_never_shows_the_template', asy
   press(viewport(), 195, 305);
   await advance(199);
   slide(viewport(), 165, 305);
-  expect(screen.getByTestId('preview-pill').textContent).toBe('CAPTURED');
+  // LV9 (book 10J LV-D21 (4)): no pill rests on the photo; "TEMPLATE" shows only while its template does.
+  expect(screen.queryByTestId('preview-pill')).toBeNull();
   expect(photo().style.opacity).toBe('1');
   expect(photo().style.transform).toContain('translateX(-30px)');
   expect(hint()).toBe('DENY');
@@ -70,7 +72,7 @@ test('lv8_c5b_a_template_shots_photo_held_still_for_200_ms_shows_its_template_an
   const env = await openPreview(X.b);
   press(viewport(), 100, 305);
   await advance(199);
-  expect(screen.getByTestId('preview-pill').textContent).toBe('CAPTURED');
+  expect(screen.queryByTestId('preview-pill')).toBeNull();
   await advance(1);
   expect(screen.getByTestId('preview-pill').textContent).toBe('TEMPLATE');
   expect(photo().style.opacity).toBe('0.35');
@@ -207,7 +209,8 @@ test('lv8_c6f_a_photo_already_in_the_group_springs_back_with_a_hint', async () =
   await advance(0);
   expect(kicker()).toBe('IMAGE 04 · EXTRA');
   expect(photo().style.transform).toBe('');
-  preview().getByRole('button', { name: 'Back to shot 01' }).click();
+  // LV9 (book 10J LV-D21 (4)): Back is the close icon.
+  preview().getByRole('button', { name: 'Close' }).click();
   await advance(0);
   tap(dock(), X.c1);
   await advance(0);
@@ -283,7 +286,7 @@ test('lv8_c7c_cancel_and_the_backdrop_keep_the_photo_in_its_shot', async () => {
   expect(env.mac.allPosts()).toEqual([]);
 });
 
-// ---- LV8·C8: the strip in the Preview; the buttons ----
+// ---- LV8·C8: the strip in the Preview (row C8(e), the buttons, is superseded by LV9·C11(a) and C12(a)) ----
 
 test('lv8_c8a_the_preview_shows_the_strip_and_marks_its_photo', async () => {
   await openPreview(X.b);
@@ -319,21 +322,6 @@ test('lv8_c8d_the_strip_marks_the_next_photo_after_a_swipe', async () => {
   await openPreview(X.b);
   swipe(-120, 0);
   expect(outlined(strip())).toEqual(['04']);
-});
-
-test('lv8_c8e_no_delete_button_retake_only_for_a_template_shot', async () => {
-  await openPreview(X.extra);
-  const names = () => preview().getAllByRole('button').map(button => button.textContent);
-  expect(kicker()).toBe('IMAGE 04 · EXTRA');
-  expect(names()).toEqual(['Move image', 'Back to shot 01']);
-  tap(strip(), X.b);
-  await advance(0);
-  expect(kicker()).toBe('SHOT 02 · CAPTURED');
-  expect(names()).toEqual(['Move image', 'Back to shot 01', 'Retake']);
-  tap(strip(), X.c1);
-  await advance(0);
-  expect(kicker()).toBe('CONDITION 01');
-  expect(names()).toEqual(['Move image', 'Back to shot 01']);
 });
 
 test('lv8_c8f_the_live_screens_strip_takes_no_touch_under_a_preview', async () => {

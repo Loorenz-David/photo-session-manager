@@ -1069,8 +1069,8 @@ the direct adapter only.
     accepted only if its `gen` is the current one and its `seq` is above the last accepted (`decodeFrame`); reconnect
     after 500, 1000, 2000, 4000, 4000… ms while visible (`reconnectDelay`), at once when the screen comes back; close
     4401 = removed.
-  - `state.ts` — one reducer and the pure selectors every component reads (`dockTiles`, `nextStep`, `moveTiles`,
-    `previewSubject`, `itemRows`, the texts in `TEXT`). The session is only ever what `GET /session` last answered
+  - `state.ts` — one reducer and the pure selectors every component reads (`dockTiles`, `nextStep`,
+    `previewSubject`, `previewHeader`, `itemRows`, the texts in `TEXT`; LV9 removed `moveTiles` and `backLabel`). The session is only ever what `GET /session` last answered
     (re-read on every `session` message, on socket open and after each of the phone's own actions); the phone never
     advances the current shot itself (MC-LV3). The preview is held by photo id, so it follows a moved image.
   - `geometry.ts` — `viewportBox`, `isRotated` (> 1.2), `localPoint` (image-local coordinates in a rotated viewport),
@@ -1106,11 +1106,11 @@ the direct adapter only.
     stage and the shot's ratio and is reused by `Preview`), `LiveCanvas` (the JPEG drawn as it arrived with
     `createImageBitmap`; always mounted, shown by opacity only once a frame of the current `gen` is drawn),
     `TemplateLayer` (the example `<img>`, `filter: grayscale(1)`: display only, H3), `LockControl`, `OverlayBar`,
-    `ControlBar`, `Dock`, `Preview` (LV8: the swipe's state machine), `ConfirmSheet` (LV8), `MoveDrawer`, `ItemDrawer`, `PropertiesPage`, `Toast`, `ConnectingOverlay`,
+    `ControlBar`, `Dock`, `Preview` (LV8: the swipe's state machine; LV9, §5 PH10: only the photo, the strip, ⋯ and ×, its root named by the kicker, no gesture while the photo drawer is open), `PhotoDrawer` (LV9: the photo's kicker, title, ratio chip, hold hint and the actions column — Retake now, LV10 adds Reframe), `ConfirmSheet` (LV8), `ItemDrawer`, `PropertiesPage`, `Toast`, `ConnectingOverlay` (LV9 removed `MoveDrawer`),
     `FullscreenButton`. `phone.css` holds the design tokens as CSS variables; values that change with state are
     inline styles. IBM Plex Mono is bundled (`@fontsource/ibm-plex-mono`, latin 400/500), never fetched at runtime.
   - **The image rule (LV6; §5 PH6a, finding F7).** Every photo preview on the phone is drawn by
-    `components/PhotoImage.tsx` (dock, Preview, Move drawer), never by a bare `<img>`: it asks for
+    `components/PhotoImage.tsx` (dock, Preview), never by a bare `<img>`: it asks for
     `photos/<id>/preview?pair=…&v=<preview>` (`api.ts::previewUrl`; LV9, PH7 v1.3: the composition `revision` is
     **not** in the URL and not in `PhotoImage`'s key, so a revision raised by a container's presets never refetches
     an unchanged picture) only while the session view's

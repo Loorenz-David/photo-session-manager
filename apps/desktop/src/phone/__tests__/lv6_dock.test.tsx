@@ -15,7 +15,8 @@ const X = { b: 44, extra: 236, c1: 383 };
 const Y = 742;
 const dock = () => screen.getByTestId('dock');
 const tiles = () => Array.from(dock().querySelectorAll<HTMLElement>('[data-dock-k]'));
-const kicker = () => screen.queryByTestId('preview')?.querySelector('.ph-kicker')?.textContent ?? null;
+// LV9 (book 10J LV-D21 (4)): the Preview has no header; what it shows is its name.
+const kicker = () => screen.queryByTestId('preview')?.getAttribute('aria-label') ?? null;
 const px = (value: string) => (value.endsWith('px') ? parseFloat(value) : null);
 
 /** The phone's own stylesheet, as the phone build ships it (jsdom loads no CSS by itself). */
