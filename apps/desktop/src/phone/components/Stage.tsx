@@ -1,4 +1,6 @@
 import { type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { overlayLines } from '@/features/compose/overlays';
+import type { OverlayKind } from '@/features/compose/useComposePrefs';
 import { isRotated, type LocalPoint, localPoint, type Point, type Size, tapToFrame, viewportBox, zoomScale } from '../geometry';
 import { buzz, HAPTIC, isDoubleTap, lockProgress, overlayValue, type Tap, TAP_FOCUS_MS, touchMode, type TouchMode } from '../gestures';
 import { type Action, cameraNotice, currentShot, exposureText, hintText, inFreeShot, liveShown, modeLabel, type PhoneState, stageRatio, wantsLive } from '../state';
@@ -12,7 +14,8 @@ type FrameProps = {
   /** The image's aspect ratio (w/h); above 1.2 the viewport turns 90° clockwise. */
   ratio: number;
   testId: string;
-  children: ReactNode;
+  /** The viewport's layers; a function is given the viewport's own size in px (before it is turned). */
+  children: ReactNode | ((viewport: Size) => ReactNode);
   onPointerDown?: (event: Pointer) => void;
   onPointerMove?: (event: Pointer) => void;
   onPointerUp?: (event: Pointer) => void;
@@ -44,7 +47,7 @@ export function ImageFrame({ ratio, testId, children, ...handlers }: FrameProps)
   return <div className="ph-stage" ref={stage}>
     <div className="ph-viewport" data-testid={testId} style={{ width: box.width, height: box.height, transform: `rotate(${box.rotated ? 90 : 0}deg)` }}
       onContextMenu={event => event.preventDefault()} {...handlers}>
-      {children}
+      {typeof children === 'function' ? children(box) : children}
     </div>
   </div>;
 }
@@ -70,10 +73,26 @@ const LockIcon = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="non
   <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
 </svg>;
 
+/**
+ * LV-D21 (7): the composition guides over the live view (10D Overlay; the Mac's `overlayLines` on
+ * the viewport's own box, each half of a split shot). Drawn by the UI only, over the live picture
+ * and the template alike; it takes no touch (H3; a tap still focuses through it).
+ */
+function LiveGuides({ kind, split, viewport }: { kind: OverlayKind; split: boolean; viewport: Size }) {
+  if (kind === 'off' || viewport.width <= 0 || viewport.height <= 0) return null;
+  const lines = overlayLines(kind, { left: 0, top: 0, width: viewport.width, height: viewport.height }, split);
+  return <svg className="ph-guides ph-live-guides" data-testid="live-guides" data-guides={kind} viewBox={`0 0 ${viewport.width} ${viewport.height}`}
+    width={viewport.width} height={viewport.height} style={{ pointerEvents: 'none' }} aria-hidden>
+    {lines.map((line, index) => <line key={index} {...line} />)}
+  </svg>;
+}
+
 type Props = {
   token: string;
   state: PhoneState;
   dispatch: Dispatch<Action>;
+  /** The composition guides chosen for the live view (the Item drawer's Guides row). */
+  guides: OverlayKind;
   /** Gestures are taken: connected, and no preview or drawer is open above the stage. */
   enabled: boolean;
   canvas: RefObject<LiveCanvasHandle | null>;
@@ -88,7 +107,7 @@ type Props = {
  * gestures on it (hold for live, slide up to lock, slide sideways for the overlay, tap to focus
  * and double-tap to unlock while locked). All in image-local coordinates.
  */
-export function Stage({ token, state, dispatch, enabled, canvas, isCurrentGen, onFocus, onClearFocus }: Props) {
+export function Stage({ token, state, dispatch, guides, enabled, canvas, isCurrentGen, onFocus, onClearFocus }: Props) {
   const shot = currentShot(state.view);
   const free = inFreeShot(state.view);
   const ratio = stageRatio(state);
@@ -198,7 +217,7 @@ export function Stage({ token, state, dispatch, enabled, canvas, isCurrentGen, o
 
   const dark = live;
   const focus = state.focus;
-  return <ImageFrame ratio={ratio} testId="viewport" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>
+  return <ImageFrame ratio={ratio} testId="viewport" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}>{viewport => <>
     <div className="ph-layer">
       <LiveCanvas ref={canvas} isCurrent={isCurrentGen} shown={showing} scale={scale}
         onDrawn={(gen, width, height) => dispatch({ type: 'drawn', gen, width, height })} />
@@ -210,6 +229,7 @@ export function Stage({ token, state, dispatch, enabled, canvas, isCurrentGen, o
       <span className="ph-split-pill" style={{ left: '25%' }}>Left · 1:1</span>
       <span className="ph-split-pill" style={{ left: '75%' }}>Right · 1:1</span>
     </>}
+    <LiveGuides kind={guides} split={shot?.split ?? false} viewport={viewport} />
     {focus && live && <div className="ph-reticle" data-testid="reticle" style={{ left: `${focus.x * 100}%`, top: `${focus.y * 100}%` }}><div className="ph-reticle-dot" /></div>}
     <div className="ph-top-row">
       <div className={`ph-pill${dark ? ' ph-pill-dark' : ''}`} data-testid="mode-pill">
@@ -230,5 +250,5 @@ export function Stage({ token, state, dispatch, enabled, canvas, isCurrentGen, o
       <div className="ph-hint" data-testid="hint" style={{ opacity: notice ? 1 : state.holding || adjust || lock || !enabled ? 0 : 1 }}>{notice ?? hintText(state)}</div>
     </div>
     <Flash count={state.flash} />
-  </ImageFrame>;
+  </>}</ImageFrame>;
 }

@@ -322,6 +322,14 @@ label printed itself. Same key and store as conversations; labels need the scope
     Diagonals; remembered on the phone, Thirds the first time) and **Reset** (the Mac's default framing: the default
     shape, centred, as large as fits). No trimming handles on the phone: a Free shape keeps its proportions (trim it
     on the Mac). The editor stays upright even for a long shot. **Cancel** closes it and nothing reaches the Mac.
+    **Done** saves the framing into the Mac's own composition (one request; Done waits for its answer): the toast
+    says "Framing saved", the Preview and the strips show the new framing, the Mac shows it at once, its exports
+    and uploads follow the new framing as for an edit made on the Mac, and ⌘Z on the Mac undoes it (one step
+    "Compose NN"). Done with nothing changed sends nothing; Done right after Reset asks the Mac for its own reset.
+    If the photo's framing changed on the Mac while the editor was open, Done is refused and nothing is
+    overwritten ("Framing changed on the Mac. Open Reframe again."); a framing the Mac finds invalid stays in the
+    editor ("That framing could not be saved."); if the Mac switched session the editor closes ("Session changed
+    on the Mac"). The editor also closes, with nothing sent, when its photo leaves the session.
   - **Nothing blinks when photos move** (LV9, book 10J LV-D21 (2), (3)): a drop **and a swipe** show in both strips at
     once; several quick ones stack and the strips keep showing them all until the Mac has answered every one (a
     refusal, or 8 s without an answer, puts the strips back to the Mac's view). A moved photo keeps its picture (it
@@ -329,7 +337,11 @@ label printed itself. Same key and store as conversations; labels need the scope
     shows that shot's grey template picture with its number, as an empty shot does; extras and Condition images
     leave a gap.
   - **Item drawer** (menu button): item name, SKU, article number (the barcode, only when the item has one), current
-    shot, angle, image counts; **Fill item properties** opens an empty page for now (LV-D17).
+    shot, angle, image counts; **Fill item properties** opens an empty page for now (LV-D17). **Guides** (LV10, book
+    10J LV-D21 (7)): Off, Thirds, Grid, Golden ratio, Diagonals — the composition guides drawn over the live
+    screen's picture, live and template alike (each half of a split shot has its own; they turn with a long shot).
+    Off the first time; remembered on the phone; a separate choice from the reframe editor's guides. Drawn by the
+    phone only and they take no touch (a tap still focuses).
   - Haptics on Android only (iPhone browsers have none). No wake lock: the screen follows the phone's Auto-Lock; when
     it comes back the app reconnects by itself.
 

@@ -25,8 +25,8 @@ type Props = {
   /** Done's request is out: Done waits for its answer. */
   busy?: boolean;
   onCancel: () => void;
-  /** Done with a framing that differs from the one the editor opened with; absent, Done is off. */
-  onDone?: (result: ReframeResult) => void;
+  /** Done with a framing that differs from the one the editor opened with. */
+  onDone: (result: ReframeResult) => void;
 };
 
 const SHAPES: readonly { value: string; label: string }[] = [
@@ -52,7 +52,9 @@ const same = (a: CompositionValues, b: CompositionValues) =>
  * moves it; two fingers move it, zoom it (spread = closer) and straighten it (twist, after 3°). Every
  * move is bounded while it happens (`reframe.ts`), so the frame never shows empty corners and
  * nothing springs back. A fine grid shows while straightening; the composition guides lie inside
- * the frame. The controls apply the Mac's own `refit`. Nothing reaches the Mac before Done.
+ * the frame. The controls apply the Mac's own `refit`. Nothing reaches the Mac before Done; Done
+ * with the framing the editor opened with sends nothing, and Done right after Reset asks the Mac
+ * for its own reset.
  * The editor stays upright whatever the photo's shape (plan point P9); it has no trimming handles
  * (P8: a Free shape keeps its proportions here).
  */
@@ -206,7 +208,7 @@ export function ReframeEditor({ token, image, defaultShape, busy = false, onCanc
     setWasReset(true);
   };
   const done = () => {
-    if (busy || !onDone) return;
+    if (busy) return;
     // Nothing changed: nothing is sent (plan point P7).
     if (same(values, opened)) return onCancel();
     onDone(wasReset ? { kind: 'reset' } : { kind: 'save', values });
@@ -227,7 +229,7 @@ export function ReframeEditor({ token, image, defaultShape, busy = false, onCanc
     <div className="ph-reframe-bar">
       <button type="button" className="ph-reframe-text" onClick={onCancel}>Cancel</button>
       <span className="ph-mono ph-kicker">REFRAME</span>
-      <button type="button" className="ph-reframe-text ph-reframe-done" disabled={busy || !onDone} onClick={done}>Done</button>
+      <button type="button" className="ph-reframe-text ph-reframe-done" disabled={busy} onClick={done}>Done</button>
     </div>
     <div className="ph-reframe-stage" ref={stage} data-testid="reframe-stage" onContextMenu={event => event.preventDefault()}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancelled}>

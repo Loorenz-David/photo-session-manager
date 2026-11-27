@@ -32,6 +32,9 @@ export const TEXT = {
   sentToCondition: 'Sent to condition images',
   /** LV-D21 (6): Reframe waits for the full frame the composition is measured in (the Mac's own words). */
   reframeWaiting: "Waiting for Capture One's full-frame preview",
+  framingSaved: 'Framing saved',
+  framingChanged: 'Framing changed on the Mac. Open Reframe again.',
+  framingInvalid: 'That framing could not be saved.',
 } as const;
 
 /** master_plan_live §6 (v1.3): the composition guides' names (10D Overlay), in the Mac's order. */
@@ -39,6 +42,8 @@ export const GUIDE_LABELS: Record<OverlayKind, string> = { off: 'Off', thirds: '
 export const GUIDE_KINDS: readonly OverlayKind[] = OVERLAY_ORDER;
 /** The guides inside the reframe editor's frame, remembered on this phone (plan point P6). */
 export const REFRAME_GUIDES_KEY = 'psm.phone.reframeGuides';
+/** The guides over the live view, a separate choice (plan point P10: framing live and checking a crop are different moments). */
+export const LIVE_GUIDES_KEY = 'psm.phone.liveGuides';
 
 /** A guide choice kept on this phone; anything else stored there is `fallback`. */
 export function readGuides(key: string, fallback: OverlayKind): OverlayKind {

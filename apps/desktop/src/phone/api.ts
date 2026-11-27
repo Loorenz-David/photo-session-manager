@@ -164,6 +164,18 @@ export const classifyPhoto = (token: string, photo_id: number, session_id: numbe
   request<unknown>('POST', `/photos/${photo_id}/classify`, token, { session_id, to });
 export const deletePhoto = (token: string, photo_id: number, session_id: number) =>
   request<unknown>('POST', `/photos/${photo_id}/delete`, token, { session_id });
+/** PH4b `values`: a framing in the Mac's spellings (what `PhoneComposition` carries, without its frame and state). */
+export type CompositionValuesBody = Pick<PhoneComposition, 'kind' | 'shape' | 'orientation' | 'quarter_turns' | 'flip' | 'straighten' | 'rect'>;
+/**
+ * PH4b: the reframe editor's Done. `revision` is the photo's when the editor opened: the Mac saves
+ * only if its framing is still that one (else 409 `composition_changed`), validates as for its own
+ * editor (400 `composition_invalid`) and answers the new revision.
+ */
+export const saveComposition = (token: string, photo_id: number, session_id: number, revision: number, values: CompositionValuesBody) =>
+  request<{ revision: number }>('POST', `/photos/${photo_id}/composition`, token, { session_id, revision, values });
+/** PH4b: Done after Reset: the Mac's own default framing, behind the same revision check. */
+export const resetComposition = (token: string, photo_id: number, session_id: number, revision: number) =>
+  request<{ revision: number }>('POST', `/photos/${photo_id}/composition/reset`, token, { session_id, revision });
 
 /**
  * The photo's preview as the Mac shows it, or `null` while the Mac has none to serve (PH6a: never

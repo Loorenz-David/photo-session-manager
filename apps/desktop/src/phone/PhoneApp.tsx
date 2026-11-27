@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { ApiError, capture, classifyPhoto, deletePhoto, focus, focusClear, forgetToken, hello, movePhoto, type PhoneSession, retake, session, setCurrent, takeToken, Unpaired } from './api';
+import type { OverlayKind } from '@/features/compose/useComposePrefs';
+import {
+  ApiError, capture, classifyPhoto, deletePhoto, focus, focusClear, forgetToken, hello, movePhoto, type PhoneSession, resetComposition, retake, saveComposition, session, setCurrent,
+  takeToken, Unpaired,
+} from './api';
 import { applyDrop, type Drop, nextPhoto, type SwipeAction } from './arrange';
 import { ConfirmSheet } from './components/ConfirmSheet';
 import { ConnectingOverlay } from './components/ConnectingOverlay';
@@ -11,15 +15,15 @@ import type { LiveCanvasHandle } from './components/LiveCanvas';
 import { PhotoDrawer } from './components/PhotoDrawer';
 import { Preview } from './components/Preview';
 import { PropertiesPage } from './components/PropertiesPage';
-import { ReframeEditor } from './components/ReframeEditor';
+import { ReframeEditor, type ReframeResult } from './components/ReframeEditor';
 import { Stage } from './components/Stage';
 import { Toast } from './components/Toast';
 import { isRotated, type Point } from './geometry';
 import { buzz, DRAG, HAPTIC } from './gestures';
 import { type CaptureMessage, type FocusMessage, PhoneSocket, type ServerMessage } from './socket';
 import {
-  connected, type DockTile, initialState, itemRows, landedToast, nextStep, pad, photoIds, previewHeader, previewRatio, previewSubject, reduce, stageRatio, TEXT,
-  tileImage, wantsLive,
+  connected, type DockTile, initialState, itemRows, landedToast, LIVE_GUIDES_KEY, nextStep, pad, photoIds, previewHeader, previewRatio, previewSubject, readGuides, reduce,
+  stageRatio, TEXT, tileImage, wantsLive, writeGuides,
 } from './state';
 
 /** While the Mac does not answer the first two requests they are asked again this often. */
@@ -327,11 +331,58 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
 
   // LV-D21 (6): the reframe editor, over the Preview of the photo it was opened for. It closes with
   // nothing sent when that photo leaves the session or the Mac no longer has its full-frame preview.
-  const [reframing, setReframing] = useState<number | null>(null);
-  const reframed = reframing !== null && subject?.image.photo_id === reframing && subject.image.composition ? { ...subject.image, composition: subject.image.composition } : null;
+  // `revision` is the photo's when the editor opened: what Done's request is checked against (PH4b).
+  const [reframing, setReframing] = useState<{ photo_id: number; revision: number } | null>(null);
+  const reframed = reframing !== null && subject?.image.photo_id === reframing.photo_id && subject.image.composition ? { ...subject.image, composition: subject.image.composition } : null;
   useEffect(() => {
     if (reframing !== null && !reframed) setReframing(null);
   }, [reframing, reframed]);
+
+  /**
+   * PH12: Done in the reframe editor. One request per Done (Done waits for its answer). Saved: the
+   * editor closes and the Mac's next view shows the new framing. Refused: a framing changed on the
+   * Mac meanwhile closes the editor (nothing is overwritten; the re-read brings the Mac's framing);
+   * one the Mac finds invalid, or a request that did not work, leaves the editor as it is; a session
+   * changed on the Mac closes it as every refused action does.
+   */
+  const [saving, setSaving] = useState(false);
+  const savingNow = useRef(false);
+  const saveFraming = async (result: ReframeResult) => {
+    if (!view || !reframing || savingNow.current) return;
+    savingNow.current = true;
+    setSaving(true);
+    try {
+      if (result.kind === 'reset') await resetComposition(token, reframing.photo_id, view.id, reframing.revision);
+      else await saveComposition(token, reframing.photo_id, view.id, reframing.revision, { ...result.values, straighten: result.values.straighten ?? 0 });
+      setReframing(null);
+      buzz(HAPTIC.select);
+      toast(TEXT.framingSaved);
+      void readSession();
+    } catch (error) {
+      const code = error instanceof ApiError ? error.code : '';
+      if (error instanceof Unpaired) onRemoved();
+      else if (code === 'composition_changed') {
+        setReframing(null);
+        toast(TEXT.framingChanged);
+        void readSession();
+      } else if (code === 'composition_invalid') toast(TEXT.framingInvalid);
+      else if (code === 'session_changed') {
+        setReframing(null);
+        refused(error, TEXT.failed);
+      } else toast(TEXT.failed);
+    } finally {
+      savingNow.current = false;
+      setSaving(false);
+    }
+  };
+
+  // LV-D21 (7): the composition guides over the live view, chosen in the Item drawer and kept on this phone.
+  const [liveGuides, setLiveGuides] = useState<OverlayKind>(() => readGuides(LIVE_GUIDES_KEY, 'off'));
+  const chooseGuides = (kind: OverlayKind) => {
+    buzz(HAPTIC.select);
+    setLiveGuides(kind);
+    writeGuides(LIVE_GUIDES_KEY, kind);
+  };
 
   /** What the strips show: the pending arrangement while the Mac answers, else the Mac's view. */
   const arranged = pending && view && pending.id === view.id ? pending : view;
@@ -460,7 +511,7 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
   return <div className="ph-app">
     <div className="ph-safe-top" />
     <FullscreenButton />
-    <Stage token={token} state={state} dispatch={dispatch} enabled={free} canvas={canvas}
+    <Stage token={token} state={state} dispatch={dispatch} guides={liveGuides} enabled={free} canvas={canvas}
       isCurrentGen={gen => socket.current?.gen === gen} onFocus={(mark, point) => void onFocus(mark, point)} onClearFocus={() => {
         buzz(HAPTIC.clearFocus);
         clearFocus();
@@ -484,10 +535,13 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
       canReframe={!!subject.image.composition} onClose={() => dispatch({ type: 'details', open: false })} onRetake={() => void retakeShot()} onReframe={() => {
         buzz(HAPTIC.select);
         dispatch({ type: 'details', open: false });
-        setReframing(subject.image.photo_id);
+        setReframing({ photo_id: subject.image.photo_id, revision: subject.image.revision });
       }} />}
-    {view && reframed && <ReframeEditor key={reframed.photo_id} token={token} image={reframed} defaultShape={view.default_shape ?? '1:1'} onCancel={() => setReframing(null)} />}
-    {view && <ItemDrawer open={state.menuOpen} itemName={view.item.name} macName={state.hello?.mac_name ?? ''} rows={itemRows(state, view)}
+    {view && reframed && <ReframeEditor key={reframed.photo_id} token={token} image={reframed} defaultShape={view.default_shape ?? '1:1'} busy={saving}
+      onCancel={() => {
+        if (!savingNow.current) setReframing(null);
+      }} onDone={result => void saveFraming(result)} />}
+    {view && <ItemDrawer open={state.menuOpen} itemName={view.item.name} macName={state.hello?.mac_name ?? ''} rows={itemRows(state, view)} guides={liveGuides} onGuides={chooseGuides}
       onClose={() => dispatch({ type: 'menu', open: false })} onProperties={() => {
         buzz(HAPTIC.menu);
         dispatch({ type: 'props', open: true });

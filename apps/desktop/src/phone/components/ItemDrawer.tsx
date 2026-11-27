@@ -1,14 +1,23 @@
+import type { OverlayKind } from '@/features/compose/useComposePrefs';
+import { GUIDE_KINDS, GUIDE_LABELS } from '../state';
+
 type Props = {
   open: boolean;
   itemName: string;
   macName: string;
   rows: { label: string; value: string }[];
+  /** LV-D21 (7): the composition guides drawn over the live view. */
+  guides: OverlayKind;
+  onGuides: (kind: OverlayKind) => void;
   onClose: () => void;
   onProperties: () => void;
 };
 
-/** Design §6 and LV-D17: the item's information and its actions, in a bottom sheet behind the menu button. */
-export function ItemDrawer({ open, itemName, macName, rows, onClose, onProperties }: Props) {
+/**
+ * Design §6 and LV-D17: the item's information and its actions, in a bottom sheet behind the menu
+ * button. LV-D21 (7): its Guides row chooses the composition guides shown over the live view.
+ */
+export function ItemDrawer({ open, itemName, macName, rows, guides, onGuides, onClose, onProperties }: Props) {
   return <>
     <div className="ph-backdrop ph-backdrop-menu" style={{ opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none' }} onClick={onClose} />
     <div className="ph-sheet ph-sheet-menu" role="dialog" aria-label="Item" aria-hidden={!open} data-testid="item-drawer" style={{ transform: `translateY(${open ? 0 : 105}%)` }}>
@@ -26,6 +35,12 @@ export function ItemDrawer({ open, itemName, macName, rows, onClose, onPropertie
           <dd className="ph-mono">{row.value}</dd>
         </div>)}
       </dl>
+      <div className="ph-item-actions">
+        <span className="ph-mono ph-section" id="ph-live-guides">GUIDES</span>
+        <div className="ph-guides-row" role="group" aria-labelledby="ph-live-guides" data-testid="guides-row">
+          {GUIDE_KINDS.map(kind => <button key={kind} type="button" aria-pressed={guides === kind} onClick={() => onGuides(kind)}>{GUIDE_LABELS[kind]}</button>)}
+        </div>
+      </div>
       <div className="ph-item-actions">
         <span className="ph-mono ph-section">ACTIONS</span>
         <button type="button" className="ph-button ph-button-solid ph-button-wide" onClick={onProperties}>

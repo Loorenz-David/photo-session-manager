@@ -1280,6 +1280,28 @@ body,
   background: var(--ph-ink);
   color: var(--ph-white);
 }
+/* LV-D21 (7): the Item drawer's Guides row (the guides over the live view): one row, the chosen one filled. */
+.ph-guides-row {
+  display: flex;
+  gap: 6px;
+}
+.ph-guides-row button {
+  flex: 1 1 auto;
+  height: 42px;
+  padding: 0 8px;
+  border: 1.5px solid var(--ph-chip-border);
+  border-radius: 999px;
+  background: var(--ph-white);
+  color: var(--ph-ink);
+  font-family: var(--ph-ui);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ph-guides-row button[aria-pressed='true'] {
+  border-color: var(--ph-ink);
+  background: var(--ph-ink);
+  color: var(--ph-white);
+}
 /* The photo drawer's Reframe while the Mac has no full-frame preview yet. */
 .ph-button:disabled {
   opacity: 0.35;
