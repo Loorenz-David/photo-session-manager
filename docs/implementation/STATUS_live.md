@@ -167,6 +167,10 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     moves, lifted template photo should leave its template, Preview without header/buttons: ⋯ drawer + close) and new
     tools (pinch zoom, reframe on the phone as 10D MC-27 with guides and grid, guides on live). Planner launched
     (`prompts/reviewer/live_tools_plan_r1.md`) → LV9_preview_corrections, LV10_zoom_reframe_guides (both Fable).
+  - **LV9/LV10 planned** (after the usage-limit reset; handoff `handoff_live_tools_plan_r1.md`, 0 cards). Causes found:
+    no "on its way" signal between shutter and photo row (2.5 s USB / 5–6 s Wi-Fi) → LV9 sends it from the shutter;
+    four flicker causes; phone shows uncropped pictures → LV10 shows framed previews. Planner choices: Move image leaves
+    the Preview (drag/swipe cover it); in reframe the photo follows the fingers (as the Mac). **Chain LV9 → LV10 started.**
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -175,8 +179,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-None. The LV9/LV10 planner stopped at once on the Claude usage limit (resets 19:20 Stockholm); nothing written.
-**Next:** relaunch `claude -p --agent pipeline-planner --model opus --allowedTools Bash Read Edit Write Grep Glob --permission-mode acceptEdits --no-session-persistence < docs/implementation/prompts/reviewer/live_tools_plan_r1.md`, then `run_phase.sh phase LV9_preview_corrections`, then LV10; rebuild the SDK sidecar, build, install; owner try-out.
+- Chain `run_phase.sh phase LV9_preview_corrections && run_phase.sh phase LV10_zoom_reframe_guides` (Fable), started 2026-11-27 evening.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).

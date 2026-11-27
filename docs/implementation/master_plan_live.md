@@ -1,4 +1,12 @@
-# Live preview — master plan (v1, 2026-11-26; v1.1 2026-11-26: fix milestones LV5, LV6 after the paused hardware check; v1.2 2026-11-27: LV8 sort and arrange, LV-D20)
+# Live preview — master plan (v1, 2026-11-26; v1.1 2026-11-26: fix milestones LV5, LV6 after the paused hardware check; v1.2 2026-11-27: LV8 sort and arrange, LV-D20; v1.3 2026-11-27: LV9 preview corrections, LV10 zoom, reframe and guides, LV-D21)
+
+**v1.3 amendments (2026-11-27, planner, from book 10J LV-D21, changelog D21; the owner's try-out of LV8):** §2 (LV9,
+LV10, totals), §3 (both `implementer: fable`, their server units), §4.2 (`CompositionService::set_at_revision`,
+`reset_at_revision`, `Error::CompositionChanged`), §4.3 (wire bodies, routes), §4.5 (phone files), §4.7 (test stems),
+§5 **PH4b** (composition routes), **PH6b** (`incoming`), **PH6c** (`composition`, `default_shape`), **PH7** (the preview URL
+without the revision, amended in place), **PH9.5a** (the pending chain, replaces PH9.5's single pending drop),
+**PH10** (the Preview's layout), **PH11** (the pinch module), **PH12** (the reframe editor), §6 (phone texts v1.3), §9.
+Nothing else is superseded.
 
 **v1.2 amendments (2026-11-27, planner, from book 10J LV-D20, changelog D20; the owner's request R3 after the
 hardware check):** §2 (LV7 recorded, LV8 added, totals), §3 (LV8 `implementer: fable`, its server unit), §4.2 and §4.3
@@ -48,13 +56,16 @@ Milestone ids `LV1`…`LV4` are this track's; they are **not** 10J's card ids LV
 | `LV4_hardware_check` | owner-attended: M-LV1…M-LV6 and the "at hardware acceptance" items on the packaged app (paused 2026-11-26 part-way; resumes after LV6) | 3 | 20 | 20 | — (owner + orchestrator) | no | LV3 (resumes after LV6, §9) | measured evidence; M-LV6 targets set by the owner |
 | `LV7_tile_loading_cue` (v1.2, recorded; planned by the orchestrator 2026-11-27, owner request R2) | a quiet loading sweep on a waiting tile | 1 | 3 | 4 | **fable** | no | LV6 | the tile shows the photo is on its way |
 | `LV8_phone_sort_and_arrange` (v1.2, LV-D20) | U1 the Mac's classify route and insert moves (PH4a); U2 the Preview's swipes, confirmation and strip; U3 press-hold-lift drag and drop in both strips; U4 cancels, the drop shown at once, rollback (PH9) | 4 | 15 | 70 | **fable** | no | LV7 | the photographer sorts and arranges a session's photos from the phone |
+| `LV9_preview_corrections` (v1.3, LV-D21 (1)–(4)) | U1 the phone view's `incoming` (PH6b); U2 waiting tiles in both strips; U3 one visual step per move (keys by photo, preview URL without the revision, swipes shown at once, the pending chain PH9.5a) and the template picture under a lifted photo; U4 the minimal Preview (PH10) | 4 | 13 | 44 | **fable** | no | LV8 | the cue from the shutter, no flicker, the template picture stays, the Preview as asked |
+| `LV10_zoom_reframe_guides` (v1.3, LV-D21 (5)–(7)) | U1 the composition on the wire and its save routes (PH4b, PH6c); U2 the pinch module, zoom in the Preview, photos shown as composed (PH11); U3 the reframe editor (PH12); U4 saving, guides on live | 4 | 16 | 53 | **fable** | no | LV9 | zoom to check sharpness, reframe on the phone, guides on live |
 
 Totals (computed from the plan files by `grep`, v1.1): 6 milestones, 22 units, 113 criteria, 329 rows; every unit has
 at most 8 criteria. (v1 read 4 milestones, 15 units, 91 criteria, 261 rows; LV3's U0 had not been counted.) **v1.2:**
 rows counted as the lines matching `^| LV<n>·C<k>(<row>)` in each plan file (`grep -c`), criteria as the distinct
 `LV<n>·C<k>` among them: LV1 17/61, LV2 29/101, LV3 29/83, LV4 20/20, LV5 12/49, LV6 6/14, LV7 3/4, LV8 15/70 →
 8 milestones, **131 criteria, 402 rows** (the plan files win over this table: LV3's own table says 85 rows, LV6's 13;
-grep finds 83 and 14). Each
+grep finds 83 and 14). **v1.3:** the same count on the new files: LV9 13/44, LV10 16/53 → 10 milestones, **160
+criteria, 499 rows**; every unit ≤ 8 criteria (LV9 3/3/4/3, LV10 4/4/5/3). Each
 milestone needs the one before approved (its `depends_on`; gate = the **Tracker** line of that plan
 file). Start each with `tools/pipeline/run_phase.sh phase <id>` (the runner resolves any id as
 `docs/implementation/plans/<id>.md`); `run_phase.sh all` reads `phases.txt`, not this list. `LV4` is never dispatched
@@ -78,6 +89,13 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   is a small server change (one core function and two move variants in `template_placement`, one route; no camera
   code, no schema), kept in the milestone rather than a separate default-implementer milestone because a second review
   cycle would cost more than the change (planning prompt `prompts/reviewer/live_sort_plan_r1.md` allows it).
+  **v1.3:** `LV9_preview_corrections` and `LV10_zoom_reframe_guides` carry `implementer: fable` (phone UI); each has a
+  small server first unit kept in the milestone for the same reason (LV9·U1: two read-only fields in `phone_view`;
+  LV10·U1: one field, two thin routes over `CompositionService`, three error codes; no schema, no camera code; planning
+  prompt `prompts/reviewer/live_tools_plan_r1.md` allows it). `LV10` is `difficulty: high` (two-finger gestures, a
+  geometry-bound editor, a save path into the composition service). Projection off for both: the only externally owned
+  shapes are browser pointer events in jsdom (mouse events of pointer types with two `pointerId`s, LV3 lesson) and the
+  Mac's own composition values (this repo's serde, MC-27).
 - **Projection off for LV5 and LV6 too (v1.1).** The two externally owned shapes in LV5 are grounded, not invented: the
   helper's `liveview.exposure` line is quoted from the hardware log, and the Focus Area values are the installed SDK's
   enum (`CrDeviceProperty.h:1456–1485` in the lab's SDK 2.02); the rest are this repo's shapes.
@@ -161,6 +179,11 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   `src/services/current_shot.rs`: `CurrentShots::set_after_take_out(session_id, container_id)` (as `set_after_retake`,
   log `by=classify`).
 - New `src/services/phone_view.rs`: `phone_view(store, shots, default_shape, session_id) -> PhoneSessionView` (PH6).
+  **v1.3:** `PhoneShot.incoming: bool`, `PhoneSession.incoming: PhoneIncoming {extras, condition}` (PH6b, LV9·U1);
+  `PhoneImage.composition: Option<PhoneComposition>`, `PhoneSession.default_shape` (PH6c, LV10·U1).
+- **v1.3 (LV10·U1, PH4b):** `src/services/composition.rs`: `CompositionService::set_at_revision(photo_id, revision,
+  values) -> Result<Composition>`, `reset_at_revision(photo_id, revision) -> Result<Composition>`; `src/error.rs`:
+  `CompositionChanged` (`composition_changed`).
 - Domain: `ShotBinding {container_id: Option<i64>}` (`None` = bound to no container → Condition) in
   `src/domain/template.rs`; `NewExposure` and `Exposure` + `shot: Option<ShotBinding>`; `PlaceRow` + `shot:
   Option<ShotBinding>`.
@@ -187,7 +210,10 @@ by the runner (its task 0 answers `BLOCKED`, as P52 did).
   `PhoneTimings {ping: 5 s, idle_close: 15 s, stall_close: 15 s}`, `write_timeout` removed), `auth.rs`, `routes.rs`,
   `ws.rs`, `wire.rs` (DTOs, frame header, `error_code`), `web_root.rs`. **v1.2 (LV8):** `wire.rs` `ClassifyBody
   {session_id, to: "main" | "condition"}`, `MoveTargetDto` + `ExtraInsert {index}`, `ConditionInsert {index}`;
-  `routes.rs` handler `classify_photo` for PH4a's route.
+  `routes.rs` handler `classify_photo` for PH4a's route. **v1.3 (LV10·U1):** `wire.rs` `CompositionBody {session_id,
+  revision, values}` (values = core's `CompositionValues` serde), `ResetBody {session_id, revision}`; `error_code` +
+  `CompositionInvalid` → 400 `composition_invalid`, `FrameUnknown` → 409 `frame_unknown`, `CompositionChanged` → 409
+  `composition_changed`; `routes.rs` handlers `save_composition`, `reset_composition` for PH4b.
 - Dependencies: `qrcode = { version = "0.15", default-features = false, features = ["svg"] }` (integrations);
   `axum` gains feature `"ws"` (infra's line `axum = "0.8"` → `axum = { version = "0.8", features = ["ws"] }`, and
   integrations depends on `axum` the same way); testkit dev-dependencies `tokio-tungstenite` (the version axum's `ws`
@@ -222,6 +248,14 @@ INTEGER, revoked_at INTEGER)`. Store trait (`crates/core/src/ports/store.rs`) ga
   96, hintPx: 24}`, `DRAG {liftMs: 400, liftScale: 1.15, bandPx: 48, edgePx: 40, scrollStepPx: 8, scrollTickMs: 16,
   pendingMs: 8000}`, `HAPTIC.lift = 12`, `HAPTIC.dragTick = 6`; `api.ts` gains `classifyPhoto` and the two move
   kinds; `Dock.tsx` serves both strips (`testId` `dock` on the live screen, `preview-strip` in the Preview).
+- **v1.3 (LV9):** `arrange.ts` `applyDrop` kind `remove`; tile keys `p<photo_id>` / `s<container_id>` / `free` /
+  `w<group><n>` (`state.ts::dockTiles`); new `components/PhotoDrawer.tsx`; removed `components/MoveDrawer.tsx`,
+  `moveTiles`, `MoveTile`, `backLabel`. **(LV10):** new `pinch.ts` (PH11), `reframe.ts` (PH12),
+  `components/ReframeEditor.tsx`; `gestures.ts` gains `ZOOM {max: 6, stretchMin: 0.8, stretchMax: 7, doubleTap: 3,
+  settleMs: 200}`; `api.ts` gains `saveComposition`, `resetComposition`; localStorage keys `psm.phone.reframeGuides`
+  (default `thirds`), `psm.phone.liveGuides` (default `off`). The phone imports the Mac's pure modules
+  `features/compose/{geometry, refit, overlays, composed}.ts` and the constants of `useComposePrefs.ts`; nothing in
+  `src/phone` imports `@/services/bindings` or `@tauri-apps/*`.
 
 ### 4.6 Log lines (never a token)
 `live.source start= link= frames_10s= repeats_10s= errors_10s=` · `live.viewer viewer= pairing= live= visible=
@@ -253,6 +287,12 @@ lv8_drag.test.tsx, lv8_drag_reliability.test.tsx}`. Tests removed or changed bec
 (listed in `plans/LV8_phone_sort_and_arrange.md`): `lv3_c22c_…` removed (no Delete button), `lv6_c2c_…` removed (a long
 press on a photo tile lifts), `lv3_c21a_…`/`lv3_c21b_…` (the hold starts after 200 ms), `lv6_c5a_…` (assertion scoped to
 the viewport).
+**v1.3 (LV9, LV10):** Rust stems `lv9_phone_incoming.rs`, `lv10_phone_composition.rs`; UI
+`apps/desktop/src/phone/__tests__/{lv9_core.test.ts, lv9_incoming.test.tsx, lv9_one_step.test.tsx, lv9_preview.test.tsx,
+lv10_core.test.ts, lv10_zoom.test.tsx, lv10_reframe.test.tsx, lv10_save_and_guides.test.tsx}`; helper `stripFrames` in
+`__tests__/helpers.ts`. Tests changed because LV-D21 changed their behaviour (listed in the plan files): preview URLs
+lose `&r=` (LV9·U3); the Move-drawer tests removed, header/Back/Retake assertions moved to the drawer and the Preview's
+`aria-label` (LV9·U4).
 
 ## 5. Contracts (stand in for the mechanism inventory; plans implement them verbatim)
 
@@ -491,6 +531,16 @@ index}` (the source is an extra, or a Main photo of an untemplated session) and 
 source outside that group or an index out of range → `invalid_value`; the same place → nothing changes. One undo step
 "Move image" for every change; PH8 announcements through `HandAction::finish`. `ReviewService::reorder` is **not** used
 (it puts a Main photo by hand into slot = position, the Mac's container semantics). Every other PH4 route unchanged.
+**PH4b Composition routes (added 2026-11-27, v1.3, LV-D21 (6); LV10·U1).** `POST /api/phone/v1/photos/<id>/composition
+{session_id, revision, values: {kind, shape, orientation, quarter_turns, flip, straighten, rect: {x, y, w, h}}}` →
+`{revision}`; `POST /api/phone/v1/photos/<id>/composition/reset {session_id, revision}` → `{revision}`. Session guard and
+`session_photo` (404) as every photo route; then `CompositionService::set_at_revision` / `reset_at_revision`: the stored
+`revision` ≠ the body's → `CompositionChanged` (409 `composition_changed`), nothing saved; else exactly `set` / `reset`
+(MC-27 validation → `CompositionInvalid` 400 `composition_invalid`; no frame → `FrameUnknown` 409 `frame_unknown`; one
+undo step "Compose NN"; `PhotoChanged` + `SessionChanged` after the commit, PH8; unchanged values → 200, same revision,
+no step, no event). `values` uses core's serde spellings (`normal`/`split`; `original`, `"1:1"`, `"4:5"`, `"3:2"`,
+`"2:3"`, `"16:9"`, `free`; `named`/`turned`; `none`/`horizontal`); a body that does not parse → 400 `invalid_value`. The
+route renders nothing: MC-28's outputs go stale by the revision, as for a Mac edit.
 **PH5 WebSocket** `GET /api/phone/v1/ws?pair=<token>` (auth before upgrade: 401). Server → phone **text**:
 `{type: "hello", viewer_id}` · `{type: "session", session_id: <id>|null, rev}` (on `ActiveSessionChanged`,
 `SessionChanged`, `PhotoAdded`, `PhotoChanged` of the active session; `rev` increases; the phone re-reads `GET
@@ -530,10 +580,27 @@ phone requests a preview only when `preview` is a string, with `&v=<preview>` in
 changes (the `session` message after the preview step's `PhotoChanged` brings the new token). Evidence: 31 × `404` on
 `/photos/{id}/preview` at the hardware check, requested before the previews existed (`arrival.preview_ready` ≈ 2.7 s
 after the photo row) with a URL that never changed.
+**PH6b On the way (added 2026-11-27, v1.3, LV-D21 (1); LV9·U1).** `PhoneShot` + `incoming: bool`: true iff the shot has
+no photo and an exposure of CS4a's "on the way" set (a reported shutter of the session within `FIFO_WINDOW_MS` whose
+photo does not exist yet) is bound to its container. `PhoneSession` + `incoming: {extras, condition}`: the exposures on
+the way bound to no container in a templated session (→ Condition) and unbound in an untemplated one (→ Main at the end,
+P66). Read in `phone_view` at `now`; no new event (CS5's `SessionChanged` at the binding and arrival's `PhotoAdded` already
+make the phone re-read). Evidence for why it is needed: from the shutter to the photo row takes ≈ 2.5 s on USB and ≈ 5–6 s
+on Wi-Fi (STATUS_live LV4, CS4a), and `OriginalPreviewJob` gives the new row a preview within a moment, so a cue tied to
+"row without preview" (LV7) almost never showed.
+**PH6c Composition on the wire (added 2026-11-27, v1.3, LV-D21 (6); LV10·U1).** `Image` + `composition: null | {kind,
+shape, orientation, quarter_turns, flip, straighten, rect: {x, y, w, h}, frame: {w, h}, state: "ok" | "needs_review"}`:
+given iff the stored composition has a rect and a frame **and** the file the preview route serves is Capture One's
+adjusted preview (`adjusted_preview_path` set and on disk: the full frame MC-27 measures in); else null (the camera's own
+preview: the phone shows it as before and cannot reframe it). `PhoneSession` + `default_shape` (the setting's spelling).
+The phone draws a photo with a composition as composed (`composedLayout`, 10D §The result is shown).
 **PH7 Phone client rules** (LV3). Token: `?pair=` on `/phone/` → `localStorage["psm.phone.token"]`, removed from the URL
 (`history.replaceState`), manifest link `href="/phone/manifest.webmanifest?pair=<token>"` set at start (so an installed
 iPhone app starts with its token). Every request sends `Authorization: Bearer`; images and the socket use `?pair=`.
-A 401 clears the token and shows the pairing screen. **Demand:** a `gen` counter in memory; every change of showing
+A 401 clears the token and shows the pairing screen. **Preview URL (amended v1.3, LV9·U3):**
+`/api/phone/v1/photos/<id>/preview?pair=<token>&v=<preview>` (+ `&try=<n>` on a retry); the composition `revision` is
+not in it (PH6a's token alone changes when the served file changes; a revision raised by a container's presets never
+refetches an unchanged picture). **Demand:** a `gen` counter in memory; every change of showing
 Live (hold, lock, unlock, release) or of visibility sends `{type: "demand", gen: ++gen, live, visible}`. A binary frame
 is drawn only if its `gen` equals the current `gen` and its `seq` exceeds the last drawn; after a switch to Live the
 live layer stays hidden (template at full opacity) until the first frame of the new `gen` is drawn. **Reconnect:** a
@@ -611,9 +678,67 @@ are PH4a. Names in §4.5.
   from the Mac, `refused` (toast by code), a re-read; (c) `pendingMs` (8 s) without an answer → the last view from the
   Mac and a re-read, no toast. While a drop is pending nothing lifts (a long press is a tap). Swipes are not shown
   ahead in the strip.
+- **PH9.5a The pending chain (added 2026-11-27, v1.3, LV-D21 (2); LV9·U3; replaces PH9.5's single pending drop and its
+  "Swipes are not shown ahead").** Drops **and swipes** are shown at once in both strips: a swipe's Deny (Retake or
+  delete) as `applyDrop(…, {kind: "remove"})` (a template shot keeps its slot, empty; an extra or Condition image leaves
+  its group), Main / Condition as `to_main` / `to_condition`. A drop or swipe while others are outstanding is applied to
+  what the strips show (the pending arrangement), never to the Mac's view. The strips keep the pending arrangement until:
+  (a) every outstanding request has been answered and a session read started after the **last** answer returns → that
+  view; (b) any request is refused → the last view from the Mac, `refused` (toast by code), a re-read; (c) an outstanding
+  request has no answer `pendingMs` (8 s) after it was sent → the last view from the Mac and a re-read, no toast; (d) after
+  the last answer, the follow-up read has not returned within `pendingMs` → the last view from the Mac. A successful answer
+  stops its own 8 s bound (the LV8 timer that kept running is gone). The Preview's next photo after a swipe is `nextPhoto`
+  of what the strips show. While anything is pending nothing lifts (a long press is a tap); swipes stay allowed. Tiles are
+  keyed by their photo (`p<photo_id>` in every group; an empty shot `s<container_id>`), so a moved photo keeps its element
+  and its picture.
 - **Invariant PH9.** A drag sends at most one request, only on a release with a non-null target computed from homes
-  measured at lift; the strip never shows a pending arrangement after one of PH9.5's ends; the phone never decides a
-  placement: every outcome on screen after an end is the Mac's re-read.
+  measured at lift; the strip never shows a pending arrangement after one of PH9.5a's ends; no arrangement or picture is
+  shown again after it was replaced while requests are outstanding; the phone never decides a placement: every outcome on
+  screen after an end is the Mac's re-read.
+
+**PH10 The Preview's layout (added 2026-11-27, v1.3, LV-D21 (4); LV9·U4).** The Preview draws only the photo (its
+swipes, hold and, from LV10, zoom), the strip, **⋯** (bottom left, `aria-label="Photo details"`) and **×** (bottom right,
+`aria-label="Close"`); no header, no resting pill or hint over the photo, no button block; its root's `aria-label` is the
+kicker. ⋯ opens the photo drawer: kicker, title, ratio chip, the hold hint for a template shot's photo, ACTIONS: Retake
+(a template shot's photo; LV3's Retake), Reframe (LV10; disabled with "Waiting for Capture One's full-frame preview" while
+the image has no `composition`). While the drawer is open the photo and the strip take no touch. The Move drawer is gone
+(drag and swipes reach every target it offered). The live screen keeps its Item drawer (LV10 adds Guides to it).
+
+**PH11 The pinch module and the Preview's zoom (added 2026-11-27, v1.3, LV-D21 (5); LV10·U2).** `pinch.ts`:
+`twoFinger(start, now) -> {scale = |now₁ − now₂| / |start₁ − start₂|, rotation = the signed angle between the two finger
+vectors (degrees, clockwise on screen positive), anchor = start midpoint, mid = current midpoint}`; `track(state, event)`:
+`idle → one{id} → two{ids, start points}`; a third pointer is ignored; `up` of one of two → `one` re-based on the
+remaining finger; `cancel` of any → `idle`. **Preview zoom:** `Zoom {scale, x, y}` (the zoom layer's translate in px and
+scale about the viewport's centre); `pinchView(base, start, now, box)` keeps the image point under the start midpoint
+under the current midpoint, scale clamped to `[ZOOM.stretchMin, ZOOM.stretchMax]` while fingers are down;
+`clampPan(z, box)`: `|x| ≤ (scale − 1)·width/2`, `|y| ≤ (scale − 1)·height/2`; `settleZoom`: scale clamped to `[1,
+ZOOM.max]`, then `clampPan`, animated `ZOOM.settleMs`. States added to PH9.1's machine: a second pointer in `pressing`,
+`swiping` or `holding` ends it with no request and starts `pinching`; `zoomed` (scale > 1): one finger pans, no swipe,
+no hold; double-tap (`isDoubleTap`) → 1× when zoomed, `ZOOM.doubleTap` (3×) about the tap at 1×; `pointercancel`, hidden,
+blur → the gesture ends, the zoom settles; the shown photo changing → 1×. The box is measured at the gesture's start (a
+transformed layer's live rectangle is never used).
+
+**PH12 The reframe editor (added 2026-11-27, v1.3, LV-D21 (6); LV10·U3–U4; 10D MC-27).** Model: the Mac's — the frame
+box `frameBox(stage, rect ratio)` stays, the picture moves under it (`transformCss(viewTransform(values, frame, stage))`);
+open values = the stored ones, `refit(…, {kind: "reframe"}, frame)` for `needs_review`. Gestures (from the values at the
+gesture's start, using `track`/`twoFinger`): one finger → `panWithin(values, frame, −Δ / (W_t·s, H_t·s))`; two fingers →
+`rotateWithin(straighten₀ + straightenFromTwist(rotation))`, then `zoomWithin(anchorIn(frame box, anchor), scale)`, then
+`panWithin(−(mid − anchor) / (W_t·s, H_t·s))`. `reframe.ts`: `panWithin` = the furthest point along the move with
+`validate(values, frame) === null` (bisection, 16 steps); `zoomWithin` = `zoomAbout` then the largest valid factor
+between 1 and it (bisection, 16 steps); `rotateWithin` = `refit(values, {kind: "straighten", degrees}, frame)`;
+`straightenFromTwist(t)` = 0 while |t| ≤ 3°, else `t − 3·sign(t)` rounded to 0.1°; `resetValues(frame, default_shape)` =
+normal, that shape, named, 0 turns, no flip, 0°, `defaultRect(normal, shape, named, turnedFrame(frame, 0))`. Every value
+shown is valid: constraints run on every move, never only at release; `pointercancel`, hidden, blur keep the last valid
+values. Controls apply `refit(values, change, frame)` (kind, shape, orientation, turn, flip, straighten). Grid
+(`STRAIGHTEN_GRID_PX`) only while a twist is past the dead zone or the straighten control is held; guides
+`overlayLines(kind, frame box, split)`, kind remembered in `psm.phone.reframeGuides`. **Done:** values equal to the open
+values → close, no request; Reset with no change since → PH4b reset route; else PH4b save with the image's `revision` at
+open; one request per Done; refusals: `composition_changed` → close + toast, `composition_invalid` → stay + toast,
+`session_changed` → close + `refused`, else stay + "That did not work. Try again.". **Cancel:** close, no request. The
+editor closes when its photo leaves the session or its `composition` becomes null. **Guides on live (LV-D21 (7)):** the
+Item drawer's Guides row (Off, Thirds, Grid, Golden ratio, Diagonals), `psm.phone.liveGuides` (default `off`), drawn as an
+SVG with `pointer-events: none` over the live viewport with `overlayLines(kind, viewport box, split of the current shot)`,
+live and template alike (H3: UI drawing only).
 
 **Invariant PH.** No request without a live pairing reaches a service; no POST acts on a session other than the
 active one; the phone uses only relative URLs and no secure-context API.
@@ -655,6 +780,13 @@ active one; the phone uses only relative URLs and no secure-context API.
   "Sent to condition images" (up) · a successful drop shows no toast; a refused one shows the `refused` text by code
   ("Session changed on the Mac", "That did not work. Try again."). Haptics (design README §Haptics): lift 12, target
   change 6, drop and Main/Condition swipes `[30,40,60]` (Move image), Deny `[30,40,30]` (Retake / delete).
+- **Phone texts v1.3 (LV9, LV10, exact):** a group waiting tile's label "Photo on its way" · the Preview's buttons
+  "Photo details" (⋯) and "Close" (×) · the photo drawer's hold hint "Hold to view template · slide sideways for overlay"
+  and actions "Retake", "Reframe" · Reframe disabled: "Waiting for Capture One's full-frame preview" (the Mac's
+  `COMPOSE_WAITING`) · the editor: "Cancel", "Done", "Normal", "Split", "Shape" (Original, 1:1, 4:5, 3:2, 2:3, 16:9,
+  Free), "Turn", "Rotate and flip" (Rotate 90° left, Rotate 90° right, Flip horizontal), "Guides" (Off, Thirds, Grid,
+  Golden ratio, Diagonals), "Straighten" (readout "2.5°"), "Reset" · toasts "Framing saved", "Framing changed on the Mac.
+  Open Reframe again.", "That framing could not be saved." · the Item drawer's row "Guides" with the same five names.
 
 ## 7. Tracker
 Each plan file's **Tracker** line is that milestone's row (sessions change only that line). Current: all four
@@ -693,3 +825,8 @@ already reads); LV2·C9(b) fills it, LV3·C24(a) hides the row only when an item
 **v1.2 (2026-11-27):** `LV7` (approved) → `LV8_phone_sort_and_arrange` (`depends_on: [LV7_tile_loading_cue]`; it edits
 the same phone files and keeps LV7's waiting tile). Runner: `tools/pipeline/run_phase.sh phase
 LV8_phone_sort_and_arrange`. LV4 is done (STATUS_live); LV8's own try-out is on the hardware by the owner.
+**v1.3 (2026-11-27, LV-D21):** `LV8` (approved) → `LV9_preview_corrections` (`depends_on: [LV8_phone_sort_and_arrange]`)
+→ `LV10_zoom_reframe_guides` (`depends_on: [LV9_preview_corrections]`: it extends LV9's photo drawer and Preview state
+machine and relies on its tile keys and pending chain). Runner: `tools/pipeline/run_phase.sh phase
+LV9_preview_corrections`, then the same for LV10. Each closes with the owner's try-out on the phone (no hardware row is
+automated; the suite never needs the camera or a phone).

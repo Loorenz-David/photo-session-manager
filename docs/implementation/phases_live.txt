@@ -14,3 +14,6 @@ LV4_hardware_check
 LV7_tile_loading_cue
 # v1.2 (2026-11-27, LV-D20): LV8 sort and arrange on the phone, implementer: fable, after LV7 (master_plan_live.md §2, §9).
 LV8_phone_sort_and_arrange
+# v1.3 (2026-11-27, LV-D21): LV9 preview corrections, then LV10 zoom, reframe and guides; both implementer: fable (master_plan_live.md §2, §9).
+LV9_preview_corrections
+LV10_zoom_reframe_guides
