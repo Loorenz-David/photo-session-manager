@@ -22,7 +22,6 @@ const editor = () => screen.queryByTestId('reframe-editor');
 const stage = () => screen.getByTestId('reframe-stage');
 const done = () => within(editor()!).getByRole('button', { name: 'Done' }) as HTMLButtonElement;
 const toast = () => screen.getByTestId('toast').textContent;
-const sessionReads = (env: PhoneEnv) => env.mac.gets('/session').length;
 
 async function click(element: HTMLElement): Promise<void> {
   element.click();
