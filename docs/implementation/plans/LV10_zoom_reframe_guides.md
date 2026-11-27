@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV10 — Zoom, reframe and guides on the phone (book 10J LV-D21 (5)–(7))
 
-**Tracker:** NOT_STARTED (2026-11-27, planner)
+**Tracker:** IMPLEMENTED (2026-11-27, fable) — 4 units, checkpoints `05729f61` (U1), `f594e337` (U2), `92dfbef3` (U3), `1764d2d6` + `21ffb636` + `764ba540` (U4); 53 rows → 54 row tests (9 Rust `lv10_phone_composition::`, 45 phone UI in `lv10_{zoom,reframe,save_and_guides}`) + 21 core unit tests (`lv10_core`: `pinch.ts`, `reframe.ts`); closing gate on clean `764ba540`: `npm run build` ok, `cargo test --workspace` 2791 passed / 0 failed, clippy, fmt, sidecar stub, typecheck green, `npm test` 162 files / 1238 passed / 0 failed; nothing seen on a phone or in a browser (handoff `handoff_LV10_zoom_reframe_guides_implement_r1.md`).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -460,3 +460,85 @@ some photos taken and their previews ready:
    app and open it again: still Thirds.
 
 ## Review log
+
+### 2026-11-27 — implement r1 (fable)
+**Built.** U1: `Error::CompositionChanged`; `CompositionService::set_at_revision` / `reset_at_revision` (a revision check in
+front of `set` / `reset`); `PhoneImage.composition` (PH6c: only with a rect, a frame and Capture One's adjusted preview on
+disk) and `PhoneSession.default_shape` in `phone_view`; wire bodies `CompositionBody`, `ResetBody`; routes
+`save_composition`, `reset_composition`; three error codes on the phone wire and `composition_changed` in the desktop's
+code map (the match is exhaustive). U2: `pinch.ts` (`twoFinger`, `pinchView`, `clampPan`, `settleZoom`, `track`), `ZOOM`;
+the Preview's gesture (one `Gesture` per touch sequence, phases `panning` and `waiting` added, double tap, cancels, 1× on
+another photo); `PhotoImage` draws a composed photo with the Mac's `composedLayout`; `previewRatio` from it. U3:
+`reframe.ts` (`panWithin`, `zoomWithin`, `rotateWithin`, `straightenFromTwist`, `resetValues`); `ReframeEditor.tsx`;
+Reframe in the photo drawer (off with the Mac's waiting line); `PhoneApp`'s `reframing`. U4: `saveComposition`,
+`resetComposition`; Done's three cases and the refusals; the Item drawer's Guides row; `LiveGuides` in `Stage`. Guide: 01,
+02, 04.
+
+**Tests.** 53 rows → 54 row tests at the rows' boundaries (C7(b) is two: the cancelled finger, the window blur) + 21 unit
+tests of the two core mechanisms. **No red baseline was captured**: every unit's tests were written after its code. Seen
+red while working: C2(b) before the unchanged-values rule (revision 1, not 0); the LV7 reduced-motion tripwire
+(`lv7_c2a`) when a new `prefers-reduced-motion` block stood before the loading cue's (moved below it); and C10(a), C11(a)
+with a deliberately wrong expected rect (x off by 5e-5 and 3e-5), to see the editor comparator fail.
+
+**Judgment calls (each also under Assumptions in the handoff).**
+1. **C2(b) against "exactly `set`".** The fixture's composition has `origin default`; `set` with the same values would
+   turn the origin to `user` (revision 1, a step, two events), while the row and PH4b say "unchanged values → 200, same
+   revision, no step, no event". `set_at_revision` therefore returns the stored composition when the values equal the
+   stored ones and the state is `ok`, whatever the origin; in every other case it is `set`. (The phone never sends
+   unchanged values: an unchanged Done sends nothing.)
+2. The revision check and the save are two store calls (delegated: a race of one request is accepted).
+3. `PhoneImage.composition` and `PhoneSession.default_shape` are **optional** in the phone's TypeScript types (absent =
+   `null` / `"1:1"`): eight earlier test files build images without them and are outside this plan's files. The Mac
+   always sends both.
+4. **`panWithin` and row C11(a).** Sixteen bisection steps over the whole move resolve it to move/65536, 8.9e-6 for
+   C11(a)'s move, so "x = 0 ± 1e-6" cannot come from the bisection alone. The frame's own edges stop the move exactly
+   (how far the rect can go before a side reaches 0 or 1); below that point the straightened image's edge is found by
+   bisection, 16 steps. A move that reaches an edge stops along its own line (both directions), as PH12 says ("the
+   furthest valid point along the move").
+5. Two fingers: the pan step divides by the picture's size **after** the zoom step (the photo follows the fingers);
+   PH12's `s` does not say which.
+6. The straighten slider, while held, applies the angle to the framing the hold started on (going back gives the frame
+   back, as a gesture does); a change without a hold (keyboard) applies to what the editor shows. Readout with one
+   decimal ("7.0°", "2.5°").
+7. Zoom: the scale is written to 4 decimals and the translate to 0.01 px; the settle and the double tap ease 200 ms
+   (CSS); a touch that moved ≤ 14 px on a zoomed picture is a tap; the last finger of a pinch is never a tap; no crop
+   mark on composed tiles (delegated, optional).
+8. A template shot's dashed split line is not drawn over a composed photo (a composed split photo draws its own middle
+   line).
+9. Editor look (delegated): menus as a small sheet over the tool row that closes after a pick (Shape, Rotate and flip,
+   Guides); the area outside the frame dimmed with white at 72 %; `HAPTIC.select` on a control, `overlayTick` on each
+   whole degree; "Rotate and flip" is an icon button with that name; a "REFRAME" kicker between Cancel and Done.
+10. Done compares the values exactly with those the editor opened with. `composition_changed` also re-reads the session
+    (so the next Reframe opens on the Mac's revision even if a socket message was missed); "Framing saved" buzzes
+    `select`; Cancel is ignored while Done's request is out.
+11. The Guides row is a labelled group "Guides" above ACTIONS, five pill buttons; the live guides are drawn in the
+    viewport's own px above the template and under the pills, in Free shot too.
+12. C9(c)'s fixture stores a rect that is off its shape on the frame (0.5 × 0.5 of 2560 × 1707), so the refit is
+    visible; K's own rect refits to itself and could not fail.
+
+**Deviations.**
+- `ImageFrame`'s children may be a function of the viewport's size (how `Stage` learns it for the guides); the Preview
+  passes nodes as before.
+- U4 is three commits: `1764d2d6` left an unused test helper that failed `npm run typecheck` (the commit was made
+  before the check was read); `21ffb636` removes it; `764ba540` names the Guides row "Guides" (§6 text). The gate ran on
+  `764ba540`.
+- At the editor's boundary a rect is read from the picture's transform (0.01 px steps, about 1e-5 of the frame), not
+  to 1e-6; the 1e-6 values are pinned in `lv10_core` (the bounded moves) and in C14(a)'s request (the pan).
+- At the U3 checkpoint Done was disabled (its request is U4); U4 enabled it.
+
+**For the reviewer and the coordinator.**
+- **Nothing was seen on a phone or in a browser.** Two-finger gestures are proven in jsdom with two pointer ids; the
+  composed picture's CSS (container units `cqw`/`cqh`, as the Mac's own), the zoom layer, the editor's look, the grid
+  and the guide lines are written by reasoning.
+- **A photo that needs review is not confirmed by an unchanged Done** (PH12 verbatim: "values equal to the open values →
+  close, no request"; the open values are the re-fitted ones). On the Mac, Return confirms such a photo (10D MC-27
+  §Revisions). If the phone should confirm too, PH12 needs "…or the photo needs review" and one row.
+- **Consequences of the bounded moves (PH12 verbatim), to judge in use:** after straightening, the frame is the
+  largest at its centre and touches the image's edge, so the photo moves only after zooming in a little; zooming out
+  at an edge stops (the Mac's editor moves the frame inward instead); a diagonal move that reaches an edge stops both
+  ways.
+- **No row, no test:** 409 `frame_unknown` and 400 `invalid_value` for a body that does not parse (both in U1's Goal).
+  The mappings exist (`wire::error_code`, `routes::body`).
+- The build's chunk shared by the desktop and the phone entry is now named `useComposePrefs-*.js` (React and the
+  compose modules); it and `phone-*.js` contain no `__TAURI` and no `tauri` (grep, 0 and 0).
+- Not updated: `master_plan_live.md` §4.7 (test stems) and §8 (environment) agree with what was run.
