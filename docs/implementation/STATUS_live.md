@@ -150,6 +150,11 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
   - **LV4 DONE** (20/20 PASS; evidence `live_preview_lab.md` §Hardware check (LV4), `sony_camera_lab.md` §Live view in
     the app). **M-LV6 targets (owner): USB ≥ 23 fps, ≤ 0.20 s; Wi-Fi ≥ 15 fps (upload dips allowed), ≤ 0.25 s.**
   - R2 planned by the orchestrator as `LV7_tile_loading_cue` (Fable, 1 unit, 4 rows); started.
+  - **LV7 APPROVED** (review r1). Release bundle built (not installed yet: the app was open).
+  - **Owner request R3 → book LV-D20 (changelog D20):** swipe to classify in the Preview (left Deny, right Main with a
+    confirm for template-shot photos, up Condition), the Preview gets the strip, press-hold-lift drag and drop (swap
+    between template shots, insert-and-shift among extra Main and among Condition); built from the description (no
+    design prototype). Planner launched (`prompts/reviewer/live_sort_plan_r1.md`).
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -158,7 +163,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-- `tools/pipeline/run_phase.sh phase LV7_tile_loading_cue` (Fable), started 2026-11-27.
+- Planner for LV8 (sort and arrange, LV-D20), `.pipeline/runs/live_sort_plan_r1.log`, started 2026-11-27.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
