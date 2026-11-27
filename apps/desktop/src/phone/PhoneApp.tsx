@@ -24,6 +24,17 @@ import {
 /** While the Mac does not answer the first two requests they are asked again this often. */
 const RETRY_MS = 2000;
 
+/** PH9.5a: the drops and swipes the Mac is still answering, and what the strips show meanwhile. */
+type Chain = {
+  shown: PhoneSession;
+  /** Each outstanding request's 8 s bound, by the request's number. */
+  open: Map<number, ReturnType<typeof setTimeout>>;
+  /** Once every request is answered: the session reads asked by then (a later read ends the chain). */
+  after: number | null;
+  /** The bound of that later read. */
+  follow: ReturnType<typeof setTimeout> | null;
+};
+
 /**
  * The Shoot Companion (book 10J §The phone design): the phone follows the Mac's active session
  * (LV-D18). PH7: the token comes from the QR code's link once and stays on the phone; a phone the
@@ -68,15 +79,23 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     c.known = new Set(ids);
   }, [toast]);
 
-  // PH9.5: while the Mac answers a drop, the strips show where the photo was put (`pending`). It
-  // ends exactly three ways: the first session read started after the Mac's answer returns
-  // (`after` = the reads asked by then), the Mac refuses, or `DRAG.pendingMs` pass.
+  // PH9.5a, the pending chain: while the Mac answers drops and swipes, both strips show them applied
+  // (`pending`), each one on top of what the strips showed when it was made. The chain ends exactly
+  // four ways: (a) every request is answered and a session read started after the last answer
+  // returns (`after` = the reads asked by then); (b) the Mac refuses one; (c) one has no answer
+  // `DRAG.pendingMs` after it was sent (`open` holds each outstanding request's own bound, stopped
+  // by its answer); (d) the read that follows the last answer has not returned in that time
+  // (`follow`). At every end the strips show the last view from the Mac.
   const [pending, setPending] = useState<PhoneSession | null>(null);
-  const waiting = useRef<{ n: number; after: number | null; timer: ReturnType<typeof setTimeout> } | null>(null);
-  const drops = useRef(0);
+  const chain = useRef<Chain | null>(null);
+  const sent = useRef(0);
   const endPending = useCallback(() => {
-    if (waiting.current) clearTimeout(waiting.current.timer);
-    waiting.current = null;
+    const now = chain.current;
+    chain.current = null;
+    if (now) {
+      now.open.forEach(timer => clearTimeout(timer));
+      if (now.follow) clearTimeout(now.follow);
+    }
     setPending(null);
   }, []);
   useEffect(() => endPending, [endPending]);
@@ -90,8 +109,8 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
       if (mine === asked.current) {
         reconcile(answer.session);
         dispatch({ type: 'view', view: answer.session });
-        // A read started before the answer may predate the move: only a later one ends the wait.
-        if (waiting.current && waiting.current.after !== null && mine > waiting.current.after) endPending();
+        // PH9.5a (a): a read started before the last answer may predate that change: only a later one ends the chain.
+        if (chain.current && chain.current.after !== null && mine > chain.current.after) endPending();
       }
       return true;
     } catch (error) {
@@ -305,8 +324,50 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     if (confirming !== null && !asksStill) setConfirming(null);
   }, [confirming, asksStill]);
 
+  /** What the strips show: the pending arrangement while the Mac answers, else the Mac's view. */
+  const arranged = pending && view && pending.id === view.id ? pending : view;
+  /** The same, read where a drop or a swipe is made (a second one may come before the strips are drawn again). */
+  const shownNow = (mac: PhoneSession) => (chain.current && chain.current.shown.id === mac.id ? chain.current.shown : mac);
+
+  /** PH9.5a: a drop or a swipe is sent and the strips show `shown` from now on. Returns the request's number. */
+  const ask = (shown: PhoneSession): number => {
+    const n = ++sent.current;
+    const now = chain.current ?? { shown, open: new Map(), after: null, follow: null };
+    // Sent while the read after the last answer is awaited: the chain waits for answers again.
+    if (now.follow) clearTimeout(now.follow);
+    now.follow = null;
+    now.after = null;
+    now.shown = shown;
+    now.open.set(n, setTimeout(() => {
+      // (c) No answer in time: the Mac is asked what is true.
+      if (!chain.current?.open.has(n)) return;
+      endPending();
+      void readSession();
+    }, DRAG.pendingMs));
+    chain.current = now;
+    setPending(shown);
+    return n;
+  };
+  /** PH9.5a: the Mac answered request `n`; after the last one, the read asked next ends the chain (a), or its bound does (d). */
+  const answered = (n: number) => {
+    const now = chain.current;
+    const bound = now?.open.get(n);
+    if (!now || bound === undefined) return;
+    clearTimeout(bound);
+    now.open.delete(n);
+    if (now.open.size > 0) return;
+    now.after = asked.current;
+    now.follow = setTimeout(() => {
+      if (chain.current === now) endPending();
+    }, DRAG.pendingMs);
+  };
+  /** PH9.5a (b): the Mac refused request `n`: the strips go back to its last view. */
+  const refusedAhead = (n: number) => {
+    if (chain.current?.open.has(n)) endPending();
+  };
+
   /**
-   * PH9.2–PH9.5: a lifted photo was released on a target. The Mac is asked (a swap or an insert is
+   * PH9.2–PH9.5a: a lifted photo was released on a target. The Mac is asked (a swap or an insert is
    * a move, the other group is a classify) and the strips show the drop at once; a successful drop
    * says nothing (the Mac's next view shows it), a refused one goes back and says why, and one the
    * Mac has not answered in 8 s goes back and asks the Mac what is true.
@@ -314,60 +375,56 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
   const drop = async (photoId: number, target: Drop) => {
     if (!view) return;
     if (target.kind === 'main_confirm') return setConfirming({ photo_id: photoId, dropped: true });
-    const n = ++drops.current;
-    if (waiting.current) clearTimeout(waiting.current.timer);
-    waiting.current = {
-      n,
-      after: null,
-      timer: setTimeout(() => {
-        if (waiting.current?.n !== n) return;
-        endPending();
-        void readSession();
-      }, DRAG.pendingMs),
-    };
-    setPending(applyDrop(view, photoId, target));
+    const base = shownNow(view);
+    const n = ask(applyDrop(base, photoId, target));
     buzz(HAPTIC.move);
     // A template shot that loses its photo to the other group becomes the current shot (plan point P6).
-    if (target.kind !== 'swap' && target.kind !== 'insert' && previewSubject(view, photoId)?.kind === 'shot') clearFocus();
+    if (target.kind !== 'swap' && target.kind !== 'insert' && previewSubject(base, photoId)?.kind === 'shot') clearFocus();
     try {
       if (target.kind === 'swap') await movePhoto(token, photoId, view.id, { kind: 'container', container_id: target.container_id });
       else if (target.kind === 'insert') await movePhoto(token, photoId, view.id, { kind: target.group === 'extra' ? 'extra_insert' : 'condition_insert', index: target.index });
       else await classifyPhoto(token, photoId, view.id, target.kind === 'to_condition' ? 'condition' : 'main');
-      if (waiting.current?.n === n) waiting.current.after = asked.current;
+      answered(n);
       void readSession();
     } catch (error) {
-      if (waiting.current?.n === n) endPending();
+      refusedAhead(n);
       refused(error, TEXT.failed);
     }
   };
-  /** What the strips show: the drop the Mac is answering, else the Mac's view. */
-  const arranged = pending && view && pending.id === view.id ? pending : view;
 
   /**
-   * PH9.1: a counted swipe on the previewed photo. The next photo shows at once (plan point P4),
-   * before any re-read could close the preview because its photo left; then the Mac is asked. A
-   * refusal says why and re-reads; the preview does not go back.
+   * PH9.1, PH9.5a: a counted swipe on the previewed photo. Both strips show it at once (a Deny
+   * takes the photo out, Main and Condition put it at that group's end) and the Preview shows the
+   * next photo of what the strips show, before any re-read could close it because its photo left;
+   * then the Mac is asked. A refusal puts the strips back, says why and re-reads; the Preview does
+   * not go back.
    */
   const swipe = async (action: Exclude<SwipeAction, 'none' | 'main_confirm'>) => {
     if (!view || !subject) return;
     const id = subject.image.photo_id;
-    dispatch({ type: 'preview', photo_id: nextPhoto(view, id) });
+    const base = shownNow(view);
+    dispatch({ type: 'preview', photo_id: nextPhoto(base, id) });
+    const n = ask(applyDrop(base, id, { kind: action === 'main' ? 'to_main' : action === 'condition' ? 'to_condition' : 'remove' }));
     buzz(action === 'retake' || action === 'delete' ? HAPTIC.retake : HAPTIC.move);
     // A template shot that loses its photo becomes the current shot (plan point P6).
     if (subject.kind === 'shot') clearFocus();
     try {
+      let done: string;
       if (action === 'retake' && subject.kind === 'shot') {
         await retake(token, view.id, subject.shot.container_id);
-        toast(`Shot ${pad(subject.shot.final_no)} reopened`);
+        done = `Shot ${pad(subject.shot.final_no)} reopened`;
       } else if (action === 'main' || action === 'condition') {
         await classifyPhoto(token, id, view.id, action);
-        toast(action === 'main' ? TEXT.movedToMain : TEXT.sentToCondition);
+        done = action === 'main' ? TEXT.movedToMain : TEXT.sentToCondition;
       } else {
         await deletePhoto(token, id, view.id);
-        toast(TEXT.imageDeleted);
+        done = TEXT.imageDeleted;
       }
+      answered(n);
+      toast(done);
       void readSession();
     } catch (error) {
+      refusedAhead(n);
       refused(error, TEXT.failed);
     }
   };

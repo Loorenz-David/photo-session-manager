@@ -73,7 +73,7 @@ test('lv3_c23b_the_preview_stays_open_on_the_image_in_its_new_place', async () =
   await pick(mainTile(3));
   const preview = within(screen.getByTestId('preview'));
   expect(preview.getByText('IMAGE 04 · EXTRA')).toBeTruthy();
-  expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe(`/api/phone/v1/photos/${PHOTO_B}/preview?pair=T&r=1&v=k0`);
+  expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe(`/api/phone/v1/photos/${PHOTO_B}/preview?pair=T&v=k0`);
   // An extra has no Retake (LV8, book 10J LV-D20 (4): the Delete button it used to show is gone).
   expect(preview.queryByRole('button', { name: 'Retake' })).toBeNull();
 });

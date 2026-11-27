@@ -254,6 +254,10 @@ export const INCOMING_LABEL = 'Photo on its way';
  * The dock's tiles: template shots in shooting order with their final numbers (card LV5), extra
  * Main images (tag = Main position) and the photos on their way to them, the Free shot tile, then
  * the Condition images (C1…) and the photos on their way to those.
+ *
+ * LV-D21 (2): a tile follows its photo. Its key is `p<photo_id>` wherever the photo stands (a
+ * template shot included), so a photo that moves keeps its element and its picture; an empty shot
+ * is `s<container_id>`, the Free shot `free`, a waiting tile `w<group><n>`.
  */
 export function dockTiles(view: PhoneSession): DockTile[] {
   const now = currentShot(view);
@@ -262,7 +266,7 @@ export function dockTiles(view: PhoneSession): DockTile[] {
   }));
   return [
     ...view.shots.map((shot): DockTile => ({
-      key: `s${shot.container_id}`, kind: 'shot', shot, tag: pad(shot.final_no), label: `${pad(shot.final_no)} · ${shot.name}`, current: shot === now,
+      key: shot.photo ? `p${shot.photo.photo_id}` : `s${shot.container_id}`, kind: 'shot', shot, tag: pad(shot.final_no), label: `${pad(shot.final_no)} · ${shot.name}`, current: shot === now,
     })),
     ...view.extras.map((image, index): DockTile => ({
       key: `p${image.photo_id}`, kind: 'extra', image, tag: pad(extraPosition(view, index)), label: `${pad(extraPosition(view, index))} · Extra image`, current: false,

@@ -21,10 +21,10 @@ type Props = {
  * only once it says the preview exists (`image.preview` is a string); until then, and whenever the
  * picture fails to load, a placeholder with the loading cue shows instead. A failed load is tried
  * again three times, two seconds apart, then the placeholder stops moving (`data-gave-up`); a new
- * `preview` value or `revision` starts over.
+ * `preview` value starts over (PH7 v1.3: a new `revision` alone changes nothing here).
  */
 export function PhotoImage({ token, image, className, style, testId, children }: Props) {
-  const key = `${image.photo_id}:${image.revision}:${image.preview}`;
+  const key = `${image.photo_id}:${image.preview}`;
   const [load, setLoad] = useState({ key, attempt: 0, failed: false });
   // What the Mac serves changed: whatever happened to the earlier picture no longer counts.
   const now = load.key === key ? load : { key, attempt: 0, failed: false };

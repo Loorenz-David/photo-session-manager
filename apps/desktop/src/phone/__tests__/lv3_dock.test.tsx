@@ -47,7 +47,7 @@ test('lv3_c15a_tiles_in_shooting_order_then_extras_free_shot_and_condition', asy
     'divider',
     { tag: 'C1', invertedTag: true, image: 'photo', grey: false, check: false, dashedPlus: false },
   ]);
-  expect(tile('02 · Back').querySelector('img')!.getAttribute('src')).toBe('/api/phone/v1/photos/201/preview?pair=T&r=1&v=k0');
+  expect(tile('02 · Back').querySelector('img')!.getAttribute('src')).toBe('/api/phone/v1/photos/201/preview?pair=T&v=k0');
   expect(tile('01 · Front').querySelector('img')!.getAttribute('src')).toBe('/api/phone/v1/containers/11/example?pair=T');
 });
 
@@ -99,7 +99,7 @@ test('lv3_c17b_tapping_a_filled_shot_opens_its_photo', async () => {
   await startPhone(env);
   tap(X.b);
   await advance(0);
-  expect(previewPhoto()).toBe('/api/phone/v1/photos/201/preview?pair=T&r=1&v=k0');
+  expect(previewPhoto()).toBe('/api/phone/v1/photos/201/preview?pair=T&v=k0');
   expect(buzzed(env, 15)).toBe(1);
   expect(env.mac.allPosts()).toEqual([]);
 });

@@ -298,11 +298,47 @@ export function phoneEnv(options: EnvOptions = {}): PhoneEnv {
   };
 }
 
+/** The strips being watched by `stripFrames` in the running test. */
+const watching: MutationObserver[] = [];
+
 afterEach(() => {
+  watching.splice(0).forEach(observer => observer.disconnect());
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+/** What a strip shows right now: each tile's key and the picture it asks for (`-` when it shows none). */
+export function stripFrame(testId: string): string[] {
+  const strip = document.querySelector(`[data-testid="${testId}"]`);
+  return Array.from(strip?.querySelectorAll('[data-dock-k]') ?? []).map(tile => `${tile.getAttribute('data-dock-k')} ${tile.querySelector('img')?.getAttribute('src') ?? '-'}`);
+}
+
+/**
+ * LV9 (plan §Shared, "Strip frames"): watches the strip `testId` from now on and returns a reader of
+ * its frames. A frame is the strip as it stands after one batch of DOM changes (tiles added, removed
+ * or moved; a tile's key or a picture's `src` changed): the tiles' keys in order, each with its
+ * picture's `src` or `-`. The first frame is the strip as it is at the call; equal consecutive
+ * frames are one. A blink (an old arrangement or an old picture shown again) is an extra frame.
+ */
+export function stripFrames(testId: string): () => string[][] {
+  const strip = document.querySelector(`[data-testid="${testId}"]`);
+  if (!strip) throw new Error(`no strip "${testId}"`);
+  const frames: string[][] = [];
+  const record = () => {
+    const frame = stripFrame(testId);
+    if (JSON.stringify(frames[frames.length - 1]) !== JSON.stringify(frame)) frames.push(frame);
+  };
+  record();
+  const observer = new MutationObserver(record);
+  observer.observe(strip, { subtree: true, childList: true, attributes: true, attributeFilter: ['src', 'data-dock-k'] });
+  watching.push(observer);
+  return () => {
+    // Changes whose report is still queued count too.
+    if (observer.takeRecords().length > 0) record();
+    return frames.map(frame => [...frame]);
+  };
+}
 
 // --- pointers: one finger on a gesture surface, in client coordinates ---
 // jsdom has no PointerEvent: a mouse event of the pointer type carries the coordinates, and the

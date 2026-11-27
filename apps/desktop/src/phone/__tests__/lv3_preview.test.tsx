@@ -67,7 +67,7 @@ test('lv3_c21a_holding_a_template_shots_photo_shows_the_template_through_it', as
   expect(preview().getByText('Hold to view template · slide sideways for overlay')).toBeTruthy();
   // The template lies under the photo.
   const layers = Array.from(viewport().querySelectorAll('img')).map(image => image.getAttribute('src'));
-  expect(layers).toEqual([`/api/phone/v1/containers/${B}/example?pair=T`, '/api/phone/v1/photos/201/preview?pair=T&r=1&v=k0']);
+  expect(layers).toEqual([`/api/phone/v1/containers/${B}/example?pair=T`, '/api/phone/v1/photos/201/preview?pair=T&v=k0']);
   press(viewport(), 195, 305);
   // LV8 (plan point P2): the hold starts after 200 ms, so a swipe never flashes the template.
   await advance(200);

@@ -57,15 +57,15 @@ test('lv8_c9a_a_still_touch_released_before_400_ms_is_a_tap', async () => {
 test('lv8_c9b_a_photo_lifts_after_400_ms_and_put_down_in_its_place_nothing_happens', async () => {
   const env = await start();
   await liftAt(X.b);
-  expect(lifted()).toEqual(['s12']);
-  expect(tile('s12').style.transform).toContain('scale(1.15)');
+  expect(lifted()).toEqual(['p201']);
+  expect(tile('p201').style.transform).toContain('scale(1.15)');
   expect(buzzes(env)).toEqual([12]);
   lift(dock(), X.b, Y);
   await advance(0);
   expect(env.mac.allPosts()).toEqual([]);
   expect(screen.queryByTestId('preview')).toBeNull();
   expect(lifted()).toEqual([]);
-  expect(tile('s12').style.transform).not.toContain('scale');
+  expect(tile('p201').style.transform).not.toContain('scale');
   expect(buzzes(env)).toEqual([12]);
 });
 
@@ -100,7 +100,7 @@ test('lv8_c10a_a_template_shots_photo_dropped_on_a_filled_shot_swaps', async () 
   const env = await start();
   await liftAt(X.b);
   slide(dock(), X.a, Y);
-  expect(marked('swap')).toEqual(['s11']);
+  expect(marked('swap')).toEqual(['p204']);
   lift(dock(), X.a, Y);
   await advance(0);
   expect(env.mac.allPosts()).toEqual([move(201, { kind: 'container', container_id: A })]);
@@ -169,7 +169,7 @@ test('lv8_c11b_a_condition_image_dropped_on_a_filled_shot_swaps_with_it', async 
   const env = await start();
   await liftAt(X.p203);
   slide(dock(), X.a, Y);
-  expect(marked('swap')).toEqual(['s11']);
+  expect(marked('swap')).toEqual(['p204']);
   lift(dock(), X.a, Y);
   await advance(0);
   expect(env.mac.allPosts()).toEqual([move(203, { kind: 'container', container_id: A })]);

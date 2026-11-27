@@ -22,9 +22,9 @@ const buzzes = (env: PhoneEnv) => env.vibrate.mock.calls.map(call => JSON.string
 const requests = (env: PhoneEnv) => env.mac.requests.map(r => `${r.method} ${r.path.replace('/api/phone/v1', '')}`);
 const INSERT_202_LAST: [string, unknown] = ['/photos/202/move', { session_id: 7, target: { kind: 'extra_insert', index: 3 } }];
 /** The strip's order as the Mac first gave it, with 202 dropped last among the extras, and as another answer. */
-const AS_GIVEN = ['s12', 's11', 's13', 'p202', 'p205', 'p206', 'free', 'p203', 'p207', 'p208'];
-const DROPPED = ['s12', 's11', 's13', 'p205', 'p206', 'p202', 'free', 'p203', 'p207', 'p208'];
-const OTHERWISE = ['s12', 's11', 's13', 'p202', 'p206', 'p205', 'free', 'p203', 'p207', 'p208'];
+const AS_GIVEN = ['p201', 'p204', 's13', 'p202', 'p205', 'p206', 'free', 'p203', 'p207', 'p208'];
+const DROPPED = ['p201', 'p204', 's13', 'p205', 'p206', 'p202', 'free', 'p203', 'p207', 'p208'];
+const OTHERWISE = ['p201', 'p204', 's13', 'p202', 'p206', 'p205', 'free', 'p203', 'p207', 'p208'];
 const image = (photo_id: number, preview = 'k0') => ({ photo_id, revision: 1, ratio: 1, preview });
 const extrasAs = (...ids: number[]) => dragSession(s => {
   s.extras = ids.map(id => image(id));

@@ -1085,9 +1085,23 @@ the direct adapter only.
     cancels a drag, a new preview picture does not). The thresholds are `SWIPE` and `DRAG` in `gestures.ts`.
     `components/Dock.tsx` is both strips (`dock` on the live screen, `preview-strip` in the Preview) and runs the
     drag as one state machine (pressing → tap | scrolling | moved | lifted → dragging → drop or cancel) on pointer
-    events with pointer capture; **no HTML5 drag and drop**. Every cancel cause reaches one function. The pending
-    drop lives in `PhoneApp` (it outlives the Preview) and ends exactly three ways: the first session read started
-    after the Mac's answer, a refusal, or 8 s without an answer. The phone never decides a placement.
+    events with pointer capture; **no HTML5 drag and drop**. Every cancel cause reaches one function. The phone
+    never decides a placement.
+  - **One visual step per move (LV9; §5 PH9.5a, book 10J LV-D21 (2)).** *Tiles follow their photos:*
+    `state.ts::dockTiles` keys a tile `p<photo_id>` wherever its photo stands (a template shot included), an empty
+    shot `s<container_id>`, the Free shot `free`, a waiting tile `w<group><n>`, and `Dock` renders one **flat** keyed
+    list, so React moves a moved photo's element and its `<img>`; nothing is drawn anew or fetched again. *The
+    pending chain* lives in `PhoneApp` (it outlives the Preview; `Chain`, `ask` / `answered` / `refusedAhead`): a
+    drop **or a swipe** is shown in both strips at once as `applyDrop` of what the strips show (a swipe's Deny is the
+    kind `remove`, Main / Condition are `to_main` / `to_condition`), several stack, and the Preview's next photo is
+    `nextPhoto` of that arrangement. The chain ends exactly four ways, each back to the Mac's last view: every
+    request answered and a session read started after the **last** answer returned; a refusal (toast by code,
+    re-read); a request without an answer 8 s after it was sent (re-read, no toast; a successful answer stops its
+    own bound); the read after the last answer not back in 8 s. While anything is pending nothing lifts; swipes stay
+    allowed. The Preview's subject is still resolved from the Mac's view. *The lift home:* while a template shot's
+    photo is lifted, `Dock` draws that shot as when empty (grey template picture, number) at the tile's measured
+    place (`data-testid="lift-home"`, last child of the row, no `data-dock-k`); extras and Condition images leave
+    the gap. Tests read the strip's frames with `helpers.ts::stripFrames` (a blink is an extra frame).
   - `components/` — `Stage` (the image viewport, its layers and one-finger gestures; `ImageFrame` sizes it from the
     stage and the shot's ratio and is reused by `Preview`), `LiveCanvas` (the JPEG drawn as it arrived with
     `createImageBitmap`; always mounted, shown by opacity only once a frame of the current `gen` is drawn),
@@ -1097,11 +1111,16 @@ the direct adapter only.
     inline styles. IBM Plex Mono is bundled (`@fontsource/ibm-plex-mono`, latin 400/500), never fetched at runtime.
   - **The image rule (LV6; §5 PH6a, finding F7).** Every photo preview on the phone is drawn by
     `components/PhotoImage.tsx` (dock, Preview, Move drawer), never by a bare `<img>`: it asks for
-    `photos/<id>/preview?pair=…&r=<revision>&v=<preview>` (`api.ts::previewUrl`) only while the session view's
+    `photos/<id>/preview?pair=…&v=<preview>` (`api.ts::previewUrl`; LV9, PH7 v1.3: the composition `revision` is
+    **not** in the URL and not in `PhotoImage`'s key, so a revision raised by a container's presets never refetches
+    an unchanged picture) only while the session view's
     `preview` token is a string; while it is null, or after a load error, it shows a grey placeholder (`.ph-photo-wait`;
     "Preparing preview…" in the Preview) with a faint light sweep (LV7: `ph-photo-sweep` in `phone.css`, 1.8 s, off
     under `prefers-reduced-motion: reduce`; it takes no pointer events). A failed load is asked again three times, 2 s apart (`&try=<n>`, which the
-    Mac ignores); a new `preview` or `revision` starts over.
+    Mac ignores), then the placeholder is `data-gave-up` (plain grey, no sweep; LV9); a new `preview` starts over.
+    The same placeholder is the waiting look of a photo on its way (LV9·U2: `state.ts::isWaiting`, the shot's
+    `incoming` and the group tiles of `incoming {extras, condition}`): such a tile is outside taps, lifts, homes,
+    drop targets and `arrangementKey`.
   - Capture feedback: flash and haptic at the tap; the toast waits for the socket's `capture exposed` for that
     capture id and then for the session re-read that shows a new photo (its place decides the text).
   - Tests: `src/phone/__tests__/lv3_*.test.ts(x)` and `lv6_*.test.tsx` render `PhoneApp` against `helpers.ts`'s fake Mac (a `fetch` and a

@@ -6,7 +6,9 @@ at P70 (§Research: after R13); add a row whenever a phase creates a new couplin
 ## Backend ↔ frontend contract
 The phone's `PhoneImage.preview` token comes from `phone_view.rs` and must stay in sync with
 `apps/desktop/src/phone/api.ts`: the client requests a preview only when the token exists and
-uses it to refresh the URL after a preview write. A service that changes a session's photos must
+uses it to refresh the URL after a preview write. **The token is the only reason the phone fetches a
+picture again (LV9, PH7 v1.3):** the composition `revision` is in the view but not in the preview URL nor in
+`PhotoImage`'s key. A service that changes a session's photos must
 emit `SessionChanged` so `phone/ws.rs` sends `session` and the phone re-reads the view.
 
 | If you change… | You must also change… | Otherwise… | Check |
@@ -68,6 +70,9 @@ emit `SessionChanged` so `phone/ws.rs` sends `session` and the phone re-reads th
 | If you change… | You must also change… | Otherwise… | Check |
 |---|---|---|---|
 | The phone wire (a route, a body, a JSON field, a WebSocket message, the `PSMF` header: `crates/integrations/src/phone/{routes.rs, wire.rs, ws.rs}`, `core/services/phone_view.rs`) | `master_plan_live.md` §5 PH (frozen: LV3's phone app is built against it), `apps/desktop/src/phone/api.ts` (and `socket.ts` from LV3) | the phone app breaks silently on the owner's phone | `cargo test -p psm-testkit --test suite -- lv2_phone_http:: lv2_phone_ws::` |
+| What the preview route serves for a photo (`phone_view::preview_file`, a new kind of preview file, a file rewritten in place) | make `PhoneImage.preview` (`phone_view.rs::image`: path + modification time) change with it; never rely on `revision` | the phone keeps showing the old picture: its URL is `…/preview?pair=…&v=<preview>` and nothing else refetches (`api.ts::previewUrl`) | `cd apps/desktop && npx vitest run src/phone/__tests__/lv9_one_step.test.tsx src/phone/__tests__/lv6_images.test.tsx`; `cargo test -p psm-testkit --test suite lv5_mac_actions::` |
+| The strip's tile keys or how `Dock` renders its row (`state.ts::dockTiles`, `components/Dock.tsx`) | keep a tile keyed by its photo (`p<photo_id>`) in one flat keyed list; everything that names a tile (homes, the lifted key, `aside`, `nearest`, tests' `data-dock-k`) uses the same key | a moved photo is drawn anew: its tile blinks and shows the previous picture until the new one is decoded (the owner's LV8 finding) | `npx vitest run src/phone/__tests__/lv9_one_step.test.tsx` (element identity, frames) |
+| A phone action that changes which photo is where (a new swipe, drop or button in `PhoneApp.tsx`) | send it through the pending chain (`ask` → `answered` / `refusedAhead`) with its `applyDrop` arrangement, computed from `shownNow`, never from the Mac's view | the strip shows the old arrangement until the re-read (two steps), or an earlier pending change blinks back | `npx vitest run src/phone/__tests__/lv9_one_step.test.tsx src/phone/__tests__/lv8_drag_reliability.test.tsx` |
 | The `phone_pairings` table or the token format (`sqlite/ensure.rs::ensure_live_columns`, `phone/pairing.rs`) | keep only the SHA-256 in the database and the token out of every log line | a paired phone stops connecting, or a token leaks | `cargo test -p psm-testkit --test suite lv2_phone_pairing::` |
 | A new phone command or a `settings.phone` field | `commands/phone.rs` or `commands/settings.rs` DTOs, `specta_builder()`, regenerated `bindings.ts`, `services/phone.ts`, `PhoneSection.tsx` | the UI never sees it or `npm run typecheck` is red | `cargo test -p psm-desktop`, `cd apps/desktop && npx vitest run src/features/settings` |
 | The phone page's location or build (`phone.html`, `vite.config.ts` inputs, `tauri.conf.json` `bundle.resources`, `phone/web_root.rs`) | build with `npm run build` before `cargo build -p psm-desktop` (tauri checks the `../dist/` resource) | the packaged app serves no phone page, or the desktop crate does not build | `cd apps/desktop && npm run build` then `ls dist/phone.html` |

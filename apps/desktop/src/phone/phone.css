@@ -578,6 +578,8 @@ body,
 }
 .ph-dock-row {
   flex: none;
+  /* The tiles' places are measured in the row (a lifted template-shot photo's home, LV-D21 (3)). */
+  position: relative;
   min-width: 100%;
   box-sizing: border-box;
   display: flex;
@@ -636,6 +638,13 @@ body,
 @keyframes ph-dock-lift {
   from { scale: 0.87; box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
   to { scale: 1; }
+}
+/* LV-D21 (3): what a lifted template-shot photo leaves in its place — its shot as when empty (the grey template
+   picture and the number). It stands at the tile's measured place, takes no room in the row and no touch. */
+.ph-dock-strip .ph-dock-tile.ph-lift-home {
+  position: absolute;
+  transition: none;
+  pointer-events: none;
 }
 /* Too far above or below the strip: letting go here puts it back. */
 .ph-dock-tile[data-away] {

@@ -1,8 +1,8 @@
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { exampleUrl, type PhoneSession } from '../api';
+import { exampleUrl, type PhoneSession, type PhoneShot } from '../api';
 import { arrangementKey, type Drop, dropTarget, type Home } from '../arrange';
 import { buzz, DOCK, DRAG, HAPTIC } from '../gestures';
-import { type DockTile, dockTiles, isWaiting, tileImage } from '../state';
+import { type DockTile, dockTiles, isWaiting, pad, tileImage } from '../state';
 import { PhotoImage } from './PhotoImage';
 
 type Pointer = ReactPointerEvent<HTMLDivElement>;
@@ -51,7 +51,11 @@ type Lift = {
   /** The auto-scroll: its direction and its 16 ms timer while the finger is at an end of the strip. */
   scrolling: -1 | 0 | 1;
   scroll: ReturnType<typeof setInterval> | null;
+  /** A template shot's photo: its shot, and where its tile stands in the row (LV-D21 (3)). */
+  home: LiftHome | null;
 };
+/** What a lifted template-shot photo leaves in its place: the shot's template picture and number. */
+type LiftHome = { shot: PhoneShot; left: number; top: number };
 
 /**
  * One finger on the strip (PH9.2): `pressing` until it is released (a tap), moves sideways
@@ -64,7 +68,7 @@ type Gesture = Press | Carry;
 const carries = (gesture: Gesture): gesture is Carry => 'lift' in gesture;
 
 /** What the strip draws of a drag: the lifted tile's key and offset, and the target under the finger. */
-type Drag = { key: string; dx: number; dy: number; target: Drop | null; away: boolean; pitch: number };
+type Drag = { key: string; dx: number; dy: number; target: Drop | null; away: boolean; pitch: number; home: LiftHome | null };
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const same = (a: Drop | null, b: Drop | null) => JSON.stringify(a) === JSON.stringify(b);
@@ -74,7 +78,8 @@ const same = (a: Drop | null, b: Drop | null) => JSON.stringify(a) === JSON.stri
  * 56 px thumbnails, on the live screen and in the Preview. A touch that stays within 8 px and is
  * released before 400 ms is a tap and selects the nearest tile; one that moves sideways scrolls
  * the strip; one that moves up or down selects nothing. A finger that rests 400 ms on a photo lifts
- * it: it follows the finger, the tiles of its group slide aside to show where it would go, and a
+ * it: it follows the finger, the tiles of its group slide aside to show where it would go (a
+ * template shot's photo leaves its shot's template picture in its place, LV-D21 (3)), and a
  * release on a target asks the Mac (swap between template shots, insert among the extras or the
  * Condition images, to the other group's end). Targets are computed from the tiles' homes measured
  * at lift, never from where they are drawn while they slide. No HTML5 drag and drop.
@@ -208,6 +213,7 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, pending,
       target,
       away: !inBand,
       pitch: group.length > 1 ? group[1].centre - group[0].centre : PITCH_PX,
+      home: lift.home,
     });
   };
 
@@ -242,9 +248,12 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, pending,
     });
     const source = homes.find(home => home.key === tile.key);
     if (!source) return;
+    // Where the tile stands in the row, measured before anything moves (the row does not move in a drag).
+    const own = Array.from(element.querySelectorAll<HTMLElement>('[data-dock-k]')).find(node => node.dataset.dockK === tile.key);
+    const home = tile.kind === 'shot' && own ? { shot: tile.shot, left: own.offsetLeft, top: own.offsetTop } : null;
     const lift: Lift = {
       source, photoId: image.photo_id, homes, arrangement: shown.current.arrangement, strip: { left: box.left, right: box.right, top: box.top, bottom: box.bottom },
-      grab: { x: clientX - box.left + element.scrollLeft, y: clientY }, finger: { x: clientX, y: clientY }, target: null, scrolling: 0, scroll: null,
+      grab: { x: clientX - box.left + element.scrollLeft, y: clientY }, finger: { x: clientX, y: clientY }, target: null, scrolling: 0, scroll: null, home,
     };
     gesture.current = { phase: 'lifted', pointerId, lift };
     buzz(HAPTIC.lift);
@@ -342,14 +351,15 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, pending,
     onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onContextMenu={event => event.preventDefault()}>
     <div className="ph-dock-scroller" ref={scroller}>
       <div className="ph-dock-row">
-        {tiles.map((tile, index) => {
+        {/* One flat keyed list (LV-D21 (2)): a tile whose photo moves is moved, never drawn anew, so its picture stays. */}
+        {tiles.flatMap((tile, index) => {
           const image = tileImage(tile);
           const waiting = isWaiting(tile);
           const lifted = drag?.key === tile.key;
           const slid = aside(tile);
           const transform = lifted ? `translate(${drag.dx}px, ${drag.dy}px) ${turn} scale(${DRAG.liftScale})` : slid !== 0 ? `translateX(${slid}px) ${turn}` : turn;
           return [
-            index === firstCondition && <div key="divider" className="ph-dock-divider" data-testid="dock-divider" />,
+            ...(index === firstCondition ? [<div key="divider" className="ph-dock-divider" data-testid="dock-divider" />] : []),
             <div key={tile.key} data-dock-k={tile.key} aria-label={tile.kind === 'free' ? 'Free shot' : tile.label} aria-current={outlined(tile) || undefined}
               data-incoming={waiting || undefined} data-lifted={lifted || undefined} data-away={(lifted && drag.away) || undefined} data-drop={dropMark(tile)}
               className={`ph-dock-tile${tile.kind === 'free' ? ' ph-dock-free' : ''}`}
@@ -367,6 +377,12 @@ export function Dock({ token, view, rotated, enabled, onSelect, onDrop, pending,
             </div>,
           ];
         })}
+        {/* LV-D21 (3): under a lifted template-shot photo its shot looks empty (the grey template picture, the number), not a gap. */}
+        {drag?.home && <div key="lift-home" className="ph-dock-tile ph-lift-home" data-testid="lift-home" aria-hidden style={{ left: drag.home.left, top: drag.home.top, transform: turn }}>
+          {drag.home.shot.example && <img className="ph-dock-image ph-grey" alt="" draggable={false} src={exampleUrl(token, drag.home.shot.container_id)} />}
+          {drag.home.shot.split && <div className="ph-dock-split" style={{ left: '50%' }} />}
+          <span className="ph-tag">{pad(drag.home.shot.final_no)}</span>
+        </div>}
       </div>
     </div>
   </div>;

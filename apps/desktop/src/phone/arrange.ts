@@ -38,7 +38,7 @@ export function nextPhoto(view: PhoneSession, photoId: number): number | null {
  * lifted and never during the drag (tiles sliding aside move on screen, not their homes).
  */
 export type Home = {
-  /** The dock tile's key (`s<container>`, `p<photo>`, `free`). */
+  /** The dock tile's key (`p<photo>`, an empty shot's `s<container>`, `free`). */
   key: string;
   kind: 'shot' | 'extra' | 'free' | 'condition';
   /** The tile's centre: x in content coordinates (client left − strip left + `scrollLeft`). */
@@ -87,14 +87,19 @@ export function dropTarget(homes: readonly Home[], source: string, fingerX: numb
   return null;
 }
 
+/** PH9.5a: a denied photo (a swipe's Retake or delete) leaves its place; it is no drop target. */
+export type Removal = { kind: 'remove' };
+
 /**
- * PH9.5: the arrangement the strips show while the Mac answers a drop of `photoId`. Swap: the two
- * exchange places; an empty shot is filled and the source's place is left empty (a shot) or closed
- * up (an extra, a Condition image). Insert: the photo is put at its place, the others keep their
- * order. To Main / to Condition: out of its place, to that group's end. Nothing else changes (the
- * current shot and the counts are the Mac's). A photo that is not in the view changes nothing.
+ * PH9.5, PH9.5a: the arrangement the strips show while the Mac answers a drop or a swipe of
+ * `photoId`. Swap: the two exchange places; an empty shot is filled and the source's place is left
+ * empty (a shot) or closed up (an extra, a Condition image). Insert: the photo is put at its place,
+ * the others keep their order. To Main / to Condition: out of its place, to that group's end.
+ * Remove: out of its place (a template shot keeps its slot, empty; an extra or a Condition image
+ * leaves its group). Nothing else changes (the current shot and the counts are the Mac's). A photo
+ * that is not in the view changes nothing.
  */
-export function applyDrop(view: PhoneSession, photoId: number, drop: Drop): PhoneSession {
+export function applyDrop(view: PhoneSession, photoId: number, drop: Drop | Removal): PhoneSession {
   const shots = [...view.shots];
   const extras = [...view.extras];
   const condition = [...view.condition];
@@ -123,7 +128,8 @@ export function applyDrop(view: PhoneSession, photoId: number, drop: Drop): Phon
     list.splice(drop.index - 1, 0, image);
   } else {
     leave(null);
-    (drop.kind === 'to_condition' ? condition : extras).push(image);
+    if (drop.kind === 'to_condition') condition.push(image);
+    else if (drop.kind !== 'remove') extras.push(image);
   }
   return { ...view, shots, extras, condition };
 }

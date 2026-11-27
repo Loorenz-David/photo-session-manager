@@ -137,12 +137,14 @@ export const deletePhoto = (token: string, photo_id: number, session_id: number)
 
 /**
  * The photo's preview as the Mac shows it, or `null` while the Mac has none to serve (PH6a: never
- * ask before `preview` is a string). `r` and `v` only make the browser fetch a changed picture
- * again; `attempt` > 0 marks a retry after a failed load (`&try=<n>`; the Mac ignores it).
+ * ask before `preview` is a string). PH7 (v1.3): `v` is the only reason to fetch a picture again
+ * (the Mac changes it whenever the file it serves changes); the composition `revision` is not in
+ * the URL, so a revision raised by a container's presets never refetches an unchanged picture.
+ * `attempt` > 0 marks a retry after a failed load (`&try=<n>`; the Mac ignores it).
  */
 export function previewUrl(token: string, image: PhoneImage, attempt = 0): string | null {
   if (image.preview === null) return null;
-  const url = `${API}/photos/${image.photo_id}/preview?pair=${encodeURIComponent(token)}&r=${image.revision}&v=${encodeURIComponent(image.preview)}`;
+  const url = `${API}/photos/${image.photo_id}/preview?pair=${encodeURIComponent(token)}&v=${encodeURIComponent(image.preview)}`;
   return attempt > 0 ? `${url}&try=${attempt}` : url;
 }
 /** The container's template example as stored (black and white is the phone's own display filter, H3). */

@@ -28,8 +28,8 @@ async function tap(x: number): Promise<void> {
 
 test('lv6_core_previewUrl_names_the_preview_version_and_the_retry_or_is_null_without_a_preview', () => {
   const image = { photo_id: 201, revision: 3, ratio: 1, preview: 'k1' };
-  expect(previewUrl('T', image)).toBe('/api/phone/v1/photos/201/preview?pair=T&r=3&v=k1');
-  expect(previewUrl('T', image, 2)).toBe('/api/phone/v1/photos/201/preview?pair=T&r=3&v=k1&try=2');
+  expect(previewUrl('T', image)).toBe('/api/phone/v1/photos/201/preview?pair=T&v=k1');
+  expect(previewUrl('T', image, 2)).toBe('/api/phone/v1/photos/201/preview?pair=T&v=k1&try=2');
   expect(previewUrl('T', { ...image, preview: null })).toBeNull();
   expect(previewUrl('T', { ...image, preview: null }, 2)).toBeNull();
 });
@@ -48,16 +48,16 @@ test('lv6_c4a_a_photo_without_a_preview_shows_the_placeholder_and_asks_for_nothi
 test('lv6_c4b_the_picture_is_asked_for_by_its_preview_version_and_again_when_it_changes', async () => {
   const env = phoneEnv();
   await startPhone(env, withPreview('k1'));
-  expect(previewRequests(tileB())).toEqual(['/api/phone/v1/photos/201/preview?pair=T&r=3&v=k1']);
+  expect(previewRequests(tileB())).toEqual(['/api/phone/v1/photos/201/preview?pair=T&v=k1']);
   expect(waits(tileB())).toBe(0);
   await macChanges(env, withPreview('k2'));
-  expect(previewRequests(tileB())).toEqual(['/api/phone/v1/photos/201/preview?pair=T&r=3&v=k2']);
+  expect(previewRequests(tileB())).toEqual(['/api/phone/v1/photos/201/preview?pair=T&v=k2']);
 });
 
 test('lv6_c4c_a_picture_that_fails_shows_the_placeholder_and_is_tried_three_more_times', async () => {
   const env = phoneEnv();
   await startPhone(env, withPreview('k1'));
-  const base = '/api/phone/v1/photos/201/preview?pair=T&r=3&v=k1';
+  const base = '/api/phone/v1/photos/201/preview?pair=T&v=k1';
   for (const retry of [1, 2, 3]) {
     fireEvent.error(tileB().querySelector('img')!);
     expect(tileB().querySelectorAll('img')).toHaveLength(0);
@@ -75,7 +75,7 @@ test('lv6_c4c_a_picture_that_fails_shows_the_placeholder_and_is_tried_three_more
   expect(tileB().querySelector('.ph-tag')!.textContent).toBe('02');
   // A new preview version starts over.
   await macChanges(env, withPreview('k2'));
-  expect(previewRequests(tileB())).toEqual(['/api/phone/v1/photos/201/preview?pair=T&r=3&v=k2']);
+  expect(previewRequests(tileB())).toEqual(['/api/phone/v1/photos/201/preview?pair=T&v=k2']);
   expect(waits(tileB())).toBe(0);
 });
 
@@ -91,7 +91,7 @@ test('lv6_c5a_the_preview_says_preparing_until_the_photo_has_a_preview', async (
   expect(previewRequests(screen.getByTestId('preview-viewport'))).toEqual([]);
   expect(screen.queryByTestId('preview-photo')).toBeNull();
   await macChanges(env, withPreview('k1'));
-  expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe('/api/phone/v1/photos/201/preview?pair=T&r=3&v=k1');
+  expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe('/api/phone/v1/photos/201/preview?pair=T&v=k1');
   expect(within(preview).queryByText('Preparing preview…')).toBeNull();
 });
 

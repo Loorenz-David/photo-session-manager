@@ -62,7 +62,7 @@ test('lv7_c1b_the_cue_leaves_when_the_picture_loads', async () => {
   const picture = tileB().querySelector('img')!;
   fireEvent.load(picture);
   expect(wait()).toBeNull();
-  expect(tileB().querySelector('img')!.getAttribute('src')).toBe('/api/phone/v1/photos/201/preview?pair=T&r=3&v=k1');
+  expect(tileB().querySelector('img')!.getAttribute('src')).toBe('/api/phone/v1/photos/201/preview?pair=T&v=k1');
 });
 
 test('lv7_c2a_reduced_motion_turns_the_sweep_off', () => {
