@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV8 — Sort and arrange on the phone (book 10J LV-D20)
 
-**Tracker:** IMPLEMENTED (2026-11-27, fable) — 4 units checkpointed (`09ba8340`, `9cbb7f7c`, `0348cc8a`, `c7824ab9`): the Mac's classify route and insert moves; the Preview's swipes, confirmation and strip; lift-drag-drop in both strips; cancels and the pending drop. 70 row tests (14 Rust, 56 UI) and 20 core unit tests; `cargo test --workspace` 2774 passed, clippy, fmt, sidecar, typecheck and build green; `npm test` 1135 passed, 1 failed (the known `p33_split_grid` C4(d) flake, green alone).
+**Tracker:** APPROVED (2026-11-27, opus) — review r1 APPROVED_WITH_NOTES: perimeter = the 27 declared paths of `09ba8340`…`798834a9` (`git diff --stat 23e42fcc 798834a9`); reviewer run on clean `1b880ee0`: `lv8_phone_sort::` 14 passed, phone tests 14 files / 181 passed, typecheck and build green; the implementer's full-suite stamp stands (the one `npm test` failure is the recorded `p33_split_grid` flake, no `src/features` file changed); all 70 rows have a boundary test that fails on a wrong outcome; homes at lift, pointer capture, one cancel, PH9.5's three ends, next photo before the request, current shot before the announcement, thin route all confirmed by reading; changed LV3/LV6 tests = the plan's list + `lv3_c23b` (declared, LV-D20 (4)); no assumption contradicts 10J; H1–H8 hold; 5 notes in `backlog_live/LV8_phone_sort_and_arrange.md`.
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -567,3 +567,39 @@ On this Mac with the camera connected and a phone paired (the app built from thi
 **1 failed: `src/features/workspace/__tests__/p33_split_grid.test.tsx` C4(d)**, the known intermittent suite flake of
 `backlog.md` (P35 → P33: its 1 s `waitFor` runs out under full-suite load; here at 1049 ms). No file under
 `src/features` changed in this milestone; that file re-run alone: 7 of 7 passed. Phone tests: 14 files, 181 passed.
+
+### 2026-11-27 — review r1 (opus): APPROVED_WITH_NOTES
+**Verified correct.** Gate: Tracker `IMPLEMENTED`; checkpoints `09ba8340`, `9cbb7f7c`, `0348cc8a`, `c7824ab9`,
+`798834a9` in `git log`. Perimeter: `git diff --stat 23e42fcc 798834a9` = exactly the 27 declared paths (6 Rust, 9
+phone sources, 9 phone tests incl. `helpers.ts`, 2 guide files, this plan). Review mode, run once on clean `1b880ee0`:
+`cargo test -p psm-testkit --test suite lv8_phone_sort::` 14 passed; `npx vitest run src/phone` 14 files, 181 passed;
+`npm run typecheck` exit 0; `npm run build` exit 0 (chunk-size warning only). The implementer's closing gate stands
+(`cargo test --workspace` 2774, clippy, fmt, sidecar); its one `npm test` failure is the recorded `p33_split_grid`
+C4(d) flake, green alone, and no `src/features` file changed.
+- **U1 (read).** `move_photo` is the one transaction; `move_to` and `classify_to` pass a `choose(Whence)`. Classify
+  table = PH4a (extra→main and condition→condition are `None` = no step, no event; the rest `ExtraEnd`/`ConditionEnd`).
+  Insert: source must be in the group (`origin` check), `index` in `1..=len` via `place_in`, same place → no change,
+  `remove`+`insert` at the final index; place rows untouched (only positions differ → `ids` empty, still written by
+  `positions_change`). `left_empty` only for a template container left `None`; `set_after_take_out` after the
+  transaction and before `h.finish`, only when a step exists and the session is active. Route: parse, `guard`,
+  `session_photo`, call (H8). Tests: every row compared whole (`everything()`/`place_rows()`), events exact, undo
+  checked so a fixture step cannot pass for the row's step.
+- **U2–U4 (read).** `swipeAction` = PH9.1's table; `dropTarget` = PH9.3's table (shot ≠ source within 32 px; span
+  ±32; insert index = 1 + others left of the finger; own place, Free, gaps, out of band → null). `Dock` measures homes
+  once in `liftAt` and `follow` reads only `lift.homes`; `setPointerCapture` in the strip's one `onPointerDown`; no
+  `draggable`/`dragstart` in `src/phone`. Every PH9.4 cause calls `finish(false)` (pointercancel, second pointer,
+  hidden, blur, `arrangementKey` change, unmount, null target; `main_confirm` cancels and opens the sheet). Pending
+  drop ends only in `endPending` from (a) a read numbered after the answer, (b) the refusal, (c) the 8 s timer (+
+  unmount); `liftAt` returns while `pending`. `swipe` dispatches `nextPhoto` before any request. Tests: each UI row
+  asserts its exact requests, vibrations, marks, transforms or kicker; C15(a) holds the follow-up read, so the drop
+  is shown between the answer and the read.
+- **Tests changed.** `lv3_c22c`, `lv6_c2c` removed; `lv3_c21a/b` `advance(200)`; `lv6_c5a` scoped to the viewport;
+  plus `lv3_c23b` (declared deviation: its Delete line now asserts no Retake on an extra; LV-D20 (4)).
+- **Assumptions 1–18** read against 10J LV-D20, PH9 and card LV8: none contradicts them.
+- **H1–H8:** rules in `crates/core` (H8), no platform concept in core (H7), Deny still hides (H2), repeats are no-ops
+  (H4); no external write, no pixel work, no UI automation.
+
+**Notes** (`backlog_live/LV8_phone_sort_and_arrange.md`): the 8 s timer is not stopped by a successful answer (a
+move answered just before 8 s can flash back for one read); a photo with no preview yet does not follow the swipe;
+nothing seen on a real phone (lift look, sheet, iOS long press, second-finger handling); `p33_split_grid` flake
+recurred; `cargo test --workspace` ran detached.
