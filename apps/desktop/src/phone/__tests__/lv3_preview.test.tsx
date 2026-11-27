@@ -1,9 +1,11 @@
 // LV3·U4 — the captured-image preview (design README §4, §Preview gestures, §Preview actions; cards
 // LV6, LV8): rows LV3·C20–C22. The fixture session (helpers): B (final 02, "Back") filled, A (01,
-// "Front") current, C (03); one extra (Main position 04); one condition image (C1).
+// "Front") current, C (03); one extra (Main position 04); one condition image (C1). LV8 (book 10J
+// LV-D20 (4)) removed the Delete button: row C22(c) went with it (its outcome is LV8·C6(a)), and the
+// hold of C21 starts after 200 ms (LV8 plan point P2).
 import { screen, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
-import { advance, B, chairSession, frameBytes, lift, type PhoneEnv, PHOTO_C1, phoneEnv, press, slide, startPhone } from './helpers';
+import { advance, B, chairSession, frameBytes, lift, type PhoneEnv, phoneEnv, press, slide, startPhone } from './helpers';
 
 // Tile centres of LV6's dock layout (56 px tiles on a 64 px pitch).
 const X = { b: 44, extra: 236, c1: 383 };
@@ -67,6 +69,8 @@ test('lv3_c21a_holding_a_template_shots_photo_shows_the_template_through_it', as
   const layers = Array.from(viewport().querySelectorAll('img')).map(image => image.getAttribute('src'));
   expect(layers).toEqual([`/api/phone/v1/containers/${B}/example?pair=T`, '/api/phone/v1/photos/201/preview?pair=T&r=1&v=k0']);
   press(viewport(), 195, 305);
+  // LV8 (plan point P2): the hold starts after 200 ms, so a swipe never flashes the template.
+  await advance(200);
   expect(photo().style.opacity).toBe('0.35');
   expect(screen.getByTestId('preview-pill').textContent).toBe('TEMPLATE');
   lift(viewport(), 195, 305);
@@ -78,6 +82,8 @@ test('lv3_c21b_sliding_sets_the_overlay_the_main_screen_shares', async () => {
   await startPhone(env);
   await open(X.b);
   press(viewport(), 100, 305);
+  // LV8 (plan point P2): the hold starts after 200 ms.
+  await advance(200);
   slide(viewport(), 120, 308);
   expect(within(viewport()).getByTestId('overlay-bar').textContent).toBe('PHOTO 42%');
   expect(photo().style.opacity).toBe('0.42');
@@ -123,19 +129,6 @@ test('lv3_c22b_retake_reopens_the_shot', async () => {
   expect(env.mac.allPosts()).toEqual([['/retake', { session_id: 7, container_id: B }]]);
   expect(buzzed(env, [30, 40, 30])).toBe(1);
   expect(toast().textContent).toBe('Shot 02 reopened');
-  expect(toast().style.opacity).toBe('1');
-  expect(screen.queryByTestId('preview')).toBeNull();
-});
-
-test('lv3_c22c_delete_denies_a_condition_image', async () => {
-  const env = phoneEnv();
-  await startPhone(env);
-  await open(X.c1);
-  expect(preview().queryByRole('button', { name: 'Retake' })).toBeNull();
-  preview().getByRole('button', { name: 'Delete' }).click();
-  await advance(0);
-  expect(env.mac.allPosts()).toEqual([[`/photos/${PHOTO_C1}/delete`, { session_id: 7 }]]);
-  expect(toast().textContent).toBe('Image deleted');
   expect(toast().style.opacity).toBe('1');
   expect(screen.queryByTestId('preview')).toBeNull();
 });

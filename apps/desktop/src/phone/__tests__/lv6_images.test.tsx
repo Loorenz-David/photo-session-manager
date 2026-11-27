@@ -87,7 +87,8 @@ test('lv6_c5a_the_preview_says_preparing_until_the_photo_has_a_preview', async (
   await tap(X.b);
   const preview = screen.getByTestId('preview');
   expect(within(preview).getByText('Preparing preview…')).toBeTruthy();
-  expect(previewRequests(preview)).toEqual([]);
+  // LV8: the Preview also holds the photo strip; the picture itself is the viewport's.
+  expect(previewRequests(screen.getByTestId('preview-viewport'))).toEqual([]);
   expect(screen.queryByTestId('preview-photo')).toBeNull();
   await macChanges(env, withPreview('k1'));
   expect(screen.getByTestId('preview-photo').getAttribute('src')).toBe('/api/phone/v1/photos/201/preview?pair=T&r=3&v=k1');

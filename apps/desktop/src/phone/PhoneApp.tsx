@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { ApiError, capture, deletePhoto, focus, focusClear, forgetToken, hello, movePhoto, type PhoneSession, retake, session, setCurrent, takeToken, Unpaired } from './api';
+import { ApiError, capture, classifyPhoto, deletePhoto, focus, focusClear, forgetToken, hello, movePhoto, type PhoneSession, retake, session, setCurrent, takeToken, Unpaired } from './api';
+import { nextPhoto, type SwipeAction } from './arrange';
+import { ConfirmSheet } from './components/ConfirmSheet';
 import { ConnectingOverlay } from './components/ConnectingOverlay';
 import { ControlBar } from './components/ControlBar';
 import { Dock } from './components/Dock';
@@ -265,24 +267,66 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     if (orphaned) dispatch({ type: 'preview', photo_id: null });
   }, [orphaned]);
 
-  /** Design §Preview actions: Retake reopens a template shot (card LV6); Delete denies an extra or a condition image. */
-  const retakeOrDelete = async () => {
-    if (!view || !subject) return;
+  /** Design §Preview actions: Retake reopens a template shot (card LV6) and closes the preview. */
+  const retakeShot = async () => {
+    if (!view || subject?.kind !== 'shot') return;
     buzz(HAPTIC.retake);
     try {
-      if (subject.kind === 'shot') {
-        clearFocus();
-        await retake(token, view.id, subject.shot.container_id);
-        toast(`Shot ${pad(subject.shot.final_no)} reopened`);
-      } else {
-        await deletePhoto(token, subject.image.photo_id, view.id);
-        toast('Image deleted');
-      }
+      clearFocus();
+      await retake(token, view.id, subject.shot.container_id);
+      toast(`Shot ${pad(subject.shot.final_no)} reopened`);
       dispatch({ type: 'preview', photo_id: null });
       void readSession();
     } catch (error) {
       refused(error, TEXT.failed);
     }
+  };
+
+  // LV-D20 (1): a template shot's photo goes to the extra Main photos only after "Move".
+  const [confirming, setConfirming] = useState<number | null>(null);
+  const asksStill = confirming !== null && previewSubject(view, confirming)?.kind === 'shot';
+  useEffect(() => {
+    if (confirming !== null && !asksStill) setConfirming(null);
+  }, [confirming, asksStill]);
+
+  /**
+   * PH9.1: a counted swipe on the previewed photo. The next photo shows at once (plan point P4),
+   * before any re-read could close the preview because its photo left; then the Mac is asked. A
+   * refusal says why and re-reads; the preview does not go back.
+   */
+  const swipe = async (action: Exclude<SwipeAction, 'none' | 'main_confirm'>) => {
+    if (!view || !subject) return;
+    const id = subject.image.photo_id;
+    dispatch({ type: 'preview', photo_id: nextPhoto(view, id) });
+    buzz(action === 'retake' || action === 'delete' ? HAPTIC.retake : HAPTIC.move);
+    // A template shot that loses its photo becomes the current shot (plan point P6).
+    if (subject.kind === 'shot') clearFocus();
+    try {
+      if (action === 'retake' && subject.kind === 'shot') {
+        await retake(token, view.id, subject.shot.container_id);
+        toast(`Shot ${pad(subject.shot.final_no)} reopened`);
+      } else if (action === 'main' || action === 'condition') {
+        await classifyPhoto(token, id, view.id, action);
+        toast(action === 'main' ? TEXT.movedToMain : TEXT.sentToCondition);
+      } else {
+        await deletePhoto(token, id, view.id);
+        toast(TEXT.imageDeleted);
+      }
+      void readSession();
+    } catch (error) {
+      refused(error, TEXT.failed);
+    }
+  };
+
+  /** Plan point P11: in the Preview's strip a photo is shown; an empty shot or Free shot becomes current and the Preview closes. */
+  const selectInPreview = (tile: DockTile) => {
+    const image = tileImage(tile);
+    if (image) {
+      if (image.photo_id !== state.preview) buzz(HAPTIC.select);
+      return dispatch({ type: 'preview', photo_id: image.photo_id });
+    }
+    dispatch({ type: 'preview', photo_id: null });
+    void choose(tile.kind === 'shot' ? tile.shot.container_id : null);
   };
 
   /** Card LV8: the Mac performs the move (a filled position swaps); the preview stays on the image. */
@@ -302,7 +346,7 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
 
   const next = nextStep(view);
   const rotated = isRotated(stageRatio(state));
-  const free = isConnected && !subject && !state.menuOpen;
+  const free = isConnected && !subject && !state.menuOpen && confirming === null;
   if (isConnected && !view) {
     return <div className="ph-app">
       <p className="ph-pairing">{TEXT.noSession}</p>
@@ -323,10 +367,12 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
     }} />
     <Toast toast={state.toast} />
     {view && subject && <Preview token={token} subject={subject} ratio={previewRatio(state, subject)} overlay={state.overlay} dispatch={dispatch}
-      backLabel={backLabel(view)} onBack={() => dispatch({ type: 'preview', photo_id: null })} onAct={() => void retakeOrDelete()} onMove={() => {
+      backLabel={backLabel(view)} onBack={() => dispatch({ type: 'preview', photo_id: null })} onRetake={() => void retakeShot()} onMove={() => {
         buzz(HAPTIC.menu);
         dispatch({ type: 'move', open: true });
-      }} />}
+      }} onSwipe={action => (action === 'main_confirm' ? setConfirming(subject.image.photo_id) : void swipe(action))}
+      strip={<Dock token={token} view={view} rotated={isRotated(previewRatio(state, subject))} enabled={!state.moveOpen && confirming === null} onSelect={selectInPreview}
+        testId="preview-strip" marked={subject.image.photo_id} />} />}
     {view && subject && <MoveDrawer token={token} view={view} subject={subject} open={state.moveOpen} onClose={() => dispatch({ type: 'move', open: false })}
       onPick={tile => void move(tile)} />}
     {view && <ItemDrawer open={state.menuOpen} itemName={view.item.name} macName={state.hello?.mac_name ?? ''} rows={itemRows(state, view)}
@@ -334,6 +380,10 @@ function Companion({ token, onRemoved }: { token: string; onRemoved: () => void 
         buzz(HAPTIC.menu);
         dispatch({ type: 'props', open: true });
       }} />}
+    <ConfirmSheet open={asksStill} text={TEXT.confirmMain} confirmLabel="Move" onCancel={() => setConfirming(null)} onConfirm={() => {
+      setConfirming(null);
+      if (subject?.image.photo_id === confirming) void swipe('main');
+    }} />
     {state.propsOpen && <PropertiesPage onBack={() => dispatch({ type: 'props', open: false })} />}
     <ConnectingOverlay connected={isConnected} macName={state.hello?.mac_name ?? null} itemName={view?.item.name ?? null} />
   </div>;

@@ -1,4 +1,4 @@
-import { type PointerEvent as ReactPointerEvent, useRef } from 'react';
+import { type PointerEvent as ReactPointerEvent, useLayoutEffect, useRef } from 'react';
 import { exampleUrl, type PhoneSession } from '../api';
 import { DOCK } from '../gestures';
 import { type DockTile, dockTiles, tileImage } from '../state';
@@ -14,7 +14,14 @@ type Props = {
   enabled: boolean;
   /** A tap chose the tile. */
   onSelect: (tile: DockTile) => void;
+  /** `dock` on the live screen, `preview-strip` in the Preview (LV-D20 (2): the same strip in both). */
+  testId?: string;
+  /** The Preview's strip outlines the photo shown (plan point P11) instead of the current shot. */
+  marked?: number;
 };
+
+/** The marked tile is kept this far inside the strip's visible edges. */
+const REVEAL_PX = 16;
 
 /**
  * The shot dock (design §3 as amended by book 10J LV-D19 (1)): an 84 px strip of 56 px thumbnails.
@@ -22,9 +29,23 @@ type Props = {
  * one that moves sideways scrolls the strip; one that moves up or down selects nothing. There is
  * no hold gesture. The strip never moves and nothing grows out of it.
  */
-export function Dock({ token, view, rotated, enabled, onSelect }: Props) {
+export function Dock({ token, view, rotated, enabled, onSelect, testId = 'dock', marked }: Props) {
   const tiles = dockTiles(view);
   const scroller = useRef<HTMLDivElement>(null);
+  const outlined = (tile: DockTile) => (marked === undefined ? tile.current : tileImage(tile)?.photo_id === marked);
+
+  // The photo shown is in sight: the strip scrolls just far enough when it changes.
+  useLayoutEffect(() => {
+    const element = scroller.current;
+    const tile = element?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (marked === undefined || !element || !tile) return;
+    const frame = element.getBoundingClientRect();
+    const rect = tile.getBoundingClientRect();
+    const over = rect.right + REVEAL_PX - frame.right;
+    const under = frame.left + REVEAL_PX - rect.left;
+    const wanted = element.scrollLeft + (over > 0 ? over : under > 0 ? -under : 0);
+    element.scrollLeft = Math.max(0, Math.min(wanted, element.scrollWidth - element.clientWidth));
+  }, [marked]);
   const touch = useRef<{ x: number; y: number; scrollLeft: number; scrolling: boolean; moved: boolean } | null>(null);
 
   /** The tile whose centre is nearest the finger, if within half a pitch. */
@@ -73,7 +94,7 @@ export function Dock({ token, view, rotated, enabled, onSelect }: Props) {
   };
 
   const firstCondition = tiles.findIndex(tile => tile.kind === 'condition');
-  return <div className="ph-dock-strip" data-testid="dock" onPointerDown={down} onPointerMove={track} onPointerUp={up} onPointerCancel={cancel}
+  return <div className="ph-dock-strip" data-testid={testId} onPointerDown={down} onPointerMove={track} onPointerUp={up} onPointerCancel={cancel}
     onContextMenu={event => event.preventDefault()}>
     <div className="ph-dock-scroller" ref={scroller}>
       <div className="ph-dock-row">
@@ -81,9 +102,9 @@ export function Dock({ token, view, rotated, enabled, onSelect }: Props) {
           const image = tileImage(tile);
           return [
             index === firstCondition && <div key="divider" className="ph-dock-divider" data-testid="dock-divider" />,
-            <div key={tile.key} data-dock-k={tile.key} aria-label={tile.kind === 'free' ? 'Free shot' : tile.label} aria-current={tile.current || undefined}
+            <div key={tile.key} data-dock-k={tile.key} aria-label={tile.kind === 'free' ? 'Free shot' : tile.label} aria-current={outlined(tile) || undefined}
               className={`ph-dock-tile${tile.kind === 'free' ? ' ph-dock-free' : ''}`}
-              style={{ transform: `rotate(${rotated ? 90 : 0}deg)`, outline: `2px solid ${tile.current ? '#111' : 'transparent'}`, outlineOffset: '2px' }}>
+              style={{ transform: `rotate(${rotated ? 90 : 0}deg)`, outline: `2px solid ${outlined(tile) ? '#111' : 'transparent'}`, outlineOffset: '2px' }}>
               {image && <PhotoImage token={token} image={image} className="ph-dock-image" />}
               {!image && tile.kind === 'shot' && tile.shot.example
                 && <img className="ph-dock-image ph-grey" alt="" draggable={false} src={exampleUrl(token, tile.shot.container_id)} />}

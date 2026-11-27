@@ -85,7 +85,11 @@ export type MoveTarget =
   | { kind: 'main_position'; position: number }
   | { kind: 'extra_end' }
   | { kind: 'condition'; position: number }
-  | { kind: 'condition_end' };
+  | { kind: 'condition_end' }
+  /** PH4a: put an extra at place `index` among the extras (1-based), the others keep their order. */
+  | { kind: 'extra_insert'; index: number }
+  /** PH4a: the same among the Condition images. */
+  | { kind: 'condition_insert'; index: number };
 
 async function request<T>(method: 'GET' | 'POST', path: string, token: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
@@ -118,6 +122,9 @@ export const retake = (token: string, session_id: number, container_id: number) 
   request<unknown>('POST', '/retake', token, { session_id, container_id });
 export const movePhoto = (token: string, photo_id: number, session_id: number, target: MoveTarget) =>
   request<unknown>('POST', `/photos/${photo_id}/move`, token, { session_id, target });
+/** PH4a: the swipe to Main or to Condition (and a drop into the other group); the Mac decides what that changes. */
+export const classifyPhoto = (token: string, photo_id: number, session_id: number, to: 'main' | 'condition') =>
+  request<unknown>('POST', `/photos/${photo_id}/classify`, token, { session_id, to });
 export const deletePhoto = (token: string, photo_id: number, session_id: number) =>
   request<unknown>('POST', `/photos/${photo_id}/delete`, token, { session_id });
 

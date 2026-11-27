@@ -241,7 +241,17 @@ export function phoneEnv(options: EnvOptions = {}): PhoneEnv {
   const stage = options.stage ?? { width: 390, height: 610 };
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
-    get(this: HTMLElement) { return this.classList.contains('ph-stage') ? stage.width : 0; },
+    get(this: HTMLElement) { return this.classList.contains('ph-stage') || this.classList.contains('ph-dock-scroller') ? stage.width : 0; },
+  });
+  // LV8: a strip's scroller is as wide as the stage and its content as wide as its tiles (16 px side
+  // padding, 64 px a tile, 19 px the divider), so an auto-scroll has an end to stop at.
+  Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+    configurable: true,
+    get(this: HTMLElement) {
+      if (!this.classList.contains('ph-dock-scroller')) return 0;
+      const row = Array.from(this.querySelector('.ph-dock-row')?.children ?? []);
+      return Math.max(stage.width, 32 - 8 + row.reduce((width, child) => width + (child.hasAttribute('data-dock-k') ? 64 : 19), 0));
+    },
   });
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
     configurable: true,
@@ -297,19 +307,24 @@ afterEach(() => {
 // --- pointers: one finger on a gesture surface, in client coordinates ---
 // jsdom has no PointerEvent: a mouse event of the pointer type carries the coordinates, and the
 // pointer id is added (React reads both from the native event).
-function pointer(type: string, target: Element, x: number, y: number): void {
+// LV8: `pointerId` names the finger (a second finger has another id).
+function pointer(type: string, target: Element, x: number, y: number, pointerId = 1): void {
   const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 });
-  Object.defineProperty(event, 'pointerId', { value: 1 });
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
   fireEvent(target, event);
 }
-export function press(target: Element, x: number, y: number): void {
-  pointer('pointerdown', target, x, y);
+export function press(target: Element, x: number, y: number, pointerId = 1): void {
+  pointer('pointerdown', target, x, y, pointerId);
 }
-export function slide(target: Element, x: number, y: number): void {
-  pointer('pointermove', target, x, y);
+export function slide(target: Element, x: number, y: number, pointerId = 1): void {
+  pointer('pointermove', target, x, y, pointerId);
 }
-export function lift(target: Element, x: number, y: number): void {
-  pointer('pointerup', target, x, y);
+export function lift(target: Element, x: number, y: number, pointerId = 1): void {
+  pointer('pointerup', target, x, y, pointerId);
+}
+/** The phone takes the touch away (a call, a system gesture): `pointercancel`. */
+export function cancel(target: Element, x: number, y: number, pointerId = 1): void {
+  pointer('pointercancel', target, x, y, pointerId);
 }
 
 /**
@@ -340,6 +355,16 @@ export function chairSession(change: (session: PhoneSession) => void = () => und
   };
   change(session);
   return session;
+}
+
+/** LV8 fixture S: the chair session with a second condition image (the strip reads "02 01 03 04 · C1 C2"). */
+export const PHOTO_C2 = 207;
+export function sortSession(change: (session: PhoneSession) => void = () => undefined): PhoneSession {
+  return chairSession(session => {
+    session.condition.push({ photo_id: PHOTO_C2, revision: 1, ratio: 1, preview: 'k0' });
+    session.counts.condition = 2;
+    change(session);
+  });
 }
 
 /** The token the started phone is paired with. */

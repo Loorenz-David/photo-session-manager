@@ -58,6 +58,14 @@ export const DOCK = {
   nearPx: 32,
 } as const;
 
+/**
+ * The Preview's swipe (book 10J LV-D20 (1); master_plan_live §5 PH9.1). A move of more than
+ * `startPx` within `holdMs` of touching the photo is a swipe; a template shot's photo held still
+ * that long shows its template instead. Released at `commitPx` or further along its direction the
+ * swipe counts; the hint shows from `hintPx`.
+ */
+export const SWIPE = { holdMs: 200, startPx: 14, commitPx: 96, hintPx: 24 } as const;
+
 /** Design §Haptics (ms). Only where the browser has them (Android Chrome); iPhone keeps the visual cues. */
 export const HAPTIC = {
   capture: [80, 40, 120],

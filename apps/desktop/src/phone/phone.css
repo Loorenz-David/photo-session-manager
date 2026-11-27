@@ -709,7 +709,58 @@ body,
   letter-spacing: 0.06em;
 }
 .ph-preview-photo {
-  transition: opacity 0.14s ease-out;
+  /* A swipe that did not count springs back; while the finger is on it the transform follows at once (inline). */
+  transition: opacity 0.14s ease-out, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* LV-D20 (1): what a swipe will do, growing clearer with the distance; solid once it will count. */
+.ph-swipe-hint-row {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.ph-swipe-hint {
+  padding: 10px 16px;
+  border: 2px solid var(--ph-white);
+  border-radius: 999px;
+  background: var(--ph-on-image-strong);
+  color: var(--ph-white);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.ph-swipe-hint[data-tone='deny'] {
+  background: var(--ph-live-dot);
+}
+.ph-swipe-hint[data-tone='none'] {
+  border-style: dashed;
+  background: var(--ph-on-image);
+  font-size: 12px;
+}
+.ph-swipe-hint[data-armed] {
+  transform: scale(1.12);
+  transition: transform 0.12s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+/* The swiped picture leaving, over the next one; it takes no touch and is gone in 0.22 s. */
+.ph-swipe-out {
+  z-index: 5;
+  pointer-events: none;
+  transform: var(--ph-swipe-to);
+  opacity: 0;
+  animation: ph-swipe-out 0.22s ease-in;
+}
+@keyframes ph-swipe-out {
+  from { transform: var(--ph-swipe-from); opacity: 1; }
+  to { transform: var(--ph-swipe-to); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-swipe-out {
+    animation: none;
+  }
 }
 .ph-preview-hint-row {
   left: 12px;
@@ -721,12 +772,16 @@ body,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 20px calc(40px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 20px calc(40px + env(safe-area-inset-bottom, 0px));
 }
 .ph-preview-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+/* An extra or a condition image has no Retake: Back takes the row (LV-D20 (4): no Delete button). */
+.ph-preview-single {
+  grid-template-columns: 1fr;
 }
 .ph-rule {
   height: 1px;
@@ -772,6 +827,7 @@ body,
 }
 .ph-backdrop-menu { z-index: 32; }
 .ph-backdrop-move { z-index: 35; }
+.ph-backdrop-confirm { z-index: 37; }
 .ph-sheet {
   position: absolute;
   left: 0;
@@ -792,6 +848,23 @@ body,
   z-index: 36;
   gap: 16px;
   padding: 12px 20px calc(34px + env(safe-area-inset-bottom, 0px));
+}
+/* LV-D20 (1): the confirmation, above the Preview and the Move drawer. */
+.ph-sheet-confirm {
+  z-index: 38;
+  gap: 18px;
+  padding: 12px 20px calc(34px + env(safe-area-inset-bottom, 0px));
+  animation: ph-sheet-in var(--ph-sheet);
+}
+@keyframes ph-sheet-in {
+  from { transform: translateY(105%); }
+  to { transform: translateY(0); }
+}
+.ph-confirm-text {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
 }
 .ph-grab {
   align-self: center;

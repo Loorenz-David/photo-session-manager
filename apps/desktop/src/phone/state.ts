@@ -22,6 +22,11 @@ export const TEXT = {
   conditionAdded: 'Condition image added',
   noSession: 'Open a session in Session Manager to start shooting.',
   failed: 'That did not work. Try again.',
+  /** LV-D20 (1): asked before a template shot's photo leaves its shot for the extra Main photos. */
+  confirmMain: 'Move this photo to Main, outside its template order?',
+  imageDeleted: 'Image deleted',
+  movedToMain: 'Moved to main images',
+  sentToCondition: 'Sent to condition images',
 } as const;
 
 /** The design's default template overlay (0–100 %, shared by live view and preview). */
