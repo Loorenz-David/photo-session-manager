@@ -9,7 +9,7 @@ blocked_on: none
 ---
 # LV10 — Zoom, reframe and guides on the phone (book 10J LV-D21 (5)–(7))
 
-**Tracker:** IMPLEMENTED (2026-11-27, fable) — 4 units, checkpoints `05729f61` (U1), `f594e337` (U2), `92dfbef3` (U3), `1764d2d6` + `21ffb636` + `764ba540` (U4); 53 rows → 54 row tests (9 Rust `lv10_phone_composition::`, 45 phone UI in `lv10_{zoom,reframe,save_and_guides}`) + 21 core unit tests (`lv10_core`: `pinch.ts`, `reframe.ts`); closing gate on clean `764ba540`: `npm run build` ok, `cargo test --workspace` 2791 passed / 0 failed, clippy, fmt, sidecar stub, typecheck green, `npm test` 162 files / 1238 passed / 0 failed; nothing seen on a phone or in a browser (handoff `handoff_LV10_zoom_reframe_guides_implement_r1.md`).
+**Tracker:** APPROVED (2026-11-27, opus) — review r1 APPROVED_WITH_NOTES: perimeter = the 29 declared code/test/guide paths of `05729f61`…`764ba540` (`git diff --stat 05729f61^ 764ba540`) + this plan in `814990a9`; reviewer run on code tree `764ba540`: `lv10_phone_composition::` 9 passed, phone tests 22 files / 283 passed, typecheck and build green (no `__TAURI`/`tauri` in `phone-*.js` or the shared `useComposePrefs-*.js`); the implementer's full-suite stamp stands (2791 Rust, 1238 UI); all 53 rows have a boundary test that fails on a wrong outcome; revision rule and validation in `CompositionService` (H8), routes parse/guard/call; the Mac's compose modules imported, none copied or edited; H1–H8 hold; 6 notes in `backlog_live/LV10_zoom_reframe_guides.md` (handoff `handoff_LV10_zoom_reframe_guides_review_r1.md`). Was: IMPLEMENTED (2026-11-27, fable) — 4 units, checkpoints `05729f61` (U1), `f594e337` (U2), `92dfbef3` (U3), `1764d2d6` + `21ffb636` + `764ba540` (U4); 53 rows → 54 row tests (9 Rust `lv10_phone_composition::`, 45 phone UI in `lv10_{zoom,reframe,save_and_guides}`) + 21 core unit tests (`lv10_core`: `pinch.ts`, `reframe.ts`); closing gate on clean `764ba540`: `npm run build` ok, `cargo test --workspace` 2791 passed / 0 failed, clippy, fmt, sidecar stub, typecheck green, `npm test` 162 files / 1238 passed / 0 failed; nothing seen on a phone or in a browser (handoff `handoff_LV10_zoom_reframe_guides_implement_r1.md`).
 
 (This line is the milestone's tracker row. Sessions change only this line of this file. The gate for `depends_on` is
 the Tracker line of the plan named there.)
@@ -542,3 +542,57 @@ with a deliberately wrong expected rect (x off by 5e-5 and 3e-5), to see the edi
 - The build's chunk shared by the desktop and the phone entry is now named `useComposePrefs-*.js` (React and the
   compose modules); it and `phone-*.js` contain no `__TAURI` and no `tauri` (grep, 0 and 0).
 - Not updated: `master_plan_live.md` §4.7 (test stems) and §8 (environment) agree with what was run.
+
+### 2026-11-27 — review r1 (opus): APPROVED_WITH_NOTES
+**Verified correct.** Gate: Tracker `IMPLEMENTED`; checkpoints `05729f61`, `f594e337`, `92dfbef3`, `1764d2d6`,
+`21ffb636`, `764ba540` and the close `814990a9` in `git log`. Perimeter: `git diff --stat 05729f61^ 764ba540` = exactly
+the handoff's 29 code, test and guide paths (6 Rust production, 2 Rust test, 14 phone sources incl. new `pinch.ts`,
+`reframe.ts`, `ReframeEditor.tsx`, 5 phone tests incl. `helpers.ts`, 3 guide files); `814990a9` = this plan only;
+`features/compose/*` untouched. Review mode, run once on code tree `764ba540`: `cargo test -p psm-testkit --test suite
+lv10_phone_composition::` 9 passed; `npx vitest run src/phone` 22 files, 283 passed; `npm run typecheck` exit 0;
+`npm run build` exit 0 (chunk-size warning only); `__TAURI` 0 and `tauri` 0 in `phone-*.js` and `useComposePrefs-*.js`.
+The implementer's closing gate stands (`cargo test --workspace` 2791, clippy, fmt, sidecar stub, `npm test` 1238).
+- **U1 (read).** `set_at_revision` / `reset_at_revision` in `CompositionService`: the stored revision is read and a
+  different one is `CompositionChanged` before anything is saved; then exactly `set` / `reset` (MC-27 `validate`,
+  `FrameUnknown`, one "Compose NN" step, `PhotoChanged` + `SessionChanged` after the commit). The only addition is the
+  unchanged-values shortcut (state `ok`, equal values → the stored composition, no step, no event), which row C2(b) and
+  PH4b require. Routes `save_composition` / `reset_composition` parse the body, run `guard` and `session_photo`, call
+  the service and serialize `{revision}` (H8). `wire::error_code` maps `composition_invalid` 400, `frame_unknown` 409,
+  `composition_changed` 409. PH6c: `composition` only with values, a frame and `adjusted_preview_path` on disk;
+  `PhoneImage.revision` is the composition's revision, so Done's check is against what the editor opened on.
+- **U2 (read).** `pinch.ts` is pure (`twoFinger`, `pinchView`, `clampPan`, `settleZoom`, `track`). `Preview` keeps one
+  `Gesture` per touch sequence with the viewport's rectangle taken at the first finger, never the zoom layer's; a
+  second finger ends a press, swipe or hold with nothing sent and starts the pinch; `panning` (zoomed, `clampPan`, no
+  swipe, no hold) and `waiting` (a pinch's last finger at 1×); double tap both ways; `pointercancel` (only of a tracked
+  finger), blur, hidden and unmount settle the zoom where it is; 1× on another photo. `PhotoImage` draws a composed
+  photo with the Mac's `composedLayout`; `previewRatio` takes the layout's ratio.
+- **U3 (read).** `reframe.ts` uses the Mac's `validate`, `panBy`, `zoomAbout`, `defaultRect`, `turnedFrame` and
+  `refit`, and copies none of them; `panWithin` stops exactly at the frame's own edges, then bisects 16 steps against
+  the straightened edge; `zoomWithin` bisects between 1 and the factor. `ReframeEditor` runs the bounded moves on
+  every `pointermove` from the gesture's base values in PH12's order (rotate, zoom about `anchorIn(frameBox, anchor)`,
+  pan); every control is `refit`; the grid only while |twist| > 3° or the slider is held; guides from `overlayLines`
+  inside the frame box, kept in `psm.phone.reframeGuides`; pointer capture on down; cancel, blur and hidden keep the
+  last values. Reframe is disabled with the Mac's waiting line when `composition` is null.
+- **U4 (read).** Done: equal values → close, nothing sent; Reset with no change since → reset route; else the save
+  with the opened revision; one request (a ref plus `busy`); the four refusal branches as PH12 says
+  (`session_changed` through `refused`). The editor closes when its photo leaves the session or loses `composition`.
+  Live guides: the Item drawer's group "Guides", `psm.phone.liveGuides` default `off`, an SVG with
+  `pointer-events: none` in the viewport's own px, over the template and live, split-aware.
+- **Tests.** Each of the 53 rows has a test at its boundary that asserts the row's exact outcome: whole JSON bodies and
+  stored state plus the history and the event list (Rust); the zoom layer's exact transform string, the editor's
+  picture transform against the Mac's `viewTransform` for the expected values, exact POST lists and bodies, toasts,
+  storage keys and guide line coordinates (UI). C11(b) also proves the stop is on the boundary (1 % further is
+  invalid). C9(c) uses a stored rect whose refit differs, so the row can fail. The editor rows read the rect at about
+  1e-5 (0.01 px transform steps) rather than 1e-6; the 1e-6 values are pinned in `lv10_core` and in C14(a)'s request
+  body. Because the boundary sits where the plan puts it, this is not a B2.
+- **Assumptions 1–12** read against 10J LV-D21, 10D MC-27, PH4b, PH11 and PH12: none contradicts them (all go to the
+  narrative). Assumption 1 (unchanged values keep origin `default`) is what row C2(b) asks for.
+- **H1–H8:** the revision rule and validation are in `crates/core`, the routes are thin (H8); `PhoneComposition` uses
+  core's own domain types, with no platform concept (H7); no pixel work: the phone moves CSS transforms over the Mac's
+  preview (H3); no RAW touched (H2); no external write (H1); no UI automation (H5); no secrets and no live service in
+  tests.
+
+**Notes** (in `backlog_live/LV10_zoom_reframe_guides.md`): a photo that needs review cannot be confirmed from the
+phone (PH12 as written); `frame_unknown` and `invalid_value` on the new routes have no row or test; nothing has been
+seen on a phone or in a browser; how the bounded moves feel compared with the Mac's editor; editor rows at display
+precision; one U4 checkpoint was committed with typecheck red (fixed in the next commit).
