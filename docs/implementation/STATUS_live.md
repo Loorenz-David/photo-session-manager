@@ -147,6 +147,9 @@ by this track. Wake prompt: `docs/process/prompts/wake_orchestrator_live.md`.
     hand-back limitation, owner aware). PASS with that limitation.
   - C5 edge of Wi-Fi: lag at the far end, Wi-Fi off froze live, back on while walking → live resumed by itself (no
     template fallback). PASS.
+  - **LV4 DONE** (20/20 PASS; evidence `live_preview_lab.md` §Hardware check (LV4), `sony_camera_lab.md` §Live view in
+    the app). **M-LV6 targets (owner): USB ≥ 23 fps, ≤ 0.20 s; Wi-Fi ≥ 15 fps (upload dips allowed), ≤ 0.25 s.**
+  - R2 planned by the orchestrator as `LV7_tile_loading_cue` (Fable, 1 unit, 4 rows); started.
 
 ## Next
 The owner reviews the pull request and the three narratives. Then LV4, the owner-attended hardware check (never
@@ -155,7 +158,7 @@ dispatched by the runner): packaged build with the SDK sidecar, both phones, the
 connected, LV1 carry-overs.
 
 ## Run in flight
-None. LV4 hardware check to resume with the owner (USB rows C1, C9; C19; C20 + targets; C5 edge of Wi-Fi; re-check F1–F7 and LV-D19).
+- `tools/pipeline/run_phase.sh phase LV7_tile_loading_cue` (Fable), started 2026-11-27.
 
 ## Needs the owner
 - Review / merge the pull request to `main`; schedule the hardware check (LV4).
