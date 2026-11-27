@@ -1280,7 +1280,11 @@ body,
   background: var(--ph-ink);
   color: var(--ph-white);
 }
-/* LV-D21 (7): the Item drawer's Guides row (the guides over the live view): one row, the chosen one filled. */
+/* LV-D21 (7): the Item drawer's Guides row (the guides over the live view): one row, the chosen one filled. Its
+   name is "Guides" (the group's label), set in capitals like the other section names. */
+.ph-section-caps {
+  text-transform: uppercase;
+}
 .ph-guides-row {
   display: flex;
   gap: 6px;

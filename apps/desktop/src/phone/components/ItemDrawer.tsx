@@ -36,7 +36,7 @@ export function ItemDrawer({ open, itemName, macName, rows, guides, onGuides, on
         </div>)}
       </dl>
       <div className="ph-item-actions">
-        <span className="ph-mono ph-section" id="ph-live-guides">GUIDES</span>
+        <span className="ph-mono ph-section ph-section-caps" id="ph-live-guides">Guides</span>
         <div className="ph-guides-row" role="group" aria-labelledby="ph-live-guides" data-testid="guides-row">
           {GUIDE_KINDS.map(kind => <button key={kind} type="button" aria-pressed={guides === kind} onClick={() => onGuides(kind)}>{GUIDE_LABELS[kind]}</button>)}
         </div>

@@ -187,7 +187,7 @@ test('lv10_c16a_the_item_drawer_has_a_guides_row_off_the_first_time', async () =
   await startPhone(env);
   await openMenu();
   expect(within(guidesRow()).getAllByRole('button').map(button => button.textContent)).toEqual(['Off', 'Thirds', 'Grid', 'Golden ratio', 'Diagonals']);
-  expect(within(screen.getByTestId('item-drawer')).getByText('GUIDES')).toBeTruthy();
+  expect(within(screen.getByTestId('item-drawer')).getByRole('group', { name: 'Guides' })).toBe(guidesRow());
   expect(pressed()).toEqual(['Off']);
   expect(lines()).toEqual([]);
 });
